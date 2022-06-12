@@ -30,3 +30,20 @@
 *.exe
 *.out
 *.app
+
+# OS-specific
+.DS_Store
+
+# Subfolders
+build/
+build_debug/
+build_release/
+tmp/
+.vscode/
+
+# Bindings
+__pycache__
+Makefile
+CMakeCache.txt
+cmake_install.cmake
+CMakeFiles
