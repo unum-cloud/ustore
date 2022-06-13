@@ -56,17 +56,17 @@ extern "C" {
 /*****************		  Structures	  ****************/
 /*********************************************************/
 
-typedef void *ukv_t;
-typedef void *ukv_txn_t;
-typedef void *ukv_iter_t;
-typedef void *ukv_column_t;
-typedef void *ukv_options_read_t;
-typedef void *ukv_options_write_t;
+typedef void* ukv_t;
+typedef void* ukv_txn_t;
+typedef void* ukv_iter_t;
+typedef void* ukv_column_t;
+typedef void* ukv_options_read_t;
+typedef void* ukv_options_write_t;
 
 typedef uint64_t ukv_key_t;
-typedef void *ukv_val_ptr_t;
+typedef void* ukv_val_ptr_t;
 typedef uint32_t ukv_val_len_t;
-typedef char const *ukv_error_t;
+typedef char const* ukv_error_t;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -85,10 +85,10 @@ typedef char const *ukv_error_t;
  */
 void ukv_open(
     // Inputs:
-    char const *config,
+    char const* config,
     // Outputs:
-    ukv_t *db,
-    ukv_error_t *error);
+    ukv_t* db,
+    ukv_error_t* error);
 
 /**
  * @brief The primary "setter" interface that inserts into "HEAD" state.
@@ -112,16 +112,16 @@ void ukv_open(
 void ukv_put(
     // Inputs:
     ukv_t const db,
-    ukv_key_t const *keys,
+    ukv_key_t const* keys,
     size_t const keys_count,
-    ukv_column_t const *columns,
+    ukv_column_t const* columns,
     size_t const columns_count,
     ukv_options_write_t const options,
     //
-    ukv_val_ptr_t const *values,
-    ukv_val_len_t const *values_lengths,
+    ukv_val_ptr_t const* values,
+    ukv_val_len_t const* values_lengths,
     // Outputs:
-    ukv_error_t *error);
+    ukv_error_t* error);
 
 /**
  * @brief Checks if certain keys are present in passed collections.
@@ -150,18 +150,18 @@ void ukv_put(
 void ukv_contains(
     // Inputs:
     ukv_t const db,
-    ukv_key_t const *keys,
+    ukv_key_t const* keys,
     size_t const keys_count,
-    ukv_column_t const *columns,
+    ukv_column_t const* columns,
     size_t const columns_count,
 
     // In-outs:
-    void **arena,
-    size_t *arena_length,
+    void** arena,
+    size_t* arena_length,
 
     // Outputs:
-    bool *values,
-    ukv_error_t *error);
+    bool* values,
+    ukv_error_t* error);
 
 /**
  * @brief The primary "getter" interface, that reads from "HEAD" state.
@@ -194,30 +194,30 @@ void ukv_contains(
 void ukv_get(
     // Inputs:
     ukv_t const db,
-    ukv_key_t const *keys,
+    ukv_key_t const* keys,
     size_t const keys_count,
-    ukv_column_t const *columns,
+    ukv_column_t const* columns,
     size_t const columns_count,
     ukv_options_read_t const options,
 
     // In-outs:
-    void **arena,
-    size_t *arena_length,
+    void** arena,
+    size_t* arena_length,
 
     // Outputs:
-    ukv_val_ptr_t *values,
-    ukv_val_len_t *values_lengths,
-    ukv_error_t *error);
+    ukv_val_ptr_t* values,
+    ukv_val_len_t* values_lengths,
+    ukv_error_t* error);
 
 /**
  * @brief Pulls metadata, mostly for logging and customer support.
  */
 void ukv_status(ukv_t db,
-                size_t *version_major,
-                size_t *version_minor,
-                size_t *disk_usage,
-                size_t *active_transactions,
-                ukv_error_t *error);
+                size_t* version_major,
+                size_t* version_minor,
+                size_t* disk_usage,
+                size_t* active_transactions,
+                ukv_error_t* error);
 
 /**
  * @brief Upserts a new column into DB.
@@ -228,10 +228,10 @@ void ukv_status(ukv_t db,
 void ukv_column_upsert(
     // Inputs:
     ukv_t const db,
-    char const *column_name,
+    char const* column_name,
     // Outputs:
-    ukv_column_t *column,
-    ukv_error_t *error);
+    ukv_column_t* column,
+    ukv_error_t* error);
 
 /**
  * @brief Exports the sizes of requested columns.
@@ -241,12 +241,12 @@ void ukv_column_upsert(
 void ukv_columns_size(
     // Inputs:
     ukv_t const db,
-    ukv_column_t const *columns,
+    ukv_column_t const* columns,
     size_t const columns_count,
     // Outputs:
-    size_t *count_keys,
-    size_t *disk_usage,
-    ukv_error_t *error);
+    size_t* count_keys,
+    size_t* disk_usage,
+    ukv_error_t* error);
 
 /*********************************************************/
 /*****************		Transactions	  ****************/
@@ -265,38 +265,38 @@ void ukv_txn_begin(
     ukv_t const db,
     size_t const sequence_number,
     // Outputs:
-    ukv_txn_t *txn,
-    ukv_error_t *error);
+    ukv_txn_t* txn,
+    ukv_error_t* error);
 
 void ukv_txn_put(
     // Inputs:
     ukv_txn_t const txn,
-    ukv_key_t const *keys,
+    ukv_key_t const* keys,
     size_t const keys_count,
-    ukv_column_t const *columns,
+    ukv_column_t const* columns,
     size_t const columns_count,
     //
-    ukv_val_ptr_t const *values,
-    ukv_val_len_t const *values_lengths,
+    ukv_val_ptr_t const* values,
+    ukv_val_len_t const* values_lengths,
     // Outputs:
-    ukv_error_t *error);
+    ukv_error_t* error);
 
 void ukv_txn_get(
     // Inputs:
     ukv_t const db,
-    ukv_key_t const *keys,
+    ukv_key_t const* keys,
     size_t const keys_count,
-    ukv_column_t const *columns,
+    ukv_column_t const* columns,
     size_t const columns_count,
 
     // In-outs:
-    void **arena,
-    size_t *arena_length,
+    void** arena,
+    size_t* arena_length,
 
     // Outputs:
-    ukv_val_ptr_t *values,
-    ukv_val_len_t *values_lengths,
-    ukv_error_t *error);
+    ukv_val_ptr_t* values,
+    ukv_val_len_t* values_lengths,
+    ukv_error_t* error);
 
 /**
  * On success, the transaction content is wiped clean.
@@ -306,21 +306,21 @@ void ukv_txn_commit(
     // Inputs:
     ukv_txn_t const txn,
     // Outputs:
-    ukv_error_t *error);
+    ukv_error_t* error);
 
 /*********************************************************/
 /*****************		  Iterators	      ****************/
 /*********************************************************/
 
-void ukv_iter_make(ukv_column_t const column, ukv_iter_t *, ukv_error_t *error);
+void ukv_iter_make(ukv_column_t const column, ukv_iter_t*, ukv_error_t* error);
 
-void ukv_iter_seek(ukv_iter_t const iter, ukv_key_t key, ukv_error_t *error);
+void ukv_iter_seek(ukv_iter_t const iter, ukv_key_t key, ukv_error_t* error);
 
-void ukv_iter_advance(ukv_iter_t const iter, size_t const count_to_skip, ukv_error_t *error);
+void ukv_iter_advance(ukv_iter_t const iter, size_t const count_to_skip, ukv_error_t* error);
 
-void ukv_iter_get_key(ukv_iter_t const iter, ukv_key_t *, ukv_error_t *error);
+void ukv_iter_get_key(ukv_iter_t const iter, ukv_key_t*, ukv_error_t* error);
 
-void ukv_iter_get_value_size(ukv_iter_t const iter, size_t *length, size_t *arena_length, ukv_error_t *error);
+void ukv_iter_get_value_size(ukv_iter_t const iter, size_t* length, size_t* arena_length, ukv_error_t* error);
 
 /**
  * @brief Fetches currently targeted value from disk.
@@ -329,12 +329,12 @@ void ukv_iter_get_value_size(ukv_iter_t const iter, size_t *length, size_t *aren
  */
 void ukv_iter_get_value(ukv_iter_t const iter,
                         // In-outs:
-                        void **arena,
-                        size_t *arena_length,
+                        void** arena,
+                        size_t* arena_length,
                         // Outputs:
-                        ukv_val_ptr_t *values,
-                        ukv_val_len_t *values_lengths,
-                        ukv_error_t *error);
+                        ukv_val_ptr_t* values,
+                        ukv_val_len_t* values_lengths,
+                        ukv_error_t* error);
 
 /*********************************************************/
 /*****************	  Memory Management   ****************/
@@ -346,7 +346,7 @@ void ukv_iter_get_value(ukv_iter_t const iter,
  * > `ukv_txn_get`
  * to deallocate and return memory to UnumDB and OS.
  */
-void ukv_get_free(ukv_t const db, void *, size_t);
+void ukv_get_free(ukv_t const db, void*, size_t);
 
 void ukv_txn_free(ukv_t const db, ukv_txn_t const txn);
 
