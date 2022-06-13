@@ -2,7 +2,6 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <unordered_set>
 #include <shared_mutex>
 #include <atomic>
 #include <cstring> // `std::memcpy`
@@ -15,9 +14,10 @@
 
 namespace {
 
-using allocator_t = std::allocator<uint8_t>;
+enum class byte_t : uint8_t {};
+using allocator_t = std::allocator<byte_t>;
 using key_t = ukv_key_t;
-using value_t = std::vector<uint8_t, allocator_t>;
+using value_t = std::vector<byte_t, allocator_t>;
 using sequence_t = size_t;
 
 struct txn_t;
@@ -31,6 +31,8 @@ struct sequenced_value_t {
 struct column_t {
     std::string name;
     std::unordered_map<key_t, sequenced_value_t> content;
+
+    void reserve_more(size_t n) { content.reserve(content.size() + n); }
 };
 
 using column_ptr_t = std::unique_ptr<column_t>;
@@ -64,7 +66,7 @@ struct db_t {
     /**
      * @brief A variable-size set of named columns.
      * It's cleaner to implement it with heterogenous lookups as
-     * an `std::unordered_set`, but it requires GCC11.
+     * an @c `std::unordered_set`, but it requires GCC11.
      */
     std::unordered_map<std::string_view, column_ptr_t> named_columns;
     /**
@@ -74,10 +76,6 @@ struct db_t {
     std::atomic<sequence_t> youngest_sequence {0};
     std::atomic<sequence_t> oldest_running_transaction {0};
 };
-
-bool key_was_changed(db_t& db, sequence_t reference_sequence_number) {
-    return false;
-}
 
 } // namespace
 
@@ -114,7 +112,7 @@ void ukv_put(
 
     for (size_t i = 0; i != c_keys_count; ++i) {
         auto len = *c_values_lengths;
-        auto begin = reinterpret_cast<uint8_t const*>(*c_values);
+        auto begin = reinterpret_cast<byte_t const*>(*c_values);
         column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
         auto key_iterator = column.content.find(*c_keys);
 
@@ -147,7 +145,7 @@ void ukv_put(
 
         ++c_keys;
         ++c_values_lengths;
-        c_values += len;
+        ++c_values;
         c_columns += c_columns_count > 1;
     }
 }
@@ -176,6 +174,7 @@ void ukv_contains(
         *c_values = column.content.find(*c_keys) != column.content.end();
 
         ++c_keys;
+        ++c_values;
         c_columns += c_columns_count > 1;
     }
 }
@@ -196,14 +195,13 @@ void ukv_get(
     // Outputs:
     ukv_val_ptr_t* c_values,
     ukv_val_len_t* c_values_lengths,
-    [[maybe_unused]] ukv_error_t* c_error) {
+    ukv_error_t* c_error) {
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
     std::shared_lock _ {db.mutex};
 
     // 1. Estimate the total size
     size_t total_bytes = 0;
-
     for (size_t i = 0; i != c_keys_count; ++i) {
         column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(c_columns[i]) : db.main_column;
         auto key_iterator = column.content.find(c_keys[i]);
@@ -211,10 +209,23 @@ void ukv_get(
             total_bytes += key_iterator->second.data.size();
     }
 
-    // 2. Fetch all the data into a single continuous memory arena
-    auto arena = allocator_t {}.allocate(total_bytes);
-    size_t exported_bytes = 0;
+    // 2. Allocate a tape for all the values to be fetched
+    byte_t* arena = *reinterpret_cast<byte_t**>(c_arena);
+    if (total_bytes > *c_arena_length) {
+        try {
+            allocator_t {}.deallocate(arena, *c_arena_length);
+            arena = allocator_t {}.allocate(total_bytes);
+            *c_arena = arena;
+            *c_arena_length = total_bytes;
+        }
+        catch (...) {
+            *c_error = "Failed to allocate memory for exports!";
+            return;
+        }
+    }
 
+    // 3. Fetch the data
+    size_t exported_bytes = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
         column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
         auto key_iterator = column.content.find(*c_keys);
@@ -231,13 +242,10 @@ void ukv_get(
         }
 
         ++c_keys;
-        c_columns += c_columns_count > 1;
         ++c_values;
         ++c_values_lengths;
+        c_columns += c_columns_count > 1;
     }
-
-    *c_arena = arena;
-    *c_arena_length = total_bytes;
 }
 
 /*********************************************************/
@@ -342,7 +350,7 @@ void ukv_txn_put(
 
     for (size_t i = 0; i != c_keys_count; ++i) {
         auto len = c_values_lengths[i];
-        auto begin = reinterpret_cast<uint8_t const*>(c_values);
+        auto begin = reinterpret_cast<byte_t const*>(*c_values);
         column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
 
         try {
@@ -357,7 +365,7 @@ void ukv_txn_put(
 
         ++c_keys;
         ++c_values_lengths;
-        c_values += len;
+        ++c_values;
         c_columns += c_columns_count > 1;
     }
 }
@@ -385,13 +393,55 @@ void ukv_txn_get(
     db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
 
+    // 1. Estimate the total size
+    size_t total_bytes = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
-        // column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
-        // auto key_iterator = column.content.find(*c_keys);
-        // if (key_was_changed(db, txn.sequence_number)) {
-        // }
+        column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(c_columns[i]) : db.main_column;
+        auto key_iterator = column.content.find(c_keys[i]);
+        if (key_iterator != column.content.end()) {
+            if (key_iterator->second.sequence_number > txn.sequence_number) {
+                *c_error = "Requested key was already overwritten since the start of the transaction!";
+                return;
+            }
+            total_bytes += key_iterator->second.data.size();
+        }
+    }
+
+    // 2. Allocate a tape for all the values to be fetched
+    byte_t* arena = *reinterpret_cast<byte_t**>(c_arena);
+    if (total_bytes <= *c_arena_length) {
+        try {
+            allocator_t {}.deallocate(arena, *c_arena_length);
+            arena = allocator_t {}.allocate(total_bytes);
+            *c_arena = arena;
+            *c_arena_length = total_bytes;
+        }
+        catch (...) {
+            *c_error = "Failed to allocate memory for exports!";
+            return;
+        }
+    }
+
+    // 3. Fetch the data
+    size_t exported_bytes = 0;
+    for (size_t i = 0; i != c_keys_count; ++i) {
+        column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
+        auto key_iterator = column.content.find(*c_keys);
+        if (key_iterator != column.content.end()) {
+            auto len = key_iterator->second.data.size();
+            std::memcpy(arena + exported_bytes, key_iterator->second.data.data(), len);
+            *c_values = reinterpret_cast<ukv_val_ptr_t>(arena + exported_bytes);
+            *c_values_lengths = static_cast<ukv_val_len_t>(len);
+            exported_bytes += len;
+        }
+        else {
+            *c_values = NULL;
+            *c_values_lengths = 0;
+        }
 
         ++c_keys;
+        ++c_values;
+        ++c_values_lengths;
         c_columns += c_columns_count > 1;
     }
 }
@@ -404,10 +454,64 @@ void ukv_txn_commit(
 
     // This write may fail with out-of-memory errors, if Hash-Tables
     // bucket allocation fails, but no values will be copied, only moved.
-
     txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
     db_t& db = *txn.db_ptr;
     std::unique_lock _ {db.mutex};
+
+    // 1. Check for refreshes among fetched keys
+    for (auto const& [located_key, located_sequence] : txn.requested_keys) {
+        column_t& column = *located_key.column_ptr;
+        auto key_iterator = column.content.find(located_key.key);
+        if (key_iterator != column.content.end()) {
+            if (key_iterator->second.sequence_number != located_sequence) {
+                *c_error = "Requested key was already overwritten since the start of the transaction!";
+                return;
+            }
+        }
+    }
+
+    // 2. Check for collisions among incoming values
+    for (auto const& [located_key, value] : txn.new_values) {
+        column_t& column = *located_key.column_ptr;
+        auto key_iterator = column.content.find(located_key.key);
+        if (key_iterator != column.content.end()) {
+            if (key_iterator->second.sequence_number >= txn.sequence_number) {
+                *c_error = "Incoming key collides with newer entry!";
+                return;
+            }
+        }
+    }
+
+    // 3. Allocate space for more nodes across different collections
+    try {
+        db.main_column.reserve_more(txn.new_values.size());
+        for (auto& name_and_column : db.named_columns)
+            name_and_column.second->reserve_more(txn.new_values.size());
+    }
+    catch (...) {
+        *c_error = "Not enough memory!";
+        return;
+    }
+
+    // 4. Import the data, as no collisions were detected
+    for (auto& located_key_and_value : txn.new_values) {
+        column_t& column = *located_key_and_value.first.column_ptr;
+        auto key_iterator = column.content.find(located_key_and_value.first.key);
+        if (key_iterator != column.content.end()) {
+            key_iterator->second.sequence_number = txn.sequence_number;
+            std::swap(key_iterator->second.data, located_key_and_value.second);
+        }
+        else {
+            sequenced_value_t sequenced_value {
+                std::move(located_key_and_value.second),
+                txn.sequence_number,
+            };
+            column.content.emplace(located_key_and_value.first.key, std::move(sequenced_value));
+        }
+    }
+
+    // 5. Commit the newest transaction ID
+    db.youngest_sequence = txn.sequence_number;
 }
 
 /*********************************************************/
@@ -443,7 +547,7 @@ void ukv_iter_get_value(ukv_iter_t const, void**, size_t*, ukv_val_ptr_t*, ukv_v
 /*********************************************************/
 
 void ukv_get_free(ukv_t const, void* c_ptr, size_t c_len) {
-    allocator_t {}.deallocate(reinterpret_cast<uint8_t*>(c_ptr), c_len);
+    allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
 }
 
 void ukv_txn_free(ukv_t const, ukv_txn_t const c_txn) {
@@ -456,10 +560,9 @@ void ukv_free(ukv_t c_db) {
     delete &db;
 }
 
-void ukv_column_free(ukv_t const c_db, ukv_column_t const c_column) {
-    ukv_error_t c_error = NULL;
-    column_t& column = *reinterpret_cast<column_t*>(c_column);
-    ukv_column_remove(c_db, column.name.c_str(), &c_error);
+void ukv_column_free(ukv_t const, ukv_column_t const) {
+    // In this in-memory freeing the column handle does nothing.
+    // The DB destructor will automatically cleanup the memory.
 }
 
 void ukv_iter_free(ukv_t const, ukv_iter_t const) {
