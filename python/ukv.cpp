@@ -57,7 +57,7 @@ struct py_ctx_t {
     size_t length = 0;
 };
 
-PYBIND11_MODULE(ukv_py, m) {
+PYBIND11_MODULE(ukv, m) {
     m.doc() =
         "Python bindings for Universal Key Value Store abstraction.\n"
         "Supports most basic collection operations, like `dict`.\n"
@@ -74,7 +74,7 @@ PYBIND11_MODULE(ukv_py, m) {
                     throw std::runtime_error(error);
                 return db_ptr;
             }),
-            py::arg("config"));
+            py::arg("config") = "");
 
     // To fetch data without copies, there is a hacky way:
     // https://github.com/pybind/pybind11/issues/1236#issuecomment-527730864
@@ -93,7 +93,7 @@ PYBIND11_MODULE(ukv_py, m) {
         if (error) [[unlikely]]
             throw std::runtime_error(error);
 
-        py::bytes result {reinterpret_cast<char const*>(vals[0]), lens[1]};
+        py::bytes result {reinterpret_cast<char const*>(vals[0]), lens[0]};
         ukv_get_free(db.raw, ctx.ptr, ctx.length);
         return result;
     });
