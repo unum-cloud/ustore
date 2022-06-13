@@ -47,3 +47,4 @@ Makefile
 CMakeCache.txt
 cmake_install.cmake
 CMakeFiles
+*.egg-info
