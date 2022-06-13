@@ -1,6 +1,8 @@
 #include <vector>
 #include <string>
+#include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <shared_mutex>
 #include <atomic>
 #include <cstring> // `std::memcpy`
@@ -27,7 +29,24 @@ struct sequenced_value_t {
 };
 
 struct collection_t {
+    std::string name;
     std::unordered_map<key_t, sequenced_value_t> content;
+};
+
+using collection_ptr_t = std::unique_ptr<collection_t>;
+
+struct collection_equals_t {
+    bool operator()(collection_ptr_t const& a, collection_ptr_t const& b) const noexcept { return a->name == b->name; }
+    bool operator()(collection_ptr_t const& a, std::string_view const& b_name) const noexcept {
+        return a->name == b_name;
+    }
+};
+
+struct collection_hash_t {
+    size_t operator()(collection_ptr_t const& collection) const noexcept {
+        return std::hash<std::string_view> {}(collection->name);
+    }
+    size_t operator()(std::string_view const& name) const noexcept { return std::hash<std::string_view> {}(name); }
 };
 
 struct located_key_t {
@@ -38,7 +57,7 @@ struct located_key_t {
         return (collection_ptr == other.collection_ptr) & (key == other.key);
     }
     bool operator!=(located_key_t const& other) const noexcept {
-        return (collection_ptr == other.collection_ptr) & (key == other.key);
+        return (collection_ptr != other.collection_ptr) | (key != other.key);
     }
 };
 
@@ -56,7 +75,12 @@ struct txn_t {
 struct db_t {
     std::shared_mutex mutex;
     collection_t main_collection;
-    std::unordered_map<std::string, collection_t> named_collections;
+    /**
+     * @brief A variable-size set of named collections, implemented
+     * as heap-allocated object, to preserve unique pointers throughout
+     * the lifetime of `named_collections`.
+     */
+    std::unordered_set<collection_ptr_t, collection_hash_t, collection_equals_t> named_collections;
     /**
      * @brief The sequence/transactions ID of the most recent update.
      * This can be updated even outside of the main @p `mutex` on HEAD state.
@@ -98,21 +122,39 @@ void ukv_put(
     ukv_error_t* c_error) {
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
+    std::unique_lock _ {db.mutex};
+
     for (size_t i = 0; i != c_keys_count; ++i) {
         auto len = c_values_lengths[i];
         auto begin = reinterpret_cast<uint8_t const*>(c_values);
         collection_t& collection = c_columns_count ? *reinterpret_cast<collection_t*>(*c_columns) : db.main_collection;
+        auto key_iterator = collection.content.find(*c_keys);
 
-        try {
-            sequenced_value_t sequenced_value {
-                value_t(begin, begin + len),
-                ++db.youngest_sequence,
-            };
-            collection.content.emplace(*c_keys, std::move(sequenced_value));
+        if (begin) {
+            // We want to insert a new entry, but let's check if we
+            // can overwrite the existig value without causing reallocations.
+            try {
+                if (key_iterator != collection.content.end()) {
+                    key_iterator->second.sequence_number = ++db.youngest_sequence;
+                    key_iterator->second.data.assign(begin, begin + len);
+                }
+                else {
+                    sequenced_value_t sequenced_value {
+                        value_t(begin, begin + len),
+                        ++db.youngest_sequence,
+                    };
+                    collection.content.emplace(*c_keys, std::move(sequenced_value));
+                }
+            }
+            catch (...) {
+                *c_error = "Failed to put!";
+                break;
+            }
         }
-        catch (...) {
-            *c_error = "Failed to put!";
-            break;
+        else {
+            // We should delete the value
+            if (key_iterator != collection.content.end())
+                collection.content.erase(key_iterator);
         }
 
         ++c_keys;
@@ -139,9 +181,10 @@ void ukv_contains(
     [[maybe_unused]] ukv_error_t* c_error) {
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
+    std::shared_lock _ {db.mutex};
+
     for (size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = c_columns_count ? *reinterpret_cast<collection_t*>(*c_columns) : db.main_collection;
-
         *c_values = collection.content.find(*c_keys) != collection.content.end();
 
         ++c_keys;
@@ -168,6 +211,7 @@ void ukv_get(
     [[maybe_unused]] ukv_error_t* c_error) {
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
+    std::shared_lock _ {db.mutex};
 
     // 1. Estimate the total size
     size_t total_bytes = 0;
@@ -212,6 +256,58 @@ void ukv_get(
 }
 
 /*********************************************************/
+/*****************	Columns Management	  ****************/
+/*********************************************************/
+
+void ukv_column_upsert(
+    // Inputs:
+    ukv_t const c_db,
+    char const* c_column_name,
+    // Outputs:
+    ukv_column_t* c_column,
+    ukv_error_t* c_error) {
+
+    db_t& db = *reinterpret_cast<db_t*>(c_db);
+    std::unique_lock _ {db.mutex};
+    auto name_len = std::strlen(c_column_name);
+    auto const column_name = std::string_view(c_column_name, name_len);
+
+    auto column_it = db.named_collections.find(column_name);
+    if (column_it == db.named_collections.end()) {
+        try {
+            auto new_column = std::make_unique<collection_t>();
+            new_column->name = column_name;
+            *c_column = new_column.get();
+            db.named_collections.emplace(std::move(new_column));
+        }
+        catch (...) {
+            *c_error = "Failed to create a new collection!";
+        }
+    }
+    else {
+        *c_column = column_it->get();
+    }
+}
+
+void ukv_column_remove(
+    // Inputs:
+    ukv_t const c_db,
+    char const* c_column_name,
+    // Outputs:
+    [[maybe_unused]] ukv_error_t* c_error) {
+
+    db_t& db = *reinterpret_cast<db_t*>(c_db);
+    std::unique_lock _ {db.mutex};
+    auto name_len = std::strlen(c_column_name);
+    auto column_name = std::string_view(c_column_name, name_len);
+
+    auto column_it = db.named_collections.find(column_name);
+    if (column_it != db.named_collections.end()) {
+        db.named_collections.erase(column_it);
+    }
+}
+
+/*********************************************************/
 /*****************		Transactions	  ****************/
 /*********************************************************/
 
@@ -253,8 +349,12 @@ void ukv_txn_put(
     // Outputs:
     ukv_error_t* c_error) {
 
+    // We need a `shared_lock` here just to avoid any changes to
+    // the underlying addresses of collections.
     txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
     db_t& db = *txn.db_ptr;
+    std::shared_lock _ {db.mutex};
+
     for (size_t i = 0; i != c_keys_count; ++i) {
         auto len = c_values_lengths[i];
         auto begin = reinterpret_cast<uint8_t const*>(c_values);
@@ -296,7 +396,6 @@ void ukv_txn_get(
 
     // This read can fail, if the values to be read have already
     // changed since the beginning of the transaction!
-
     txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
     db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
@@ -363,14 +462,21 @@ void ukv_get_free(ukv_t const, void* c_ptr, size_t c_len) {
     allocator_t {}.deallocate(reinterpret_cast<uint8_t*>(c_ptr), c_len);
 }
 
-void ukv_txn_free(ukv_t const c_db, ukv_txn_t const c_txn);
+void ukv_txn_free(ukv_t const, ukv_txn_t const c_txn) {
+    txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
+    delete &txn;
+}
 
 void ukv_free(ukv_t c_db) {
     db_t& db = *reinterpret_cast<db_t*>(c_db);
     delete &db;
 }
 
-void ukv_column_free(ukv_t const db, ukv_column_t const column);
+void ukv_column_free(ukv_t const c_db, ukv_column_t const c_column) {
+    ukv_error_t c_error = NULL;
+    collection_t& collection = *reinterpret_cast<collection_t*>(c_column);
+    ukv_column_remove(c_db, collection.name.c_str(), &c_error);
+}
 
 void ukv_iter_free(ukv_t const, ukv_iter_t const) {
 }

@@ -106,6 +106,8 @@ void ukv_open(
  * @param columns_count     Number of elements in @p `columns`.
  * @param options           Write options.
  * @param values            Array of pointers to the first byte of each value.
+ *                          NULLs, if you want to @b delete the values associated
+ *                          with given @p `keys`.
  * @param values_lengths    Array of lengths of buffers, storing the @p `values`.
  * @param error             The error to be handled.
  */
@@ -209,19 +211,12 @@ void ukv_get(
     ukv_val_len_t* values_lengths,
     ukv_error_t* error);
 
-/**
- * @brief Pulls metadata, mostly for logging and customer support.
- */
-void ukv_status(ukv_t db,
-                size_t* version_major,
-                size_t* version_minor,
-                size_t* disk_usage,
-                size_t* active_transactions,
-                ukv_error_t* error);
+/*********************************************************/
+/*****************	Columns Management	  ****************/
+/*********************************************************/
 
 /**
  * @brief Upserts a new column into DB.
- * ! Currently Unavailable.
  * As of now, only the default column is available
  * and @p `column_name` is ignored across the interaface.
  */
@@ -233,20 +228,23 @@ void ukv_column_upsert(
     ukv_column_t* column,
     ukv_error_t* error);
 
-/**
- * @brief Exports the sizes of requested columns.
- * @param count_keys Array to store the number of keys in each column.
- * @param disk_usage Array to store the number of bytes in both keys and values in each column.
- */
-void ukv_columns_size(
+void ukv_column_remove(
     // Inputs:
     ukv_t const db,
-    ukv_column_t const* columns,
-    size_t const columns_count,
+    char const* column_name,
     // Outputs:
-    size_t* count_keys,
-    size_t* disk_usage,
     ukv_error_t* error);
+
+/**
+ * @brief Pulls metadata, mostly for logging and customer support.
+ */
+void ukv_status(ukv_t db,
+                size_t* version_major,
+                size_t* version_minor,
+                size_t* memory_usage,
+                size_t* disk_usage,
+                size_t* active_transactions,
+                ukv_error_t* error);
 
 /*********************************************************/
 /*****************		Transactions	  ****************/
