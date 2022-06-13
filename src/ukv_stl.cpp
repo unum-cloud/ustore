@@ -113,8 +113,8 @@ void ukv_put(
     std::unique_lock _ {db.mutex};
 
     for (size_t i = 0; i != c_keys_count; ++i) {
-        auto len = c_values_lengths[i];
-        auto begin = reinterpret_cast<uint8_t const*>(c_values);
+        auto len = *c_values_lengths;
+        auto begin = reinterpret_cast<uint8_t const*>(*c_values);
         column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
         auto key_iterator = column.content.find(*c_keys);
 
@@ -205,13 +205,10 @@ void ukv_get(
     size_t total_bytes = 0;
 
     for (size_t i = 0; i != c_keys_count; ++i) {
-        column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
-        auto key_iterator = column.content.find(*c_keys);
+        column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(c_columns[i]) : db.main_column;
+        auto key_iterator = column.content.find(c_keys[i]);
         if (key_iterator != column.content.end())
             total_bytes += key_iterator->second.data.size();
-
-        ++c_keys;
-        c_columns += c_columns_count > 1;
     }
 
     // 2. Fetch all the data into a single continuous memory arena
@@ -389,9 +386,8 @@ void ukv_txn_get(
     std::shared_lock _ {db.mutex};
 
     for (size_t i = 0; i != c_keys_count; ++i) {
-        column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
-        auto key_iterator = column.content.find(*c_keys);
-
+        // column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
+        // auto key_iterator = column.content.find(*c_keys);
         // if (key_was_changed(db, txn.sequence_number)) {
         // }
 
