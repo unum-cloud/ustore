@@ -2,10 +2,11 @@ Language: Cpp
 BasedOnStyle:  LLVM
 IndentWidth: 4
 TabWidth: 4
-NamespaceIndentation: All
+NamespaceIndentation: None
 ColumnLimit: 120
 ReflowComments: true
 UseTab: Never
+PointerAlignment: Left
 
 AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false
@@ -16,11 +17,12 @@ AlignTrailingComments: true
 AllowAllArgumentsOnNextLine: false
 AllowAllConstructorInitializersOnNextLine: true
 AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortEnumsOnASingleLine: false
 AllowShortBlocksOnASingleLine: false
 AllowShortCaseLabelsOnASingleLine: true
-AllowShortFunctionsOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: InlineOnly
 AllowShortIfStatementsOnASingleLine: Never
-AllowShortLambdasOnASingleLine: Empty
+AllowShortLambdasOnASingleLine: Inline
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakBeforeMultilineStrings: true
 AlwaysBreakTemplateDeclarations: Yes
