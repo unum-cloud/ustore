@@ -1,7 +1,7 @@
 import ukv
 
 
-def test_explicit(col):
+def only_explicit(col):
 
     col.set(3, 'x'.encode())
     col.set(4, 'y'.encode())
@@ -9,7 +9,7 @@ def test_explicit(col):
     assert col.get(4) == 'y'.encode()
 
 
-def test_operators(col):
+def only_operators(col):
 
     assert 1 not in col
     assert 2 not in col
@@ -29,23 +29,23 @@ def test_operators(col):
 
 def test_main_collection():
     db = ukv.DataBase()
-    test_explicit(db)
-    test_operators(db)
+    only_explicit(db)
+    only_operators(db)
 
 
 def test_named_collections():
     db = ukv.DataBase()
     col_sub = db['sub']
     col_dub = db['dub']
-    test_explicit(col_sub)
-    test_explicit(col_dub)
-    test_operators(col_sub)
-    test_operators(col_dub)
+    only_explicit(col_sub)
+    only_explicit(col_dub)
+    only_operators(col_sub)
+    only_operators(col_dub)
 
 
 def test_main_collection_txn():
 
     with ukv.DataBase() as db:
         with ukv.Transaction(db) as txn:
-            test_explicit(txn)
-            test_operators(txn)
+            only_explicit(txn)
+            only_operators(txn)

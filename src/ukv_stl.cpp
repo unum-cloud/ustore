@@ -102,7 +102,7 @@ void ukv_open(
     *db = new db_t {};
 }
 
-void ukv_put(
+void ukv_write(
     // Inputs:
     ukv_t const c_db,
     ukv_key_t const* c_keys,
@@ -159,36 +159,7 @@ void ukv_put(
     }
 }
 
-void ukv_contains(
-    // Inputs:
-    ukv_t const c_db,
-    ukv_key_t const* c_keys,
-    size_t const c_keys_count,
-    ukv_column_t const* c_columns,
-    size_t const c_columns_count,
-
-    // In-outs:
-    [[maybe_unused]] void** c_arena,
-    [[maybe_unused]] size_t* c_arena_length,
-
-    // Outputs:
-    bool* c_values,
-    [[maybe_unused]] ukv_error_t* c_error) {
-
-    db_t& db = *reinterpret_cast<db_t*>(c_db);
-    std::shared_lock _ {db.mutex};
-
-    for (size_t i = 0; i != c_keys_count; ++i) {
-        column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
-        *c_values = column.content.find(*c_keys) != column.content.end();
-
-        ++c_keys;
-        ++c_values;
-        c_columns += c_columns_count > 1;
-    }
-}
-
-void ukv_get(
+void ukv_read(
     // Inputs:
     ukv_t const c_db,
     ukv_key_t const* c_keys,
@@ -208,6 +179,16 @@ void ukv_get(
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
     std::shared_lock _ {db.mutex};
+
+    // 0. Check if the user is only interested in existance checks
+    if (!c_values) {
+        for (size_t i = 0; i != c_keys_count; ++i) {
+            column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(c_columns[i]) : db.main_column;
+            auto key_iterator = column.content.find(c_keys[i]);
+            c_values_lengths[i] = key_iterator != column.content.end() ? key_iterator->second.data.size() : 0;
+        }
+        return;
+    }
 
     // 1. Estimate the total size
     size_t total_bytes = 0;
@@ -338,7 +319,7 @@ void ukv_txn_begin(
     txn.new_values.clear();
 }
 
-void ukv_txn_put(
+void ukv_txn_write(
     // Inputs:
     ukv_txn_t const c_txn,
     ukv_key_t const* c_keys,
@@ -379,7 +360,7 @@ void ukv_txn_put(
     }
 }
 
-void ukv_txn_get(
+void ukv_txn_read(
     // Inputs:
     ukv_txn_t const c_txn,
     ukv_key_t const* c_keys,
@@ -404,18 +385,47 @@ void ukv_txn_get(
     std::shared_lock _ {db.mutex};
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
+    // 0. Check if the user is only interested in existance checks
+    if (!c_values) {
+        for (size_t i = 0; i != c_keys_count; ++i) {
+            column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(c_columns[i]) : db.main_column;
+
+            // Some keys may already be overwritten inside of transaction
+            if (auto overwrite_iterator = txn.new_values.find(located_key_t {&column, c_keys[i]});
+                overwrite_iterator != txn.new_values.end()) {
+                c_values_lengths[i] = overwrite_iterator->second.size();
+            }
+            // Others should be pulled from the main store
+            else if (auto key_iterator = column.content.find(c_keys[i]); key_iterator != column.content.end()) {
+                if (belongs_to_gap(key_iterator->second.sequence_number,
+                                   txn.sequence_number,
+                                   youngest_sequence_number)) {
+                    *c_error = "Requested key was already overwritten since the start of the transaction!";
+                    return;
+                }
+                c_values_lengths[i] = key_iterator->second.data.size();
+            }
+            // But some will be missing
+            else {
+                c_values_lengths[i] = 0;
+            }
+        }
+        return;
+    }
+
     // 1. Estimate the total size of keys outside of the transaction
     size_t total_bytes = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
         column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(c_columns[i]) : db.main_column;
 
         // Some keys may already be overwritten inside of transaction
-        auto overwrite_iterator = txn.new_values.find(located_key_t {&column, c_keys[i]});
-        if (overwrite_iterator != txn.new_values.end())
-            continue;
-
-        auto key_iterator = column.content.find(c_keys[i]);
-        if (key_iterator != column.content.end()) {
+        if (auto overwrite_iterator = txn.new_values.find(located_key_t {&column, c_keys[i]});
+            overwrite_iterator != txn.new_values.end()) {
+            // We don't need extra memory for those, as transactions state can't be changed concurrently.
+            // We can simply return pointers to the inserted values.
+        }
+        // Others should be pulled from the main store
+        else if (auto key_iterator = column.content.find(c_keys[i]); key_iterator != column.content.end()) {
             if (belongs_to_gap(key_iterator->second.sequence_number, txn.sequence_number, youngest_sequence_number)) {
                 *c_error = "Requested key was already overwritten since the start of the transaction!";
                 return;
@@ -450,6 +460,7 @@ void ukv_txn_get(
             *c_values = reinterpret_cast<ukv_val_ptr_t>(overwrite_iterator->second.data());
             *c_values_lengths = static_cast<ukv_val_len_t>(overwrite_iterator->second.size());
         }
+        // Others should be pulled from the main store
         else if (auto key_iterator = column.content.find(*c_keys); key_iterator != column.content.end()) {
             auto len = key_iterator->second.data.size();
             std::memcpy(arena + exported_into_arena, key_iterator->second.data.data(), len);
@@ -457,6 +468,7 @@ void ukv_txn_get(
             *c_values_lengths = static_cast<ukv_val_len_t>(len);
             exported_into_arena += len;
         }
+        // But some will be missing
         else {
             *c_values = NULL;
             *c_values_lengths = 0;
@@ -522,10 +534,17 @@ void ukv_txn_commit(
     for (auto& located_key_and_value : txn.new_values) {
         column_t& column = *located_key_and_value.first.column_ptr;
         auto key_iterator = column.content.find(located_key_and_value.first.key);
-        if (key_iterator != column.content.end()) {
+        // A key was deleted:
+        if (located_key_and_value.second.empty()) {
+            if (key_iterator != column.content.end())
+                column.content.erase(key_iterator);
+        }
+        // A keys was updated:
+        else if (key_iterator != column.content.end()) {
             key_iterator->second.sequence_number = txn.sequence_number;
             std::swap(key_iterator->second.data, located_key_and_value.second);
         }
+        // A key was inserted:
         else {
             sequenced_value_t sequenced_value {
                 std::move(located_key_and_value.second),
@@ -555,15 +574,15 @@ void ukv_iter_advance(ukv_iter_t const, size_t const, ukv_error_t* error) {
     *error = "Iterators aren't supported by std::unordered_map";
 }
 
-void ukv_iter_get_key(ukv_iter_t const, ukv_key_t*, ukv_error_t* error) {
+void ukv_iter_read_key(ukv_iter_t const, ukv_key_t*, ukv_error_t* error) {
     *error = "Iterators aren't supported by std::unordered_map";
 }
 
-void ukv_iter_get_value_size(ukv_iter_t const, size_t*, size_t*, ukv_error_t* error) {
+void ukv_iter_read_value_size(ukv_iter_t const, size_t*, size_t*, ukv_error_t* error) {
     *error = "Iterators aren't supported by std::unordered_map";
 }
 
-void ukv_iter_get_value(ukv_iter_t const, void**, size_t*, ukv_val_ptr_t*, ukv_val_len_t*, ukv_error_t* error) {
+void ukv_iter_read_value(ukv_iter_t const, void**, size_t*, ukv_val_ptr_t*, ukv_val_len_t*, ukv_error_t* error) {
     *error = "Iterators aren't supported by std::unordered_map";
 }
 
@@ -571,7 +590,7 @@ void ukv_iter_get_value(ukv_iter_t const, void**, size_t*, ukv_val_ptr_t*, ukv_v
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
-void ukv_get_free(ukv_t const, void* c_ptr, size_t c_len) {
+void ukv_read_free(ukv_t const, void* c_ptr, size_t c_len) {
     allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
 }
 
