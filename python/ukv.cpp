@@ -49,6 +49,7 @@
 namespace py = pybind11;
 
 struct py_db_t;
+struct py_txn_t;
 struct py_column_t;
 struct py_arena_t;
 
@@ -61,11 +62,39 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     ukv_t raw = NULL;
     std::string config;
     py_arena_t temporary_arena;
+
+    ~py_db_t() {
+        if (raw)
+            ukv_free(raw);
+        raw = NULL;
+    }
+};
+
+struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
+    ukv_txn_t raw = NULL;
+    py_db_t* db_ptr = NULL;
+    py_arena_t temporary_arena;
+
+    ~py_txn_t() {
+
+        if (raw)
+            ukv_txn_free(db_ptr->raw, raw);
+        raw = NULL;
+    }
 };
 
 struct py_column_t : public std::enable_shared_from_this<py_column_t> {
     ukv_column_t raw = NULL;
     std::string name;
+
+    py_db_t* db_ptr = NULL;
+    py_txn_t* txn_ptr = NULL;
+
+    ~py_column_t() {
+        if (raw)
+            ukv_column_free(db_ptr->raw, raw);
+        raw = NULL;
+    }
 };
 
 std::runtime_error make_exception(py_db_t& db, char const* error) {
@@ -86,6 +115,13 @@ std::shared_ptr<py_db_t> open_if_closed(py_db_t& db) {
     return db.shared_from_this();
 }
 
+void free_temporary_memory(py_db_t& db, py_arena_t& arena) {
+    if (arena.ptr)
+        ukv_get_free(db.raw, arena.ptr, arena.length);
+    arena.ptr = NULL;
+    arena.length = 0;
+}
+
 void close_if_opened(py_db_t& db,
                      py::object const& exc_type,
                      py::object const& exc_value,
@@ -93,14 +129,36 @@ void close_if_opened(py_db_t& db,
     if (!db.raw)
         return;
 
-    if (db.temporary_arena.ptr) {
-        ukv_get_free(db.raw, db.temporary_arena.ptr, db.temporary_arena.length);
-        db.temporary_arena.ptr = NULL;
-        db.temporary_arena.length = 0;
-    }
-
+    free_temporary_memory(db, db.temporary_arena);
     ukv_free(db.raw);
     db.raw = NULL;
+}
+
+std::shared_ptr<py_txn_t> begin_if_needed(py_txn_t& txn) {
+
+    py_db_t& db = *txn.db_ptr;
+    ukv_error_t error = NULL;
+    ukv_txn_begin(db.raw, 0, &txn.raw, &error);
+    if (error) [[unlikely]]
+        throw make_exception(db, error);
+
+    return txn.shared_from_this();
+}
+
+void commit(py_txn_t& txn, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
+    if (!txn.raw)
+        return;
+
+    py_db_t& db = *txn.db_ptr;
+    ukv_error_t error = NULL;
+    ukv_options_write_t options = NULL;
+    ukv_txn_commit(txn.raw, options, &error);
+    if (error) [[unlikely]]
+        throw make_exception(db, error);
+
+    free_temporary_memory(db, txn.temporary_arena);
+    ukv_txn_free(db.raw, txn.raw);
+    txn.raw = NULL;
 }
 
 py::bytes get_item(py_db_t& db, ukv_column_t column_ptr, ukv_key_t key) {
@@ -145,6 +203,42 @@ void set_item(py_db_t& db, ukv_column_t column_ptr, ukv_key_t key, py::bytes con
         throw make_exception(db, error);
 }
 
+py::bytes get_item(py_txn_t& txn, ukv_column_t column_ptr, ukv_key_t key) {
+    py_db_t& db = *txn.db_ptr;
+    ukv_val_ptr_t vals[1];
+    ukv_val_len_t lens[1];
+    ukv_error_t error = NULL;
+    ukv_options_read_t options = NULL;
+
+    ukv_txn_get(txn.raw,
+                &key,
+                1,
+                &column_ptr,
+                column_ptr != NULL,
+                options,
+                &txn.temporary_arena.ptr,
+                &txn.temporary_arena.length,
+                vals,
+                lens,
+                &error);
+    if (error) [[unlikely]]
+        throw make_exception(db, error);
+
+    return py::bytes {reinterpret_cast<char const*>(vals[0]), lens[0]};
+}
+
+void set_item(py_txn_t& txn, ukv_column_t column_ptr, ukv_key_t key, py::bytes const& value) {
+    py_db_t& db = *txn.db_ptr;
+    std::string_view str = value;
+    ukv_val_ptr_t ptr = ukv_val_ptr_t(str.data());
+    ukv_val_len_t len = static_cast<ukv_val_len_t>(str.size());
+    ukv_error_t error = NULL;
+
+    ukv_txn_put(txn.raw, &key, 1, &column_ptr, column_ptr != NULL, &ptr, &len, &error);
+    if (error) [[unlikely]]
+        throw make_exception(db, error);
+}
+
 ukv_column_t column_named(py_db_t& db, std::string const& column_name) {
     ukv_column_t column_ptr = NULL;
     ukv_error_t error = NULL;
@@ -161,9 +255,12 @@ PYBIND11_MODULE(ukv, m) {
         "Supports most basic collection operations, like `dict`.\n"
         "---------------------------------------------\n";
 
-    // auto ctx = py::class_<py_arena_t, std::shared_ptr<py_arena_t>>(m, "Context");
-
+    // Define our primary classes: `DataBase`, `Collection`, `Transaction`
     auto db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase");
+    auto col = py::class_<py_column_t, std::shared_ptr<py_column_t>>(m, "Collection");
+    auto txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction");
+
+    // Define `DataBase`
     db.def(py::init([](std::string const& config) {
                auto db_ptr = std::make_shared<py_db_t>();
                db_ptr->config = config;
@@ -172,26 +269,10 @@ PYBIND11_MODULE(ukv, m) {
            }),
            py::arg("config") = "");
 
-    // Opening and closing:
-    db.def("__enter__", &open_if_closed);
-    db.def("__exit__", &close_if_opened);
-
-    // Head state updates:
-    db.def("__getitem__", [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, key); });
-
-    db.def("__setitem__",
-           [](py_db_t& db, ukv_key_t key, py::bytes const& value) { return set_item(db, NULL, key, value); });
-
     db.def(
         "get",
         [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, key); },
         py::arg("key"));
-
-    db.def(
-        "set",
-        [](py_db_t& db, ukv_key_t key, py::bytes const& value) { return set_item(db, NULL, key, value); },
-        py::arg("key"),
-        py::arg("value"));
 
     db.def(
         "get",
@@ -203,10 +284,103 @@ PYBIND11_MODULE(ukv, m) {
 
     db.def(
         "set",
+        [](py_db_t& db, ukv_key_t key, py::bytes const& value) { return set_item(db, NULL, key, value); },
+        py::arg("key"),
+        py::arg("value"));
+
+    db.def(
+        "set",
         [](py_db_t& db, std::string const& collection, ukv_key_t key, py::bytes const& value) {
             return set_item(db, column_named(db, collection), key, value);
         },
         py::arg("collection"),
         py::arg("key"),
         py::arg("value"));
+
+    // Define `Collection`s member method, without defining any external constructors
+    col.def(
+        "get",
+        [](py_column_t& col, ukv_key_t key) {
+            return col.txn_ptr ? get_item(*col.txn_ptr, col.raw, key) : get_item(*col.db_ptr, col.raw, key);
+        },
+        py::arg("key"));
+
+    col.def(
+        "set",
+        [](py_column_t& col, ukv_key_t key, py::bytes const& value) {
+            return col.txn_ptr ? set_item(*col.txn_ptr, col.raw, key, value)
+                               : set_item(*col.db_ptr, col.raw, key, value);
+        },
+        py::arg("key"),
+        py::arg("value"));
+
+    // Unlike `DataBase`, it won't begin before the `__enter__` call.
+    txn.def(py::init([](py_db_t& db) {
+        auto txn_ptr = std::make_shared<py_txn_t>();
+        txn_ptr->db_ptr = &db;
+        return txn_ptr;
+    }));
+    txn.def(
+        "get",
+        [](py_txn_t& txn, ukv_key_t key) { return get_item(txn, NULL, key); },
+        py::arg("key"));
+
+    txn.def(
+        "get",
+        [](py_txn_t& txn, std::string const& collection, ukv_key_t key) {
+            return get_item(txn, column_named(*txn.db_ptr, collection), key);
+        },
+        py::arg("collection"),
+        py::arg("key"));
+
+    txn.def(
+        "set",
+        [](py_txn_t& txn, ukv_key_t key, py::bytes const& value) { return set_item(txn, NULL, key, value); },
+        py::arg("key"),
+        py::arg("value"));
+
+    txn.def(
+        "set",
+        [](py_txn_t& txn, std::string const& collection, ukv_key_t key, py::bytes const& value) {
+            return set_item(txn, column_named(*txn.db_ptr, collection), key, value);
+        },
+        py::arg("collection"),
+        py::arg("key"),
+        py::arg("value"));
+
+    // Resource management
+    db.def("__enter__", &open_if_closed);
+    db.def("__exit__", &close_if_opened);
+    txn.def("__enter__", &begin_if_needed);
+    txn.def("__exit__", &commit);
+
+    // Operator overaloads
+    db.def("__getitem__", [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, key); });
+    db.def("__setitem__",
+           [](py_db_t& db, ukv_key_t key, py::bytes const& value) { return set_item(db, NULL, key, value); });
+    txn.def("__getitem__", [](py_txn_t& txn, ukv_key_t key) { return get_item(txn, NULL, key); });
+    txn.def("__setitem__",
+            [](py_txn_t& txn, ukv_key_t key, py::bytes const& value) { return set_item(txn, NULL, key, value); });
+    col.def("__getitem__", [](py_column_t& col, ukv_key_t key) {
+        return col.txn_ptr ? get_item(*col.txn_ptr, col.raw, key) : get_item(*col.db_ptr, col.raw, key);
+    });
+    col.def("__setitem__", [](py_column_t& col, ukv_key_t key, py::bytes const& value) {
+        return col.txn_ptr ? set_item(*col.txn_ptr, col.raw, key, value) : set_item(*col.db_ptr, col.raw, key, value);
+    });
+
+    db.def("__getitem__", [](py_db_t& db, std::string const& collection) {
+        auto col = std::make_shared<py_column_t>();
+        col->name = collection;
+        col->raw = column_named(db, collection);
+        col->db_ptr = &db;
+        return col;
+    });
+    txn.def("__getitem__", [](py_txn_t& txn, std::string const& collection) {
+        auto col = std::make_shared<py_column_t>();
+        col->name = collection;
+        col->raw = column_named(*txn.db_ptr, collection);
+        col->db_ptr = txn.db_ptr;
+        col->txn_ptr = &txn;
+        return col;
+    });
 }
