@@ -138,7 +138,7 @@ void ukv_write(
                         value_t(begin, begin + len),
                         ++db.youngest_sequence,
                     };
-                    column.content.emplace(*c_keys, std::move(sequenced_value));
+                    column.content.insert_or_assign(*c_keys, std::move(sequenced_value));
                 }
             }
             catch (...) {
@@ -261,7 +261,7 @@ void ukv_column_upsert(
             auto new_column = std::make_unique<column_t>();
             new_column->name = column_name;
             *c_column = new_column.get();
-            db.named_columns.emplace(new_column->name, std::move(new_column));
+            db.named_columns.insert_or_assign(new_column->name, std::move(new_column));
         }
         catch (...) {
             *c_error = "Failed to create a new column!";
@@ -346,7 +346,7 @@ void ukv_txn_write(
         try {
             located_key_t located_key {&column, *c_keys};
             value_t value {begin, begin + len};
-            txn.new_values.emplace(std::move(located_key), std::move(value));
+            txn.new_values.insert_or_assign(std::move(located_key), std::move(value));
         }
         catch (...) {
             *c_error = "Failed to put into transaction!";
@@ -550,7 +550,7 @@ void ukv_txn_commit(
                 std::move(located_key_and_value.second),
                 txn.sequence_number,
             };
-            column.content.emplace(located_key_and_value.first.key, std::move(sequenced_value));
+            column.content.insert_or_assign(located_key_and_value.first.key, std::move(sequenced_value));
         }
     }
 
