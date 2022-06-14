@@ -287,6 +287,7 @@ void ukv_txn_get(
     size_t const keys_count,
     ukv_column_t const* columns,
     size_t const columns_count,
+    ukv_options_read_t const options,
 
     // In-outs:
     void** arena,
@@ -305,6 +306,7 @@ void ukv_txn_get(
 void ukv_txn_commit(
     // Inputs:
     ukv_txn_t const txn,
+    ukv_options_write_t const options,
     // Outputs:
     ukv_error_t* error);
 
