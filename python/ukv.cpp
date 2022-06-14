@@ -10,11 +10,13 @@
  * @section Interface
  * * update([mapping]) ~ Batch Insert/Put
  * * get(key[, default]) ~ Single & Batch Read
- * * clear() ~ Removes all items
- * * pop(key[, default]) ~ Removes the key in and returns its value.
- * * setdefault(key[, default])
- * * popitem() ~ Pop (key, &value) pairs in Last-In First-Out order.
  * * __in__(key) ~ Single & Batch Contains
+ * TODO: * clear() ~ Removes all items
+ * TODO: * pop(key[, default]) ~ Removes the key in and returns its value.
+ * Not implemented:
+ * * __len__()
+ * * popitem() ~ Pop (key, &value) pairs in Last-In First-Out order.
+ * * setdefault(key[, default])
  * Full @c `dict` API:
  * https://docs.python.org/3/library/stdtypes.html#mapping-types-dict
  * https://python-reference.readthedocs.io/en/latest/docs/dict/
