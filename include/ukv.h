@@ -37,13 +37,15 @@
  * @section Choosing between more functions vs more argument per function
  * We try to preserve balance in the number of function calls exposed in
  * this C API/ABI layer and the complexity of each call. As a result,
- * the @b set methods can be used to:
+ * the @b read methods can be used to:
  * > insert
  * > update
  * > detele
- * and the @b get methods can be used to:
+ * and the @b write methods can be used to:
  * > check object existance
  * > retrieve an object
+ * Interfaces for normal and transactional operations are identical,
+ * exept for the `_txn_` name part.
  *
  * @section Reference Designs
  * This interface is design as a generalization over most CRUD APIs
