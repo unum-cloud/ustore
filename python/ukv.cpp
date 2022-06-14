@@ -119,7 +119,7 @@ std::shared_ptr<py_db_t> open_if_closed(py_db_t& db) {
 
 void free_temporary_memory(py_db_t& db, py_arena_t& arena) {
     if (arena.ptr)
-        ukv_get_free(db.raw, arena.ptr, arena.length);
+        ukv_read_free(db.raw, arena.ptr, arena.length);
     arena.ptr = NULL;
     arena.length = 0;
 }
@@ -164,24 +164,25 @@ void commit(py_txn_t& txn, py::object const& exc_type, py::object const& exc_val
 }
 
 bool contains_item(py_db_t& db, ukv_column_t column_ptr, ukv_key_t key) {
-    bool result = false;
+    ukv_val_len_t value_length = 0;
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
 
-    ukv_contains(db.raw,
-                 &key,
-                 1,
-                 &column_ptr,
-                 column_ptr != NULL,
-                 options,
-                 &db.temporary_arena.ptr,
-                 &db.temporary_arena.length,
-                 &result,
-                 &error);
+    ukv_read(db.raw,
+             &key,
+             1,
+             &column_ptr,
+             column_ptr != NULL,
+             options,
+             &db.temporary_arena.ptr,
+             &db.temporary_arena.length,
+             NULL,
+             &value_length,
+             &error);
     if (error) [[unlikely]]
         throw make_exception(db, error);
 
-    return result;
+    return value_length != 0;
 }
 
 std::optional<py::bytes> get_item(py_db_t& db, ukv_column_t column_ptr, ukv_key_t key) {
@@ -190,17 +191,17 @@ std::optional<py::bytes> get_item(py_db_t& db, ukv_column_t column_ptr, ukv_key_
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
 
-    ukv_get(db.raw,
-            &key,
-            1,
-            &column_ptr,
-            column_ptr != NULL,
-            options,
-            &db.temporary_arena.ptr,
-            &db.temporary_arena.length,
-            &value,
-            &value_length,
-            &error);
+    ukv_read(db.raw,
+             &key,
+             1,
+             &column_ptr,
+             column_ptr != NULL,
+             options,
+             &db.temporary_arena.ptr,
+             &db.temporary_arena.length,
+             &value,
+             &value_length,
+             &error);
     if (error) [[unlikely]]
         throw make_exception(db, error);
 
@@ -223,31 +224,32 @@ void set_item(py_db_t& db, ukv_column_t column_ptr, ukv_key_t key, py::bytes con
     ukv_val_len_t len = value ? static_cast<ukv_val_len_t>(std::string_view {*value}.size()) : 0;
     ukv_error_t error = NULL;
 
-    ukv_put(db.raw, &key, 1, &column_ptr, column_ptr != NULL, options, &ptr, &len, &error);
+    ukv_write(db.raw, &key, 1, &column_ptr, column_ptr != NULL, options, &ptr, &len, &error);
     if (error) [[unlikely]]
         throw make_exception(db, error);
 }
 
 bool contains_item(py_txn_t& txn, ukv_column_t column_ptr, ukv_key_t key) {
     py_db_t& db = *txn.db_ptr;
-    bool result = false;
+    ukv_val_len_t value_length = 0;
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
 
-    ukv_txn_contains(txn.raw,
-                     &key,
-                     1,
-                     &column_ptr,
-                     column_ptr != NULL,
-                     options,
-                     &txn.temporary_arena.ptr,
-                     &txn.temporary_arena.length,
-                     &result,
-                     &error);
+    ukv_txn_read(txn.raw,
+                 &key,
+                 1,
+                 &column_ptr,
+                 column_ptr != NULL,
+                 options,
+                 &txn.temporary_arena.ptr,
+                 &txn.temporary_arena.length,
+                 NULL,
+                 &value_length,
+                 &error);
     if (error) [[unlikely]]
         throw make_exception(db, error);
 
-    return result;
+    return value_length != 0;
 }
 
 std::optional<py::bytes> get_item(py_txn_t& txn, ukv_column_t column_ptr, ukv_key_t key) {
@@ -257,17 +259,17 @@ std::optional<py::bytes> get_item(py_txn_t& txn, ukv_column_t column_ptr, ukv_ke
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
 
-    ukv_txn_get(txn.raw,
-                &key,
-                1,
-                &column_ptr,
-                column_ptr != NULL,
-                options,
-                &txn.temporary_arena.ptr,
-                &txn.temporary_arena.length,
-                &value,
-                &value_length,
-                &error);
+    ukv_txn_read(txn.raw,
+                 &key,
+                 1,
+                 &column_ptr,
+                 column_ptr != NULL,
+                 options,
+                 &txn.temporary_arena.ptr,
+                 &txn.temporary_arena.length,
+                 &value,
+                 &value_length,
+                 &error);
     if (error) [[unlikely]]
         throw make_exception(db, error);
 
@@ -283,7 +285,7 @@ void set_item(py_txn_t& txn, ukv_column_t column_ptr, ukv_key_t key, py::bytes c
     ukv_val_len_t len = value ? static_cast<ukv_val_len_t>(std::string_view {*value}.size()) : 0;
     ukv_error_t error = NULL;
 
-    ukv_txn_put(txn.raw, &key, 1, &column_ptr, column_ptr != NULL, &ptr, &len, &error);
+    ukv_txn_write(txn.raw, &key, 1, &column_ptr, column_ptr != NULL, &ptr, &len, &error);
     if (error) [[unlikely]]
         throw make_exception(db, error);
 }
