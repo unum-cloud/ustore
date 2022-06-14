@@ -251,12 +251,13 @@ void ukv_status(ukv_t db,
 /*********************************************************/
 
 /**
- * @brief
+ * @brief Begins a new ACID transaction.
  *
- * @param db
- * @param sequence_number
- * @param txn May be pointing to an existing transaction. In that case, it's reset to new @p `sequence_number`.
- * @param error
+ * @param db                Already open database instance, @see `ukv_open`.
+ * @param sequence_number   If equal to 0, a new number will be generated on the fly.
+ * @param txn               May be pointing to an existing transaction.
+ *                          In that case, it's reset to new @p `sequence_number`.
+ * @param error             The error message to be handled by callee.
  */
 void ukv_txn_begin(
     // Inputs:
@@ -297,6 +298,7 @@ void ukv_txn_get(
     ukv_error_t* error);
 
 /**
+ * @brief Commits an ACID transaction.
  * On success, the transaction content is wiped clean.
  * On failure, the entire transaction state is preserved to allow retries.
  */

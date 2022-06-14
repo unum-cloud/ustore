@@ -74,8 +74,17 @@ struct db_t {
      * This can be updated even outside of the main @p `mutex` on HEAD state.
      */
     std::atomic<sequence_t> youngest_sequence {0};
-    std::atomic<sequence_t> oldest_running_transaction {0};
 };
+
+/**
+ * @brief Solves the problem of modulo arithmetic and `sequence_t` overflow.
+ * Still works correctly, when `max` has overflown, but `min` hasn't yet,
+ * so `min` can be bigger than `max`.
+ */
+bool belongs_to_gap(sequence_t sequence_number, sequence_t min, sequence_t max) noexcept {
+    return min < max ? ((sequence_number > min) & (sequence_number <= max))
+                     : ((sequence_number > min) | (sequence_number <= max));
+}
 
 } // namespace
 
@@ -324,7 +333,7 @@ void ukv_txn_begin(
 
     txn_t& txn = *reinterpret_cast<txn_t*>(*c_txn);
     txn.db_ptr = &db;
-    txn.sequence_number = c_sequence_number;
+    txn.sequence_number = c_sequence_number ? c_sequence_number : ++db.youngest_sequence;
     txn.requested_keys.clear();
     txn.new_values.clear();
 }
@@ -392,6 +401,7 @@ void ukv_txn_get(
     txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
     db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
+    sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
     // 1. Estimate the total size
     size_t total_bytes = 0;
@@ -399,7 +409,7 @@ void ukv_txn_get(
         column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(c_columns[i]) : db.main_column;
         auto key_iterator = column.content.find(c_keys[i]);
         if (key_iterator != column.content.end()) {
-            if (key_iterator->second.sequence_number > txn.sequence_number) {
+            if (belongs_to_gap(key_iterator->second.sequence_number, txn.sequence_number, youngest_sequence_number)) {
                 *c_error = "Requested key was already overwritten since the start of the transaction!";
                 return;
             }
@@ -457,6 +467,7 @@ void ukv_txn_commit(
     txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
     db_t& db = *txn.db_ptr;
     std::unique_lock _ {db.mutex};
+    sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
     // 1. Check for refreshes among fetched keys
     for (auto const& [located_key, located_sequence] : txn.requested_keys) {
@@ -475,7 +486,7 @@ void ukv_txn_commit(
         column_t& column = *located_key.column_ptr;
         auto key_iterator = column.content.find(located_key.key);
         if (key_iterator != column.content.end()) {
-            if (key_iterator->second.sequence_number >= txn.sequence_number) {
+            if (belongs_to_gap(key_iterator->second.sequence_number, txn.sequence_number, youngest_sequence_number)) {
                 *c_error = "Incoming key collides with newer entry!";
                 return;
             }
