@@ -234,16 +234,16 @@ void ukv_get(
     }
 
     // 3. Fetch the data
-    size_t exported_bytes = 0;
+    size_t exported_into_arena = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
         column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
         auto key_iterator = column.content.find(*c_keys);
         if (key_iterator != column.content.end()) {
             auto len = key_iterator->second.data.size();
-            std::memcpy(arena + exported_bytes, key_iterator->second.data.data(), len);
-            *c_values = reinterpret_cast<ukv_val_ptr_t>(arena + exported_bytes);
+            std::memcpy(arena + exported_into_arena, key_iterator->second.data.data(), len);
+            *c_values = reinterpret_cast<ukv_val_ptr_t>(arena + exported_into_arena);
             *c_values_lengths = static_cast<ukv_val_len_t>(len);
-            exported_bytes += len;
+            exported_into_arena += len;
         }
         else {
             *c_values = NULL;
@@ -386,6 +386,7 @@ void ukv_txn_get(
     size_t const c_keys_count,
     ukv_column_t const* c_columns,
     size_t const c_columns_count,
+    [[maybe_unused]] ukv_options_read_t const options,
 
     // In-outs:
     void** c_arena,
@@ -403,10 +404,16 @@ void ukv_txn_get(
     std::shared_lock _ {db.mutex};
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
-    // 1. Estimate the total size
+    // 1. Estimate the total size of keys outside of the transaction
     size_t total_bytes = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
         column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(c_columns[i]) : db.main_column;
+
+        // Some keys may already be overwritten inside of transaction
+        auto overwrite_iterator = txn.new_values.find(located_key_t {&column, c_keys[i]});
+        if (overwrite_iterator != txn.new_values.end())
+            continue;
+
         auto key_iterator = column.content.find(c_keys[i]);
         if (key_iterator != column.content.end()) {
             if (belongs_to_gap(key_iterator->second.sequence_number, txn.sequence_number, youngest_sequence_number)) {
@@ -417,7 +424,7 @@ void ukv_txn_get(
         }
     }
 
-    // 2. Allocate a tape for all the values to be fetched
+    // 2. Allocate a tape for all the values to be pulled
     byte_t* arena = *reinterpret_cast<byte_t**>(c_arena);
     if (total_bytes <= *c_arena_length) {
         try {
@@ -432,17 +439,23 @@ void ukv_txn_get(
         }
     }
 
-    // 3. Fetch the data
-    size_t exported_bytes = 0;
+    // 3. Pull the data from the main store
+    size_t exported_into_arena = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
         column_t& column = c_columns_count ? *reinterpret_cast<column_t*>(*c_columns) : db.main_column;
-        auto key_iterator = column.content.find(*c_keys);
-        if (key_iterator != column.content.end()) {
+
+        // Some keys may already be overwritten inside of transaction
+        if (auto overwrite_iterator = txn.new_values.find(located_key_t {&column, c_keys[i]});
+            overwrite_iterator != txn.new_values.end()) {
+            *c_values = reinterpret_cast<ukv_val_ptr_t>(overwrite_iterator->second.data());
+            *c_values_lengths = static_cast<ukv_val_len_t>(overwrite_iterator->second.size());
+        }
+        else if (auto key_iterator = column.content.find(*c_keys); key_iterator != column.content.end()) {
             auto len = key_iterator->second.data.size();
-            std::memcpy(arena + exported_bytes, key_iterator->second.data.data(), len);
-            *c_values = reinterpret_cast<ukv_val_ptr_t>(arena + exported_bytes);
+            std::memcpy(arena + exported_into_arena, key_iterator->second.data.data(), len);
+            *c_values = reinterpret_cast<ukv_val_ptr_t>(arena + exported_into_arena);
             *c_values_lengths = static_cast<ukv_val_len_t>(len);
-            exported_bytes += len;
+            exported_into_arena += len;
         }
         else {
             *c_values = NULL;
@@ -459,6 +472,7 @@ void ukv_txn_get(
 void ukv_txn_commit(
     // Inputs:
     ukv_txn_t const c_txn,
+    [[maybe_unused]] ukv_options_write_t const options,
     // Outputs:
     ukv_error_t* c_error) {
 
