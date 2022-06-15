@@ -1,4 +1,3 @@
-import threading
 import ukv
 
 
@@ -50,28 +49,3 @@ def test_main_collection_txn():
         with ukv.Transaction(db) as txn:
             only_explicit(txn)
             only_operators(txn)
-
-
-def test_multithreaded_transaction():
-    keys_count = 100
-
-    def set_same_value(txn, value):
-        for index in range(keys_count):
-            txn.set(index, value.encode())
-        for index in range(keys_count):
-            assert txn.get(index) == value.encode()
-
-    with ukv.DataBase() as db:
-        with ukv.Transaction(db) as txn:
-            thread_count = 128
-            threads = [None] * thread_count
-            for thread_idx in range(thread_count):
-                threads[thread_idx] = threading.Thread(
-                    target=set_same_value, args=(txn, str(thread_idx,)))
-            for thread_idx in range(thread_count):
-                threads[thread_idx].start()
-            for thread_idx in range(thread_count):
-                threads[thread_idx].join()
-
-            for index in range(keys_count-1):
-                assert txn.get(index) == txn.get(index+1)
