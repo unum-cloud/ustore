@@ -81,9 +81,11 @@ typedef void* ukv_options_read_t;
 typedef void* ukv_options_write_t;
 
 typedef uint64_t ukv_key_t;
+typedef void* ukv_arena_ptr_t;
 typedef void* ukv_val_ptr_t;
 typedef uint32_t ukv_val_len_t;
 typedef char const* ukv_error_t;
+
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -182,7 +184,7 @@ void ukv_read(
     ukv_options_read_t const options,
 
     // In-outs:
-    void** arena,
+    ukv_arena_ptr_t* arena,
     size_t* arena_length,
 
     // Outputs:
@@ -273,7 +275,7 @@ void ukv_txn_read(
     ukv_options_read_t const options,
 
     // In-outs:
-    void** arena,
+    ukv_arena_ptr_t* arena,
     size_t* arena_length,
 
     // Outputs:
@@ -314,7 +316,7 @@ void ukv_iter_read_value_size(ukv_iter_t const iter, size_t* length, size_t* are
  */
 void ukv_iter_read_value(ukv_iter_t const iter,
                          // In-outs:
-                         void** arena,
+                         ukv_arena_ptr_t* arena,
                          size_t* arena_length,
                          // Outputs:
                          ukv_val_ptr_t* value,
@@ -331,7 +333,7 @@ void ukv_iter_read_value(ukv_iter_t const iter,
  * > `ukv_txn_read`
  * to deallocate and return memory to UnumDB and OS.
  */
-void ukv_read_free(ukv_t const db, void*, size_t);
+void ukv_read_free(ukv_t const db, ukv_arena_ptr_t, size_t);
 
 void ukv_txn_free(ukv_t const db, ukv_txn_t const txn);
 
