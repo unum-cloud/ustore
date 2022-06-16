@@ -121,7 +121,7 @@ std::shared_ptr<py_db_t> open_if_closed(py_db_t& db) {
 
 void free_temporary_memory(py_db_t& db, py_arena_t& arena) {
     if (arena.ptr)
-        ukv_read_free(db.raw, arena.ptr, arena.length);
+        ukv_arena_free(db.raw, arena.ptr, arena.length);
     arena.ptr = NULL;
     arena.length = 0;
 }
