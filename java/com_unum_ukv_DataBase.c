@@ -91,7 +91,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_containsKey(JNIEnv* env_ja
 
     ukv_read(db_ptr_c, &key_c, 1, NULL, 0, options_c, &arena_c, &arena_len_c, NULL, &value_len_c, &error_c);
     if (arena_c)
-        ukv_read_free(db_ptr_c, arena_c, arena_len_c);
+        ukv_arena_free(db_ptr_c, arena_c, arena_len_c);
     if (forward_error(env_java, error_c))
         return false;
 
@@ -124,7 +124,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_get(JNIEnv* env_java, jo
     }
 
     if (arena_c)
-        ukv_read_free(db_ptr_c, arena_c, arena_len_c);
+        ukv_arena_free(db_ptr_c, arena_c, arena_len_c);
 
     forward_error(env_java, error_c);
     return result_java;

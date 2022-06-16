@@ -92,7 +92,7 @@ func (db *database) Get(key uint64) ([]byte, error) {
 		&pulled_value_c, &pulled_value_length_c, &error_c)
 
 	pulled_value_go := C.GoBytes(unsafe.Pointer(pulled_value_c), C.int(pulled_value_length_c))
-	C.ukv_read_free(db.raw, arena_c, arena_length_c)
+	C.ukv_arena_free(db.raw, arena_c, arena_length_c)
 	// We can also jsut cast it to slice without copies
 	// pulled_value_go := (*[1 << 30]byte)(unsafe.Pointer(pulled_value_c))[:arena_length_c:arena_length_c]
 
