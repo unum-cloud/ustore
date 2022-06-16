@@ -101,9 +101,9 @@ struct py_column_t : public std::enable_shared_from_this<py_column_t> {
     }
 };
 
-std::runtime_error make_exception(py_db_t& db, char const* error) {
+std::runtime_error make_exception([[maybe_unused]] py_db_t& db, char const* error) {
     std::runtime_error result(error);
-    ukv_error_free(db.raw, error);
+    ukv_error_free(error);
     return result;
 }
 

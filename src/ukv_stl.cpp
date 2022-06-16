@@ -612,5 +612,5 @@ void ukv_column_free(ukv_t const, ukv_column_t const) {
 void ukv_iter_free(ukv_t const, ukv_iter_t const) {
 }
 
-void ukv_error_free(ukv_t, ukv_error_t) {
+void ukv_error_free(ukv_error_t) {
 }

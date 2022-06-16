@@ -209,7 +209,8 @@ void ukv_column_upsert(
 
 /**
  * @brief Removes column and all of its conntents from DB.
- * The default unnamed collection can't be removed.
+ * The default unnamed collection can't be removed, but it
+ * will be @b cleared, if you pass a `NULL` as `column_name`.
  */
 void ukv_column_remove(
     // Inputs:
@@ -340,15 +341,16 @@ void ukv_iter_free(ukv_t const db, ukv_iter_t const iter);
 void ukv_column_free(ukv_t const db, ukv_column_t const column);
 
 /**
- * @brief A function to be called after any function failure,
- * that resulted in a non-NULL `ukv_error_t`.
- */
-void ukv_error_free(ukv_t const db, ukv_error_t const error);
-
-/**
  * @brief Closes the DB and deallocates the state.
  */
 void ukv_free(ukv_t const db);
+
+/**
+ * @brief A function to be called after any function failure,
+ * that resulted in a non-NULL `ukv_error_t`, even `ukv_open`.
+ * That's why, unlike other `...free` methods, doesn't need `db`.
+ */
+void ukv_error_free(ukv_error_t const error);
 
 #ifdef __cplusplus
 } /* end extern "C" */
