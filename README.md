@@ -5,7 +5,7 @@ Universal Key-Value store interface for both in-memory and persistent ACID trans
 ```mermaid
 flowchart LR
   
-  ukv((UKV))
+  ukv(((UKV)))
 
   id1[In-Memory Embedded FOSS Store with STL] --> ukv;
   id2[In-Memory Embeded Store by Unum] --> ukv;
@@ -24,6 +24,17 @@ flowchart LR
   %% ukv ---> Lucene;
   %% ukv ---> MongoDB;
 ```
+
+Assumptions and limitations:
+
+* Keys are constant length native integer types. High-performance solutions are impossible with variable size keys. 64-bit unsigned integers are currently chosen as the smallest native numeric type, that can address modern datasets.
+* Values are serialized into variable-length byte strings.
+* Iterators and enumerators often come with certain relevance, consistency or performance tradeoffs or aren't supported at all. Check the specs of exact backend.
+* Transactions are ACI(D) by-default, meaning that:
+  * Atomicity is guaranteed,
+  * Consistency is implemented in the strongest form - tracking all key and metadata lookups by default,
+  * Isolation is guaranteed, but may be implemented differently, depending on backend - in-memory systems generally prefer "locking" over "multi-versioning".
+  * Durability doesn't apply to in-memory systems, but even in persistent stores its often disabled to be implemented in higher layers of infrastructure.
 
 ## Development
 
@@ -68,6 +79,10 @@ db.put(42, "purpose of life".getBytes());
 assert db.get(42) == "purpose of life".getBytes() : "Big surprise";
 db.close();
 ```
+
+All `get` requests cause memory allocations in Java Runtime and export data into native Java types.
+Most `set` requests will simply cast and forward values without additional copies.
+Aside from opening and closing this class is **thread-safe** for higher interop with other Java-based tools.
 
 ### GoLang
 
