@@ -166,7 +166,7 @@ void ukv_write(
  *                          During the first request you pass a `NULL`,
  *                          we allocate that buffer, put found values in it and
  *                          return you a pointer. You can later reuse it for future
- *                          requests, or `free` it via `ukv_read_free`.
+ *                          requests, or `free` it via `ukv_arena_free`.
  * @param arena_length      Current size of @p `arena`.
  * @param values            Array of pointers to the first byte of each value.
  *                          If `NULL`, only the `value_lengths` will be pulled.
@@ -313,7 +313,7 @@ void ukv_iter_read_value_size(ukv_iter_t const iter, size_t* length, size_t* are
 /**
  * @brief Fetches currently targeted value from disk.
  * ! The entry received from yere should NOT
- * ! be deallocated via `ukv_read_free`.
+ * ! be deallocated via `ukv_arena_free`.
  */
 void ukv_iter_read_value(ukv_iter_t const iter,
                          // In-outs:
@@ -334,7 +334,7 @@ void ukv_iter_read_value(ukv_iter_t const iter,
  * > `ukv_txn_read`
  * to deallocate and return memory to UnumDB and OS.
  */
-void ukv_read_free(ukv_t const db, ukv_arena_ptr_t, size_t);
+void ukv_arena_free(ukv_t const db, ukv_arena_ptr_t, size_t);
 
 void ukv_txn_free(ukv_t const db, ukv_txn_t const txn);
 

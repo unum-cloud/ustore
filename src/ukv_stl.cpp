@@ -590,7 +590,7 @@ void ukv_iter_read_value(ukv_iter_t const, void**, size_t*, ukv_val_ptr_t*, ukv_
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
-void ukv_read_free(ukv_t const, void* c_ptr, size_t c_len) {
+void ukv_arena_free(ukv_t const, void* c_ptr, size_t c_len) {
     allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
 }
 
