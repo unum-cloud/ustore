@@ -29,8 +29,8 @@ public class DataBase implements AutoCloseable {
     static {
         try {
             // TODO: During installation, put the library at the right global path
-            // System.loadLibrary("native");
-            System.load("/home/av/Code/DiskKV/bindings/jvm/libnative.so");
+            System.loadLibrary("ukv_java");
+            // System.load("/home/av/Code/DiskKV/bindings/jvm/libnative.so");
         } catch (UnsatisfiedLinkError e) {
             String paths = System.getProperty("java.library.path");
             System.err.println("Native code library failed to load.\n" + e);
@@ -119,13 +119,6 @@ public class DataBase implements AutoCloseable {
         System.out.println("Closed DataBase in the auto-close");
     }
 
-    public static void main(byte[][] args) {
-        DataBase db = new DataBase("");
-        db.put(1, "hey".getBytes());
-        assert db.get(1) == "hey".getBytes() : "Received wrong value";
-        db.close();
-    }
-
     // Currently unsupported functions:
 
     public native boolean isEmpty();
@@ -134,4 +127,10 @@ public class DataBase implements AutoCloseable {
 
     public native void enumerate();
 
+    public static void main(String[] args) {
+        DataBase db = new DataBase("");
+        db.put(1, "hey".getBytes());
+        assert db.get(1) == "hey".getBytes() : "Received wrong value";
+        db.close();
+    }
 }
