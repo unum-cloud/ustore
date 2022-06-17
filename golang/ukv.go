@@ -33,7 +33,7 @@ func (db *database) Reconnect(config string) error {
 
 	if error_c != nil {
 		error_go := C.GoString(error_c)
-		C.ukv_error_free(db.raw, error_c)
+		C.ukv_error_free(error_c)
 		return errors.New(error_go)
 	}
 
@@ -63,7 +63,7 @@ func (db *database) Set(key uint64, value *[]byte) error {
 
 	if error_c != nil {
 		error_go := C.GoString(error_c)
-		C.ukv_error_free(db.raw, error_c)
+		C.ukv_error_free(error_c)
 		return errors.New(error_go)
 	}
 
@@ -98,7 +98,7 @@ func (db *database) Get(key uint64) ([]byte, error) {
 
 	if error_c != nil {
 		error_go := C.GoString(error_c)
-		C.ukv_error_free(db.raw, error_c)
+		C.ukv_error_free(error_c)
 		return nil, errors.New(error_go)
 	}
 
