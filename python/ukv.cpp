@@ -8,15 +8,23 @@
  *   https://stackoverflow.com/a/55205951
  *
  * @section Interface
- * * update([mapping]) ~ Batch Insert/Put
- * * get(key[, default]) ~ Single & Batch Read
- * * __in__(key) ~ Single & Batch Contains
- * TODO: * clear() ~ Removes all items
- * TODO: * pop(key[, default]) ~ Removes the key in and returns its value.
- * Not implemented:
- * * __len__()
- * * popitem() ~ Pop (key, &value) pairs in Last-In First-Out order.
- * * setdefault(key[, default])
+ * Primary DataBase Methods:
+ *      * get(collection?, key, default?) ~ Single Read
+ *      * set(collection?, key, default?) ~ Single Insert
+ *      * __in__(key) ~ Single & Batch Contains
+ *      * __getitem__(key: int) ~ Value Lookup
+ *      * __getitem__(collection: str) ~ Sub-Collection Lookup
+ *      * clear() ~ Removes all items
+ *      * TODO: pop(key, default?) ~ Removes the key in and returns its value.
+ *      * TODO: update(mapping) ~ Batch Insert/Put
+ * Additional Batch Methods:
+ *      * TODO: get_matrix(collection?, keys, max_length: int, padding: byte)
+ *      * TODO: get_table(collection?, keys, field_ids)
+ * Intentionally not implemented:
+ *      * __len__() ~ It's hard to consistently estimate the collection.
+ *      * popitem() ~ We can't guarantee Last-In First-Out semantics.
+ *      * setdefault(key[, default]) ~ As default values aren't 
+ * 
  * Full @c `dict` API:
  * https://docs.python.org/3/library/stdtypes.html#mapping-types-dict
  * https://python-reference.readthedocs.io/en/latest/docs/dict/
@@ -349,6 +357,11 @@ PYBIND11_MODULE(ukv, m) {
         py::arg("collection"),
         py::arg("key"),
         py::arg("value"));
+    col.def(
+        "clear",
+        [](py_db_t& db) {
+            // TODO:
+        });
 
     // Define `Collection`s member method, without defining any external constructors
     col.def(
@@ -366,6 +379,14 @@ PYBIND11_MODULE(ukv, m) {
         },
         py::arg("key"),
         py::arg("value"));
+    col.def(
+        "clear",
+        [](py_column_t& col) {
+            ukv_error_t error = NULL;        
+            ukv_column_remove(col.db_ptr->raw, col.name.c_str(), &error);
+            if (error) [[unlikely]]
+                throw make_exception(*col.db_ptr, error);
+        });
 
     // Unlike `DataBase`, it won't begin before the `__enter__` call.
     txn.def(py::init([](py_db_t& db) {
@@ -449,4 +470,11 @@ PYBIND11_MODULE(ukv, m) {
         col->txn_ptr = &txn;
         return col;
     });
+    txn.def("__delitem__", [](py_db_t& db, std::string const& collection) { 
+        ukv_error_t error = NULL;        
+        ukv_column_remove(db.raw, collection.c_str(), &error);
+        if (error) [[unlikely]]
+            throw make_exception(db, error);
+    });
+
 }
