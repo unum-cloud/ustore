@@ -9,6 +9,7 @@ package main
 import "C"
 import (
 	"errors"
+	"fmt"
 	"unsafe"
 )
 
@@ -106,12 +107,44 @@ func (db *database) Get(key uint64) ([]byte, error) {
 
 }
 
+func (db *database) Contains(key uint64) (bool, error) {
+
+	// Even though we can't properly write without a single copy
+	// from Go layer, but we can read entries from C-allocated buffers.
+	error_c := C.ukv_error_t(nil)
+	key_c := C.ukv_key_t(key)
+	pulled_value_length_c := C.ukv_val_len_t(0)
+	arena_c := (C.ukv_arena_ptr_t)(nil)
+	arena_length_c := (C.size_t)(0)
+
+	C.ukv_read(
+		// Inputs:
+		db.raw, &key_c, C.size_t(1),
+		// Configs:
+		(*C.ukv_column_t)(nil), C.size_t(0), (C.ukv_options_read_t)(nil),
+		// Temporary Memory:
+		&arena_c, &arena_length_c,
+		// Data:
+		nil, &pulled_value_length_c, &error_c)
+
+	C.ukv_arena_free(db.raw, arena_c, arena_length_c)
+
+	if error_c != nil {
+		error_go := C.GoString(error_c)
+		C.ukv_error_free(error_c)
+		return false, errors.New(error_go)
+	}
+
+	return pulled_value_length_c != 0, nil
+}
+
 func main() {
 
 	db := database{}
 	db.Reconnect("")
 	db.Set(10, &[]byte{10, 23})
-	db.Get(10)
+	fmt.Println(db.Get(10))
+	fmt.Println(db.Contains(10))
 
 	// TODO: Outgoing channel for batch reads
 	// TODO: Internal memory handle inside `database` to store reads
