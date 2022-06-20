@@ -2,7 +2,7 @@ package main
 
 /*
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../include
-#cgo LDFLAGS: -L${SRCDIR}/../build/lib -lukv -lstdc++
+#cgo LDFLAGS: -L${SRCDIR}/../build/lib -lukv_stl_embedded -lstdc++
 #include "ukv.h"
 #include <stdlib.h>
 */
@@ -55,9 +55,9 @@ func (db *database) Set(key uint64, value *[]byte) error {
 
 	C.ukv_write(
 		// Inputs:
-		db.raw, &key_c, C.size_t(1),
+		db.raw, nil, &key_c, C.size_t(1),
 		// Configs:
-		(*C.ukv_column_t)(nil), C.size_t(0), (C.ukv_options_write_t)(nil),
+		(*C.ukv_column_t)(nil), (C.ukv_options_write_t)(nil),
 		// Data:
 		&value_ptr_c, &value_length_c, &error_c)
 	C.free(value_go)
@@ -84,9 +84,9 @@ func (db *database) Get(key uint64) ([]byte, error) {
 
 	C.ukv_read(
 		// Inputs:
-		db.raw, &key_c, C.size_t(1),
+		db.raw, nil, &key_c, C.size_t(1),
 		// Configs:
-		(*C.ukv_column_t)(nil), C.size_t(0), (C.ukv_options_read_t)(nil),
+		(*C.ukv_column_t)(nil), (C.ukv_options_read_t)(nil),
 		// Temporary Memory:
 		&arena_c, &arena_length_c,
 		// Data:
@@ -119,9 +119,9 @@ func (db *database) Contains(key uint64) (bool, error) {
 
 	C.ukv_read(
 		// Inputs:
-		db.raw, &key_c, C.size_t(1),
+		db.raw, nil, &key_c, C.size_t(1),
 		// Configs:
-		(*C.ukv_column_t)(nil), C.size_t(0), (C.ukv_options_read_t)(nil),
+		(*C.ukv_column_t)(nil), (C.ukv_options_read_t)(nil),
 		// Temporary Memory:
 		&arena_c, &arena_length_c,
 		// Data:
