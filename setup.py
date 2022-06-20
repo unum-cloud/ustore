@@ -13,7 +13,7 @@ ext_modules = [
         # Example: passing in the version to the compiled code
         include_dirs=['include/'],
         library_dirs=['build/lib/'],
-        libraries=['ukv'],
+        libraries=['ukv_stl_embedded'],
         define_macros=[('UKV_VERSION', __version__)],
     ),
 ]
