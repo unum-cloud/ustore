@@ -1,3 +1,5 @@
+import pytest
+
 import ukv
 
 
@@ -23,6 +25,82 @@ def test_transaction_remove():
             del txn[index]
     for index in range(keys_count):
         assert index not in db
+
+
+def test_set_by_2_transactions():
+    keys_count = 100
+
+    db = ukv.DataBase()
+    txn1 = ukv.Transaction(db)
+    txn2 = ukv.Transaction(db)
+
+    for index in range(0, keys_count, 2):
+        txn1.set(index, str(index).encode())
+    for index in range(1, keys_count, 2):
+        txn2.set(index, str(index).encode())
+
+    txn1.__exit__(None, None, None)
+    txn2.__exit__(None, None, None)
+
+    for index in range(keys_count):
+        assert db.get(index) == str(index).encode()
+
+
+def test_remove_by_2_transactions():
+    keys_count = 100
+
+    db = ukv.DataBase()
+    for index in range(keys_count):
+        db.set(index, str(index).encode())
+
+    txn1 = ukv.Transaction(db)
+    txn2 = ukv.Transaction(db)
+    for index in range(0, keys_count, 2):
+        del txn1[index]
+    for index in range(1, keys_count, 2):
+        del txn2[index]
+
+    txn1.__exit__(None, None, None)
+    txn2.__exit__(None, None, None)
+
+    for index in range(keys_count):
+        assert index not in db
+
+
+def test_set_by_2_intersected_transactions():
+    keys_count = 100
+
+    db = ukv.DataBase()
+    txn1 = ukv.Transaction(db)
+    txn2 = ukv.Transaction(db)
+
+    for index in range(keys_count):
+        txn1.set(index, str(index).encode())
+    for index in range(keys_count):
+        txn2.set(index, str(index).encode())
+
+    txn2.__exit__(None, None, None)
+    with pytest.raises(Exception):
+        txn1.__exit__(None, None, None)
+
+
+def test_remove_by_2_intersected_transactions():
+    keys_count = 100
+
+    db = ukv.DataBase()
+    for index in range(keys_count):
+        db.set(index, str(index).encode())
+
+    txn1 = ukv.Transaction(db)
+    txn2 = ukv.Transaction(db)
+    for index in range(keys_count):
+        del txn1[index]
+    for index in range(keys_count):
+        del txn2[index]
+
+    txn2.__exit__(None, None, None)
+    with pytest.raises(Exception):
+        txn1.__exit__(None, None, None)
 
 
 def test_multiple_transactions():
