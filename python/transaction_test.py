@@ -150,6 +150,17 @@ def test_transaction_set_get_with_multiple_collections():
                 assert index in db[str(col_index)]
 
 
+def test_transaction_get_fail():
+    db = ukv.DataBase()
+
+    txn1 = ukv.Transaction(db)
+    txn2 = ukv.Transaction(db)
+
+    db.set(0, "value".encode())
+    with pytest.raises(Exception):
+        txn1.get(0)
+
+
 # TODO: We don't have rollback to commit transactions anyway
 # def test_transactions_with_threads():
 #     keys_count = 100
