@@ -24,7 +24,7 @@ import java.lang.*; // Finalization
  *          https://github.com/facebook/rocksdb/blob/main/java/src/main/java/org/rocksdb/RocksDB.java
  * 
  */
-public class DataBase implements AutoCloseable {
+public class DataBase extends Transaction implements AutoCloseable {
 
     static {
         try {
@@ -39,93 +39,21 @@ public class DataBase implements AutoCloseable {
         }
     }
 
-    private long nativeAddress = 0;
-
     /**
-     * Tests if the specified object is a key in this collection.
+     * @brief Begins a new transaction with an auto-incremented identifier.
+     *        By default, the transaction will be commited on `close`.
      */
-    public native boolean containsKey(long key);
+    public native Transaction transaction();
 
     /**
-     * Maps the specified key to the specified value in this collection.
-     */
-    public native void put(long key, byte[] value);
-
-    /**
-     * Returns the value to which the specified key is mapped, or null if this map
-     * contains no mapping for the key.
-     */
-    public native byte[] get(long key);
-
-    /**
-     * Removes the key (and its corresponding value) from this collection.
-     */
-    public native byte[] remove(long key);
-
-    /**
-     * Clears this collection so that it contains no keys.
+     * @brief Clears this collection so that it contains no keys.
+     *        Imposes a global lock on the entire collection, so use rarely.
      */
     public native void clear();
 
     public native void open(String config_json);
 
     public native void close_();
-
-    /**
-     * If the specified key is not already associated with a value (or is mapped to
-     * null) associates it with the given value and returns null, else returns the
-     * current value.
-     */
-    public void putIfAbsent(long key, byte[] value) {
-        if (!containsKey(key))
-            put(key, value);
-    }
-
-    /**
-     * Copies all of the mappings from the specified map to this collection.
-     */
-    public void putAll(Map<Long, byte[]> t) {
-        for (Map.Entry<Long, byte[]> entry : t.entrySet())
-            put(entry.getKey(), entry.getValue());
-    }
-
-    /**
-     * Replaces the entry for the specified key only if it is currently mapped to
-     * some value.
-     */
-    public byte[] replace(long key, byte[] value) {
-        byte[] old = get(key);
-        if (old != value)
-            put(key, value);
-        return old;
-    }
-
-    /**
-     * Returns the value to which the specified key is mapped, or defaultValue if
-     * this map contains no mapping for the key.
-     */
-    public byte[] getOrDefault(long key, byte[] defaultValue) {
-        byte[] old = get(key);
-        if (old != null)
-            return old;
-        return defaultValue;
-
-    }
-
-    /**
-     * Removes the entry for the specified key only if it is currently mapped to the
-     * specified value.
-     * 
-     * @return True, iff key was found, value was equal and the removal occured.
-     */
-    public boolean remove(long key, byte[] value) {
-        byte[] old = get(key);
-        if (old == value) {
-            remove(key, value);
-            return true;
-        } else
-            return false;
-    }
 
     public DataBase(String config_json) {
         open(config_json);
@@ -140,16 +68,16 @@ public class DataBase implements AutoCloseable {
     @Override
     public void close() {
         close_();
-        System.out.println("Closed DataBase in the auto-close");
     }
 
-    // Currently unsupported functions:
+    @Override
+    public void rollback() {
+    }
 
-    public native boolean isEmpty();
-
-    public native long size();
-
-    public native void enumerate();
+    @Override
+    public boolean commit() {
+        return false;
+    }
 
     public static void main(String[] args) {
         DataBase db = new DataBase("");

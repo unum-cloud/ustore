@@ -9,35 +9,11 @@ extern "C" {
 #endif
 /*
  * Class:     com_unum_ukv_DataBase
- * Method:    containsKey
- * Signature: (J)Z
+ * Method:    transaction
+ * Signature: ()Lcom/unum/ukv/Transaction;
  */
-JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_containsKey
-  (JNIEnv *, jobject, jlong);
-
-/*
- * Class:     com_unum_ukv_DataBase
- * Method:    put
- * Signature: (J[B)V
- */
-JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_put
-  (JNIEnv *, jobject, jlong, jbyteArray);
-
-/*
- * Class:     com_unum_ukv_DataBase
- * Method:    get
- * Signature: (J)[B
- */
-JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_get
-  (JNIEnv *, jobject, jlong);
-
-/*
- * Class:     com_unum_ukv_DataBase
- * Method:    remove
- * Signature: (J)[B
- */
-JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_remove
-  (JNIEnv *, jobject, jlong);
+JNIEXPORT jobject JNICALL Java_com_unum_ukv_DataBase_transaction
+  (JNIEnv *, jobject);
 
 /*
  * Class:     com_unum_ukv_DataBase
@@ -61,38 +37,6 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_open
  * Signature: ()V
  */
 JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_close_1
-  (JNIEnv *, jobject);
-
-/*
- * Class:     com_unum_ukv_DataBase
- * Method:    putAll
- * Signature: (Ljava/util/Map;)V
- */
-JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_putAll
-  (JNIEnv *, jobject, jobject);
-
-/*
- * Class:     com_unum_ukv_DataBase
- * Method:    isEmpty
- * Signature: ()Z
- */
-JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_isEmpty
-  (JNIEnv *, jobject);
-
-/*
- * Class:     com_unum_ukv_DataBase
- * Method:    size
- * Signature: ()J
- */
-JNIEXPORT jlong JNICALL Java_com_unum_ukv_DataBase_size
-  (JNIEnv *, jobject);
-
-/*
- * Class:     com_unum_ukv_DataBase
- * Method:    enumerate
- * Signature: ()V
- */
-JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_enumerate
   (JNIEnv *, jobject);
 
 #ifdef __cplusplus
