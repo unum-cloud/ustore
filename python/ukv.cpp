@@ -418,6 +418,8 @@ PYBIND11_MODULE(ukv, m) {
                     commit(txn);
                 }
                 catch (...) {
+                    // We must now propagate this exception upwards:
+                    // https://gist.github.com/YannickJadoul/f1fc8db711ed980cf02610277af058e4
                 }
             });
 
