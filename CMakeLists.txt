@@ -55,6 +55,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG_SAFE_MODE -g")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG -O3")
 
 include_directories(include/)
+
 # Download Networking TS for us to implement RPC
 # Example can be found here: https://github.com/bsergeev/CppNetworkingTS
 # Discussions: https://www.reddit.com/r/cpp/comments/b12iob/networking_ts_beast_new_tutorials_read_this_to/
@@ -74,3 +75,8 @@ if (NOT NETTS_INCLUDE_DIR)
     message(FATAL_ERROR "Something wrong with networking-ts-impl.git, aborting...")
 endif()
 include_directories("${NETTS_LOCATION}/include")
+
+# Define the libraries we will need to build
+add_library(ukv_stl_embedded    src/ukv_stl_embedded.cpp)
+add_library(ukv_stl_client      src/ukv_stl_client.cpp)
+add_executable(ukv_stl_server   src/ukv_stl_server.cpp)
