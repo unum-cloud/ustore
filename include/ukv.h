@@ -10,10 +10,8 @@
  * > Zero-length values are not allowed.
  * > Iterators often can't be fully consistent, to allow concurrency.
  *
- * @todo Iterators over transactions/snapshots.
  * @todo Manual state control over compactions.
  * @todo Bulk imports.
- * @todo Creating and removing columns/collections.
  *
  * @section Why prefer batch APIs?
  * Using the batch APIs to issue a single read/write request
@@ -21,6 +19,10 @@
  * singular operations is impossible. Regardless of IO layer,
  * a lot of synchronization and locks must be issued to provide
  * consistency.
+ *
+ * @section Iterators
+ * Implementing consistent iterators over concurrent state is exceptionally
+ * expensive, thus we plan to implement those via "Pagination" in the future.
  *
  * @section Interface Conventions
  * 1. We try to expose just opaque struct pointers and functions to
@@ -75,7 +77,6 @@ extern "C" {
 
 typedef void* ukv_t;
 typedef void* ukv_txn_t;
-typedef void* ukv_iter_t;
 typedef void* ukv_column_t;
 typedef void* ukv_options_read_t;
 typedef void* ukv_options_write_t;
@@ -85,7 +86,6 @@ typedef void* ukv_arena_ptr_t;
 typedef void* ukv_val_ptr_t;
 typedef uint32_t ukv_val_len_t;
 typedef char const* ukv_error_t;
-
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -98,14 +98,12 @@ typedef char const* ukv_error_t;
  * > remote persistent transactional KVS
  * > remote in-memory transactional KVS
  *
- * @param config    Configuration NULL-terminated string.
- * @param db        A pointer to initialized and opened KVS, unless @p `error` is filled.
- * @param error     The error message to be handled by callee.
+ * @param[in] config  Configuration NULL-terminated string.
+ * @param[out] db     A pointer to initialized and opened KVS, unless @p `error` is filled.
+ * @param[out] error  The error message to be handled by callee.
  */
-void ukv_open(
-    // Inputs:
+void ukv_open( //
     char const* config,
-    // Outputs:
     ukv_t* db,
     ukv_error_t* error);
 
@@ -113,83 +111,86 @@ void ukv_open(
  * @brief The primary "setter" interface that inserts into "HEAD" state.
  * Passing NULLs into @p `values` is identical to deleting entries.
  * If a fail had occured, @p `error` will be set to non-NULL.
- * @see `ukv_txn_write` for transactional consistent inserts.
  *
- * @param db                Already open database instance, @see `ukv_open`.
- * @param keys              Array of keys in one or more collections.
- * @param keys_count        Number of elements in @p `keys`.
- * @param columns           Array of columns with 0, 1 or `keys_count`
- *                          elements describing the locations of keys.
- *                          If NULL is passed, the default collection
- *                          is assumed.
- * @param columns_count     Number of elements in @p `columns`.
- * @param options           Write options.
- * @param values            Array of pointers to the first byte of each value.
- *                          NULLs, if you want to @b delete the values associated
- *                          with given @p `keys`.
- * @param values_lengths    Array of lengths of buffers, storing the @p `values`.
- * @param error             The error to be handled.
+ * @section Functionality Matrix
+ * This is one of the two primary methods, that knots together various kinds of reads:
+ * > Transactional and Heads
+ * > Insertions and Deletions
+ *
+ * @param[in] db             Already open database instance, @see `ukv_open`.
+ * @param[in] txn            Transaction, through which the operation must go.
+ *                           Can be `NULL`.
+ * @param[in] keys           Array of keys in one or more collections.
+ * @param[in] keys_count     Number of elements in @p `keys`.
+ * @param[in] columns        Array of columns with 0, 1 or `keys_count`
+ *                           elements describing the locations of keys.
+ *                           If NULL is passed, the default collection
+ *                           is assumed.
+ * @param[in] options        Write options.
+ * @param[in] values         Array of pointers to the first byte of each value.
+ *                           NULLs, if you want to @b delete the values associated
+ *                           with given @p `keys`.
+ * @param[in] lengths        Array of lengths of buffers, storing the @p `values`.
+ * @param[out] error         The error to be handled.
  */
-void ukv_write(
-    // Inputs:
+void ukv_write( //
     ukv_t const db,
+    ukv_txn_t const txn,
     ukv_key_t const* keys,
     size_t const keys_count,
     ukv_column_t const* columns,
-    size_t const columns_count,
     ukv_options_write_t const options,
-    //
     ukv_val_ptr_t const* values,
-    ukv_val_len_t const* values_lengths,
-    // Outputs:
+    ukv_val_len_t const* lengths,
     ukv_error_t* error);
 
 /**
- * @brief The primary "getter" interface, that reads from "HEAD" state.
+ * @brief The primary "getter" interface.
  * If a fail had occured, @p `error` will be set to non-NULL.
  * If a key wasn't found in target collection, the value is empty.
- * @see `ukv_txn_write` for transactional consistent lookups.
  *
- * @param db                Already open database instance, @see `ukv_open`.
- * @param keys              Array of keys in one or more collections.
- * @param keys_count        Number of elements in @p `keys`.
- * @param columns           Array of columns with 0, 1 or `keys_count`
- *                          elements describing the locations of keys.
- *                          If NULL is passed, the default collection
- *                          is assumed.
- * @param columns_count     Number of elements in @p `columns`.
- * @param options           Write options.
- * @param arena             Points to a memory region that we use during
- *                          this request. If it's too small (@p `arena_length`),
- *                          we `realloc` a new buffer. You can't pass a memory
- *                          allocated by a third-party allocator.
- *                          During the first request you pass a `NULL`,
- *                          we allocate that buffer, put found values in it and
- *                          return you a pointer. You can later reuse it for future
- *                          requests, or `free` it via `ukv_arena_free`.
- * @param arena_length      Current size of @p `arena`.
- * @param values            Array of pointers to the first byte of each value.
- *                          If `NULL`, only the `value_lengths` will be pulled.
- * @param values_lengths    Lengths of the values. Zero means value is missing.
- *                          Can't be `NULL`.
- * @param error             The error message to be handled by callee.
+ * @section Functionality Matrix
+ * This is one of the two primary methods, that knots together various kinds of reads:
+ * > Transactional and Heads
+ * > Single and Batch
+ * > Size Estimates and Exports
+ *
+ * @param[in] db              Already open database instance, @see `ukv_open`.
+ * @param[in] txn             Transaction or the snapshot, through which the
+ *                            operation must go. Can be `NULL`.
+ * @param[in] keys            Array of keys in one or more collections.
+ * @param[in] keys_count      Number of elements in @p `keys`.
+ * @param[in] columns         Array of columns with 0, 1 or `keys_count`
+ *                            elements describing the locations of keys.
+ *                            If NULL is passed, the default collection
+ *                            is assumed.
+ * @param[in] options         Write options.
+ * @param[inout] arena        Points to a memory region that we use during
+ *                            this request. If it's too small (@p `arena_length`),
+ *                            we `realloc` a new buffer. You can't pass a memory
+ *                            allocated by a third-party allocator.
+ *                            During the first request you pass a `NULL`,
+ *                            we allocate that buffer, put found values in it and
+ *                            return you a pointer. You can later reuse it for future
+ *                            requests, or `free` it via `ukv_arena_free`.
+ * @param[inout] arena_length Current size of @p `arena`.
+ * @param[out] values         Array of pointers to the first byte of each value.
+ *                            If `NULL`, only the `value_lengths` will be pulled.
+ * @param[out] lengths        Lengths of the values. Zero means value is missing.
+ *                            Can't be `NULL`.
+ * @param[out] error          The error message to be handled by callee.
  */
-void ukv_read(
-    // Inputs:
+void ukv_read( //
     ukv_t const db,
-    ukv_key_t const* keys,
+    ukv_txn_t const txn,
+    ukv_key_t* keys,
     size_t const keys_count,
     ukv_column_t const* columns,
-    size_t const columns_count,
     ukv_options_read_t const options,
-
-    // In-outs:
     ukv_arena_ptr_t* arena,
     size_t* arena_length,
-
-    // Outputs:
     ukv_val_ptr_t* values,
-    ukv_val_len_t* values_lengths,
+    ukv_val_len_t* lengths,
     ukv_error_t* error);
 
 /*********************************************************/
@@ -200,12 +201,15 @@ void ukv_read(
  * @brief Upserts a new named column into DB.
  * This function may never be called, as the default
  * unnamed collection always exists.
+ *
+ * @param[in] db           Already open database instance, @see `ukv_open`.
+ * @param[in] column_name  A `NULL`-terminated collection name.
+ * @param[out] column      Address to which the column handle will be expored.
+ * @param[out] error       The error message to be handled by callee.
  */
-void ukv_column_upsert(
-    // Inputs:
+void ukv_column_upsert( //
     ukv_t const db,
     char const* column_name,
-    // Outputs:
     ukv_column_t* column,
     ukv_error_t* error);
 
@@ -213,31 +217,55 @@ void ukv_column_upsert(
  * @brief Removes column and all of its conntents from DB.
  * The default unnamed collection can't be removed, but it
  * will be @b cleared, if you pass a `NULL` as `column_name`.
+ *
+ * @param[in] db           Already open database instance, @see `ukv_open`.
+ * @param[in] column_name  A `NULL`-terminated collection name.
+ * @param[out] error       The error message to be handled by callee.
  */
-void ukv_column_remove(
-    // Inputs:
+void ukv_column_remove( //
     ukv_t const db,
     char const* column_name,
-    // Outputs:
+    ukv_error_t* error);
+
+/**
+ * @brief Triggers a "Compaction" or "Garbage Collection" procedure
+ * on the entire collection. This is an exceptionally expensive task,
+ * that only makes sense on exports, when you want to export production
+ * data into a read-only collection for your products deployment.
+ *
+ * @param[in] db           Already open database instance, @see `ukv_open`.
+ * @param[in] column       A column handle.
+ * @param[out] error       The error message to be handled by callee.
+ */
+void ukv_column_compact( //
+    ukv_t const db,
+    ukv_column_t* column,
+    ukv_error_t* error);
+
+void ukv_columns_list( //
+    ukv_t const db,
+    char const** columns_names,
+    size_t* columns_count,
     ukv_error_t* error);
 
 /**
  * @brief Pulls metadata, mostly for logging and customer support.
  */
-void ukv_status(ukv_t db,
-                size_t* version_major,
-                size_t* version_minor,
-                size_t* memory_usage,
-                size_t* disk_usage,
-                size_t* active_transactions,
-                ukv_error_t* error);
+void ukv_status( //
+    ukv_t db,
+    size_t* version_major,
+    size_t* version_minor,
+    size_t* memory_usage,
+    size_t* disk_usage,
+    size_t* active_transactions,
+    ukv_error_t* error);
 
 /*********************************************************/
 /*****************		Transactions	  ****************/
 /*********************************************************/
 
 /**
- * @brief Begins a new ACID transaction.
+ * @brief Begins a new ACID transaction or resets an existing one.
  *
  * @param db                Already open database instance, @see `ukv_open`.
  * @param sequence_number   If equal to 0, a new number will be generated on the fly.
@@ -245,43 +273,10 @@ void ukv_status(ukv_t db,
  *                          In that case, it's reset to new @p `sequence_number`.
  * @param error             The error message to be handled by callee.
  */
-void ukv_txn_begin(
-    // Inputs:
+void ukv_txn_begin( //
     ukv_t const db,
     size_t const sequence_number,
-    // Outputs:
     ukv_txn_t* txn,
-    ukv_error_t* error);
-
-void ukv_txn_write(
-    // Inputs:
-    ukv_txn_t const txn,
-    ukv_key_t const* keys,
-    size_t const keys_count,
-    ukv_column_t const* columns,
-    size_t const columns_count,
-    //
-    ukv_val_ptr_t const* values,
-    ukv_val_len_t const* values_lengths,
-    // Outputs:
-    ukv_error_t* error);
-
-void ukv_txn_read(
-    // Inputs:
-    ukv_t const db,
-    ukv_key_t const* keys,
-    size_t const keys_count,
-    ukv_column_t const* columns,
-    size_t const columns_count,
-    ukv_options_read_t const options,
-
-    // In-outs:
-    ukv_arena_ptr_t* arena,
-    size_t* arena_length,
-
-    // Outputs:
-    ukv_val_ptr_t* values,
-    ukv_val_len_t* values_lengths,
     ukv_error_t* error);
 
 /**
@@ -289,43 +284,59 @@ void ukv_txn_read(
  * On success, the transaction content is wiped clean.
  * On failure, the entire transaction state is preserved to allow retries.
  */
-void ukv_txn_commit(
-    // Inputs:
+void ukv_txn_commit( //
     ukv_txn_t const txn,
     ukv_options_write_t const options,
-    // Outputs:
     ukv_error_t* error);
 
 /*********************************************************/
-/*****************		  Iterators	      ****************/
+/*****************	       Options        ****************/
 /*********************************************************/
-
-void ukv_iter_make(ukv_column_t const column, ukv_iter_t*, ukv_error_t* error);
-
-void ukv_iter_seek(ukv_iter_t const iter, ukv_key_t key, ukv_error_t* error);
-
-void ukv_iter_advance(ukv_iter_t const iter, size_t const count_to_skip, ukv_error_t* error);
-
-void ukv_iter_read_key(ukv_iter_t const iter, ukv_key_t*, ukv_error_t* error);
-
-void ukv_iter_read_value_size(ukv_iter_t const iter, size_t* length, size_t* arena_length, ukv_error_t* error);
 
 /**
- * @brief Fetches currently targeted value from disk.
- * ! The entry received from yere should NOT
- * ! be deallocated via `ukv_arena_free`.
+ * @brief Conditionally forces non-transactional reads to create
+ * a snapshot, so that all the reads in the batch are consistent with
+ * each other.
+ *
+ * @param[inout] options Options flags to be updated.
  */
-void ukv_iter_read_value(ukv_iter_t const iter,
-                         // In-outs:
-                         ukv_arena_ptr_t* arena,
-                         size_t* arena_length,
-                         // Outputs:
-                         ukv_val_ptr_t* value,
-                         ukv_val_len_t* value_lengths,
-                         ukv_error_t* error);
+void ukv_option_read_consistent(ukv_options_read_t* options, bool);
+
+/**
+ * @brief Conditionally disables the tracking of the current batch of
+ * reads, so that it doesn't stop transactions, which follow overwrites
+ * of their dependencies.
+ *
+ * @param[inout] options Options flags to be updated.
+ */
+void ukv_option_read_transparent(ukv_options_read_t* options, bool);
+
+/**
+ * @brief Conditionally informs that there is only one collection
+ * passed instead of the same number as input keys.
+ *
+ * @param[inout] options Options flags to be updated.
+ */
+void ukv_option_read_colocated(ukv_options_read_t* options, bool);
+
+/**
+ * @brief Conditionally forces the write to be flushed either to
+ * Write-Ahead-Log or directly to disk by the end of the operation.
+ *
+ * @param[inout] options Options flags to be updated.
+ */
+void ukv_option_write_flush(ukv_options_write_t* options, bool);
+
+/**
+ * @brief Conditionally informs that there is only one collection
+ * passed instead of the same number as input keys.
+ *
+ * @param[inout] options Options flags to be updated.
+ */
+void ukv_option_write_colocated(ukv_options_read_t* options, bool);
 
 /*********************************************************/
-/*****************	  Memory Management   ****************/
+/*****************	 Memory Reclamation   ****************/
 /*********************************************************/
 
 /**
@@ -337,8 +348,6 @@ void ukv_iter_read_value(ukv_iter_t const iter,
 void ukv_arena_free(ukv_t const db, ukv_arena_ptr_t, size_t);
 
 void ukv_txn_free(ukv_t const db, ukv_txn_t const txn);
-
-void ukv_iter_free(ukv_t const db, ukv_iter_t const iter);
 
 void ukv_column_free(ukv_t const db, ukv_column_t const column);
 
