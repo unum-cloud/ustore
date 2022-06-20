@@ -23,8 +23,8 @@
  * Intentionally not implemented:
  *      * __len__() ~ It's hard to consistently estimate the collection.
  *      * popitem() ~ We can't guarantee Last-In First-Out semantics.
- *      * setdefault(key[, default]) ~ As default values aren't 
- * 
+ *      * setdefault(key[, default]) ~ As default values are useless in DBs.
+ *
  * Full @c `dict` API:
  * https://docs.python.org/3/library/stdtypes.html#mapping-types-dict
  * https://python-reference.readthedocs.io/en/latest/docs/dict/
@@ -73,7 +73,11 @@ struct py_arena_t {
 struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     ukv_t raw = NULL;
     std::string config;
-    py_arena_t temporary_arena;
+    py_arena_t arena;
+
+    py_db_t() = default;
+    py_db_t(py_db_t&&) = delete;
+    py_db_t(py_db_t const&) = delete;
 
     ~py_db_t() {
         if (raw)
@@ -85,7 +89,11 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
 struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
     ukv_txn_t raw = NULL;
     py_db_t* db_ptr = NULL;
-    py_arena_t temporary_arena;
+    py_arena_t arena;
+
+    py_txn_t() = default;
+    py_txn_t(py_txn_t&&) = delete;
+    py_txn_t(py_txn_t const&) = delete;
 
     ~py_txn_t() {
 
@@ -101,6 +109,10 @@ struct py_column_t : public std::enable_shared_from_this<py_column_t> {
 
     py_db_t* db_ptr = NULL;
     py_txn_t* txn_ptr = NULL;
+
+    py_column_t() = default;
+    py_column_t(py_column_t&&) = delete;
+    py_column_t(py_column_t const&) = delete;
 
     ~py_column_t() {
         if (raw)
@@ -141,7 +153,7 @@ void close_if_opened(py_db_t& db,
     if (!db.raw)
         return;
 
-    free_temporary_memory(db, db.temporary_arena);
+    free_temporary_memory(db, db.arena);
     ukv_free(db.raw);
     db.raw = NULL;
 }
@@ -168,24 +180,24 @@ void commit(py_txn_t& txn, py::object const& exc_type, py::object const& exc_val
     if (error) [[unlikely]]
         throw make_exception(db, error);
 
-    free_temporary_memory(db, txn.temporary_arena);
+    free_temporary_memory(db, txn.arena);
     ukv_txn_free(db.raw, txn.raw);
     txn.raw = NULL;
 }
 
-bool contains_item(py_db_t& db, ukv_column_t column_ptr, ukv_key_t key) {
+bool contains_item(py_db_t& db, ukv_txn_t txn_ptr, ukv_column_t column_ptr, py_arena_t& arena, ukv_key_t key) {
     ukv_val_len_t value_length = 0;
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
 
     ukv_read(db.raw,
+             txn_ptr,
              &key,
              1,
-             &column_ptr,
-             column_ptr != NULL,
+             column_ptr ? &column_ptr : NULL,
              options,
-             &db.temporary_arena.ptr,
-             &db.temporary_arena.length,
+             &arena.ptr,
+             &arena.length,
              NULL,
              &value_length,
              &error);
@@ -195,20 +207,22 @@ bool contains_item(py_db_t& db, ukv_column_t column_ptr, ukv_key_t key) {
     return value_length != 0;
 }
 
-std::optional<py::bytes> get_item(py_db_t& db, ukv_column_t column_ptr, ukv_key_t key) {
+std::optional<py::bytes> get_item(
+    py_db_t& db, ukv_txn_t txn_ptr, ukv_column_t column_ptr, py_arena_t& arena, ukv_key_t key) {
+
     ukv_val_ptr_t value = NULL;
     ukv_val_len_t value_length = 0;
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
 
     ukv_read(db.raw,
+             txn_ptr,
              &key,
              1,
-             &column_ptr,
-             column_ptr != NULL,
+             column_ptr ? &column_ptr : NULL,
              options,
-             &db.temporary_arena.ptr,
-             &db.temporary_arena.length,
+             &arena.ptr,
+             &arena.length,
              &value,
              &value_length,
              &error);
@@ -228,74 +242,13 @@ std::optional<py::bytes> get_item(py_db_t& db, ukv_column_t column_ptr, ukv_key_
     return py::bytes {reinterpret_cast<char const*>(value), value_length};
 }
 
-void set_item(py_db_t& db, ukv_column_t column_ptr, ukv_key_t key, py::bytes const* value = NULL) {
+void set_item(py_db_t& db, ukv_txn_t txn_ptr, ukv_column_t column_ptr, ukv_key_t key, py::bytes const* value = NULL) {
     ukv_options_write_t options = NULL;
     ukv_val_ptr_t ptr = value ? ukv_val_ptr_t(std::string_view {*value}.data()) : NULL;
     ukv_val_len_t len = value ? static_cast<ukv_val_len_t>(std::string_view {*value}.size()) : 0;
     ukv_error_t error = NULL;
 
-    ukv_write(db.raw, &key, 1, &column_ptr, column_ptr != NULL, options, &ptr, &len, &error);
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
-}
-
-bool contains_item(py_txn_t& txn, ukv_column_t column_ptr, ukv_key_t key) {
-    py_db_t& db = *txn.db_ptr;
-    ukv_val_len_t value_length = 0;
-    ukv_error_t error = NULL;
-    ukv_options_read_t options = NULL;
-
-    ukv_txn_read(txn.raw,
-                 &key,
-                 1,
-                 &column_ptr,
-                 column_ptr != NULL,
-                 options,
-                 &txn.temporary_arena.ptr,
-                 &txn.temporary_arena.length,
-                 NULL,
-                 &value_length,
-                 &error);
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
-
-    return value_length != 0;
-}
-
-std::optional<py::bytes> get_item(py_txn_t& txn, ukv_column_t column_ptr, ukv_key_t key) {
-    py_db_t& db = *txn.db_ptr;
-    ukv_val_ptr_t value = NULL;
-    ukv_val_len_t value_length = 0;
-    ukv_error_t error = NULL;
-    ukv_options_read_t options = NULL;
-
-    ukv_txn_read(txn.raw,
-                 &key,
-                 1,
-                 &column_ptr,
-                 column_ptr != NULL,
-                 options,
-                 &txn.temporary_arena.ptr,
-                 &txn.temporary_arena.length,
-                 &value,
-                 &value_length,
-                 &error);
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
-
-    if (!value_length)
-        return {};
-
-    return py::bytes {reinterpret_cast<char const*>(value), value_length};
-}
-
-void set_item(py_txn_t& txn, ukv_column_t column_ptr, ukv_key_t key, py::bytes const* value = NULL) {
-    py_db_t& db = *txn.db_ptr;
-    ukv_val_ptr_t ptr = value ? ukv_val_ptr_t(std::string_view {*value}.data()) : NULL;
-    ukv_val_len_t len = value ? static_cast<ukv_val_len_t>(std::string_view {*value}.size()) : 0;
-    ukv_error_t error = NULL;
-
-    ukv_txn_write(txn.raw, &key, 1, &column_ptr, column_ptr != NULL, &ptr, &len, &error);
+    ukv_write(db.raw, txn_ptr, &key, 1, column_ptr ? &column_ptr : NULL, options, &ptr, &len, &error);
     if (error) [[unlikely]]
         throw make_exception(db, error);
 }
@@ -332,61 +285,60 @@ PYBIND11_MODULE(ukv, m) {
 
     db.def(
         "get",
-        [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, key); },
+        [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, NULL, db.arena, key); },
         py::arg("key"));
 
     db.def(
         "get",
         [](py_db_t& db, std::string const& collection, ukv_key_t key) {
-            return get_item(db, column_named(db, collection), key);
+            return get_item(db, NULL, column_named(db, collection), db.arena, key);
         },
         py::arg("collection"),
         py::arg("key"));
 
     db.def(
         "set",
-        [](py_db_t& db, ukv_key_t key, py::bytes const& value) { return set_item(db, NULL, key, &value); },
+        [](py_db_t& db, ukv_key_t key, py::bytes const& value) { return set_item(db, NULL, NULL, key, &value); },
         py::arg("key"),
         py::arg("value"));
 
     db.def(
         "set",
         [](py_db_t& db, std::string const& collection, ukv_key_t key, py::bytes const& value) {
-            return set_item(db, column_named(db, collection), key, &value);
+            return set_item(db, NULL, column_named(db, collection), key, &value);
         },
         py::arg("collection"),
         py::arg("key"),
         py::arg("value"));
-    col.def(
-        "clear",
-        [](py_db_t& db) {
-            // TODO:
-        });
+    col.def("clear", [](py_db_t& db) {
+        // TODO:
+    });
 
     // Define `Collection`s member method, without defining any external constructors
     col.def(
         "get",
         [](py_column_t& col, ukv_key_t key) {
-            return col.txn_ptr ? get_item(*col.txn_ptr, col.raw, key) : get_item(*col.db_ptr, col.raw, key);
+            return get_item(*col.db_ptr,
+                            col.txn_ptr ? col.txn_ptr->raw : NULL,
+                            col.raw,
+                            col.txn_ptr ? col.txn_ptr->arena : col.db_ptr->arena,
+                            key);
         },
         py::arg("key"));
 
     col.def(
         "set",
         [](py_column_t& col, ukv_key_t key, py::bytes const& value) {
-            return col.txn_ptr ? set_item(*col.txn_ptr, col.raw, key, &value)
-                               : set_item(*col.db_ptr, col.raw, key, &value);
+            return set_item(*col.db_ptr, col.txn_ptr ? col.txn_ptr->raw : NULL, col.raw, key, &value);
         },
         py::arg("key"),
         py::arg("value"));
-    col.def(
-        "clear",
-        [](py_column_t& col) {
-            ukv_error_t error = NULL;        
-            ukv_column_remove(col.db_ptr->raw, col.name.c_str(), &error);
-            if (error) [[unlikely]]
-                throw make_exception(*col.db_ptr, error);
-        });
+    col.def("clear", [](py_column_t& col) {
+        ukv_error_t error = NULL;
+        ukv_column_remove(col.db_ptr->raw, col.name.c_str(), &error);
+        if (error) [[unlikely]]
+            throw make_exception(*col.db_ptr, error);
+    });
 
     // Unlike `DataBase`, it won't begin before the `__enter__` call.
     txn.def(py::init([](py_db_t& db) {
@@ -396,27 +348,29 @@ PYBIND11_MODULE(ukv, m) {
     }));
     txn.def(
         "get",
-        [](py_txn_t& txn, ukv_key_t key) { return get_item(txn, NULL, key); },
+        [](py_txn_t& txn, ukv_key_t key) { return get_item(*txn.db_ptr, txn.raw, NULL, txn.arena, key); },
         py::arg("key"));
 
     txn.def(
         "get",
         [](py_txn_t& txn, std::string const& collection, ukv_key_t key) {
-            return get_item(txn, column_named(*txn.db_ptr, collection), key);
+            return get_item(*txn.db_ptr, txn.raw, column_named(*txn.db_ptr, collection), txn.arena, key);
         },
         py::arg("collection"),
         py::arg("key"));
 
     txn.def(
         "set",
-        [](py_txn_t& txn, ukv_key_t key, py::bytes const& value) { return set_item(txn, NULL, key, &value); },
+        [](py_txn_t& txn, ukv_key_t key, py::bytes const& value) {
+            return set_item(*txn.db_ptr, txn.raw, NULL, key, &value);
+        },
         py::arg("key"),
         py::arg("value"));
 
     txn.def(
         "set",
         [](py_txn_t& txn, std::string const& collection, ukv_key_t key, py::bytes const& value) {
-            return set_item(txn, column_named(*txn.db_ptr, collection), key, &value);
+            return set_item(*txn.db_ptr, txn.raw, column_named(*txn.db_ptr, collection), key, &value);
         },
         py::arg("collection"),
         py::arg("key"),
@@ -429,29 +383,40 @@ PYBIND11_MODULE(ukv, m) {
     txn.def("__exit__", &commit);
 
     // Operator overaloads used to edit entries
-    db.def("__getitem__", [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, key); });
+    db.def("__contains__", [](py_db_t& db, ukv_key_t key) { return contains_item(db, NULL, NULL, db.arena, key); });
+    db.def("__getitem__", [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, NULL, db.arena, key); });
     db.def("__setitem__",
-           [](py_db_t& db, ukv_key_t key, py::bytes const& value) { return set_item(db, NULL, key, &value); });
-    db.def("__delitem__", [](py_db_t& db, ukv_key_t key) { return set_item(db, NULL, key); });
-    db.def("__contains__", [](py_db_t& db, ukv_key_t key) { return contains_item(db, NULL, key); });
+           [](py_db_t& db, ukv_key_t key, py::bytes const& value) { return set_item(db, NULL, NULL, key, &value); });
+    db.def("__delitem__", [](py_db_t& db, ukv_key_t key) { return set_item(db, NULL, NULL, key); });
 
-    txn.def("__getitem__", [](py_txn_t& txn, ukv_key_t key) { return get_item(txn, NULL, key); });
-    txn.def("__setitem__",
-            [](py_txn_t& txn, ukv_key_t key, py::bytes const& value) { return set_item(txn, NULL, key, &value); });
-    txn.def("__delitem__", [](py_txn_t& txn, ukv_key_t key) { return set_item(txn, NULL, key); });
-    txn.def("__contains__", [](py_txn_t& txn, ukv_key_t key) { return contains_item(txn, NULL, key); });
+    txn.def("__contains__",
+            [](py_txn_t& txn, ukv_key_t key) { return contains_item(*txn.db_ptr, txn.raw, NULL, txn.arena, key); });
+    txn.def("__getitem__",
+            [](py_txn_t& txn, ukv_key_t key) { return get_item(*txn.db_ptr, txn.raw, NULL, txn.arena, key); });
+    txn.def("__setitem__", [](py_txn_t& txn, ukv_key_t key, py::bytes const& value) {
+        return set_item(*txn.db_ptr, txn.raw, NULL, key, &value);
+    });
+    txn.def("__delitem__", [](py_txn_t& txn, ukv_key_t key) { return set_item(*txn.db_ptr, txn.raw, NULL, key); });
 
+    col.def("__contains__", [](py_column_t& col, ukv_key_t key) {
+        return contains_item(*col.db_ptr,
+                             col.txn_ptr ? col.txn_ptr->raw : NULL,
+                             col.raw,
+                             col.txn_ptr ? col.txn_ptr->arena : col.db_ptr->arena,
+                             key);
+    });
     col.def("__getitem__", [](py_column_t& col, ukv_key_t key) {
-        return col.txn_ptr ? get_item(*col.txn_ptr, col.raw, key) : get_item(*col.db_ptr, col.raw, key);
+        return get_item(*col.db_ptr,
+                        col.txn_ptr ? col.txn_ptr->raw : NULL,
+                        col.raw,
+                        col.txn_ptr ? col.txn_ptr->arena : col.db_ptr->arena,
+                        key);
     });
     col.def("__setitem__", [](py_column_t& col, ukv_key_t key, py::bytes const& value) {
-        return col.txn_ptr ? set_item(*col.txn_ptr, col.raw, key, &value) : set_item(*col.db_ptr, col.raw, key, &value);
+        return set_item(*col.db_ptr, col.txn_ptr ? col.txn_ptr->raw : NULL, col.raw, key, &value);
     });
     col.def("__delitem__", [](py_column_t& col, ukv_key_t key) {
-        return col.txn_ptr ? set_item(*col.txn_ptr, col.raw, key) : set_item(*col.db_ptr, col.raw, key);
-    });
-    col.def("__contains__", [](py_column_t& col, ukv_key_t key) {
-        return col.txn_ptr ? contains_item(*col.txn_ptr, col.raw, key) : contains_item(*col.db_ptr, col.raw, key);
+        return set_item(*col.db_ptr, col.txn_ptr ? col.txn_ptr->raw : NULL, col.raw, key);
     });
 
     // Operator overaloads used to access collections
@@ -470,11 +435,10 @@ PYBIND11_MODULE(ukv, m) {
         col->txn_ptr = &txn;
         return col;
     });
-    txn.def("__delitem__", [](py_db_t& db, std::string const& collection) { 
-        ukv_error_t error = NULL;        
+    txn.def("__delitem__", [](py_db_t& db, std::string const& collection) {
+        ukv_error_t error = NULL;
         ukv_column_remove(db.raw, collection.c_str(), &error);
         if (error) [[unlikely]]
             throw make_exception(db, error);
     });
-
 }
