@@ -678,9 +678,6 @@ void ukv_txn_commit( //
             column.content.insert_or_assign(located_key_and_value.first.key, std::move(sequenced_value));
         }
     }
-
-    // 5. Commit the newest transaction ID
-    db.youngest_sequence = txn.sequence_number;
 }
 
 /*********************************************************/
