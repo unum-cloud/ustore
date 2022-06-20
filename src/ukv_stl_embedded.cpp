@@ -400,7 +400,7 @@ void _ukv_read_txn( //
 
     // 2. Allocate a tape for all the values to be pulled
     byte_t* arena = *reinterpret_cast<byte_t**>(c_arena);
-    if (total_bytes <= *c_arena_length) {
+    if (total_bytes >= *c_arena_length) {
         try {
             allocator_t {}.deallocate(arena, *c_arena_length);
             arena = allocator_t {}.allocate(total_bytes);
