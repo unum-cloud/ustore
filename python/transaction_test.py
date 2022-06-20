@@ -1,3 +1,5 @@
+from threading import Thread
+
 import pytest
 
 import ukv
@@ -128,3 +130,43 @@ def test_multiple_transactions():
 
     set_same_value('c')
     check_db(db, 'c')
+
+
+def test_transaction_set_get_with_multiple_collections():
+    coll_count = 100
+    keys_count = 100
+    db = ukv.DataBase()
+
+    with ukv.Transaction(db) as txn:
+        for col_index in range(coll_count):
+            for index in range(keys_count):
+                txn.set(str(col_index), index, str(index).encode())
+
+    with ukv.Transaction(db) as txn:
+        for col_index in range(coll_count):
+            for index in range(keys_count):
+                txn.get(str(col_index), index)
+                assert index in db[str(col_index)]
+
+
+# TODO: We don't have rollback to commit transactions anyway
+# def test_transactions_with_threads():
+#     keys_count = 100
+#     db = ukv.DataBase()
+
+#     def set_same_value(value):
+#         with ukv.Transaction(db) as txn:
+#             for index in range(keys_count):
+#                 txn.set(index, value.encode())
+
+#     threads_cnt = 64
+#     threads = [None] * threads_cnt
+#     for index in range(threads_cnt):
+#         threads[index] = Thread(target=set_same_value, args=(str(index),))
+#         threads[index].start()
+
+#     for index in range(threads_cnt):
+#         threads[index].join()
+
+#     for index in range(keys_count-1):
+#         assert db.get(index) == db.get(index+1)
