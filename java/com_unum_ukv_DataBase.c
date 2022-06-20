@@ -4,15 +4,17 @@
 jfieldID find_db_ptr_field(JNIEnv* env_java, jobject db_java) {
     static jfieldID db_ptr_field = NULL;
     if (!db_ptr_field) {
+        // https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/types.html
+        // https://docs.oracle.com/javase/tutorial/java/nutsandbolts/datatypes.html
         jclass db_class = (*env_java)->GetObjectClass(env_java, db_java);
-        db_ptr_field = (*env_java)->GetFieldID(env_java, db_class, "nativeAddress", "I");
+        db_ptr_field = (*env_java)->GetFieldID(env_java, db_class, "nativeAddress", "J");
     }
     return db_ptr_field;
 }
 
 ukv_t db_ptr(JNIEnv* env_java, jobject db_java) {
     jfieldID db_ptr_field = find_db_ptr_field(env_java, db_java);
-    long int db_ptr_java = (*env_java)->GetIntField(env_java, db_java, db_ptr_field);
+    long int db_ptr_java = (*env_java)->GetLongField(env_java, db_java, db_ptr_field);
     return (ukv_t)db_ptr_java;
 }
 
@@ -37,7 +39,8 @@ bool forward_error(JNIEnv* env_java, ukv_error_t error_c) {
 JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_open(JNIEnv* env_java, jobject db_java, jstring config_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, db_java);
-    if (db_ptr_c != NULL)
+    if (db_ptr_c)
+        // The DB is already initialized
         return;
 
     // Temporarily copy the contents of the passed configuration string
@@ -50,7 +53,22 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_open(JNIEnv* env_java, jobject
         return;
 
     jfieldID db_ptr_field = find_db_ptr_field(env_java, db_java);
-    (*env_java)->SetIntField(env_java, db_java, db_ptr_field, (long int)db_ptr_c);
+    (*env_java)->SetLongField(env_java, db_java, db_ptr_field, (long int)db_ptr_c);
+}
+
+JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_close_1(JNIEnv* env_java, jobject db_java) {
+
+    ukv_t db_ptr_c = db_ptr(env_java, db_java);
+    if (!db_ptr_c)
+        // The DB is already closed
+        return;
+
+    // Overwrite the field first, to avoid multiple deallocations
+    jfieldID db_ptr_field = find_db_ptr_field(env_java, db_java);
+    (*env_java)->SetLongField(env_java, db_java, db_ptr_field, (long int)0);
+
+    // Then actually dealloc
+    ukv_free(db_ptr_c);
 }
 
 JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_put(JNIEnv* env_java,
@@ -118,9 +136,9 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_get(JNIEnv* env_java, jo
 
     ukv_read(db_ptr_c, NULL, &key_c, 1, NULL, options_c, &arena_c, &arena_len_c, &value_ptr_c, &value_len_c, &error_c);
     if (value_len_c) {
-        result_java = NewByteArray(env_java, value_len_c);
+        result_java = (*env_java)->NewByteArray(env_java, value_len_c);
         if (result_java)
-            SetByteArrayRegion(env_java, result_java, 0, value_len_c, (jbyte const*)value_ptr_c);
+            (*env_java)->SetByteArrayRegion(env_java, result_java, 0, value_len_c, (jbyte const*)value_ptr_c);
     }
 
     if (arena_c)
