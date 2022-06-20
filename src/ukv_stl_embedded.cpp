@@ -569,8 +569,8 @@ void ukv_control( //
     ukv_str_t* c_response,
     ukv_error_t* c_error) {
 
-    *resposne = NULL;
-    *error = "Controls aren't supported in this implementation!";
+    *c_response = NULL;
+    *c_error = "Controls aren't supported in this implementation!";
 }
 
 /*********************************************************/
