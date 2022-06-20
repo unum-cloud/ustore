@@ -30,7 +30,7 @@ enum class byte_t : uint8_t {};
 using allocator_t = std::allocator<byte_t>;
 using key_t = ukv_key_t;
 using value_t = std::vector<byte_t, allocator_t>;
-using sequence_t = size_t;
+using sequence_t = ssize_t;
 
 struct txn_t;
 struct db_t;
@@ -101,9 +101,13 @@ struct db_t {
  * Still works correctly, when `max` has overflown, but `min` hasn't yet,
  * so `min` can be bigger than `max`.
  */
-bool belongs_to_gap(sequence_t sequence_number, sequence_t min, sequence_t max) noexcept {
-    return min < max ? ((sequence_number > min) & (sequence_number <= max))
-                     : ((sequence_number > min) | (sequence_number <= max));
+bool entry_was_overwritten(sequence_t entry_sequence,
+                           sequence_t transaction_sequence,
+                           sequence_t youngest_sequence) noexcept {
+
+    return transaction_sequence <= youngest_sequence
+               ? ((entry_sequence >= transaction_sequence) & (entry_sequence <= youngest_sequence))
+               : ((entry_sequence >= transaction_sequence) | (entry_sequence <= youngest_sequence));
 }
 
 enum option_flags_t {
@@ -120,7 +124,7 @@ column_t& column_at(db_t& db, ukv_column_t const* c_columns, size_t i, void* c_o
 
 void set_flag(void** c_options, bool c_enabled, option_flags_t flag) {
     auto& options = *reinterpret_cast<std::uintptr_t*>(c_options);
-    if (flag)
+    if (c_enabled)
         options |= flag;
     else
         options &= ~flag;
@@ -211,7 +215,7 @@ void _ukv_measure_head( //
     ukv_column_t const* c_columns,
     ukv_options_read_t const c_options,
     ukv_val_len_t* c_lengths,
-    ukv_error_t* c_error) {
+    [[maybe_unused]] ukv_error_t* c_error) {
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
     std::shared_lock _ {db.mutex};
@@ -304,7 +308,7 @@ void _ukv_write_txn( //
         auto begin = reinterpret_cast<byte_t const*>(c_values[i]);
 
         try {
-            located_key_t located_key {&column, *c_keys};
+            located_key_t located_key {&column, key};
             value_t value {begin, begin + length};
             txn.new_values.insert_or_assign(std::move(located_key), std::move(value));
         }
@@ -339,7 +343,9 @@ void _ukv_measure_txn( //
         }
         // Others should be pulled from the main store
         else if (auto key_iterator = column.content.find(c_keys[i]); key_iterator != column.content.end()) {
-            if (belongs_to_gap(key_iterator->second.sequence_number, txn.sequence_number, youngest_sequence_number)) {
+            if (entry_was_overwritten(key_iterator->second.sequence_number,
+                                      txn.sequence_number,
+                                      youngest_sequence_number)) {
                 *c_error = "Requested key was already overwritten since the start of the transaction!";
                 return;
             }
@@ -382,7 +388,9 @@ void _ukv_read_txn( //
         }
         // Others should be pulled from the main store
         else if (auto key_iterator = column.content.find(c_keys[i]); key_iterator != column.content.end()) {
-            if (belongs_to_gap(key_iterator->second.sequence_number, txn.sequence_number, youngest_sequence_number)) {
+            if (entry_was_overwritten(key_iterator->second.sequence_number,
+                                      txn.sequence_number,
+                                      youngest_sequence_number)) {
                 *c_error = "Requested key was already overwritten since the start of the transaction!";
                 return;
             }
@@ -417,7 +425,7 @@ void _ukv_read_txn( //
             c_lengths[i] = static_cast<ukv_val_len_t>(overwrite_iterator->second.size());
         }
         // Others should be pulled from the main store
-        else if (auto key_iterator = column.content.find(*c_keys); key_iterator != column.content.end()) {
+        else if (auto key_iterator = column.content.find(c_keys[i]); key_iterator != column.content.end()) {
             auto len = key_iterator->second.data.size();
             std::memcpy(arena + exported_into_arena, key_iterator->second.data.data(), len);
             c_values[i] = reinterpret_cast<ukv_val_ptr_t>(arena + exported_into_arena);
@@ -613,7 +621,13 @@ void ukv_txn_commit( //
         column_t& column = *located_key.column_ptr;
         auto key_iterator = column.content.find(located_key.key);
         if (key_iterator != column.content.end()) {
-            if (belongs_to_gap(key_iterator->second.sequence_number, txn.sequence_number, youngest_sequence_number)) {
+            if (key_iterator->second.sequence_number == txn.sequence_number) {
+                *c_error = "Can't commit same entry more than once!";
+                return;
+            }
+            if (entry_was_overwritten(key_iterator->second.sequence_number,
+                                      txn.sequence_number,
+                                      youngest_sequence_number)) {
                 *c_error = "Incoming key collides with newer entry!";
                 return;
             }
