@@ -446,7 +446,7 @@ PYBIND11_MODULE(ukv, m) {
     });
 
     // Operator overaloads used to access collections
-    db.def("__getitem__", [](py_db_t& db, std::string const& collection) {
+    txn.def("__getitem__", [](py_db_t& db, std::string const& collection) {
         auto col = std::make_shared<py_column_t>();
         col->name = collection;
         col->raw = column_named(db, collection);
@@ -461,5 +461,5 @@ PYBIND11_MODULE(ukv, m) {
         col->txn_ptr = &txn;
         return col;
     });
-    txn.def("__delitem__", [](py_db_t& db, std::string const& collection) { column_remove(db, collection); });
+    db.def("__delitem__", [](py_db_t& db, std::string const& collection) { column_remove(db, collection); });
 }
