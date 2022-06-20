@@ -39,8 +39,8 @@ def test_set_by_2_transactions():
     for index in range(1, keys_count, 2):
         txn2.set(index, str(index).encode())
 
-    txn1.__exit__(None, None, None)
-    txn2.__exit__(None, None, None)
+    txn1.commit()
+    txn2.commit()
 
     for index in range(keys_count):
         assert db.get(index) == str(index).encode()
@@ -60,8 +60,8 @@ def test_remove_by_2_transactions():
     for index in range(1, keys_count, 2):
         del txn2[index]
 
-    txn1.__exit__(None, None, None)
-    txn2.__exit__(None, None, None)
+    txn1.commit()
+    txn2.commit()
 
     for index in range(keys_count):
         assert index not in db
@@ -75,13 +75,16 @@ def test_set_by_2_intersected_transactions():
     txn2 = ukv.Transaction(db)
 
     for index in range(keys_count):
-        txn1.set(index, str(index).encode())
+        txn1.set(index, 'a'.encode())
     for index in range(keys_count):
-        txn2.set(index, str(index).encode())
+        txn2.set(index, 'b'.encode())
 
-    txn2.__exit__(None, None, None)
+    txn2.commit()
     with pytest.raises(Exception):
-        txn1.__exit__(None, None, None)
+        txn1.commit()
+
+    for index in range(keys_count):
+        assert db[index] == 'b'.encode()
 
 
 def test_remove_by_2_intersected_transactions():
@@ -98,9 +101,9 @@ def test_remove_by_2_intersected_transactions():
     for index in range(keys_count):
         del txn2[index]
 
-    txn2.__exit__(None, None, None)
+    txn2.commit()
     with pytest.raises(Exception):
-        txn1.__exit__(None, None, None)
+        txn1.commit()
 
 
 def test_multiple_transactions():
