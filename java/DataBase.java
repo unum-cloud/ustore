@@ -42,32 +42,14 @@ public class DataBase implements AutoCloseable {
     private long nativeAddress = 0;
 
     /**
-     * Maps the specified key to the specified value in this collection.
-     */
-    public native void put(long key, byte[] value);
-
-    /**
-     * If the specified key is not already associated with a value (or is mapped to
-     * null) associates it with the given value and returns null, else returns the
-     * current value.
-     */
-    public native void putIfAbsent(long key, byte[] value);
-
-    /**
-     * Copies all of the mappings from the specified map to this collection.
-     */
-    public native void putAll(Map<Long, byte[]> t);
-
-    /**
-     * Replaces the entry for the specified key only if it is currently mapped to
-     * some value.
-     */
-    public native byte[] replace(long key, byte[] value);
-
-    /**
      * Tests if the specified object is a key in this collection.
      */
     public native boolean containsKey(long key);
+
+    /**
+     * Maps the specified key to the specified value in this collection.
+     */
+    public native void put(long key, byte[] value);
 
     /**
      * Returns the value to which the specified key is mapped, or null if this map
@@ -76,23 +58,9 @@ public class DataBase implements AutoCloseable {
     public native byte[] get(long key);
 
     /**
-     * Returns the value to which the specified key is mapped, or defaultValue if
-     * this map contains no mapping for the key.
-     */
-    public native byte[] getOrDefault(long key, byte[] defaultValue);
-
-    /**
      * Removes the key (and its corresponding value) from this collection.
      */
     public native byte[] remove(long key);
-
-    /**
-     * Removes the entry for the specified key only if it is currently mapped to the
-     * specified value.
-     * 
-     * @return True, iff key was found, value was equal and the removal occured.
-     */
-    public native boolean remove(long key, byte[] value);
 
     /**
      * Clears this collection so that it contains no keys.
@@ -102,6 +70,62 @@ public class DataBase implements AutoCloseable {
     public native void open(String config_json);
 
     public native void close_();
+
+    /**
+     * If the specified key is not already associated with a value (or is mapped to
+     * null) associates it with the given value and returns null, else returns the
+     * current value.
+     */
+    public void putIfAbsent(long key, byte[] value) {
+        if (!containsKey(key))
+            put(key, value);
+    }
+
+    /**
+     * Copies all of the mappings from the specified map to this collection.
+     */
+    public void putAll(Map<Long, byte[]> t) {
+        for (Map.Entry<Long, byte[]> entry : t.entrySet())
+            put(entry.getKey(), entry.getValue());
+    }
+
+    /**
+     * Replaces the entry for the specified key only if it is currently mapped to
+     * some value.
+     */
+    public byte[] replace(long key, byte[] value) {
+        byte[] old = get(key);
+        if (old != value)
+            put(key, value);
+        return old;
+    }
+
+    /**
+     * Returns the value to which the specified key is mapped, or defaultValue if
+     * this map contains no mapping for the key.
+     */
+    public byte[] getOrDefault(long key, byte[] defaultValue) {
+        byte[] old = get(key);
+        if (old != null)
+            return old;
+        return defaultValue;
+
+    }
+
+    /**
+     * Removes the entry for the specified key only if it is currently mapped to the
+     * specified value.
+     * 
+     * @return True, iff key was found, value was equal and the removal occured.
+     */
+    public boolean remove(long key, byte[] value) {
+        byte[] old = get(key);
+        if (old == value) {
+            remove(key, value);
+            return true;
+        } else
+            return false;
+    }
 
     public DataBase(String config_json) {
         open(config_json);
