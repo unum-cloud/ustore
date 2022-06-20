@@ -8,6 +8,7 @@
  * Deficiencies:
  * > Global Lock.
  * > No support for range queries.
+ * > Keeps track of all the deleted keys throughout the history.
  */
 
 #include <vector>
@@ -179,31 +180,24 @@ void _ukv_write_head( //
         auto begin = reinterpret_cast<byte_t const*>(c_values[i]);
         auto key_iterator = column.content.find(key);
 
-        if (begin) {
-            // We want to insert a new entry, but let's check if we
-            // can overwrite the existig value without causing reallocations.
-            try {
-                if (key_iterator != column.content.end()) {
-                    key_iterator->second.sequence_number = ++db.youngest_sequence;
-                    key_iterator->second.data.assign(begin, begin + length);
-                }
-                else {
-                    sequenced_value_t sequenced_value {
-                        value_t(begin, begin + length),
-                        ++db.youngest_sequence,
-                    };
-                    column.content.insert_or_assign(key, std::move(sequenced_value));
-                }
+        // We want to insert a new entry, but let's check if we
+        // can overwrite the existig value without causing reallocations.
+        try {
+            if (key_iterator != column.content.end()) {
+                key_iterator->second.sequence_number = ++db.youngest_sequence;
+                key_iterator->second.data.assign(begin, begin + length);
             }
-            catch (...) {
-                *c_error = "Failed to put!";
-                break;
+            else {
+                sequenced_value_t sequenced_value {
+                    value_t(begin, begin + length),
+                    ++db.youngest_sequence,
+                };
+                column.content.insert_or_assign(key, std::move(sequenced_value));
             }
         }
-        else {
-            // We should delete the value
-            if (key_iterator != column.content.end())
-                column.content.erase(key_iterator);
+        catch (...) {
+            *c_error = "Failed to put!";
+            break;
         }
     }
 }
@@ -660,12 +654,13 @@ void ukv_txn_commit( //
         column_t& column = *located_key_and_value.first.column_ptr;
         auto key_iterator = column.content.find(located_key_and_value.first.key);
         // A key was deleted:
-        if (located_key_and_value.second.empty()) {
-            if (key_iterator != column.content.end())
-                column.content.erase(key_iterator);
-        }
+        // if (located_key_and_value.second.empty()) {
+        //     if (key_iterator != column.content.end())
+        //         column.content.erase(key_iterator);
+        // }
         // A keys was updated:
-        else if (key_iterator != column.content.end()) {
+        // else
+        if (key_iterator != column.content.end()) {
             key_iterator->second.sequence_number = txn.sequence_number;
             std::swap(key_iterator->second.data, located_key_and_value.second);
         }
