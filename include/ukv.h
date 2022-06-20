@@ -85,6 +85,7 @@ typedef uint64_t ukv_key_t;
 typedef void* ukv_arena_ptr_t;
 typedef void* ukv_val_ptr_t;
 typedef uint32_t ukv_val_len_t;
+typedef char const* ukv_str_t;
 typedef char const* ukv_error_t;
 
 /*********************************************************/
@@ -98,8 +99,8 @@ typedef char const* ukv_error_t;
  * > remote persistent transactional KVS
  * > remote in-memory transactional KVS
  *
- * @param[in] config  Configuration NULL-terminated string.
- * @param[out] db     A pointer to initialized and opened KVS, unless @p `error` is filled.
+ * @param[in] config  A NULL-terminated @b JSON string with configuration specs.
+ * @param[out] db     A pointer to the opened KVS, unless @p `error` is filled.
  * @param[out] error  The error message to be handled by callee.
  */
 void ukv_open( //
@@ -122,10 +123,10 @@ void ukv_open( //
  *                           Can be `NULL`.
  * @param[in] keys           Array of keys in one or more collections.
  * @param[in] keys_count     Number of elements in @p `keys`.
- * @param[in] columns        Array of columns with 0, 1 or `keys_count`
- *                           elements describing the locations of keys.
+ * @param[in] columns        Array of columns owning the @p `keys`.
  *                           If NULL is passed, the default collection
- *                           is assumed.
+ *                           is assumed. Instead of passing one collection for
+ *                           each key, you can use `ukv_option_read_colocated`.
  * @param[in] options        Write options.
  * @param[in] values         Array of pointers to the first byte of each value.
  *                           NULLs, if you want to @b delete the values associated
@@ -160,11 +161,11 @@ void ukv_write( //
  *                            operation must go. Can be `NULL`.
  * @param[in] keys            Array of keys in one or more collections.
  * @param[in] keys_count      Number of elements in @p `keys`.
- * @param[in] columns         Array of columns with 0, 1 or `keys_count`
- *                            elements describing the locations of keys.
+ * @param[in] columns         Array of columns owning the @p `keys`.
  *                            If NULL is passed, the default collection
- *                            is assumed.
- * @param[in] options         Write options.
+ *                            is assumed. Instead of passing one collection for
+ *                            each key, you can use `ukv_option_read_colocated`.
+ * @param[in] options         Read options.
  * @param[inout] arena        Points to a memory region that we use during
  *                            this request. If it's too small (@p `arena_length`),
  *                            we `realloc` a new buffer. You can't pass a memory
@@ -209,7 +210,7 @@ void ukv_read( //
  */
 void ukv_column_upsert( //
     ukv_t const db,
-    char const* column_name,
+    ukv_str_t column_name,
     ukv_column_t* column,
     ukv_error_t* error);
 
@@ -224,40 +225,31 @@ void ukv_column_upsert( //
  */
 void ukv_column_remove( //
     ukv_t const db,
-    char const* column_name,
+    ukv_str_t column_name,
     ukv_error_t* error);
 
 /**
- * @brief Triggers a "Compaction" or "Garbage Collection" procedure
- * on the entire collection. This is an exceptionally expensive task,
- * that only makes sense on exports, when you want to export production
- * data into a read-only collection for your products deployment.
+ * @brief Performs free-form queries on the DB, that may not necesserily
+ * have a stable API and a fixed format output. Generally, those requests
+ * are very expensive and shouldn't be executed in most applications.
+ * This is the "kitchensink" of UKV interface, similar to `fcntl` & `ioctl`.
  *
- * @param[in] db           Already open database instance, @see `ukv_open`.
- * @param[in] column       A column handle.
- * @param[out] error       The error message to be handled by callee.
+ * @param[in] db        Already open database instance, @see `ukv_open`.
+ * @param[in] request   Textual representation of the command.
+ * @param[out] response Output text of the request.
+ * @param[out] error    The error message to be handled by callee.
+ *
+ * @section Supported Commands
+ * > "clear":   Removes all the data from DB, while keeping collection names.
+ * > "reset":   Removes all the data from DB, including collection names.
+ * > "compact": Flushes and compacts all the data in LSM-tree implementations.
+ * > "info":    Metadata about the current software version, used for debugging.
+ * > "usage":   Metadata about approximate collection sizes, RAM and disk usage.
  */
-void ukv_column_compact( //
+void ukv_control( //
     ukv_t const db,
-    ukv_column_t* column,
-    ukv_error_t* error);
-
-void ukv_columns_list( //
-    ukv_t const db,
-    char const** columns_names,
-    size_t* columns_count,
-    ukv_error_t* error);
-
-/**
- * @brief Pulls metadata, mostly for logging and customer support.
- */
-void ukv_status( //
-    ukv_t db,
-    size_t* version_major,
-    size_t* version_minor,
-    size_t* memory_usage,
-    size_t* disk_usage,
-    size_t* active_transactions,
+    ukv_str_t request,
+    ukv_str_t* response,
     ukv_error_t* error);
 
 /*********************************************************/
@@ -340,10 +332,8 @@ void ukv_option_write_colocated(ukv_options_read_t* options, bool);
 /*********************************************************/
 
 /**
- * @brief A function to be used in conjunction with:
- * > `ukv_read`
- * > `ukv_txn_read`
- * to deallocate and return memory to UnumDB and OS.
+ * @brief A function to be used after `ukv_read` to
+ * deallocate and return memory to UnumDB and OS.
  */
 void ukv_arena_free(ukv_t const db, ukv_arena_ptr_t, size_t);
 
