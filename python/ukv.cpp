@@ -146,10 +146,7 @@ void free_temporary_memory(py_db_t& db, py_arena_t& arena) {
     arena.length = 0;
 }
 
-void close_if_opened(py_db_t& db,
-                     py::object const& exc_type,
-                     py::object const& exc_value,
-                     py::object const& traceback) {
+void close_if_opened(py_db_t& db) {
     if (!db.raw)
         return;
 
@@ -238,7 +235,7 @@ std::optional<py::bytes> get_item(
     if (error) [[unlikely]]
         throw make_exception(db, error);
 
-    if (!value_length)
+    if (!value_length || !value)
         return {};
 
     // To fetch data without copies, there is a hacky way:
@@ -366,12 +363,15 @@ PYBIND11_MODULE(ukv, m) {
         column_named(db, name);
     });
 
-    // Unlike `DataBase`, it won't begin before the `__enter__` call.
-    txn.def(py::init([](py_db_t& db) {
-        auto txn_ptr = std::make_shared<py_txn_t>();
-        txn_ptr->db_ptr = &db;
-        return txn_ptr;
-    }));
+    // `Transaction`:
+    txn.def(py::init([](py_db_t& db, bool begin) {
+                auto txn_ptr = std::make_shared<py_txn_t>();
+                txn_ptr->db_ptr = &db;
+                begin_if_needed(*txn_ptr);
+                return txn_ptr;
+            }),
+            py::arg("db"),
+            py::arg("begin") = true);
     txn.def(
         "get",
         [](py_txn_t& txn, ukv_key_t key) { return get_item(*txn.db_ptr, txn.raw, NULL, txn.arena, key); },
@@ -404,9 +404,14 @@ PYBIND11_MODULE(ukv, m) {
 
     // Resource management
     db.def("__enter__", &open_if_closed);
-    db.def("__exit__", &close_if_opened);
+    db.def("close", &close_if_opened);
     txn.def("__enter__", &begin_if_needed);
     txn.def("commit", &commit);
+
+    db.def("__exit__",
+           [](py_db_t& db, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
+               close_if_opened(db);
+           });
     txn.def("__exit__",
             [](py_txn_t& txn, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
                 try {
