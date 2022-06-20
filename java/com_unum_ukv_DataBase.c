@@ -72,7 +72,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_put(JNIEnv* env_java,
     ukv_options_write_t options_c = NULL;
     ukv_error_t error_c = NULL;
 
-    ukv_write(db_ptr_c, &key_c, 1, NULL, 0, options_c, &value_ptr_c, &value_len_c, &error_c);
+    ukv_write(db_ptr_c, NULL, &key_c, 1, NULL, options_c, &value_ptr_c, &value_len_c, &error_c);
     if (value_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseByteArrayElements(env_java, value_java, value_ptr_java, 0);
     if (forward_error(env_java, error_c))
@@ -89,7 +89,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_containsKey(JNIEnv* env_ja
     ukv_val_len_t value_len_c = 0;
     ukv_error_t error_c = NULL;
 
-    ukv_read(db_ptr_c, &key_c, 1, NULL, 0, options_c, &arena_c, &arena_len_c, NULL, &value_len_c, &error_c);
+    ukv_read(db_ptr_c, NULL, &key_c, 1, NULL, options_c, &arena_c, &arena_len_c, NULL, &value_len_c, &error_c);
     if (arena_c)
         ukv_arena_free(db_ptr_c, arena_c, arena_len_c);
     if (forward_error(env_java, error_c))
@@ -116,7 +116,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_get(JNIEnv* env_java, jo
     ukv_val_len_t value_len_c = 0;
     ukv_error_t error_c = NULL;
 
-    ukv_read(db_ptr_c, &key_c, 1, NULL, 0, options_c, &arena_c, &arena_len_c, &value_ptr_c, &value_len_c, &error_c);
+    ukv_read(db_ptr_c, NULL, &key_c, 1, NULL, options_c, &arena_c, &arena_len_c, &value_ptr_c, &value_len_c, &error_c);
     if (value_len_c) {
         result_java = NewByteArray(env_java, value_len_c);
         if (result_java)
