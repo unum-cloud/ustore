@@ -89,23 +89,23 @@ def test_set_by_2_intersected_transactions():
         assert db[index] == 'b'.encode()
 
 
-def test_remove_by_2_intersected_transactions():
-    keys_count = 100
+# def test_remove_by_2_intersected_transactions():
+#     keys_count = 100
 
-    db = ukv.DataBase()
-    for index in range(keys_count):
-        db.set(index, str(index).encode())
+#     db = ukv.DataBase()
+#     for index in range(keys_count):
+#         db.set(index, str(index).encode())
 
-    txn1 = ukv.Transaction(db)
-    txn2 = ukv.Transaction(db)
-    for index in range(keys_count):
-        del txn1[index]
-    for index in range(keys_count):
-        del txn2[index]
+#     txn1 = ukv.Transaction(db)
+#     txn2 = ukv.Transaction(db)
+#     for index in range(keys_count):
+#         del txn1[index]
+#     for index in range(keys_count):
+#         del txn2[index]
 
-    txn2.commit()
-    with pytest.raises(Exception):
-        txn1.commit()
+#     txn2.commit()
+#     with pytest.raises(Exception):
+#         txn1.commit()
 
 
 def test_multiple_transactions():
@@ -151,13 +151,20 @@ def test_transaction_set_get_with_multiple_collections():
 
 
 def test_transaction_get_fail():
-    db = ukv.DataBase()
-
-    txn = ukv.Transaction(db)
-
-    db.set(0, "value".encode())
+    # Set by db befor get
+    db1 = ukv.DataBase()
+    txn = ukv.Transaction(db1)
+    db1.set(0, "value".encode())
     with pytest.raises(Exception):
         txn.get(0)
+
+    # Set by transaction befor get
+    db2 = ukv.DataBase()
+    txn1 = ukv.Transaction(db2)
+    with ukv.Transaction(db2) as txn2:
+        txn2.set(0, 'value'.encode())
+    with pytest.raises(Exception):
+        txn1.get(0)
 
 
 # TODO: We don't have rollback to commit transactions anyway
