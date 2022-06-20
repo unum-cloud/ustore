@@ -145,7 +145,8 @@ def test_transaction_set_get_with_multiple_collections():
     with ukv.Transaction(db) as txn:
         for col_index in range(coll_count):
             for index in range(keys_count):
-                txn.get(str(col_index), index)
+                assert txn.get(str(col_index), index) == str(index).encode()
+                assert txn[str(col_index)][index] == str(index).encode()
                 assert index in db[str(col_index)]
 
 
