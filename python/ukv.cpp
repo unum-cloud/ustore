@@ -169,7 +169,7 @@ std::shared_ptr<py_txn_t> begin_if_needed(py_txn_t& txn) {
     return txn.shared_from_this();
 }
 
-void commit(py_txn_t& txn, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
+void commit(py_txn_t& txn) {
     if (!txn.raw)
         return;
 
@@ -406,7 +406,15 @@ PYBIND11_MODULE(ukv, m) {
     db.def("__enter__", &open_if_closed);
     db.def("__exit__", &close_if_opened);
     txn.def("__enter__", &begin_if_needed);
-    txn.def("__exit__", &commit);
+    txn.def("commit", &commit);
+    txn.def("__exit__",
+            [](py_txn_t& txn, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
+                try {
+                    commit(txn);
+                }
+                catch (...) {
+                }
+            });
 
     // Operator overaloads used to edit entries
     db.def("__contains__", [](py_db_t& db, ukv_key_t key) { return contains_item(db, NULL, NULL, db.arena, key); });
@@ -446,7 +454,7 @@ PYBIND11_MODULE(ukv, m) {
     });
 
     // Operator overaloads used to access collections
-    txn.def("__getitem__", [](py_db_t& db, std::string const& collection) {
+    db.def("__getitem__", [](py_db_t& db, std::string const& collection) {
         auto col = std::make_shared<py_column_t>();
         col->name = collection;
         col->raw = column_named(db, collection);
