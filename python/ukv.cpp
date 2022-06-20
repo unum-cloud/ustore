@@ -176,6 +176,8 @@ void commit(py_txn_t& txn, py::object const& exc_type, py::object const& exc_val
     py_db_t& db = *txn.db_ptr;
     ukv_error_t error = NULL;
     ukv_options_write_t options = NULL;
+
+    [[maybe_unused]] py::gil_scoped_release release;
     ukv_txn_commit(txn.raw, options, &error);
     if (error) [[unlikely]]
         throw make_exception(db, error);
@@ -183,6 +185,7 @@ void commit(py_txn_t& txn, py::object const& exc_type, py::object const& exc_val
     free_temporary_memory(db, txn.arena);
     ukv_txn_free(db.raw, txn.raw);
     txn.raw = NULL;
+    [[maybe_unused]] py::gil_scoped_acquire acquire;
 }
 
 bool contains_item(py_db_t& db, ukv_txn_t txn_ptr, ukv_column_t column_ptr, py_arena_t& arena, ukv_key_t key) {
@@ -190,6 +193,7 @@ bool contains_item(py_db_t& db, ukv_txn_t txn_ptr, ukv_column_t column_ptr, py_a
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
 
+    [[maybe_unused]] py::gil_scoped_release release;
     ukv_read(db.raw,
              txn_ptr,
              &key,
@@ -201,6 +205,8 @@ bool contains_item(py_db_t& db, ukv_txn_t txn_ptr, ukv_column_t column_ptr, py_a
              NULL,
              &value_length,
              &error);
+    [[maybe_unused]] py::gil_scoped_acquire acquire;
+
     if (error) [[unlikely]]
         throw make_exception(db, error);
 
@@ -215,6 +221,7 @@ std::optional<py::bytes> get_item(
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
 
+    [[maybe_unused]] py::gil_scoped_release release;
     ukv_read(db.raw,
              txn_ptr,
              &key,
@@ -226,6 +233,8 @@ std::optional<py::bytes> get_item(
              &value,
              &value_length,
              &error);
+    [[maybe_unused]] py::gil_scoped_acquire acquire;
+
     if (error) [[unlikely]]
         throw make_exception(db, error);
 
@@ -248,7 +257,10 @@ void set_item(py_db_t& db, ukv_txn_t txn_ptr, ukv_column_t column_ptr, ukv_key_t
     ukv_val_len_t len = value ? static_cast<ukv_val_len_t>(std::string_view {*value}.size()) : 0;
     ukv_error_t error = NULL;
 
+    [[maybe_unused]] py::gil_scoped_release release;
     ukv_write(db.raw, txn_ptr, &key, 1, column_ptr ? &column_ptr : NULL, options, &ptr, &len, &error);
+    [[maybe_unused]] py::gil_scoped_acquire acquire;
+
     if (error) [[unlikely]]
         throw make_exception(db, error);
 }
@@ -257,10 +269,24 @@ ukv_column_t column_named(py_db_t& db, std::string const& column_name) {
     ukv_column_t column_ptr = NULL;
     ukv_error_t error = NULL;
 
+    [[maybe_unused]] py::gil_scoped_release release;
     ukv_column_upsert(db.raw, column_name.c_str(), &column_ptr, &error);
+    [[maybe_unused]] py::gil_scoped_acquire acquire;
+
     if (error) [[unlikely]]
         throw make_exception(db, error);
     return column_ptr;
+}
+
+void column_remove(py_db_t& db, std::string const& column_name) {
+    ukv_error_t error = NULL;
+
+    [[maybe_unused]] py::gil_scoped_release release;
+    ukv_column_remove(db.raw, column_name.c_str(), &error);
+    [[maybe_unused]] py::gil_scoped_acquire acquire;
+
+    if (error) [[unlikely]]
+        throw make_exception(db, error);
 }
 
 PYBIND11_MODULE(ukv, m) {
@@ -334,10 +360,10 @@ PYBIND11_MODULE(ukv, m) {
         py::arg("key"),
         py::arg("value"));
     col.def("clear", [](py_column_t& col) {
-        ukv_error_t error = NULL;
-        ukv_column_remove(col.db_ptr->raw, col.name.c_str(), &error);
-        if (error) [[unlikely]]
-            throw make_exception(*col.db_ptr, error);
+        py_db_t& db = *col.db_ptr;
+        std::string name {std::move(col.name)};
+        column_remove(db, name);
+        column_named(db, name);
     });
 
     // Unlike `DataBase`, it won't begin before the `__enter__` call.
@@ -435,10 +461,5 @@ PYBIND11_MODULE(ukv, m) {
         col->txn_ptr = &txn;
         return col;
     });
-    txn.def("__delitem__", [](py_db_t& db, std::string const& collection) {
-        ukv_error_t error = NULL;
-        ukv_column_remove(db.raw, collection.c_str(), &error);
-        if (error) [[unlikely]]
-            throw make_exception(db, error);
-    });
+    txn.def("__delitem__", [](py_db_t& db, std::string const& collection) { column_remove(db, collection); });
 }
