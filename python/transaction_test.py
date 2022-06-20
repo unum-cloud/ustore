@@ -153,12 +153,11 @@ def test_transaction_set_get_with_multiple_collections():
 def test_transaction_get_fail():
     db = ukv.DataBase()
 
-    txn1 = ukv.Transaction(db)
-    txn2 = ukv.Transaction(db)
+    txn = ukv.Transaction(db)
 
     db.set(0, "value".encode())
     with pytest.raises(Exception):
-        txn1.get(0)
+        txn.get(0)
 
 
 # TODO: We don't have rollback to commit transactions anyway
