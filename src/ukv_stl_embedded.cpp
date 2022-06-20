@@ -1,3 +1,15 @@
+/**
+ * @file ukv_stl_embedded.cpp
+ * @author Ashot Vardanian
+ *
+ * @brief Embedded In-Memory Key-Value Store implementation using only @b STL.
+ * This is not the fastest, not the smartest possible solution for @b ACID KVS,
+ * but is a good reference design for educational purposes.
+ * Deficiencies:
+ * > Global Lock.
+ * > No support for range queries.
+ */
+
 #include <vector>
 #include <string>
 #include <string_view>
@@ -58,11 +70,14 @@ struct txn_t {
     std::unordered_map<located_key_t, value_t, located_key_hash_t> new_values;
     db_t* db_ptr {nullptr};
     sequence_t sequence_number {0};
+
+    void commit();
 };
 
 struct db_t {
     std::shared_mutex mutex;
     column_t main_column;
+
     /**
      * @brief A variable-size set of named columns.
      * It's cleaner to implement it with heterogenous lookups as
@@ -74,6 +89,11 @@ struct db_t {
      * This can be updated even outside of the main @p `mutex` on HEAD state.
      */
     std::atomic<sequence_t> youngest_sequence {0};
+    /**
+     * @brief Path on disk, from which the data will be read.
+     * When closed, we will try saving the DB on disk.
+     */
+    std::string persisted_path;
 };
 
 /**
@@ -86,20 +106,71 @@ bool belongs_to_gap(sequence_t sequence_number, sequence_t min, sequence_t max) 
                      : ((sequence_number > min) | (sequence_number <= max));
 }
 
+template <typename keys_iterator_at, typename columns_iterator_at, typename values_iterator_at>
+void write(db_t&,
+           keys_iterator_at keys_begin,
+           keys_iterator_at keys_end,
+           columns_iterator_at columns_begin,
+           columns_iterator_at columns_end,
+           values_iterator_at values_begin,
+           values_iterator_at values_end,
+           ukv_error_t* c_error) {
+}
+
+template <typename keys_iterator_at, typename columns_iterator_at, typename values_iterator_at>
+void write(txn_t&,
+           keys_iterator_at keys_begin,
+           keys_iterator_at keys_end,
+           columns_iterator_at columns_begin,
+           columns_iterator_at columns_end,
+           values_iterator_at values_begin,
+           values_iterator_at values_end,
+           ukv_error_t* c_error) {
+}
+
+size_t estimate_key_size(db_t&, column_t& column, key_t key, ukv_error_t* c_error) {
+    auto key_iterator = column.content.find(key);
+    return key_iterator != column.content.end() ? key_iterator->second.data.size() : 0;
+}
+
+size_t estimate_key_size(txn_t& txn, column_t& column, key_t key, ukv_error_t* c_error) {
+    // Some keys may already be overwritten inside of transaction
+    if (auto overwrite_iterator = txn.new_values.find(located_key_t {&column, key});
+        overwrite_iterator != txn.new_values.end()) {
+        return overwrite_iterator->second.size();
+    }
+    // Others should be pulled from the main store
+    else if (auto key_iterator = column.content.find(key); key_iterator != column.content.end()) {
+        if (belongs_to_gap(key_iterator->second.sequence_number,
+                           txn.sequence_number,
+                           txn.db_ptr->youngest_sequence.load())) {
+            *c_error = "Requested key was already overwritten since the start of the transaction!";
+            return 0;
+        }
+        return key_iterator->second.data.size();
+    }
+    // But some will be missing
+    else
+        return 0;
+}
+
 } // namespace
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
 /*********************************************************/
 
-void ukv_open(
-    // Inputs:
-    [[maybe_unused]] char const* config,
-    // Outputs:
-    ukv_t* db,
-    [[maybe_unused]] ukv_error_t* c_error) {
+void ukv_open( //
+    [[maybe_unused]] char const* c_config,
+    ukv_t* c_db,
+    ukv_error_t* c_error) {
 
-    *db = new db_t {};
+    try {
+        *c_db = new db_t {};
+    }
+    catch (...) {
+        *c_error = "Failed to initizalize the database";
+    }
 }
 
 void ukv_write(
@@ -159,20 +230,14 @@ void ukv_write(
     }
 }
 
-void ukv_read(
-    // Inputs:
+void ukv_read( //
     ukv_t const c_db,
     ukv_key_t const* c_keys,
     size_t const c_keys_count,
     ukv_column_t const* c_columns,
-    size_t const c_columns_count,
-    [[maybe_unused]] ukv_options_read_t const c_options,
-
-    // In-outs:
+    ukv_options_read_t const c_options,
     void** c_arena,
     size_t* c_arena_length,
-
-    // Outputs:
     ukv_val_ptr_t* c_values,
     ukv_val_len_t* c_values_lengths,
     ukv_error_t* c_error) {
@@ -484,7 +549,7 @@ void ukv_txn_read(
 void ukv_txn_commit(
     // Inputs:
     ukv_txn_t const c_txn,
-    [[maybe_unused]] ukv_options_write_t const options,
+    ukv_options_write_t const c_options,
     // Outputs:
     ukv_error_t* c_error) {
 
@@ -559,34 +624,6 @@ void ukv_txn_commit(
 }
 
 /*********************************************************/
-/*****************		  Iterators	      ****************/
-/*********************************************************/
-
-void ukv_iter_make(ukv_column_t const, ukv_iter_t*, ukv_error_t* error) {
-    *error = "Iterators aren't supported by std::unordered_map";
-}
-
-void ukv_iter_seek(ukv_iter_t const, ukv_key_t, ukv_error_t* error) {
-    *error = "Iterators aren't supported by std::unordered_map";
-}
-
-void ukv_iter_advance(ukv_iter_t const, size_t const, ukv_error_t* error) {
-    *error = "Iterators aren't supported by std::unordered_map";
-}
-
-void ukv_iter_read_key(ukv_iter_t const, ukv_key_t*, ukv_error_t* error) {
-    *error = "Iterators aren't supported by std::unordered_map";
-}
-
-void ukv_iter_read_value_size(ukv_iter_t const, size_t*, size_t*, ukv_error_t* error) {
-    *error = "Iterators aren't supported by std::unordered_map";
-}
-
-void ukv_iter_read_value(ukv_iter_t const, void**, size_t*, ukv_val_ptr_t*, ukv_val_len_t*, ukv_error_t* error) {
-    *error = "Iterators aren't supported by std::unordered_map";
-}
-
-/*********************************************************/
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
@@ -607,9 +644,6 @@ void ukv_free(ukv_t c_db) {
 void ukv_column_free(ukv_t const, ukv_column_t const) {
     // In this in-memory freeing the column handle does nothing.
     // The DB destructor will automatically cleanup the memory.
-}
-
-void ukv_iter_free(ukv_t const, ukv_iter_t const) {
 }
 
 void ukv_error_free(ukv_error_t) {
