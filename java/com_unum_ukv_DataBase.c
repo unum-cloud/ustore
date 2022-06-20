@@ -93,8 +93,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_put(JNIEnv* env_java,
     ukv_write(db_ptr_c, NULL, &key_c, 1, NULL, options_c, &value_ptr_c, &value_len_c, &error_c);
     if (value_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseByteArrayElements(env_java, value_java, value_ptr_java, 0);
-    if (forward_error(env_java, error_c))
-        return;
+    forward_error(env_java, error_c);
 }
 
 JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_containsKey(JNIEnv* env_java, jobject db_java, jlong key_java) {
@@ -149,12 +148,23 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_get(JNIEnv* env_java, jo
 }
 
 JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_remove__J(JNIEnv* env_java, jobject db_java, jlong key_java) {
+
+    ukv_t db_ptr_c = db_ptr(env_java, db_java);
+    ukv_key_t key_c = (ukv_key_t)key_java;
+    ukv_val_ptr_t value_ptr_c = NULL;
+    ukv_val_len_t value_len_c = 0;
+    ukv_options_write_t options_c = NULL;
+    ukv_error_t error_c = NULL;
+
+    ukv_write(db_ptr_c, NULL, &key_c, 1, NULL, options_c, &value_ptr_c, &value_len_c, &error_c);
+    forward_error(env_java, error_c);
 }
 
 JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_clear(JNIEnv* env_java, jobject db_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, db_java);
     ukv_error_t error_c = NULL;
+
     ukv_column_remove(db_ptr_c, NULL, &error_c);
     forward_error(env_java, error_c);
 }
