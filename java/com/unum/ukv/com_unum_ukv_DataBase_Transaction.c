@@ -1,7 +1,7 @@
-#include "com_unum_ukv_Transaction.h"
 #include "com_unum_ukv_Shared.h"
+#include "com_unum_ukv_DataBase_Transaction.h"
 
-JNIEXPORT void JNICALL Java_com_unum_ukv_Transaction_put( //
+JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
     JNIEnv* env_java,
     jobject txn_java,
     jstring column_java,
@@ -39,7 +39,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_Transaction_put( //
     forward_error(env_java, error_c);
 }
 
-JNIEXPORT jboolean JNICALL Java_com_unum_ukv_Transaction_containsKey( //
+JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsKey( //
     JNIEnv* env_java,
     jobject txn_java,
     jstring column_java,
@@ -75,7 +75,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_Transaction_containsKey( //
     return value_len_c != 0;
 }
 
-JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_Transaction_get( //
+JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     JNIEnv* env_java,
     jobject txn_java,
     jstring column_java,
@@ -124,7 +124,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_Transaction_get( //
     return result_java;
 }
 
-JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_Transaction_remove( //
+JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_remove( //
     JNIEnv* env_java,
     jobject txn_java,
     jstring column_java,
@@ -151,7 +151,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_Transaction_remove( //
     forward_error(env_java, error_c);
 }
 
-JNIEXPORT void JNICALL Java_com_unum_ukv_Transaction_rollback( //
+JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_rollback( //
     JNIEnv* env_java,
     jobject txn_java) {
 
@@ -163,7 +163,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_Transaction_rollback( //
     forward_error(env_java, error_c);
 }
 
-JNIEXPORT jboolean JNICALL Java_com_unum_ukv_Transaction_commit( //
+JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_commit( //
     JNIEnv* env_java,
     jobject txn_java) {
 
