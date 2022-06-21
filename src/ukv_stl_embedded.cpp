@@ -119,8 +119,13 @@ enum option_flags_t {
 };
 
 column_t& column_at(db_t& db, ukv_column_t const* c_columns, size_t i, void* c_options) {
+    if (!c_columns)
+        return db.main_column;
     auto options = reinterpret_cast<std::uintptr_t>(c_options);
-    return c_columns ? *reinterpret_cast<column_t*>(c_columns[(options & colocated_k) ? 0 : i]) : db.main_column;
+    auto column_ptr = reinterpret_cast<column_t*>(c_columns[(options & colocated_k) ? 0 : i]);
+    if (!column_ptr)
+        return db.main_column;
+    return *column_ptr;
 }
 
 void set_flag(void** c_options, bool c_enabled, option_flags_t flag) {
