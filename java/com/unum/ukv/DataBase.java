@@ -129,10 +129,27 @@ public class DataBase {
         /**
          * Removes the key (and its corresponding value) from this collection.
          */
-        public native byte[] remove(String collection, long key);
+        public native void erase(String collection, long key);
+
+        public void erase(long key) {
+            erase(null, key);
+        }
+
+        /**
+         * Removes the key (and its corresponding value) from this collection.
+         * 
+         * @return Previously held value.
+         */
+        public byte[] remove(String collection, long key) {
+            byte[] value = get(collection, key);
+            erase(collection, key);
+            return value;
+        }
 
         public byte[] remove(long key) {
-            return remove(null, key);
+            byte[] value = get(key);
+            erase(key);
+            return value;
         }
 
         /**
