@@ -1,12 +1,13 @@
-#include <jni.h>
 
 #ifndef _Included_com_unum_ukv_Shared
 #define _Included_com_unum_ukv_Shared
+
+#include <jni.h>
+#include "ukv.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "ukv.h"
 
 jfieldID find_field_database_address(JNIEnv* env_java, jobject txn_java);
 

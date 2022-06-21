@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# Get the absolute path of the executable
+SELF_PATH=$(cd -P -- "$(dirname -- "$0")" && pwd -P) && SELF_PATH=$SELF_PATH/$(basename -- "$0")
+DIR_PATH=$(dirname -- "$SELF_PATH")
+
 # Depending on your platform, Java may be installed at different paths.
 # Linux:
 #       apt-get install default-jdk
@@ -8,11 +12,11 @@
 #       brew install java
 #       export JAVA_HOME="/usr/libexec/java_home -v 1.8"
 
-cd java &&
-    javac -h . DataBase.java Transaction.java -Xlint:deprecation &&
-    gcc -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I${PWD}/../include com_unum_ukv_Shared.c -o com_unum_ukv_Shared.o &&
-    gcc -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I${PWD}/../include com_unum_ukv_DataBase.c -o com_unum_ukv_DataBase.o &&
-    gcc -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I${PWD}/../include com_unum_ukv_Transaction.c -o com_unum_ukv_Transaction.o &&
-    gcc -shared -fPIC -o libukv_java.so com_unum_ukv_Shared.o com_unum_ukv_DataBase.o com_unum_ukv_Transaction.o -L${PWD}/../build/lib -lukv_stl_embedded -lc &&
+cd java/com/unum/ukv &&
+    javac -h . DataBase.java -Xlint:deprecation &&
+    gcc -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I${DIR_PATH}/../include com_unum_ukv_Shared.c -o com_unum_ukv_Shared.o &&
+    gcc -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I${DIR_PATH}/../include com_unum_ukv_DataBase_Context.c -o com_unum_ukv_DataBase_Context.o &&
+    gcc -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I${DIR_PATH}/../include com_unum_ukv_DataBase_Transaction.c -o com_unum_ukv_DataBase_Transaction.o &&
+    gcc -shared -fPIC -o libukv_java.so com_unum_ukv_Shared.o com_unum_ukv_DataBase_Context.o com_unum_ukv_DataBase_Transaction.o -L${DIR_PATH}/../build/lib -lukv_stl_embedded -lc &&
     java -Djava.library.path=. -cp . DataBase.java
-cd ..
+cd ../../../..
