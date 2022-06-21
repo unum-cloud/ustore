@@ -7,6 +7,8 @@
 *.o
 *.obj
 *.class
+*.egg-info
+*.jar
 
 # Precompiled Headers
 *.gch
@@ -35,17 +37,16 @@
 # OS-specific
 .DS_Store
 
-# Subfolders
-build/
-build_debug/
-build_release/
-tmp/
-.vscode/
-
-# Bindings
-__pycache__
+# Temporary Files
 Makefile
 CMakeCache.txt
 cmake_install.cmake
 CMakeFiles
-*.egg-info
+build/
+build_debug/
+build_release/
+tmp/
+*.log
+.vscode/settings.json
+__pycache__
+.pytest_cache/
