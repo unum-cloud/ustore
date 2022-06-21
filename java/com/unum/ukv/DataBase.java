@@ -278,7 +278,6 @@ public class DataBase {
         Context ctx = new Context("");
         ctx.put(1, "hey".getBytes());
         assert ctx.get(1) == "hey".getBytes() : "Received wrong value";
-        ctx.close();
 
         Transaction txn = ctx.transaction();
         txn.put(42, "meaning of life".getBytes());
@@ -286,6 +285,7 @@ public class DataBase {
         txn.commit();
         assert ctx.get(42) == "meaning of life".getBytes() : "Accepted wrong philosophy";
 
+        ctx.close();
         System.out.println("Success!");
     }
 }
