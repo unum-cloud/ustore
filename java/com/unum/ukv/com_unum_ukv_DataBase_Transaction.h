@@ -49,10 +49,10 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get
 
 /*
  * Class:     com_unum_ukv_DataBase_Transaction
- * Method:    remove
- * Signature: (Ljava/lang/String;J)[B
+ * Method:    erase
+ * Signature: (Ljava/lang/String;J)V
  */
-JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_remove
+JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase
   (JNIEnv *, jobject, jstring, jlong);
 
 #ifdef __cplusplus
