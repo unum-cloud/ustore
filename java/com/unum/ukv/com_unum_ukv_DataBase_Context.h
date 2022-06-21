@@ -9,22 +9,6 @@ extern "C" {
 #endif
 /*
  * Class:     com_unum_ukv_DataBase_Context
- * Method:    transaction
- * Signature: ()Lcom/unum/ukv/DataBase/Transaction;
- */
-JNIEXPORT jobject JNICALL Java_com_unum_ukv_DataBase_00024Context_transaction
-  (JNIEnv *, jobject);
-
-/*
- * Class:     com_unum_ukv_DataBase_Context
- * Method:    clear
- * Signature: ()V
- */
-JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_clear
-  (JNIEnv *, jobject);
-
-/*
- * Class:     com_unum_ukv_DataBase_Context
  * Method:    open
  * Signature: (Ljava/lang/String;)V
  */
@@ -38,6 +22,38 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_open
  */
 JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_close_1
   (JNIEnv *, jobject);
+
+/*
+ * Class:     com_unum_ukv_DataBase_Context
+ * Method:    transaction
+ * Signature: ()Lcom/unum/ukv/DataBase/Transaction;
+ */
+JNIEXPORT jobject JNICALL Java_com_unum_ukv_DataBase_00024Context_transaction
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     com_unum_ukv_DataBase_Context
+ * Method:    clear
+ * Signature: ()V
+ */
+JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_clear__
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     com_unum_ukv_DataBase_Context
+ * Method:    clear
+ * Signature: (Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_clear__Ljava_lang_String_2
+  (JNIEnv *, jobject, jstring);
+
+/*
+ * Class:     com_unum_ukv_DataBase_Context
+ * Method:    remove
+ * Signature: (Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_remove
+  (JNIEnv *, jobject, jstring);
 
 #ifdef __cplusplus
 }
