@@ -34,7 +34,7 @@ ukv_txn_t txn_ptr(JNIEnv* env_java, jobject txn_java) {
     return (ukv_txn_t)txn_ptr_java;
 }
 
-ukv_column_t column_ptr(JNIEnv* env_java, ukv_t db_ptr, jstring name_java) {
+ukv_collection_t collection_ptr(JNIEnv* env_java, ukv_t db_ptr, jstring name_java) {
 
     // We may be passing the empty name of the default collection
     if (!name_java)
@@ -47,14 +47,14 @@ ukv_column_t column_ptr(JNIEnv* env_java, ukv_t db_ptr, jstring name_java) {
         return NULL;
 
     ukv_error_t error_c = NULL;
-    ukv_column_t column_c = NULL;
-    ukv_column_upsert(db_ptr, name_c, &column_c, &error_c);
+    ukv_collection_t collection_c = NULL;
+    ukv_collection_upsert(db_ptr, name_c, &collection_c, &error_c);
 
     if (name_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseStringUTFChars(env_java, name_java, name_c);
 
     forward_error(env_java, error_c);
-    return column_c;
+    return collection_c;
 }
 
 bool forward_error(JNIEnv* env_java, char const* error_c) {
