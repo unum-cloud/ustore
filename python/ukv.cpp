@@ -62,10 +62,10 @@ namespace py = pybind11;
 
 struct py_db_t;
 struct py_txn_t;
-struct py_column_t;
+struct py_collection_t;
 struct py_arena_t;
 
-struct py_arena_t {
+struct py_arena_t : public std::enable_shared_from_this<py_arena_t> {
     void* ptr = NULL;
     size_t length = 0;
 };
@@ -103,20 +103,20 @@ struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
     }
 };
 
-struct py_column_t : public std::enable_shared_from_this<py_column_t> {
-    ukv_column_t raw = NULL;
+struct py_collection_t : public std::enable_shared_from_this<py_collection_t> {
+    ukv_collection_t raw = NULL;
     std::string name;
 
     py_db_t* db_ptr = NULL;
     py_txn_t* txn_ptr = NULL;
 
-    py_column_t() = default;
-    py_column_t(py_column_t&&) = delete;
-    py_column_t(py_column_t const&) = delete;
+    py_collection_t() = default;
+    py_collection_t(py_collection_t&&) = delete;
+    py_collection_t(py_collection_t const&) = delete;
 
-    ~py_column_t() {
+    ~py_collection_t() {
         if (raw)
-            ukv_column_free(db_ptr->raw, raw);
+            ukv_collection_free(db_ptr->raw, raw);
         raw = NULL;
     }
 };
@@ -185,23 +185,30 @@ void commit(py_txn_t& txn) {
     [[maybe_unused]] py::gil_scoped_acquire acquire;
 }
 
-bool contains_item(py_db_t& db, ukv_txn_t txn_ptr, ukv_column_t column_ptr, py_arena_t& arena, ukv_key_t key) {
+bool contains_item( //
+    py_db_t& db,
+    ukv_txn_t txn_ptr,
+    ukv_collection_t collection_ptr,
+    py_arena_t& arena,
+    ukv_key_t key) {
+
     ukv_val_len_t value_length = 0;
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_read(db.raw,
-             txn_ptr,
-             &key,
-             1,
-             column_ptr ? &column_ptr : NULL,
-             options,
-             &arena.ptr,
-             &arena.length,
-             NULL,
-             &value_length,
-             &error);
+    ukv_read( //
+        db.raw,
+        txn_ptr,
+        &key,
+        1,
+        &collection_ptr,
+        options,
+        &arena.ptr,
+        &arena.length,
+        NULL,
+        &value_length,
+        &error);
     [[maybe_unused]] py::gil_scoped_acquire acquire;
 
     if (error) [[unlikely]]
@@ -210,8 +217,12 @@ bool contains_item(py_db_t& db, ukv_txn_t txn_ptr, ukv_column_t column_ptr, py_a
     return value_length != 0;
 }
 
-std::optional<py::bytes> get_item(
-    py_db_t& db, ukv_txn_t txn_ptr, ukv_column_t column_ptr, py_arena_t& arena, ukv_key_t key) {
+std::optional<py::bytes> get_item( //
+    py_db_t& db,
+    ukv_txn_t txn_ptr,
+    ukv_collection_t collection_ptr,
+    py_arena_t& arena,
+    ukv_key_t key) {
 
     ukv_val_ptr_t value = NULL;
     ukv_val_len_t value_length = 0;
@@ -219,17 +230,18 @@ std::optional<py::bytes> get_item(
     ukv_options_read_t options = NULL;
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_read(db.raw,
-             txn_ptr,
-             &key,
-             1,
-             column_ptr ? &column_ptr : NULL,
-             options,
-             &arena.ptr,
-             &arena.length,
-             &value,
-             &value_length,
-             &error);
+    ukv_read( //
+        db.raw,
+        txn_ptr,
+        &key,
+        1,
+        &collection_ptr,
+        options,
+        &arena.ptr,
+        &arena.length,
+        &value,
+        &value_length,
+        &error);
     [[maybe_unused]] py::gil_scoped_acquire acquire;
 
     if (error) [[unlikely]]
@@ -248,38 +260,60 @@ std::optional<py::bytes> get_item(
     return py::bytes {reinterpret_cast<char const*>(value), value_length};
 }
 
-void set_item(py_db_t& db, ukv_txn_t txn_ptr, ukv_column_t column_ptr, ukv_key_t key, py::bytes const* value = NULL) {
+void set_item( //
+    py_db_t& db,
+    ukv_txn_t txn_ptr,
+    ukv_collection_t collection_ptr,
+    ukv_key_t key,
+    py::bytes const* value = NULL) {
+
     ukv_options_write_t options = NULL;
     ukv_val_ptr_t ptr = value ? ukv_val_ptr_t(std::string_view {*value}.data()) : NULL;
     ukv_val_len_t len = value ? static_cast<ukv_val_len_t>(std::string_view {*value}.size()) : 0;
     ukv_error_t error = NULL;
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_write(db.raw, txn_ptr, &key, 1, column_ptr ? &column_ptr : NULL, options, &ptr, &len, &error);
+    ukv_write( //
+        db.raw,
+        txn_ptr,
+        &key,
+        1,
+        &collection_ptr,
+        options,
+        &ptr,
+        &len,
+        &error);
     [[maybe_unused]] py::gil_scoped_acquire acquire;
 
     if (error) [[unlikely]]
         throw make_exception(db, error);
 }
 
-ukv_column_t column_named(py_db_t& db, std::string const& column_name) {
-    ukv_column_t column_ptr = NULL;
+ukv_collection_t collection_named(py_db_t& db, std::string const& collection_name) {
+    ukv_collection_t collection_ptr = NULL;
     ukv_error_t error = NULL;
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_column_upsert(db.raw, column_name.c_str(), &column_ptr, &error);
+    ukv_collection_upsert( //
+        db.raw,
+        collection_name.c_str(),
+        &collection_ptr,
+        &error);
     [[maybe_unused]] py::gil_scoped_acquire acquire;
 
     if (error) [[unlikely]]
         throw make_exception(db, error);
-    return column_ptr;
+    return collection_ptr;
 }
 
-void column_remove(py_db_t& db, std::string const& column_name) {
+void collection_remove(py_db_t& db, std::string const& collection_name) {
     ukv_error_t error = NULL;
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_column_remove(db.raw, column_name.c_str(), &error);
+    ukv_collection_remove( //
+        db.raw,
+        collection_name.c_str(),
+        &error);
     [[maybe_unused]] py::gil_scoped_acquire acquire;
 
     if (error) [[unlikely]]
@@ -294,7 +328,7 @@ PYBIND11_MODULE(ukv, m) {
 
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
     auto db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase");
-    auto col = py::class_<py_column_t, std::shared_ptr<py_column_t>>(m, "Collection");
+    auto col = py::class_<py_collection_t, std::shared_ptr<py_collection_t>>(m, "Collection");
     auto txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction");
 
     // Define `DataBase`
@@ -314,7 +348,7 @@ PYBIND11_MODULE(ukv, m) {
     db.def(
         "get",
         [](py_db_t& db, std::string const& collection, ukv_key_t key) {
-            return get_item(db, NULL, column_named(db, collection), db.arena, key);
+            return get_item(db, NULL, collection_named(db, collection), db.arena, key);
         },
         py::arg("collection"),
         py::arg("key"));
@@ -328,7 +362,7 @@ PYBIND11_MODULE(ukv, m) {
     db.def(
         "set",
         [](py_db_t& db, std::string const& collection, ukv_key_t key, py::bytes const& value) {
-            return set_item(db, NULL, column_named(db, collection), key, &value);
+            return set_item(db, NULL, collection_named(db, collection), key, &value);
         },
         py::arg("collection"),
         py::arg("key"),
@@ -340,7 +374,7 @@ PYBIND11_MODULE(ukv, m) {
     // Define `Collection`s member method, without defining any external constructors
     col.def(
         "get",
-        [](py_column_t& col, ukv_key_t key) {
+        [](py_collection_t& col, ukv_key_t key) {
             return get_item(*col.db_ptr,
                             col.txn_ptr ? col.txn_ptr->raw : NULL,
                             col.raw,
@@ -351,16 +385,16 @@ PYBIND11_MODULE(ukv, m) {
 
     col.def(
         "set",
-        [](py_column_t& col, ukv_key_t key, py::bytes const& value) {
+        [](py_collection_t& col, ukv_key_t key, py::bytes const& value) {
             return set_item(*col.db_ptr, col.txn_ptr ? col.txn_ptr->raw : NULL, col.raw, key, &value);
         },
         py::arg("key"),
         py::arg("value"));
-    col.def("clear", [](py_column_t& col) {
+    col.def("clear", [](py_collection_t& col) {
         py_db_t& db = *col.db_ptr;
         std::string name {std::move(col.name)};
-        column_remove(db, name);
-        column_named(db, name);
+        collection_remove(db, name);
+        collection_named(db, name);
     });
 
     // `Transaction`:
@@ -380,7 +414,7 @@ PYBIND11_MODULE(ukv, m) {
     txn.def(
         "get",
         [](py_txn_t& txn, std::string const& collection, ukv_key_t key) {
-            return get_item(*txn.db_ptr, txn.raw, column_named(*txn.db_ptr, collection), txn.arena, key);
+            return get_item(*txn.db_ptr, txn.raw, collection_named(*txn.db_ptr, collection), txn.arena, key);
         },
         py::arg("collection"),
         py::arg("key"));
@@ -396,7 +430,7 @@ PYBIND11_MODULE(ukv, m) {
     txn.def(
         "set",
         [](py_txn_t& txn, std::string const& collection, ukv_key_t key, py::bytes const& value) {
-            return set_item(*txn.db_ptr, txn.raw, column_named(*txn.db_ptr, collection), key, &value);
+            return set_item(*txn.db_ptr, txn.raw, collection_named(*txn.db_ptr, collection), key, &value);
         },
         py::arg("collection"),
         py::arg("key"),
@@ -439,42 +473,42 @@ PYBIND11_MODULE(ukv, m) {
     });
     txn.def("__delitem__", [](py_txn_t& txn, ukv_key_t key) { return set_item(*txn.db_ptr, txn.raw, NULL, key); });
 
-    col.def("__contains__", [](py_column_t& col, ukv_key_t key) {
+    col.def("__contains__", [](py_collection_t& col, ukv_key_t key) {
         return contains_item(*col.db_ptr,
                              col.txn_ptr ? col.txn_ptr->raw : NULL,
                              col.raw,
                              col.txn_ptr ? col.txn_ptr->arena : col.db_ptr->arena,
                              key);
     });
-    col.def("__getitem__", [](py_column_t& col, ukv_key_t key) {
+    col.def("__getitem__", [](py_collection_t& col, ukv_key_t key) {
         return get_item(*col.db_ptr,
                         col.txn_ptr ? col.txn_ptr->raw : NULL,
                         col.raw,
                         col.txn_ptr ? col.txn_ptr->arena : col.db_ptr->arena,
                         key);
     });
-    col.def("__setitem__", [](py_column_t& col, ukv_key_t key, py::bytes const& value) {
+    col.def("__setitem__", [](py_collection_t& col, ukv_key_t key, py::bytes const& value) {
         return set_item(*col.db_ptr, col.txn_ptr ? col.txn_ptr->raw : NULL, col.raw, key, &value);
     });
-    col.def("__delitem__", [](py_column_t& col, ukv_key_t key) {
+    col.def("__delitem__", [](py_collection_t& col, ukv_key_t key) {
         return set_item(*col.db_ptr, col.txn_ptr ? col.txn_ptr->raw : NULL, col.raw, key);
     });
 
     // Operator overaloads used to access collections
     db.def("__getitem__", [](py_db_t& db, std::string const& collection) {
-        auto col = std::make_shared<py_column_t>();
+        auto col = std::make_shared<py_collection_t>();
         col->name = collection;
-        col->raw = column_named(db, collection);
+        col->raw = collection_named(db, collection);
         col->db_ptr = &db;
         return col;
     });
     txn.def("__getitem__", [](py_txn_t& txn, std::string const& collection) {
-        auto col = std::make_shared<py_column_t>();
+        auto col = std::make_shared<py_collection_t>();
         col->name = collection;
-        col->raw = column_named(*txn.db_ptr, collection);
+        col->raw = collection_named(*txn.db_ptr, collection);
         col->db_ptr = txn.db_ptr;
         col->txn_ptr = &txn;
         return col;
     });
-    db.def("__delitem__", [](py_db_t& db, std::string const& collection) { column_remove(db, collection); });
+    db.def("__delitem__", [](py_db_t& db, std::string const& collection) { collection_remove(db, collection); });
 }

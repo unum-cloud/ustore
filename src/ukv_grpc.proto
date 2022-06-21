@@ -16,14 +16,14 @@ service UKV {
     rpc TxnCommit(Transaction) returns (WriteResult) {}
     rpc TxnCancel(Transaction) returns (Empty) {}
 
-    rpc ColumnCreate(ColumnName) returns (WriteResult) {}
-    rpc ColumnClear(ColumnName) returns (WriteResult) {}
+    rpc CollectionCreate(CollectionName) returns (WriteResult) {}
+    rpc collectionClear(CollectionName) returns (WriteResult) {}
 }
 
 
 message ReadRequest {
     repeated uint64 keys = 1;
-    repeated Column columns = 2;
+    repeated Collection collections = 2;
     Transaction transation = 3;
 
     bool wants_consistent = 10;
@@ -40,13 +40,13 @@ message ReadResult {
 
 message WriteRequest {
     repeated uint64 keys = 1;
-    repeated Column columns = 2;
+    repeated Collection collections = 2;
     repeated bytes values = 3;
     Transaction transation = 4;
 
     bool wants_colocated = 10;
     bool wants_flush = 11;
-  }
+}
   
 
 message WriteResult {
@@ -57,11 +57,11 @@ message Transaction {
     uint64 id = 1;
 }
 
-message Column {
+message Collection {
     uint64 id = 1;
 }
 
-message ColumnName {
+message CollectionName {
     string name = 1;
 }
 
