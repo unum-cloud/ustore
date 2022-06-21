@@ -84,6 +84,8 @@ All `get` requests cause memory allocations in Java Runtime and export data into
 Most `set` requests will simply cast and forward values without additional copies.
 Aside from opening and closing this class is **thread-safe** for higher interop with other Java-based tools.
 
+Implementation follows the ["best practices" defined by IBM](https://developer.ibm.com/articles/j-jni/).
+
 ### GoLang
 
 GoLang bindings are implemented using [cGo](https://pkg.go.dev/cmd/cgo).

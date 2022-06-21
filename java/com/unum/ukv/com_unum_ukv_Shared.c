@@ -6,18 +6,18 @@ jfieldID find_field_database_address(JNIEnv* env_java, jobject txn_java) {
         // https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/types.html
         // https://docs.oracle.com/javase/tutorial/java/nutsandbolts/datatypes.html
         jclass txn_class = (*env_java)->GetObjectClass(env_java, txn_java);
-        jfieldID db_ptr_field = (*env_java)->GetFieldID(env_java, txn_class, "databaseAddress", "J");
+        db_ptr_field = (*env_java)->GetFieldID(env_java, txn_class, "databaseAddress", "J");
     }
     return db_ptr_field;
 }
 
 jfieldID find_field_transaction_address(JNIEnv* env_java, jobject txn_java) {
-    static jfieldID db_ptr_field = NULL;
-    if (!db_ptr_field) {
+    static jfieldID txn_ptr_field = NULL;
+    if (!txn_ptr_field) {
         // https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/types.html
         // https://docs.oracle.com/javase/tutorial/java/nutsandbolts/datatypes.html
         jclass txn_class = (*env_java)->GetObjectClass(env_java, txn_java);
-        jfieldID txn_ptr_field = (*env_java)->GetFieldID(env_java, txn_class, "transactionAddress", "J");
+        txn_ptr_field = (*env_java)->GetFieldID(env_java, txn_class, "transactionAddress", "J");
     }
     return txn_ptr_field;
 }
