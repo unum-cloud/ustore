@@ -21,7 +21,8 @@ ukv_txn_t txn_ptr(JNIEnv* env_java, jobject txn_java);
  * @return true  If error was detected.
  * @return false If no error appeared.
  */
-bool forward_error(JNIEnv* env_java, ukv_error_t error_c);
+bool forward_error(JNIEnv* env_java, char const* error_c);
+bool forward_ukv_error(JNIEnv* env_java, ukv_error_t error_c);
 
 #ifdef __cplusplus
 }
