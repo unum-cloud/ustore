@@ -6,14 +6,17 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_open(JNIEnv* env_
                                                                     jstring config_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, db_java);
-    if (db_ptr_c)
-        // The DB is already initialized
+    if (db_ptr_c) {
+        forward_error(env_java, "Database is already opened. Close it's current state first!");
         return;
+    }
 
     // Temporarily copy the contents of the passed configuration string
     char const* config_c = (*env_java)->GetStringUTFChars(env_java, config_java, NULL);
-    ukv_error_t error_c = NULL;
+    if ((*env_java)->ExceptionCheck(env_java))
+        return;
 
+    ukv_error_t error_c = NULL;
     ukv_open(config_c, &db_ptr_c, &error_c);
     (*env_java)->ReleaseStringUTFChars(env_java, config_java, config_c);
     if (forward_error(env_java, error_c))
@@ -27,7 +30,10 @@ JNIEXPORT jobject JNICALL Java_com_unum_ukv_DataBase_00024Context_transaction(JN
 
     ukv_t db_ptr_c = db_ptr(env_java, db_java);
     ukv_txn_t txn_ptr_c = txn_ptr(env_java, db_java);
-    printf("found: %p %p \n", db_ptr_c, txn_ptr_c);
+    if (!db_ptr_c) {
+        forward_error(env_java, "Database is closed!");
+        return NULL;
+    }
 
     ukv_error_t error_c = NULL;
     ukv_txn_begin(db_ptr_c, 0, &txn_ptr_c, &error_c);
@@ -66,6 +72,10 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_clear(JNIEnv* env
 
     ukv_t db_ptr_c = db_ptr(env_java, db_java);
     ukv_error_t error_c = NULL;
+    if (!db_ptr_c) {
+        forward_error(env_java, "Database is closed!");
+        return;
+    }
 
     ukv_column_remove(db_ptr_c, NULL, &error_c);
     forward_error(env_java, error_c);
