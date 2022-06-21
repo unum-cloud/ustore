@@ -29,7 +29,7 @@
  * 	  clients. This allows us to change internal representations
  *    without forcing clients to recompile code, that uses shared lib.
  * 2. Errors are encoded into NULL-terminated C strings.
- * 3. Functions that accept `columns`, @b can receive 0, 1 or N such
+ * 3. Functions that accept `collections`, @b can receive 0, 1 or N such
  *    arguments, where N is the number of passed `keys`.
  * 4. Collections, Iterators and Transactions are referencing the DB,
  *    so the DB shouldn't die/close before those objects are freed.
@@ -77,7 +77,7 @@ extern "C" {
 
 typedef void* ukv_t;
 typedef void* ukv_txn_t;
-typedef void* ukv_column_t;
+typedef void* ukv_collection_t;
 typedef void* ukv_options_read_t;
 typedef void* ukv_options_write_t;
 
@@ -123,7 +123,7 @@ void ukv_open( //
  *                           Can be `NULL`.
  * @param[in] keys           Array of keys in one or more collections.
  * @param[in] keys_count     Number of elements in @p `keys`.
- * @param[in] columns        Array of columns owning the @p `keys`.
+ * @param[in] collections        Array of collections owning the @p `keys`.
  *                           If NULL is passed, the default collection
  *                           is assumed. Instead of passing one collection for
  *                           each key, you can use `ukv_option_read_colocated`.
@@ -139,7 +139,7 @@ void ukv_write( //
     ukv_txn_t const txn,
     ukv_key_t const* keys,
     size_t const keys_count,
-    ukv_column_t const* columns,
+    ukv_collection_t const* collections,
     ukv_options_write_t const options,
     ukv_val_ptr_t const* values,
     ukv_val_len_t const* lengths,
@@ -161,7 +161,7 @@ void ukv_write( //
  *                            operation must go. Can be `NULL`.
  * @param[in] keys            Array of keys in one or more collections.
  * @param[in] keys_count      Number of elements in @p `keys`.
- * @param[in] columns         Array of columns owning the @p `keys`.
+ * @param[in] collections         Array of collections owning the @p `keys`.
  *                            If NULL is passed, the default collection
  *                            is assumed. Instead of passing one collection for
  *                            each key, you can use `ukv_option_read_colocated`.
@@ -186,7 +186,7 @@ void ukv_read( //
     ukv_txn_t const txn,
     ukv_key_t* keys,
     size_t const keys_count,
-    ukv_column_t const* columns,
+    ukv_collection_t const* collections,
     ukv_options_read_t const options,
     ukv_arena_ptr_t* arena,
     size_t* arena_length,
@@ -195,37 +195,37 @@ void ukv_read( //
     ukv_error_t* error);
 
 /*********************************************************/
-/*****************	Columns Management	  ****************/
+/***************** Collection Management  ****************/
 /*********************************************************/
 
 /**
- * @brief Upserts a new named column into DB.
+ * @brief Upserts a new named collection into DB.
  * This function may never be called, as the default
  * unnamed collection always exists.
  *
  * @param[in] db           Already open database instance, @see `ukv_open`.
- * @param[in] column_name  A `NULL`-terminated collection name.
- * @param[out] column      Address to which the column handle will be expored.
+ * @param[in] collection_name  A `NULL`-terminated collection name.
+ * @param[out] collection      Address to which the collection handle will be expored.
  * @param[out] error       The error message to be handled by callee.
  */
-void ukv_column_upsert( //
+void ukv_collection_upsert( //
     ukv_t const db,
-    ukv_str_t column_name,
-    ukv_column_t* column,
+    ukv_str_t collection_name,
+    ukv_collection_t* collection,
     ukv_error_t* error);
 
 /**
- * @brief Removes column and all of its conntents from DB.
+ * @brief Removes collection and all of its conntents from DB.
  * The default unnamed collection can't be removed, but it
- * will be @b cleared, if you pass a `NULL` as `column_name`.
+ * will be @b cleared, if you pass a `NULL` as `collection_name`.
  *
  * @param[in] db           Already open database instance, @see `ukv_open`.
- * @param[in] column_name  A `NULL`-terminated collection name.
+ * @param[in] collection_name  A `NULL`-terminated collection name.
  * @param[out] error       The error message to be handled by callee.
  */
-void ukv_column_remove( //
+void ukv_collection_remove( //
     ukv_t const db,
-    ukv_str_t column_name,
+    ukv_str_t collection_name,
     ukv_error_t* error);
 
 /**
@@ -339,7 +339,7 @@ void ukv_arena_free(ukv_t const db, ukv_arena_ptr_t, size_t);
 
 void ukv_txn_free(ukv_t const db, ukv_txn_t const txn);
 
-void ukv_column_free(ukv_t const db, ukv_column_t const column);
+void ukv_collection_free(ukv_t const db, ukv_collection_t const collection);
 
 /**
  * @brief Closes the DB and deallocates the state.

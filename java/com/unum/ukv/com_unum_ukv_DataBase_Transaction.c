@@ -4,7 +4,7 @@
 JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
     JNIEnv* env_java,
     jobject txn_java,
-    jstring column_java,
+    jstring collection_java,
     jlong key_java,
     jbyteArray value_java) {
 
@@ -15,7 +15,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
     }
 
     ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
-    ukv_column_t column_ptr_c = column_ptr(env_java, db_ptr_c, column_java);
+    ukv_collection_t collection_ptr_c = collection_ptr(env_java, db_ptr_c, collection_java);
     if ((*env_java)->ExceptionCheck(env_java))
         return;
 
@@ -39,7 +39,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
         txn_ptr_c,
         &key_c,
         1,
-        &column_ptr_c,
+        &collection_ptr_c,
         options_c,
         &value_ptr_c,
         &value_len_c,
@@ -53,7 +53,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
 JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsKey( //
     JNIEnv* env_java,
     jobject txn_java,
-    jstring column_java,
+    jstring collection_java,
     jlong key_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, txn_java);
@@ -63,7 +63,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
     }
 
     ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
-    ukv_column_t column_ptr_c = column_ptr(env_java, db_ptr_c, column_java);
+    ukv_collection_t collection_ptr_c = collection_ptr(env_java, db_ptr_c, collection_java);
     if ((*env_java)->ExceptionCheck(env_java))
         return JNI_FALSE;
 
@@ -79,7 +79,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
         txn_ptr_c,
         &key_c,
         1,
-        &column_ptr_c,
+        &collection_ptr_c,
         options_c,
         &arena_c,
         &arena_len_c,
@@ -98,7 +98,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
 JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     JNIEnv* env_java,
     jobject txn_java,
-    jstring column_java,
+    jstring collection_java,
     jlong key_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, txn_java);
@@ -108,7 +108,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     }
 
     ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
-    ukv_column_t column_ptr_c = column_ptr(env_java, db_ptr_c, column_java);
+    ukv_collection_t collection_ptr_c = collection_ptr(env_java, db_ptr_c, collection_java);
     if ((*env_java)->ExceptionCheck(env_java))
         return NULL;
 
@@ -125,7 +125,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
         txn_ptr_c,
         &key_c,
         1,
-        &column_ptr_c,
+        &collection_ptr_c,
         options_c,
         &arena_c,
         &arena_len_c,
@@ -156,7 +156,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
 JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
     JNIEnv* env_java,
     jobject txn_java,
-    jstring column_java,
+    jstring collection_java,
     jlong key_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, txn_java);
@@ -166,7 +166,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
     }
 
     ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
-    ukv_column_t column_ptr_c = column_ptr(env_java, db_ptr_c, column_java);
+    ukv_collection_t collection_ptr_c = collection_ptr(env_java, db_ptr_c, collection_java);
     if ((*env_java)->ExceptionCheck(env_java))
         return;
 
@@ -181,7 +181,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
         txn_ptr_c,
         &key_c,
         1,
-        &column_ptr_c,
+        &collection_ptr_c,
         options_c,
         &value_ptr_c,
         &value_len_c,

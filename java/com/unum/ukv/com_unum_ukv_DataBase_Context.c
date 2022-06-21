@@ -81,6 +81,6 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_clear__(JNIEnv* e
         return;
     }
 
-    ukv_column_remove(db_ptr_c, NULL, &error_c);
+    ukv_collection_remove(db_ptr_c, NULL, &error_c);
     forward_ukv_error(env_java, error_c);
 }
