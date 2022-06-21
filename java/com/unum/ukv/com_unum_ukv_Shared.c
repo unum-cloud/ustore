@@ -34,7 +34,7 @@ ukv_txn_t txn_ptr(JNIEnv* env_java, jobject txn_java) {
     return (ukv_txn_t)txn_ptr_java;
 }
 
-bool forward_error(JNIEnv* env_java, ukv_error_t error_c) {
+bool forward_error(JNIEnv* env_java, char const* error_c) {
     if (!error_c)
         return false;
 
@@ -44,6 +44,13 @@ bool forward_error(JNIEnv* env_java, ukv_error_t error_c) {
     if (error_java)
         (*env_java)->ThrowNew(env_java, error_java, error_c);
 
-    ukv_error_free(error_c);
     return true;
+}
+
+bool forward_ukv_error(JNIEnv* env_java, ukv_error_t error_c) {
+    if (forward_error(env_java, error_c)) {
+        ukv_error_free(error_c);
+        return true;
+    }
+    return false;
 }

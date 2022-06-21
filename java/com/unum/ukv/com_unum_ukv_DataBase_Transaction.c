@@ -43,9 +43,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
 
     if (value_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseByteArrayElements(env_java, value_java, value_ptr_java, 0);
-    if ((*env_java)->ExceptionCheck(env_java))
-        return;
-    forward_error(env_java, error_c);
+    forward_ukv_error(env_java, error_c);
 }
 
 JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsKey( //
@@ -139,8 +137,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
         ukv_arena_free(db_ptr_c, arena_c, arena_len_c);
 
     // Don't overwrite the Java exception with the original read exception
-    if (!(*env_java)->ExceptionCheck(env_java))
-        forward_error(env_java, error_c);
+    forward_ukv_error(env_java, error_c);
     return result_java;
 }
 
@@ -173,7 +170,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_remove(
         &value_ptr_c,
         &value_len_c,
         &error_c);
-    forward_error(env_java, error_c);
+    forward_ukv_error(env_java, error_c);
 }
 
 JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_rollback( //
@@ -194,7 +191,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_rollback( //
 
     ukv_error_t error_c = NULL;
     ukv_txn_begin(db_ptr_c, 0, &txn_ptr_c, &error_c);
-    forward_error(env_java, error_c);
+    forward_ukv_error(env_java, error_c);
 }
 
 JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_commit( //
