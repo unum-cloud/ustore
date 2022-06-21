@@ -6,10 +6,10 @@
     "configurations": [
         {
             "type": "java",
-            "name": "Launch Current File",
+            "name": "Java: Launch Current File",
             "request": "launch",
             "mainClass": "${file}",
-            "vmArgs": "-Djava.library.path=${fileDirname}",
+            "vmArgs": "-Djava.library.path=${fileDirname} -Xcheck:jni",
             "cwd": "${workspaceFolder}/java"
         }
     ]
