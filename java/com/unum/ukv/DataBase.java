@@ -2,6 +2,7 @@ package com.unum.ukv;
 
 import java.util.Map; // Map abstract class
 import java.lang.AutoCloseable; // Finalization
+import java.util.Arrays; // Arrays.equals
 
 /**
  * @brief An Embedded Persistent Key-Value Store with
@@ -168,14 +169,14 @@ public class DataBase {
          */
         public byte[] replace(String collection, long key, byte[] value) {
             byte[] old = get(collection, key);
-            if (old != value)
+            if (!Arrays.equals(old, value))
                 put(collection, key, value);
             return old;
         }
 
         public byte[] replace(long key, byte[] value) {
             byte[] old = get(key);
-            if (old != value)
+            if (!Arrays.equals(old, value))
                 put(key, value);
             return old;
         }
@@ -206,7 +207,7 @@ public class DataBase {
          */
         public boolean remove(String collection, long key, byte[] value) {
             byte[] old = get(collection, key);
-            if (old == value) {
+            if (Arrays.equals(old, value)) {
                 remove(collection, key, value);
                 return true;
             } else
@@ -215,7 +216,7 @@ public class DataBase {
 
         public boolean remove(long key, byte[] value) {
             byte[] old = get(key);
-            if (old == value) {
+            if (Arrays.equals(old, value)) {
                 remove(key, value);
                 return true;
             } else
@@ -231,7 +232,22 @@ public class DataBase {
         }
     }
 
-    public static class Context extends Transaction implements AutoCloseable {
+    public static class Context extends Transaction {
+
+        public Context() {
+        }
+
+        /**
+         * @brief Initializes and opens a connection using passed config.
+         *        No need to call `open` or `close` after than.
+         */
+        public Context(String config_json) {
+            open(config_json);
+        }
+
+        public native void open(String config_json);
+
+        public native void close_();
 
         /**
          * @brief Begins a new transaction with an auto-incremented identifier.
@@ -240,18 +256,22 @@ public class DataBase {
         public native Transaction transaction();
 
         /**
-         * @brief Clears this collection so that it contains no keys.
-         *        Imposes a global lock on the entire collection, so use rarely.
+         * @brief Clears the entire DB so that it contains no keys, but keeps collection
+         *        names. Imposes a global lock on the entire collection, so use rarely.
          */
         public native void clear();
 
-        public native void open(String config_json);
+        /**
+         * @brief Clears this collection so that it contains no keys.
+         *        Imposes a global lock on the entire collection, so use rarely.
+         */
+        public native void clear(String collection);
 
-        public native void close_();
-
-        public Context(String config_json) {
-            open(config_json);
-        }
+        /**
+         * @brief Removes a collection and all the keys in it.
+         *        Imposes a global lock on the entire collection, so use rarely.
+         */
+        public native void remove(String collection);
 
         /**
          * This is the preferred Java 9+ resource management
@@ -276,14 +296,14 @@ public class DataBase {
 
     public static void main(String[] args) {
         Context ctx = new Context("");
-        ctx.put(1, "hey".getBytes());
-        assert ctx.get(1) == "hey".getBytes() : "Received wrong value";
+        ctx.put(42, "hey".getBytes());
+        assert Arrays.equals(ctx.get(42), "hey".getBytes()) : "Received wrong value";
 
         Transaction txn = ctx.transaction();
-        txn.put(42, "meaning of life".getBytes());
-        assert txn.get(42) == "meaning of life".getBytes() : "Wrong philosophy";
+        txn.put("any", 42, "meaning of life".getBytes());
+        assert Arrays.equals(txn.get("any", 42), "meaning of life".getBytes()) : "Wrong philosophy";
         txn.commit();
-        assert ctx.get(42) == "meaning of life".getBytes() : "Accepted wrong philosophy";
+        assert Arrays.equals(ctx.get("any", 42), "meaning of life".getBytes()) : "Accepted wrong philosophy";
 
         ctx.close();
         System.out.println("Success!");
