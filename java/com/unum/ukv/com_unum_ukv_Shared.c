@@ -1,37 +1,60 @@
 #include "com_unum_ukv_Shared.h"
 
-jfieldID find_field_database_address(JNIEnv* env_java, jobject txn_java) {
+jfieldID find_db_field(JNIEnv* env_java) {
     static jfieldID db_ptr_field = NULL;
     if (!db_ptr_field) {
         // https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/types.html
         // https://docs.oracle.com/javase/tutorial/java/nutsandbolts/datatypes.html
-        jclass txn_class = (*env_java)->GetObjectClass(env_java, txn_java);
-        db_ptr_field = (*env_java)->GetFieldID(env_java, txn_class, "databaseAddress", "J");
+        jclass txn_class_java = (*env_java)->FindClass(env_java, "com/unum/ukv/DataBase$Transaction");
+        db_ptr_field = (*env_java)->GetFieldID(env_java, txn_class_java, "databaseAddress", "J");
     }
     return db_ptr_field;
 }
 
-jfieldID find_field_transaction_address(JNIEnv* env_java, jobject txn_java) {
+jfieldID find_txn_field(JNIEnv* env_java) {
     static jfieldID txn_ptr_field = NULL;
     if (!txn_ptr_field) {
         // https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/types.html
         // https://docs.oracle.com/javase/tutorial/java/nutsandbolts/datatypes.html
-        jclass txn_class = (*env_java)->GetObjectClass(env_java, txn_java);
-        txn_ptr_field = (*env_java)->GetFieldID(env_java, txn_class, "transactionAddress", "J");
+        jclass txn_class_java = (*env_java)->FindClass(env_java, "com/unum/ukv/DataBase$Transaction");
+        txn_ptr_field = (*env_java)->GetFieldID(env_java, txn_class_java, "transactionAddress", "J");
     }
     return txn_ptr_field;
 }
 
 ukv_t db_ptr(JNIEnv* env_java, jobject txn_java) {
-    jfieldID db_ptr_field = find_field_database_address(env_java, txn_java);
+    jfieldID db_ptr_field = find_db_field(env_java);
     long int db_ptr_java = (*env_java)->GetLongField(env_java, txn_java, db_ptr_field);
     return (ukv_t)db_ptr_java;
 }
 
 ukv_txn_t txn_ptr(JNIEnv* env_java, jobject txn_java) {
-    jfieldID txn_ptr_field = find_field_transaction_address(env_java, txn_java);
+    jfieldID txn_ptr_field = find_txn_field(env_java);
     long int txn_ptr_java = (*env_java)->GetLongField(env_java, txn_java, txn_ptr_field);
     return (ukv_txn_t)txn_ptr_java;
+}
+
+ukv_column_t column_ptr(JNIEnv* env_java, ukv_t db_ptr, jstring name_java) {
+
+    // We may be passing the empty name of the default collection
+    if (!name_java)
+        return NULL;
+
+    // Temporarily copy the contents of the passed string
+    jboolean name_is_copy_java = JNI_FALSE;
+    char const* name_c = (*env_java)->GetStringUTFChars(env_java, name_java, &name_is_copy_java);
+    if ((*env_java)->ExceptionCheck(env_java))
+        return NULL;
+
+    ukv_error_t error_c = NULL;
+    ukv_column_t column_c = NULL;
+    ukv_column_upsert(db_ptr, name_c, &column_c, &error_c);
+
+    if (name_is_copy_java == JNI_TRUE)
+        (*env_java)->ReleaseStringUTFChars(env_java, name_java, name_c);
+
+    forward_error(env_java, error_c);
+    return column_c;
 }
 
 bool forward_error(JNIEnv* env_java, char const* error_c) {

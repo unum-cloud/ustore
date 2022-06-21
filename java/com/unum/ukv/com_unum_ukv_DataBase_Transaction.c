@@ -9,11 +9,15 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
     jbyteArray value_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, txn_java);
-    ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
     if (!db_ptr_c) {
         forward_error(env_java, "Database is closed!");
         return;
     }
+
+    ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
+    ukv_column_t column_ptr_c = column_ptr(env_java, db_ptr_c, column_java);
+    if ((*env_java)->ExceptionCheck(env_java))
+        return;
 
     // Extract the raw pointer to underlying data
     // https://docs.oracle.com/en/java/javase/13/docs/specs/jni/functions.html
@@ -35,7 +39,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
         txn_ptr_c,
         &key_c,
         1,
-        NULL,
+        &column_ptr_c,
         options_c,
         &value_ptr_c,
         &value_len_c,
@@ -53,11 +57,15 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
     jlong key_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, txn_java);
-    ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
     if (!db_ptr_c) {
         forward_error(env_java, "Database is closed!");
         return JNI_FALSE;
     }
+
+    ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
+    ukv_column_t column_ptr_c = column_ptr(env_java, db_ptr_c, column_java);
+    if ((*env_java)->ExceptionCheck(env_java))
+        return JNI_FALSE;
 
     ukv_key_t key_c = (ukv_key_t)key_java;
     ukv_options_read_t options_c = NULL;
@@ -71,7 +79,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
         txn_ptr_c,
         &key_c,
         1,
-        NULL,
+        &column_ptr_c,
         options_c,
         &arena_c,
         &arena_len_c,
@@ -94,11 +102,15 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     jlong key_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, txn_java);
-    ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
     if (!db_ptr_c) {
         forward_error(env_java, "Database is closed!");
         return NULL;
     }
+
+    ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
+    ukv_column_t column_ptr_c = column_ptr(env_java, db_ptr_c, column_java);
+    if ((*env_java)->ExceptionCheck(env_java))
+        return NULL;
 
     ukv_key_t key_c = (ukv_key_t)key_java;
     ukv_options_read_t options_c = NULL;
@@ -113,7 +125,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
         txn_ptr_c,
         &key_c,
         1,
-        NULL,
+        &column_ptr_c,
         options_c,
         &arena_c,
         &arena_len_c,
@@ -141,18 +153,22 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     return result_java;
 }
 
-JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_remove( //
+JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
     JNIEnv* env_java,
     jobject txn_java,
     jstring column_java,
     jlong key_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, txn_java);
-    ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
     if (!db_ptr_c) {
         forward_error(env_java, "Database is closed!");
-        return NULL;
+        return;
     }
+
+    ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
+    ukv_column_t column_ptr_c = column_ptr(env_java, db_ptr_c, column_java);
+    if ((*env_java)->ExceptionCheck(env_java))
+        return;
 
     ukv_key_t key_c = (ukv_key_t)key_java;
     ukv_val_ptr_t value_ptr_c = NULL;
@@ -165,7 +181,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_remove(
         txn_ptr_c,
         &key_c,
         1,
-        NULL,
+        &column_ptr_c,
         options_c,
         &value_ptr_c,
         &value_len_c,
