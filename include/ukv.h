@@ -83,7 +83,7 @@ typedef void* ukv_options_write_t;
 
 typedef uint64_t ukv_key_t;
 typedef uint32_t ukv_val_len_t;
-typedef void* ukv_tape_ptr_t;
+typedef uint8_t* ukv_tape_ptr_t;
 typedef char const* ukv_str_t;
 typedef char const* ukv_error_t;
 
