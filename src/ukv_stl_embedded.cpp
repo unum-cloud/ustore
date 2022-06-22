@@ -141,7 +141,8 @@ byte_t* reserve_tape(ukv_tape_ptr_t* c_tape, size_t* c_tape_length, size_t new_l
     byte_t* tape = *reinterpret_cast<byte_t**>(c_tape);
     if (new_length >= *c_tape_length) {
         try {
-            allocator_t {}.deallocate(tape, *c_tape_length);
+            if (tape)
+                allocator_t {}.deallocate(tape, *c_tape_length);
             tape = allocator_t {}.allocate(new_length);
             *c_tape = tape;
             *c_tape_length = new_length;
@@ -287,7 +288,7 @@ void _ukv_read_head( //
     std::shared_lock _ {db.mutex};
 
     // 1. Estimate the total size
-    size_t total_bytes = 0;
+    size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
     for (size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key_iterator = collection.pairs.find(c_keys[i]);
@@ -418,7 +419,7 @@ void _ukv_read_txn( //
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
     // 1. Estimate the total size of keys
-    size_t total_bytes = 0;
+    size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
     for (size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
 
@@ -440,7 +441,6 @@ void _ukv_read_txn( //
     }
 
     // 2. Allocate a tape for all the values to be pulled
-    total_bytes += sizeof(ukv_val_len_t) * c_keys_count;
     byte_t* tape = reserve_tape(c_tape, c_tape_length, total_bytes, c_error);
     if (!tape)
         return;
