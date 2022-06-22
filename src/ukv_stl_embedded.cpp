@@ -114,8 +114,9 @@ bool entry_was_overwritten(sequence_t entry_sequence,
 enum option_flags_t {
     consistent_k = 1 << 0,
     colocated_k = 1 << 1,
-    transaparent_read_k = 1 << 2,
-    flush_write_k = 1 << 3,
+    read_lengths_k = 1 << 2,
+    read_transparent_k = 1 << 3,
+    write_flush_k = 1 << 4,
 };
 
 collection_t& collection_at(db_t& db, ukv_collection_t const* c_collections, size_t i, void* c_options) {
@@ -136,16 +137,47 @@ void set_flag(void** c_options, bool c_enabled, option_flags_t flag) {
         options &= ~flag;
 }
 
+byte_t* reserve_tape(ukv_tape_ptr_t* c_tape, size_t* c_tape_length, size_t new_length, ukv_error_t* c_error) {
+    byte_t* tape = *reinterpret_cast<byte_t**>(c_tape);
+    if (new_length >= *c_tape_length) {
+        try {
+            allocator_t {}.deallocate(tape, *c_tape_length);
+            tape = allocator_t {}.allocate(new_length);
+            *c_tape = tape;
+            *c_tape_length = new_length;
+            return tape;
+        }
+        catch (...) {
+            *c_error = "Failed to allocate memory for exports!";
+            return nullptr;
+        }
+    }
+    else
+        return tape;
+}
+
+void save_to_disk(db_t const&, ukv_error_t* c_error) {
+    *c_error = "Serialization is not implemented!";
+}
+
+void read_from_disk(db_t const&, ukv_error_t* c_error) {
+    *c_error = "Serialization is not implemented!";
+}
+
 /*********************************************************/
 /*****************	       Options        ****************/
 /*********************************************************/
+
+void ukv_option_read_lengths(ukv_options_read_t* c_options, bool c_enabled) {
+    set_flag(c_options, c_enabled, read_lengths_k);
+}
 
 void ukv_option_read_consistent(ukv_options_read_t* c_options, bool c_enabled) {
     set_flag(c_options, c_enabled, consistent_k);
 }
 
 void ukv_option_read_transparent(ukv_options_read_t* c_options, bool c_enabled) {
-    set_flag(c_options, c_enabled, transaparent_read_k);
+    set_flag(c_options, c_enabled, read_transparent_k);
 }
 
 void ukv_option_read_colocated(ukv_options_read_t* c_options, bool c_enabled) {
@@ -153,7 +185,7 @@ void ukv_option_read_colocated(ukv_options_read_t* c_options, bool c_enabled) {
 }
 
 void ukv_option_write_flush(ukv_options_write_t* c_options, bool c_enabled) {
-    set_flag(c_options, c_enabled, flush_write_k);
+    set_flag(c_options, c_enabled, write_flush_k);
 }
 
 void ukv_option_write_colocated(ukv_options_read_t* c_options, bool c_enabled) {
@@ -170,19 +202,20 @@ void _ukv_write_head( //
     size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_write_t const c_options,
-    ukv_val_ptr_t const* c_values,
+    ukv_tape_ptr_t const c_values,
     ukv_val_len_t const* c_lengths,
     ukv_error_t* c_error) {
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
     std::unique_lock _ {db.mutex};
 
+    size_t exported_bytes = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
 
         collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key = c_keys[i];
         auto length = c_lengths[i];
-        auto begin = reinterpret_cast<byte_t const*>(c_values[i]);
+        auto begin = reinterpret_cast<byte_t const*>(c_values) + exported_bytes;
         auto key_iterator = collection.pairs.find(key);
 
         // We want to insert a new entry, but let's check if we
@@ -204,7 +237,12 @@ void _ukv_write_head( //
             *c_error = "Failed to put!";
             break;
         }
+        exported_bytes += length;
     }
+
+    // TODO: Degrade the lock to "shared" state before starting expensive IO
+    if (std::uintptr_t(c_options) & write_flush_k)
+        save_to_disk(db, c_error);
 }
 
 void _ukv_measure_head( //
@@ -213,16 +251,25 @@ void _ukv_measure_head( //
     size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
-    ukv_val_len_t* c_lengths,
-    [[maybe_unused]] ukv_error_t* c_error) {
+    ukv_tape_ptr_t* c_tape,
+    size_t* c_tape_length,
+    ukv_error_t* c_error) {
+
+    // 1. Allocate a tape for all the values to be pulled
+    size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    byte_t* tape = reserve_tape(c_tape, c_tape_length, total_bytes, c_error);
+    if (!tape)
+        return;
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
     std::shared_lock _ {db.mutex};
 
+    // 2. Pull the data
+    auto lengths = reinterpret_cast<ukv_val_len_t*>(tape);
     for (size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key_iterator = collection.pairs.find(c_keys[i]);
-        c_lengths[i] = key_iterator != collection.pairs.end() ? key_iterator->second.data.size() : 0;
+        lengths[i] = key_iterator != collection.pairs.end() ? key_iterator->second.data.size() : 0;
     }
 }
 
@@ -232,10 +279,8 @@ void _ukv_read_head( //
     size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
-    ukv_arena_ptr_t* c_arena,
-    size_t* c_arena_length,
-    ukv_val_ptr_t* c_values,
-    ukv_val_len_t* c_lengths,
+    ukv_tape_ptr_t* c_tape,
+    size_t* c_tape_length,
     ukv_error_t* c_error) {
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
@@ -251,35 +296,24 @@ void _ukv_read_head( //
     }
 
     // 2. Allocate a tape for all the values to be fetched
-    byte_t* arena = *reinterpret_cast<byte_t**>(c_arena);
-    if (total_bytes > *c_arena_length) {
-        try {
-            allocator_t {}.deallocate(arena, *c_arena_length);
-            arena = allocator_t {}.allocate(total_bytes);
-            *c_arena = arena;
-            *c_arena_length = total_bytes;
-        }
-        catch (...) {
-            *c_error = "Failed to allocate memory for exports!";
-            return;
-        }
-    }
+    byte_t* tape = reserve_tape(c_tape, c_tape_length, total_bytes, c_error);
+    if (!tape)
+        return;
 
     // 3. Fetch the data
-    size_t exported_into_arena = 0;
+    ukv_val_len_t* lengths = reinterpret_cast<ukv_val_len_t*>(tape);
+    size_t exported_bytes = sizeof(ukv_val_len_t) * c_keys_count;
     for (size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key_iterator = collection.pairs.find(c_keys[i]);
         if (key_iterator != collection.pairs.end()) {
             auto len = key_iterator->second.data.size();
-            std::memcpy(arena + exported_into_arena, key_iterator->second.data.data(), len);
-            c_values[i] = reinterpret_cast<ukv_val_ptr_t>(arena + exported_into_arena);
-            c_lengths[i] = static_cast<ukv_val_len_t>(len);
-            exported_into_arena += len;
+            std::memcpy(tape + exported_bytes, key_iterator->second.data.data(), len);
+            lengths[i] = static_cast<ukv_val_len_t>(len);
+            exported_bytes += len;
         }
         else {
-            c_values[i] = NULL;
-            c_lengths[i] = 0;
+            lengths[i] = 0;
         }
     }
 }
@@ -290,8 +324,8 @@ void _ukv_write_txn( //
     size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_write_t const c_options,
-    ukv_val_ptr_t const* c_values,
-    ukv_val_len_t const* c_lengths,
+    ukv_tape_ptr_t const c_tape,
+    ukv_val_len_t const* lengths,
     ukv_error_t* c_error) {
 
     // No need for locking here, until we commit, unless, of course,
@@ -300,11 +334,12 @@ void _ukv_write_txn( //
     db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
 
+    size_t exported_bytes = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key = c_keys[i];
-        auto length = c_lengths[i];
-        auto begin = reinterpret_cast<byte_t const*>(c_values[i]);
+        auto length = lengths[i];
+        auto begin = reinterpret_cast<byte_t const*>(c_tape) + exported_bytes;
 
         try {
             located_key_t located_key {&collection, key};
@@ -315,6 +350,7 @@ void _ukv_write_txn( //
             *c_error = "Failed to put into transaction!";
             break;
         }
+        exported_bytes += length;
     }
 }
 
@@ -324,21 +360,30 @@ void _ukv_measure_txn( //
     size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
-    ukv_val_len_t* c_lengths,
+    ukv_tape_ptr_t* c_tape,
+    size_t* c_tape_length,
     ukv_error_t* c_error) {
+
+    // 1. Allocate a tape for all the values to be pulled
+    size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    byte_t* tape = reserve_tape(c_tape, c_tape_length, total_bytes, c_error);
+    if (!tape)
+        return;
 
     txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
     db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
+    // 2. Pull the data
+    auto lengths = reinterpret_cast<ukv_val_len_t*>(tape);
     for (size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
 
         // Some keys may already be overwritten inside of transaction
         if (auto overwrite_iterator = txn.new_values.find(located_key_t {&collection, c_keys[i]});
             overwrite_iterator != txn.new_values.end()) {
-            c_lengths[i] = overwrite_iterator->second.size();
+            lengths[i] = overwrite_iterator->second.size();
         }
         // Others should be pulled from the main store
         else if (auto key_iterator = collection.pairs.find(c_keys[i]); key_iterator != collection.pairs.end()) {
@@ -348,11 +393,11 @@ void _ukv_measure_txn( //
                 *c_error = "Requested key was already overwritten since the start of the transaction!";
                 return;
             }
-            c_lengths[i] = key_iterator->second.data.size();
+            lengths[i] = key_iterator->second.data.size();
         }
         // But some will be missing
         else {
-            c_lengths[i] = 0;
+            lengths[i] = 0;
         }
     }
 }
@@ -363,10 +408,8 @@ void _ukv_read_txn( //
     size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
-    ukv_arena_ptr_t* c_arena,
-    size_t* c_arena_length,
-    ukv_val_ptr_t* c_values,
-    ukv_val_len_t* c_lengths,
+    ukv_tape_ptr_t* c_tape,
+    size_t* c_tape_length,
     ukv_error_t* c_error) {
 
     txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
@@ -374,7 +417,7 @@ void _ukv_read_txn( //
     std::shared_lock _ {db.mutex};
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
-    // 1. Estimate the total size of keys outside of the transaction
+    // 1. Estimate the total size of keys
     size_t total_bytes = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
@@ -382,8 +425,7 @@ void _ukv_read_txn( //
         // Some keys may already be overwritten inside of transaction
         if (auto overwrite_iterator = txn.new_values.find(located_key_t {&collection, c_keys[i]});
             overwrite_iterator != txn.new_values.end()) {
-            // We don't need extra memory for those, as transactions state can't be changed concurrently.
-            // We can simply return pointers to the inserted values.
+            total_bytes += overwrite_iterator->second.size();
         }
         // Others should be pulled from the main store
         else if (auto key_iterator = collection.pairs.find(c_keys[i]); key_iterator != collection.pairs.end()) {
@@ -398,43 +440,35 @@ void _ukv_read_txn( //
     }
 
     // 2. Allocate a tape for all the values to be pulled
-    byte_t* arena = *reinterpret_cast<byte_t**>(c_arena);
-    if (total_bytes >= *c_arena_length) {
-        try {
-            allocator_t {}.deallocate(arena, *c_arena_length);
-            arena = allocator_t {}.allocate(total_bytes);
-            *c_arena = arena;
-            *c_arena_length = total_bytes;
-        }
-        catch (...) {
-            *c_error = "Failed to allocate memory for exports!";
-            return;
-        }
-    }
+    total_bytes += sizeof(ukv_val_len_t) * c_keys_count;
+    byte_t* tape = reserve_tape(c_tape, c_tape_length, total_bytes, c_error);
+    if (!tape)
+        return;
 
-    // 3. Pull the data from the main store
-    size_t exported_into_arena = 0;
+    // 3. Pull the data
+    ukv_val_len_t* lengths = reinterpret_cast<ukv_val_len_t*>(tape);
+    size_t exported_bytes = sizeof(ukv_val_len_t) * c_keys_count;
     for (size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
 
         // Some keys may already be overwritten inside of transaction
         if (auto overwrite_iterator = txn.new_values.find(located_key_t {&collection, c_keys[i]});
             overwrite_iterator != txn.new_values.end()) {
-            c_values[i] = reinterpret_cast<ukv_val_ptr_t>(overwrite_iterator->second.data());
-            c_lengths[i] = static_cast<ukv_val_len_t>(overwrite_iterator->second.size());
+            auto len = overwrite_iterator->second.size();
+            std::memcpy(tape + exported_bytes, overwrite_iterator->second.data(), len);
+            lengths[i] = static_cast<ukv_val_len_t>(len);
+            exported_bytes += len;
         }
         // Others should be pulled from the main store
         else if (auto key_iterator = collection.pairs.find(c_keys[i]); key_iterator != collection.pairs.end()) {
             auto len = key_iterator->second.data.size();
-            std::memcpy(arena + exported_into_arena, key_iterator->second.data.data(), len);
-            c_values[i] = reinterpret_cast<ukv_val_ptr_t>(arena + exported_into_arena);
-            c_lengths[i] = static_cast<ukv_val_len_t>(len);
-            exported_into_arena += len;
+            std::memcpy(tape + exported_bytes, key_iterator->second.data.data(), len);
+            lengths[i] = static_cast<ukv_val_len_t>(len);
+            exported_bytes += len;
         }
         // But some will be missing
         else {
-            c_values[i] = NULL;
-            c_lengths[i] = 0;
+            lengths[i] = 0;
         }
     }
 }
@@ -446,36 +480,30 @@ void ukv_read( //
     size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
-    ukv_arena_ptr_t* c_arena,
-    size_t* c_arena_length,
-    ukv_val_ptr_t* c_values,
-    ukv_val_len_t* c_lengths,
+    ukv_tape_ptr_t* c_tape,
+    size_t* c_tape_length,
     ukv_error_t* c_error) {
 
-    if (!c_values)
-        return c_txn ? _ukv_measure_txn(c_txn, c_keys, c_keys_count, c_collections, c_options, c_lengths, c_error)
-                     : _ukv_measure_head(c_db, c_keys, c_keys_count, c_collections, c_options, c_lengths, c_error);
+    if (std::uintptr_t(c_options) & read_lengths_k)
+        return c_txn ? _ukv_measure_txn(c_txn,
+                                        c_keys,
+                                        c_keys_count,
+                                        c_collections,
+                                        c_options,
+                                        c_tape,
+                                        c_tape_length,
+                                        c_error)
+                     : _ukv_measure_head(c_db,
+                                         c_keys,
+                                         c_keys_count,
+                                         c_collections,
+                                         c_options,
+                                         c_tape,
+                                         c_tape_length,
+                                         c_error);
 
-    return c_txn ? _ukv_read_txn(c_txn,
-                                 c_keys,
-                                 c_keys_count,
-                                 c_collections,
-                                 c_options,
-                                 c_arena,
-                                 c_arena_length,
-                                 c_values,
-                                 c_lengths,
-                                 c_error)
-                 : _ukv_read_head(c_db,
-                                  c_keys,
-                                  c_keys_count,
-                                  c_collections,
-                                  c_options,
-                                  c_arena,
-                                  c_arena_length,
-                                  c_values,
-                                  c_lengths,
-                                  c_error);
+    return c_txn ? _ukv_read_txn(c_txn, c_keys, c_keys_count, c_collections, c_options, c_tape, c_tape_length, c_error)
+                 : _ukv_read_head(c_db, c_keys, c_keys_count, c_collections, c_options, c_tape, c_tape_length, c_error);
 }
 
 void ukv_write( //
@@ -485,12 +513,12 @@ void ukv_write( //
     size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_write_t const c_options,
-    ukv_val_ptr_t const* c_values,
+    ukv_tape_ptr_t c_tape,
     ukv_val_len_t const* c_lengths,
     ukv_error_t* c_error) {
 
-    return c_txn ? _ukv_write_txn(c_txn, c_keys, c_keys_count, c_collections, c_options, c_values, c_lengths, c_error)
-                 : _ukv_write_head(c_db, c_keys, c_keys_count, c_collections, c_options, c_values, c_lengths, c_error);
+    return c_txn ? _ukv_write_txn(c_txn, c_keys, c_keys_count, c_collections, c_options, c_tape, c_lengths, c_error)
+                 : _ukv_write_head(c_db, c_keys, c_keys_count, c_collections, c_options, c_tape, c_lengths, c_error);
 }
 
 /*********************************************************/
@@ -498,12 +526,18 @@ void ukv_write( //
 /*********************************************************/
 
 void ukv_open( //
-    [[maybe_unused]] char const* c_config,
+    char const* c_config,
     ukv_t* c_db,
     ukv_error_t* c_error) {
 
     try {
-        *c_db = new db_t {};
+        auto db_ptr = new db_t {};
+        auto len = std::strlen(c_config);
+        if (len) {
+            db_ptr->persisted_path = std::string(c_config, len);
+            read_from_disk(*db_ptr, c_error);
+        }
+        *c_db = db_ptr;
     }
     catch (...) {
         *c_error = "Failed to initizalize the database";
@@ -678,13 +712,17 @@ void ukv_txn_commit( //
             collection.pairs.insert_or_assign(located_key_and_value.first.key, std::move(sequenced_value));
         }
     }
+
+    // TODO: Degrade the lock to "shared" state before starting expensive IO
+    if (std::uintptr_t(c_options) & write_flush_k)
+        save_to_disk(db, c_error);
 }
 
 /*********************************************************/
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
-void ukv_arena_free(ukv_t const, void* c_ptr, size_t c_len) {
+void ukv_tape_free(ukv_t const, void* c_ptr, size_t c_len) {
     allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
 }
 
