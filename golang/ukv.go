@@ -57,7 +57,7 @@ func (db *database) Set(key uint64, value *[]byte) error {
 		// Inputs:
 		db.raw, nil, &key_c, C.size_t(1),
 		// Configs:
-		(*C.ukv_column_t)(nil), (C.ukv_options_write_t)(nil),
+		(*C.ukv_collection_t)(nil), (C.ukv_options_write_t)(nil),
 		// Data:
 		&value_ptr_c, &value_length_c, &error_c)
 	C.free(value_go)
@@ -86,7 +86,7 @@ func (db *database) Get(key uint64) ([]byte, error) {
 		// Inputs:
 		db.raw, nil, &key_c, C.size_t(1),
 		// Configs:
-		(*C.ukv_column_t)(nil), (C.ukv_options_read_t)(nil),
+		(*C.ukv_collection_t)(nil), (C.ukv_options_read_t)(nil),
 		// Temporary Memory:
 		&arena_c, &arena_length_c,
 		// Data:
@@ -121,7 +121,7 @@ func (db *database) Contains(key uint64) (bool, error) {
 		// Inputs:
 		db.raw, nil, &key_c, C.size_t(1),
 		// Configs:
-		(*C.ukv_column_t)(nil), (C.ukv_options_read_t)(nil),
+		(*C.ukv_collection_t)(nil), (C.ukv_options_read_t)(nil),
 		// Temporary Memory:
 		&arena_c, &arena_length_c,
 		// Data:
