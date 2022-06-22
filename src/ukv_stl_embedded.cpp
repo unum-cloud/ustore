@@ -41,24 +41,24 @@ struct sequenced_value_t {
     sequence_t sequence_number {0};
 };
 
-struct column_t {
+struct collection_t {
     std::string name;
-    std::unordered_map<key_t, sequenced_value_t> content;
+    std::unordered_map<key_t, sequenced_value_t> pairs;
 
-    void reserve_more(size_t n) { content.reserve(content.size() + n); }
+    void reserve_more(size_t n) { pairs.reserve(pairs.size() + n); }
 };
 
-using column_ptr_t = std::unique_ptr<column_t>;
+using collection_ptr_t = std::unique_ptr<collection_t>;
 
 struct located_key_t {
-    column_t* column_ptr = nullptr;
+    collection_t* collection_ptr = nullptr;
     key_t key {0};
 
     bool operator==(located_key_t const& other) const noexcept {
-        return (column_ptr == other.column_ptr) & (key == other.key);
+        return (collection_ptr == other.collection_ptr) & (key == other.key);
     }
     bool operator!=(located_key_t const& other) const noexcept {
-        return (column_ptr != other.column_ptr) | (key != other.key);
+        return (collection_ptr != other.collection_ptr) | (key != other.key);
     }
 };
 
@@ -75,14 +75,14 @@ struct txn_t {
 
 struct db_t {
     std::shared_mutex mutex;
-    column_t main_column;
+    collection_t unnamed;
 
     /**
-     * @brief A variable-size set of named columns.
+     * @brief A variable-size set of named collections.
      * It's cleaner to implement it with heterogenous lookups as
      * an @c `std::unordered_set`, but it requires GCC11.
      */
-    std::unordered_map<std::string_view, column_ptr_t> named_columns;
+    std::unordered_map<std::string_view, collection_ptr_t> named;
     /**
      * @brief The sequence/transactions ID of the most recent update.
      * This can be updated even outside of the main @p `mutex` on HEAD state.
@@ -118,9 +118,14 @@ enum option_flags_t {
     flush_write_k = 1 << 3,
 };
 
-column_t& column_at(db_t& db, ukv_column_t const* c_columns, size_t i, void* c_options) {
+collection_t& collection_at(db_t& db, ukv_collection_t const* c_collections, size_t i, void* c_options) {
+    if (!c_collections)
+        return db.unnamed;
     auto options = reinterpret_cast<std::uintptr_t>(c_options);
-    return c_columns ? *reinterpret_cast<column_t*>(c_columns[(options & colocated_k) ? 0 : i]) : db.main_column;
+    auto collection_ptr = reinterpret_cast<collection_t*>(c_collections[(options & colocated_k) ? 0 : i]);
+    if (!collection_ptr)
+        return db.unnamed;
+    return *collection_ptr;
 }
 
 void set_flag(void** c_options, bool c_enabled, option_flags_t flag) {
@@ -163,7 +168,7 @@ void _ukv_write_head( //
     ukv_t const c_db,
     ukv_key_t const* c_keys,
     size_t const c_keys_count,
-    ukv_column_t const* c_columns,
+    ukv_collection_t const* c_collections,
     ukv_options_write_t const c_options,
     ukv_val_ptr_t const* c_values,
     ukv_val_len_t const* c_lengths,
@@ -174,16 +179,16 @@ void _ukv_write_head( //
 
     for (size_t i = 0; i != c_keys_count; ++i) {
 
-        column_t& column = column_at(db, c_columns, i, c_options);
+        collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key = c_keys[i];
         auto length = c_lengths[i];
         auto begin = reinterpret_cast<byte_t const*>(c_values[i]);
-        auto key_iterator = column.content.find(key);
+        auto key_iterator = collection.pairs.find(key);
 
         // We want to insert a new entry, but let's check if we
         // can overwrite the existig value without causing reallocations.
         try {
-            if (key_iterator != column.content.end()) {
+            if (key_iterator != collection.pairs.end()) {
                 key_iterator->second.sequence_number = ++db.youngest_sequence;
                 key_iterator->second.data.assign(begin, begin + length);
             }
@@ -192,7 +197,7 @@ void _ukv_write_head( //
                     value_t(begin, begin + length),
                     ++db.youngest_sequence,
                 };
-                column.content.insert_or_assign(key, std::move(sequenced_value));
+                collection.pairs.insert_or_assign(key, std::move(sequenced_value));
             }
         }
         catch (...) {
@@ -206,7 +211,7 @@ void _ukv_measure_head( //
     ukv_t const c_db,
     ukv_key_t const* c_keys,
     size_t const c_keys_count,
-    ukv_column_t const* c_columns,
+    ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
     ukv_val_len_t* c_lengths,
     [[maybe_unused]] ukv_error_t* c_error) {
@@ -215,9 +220,9 @@ void _ukv_measure_head( //
     std::shared_lock _ {db.mutex};
 
     for (size_t i = 0; i != c_keys_count; ++i) {
-        column_t& column = column_at(db, c_columns, i, c_options);
-        auto key_iterator = column.content.find(c_keys[i]);
-        c_lengths[i] = key_iterator != column.content.end() ? key_iterator->second.data.size() : 0;
+        collection_t& collection = collection_at(db, c_collections, i, c_options);
+        auto key_iterator = collection.pairs.find(c_keys[i]);
+        c_lengths[i] = key_iterator != collection.pairs.end() ? key_iterator->second.data.size() : 0;
     }
 }
 
@@ -225,7 +230,7 @@ void _ukv_read_head( //
     ukv_t const c_db,
     ukv_key_t const* c_keys,
     size_t const c_keys_count,
-    ukv_column_t const* c_columns,
+    ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
     ukv_arena_ptr_t* c_arena,
     size_t* c_arena_length,
@@ -239,9 +244,9 @@ void _ukv_read_head( //
     // 1. Estimate the total size
     size_t total_bytes = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
-        column_t& column = column_at(db, c_columns, i, c_options);
-        auto key_iterator = column.content.find(c_keys[i]);
-        if (key_iterator != column.content.end())
+        collection_t& collection = collection_at(db, c_collections, i, c_options);
+        auto key_iterator = collection.pairs.find(c_keys[i]);
+        if (key_iterator != collection.pairs.end())
             total_bytes += key_iterator->second.data.size();
     }
 
@@ -263,9 +268,9 @@ void _ukv_read_head( //
     // 3. Fetch the data
     size_t exported_into_arena = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
-        column_t& column = column_at(db, c_columns, i, c_options);
-        auto key_iterator = column.content.find(c_keys[i]);
-        if (key_iterator != column.content.end()) {
+        collection_t& collection = collection_at(db, c_collections, i, c_options);
+        auto key_iterator = collection.pairs.find(c_keys[i]);
+        if (key_iterator != collection.pairs.end()) {
             auto len = key_iterator->second.data.size();
             std::memcpy(arena + exported_into_arena, key_iterator->second.data.data(), len);
             c_values[i] = reinterpret_cast<ukv_val_ptr_t>(arena + exported_into_arena);
@@ -283,7 +288,7 @@ void _ukv_write_txn( //
     ukv_txn_t const c_txn,
     ukv_key_t const* c_keys,
     size_t const c_keys_count,
-    ukv_column_t const* c_columns,
+    ukv_collection_t const* c_collections,
     ukv_options_write_t const c_options,
     ukv_val_ptr_t const* c_values,
     ukv_val_len_t const* c_lengths,
@@ -296,13 +301,13 @@ void _ukv_write_txn( //
     std::shared_lock _ {db.mutex};
 
     for (size_t i = 0; i != c_keys_count; ++i) {
-        column_t& column = column_at(db, c_columns, i, c_options);
+        collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key = c_keys[i];
         auto length = c_lengths[i];
         auto begin = reinterpret_cast<byte_t const*>(c_values[i]);
 
         try {
-            located_key_t located_key {&column, key};
+            located_key_t located_key {&collection, key};
             value_t value {begin, begin + length};
             txn.new_values.insert_or_assign(std::move(located_key), std::move(value));
         }
@@ -317,7 +322,7 @@ void _ukv_measure_txn( //
     ukv_txn_t const c_txn,
     ukv_key_t const* c_keys,
     size_t const c_keys_count,
-    ukv_column_t const* c_columns,
+    ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
     ukv_val_len_t* c_lengths,
     ukv_error_t* c_error) {
@@ -328,15 +333,15 @@ void _ukv_measure_txn( //
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
     for (size_t i = 0; i != c_keys_count; ++i) {
-        column_t& column = column_at(db, c_columns, i, c_options);
+        collection_t& collection = collection_at(db, c_collections, i, c_options);
 
         // Some keys may already be overwritten inside of transaction
-        if (auto overwrite_iterator = txn.new_values.find(located_key_t {&column, c_keys[i]});
+        if (auto overwrite_iterator = txn.new_values.find(located_key_t {&collection, c_keys[i]});
             overwrite_iterator != txn.new_values.end()) {
             c_lengths[i] = overwrite_iterator->second.size();
         }
         // Others should be pulled from the main store
-        else if (auto key_iterator = column.content.find(c_keys[i]); key_iterator != column.content.end()) {
+        else if (auto key_iterator = collection.pairs.find(c_keys[i]); key_iterator != collection.pairs.end()) {
             if (entry_was_overwritten(key_iterator->second.sequence_number,
                                       txn.sequence_number,
                                       youngest_sequence_number)) {
@@ -356,7 +361,7 @@ void _ukv_read_txn( //
     ukv_txn_t const c_txn,
     ukv_key_t const* c_keys,
     size_t const c_keys_count,
-    ukv_column_t const* c_columns,
+    ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
     ukv_arena_ptr_t* c_arena,
     size_t* c_arena_length,
@@ -372,16 +377,16 @@ void _ukv_read_txn( //
     // 1. Estimate the total size of keys outside of the transaction
     size_t total_bytes = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
-        column_t& column = column_at(db, c_columns, i, c_options);
+        collection_t& collection = collection_at(db, c_collections, i, c_options);
 
         // Some keys may already be overwritten inside of transaction
-        if (auto overwrite_iterator = txn.new_values.find(located_key_t {&column, c_keys[i]});
+        if (auto overwrite_iterator = txn.new_values.find(located_key_t {&collection, c_keys[i]});
             overwrite_iterator != txn.new_values.end()) {
             // We don't need extra memory for those, as transactions state can't be changed concurrently.
             // We can simply return pointers to the inserted values.
         }
         // Others should be pulled from the main store
-        else if (auto key_iterator = column.content.find(c_keys[i]); key_iterator != column.content.end()) {
+        else if (auto key_iterator = collection.pairs.find(c_keys[i]); key_iterator != collection.pairs.end()) {
             if (entry_was_overwritten(key_iterator->second.sequence_number,
                                       txn.sequence_number,
                                       youngest_sequence_number)) {
@@ -410,16 +415,16 @@ void _ukv_read_txn( //
     // 3. Pull the data from the main store
     size_t exported_into_arena = 0;
     for (size_t i = 0; i != c_keys_count; ++i) {
-        column_t& column = column_at(db, c_columns, i, c_options);
+        collection_t& collection = collection_at(db, c_collections, i, c_options);
 
         // Some keys may already be overwritten inside of transaction
-        if (auto overwrite_iterator = txn.new_values.find(located_key_t {&column, c_keys[i]});
+        if (auto overwrite_iterator = txn.new_values.find(located_key_t {&collection, c_keys[i]});
             overwrite_iterator != txn.new_values.end()) {
             c_values[i] = reinterpret_cast<ukv_val_ptr_t>(overwrite_iterator->second.data());
             c_lengths[i] = static_cast<ukv_val_len_t>(overwrite_iterator->second.size());
         }
         // Others should be pulled from the main store
-        else if (auto key_iterator = column.content.find(c_keys[i]); key_iterator != column.content.end()) {
+        else if (auto key_iterator = collection.pairs.find(c_keys[i]); key_iterator != collection.pairs.end()) {
             auto len = key_iterator->second.data.size();
             std::memcpy(arena + exported_into_arena, key_iterator->second.data.data(), len);
             c_values[i] = reinterpret_cast<ukv_val_ptr_t>(arena + exported_into_arena);
@@ -439,7 +444,7 @@ void ukv_read( //
     ukv_txn_t const c_txn,
     ukv_key_t* c_keys,
     size_t const c_keys_count,
-    ukv_column_t const* c_columns,
+    ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
     ukv_arena_ptr_t* c_arena,
     size_t* c_arena_length,
@@ -448,13 +453,13 @@ void ukv_read( //
     ukv_error_t* c_error) {
 
     if (!c_values)
-        return c_txn ? _ukv_measure_txn(c_txn, c_keys, c_keys_count, c_columns, c_options, c_lengths, c_error)
-                     : _ukv_measure_head(c_db, c_keys, c_keys_count, c_columns, c_options, c_lengths, c_error);
+        return c_txn ? _ukv_measure_txn(c_txn, c_keys, c_keys_count, c_collections, c_options, c_lengths, c_error)
+                     : _ukv_measure_head(c_db, c_keys, c_keys_count, c_collections, c_options, c_lengths, c_error);
 
     return c_txn ? _ukv_read_txn(c_txn,
                                  c_keys,
                                  c_keys_count,
-                                 c_columns,
+                                 c_collections,
                                  c_options,
                                  c_arena,
                                  c_arena_length,
@@ -464,7 +469,7 @@ void ukv_read( //
                  : _ukv_read_head(c_db,
                                   c_keys,
                                   c_keys_count,
-                                  c_columns,
+                                  c_collections,
                                   c_options,
                                   c_arena,
                                   c_arena_length,
@@ -478,14 +483,14 @@ void ukv_write( //
     ukv_txn_t const c_txn,
     ukv_key_t const* c_keys,
     size_t const c_keys_count,
-    ukv_column_t const* c_columns,
+    ukv_collection_t const* c_collections,
     ukv_options_write_t const c_options,
     ukv_val_ptr_t const* c_values,
     ukv_val_len_t const* c_lengths,
     ukv_error_t* c_error) {
 
-    return c_txn ? _ukv_write_txn(c_txn, c_keys, c_keys_count, c_columns, c_options, c_values, c_lengths, c_error)
-                 : _ukv_write_head(c_db, c_keys, c_keys_count, c_columns, c_options, c_values, c_lengths, c_error);
+    return c_txn ? _ukv_write_txn(c_txn, c_keys, c_keys_count, c_collections, c_options, c_values, c_lengths, c_error)
+                 : _ukv_write_head(c_db, c_keys, c_keys_count, c_collections, c_options, c_values, c_lengths, c_error);
 }
 
 /*********************************************************/
@@ -506,54 +511,54 @@ void ukv_open( //
 }
 
 /*********************************************************/
-/*****************	Columns Management	  ****************/
+/*****************	collections Management	  ****************/
 /*********************************************************/
 
-void ukv_column_upsert(
+void ukv_collection_upsert(
     // Inputs:
     ukv_t const c_db,
-    char const* c_column_name,
+    char const* c_collection_name,
     // Outputs:
-    ukv_column_t* c_column,
+    ukv_collection_t* c_collection,
     ukv_error_t* c_error) {
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
     std::unique_lock _ {db.mutex};
-    auto name_len = std::strlen(c_column_name);
-    auto const column_name = std::string_view(c_column_name, name_len);
+    auto name_len = std::strlen(c_collection_name);
+    auto const collection_name = std::string_view(c_collection_name, name_len);
 
-    auto column_it = db.named_columns.find(column_name);
-    if (column_it == db.named_columns.end()) {
+    auto collection_it = db.named.find(collection_name);
+    if (collection_it == db.named.end()) {
         try {
-            auto new_column = std::make_unique<column_t>();
-            new_column->name = column_name;
-            *c_column = new_column.get();
-            db.named_columns.insert_or_assign(new_column->name, std::move(new_column));
+            auto new_collection = std::make_unique<collection_t>();
+            new_collection->name = collection_name;
+            *c_collection = new_collection.get();
+            db.named.insert_or_assign(new_collection->name, std::move(new_collection));
         }
         catch (...) {
-            *c_error = "Failed to create a new column!";
+            *c_error = "Failed to create a new collection!";
         }
     }
     else {
-        *c_column = column_it->second.get();
+        *c_collection = collection_it->second.get();
     }
 }
 
-void ukv_column_remove(
+void ukv_collection_remove(
     // Inputs:
     ukv_t const c_db,
-    char const* c_column_name,
+    char const* c_collection_name,
     // Outputs:
     [[maybe_unused]] ukv_error_t* c_error) {
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
     std::unique_lock _ {db.mutex};
-    auto name_len = std::strlen(c_column_name);
-    auto column_name = std::string_view(c_column_name, name_len);
+    auto name_len = std::strlen(c_collection_name);
+    auto collection_name = std::string_view(c_collection_name, name_len);
 
-    auto column_it = db.named_columns.find(column_name);
-    if (column_it != db.named_columns.end()) {
-        db.named_columns.erase(column_it);
+    auto collection_it = db.named.find(collection_name);
+    if (collection_it != db.named.end()) {
+        db.named.erase(collection_it);
     }
 }
 
@@ -610,9 +615,9 @@ void ukv_txn_commit( //
 
     // 1. Check for refreshes among fetched keys
     for (auto const& [located_key, located_sequence] : txn.requested_keys) {
-        column_t& column = *located_key.column_ptr;
-        auto key_iterator = column.content.find(located_key.key);
-        if (key_iterator != column.content.end()) {
+        collection_t& collection = *located_key.collection_ptr;
+        auto key_iterator = collection.pairs.find(located_key.key);
+        if (key_iterator != collection.pairs.end()) {
             if (key_iterator->second.sequence_number != located_sequence) {
                 *c_error = "Requested key was already overwritten since the start of the transaction!";
                 return;
@@ -622,9 +627,9 @@ void ukv_txn_commit( //
 
     // 2. Check for collisions among incoming values
     for (auto const& [located_key, value] : txn.new_values) {
-        column_t& column = *located_key.column_ptr;
-        auto key_iterator = column.content.find(located_key.key);
-        if (key_iterator != column.content.end()) {
+        collection_t& collection = *located_key.collection_ptr;
+        auto key_iterator = collection.pairs.find(located_key.key);
+        if (key_iterator != collection.pairs.end()) {
             if (key_iterator->second.sequence_number == txn.sequence_number) {
                 *c_error = "Can't commit same entry more than once!";
                 return;
@@ -640,9 +645,9 @@ void ukv_txn_commit( //
 
     // 3. Allocate space for more nodes across different collections
     try {
-        db.main_column.reserve_more(txn.new_values.size());
-        for (auto& name_and_column : db.named_columns)
-            name_and_column.second->reserve_more(txn.new_values.size());
+        db.unnamed.reserve_more(txn.new_values.size());
+        for (auto& name_and_collection : db.named)
+            name_and_collection.second->reserve_more(txn.new_values.size());
     }
     catch (...) {
         *c_error = "Not enough memory!";
@@ -651,16 +656,16 @@ void ukv_txn_commit( //
 
     // 4. Import the data, as no collisions were detected
     for (auto& located_key_and_value : txn.new_values) {
-        column_t& column = *located_key_and_value.first.column_ptr;
-        auto key_iterator = column.content.find(located_key_and_value.first.key);
+        collection_t& collection = *located_key_and_value.first.collection_ptr;
+        auto key_iterator = collection.pairs.find(located_key_and_value.first.key);
         // A key was deleted:
         // if (located_key_and_value.second.empty()) {
-        //     if (key_iterator != column.content.end())
-        //         column.content.erase(key_iterator);
+        //     if (key_iterator != collection.pairs.end())
+        //         collection.pairs.erase(key_iterator);
         // }
         // A keys was updated:
         // else
-        if (key_iterator != column.content.end()) {
+        if (key_iterator != collection.pairs.end()) {
             key_iterator->second.sequence_number = txn.sequence_number;
             std::swap(key_iterator->second.data, located_key_and_value.second);
         }
@@ -670,7 +675,7 @@ void ukv_txn_commit( //
                 std::move(located_key_and_value.second),
                 txn.sequence_number,
             };
-            column.content.insert_or_assign(located_key_and_value.first.key, std::move(sequenced_value));
+            collection.pairs.insert_or_assign(located_key_and_value.first.key, std::move(sequenced_value));
         }
     }
 }
@@ -693,8 +698,8 @@ void ukv_free(ukv_t c_db) {
     delete &db;
 }
 
-void ukv_column_free(ukv_t const, ukv_column_t const) {
-    // In this in-memory freeing the column handle does nothing.
+void ukv_collection_free(ukv_t const, ukv_collection_t const) {
+    // In this in-memory freeing the collection handle does nothing.
     // The DB destructor will automatically cleanup the memory.
 }
 
