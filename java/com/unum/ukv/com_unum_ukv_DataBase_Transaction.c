@@ -29,21 +29,11 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
 
     // Cast everything to our types
     ukv_key_t key_c = (ukv_key_t)key_java;
-    ukv_val_ptr_t value_ptr_c = (ukv_val_ptr_t)value_ptr_java;
+    ukv_tape_ptr_t value_ptr_c = (ukv_tape_ptr_t)value_ptr_java;
     ukv_val_len_t value_len_c = (ukv_val_len_t)value_len_java;
     ukv_options_write_t options_c = NULL;
     ukv_error_t error_c = NULL;
-
-    ukv_write( //
-        db_ptr_c,
-        txn_ptr_c,
-        &key_c,
-        1,
-        &collection_ptr_c,
-        options_c,
-        &value_ptr_c,
-        &value_len_c,
-        &error_c);
+    ukv_write(db_ptr_c, txn_ptr_c, &key_c, 1, &collection_ptr_c, options_c, value_ptr_c, &value_len_c, &error_c);
 
     if (value_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseByteArrayElements(env_java, value_java, value_ptr_java, 0);
@@ -69,29 +59,19 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
 
     ukv_key_t key_c = (ukv_key_t)key_java;
     ukv_options_read_t options_c = NULL;
-    ukv_arena_ptr_t arena_c = NULL;
-    size_t arena_len_c = 0;
-    ukv_val_len_t value_len_c = 0;
+    ukv_tape_ptr_t tape_c = NULL;
+    size_t tape_len_c = 0;
     ukv_error_t error_c = NULL;
 
-    ukv_read( //
-        db_ptr_c,
-        txn_ptr_c,
-        &key_c,
-        1,
-        &collection_ptr_c,
-        options_c,
-        &arena_c,
-        &arena_len_c,
-        NULL,
-        &value_len_c,
-        &error_c);
+    ukv_option_read_lengths(&options_c, true);
+    ukv_read(db_ptr_c, txn_ptr_c, &key_c, 1, &collection_ptr_c, options_c, &tape_c, &tape_len_c, &error_c);
 
-    if (arena_c)
-        ukv_arena_free(db_ptr_c, arena_c, arena_len_c);
+    if (tape_c)
+        ukv_tape_free(db_ptr_c, tape_c, tape_len_c);
     if (forward_error(env_java, error_c))
         return JNI_FALSE;
 
+    ukv_val_len_t value_len_c = *(ukv_val_len_t*)tape_c;
     return value_len_c != 0 ? JNI_TRUE : JNI_FALSE;
 }
 
@@ -114,24 +94,16 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
 
     ukv_key_t key_c = (ukv_key_t)key_java;
     ukv_options_read_t options_c = NULL;
-    ukv_arena_ptr_t arena_c = NULL;
-    size_t arena_len_c = 0;
-    ukv_val_ptr_t value_ptr_c = NULL;
-    ukv_val_len_t value_len_c = 0;
+    ukv_tape_ptr_t tape_c = NULL;
+    size_t tape_len_c = 0;
     ukv_error_t error_c = NULL;
 
-    ukv_read( //
-        db_ptr_c,
-        txn_ptr_c,
-        &key_c,
-        1,
-        &collection_ptr_c,
-        options_c,
-        &arena_c,
-        &arena_len_c,
-        &value_ptr_c,
-        &value_len_c,
-        &error_c);
+    ukv_read(db_ptr_c, txn_ptr_c, &key_c, 1, &collection_ptr_c, options_c, &tape_c, &tape_len_c, &error_c);
+    if (forward_ukv_error(env_java, error_c))
+        return NULL;
+
+    ukv_tape_ptr_t value_ptr_c = (ukv_tape_ptr_t)tape_c + sizeof(ukv_val_len_t);
+    ukv_val_len_t value_len_c = *(ukv_val_len_t*)tape_c;
 
     // For small lookups its jenerally cheaper to allocate new Java buffers
     // and copy the data there:
@@ -145,11 +117,9 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
             (*env_java)->SetByteArrayRegion(env_java, result_java, 0, value_len_c, (jbyte const*)value_ptr_c);
     }
 
-    if (arena_c)
-        ukv_arena_free(db_ptr_c, arena_c, arena_len_c);
+    if (tape_c)
+        ukv_tape_free(db_ptr_c, tape_c, tape_len_c);
 
-    // Don't overwrite the Java exception with the original read exception
-    forward_ukv_error(env_java, error_c);
     return result_java;
 }
 
@@ -171,21 +141,12 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
         return;
 
     ukv_key_t key_c = (ukv_key_t)key_java;
-    ukv_val_ptr_t value_ptr_c = NULL;
+    ukv_tape_ptr_t value_ptr_c = NULL;
     ukv_val_len_t value_len_c = 0;
     ukv_options_write_t options_c = NULL;
     ukv_error_t error_c = NULL;
 
-    ukv_write( //
-        db_ptr_c,
-        txn_ptr_c,
-        &key_c,
-        1,
-        &collection_ptr_c,
-        options_c,
-        &value_ptr_c,
-        &value_len_c,
-        &error_c);
+    ukv_write(db_ptr_c, txn_ptr_c, &key_c, 1, &collection_ptr_c, options_c, value_ptr_c, &value_len_c, &error_c);
     forward_ukv_error(env_java, error_c);
 }
 
