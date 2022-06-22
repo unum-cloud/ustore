@@ -55,6 +55,7 @@
 #include <optional>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 
 #include "ukv.h"
 
@@ -191,28 +192,18 @@ bool contains_item( //
     py_tape_t& tape,
     ukv_key_t key) {
 
-    ukv_val_len_t value_length = 0;
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_read( //
-        db.raw,
-        txn_ptr,
-        &key,
-        1,
-        &collection_ptr,
-        options,
-        &tape.ptr,
-        &tape.length,
-        NULL,
-        &value_length,
-        &error);
+    ukv_option_read_lengths(&options, true);
+    ukv_read(db.raw, txn_ptr, &key, 1, &collection_ptr, options, &tape.ptr, &tape.length, &error);
 
     if (error) [[unlikely]]
         throw make_exception(db, error);
 
-    return value_length != 0;
+    auto lengths = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
+    return lengths[0] != 0;
 }
 
 std::optional<py::bytes> get_item( //
@@ -222,29 +213,17 @@ std::optional<py::bytes> get_item( //
     py_tape_t& tape,
     ukv_key_t key) {
 
-    ukv_val_ptr_t value = NULL;
-    ukv_val_len_t value_length = 0;
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_read( //
-        db.raw,
-        txn_ptr,
-        &key,
-        1,
-        &collection_ptr,
-        options,
-        &tape.ptr,
-        &tape.length,
-        &value,
-        &value_length,
-        &error);
+    ukv_read(db.raw, txn_ptr, &key, 1, &collection_ptr, options, &tape.ptr, &tape.length, &error);
 
     if (error) [[unlikely]]
         throw make_exception(db, error);
 
-    if (!value_length || !value)
+    auto lengths = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
+    if (!lengths[0])
         return {};
 
     // To fetch data without copies, there is a hacky way:
@@ -254,7 +233,8 @@ std::optional<py::bytes> get_item( //
     // https://github.com/pybind/pybind11/blob/a05bc3d2359d12840ef2329d68f613f1a7df9c5d/include/pybind11/pytypes.h#L1474
     // https://docs.python.org/3/c-api/bytes.html
     // https://github.com/python/cpython/blob/main/Objects/bytesobject.c
-    return py::bytes {reinterpret_cast<char const*>(value), value_length};
+    auto data = reinterpret_cast<char const*>(lengths + 1);
+    return py::bytes {data, lengths[0]};
 }
 
 /**
@@ -267,6 +247,8 @@ std::optional<py::bytes> get_item( //
  *                  must match with `len(keys)` and the second one must be
  *                  at least 8 for us be able to efficiently reuse that memory.
  *
+ * @param values_lengths May be NULL.
+ *
  * https://pybind11.readthedocs.io/en/stable/advanced/pycpp/numpy.html#buffer-protocol
  * https://pybind11.readthedocs.io/en/stable/advanced/cast/overview.html#list-of-all-builtin-conversions
  * https://docs.python.org/3/c-api/buffer.html
@@ -276,32 +258,57 @@ void export_matrix( //
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
     py_tape_t& tape,
-    py::array_t<ukv_key_t> keys,
+    py::array_t<ukv_key_t, py::array::c_style | py::array::forcecast> keys,
     py::buffer_info values,
     py::buffer_info values_lengths,
     uint8_t padding_element = 0) {
 
-    ukv_val_ptr_t value = NULL;
-    ukv_val_len_t value_length = 0;
+    if (values.ndim != 2)
+        throw std::invalid_argument("Output tensor must have rank 2");
+    if (values_lengths.ndim != 1)
+        throw std::invalid_argument("Lengths tensor must have rank 1");
+    if (keys.size() != values.shape[0])
+        throw std::invalid_argument("Number of input keys and output slots doesn't match");
+    if (keys.size() != values_lengths.shape[0])
+        throw std::invalid_argument("Number of input keys and output lengths doesn't match");
+    if (values.itemsize != sizeof(uint8_t))
+        throw std::invalid_argument("Output tensor must have single-byte entries");
+    if (values_lengths.itemsize != sizeof(ukv_val_len_t))
+        throw std::invalid_argument("Lengths tensor must have 4-byte entries");
+
     ukv_error_t error = NULL;
     ukv_options_read_t options = NULL;
+    ukv_key_t const* keys_ptr = reinterpret_cast<ukv_key_t const*>(keys.data());
+    size_t const keys_count = static_cast<size_t>(keys.size());
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_read( //
-        db.raw,
-        txn_ptr,
-        &key,
-        1,
-        &collection_ptr,
-        options,
-        &tape.ptr,
-        &tape.length,
-        &value,
-        &value_length,
-        &error);
+    ukv_read(db.raw, txn_ptr, keys_ptr, keys_count, &collection_ptr, options, &tape.ptr, &tape.length, &error);
 
     if (error) [[unlikely]]
         throw make_exception(db, error);
+
+    // Export the data into the matrix
+    auto inputs_lengths = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
+    auto inputs_bytes = reinterpret_cast<uint8_t const*>(inputs_lengths + keys_count);
+    auto outputs_lengths = reinterpret_cast<ukv_val_len_t*>(values_lengths.ptr);
+    auto outputs_bytes = reinterpret_cast<uint8_t*>(values.ptr);
+
+    size_t skipped_input_bytes = 0;
+    ukv_val_len_t length_cap = static_cast<ukv_val_len_t>(values.shape[1]);
+    for (size_t i = 0; i != keys_count; ++i) {
+        auto input_length = inputs_lengths[i];
+        auto input_bytes = inputs_bytes + skipped_input_bytes;
+        auto output_bytes = outputs_bytes + values.strides[0] * i;
+        auto& output_length = outputs_lengths[values_lengths.strides[0] * i];
+
+        size_t count_copy = std::min(length_cap, input_length);
+        size_t count_pads = length_cap - count_copy;
+        std::memcpy(output_bytes, input_bytes, count_copy);
+        std::memset(output_bytes + count_copy, padding_element, count_pads);
+
+        output_length = input_length;
+        skipped_input_bytes += input_length;
+    }
 }
 
 void set_item( //
@@ -312,7 +319,7 @@ void set_item( //
     py::bytes const* value = NULL) {
 
     ukv_options_write_t options = NULL;
-    ukv_val_ptr_t ptr = value ? ukv_val_ptr_t(std::string_view {*value}.data()) : NULL;
+    ukv_tape_ptr_t ptr = value ? ukv_tape_ptr_t(std::string_view {*value}.data()) : NULL;
     ukv_val_len_t len = value ? static_cast<ukv_val_len_t>(std::string_view {*value}.size()) : 0;
     ukv_error_t error = NULL;
 
@@ -324,7 +331,7 @@ void set_item( //
         1,
         &collection_ptr,
         options,
-        &ptr,
+        ptr,
         &len,
         &error);
 
