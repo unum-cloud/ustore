@@ -41,7 +41,7 @@ func forwardError(error_c C.ukv_error_t) error {
 }
 
 func cleanTape(db *database, tape_c C.ukv_tape_ptr_t, tape_length_c C.size_t) {
-	// C.ukv_tape_free(db.raw, tape_c, tape_length_c)
+	C.ukv_tape_free(db.raw, tape_c, tape_length_c)
 }
 
 func (db *database) Reconnect(config string) error {

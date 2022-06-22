@@ -1,7 +1,5 @@
-from threading import Thread
 
 import pytest
-
 import ukv
 
 
@@ -158,7 +156,7 @@ def test_transaction_get_fail():
     with pytest.raises(Exception):
         txn.get(0)
 
-    # Set by transaction befor get
+    # Set by transaction before get
     db2 = ukv.DataBase()
     txn1 = ukv.Transaction(db2)
     with ukv.Transaction(db2) as txn2:
