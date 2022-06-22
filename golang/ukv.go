@@ -27,7 +27,7 @@ import (
  * Further Reading:
  * https://blog.marlin.org/cgo-referencing-c-library-in-go
  */
-type database struct {
+type DataBase struct {
 	raw C.ukv_t
 }
 
@@ -40,22 +40,28 @@ func forwardError(error_c C.ukv_error_t) error {
 	return nil
 }
 
-func cleanTape(db *database, tape_c C.ukv_tape_ptr_t, tape_length_c C.size_t) {
+func cleanTape(db *DataBase, tape_c C.ukv_tape_ptr_t, tape_length_c C.size_t) {
 	C.ukv_tape_free(db.raw, tape_c, tape_length_c)
 }
 
-func (db *database) Reconnect(config string) error {
+func (db *DataBase) ReConnect(config string) error {
 
 	error_c := C.ukv_error_t(nil)
 	config_c := C.CString(config)
 	defer C.free(unsafe.Pointer(config_c))
 
 	C.ukv_open(config_c, &db.raw, &error_c)
-
 	return forwardError(error_c)
 }
 
-func (db *database) Set(key uint64, value *[]byte) error {
+func (db *DataBase) Close() {
+	if db.raw != nil {
+		C.ukv_free(&db.raw)
+		db.raw = nil
+	}
+}
+
+func (db *DataBase) Set(key uint64, value *[]byte) error {
 
 	// Passing values without copies seems essentially impossible
 	// and causes: "cgo argument has Go pointer to Go pointer"
@@ -70,15 +76,28 @@ func (db *database) Set(key uint64, value *[]byte) error {
 	value_length_c := C.ukv_val_len_t(len(*value))
 	defer C.free(value_go)
 
-	C.ukv_write(
-		db.raw, nil, &key_c, 1,
-		collection_c, options_c,
-		value_ptr_c, &value_length_c, &error_c)
-
+	C.ukv_write(db.raw, nil, &key_c, 1, collection_c, options_c, value_ptr_c, &value_length_c, &error_c)
 	return forwardError(error_c)
 }
 
-func (db *database) Get(key uint64) ([]byte, error) {
+func (db *DataBase) Delete(key uint64) error {
+
+	// Passing values without copies seems essentially impossible
+	// and causes: "cgo argument has Go pointer to Go pointer"
+	// when we try to take pass pointer to to first object in `[]byte`.
+	// https://stackoverflow.com/a/64867672
+	error_c := C.ukv_error_t(nil)
+	key_c := C.ukv_key_t(key)
+	collection_c := (*C.ukv_collection_t)(nil)
+	options_c := C.ukv_options_write_t(nil)
+	value_ptr_c := C.ukv_tape_ptr_t(nil)
+	value_length_c := C.ukv_val_len_t(0)
+
+	C.ukv_write(db.raw, nil, &key_c, 1, collection_c, options_c, value_ptr_c, &value_length_c, &error_c)
+	return forwardError(error_c)
+}
+
+func (db *DataBase) Get(key uint64) ([]byte, error) {
 
 	// Even though we can't properly write without a single copy
 	// from Go layer, but we can read entries from C-allocated buffers.
@@ -109,7 +128,7 @@ func (db *database) Get(key uint64) ([]byte, error) {
 
 }
 
-func (db *database) Contains(key uint64) (bool, error) {
+func (db *DataBase) Contains(key uint64) (bool, error) {
 
 	// Even though we can't properly write without a single copy
 	// from Go layer, but we can read entries from C-allocated buffers.
@@ -138,12 +157,13 @@ func (db *database) Contains(key uint64) (bool, error) {
 
 func main() {
 
-	db := database{}
-	db.Reconnect("")
+	db := DataBase{}
+	if db.ReConnect("") != nil {
+		return
+	}
+
+	defer db.Close()
 	db.Set(10, &[]byte{10, 23})
 	fmt.Println(db.Get(10))
 	fmt.Println(db.Contains(10))
-
-	// TODO: Outgoing channel for batch reads
-	// TODO: Internal memory handle inside `database` to store reads
 }
