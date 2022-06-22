@@ -67,7 +67,7 @@ struct py_collection_t;
 struct py_tape_t;
 
 struct py_tape_t {
-    void* ptr = NULL;
+    ukv_tape_ptr_t ptr = NULL;
     size_t length = 0;
 };
 
