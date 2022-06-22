@@ -723,15 +723,21 @@ void ukv_txn_commit( //
 /*********************************************************/
 
 void ukv_tape_free(ukv_t const, ukv_tape_ptr_t c_ptr, size_t c_len) {
+    if (!c_ptr || !c_len)
+        return;
     allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
 }
 
 void ukv_txn_free(ukv_t const, ukv_txn_t const c_txn) {
+    if (!c_txn)
+        return;
     txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
     delete &txn;
 }
 
 void ukv_free(ukv_t c_db) {
+    if (!c_db)
+        return;
     db_t& db = *reinterpret_cast<db_t*>(c_db);
     delete &db;
 }
