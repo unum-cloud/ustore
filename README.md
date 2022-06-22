@@ -102,3 +102,14 @@ db.Get(42)
 Implementation-wise, GoLang variant performs `memcpy`s on essentially every call.
 As GoLang has no exceptions in the classical OOP sense, most functions return multiple values, error being the last one in each pack.
 Batch lookup operations are imlemented via channels sending slices, to avoid reallocations.
+
+## TODOs
+
+* [ ] gRPC server and client in C++
+* [ ] GoLang Channel Batch Reads and Batch Insertions
+* [ ] Swift Bindings
+* [ ] Rust Bindings
+* [ ] Scala Bindings
+* [ ] Wolfram Language Bindings
+* [ ] Read/Write Apache Arrow Tables via C API
+* [ ] Java Apache Arrow support
