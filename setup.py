@@ -9,7 +9,7 @@ __libname__ = 'ukv'
 ext_modules = [
     Pybind11Extension(
         'ukv',
-        ['python/ukv.cpp'],
+        ['python/ukv_pybind.cpp'],
         # Example: passing in the version to the compiled code
         include_dirs=['include/'],
         library_dirs=['build/lib/'],
