@@ -722,7 +722,7 @@ void ukv_txn_commit( //
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
-void ukv_tape_free(ukv_t const, void* c_ptr, size_t c_len) {
+void ukv_tape_free(ukv_t const, ukv_tape_ptr_t c_ptr, size_t c_len) {
     allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
 }
 
