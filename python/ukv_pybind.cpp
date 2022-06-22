@@ -63,9 +63,9 @@ namespace py = pybind11;
 struct py_db_t;
 struct py_txn_t;
 struct py_collection_t;
-struct py_arena_t;
+struct py_tape_t;
 
-struct py_arena_t : public std::enable_shared_from_this<py_arena_t> {
+struct py_tape_t {
     void* ptr = NULL;
     size_t length = 0;
 };
@@ -73,7 +73,7 @@ struct py_arena_t : public std::enable_shared_from_this<py_arena_t> {
 struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     ukv_t raw = NULL;
     std::string config;
-    py_arena_t arena;
+    py_tape_t tape;
 
     py_db_t() = default;
     py_db_t(py_db_t&&) = delete;
@@ -89,7 +89,7 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
 struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
     ukv_txn_t raw = NULL;
     py_db_t* db_ptr = NULL;
-    py_arena_t arena;
+    py_tape_t tape;
 
     py_txn_t() = default;
     py_txn_t(py_txn_t&&) = delete;
@@ -139,18 +139,18 @@ std::shared_ptr<py_db_t> open_if_closed(py_db_t& db) {
     return db.shared_from_this();
 }
 
-void free_temporary_memory(py_db_t& db, py_arena_t& arena) {
-    if (arena.ptr)
-        ukv_arena_free(db.raw, arena.ptr, arena.length);
-    arena.ptr = NULL;
-    arena.length = 0;
+void free_temporary_memory(py_db_t& db, py_tape_t& tape) {
+    if (tape.ptr)
+        ukv_tape_free(db.raw, tape.ptr, tape.length);
+    tape.ptr = NULL;
+    tape.length = 0;
 }
 
 void close_if_opened(py_db_t& db) {
     if (!db.raw)
         return;
 
-    free_temporary_memory(db, db.arena);
+    free_temporary_memory(db, db.tape);
     ukv_free(db.raw);
     db.raw = NULL;
 }
@@ -179,17 +179,16 @@ void commit(py_txn_t& txn) {
     if (error) [[unlikely]]
         throw make_exception(db, error);
 
-    free_temporary_memory(db, txn.arena);
+    free_temporary_memory(db, txn.tape);
     ukv_txn_free(db.raw, txn.raw);
     txn.raw = NULL;
-    [[maybe_unused]] py::gil_scoped_acquire acquire;
 }
 
 bool contains_item( //
     py_db_t& db,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    py_arena_t& arena,
+    py_tape_t& tape,
     ukv_key_t key) {
 
     ukv_val_len_t value_length = 0;
@@ -204,12 +203,11 @@ bool contains_item( //
         1,
         &collection_ptr,
         options,
-        &arena.ptr,
-        &arena.length,
+        &tape.ptr,
+        &tape.length,
         NULL,
         &value_length,
         &error);
-    [[maybe_unused]] py::gil_scoped_acquire acquire;
 
     if (error) [[unlikely]]
         throw make_exception(db, error);
@@ -221,7 +219,7 @@ std::optional<py::bytes> get_item( //
     py_db_t& db,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    py_arena_t& arena,
+    py_tape_t& tape,
     ukv_key_t key) {
 
     ukv_val_ptr_t value = NULL;
@@ -237,12 +235,11 @@ std::optional<py::bytes> get_item( //
         1,
         &collection_ptr,
         options,
-        &arena.ptr,
-        &arena.length,
+        &tape.ptr,
+        &tape.length,
         &value,
         &value_length,
         &error);
-    [[maybe_unused]] py::gil_scoped_acquire acquire;
 
     if (error) [[unlikely]]
         throw make_exception(db, error);
@@ -258,6 +255,53 @@ std::optional<py::bytes> get_item( //
     // https://docs.python.org/3/c-api/bytes.html
     // https://github.com/python/cpython/blob/main/Objects/bytesobject.c
     return py::bytes {reinterpret_cast<char const*>(value), value_length};
+}
+
+/**
+ * @brief Exports keys into a 2-dimensional preallocated NumPy buffer.
+ *        The most performant batch-reading method, ideal for ML.
+ *
+ * @param keys      A NumPy array of keys.
+ * @param valus     A buffer-protocol object, whose `shape` has 2 dims
+ *                  the `itemsize` is just one byte. The first dimensions
+ *                  must match with `len(keys)` and the second one must be
+ *                  at least 8 for us be able to efficiently reuse that memory.
+ *
+ * https://pybind11.readthedocs.io/en/stable/advanced/pycpp/numpy.html#buffer-protocol
+ * https://pybind11.readthedocs.io/en/stable/advanced/cast/overview.html#list-of-all-builtin-conversions
+ * https://docs.python.org/3/c-api/buffer.html
+ */
+void export_matrix( //
+    py_db_t& db,
+    ukv_txn_t txn_ptr,
+    ukv_collection_t collection_ptr,
+    py_tape_t& tape,
+    py::array_t<ukv_key_t> keys,
+    py::buffer_info values,
+    py::buffer_info values_lengths,
+    uint8_t padding_element = 0) {
+
+    ukv_val_ptr_t value = NULL;
+    ukv_val_len_t value_length = 0;
+    ukv_error_t error = NULL;
+    ukv_options_read_t options = NULL;
+
+    [[maybe_unused]] py::gil_scoped_release release;
+    ukv_read( //
+        db.raw,
+        txn_ptr,
+        &key,
+        1,
+        &collection_ptr,
+        options,
+        &tape.ptr,
+        &tape.length,
+        &value,
+        &value_length,
+        &error);
+
+    if (error) [[unlikely]]
+        throw make_exception(db, error);
 }
 
 void set_item( //
@@ -283,7 +327,6 @@ void set_item( //
         &ptr,
         &len,
         &error);
-    [[maybe_unused]] py::gil_scoped_acquire acquire;
 
     if (error) [[unlikely]]
         throw make_exception(db, error);
@@ -299,7 +342,6 @@ ukv_collection_t collection_named(py_db_t& db, std::string const& collection_nam
         collection_name.c_str(),
         &collection_ptr,
         &error);
-    [[maybe_unused]] py::gil_scoped_acquire acquire;
 
     if (error) [[unlikely]]
         throw make_exception(db, error);
@@ -314,7 +356,6 @@ void collection_remove(py_db_t& db, std::string const& collection_name) {
         db.raw,
         collection_name.c_str(),
         &error);
-    [[maybe_unused]] py::gil_scoped_acquire acquire;
 
     if (error) [[unlikely]]
         throw make_exception(db, error);
@@ -342,13 +383,13 @@ PYBIND11_MODULE(ukv, m) {
 
     db.def(
         "get",
-        [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, NULL, db.arena, key); },
+        [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, NULL, db.tape, key); },
         py::arg("key"));
 
     db.def(
         "get",
         [](py_db_t& db, std::string const& collection, ukv_key_t key) {
-            return get_item(db, NULL, collection_named(db, collection), db.arena, key);
+            return get_item(db, NULL, collection_named(db, collection), db.tape, key);
         },
         py::arg("collection"),
         py::arg("key"));
@@ -378,7 +419,7 @@ PYBIND11_MODULE(ukv, m) {
             return get_item(*col.db_ptr,
                             col.txn_ptr ? col.txn_ptr->raw : NULL,
                             col.raw,
-                            col.txn_ptr ? col.txn_ptr->arena : col.db_ptr->arena,
+                            col.txn_ptr ? col.txn_ptr->tape : col.db_ptr->tape,
                             key);
         },
         py::arg("key"));
@@ -408,13 +449,13 @@ PYBIND11_MODULE(ukv, m) {
             py::arg("begin") = true);
     txn.def(
         "get",
-        [](py_txn_t& txn, ukv_key_t key) { return get_item(*txn.db_ptr, txn.raw, NULL, txn.arena, key); },
+        [](py_txn_t& txn, ukv_key_t key) { return get_item(*txn.db_ptr, txn.raw, NULL, txn.tape, key); },
         py::arg("key"));
 
     txn.def(
         "get",
         [](py_txn_t& txn, std::string const& collection, ukv_key_t key) {
-            return get_item(*txn.db_ptr, txn.raw, collection_named(*txn.db_ptr, collection), txn.arena, key);
+            return get_item(*txn.db_ptr, txn.raw, collection_named(*txn.db_ptr, collection), txn.tape, key);
         },
         py::arg("collection"),
         py::arg("key"));
@@ -458,16 +499,16 @@ PYBIND11_MODULE(ukv, m) {
             });
 
     // Operator overaloads used to edit entries
-    db.def("__contains__", [](py_db_t& db, ukv_key_t key) { return contains_item(db, NULL, NULL, db.arena, key); });
-    db.def("__getitem__", [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, NULL, db.arena, key); });
+    db.def("__contains__", [](py_db_t& db, ukv_key_t key) { return contains_item(db, NULL, NULL, db.tape, key); });
+    db.def("__getitem__", [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, NULL, db.tape, key); });
     db.def("__setitem__",
            [](py_db_t& db, ukv_key_t key, py::bytes const& value) { return set_item(db, NULL, NULL, key, &value); });
     db.def("__delitem__", [](py_db_t& db, ukv_key_t key) { return set_item(db, NULL, NULL, key); });
 
     txn.def("__contains__",
-            [](py_txn_t& txn, ukv_key_t key) { return contains_item(*txn.db_ptr, txn.raw, NULL, txn.arena, key); });
+            [](py_txn_t& txn, ukv_key_t key) { return contains_item(*txn.db_ptr, txn.raw, NULL, txn.tape, key); });
     txn.def("__getitem__",
-            [](py_txn_t& txn, ukv_key_t key) { return get_item(*txn.db_ptr, txn.raw, NULL, txn.arena, key); });
+            [](py_txn_t& txn, ukv_key_t key) { return get_item(*txn.db_ptr, txn.raw, NULL, txn.tape, key); });
     txn.def("__setitem__", [](py_txn_t& txn, ukv_key_t key, py::bytes const& value) {
         return set_item(*txn.db_ptr, txn.raw, NULL, key, &value);
     });
@@ -477,14 +518,14 @@ PYBIND11_MODULE(ukv, m) {
         return contains_item(*col.db_ptr,
                              col.txn_ptr ? col.txn_ptr->raw : NULL,
                              col.raw,
-                             col.txn_ptr ? col.txn_ptr->arena : col.db_ptr->arena,
+                             col.txn_ptr ? col.txn_ptr->tape : col.db_ptr->tape,
                              key);
     });
     col.def("__getitem__", [](py_collection_t& col, ukv_key_t key) {
         return get_item(*col.db_ptr,
                         col.txn_ptr ? col.txn_ptr->raw : NULL,
                         col.raw,
-                        col.txn_ptr ? col.txn_ptr->arena : col.db_ptr->arena,
+                        col.txn_ptr ? col.txn_ptr->tape : col.db_ptr->tape,
                         key);
     });
     col.def("__setitem__", [](py_collection_t& col, ukv_key_t key, py::bytes const& value) {
