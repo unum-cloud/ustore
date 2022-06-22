@@ -82,8 +82,8 @@ typedef void* ukv_options_read_t;
 typedef void* ukv_options_write_t;
 
 typedef uint64_t ukv_key_t;
-typedef void* ukv_tape_ptr_t;
 typedef uint32_t ukv_val_len_t;
+typedef void* ukv_tape_ptr_t;
 typedef char const* ukv_str_t;
 typedef char const* ukv_error_t;
 
@@ -127,7 +127,7 @@ void ukv_open( //
  *                           is assumed. Instead of passing one collection for
  *                           each key, you can use `ukv_option_read_colocated`.
  * @param[in] options        Write options.
- * @param[in] values         Pointer to a tape of values to be imported.
+ * @param[in] values         Pointer to a tape of concatenated values to be imported.
  * @param[in] lengths        Pointer to lengths of chunks in packed into @p `values`.
  * @param[out] error         The error to be handled.
  */
@@ -139,7 +139,7 @@ void ukv_write( //
     ukv_collection_t const* collections,
     ukv_options_write_t const options,
     ukv_tape_ptr_t values,
-    ukv_val_len_t* lengths,
+    ukv_val_len_t const* lengths,
     ukv_error_t* error);
 
 /**
@@ -184,7 +184,7 @@ void ukv_write( //
 void ukv_read( //
     ukv_t const db,
     ukv_txn_t const txn,
-    ukv_key_t* keys,
+    ukv_key_t const* keys,
     size_t const keys_count,
     ukv_collection_t const* collections,
     ukv_options_read_t const options,

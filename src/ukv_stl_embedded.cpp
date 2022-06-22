@@ -476,7 +476,7 @@ void _ukv_read_txn( //
 void ukv_read( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
-    ukv_key_t* c_keys,
+    ukv_key_t const* c_keys,
     size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
