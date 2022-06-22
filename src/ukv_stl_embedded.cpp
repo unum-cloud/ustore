@@ -144,7 +144,7 @@ byte_t* reserve_tape(ukv_tape_ptr_t* c_tape, size_t* c_tape_length, size_t new_l
             if (tape)
                 allocator_t {}.deallocate(tape, *c_tape_length);
             tape = allocator_t {}.allocate(new_length);
-            *c_tape = tape;
+            *c_tape = reinterpret_cast<uint8_t*>(tape);
             *c_tape_length = new_length;
             return tape;
         }
