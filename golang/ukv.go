@@ -1,4 +1,4 @@
-package main
+package ukv
 
 /*
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../include
@@ -15,7 +15,6 @@ ukv_tape_ptr_t* tape_get_value(ukv_tape_ptr_t tape, size_t count_keys, size_t by
 import "C"
 import (
 	"errors"
-	"fmt"
 	"unsafe"
 )
 
@@ -56,7 +55,7 @@ func (db *DataBase) ReConnect(config string) error {
 
 func (db *DataBase) Close() {
 	if db.raw != nil {
-		C.ukv_free(&db.raw)
+		C.ukv_free(db.raw)
 		db.raw = nil
 	}
 }
@@ -153,17 +152,4 @@ func (db *DataBase) Contains(key uint64) (bool, error) {
 
 	pulled_value_length_c := C.tape_get_length(tape_c, 0)
 	return pulled_value_length_c != 0, nil
-}
-
-func main() {
-
-	db := DataBase{}
-	if db.ReConnect("") != nil {
-		return
-	}
-
-	defer db.Close()
-	db.Set(10, &[]byte{10, 23})
-	fmt.Println(db.Get(10))
-	fmt.Println(db.Contains(10))
 }
