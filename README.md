@@ -106,7 +106,7 @@ Batch lookup operations are imlemented via channels sending slices, to avoid rea
 ## TODOs
 
 * [ ] gRPC server and client in C++
-* [ ] GoLang Channel Batch Reads and Batch Insertions
+* [ ] GoLang memory pinning Channel Batch Reads of [slices](https://stackoverflow.com/a/36546929)
 * [ ] Swift Bindings
 * [ ] Rust Bindings
 * [ ] Scala Bindings
