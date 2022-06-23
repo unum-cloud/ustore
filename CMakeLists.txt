@@ -75,6 +75,15 @@ FetchContent_GetProperties(boost SOURCE_DIR BOOST_SRC_DIR)
 include_directories(${BOOST_SRC_DIR})
 include_directories(${Boost_INCLUDE_DIRS})
 
+# FMT:
+FetchContent_Declare(
+  fmt
+  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+  GIT_TAG 8.1.1
+  GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(fmt)
+
 # SIMD-JSON: https://github.com/simdjson/simdjson/blob/master/doc/basics.md#using-simdjson-as-a-cmake-dependency
 FetchContent_Declare(
   simdjson
@@ -116,7 +125,16 @@ FetchContent_MakeAvailable(simdjson)
 
 # Define the libraries we will need to build
 include_directories(include/)
-add_library(ukv_stl_embedded src/ukv_stl_embedded.cpp)
-add_library(ukv_stl_client src/ukv_stl_client.cpp)
+
+add_library(ukv_stl src/ukv_stl.cpp)
+
+add_library(ukv_rocksdb src/ukv_rocksdb.cpp)
+
+add_library(ukv_beast_client src/ukv_beast_client.cpp)
+
 add_executable(ukv_beast_server src/ukv_beast_server.cpp)
-target_link_libraries(ukv_beast_server simdjson)
+target_link_libraries(ukv_beast_server
+  ukv_stl
+  fmt::fmt
+  simdjson
+)

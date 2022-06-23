@@ -93,7 +93,7 @@ The language lacks operator and function overloads, so we can't mimic native col
 Instead we mimic the interfaces of most commonly used ORMs.
 
 ```go
-db := database{}
+db := DataBase{}
 db.Reconnect("")
 db.Set(42, &[]byte{4, 2})
 db.Get(42)
