@@ -17,6 +17,6 @@ cd java/com/unum/ukv &&
     gcc -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I${DIR_PATH}/../include com_unum_ukv_Shared.c -o com_unum_ukv_Shared.o &&
     gcc -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I${DIR_PATH}/../include com_unum_ukv_DataBase_Context.c -o com_unum_ukv_DataBase_Context.o &&
     gcc -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I${DIR_PATH}/../include com_unum_ukv_DataBase_Transaction.c -o com_unum_ukv_DataBase_Transaction.o &&
-    gcc -shared -fPIC -o libukv_java.so com_unum_ukv_Shared.o com_unum_ukv_DataBase_Context.o com_unum_ukv_DataBase_Transaction.o -L${DIR_PATH}/../build/lib -lukv_stl_embedded -lc &&
+    gcc -shared -fPIC -o libukv_java.so com_unum_ukv_Shared.o com_unum_ukv_DataBase_Context.o com_unum_ukv_DataBase_Transaction.o -L${DIR_PATH}/../build/lib -lukv_stl -lc &&
     java -ea -Xcheck:jni -Djava.library.path=. -cp . DataBase.java
 cd ../../../..

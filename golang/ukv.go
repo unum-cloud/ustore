@@ -2,7 +2,7 @@ package ukv
 
 /*
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../include
-#cgo LDFLAGS: -L${SRCDIR}/../build/lib -lukv_stl_embedded -lstdc++
+#cgo LDFLAGS: -L${SRCDIR}/../build/lib -lukv_stl -lstdc++
 
 #include "ukv.h"
 #include <stdlib.h>
