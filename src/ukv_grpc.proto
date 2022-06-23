@@ -5,9 +5,9 @@ option java_package = "com.unum.ukv";
 option java_outer_classname = "UKVProto";
 option objc_class_prefix = "UKV";
 
-package routeguide;
+package ukv;
 
-service UKV {
+service DataBase {
 
     rpc Read(ReadRequest) returns (ReadResult) {}
     rpc Write(WriteRequest) returns (WriteResult) {}
