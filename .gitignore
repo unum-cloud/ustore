@@ -47,3 +47,6 @@ tmp/
 __pycache__
 .pytest_cache/
 .gradle/
+_deps/
+*.cmake
+protos/
