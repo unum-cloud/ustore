@@ -3,9 +3,9 @@
  * @author Ashot Vardanian
  * @date 2022-06-18
  *
- * @brief A web server implementint REST backend on top of any other
+ * @brief A web server implementint @b REST backend on top of any other
  * UKV implementation using pre-release draft of C++23 Networking TS,
- * through the means of Boost.Beast and Boost.ASIO.
+ * through the means of @b Boost.Beast and @b Boost.ASIO.
  *
  * @section Supported Endpoints
  *
@@ -111,7 +111,7 @@ struct db_t : public std::enable_shared_from_this<db_t> {
     ukv_t raw = NULL;
     int running_transactions;
 
-    ~db_t() { ukv_free(raw); }
+    ~db_t() noexcept { ukv_free(raw); }
 };
 
 struct raii_tape_t {
@@ -148,6 +148,27 @@ http::response<http::string_body> make_error(http::request<body_at, http::basic_
 }
 
 /**
+ * @brief Searches for a "value" among key-value pairs passed in URI after path.
+ * @param query_params  Must begin with "?".
+ * @param param_name    Must end with "=".
+ */
+std::optional<beast::string_view> param_value(beast::string_view query_params, beast::string_view param_name) {
+
+    auto key_begin = std::search(query_params.begin(), query_params.end(), param_name.begin(), param_name.end());
+    if (key_begin == query_params.end())
+        return std::nullopt;
+
+    char preceding_char = *(key_begin - 1);
+    bool isnt_part_of_bigger_key = (preceding_char != '?') & (preceding_char != '&');
+    if (!isnt_part_of_bigger_key)
+        return std::nullopt;
+
+    auto value_begin = key_begin + param_name.size();
+    auto value_end = std::find(value_begin, query_params.end(), '&');
+    return beast::string_view {value_begin, static_cast<size_t>(value_end - value_begin)};
+}
+
+/**
  * @brief Primary dispatch point, rounting incoming HTTP requests
  *        into underlying UKV calls, preparing results and sending back.
  */
@@ -163,20 +184,40 @@ void handle_request(db_t& db,
     // Modifying single entries:
     if (received_path.starts_with("/one/")) {
 
-        auto remaining = received_path.substr(5);
-        auto params = remaining.find('?');
-        if (params != remaining.size()) {
-        }
-
-        auto key = ukv_key_t {0};
-        auto result = std::from_chars(remaining.data(), remaining.data() + remaining.size(), key);
-        if (result.ec != std::errc())
-            return send_response(make_error(req, http::status::bad_request, "Couldn't parse the integer key"));
-
-        ukv_collection_t collection = NULL;
+        ukv_key_t key = 0;
         ukv_txn_t txn = NULL;
+        ukv_collection_t collection = NULL;
         ukv_options_read_t options = NULL;
 
+        // Parse the `key`
+        auto key_begin = received_path.substr(5).begin();
+        auto key_end = std::find(key_begin, received_path.end(), '?');
+        auto key_parse_result = std::from_chars(key_begin, key_end, key);
+        if (key_parse_result.ec != std::errc())
+            return send_response(make_error(req, http::status::bad_request, "Couldn't parse the integer key"));
+
+        // Parse the following free-order parameters, starting with transaction identifier.
+        auto params_str = beast::string_view {key_end, static_cast<size_t>(received_path.end() - key_end)};
+        if (auto txn_val = param_value(params_str, "txn="); txn_val) {
+            auto txn_id = size_t {0};
+            auto txn_parse_result = std::from_chars(txn_val->data(), txn_val->data() + txn_val->size(), txn_id);
+            if (txn_parse_result.ec != std::errc())
+                return send_response(make_error(req, http::status::bad_request, "Couldn't parse the transaction id"));
+        }
+
+        // Parse the collection name string.
+        if (auto col_val = param_value(params_str, "col="); col_val) {
+            char col_name_buffer[65] = {0};
+            std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
+
+            raii_error_t error;
+            ukv_collection_upsert(db.raw, col_name_buffer, &collection, &error.raw);
+            if (error.raw)
+                return send_response(make_error(req, http::status::internal_server_error, error.raw));
+        }
+
+        // Once we know, which collection, key and transation user is
+        // interested in - perform the actions depending on verbs.
         switch (received_verb) {
 
             // Read the data:
@@ -238,12 +279,28 @@ void handle_request(db_t& db,
             auto payload_len = req.payload_size();
             if (!payload_len)
                 return send_response(
-                    make_error(req, http::status::not_found, "Chunk Transfer Encoding isn't supported"));
+                    make_error(req, http::status::length_required, "Chunk Transfer Encoding isn't supported"));
 
             raii_error_t error;
             auto value_ptr = reinterpret_cast<ukv_tape_ptr_t>(req.body().data());
             auto value_len = static_cast<ukv_val_len_t>(*payload_len);
             ukv_write(db.raw, txn, &key, 1, &collection, options, value_ptr, &value_len, &error.raw);
+            if (error.raw)
+                return send_response(make_error(req, http::status::internal_server_error, error.raw));
+
+            http::response<http::empty_body> res;
+            res.set(http::field::server, server_name_k);
+            res.set(http::field::content_type, binary_mime_k);
+            res.keep_alive(req.keep_alive());
+            return send_response(std::move(res));
+        }
+
+            // Upsert data:
+        case http::verb::delete_: {
+
+            raii_error_t error;
+            ukv_val_len_t value_len = 0;
+            ukv_write(db.raw, txn, &key, 1, &collection, options, NULL, &value_len, &error.raw);
             if (error.raw)
                 return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
