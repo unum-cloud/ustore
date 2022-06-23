@@ -10,16 +10,19 @@
  * @section Supported Endpoints
  *
  * Modifying single entries:
- * > POST /one/name?/id/field?:    Imports binary data under given key in a named collection.
- * > GET /one/name?/id/field?:     Returns binary data under given key in a named collection.
- * > HEAD /one/name?/id/field?:    Returns binary data under given key in a named collection.
- * > DELETE /one/name?/id/field?:  Returns binary data under given key in a named collection.
+ * > POST /one/id?col=str&txn=int&field=str:    Upserts data.
+ * > GET /one/id?col=str&txn=int&field=str:     Retrieves data.
+ * > HEAD /one/id?col=str&txn=int&field=str:    Retrieves data length.
+ * > DELETE /one/id?col=str&txn=int&field=str:  Deletes data.
  *
  * Modifying collections:
  * > POST /col/name:    Upserts a collection.
  * > DELETE /col/name:  Drops the entire collection.
  * > DELETE /col:       Clears the main collection.
- * > DELETE /:          Clears the entire DB.
+ *
+ * Global operations:
+ * > DELETE /all/:              Clears the entire DB.
+ * > GET /all/meta?query=str:   Retrieves DB metadata.
  *
  * Supporting transactions:
  * > GET /txn/client:   Returns: {id?: int, error?: str}
@@ -49,7 +52,7 @@
  *                  Returns: {len?: int, error?: str}
  *
  * Working with @b batched data in Apache Arrow format:
- * > GET /soa/:     Receives: {cols?: [str], keys: [int], fields: [str], txn?: int}
+ * > GET /arrow/:   Receives: {cols?: [str], keys: [int], fields: [str], txn?: int}
  *                  Returns: Apache Arrow buffers
  */
 
@@ -62,6 +65,7 @@
 #include <vector>
 #include <string>
 #include <string_view>
+#include <charconv>
 
 // Boost files are quite noisy in terms of warnings,
 // so let's silence them a bit.
@@ -83,6 +87,8 @@
 #include <boost/asio/strand.hpp>
 #include <boost/config.hpp>
 
+#include <fmt/core.h>
+
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #elif defined(__GNUC__) || defined(__GNUG__)
@@ -98,17 +104,47 @@ namespace net = boost::asio;      // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
 
 static constexpr char const* server_name_k = "unum-cloud/ukv/beast_server";
+static constexpr char const* binary_mime_k = "application/octet-stream";
 
 struct db_t : public std::enable_shared_from_this<db_t> {
 
-    ukv_t raw;
+    ukv_t raw = NULL;
     int running_transactions;
 
     ~db_t() { ukv_free(raw); }
 };
 
+struct raii_tape_t {
+    ukv_t db = NULL;
+    ukv_tape_ptr_t ptr = NULL;
+    size_t capacity = 0;
+
+    raii_tape_t(ukv_t db_ptr) noexcept : db(db_ptr) {}
+    ~raii_tape_t() noexcept { ukv_tape_free(db, ptr, capacity); }
+};
+
+struct raii_error_t {
+    ukv_error_t raw = NULL;
+
+    ~raii_error_t() noexcept { ukv_error_free(raw); }
+};
+
 void log_failure(beast::error_code ec, char const* what) {
     std::cerr << what << ": " << ec.message() << "\n";
+}
+
+template <typename body_at, typename allocator_at>
+http::response<http::string_body> make_error(http::request<body_at, http::basic_fields<allocator_at>> const& req,
+                                             http::status status,
+                                             beast::string_view why) {
+
+    http::response<http::string_body> res {status, req.version()};
+    res.set(http::field::server, server_name_k);
+    res.set(http::field::content_type, "text/html");
+    res.keep_alive(req.keep_alive());
+    res.body() = std::string(why);
+    res.prepare_payload();
+    return res;
 }
 
 /**
@@ -120,89 +156,135 @@ void handle_request(db_t& db,
                     http::request<body_at, http::basic_fields<allocator_at>>&& req,
                     send_response_at&& send_response) {
 
-    // Returns a bad request response
-    auto const bad_request = [&req](beast::string_view why) {
-        http::response<http::string_body> res {http::status::bad_request, req.version()};
-        res.set(http::field::server, server_name_k);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = std::string(why);
-        res.prepare_payload();
-        return res;
-    };
+    http::verb received_verb = req.method();
+    beast::string_view received_path = req.target();
+    fmt::print("Received path:{}\n", std::string(received_path));
 
-    // Returns a not found response
-    auto const not_found = [&req](beast::string_view target) {
-        http::response<http::string_body> res {http::status::not_found, req.version()};
-        res.set(http::field::server, server_name_k);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = "The resource '" + std::string(target) + "' was not found.";
-        res.prepare_payload();
-        return res;
-    };
+    // Modifying single entries:
+    if (received_path.starts_with("/one/")) {
 
-    // Returns a server error response
-    auto const server_error = [&req](beast::string_view what) {
-        http::response<http::string_body> res {http::status::internal_server_error, req.version()};
-        res.set(http::field::server, server_name_k);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = "An error occurred: '" + std::string(what) + "'";
-        res.prepare_payload();
-        return res;
-    };
+        auto remaining = received_path.substr(5);
+        auto params = remaining.find('?');
+        if (params != remaining.size()) {
+        }
 
-    // Make sure we can handle the method
-    if (req.method() != http::verb::get && req.method() != http::verb::head)
-        return send_response(bad_request("Unknown HTTP-method"));
+        auto key = ukv_key_t {0};
+        auto result = std::from_chars(remaining.data(), remaining.data() + remaining.size(), key);
+        if (result.ec != std::errc())
+            return send_response(make_error(req, http::status::bad_request, "Couldn't parse the integer key"));
 
-    // Request path must be absolute and not contain "..".
-    if (req.target().empty() || req.target()[0] != '/' || req.target().find("..") != beast::string_view::npos)
-        return send_response(bad_request("Illegal request-target"));
+        ukv_collection_t collection = NULL;
+        ukv_txn_t txn = NULL;
+        ukv_options_read_t options = NULL;
 
-    // Build the path to the requested file
-    std::string path = ""; // path_cat(db, req.target());
-    if (req.target().back() == '/')
-        path.append("index.html");
+        switch (received_verb) {
 
-    // Attempt to open the file
-    beast::error_code ec;
-    http::file_body::value_type body;
-    body.open(path.c_str(), beast::file_mode::scan, ec);
+            // Read the data:
+        case http::verb::get: {
 
-    // Handle the case where the file doesn't exist
-    if (ec == beast::errc::no_such_file_or_directory)
-        return send_response(not_found(req.target()));
+            raii_tape_t tape(db.raw);
+            raii_error_t error;
+            ukv_read(db.raw, txn, &key, 1, &collection, options, &tape.ptr, &tape.capacity, &error.raw);
+            if (error.raw)
+                return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
-    // Handle an unknown error
-    if (ec)
-        return send_response(server_error(ec.message()));
+            ukv_tape_ptr_t begin = tape.ptr + sizeof(ukv_val_len_t);
+            ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
+            if (!len)
+                return send_response(make_error(req, http::status::not_found, "Missing key"));
 
-    // Cache the size since we need it after the move
-    auto const size = body.size();
+            http::buffer_body::value_type body;
+            body.data = begin;
+            body.size = len;
+            body.more = false;
 
-    // Respond to HEAD request
-    if (req.method() == http::verb::head) {
-        http::response<http::empty_body> res {http::status::ok, req.version()};
-        res.set(http::field::server, server_name_k);
-        // res.set(http::field::content_type, mime_type(path));
-        res.content_length(size);
-        res.keep_alive(req.keep_alive());
-        return send_response(std::move(res));
+            http::response<http::buffer_body> res {
+                std::piecewise_construct,
+                std::make_tuple(std::move(body)),
+                std::make_tuple(http::status::ok, req.version()),
+            };
+            res.set(http::field::server, server_name_k);
+            res.set(http::field::content_type, binary_mime_k);
+            res.content_length(len);
+            res.keep_alive(req.keep_alive());
+            return send_response(std::move(res));
+        }
+
+            // Check the data:
+        case http::verb::head: {
+
+            raii_tape_t tape(db.raw);
+            raii_error_t error;
+            ukv_option_read_lengths(&options, true);
+            ukv_read(db.raw, txn, &key, 1, &collection, options, &tape.ptr, &tape.capacity, &error.raw);
+            if (error.raw)
+                return send_response(make_error(req, http::status::internal_server_error, error.raw));
+
+            ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
+            if (!len)
+                return send_response(make_error(req, http::status::not_found, "Missing key"));
+
+            http::response<http::empty_body> res;
+            res.set(http::field::server, server_name_k);
+            res.set(http::field::content_type, binary_mime_k);
+            res.content_length(len);
+            res.keep_alive(req.keep_alive());
+            return send_response(std::move(res));
+        }
+
+            // Upsert data:
+        case http::verb::post: {
+
+            auto payload_len = req.payload_size();
+            if (!payload_len)
+                return send_response(
+                    make_error(req, http::status::not_found, "Chunk Transfer Encoding isn't supported"));
+
+            raii_error_t error;
+            auto value_ptr = reinterpret_cast<ukv_tape_ptr_t>(req.body().data());
+            auto value_len = static_cast<ukv_val_len_t>(*payload_len);
+            ukv_write(db.raw, txn, &key, 1, &collection, options, value_ptr, &value_len, &error.raw);
+            if (error.raw)
+                return send_response(make_error(req, http::status::internal_server_error, error.raw));
+
+            http::response<http::empty_body> res;
+            res.set(http::field::server, server_name_k);
+            res.set(http::field::content_type, binary_mime_k);
+            res.keep_alive(req.keep_alive());
+            return send_response(std::move(res));
+        }
+
+        //
+        default: return send_response(make_error(req, http::status::bad_request, "Unsupported HTTP verb"));
+        }
     }
 
-    // Respond to GET request
-    http::response<http::file_body> res {
-        std::piecewise_construct,
-        std::make_tuple(std::move(body)),
-        std::make_tuple(http::status::ok, req.version()),
-    };
-    res.set(http::field::server, server_name_k);
-    // res.set(http::field::content_type, mime_type(path));
-    res.content_length(size);
-    res.keep_alive(req.keep_alive());
-    return send_response(std::move(res));
+    // Modifying collections:
+    else if (received_path.starts_with("/col/")) {
+    }
+
+    // Global operations:
+    else if (received_path.starts_with("/all/")) {
+    }
+
+    // Supporting transactions:
+    else if (received_path.starts_with("/txn/")) {
+    }
+
+    // Structure-of-Arrays:
+    else if (received_path.starts_with("/soa/"))
+        return send_response(make_error(req, http::status::bad_request, "Batch API aren't implemented yet"));
+
+    // Array-of-Structures:
+    else if (received_path.starts_with("/aos/"))
+        return send_response(make_error(req, http::status::bad_request, "Batch API aren't implemented yet"));
+
+    // Array-of-Structures:
+    else if (received_path.starts_with("/arrow/"))
+        return send_response(make_error(req, http::status::bad_request, "Batch API aren't implemented yet"));
+
+    else
+        return send_response(make_error(req, http::status::bad_request, "Unknown request"));
 }
 
 /**
@@ -374,7 +456,7 @@ class listener_t : public std::enable_shared_from_this<listener_t> {
 
 int main(int argc, char* argv[]) {
 
-    // Check command line arguments.
+    // Check command line arguments
     if (argc != 5) {
         std::cerr << "Usage: ukv_beast_server <address> <port> <threads> <db_config_path>\n"
                   << "Example:\n"
@@ -382,15 +464,23 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
+    // Parse the arguments
     auto const address = net::ip::make_address(argv[1]);
     auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
     auto const threads = std::max<int>(1, std::atoi(argv[3]));
     auto const db_config_path = std::string(argv[4]);
 
-    auto io_context = net::io_context {threads};
+    // Check if we can initialize the DB
     auto db = std::make_shared<db_t>();
+    raii_error_t error;
+    ukv_open("", &db->raw, &error.raw);
+    if (error.raw) {
+        std::cerr << "Couldn't initialize DB: " << error.raw << std::endl;
+        return EXIT_FAILURE;
+    }
 
     // Create and launch a listening port
+    auto io_context = net::io_context {threads};
     std::make_shared<listener_t>(io_context, tcp::endpoint {address, port}, db)->run();
 
     // Run the I/O service on the requested number of threads
