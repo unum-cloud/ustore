@@ -7,10 +7,10 @@ flowchart LR
   
   ukv(((UKV)))
 
-  id1[In-Memory Embedded FOSS Store with STL] --> ukv;
-  id2[In-Memory Embeded Store by Unum] --> ukv;
-  id3[Persistent Embedded FOSS Store on RocksDB] --> ukv;
-  id4[Persistent Embeded Store by Unum] --> ukv;
+  id1[In-Memory Store using STL] --> ukv;
+  id3[Persistent Store using RocksDB] --> ukv;
+  id2[In-Memory Store by Unum] --> ukv;
+  id4[Persistent Store by Unum] --> ukv;
   %% id5[In-Memory Distributed Store by Unum] --> ukv;
   %% id6[Persistent Distributed Store by Unum] --> ukv;
   
@@ -20,9 +20,15 @@ flowchart LR
   ukv --> Python;
   ukv --> GoLang;
   ukv --> Java;
+  ukv --> REST;
+  
+  %% ukv --> SQL;
   %% ukv ---> Redis;
   %% ukv ---> Lucene;
   %% ukv ---> MongoDB;
+  
+  style id2 stroke:#743cce,stroke-width:2px;
+  style id4 stroke:#743cce,stroke-width:2px;
 ```
 
 Assumptions and limitations:
