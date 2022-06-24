@@ -59,6 +59,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fvisibility=hidden")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DDEBUG_SAFE_MODE -g")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG_SAFE_MODE -g")
 
+find_package(Threads REQUIRED)
+
 # Install 3rd Party Packages
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
@@ -91,6 +93,7 @@ FetchContent_Declare(
   GIT_TAG v3.10.5
   GIT_SHALLOW TRUE
 )
+FetchContent_MakeAvailable(nlohmann_json)
 
 # RocksDB:
 # https://github.com/facebook/rocksdb/blob/main/CMakeLists.txt
@@ -152,6 +155,7 @@ add_library(ukv_beast_client src/ukv_beast_client.cpp)
 add_executable(ukv_beast_server src/ukv_beast_server.cpp)
 target_link_libraries(ukv_beast_server
   ukv_stl
+  pthread
   fmt::fmt
   nlohmann_json
 )
