@@ -103,6 +103,25 @@ Implementation-wise, GoLang variant performs `memcpy`s on essentially every call
 As GoLang has no exceptions in the classical OOP sense, most functions return multiple values, error being the last one in each pack.
 Batch lookup operations are imlemented via channels sending slices, to avoid reallocations.
 
+### RESTful API & Clients
+
+We implement a REST server using `Boost.Beast` and the underlying `Boost.Asio`, as the go-to Web-Dev libraries in C++.
+We also provide a [`OneAPI` specification](/openapi.yml), that is used as both a documentation point and an automatic client-library generator.
+
+```sh
+npm install @openapitools/openapi-generator-cli -g
+npx openapi-generator-cli generate -i openapi.yml -g ruby -o /tmp/
+```
+
+Or via Docker:
+
+```sh
+docker run --rm -v "${PWD}:/local" openapitools/openapi-generator-cli generate \
+    -i "/local/openapi.yml" \
+    -g ruby \
+    -o "/local/tmp/"
+```
+
 ## TODOs
 
 * [ ] gRPC server and client in C++
