@@ -84,14 +84,23 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fmt)
 
-# SIMD-JSON: https://github.com/simdjson/simdjson/blob/master/doc/basics.md#using-simdjson-as-a-cmake-dependency
+# JSON:
 FetchContent_Declare(
-  simdjson
-  GIT_REPOSITORY https://github.com/simdjson/simdjson.git
-  GIT_TAG tags/v2.0.4
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.10.5
   GIT_SHALLOW TRUE
 )
-FetchContent_MakeAvailable(simdjson)
+
+# RocksDB:
+set(WITH_GFLAGS FALSE)
+FetchContent_Declare(
+  rocksdb
+  GIT_REPOSITORY https://github.com/facebook/rocksdb.git
+  GIT_TAG v7.3.1
+  GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(rocksdb)
 
 # gRPC: https://grpc.io/blog/cmake-improvements/
 # https://github.com/grpc/grpc/blob/master/test/distrib/cpp/run_distrib_test_cmake_fetchcontent.sh
@@ -129,6 +138,9 @@ include_directories(include/)
 add_library(ukv_stl src/ukv_stl.cpp)
 
 add_library(ukv_rocksdb src/ukv_rocksdb.cpp)
+target_link_libraries(ukv_rocksdb
+  rocksdb
+)
 
 add_library(ukv_beast_client src/ukv_beast_client.cpp)
 
@@ -136,5 +148,5 @@ add_executable(ukv_beast_server src/ukv_beast_server.cpp)
 target_link_libraries(ukv_beast_server
   ukv_stl
   fmt::fmt
-  simdjson
+  nlohmann_json
 )
