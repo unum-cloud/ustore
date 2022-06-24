@@ -61,7 +61,6 @@
  * > application/cbor:      https://datatracker.ietf.org/doc/html/rfc7049
  * > application/bson:      https://bsonspec.org/
  * > application/ubjson
- * > application/bjdata
  * All of that is supported through the infamous "nlohmann/json" library with
  * native support for round-trip conversions between mentioned formats.
  *
@@ -186,11 +185,12 @@
 
 #include "ukv.h"
 
-namespace beast = boost::beast;   // from <boost/beast.hpp>
-namespace http = beast::http;     // from <boost/beast/http.hpp>
-namespace net = boost::asio;      // from <boost/asio.hpp>
-using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
-using json_t = nlohmann::json;    // from <nlohmann/json.h>
+namespace beast = boost::beast;          // from <boost/beast.hpp>
+namespace http = beast::http;            // from <boost/beast/http.hpp>
+namespace net = boost::asio;             // from <boost/asio.hpp>
+using tcp = boost::asio::ip::tcp;        // from <boost/asio/ip/tcp.hpp>
+using json_t = nlohmann::json;           // from <nlohmann/json.h>
+using json_ptr_t = json_t::json_pointer; // from <nlohmann/json.h>
 
 static constexpr char const* server_name_k = "unum-cloud/ukv/beast_server";
 static constexpr char const* mime_binary_k = "application/octet-stream";
@@ -199,7 +199,6 @@ static constexpr char const* mime_msgpack_k = "application/msgpack";
 static constexpr char const* mime_cbor_k = "application/cbor";
 static constexpr char const* mime_bson_k = "application/bson";
 static constexpr char const* mime_ubjson_k = "application/ubjson";
-static constexpr char const* mime_bjdata_k = "application/bjdata";
 
 struct db_t : public std::enable_shared_from_this<db_t> {
 
@@ -256,6 +255,21 @@ http::response<http::string_body> make_error(http::request<body_at, http::basic_
     res.body() = std::string(why);
     res.prepare_payload();
     return res;
+}
+
+/**
+ * @brief Extracts a select subset of keys by from input document.
+ *
+ * Can be implemented through flattening, sampling and unflattening.
+ * https://json.nlohmann.me/api/json_pointer/
+ * https://json.nlohmann.me/api/basic_json/flatten/
+ * https://json.nlohmann.me/api/basic_json/unflatten/
+ */
+json_t sample_fields(json_t&& original, std::vector<json_ptr_t> const& json_pointers, json_t defaults) {
+    if (json_pointers.empty())
+        return original;
+
+    return {};
 }
 
 /**
@@ -485,10 +499,10 @@ void respond_to_aos(db_t& db,
     // Make sure we support the requested content type
     auto payload_type = req[http::field::content_type];
     if (payload_type != mime_json_k && payload_type != mime_msgpack_k && payload_type != mime_cbor_k &&
-        payload_type != mime_bson_k && payload_type != mime_ubjson_k && payload_type != mime_bjdata_k)
+        payload_type != mime_bson_k && payload_type != mime_ubjson_k)
         return send_response(make_error(req,
                                         http::status::unsupported_media_type,
-                                        "We only support json, msgpack, cbor, bson, ubjson and bjdata MIME types"));
+                                        "We only support json, msgpack, cbor, bson and ubjson MIME types"));
 
     // Make sure the payload is present, as it handles the heavy part of the query
     auto opt_payload_len = req.payload_size();
@@ -512,8 +526,6 @@ void respond_to_aos(db_t& db,
         payload_dict = json_t::from_cbor(payload_ptr, payload_ptr + payload_len, true, false);
     else if (payload_type != mime_ubjson_k)
         payload_dict = json_t::from_ubjson(payload_ptr, payload_ptr + payload_len, true, false);
-    // else if (payload_type != mime_bjdata_k)
-    //     payload_dict = json_t::from_bjdata(payload_ptr, payload_ptr + payload_len, true, false);
 
     if (payload_dict.is_discarded())
         return send_response(make_error(req, http::status::bad_request, "Couldn't parse the payload"));
@@ -533,13 +545,47 @@ void respond_to_aos(db_t& db,
                                             "GET request must provide a non-empty list of integer keys"));
 
         for (auto const& key_json : *keys_it) {
-            if (!key_json.is_number_unsigned())
+            if (!key_json.is_number_unsigned()) [[unlikely]]
                 return send_response(make_error(req,
                                                 http::status::bad_request,
                                                 "GET request must provide a non-empty list of integer keys"));
             keys.push_back(key_json.template get<ukv_key_t>());
         }
-        return;
+
+        // Pull the entire objects before we start sampling their fields
+        raii_tape_t tape(db.raw);
+        raii_error_t error;
+        ukv_read(db.raw,
+                 txn.raw,
+                 keys.data(),
+                 keys.size(),
+                 NULL, // collections.data(),
+                 options,
+                 &tape.ptr,
+                 &tape.capacity,
+                 &error.raw);
+        if (error.raw)
+            return send_response(make_error(req, http::status::internal_server_error, error.raw));
+
+        ukv_val_len_t const* values_lens = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
+        ukv_tape_ptr_t values_begin = tape.ptr + sizeof(ukv_val_len_t) * keys.size();
+
+        size_t exported_bytes = 0;
+        std::vector<json_t> parsed_vals(keys.size());
+        for (size_t key_idx = 0; key_idx != keys.size(); ++key_idx) {
+            ukv_tape_ptr_t begin = values_begin + exported_bytes;
+            ukv_val_len_t len = values_lens[key_idx];
+            json_t& val = parsed_vals[key_idx];
+            if (!len)
+                continue;
+
+            val = json_t::from_msgpack(begin, begin + len, true, false);
+
+            exported_bytes += len;
+        }
+
+        response_dict = {"objs", parsed_vals};
+        break;
     }
 
         //
@@ -547,6 +593,30 @@ void respond_to_aos(db_t& db,
         return send_response(make_error(req, http::status::bad_request, "Unsupported HTTP verb"));
     }
     }
+
+    // Export the response dictionary into the desired format
+    std::string response_str;
+    if (payload_type != mime_json_k)
+        response_str = response_dict.dump();
+    else if (payload_type != mime_msgpack_k)
+        json_t::to_msgpack(response_dict, response_str);
+    else if (payload_type != mime_bson_k)
+        json_t::to_bson(response_dict, response_str);
+    else if (payload_type != mime_cbor_k)
+        json_t::to_cbor(response_dict, response_str);
+    else if (payload_type != mime_ubjson_k)
+        json_t::to_ubjson(response_dict, response_str);
+
+    http::response<http::string_body> res {
+        std::piecewise_construct,
+        std::make_tuple(std::move(response_str)),
+        std::make_tuple(http::status::ok, req.version()),
+    };
+    res.set(http::field::server, server_name_k);
+    res.set(http::field::content_type, payload_type);
+    res.content_length(response_str.size());
+    res.keep_alive(req.keep_alive());
+    return send_response(std::move(res));
 }
 
 /**
