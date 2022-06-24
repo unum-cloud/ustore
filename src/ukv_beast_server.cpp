@@ -5,7 +5,7 @@
  *
  * @brief A web server implementint @b REST backend on top of any other
  * UKV implementation using pre-release draft of C++23 Networking TS,
- * through the means of @b Boost.Beast and @b Boost.ASIO.
+ * through the means of @b Boost.Beast, @b Boost.ASIO and @b nlohmann.JSON.
  *
  * @section Supported Endpoints
  *
@@ -33,34 +33,115 @@
  * > DELETE /txn/id:    Drops the transaction and it's contents.
  * > POST /txn/id:      Commits and drops the transaction.
  *
- *  @section Upcoming Endpoints
+ * @section Object Structure
  *
- * Working with @b batched data in AOS:
- * > PUT /aos/:     Receives: [obj]
- *                  Returns: {error?: str}
- * > GET /aos/:     Receives: {keys: [int], fields?: [str]}
- *                  Returns: {objs?: [obj], error?: str}
- * > DELETE /aos/:  Receives: {keys: [int], fields?: [str]}
- *                  Returns: {error?: str}
- * > HEAD /aos/:    Receives: {keys: [int], fields?: [str]}
- *                  Returns: {len?: int, error?: str}
+ * Every Key-Value pair can be encapsulated in a dictionary-like
+ * or @b JSON-object-like structure. In it's most degenerate form it can be:
+ *      {
+ *          "_id": 42,      // Like with MongoDB, stores the identifier
+ *          "_col": null,   // Stores NULL, or the string for named collections
+ *          "_bin": "a6cd"  // Base64-encoded binary content of the value
+ *      }
+ *
+ * When working with JSON exports, we can't properly represent binary values.
+ * To be more efficient, we allow @b BSON, @b MsgPack, @b CBOR and other formats
+ * for content exchange. Furthermore, a document may not have `_bin`, in which case
+ * the entire body of the document (aside from `_id` and `_bin`) will be exported:
+ *      {
+ *          "_id": 42,                 ->       example/42:
+ *          "_col": "example",         ->           { "name": "isaac",
+ *          "name": "isaac",           ->             "lastname": "newton" }
+ *          "lastname": "newton"
+ *      }
+ *
+ * The final pruned object will be converted into MsgPack and serialized into the DB
+ * as a binary value. On each export, the decoding will be done again for @b MIMEs:
+ * > application/json:      https://datatracker.ietf.org/doc/html/rfc4627
+ * > application/msgpack:   https://datatracker.ietf.org/doc/html/rfc6838
+ * > application/cbor:      https://datatracker.ietf.org/doc/html/rfc7049
+ * > application/bson:      https://bsonspec.org/
+ * > application/ubjson
+ * > application/bjdata
+ * All of that is supported through the infamous "nlohmann/json" library with
+ * native support for round-trip conversions between mentioned formats.
+ *
+ * @section Accessing Object Fields
+ *
+ * We support the JSON Pointer (RFC 6901) to access nested document fields via
+ * a simple string path. On batched requests we support the optional "fields"
+ * argument, which is a list of strings like: ["/name", "/mother/name"].
+ * This allows users to only sample the parts of data they are need, without
+ * overloading the network with useless transfers.
+ *
+ * Furthermore, we support JSON Patches (RFC 6902), for inplace modificiations.
+ * So instead of using a custom proprietary protocol and query language, like in
+ * MongoDB, one can perform standardized queries.
+ *
+ * @section Batched Operations
+ *
+ * Working with @b batched data in @b AOS:
+ * > PUT /aos/:
+ *      Receives: [obj]
+ *      Returns: {error?: str}
+ * > PATCH /aos/:
+ *      Receives: {cols?: [str], keys: [int], patch: obj}
+ *      Returns: {error?: str}
+ * > GET /aos/:
+ *      Receives: {cols?: [str], keys: [int], fields?: [str]}
+ *      Returns: {objs?: [obj], error?: str}
+ * > DELETE /aos/:
+ *      Receives: {cols?: [str], keys: [int], fields?: [str]}
+ *      Returns: {error?: str}
+ * > HEAD /aos/:
+ *      Receives: {cols?: [str], keys: [int], fields?: [str]}
+ *      Returns: {len?: int, error?: str}
  * The supported query parameters define how to parse the payload:
- * > colocated:     Means we should put all into one specific collection, regardless of internal `_col` key.
- * > txn:           Means we should do the operation from within a specified transaction context.
+ * > col: Means we should put all into one collection, disregarding the `_col` fields.
+ * > txn: Means we should do the operation from within a specified transaction context.
  *
- * Working with @b batched data in tape-like SOA:
- * > PUT /soa/:     Receives: {cols?: [str], keys: [int], txn?: int, lens: [int], tape: str}
- *                  Returns: {error?: str}
- * > GET /soa/:     Receives: {cols?: [str], keys: [int], fields?: [str], txn?: int}
- *                  Returns: {lens?: [int], tape?: str, error?: str}
- * > DELETE /soa/:  Receives: {cols?: [str], keys: [int], fields?: [str], txn?: int}
- *                  Returns: {error?: str}
- * > HEAD /soa/:    Receives: {col?: str, key: int, fields?: [str], txn?: int}
- *                  Returns: {len?: int, error?: str}
+ * @section Supported HTTP Headers
+ * Most of the HTTP headers aren't supported by this web server, as it implements
+ * a very specific set of CRUD operations. However, the following headers are at
+ * least partially implemented:
  *
- * Working with @b batched data in Apache Arrow format:
- * > GET /arrow/:   Receives: {cols?: [str], keys: [int], fields: [str], txn?: int}
- *                  Returns: Apache Arrow buffers
+ * > Cache-Control: no-store
+ *      Means, that we should avoid caching the value in the DB on any request.
+ *      https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
+ * > If-Match: hash
+ *      Performs conditional checks on the existing value before overwriting it.
+ *      Those can be implemented by using Boosts CRC32 hash implementations for
+ *      portability.
+ *      https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Match
+ * > If-Unmodified-Since: <day-name>, <day> <month> <year> <hour>:<minute>:<second> GMT
+ *      Performs conditional checks on operations, similar to transactions,
+ *      but of preventive nature and on the scope of a single request.
+ *      https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Unmodified-Since
+ * > Transfer-Encoding: gzip|deflate
+ *      Describes, how the payload is compressed. Is different from `Content-Encoding`,
+ *      which controls the entire session.
+ *      https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Transfer-Encoding
+ *
+ * @section Upcoming Endpoints
+ *
+ * Working with @b batched data in tape-like @b SOA:
+ * > PUT /soa/:
+ *      Receives: {cols?: [str], keys: [int], txn?: int, lens: [int], tape: str}
+ *      Returns: {error?: str}
+ * > GET /soa/:
+ *      Receives: {cols?: [str], keys: [int], fields?: [str], txn?: int}
+ *      Returns: {lens?: [int], tape?: str, error?: str}
+ * > DELETE /soa/:
+ *      Receives: {cols?: [str], keys: [int], fields?: [str], txn?: int}
+ *      Returns: {error?: str}
+ * > HEAD /soa/:
+ *      Receives: {col?: str, key: int, fields?: [str], txn?: int}
+ *      Returns: {len?: int, error?: str}
+ *
+ * Working with @b batched data in @b Apache.Arrow format:
+ * > GET /arrow/:
+ *      Receives: {cols?: [str], keys: [int], fields: [str], txn?: int}
+ *      Returns: Apache Arrow buffers
+ * The result object will have the "application/vnd.apache.arrow.stream" @b MIME.
  */
 
 #include <algorithm>
@@ -94,6 +175,7 @@
 #include <boost/config.hpp>
 
 #include <fmt/core.h>
+#include <nlohmann/json.hpp>
 
 #if defined(__clang__)
 #pragma clang diagnostic pop
@@ -108,9 +190,16 @@ namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>
 namespace net = boost::asio;      // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
+using json_t = nlohmann::json;    // from <nlohmann/json.h>
 
 static constexpr char const* server_name_k = "unum-cloud/ukv/beast_server";
-static constexpr char const* binary_mime_k = "application/octet-stream";
+static constexpr char const* mime_binary_k = "application/octet-stream";
+static constexpr char const* mime_json_k = "application/json";
+static constexpr char const* mime_msgpack_k = "application/msgpack";
+static constexpr char const* mime_cbor_k = "application/cbor";
+static constexpr char const* mime_bson_k = "application/bson";
+static constexpr char const* mime_ubjson_k = "application/ubjson";
+static constexpr char const* mime_bjdata_k = "application/bjdata";
 
 struct db_t : public std::enable_shared_from_this<db_t> {
 
@@ -190,176 +279,294 @@ std::optional<beast::string_view> param_value(beast::string_view query_params, b
     return beast::string_view {value_begin, static_cast<size_t>(value_end - value_begin)};
 }
 
-/**
- * @brief Primary dispatch point, rounting incoming HTTP requests
- *        into underlying UKV calls, preparing results and sending back.
- */
 template <typename body_at, typename allocator_at, typename send_response_at>
-void handle_request(db_t& db,
+void respond_to_one(db_t& db,
                     http::request<body_at, http::basic_fields<allocator_at>>&& req,
                     send_response_at&& send_response) {
 
     http::verb received_verb = req.method();
     beast::string_view received_path = req.target();
-    fmt::print("Received path:{}\n", std::string(received_path));
 
-    // Modifying single entries:
-    if (received_path.starts_with("/one/")) {
+    raii_txn_t txn(db.raw);
+    raii_collection_t collection(db.raw);
+    ukv_key_t key = 0;
+    ukv_options_read_t options = NULL;
 
-        raii_txn_t txn;
-        raii_collection_t collection;
-        ukv_key_t key = 0;
-        ukv_options_read_t options = NULL;
+    // Parse the `key`
+    auto key_begin = received_path.substr(5).begin();
+    auto key_end = std::find(key_begin, received_path.end(), '?');
+    auto key_parse_result = std::from_chars(key_begin, key_end, key);
+    if (key_parse_result.ec != std::errc())
+        return send_response(make_error(req, http::status::bad_request, "Couldn't parse the integer key"));
 
-        // Parse the `key`
-        auto key_begin = received_path.substr(5).begin();
-        auto key_end = std::find(key_begin, received_path.end(), '?');
-        auto key_parse_result = std::from_chars(key_begin, key_end, key);
-        if (key_parse_result.ec != std::errc())
-            return send_response(make_error(req, http::status::bad_request, "Couldn't parse the integer key"));
+    // Parse the following free-order parameters, starting with transaction identifier.
+    auto params_str = beast::string_view {key_end, static_cast<size_t>(received_path.end() - key_end)};
+    if (auto txn_val = param_value(params_str, "txn="); txn_val) {
+        auto txn_id = size_t {0};
+        auto txn_parse_result = std::from_chars(txn_val->data(), txn_val->data() + txn_val->size(), txn_id);
+        if (txn_parse_result.ec != std::errc())
+            return send_response(make_error(req, http::status::bad_request, "Couldn't parse the transaction id"));
+    }
 
-        // Parse the following free-order parameters, starting with transaction identifier.
-        auto params_str = beast::string_view {key_end, static_cast<size_t>(received_path.end() - key_end)};
-        if (auto txn_val = param_value(params_str, "txn="); txn_val) {
-            auto txn_id = size_t {0};
-            auto txn_parse_result = std::from_chars(txn_val->data(), txn_val->data() + txn_val->size(), txn_id);
-            if (txn_parse_result.ec != std::errc())
-                return send_response(make_error(req, http::status::bad_request, "Couldn't parse the transaction id"));
+    // Parse the collection name string.
+    if (auto col_val = param_value(params_str, "col="); col_val) {
+        char col_name_buffer[65] = {0};
+        std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
+
+        raii_error_t error;
+        ukv_collection_upsert(db.raw, col_name_buffer, &collection.raw, &error.raw);
+        if (error.raw)
+            return send_response(make_error(req, http::status::internal_server_error, error.raw));
+    }
+
+    // Once we know, which collection, key and transation user is
+    // interested in - perform the actions depending on verbs.
+    switch (received_verb) {
+
+        // Read the data:
+    case http::verb::get: {
+
+        raii_tape_t tape(db.raw);
+        raii_error_t error;
+        ukv_read(db.raw, txn.raw, &key, 1, &collection.raw, options, &tape.ptr, &tape.capacity, &error.raw);
+        if (error.raw)
+            return send_response(make_error(req, http::status::internal_server_error, error.raw));
+
+        ukv_tape_ptr_t begin = tape.ptr + sizeof(ukv_val_len_t);
+        ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
+        if (!len)
+            return send_response(make_error(req, http::status::not_found, "Missing key"));
+
+        http::buffer_body::value_type body;
+        body.data = begin;
+        body.size = len;
+        body.more = false;
+
+        http::response<http::buffer_body> res {
+            std::piecewise_construct,
+            std::make_tuple(std::move(body)),
+            std::make_tuple(http::status::ok, req.version()),
+        };
+        res.set(http::field::server, server_name_k);
+        res.set(http::field::content_type, mime_binary_k);
+        res.content_length(len);
+        res.keep_alive(req.keep_alive());
+        return send_response(std::move(res));
+    }
+
+        // Check the data:
+    case http::verb::head: {
+
+        raii_tape_t tape(db.raw);
+        raii_error_t error;
+        ukv_option_read_lengths(&options, true);
+        ukv_read(db.raw, txn.raw, &key, 1, &collection.raw, options, &tape.ptr, &tape.capacity, &error.raw);
+        if (error.raw)
+            return send_response(make_error(req, http::status::internal_server_error, error.raw));
+
+        ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
+        if (!len)
+            return send_response(make_error(req, http::status::not_found, "Missing key"));
+
+        http::response<http::empty_body> res;
+        res.set(http::field::server, server_name_k);
+        res.set(http::field::content_type, mime_binary_k);
+        res.content_length(len);
+        res.keep_alive(req.keep_alive());
+        return send_response(std::move(res));
+    }
+
+    // Insert data if it's missing:
+    case http::verb::post: {
+        raii_tape_t tape(db.raw);
+        raii_error_t error;
+        ukv_option_read_lengths(&options, true);
+        ukv_read(db.raw, txn.raw, &key, 1, &collection.raw, options, &tape.ptr, &tape.capacity, &error.raw);
+        if (error.raw)
+            return send_response(make_error(req, http::status::internal_server_error, error.raw));
+
+        ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
+        if (len)
+            return send_response(make_error(req, http::status::conflict, "Duplicate key"));
+
+        [[fallthrough]];
+    }
+
+        // Upsert data:
+    case http::verb::put: {
+
+        auto opt_payload_len = req.payload_size();
+        if (!opt_payload_len)
+            return send_response(
+                make_error(req, http::status::length_required, "Chunk Transfer Encoding isn't supported"));
+
+        // Should we explicitly check the type of the input here?
+        auto payload_type = req[http::field::content_type];
+        if (payload_type != mime_binary_k)
+            return send_response(
+                make_error(req, http::status::unsupported_media_type, "Only binary payload is allowed"));
+
+        raii_error_t error;
+        auto value = req.body();
+        auto value_ptr = reinterpret_cast<ukv_tape_ptr_t>(value.data());
+        auto value_len = static_cast<ukv_val_len_t>(*opt_payload_len);
+        ukv_write(db.raw, txn.raw, &key, 1, &collection.raw, options, value_ptr, &value_len, &error.raw);
+        if (error.raw)
+            return send_response(make_error(req, http::status::internal_server_error, error.raw));
+
+        http::response<http::empty_body> res;
+        res.set(http::field::server, server_name_k);
+        res.set(http::field::content_type, mime_binary_k);
+        res.keep_alive(req.keep_alive());
+        return send_response(std::move(res));
+    }
+
+        // Upsert data:
+    case http::verb::delete_: {
+
+        raii_error_t error;
+        ukv_val_len_t value_len = 0;
+        ukv_write(db.raw, txn.raw, &key, 1, &collection.raw, options, NULL, &value_len, &error.raw);
+        if (error.raw)
+            return send_response(make_error(req, http::status::internal_server_error, error.raw));
+
+        http::response<http::empty_body> res;
+        res.set(http::field::server, server_name_k);
+        res.set(http::field::content_type, mime_binary_k);
+        res.keep_alive(req.keep_alive());
+        return send_response(std::move(res));
+    }
+
+    //
+    default: {
+        return send_response(make_error(req, http::status::bad_request, "Unsupported HTTP verb"));
+    }
+    }
+}
+
+template <typename body_at, typename allocator_at, typename send_response_at>
+void respond_to_aos(db_t& db,
+                    http::request<body_at, http::basic_fields<allocator_at>>&& req,
+                    send_response_at&& send_response) {
+
+    http::verb received_verb = req.method();
+    beast::string_view received_path = req.target();
+
+    raii_txn_t txn(db.raw);
+    ukv_options_read_t options = NULL;
+    std::vector<raii_collection_t> collections;
+    std::vector<ukv_key_t> keys;
+
+    // Parse the free-order parameters, starting with transaction identifier.
+    auto params_begin = std::find(received_path.begin(), received_path.end(), '?');
+    auto params_str = beast::string_view {params_begin, static_cast<size_t>(received_path.end() - params_begin)};
+    if (auto txn_val = param_value(params_str, "txn="); txn_val) {
+        auto txn_id = size_t {0};
+        auto txn_parse_result = std::from_chars(txn_val->data(), txn_val->data() + txn_val->size(), txn_id);
+        if (txn_parse_result.ec != std::errc())
+            return send_response(make_error(req, http::status::bad_request, "Couldn't parse the transaction id"));
+    }
+
+    // Parse the collection name string.
+    if (auto col_val = param_value(params_str, "col="); col_val) {
+        char col_name_buffer[65] = {0};
+        std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
+
+        raii_error_t error;
+        raii_collection_t collection(db.raw);
+        ukv_collection_upsert(db.raw, col_name_buffer, &collection.raw, &error.raw);
+        if (error.raw)
+            return send_response(make_error(req, http::status::internal_server_error, error.raw));
+
+        collections.emplace_back(collection);
+        ukv_option_read_colocated(&options, true);
+    }
+
+    // Make sure we support the requested content type
+    auto payload_type = req[http::field::content_type];
+    if (payload_type != mime_json_k && payload_type != mime_msgpack_k && payload_type != mime_cbor_k &&
+        payload_type != mime_bson_k && payload_type != mime_ubjson_k && payload_type != mime_bjdata_k)
+        return send_response(make_error(req,
+                                        http::status::unsupported_media_type,
+                                        "We only support json, msgpack, cbor, bson, ubjson and bjdata MIME types"));
+
+    // Make sure the payload is present, as it handles the heavy part of the query
+    auto opt_payload_len = req.payload_size();
+    if (!opt_payload_len)
+        return send_response(make_error(req, http::status::length_required, "Chunk Transfer Encoding isn't supported"));
+
+    // Parse the payload, that will contain auxiliary data
+    auto payload = req.body();
+    auto payload_ptr = reinterpret_cast<char const*>(payload.data());
+    auto payload_len = static_cast<size_t>(*opt_payload_len);
+    auto payload_dict = json_t {};
+    auto response_dict = json_t {};
+
+    if (payload_type != mime_json_k)
+        payload_dict = json_t::parse(payload_ptr, payload_ptr + payload_len, nullptr, true, false);
+    else if (payload_type != mime_msgpack_k)
+        payload_dict = json_t::from_msgpack(payload_ptr, payload_ptr + payload_len, true, false);
+    else if (payload_type != mime_bson_k)
+        payload_dict = json_t::from_bson(payload_ptr, payload_ptr + payload_len, true, false);
+    else if (payload_type != mime_cbor_k)
+        payload_dict = json_t::from_cbor(payload_ptr, payload_ptr + payload_len, true, false);
+    else if (payload_type != mime_ubjson_k)
+        payload_dict = json_t::from_ubjson(payload_ptr, payload_ptr + payload_len, true, false);
+    // else if (payload_type != mime_bjdata_k)
+    //     payload_dict = json_t::from_bjdata(payload_ptr, payload_ptr + payload_len, true, false);
+
+    if (payload_dict.is_discarded())
+        return send_response(make_error(req, http::status::bad_request, "Couldn't parse the payload"));
+
+    // Once we know, which collection, key and transation user is
+    // interested in - perform the actions depending on verbs.
+    switch (received_verb) {
+
+        // Read the data:
+    case http::verb::get: {
+
+        // Validate and deserialize the requested keys
+        auto keys_it = payload_dict.find("keys");
+        if (keys_it != payload_dict.end() || !keys_it->is_array() || keys_it->empty())
+            return send_response(make_error(req,
+                                            http::status::bad_request,
+                                            "GET request must provide a non-empty list of integer keys"));
+
+        for (auto const& key_json : *keys_it) {
+            if (!key_json.is_number_unsigned())
+                return send_response(make_error(req,
+                                                http::status::bad_request,
+                                                "GET request must provide a non-empty list of integer keys"));
+            keys.push_back(key_json.template get<ukv_key_t>());
         }
-
-        // Parse the collection name string.
-        if (auto col_val = param_value(params_str, "col="); col_val) {
-            char col_name_buffer[65] = {0};
-            std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
-
-            raii_error_t error;
-            ukv_collection_upsert(db.raw, col_name_buffer, &collection, &error.raw);
-            if (error.raw)
-                return send_response(make_error(req, http::status::internal_server_error, error.raw));
-        }
-
-        // Once we know, which collection, key and transation user is
-        // interested in - perform the actions depending on verbs.
-        switch (received_verb) {
-
-            // Read the data:
-        case http::verb::get: {
-
-            raii_tape_t tape(db.raw);
-            raii_error_t error;
-            ukv_read(db.raw, txn, &key, 1, &collection, options, &tape.ptr, &tape.capacity, &error.raw);
-            if (error.raw)
-                return send_response(make_error(req, http::status::internal_server_error, error.raw));
-
-            ukv_tape_ptr_t begin = tape.ptr + sizeof(ukv_val_len_t);
-            ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
-            if (!len)
-                return send_response(make_error(req, http::status::not_found, "Missing key"));
-
-            http::buffer_body::value_type body;
-            body.data = begin;
-            body.size = len;
-            body.more = false;
-
-            http::response<http::buffer_body> res {
-                std::piecewise_construct,
-                std::make_tuple(std::move(body)),
-                std::make_tuple(http::status::ok, req.version()),
-            };
-            res.set(http::field::server, server_name_k);
-            res.set(http::field::content_type, binary_mime_k);
-            res.content_length(len);
-            res.keep_alive(req.keep_alive());
-            return send_response(std::move(res));
-        }
-
-            // Check the data:
-        case http::verb::head: {
-
-            raii_tape_t tape(db.raw);
-            raii_error_t error;
-            ukv_option_read_lengths(&options, true);
-            ukv_read(db.raw, txn, &key, 1, &collection, options, &tape.ptr, &tape.capacity, &error.raw);
-            if (error.raw)
-                return send_response(make_error(req, http::status::internal_server_error, error.raw));
-
-            ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
-            if (!len)
-                return send_response(make_error(req, http::status::not_found, "Missing key"));
-
-            http::response<http::empty_body> res;
-            res.set(http::field::server, server_name_k);
-            res.set(http::field::content_type, binary_mime_k);
-            res.content_length(len);
-            res.keep_alive(req.keep_alive());
-            return send_response(std::move(res));
-        }
-
-        // Insert data if it's missing:
-        case http::verb::post: {
-            raii_tape_t tape(db.raw);
-            raii_error_t error;
-            ukv_option_read_lengths(&options, true);
-            ukv_read(db.raw, txn, &key, 1, &collection, options, &tape.ptr, &tape.capacity, &error.raw);
-            if (error.raw)
-                return send_response(make_error(req, http::status::internal_server_error, error.raw));
-
-            if (len)
-                return send_response(make_error(req, http::status::conflict, "Duplicate key"));
-
-            [[fallthrough]];
-        }
-
-            // Upsert data:
-        case http::verb::put: {
-
-            auto payload_len = req.payload_size();
-            if (!payload_len)
-                return send_response(
-                    make_error(req, http::status::length_required, "Chunk Transfer Encoding isn't supported"));
-
-            // Should we explicitly check the type of the input here?
-            // auto data_type = req.get(http::field::content_type);
-            // if (data_type != binary_mime_k)
-            //     return send_response(
-            //         make_error(req, http::status::unsupported_media_type, "Only binary payload is allowed"));
-
-            raii_error_t error;
-            auto value_ptr = reinterpret_cast<ukv_tape_ptr_t>(req.body().data());
-            auto value_len = static_cast<ukv_val_len_t>(*payload_len);
-            ukv_write(db.raw, txn, &key, 1, &collection, options, value_ptr, &value_len, &error.raw);
-            if (error.raw)
-                return send_response(make_error(req, http::status::internal_server_error, error.raw));
-
-            http::response<http::empty_body> res;
-            res.set(http::field::server, server_name_k);
-            res.set(http::field::content_type, binary_mime_k);
-            res.keep_alive(req.keep_alive());
-            return send_response(std::move(res));
-        }
-
-            // Upsert data:
-        case http::verb::delete_: {
-
-            raii_error_t error;
-            ukv_val_len_t value_len = 0;
-            ukv_write(db.raw, txn, &key, 1, &collection, options, NULL, &value_len, &error.raw);
-            if (error.raw)
-                return send_response(make_error(req, http::status::internal_server_error, error.raw));
-
-            http::response<http::empty_body> res;
-            res.set(http::field::server, server_name_k);
-            res.set(http::field::content_type, binary_mime_k);
-            res.keep_alive(req.keep_alive());
-            return send_response(std::move(res));
-        }
+        return;
+    }
 
         //
-        default: {
-            return send_response(make_error(req, http::status::bad_request, "Unsupported HTTP verb"));
-        }
-        }
+    default: {
+        return send_response(make_error(req, http::status::bad_request, "Unsupported HTTP verb"));
     }
+    }
+}
+
+/**
+ * @brief Primary dispatch point, rounting incoming HTTP requests
+ *        into underlying UKV calls, preparing results and sending back.
+ */
+template <typename body_at, typename allocator_at, typename send_response_at>
+void route_request(db_t& db,
+                   http::request<body_at, http::basic_fields<allocator_at>>&& req,
+                   send_response_at&& send_response) {
+
+    http::verb received_verb = req.method();
+    beast::string_view received_path = req.target();
+    fmt::print("Received path: {} {}\n",
+               std::string(beast::http::to_string(received_verb)),
+               std::string(received_path));
+
+    // Modifying single entries:
+    if (received_path.starts_with("/one/"))
+        return respond_to_one(db, std::move(req), send_response);
 
     // Modifying collections:
     else if (received_path.starts_with("/col/")) {
@@ -370,23 +577,22 @@ void handle_request(db_t& db,
     }
 
     // Supporting transactions:
-    else if (received_path.starts_with("/txn/")) {
-    }
+    else if (received_path.starts_with("/txn/"))
+        return send_response(make_error(req, http::status::bad_request, "Transactions aren't implemented yet"));
+
+    // Array-of-Structures:
+    else if (received_path.starts_with("/aos/"))
+        return respond_to_aos(db, std::move(req), send_response);
 
     // Structure-of-Arrays:
     else if (received_path.starts_with("/soa/"))
         return send_response(make_error(req, http::status::bad_request, "Batch API aren't implemented yet"));
 
     // Array-of-Structures:
-    else if (received_path.starts_with("/aos/"))
-        return send_response(make_error(req, http::status::bad_request, "Batch API aren't implemented yet"));
-
-    // Array-of-Structures:
     else if (received_path.starts_with("/arrow/"))
         return send_response(make_error(req, http::status::bad_request, "Batch API aren't implemented yet"));
 
-    else
-        return send_response(make_error(req, http::status::bad_request, "Unknown request"));
+    return send_response(make_error(req, http::status::bad_request, "Unknown request"));
 }
 
 /**
@@ -464,7 +670,7 @@ class session_t : public std::enable_shared_from_this<session_t> {
             return log_failure(ec, "read");
 
         // send_at the response
-        handle_request(*db_, std::move(req_), send_request_);
+        route_request(*db_, std::move(req_), send_request_);
     }
 
     void on_write(bool close, beast::error_code ec, std::size_t bytes_transferred) {
