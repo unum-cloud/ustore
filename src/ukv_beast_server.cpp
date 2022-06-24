@@ -10,13 +10,17 @@
  * @section Supported Endpoints
  *
  * Modifying single entries:
- * > POST /one/id?col=str&txn=int&field=str:    Upserts data.
+ * > PUT /one/id?col=str&txn=int&field=str:     Upserts data.
+ * > POST /one/id?col=str&txn=int&field=str:    Inserts data.
  * > GET /one/id?col=str&txn=int&field=str:     Retrieves data.
  * > HEAD /one/id?col=str&txn=int&field=str:    Retrieves data length.
  * > DELETE /one/id?col=str&txn=int&field=str:  Deletes data.
+ * This API drastically differs from batch APIs, as we can always provide
+ * just a single collection name and a single key. In batch APIs we can't
+ * properly pass that inside the query URI.
  *
  * Modifying collections:
- * > POST /col/name:    Upserts a collection.
+ * > PUT /col/name:     Upserts a collection.
  * > DELETE /col/name:  Drops the entire collection.
  * > DELETE /col:       Clears the main collection.
  *
@@ -31,24 +35,27 @@
  *
  *  @section Upcoming Endpoints
  *
+ * Working with @b batched data in AOS:
+ * > PUT /aos/:     Receives: [obj]
+ *                  Returns: {error?: str}
+ * > GET /aos/:     Receives: {keys: [int], fields?: [str]}
+ *                  Returns: {objs?: [obj], error?: str}
+ * > DELETE /aos/:  Receives: {keys: [int], fields?: [str]}
+ *                  Returns: {error?: str}
+ * > HEAD /aos/:    Receives: {keys: [int], fields?: [str]}
+ *                  Returns: {len?: int, error?: str}
+ * The supported query parameters define how to parse the payload:
+ * > colocated:     Means we should put all into one specific collection, regardless of internal `_col` key.
+ * > txn:           Means we should do the operation from within a specified transaction context.
+ *
  * Working with @b batched data in tape-like SOA:
- * > POST /soa/:    Receives: {cols?: [str], keys: [int], txn?: int, lens: [int], tape: str}
+ * > PUT /soa/:     Receives: {cols?: [str], keys: [int], txn?: int, lens: [int], tape: str}
  *                  Returns: {error?: str}
  * > GET /soa/:     Receives: {cols?: [str], keys: [int], fields?: [str], txn?: int}
  *                  Returns: {lens?: [int], tape?: str, error?: str}
  * > DELETE /soa/:  Receives: {cols?: [str], keys: [int], fields?: [str], txn?: int}
  *                  Returns: {error?: str}
  * > HEAD /soa/:    Receives: {col?: str, key: int, fields?: [str], txn?: int}
- *                  Returns: {len?: int, error?: str}
- *
- * Working with @b batched data in AOS:
- * > POST /aos/:    Receives: {colocated?: str, objs: [obj], txn?: int}
- *                  Returns: {error?: str}
- * > GET /aos/:     Receives: {colocated?: str, keys: [int], fields?: [str], txn?: int}
- *                  Returns: {objs?: [obj], error?: str}
- * > DELETE /aos/:  Receives: {colocated?: str, keys: [int], fields?: [str], txn?: int}
- *                  Returns: {error?: str}
- * > HEAD /aos/:    Receives: {colocated?: str, keys: [int], fields?: [str], txn?: int}
  *                  Returns: {len?: int, error?: str}
  *
  * Working with @b batched data in Apache Arrow format:
@@ -64,7 +71,6 @@
 #include <thread>
 #include <vector>
 #include <string>
-#include <string_view>
 #include <charconv>
 
 // Boost files are quite noisy in terms of warnings,
@@ -129,6 +135,22 @@ struct raii_error_t {
     ~raii_error_t() noexcept { ukv_error_free(raw); }
 };
 
+struct raii_txn_t {
+    ukv_t db = NULL;
+    ukv_txn_t raw = NULL;
+
+    raii_txn_t(ukv_t db_ptr) noexcept : db(db_ptr) {}
+    ~raii_txn_t() noexcept { ukv_txn_free(db, raw); }
+};
+
+struct raii_collection_t {
+    ukv_t db = NULL;
+    ukv_collection_t raw = NULL;
+
+    raii_collection_t(ukv_t db_ptr) noexcept : db(db_ptr) {}
+    ~raii_collection_t() noexcept { ukv_collection_free(db, raw); }
+};
+
 void log_failure(beast::error_code ec, char const* what) {
     std::cerr << what << ": " << ec.message() << "\n";
 }
@@ -149,7 +171,7 @@ http::response<http::string_body> make_error(http::request<body_at, http::basic_
 
 /**
  * @brief Searches for a "value" among key-value pairs passed in URI after path.
- * @param query_params  Must begin with "?".
+ * @param query_params  Must begin with "?" or "/".
  * @param param_name    Must end with "=".
  */
 std::optional<beast::string_view> param_value(beast::string_view query_params, beast::string_view param_name) {
@@ -159,7 +181,7 @@ std::optional<beast::string_view> param_value(beast::string_view query_params, b
         return std::nullopt;
 
     char preceding_char = *(key_begin - 1);
-    bool isnt_part_of_bigger_key = (preceding_char != '?') & (preceding_char != '&');
+    bool isnt_part_of_bigger_key = (preceding_char != '?') & (preceding_char != '&') & (preceding_char != '/');
     if (!isnt_part_of_bigger_key)
         return std::nullopt;
 
@@ -184,9 +206,9 @@ void handle_request(db_t& db,
     // Modifying single entries:
     if (received_path.starts_with("/one/")) {
 
+        raii_txn_t txn;
+        raii_collection_t collection;
         ukv_key_t key = 0;
-        ukv_txn_t txn = NULL;
-        ukv_collection_t collection = NULL;
         ukv_options_read_t options = NULL;
 
         // Parse the `key`
@@ -273,13 +295,34 @@ void handle_request(db_t& db,
             return send_response(std::move(res));
         }
 
-            // Upsert data:
+        // Insert data if it's missing:
         case http::verb::post: {
+            raii_tape_t tape(db.raw);
+            raii_error_t error;
+            ukv_option_read_lengths(&options, true);
+            ukv_read(db.raw, txn, &key, 1, &collection, options, &tape.ptr, &tape.capacity, &error.raw);
+            if (error.raw)
+                return send_response(make_error(req, http::status::internal_server_error, error.raw));
+
+            if (len)
+                return send_response(make_error(req, http::status::conflict, "Duplicate key"));
+
+            [[fallthrough]];
+        }
+
+            // Upsert data:
+        case http::verb::put: {
 
             auto payload_len = req.payload_size();
             if (!payload_len)
                 return send_response(
                     make_error(req, http::status::length_required, "Chunk Transfer Encoding isn't supported"));
+
+            // Should we explicitly check the type of the input here?
+            // auto data_type = req.get(http::field::content_type);
+            // if (data_type != binary_mime_k)
+            //     return send_response(
+            //         make_error(req, http::status::unsupported_media_type, "Only binary payload is allowed"));
 
             raii_error_t error;
             auto value_ptr = reinterpret_cast<ukv_tape_ptr_t>(req.body().data());
@@ -312,7 +355,9 @@ void handle_request(db_t& db,
         }
 
         //
-        default: return send_response(make_error(req, http::status::bad_request, "Unsupported HTTP verb"));
+        default: {
+            return send_response(make_error(req, http::status::bad_request, "Unsupported HTTP verb"));
+        }
         }
     }
 
