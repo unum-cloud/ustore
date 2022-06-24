@@ -5,13 +5,13 @@
  * @brief C bindings for Unums Key-Value store, that provide:
  * > ABI stability for the essential CRUD operations,
  * > Interoperability with higher-level languages.
- * Assumptions and limitations:
- * > Keys are preset to 8-byte unsigned integers.
- * > Zero-length values are not allowed.
- * > Iterators often can't be fully consistent, to allow concurrency.
  *
- * @todo Manual state control over compactions.
- * @todo Bulk imports.
+ * @section Assumptions and Limitations (in current version):
+ * > Keys are preset to 8-byte unsigned integers.
+ * > Zero-length values are not allowed, same for values over 4GB.
+ * > Fully @b synchronous for the simplicity of interface.
+ * > Iterators often can't be fully consistent, to allow concurrency.
+ * > Maximum collection name length is set to 64 characters. Postgres does 59 :)
  *
  * @section Why prefer batch APIs?
  * Using the batch APIs to issue a single read/write request

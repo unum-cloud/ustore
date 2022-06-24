@@ -106,19 +106,20 @@ Batch lookup operations are imlemented via channels sending slices, to avoid rea
 ### RESTful API & Clients
 
 We implement a REST server using `Boost.Beast` and the underlying `Boost.Asio`, as the go-to Web-Dev libraries in C++.
-We also provide a [`OneAPI` specification](/openapi.yml), that is used as both a documentation point and an automatic client-library generator.
+We also provide a [`OneAPI` specification](/openapi.yaml), that is used as both a documentation point and an automatic client-library generator.
+The entire list of generators is [available here](https://openapi-generator.tech/docs/generators/);
 
 ```sh
 npm install @openapitools/openapi-generator-cli -g
-npx openapi-generator-cli generate -i openapi.yml -g ruby -o /tmp/
+npx openapi-generator-cli generate -i openapi.yaml -g html2 -o /tmp/
 ```
 
 Or via Docker:
 
 ```sh
 docker run --rm -v "${PWD}:/local" openapitools/openapi-generator-cli generate \
-    -i "/local/openapi.yml" \
-    -g ruby \
+    -i "/local/openapi.yaml" \
+    -g html2 \
     -o "/local/tmp/"
 ```
 
@@ -132,3 +133,4 @@ docker run --rm -v "${PWD}:/local" openapitools/openapi-generator-cli generate \
 * [ ] Wolfram Language Bindings
 * [ ] Read/Write Apache Arrow Tables via C API
 * [ ] Java Apache Arrow support
+* [ ] Fill the [OpenAPI specification](openapi.yaml)
