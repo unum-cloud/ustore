@@ -50,3 +50,4 @@ __pycache__
 _deps/
 *.cmake
 protos/
+openapitools.json
