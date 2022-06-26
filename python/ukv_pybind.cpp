@@ -68,7 +68,7 @@ struct py_tape_t;
 
 struct py_tape_t {
     ukv_tape_ptr_t ptr = NULL;
-    size_t length = 0;
+    ukv_size_t length = 0;
 };
 
 struct py_db_t : public std::enable_shared_from_this<py_db_t> {
@@ -282,7 +282,7 @@ void export_matrix( //
     py::handle keys_arr,
     py::handle values_arr,
     py::handle values_lengths_arr,
-    uint8_t padding_char = 0) {
+    std::uint8_t padding_char = 0) {
 
     // Check if we are receiving protocol buffers
     PyObject* keys_obj = keys_arr.ptr();
@@ -310,22 +310,22 @@ void export_matrix( //
         throw std::invalid_argument("Keys must be placed in a coninuous 1 dimensional array");
     if (keys.py.strides[0] != sizeof(ukv_key_t))
         throw std::invalid_argument("Keys can't be strided");
-    size_t const keys_count = static_cast<size_t>(keys.py.len / keys.py.itemsize);
+    ukv_size_t const keys_count = static_cast<ukv_size_t>(keys.py.len / keys.py.itemsize);
     ukv_key_t const* keys_ptr = reinterpret_cast<ukv_key_t const*>(keys.py.buf);
 
     // Validate the format of `values`
     if (values.py.ndim != 2)
         throw std::invalid_argument("Output tensor must have rank 2");
-    if (values.py.itemsize != sizeof(uint8_t))
+    if (values.py.itemsize != sizeof(std::uint8_t))
         throw std::invalid_argument("Output tensor must have single-byte entries");
     if ((values.py.shape[0] <= 0) || values.py.shape[1] <= 0)
         throw std::invalid_argument("Output tensor sides can't be zero");
     if ((values.py.strides[0] <= 0) || values.py.strides[1] <= 0)
         throw std::invalid_argument("Output tensor strides can't be negative");
-    if (keys_count != static_cast<size_t>(values.py.shape[0]))
+    if (keys_count != static_cast<ukv_size_t>(values.py.shape[0]))
         throw std::invalid_argument("Number of input keys and output slots doesn't match");
-    auto outputs_bytes = reinterpret_cast<uint8_t*>(values.py.buf);
-    auto outputs_bytes_stride = static_cast<size_t>(values.py.strides[0]);
+    auto outputs_bytes = reinterpret_cast<std::uint8_t*>(values.py.buf);
+    auto outputs_bytes_stride = static_cast<std::size_t>(values.py.strides[0]);
     auto output_bytes_cap = static_cast<ukv_val_len_t>(values.py.shape[1]);
 
     // Validate the format of `values_lengths`
@@ -337,10 +337,10 @@ void export_matrix( //
         throw std::invalid_argument("Lengths tensor sides can't be zero");
     if (values_lengths.py.strides[0] <= 0)
         throw std::invalid_argument("Lengths tensor strides can't be negative");
-    if (keys_count != static_cast<size_t>(values_lengths.py.shape[0]))
+    if (keys_count != static_cast<ukv_size_t>(values_lengths.py.shape[0]))
         throw std::invalid_argument("Number of input keys and output slots doesn't match");
-    auto outputs_lengths_bytes = reinterpret_cast<uint8_t*>(values_lengths.py.buf);
-    auto outputs_lengths_bytes_stride = static_cast<size_t>(values_lengths.py.strides[0]);
+    auto outputs_lengths_bytes = reinterpret_cast<std::uint8_t*>(values_lengths.py.buf);
+    auto outputs_lengths_bytes_stride = static_cast<std::size_t>(values_lengths.py.strides[0]);
 
     // Perform the read
     [[maybe_unused]] py::gil_scoped_release release;
@@ -354,18 +354,18 @@ void export_matrix( //
 
     // Export the data into the matrix
     auto inputs_lengths = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
-    auto inputs_bytes = reinterpret_cast<uint8_t const*>(tape.ptr) + keys_count * sizeof(ukv_val_len_t);
+    auto inputs_bytes = reinterpret_cast<std::uint8_t const*>(tape.ptr) + keys_count * sizeof(ukv_val_len_t);
     auto skipped_input_bytes = 0ul;
-    for (size_t i = 0; i != keys_count; ++i) {
+    for (ukv_size_t i = 0; i != keys_count; ++i) {
 
-        uint8_t const* input_bytes = inputs_bytes + skipped_input_bytes;
+        std::uint8_t const* input_bytes = inputs_bytes + skipped_input_bytes;
         ukv_val_len_t const input_length = inputs_lengths[i];
-        uint8_t* output_bytes = outputs_bytes + outputs_bytes_stride * i;
+        std::uint8_t* output_bytes = outputs_bytes + outputs_bytes_stride * i;
         ukv_val_len_t& output_length =
             *reinterpret_cast<ukv_val_len_t*>(outputs_lengths_bytes + outputs_lengths_bytes_stride * i);
 
-        size_t count_copy = std::min(output_bytes_cap, input_length);
-        size_t count_pads = output_bytes_cap - count_copy;
+        std::size_t count_copy = std::min(output_bytes_cap, input_length);
+        std::size_t count_pads = output_bytes_cap - count_copy;
         std::memcpy(output_bytes, input_bytes, count_copy);
         std::memset(output_bytes + count_copy, padding_char, count_pads);
 
@@ -626,7 +626,7 @@ PYBIND11_MODULE(ukv, m) {
     // Batch Matrix Operations
     db.def(
         "fill_matrix",
-        [](py_db_t& db, py::handle keys, py::handle values, py::handle values_lengths, uint8_t padding_char = 0) {
+        [](py_db_t& db, py::handle keys, py::handle values, py::handle values_lengths, std::uint8_t padding_char = 0) {
             return export_matrix(db, NULL, NULL, db.tape, keys, values, values_lengths, padding_char);
         },
         py::arg("keys"),
@@ -639,7 +639,7 @@ PYBIND11_MODULE(ukv, m) {
            py::handle keys,
            py::handle values,
            py::handle values_lengths,
-           uint8_t padding_char = 0) {
+           std::uint8_t padding_char = 0) {
             return export_matrix(*col.db_ptr,
                                  col.txn_ptr ? col.txn_ptr->raw : NULL,
                                  col.raw,
@@ -655,7 +655,11 @@ PYBIND11_MODULE(ukv, m) {
         py::arg("padding") = 0);
     txn.def(
         "fill_matrix",
-        [](py_txn_t& txn, py::handle keys, py::handle values, py::handle values_lengths, uint8_t padding_char = 0) {
+        [](py_txn_t& txn,
+           py::handle keys,
+           py::handle values,
+           py::handle values_lengths,
+           std::uint8_t padding_char = 0) {
             return export_matrix(*txn.db_ptr, txn.raw, NULL, txn.tape, keys, values, values_lengths, padding_char);
         },
         py::arg("keys"),

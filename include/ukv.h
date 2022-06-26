@@ -1,7 +1,7 @@
 /**
  * @file ukv.h
  * @author Ashot Vardanian
- * @date 9 Sep 2012
+ * @date 12 Jun 2022
  * @brief C bindings for Unums Key-Value store, that provide:
  * > ABI stability for the essential CRUD operations,
  * > Interoperability with higher-level languages.
@@ -84,7 +84,8 @@ typedef void* ukv_options_write_t;
 typedef uint64_t ukv_key_t;
 typedef uint32_t ukv_val_len_t;
 typedef uint8_t* ukv_tape_ptr_t;
-typedef char const* ukv_str_t;
+typedef uint64_t ukv_size_t;
+typedef char const* ukv_str_view_t;
 typedef char const* ukv_error_t;
 
 /*********************************************************/
@@ -103,7 +104,7 @@ typedef char const* ukv_error_t;
  * @param[out] error  The error message to be handled by callee.
  */
 void ukv_open( //
-    char const* config,
+    ukv_str_view_t config,
     ukv_t* db,
     ukv_error_t* error);
 
@@ -135,7 +136,7 @@ void ukv_write( //
     ukv_t const db,
     ukv_txn_t const txn,
     ukv_key_t const* keys,
-    size_t const keys_count,
+    ukv_size_t const keys_count,
     ukv_collection_t const* collections,
     ukv_options_write_t const options,
     ukv_tape_ptr_t values,
@@ -185,11 +186,11 @@ void ukv_read( //
     ukv_t const db,
     ukv_txn_t const txn,
     ukv_key_t const* keys,
-    size_t const keys_count,
+    ukv_size_t const keys_count,
     ukv_collection_t const* collections,
     ukv_options_read_t const options,
     ukv_tape_ptr_t* tape,
-    size_t* capacity,
+    ukv_size_t* capacity,
     ukv_error_t* error);
 
 /*********************************************************/
@@ -208,7 +209,7 @@ void ukv_read( //
  */
 void ukv_collection_upsert( //
     ukv_t const db,
-    ukv_str_t name,
+    ukv_str_view_t name,
     ukv_collection_t* collection,
     ukv_error_t* error);
 
@@ -223,7 +224,7 @@ void ukv_collection_upsert( //
  */
 void ukv_collection_remove( //
     ukv_t const db,
-    ukv_str_t name,
+    ukv_str_view_t name,
     ukv_error_t* error);
 
 /**
@@ -246,8 +247,8 @@ void ukv_collection_remove( //
  */
 void ukv_control( //
     ukv_t const db,
-    ukv_str_t request,
-    ukv_str_t* response,
+    ukv_str_view_t request,
+    ukv_str_view_t* response,
     ukv_error_t* error);
 
 /*********************************************************/
@@ -265,7 +266,7 @@ void ukv_control( //
  */
 void ukv_txn_begin( //
     ukv_t const db,
-    size_t const sequence_number,
+    ukv_size_t const sequence_number,
     ukv_txn_t* txn,
     ukv_error_t* error);
 
@@ -341,7 +342,7 @@ void ukv_option_write_colocated(ukv_options_read_t* options, bool);
  * @brief A function to be used after `ukv_read` to
  * deallocate and return memory to UnumDB and OS.
  */
-void ukv_tape_free(ukv_t const db, ukv_tape_ptr_t, size_t);
+void ukv_tape_free(ukv_t const db, ukv_tape_ptr_t, ukv_size_t);
 
 void ukv_txn_free(ukv_t const db, ukv_txn_t const txn);
 
