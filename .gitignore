@@ -51,3 +51,4 @@ _deps/
 *.cmake
 protos/
 openapitools.json
+build_version.cc
