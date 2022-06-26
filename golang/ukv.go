@@ -7,9 +7,9 @@ package ukv
 #include "ukv.h"
 #include <stdlib.h>
 
-ukv_val_len_t tape_get_length(ukv_tape_ptr_t tape, size_t key_idx) {
+ukv_val_len_t tape_get_length(ukv_tape_ptr_t tape, ukv_size_t key_idx) {
 	return ((ukv_val_len_t *)tape)[key_idx]; }
-ukv_tape_ptr_t* tape_get_value(ukv_tape_ptr_t tape, size_t count_keys, size_t bytes_to_skip) {
+ukv_tape_ptr_t* tape_get_value(ukv_tape_ptr_t tape, ukv_size_t count_keys, ukv_size_t bytes_to_skip) {
 	return (ukv_tape_ptr_t *)(tape + sizeof(ukv_val_len_t) * count_keys) + bytes_to_skip; }
 */
 import "C"
@@ -39,7 +39,7 @@ func forwardError(error_c C.ukv_error_t) error {
 	return nil
 }
 
-func cleanTape(db *DataBase, tape_c C.ukv_tape_ptr_t, tape_length_c C.size_t) {
+func cleanTape(db *DataBase, tape_c C.ukv_tape_ptr_t, tape_length_c C.ukv_size_t) {
 	C.ukv_tape_free(db.raw, tape_c, tape_length_c)
 }
 
@@ -105,7 +105,7 @@ func (db *DataBase) Get(key uint64) ([]byte, error) {
 	collection_c := (*C.ukv_collection_t)(nil)
 	options_c := (C.ukv_options_read_t)(nil)
 	tape_c := (C.ukv_tape_ptr_t)(nil)
-	tape_length_c := (C.size_t)(0)
+	tape_length_c := (C.ukv_size_t)(0)
 
 	C.ukv_read(db.raw, nil, &key_c, 1,
 		collection_c, options_c,
@@ -136,7 +136,7 @@ func (db *DataBase) Contains(key uint64) (bool, error) {
 	collection_c := (*C.ukv_collection_t)(nil)
 	options_c := (C.ukv_options_read_t)(nil)
 	tape_c := (C.ukv_tape_ptr_t)(nil)
-	tape_length_c := (C.size_t)(0)
+	tape_length_c := (C.ukv_size_t)(0)
 	defer cleanTape(db, tape_c, tape_length_c)
 
 	C.ukv_option_read_lengths(&options_c, true)

@@ -80,21 +80,27 @@
  *
  * Working with @b batched data in @b AOS:
  * > PUT /aos/:
- *      Receives: [obj]
+ *      Receives: {objs:[obj], txn?: int, cols?: [str]|str, keys?: [int]}
  *      Returns: {error?: str}
+ *      If `keys` aren't given, they are being sampled as `[x['_id'] for x in objs]`.
+ *      If `cols` aren't given, they are being sampled as `[x['_col'] for x in objs]`.
  * > PATCH /aos/:
- *      Receives: {cols?: [str], keys: [int], patch: obj}
+ *      Receives: {cols?: [str]|str, keys?: [int], patch: obj, txn?: int}
  *      Returns: {error?: str}
+ *      If `keys` aren't given, the whole collection(s) is being patched.
+ *      If `cols` are also skipped, the entire DB is patched.
  * > GET /aos/:
- *      Receives: {cols?: [str], keys: [int], fields?: [str]}
+ *      Receives: {cols?: [str]|str, keys?: [int], fields?: [str], txn?: int}
  *      Returns: {objs?: [obj], error?: str}
+ *      If `keys` aren't given, the whole collection(s) is being retrieved.
+ *      If `cols` are also skipped, the entire DB is retrieved.
  * > DELETE /aos/:
- *      Receives: {cols?: [str], keys: [int], fields?: [str]}
+ *      Receives: {cols?: [str]|str, keys?: [int], fields?: [str], txn?: int}
  *      Returns: {error?: str}
  * > HEAD /aos/:
- *      Receives: {cols?: [str], keys: [int], fields?: [str]}
+ *      Receives: {cols?: [str]|str, keys?: [int], fields?: [str], txn?: int}
  *      Returns: {len?: int, error?: str}
- * The supported query parameters define how to parse the payload:
+ * The otional payload members define how to parse the payload:
  * > col: Means we should put all into one collection, disregarding the `_col` fields.
  * > txn: Means we should do the operation from within a specified transaction context.
  *
@@ -211,7 +217,7 @@ struct db_t : public std::enable_shared_from_this<db_t> {
 struct raii_tape_t {
     ukv_t db = NULL;
     ukv_tape_ptr_t ptr = NULL;
-    size_t capacity = 0;
+    ukv_size_t capacity = 0;
 
     raii_tape_t(ukv_t db_ptr) noexcept : db(db_ptr) {}
     ~raii_tape_t() noexcept { ukv_tape_free(db, ptr, capacity); }
@@ -239,6 +245,17 @@ struct raii_collection_t {
     ~raii_collection_t() noexcept { ukv_collection_free(db, raw); }
 };
 
+struct raii_collections_t {
+    ukv_t db = NULL;
+    std::vector<ukv_collection_t> raw_array;
+
+    raii_collections_t(ukv_t db_ptr) noexcept : db(db_ptr) {}
+    ~raii_collections_t() noexcept {
+        for (auto raw : raw_array)
+            ukv_collection_free(db, raw);
+    }
+};
+
 void log_failure(beast::error_code ec, char const* what) {
     std::cerr << what << ": " << ec.message() << "\n";
 }
@@ -262,14 +279,34 @@ http::response<http::string_body> make_error(http::request<body_at, http::basic_
  *
  * Can be implemented through flattening, sampling and unflattening.
  * https://json.nlohmann.me/api/json_pointer/
- * https://json.nlohmann.me/api/basic_json/flatten/
- * https://json.nlohmann.me/api/basic_json/unflatten/
  */
-json_t sample_fields(json_t&& original, std::vector<json_ptr_t> const& json_pointers, json_t defaults) {
-    if (json_pointers.empty())
-        return original;
+json_t sample_fields(json_t&& original,
+                     std::vector<json_ptr_t> const& json_pointers,
+                     std::vector<std::string> const& json_pointers_strs) {
 
-    return {};
+    if (json_pointers.empty())
+        return std::move(original);
+
+    json_t empty {nullptr};
+    json_t result = json_t::object();
+    for (size_t ptr_idx = 0; ptr_idx != json_pointers.size(); ++ptr_idx) {
+
+        auto const& ptr = json_pointers[ptr_idx];
+        auto const& ptr_str = json_pointers_strs[ptr_idx];
+
+        // An exception-safe approach to searching for JSON-pointers:
+        // https://json.nlohmann.me/api/basic_json/at/#exceptions
+        // https://json.nlohmann.me/api/basic_json/operator%5B%5D/#exceptions
+        // https://json.nlohmann.me/api/basic_json/value/#exception-safety
+        auto found = original.value(ptr, empty);
+        if (found != empty)
+            result[ptr_str] = std::move(found);
+    }
+
+    // https://json.nlohmann.me/features/json_pointer/
+    // https://json.nlohmann.me/api/basic_json/flatten/
+    // https://json.nlohmann.me/api/basic_json/unflatten/
+    return result.unflatten();
 }
 
 /**
@@ -467,8 +504,8 @@ void respond_to_aos(db_t& db,
     beast::string_view received_path = req.target();
 
     raii_txn_t txn(db.raw);
+    raii_collections_t collections(db.raw);
     ukv_options_read_t options = NULL;
-    std::vector<raii_collection_t> collections;
     std::vector<ukv_key_t> keys;
 
     // Parse the free-order parameters, starting with transaction identifier.
@@ -492,7 +529,7 @@ void respond_to_aos(db_t& db,
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
-        collections.emplace_back(collection);
+        collections.raw_array.emplace_back(std::exchange(collection.raw, nullptr));
         ukv_option_read_colocated(&options, true);
     }
 
@@ -512,7 +549,7 @@ void respond_to_aos(db_t& db,
     // Parse the payload, that will contain auxiliary data
     auto payload = req.body();
     auto payload_ptr = reinterpret_cast<char const*>(payload.data());
-    auto payload_len = static_cast<size_t>(*opt_payload_len);
+    auto payload_len = static_cast<ukv_size_t>(*opt_payload_len);
     auto payload_dict = json_t {};
     auto response_dict = json_t {};
 
@@ -532,6 +569,9 @@ void respond_to_aos(db_t& db,
 
     // Once we know, which collection, key and transation user is
     // interested in - perform the actions depending on verbs.
+    //
+    // Just write: PUT, DELETE without `fields`.
+    // Every other request is dominated by a read.
     switch (received_verb) {
 
         // Read the data:
@@ -545,7 +585,7 @@ void respond_to_aos(db_t& db,
                                             "GET request must provide a non-empty list of integer keys"));
 
         for (auto const& key_json : *keys_it) {
-            if (!key_json.is_number_unsigned()) [[unlikely]]
+            if (!key_json.is_number_unsigned())
                 return send_response(make_error(req,
                                                 http::status::bad_request,
                                                 "GET request must provide a non-empty list of integer keys"));
@@ -559,7 +599,7 @@ void respond_to_aos(db_t& db,
                  txn.raw,
                  keys.data(),
                  keys.size(),
-                 NULL, // collections.data(),
+                 collections.raw_array.data(),
                  options,
                  &tape.ptr,
                  &tape.capacity,
@@ -570,9 +610,9 @@ void respond_to_aos(db_t& db,
         ukv_val_len_t const* values_lens = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
         ukv_tape_ptr_t values_begin = tape.ptr + sizeof(ukv_val_len_t) * keys.size();
 
-        size_t exported_bytes = 0;
+        std::size_t exported_bytes = 0;
         std::vector<json_t> parsed_vals(keys.size());
-        for (size_t key_idx = 0; key_idx != keys.size(); ++key_idx) {
+        for (std::size_t key_idx = 0; key_idx != keys.size(); ++key_idx) {
             ukv_tape_ptr_t begin = values_begin + exported_bytes;
             ukv_val_len_t len = values_lens[key_idx];
             json_t& val = parsed_vals[key_idx];
@@ -580,11 +620,38 @@ void respond_to_aos(db_t& db,
                 continue;
 
             val = json_t::from_msgpack(begin, begin + len, true, false);
-
             exported_bytes += len;
         }
 
-        response_dict = {"objs", parsed_vals};
+        // Now post-process sampling only a fraction of keys
+        auto fields_it = payload_dict.find("fields");
+        if (fields_it != payload_dict.end()) {
+            if (!fields_it->is_array() || fields_it->empty())
+                return send_response(make_error(req,
+                                                http::status::bad_request,
+                                                "GET request must provide a non-empty list of string paths"));
+
+            // Parse distinct paths
+            std::vector<std::string> path_strs;
+            std::vector<json_ptr_t> path_ptrs;
+            path_strs.reserve(fields_it->size());
+            path_ptrs.reserve((fields_it->size()));
+            for (auto const& field_json : *fields_it) {
+                if (!field_json.is_string())
+                    return send_response(make_error(req,
+                                                    http::status::bad_request,
+                                                    "GET request must provide a non-empty list of string paths"));
+                auto const& key_str = field_json.template get<std::string>();
+                path_strs.emplace_back(key_str);
+                path_ptrs.emplace_back(key_str);
+            }
+
+            // Export them from every document
+            for (auto& val : parsed_vals)
+                val = sample_fields(std::move(val), path_ptrs, path_strs);
+        }
+
+        response_dict = json_t::object({"objs", std::move(parsed_vals)});
         break;
     }
 

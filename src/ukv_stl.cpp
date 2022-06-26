@@ -45,7 +45,7 @@ struct collection_t {
     std::string name;
     std::unordered_map<key_t, sequenced_value_t> pairs;
 
-    void reserve_more(size_t n) { pairs.reserve(pairs.size() + n); }
+    void reserve_more(std::size_t n) { pairs.reserve(pairs.size() + n); }
 };
 
 using collection_ptr_t = std::unique_ptr<collection_t>;
@@ -63,7 +63,7 @@ struct located_key_t {
 };
 
 struct located_key_hash_t {
-    size_t operator()(located_key_t const& located) const noexcept { return std::hash<key_t> {}(located.key); }
+    std::size_t operator()(located_key_t const& located) const noexcept { return std::hash<key_t> {}(located.key); }
 };
 
 struct txn_t {
@@ -119,7 +119,7 @@ enum option_flags_t {
     write_flush_k = 1 << 4,
 };
 
-collection_t& collection_at(db_t& db, ukv_collection_t const* c_collections, size_t i, void* c_options) {
+collection_t& collection_at(db_t& db, ukv_collection_t const* c_collections, ukv_size_t i, void* c_options) {
     if (!c_collections)
         return db.unnamed;
     auto options = reinterpret_cast<std::uintptr_t>(c_options);
@@ -137,7 +137,7 @@ void set_flag(void** c_options, bool c_enabled, option_flags_t flag) {
         options &= ~flag;
 }
 
-byte_t* reserve_tape(ukv_tape_ptr_t* c_tape, size_t* c_tape_length, size_t new_length, ukv_error_t* c_error) {
+byte_t* reserve_tape(ukv_tape_ptr_t* c_tape, ukv_size_t* c_tape_length, ukv_size_t new_length, ukv_error_t* c_error) {
     byte_t* tape = *reinterpret_cast<byte_t**>(c_tape);
     if (new_length >= *c_tape_length) {
         try {
@@ -200,7 +200,7 @@ void ukv_option_write_colocated(ukv_options_read_t* c_options, bool c_enabled) {
 void _ukv_write_head( //
     ukv_t const c_db,
     ukv_key_t const* c_keys,
-    size_t const c_keys_count,
+    ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_write_t const c_options,
     ukv_tape_ptr_t const c_values,
@@ -210,8 +210,8 @@ void _ukv_write_head( //
     db_t& db = *reinterpret_cast<db_t*>(c_db);
     std::unique_lock _ {db.mutex};
 
-    size_t exported_bytes = 0;
-    for (size_t i = 0; i != c_keys_count; ++i) {
+    ukv_size_t exported_bytes = 0;
+    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
 
         collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key = c_keys[i];
@@ -249,15 +249,15 @@ void _ukv_write_head( //
 void _ukv_measure_head( //
     ukv_t const c_db,
     ukv_key_t const* c_keys,
-    size_t const c_keys_count,
+    ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
     ukv_tape_ptr_t* c_tape,
-    size_t* c_tape_length,
+    ukv_size_t* c_tape_length,
     ukv_error_t* c_error) {
 
     // 1. Allocate a tape for all the values to be pulled
-    size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
     byte_t* tape = reserve_tape(c_tape, c_tape_length, total_bytes, c_error);
     if (!tape)
         return;
@@ -267,7 +267,7 @@ void _ukv_measure_head( //
 
     // 2. Pull the data
     auto lengths = reinterpret_cast<ukv_val_len_t*>(tape);
-    for (size_t i = 0; i != c_keys_count; ++i) {
+    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key_iterator = collection.pairs.find(c_keys[i]);
         lengths[i] = key_iterator != collection.pairs.end() ? key_iterator->second.data.size() : 0;
@@ -277,19 +277,19 @@ void _ukv_measure_head( //
 void _ukv_read_head( //
     ukv_t const c_db,
     ukv_key_t const* c_keys,
-    size_t const c_keys_count,
+    ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
     ukv_tape_ptr_t* c_tape,
-    size_t* c_tape_length,
+    ukv_size_t* c_tape_length,
     ukv_error_t* c_error) {
 
     db_t& db = *reinterpret_cast<db_t*>(c_db);
     std::shared_lock _ {db.mutex};
 
     // 1. Estimate the total size
-    size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
-    for (size_t i = 0; i != c_keys_count; ++i) {
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key_iterator = collection.pairs.find(c_keys[i]);
         if (key_iterator != collection.pairs.end())
@@ -303,8 +303,8 @@ void _ukv_read_head( //
 
     // 3. Fetch the data
     ukv_val_len_t* lengths = reinterpret_cast<ukv_val_len_t*>(tape);
-    size_t exported_bytes = sizeof(ukv_val_len_t) * c_keys_count;
-    for (size_t i = 0; i != c_keys_count; ++i) {
+    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key_iterator = collection.pairs.find(c_keys[i]);
         if (key_iterator != collection.pairs.end()) {
@@ -322,7 +322,7 @@ void _ukv_read_head( //
 void _ukv_write_txn( //
     ukv_txn_t const c_txn,
     ukv_key_t const* c_keys,
-    size_t const c_keys_count,
+    ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_write_t const c_options,
     ukv_tape_ptr_t const c_tape,
@@ -335,8 +335,8 @@ void _ukv_write_txn( //
     db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
 
-    size_t exported_bytes = 0;
-    for (size_t i = 0; i != c_keys_count; ++i) {
+    ukv_size_t exported_bytes = 0;
+    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
         auto key = c_keys[i];
         auto length = lengths[i];
@@ -358,15 +358,15 @@ void _ukv_write_txn( //
 void _ukv_measure_txn( //
     ukv_txn_t const c_txn,
     ukv_key_t const* c_keys,
-    size_t const c_keys_count,
+    ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
     ukv_tape_ptr_t* c_tape,
-    size_t* c_tape_length,
+    ukv_size_t* c_tape_length,
     ukv_error_t* c_error) {
 
     // 1. Allocate a tape for all the values to be pulled
-    size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
     byte_t* tape = reserve_tape(c_tape, c_tape_length, total_bytes, c_error);
     if (!tape)
         return;
@@ -378,7 +378,7 @@ void _ukv_measure_txn( //
 
     // 2. Pull the data
     auto lengths = reinterpret_cast<ukv_val_len_t*>(tape);
-    for (size_t i = 0; i != c_keys_count; ++i) {
+    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
 
         // Some keys may already be overwritten inside of transaction
@@ -406,11 +406,11 @@ void _ukv_measure_txn( //
 void _ukv_read_txn( //
     ukv_txn_t const c_txn,
     ukv_key_t const* c_keys,
-    size_t const c_keys_count,
+    ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
     ukv_tape_ptr_t* c_tape,
-    size_t* c_tape_length,
+    ukv_size_t* c_tape_length,
     ukv_error_t* c_error) {
 
     txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
@@ -419,8 +419,8 @@ void _ukv_read_txn( //
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
     // 1. Estimate the total size of keys
-    size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
-    for (size_t i = 0; i != c_keys_count; ++i) {
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
 
         // Some keys may already be overwritten inside of transaction
@@ -447,8 +447,8 @@ void _ukv_read_txn( //
 
     // 3. Pull the data
     ukv_val_len_t* lengths = reinterpret_cast<ukv_val_len_t*>(tape);
-    size_t exported_bytes = sizeof(ukv_val_len_t) * c_keys_count;
-    for (size_t i = 0; i != c_keys_count; ++i) {
+    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         collection_t& collection = collection_at(db, c_collections, i, c_options);
 
         // Some keys may already be overwritten inside of transaction
@@ -477,11 +477,11 @@ void ukv_read( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
     ukv_key_t const* c_keys,
-    size_t const c_keys_count,
+    ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_read_t const c_options,
     ukv_tape_ptr_t* c_tape,
-    size_t* c_tape_length,
+    ukv_size_t* c_tape_length,
     ukv_error_t* c_error) {
 
     if (std::uintptr_t(c_options) & read_lengths_k)
@@ -510,7 +510,7 @@ void ukv_write( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
     ukv_key_t const* c_keys,
-    size_t const c_keys_count,
+    ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
     ukv_options_write_t const c_options,
     ukv_tape_ptr_t c_tape,
@@ -613,7 +613,7 @@ void ukv_control( //
 void ukv_txn_begin(
     // Inputs:
     ukv_t const c_db,
-    size_t const c_sequence_number,
+    ukv_size_t const c_sequence_number,
     // Outputs:
     ukv_txn_t* c_txn,
     ukv_error_t* c_error) {
@@ -722,7 +722,7 @@ void ukv_txn_commit( //
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
-void ukv_tape_free(ukv_t const, ukv_tape_ptr_t c_ptr, size_t c_len) {
+void ukv_tape_free(ukv_t const, ukv_tape_ptr_t c_ptr, ukv_size_t c_len) {
     if (!c_ptr || !c_len)
         return;
     allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
