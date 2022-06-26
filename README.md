@@ -131,7 +131,38 @@ docker run --rm -v "${PWD}:/local" openapitools/openapi-generator-cli generate \
 
 ## TODOs
 
-* [ ] gRPC server and client in C++
+At this point we alerady have a pretty big number of frontends and backends ready.
+
+```sh
+cloc $(git ls-files)
+```
+
+Yields following output:
+
+```txt
+-------------------------------------------------------------------------------
+Language                     files          blank        comment           code
+-------------------------------------------------------------------------------
+C++                              5            325            455           1556
+C                                3             68             21            264
+Python                           5             93             33            244
+Java                             1             45            133            150
+C/C++ Header                     4             55            322            141
+Go                               2             34             32            116
+Markdown                         1             36              0            106
+YAML                             2             11              1            104
+CMake                            1             23             56             83
+Protocol Buffers                 1             19              0             49
+JSON                             1              0              0             16
+Bourne Shell                     3              3              8             15
+-------------------------------------------------------------------------------
+SUM:                            29            712           1061           2844
+-------------------------------------------------------------------------------
+```
+
+Here are our next tasks
+
+* [ ] More tests in Python
 * [ ] GoLang memory pinning Channel Batch Reads of [slices](https://stackoverflow.com/a/36546929)
 * [ ] Swift Bindings
 * [ ] Rust Bindings
