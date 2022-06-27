@@ -107,6 +107,7 @@ set(WITH_GFLAGS FALSE)
 set(WITH_JEMALLOC FALSE)
 set(USE_RTTI TRUE)
 set(ROCKSDB_BUILD_SHARED FALSE)
+set(WITH_LIBURING FALSE)
 FetchContent_Declare(
   rocksdb
   GIT_REPOSITORY https://github.com/facebook/rocksdb.git
