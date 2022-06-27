@@ -173,7 +173,7 @@ void commit(py_txn_t& txn) {
 
     py_db_t& db = *txn.db_ptr;
     ukv_error_t error = NULL;
-    ukv_options_write_t options = NULL;
+    ukv_options_t options = NULL;
 
     [[maybe_unused]] py::gil_scoped_release release;
     ukv_txn_commit(txn.raw, options, &error);
@@ -193,7 +193,7 @@ bool contains_item( //
     ukv_key_t key) {
 
     ukv_error_t error = NULL;
-    ukv_options_read_t options = NULL;
+    ukv_options_t options = NULL;
 
     [[maybe_unused]] py::gil_scoped_release release;
     ukv_option_read_lengths(&options, true);
@@ -214,7 +214,7 @@ std::optional<py::bytes> get_item( //
     ukv_key_t key) {
 
     ukv_error_t error = NULL;
-    ukv_options_read_t options = NULL;
+    ukv_options_t options = NULL;
 
     [[maybe_unused]] py::gil_scoped_release release;
     ukv_read(db.raw, txn_ptr, &key, 1, &collection_ptr, options, &tape.ptr, &tape.length, &error);
@@ -345,7 +345,7 @@ void export_matrix( //
     // Perform the read
     [[maybe_unused]] py::gil_scoped_release release;
     ukv_error_t error = NULL;
-    ukv_options_read_t options = NULL;
+    ukv_options_t options = NULL;
     ukv_option_read_colocated(&options, true);
     ukv_read(db.raw, txn_ptr, keys_ptr, keys_count, &collection_ptr, options, &tape.ptr, &tape.length, &error);
 
@@ -381,7 +381,7 @@ void set_item( //
     ukv_key_t key,
     py::bytes const* value = NULL) {
 
-    ukv_options_write_t options = NULL;
+    ukv_options_t options = NULL;
     ukv_tape_ptr_t ptr = value ? ukv_tape_ptr_t(std::string_view {*value}.data()) : NULL;
     ukv_val_len_t len = value ? static_cast<ukv_val_len_t>(std::string_view {*value}.size()) : 0;
     ukv_error_t error = NULL;
