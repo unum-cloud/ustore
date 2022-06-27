@@ -47,13 +47,24 @@ typedef enum {
 void ukv_docs_write( //
     ukv_t const db,
     ukv_txn_t const txn,
+
     ukv_key_t const* keys,
     ukv_size_t const keys_count,
+    ukv_size_t const keys_stride,
+
     ukv_collection_t const* collections,
+    ukv_size_t const collections_stride,
+
     ukv_str_view_t const* fields,
     ukv_size_t const fields_count,
-    ukv_tape_ptr_t values,
+    ukv_size_t const fields_stride,
+
+    ukv_tape_ptr_t const* values,
+    ukv_size_t const values_stride,
+
     ukv_val_len_t const* lengths,
+    ukv_size_t const lengths_stride,
+
     ukv_options_t const options,
     ukv_format_t const format,
     ukv_error_t* error);
