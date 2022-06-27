@@ -97,11 +97,16 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 # RocksDB:
 # https://github.com/facebook/rocksdb/blob/main/CMakeLists.txt
-set(WITH_GFLAGS FALSE)
-set(WITH_BENCHMARK_TOOLS FALSE)
-set(WITH_CORE_TOOLS FALSE)
-set(WITH_TOOLS FALSE)
+set(FAIL_ON_WARNINGS FALSE)
 set(WITH_TESTS FALSE)
+set(WITH_BENCHMARK_TOOLS FALSE)
+set(WITH_SNAPPY FALSE)
+set(WITH_LZ4 FALSE)
+set(WITH_TOOLS FALSE)
+set(WITH_GFLAGS FALSE)
+set(WITH_JEMALLOC FALSE)
+set(USE_RTTI TRUE)
+set(ROCKSDB_BUILD_SHARED FALSE)
 FetchContent_Declare(
   rocksdb
   GIT_REPOSITORY https://github.com/facebook/rocksdb.git
@@ -109,6 +114,7 @@ FetchContent_Declare(
   GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(rocksdb)
+include_directories(rocksdb INTERFACE ${rocksdb_SOURCE_DIR}/include)
 
 # gRPC: https://grpc.io/blog/cmake-improvements/
 # https://github.com/grpc/grpc/blob/master/test/distrib/cpp/run_distrib_test_cmake_fetchcontent.sh
