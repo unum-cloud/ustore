@@ -598,8 +598,8 @@ void ukv_collection_remove(
 
 void ukv_control( //
     [[maybe_unused]] ukv_t const c_db,
-    [[maybe_unused]] ukv_str_t c_request,
-    ukv_str_t* c_response,
+    [[maybe_unused]] ukv_str_view_t c_request,
+    ukv_str_view_t* c_response,
     ukv_error_t* c_error) {
 
     *c_response = NULL;
