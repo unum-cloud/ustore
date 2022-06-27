@@ -31,7 +31,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
     ukv_key_t key_c = (ukv_key_t)key_java;
     ukv_tape_ptr_t value_ptr_c = (ukv_tape_ptr_t)value_ptr_java;
     ukv_val_len_t value_len_c = (ukv_val_len_t)value_len_java;
-    ukv_options_write_t options_c = NULL;
+    ukv_options_t options_c = NULL;
     ukv_error_t error_c = NULL;
     ukv_write(db_ptr_c, txn_ptr_c, &key_c, 1, &collection_ptr_c, options_c, value_ptr_c, &value_len_c, &error_c);
 
@@ -58,7 +58,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
         return JNI_FALSE;
 
     ukv_key_t key_c = (ukv_key_t)key_java;
-    ukv_options_read_t options_c = NULL;
+    ukv_options_t options_c = NULL;
     ukv_tape_ptr_t tape_c = NULL;
     ukv_size_t tape_len_c = 0;
     ukv_error_t error_c = NULL;
@@ -93,7 +93,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
         return NULL;
 
     ukv_key_t key_c = (ukv_key_t)key_java;
-    ukv_options_read_t options_c = NULL;
+    ukv_options_t options_c = NULL;
     ukv_tape_ptr_t tape_c = NULL;
     ukv_size_t tape_len_c = 0;
     ukv_error_t error_c = NULL;
@@ -143,7 +143,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
     ukv_key_t key_c = (ukv_key_t)key_java;
     ukv_tape_ptr_t value_ptr_c = NULL;
     ukv_val_len_t value_len_c = 0;
-    ukv_options_write_t options_c = NULL;
+    ukv_options_t options_c = NULL;
     ukv_error_t error_c = NULL;
 
     ukv_write(db_ptr_c, txn_ptr_c, &key_c, 1, &collection_ptr_c, options_c, value_ptr_c, &value_len_c, &error_c);
@@ -181,7 +181,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_commit( /
         return JNI_FALSE;
     }
 
-    ukv_options_write_t options_c = NULL;
+    ukv_options_t options_c = NULL;
     ukv_error_t error_c = NULL;
     ukv_txn_commit(txn_ptr_c, options_c, &error_c);
     return error_c ? JNI_FALSE : JNI_TRUE;
