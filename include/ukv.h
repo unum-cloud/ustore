@@ -93,7 +93,7 @@ typedef enum {
     ukv_options_default_k = 0,
     ukv_option_colocated_k = 1 << 0,
     ukv_option_read_lengths_k = 1 << 1,
-    ukv_option_write_flush_k = 1 << 1
+    ukv_option_write_flush_k = 1 << 2,
 } ukv_options_t;
 
 /*********************************************************/
@@ -144,12 +144,12 @@ void ukv_write( //
     ukv_t const db,
     ukv_txn_t const txn,
 
+    ukv_collection_t const* collections,
+    ukv_size_t const collections_stride,
+
     ukv_key_t const* keys,
     ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
-
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
 
     ukv_options_t const options,
 
@@ -204,12 +204,12 @@ void ukv_read( //
     ukv_t const db,
     ukv_txn_t const txn,
 
+    ukv_collection_t const* collections,
+    ukv_size_t const collections_stride,
+
     ukv_key_t const* keys,
     ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
-
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
 
     ukv_options_t const options,
 

@@ -48,16 +48,19 @@ void ukv_docs_write( //
     ukv_t const db,
     ukv_txn_t const txn,
 
+    ukv_collection_t const* collections,
+    ukv_size_t const collections_stride,
+
     ukv_key_t const* keys,
     ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
 
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
-
     ukv_str_view_t const* fields,
     ukv_size_t const fields_count,
     ukv_size_t const fields_stride,
+
+    ukv_options_t const options,
+    ukv_format_t const format,
 
     ukv_tape_ptr_t const* values,
     ukv_size_t const values_stride,
@@ -65,13 +68,11 @@ void ukv_docs_write( //
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
 
-    ukv_options_t const options,
-    ukv_format_t const format,
     ukv_error_t* error);
 
 /**
  * @brief The primary "getter" interface for sub-document-level data.
- * It's identical to `ukv_write`, but also receives:
+ * It's identical to `ukv_read`, but also receives:
  *
  * @param[in] fields
  * @param[in] fields_count
@@ -80,13 +81,21 @@ void ukv_docs_write( //
 void ukv_docs_read( //
     ukv_t const db,
     ukv_txn_t const txn,
+
+    ukv_collection_t const* collections,
+    ukv_size_t const collections_stride,
+
     ukv_key_t const* keys,
     ukv_size_t const keys_count,
-    ukv_collection_t const* collections,
+    ukv_size_t const keys_stride,
+
     ukv_str_view_t const* fields,
     ukv_size_t const fields_count,
+    ukv_size_t const fields_stride,
+
     ukv_options_t const options,
     ukv_format_t const format,
+
     ukv_tape_ptr_t* tape,
     ukv_size_t* capacity,
     ukv_error_t* error);
