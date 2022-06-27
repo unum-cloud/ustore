@@ -342,7 +342,7 @@ void respond_to_one(db_t& db,
     raii_txn_t txn(db.raw);
     raii_collection_t collection(db.raw);
     ukv_key_t key = 0;
-    ukv_options_read_t options = NULL;
+    ukv_options_t options = NULL;
 
     // Parse the `key`
     auto key_begin = received_path.substr(5).begin();
@@ -506,7 +506,7 @@ void respond_to_aos(db_t& db,
 
     raii_txn_t txn(db.raw);
     raii_collections_t collections(db.raw);
-    ukv_options_read_t options = NULL;
+    ukv_options_t options = NULL;
     std::vector<ukv_key_t> keys;
 
     // Parse the free-order parameters, starting with transaction identifier.
@@ -573,6 +573,9 @@ void respond_to_aos(db_t& db,
     //
     // Just write: PUT, DELETE without `fields`.
     // Every other request is dominated by a read.
+    bool needs_to_parse = payload_dict.contains("fields");
+    bool needs_to_reads = needs_to_parse || received_verb == http::verb::patch || received_verb == http::verb::get ||
+                          received_verb == http::verb::get || received_verb == http::verb::get;
     switch (received_verb) {
 
         // Read the data:
