@@ -149,15 +149,16 @@
  * The result object will have the "application/vnd.apache.arrow.stream" @b MIME.
  */
 
-#include <algorithm>
 #include <cstdlib>
-#include <functional>
-#include <iostream>
 #include <memory>
-#include <thread>
 #include <vector>
 #include <string>
-#include <charconv>
+#include <algorithm>
+#include <functional>
+#include <thread>   // Thread pool
+#include <charconv> // Parsing integers
+#include <iostream> // Logging to `std::cerr`
+#include <fstream>  // Parsing config file
 
 // Boost files are quite noisy in terms of warnings,
 // so let's silence them a bit.
@@ -902,10 +903,12 @@ class listener_t : public std::enable_shared_from_this<listener_t> {
 int main(int argc, char* argv[]) {
 
     // Check command line arguments
-    if (argc != 5) {
-        std::cerr << "Usage: ukv_beast_server <address> <port> <threads> <db_config_path>\n"
+    if (argc < 4) {
+        std::cerr << "Usage: ukv_beast_server <address> <port> <threads> <db_config_path>?\n"
                   << "Example:\n"
-                  << "    ukv_beast_server 0.0.0.0 8080 1 config.json\n";
+                  << "    ukv_beast_server 0.0.0.0 8080 1\n"
+                  << "    ukv_beast_server 0.0.0.0 8080 1 ./config.json\n"
+                  << "";
         return EXIT_FAILURE;
     }
 
@@ -913,12 +916,21 @@ int main(int argc, char* argv[]) {
     auto const address = net::ip::make_address(argv[1]);
     auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
     auto const threads = std::max<int>(1, std::atoi(argv[3]));
-    auto const db_config_path = std::string(argv[4]);
+    auto db_config = std::string();
+
+    // Read the configuration file
+    if (argc >= 5) {
+        auto const db_config_path = std::string(argv[4]);
+        if (!db_config_path.empty()) {
+            std::ifstream ifs(db_config_path);
+            db_config = std::string(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+        }
+    }
 
     // Check if we can initialize the DB
     auto db = std::make_shared<db_t>();
     raii_error_t error;
-    ukv_open("", &db->raw, &error.raw);
+    ukv_open(db_config.c_str(), &db->raw, &error.raw);
     if (error.raw) {
         std::cerr << "Couldn't initialize DB: " << error.raw << std::endl;
         return EXIT_FAILURE;
