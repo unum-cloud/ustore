@@ -12,12 +12,11 @@
 
 namespace unum::ukv {
 
-using key_t = ukv_key_t;
 enum class byte_t : uint8_t {};
 
 using allocator_t = std::allocator<byte_t>;
 using value_t = std::vector<byte_t, allocator_t>;
-using sequence_t = std::ssize_t;
+using sequence_t = std::int64_t;
 
 /**
  * @brief Solves the problem of modulo arithmetic and `sequence_t` overflow.
@@ -37,10 +36,18 @@ inline bool entry_was_overwritten(sequence_t entry_sequence,
  * @brief Calculates the offset of entry in a strided memory span.
  */
 template <typename object_at>
-inline object_at& strided_ref(object_at* begin, ukv_size_t stride, ukv_size_t idx) noexcept {
-    auto begin_bytes = reinterpret_cast<byte_t*>(begin) + stride * idx;
-    return *reinterpret_cast<object_at*>(begin_bytes);
-}
+struct strided_ptr_gt {
+    object_at* begin = nullptr;
+    ukv_size_t stride = 0;
+
+    inline object_at& operator[](ukv_size_t idx) const noexcept {
+        auto begin_bytes = (byte_t*)begin + stride * idx;
+        return *reinterpret_cast<object_at*>(begin_bytes);
+    }
+
+    inline operator bool() const noexcept { return begin != nullptr; }
+    inline bool repeats() const noexcept { return !stride; }
+};
 
 byte_t* reserve_tape(ukv_tape_ptr_t* tape_ptr, ukv_size_t* tape_length, ukv_size_t new_length, ukv_error_t* c_error) {
 
