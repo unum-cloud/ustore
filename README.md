@@ -112,6 +112,13 @@ Batch lookup operations are imlemented via channels sending slices, to avoid rea
 ### RESTful API & Clients
 
 We implement a REST server using `Boost.Beast` and the underlying `Boost.Asio`, as the go-to Web-Dev libraries in C++.
+To test the REST API:
+
+```sh
+kill $(lsof -t -i:8080)
+cmake . && make && echo Compiled  && ./build/bin/ukv_beast_server 0.0.0.0 8080 1
+```
+
 We also provide a [`OneAPI` specification](/openapi.yaml), that is used as both a documentation point and an automatic client-library generator.
 The entire list of generators is [available here](https://openapi-generator.tech/docs/generators/);
 

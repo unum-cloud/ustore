@@ -1,0 +1,58 @@
+apply plugin: 'java'
+apply plugin: 'application'
+apply plugin: 'c'
+
+
+// Based on following tutorial:
+// https://www.jetbrains.com/help/idea/setting-up-jni-development-in-gradle-project.html#adding_jni_support
+mainClassName = 'DataBase'
+
+repositories {
+    mavenCentral()
+}
+dependencies {
+    testCompile('junit:junit:4.12')
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+test {
+    systemProperty "java.library.path", file("${buildDir}/lib/ukv_java").absolutePath
+}
+
+model {
+    platforms {
+        x64 {
+            architecture "x64"
+        }
+    }
+
+    components {
+        ukv(NativeLibrarySpec) {
+            binaries.all {
+                if (targetPlatform.operatingSystem.linux) {
+                    cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include"
+                    cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include/linux"
+                    cCompiler.args '-D_FILE_OFFSET_BITS=64'
+
+                // Skip other platforms for now:
+                // } else if (targetPlatform.operatingSystem.macOsX) {
+                //     cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include"
+                //     cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include/darwin"
+                //     cCompiler.args '-mmacosx-version-min=10.4'
+                //     linker.args '-mmacosx-version-min=10.4'
+                // } else if (targetPlatform.operatingSystem.windows) {
+                //     cCompiler.args "-I${org.gradle.internal.jvm.Jvm.current().javaHome}/include"
+                //     cCompiler.args "-I${org.gradle.internal.jvm.Jvm.current().javaHome}/include/win32"
+                //     linker.args "Shlwapi.lib", "Advapi32.lib"
+                // } else if (targetPlatform.operatingSystem.freeBSD) {
+                //     cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include"
+                //     cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include/freebsd"
+                } 
+            }
+        }
+    }
+}
+
+test.dependsOn 'ukvSharedLib'
