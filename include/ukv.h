@@ -121,7 +121,7 @@ typedef enum {
 
 } ukv_options_t;
 
-static ukv_collection_t ukv_default_collection_k;
+extern ukv_collection_t ukv_default_collection_k;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -153,6 +153,9 @@ void ukv_open( //
  * > Transactional and Heads
  * > Insertions and Deletions
  *
+ * If lengths aren't provided, they are inferred from the passed values,
+ * as the offset of the first NULL-termination (zero) symbol.
+ *
  * @param[in] db             Already open database instance, @see `ukv_open`.
  * @param[in] txn            Transaction, through which the operation must go.
  *                           Can be `NULL`.
@@ -178,14 +181,13 @@ void ukv_write( //
     ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
 
-    ukv_options_t const options,
-
     ukv_tape_ptr_t const* values,
     ukv_size_t const values_stride,
 
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
 
+    ukv_options_t const options,
     ukv_error_t* error);
 
 /**
