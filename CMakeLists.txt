@@ -97,25 +97,37 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 # RocksDB:
 # https://github.com/facebook/rocksdb/blob/main/CMakeLists.txt
-set(FAIL_ON_WARNINGS FALSE)
-set(WITH_TESTS FALSE)
-set(WITH_BENCHMARK_TOOLS FALSE)
-set(WITH_SNAPPY FALSE)
-set(WITH_LZ4 FALSE)
-set(WITH_TOOLS FALSE)
-set(WITH_GFLAGS FALSE)
-set(WITH_JEMALLOC FALSE)
-set(USE_RTTI TRUE)
-set(ROCKSDB_BUILD_SHARED FALSE)
-set(WITH_LIBURING FALSE)
 FetchContent_Declare(
   rocksdb
   GIT_REPOSITORY https://github.com/facebook/rocksdb.git
   GIT_TAG v7.3.1
   GIT_SHALLOW TRUE
 )
-FetchContent_MakeAvailable(rocksdb)
-include_directories(rocksdb INTERFACE ${rocksdb_SOURCE_DIR}/include)
+
+FetchContent_GetProperties(rocksdb)
+if(NOT rocksdb_POPULATED)
+  # Fetch the content using previously declared details
+  set(FAIL_ON_WARNINGS FALSE)
+  set(WITH_TESTS FALSE)
+  set(WITH_BENCHMARK_TOOLS FALSE)
+  set(WITH_SNAPPY FALSE)
+  set(WITH_LZ4 FALSE)
+  set(WITH_TOOLS FALSE)
+  set(WITH_GFLAGS FALSE)
+  set(WITH_JEMALLOC FALSE)
+  set(USE_RTTI 1)
+  set(PORTABLE ON)
+  set(FORCE_SSE42 ON)
+  set(BUILD_SHARED FALSE)
+  set(WITH_LIBURING FALSE)
+  set(WITH_TESTS OFF CACHE INTERNAL "")
+  set(WITH_TOOLS OFF CACHE INTERNAL "")
+  set(CMAKE_ENABLE_SHARED OFF CACHE INTERNAL "")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
+  FetchContent_Populate(rocksdb)
+  add_subdirectory(${rocksdb_SOURCE_DIR} ${rocksdb_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
+
 
 # gRPC: https://grpc.io/blog/cmake-improvements/
 # https://github.com/grpc/grpc/blob/master/test/distrib/cpp/run_distrib_test_cmake_fetchcontent.sh
