@@ -342,7 +342,7 @@ void respond_to_one(db_t& db,
     raii_txn_t txn(db.raw);
     raii_collection_t collection(db.raw);
     ukv_key_t key = 0;
-    ukv_options_read_t options = NULL;
+    ukv_options_t options = ukv_options_default_k;
 
     // Parse the `key`
     auto key_begin = received_path.substr(5).begin();
@@ -380,7 +380,7 @@ void respond_to_one(db_t& db,
 
         raii_tape_t tape(db.raw);
         raii_error_t error;
-        ukv_read(db.raw, txn.raw, &key, 1, &collection.raw, options, &tape.ptr, &tape.capacity, &error.raw);
+        ukv_read(db.raw, txn.raw, &collection.raw, 0, &key, 1, 0, options, &tape.ptr, &tape.capacity, &error.raw);
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -411,8 +411,8 @@ void respond_to_one(db_t& db,
 
         raii_tape_t tape(db.raw);
         raii_error_t error;
-        ukv_option_read_lengths(&options, true);
-        ukv_read(db.raw, txn.raw, &key, 1, &collection.raw, options, &tape.ptr, &tape.capacity, &error.raw);
+        options = ukv_option_read_lengths_k;
+        ukv_read(db.raw, txn.raw, &collection.raw, 0, &key, 1, 0, options, &tape.ptr, &tape.capacity, &error.raw);
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -432,8 +432,8 @@ void respond_to_one(db_t& db,
     case http::verb::post: {
         raii_tape_t tape(db.raw);
         raii_error_t error;
-        ukv_option_read_lengths(&options, true);
-        ukv_read(db.raw, txn.raw, &key, 1, &collection.raw, options, &tape.ptr, &tape.capacity, &error.raw);
+        options = ukv_option_read_lengths_k;
+        ukv_read(db.raw, txn.raw, &collection.raw, 0, &key, 1, 0, options, &tape.ptr, &tape.capacity, &error.raw);
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -462,7 +462,7 @@ void respond_to_one(db_t& db,
         auto value = req.body();
         auto value_ptr = reinterpret_cast<ukv_tape_ptr_t>(value.data());
         auto value_len = static_cast<ukv_val_len_t>(*opt_payload_len);
-        ukv_write(db.raw, txn.raw, &key, 1, &collection.raw, options, value_ptr, &value_len, &error.raw);
+        ukv_write(db.raw, txn.raw, &collection.raw, 0, &key, 1, 0, &value_ptr, 0, &value_len, 0, options, &error.raw);
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -477,8 +477,9 @@ void respond_to_one(db_t& db,
     case http::verb::delete_: {
 
         raii_error_t error;
+        ukv_tape_ptr_t value_ptr = nullptr;
         ukv_val_len_t value_len = 0;
-        ukv_write(db.raw, txn.raw, &key, 1, &collection.raw, options, NULL, &value_len, &error.raw);
+        ukv_write(db.raw, txn.raw, &collection.raw, 0, &key, 1, 0, &value_ptr, 0, &value_len, 0, options, &error.raw);
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -506,7 +507,7 @@ void respond_to_aos(db_t& db,
 
     raii_txn_t txn(db.raw);
     raii_collections_t collections(db.raw);
-    ukv_options_read_t options = NULL;
+    ukv_options_t options = ukv_options_default_k;
     std::vector<ukv_key_t> keys;
 
     // Parse the free-order parameters, starting with transaction identifier.
@@ -531,7 +532,7 @@ void respond_to_aos(db_t& db,
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
         collections.raw_array.emplace_back(std::exchange(collection.raw, nullptr));
-        ukv_option_read_colocated(&options, true);
+        // ukv_option_read_colocated(&options, true);
     }
 
     // Make sure we support the requested content type
@@ -573,6 +574,9 @@ void respond_to_aos(db_t& db,
     //
     // Just write: PUT, DELETE without `fields`.
     // Every other request is dominated by a read.
+    bool needs_to_parse = payload_dict.contains("fields");
+    bool needs_to_reads = needs_to_parse || received_verb == http::verb::patch || received_verb == http::verb::get ||
+                          received_verb == http::verb::get || received_verb == http::verb::get;
     switch (received_verb) {
 
         // Read the data:
@@ -596,15 +600,15 @@ void respond_to_aos(db_t& db,
         // Pull the entire objects before we start sampling their fields
         raii_tape_t tape(db.raw);
         raii_error_t error;
-        ukv_read(db.raw,
-                 txn.raw,
-                 keys.data(),
-                 keys.size(),
-                 collections.raw_array.data(),
-                 options,
-                 &tape.ptr,
-                 &tape.capacity,
-                 &error.raw);
+        // ukv_read(db.raw,
+        //          txn.raw,
+        //          keys.data(),
+        //          keys.size(),
+        //          collections.raw_array.data(),
+        //          options,
+        //          &tape.ptr,
+        //          &tape.capacity,
+        //          &error.raw);
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
