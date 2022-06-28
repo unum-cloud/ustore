@@ -38,11 +38,15 @@ typedef enum {
 
 /**
  * @brief The primary "setter" interface for sub-document-level data.
- * It's identical to `ukv_write`, but also receives:
+ * Is an extension of the @see `ukv_write` function for structured vals.
  *
- * @param[in] fields
- * @param[in] fields_count
- * @param[in] format
+ * @param[in] collections  Must have collections storing only docs!
+ * @param[in] fields       Optional JSON-Pointer strings for field paths.
+ * @param[in] format       Imported `values` format, which will be converted
+ *                         to some internal representation. On retrieval, a
+ *                         different format can be requested. Like importing
+ *                         JSONs & BSONs from Mongo, but later exporting
+ *                         Apache Arrow Tables.
  */
 void ukv_docs_write( //
     ukv_t const db,
@@ -72,11 +76,15 @@ void ukv_docs_write( //
 
 /**
  * @brief The primary "getter" interface for sub-document-level data.
- * It's identical to `ukv_read`, but also receives:
+ * Is an extension of the @see `ukv_read` function for structured vals.
  *
- * @param[in] fields
- * @param[in] fields_count
- * @param[in] format
+ * @param[in] collections  Must have collections storing only docs!
+ * @param[in] fields       Optional JSON-Pointer strings for field paths.
+ * @param[in] format       Imported `values` format, which will be converted
+ *                         to some internal representation. On retrieval, a
+ *                         different format can be requested. Like importing
+ *                         JSONs & BSONs from Mongo, but later exporting
+ *                         Apache Arrow Tables.
  */
 void ukv_docs_read( //
     ukv_t const db,

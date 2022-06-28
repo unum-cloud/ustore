@@ -38,16 +38,17 @@
  * 5. Strides! Higher level systems may pack groups of arguments into AoS
  *    instead of SoA. To minimize the need of copies and data re-layout,
  *    we use byte-length strides arguments, similar to BLAS libraries.
+ *    Passing Zero as a "stride" means repeating the same value.
  *
  * @section Choosing between more functions vs more argument per function
  * We try to preserve balance in the number of function calls exposed in
  * this C API/ABI layer and the complexity of each call. As a result,
- * the @b read methods can be used to:
+ * the @b write methods can be used to:
  * > insert
  * > update
  * > detele
- * and the @b write methods can be used to:
- * > check object existance
+ * and the @b read methods can be used to:
+ * > check object existance or it's length
  * > retrieve an object
  * Interfaces for normal and transactional operations are identical,
  * exept for the `_txn_` name part.
@@ -90,11 +91,25 @@ typedef char const* ukv_str_view_t;
 typedef char const* ukv_error_t;
 
 typedef enum {
+
     ukv_options_default_k = 0,
-    ukv_option_colocated_k = 1 << 0,
+    /**
+     * @brief Limits the "read" operations to just metadata retrieval.
+     * Identical to the "HEAD" verb in the HTTP protocol.
+     */
     ukv_option_read_lengths_k = 1 << 1,
+    /**
+     * @brief Forces absolute consistency on the write operations
+     * flushing all the data to disk after each write. It's usage
+     * may cause severe performance degradation in some implementations.
+     * Yet the users must be warned, that modern IO drivers still often
+     * can't guarantee that everything will reach the disk.
+     */
     ukv_option_write_flush_k = 1 << 2,
+
 } ukv_options_t;
+
+static ukv_collection_t ukv_default_collection_k;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
