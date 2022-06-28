@@ -255,12 +255,7 @@ struct read_task_t {
     col_t& collection;
     ukv_key_t key;
 
-    inline located_key_t location() const noexcept {
-        return located_key_t {
-            &collection,
-            key,
-        };
-    }
+    inline located_key_t location() const noexcept { return located_key_t {&collection, key}; }
 };
 
 struct read_tasks_t {
@@ -269,7 +264,7 @@ struct read_tasks_t {
     strided_ptr_gt<ukv_key_t const> keys;
 
     inline read_task_t operator[](ukv_size_t i) const noexcept {
-        col_t& col = cols && cols[i] ? reinterpret_cast<col_t&>(cols[i]) : db.unnamed;
+        col_t& col = cols && cols[i] ? *reinterpret_cast<col_t*>(cols[i]) : db.unnamed;
         ukv_key_t key = keys[i];
         return {col, key};
     }
@@ -281,12 +276,7 @@ struct write_task_t {
     byte_t const* begin;
     ukv_val_len_t length;
 
-    inline located_key_t location() const noexcept {
-        return located_key_t {
-            &collection,
-            key,
-        };
-    }
+    inline located_key_t location() const noexcept { return located_key_t {&collection, key}; }
     value_t value() const { return {begin, begin + length}; }
 };
 
@@ -298,7 +288,7 @@ struct write_tasks_t {
     strided_ptr_gt<ukv_val_len_t const> lens;
 
     inline write_task_t operator[](ukv_size_t i) const noexcept {
-        col_t& col = cols && cols[i] ? reinterpret_cast<col_t&>(cols[i]) : db.unnamed;
+        col_t& col = cols && cols[i] ? *reinterpret_cast<col_t*>(cols[i]) : db.unnamed;
         ukv_key_t key = keys[i];
         byte_t const* begin;
         ukv_val_len_t len;
@@ -373,8 +363,7 @@ void measure_head( //
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
         auto key_iterator = task.collection.pairs.find(task.key);
-        if (key_iterator != task.collection.pairs.end())
-            lens[i] = key_iterator->second.data.size();
+        lens[i] = key_iterator != task.collection.pairs.end() ? key_iterator->second.data.size() : 0;
     }
 }
 
@@ -667,7 +656,7 @@ void ukv_open( //
 /*****************	cols Management	  ****************/
 /*********************************************************/
 
-void ukv_col_upsert(
+void ukv_collection_upsert(
     // Inputs:
     ukv_t const c_db,
     char const* c_col_name,
@@ -697,7 +686,7 @@ void ukv_col_upsert(
     }
 }
 
-void ukv_col_remove(
+void ukv_collection_remove(
     // Inputs:
     ukv_t const c_db,
     char const* c_col_name,
@@ -858,7 +847,7 @@ void ukv_free(ukv_t c_db) {
     delete &db;
 }
 
-void ukv_col_free(ukv_t const, ukv_collection_t const) {
+void ukv_collection_free(ukv_t const, ukv_collection_t const) {
     // In this in-memory freeing the col handle does nothing.
     // The DB destructor will automatically cleanup the memory.
 }
