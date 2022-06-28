@@ -165,31 +165,11 @@ def test_transaction_get_fail():
         txn1.get(0)
 
 
-# TODO: We don't have rollback to commit transactions anyway
-# def test_transactions_with_threads():
-#     keys_count = 10
-#     db = ukv.DataBase()
-
-#     def set_same_value(value):
-#         txn = ukv.Transaction(db)
-#         for index in range(keys_count):
-#             txn.set(index, value.encode())
-#         while True:
-#             try:
-#                 txn.commit()
-#                 break
-#             except:
-#                 pass
-
-#     threads_cnt = 8
-#     threads = [None] * threads_cnt
-#     for index in range(threads_cnt):
-#         threads[index] = Thread(target=set_same_value, args=(str(index),))
-#         threads[index].start()
-
-#     for index in range(threads_cnt):
-#         threads[index].join()
-
-#     for index in range(keys_count-1):
-#         assert db.get(index) == db.get(index+1)
-#         print(db.get(index))
+def test_transaction_fail():
+    db = ukv.DataBase()
+    txn = ukv.Transaction(db)
+    txn.get(0)
+    txn.set(1, "value".encode())
+    db.set(1, "value".encode())
+    with pytest.raises(Exception):
+        txn.commit()
