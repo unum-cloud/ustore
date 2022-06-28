@@ -16,22 +16,21 @@
 #include <string_view>
 #include <unordered_map>
 #include <shared_mutex>
-#include <atomic>
-#include <cstring> // `std::memcpy`
+#include <atomic>     // Thread-safe sequence counters
+#include <filesystem> // Enumerating the directory
+#include <stdio.h>    // Saving/reading from disk
 
 #include "ukv.h"
+#include "helpers.hpp"
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
 /*********************************************************/
 
-namespace {
+using namespace unum::ukv;
+namespace fs = std::filesystem;
 
-enum class byte_t : uint8_t {};
-using allocator_t = std::allocator<byte_t>;
-using key_t = ukv_key_t;
-using value_t = std::vector<byte_t, allocator_t>;
-using sequence_t = ssize_t;
+namespace {
 
 struct txn_t;
 struct db_t;
@@ -54,16 +53,18 @@ struct located_key_t {
     collection_t* collection_ptr = nullptr;
     key_t key {0};
 
-    bool operator==(located_key_t const& other) const noexcept {
+    inline bool operator==(located_key_t const& other) const noexcept {
         return (collection_ptr == other.collection_ptr) & (key == other.key);
     }
-    bool operator!=(located_key_t const& other) const noexcept {
+    inline bool operator!=(located_key_t const& other) const noexcept {
         return (collection_ptr != other.collection_ptr) | (key != other.key);
     }
 };
 
 struct located_key_hash_t {
-    std::size_t operator()(located_key_t const& located) const noexcept { return std::hash<key_t> {}(located.key); }
+    inline std::size_t operator()(located_key_t const& located) const noexcept {
+        return std::hash<key_t> {}(located.key);
+    }
 };
 
 struct txn_t {
@@ -97,72 +98,147 @@ struct db_t {
 
 } // namespace
 
-/**
- * @brief Solves the problem of modulo arithmetic and `sequence_t` overflow.
- * Still works correctly, when `max` has overflown, but `min` hasn't yet,
- * so `min` can be bigger than `max`.
- */
-bool entry_was_overwritten(sequence_t entry_sequence,
-                           sequence_t transaction_sequence,
-                           sequence_t youngest_sequence) noexcept {
+void save_to_disk(collection_t const& col, std::string const& path, ukv_error_t* c_error) {
+    // Using the classical C++ IO mechanisms is a bad tone in the modern world.
+    // They are ugly and, more importantly, painly slow.
+    // https://www.reddit.com/r/cpp_questions/comments/e2xia9/performance_comparison_of_various_ways_of_reading/
+    //
+    // So instead we stick to the LibC way of doing things.
+    // POSIX API would have been even better, but LibC will provide
+    // higher portability for this reference implementation.
+    // https://www.ibm.com/docs/en/i/7.1?topic=functions-fopen-open-files
+    FILE* handle = fopen(path.c_str(), "wb+");
 
-    return transaction_sequence <= youngest_sequence
-               ? ((entry_sequence >= transaction_sequence) & (entry_sequence <= youngest_sequence))
-               : ((entry_sequence >= transaction_sequence) | (entry_sequence <= youngest_sequence));
-}
-
-enum option_flags_t {
-    consistent_k = 1 << 0,
-    colocated_k = 1 << 1,
-    read_lengths_k = 1 << 2,
-    read_transparent_k = 1 << 3,
-    write_flush_k = 1 << 4,
-};
-
-collection_t& collection_at(db_t& db, ukv_collection_t const* c_collections, ukv_size_t i, void* c_options) {
-    if (!c_collections)
-        return db.unnamed;
-    auto options = reinterpret_cast<std::uintptr_t>(c_options);
-    auto collection_ptr = reinterpret_cast<collection_t*>(c_collections[(options & colocated_k) ? 0 : i]);
-    if (!collection_ptr)
-        return db.unnamed;
-    return *collection_ptr;
-}
-
-void set_flag(void** c_options, bool c_enabled, option_flags_t flag) {
-    auto& options = *reinterpret_cast<std::uintptr_t*>(c_options);
-    if (c_enabled)
-        options |= flag;
-    else
-        options &= ~flag;
-}
-
-byte_t* reserve_tape(ukv_tape_ptr_t* c_tape, ukv_size_t* c_tape_length, ukv_size_t new_length, ukv_error_t* c_error) {
-    byte_t* tape = *reinterpret_cast<byte_t**>(c_tape);
-    if (new_length >= *c_tape_length) {
-        try {
-            if (tape)
-                allocator_t {}.deallocate(tape, *c_tape_length);
-            tape = allocator_t {}.allocate(new_length);
-            *c_tape = reinterpret_cast<uint8_t*>(tape);
-            *c_tape_length = new_length;
-            return tape;
-        }
-        catch (...) {
-            *c_error = "Failed to allocate memory for exports!";
-            return nullptr;
+    // Save the collection size
+    {
+        auto n = static_cast<ukv_size_t>(col.pairs.size());
+        auto saved_length = fwrite(&n, sizeof(ukv_size_t), 1, handle);
+        if (saved_length != sizeof(ukv_size_t)) {
+            *c_error = "Couldn't write anything to file.";
+            break;
         }
     }
-    else
-        return tape;
+
+    // Save the entries
+    for (auto const& [key, val] : col.pairs) {
+        auto saved_length = fwrite(&key, sizeof(key_t), 1, handle);
+        if (saved_length != sizeof(key_t)) {
+            *c_error = "Write partially failed on key.";
+            break;
+        }
+
+        auto val_len = static_cast<ukv_val_len_t>(val.size());
+        auto saved_length = fwrite(&val_len, sizeof(ukv_val_len_t), 1, handle);
+        if (saved_length != sizeof(ukv_val_len_t)) {
+            *c_error = "Write partially failed on value length.";
+            break;
+        }
+
+        auto saved_length = fwrite(val.data(), sizeof(byte_t), val.size(), handle);
+        if (saved_length != val.size()) {
+            *c_error = "Write partially failed on value.";
+            break;
+        }
+    }
+
+    if (fclose(handle) == EOF)
+        *c_error = "Couldn't close the file after write.";
 }
 
-void save_to_disk(db_t const&, ukv_error_t* c_error) {
-    *c_error = "Serialization is not implemented!";
+void read_from_disk(collection_t& col, std::string const& path, ukv_error_t* c_error) {
+    // Similar to serialization, we don't use STL here
+    FILE* handle = fopen(path.c_str(), "rb+");
+
+    // Get the collection size, to preallocate entries
+    auto n = ukv_size_t(0);
+    {
+        auto read_length = fread(&n, sizeof(ukv_size_t), 1, handle);
+        if (read_length != sizeof(ukv_size_t)) {
+            *c_error = "Couldn't read anything from file.";
+            break;
+        }
+    }
+
+    // Save the entries
+    col.pairs.reserve(n);
+    for (ukv_size_t i = 0; i != n; ++i) {
+
+        auto key = key_t {};
+        auto read_length = fread(&key, sizeof(key_t), 1, handle);
+        if (read_length != sizeof(key_t)) {
+            *c_error = "Read partially failed on key.";
+            break;
+        }
+
+        auto val_len = ukv_val_len_t(0);
+        auto read_length = fread(&val_len, sizeof(ukv_val_len_t), 1, handle);
+        if (read_length != sizeof(ukv_val_len_t)) {
+            *c_error = "Read partially failed on value length.";
+            break;
+        }
+
+        auto val = value_t(val_len);
+        auto read_length = fread(val.data(), sizeof(byte_t), val.size(), handle);
+        if (read_length != val.size()) {
+            *c_error = "Read partially failed on value.";
+            break;
+        }
+
+        col.pairs.emplace(key, std::move(value));
+    }
+
+    if (fclose(handle) == EOF)
+        *c_error = "Couldn't close the file after reading.";
 }
 
-void read_from_disk(db_t const&, ukv_error_t* c_error) {
-    *c_error = "Serialization is not implemented!";
+void save_to_disk(db_t const& db, ukv_error_t* c_error) {
+    auto dir_path = fs::path(db.persisted_path);
+    if (!fs::is_directory(dir_path)) {
+        *c_error = "Supplied path is not a directory!";
+        return;
+    }
+
+    save_to_disk(db.unnamed, dir_path / ".stl.ukv", c_error);
+    if (*c_error)
+        return;
+
+    for (auto const& [name, col] : db.named) {
+        save_to_disk(col, dir_path / (name + ".stl.ukv"), c_error);
+        if (*c_error)
+            return;
+    }
+}
+
+void read_from_disk(db_t const& db, ukv_error_t* c_error) {
+    auto dir_path = fs::path(db.persisted_path);
+    if (!fs::is_directory(dir_path)) {
+        *c_error = "Supplied path is not a directory!";
+        return;
+    }
+
+    // Parse the main unnamed collection
+    if (fs::path path = dir_path / ".stl.ukv"; fs::is_regular_file(path)) {
+        auto path_str = path.native();
+        read_from_disk(*col, path_str, c_error);
+        db.named.emplace(std::string_view(col->name), std::move(col));
+    }
+
+    // Parse all the named collections we can find
+    for (auto const& dir_entry : fs::directory_iterator {dir_path}) {
+        if (!dir_entry.is_regular_file())
+            continue;
+        fs::path const& path = dir_entry.path();
+        auto path_str = path.native();
+        if (!path_str.ends_with(".stl.ukv"))
+            continue;
+
+        auto filename_w_ext = path.filename().native();
+        auto filename = filename_w_ext.substr(0, filename_w_ext.size() - 8);
+        auto col = std::make_unique<collection_t>();
+        col->name = filename;
+        read_from_disk(*col, path_str, c_error);
+        db.named.emplace(std::string_view(col->name), std::move(col));
+    }
 }
 
 /*********************************************************/
