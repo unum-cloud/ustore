@@ -87,8 +87,14 @@ typedef uint64_t ukv_key_t;
 typedef uint32_t ukv_val_len_t;
 typedef uint8_t* ukv_tape_ptr_t;
 typedef uint64_t ukv_size_t;
-typedef char const* ukv_str_view_t;
 typedef char const* ukv_error_t;
+
+/**
+ * @brief Non-owning string reference.
+ * Always provided by user and we don't participate
+ * in its lifetime management in any way.
+ */
+typedef char const* ukv_str_view_t;
 
 typedef enum {
 
@@ -106,6 +112,12 @@ typedef enum {
      * can't guarantee that everything will reach the disk.
      */
     ukv_option_write_flush_k = 1 << 2,
+    /**
+     * @brief When reading from a transaction, avoids tracking the keys.
+     * Which will increase the probability of writes, but levels-down the
+     * consistency guarantees.
+     */
+    ukv_option_read_transparent_k = 1 << 3,
 
 } ukv_options_t;
 
