@@ -142,6 +142,7 @@ FetchContent_MakeAvailable(rocksdb)
 
 # Define the libraries we will need to build
 include_directories(include/)
+include_directories(src/)
 
 add_library(ukv_stl src/ukv_stl.cpp)
 
