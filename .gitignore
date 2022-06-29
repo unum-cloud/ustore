@@ -48,7 +48,8 @@ __pycache__
 .pytest_cache/
 .gradle/
 _deps/
-*.cmake
 protos/
 openapitools.json
 build_version.cc
+CPackConfig.cmake
+CPackSourceConfig.cmake
