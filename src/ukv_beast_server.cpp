@@ -181,7 +181,6 @@
 #include <boost/config.hpp>
 
 #include <fmt/core.h>
-#include <nlohmann/json.hpp>
 
 #if defined(__clang__)
 #pragma clang diagnostic pop
@@ -191,13 +190,12 @@
 #endif
 
 #include "ukv.h"
+#include "ukv_docs.h"
 
-namespace beast = boost::beast;          // from <boost/beast.hpp>
-namespace http = beast::http;            // from <boost/beast/http.hpp>
-namespace net = boost::asio;             // from <boost/asio.hpp>
-using tcp = boost::asio::ip::tcp;        // from <boost/asio/ip/tcp.hpp>
-using json_t = nlohmann::json;           // from <nlohmann/json.h>
-using json_ptr_t = json_t::json_pointer; // from <nlohmann/json.h>
+namespace beast = boost::beast;   // from <boost/beast.hpp>
+namespace http = beast::http;     // from <boost/beast/http.hpp>
+namespace net = boost::asio;      // from <boost/asio.hpp>
+using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
 
 static constexpr char const* server_name_k = "unum-cloud/ukv/beast_server";
 static constexpr char const* mime_binary_k = "application/octet-stream";
@@ -206,6 +204,27 @@ static constexpr char const* mime_msgpack_k = "application/msgpack";
 static constexpr char const* mime_cbor_k = "application/cbor";
 static constexpr char const* mime_bson_k = "application/bson";
 static constexpr char const* mime_ubjson_k = "application/ubjson";
+
+ukv_format_t mime_to_format(beast::string_view mime) {
+    if (mime == mime_json_k)
+        return ukv_format_json_k;
+    else if (mime == "application/json-patch+json")
+        return ukv_format_json_patch_k;
+    else if (mime == mime_msgpack_k)
+        return ukv_format_msgpack_k;
+    else if (mime == mime_bson_k)
+        return ukv_format_bson_k;
+    else if (mime == mime_cbor_k)
+        return ukv_format_cbor_k;
+    else if (mime == mime_ubjson_k)
+        return ukv_format_ubjson_k;
+    else if (mime == "application/vnd.apache.arrow.stream" || mime == "application/vnd.apache.arrow.file")
+        return ukv_format_arrow_k;
+    else if (mime == "application/vnd.apache.parquet")
+        return ukv_format_parquet_k;
+    else
+        return ukv_format_unknown_k;
+}
 
 struct db_t : public std::enable_shared_from_this<db_t> {
 
@@ -273,41 +292,6 @@ http::response<http::string_body> make_error(http::request<body_at, http::basic_
     res.body() = std::string(why);
     res.prepare_payload();
     return res;
-}
-
-/**
- * @brief Extracts a select subset of keys by from input document.
- *
- * Can be implemented through flattening, sampling and unflattening.
- * https://json.nlohmann.me/api/json_pointer/
- */
-json_t sample_fields(json_t&& original,
-                     std::vector<json_ptr_t> const& json_pointers,
-                     std::vector<std::string> const& json_pointers_strs) {
-
-    if (json_pointers.empty())
-        return std::move(original);
-
-    json_t empty {nullptr};
-    json_t result = json_t::object();
-    for (size_t ptr_idx = 0; ptr_idx != json_pointers.size(); ++ptr_idx) {
-
-        auto const& ptr = json_pointers[ptr_idx];
-        auto const& ptr_str = json_pointers_strs[ptr_idx];
-
-        // An exception-safe approach to searching for JSON-pointers:
-        // https://json.nlohmann.me/api/basic_json/at/#exceptions
-        // https://json.nlohmann.me/api/basic_json/operator%5B%5D/#exceptions
-        // https://json.nlohmann.me/api/basic_json/value/#exception-safety
-        auto found = original.value(ptr, empty);
-        if (found != empty)
-            result[ptr_str] = std::move(found);
-    }
-
-    // https://json.nlohmann.me/features/json_pointer/
-    // https://json.nlohmann.me/api/basic_json/flatten/
-    // https://json.nlohmann.me/api/basic_json/unflatten/
-    return result.unflatten();
 }
 
 /**
@@ -537,6 +521,7 @@ void respond_to_aos(db_t& db,
 
     // Make sure we support the requested content type
     auto payload_type = req[http::field::content_type];
+    auto payload_format = mime_to_format(payload_type);
     if (payload_type != mime_json_k && payload_type != mime_msgpack_k && payload_type != mime_cbor_k &&
         payload_type != mime_bson_k && payload_type != mime_ubjson_k)
         return send_response(make_error(req,
@@ -552,23 +537,8 @@ void respond_to_aos(db_t& db,
     auto payload = req.body();
     auto payload_ptr = reinterpret_cast<char const*>(payload.data());
     auto payload_len = static_cast<ukv_size_t>(*opt_payload_len);
-    auto payload_dict = json_t {};
-    auto response_dict = json_t {};
 
-    if (payload_type != mime_json_k)
-        payload_dict = json_t::parse(payload_ptr, payload_ptr + payload_len, nullptr, true, false);
-    else if (payload_type != mime_msgpack_k)
-        payload_dict = json_t::from_msgpack(payload_ptr, payload_ptr + payload_len, true, false);
-    else if (payload_type != mime_bson_k)
-        payload_dict = json_t::from_bson(payload_ptr, payload_ptr + payload_len, true, false);
-    else if (payload_type != mime_cbor_k)
-        payload_dict = json_t::from_cbor(payload_ptr, payload_ptr + payload_len, true, false);
-    else if (payload_type != mime_ubjson_k)
-        payload_dict = json_t::from_ubjson(payload_ptr, payload_ptr + payload_len, true, false);
-
-    if (payload_dict.is_discarded())
-        return send_response(make_error(req, http::status::bad_request, "Couldn't parse the payload"));
-
+#if 0
     // Once we know, which collection, key and transation user is
     // interested in - perform the actions depending on verbs.
     //
@@ -665,20 +635,9 @@ void respond_to_aos(db_t& db,
         return send_response(make_error(req, http::status::bad_request, "Unsupported HTTP verb"));
     }
     }
-
+#endif
     // Export the response dictionary into the desired format
     std::string response_str;
-    if (payload_type != mime_json_k)
-        response_str = response_dict.dump();
-    else if (payload_type != mime_msgpack_k)
-        json_t::to_msgpack(response_dict, response_str);
-    else if (payload_type != mime_bson_k)
-        json_t::to_bson(response_dict, response_str);
-    else if (payload_type != mime_cbor_k)
-        json_t::to_cbor(response_dict, response_str);
-    else if (payload_type != mime_ubjson_k)
-        json_t::to_ubjson(response_dict, response_str);
-
     http::response<http::string_body> res {
         std::piecewise_construct,
         std::make_tuple(std::move(response_str)),
