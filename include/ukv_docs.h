@@ -8,6 +8,12 @@
  * Yet no guarantees are provided regarding the internal representation of the
  * values, so if if you want to access same values through binary interface,
  * you may not get the exact same bytes as you have provided in.
+ *
+ * @section Number of Keys vs Number of Fields
+ * One of the biggest questions to API is prefering "Zips" vs the "Cartesian Product"
+ * of "Key" and "Field" combinations. When writing we may want to discard a certain
+ * subset of fields in every document, but we may also be interested in having a
+ * more targetted approach.
  */
 
 #pragma once
@@ -30,6 +36,9 @@ typedef enum {
     ukv_format_arrow_k = 4,
     ukv_format_parquet_k = 5,
     ukv_format_json_patch_k = 6,
+    ukv_format_cbor_k = 7,
+    ukv_format_ubjson_k = 8,
+    ukv_format_unknown_k = 0xFFFFFFFF,
 } ukv_format_t;
 
 /*********************************************************/
@@ -72,6 +81,8 @@ void ukv_docs_write( //
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
 
+    ukv_tape_ptr_t* tape,
+    ukv_size_t* capacity,
     ukv_error_t* error);
 
 /**

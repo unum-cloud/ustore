@@ -57,7 +57,7 @@ It's feature-rich, but not very performant, supporting:
 * Named Collections
 * Transactions
 * Single & *Batch* Operations
-* *Tensor Exports*
+* Tensor Exports into anything that supports [Buffer Protocol](https://docs.python.org/3/c-api/buffer.html)
 
 Using it can be as easy as:
 
