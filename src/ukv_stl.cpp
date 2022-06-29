@@ -41,7 +41,7 @@ struct txn_t;
 struct db_t;
 
 struct sequenced_value_t {
-    value_t data;
+    buffer_t data;
     sequence_t sequence_number {0};
 };
 
@@ -74,7 +74,7 @@ struct located_key_hash_t {
 
 struct txn_t {
     std::unordered_map<located_key_t, sequence_t, located_key_hash_t> requested_keys;
-    std::unordered_map<located_key_t, value_t, located_key_hash_t> new_values;
+    std::unordered_map<located_key_t, buffer_t, located_key_hash_t> new_values;
     db_t* db_ptr {nullptr};
     sequence_t sequence_number {0};
 };
@@ -127,7 +127,7 @@ struct write_task_t {
     ukv_val_len_t length;
 
     inline located_key_t location() const noexcept { return located_key_t {&collection, key}; }
-    value_t value() const { return {begin, begin + length}; }
+    buffer_t buffer() const { return {begin, begin + length}; }
 };
 
 struct write_tasks_t {
@@ -235,7 +235,7 @@ void read_from_disk(col_t& col, std::string const& path, ukv_error_t* c_error) {
             break;
         }
 
-        auto val = value_t(val_len);
+        auto val = buffer_t(val_len);
         read_len = fread(val.data(), sizeof(byte_t), val.size(), handle);
         if (read_len != val.size()) {
             *c_error = "Read partially failed on value.";
@@ -326,7 +326,7 @@ void write_head( //
                 key_iterator->second.data.assign(task.begin, task.begin + task.length);
             }
             else {
-                sequenced_value_t sequenced_value = {task.value(), ++db.youngest_sequence};
+                sequenced_value_t sequenced_value = {task.buffer(), ++db.youngest_sequence};
                 task.collection.pairs.insert_or_assign(task.key, std::move(sequenced_value));
             }
         }
@@ -426,7 +426,7 @@ void write_txn( //
         write_task_t task = tasks[i];
 
         try {
-            txn.new_values.insert_or_assign(task.location(), task.value());
+            txn.new_values.insert_or_assign(task.location(), task.buffer());
         }
         catch (...) {
             *c_error = "Failed to put into transaction!";

@@ -77,8 +77,8 @@ json_t parse_any(ukv_tape_ptr_t bytes, ukv_val_len_t len, ukv_format_t const c_f
     }
 }
 
-value_t dump_any(json_t const& json, ukv_format_t const c_format, ukv_error_t* c_error) {
-    value_t result;
+buffer_t dump_any(json_t const& json, ukv_format_t const c_format, ukv_error_t* c_error) {
+    buffer_t result;
     // Yes, it's a dirty hack, but it works :)
     // nlohmann::detail::output_vector_adapter<byte_t> output(result);
     auto& result_chars = reinterpret_cast<std::vector<char>&>(result);
@@ -134,7 +134,7 @@ void ukv_docs_write( //
         std::vector<json_ptr_t> fields_ptrs;
     }
 
-    std::vector<value_t> msgpacks(c_keys_count);
+    std::vector<buffer_t> msgpacks(c_keys_count);
 
     if (jsons[0].is_discarded()) {
         *c_error = "Couldn't parse inputs";
