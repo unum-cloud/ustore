@@ -91,57 +91,35 @@ FetchContent_MakeAvailable(fmt)
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.10.5/json.tar.xz)
 FetchContent_MakeAvailable(json)
 
-# RocksDB:
-# https://github.com/facebook/rocksdb/blob/main/CMakeLists.txt
-set(WITH_GFLAGS FALSE)
-set(WITH_BENCHMARK_TOOLS FALSE)
-set(WITH_CORE_TOOLS FALSE)
-set(WITH_TOOLS FALSE)
-set(WITH_TESTS FALSE)
+# LZ4 Compression
+# https://stackoverflow.com/questions/67537111/how-do-i-decide-between-lz4-and-snappy-compression
+include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
+
+# TurboPFor for 64-bit integers
+# https://github.com/powturbo/TurboPFor-Integer-Compression
+# https://github.com/topics/integer-compression
+include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
+
+# FastPFor Integer Compression for 32-bit integers
 FetchContent_Declare(
-  rocksdb
-  GIT_REPOSITORY https://github.com/facebook/rocksdb.git
-  GIT_TAG v7.3.1
+  fpfor
+  GIT_REPOSITORY https://github.com/lemire/FastPFor.git
+  GIT_TAG v0.1.8
   GIT_SHALLOW TRUE
 )
-FetchContent_MakeAvailable(rocksdb)
-
-# gRPC: https://grpc.io/blog/cmake-improvements/
-# https://github.com/grpc/grpc/blob/master/test/distrib/cpp/run_distrib_test_cmake_fetchcontent.sh
-# FetchContent_Declare(
-# gRPC
-# GIT_REPOSITORY https://github.com/grpc/grpc
-# GIT_TAG v1.47.0
-# GIT_SHALLOW TRUE
-# )
-# FetchContent_MakeAvailable(gRPC)
-#
-# Download Networking TS for us to implement RPC
-# Example can be found here: https://github.com/bsergeev/CppNetworkingTS
-# Discussions: https://www.reddit.com/r/cpp/comments/b12iob/networking_ts_beast_new_tutorials_read_this_to/
-# find_package(Git)
-# if(NOT GIT_FOUND)
-# message(FATAL_ERROR "Git not found, aborting...")
-# endif()
-# set(NETTS_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/netts)
-# find_path(NETTS_INCLUDE_DIR "net" NO_DEFAULT_PATH PATHS "${NETTS_LOCATION}/include/experimental")
-# if(NOT NETTS_INCLUDE_DIR) # The repo wasn't found => clone it
-# execute_process(COMMAND git clone https://github.com/chriskohlhoff/networking-ts-impl.git ${NETTS_LOCATION})
-# else() # Pull the repo, in case it was updated
-# execute_process(COMMAND git pull WORKING_DIRECTORY ${NETTS_LOCATION})
-# endif()
-# find_path(NETTS_INCLUDE_DIR "net" NO_DEFAULT_PATH PATHS "${NETTS_LOCATION}/include/experimental")
-# if(NOT NETTS_INCLUDE_DIR)
-# message(FATAL_ERROR "Something wrong with networking-ts-impl.git, aborting...")
-# endif()
-# include_directories("${NETTS_LOCATION}/include")
+FetchContent_MakeAvailable(fpfor)
 
 # Define the libraries we will need to build
 include_directories(include/)
 include_directories(src/)
 
-add_library(ukv_stl src/ukv_stl.cpp src/ukv_docs_nlohmann.cpp)
+add_library(ukv_stl
+  src/ukv_stl.cpp
+  src/ukv_docs_nlohmann.cpp
+  src/ukv_graph_pfor.cpp)
 target_link_libraries(ukv_stl
+  lz4
+  turbopfor
   nlohmann_json::nlohmann_json
 )
 
