@@ -101,6 +101,59 @@ struct db_t {
     std::string persisted_path;
 };
 
+struct read_task_t {
+    col_t& collection;
+    ukv_key_t key;
+
+    inline located_key_t location() const noexcept { return located_key_t {&collection, key}; }
+};
+
+struct read_tasks_t {
+    db_t& db;
+    strided_ptr_gt<ukv_collection_t> cols;
+    strided_ptr_gt<ukv_key_t const> keys;
+
+    inline read_task_t operator[](ukv_size_t i) const noexcept {
+        col_t& col = cols && cols[i] ? *reinterpret_cast<col_t*>(cols[i]) : db.unnamed;
+        ukv_key_t key = keys[i];
+        return {col, key};
+    }
+};
+
+struct write_task_t {
+    col_t& collection;
+    ukv_key_t key;
+    byte_t const* begin;
+    ukv_val_len_t length;
+
+    inline located_key_t location() const noexcept { return located_key_t {&collection, key}; }
+    value_t value() const { return {begin, begin + length}; }
+};
+
+struct write_tasks_t {
+    db_t& db;
+    strided_ptr_gt<ukv_collection_t> cols;
+    strided_ptr_gt<ukv_key_t const> keys;
+    strided_ptr_gt<ukv_tape_ptr_t const> vals;
+    strided_ptr_gt<ukv_val_len_t const> lens;
+
+    inline write_task_t operator[](ukv_size_t i) const noexcept {
+        col_t& col = cols && cols[i] ? *reinterpret_cast<col_t*>(cols[i]) : db.unnamed;
+        ukv_key_t key = keys[i];
+        byte_t const* begin;
+        ukv_val_len_t len;
+        if (vals) {
+            begin = reinterpret_cast<byte_t const*>(vals[i]);
+            len = lens ? lens[i] : std::strlen(reinterpret_cast<char const*>(vals[i]));
+        }
+        else {
+            begin = nullptr;
+            len = 0;
+        }
+        return {col, key, begin, len};
+    }
+};
+
 void save_to_disk(col_t const& col, std::string const& path, ukv_error_t* c_error) {
     // Using the classical C++ IO mechanisms is a bad tone in the modern world.
     // They are ugly and, more importantly, painly slow.
@@ -250,59 +303,6 @@ void read_from_disk(db_t& db, ukv_error_t* c_error) {
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
 /*********************************************************/
-
-struct read_task_t {
-    col_t& collection;
-    ukv_key_t key;
-
-    inline located_key_t location() const noexcept { return located_key_t {&collection, key}; }
-};
-
-struct read_tasks_t {
-    db_t& db;
-    strided_ptr_gt<ukv_collection_t> cols;
-    strided_ptr_gt<ukv_key_t const> keys;
-
-    inline read_task_t operator[](ukv_size_t i) const noexcept {
-        col_t& col = cols && cols[i] ? *reinterpret_cast<col_t*>(cols[i]) : db.unnamed;
-        ukv_key_t key = keys[i];
-        return {col, key};
-    }
-};
-
-struct write_task_t {
-    col_t& collection;
-    ukv_key_t key;
-    byte_t const* begin;
-    ukv_val_len_t length;
-
-    inline located_key_t location() const noexcept { return located_key_t {&collection, key}; }
-    value_t value() const { return {begin, begin + length}; }
-};
-
-struct write_tasks_t {
-    db_t& db;
-    strided_ptr_gt<ukv_collection_t> cols;
-    strided_ptr_gt<ukv_key_t const> keys;
-    strided_ptr_gt<ukv_tape_ptr_t const> vals;
-    strided_ptr_gt<ukv_val_len_t const> lens;
-
-    inline write_task_t operator[](ukv_size_t i) const noexcept {
-        col_t& col = cols && cols[i] ? *reinterpret_cast<col_t*>(cols[i]) : db.unnamed;
-        ukv_key_t key = keys[i];
-        byte_t const* begin;
-        ukv_val_len_t len;
-        if (vals) {
-            begin = reinterpret_cast<byte_t const*>(vals[i]);
-            len = lens ? lens[i] : std::strlen(reinterpret_cast<char const*>(vals[i]));
-        }
-        else {
-            begin = nullptr;
-            len = 0;
-        }
-        return {col, key, begin, len};
-    }
-};
 
 void write_head( //
     db_t& db,
