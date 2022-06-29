@@ -87,13 +87,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(fmt)
 
 # JSON:
-FetchContent_Declare(
-  nlohmann_json
-  GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG v3.10.5
-  GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(nlohmann_json)
+# https://json.nlohmann.me/integration/cmake/#fetchcontent
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.10.5/json.tar.xz)
+FetchContent_MakeAvailable(json)
 
 # RocksDB:
 # https://github.com/facebook/rocksdb/blob/main/CMakeLists.txt
@@ -144,7 +140,10 @@ FetchContent_MakeAvailable(rocksdb)
 include_directories(include/)
 include_directories(src/)
 
-add_library(ukv_stl src/ukv_stl.cpp)
+add_library(ukv_stl src/ukv_stl.cpp src/ukv_docs_nlohmann.cpp)
+target_link_libraries(ukv_stl
+  nlohmann_json::nlohmann_json
+)
 
 add_library(ukv_rocksdb src/ukv_rocksdb.cpp)
 target_link_libraries(ukv_rocksdb
@@ -158,5 +157,5 @@ target_link_libraries(ukv_beast_server
   ukv_stl
   pthread
   fmt::fmt
-  nlohmann_json
+  nlohmann_json::nlohmann_json
 )
