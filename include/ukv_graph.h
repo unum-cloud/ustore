@@ -18,13 +18,20 @@
  * with a lot of metadata, one could structure them as a set of following collections:
  *      * objs.docs
  *      * objs.graph
- * Or if it's a bipartite graph of `person_t` and `product_t`, like in
+ * Or if it's a bipartite graph of `person_t` and `movie_t`, like in
  * recommendation systems, one could imagine:
  *      * people.docs
- *      * products.docs
- *      * people->products.graph
+ *      * movies.docs
+ *      * people->movies.digraph
  * Which means that in every edge the first ID will be a person and target
- * will be a product.
+ * will be a movie. If you want to keep edge directed in an opposite way, add:
+ *      * movies->people.digraph
+ *
+ * So we can have following kinds of Graphs:
+ *      * @b U: Undirected within same collection (movies.graph)
+ *      * @b D: Directed within same collection (movies.digraph)
+ *      * @b A: Directed Across collections (movies->people.digraph)
+ * Mixing kinds of edges within same collection is Undefined Behaviour.
  */
 
 #pragma once
@@ -39,7 +46,21 @@ extern "C" {
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-static ukv_key_t ukv_default_edge_id_k;
+extern ukv_key_t ukv_default_edge_id_k;
+
+/**
+ * @brief Every node can be either a source or a target in a Directed Graph.
+ * When working with undirected graphs, this argument is irrelevant and
+ * should be set to `ukv_graph_node_any_k`. With directed graphs, where
+ * source and target can belong to different collections its @b crucial
+ * that members of each collection are fixed to be either only sources
+ * or only edges.
+ */
+enum ukv_graph_node_role_t {
+    ukv_graph_node_any_k = 0,
+    ukv_graph_node_source_k = 1,
+    ukv_graph_node_target_k = 2,
+};
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -49,16 +70,18 @@ static ukv_key_t ukv_default_edge_id_k;
  * @brief Finds and extracts all the related edges and
  * neighbor IDs for the provided nodes set. The results
  * are exported onto a tape in the following order:
- *      1. number of outgoing edges per node
- *      2. number of incoming edges per node
+ *      1. `ukv_size_t` number of outgoing edges per node
+ *      2. `ukv_size_t` number of incoming edges per node
  *      3. outgoing edges per node:
- *          1. all target ids
- *          2. all edge ids
+ *          1. `ukv_key_t` all target ids
+ *          2. `ukv_key_t` all edge ids
  *      4. incoming edges per node:
- *          1. all source ids
- *          2. all edge ids
+ *          1. `ukv_key_t` all source ids
+ *          2. `ukv_key_t` all edge ids
  *
- * To request node degrees, add the @c `ukv_option_read_lengths_k` flag.
+ * @param[in] roles     The roles of passed @p `nodes` in wanted edges.
+ * @param[in] options   To request node degrees, add the
+ *                      @c `ukv_option_read_lengths_k` flag.
  */
 void ukv_graph_gather_neighbors( //
     ukv_t const db,
@@ -71,15 +94,10 @@ void ukv_graph_gather_neighbors( //
     ukv_size_t const nodes_count,
     ukv_size_t const nodes_stride,
 
+    ukv_graph_node_role_t const* roles,
+    ukv_size_t const roles_stride,
+
     ukv_options_t const options,
-
-    ukv_key_t* edges_ids,
-    ukv_size_t const edges_stride,
-
-    ukv_key_t* neighbors_ids,
-    ukv_size_t const neighbors_stride,
-    ukv_collection_t const* neighbors_collections,
-    ukv_size_t const neighbors_collections_stride,
 
     ukv_tape_ptr_t* tape,
     ukv_size_t* capacity,
@@ -87,7 +105,9 @@ void ukv_graph_gather_neighbors( //
 
 /**
  * @brief Inserts edges between provided nodes.
- * The edge IDs are optional, but the source AND target IDs are not.
+ *
+ * @param[in] edge_ids  Optional edge identifiers.
+ *                      Necessary for edges storing a lot of metadata.
  */
 void ukv_graph_upsert_edges( //
     ukv_t const db,
@@ -114,7 +134,8 @@ void ukv_graph_upsert_edges( //
 
 /**
  * @brief Removes edges from the graph.
- * The edge IDs are optional, but the source OR target IDs are not.
+ *
+ * @param[in] member_ids Either source OR target node IDs.
  */
 void ukv_graph_remove_edges( //
     ukv_t const db,
@@ -127,11 +148,11 @@ void ukv_graph_remove_edges( //
     ukv_size_t const edges_count,
     ukv_size_t const edges_stride,
 
-    ukv_key_t const* sources_ids,
-    ukv_size_t const sources_stride,
+    ukv_key_t const* member_ids,
+    ukv_size_t const member_stride,
 
-    ukv_key_t const* targets_ids,
-    ukv_size_t const targets_stride,
+    ukv_graph_node_role_t const* roles,
+    ukv_size_t const roles_stride,
 
     ukv_options_t const options,
 
@@ -140,7 +161,10 @@ void ukv_graph_remove_edges( //
     ukv_error_t* error);
 
 /**
- * @brief Removes nodes from the graph.
+ * @brief Removes nodes from the graph and exports deleted edge IDs.
+ * Those are then availiable in the tape in the following format:
+ *      1. `ukv_size_t` counter for the number of edges
+ *      2. `ukv_key_t`s edge IDs in no particular order
  */
 void ukv_graph_remove_nodes( //
     ukv_t const db,
@@ -150,7 +174,11 @@ void ukv_graph_remove_nodes( //
     ukv_size_t const collections_stride,
 
     ukv_key_t const* nodes_ids,
+    ukv_size_t const nodes_count,
     ukv_size_t const nodes_stride,
+
+    ukv_graph_node_role_t const* roles,
+    ukv_size_t const roles_stride,
 
     ukv_options_t const options,
 
