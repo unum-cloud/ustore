@@ -57,9 +57,10 @@ extern ukv_key_t ukv_default_edge_id_k;
  * or only edges.
  */
 enum ukv_graph_node_role_t {
-    ukv_graph_node_any_k = 0,
+    ukv_graph_node_unknown_k = 0,
     ukv_graph_node_source_k = 1,
     ukv_graph_node_target_k = 2,
+    ukv_graph_node_any_k = 3,
 };
 
 /*********************************************************/
