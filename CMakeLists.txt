@@ -121,7 +121,7 @@ if(NOT rocksdb_POPULATED)
   set(WITH_TESTS OFF CACHE INTERNAL "")
   set(WITH_TOOLS OFF CACHE INTERNAL "")
   set(CMAKE_ENABLE_SHARED OFF CACHE INTERNAL "")
-  # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
   FetchContent_Populate(rocksdb)
   add_subdirectory(${rocksdb_SOURCE_DIR} ${rocksdb_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
@@ -158,7 +158,7 @@ endif()
 # include_directories("${NETTS_LOCATION}/include")
 
 # Define the libraries we will need to build
-include_directories(include/)
+include_directories(include/ ${rocksdb_SOURCE_DIR}/include)
 
 add_library(ukv_stl src/ukv_stl.cpp)
 
