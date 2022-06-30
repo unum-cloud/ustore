@@ -34,7 +34,7 @@ if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse4.2 -mavx2") # -march=native
 
   if(UNIX AND NOT APPLE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx512f")
+    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx512f") # Conflicts with (ROCKSDB PORTABLE ON). Decide Conditions. 
   endif()
 endif()
 
@@ -97,18 +97,35 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 # RocksDB:
 # https://github.com/facebook/rocksdb/blob/main/CMakeLists.txt
-set(WITH_GFLAGS FALSE)
-set(WITH_BENCHMARK_TOOLS FALSE)
-set(WITH_CORE_TOOLS FALSE)
-set(WITH_TOOLS FALSE)
-set(WITH_TESTS FALSE)
 FetchContent_Declare(
   rocksdb
   GIT_REPOSITORY https://github.com/facebook/rocksdb.git
   GIT_TAG v7.3.1
   GIT_SHALLOW TRUE
 )
-FetchContent_MakeAvailable(rocksdb)
+
+FetchContent_GetProperties(rocksdb)
+if(NOT rocksdb_POPULATED)
+  # Fetch the content using previously declared details
+  set(WITH_LIBURING OFF CACHE INTERNAL "")
+  set(FAIL_ON_WARNINGS OFF CACHE INTERNAL "")
+  set(WITH_BENCHMARK_TOOLS OFF CACHE INTERNAL "")
+  set(WITH_SNAPPY OFF CACHE INTERNAL "")
+  set(WITH_LZ4 OFF CACHE INTERNAL "")
+  set(WITH_GFLAGS OFF CACHE INTERNAL "")
+  set(WITH_JEMALLOC OFF CACHE INTERNAL "")
+  set(USE_RTTI 1 CACHE INTERNAL "")
+  set(PORTABLE ON CACHE INTERNAL "")
+  set(FORCE_SSE42 ON CACHE INTERNAL "")
+  set(BUILD_SHARED OFF CACHE INTERNAL "")
+  set(WITH_TESTS OFF CACHE INTERNAL "")
+  set(WITH_TOOLS OFF CACHE INTERNAL "")
+  set(CMAKE_ENABLE_SHARED OFF CACHE INTERNAL "")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
+  FetchContent_Populate(rocksdb)
+  add_subdirectory(${rocksdb_SOURCE_DIR} ${rocksdb_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
+
 
 # gRPC: https://grpc.io/blog/cmake-improvements/
 # https://github.com/grpc/grpc/blob/master/test/distrib/cpp/run_distrib_test_cmake_fetchcontent.sh
@@ -141,8 +158,7 @@ FetchContent_MakeAvailable(rocksdb)
 # include_directories("${NETTS_LOCATION}/include")
 
 # Define the libraries we will need to build
-include_directories(include/)
-include_directories(src/)
+include_directories(include/ ${rocksdb_SOURCE_DIR}/include)
 
 add_library(ukv_stl src/ukv_stl.cpp)
 
