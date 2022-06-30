@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <algorithm> // `std::sort`
+#include <optional>  // `std::optional`
 
 #include "ukv_graph.h"
 #include "helpers.hpp"
@@ -27,17 +28,49 @@ struct edge_t {
     ukv_key_t edge_id = ukv_default_edge_id_k;
 };
 
-struct located_node_t {
-    ukv_collection_t collection;
-    ukv_key_t node_id;
+void sort_and_deduplicate(std::vector<located_key_t>& keys) {
+    std::sort(keys.begin(), keys.end());
+    keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+}
+
+std::size_t offset_in_sorted(std::vector<located_key_t> const& keys, located_key_t wanted) {
+    return std::lower_bound(keys.begin(), keys.end(), wanted) - keys.begin();
+}
+
+struct neighborhood_t {
+    ukv_key_t neighbor_id = 0;
+    ukv_key_t edge_id = 0;
 };
+
+range_gt<neighborhood_t const*> neighbors(value_view_t bytes, ukv_graph_node_role_t role = ukv_graph_node_any_k) {
+    auto degrees = reinterpret_cast<ukv_size_t const*>(bytes.begin());
+    auto ids = reinterpret_cast<neighborhood_t const*>(degrees + 2);
+
+    switch (role) {
+    case ukv_graph_node_source_k: return {ids, ids + degrees[0]};
+    case ukv_graph_node_target_k: return {ids + degrees[0], ids + degrees[1]};
+    case ukv_graph_node_any_k: return {ids, ids + degrees[0] + degrees[1]};
+    case ukv_graph_node_unknown_k: return {};
+    }
+    __builtin_unreachable();
+}
 
 void upsert(value_t& value, ukv_graph_node_role_t role, ukv_key_t neighbor_id, ukv_key_t edge_id) {
     auto node_degrees = reinterpret_cast<ukv_size_t*>(value.begin());
     auto neighbor_and_edge_ids = reinterpret_cast<ukv_key_t*>(node_degrees + 2);
 }
 
-void erase(value_t&, ukv_graph_node_role_t role, ukv_key_t neighbor_id, ukv_key_t edge_id) {
+void erase(value_t& value, ukv_graph_node_role_t role, ukv_key_t neighbor_id, std::optional<ukv_key_t> edge_id = {}) {
+}
+
+ukv_graph_node_role_t invert(ukv_graph_node_role_t role) {
+    switch (role) {
+    case ukv_graph_node_source_k: return ukv_graph_node_target_k;
+    case ukv_graph_node_target_k: return ukv_graph_node_source_k;
+    case ukv_graph_node_any_k: return ukv_graph_node_unknown_k;
+    case ukv_graph_node_unknown_k: return ukv_graph_node_any_k;
+    }
+    __builtin_unreachable();
 }
 
 void ukv_graph_gather_neighbors( //
@@ -99,24 +132,23 @@ void ukv_graph_upsert_edges( //
     strided_ptr_gt<ukv_key_t const> targets_ids {c_targets_ids, c_targets_stride};
 
     // Fetch all the data related to touched nodes
-    std::vector<located_node_t> updated_ids {c_edges_count + c_edges_count};
+    std::vector<located_key_t> updated_ids {c_edges_count + c_edges_count};
     for (ukv_size_t i = 0; i != c_edges_count; ++i)
         updated_ids[i] = {collections[i], sources_ids[i]};
     for (ukv_size_t i = 0; i != c_edges_count; ++i)
         updated_ids[c_edges_count + i] = {collections[i], targets_ids[i]};
 
     // Keep only the unique items
-    std::sort(updated_ids.begin(), updated_ids.end());
-    updated_ids.erase(std::unique(updated_ids.begin(), updated_ids.end()), updated_ids.end());
+    sort_and_deduplicate(updated_ids);
     std::vector<value_t> updated_vals(updated_ids.size());
 
     ukv_read(c_db,
              c_txn,
              &updated_ids[0].collection,
-             sizeof(located_node_t),
-             &updated_ids[0].node_id,
+             sizeof(located_key_t),
+             &updated_ids[0].key,
              static_cast<ukv_size_t>(updated_ids.size()),
-             sizeof(located_node_t),
+             sizeof(located_key_t),
              c_options,
              c_tape,
              c_capacity,
@@ -138,10 +170,8 @@ void ukv_graph_upsert_edges( //
         auto target_id = targets_ids[i];
         auto edge_id = edges_ids[i];
 
-        auto source_idx = std::lower_bound(updated_ids.begin(), updated_ids.end(), target_id) - updated_ids.begin();
-        auto target_idx = std::lower_bound(updated_ids.begin(), updated_ids.end(), source_id) - updated_ids.begin();
-        auto& source_value = updated_vals[source_idx];
-        auto& target_value = updated_vals[target_idx];
+        auto& source_value = updated_vals[offset_in_sorted(updated_ids, {collection, target_id})];
+        auto& target_value = updated_vals[offset_in_sorted(updated_ids, {collection, source_id})];
 
         upsert(source_value, ukv_graph_node_source_k, target_id, edge_id);
         upsert(target_value, ukv_graph_node_target_k, source_id, edge_id);
@@ -151,10 +181,10 @@ void ukv_graph_upsert_edges( //
     ukv_write(c_db,
               c_txn,
               &updated_ids[0].collection,
-              sizeof(located_node_t),
-              &updated_ids[0].node_id,
+              sizeof(located_key_t),
+              &updated_ids[0].key,
               static_cast<ukv_size_t>(updated_ids.size()),
-              sizeof(located_node_t),
+              sizeof(located_key_t),
               &updated_vals[0].ptr,
               sizeof(value_t),
               &updated_vals[0].length,
@@ -222,19 +252,13 @@ void ukv_graph_remove_nodes( //
     if (*c_error)
         return;
 
-    auto arr_lengths = reinterpret_cast<ukv_val_len_t*>(c_tape);
-    auto arr_bytes = c_tape + sizeof(ukv_val_len_t) * c_nodes_count;
-
     // Estimate the memory usage to avoid re-allocating
     // Copy data from tape into disjoint mutable arrays
     std::size_t count_edges = 0ull;
     {
         tape_iterator_t values {*c_tape, c_nodes_count};
-        for (ukv_size_t i = 0; i != c_nodes_count; ++i, ++values) {
-            value_view_t value = *values;
-            auto degrees = reinterpret_cast<ukv_size_t const*>(value.begin());
-            count_edges += degrees[0] + degrees[1];
-        }
+        for (ukv_size_t i = 0; i != c_nodes_count; ++i, ++values)
+            count_edges += neighbors(*values).size();
     }
 
     strided_ptr_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
@@ -243,49 +267,26 @@ void ukv_graph_remove_nodes( //
 
     // Enumerate the opposite ends, from which that same reference must be removed.
     // Here all the keys will be in the sorted order.
-    std::vector<located_node_t> updated_ids;
+    std::vector<located_key_t> updated_ids;
     std::vector<value_t> updated_vals;
     updated_ids.reserve(count_edges * 2);
     {
-        ukv_size_t unpacked_bytes = 0;
-        for (ukv_size_t i = 0; i != c_nodes_count; ++i) {
-            auto collection = collections[i];
-            auto node_id = nodes_ids[i];
-            auto role = roles[i];
-            auto len = arr_lengths[i];
-            if (!len)
+        tape_iterator_t values {*c_tape, c_nodes_count};
+        for (ukv_size_t i = 0; i != c_nodes_count; ++i, ++values) {
+            value_view_t value = *values;
+            if (!value)
                 continue;
 
-            auto bytes = arr_bytes + unpacked_bytes;
-            auto node_degrees = reinterpret_cast<ukv_size_t*>(bytes);
-            auto neighbor_and_edge_ids = reinterpret_cast<ukv_key_t*>(node_degrees + 2);
-
-            // Parse outgoing neighbor ids, to fetch their incoming edges
-            if (role == ukv_graph_node_source_k)
-                for (ukv_size_t j = 0; j != node_degrees[0]; ++j, neighbor_and_edge_ids += 2)
-                    updated_ids.push_back({collection, neighbor_and_edge_ids[0]});
-            else
-                neighbor_and_edge_ids += 2 * node_degrees[0];
-
-            // Parse incoming neighbor ids
-            if (role == ukv_graph_node_target_k)
-                for (ukv_size_t j = 0; j != node_degrees[1]; ++j, neighbor_and_edge_ids += 2)
-                    updated_ids.push_back({collection, neighbor_and_edge_ids[0]});
-            else
-                neighbor_and_edge_ids += 2 * node_degrees[1];
-
-            // Proceed to next list of neighbors
-            unpacked_bytes += len;
+            auto collection = collections[i];
+            auto role = roles[i];
+            for (neighborhood_t n : neighbors(value, role))
+                updated_ids.push_back({collection, n.neighbor_id});
         }
     }
 
     // Sorting the tasks would help us faster locate them in the future.
-    std::sort(updated_ids.begin(), updated_ids.end(), [](located_node_t const& a, located_node_t const& b) {
-        return a.node_id < b.node_id;
-    });
-
-    // We may face repetitions when connected nodes are removed
-    updated_ids.erase(std::unique(updated_ids.begin(), updated_ids.end()), updated_ids.end());
+    // We may also face repetitions when connected nodes are removed.
+    sort_and_deduplicate(updated_ids);
     updated_vals.resize(updated_ids.size());
 
     // Fetch the opposite ends, from which that same reference must be removed.
@@ -294,10 +295,10 @@ void ukv_graph_remove_nodes( //
     ukv_read(c_db,
              c_txn,
              &updated_ids[0].collection,
-             sizeof(located_node_t),
-             &updated_ids[0].node_id,
+             sizeof(located_key_t),
+             &updated_ids[0].key,
              static_cast<ukv_size_t>(updated_ids.size()),
-             sizeof(located_node_t),
+             sizeof(located_key_t),
              c_options,
              c_tape,
              c_capacity,
@@ -305,19 +306,42 @@ void ukv_graph_remove_nodes( //
     if (c_error)
         return;
 
-    // From every sequence remove the matching range of neightbors
-    //
-    //
-    //
+    // Export taped values into disjoint buffers
+    {
+        tape_iterator_t values {*c_tape, c_nodes_count};
+        for (ukv_size_t i = 0; i != c_nodes_count; ++i, ++values)
+            updated_vals[i] = *values;
+    }
+
+    // From every sequence remove the matching range of neighbors
+    {
+        tape_iterator_t values {*c_tape, c_nodes_count};
+        for (ukv_size_t i = 0; i != c_nodes_count; ++i, ++values) {
+            auto collection = collections[i];
+            auto node_id = nodes_ids[i];
+            auto role = roles[i];
+
+            auto node_idx = offset_in_sorted(updated_ids, {collection, node_id});
+            value_t& node_value = updated_vals[node_idx];
+
+            for (neighborhood_t n : neighbors(node_value, role)) {
+                auto neighbor_idx = offset_in_sorted(updated_ids, {collection, n.neighbor_id});
+                value_t& neighbor_value = updated_vals[neighbor_idx];
+                erase(neighbor_value, invert(role), node_id);
+            }
+
+            node_value.clear();
+        }
+    }
 
     // Now we will go through all the explicitly deleted nodes
     ukv_write(c_db,
               c_txn,
               &updated_ids[0].collection,
-              sizeof(located_node_t),
-              &updated_ids[0].node_id,
+              sizeof(located_key_t),
+              &updated_ids[0].key,
               static_cast<ukv_size_t>(updated_ids.size()),
-              sizeof(located_node_t),
+              sizeof(located_key_t),
               &updated_vals[0].ptr,
               sizeof(value_t),
               &updated_vals[0].length,
