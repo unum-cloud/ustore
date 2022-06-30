@@ -8,24 +8,24 @@ __libname__ = 'ukv'
 
 ext_modules = [
     Pybind11Extension(
-        'ukv/stl1',
+        'ukv/stl',
         ['python/ukv_pybind.cpp'],
         # Example: passing in the version to the compiled code
         include_dirs=['include/'],
         library_dirs=['build/lib/'],
         libraries=['ukv_stl'],
         define_macros=[('UKV_VERSION', __version__),
-                       ('MODULE_NAME', 'stl1')],
+                       ('MODULE_NAME', 'stl')],
     ),
     Pybind11Extension(
-        'ukv/stl2',
+        'ukv/rocks',
         ['python/ukv_pybind.cpp'],
         # Example: passing in the version to the compiled code
         include_dirs=['include/'],
         library_dirs=['build/lib/'],
-        libraries=['ukv_stl'],
+        libraries=['ukv_rocksdb', 'rocksdb'],
         define_macros=[('UKV_VERSION', __version__),
-                       ('MODULE_NAME', 'stl2')],
+                       ('MODULE_NAME', 'rocks')],
     ),
 ]
 
