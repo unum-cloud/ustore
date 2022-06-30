@@ -37,58 +37,40 @@ using namespace unum::ukv;
 using namespace unum;
 namespace fs = std::filesystem;
 
-struct txn_t;
-struct db_t;
+struct stl_txn_t;
+struct stl_db_t;
 
 struct sequenced_value_t {
     buffer_t data;
     sequence_t sequence_number {0};
 };
 
-struct col_t {
+struct stl_collection_t {
     std::string name;
     std::unordered_map<ukv_key_t, sequenced_value_t> pairs;
 
     void reserve_more(std::size_t n) { pairs.reserve(pairs.size() + n); }
 };
 
-using col_ptr_t = std::unique_ptr<col_t>;
+using stl_collection_ptr_t = std::unique_ptr<stl_collection_t>;
 
-struct located_key_t {
-    col_t* col_ptr = nullptr;
-    ukv_key_t key {0};
-
-    inline bool operator==(located_key_t const& other) const noexcept {
-        return (col_ptr == other.col_ptr) & (key == other.key);
-    }
-    inline bool operator!=(located_key_t const& other) const noexcept {
-        return (col_ptr != other.col_ptr) | (key != other.key);
-    }
-};
-
-struct located_key_hash_t {
-    inline std::size_t operator()(located_key_t const& located) const noexcept {
-        return std::hash<ukv_key_t> {}(located.key);
-    }
-};
-
-struct txn_t {
+struct stl_txn_t {
     std::unordered_map<located_key_t, sequence_t, located_key_hash_t> requested_keys;
     std::unordered_map<located_key_t, buffer_t, located_key_hash_t> new_values;
-    db_t* db_ptr {nullptr};
+    stl_db_t* db_ptr {nullptr};
     sequence_t sequence_number {0};
 };
 
-struct db_t {
+struct stl_db_t {
     std::shared_mutex mutex;
-    col_t unnamed;
+    stl_collection_t unnamed;
 
     /**
      * @brief A variable-size set of named cols.
      * It's cleaner to implement it with heterogenous lookups as
      * an @c `std::unordered_set`, but it requires GCC11.
      */
-    std::unordered_map<std::string_view, col_ptr_t> named;
+    std::unordered_map<std::string_view, stl_collection_ptr_t> named;
     /**
      * @brief The sequence/transactions ID of the most recent update.
      * This can be updated even outside of the main @p `mutex` on HEAD state.
@@ -102,26 +84,26 @@ struct db_t {
 };
 
 struct read_task_t {
-    col_t& collection;
+    stl_collection_t& collection;
     ukv_key_t key;
 
     inline located_key_t location() const noexcept { return located_key_t {&collection, key}; }
 };
 
 struct read_tasks_t {
-    db_t& db;
+    stl_db_t& db;
     strided_ptr_gt<ukv_collection_t> cols;
     strided_ptr_gt<ukv_key_t const> keys;
 
     inline read_task_t operator[](ukv_size_t i) const noexcept {
-        col_t& col = cols && cols[i] ? *reinterpret_cast<col_t*>(cols[i]) : db.unnamed;
+        stl_collection_t& col = cols && cols[i] ? *reinterpret_cast<stl_collection_t*>(cols[i]) : db.unnamed;
         ukv_key_t key = keys[i];
         return {col, key};
     }
 };
 
 struct write_task_t {
-    col_t& collection;
+    stl_collection_t& collection;
     ukv_key_t key;
     byte_t const* begin;
     ukv_val_len_t length;
@@ -131,14 +113,14 @@ struct write_task_t {
 };
 
 struct write_tasks_t {
-    db_t& db;
+    stl_db_t& db;
     strided_ptr_gt<ukv_collection_t> cols;
     strided_ptr_gt<ukv_key_t const> keys;
     strided_ptr_gt<ukv_tape_ptr_t const> vals;
     strided_ptr_gt<ukv_val_len_t const> lens;
 
     inline write_task_t operator[](ukv_size_t i) const noexcept {
-        col_t& col = cols && cols[i] ? *reinterpret_cast<col_t*>(cols[i]) : db.unnamed;
+        stl_collection_t& col = cols && cols[i] ? *reinterpret_cast<stl_collection_t*>(cols[i]) : db.unnamed;
         ukv_key_t key = keys[i];
         byte_t const* begin;
         ukv_val_len_t len;
@@ -154,7 +136,7 @@ struct write_tasks_t {
     }
 };
 
-void save_to_disk(col_t const& col, std::string const& path, ukv_error_t* c_error) {
+void save_to_disk(stl_collection_t const& col, std::string const& path, ukv_error_t* c_error) {
     // Using the classical C++ IO mechanisms is a bad tone in the modern world.
     // They are ugly and, more importantly, painly slow.
     // https://www.reddit.com/r/cpp_questions/comments/e2xia9/performance_comparison_of_various_ways_of_reading/
@@ -203,7 +185,7 @@ cleanup:
         *c_error = "Couldn't close the file after write.";
 }
 
-void read_from_disk(col_t& col, std::string const& path, ukv_error_t* c_error) {
+void read_from_disk(stl_collection_t& col, std::string const& path, ukv_error_t* c_error) {
     // Similar to serialization, we don't use STL here
     FILE* handle = fopen(path.c_str(), "rb+");
 
@@ -250,7 +232,7 @@ cleanup:
         *c_error = "Couldn't close the file after reading.";
 }
 
-void save_to_disk(db_t const& db, ukv_error_t* c_error) {
+void save_to_disk(stl_db_t const& db, ukv_error_t* c_error) {
     auto dir_path = fs::path(db.persisted_path);
     if (!fs::is_directory(dir_path)) {
         *c_error = "Supplied path is not a directory!";
@@ -269,7 +251,7 @@ void save_to_disk(db_t const& db, ukv_error_t* c_error) {
     }
 }
 
-void read_from_disk(db_t& db, ukv_error_t* c_error) {
+void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
     auto dir_path = fs::path(db.persisted_path);
     if (!fs::is_directory(dir_path)) {
         *c_error = "Supplied path is not a directory!";
@@ -293,7 +275,7 @@ void read_from_disk(db_t& db, ukv_error_t* c_error) {
 
         auto filename_w_ext = path.filename().native();
         auto filename = filename_w_ext.substr(0, filename_w_ext.size() - 8);
-        auto col = std::make_unique<col_t>();
+        auto col = std::make_unique<stl_collection_t>();
         col->name = filename;
         read_from_disk(*col, path_str, c_error);
         db.named.emplace(std::string_view(col->name), std::move(col));
@@ -305,7 +287,7 @@ void read_from_disk(db_t& db, ukv_error_t* c_error) {
 /*********************************************************/
 
 void write_head( //
-    db_t& db,
+    stl_db_t& db,
     write_tasks_t tasks,
     ukv_size_t const n,
     ukv_options_t const c_options,
@@ -342,7 +324,7 @@ void write_head( //
 }
 
 void measure_head( //
-    db_t& db,
+    stl_db_t& db,
     read_tasks_t tasks,
     ukv_size_t const n,
     [[maybe_unused]] ukv_options_t const c_options,
@@ -368,7 +350,7 @@ void measure_head( //
 }
 
 void read_head( //
-    db_t& db,
+    stl_db_t& db,
     read_tasks_t tasks,
     ukv_size_t const n,
     [[maybe_unused]] ukv_options_t const c_options,
@@ -411,7 +393,7 @@ void read_head( //
 }
 
 void write_txn( //
-    txn_t& txn,
+    stl_txn_t& txn,
     write_tasks_t tasks,
     ukv_size_t const n,
     [[maybe_unused]] ukv_options_t const c_options,
@@ -419,7 +401,7 @@ void write_txn( //
 
     // No need for locking here, until we commit, unless, of course,
     // a col is being deleted.
-    db_t& db = *txn.db_ptr;
+    stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
 
     for (ukv_size_t i = 0; i != n; ++i) {
@@ -436,7 +418,7 @@ void write_txn( //
 }
 
 void measure_txn( //
-    txn_t& txn,
+    stl_txn_t& txn,
     read_tasks_t tasks,
     ukv_size_t const n,
     ukv_options_t const c_options,
@@ -450,7 +432,7 @@ void measure_txn( //
     if (!tape)
         return;
 
-    db_t& db = *txn.db_ptr;
+    stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
     bool should_track_requests = !(c_options & ukv_option_read_transparent_k);
@@ -489,7 +471,7 @@ void measure_txn( //
 }
 
 void read_txn( //
-    txn_t& txn,
+    stl_txn_t& txn,
     read_tasks_t tasks,
     ukv_size_t const n,
     ukv_options_t const c_options,
@@ -497,7 +479,7 @@ void read_txn( //
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 
-    db_t& db = *txn.db_ptr;
+    stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
     bool should_track_requests = !(c_options & ukv_option_read_transparent_k);
@@ -581,8 +563,8 @@ void ukv_read( //
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 
-    db_t& db = *reinterpret_cast<db_t*>(c_db);
-    txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
+    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     read_tasks_t tasks {db, cols, keys};
@@ -617,8 +599,8 @@ void ukv_write( //
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
-    db_t& db = *reinterpret_cast<db_t*>(c_db);
-    txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
+    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_ptr_gt<ukv_tape_ptr_t const> vals {c_vals, c_vals_stride};
@@ -639,7 +621,7 @@ void ukv_open( //
     ukv_error_t* c_error) {
 
     try {
-        auto db_ptr = new db_t {};
+        auto db_ptr = new stl_db_t {};
         auto len = std::strlen(c_config);
         if (len) {
             db_ptr->persisted_path = std::string(c_config, len);
@@ -664,7 +646,7 @@ void ukv_collection_upsert(
     ukv_collection_t* c_col,
     ukv_error_t* c_error) {
 
-    db_t& db = *reinterpret_cast<db_t*>(c_db);
+    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
     auto name_len = std::strlen(c_col_name);
     auto const col_name = std::string_view(c_col_name, name_len);
@@ -672,7 +654,7 @@ void ukv_collection_upsert(
     auto col_it = db.named.find(col_name);
     if (col_it == db.named.end()) {
         try {
-            auto new_col = std::make_unique<col_t>();
+            auto new_col = std::make_unique<stl_collection_t>();
             new_col->name = col_name;
             *c_col = new_col.get();
             db.named.insert_or_assign(new_col->name, std::move(new_col));
@@ -693,7 +675,7 @@ void ukv_collection_remove(
     // Outputs:
     [[maybe_unused]] ukv_error_t* c_error) {
 
-    db_t& db = *reinterpret_cast<db_t*>(c_db);
+    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
     auto name_len = std::strlen(c_col_name);
     auto col_name = std::string_view(c_col_name, name_len);
@@ -726,17 +708,17 @@ void ukv_txn_begin(
     ukv_txn_t* c_txn,
     ukv_error_t* c_error) {
 
-    db_t& db = *reinterpret_cast<db_t*>(c_db);
+    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     if (!*c_txn) {
         try {
-            *c_txn = new txn_t();
+            *c_txn = new stl_txn_t();
         }
         catch (...) {
             *c_error = "Failed to initizalize the transaction";
         }
     }
 
-    txn_t& txn = *reinterpret_cast<txn_t*>(*c_txn);
+    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(*c_txn);
     txn.db_ptr = &db;
     txn.sequence_number = c_sequence_number ? c_sequence_number : ++db.youngest_sequence;
     txn.requested_keys.clear();
@@ -750,14 +732,14 @@ void ukv_txn_commit( //
 
     // This write may fail with out-of-memory errors, if Hash-Tables
     // bucket allocation fails, but no values will be copied, only moved.
-    txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
-    db_t& db = *txn.db_ptr;
+    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
+    stl_db_t& db = *txn.db_ptr;
     std::unique_lock _ {db.mutex};
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
     // 1. Check for refreshes among fetched keys
     for (auto const& [located_key, located_sequence] : txn.requested_keys) {
-        col_t& col = *located_key.col_ptr;
+        stl_collection_t& col = *reinterpret_cast<stl_collection_t*>(located_key.collection);
         auto key_iterator = col.pairs.find(located_key.key);
         if (key_iterator != col.pairs.end()) {
             if (key_iterator->second.sequence_number != located_sequence) {
@@ -769,7 +751,7 @@ void ukv_txn_commit( //
 
     // 2. Check for collisions among incoming values
     for (auto const& [located_key, value] : txn.new_values) {
-        col_t& col = *located_key.col_ptr;
+        stl_collection_t& col = *reinterpret_cast<stl_collection_t*>(located_key.collection);
         auto key_iterator = col.pairs.find(located_key.key);
         if (key_iterator != col.pairs.end()) {
             if (key_iterator->second.sequence_number == txn.sequence_number) {
@@ -798,7 +780,7 @@ void ukv_txn_commit( //
 
     // 4. Import the data, as no collisions were detected
     for (auto& located_key_and_value : txn.new_values) {
-        col_t& col = *located_key_and_value.first.col_ptr;
+        stl_collection_t& col = *reinterpret_cast<stl_collection_t*>(located_key_and_value.first.collection);
         auto key_iterator = col.pairs.find(located_key_and_value.first.key);
         // A key was deleted:
         // if (located_key_and_value.second.empty()) {
@@ -836,14 +818,14 @@ void ukv_tape_free(ukv_t const, ukv_tape_ptr_t c_ptr, ukv_size_t c_len) {
 void ukv_txn_free(ukv_t const, ukv_txn_t const c_txn) {
     if (!c_txn)
         return;
-    txn_t& txn = *reinterpret_cast<txn_t*>(c_txn);
+    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     delete &txn;
 }
 
 void ukv_free(ukv_t c_db) {
     if (!c_db)
         return;
-    db_t& db = *reinterpret_cast<db_t*>(c_db);
+    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     delete &db;
 }
 
