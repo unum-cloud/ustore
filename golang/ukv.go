@@ -69,13 +69,13 @@ func (db *DataBase) Set(key uint64, value *[]byte) error {
 	error_c := C.ukv_error_t(nil)
 	key_c := C.ukv_key_t(key)
 	collection_c := (*C.ukv_collection_t)(nil)
-	options_c := C.ukv_options_write_t(nil)
+	options_c := C.ukv_options_t(C.ukv_options_default_k)
 	value_go := C.CBytes(*value)
 	value_ptr_c := C.ukv_tape_ptr_t(value_go)
 	value_length_c := C.ukv_val_len_t(len(*value))
 	defer C.free(value_go)
 
-	C.ukv_write(db.raw, nil, &key_c, 1, collection_c, options_c, value_ptr_c, &value_length_c, &error_c)
+	C.ukv_write(db.raw, nil, collection_c, 0, &key_c, 1, 0, &value_ptr_c, 0, &value_length_c, 0, options_c, &error_c)
 	return forwardError(error_c)
 }
 
@@ -88,11 +88,11 @@ func (db *DataBase) Delete(key uint64) error {
 	error_c := C.ukv_error_t(nil)
 	key_c := C.ukv_key_t(key)
 	collection_c := (*C.ukv_collection_t)(nil)
-	options_c := C.ukv_options_write_t(nil)
+	options_c := C.ukv_options_t(C.ukv_options_default_k)
 	value_ptr_c := C.ukv_tape_ptr_t(nil)
 	value_length_c := C.ukv_val_len_t(0)
 
-	C.ukv_write(db.raw, nil, &key_c, 1, collection_c, options_c, value_ptr_c, &value_length_c, &error_c)
+	C.ukv_write(db.raw, nil, collection_c, 0, &key_c, 1, 0, &value_ptr_c, 0, &value_length_c, 0, options_c, &error_c)
 	return forwardError(error_c)
 }
 
@@ -103,12 +103,14 @@ func (db *DataBase) Get(key uint64) ([]byte, error) {
 	error_c := C.ukv_error_t(nil)
 	key_c := C.ukv_key_t(key)
 	collection_c := (*C.ukv_collection_t)(nil)
-	options_c := (C.ukv_options_read_t)(nil)
+	options_c := C.ukv_options_t(C.ukv_options_default_k)
 	tape_c := (C.ukv_tape_ptr_t)(nil)
 	tape_length_c := (C.ukv_size_t)(0)
 
-	C.ukv_read(db.raw, nil, &key_c, 1,
-		collection_c, options_c,
+	C.ukv_read(db.raw, nil,
+		collection_c, 0,
+		&key_c, 1, 0,
+		options_c,
 		&tape_c, &tape_length_c,
 		&error_c)
 
@@ -134,16 +136,17 @@ func (db *DataBase) Contains(key uint64) (bool, error) {
 	error_c := C.ukv_error_t(nil)
 	key_c := C.ukv_key_t(key)
 	collection_c := (*C.ukv_collection_t)(nil)
-	options_c := (C.ukv_options_read_t)(nil)
+	options_c := C.ukv_options_t(C.ukv_option_read_lengths_k)
 	tape_c := (C.ukv_tape_ptr_t)(nil)
 	tape_length_c := (C.ukv_size_t)(0)
 	defer cleanTape(db, tape_c, tape_length_c)
 
-	C.ukv_option_read_lengths(&options_c, true)
-	C.ukv_read(
-		db.raw, nil, &key_c, 1,
-		collection_c, options_c,
-		&tape_c, &tape_length_c, &error_c)
+	C.ukv_read(db.raw, nil,
+		collection_c, 0,
+		&key_c, 1, 0,
+		options_c,
+		&tape_c, &tape_length_c,
+		&error_c)
 
 	error_go := forwardError(error_c)
 	if error_go != nil {

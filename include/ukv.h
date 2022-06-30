@@ -35,16 +35,20 @@
  *    so the DB shouldn't die/close before those objects are freed.
  *    This also allows us to reduce the number of function arguments for
  *    interface functions.
+ * 5. Strides! Higher level systems may pack groups of arguments into AoS
+ *    instead of SoA. To minimize the need of copies and data re-layout,
+ *    we use byte-length strides arguments, similar to BLAS libraries.
+ *    Passing Zero as a "stride" means repeating the same value.
  *
  * @section Choosing between more functions vs more argument per function
  * We try to preserve balance in the number of function calls exposed in
  * this C API/ABI layer and the complexity of each call. As a result,
- * the @b read methods can be used to:
+ * the @b write methods can be used to:
  * > insert
  * > update
  * > detele
- * and the @b write methods can be used to:
- * > check object existance
+ * and the @b read methods can be used to:
+ * > check object existance or it's length
  * > retrieve an object
  * Interfaces for normal and transactional operations are identical,
  * exept for the `_txn_` name part.
@@ -72,21 +76,52 @@ extern "C" {
 #include <stdint.h>
 
 /*********************************************************/
-/*****************		  Structures	  ****************/
+/*****************   Structures & Consts  ****************/
 /*********************************************************/
 
 typedef void* ukv_t;
 typedef void* ukv_txn_t;
 typedef void* ukv_collection_t;
-typedef void* ukv_options_read_t;
-typedef void* ukv_options_write_t;
 
 typedef uint64_t ukv_key_t;
 typedef uint32_t ukv_val_len_t;
 typedef uint8_t* ukv_tape_ptr_t;
 typedef uint64_t ukv_size_t;
-typedef char const* ukv_str_view_t;
 typedef char const* ukv_error_t;
+
+/**
+ * @brief Non-owning string reference.
+ * Always provided by user and we don't participate
+ * in its lifetime management in any way.
+ */
+typedef char const* ukv_str_view_t;
+
+typedef enum {
+
+    ukv_options_default_k = 0,
+    /**
+     * @brief Limits the "read" operations to just metadata retrieval.
+     * Identical to the "HEAD" verb in the HTTP protocol.
+     */
+    ukv_option_read_lengths_k = 1 << 1,
+    /**
+     * @brief Forces absolute consistency on the write operations
+     * flushing all the data to disk after each write. It's usage
+     * may cause severe performance degradation in some implementations.
+     * Yet the users must be warned, that modern IO drivers still often
+     * can't guarantee that everything will reach the disk.
+     */
+    ukv_option_write_flush_k = 1 << 2,
+    /**
+     * @brief When reading from a transaction, avoids tracking the keys.
+     * Which will increase the probability of writes, but levels-down the
+     * consistency guarantees.
+     */
+    ukv_option_read_transparent_k = 1 << 3,
+
+} ukv_options_t;
+
+extern ukv_collection_t ukv_default_collection_k;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -109,7 +144,7 @@ void ukv_open( //
     ukv_error_t* error);
 
 /**
- * @brief The primary "setter" interface that inserts into "HEAD" state.
+ * @brief The primary "setter" interface.
  * Passing NULLs into @p `values` is identical to deleting entries.
  * If a fail had occured, @p `error` will be set to non-NULL.
  *
@@ -117,6 +152,9 @@ void ukv_open( //
  * This is one of the two primary methods, that knots together various kinds of reads:
  * > Transactional and Heads
  * > Insertions and Deletions
+ *
+ * If lengths aren't provided, they are inferred from the passed values,
+ * as the offset of the first NULL-termination (zero) symbol.
  *
  * @param[in] db             Already open database instance, @see `ukv_open`.
  * @param[in] txn            Transaction, through which the operation must go.
@@ -135,12 +173,21 @@ void ukv_open( //
 void ukv_write( //
     ukv_t const db,
     ukv_txn_t const txn,
+
+    ukv_collection_t const* collections,
+    ukv_size_t const collections_stride,
+
     ukv_key_t const* keys,
     ukv_size_t const keys_count,
-    ukv_collection_t const* collections,
-    ukv_options_write_t const options,
-    ukv_tape_ptr_t values,
+    ukv_size_t const keys_stride,
+
+    ukv_tape_ptr_t const* values,
+    ukv_size_t const values_stride,
+
     ukv_val_len_t const* lengths,
+    ukv_size_t const lengths_stride,
+
+    ukv_options_t const options,
     ukv_error_t* error);
 
 /**
@@ -171,7 +218,7 @@ void ukv_write( //
  *                            > transaparent: Bypassed any ACID checks on next write.
  *                            > lengths: Only fetches lengths of values, not content.
  *
- * @param[inout] tape        Points to a memory region that we use during
+ * @param[inout] tape         Points to a memory region that we use during
  *                            this request. If it's too small (@p `capacity`),
  *                            we `realloc` a new buffer. You can't pass a memory
  *                            allocated by a third-party allocator.
@@ -185,10 +232,16 @@ void ukv_write( //
 void ukv_read( //
     ukv_t const db,
     ukv_txn_t const txn,
+
+    ukv_collection_t const* collections,
+    ukv_size_t const collections_stride,
+
     ukv_key_t const* keys,
     ukv_size_t const keys_count,
-    ukv_collection_t const* collections,
-    ukv_options_read_t const options,
+    ukv_size_t const keys_stride,
+
+    ukv_options_t const options,
+
     ukv_tape_ptr_t* tape,
     ukv_size_t* capacity,
     ukv_error_t* error);
@@ -277,62 +330,8 @@ void ukv_txn_begin( //
  */
 void ukv_txn_commit( //
     ukv_txn_t const txn,
-    ukv_options_write_t const options,
+    ukv_options_t const options,
     ukv_error_t* error);
-
-/*********************************************************/
-/*****************	       Options        ****************/
-/*********************************************************/
-
-/**
- * @brief Pull just the lengths of the entries without fetching
- * the content values.
- *
- * @param[inout] options Options flags to be updated.
- */
-void ukv_option_read_lengths(ukv_options_read_t* options, bool);
-
-/**
- * @brief Conditionally forces non-transactional reads to create
- * a snapshot, so that all the reads in the batch are consistent with
- * each other.
- *
- * @param[inout] options Options flags to be updated.
- */
-void ukv_option_read_consistent(ukv_options_read_t* options, bool);
-
-/**
- * @brief Conditionally disables the tracking of the current batch of
- * reads, so that it doesn't stop transactions, which follow overwrites
- * of their dependencies.
- *
- * @param[inout] options Options flags to be updated.
- */
-void ukv_option_read_transparent(ukv_options_read_t* options, bool);
-
-/**
- * @brief Conditionally informs that there is only one collection
- * passed instead of the same number as input keys.
- *
- * @param[inout] options Options flags to be updated.
- */
-void ukv_option_read_colocated(ukv_options_read_t* options, bool);
-
-/**
- * @brief Conditionally forces the write to be flushed either to
- * Write-Ahead-Log or directly to disk by the end of the operation.
- *
- * @param[inout] options Options flags to be updated.
- */
-void ukv_option_write_flush(ukv_options_write_t* options, bool);
-
-/**
- * @brief Conditionally informs that there is only one collection
- * passed instead of the same number as input keys.
- *
- * @param[inout] options Options flags to be updated.
- */
-void ukv_option_write_colocated(ukv_options_read_t* options, bool);
 
 /*********************************************************/
 /*****************	 Memory Reclamation   ****************/
