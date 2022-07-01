@@ -62,7 +62,7 @@ It's feature-rich, but not very performant, supporting:
 Using it can be as easy as:
 
 ```python
-import ukv
+import ukv.stl as ukv
 
 db = ukv.DataBase()
 db[42] = 'purpose of life'.encode()

@@ -10,6 +10,7 @@ ext_modules = [
     Pybind11Extension(
         'ukv/stl',
         [
+            'python/pybind.cpp',
             'python/pybind_database.cpp',
             'python/pybind_networkx.cpp',
             'python/pybind_pandas.cpp',
@@ -25,6 +26,7 @@ ext_modules = [
     Pybind11Extension(
         'ukv/rocks',
         [
+            'python/pybind.cpp',
             'python/pybind_database.cpp',
             'python/pybind_networkx.cpp',
             'python/pybind_pandas.cpp',
