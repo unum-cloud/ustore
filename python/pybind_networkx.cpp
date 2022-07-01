@@ -101,7 +101,7 @@ struct network_t : public std::enable_shared_from_this<network_t> {
 
 PYBIND11_MODULE(ukv.networkx, m) {
     m.doc() =
-        "Python Graph/Network processing workloads.\n"
+        "Python library for Graph/Network processing workloads.\n"
         "Similar to NetworkX, but implemented in C/C++ and \n"
         "with support for persistent storage and ACID operations.\n"
         "---------------------------------------------\n";
@@ -118,19 +118,10 @@ PYBIND11_MODULE(ukv.networkx, m) {
             py::arg("attributed_relations") = false);
 
     // Random scalar operations
-    net.def("has_node", [](network_t& net, ukv_key_t v) {
-        // Checks if there is such node ID both among sources and targets
-        return false;
-    });
-    net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
-        //
-        return false;
-    });
-    net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
-        //
-        return false;
-    });
-    net.def("count_edges", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {});
+    net.def("has_node", [](network_t& net, ukv_key_t v) { return false; });
+    net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) { return false; });
+    net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) { return false; });
+    net.def("count_edges", [](network_t& net, ukv_key_t v1, ukv_key_t v2) { return 0ul; });
 
     // Batch retrieval into dynamically sized NumPy arrays
     net.def("neighbors", [](network_t& net, ukv_key_t n) {

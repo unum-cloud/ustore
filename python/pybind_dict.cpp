@@ -432,8 +432,8 @@ void collection_remove(py_db_t& db, std::string const& collection_name) {
 
 PYBIND11_MODULE(ukv, m) {
     m.doc() =
-        "Python bindings for Universal Key Value Store abstraction.\n"
-        "Supports most basic collection operations, like `dict`.\n"
+        "Python bindings for Universal Key Value store library.\n"
+        "Supports most basic collection operations, just like `dict`.\n"
         "---------------------------------------------\n";
 
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
