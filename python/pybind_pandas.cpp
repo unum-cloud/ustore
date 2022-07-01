@@ -13,15 +13,9 @@
  *      * __len__() ~ It's hard to consistently estimate the collection.
  */
 
-#include <optional>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
-
+#include "pybind.hpp"
 #include "ukv_docs.h"
-#include "ukv.hpp"
 
-namespace py = pybind11;
 using namespace unum::ukv;
 using namespace unum;
 
@@ -41,15 +35,10 @@ struct dataframe_t : public std::enable_shared_from_this<dataframe_t> {
     dataframe_t(dataframe_t const&) = delete;
 };
 
-PYBIND11_MODULE(ukv.pandas, m) {
-    m.doc() =
-        "Python library for Tabular data processing workloads.\n"
-        "Similar to NetworkX, but implemented in C/C++ and \n"
-        "with support for persistent storage and ACID operations.\n"
-        "---------------------------------------------\n";
+void ukv::wrap_dataframe(py::module& m) {
 
-    auto df = py::class_<dataframe_t, std::shared_ptr<dataframe_t>>(m, "DataFrame");
-    df.def(py::init([](std::vector<std::string> fields, ) { return std::make_shared<dataframe_t>(); }));
+    auto df = py::class_<dataframe_t, std::shared_ptr<dataframe_t>>(m, "DataFrame", py::module_local());
+    df.def(py::init([](std::vector<std::string> fields) { return std::make_shared<dataframe_t>(); }));
 
     // Batch Access
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.iloc.html#pandas.DataFrame.loc

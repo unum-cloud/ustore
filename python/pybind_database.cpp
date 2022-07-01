@@ -1,13 +1,8 @@
 /**
  * @brief Python bindings for Unums Key Value Store.
  *
- * @section Features
- * > Zero-Copy data forwarding into Python runtime
- *   https://stackoverflow.com/questions/58113973/returning-multiple-pyarray-without-copying-in-pybind11
- * > Calls the C functions outside of the Global Interpret Lock
- *   https://stackoverflow.com/a/55205951
- *
  * @section Interface
+ *
  * Primary DataBase Methods:
  *      * get(collection?, key, default?) ~ Single Read
  *      * set(collection?, key, default?) ~ Single Insert
@@ -30,40 +25,12 @@
  * https://python-reference.readthedocs.io/en/latest/docs/dict/
  * https://docs.python.org/3/tutorial/datastructures.html#dictionaries
  * https://docs.python.org/3/c-api/dict.html
- *
- * @section Low-level CPython bindings
- * The complexit of implementing the low-level interface boils
- * down to frequent manual calls to `PyArg_ParseTuple()`.
- * It also gives us a more fine-grained control over `PyGILState_Release()`.
- * https://docs.python.org/3/extending/extending.html
- * https://realpython.com/build-python-c-extension-module/
- * https://docs.python.org/3/c-api/arg.html
- * https://docs.python.org/3/c-api/mapping.html
- * https://docs.python.org/3/c-api/init.html#thread-state-and-the-global-interpreter-lock
- *
- * @section High-level Python bindings generators
- * https://realpython.com/python-bindings-overview/
- * http://blog.behnel.de/posts/cython-pybind11-cffi-which-tool-to-choose.html
- * https://pythonspeed.com/articles/python-extension-performance/
- * https://github.com/wjakob/nanobind
- * https://wiki.python.org/moin/IntegratingPythonWithOtherLanguages
- *
- * @sections TODOs:
- * * Nanobind or raw C reimplementation of the interface.
  */
 
-#include <optional>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
+#include "pybind.hpp"
 
-#include "ukv.h"
-#include "python/ukv_pybind.hpp"
-
-#define stringify_value_m(a) stringify_m(a)
-#define stringify_m(a) #a
-
-namespace py = pybind11;
+using namespace unum::ukv;
+using namespace unum;
 
 struct py_db_t;
 struct py_txn_t;
@@ -433,12 +400,7 @@ void collection_remove(py_db_t& db, std::string const& collection_name) {
         throw make_exception(db, error);
 }
 
-PYBIND11_MODULE(MODULE_NAME, m) {
-    m.attr("__name__") = "ukv." stringify_value_m(MODULE_NAME);
-    m.doc() =
-        "Python bindings for Universal Key Value store library.\n"
-        "Supports most basic collection operations, just like `dict`.\n"
-        "---------------------------------------------\n";
+void ukv::wrap_database(py::module& m) {
 
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
     auto db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
