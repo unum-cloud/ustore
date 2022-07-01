@@ -1,10 +1,16 @@
 
 #pragma once
 #include <utility> // `std::pair`
+
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/numpy.h>
+
 #include "ukv.hpp"
 
 namespace unum::ukv {
+
+namespace py = pybind11;
 
 struct py_buffer_t {
     ~py_buffer_t() {
@@ -19,10 +25,6 @@ struct py_buffer_t {
     Py_buffer py;
     bool initialized = false;
 };
-
-template <typename scalar_at>
-std::pair<py_buffer_t, strided_range_gt<scalar_at>> strided_matrix(py::handle handle) {
-}
 
 template <typename scalar_at>
 std::pair<py_buffer_t, strided_range_gt<scalar_at>> strided_array(py::handle handle) {
@@ -46,10 +48,14 @@ std::pair<py_buffer_t, strided_range_gt<scalar_at>> strided_array(py::handle han
         throw std::invalid_argument("Scalar type mismatch");
 
     strided_range_gt<scalar_at> result;
-    result.raw = reinterpret_cast<object_at*>(raii.py.buf);
+    result.raw = reinterpret_cast<scalar_at*>(raii.py.buf);
     result.stride = static_cast<ukv_size_t>(raii.py.strides[0]);
     result.count = static_cast<ukv_size_t>(raii.py.shape[0]);
     return {std::move(raii), result};
 }
+
+void wrap_database(py::module&);
+void wrap_dataframe(py::module&);
+void wrap_network(py::module&);
 
 } // namespace unum::ukv

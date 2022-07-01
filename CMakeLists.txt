@@ -118,7 +118,8 @@ include_directories(include/ ${rocksdb_SOURCE_DIR}/include)
 add_library(ukv_stl
   src/ukv_stl.cpp
   src/ukv_docs_nlohmann.cpp
-  src/ukv_graph_pfor.cpp)
+  src/ukv_graph_pfor.cpp
+)
 target_link_libraries(ukv_stl
   lz4
   turbopfor

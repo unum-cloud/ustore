@@ -10,31 +10,31 @@ ext_modules = [
     Pybind11Extension(
         'ukv/stl',
         [
-            'python/pybind_dict.cpp',
+            'python/pybind_database.cpp',
             'python/pybind_networkx.cpp',
             'python/pybind_pandas.cpp',
         ],
-        include_dirs=['include/'],
+        include_dirs=['include/', 'python/'],
         library_dirs=['build/lib/'],
         libraries=['ukv_stl'],
         define_macros=[
             ('UKV_VERSION', __version__),
-            ('MODULE_NAME', 'stl')
+            ('UKV_PYTHON_MODULE_NAME', 'stl')
         ],
     ),
     Pybind11Extension(
         'ukv/rocks',
         [
-            'python/pybind_dict.cpp',
+            'python/pybind_database.cpp',
             'python/pybind_networkx.cpp',
             'python/pybind_pandas.cpp',
         ],
-        include_dirs=['include/'],
+        include_dirs=['include/', 'python/'],
         library_dirs=['build/lib/'],
         libraries=['ukv_rocksdb', 'rocksdb'],
         define_macros=[
             ('UKV_VERSION', __version__),
-            ('MODULE_NAME', 'rocks')
+            ('UKV_PYTHON_MODULE_NAME', 'rocks')
         ],
     ),
 ]

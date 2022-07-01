@@ -28,15 +28,9 @@
  *      * __len__() ~ It's hard to consistently estimate the collection.
  */
 
-#include <optional>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
+#include "pybind.hpp"
+#include "ukv_graph.hpp"
 
-#include "ukv.h"
-#include "ukv.hpp"
-
-namespace py = pybind11;
 using namespace unum::ukv;
 using namespace unum;
 
@@ -61,7 +55,6 @@ struct network_t : public std::enable_shared_from_this<network_t> {
     bool has_target_attrs_ = false;
     bool has_edge_attrs_ = false;
 
-    network_t() = default;
     network_t(network_t&&) = delete;
     network_t(network_t const&) = delete;
 
@@ -92,26 +85,19 @@ struct network_t : public std::enable_shared_from_this<network_t> {
               bool allow_self_loops,
               bool allow_parallel_edges) {}
 
-    ~network_t() {
-        if (raw)
-            ukv_collection_free(db_ptr->raw, raw);
-        raw = NULL;
-    }
+    network_t() {}
+    ~network_t() {}
 };
 
-PYBIND11_MODULE(ukv.networkx, m) {
-    m.doc() =
-        "Python library for Graph/Network processing workloads.\n"
-        "Similar to NetworkX, but implemented in C/C++ and \n"
-        "with support for persistent storage and ACID operations.\n"
-        "---------------------------------------------\n";
+void ukv::wrap_network(py::module& m) {
 
-    auto net = py::class_<network_t, std::shared_ptr<network_t>>(m, "Network");
+    auto net = py::class_<network_t, std::shared_ptr<network_t>>(m, "Network", py::module_local());
     net.def(py::init([](std::string relation_name,
                         std::optional<std::string> source_attributes,
                         std::optional<std::string> target_attributes,
                         bool multi = false,
                         bool attributed_relations = false) { return std::make_shared<network_t>(); }),
+            py::arg("relation_name"),
             py::arg("source_attributes") = std::nullopt,
             py::arg("target_attributes") = std::nullopt,
             py::arg("multi") = false,
