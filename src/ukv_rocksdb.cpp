@@ -54,7 +54,7 @@ void _ukv_write_head( //
     ukv_key_t const* c_keys,
     size_t const c_keys_count,
     ukv_collection_t const* c_collections,
-    ukv_options_write_t const c_options,
+    ukv_options_t const c_options,
     ukv_tape_ptr_t const c_values,
     ukv_val_len_t const* c_lengths,
     ukv_error_t* c_error) {
@@ -75,7 +75,7 @@ void _ukv_write_txn( //
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
-    ukv_options_write_t const c_options,
+    ukv_options_t const c_options,
     ukv_tape_ptr_t const c_tape,
     ukv_val_len_t const* lengths,
     ukv_error_t* c_error) {
@@ -95,7 +95,7 @@ void _ukv_read_head( //
     ukv_key_t const* c_keys,
     size_t const c_keys_count,
     ukv_collection_t const* c_collections,
-    ukv_options_read_t const c_options,
+    ukv_options_t const c_options,
     ukv_tape_ptr_t* c_tape,
     size_t* c_tape_length,
     ukv_error_t* c_error) {
@@ -121,7 +121,7 @@ void _ukv_read_txn( //
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
-    ukv_options_read_t const c_options,
+    ukv_options_t const c_options,
     ukv_tape_ptr_t* c_tape,
     ukv_size_t* c_tape_length,
     ukv_error_t* c_error) {
@@ -148,7 +148,7 @@ void ukv_write( //
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
-    ukv_options_write_t const c_options,
+    ukv_options_t const c_options,
     ukv_tape_ptr_t c_tape,
     ukv_val_len_t const* c_lengths,
     ukv_error_t* c_error) {
@@ -163,7 +163,7 @@ void ukv_read( //
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_count,
     ukv_collection_t const* c_collections,
-    ukv_options_read_t const c_options,
+    ukv_options_t const c_options,
     ukv_tape_ptr_t* c_tape,
     ukv_size_t* c_tape_length,
     ukv_error_t* c_error) {
@@ -201,11 +201,11 @@ void ukv_txn_begin( //
 
 void ukv_txn_commit( //
     ukv_txn_t const txn,
-    ukv_options_write_t const options,
+    ukv_options_t const options,
     ukv_error_t* error) {
 }
 
-void ukv_option_read_colocated(ukv_options_read_t* options, bool) {
+void ukv_option_read_colocated(ukv_options_t* options, bool) {
 }
 
 void ukv_txn_free(ukv_t const db, ukv_txn_t const txn) {
@@ -221,19 +221,4 @@ void ukv_error_free(ukv_error_t const error) {
 }
 
 void ukv_tape_free(ukv_t const db, ukv_tape_ptr_t, ukv_size_t) {
-}
-
-void ukv_option_read_lengths(ukv_options_read_t* options, bool) {
-}
-
-void ukv_option_read_consistent(ukv_options_read_t* options, bool) {
-}
-
-void ukv_option_read_transparent(ukv_options_read_t* options, bool) {
-}
-
-void ukv_option_write_flush(ukv_options_write_t* options, bool) {
-}
-
-void ukv_option_write_colocated(ukv_options_read_t* options, bool) {
 }
