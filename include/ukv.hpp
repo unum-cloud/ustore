@@ -55,28 +55,28 @@ struct located_key_hash_t {
 
 class error_t {
   public:
-    ukv_error_t raw_ = nullptr;
+    ukv_error_t raw = nullptr;
 
-    error_t(ukv_error_t err = nullptr) noexcept : raw_(err) {}
-    operator bool() const noexcept { return raw_; }
+    error_t(ukv_error_t err = nullptr) noexcept : raw(err) {}
+    operator bool() const noexcept { return raw; }
 
     error_t(error_t const&) = delete;
     error_t& operator=(error_t const&) = delete;
 
-    error_t(error_t&& other) noexcept { raw_ = std::exchange(other.raw_, nullptr); }
+    error_t(error_t&& other) noexcept { raw = std::exchange(other.raw, nullptr); }
     error_t& operator=(error_t&& other) noexcept {
-        raw_ = std::exchange(other.raw_, nullptr);
+        raw = std::exchange(other.raw, nullptr);
         return *this;
     }
     ~error_t() {
-        if (raw_)
-            ukv_error_free(raw_);
-        raw_ = nullptr;
+        if (raw)
+            ukv_error_free(raw);
+        raw = nullptr;
     }
 
     std::runtime_error release_exception() {
-        std::runtime_error result(raw_);
-        ukv_error_free(std::exchange(raw_, nullptr));
+        std::runtime_error result(raw);
+        ukv_error_free(std::exchange(raw, nullptr));
         return result;
     }
 };
@@ -259,6 +259,7 @@ struct taped_values_t {
 
     inline tape_iterator_t begin() const noexcept { return {lengths, values}; }
     inline tape_iterator_t end() const noexcept { return {lengths + count, values}; }
+    inline std::size_t size() const noexcept { return count; }
 };
 
 /**
@@ -339,7 +340,7 @@ struct sample_handle_t {
                  options,
                  memory,
                  capacity,
-                 &error.raw_);
+                 &error.raw);
         if (error)
             return {std::move(error)};
 
@@ -360,7 +361,7 @@ struct sample_handle_t {
                   vals.lengths_range.raw,
                   vals.lengths_range.stride,
                   options,
-                  &error.raw_);
+                  &error.raw);
         return error;
     }
 
@@ -427,7 +428,7 @@ struct db_t {
 
     error_t open(std::string const& config) {
         error_t error;
-        ukv_open(config.c_str(), &raw, &error.raw_);
+        ukv_open(config.c_str(), &raw, &error.raw);
         return error;
     }
 

@@ -88,7 +88,10 @@ inline bool entry_was_overwritten(sequence_t entry_sequence,
                : ((entry_sequence >= transaction_sequence) | (entry_sequence <= youngest_sequence));
 }
 
-byte_t* reserve_tape(ukv_tape_ptr_t* tape_ptr, ukv_size_t* tape_length, ukv_size_t new_length, ukv_error_t* c_error) {
+static byte_t* reserve_tape(ukv_tape_ptr_t* tape_ptr,
+                            ukv_size_t* tape_length,
+                            ukv_size_t new_length,
+                            ukv_error_t* c_error) {
 
     byte_t* tape = *reinterpret_cast<byte_t**>(tape_ptr);
     if (new_length >= *tape_length) {

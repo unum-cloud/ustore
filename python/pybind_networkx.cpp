@@ -41,12 +41,14 @@ using namespace unum;
 struct network_t : public std::enable_shared_from_this<network_t> {
 
     ukv_t db = NULL;
+    ukv_txn_t txn = NULL;
     ukv_collection_t sources_attrs = NULL;
     ukv_collection_t targets_attrs = NULL;
     ukv_collection_t relations_attrs = NULL;
     ukv_collection_t inverted_index = NULL;
 
     std::string name;
+    managed_tape_t tape;
 
     bool is_directed_ = false;
     bool is_multi_ = false;
@@ -74,7 +76,6 @@ struct network_t : public std::enable_shared_from_this<network_t> {
      * > targets_name: "movies.docs"
      * > relations_name: "views.graph"
      * > attributes_name: "views.docs"
-     *
      */
     network_t(ukv_t db,
               std::string const& relations_name,
@@ -97,17 +98,131 @@ void ukv::wrap_network(py::module& m) {
                         std::optional<std::string> target_attributes,
                         bool multi = false,
                         bool attributed_relations = false) { return std::make_shared<network_t>(); }),
-            py::arg("relation_name"),
+            py::arg("relation_name") = ".graph",
             py::arg("source_attributes") = std::nullopt,
             py::arg("target_attributes") = std::nullopt,
             py::arg("multi") = false,
             py::arg("attributed_relations") = false);
 
     // Random scalar operations
-    net.def("has_node", [](network_t& net, ukv_key_t v) { return false; });
-    net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) { return false; });
-    net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) { return false; });
-    net.def("count_edges", [](network_t& net, ukv_key_t v1, ukv_key_t v2) { return 0ul; });
+    net.def("has_node", [](network_t& net, ukv_key_t v) {
+        error_t error;
+        ukv_read(net.db,
+                 net.txn,
+                 &net.relations_attrs,
+                 0,
+                 &v,
+                 1,
+                 0,
+                 ukv_option_read_lengths_k,
+                 &net.tape.memory,
+                 &net.tape.capacity,
+                 &error.raw);
+        if (error)
+            throw error.release_exception();
+
+        taped_values_t vals = net.tape;
+        if (!vals.size())
+            return false;
+        value_view_t val = *vals.begin();
+        return val.size() != 0;
+    });
+
+    net.def("degree", [](network_t& net, ukv_key_t v) {
+        error_t error;
+        ukv_graph_gather_neighbors(net.db,
+                                   net.txn,
+                                   &net.relations_attrs,
+                                   0,
+                                   &v,
+                                   1,
+                                   0,
+                                   ukv_options_default_k,
+                                   &net.tape.memory,
+                                   &net.tape.capacity,
+                                   &error.raw);
+        if (error)
+            throw error.release_exception();
+
+        taped_values_t vals = net.tape;
+        if (!vals.size())
+            return 0ul;
+        value_view_t val = *vals.begin();
+        return neighbors(val, ukv_graph_node_any_k).size();
+    });
+
+    net.def("count_edges", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
+        error_t error;
+        ukv_graph_gather_neighbors(net.db,
+                                   net.txn,
+                                   &net.relations_attrs,
+                                   0,
+                                   &v1,
+                                   1,
+                                   0,
+                                   ukv_options_default_k,
+                                   &net.tape.memory,
+                                   &net.tape.capacity,
+                                   &error.raw);
+        if (error)
+            throw error.release_exception();
+
+        taped_values_t vals = net.tape;
+        if (!vals.size())
+            return 0ul;
+        value_view_t val = *vals.begin();
+        auto neighbors_range = neighbors(val, ukv_graph_node_source_k);
+        auto matching_range = std::equal_range(neighbors_range.begin(), neighbors_range.end(), v2);
+        return static_cast<std::size_t>(matching_range.second - matching_range.first);
+    });
+
+    net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
+        error_t error;
+        ukv_graph_gather_neighbors(net.db,
+                                   net.txn,
+                                   &net.relations_attrs,
+                                   0,
+                                   &v1,
+                                   1,
+                                   0,
+                                   ukv_options_default_k,
+                                   &net.tape.memory,
+                                   &net.tape.capacity,
+                                   &error.raw);
+        if (error)
+            throw error.release_exception();
+
+        taped_values_t vals = net.tape;
+        if (!vals.size())
+            return false;
+        value_view_t val = *vals.begin();
+        auto neighbors_range = neighbors(val, ukv_graph_node_source_k);
+        return std::binary_search(neighbors_range.begin(), neighbors_range.end(), v2);
+    });
+
+    net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
+        error_t error;
+        ukv_graph_gather_neighbors(net.db,
+                                   net.txn,
+                                   &net.relations_attrs,
+                                   0,
+                                   &v1,
+                                   1,
+                                   0,
+                                   ukv_options_default_k,
+                                   &net.tape.memory,
+                                   &net.tape.capacity,
+                                   &error.raw);
+        if (error)
+            throw error.release_exception();
+
+        taped_values_t vals = net.tape;
+        if (!vals.size())
+            return false;
+        value_view_t val = *vals.begin();
+        auto neighbors_range = neighbors(val, ukv_graph_node_source_k);
+        return std::binary_search(neighbors_range.begin(), neighbors_range.end(), neighborhood_t {v2, eid});
+    });
 
     // Batch retrieval into dynamically sized NumPy arrays
     net.def("neighbors", [](network_t& net, ukv_key_t n) {
@@ -133,7 +248,9 @@ void ukv::wrap_network(py::module& m) {
             [](network_t& net, py::handle const& v1s, py::handle const& v2s, py::handle const& eids) {});
 
     // Bulk Writes
-    net.def("clear_edges", [](network_t& net) {});
+    net.def("clear_edges", [](network_t& net) {
+
+    });
     net.def("clear", [](network_t& net) {});
 
     // Bulk Reads
