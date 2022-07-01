@@ -58,6 +58,7 @@
 #include <pybind11/numpy.h>
 
 #include "ukv.h"
+#include "python/ukv_pybind.hpp"
 
 namespace py = pybind11;
 
@@ -236,20 +237,6 @@ std::optional<py::bytes> get_item( //
     return py::bytes {data, lengths[0]};
 }
 
-struct buffer_t {
-    ~buffer_t() {
-        if (initialized)
-            PyBuffer_Release(&py);
-        initialized = false;
-    }
-    buffer_t() = default;
-    buffer_t(buffer_t&&) = delete;
-    buffer_t(buffer_t const&) = delete;
-
-    Py_buffer py;
-    bool initialized = false;
-};
-
 /**
  * @brief Exports keys into a 2-dimensional preallocated NumPy buffer.
  *        The most performant batch-reading method, ideal for ML.
@@ -293,7 +280,7 @@ void export_matrix( //
     // Take buffer protocol handles
     // Flags can be: https://docs.python.org/3/c-api/buffer.html#readonly-format
     auto output_flags = PyBUF_WRITABLE | PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
-    buffer_t keys, values, values_lengths;
+    py_buffer_t keys, values, values_lengths;
     keys.initialized = PyObject_GetBuffer(keys_obj, &keys.py, PyBUF_ANY_CONTIGUOUS) == 0;
     values.initialized = PyObject_GetBuffer(values_obj, &values.py, output_flags) == 0;
     values_lengths.initialized = PyObject_GetBuffer(values_lengths_obj, &values_lengths.py, output_flags) == 0;
