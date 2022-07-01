@@ -1,7 +1,7 @@
 /**
  * @file ukv.hpp
  * @author Ashot Vardanian
- * @date 26 Jun 2022
+ * @date 30 Jun 2022
  * @brief C++ bindings built on top of @see "ukv_graph.h" with
  * two primary purposes:
  * > @b RAII controls for non-trivial & potentially heavy objects.
