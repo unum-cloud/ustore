@@ -2,7 +2,10 @@
  * @file ukv.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings built on top of @see "ukv.h".
+ * @brief C++ bindings built on top of @see "ukv.h" with
+ * two primary purposes:
+ * > @b RAII controls for non-trivial & potentially heavy objects.
+ * > syntactic @b sugar, iterators, containers and other C++  stuff.
  */
 
 #pragma once
@@ -10,6 +13,7 @@
 #include <string_view>
 #include <functional> // `std::hash`
 #include <optional>   // `std::optional`
+#include <stdexcept>  // `std::runtime_error`
 
 #include "ukv.h"
 
@@ -69,6 +73,12 @@ class error_t {
             ukv_error_free(raw_);
         raw_ = nullptr;
     }
+
+    std::runtime_error release_exception() {
+        std::runtime_error result(raw_);
+        ukv_error_free(std::exchange(raw_, nullptr));
+        return result;
+    }
 };
 
 template <typename object_at>
@@ -87,6 +97,16 @@ class expected_gt {
     operator std::optional<object_at>() && noexcept {
         return error_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
     }
+};
+
+template <typename pointer_at>
+struct range_gt {
+    pointer_at begin_ = nullptr;
+    pointer_at end_ = nullptr;
+
+    pointer_at begin() const noexcept { return begin_; }
+    pointer_at end() const noexcept { return end_; }
+    std::size_t size() const noexcept { return end_ - begin_; }
 };
 
 /**
@@ -295,7 +315,6 @@ struct managed_tape_t {
  * @brief A proxy object, that allows both lookups and writes
  * with `[]` and assignment operators for a batch of keys
  * simultaneously.
- *
  */
 struct sample_handle_t {
 
@@ -412,10 +431,14 @@ struct db_t {
         return error;
     }
 
+    void close() {
+        ukv_free(raw);
+        raw = nullptr;
+    }
+
     ~db_t() {
         if (raw)
-            ukv_free(raw);
-        raw = nullptr;
+            close();
     }
 };
 
