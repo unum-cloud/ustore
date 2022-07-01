@@ -214,7 +214,6 @@ void ukv_write( //
  *                            is assumed. Instead of passing one collection for
  *                            each key, you can use `ukv_option_read_colocated`.
  * @param[in] options         Read options:
- *                            > colocated: From same collection.
  *                            > transaparent: Bypassed any ACID checks on next write.
  *                            > lengths: Only fetches lengths of values, not content.
  *
@@ -239,6 +238,34 @@ void ukv_read( //
     ukv_key_t const* keys,
     ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
+
+    ukv_options_t const options,
+
+    ukv_tape_ptr_t* tape,
+    ukv_size_t* capacity,
+    ukv_error_t* error);
+
+/**
+ * @brief Retrieves the following (upto) `scan_length` keys starting
+ * from `min_key` or the smallest following key in each collection.
+ *
+ * @param[in] options   Read options:
+ *                      > transaparent: Bypassed any ACID checks on next write.
+ *                      > lengths: Will fetches lengths of values, after the keys.
+ */
+void ukv_scan( //
+    ukv_t const db,
+    ukv_txn_t const txn,
+
+    ukv_collection_t const* collections,
+    ukv_size_t const collections_stride,
+
+    ukv_key_t const* min_keys,
+    ukv_size_t const min_keys_count,
+    ukv_size_t const min_keys_stride,
+
+    ukv_size_t const* scan_lengths,
+    ukv_size_t const scan_lengths_stride,
 
     ukv_options_t const options,
 
