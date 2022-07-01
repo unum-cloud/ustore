@@ -3,22 +3,39 @@ import os
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 
-__version__ = '0.0.1'
+__version__ = '0.0.5'
 __libname__ = 'ukv'
 
 ext_modules = [
     Pybind11Extension(
-        'ukv',
+        'ukv/stl',
         [
             'python/pybind_dict.cpp',
             'python/pybind_networkx.cpp',
-            'python/pybind_pandas.cpp', 
+            'python/pybind_pandas.cpp',
         ],
-        # Example: passing in the version to the compiled code
         include_dirs=['include/'],
         library_dirs=['build/lib/'],
         libraries=['ukv_stl'],
-        define_macros=[('UKV_VERSION', __version__)],
+        define_macros=[
+            ('UKV_VERSION', __version__),
+            ('MODULE_NAME', 'stl')
+        ],
+    ),
+    Pybind11Extension(
+        'ukv/rocks',
+        [
+            'python/pybind_dict.cpp',
+            'python/pybind_networkx.cpp',
+            'python/pybind_pandas.cpp',
+        ],
+        include_dirs=['include/'],
+        library_dirs=['build/lib/'],
+        libraries=['ukv_rocksdb', 'rocksdb'],
+        define_macros=[
+            ('UKV_VERSION', __version__),
+            ('MODULE_NAME', 'rocks')
+        ],
     ),
 ]
 

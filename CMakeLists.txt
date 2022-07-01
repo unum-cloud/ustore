@@ -34,7 +34,7 @@ if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse4.2 -mavx2") # -march=native
 
   if(UNIX AND NOT APPLE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx512f")
+    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx512f") # Conflicts with (ROCKSDB PORTABLE ON). Decide Conditions.
   endif()
 endif()
 
@@ -100,6 +100,9 @@ include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
 # https://github.com/topics/integer-compression
 include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
 
+# RocksDB
+include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
+
 # FastPFor Integer Compression for 32-bit integers
 FetchContent_Declare(
   fpfor
@@ -110,8 +113,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(fpfor)
 
 # Define the libraries we will need to build
-include_directories(include/)
-include_directories(src/)
+include_directories(include/ ${rocksdb_SOURCE_DIR}/include)
 
 add_library(ukv_stl
   src/ukv_stl.cpp
