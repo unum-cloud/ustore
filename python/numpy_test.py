@@ -1,4 +1,4 @@
-import ukv
+import ukv.stl as ukv
 import numpy as np
 
 
