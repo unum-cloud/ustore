@@ -60,6 +60,9 @@
 #include "ukv.h"
 #include "python/ukv_pybind.hpp"
 
+#define stringify_value_m(a) stringify_m(a)
+#define stringify_m(a) #a
+
 namespace py = pybind11;
 
 struct py_db_t;
@@ -430,16 +433,17 @@ void collection_remove(py_db_t& db, std::string const& collection_name) {
         throw make_exception(db, error);
 }
 
-PYBIND11_MODULE(ukv, m) {
+PYBIND11_MODULE(MODULE_NAME, m) {
+    m.attr("__name__") = "ukv." stringify_value_m(MODULE_NAME);
     m.doc() =
         "Python bindings for Universal Key Value store library.\n"
         "Supports most basic collection operations, just like `dict`.\n"
         "---------------------------------------------\n";
 
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
-    auto db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase");
-    auto col = py::class_<py_collection_t, std::shared_ptr<py_collection_t>>(m, "Collection");
-    auto txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction");
+    auto db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
+    auto col = py::class_<py_collection_t, std::shared_ptr<py_collection_t>>(m, "Collection", py::module_local());
+    auto txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction", py::module_local());
 
     // Define `DataBase`
     db.def(py::init([](std::string const& config) {
