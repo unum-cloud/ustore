@@ -74,16 +74,6 @@ struct value_t {
     inline void clear() noexcept { length = 0; }
 };
 
-template <typename pointer_at>
-struct range_gt {
-    pointer_at begin_ = nullptr;
-    pointer_at end_ = nullptr;
-
-    pointer_at begin() const noexcept { return begin_; }
-    pointer_at end() const noexcept { return end_; }
-    std::size_t size() const noexcept { return end_ - begin_; }
-};
-
 /**
  * @brief Solves the problem of modulo arithmetic and `sequence_t` overflow.
  * Still works correctly, when `max` has overflown, but `min` hasn't yet,

@@ -10,7 +10,7 @@
 #include <algorithm> // `std::sort`
 #include <optional>  // `std::optional`
 
-#include "ukv_graph.h"
+#include "ukv_graph.hpp"
 #include "helpers.hpp"
 
 /*********************************************************/
@@ -22,12 +22,6 @@ using namespace unum;
 
 ukv_key_t ukv_default_edge_id_k = std::numeric_limits<ukv_key_t>::max();
 
-struct edge_t {
-    ukv_key_t source_id;
-    ukv_key_t target_id;
-    ukv_key_t edge_id = ukv_default_edge_id_k;
-};
-
 void sort_and_deduplicate(std::vector<located_key_t>& keys) {
     std::sort(keys.begin(), keys.end());
     keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
@@ -37,40 +31,12 @@ std::size_t offset_in_sorted(std::vector<located_key_t> const& keys, located_key
     return std::lower_bound(keys.begin(), keys.end(), wanted) - keys.begin();
 }
 
-struct neighborhood_t {
-    ukv_key_t neighbor_id = 0;
-    ukv_key_t edge_id = 0;
-};
-
-range_gt<neighborhood_t const*> neighbors(value_view_t bytes, ukv_graph_node_role_t role = ukv_graph_node_any_k) {
-    auto degrees = reinterpret_cast<ukv_size_t const*>(bytes.begin());
-    auto ids = reinterpret_cast<neighborhood_t const*>(degrees + 2);
-
-    switch (role) {
-    case ukv_graph_node_source_k: return {ids, ids + degrees[0]};
-    case ukv_graph_node_target_k: return {ids + degrees[0], ids + degrees[1]};
-    case ukv_graph_node_any_k: return {ids, ids + degrees[0] + degrees[1]};
-    case ukv_graph_node_unknown_k: return {};
-    }
-    __builtin_unreachable();
-}
-
 void upsert(value_t& value, ukv_graph_node_role_t role, ukv_key_t neighbor_id, ukv_key_t edge_id) {
     auto node_degrees = reinterpret_cast<ukv_size_t*>(value.begin());
     auto neighbor_and_edge_ids = reinterpret_cast<ukv_key_t*>(node_degrees + 2);
 }
 
 void erase(value_t& value, ukv_graph_node_role_t role, ukv_key_t neighbor_id, std::optional<ukv_key_t> edge_id = {}) {
-}
-
-ukv_graph_node_role_t invert(ukv_graph_node_role_t role) {
-    switch (role) {
-    case ukv_graph_node_source_k: return ukv_graph_node_target_k;
-    case ukv_graph_node_target_k: return ukv_graph_node_source_k;
-    case ukv_graph_node_any_k: return ukv_graph_node_unknown_k;
-    case ukv_graph_node_unknown_k: return ukv_graph_node_any_k;
-    }
-    __builtin_unreachable();
 }
 
 void ukv_graph_gather_neighbors( //
