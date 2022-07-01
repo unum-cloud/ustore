@@ -2,8 +2,8 @@
  * @file ukv_graph_pfor.cpp
  * @author Ashot Vardanian
  *
- * @brief Graph implementation using fast Integer Compression schemes.
- *
+ * @brief Graph implementation using fast integer compression.
+ * Sits on top of any @see "ukv.h"-compatiable system.
  */
 
 #include <vector>

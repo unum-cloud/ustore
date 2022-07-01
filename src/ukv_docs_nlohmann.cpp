@@ -1,8 +1,9 @@
 /**
- * @file ukv_stl.cpp
+ * @file ukv_docs_nlohmann.cpp
  * @author Ashot Vardanian
  *
- * @brief Document Store implementation on top of "nlohmann/JSON".
+ * @brief Document storage using "nlohmann/JSON" lib.
+ * Sits on top of any @see "ukv.h"-compatiable system.
  */
 
 #include <vector>
