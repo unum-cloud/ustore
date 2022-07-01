@@ -20,9 +20,23 @@ struct edge_t {
     ukv_key_t edge_id = ukv_default_edge_id_k;
 };
 
+/**
+ * @brief An asymmetric slice of a bond/relation.
+ * Every node stores a list of such @c `neighborhood_t`s
+ * in a sorted order.
+ */
 struct neighborhood_t {
     ukv_key_t neighbor_id = 0;
     ukv_key_t edge_id = 0;
+
+    friend inline bool operator<(ukv_key_t a_node_id, neighborhood_t b) noexcept { return a_node_id < b.neighbor_id; }
+    friend inline bool operator<(neighborhood_t a, ukv_key_t b_node_id) noexcept { return a.neighbor_id < b_node_id; }
+    friend inline bool operator<(neighborhood_t a, neighborhood_t b) noexcept {
+        return (a.neighbor_id < b.neighbor_id) | ((a.neighbor_id == b.neighbor_id) | (a.edge_id < b.edge_id));
+    }
+    friend inline bool operator==(neighborhood_t a, neighborhood_t b) noexcept {
+        return (a.neighbor_id == b.neighbor_id) & (a.edge_id < b.edge_id);
+    }
 };
 
 struct edges_t {
@@ -43,6 +57,10 @@ inline ukv_graph_node_role_t invert(ukv_graph_node_role_t role) {
 
 inline range_gt<neighborhood_t const*> neighbors(value_view_t bytes,
                                                  ukv_graph_node_role_t role = ukv_graph_node_any_k) {
+    // Handle missing nodes
+    if (bytes.size() < 2 * sizeof(ukv_size_t))
+        return {};
+
     auto degrees = reinterpret_cast<ukv_size_t const*>(bytes.begin());
     auto ids = reinterpret_cast<neighborhood_t const*>(degrees + 2);
 

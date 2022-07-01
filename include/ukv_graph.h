@@ -79,6 +79,12 @@ enum ukv_graph_node_role_t {
  *      4. incoming edges per node:
  *          1. `ukv_key_t` all source ids
  *          2. `ukv_key_t` all edge ids
+ * A missing node will be represented with zero-length value,
+ * that will not even have degrees listed. While a detached
+ * node will have both degrees set to zero.
+ *
+ * This function mostly forward to `ukv_read`, but adjusts the
+ * behaviour of certain flags.
  *
  * @param[in] roles     The roles of passed @p `nodes` in wanted edges.
  * @param[in] options   To request node degrees, add the
@@ -94,9 +100,6 @@ void ukv_graph_gather_neighbors( //
     ukv_key_t const* nodes_ids,
     ukv_size_t const nodes_count,
     ukv_size_t const nodes_stride,
-
-    ukv_graph_node_role_t const* roles,
-    ukv_size_t const roles_stride,
 
     ukv_options_t const options,
 
