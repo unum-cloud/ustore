@@ -12,6 +12,10 @@ namespace unum::ukv {
 
 namespace py = pybind11;
 
+struct py_db_t;
+struct py_txn_t;
+struct py_collection_t;
+
 struct py_buffer_t {
     ~py_buffer_t() {
         if (initialized)

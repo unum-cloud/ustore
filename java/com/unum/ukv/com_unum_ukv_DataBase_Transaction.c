@@ -33,6 +33,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
     ukv_val_len_t value_len_c = (ukv_val_len_t)value_len_java;
     ukv_options_t options_c = ukv_options_default_k;
     ukv_error_t error_c = NULL;
+    ukv_val_len_t value_off_c = 0;
     ukv_write(db_ptr_c,
               txn_ptr_c,
               &collection_ptr_c,
@@ -41,6 +42,8 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
               1,
               0,
               &value_ptr_c,
+              0,
+              &value_off_c,
               0,
               &value_len_c,
               0,
@@ -156,6 +159,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
     ukv_val_len_t value_len_c = 0;
     ukv_options_t options_c = ukv_options_default_k;
     ukv_error_t error_c = NULL;
+    ukv_val_len_t value_off_c = 0;
     ukv_write(db_ptr_c,
               txn_ptr_c,
               &collection_ptr_c,
@@ -164,6 +168,8 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
               1,
               0,
               &value_ptr_c,
+              0,
+              &value_off_c,
               0,
               &value_len_c,
               0,
