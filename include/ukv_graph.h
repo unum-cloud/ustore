@@ -3,14 +3,23 @@
  * @author Ashot Vardanian
  * @date 27 Jun 2022
  * @brief C bindings for Unums collections of relations.
- * It essentially extends "ukv.h", to store @b Directed-Graphs.
+ * It essentially extends "ukv.h", to store @b Graphs.
  * Unlike raw values and docs collections, this is an index
  * and the data is transformed into @b Multi-Way @b Inverted-Index.
  *
- * Edges are represented as triplets: (source ID, target ID, edge ID), where the
+ * Edges are represented as triplets: (first ID, second ID, edge ID), where the
  * last argument is optional. Multiple edges between same nodes are possible,
- * forming a @b Directed-Multi-Graph, but only if you provide the edge IDs.
+ * potentially forming a @b Directed-Multi-Graph, but only if you setedge IDs.
  * Every node ID is mapped to an entire list of relations that it forms.
+ *
+ * @section Supported Graph Kinds
+ * 1. @b Undirected (Multi) Graph within nodes of same collection: (movies.graph)
+ * 2. @b Directed (Multi) Graph within nodes of same collection: (movies.digraph)
+ * 3. @b Joining (Multi) Graph linking two different collections: (movies->people.digraph)
+ * In the last one, you can't choose directions at the level of edges, only collections.
+ * In any one of those collections, storing metadata (a dictionary per each node/edge ID)
+ * is @b optional. In theory, you may want to store metadata in a different DB, but that
+ * would mean loosing ACID guarantees.
  *
  * @section Linking keys across collections
  * It's impossible to foresee every higher-level usage pattern, so certain
@@ -27,11 +36,10 @@
  * will be a movie. If you want to keep edge directed in an opposite way, add:
  *      * movies->people.digraph
  *
- * So we can have following kinds of Graphs:
- *      * @b U: Undirected within same collection (movies.graph)
- *      * @b D: Directed within same collection (movies.digraph)
- *      * @b A: Directed Across collections (movies->people.digraph)
- * Mixing kinds of edges within same collection is Undefined Behaviour.
+ * @section Hyper-Graphs
+ * If working with Hyper-Graphs (multiple nodes linked by one edge), you are expected
+ * to use Undirected Graphs, with nodes and hyper-edges mixed together. You would be
+ * differentiating them not by parent collection, but by stored metadata at runtime.
  */
 
 #pragma once
