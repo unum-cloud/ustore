@@ -301,9 +301,3 @@ class db_t : public std::enable_shared_from_this<db_t> {
 };
 
 } // namespace unum::ukv
-
-// auto db = db_t {};
-// auto txn =
-// auto col = db["bank"];
-// auto val = col[alice_id];
-// auto val2 = col[42_key.in(col)]
