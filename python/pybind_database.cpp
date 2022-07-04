@@ -372,7 +372,7 @@ void ukv::wrap_database(py::module& m) {
         "get",
         [](py_col_t& py_col, ukv_key_t key) {
             return get_item(py_col.db_ptr->native,
-                            py_col.txn_ptr->native,
+                            py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                             py_col.native,
                             py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
                             key);
@@ -382,7 +382,11 @@ void ukv::wrap_database(py::module& m) {
     py_col.def(
         "set",
         [](py_col_t& py_col, ukv_key_t key, py::bytes const& value) {
-            return set_item(py_col.db_ptr->native, py_col.txn_ptr->native, py_col.native, key, &value);
+            return set_item(py_col.db_ptr->native,
+                            py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
+                            py_col.native,
+                            key,
+                            &value);
         },
         py::arg("key"),
         py::arg("value"));
@@ -445,10 +449,9 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def("commit", &commit);
 
     py_db.def("__enter__", [](py_db_t& py_db) {
-        if (py_db.native)
-            return;
-        auto error = py_db.native.open(py_db.config);
-        error.throw_unhandled();
+        if (!py_db.native)
+            py_db.native.open(py_db.config).throw_unhandled();
+        return py_db.shared_from_this();
     });
     py_db.def("close", [](py_db_t& py_db) { py_db.native.close(); });
 
@@ -497,23 +500,30 @@ void ukv::wrap_database(py::module& m) {
 
     py_col.def("__contains__", [](py_col_t& py_col, ukv_key_t key) {
         return contains_item(py_col.db_ptr->native,
-                             py_col.txn_ptr->native,
+                             py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                              py_col.native,
                              py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
                              key);
     });
     py_col.def("__getitem__", [](py_col_t& py_col, ukv_key_t key) {
         return get_item(py_col.db_ptr->native,
-                        py_col.txn_ptr->native,
+                        py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                         py_col.native,
                         py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
                         key);
     });
     py_col.def("__setitem__", [](py_col_t& py_col, ukv_key_t key, py::bytes const& value) {
-        return set_item(py_col.db_ptr->native, py_col.txn_ptr->native, py_col.native, key, &value);
+        return set_item(py_col.db_ptr->native,
+                        py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
+                        py_col.native,
+                        key,
+                        &value);
     });
     py_col.def("__delitem__", [](py_col_t& py_col, ukv_key_t key) {
-        return set_item(py_col.db_ptr->native, py_col.txn_ptr->native, py_col.native, key);
+        return set_item(py_col.db_ptr->native,
+                        py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
+                        py_col.native,
+                        key);
     });
 
     // Operator overaloads used to access collections
@@ -572,7 +582,7 @@ void ukv::wrap_database(py::module& m) {
            py::handle values_lengths,
            std::uint8_t padding_char = 0) {
             return export_matrix(py_col.db_ptr->native,
-                                 py_col.txn_ptr->native,
+                                 py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                                  py_col.native,
                                  py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
                                  keys,
