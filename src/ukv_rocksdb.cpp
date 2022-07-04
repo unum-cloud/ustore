@@ -70,7 +70,7 @@ struct write_tasks_t {
     }
 };
 
-void ukv_open(char const* c_config, ukv_t* c_db, ukv_error_t* c_error) {
+void ukv_open([[maybe_unused]] char const* c_config, ukv_t* c_db, ukv_error_t* c_error) {
     rocks_db_t* db = NULL;
 
     std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
@@ -93,11 +93,11 @@ void write_head( //
     rocks_db_t* db,
     write_tasks_t tasks,
     ukv_size_t const n,
-    ukv_options_t const c_options,
+    [[maybe_unused]] ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
     rocksdb::WriteBatch batch;
-    for (size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != n; ++i) {
         write_task_t task = tasks[i];
         batch.Put(task.collection, task.key, task.value);
     }
@@ -111,14 +111,16 @@ void write_txn( //
     rocks_txn_t* txn,
     write_tasks_t tasks,
     ukv_size_t const n,
-    ukv_options_t const c_options,
+    [[maybe_unused]] ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
-    for (size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != n; ++i) {
         write_task_t task = tasks[i];
         rocksdb::Status status = txn->Put(task.collection, task.key, task.value);
-        if (!status.ok())
+        if (!status.ok()) {
             *c_error = "Transaction Write Error";
+            return;
+        }
     }
 }
 
@@ -160,7 +162,7 @@ void read_head( //
     rocks_db_t* db,
     read_tasks_t tasks,
     ukv_size_t const n,
-    ukv_options_t const c_options,
+    [[maybe_unused]] ukv_options_t const c_options,
     ukv_tape_ptr_t* c_tape,
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
@@ -169,7 +171,7 @@ void read_head( //
     std::vector<rocksdb::Slice> keys(n);
     std::vector<std::string> values(n);
 
-    for (size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
         handles[i] = task.collection;
         keys[i] = task.key;
@@ -177,7 +179,7 @@ void read_head( //
 
     std::vector<rocksdb::Status> statuses = db->MultiGet(rocksdb::ReadOptions(), handles, keys, &values);
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
-    for (size_t i = 0; i != values.size(); ++i)
+    for (std::size_t i = 0; i != values.size(); ++i)
         total_bytes += values[i].size();
 
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
@@ -187,7 +189,7 @@ void read_head( //
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
     ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * n;
 
-    for (size_t i = 0; i != values.size(); ++i) {
+    for (std::size_t i = 0; i != values.size(); ++i) {
         auto len = values[i].size();
         std::memcpy(tape + exported_bytes, values[i].data(), len);
         lens[i] = static_cast<ukv_val_len_t>(len);
@@ -198,7 +200,7 @@ void read_txn( //
     rocks_txn_t* txn,
     read_tasks_t tasks,
     ukv_size_t const n,
-    ukv_options_t const c_options,
+    [[maybe_unused]] ukv_options_t const c_options,
     ukv_tape_ptr_t* c_tape,
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
@@ -207,7 +209,7 @@ void read_txn( //
     std::vector<rocksdb::Slice> keys(n);
     std::vector<std::string> values(n);
 
-    for (size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
         handles[i] = task.collection;
         keys[i] = task.key;
@@ -216,8 +218,13 @@ void read_txn( //
     std::vector<rocksdb::Status> statuses = txn->MultiGet(rocksdb::ReadOptions(), handles, keys, &values);
 
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
-    for (size_t i = 0; i != values.size(); ++i)
+    for (std::size_t i = 0; i != values.size(); ++i) {
+        if (!statuses[i].ok()) {
+            *c_error = "Transaction Read Error";
+            return;
+        }
         total_bytes += values[i].size();
+    }
 
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
     if (!tape)
@@ -226,7 +233,7 @@ void read_txn( //
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
     ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * n;
 
-    for (size_t i = 0; i != values.size(); ++i) {
+    for (std::size_t i = 0; i != values.size(); ++i) {
         auto len = values[i].size();
         std::memcpy(tape + exported_bytes, values[i].data(), len);
         lens[i] = static_cast<ukv_val_len_t>(len);
@@ -282,8 +289,8 @@ void ukv_collection_remove( //
 }
 
 void ukv_control( //
-    ukv_t const c_db,
-    ukv_str_view_t c_request,
+    [[maybe_unused]] ukv_t const c_db,
+    [[maybe_unused]] ukv_str_view_t c_request,
     ukv_str_view_t* c_response,
     ukv_error_t* c_error) {
 
@@ -293,18 +300,23 @@ void ukv_control( //
 
 void ukv_txn_begin( //
     ukv_t const c_db,
-    ukv_size_t const sequence_number,
+    [[maybe_unused]] ukv_size_t const sequence_number,
     ukv_txn_t* c_txn,
     ukv_error_t* c_error) {
 
     rocks_db_t* db = reinterpret_cast<rocks_db_t*>(c_db);
-    rocks_txn_t* txn = NULL;
-    *c_txn = db->BeginTransaction(rocksdb::WriteOptions(), rocksdb::TransactionOptions(), txn);
+    rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
+    txn = db->BeginTransaction(rocksdb::WriteOptions(), rocksdb::TransactionOptions(), txn);
+    if (!txn) {
+        *c_error = "Transaction Begin Error";
+        return;
+    }
+    *c_txn = txn;
 }
 
 void ukv_txn_commit( //
     ukv_txn_t const c_txn,
-    ukv_options_t const c_options,
+    [[maybe_unused]] ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
@@ -332,5 +344,5 @@ void ukv_free(ukv_t c_db) {
     delete db;
 }
 
-void ukv_error_free(ukv_error_t const error) {
+void ukv_error_free([[maybe_unused]] ukv_error_t const error) {
 }
