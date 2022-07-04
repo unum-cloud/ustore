@@ -298,6 +298,8 @@ class managed_tape_t {
 
   public:
     managed_tape_t(ukv_t db) noexcept : db_(db) {}
+    managed_tape_t(managed_tape_t const&) = delete;
+
     ~managed_tape_t() {
         if (memory_)
             ukv_tape_free(db_, memory_, capacity_);
@@ -305,9 +307,13 @@ class managed_tape_t {
         capacity_ = 0;
     }
 
-    operator taped_values_view_t() const noexcept { return {memory_, capacity_}; }
-    ukv_tape_ptr_t* internal_memory() noexcept { return &memory_; }
-    ukv_size_t* internal_capacity() noexcept { return &capacity_; }
+    inline managed_tape_t(managed_tape_t&& other) noexcept
+        : db_(other.db_), memory_(std::exchange(other.memory_, nullptr)),
+          capacity_(std::exchange(other.capacity_, 0u)) {}
+
+    inline operator taped_values_view_t() const noexcept { return {memory_, capacity_}; }
+    inline ukv_tape_ptr_t* internal_memory() noexcept { return &memory_; }
+    inline ukv_size_t* internal_capacity() noexcept { return &capacity_; }
 };
 
 } // namespace unum::ukv

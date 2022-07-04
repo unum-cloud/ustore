@@ -318,14 +318,15 @@ void ukv::wrap_database(py::module& m) {
 
     // Define `DataBase`
     py_db.def( //
-        py::init([](std::string const& config) {
+        py::init([](std::string const& config, bool open) {
             db_t db;
-            auto error = db.open(config);
-            error.throw_unhandled();
+            if (open)
+                db.open(config).throw_unhandled();
             session_t session = db.session();
             return std::make_shared<py_db_t>(std::move(db), std::move(session), config);
         }),
-        py::arg("config") = "");
+        py::arg("config") = "",
+        py::arg("open") = true);
 
     py_db.def(
         "get",

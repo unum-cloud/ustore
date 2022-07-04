@@ -150,6 +150,10 @@ class txn_t {
 
   public:
     txn_t(ukv_t db, ukv_txn_t txn) : db_(db), txn_(txn), read_tape_(db) {}
+    txn_t(txn_t const&) = delete;
+    txn_t(txn_t&& other) noexcept
+        : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), read_tape_(std::move(other.read_tape_)) {}
+
     inline ukv_t db() const noexcept { return db_; }
     inline managed_tape_t& tape() noexcept { return read_tape_; }
     inline operator ukv_txn_t() const noexcept { return txn_; }
@@ -206,6 +210,10 @@ class session_t {
 
   public:
     session_t(ukv_t db) : db_(db), read_tape_(db) {}
+    session_t(session_t const&) = delete;
+    session_t(session_t&& other) noexcept
+        : db_(other.db_), read_tape_(std::move(other.read_tape_)), lazy_lookups_(std::move(other.lazy_lookups_)) {}
+
     inline ukv_t db() const noexcept { return db_; }
     inline managed_tape_t& tape() noexcept { return read_tape_; }
 
@@ -263,6 +271,10 @@ class db_t : public std::enable_shared_from_this<db_t> {
     ukv_t db_ = nullptr;
 
   public:
+    db_t() = default;
+    db_t(db_t const&) = delete;
+    db_t(db_t&& other) noexcept : db_(std::exchange(other.db_, nullptr)) {}
+
     error_t open(std::string const& config) {
         error_t error;
         ukv_open(config.c_str(), &db_, error.internal_cptr());

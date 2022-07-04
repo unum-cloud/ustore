@@ -19,8 +19,8 @@ struct py_col_t;
 /**
  * @brief Wrapper for `ukv::db_t`.
  * Assumes that the Python client won't use more than one
- * concurrent session, as multithreading in Pyhton is prohibitively
- * expensive.
+ * concurrent session, as multithreading in Pyhton is
+ * prohibitively expensive.
  * We need to preserve the `config`, to allow re-opening.
  */
 struct py_db_t : public std::enable_shared_from_this<py_db_t> {
@@ -28,7 +28,10 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     session_t session;
     std::string config;
 
-    py_db_t(db_t&& n, session_t&& s, std::string const& c) : native(n), session(s), config(c) {}
+    py_db_t(db_t&& n, session_t&& s, std::string const& c) : native(std::move(n)), session(std::move(s)), config(c) {}
+    py_db_t(py_db_t const&) = delete;
+    py_db_t(py_db_t&& other) noexcept
+        : native(std::move(other.native)), session(std::move(other.session)), config(std::move(config)) {}
 };
 
 /**
@@ -38,7 +41,9 @@ struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
     std::shared_ptr<py_db_t> db_ptr;
     txn_t native;
 
-    py_txn_t(std::shared_ptr<py_db_t>&& d, txn_t&& t) : db_ptr(d), native(t) {}
+    py_txn_t(std::shared_ptr<py_db_t>&& d, txn_t&& t) : db_ptr(std::move(d)), native(std::move(t)) {}
+    py_txn_t(py_txn_t const&) = delete;
+    py_txn_t(py_txn_t&& other) noexcept : db_ptr(std::move(other.db_ptr)), native(std::move(other.native)) {}
 };
 
 /**
@@ -51,6 +56,12 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
     std::shared_ptr<py_txn_t> txn_ptr;
     collection_t native;
     std::string name;
+
+    py_col_t() {}
+    py_col_t(py_col_t const&) = delete;
+    py_col_t(py_col_t&& other) noexcept
+        : db_ptr(std::move(other.db_ptr)).txn_ptr(std::move(other.txn_ptr)),
+    native(std::move(other.native)), name(std::move(other.name)) {}
 };
 
 struct py_buffer_t {
