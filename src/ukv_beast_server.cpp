@@ -189,13 +189,17 @@
 #elif defined(_MSC_VER)
 #endif
 
-#include "ukv.h"
-#include "ukv_docs.h"
+#include "ukv.hpp"
+#include "ukv_graph.hpp"
+#include "ukv_docs.hpp"
 
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>
 namespace net = boost::asio;      // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
+
+using namespace unum::ukv;
+using namespace unum;
 
 static constexpr char const* server_name_k = "unum-cloud/ukv/beast_server";
 static constexpr char const* mime_binary_k = "application/octet-stream";
@@ -226,54 +230,9 @@ ukv_format_t mime_to_format(beast::string_view mime) {
         return ukv_format_unknown_k;
 }
 
-struct db_t : public std::enable_shared_from_this<db_t> {
-
-    ukv_t raw = NULL;
+struct db_w_clients_t : public std::enable_shared_from_this<db_w_clients_t> {
+    db_t session;
     int running_transactions;
-
-    ~db_t() noexcept { ukv_free(raw); }
-};
-
-struct raii_tape_t {
-    ukv_t db = NULL;
-    ukv_tape_ptr_t ptr = NULL;
-    ukv_size_t capacity = 0;
-
-    raii_tape_t(ukv_t db_ptr) noexcept : db(db_ptr) {}
-    ~raii_tape_t() noexcept { ukv_tape_free(db, ptr, capacity); }
-};
-
-struct raii_error_t {
-    ukv_error_t raw = NULL;
-
-    ~raii_error_t() noexcept { ukv_error_free(raw); }
-};
-
-struct raii_txn_t {
-    ukv_t db = NULL;
-    ukv_txn_t raw = NULL;
-
-    raii_txn_t(ukv_t db_ptr) noexcept : db(db_ptr) {}
-    ~raii_txn_t() noexcept { ukv_txn_free(db, raw); }
-};
-
-struct raii_collection_t {
-    ukv_t db = NULL;
-    ukv_collection_t raw = NULL;
-
-    raii_collection_t(ukv_t db_ptr) noexcept : db(db_ptr) {}
-    ~raii_collection_t() noexcept { ukv_collection_free(db, raw); }
-};
-
-struct raii_collections_t {
-    ukv_t db = NULL;
-    std::vector<ukv_collection_t> raw_array;
-
-    raii_collections_t(ukv_t db_ptr) noexcept : db(db_ptr) {}
-    ~raii_collections_t() noexcept {
-        for (auto raw : raw_array)
-            ukv_collection_free(db, raw);
-    }
 };
 
 void log_failure(beast::error_code ec, char const* what) {
@@ -316,15 +275,15 @@ std::optional<beast::string_view> param_value(beast::string_view query_params, b
 }
 
 template <typename body_at, typename allocator_at, typename send_response_at>
-void respond_to_one(db_t& db,
+void respond_to_one(session_t& session,
                     http::request<body_at, http::basic_fields<allocator_at>>&& req,
                     send_response_at&& send_response) {
 
     http::verb received_verb = req.method();
     beast::string_view received_path = req.target();
 
-    raii_txn_t txn(db.raw);
-    raii_collection_t collection(db.raw);
+    txn_t txn(session.db());
+    collection_t collection;
     ukv_key_t key = 0;
     ukv_options_t options = ukv_options_default_k;
 
@@ -349,8 +308,8 @@ void respond_to_one(db_t& db,
         char col_name_buffer[65] = {0};
         std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
 
-        raii_error_t error;
-        ukv_collection_upsert(db.raw, col_name_buffer, &collection.raw, &error.raw);
+        error_t error;
+        ukv_collection_upsert(session.db(), col_name_buffer, &collection.raw, error.internal_cptr());
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
     }
@@ -362,9 +321,19 @@ void respond_to_one(db_t& db,
         // Read the data:
     case http::verb::get: {
 
-        raii_tape_t tape(db.raw);
-        raii_error_t error;
-        ukv_read(db.raw, txn.raw, &collection.raw, 0, &key, 1, 0, options, &tape.ptr, &tape.capacity, &error.raw);
+        managed_tape_t tape(session.db());
+        error_t error;
+        ukv_read(session.db(),
+                 txn.raw,
+                 &collection.raw,
+                 0,
+                 &key,
+                 1,
+                 0,
+                 options,
+                 &tape.ptr,
+                 &tape.capacity,
+                 error.internal_cptr());
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -393,10 +362,20 @@ void respond_to_one(db_t& db,
         // Check the data:
     case http::verb::head: {
 
-        raii_tape_t tape(db.raw);
-        raii_error_t error;
+        managed_tape_t tape(session.db());
+        error_t error;
         options = ukv_option_read_lengths_k;
-        ukv_read(db.raw, txn.raw, &collection.raw, 0, &key, 1, 0, options, &tape.ptr, &tape.capacity, &error.raw);
+        ukv_read(session.db(),
+                 txn.raw,
+                 &collection.raw,
+                 0,
+                 &key,
+                 1,
+                 0,
+                 options,
+                 &tape.ptr,
+                 &tape.capacity,
+                 error.internal_cptr());
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -414,10 +393,20 @@ void respond_to_one(db_t& db,
 
     // Insert data if it's missing:
     case http::verb::post: {
-        raii_tape_t tape(db.raw);
-        raii_error_t error;
+        managed_tape_t tape(session.db());
+        error_t error;
         options = ukv_option_read_lengths_k;
-        ukv_read(db.raw, txn.raw, &collection.raw, 0, &key, 1, 0, options, &tape.ptr, &tape.capacity, &error.raw);
+        ukv_read(session.db(),
+                 txn.raw,
+                 &collection.raw,
+                 0,
+                 &key,
+                 1,
+                 0,
+                 options,
+                 &tape.ptr,
+                 &tape.capacity,
+                 error.internal_cptr());
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -442,11 +431,26 @@ void respond_to_one(db_t& db,
             return send_response(
                 make_error(req, http::status::unsupported_media_type, "Only binary payload is allowed"));
 
-        raii_error_t error;
+        error_t error;
         auto value = req.body();
         auto value_ptr = reinterpret_cast<ukv_tape_ptr_t>(value.data());
         auto value_len = static_cast<ukv_val_len_t>(*opt_payload_len);
-        ukv_write(db.raw, txn.raw, &collection.raw, 0, &key, 1, 0, &value_ptr, 0, &value_len, 0, options, &error.raw);
+        ukv_val_len_t value_off = 0;
+        ukv_write(session.db(),
+                  txn.raw,
+                  &collection.raw,
+                  0,
+                  &key,
+                  1,
+                  0,
+                  &value_ptr,
+                  0,
+                  &value_off,
+                  0,
+                  &value_len,
+                  0,
+                  options,
+                  error.internal_cptr());
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -460,10 +464,25 @@ void respond_to_one(db_t& db,
         // Upsert data:
     case http::verb::delete_: {
 
-        raii_error_t error;
+        error_t error;
         ukv_tape_ptr_t value_ptr = nullptr;
         ukv_val_len_t value_len = 0;
-        ukv_write(db.raw, txn.raw, &collection.raw, 0, &key, 1, 0, &value_ptr, 0, &value_len, 0, options, &error.raw);
+        ukv_val_len_t value_off = 0;
+        ukv_write(session.db(),
+                  txn.raw,
+                  &collection.raw,
+                  0,
+                  &key,
+                  1,
+                  0,
+                  &value_ptr,
+                  0,
+                  &value_off,
+                  0,
+                  &value_len,
+                  0,
+                  options,
+                  error.internal_cptr());
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -482,15 +501,15 @@ void respond_to_one(db_t& db,
 }
 
 template <typename body_at, typename allocator_at, typename send_response_at>
-void respond_to_aos(db_t& db,
+void respond_to_aos(session_t& session,
                     http::request<body_at, http::basic_fields<allocator_at>>&& req,
                     send_response_at&& send_response) {
 
     http::verb received_verb = req.method();
     beast::string_view received_path = req.target();
 
-    raii_txn_t txn(db.raw);
-    raii_collections_t collections(db.raw);
+    txn_t txn(session.db());
+    std::vector<collection_t> collections(session.db());
     ukv_options_t options = ukv_options_default_k;
     std::vector<ukv_key_t> keys;
 
@@ -509,9 +528,9 @@ void respond_to_aos(db_t& db,
         char col_name_buffer[65] = {0};
         std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
 
-        raii_error_t error;
-        raii_collection_t collection(db.raw);
-        ukv_collection_upsert(db.raw, col_name_buffer, &collection.raw, &error.raw);
+        error_t error;
+        collection_t collection(session.db());
+        ukv_collection_upsert(session.db(), col_name_buffer, &collection.raw, error.internal_cptr());
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -568,9 +587,9 @@ void respond_to_aos(db_t& db,
         }
 
         // Pull the entire objects before we start sampling their fields
-        raii_tape_t tape(db.raw);
-        raii_error_t error;
-        // ukv_read(db.raw,
+        managed_tape_t tape(session.db());
+        error_t error;
+        // ukv_read(session.db(),
         //          txn.raw,
         //          keys.data(),
         //          keys.size(),
@@ -578,7 +597,7 @@ void respond_to_aos(db_t& db,
         //          options,
         //          &tape.ptr,
         //          &tape.capacity,
-        //          &error.raw);
+        //          error.internal_cptr());
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -655,7 +674,7 @@ void respond_to_aos(db_t& db,
  *        into underlying UKV calls, preparing results and sending back.
  */
 template <typename body_at, typename allocator_at, typename send_response_at>
-void route_request(db_t& db,
+void route_request(session_t& session,
                    http::request<body_at, http::basic_fields<allocator_at>>&& req,
                    send_response_at&& send_response) {
 
@@ -667,7 +686,7 @@ void route_request(db_t& db,
 
     // Modifying single entries:
     if (received_path.starts_with("/one/"))
-        return respond_to_one(db, std::move(req), send_response);
+        return respond_to_one(session, std::move(req), send_response);
 
     // Modifying collections:
     else if (received_path.starts_with("/col/")) {
@@ -683,7 +702,7 @@ void route_request(db_t& db,
 
     // Array-of-Structures:
     else if (received_path.starts_with("/aos/"))
-        return respond_to_aos(db, std::move(req), send_response);
+        return respond_to_aos(session, std::move(req), send_response);
 
     // Structure-of-Arrays:
     else if (received_path.starts_with("/soa/"))
@@ -699,13 +718,13 @@ void route_request(db_t& db,
 /**
  * @brief A communication channel/session for a single client.
  */
-class session_t : public std::enable_shared_from_this<session_t> {
+class web_session_t : public std::enable_shared_from_this<web_session_t> {
     // This is the C++11 equivalent of a generic lambda.
     // The function object is used to send an HTTP message.
     struct send_request_t {
-        session_t& self_;
+        web_session_t& self_;
 
-        explicit send_request_t(session_t& self) noexcept : self_(self) {}
+        explicit send_request_t(web_session_t& self) noexcept : self_(self) {}
 
         template <bool ir_request_ak, typename body_at, typename fields_at>
         void operator()(http::message<ir_request_ak, body_at, fields_at>&& msg) const {
@@ -722,30 +741,31 @@ class session_t : public std::enable_shared_from_this<session_t> {
             http::async_write(
                 self_.stream_,
                 *sp,
-                beast::bind_front_handler(&session_t::on_write, self_.shared_from_this(), sp->need_eof()));
+                beast::bind_front_handler(&web_session_t::on_write, self_.shared_from_this(), sp->need_eof()));
         }
     };
 
     beast::tcp_stream stream_;
     beast::flat_buffer buffer_;
-    std::shared_ptr<db_t> db_;
+    std::shared_ptr<db_w_clients_t> db_;
+    session_t db_session_;
     http::request<http::string_body> req_;
     std::shared_ptr<void> res_;
     send_request_t send_request_;
 
   public:
-    session_t(tcp::socket&& socket, std::shared_ptr<db_t> const& db)
-        : stream_(std::move(socket)), db_(db), send_request_(*this) {}
+    web_session_t(tcp::socket&& socket, std::shared_ptr<db_w_clients_t> const& session)
+        : stream_(std::move(socket)), db_(session), db_session_(session->session()), send_request_(*this) {}
 
     /**
      * @brief Start the asynchronous operation.
      */
     void run() {
         // We need to be executing within a strand to perform async operations
-        // on the I/O objects in this session_t. Although not strictly necessary
+        // on the I/O objects in this web_session_t. Although not strictly necessary
         // for single-threaded contexts, this example code is written to be
         // thread-safe by default.
-        net::dispatch(stream_.get_executor(), beast::bind_front_handler(&session_t::do_read, shared_from_this()));
+        net::dispatch(stream_.get_executor(), beast::bind_front_handler(&web_session_t::do_read, shared_from_this()));
     }
 
     void do_read() {
@@ -757,7 +777,10 @@ class session_t : public std::enable_shared_from_this<session_t> {
         stream_.expires_after(std::chrono::seconds(30));
 
         // Read a request
-        http::async_read(stream_, buffer_, req_, beast::bind_front_handler(&session_t::on_read, shared_from_this()));
+        http::async_read(stream_,
+                         buffer_,
+                         req_,
+                         beast::bind_front_handler(&web_session_t::on_read, shared_from_this()));
     }
 
     void on_read(beast::error_code ec, std::size_t bytes_transferred) {
@@ -771,7 +794,7 @@ class session_t : public std::enable_shared_from_this<session_t> {
             return log_failure(ec, "read");
 
         // send_at the response
-        route_request(*db_, std::move(req_), send_request_);
+        route_request(db_session_, std::move(req_), send_request_);
     }
 
     void on_write(bool close, beast::error_code ec, std::size_t bytes_transferred) {
@@ -802,16 +825,16 @@ class session_t : public std::enable_shared_from_this<session_t> {
 
 /**
  * @brief Spins on sockets, listening for new connection requests.
- *        Once accepted, allocates and dispatches a new @c `session_t`.
+ *        Once accepted, allocates and dispatches a new @c `web_session_t`.
  */
 class listener_t : public std::enable_shared_from_this<listener_t> {
     net::io_context& io_context_;
     tcp::acceptor acceptor_;
-    std::shared_ptr<db_t> db_;
+    std::shared_ptr<db_w_clients_t> db_;
 
   public:
-    listener_t(net::io_context& io_context, tcp::endpoint endpoint, std::shared_ptr<db_t> const& db)
-        : io_context_(io_context), acceptor_(net::make_strand(io_context)), db_(db) {
+    listener_t(net::io_context& io_context, tcp::endpoint endpoint, std::shared_ptr<db_w_clients_t> const& session)
+        : io_context_(io_context), acceptor_(net::make_strand(io_context)), db_(session) {
         connect_to(endpoint);
     }
 
@@ -830,8 +853,8 @@ class listener_t : public std::enable_shared_from_this<listener_t> {
             // To avoid infinite loop
             return log_failure(ec, "accept");
 
-        // Create the session_t and run it
-        std::make_shared<session_t>(std::move(socket), db_)->run();
+        // Create the web_session_t and run it
+        std::make_shared<web_session_t>(std::move(socket), db_)->run();
         // Accept another connection
         do_accept();
     }
@@ -891,9 +914,9 @@ int main(int argc, char* argv[]) {
     }
 
     // Check if we can initialize the DB
-    auto db = std::make_shared<db_t>();
-    raii_error_t error;
-    ukv_open(db_config.c_str(), &db->raw, &error.raw);
+    auto session = std::make_shared<db_w_clients_t>();
+    error_t error;
+    ukv_open(db_config.c_str(), &session->raw, error.internal_cptr());
     if (error.raw) {
         std::cerr << "Couldn't initialize DB: " << error.raw << std::endl;
         return EXIT_FAILURE;
@@ -901,7 +924,7 @@ int main(int argc, char* argv[]) {
 
     // Create and launch a listening port
     auto io_context = net::io_context {threads};
-    std::make_shared<listener_t>(io_context, tcp::endpoint {address, port}, db)->run();
+    std::make_shared<listener_t>(io_context, tcp::endpoint {address, port}, session)->run();
 
     // Run the I/O service on the requested number of threads
     std::vector<std::thread> v;

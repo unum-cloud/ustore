@@ -5,26 +5,53 @@
  *
  * Primary DataBase Methods:
  *      * get(collection?, key, default?) ~ Single Read
- *      * set(collection?, key, default?) ~ Single Insert
+ *      * set(collection?, key, value, default?) ~ Single Insert
  *      * __in__(key) ~ Single & Batch Contains
  *      * __getitem__(key: int) ~ Value Lookup
+ *      * __setitem__(key: int, value) ~ Value Upserts
  *      * __getitem__(collection: str) ~ Sub-Collection Lookup
  *      * clear() ~ Removes all items
  *      * TODO: pop(key, default?) ~ Removes the key in and returns its value.
  *      * TODO: update(mapping) ~ Batch Insert/Put
+ *
  * Additional Batch Methods:
  *      * TODO: get_matrix(collection?, keys, max_length: int, padding: byte)
  *      * TODO: get_table(collection?, keys, field_ids)
+ *
  * Intentionally not implemented:
  *      * __len__() ~ It's hard to consistently estimate the collection.
  *      * popitem() ~ We can't guarantee Last-In First-Out semantics.
  *      * setdefault(key[, default]) ~ As default values are useless in DBs.
+ *
+ * Similarly, those operations are supported at "collection-level", not just
+ * DataBase level.
  *
  * Full @c `dict` API:
  * https://docs.python.org/3/library/stdtypes.html#mapping-types-dict
  * https://python-reference.readthedocs.io/en/latest/docs/dict/
  * https://docs.python.org/3/tutorial/datastructures.html#dictionaries
  * https://docs.python.org/3/c-api/dict.html
+ *
+ * @section Understanding Python Strings
+ *
+ * Most dynamic allocations in CPython are done via `PyObject_Malloc`,
+ * `PyMem_Malloc`, `PyMem_Calloc`, so understanding the memory layout
+ * is as easy as searching the git repo for those function calls.
+ * What you will see, is that metadata is generally stored in the same allocated
+ * region, as a prefix, as in most dynamically typed or List-oriented systems.
+ * It's identical for `PyBytes_FromStringAndSize`, `PyUnicode_New`, `PyList_New`.
+ *
+ * Same way for lists of lists. The `PyListObject` stores a vector of pointers
+ * to it's internal entries in a member @p `ob_item`. So we forward thatlist directly
+ * to our C bindings, checking beforehand, that the internal objects are either strings,
+ * byte-strings, or NumPy arrays.
+ *
+ * > PEP 393 – Flexible String Representation
+ *   Describes the 3 possible memory layouts, including the @c `PyASCIIObject`,
+ *   the @c `PyCompactUnicodeObject` and the @c `PyUnicodeObject`.
+ *   https://peps.python.org/pep-0393/
+ *   https://docs.python.org/3/c-api/unicode.html
+ *
  */
 
 #include "pybind.hpp"
@@ -32,167 +59,76 @@
 using namespace unum::ukv;
 using namespace unum;
 
-struct py_db_t;
-struct py_txn_t;
-struct py_collection_t;
-struct py_tape_t;
-
-struct py_tape_t {
-    ukv_tape_ptr_t ptr = NULL;
-    ukv_size_t length = 0;
-};
-
-struct py_db_t : public std::enable_shared_from_this<py_db_t> {
-    ukv_t raw = NULL;
-    std::string config;
-    py_tape_t tape;
-
-    py_db_t() = default;
-    py_db_t(py_db_t&&) = delete;
-    py_db_t(py_db_t const&) = delete;
-
-    ~py_db_t() {
-        if (raw)
-            ukv_free(raw);
-        raw = NULL;
-    }
-};
-
-struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
-    ukv_txn_t raw = NULL;
-    py_db_t* db_ptr = NULL;
-    py_tape_t tape;
-
-    py_txn_t() = default;
-    py_txn_t(py_txn_t&&) = delete;
-    py_txn_t(py_txn_t const&) = delete;
-
-    ~py_txn_t() {
-
-        if (raw)
-            ukv_txn_free(db_ptr->raw, raw);
-        raw = NULL;
-    }
-};
-
-struct py_collection_t : public std::enable_shared_from_this<py_collection_t> {
-    ukv_collection_t raw = NULL;
-    std::string name;
-
-    py_db_t* db_ptr = NULL;
-    py_txn_t* txn_ptr = NULL;
-
-    py_collection_t() = default;
-    py_collection_t(py_collection_t&&) = delete;
-    py_collection_t(py_collection_t const&) = delete;
-
-    ~py_collection_t() {
-        if (raw)
-            ukv_collection_free(db_ptr->raw, raw);
-        raw = NULL;
-    }
-};
-
-std::runtime_error make_exception([[maybe_unused]] py_db_t& db, char const* error) {
-    std::runtime_error result(error);
-    ukv_error_free(error);
-    return result;
-}
-
-std::shared_ptr<py_db_t> open_if_closed(py_db_t& db) {
-    if (db.raw)
-        return db.shared_from_this();
-
-    ukv_error_t error = NULL;
-    ukv_open(db.config.c_str(), &db.raw, &error);
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
-
-    return db.shared_from_this();
-}
-
-void free_temporary_memory(py_db_t& db, py_tape_t& tape) {
-    if (tape.ptr)
-        ukv_tape_free(db.raw, tape.ptr, tape.length);
-    tape.ptr = NULL;
-    tape.length = 0;
-}
-
-void close_if_opened(py_db_t& db) {
-    if (!db.raw)
-        return;
-
-    free_temporary_memory(db, db.tape);
-    ukv_free(db.raw);
-    db.raw = NULL;
-}
-
-std::shared_ptr<py_txn_t> begin_if_needed(py_txn_t& txn) {
-
-    py_db_t& db = *txn.db_ptr;
-    ukv_error_t error = NULL;
-    ukv_txn_begin(db.raw, 0, &txn.raw, &error);
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
-
-    return txn.shared_from_this();
-}
-
-void commit(py_txn_t& txn) {
-    if (!txn.raw)
-        return;
-
-    py_db_t& db = *txn.db_ptr;
-    ukv_error_t error = NULL;
-    ukv_options_t options = ukv_options_default_k;
+std::shared_ptr<py_txn_t> begin_if_needed(py_txn_t& py_txn) {
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_txn_commit(txn.raw, options, &error);
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
+    auto error = py_txn.native.reset();
+    error.throw_unhandled();
+    return py_txn.shared_from_this();
+}
 
-    free_temporary_memory(db, txn.tape);
-    ukv_txn_free(db.raw, txn.raw);
-    txn.raw = NULL;
+void commit(py_txn_t& py_txn) {
+
+    [[maybe_unused]] py::gil_scoped_release release;
+    auto error = py_txn.native.commit();
+    error.throw_unhandled();
 }
 
 bool contains_item( //
-    py_db_t& db,
+    ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    py_tape_t& tape,
+    managed_tape_t& tape,
     ukv_key_t key) {
 
-    ukv_error_t error = NULL;
+    ukv::error_t error;
     ukv_options_t options = ukv_option_read_lengths_k;
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_read(db.raw, txn_ptr, &collection_ptr, 0, &key, 1, 0, options, &tape.ptr, &tape.length, &error);
+    ukv_read( //
+        db_ptr,
+        txn_ptr,
+        &collection_ptr,
+        0,
+        &key,
+        1,
+        0,
+        options,
+        tape.internal_memory(),
+        tape.internal_capacity(),
+        error.internal_cptr());
+    error.throw_unhandled();
 
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
-
-    auto lengths = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
+    auto lengths = reinterpret_cast<ukv_val_len_t*>(*tape.internal_memory());
     return lengths[0] != 0;
 }
 
 std::optional<py::bytes> get_item( //
-    py_db_t& db,
+    ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    py_tape_t& tape,
+    managed_tape_t& tape,
     ukv_key_t key) {
 
-    ukv_error_t error = NULL;
+    ukv::error_t error;
     ukv_options_t options = ukv_options_default_k;
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_read(db.raw, txn_ptr, &collection_ptr, 0, &key, 1, 0, options, &tape.ptr, &tape.length, &error);
+    ukv_read( //
+        db_ptr,
+        txn_ptr,
+        &collection_ptr,
+        0,
+        &key,
+        1,
+        0,
+        options,
+        tape.internal_memory(),
+        tape.internal_capacity(),
+        error.internal_cptr());
+    error.throw_unhandled();
 
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
-
-    auto lengths = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
+    auto lengths = reinterpret_cast<ukv_val_len_t*>(*tape.internal_memory());
     if (!lengths[0])
         return {};
 
@@ -224,17 +160,17 @@ std::optional<py::bytes> get_item( //
  *                  must match with `len(keys)` and the second one must be
  *                  at least 8 for us be able to efficiently reuse that memory.
  *
- * @param values_lengths May be NULL.
+ * @param values_lengths May be nullptr.
  *
  * https://pybind11.readthedocs.io/en/stable/advanced/pycpp/numpy.html#buffer-protocol
  * https://pybind11.readthedocs.io/en/stable/advanced/cast/overview.html#list-of-all-builtin-conversions
  * https://docs.python.org/3/c-api/buffer.html
  */
 void export_matrix( //
-    py_db_t& db,
+    ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    py_tape_t& tape,
+    managed_tape_t& tape,
     py::handle keys_arr,
     py::handle values_arr,
     py::handle values_lengths_arr,
@@ -300,31 +236,31 @@ void export_matrix( //
 
     // Perform the read
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_error_t error = NULL;
+    ukv::error_t error;
     ukv_options_t options = ukv_options_default_k;
-    ukv_read(db.raw,
-             txn_ptr,
-             &collection_ptr,
-             0,
-             keys_ptr,
-             keys_count,
-             sizeof(ukv_key_t),
-             options,
-             &tape.ptr,
-             &tape.length,
-             &error);
+    ukv_read( //
+        db_ptr,
+        txn_ptr,
+        &collection_ptr,
+        0,
+        keys_ptr,
+        keys_count,
+        sizeof(ukv_key_t),
+        options,
+        tape.internal_memory(),
+        tape.internal_capacity(),
+        error.internal_cptr());
 
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
+    error.throw_unhandled();
 
     // Export the data into the matrix
-    auto inputs_lengths = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
-    auto inputs_bytes = reinterpret_cast<std::uint8_t const*>(tape.ptr) + keys_count * sizeof(ukv_val_len_t);
+    taped_values_view_t inputs = tape;
+    tape_iterator_t input_it = inputs.begin();
     auto skipped_input_bytes = 0ul;
-    for (ukv_size_t i = 0; i != keys_count; ++i) {
-
-        std::uint8_t const* input_bytes = inputs_bytes + skipped_input_bytes;
-        ukv_val_len_t const input_length = inputs_lengths[i];
+    for (ukv_size_t i = 0; i != keys_count; ++i, ++input_it) {
+        value_view_t input = *input_it;
+        auto input_bytes = reinterpret_cast<std::uint8_t const*>(input.begin());
+        auto input_length = static_cast<ukv_val_len_t const>(input.size());
         std::uint8_t* output_bytes = outputs_bytes + outputs_bytes_stride * i;
         ukv_val_len_t& output_length =
             *reinterpret_cast<ukv_val_len_t*>(outputs_lengths_bytes + outputs_lengths_bytes_stride * i);
@@ -340,20 +276,21 @@ void export_matrix( //
 }
 
 void set_item( //
-    py_db_t& db,
+    ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
     ukv_key_t key,
-    py::bytes const* value = NULL) {
+    py::bytes const* value = nullptr) {
 
     ukv_options_t options = ukv_options_default_k;
-    ukv_tape_ptr_t ptr = value ? ukv_tape_ptr_t(std::string_view {*value}.data()) : NULL;
+    ukv_tape_ptr_t ptr = value ? ukv_tape_ptr_t(std::string_view {*value}.data()) : nullptr;
     ukv_val_len_t len = value ? static_cast<ukv_val_len_t>(std::string_view {*value}.size()) : 0;
-    ukv_error_t error = NULL;
+    ukv::error_t error;
+    ukv_val_len_t offset_in_val = 0;
 
     [[maybe_unused]] py::gil_scoped_release release;
     ukv_write( //
-        db.raw,
+        db_ptr,
         txn_ptr,
         &collection_ptr,
         0,
@@ -362,253 +299,261 @@ void set_item( //
         0,
         &ptr,
         0,
+        &offset_in_val,
+        0,
         &len,
         0,
         options,
-        &error);
+        error.internal_cptr());
 
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
-}
-
-ukv_collection_t collection_named(py_db_t& db, std::string const& collection_name) {
-    ukv_collection_t collection_ptr = NULL;
-    ukv_error_t error = NULL;
-
-    [[maybe_unused]] py::gil_scoped_release release;
-    ukv_collection_upsert( //
-        db.raw,
-        collection_name.c_str(),
-        &collection_ptr,
-        &error);
-
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
-    return collection_ptr;
-}
-
-void collection_remove(py_db_t& db, std::string const& collection_name) {
-    ukv_error_t error = NULL;
-
-    [[maybe_unused]] py::gil_scoped_release release;
-    ukv_collection_remove( //
-        db.raw,
-        collection_name.c_str(),
-        &error);
-
-    if (error) [[unlikely]]
-        throw make_exception(db, error);
+    error.throw_unhandled();
 }
 
 void ukv::wrap_database(py::module& m) {
 
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
-    auto db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
-    auto col = py::class_<py_collection_t, std::shared_ptr<py_collection_t>>(m, "Collection", py::module_local());
-    auto txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction", py::module_local());
+    auto py_db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
+    auto py_col = py::class_<py_col_t, std::shared_ptr<py_col_t>>(m, "Collection", py::module_local());
+    auto py_txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction", py::module_local());
 
     // Define `DataBase`
-    db.def(py::init([](std::string const& config) {
-               auto db_ptr = std::make_shared<py_db_t>();
-               db_ptr->config = config;
-               open_if_closed(*db_ptr);
-               return db_ptr;
-           }),
-           py::arg("config") = "");
+    py_db.def( //
+        py::init([](std::string const& config) {
+            db_t db;
+            auto error = db.open(config);
+            error.throw_unhandled();
+            session_t session = db.session();
+            return std::make_shared<py_db_t>(std::move(db), std::move(session), config);
+        }),
+        py::arg("config") = "");
 
-    db.def(
+    py_db.def(
         "get",
-        [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, NULL, db.tape, key); },
+        [](py_db_t& py_db, ukv_key_t key) {
+            return get_item(py_db.native, nullptr, nullptr, py_db.session.tape(), key);
+        },
         py::arg("key"));
 
-    db.def(
+    py_db.def(
         "get",
-        [](py_db_t& db, std::string const& collection, ukv_key_t key) {
-            return get_item(db, NULL, collection_named(db, collection), db.tape, key);
+        [](py_db_t& py_db, std::string const& collection, ukv_key_t key) {
+            auto maybe_col = py_db.native[collection];
+            maybe_col.throw_unhandled();
+            return get_item(py_db.native, nullptr, *maybe_col, py_db.session.tape(), key);
         },
         py::arg("collection"),
         py::arg("key"));
 
-    db.def(
+    py_db.def(
         "set",
-        [](py_db_t& db, ukv_key_t key, py::bytes const& value) { return set_item(db, NULL, NULL, key, &value); },
+        [](py_db_t& py_db, ukv_key_t key, py::bytes const& value) {
+            return set_item(py_db.native, nullptr, nullptr, key, &value);
+        },
         py::arg("key"),
         py::arg("value"));
 
-    db.def(
+    py_db.def(
         "set",
-        [](py_db_t& db, std::string const& collection, ukv_key_t key, py::bytes const& value) {
-            return set_item(db, NULL, collection_named(db, collection), key, &value);
+        [](py_db_t& py_db, std::string const& collection, ukv_key_t key, py::bytes const& value) {
+            auto maybe_col = py_db.native[collection];
+            maybe_col.throw_unhandled();
+            return set_item(py_db.native, nullptr, *maybe_col, key, &value);
         },
         py::arg("collection"),
         py::arg("key"),
         py::arg("value"));
-    col.def("clear", [](py_db_t& db) {
+    py_col.def("clear", [](py_db_t& py_db) {
         // TODO:
     });
 
     // Define `Collection`s member method, without defining any external constructors
-    col.def(
+    py_col.def(
         "get",
-        [](py_collection_t& col, ukv_key_t key) {
-            return get_item(*col.db_ptr,
-                            col.txn_ptr ? col.txn_ptr->raw : NULL,
-                            col.raw,
-                            col.txn_ptr ? col.txn_ptr->tape : col.db_ptr->tape,
+        [](py_col_t& py_col, ukv_key_t key) {
+            return get_item(py_col.db_ptr->native,
+                            py_col.txn_ptr->native,
+                            py_col.native,
+                            py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
                             key);
         },
         py::arg("key"));
 
-    col.def(
+    py_col.def(
         "set",
-        [](py_collection_t& col, ukv_key_t key, py::bytes const& value) {
-            return set_item(*col.db_ptr, col.txn_ptr ? col.txn_ptr->raw : NULL, col.raw, key, &value);
+        [](py_col_t& py_col, ukv_key_t key, py::bytes const& value) {
+            return set_item(py_col.db_ptr->native, py_col.txn_ptr->native, py_col.native, key, &value);
         },
         py::arg("key"),
         py::arg("value"));
-    col.def("clear", [](py_collection_t& col) {
-        py_db_t& db = *col.db_ptr;
-        std::string name {std::move(col.name)};
-        collection_remove(db, name);
-        collection_named(db, name);
+    py_col.def("clear", [](py_col_t& py_col) {
+        db_t& db = py_col.db_ptr->native;
+        db.remove(py_col.name).throw_unhandled();
+        auto maybe_col = db[py_col.name];
+        maybe_col.throw_unhandled();
+        py_col.native = *maybe_col;
     });
 
     // `Transaction`:
-    txn.def(py::init([](py_db_t& db, bool begin) {
-                auto txn_ptr = std::make_shared<py_txn_t>();
-                txn_ptr->db_ptr = &db;
-                begin_if_needed(*txn_ptr);
-                return txn_ptr;
-            }),
-            py::arg("db"),
-            py::arg("begin") = true);
-    txn.def(
+    py_txn.def( //
+        py::init([](py_db_t& py_db, bool begin) {
+            auto db_ptr = py_db.shared_from_this();
+            auto maybe_txn = py_db.session.transact();
+            maybe_txn.throw_unhandled();
+            return std::make_shared<py_txn_t>(std::move(db_ptr), *std::move(maybe_txn));
+        }),
+        py::arg("db"),
+        py::arg("begin") = true);
+    py_txn.def(
         "get",
-        [](py_txn_t& txn, ukv_key_t key) { return get_item(*txn.db_ptr, txn.raw, NULL, txn.tape, key); },
+        [](py_txn_t& py_txn, ukv_key_t key) {
+            return get_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.tape(), key);
+        },
         py::arg("key"));
 
-    txn.def(
+    py_txn.def(
         "get",
-        [](py_txn_t& txn, std::string const& collection, ukv_key_t key) {
-            return get_item(*txn.db_ptr, txn.raw, collection_named(*txn.db_ptr, collection), txn.tape, key);
+        [](py_txn_t& py_txn, std::string const& collection, ukv_key_t key) {
+            auto maybe_col = py_txn.db_ptr->native[collection];
+            maybe_col.throw_unhandled();
+            return get_item(py_txn.db_ptr->native, py_txn.native, *maybe_col, py_txn.native.tape(), key);
         },
         py::arg("collection"),
         py::arg("key"));
 
-    txn.def(
+    py_txn.def(
         "set",
-        [](py_txn_t& txn, ukv_key_t key, py::bytes const& value) {
-            return set_item(*txn.db_ptr, txn.raw, NULL, key, &value);
+        [](py_txn_t& py_txn, ukv_key_t key, py::bytes const& value) {
+            return set_item(py_txn.db_ptr->native, py_txn.native, nullptr, key, &value);
         },
         py::arg("key"),
         py::arg("value"));
 
-    txn.def(
+    py_txn.def(
         "set",
-        [](py_txn_t& txn, std::string const& collection, ukv_key_t key, py::bytes const& value) {
-            return set_item(*txn.db_ptr, txn.raw, collection_named(*txn.db_ptr, collection), key, &value);
+        [](py_txn_t& py_txn, std::string const& collection, ukv_key_t key, py::bytes const& value) {
+            auto maybe_col = py_txn.db_ptr->native[collection];
+            maybe_col.throw_unhandled();
+            return set_item(py_txn.db_ptr->native, py_txn.native, *maybe_col, key, &value);
         },
         py::arg("collection"),
         py::arg("key"),
         py::arg("value"));
 
     // Resource management
-    db.def("__enter__", &open_if_closed);
-    db.def("close", &close_if_opened);
-    txn.def("__enter__", &begin_if_needed);
-    txn.def("commit", &commit);
+    py_txn.def("__enter__", &begin_if_needed);
+    py_txn.def("commit", &commit);
 
-    db.def("__exit__",
-           [](py_db_t& db, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
-               close_if_opened(db);
-           });
-    txn.def("__exit__",
-            [](py_txn_t& txn, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
-                try {
-                    commit(txn);
-                }
-                catch (...) {
-                    // We must now propagate this exception upwards:
-                    // https://gist.github.com/YannickJadoul/f1fc8db711ed980cf02610277af058e4
-                }
-            });
+    py_db.def("__enter__", [](py_db_t& py_db) {
+        if (py_db.native)
+            return;
+        auto error = py_db.native.open(py_db.config);
+        error.throw_unhandled();
+    });
+    py_db.def("close", [](py_db_t& py_db) { py_db.native.close(); });
+
+    py_db.def( //
+        "__exit__",
+        [](py_db_t& py_db, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
+            py_db.native.close();
+        });
+    py_txn.def(
+        "__exit__",
+        [](py_txn_t& py_txn, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
+            try {
+                commit(py_txn);
+            }
+            catch (...) {
+                // We must now propagate this exception upwards:
+                // https://gist.github.com/YannickJadoul/f1fc8db711ed980cf02610277af058e4
+            }
+        });
 
     // Operator overaloads used to edit entries
-    db.def("__contains__", [](py_db_t& db, ukv_key_t key) { return contains_item(db, NULL, NULL, db.tape, key); });
-    db.def("__getitem__", [](py_db_t& db, ukv_key_t key) { return get_item(db, NULL, NULL, db.tape, key); });
-    db.def("__setitem__",
-           [](py_db_t& db, ukv_key_t key, py::bytes const& value) { return set_item(db, NULL, NULL, key, &value); });
-    db.def("__delitem__", [](py_db_t& db, ukv_key_t key) { return set_item(db, NULL, NULL, key); });
-
-    txn.def("__contains__",
-            [](py_txn_t& txn, ukv_key_t key) { return contains_item(*txn.db_ptr, txn.raw, NULL, txn.tape, key); });
-    txn.def("__getitem__",
-            [](py_txn_t& txn, ukv_key_t key) { return get_item(*txn.db_ptr, txn.raw, NULL, txn.tape, key); });
-    txn.def("__setitem__", [](py_txn_t& txn, ukv_key_t key, py::bytes const& value) {
-        return set_item(*txn.db_ptr, txn.raw, NULL, key, &value);
+    py_db.def("__contains__", [](py_db_t& py_db, ukv_key_t key) {
+        return contains_item(py_db.native, nullptr, nullptr, py_db.session.tape(), key);
     });
-    txn.def("__delitem__", [](py_txn_t& txn, ukv_key_t key) { return set_item(*txn.db_ptr, txn.raw, NULL, key); });
+    py_db.def("__getitem__", [](py_db_t& py_db, ukv_key_t key) {
+        return get_item(py_db.native, nullptr, nullptr, py_db.session.tape(), key);
+    });
+    py_db.def("__setitem__", [](py_db_t& py_db, ukv_key_t key, py::bytes const& value) {
+        return set_item(py_db.native, nullptr, nullptr, key, &value);
+    });
+    py_db.def("__delitem__",
+              [](py_db_t& py_db, ukv_key_t key) { return set_item(py_db.native, nullptr, nullptr, key); });
 
-    col.def("__contains__", [](py_collection_t& col, ukv_key_t key) {
-        return contains_item(*col.db_ptr,
-                             col.txn_ptr ? col.txn_ptr->raw : NULL,
-                             col.raw,
-                             col.txn_ptr ? col.txn_ptr->tape : col.db_ptr->tape,
+    py_txn.def("__contains__", [](py_txn_t& py_txn, ukv_key_t key) {
+        return contains_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.tape(), key);
+    });
+    py_txn.def("__getitem__", [](py_txn_t& py_txn, ukv_key_t key) {
+        return get_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.tape(), key);
+    });
+    py_txn.def("__setitem__", [](py_txn_t& py_txn, ukv_key_t key, py::bytes const& value) {
+        return set_item(py_txn.db_ptr->native, py_txn.native, nullptr, key, &value);
+    });
+    py_txn.def("__delitem__", [](py_txn_t& py_txn, ukv_key_t key) {
+        return set_item(py_txn.db_ptr->native, py_txn.native, nullptr, key);
+    });
+
+    py_col.def("__contains__", [](py_col_t& py_col, ukv_key_t key) {
+        return contains_item(py_col.db_ptr->native,
+                             py_col.txn_ptr->native,
+                             py_col.native,
+                             py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
                              key);
     });
-    col.def("__getitem__", [](py_collection_t& col, ukv_key_t key) {
-        return get_item(*col.db_ptr,
-                        col.txn_ptr ? col.txn_ptr->raw : NULL,
-                        col.raw,
-                        col.txn_ptr ? col.txn_ptr->tape : col.db_ptr->tape,
+    py_col.def("__getitem__", [](py_col_t& py_col, ukv_key_t key) {
+        return get_item(py_col.db_ptr->native,
+                        py_col.txn_ptr->native,
+                        py_col.native,
+                        py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
                         key);
     });
-    col.def("__setitem__", [](py_collection_t& col, ukv_key_t key, py::bytes const& value) {
-        return set_item(*col.db_ptr, col.txn_ptr ? col.txn_ptr->raw : NULL, col.raw, key, &value);
+    py_col.def("__setitem__", [](py_col_t& py_col, ukv_key_t key, py::bytes const& value) {
+        return set_item(py_col.db_ptr->native, py_col.txn_ptr->native, py_col.native, key, &value);
     });
-    col.def("__delitem__", [](py_collection_t& col, ukv_key_t key) {
-        return set_item(*col.db_ptr, col.txn_ptr ? col.txn_ptr->raw : NULL, col.raw, key);
+    py_col.def("__delitem__", [](py_col_t& py_col, ukv_key_t key) {
+        return set_item(py_col.db_ptr->native, py_col.txn_ptr->native, py_col.native, key);
     });
 
     // Operator overaloads used to access collections
-    db.def("__getitem__", [](py_db_t& db, std::string const& collection) {
-        auto col = std::make_shared<py_collection_t>();
-        col->name = collection;
-        col->raw = collection_named(db, collection);
-        col->db_ptr = &db;
-        return col;
+    py_db.def("__getitem__", [](py_db_t& py_db, std::string const& collection) {
+        auto maybe_col = py_db.native[collection];
+        maybe_col.throw_unhandled();
+
+        auto py_col = std::make_shared<py_col_t>();
+        py_col->name = collection;
+        py_col->native = *std::move(maybe_col);
+        py_col->db_ptr = py_db.shared_from_this();
+        return py_col;
     });
-    txn.def("__getitem__", [](py_txn_t& txn, std::string const& collection) {
-        auto col = std::make_shared<py_collection_t>();
-        col->name = collection;
-        col->raw = collection_named(*txn.db_ptr, collection);
-        col->db_ptr = txn.db_ptr;
-        col->txn_ptr = &txn;
-        return col;
+    py_txn.def("__getitem__", [](py_txn_t& py_txn, std::string const& collection) {
+        auto maybe_col = py_txn.db_ptr->native[collection];
+        maybe_col.throw_unhandled();
+
+        auto py_col = std::make_shared<py_col_t>();
+        py_col->name = collection;
+        py_col->native = *std::move(maybe_col);
+        py_col->db_ptr = py_txn.db_ptr;
+        py_col->txn_ptr = py_txn.shared_from_this();
+        return py_col;
     });
-    db.def("__delitem__", [](py_db_t& db, std::string const& collection) { collection_remove(db, collection); });
+    py_db.def("__delitem__", [](py_db_t& py_db, std::string const& collection) {
+        auto error = py_db.native.remove(collection);
+        error.throw_unhandled();
+    });
 
     // Batch Matrix Operations
-    db.def(
+    py_db.def(
         "fill_matrix",
-        [](py_db_t& db, py::handle keys, py::handle values, py::handle values_lengths, std::uint8_t padding_char = 0) {
-            return export_matrix(db, NULL, NULL, db.tape, keys, values, values_lengths, padding_char);
-        },
-        py::arg("keys"),
-        py::arg("values"),
-        py::arg("values_lengths"),
-        py::arg("padding") = 0);
-    col.def(
-        "fill_matrix",
-        [](py_collection_t& col,
+        [](py_db_t& py_db,
            py::handle keys,
            py::handle values,
            py::handle values_lengths,
            std::uint8_t padding_char = 0) {
-            return export_matrix(*col.db_ptr,
-                                 col.txn_ptr ? col.txn_ptr->raw : NULL,
-                                 col.raw,
-                                 col.txn_ptr ? col.txn_ptr->tape : col.db_ptr->tape,
+            return export_matrix(py_db.native,
+                                 nullptr,
+                                 nullptr,
+                                 py_db.session.tape(),
                                  keys,
                                  values,
                                  values_lengths,
@@ -618,14 +563,41 @@ void ukv::wrap_database(py::module& m) {
         py::arg("values"),
         py::arg("values_lengths"),
         py::arg("padding") = 0);
-    txn.def(
+    py_col.def(
         "fill_matrix",
-        [](py_txn_t& txn,
+        [](py_col_t& py_col,
            py::handle keys,
            py::handle values,
            py::handle values_lengths,
            std::uint8_t padding_char = 0) {
-            return export_matrix(*txn.db_ptr, txn.raw, NULL, txn.tape, keys, values, values_lengths, padding_char);
+            return export_matrix(py_col.db_ptr->native,
+                                 py_col.txn_ptr->native,
+                                 py_col.native,
+                                 py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
+                                 keys,
+                                 values,
+                                 values_lengths,
+                                 padding_char);
+        },
+        py::arg("keys"),
+        py::arg("values"),
+        py::arg("values_lengths"),
+        py::arg("padding") = 0);
+    py_txn.def(
+        "fill_matrix",
+        [](py_txn_t& py_txn,
+           py::handle keys,
+           py::handle values,
+           py::handle values_lengths,
+           std::uint8_t padding_char = 0) {
+            return export_matrix(py_txn.db_ptr->native,
+                                 py_txn.native,
+                                 nullptr,
+                                 py_txn.native.tape(),
+                                 keys,
+                                 values,
+                                 values_lengths,
+                                 padding_char);
         },
         py::arg("keys"),
         py::arg("values"),

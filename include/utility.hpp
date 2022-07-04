@@ -84,7 +84,12 @@ class error_t {
         return result;
     }
 
-    ukv_error_t* internals() noexcept { return &raw_; }
+    void throw_unhandled() {
+        if (*this) [[unlikely]]
+            throw release_exception();
+    }
+
+    ukv_error_t* internal_cptr() noexcept { return &raw_; }
 };
 
 template <typename object_at>
@@ -103,6 +108,11 @@ class expected_gt {
     object_at const& operator*() const& noexcept { return object_; }
     operator std::optional<object_at>() && {
         return error_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
+    }
+
+    void throw_unhandled() {
+        if (error_) [[unlikely]]
+            throw error_.release_exception();
     }
 };
 
@@ -296,8 +306,8 @@ class managed_tape_t {
     }
 
     operator taped_values_view_t() const noexcept { return {memory_, capacity_}; }
-    ukv_tape_ptr_t* memory() noexcept { return &memory_; }
-    ukv_size_t* capacity() noexcept { return &capacity_; }
+    ukv_tape_ptr_t* internal_memory() noexcept { return &memory_; }
+    ukv_size_t* internal_capacity() noexcept { return &capacity_; }
 };
 
 } // namespace unum::ukv
