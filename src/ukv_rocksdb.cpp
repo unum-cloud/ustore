@@ -181,7 +181,7 @@ void read_head( //
         total_bytes += values[i].size();
 
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
@@ -220,7 +220,7 @@ void read_txn( //
         total_bytes += values[i].size();
 
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);

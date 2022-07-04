@@ -289,7 +289,7 @@ void measure_head( //
     // 1. Allocate a tape for all the values to be pulled
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     std::shared_lock _ {db.mutex};
@@ -327,7 +327,7 @@ void read_head( //
 
     // 2. Allocate a tape for all the values to be fetched
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     // 3. Fetch the data
@@ -386,7 +386,7 @@ void measure_txn( //
     // 1. Allocate a tape for all the values to be pulled
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     stl_db_t& db = *txn.db_ptr;
@@ -465,7 +465,7 @@ void read_txn( //
 
     // 2. Allocate a tape for all the values to be pulled
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     // 3. Pull the data
