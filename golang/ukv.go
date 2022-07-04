@@ -73,9 +73,10 @@ func (db *DataBase) Set(key uint64, value *[]byte) error {
 	value_go := C.CBytes(*value)
 	value_ptr_c := C.ukv_tape_ptr_t(value_go)
 	value_length_c := C.ukv_val_len_t(len(*value))
+	value_offset_c := C.ukv_val_len_t(0)
 	defer C.free(value_go)
 
-	C.ukv_write(db.raw, nil, collection_c, 0, &key_c, 1, 0, &value_ptr_c, 0, &value_length_c, 0, options_c, &error_c)
+	C.ukv_write(db.raw, nil, collection_c, 0, &key_c, 1, 0, &value_ptr_c, 0, &value_offset_c, 0, &value_length_c, 0, options_c, &error_c)
 	return forwardError(error_c)
 }
 
@@ -91,8 +92,9 @@ func (db *DataBase) Delete(key uint64) error {
 	options_c := C.ukv_options_t(C.ukv_options_default_k)
 	value_ptr_c := C.ukv_tape_ptr_t(nil)
 	value_length_c := C.ukv_val_len_t(0)
+	value_offset_c := C.ukv_val_len_t(0)
 
-	C.ukv_write(db.raw, nil, collection_c, 0, &key_c, 1, 0, &value_ptr_c, 0, &value_length_c, 0, options_c, &error_c)
+	C.ukv_write(db.raw, nil, collection_c, 0, &key_c, 1, 0, &value_ptr_c, 0, &value_offset_c, 0, &value_length_c, 0, options_c, &error_c)
 	return forwardError(error_c)
 }
 
