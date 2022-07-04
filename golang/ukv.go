@@ -1,4 +1,4 @@
-package ukv
+package UKV
 
 /*
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../include

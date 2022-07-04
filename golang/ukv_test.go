@@ -3,7 +3,7 @@ package ukv_test
 import (
 	"testing"
 
-	ukv "github.com/unum-cloud/ukv/golang"
+	ukv "github.com/unum-cloud/UKV/golang"
 )
 
 func TestDataBaseSimple(t *testing.T) {
