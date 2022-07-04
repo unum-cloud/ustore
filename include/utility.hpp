@@ -58,31 +58,33 @@ struct located_key_hash_t {
 };
 
 class error_t {
-  public:
-    ukv_error_t raw = nullptr;
+    ukv_error_t raw_ = nullptr;
 
-    error_t(ukv_error_t err = nullptr) noexcept : raw(err) {}
-    operator bool() const noexcept { return raw; }
+  public:
+    error_t(ukv_error_t err = nullptr) noexcept : raw_(err) {}
+    operator bool() const noexcept { return raw_; }
 
     error_t(error_t const&) = delete;
     error_t& operator=(error_t const&) = delete;
 
-    error_t(error_t&& other) noexcept { raw = std::exchange(other.raw, nullptr); }
+    error_t(error_t&& other) noexcept { raw_ = std::exchange(other.raw_, nullptr); }
     error_t& operator=(error_t&& other) noexcept {
-        raw = std::exchange(other.raw, nullptr);
+        raw_ = std::exchange(other.raw_, nullptr);
         return *this;
     }
     ~error_t() {
-        if (raw)
-            ukv_error_free(raw);
-        raw = nullptr;
+        if (raw_)
+            ukv_error_free(raw_);
+        raw_ = nullptr;
     }
 
     std::runtime_error release_exception() {
-        std::runtime_error result(raw);
-        ukv_error_free(std::exchange(raw, nullptr));
+        std::runtime_error result(raw_);
+        ukv_error_free(std::exchange(raw_, nullptr));
         return result;
     }
+
+    ukv_error_t* internals() noexcept { return &raw_; }
 };
 
 template <typename object_at>
@@ -121,76 +123,87 @@ struct range_gt {
  * values with `stride` equal to zero.
  */
 template <typename object_at>
-struct strided_ptr_gt {
+class strided_ptr_gt {
 
-    object_at* raw = nullptr;
-    ukv_size_t stride = 0;
+    object_at* raw_ = nullptr;
+    ukv_size_t stride_ = 0;
+
+  public:
+    inline strided_ptr_gt(object_at* raw, ukv_size_t stride = 0) noexcept : raw_(raw), stride_(stride) {}
 
     inline object_at& operator[](ukv_size_t idx) const noexcept {
-        auto raw_bytes = (byte_t*)raw + stride * idx;
+        auto raw_bytes = (byte_t*)raw_ + stride_ * idx;
         return *reinterpret_cast<object_at*>(raw_bytes);
     }
 
     inline strided_ptr_gt& operator++() noexcept {
-        raw += stride;
+        raw_ += stride_;
         return *this;
     }
 
     inline strided_ptr_gt& operator--() noexcept {
-        raw -= stride;
+        raw_ -= stride_;
         return *this;
     }
 
-    inline strided_ptr_gt operator++(int) const noexcept { return {raw + stride, stride}; }
-    inline strided_ptr_gt operator--(int) const noexcept { return {raw - stride, stride}; }
-    inline operator bool() const noexcept { return raw != nullptr; }
-    inline bool repeats() const noexcept { return !stride; }
-    inline object_at& operator*() const noexcept { return *raw; }
+    inline strided_ptr_gt operator++(int) const noexcept { return {raw_ + stride_, stride_}; }
+    inline strided_ptr_gt operator--(int) const noexcept { return {raw_ - stride_, stride_}; }
+    inline operator bool() const noexcept { return raw_ != nullptr; }
+    inline bool repeats() const noexcept { return !stride_; }
+    inline object_at& operator*() const noexcept { return *raw_; }
+    inline object_at* operator->() const noexcept { return raw_; }
+    inline object_at* get() const noexcept { return raw_; }
 
-    inline bool operator==(strided_ptr_gt const& other) const noexcept { return raw == other.raw; }
-    inline bool operator!=(strided_ptr_gt const& other) const noexcept { return raw != other.raw; }
+    inline bool operator==(strided_ptr_gt const& other) const noexcept { return raw_ == other.raw_; }
+    inline bool operator!=(strided_ptr_gt const& other) const noexcept { return raw_ != other.raw_; }
 };
 
 template <typename object_at>
-struct strided_range_gt {
+class strided_range_gt {
 
-    object_at* raw = nullptr;
-    ukv_size_t stride = 0;
-    ukv_size_t count = 0;
+    object_at* begin_ = nullptr;
+    ukv_size_t stride_ = 0;
+    ukv_size_t count_ = 0;
 
+  public:
     strided_range_gt() = default;
-    strided_range_gt(object_at& single, ukv_size_t repeats = 1) noexcept : raw(&single), stride(0), count(repeats) {}
+    strided_range_gt(object_at& single, ukv_size_t repeats = 1) noexcept
+        : begin_(&single), stride_(0), count_(repeats) {}
     strided_range_gt(object_at* begin, object_at* end) noexcept
-        : raw(begin), stride(sizeof(object_at)), count(end - begin) {}
+        : begin_(begin), stride_(sizeof(object_at)), count_(end - begin) {}
     strided_range_gt(std::vector<object_at>& vec) noexcept
-        : raw(vec.data()), stride(sizeof(object_at)), count(vec.size()) {}
+        : begin_(vec.data()), stride_(sizeof(object_at)), count_(vec.size()) {}
+    strided_range_gt(object_at* begin, ukv_size_t stride, ukv_size_t count) noexcept
+        : begin_(begin), stride_(stride), count_(count) {}
 
-    inline strided_ptr_gt<object_at> begin() const noexcept { return {raw, stride}; }
-    inline strided_ptr_gt<object_at> end() const noexcept { return begin() + count; }
-    inline std::size_t size() const noexcept { return count; }
-    inline operator bool() const noexcept { return count; }
+    inline strided_ptr_gt<object_at> begin() const noexcept { return {begin_, stride_}; }
+    inline strided_ptr_gt<object_at> end() const noexcept { return begin() + count_; }
+    inline std::size_t size() const noexcept { return count_; }
+    inline operator bool() const noexcept { return count_; }
+    ukv_size_t stride() const noexcept { return stride_; }
+    ukv_size_t count() const noexcept { return count_; }
 };
 
-struct value_view_t {
+class value_view_t {
 
-    ukv_tape_ptr_t ptr = nullptr;
-    ukv_val_len_t length = 0;
+    ukv_tape_ptr_t ptr_ = nullptr;
+    ukv_val_len_t length_ = 0;
 
-    inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr); }
-    inline byte_t const* end() const noexcept { return begin() + length; }
-    inline std::size_t size() const noexcept { return length; }
-    inline operator bool() const noexcept { return length; }
+  public:
+    inline value_view_t(ukv_tape_ptr_t ptr, ukv_val_len_t length) noexcept : ptr_(ptr), length_(length) {}
+    inline value_view_t(byte_t const* begin, byte_t const* end) noexcept
+        : ptr_(ukv_tape_ptr_t(begin)), length_(static_cast<ukv_val_len_t>(end - begin)) {}
+
+    inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
+    inline byte_t const* end() const noexcept { return begin() + length_; }
+    inline std::size_t size() const noexcept { return length_; }
+    inline operator bool() const noexcept { return length_; }
 };
 
 struct collections_view_t {
     strided_range_gt<ukv_collection_t> range;
 
-    collections_view_t() noexcept {
-        range.raw = &ukv_default_collection_k;
-        range.stride = 0;
-        range.count = 1;
-    }
-
+    collections_view_t() noexcept : range(ukv_default_collection_k, 1) {}
     collections_view_t(strided_range_gt<ukv_collection_t> r) noexcept : range(r) {}
 };
 
@@ -202,24 +215,20 @@ struct located_keys_view_t {
     strided_range_gt<located_key_t> range;
 
     keys_view_t keys() const noexcept {
-        keys_view_t result;
-        result.range.raw = &range.raw->key;
-        result.range.count = range.count;
-        result.range.stride = sizeof(located_key_t) * range.stride;
-        return result;
+        return {
+            strided_range_gt<ukv_key_t> {&range.begin()->key, range.stride() * sizeof(located_key_t), range.count()}};
     }
 
     collections_view_t collections() const noexcept {
-        collections_view_t result;
-        result.range.raw = &range.raw->collection;
-        result.range.count = range.count;
-        result.range.stride = sizeof(located_key_t) * range.stride;
-        return result;
+        return {strided_range_gt<ukv_collection_t> {&range.begin()->collection,
+                                                    range.stride() * sizeof(located_key_t),
+                                                    range.count()}};
     }
 };
 
 struct disjoint_values_view_t {
     strided_range_gt<ukv_tape_ptr_t> values_range;
+    strided_range_gt<ukv_val_len_t> offsets_range;
     strided_range_gt<ukv_val_len_t> lengths_range;
 };
 
