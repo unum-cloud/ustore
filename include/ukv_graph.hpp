@@ -1,5 +1,5 @@
 /**
- * @file ukv.hpp
+ * @file ukv_graph.hpp
  * @author Ashot Vardanian
  * @date 30 Jun 2022
  * @brief C++ bindings built on top of @see "ukv_graph.h" with
@@ -39,7 +39,7 @@ struct neighborhood_t {
     }
 };
 
-struct edges_t {
+struct edges_soa_view_t {
     strided_range_gt<ukv_key_t const> source_ids;
     strided_range_gt<ukv_key_t const> target_ids;
     strided_range_gt<ukv_key_t const> edge_ids;
@@ -77,30 +77,18 @@ inline range_gt<neighborhood_t const*> neighbors(value_view_t bytes,
  * @brief Parses the a single `value_view_t` chunk from the output
  * of `ukv_graph_gather_neighbors`.
  */
-inline std::pair<edges_t, edges_t> edges_from_neighbors(ukv_key_t* key_ptr, value_view_t bytes) {
-    edges_t outgoing, incoming;
+inline std::pair<edges_soa_view_t, edges_soa_view_t> edges_from_neighbors(ukv_key_t* key_ptr, value_view_t bytes) {
+    edges_soa_view_t outgoing, incoming;
     auto targets = neighbors(bytes, ukv_graph_node_source_k);
     auto sources = neighbors(bytes, ukv_graph_node_target_k);
 
-    outgoing.source_ids.raw = key_ptr;
-    outgoing.source_ids.stride = 0;
-    outgoing.source_ids.count = targets.size();
-    outgoing.target_ids.raw = &targets.begin()->neighbor_id;
-    outgoing.target_ids.stride = sizeof(neighborhood_t);
-    outgoing.target_ids.count = targets.size();
-    outgoing.edge_ids.raw = &targets.begin()->edge_id;
-    outgoing.edge_ids.stride = sizeof(neighborhood_t);
-    outgoing.edge_ids.count = targets.size();
+    outgoing.source_ids = {key_ptr, 0, targets.size()};
+    outgoing.target_ids = {&targets.begin()->neighbor_id, sizeof(neighborhood_t), targets.size()};
+    outgoing.edge_ids = {&targets.begin()->edge_id, sizeof(neighborhood_t), targets.size()};
 
-    incoming.source_ids.raw = &sources.begin()->neighbor_id;
-    incoming.source_ids.stride = sizeof(neighborhood_t);
-    incoming.source_ids.count = sources.size();
-    incoming.target_ids.raw = key_ptr;
-    incoming.target_ids.stride = 0;
-    incoming.target_ids.count = sources.size();
-    incoming.edge_ids.raw = &sources.begin()->edge_id;
-    incoming.edge_ids.stride = sizeof(neighborhood_t);
-    incoming.edge_ids.count = sources.size();
+    incoming.source_ids = {&sources.begin()->neighbor_id, sizeof(neighborhood_t), sources.size()};
+    incoming.target_ids = {key_ptr, 0, sources.size()};
+    incoming.edge_ids = {&sources.begin()->edge_id, sizeof(neighborhood_t), sources.size()};
 
     return {outgoing, incoming};
 }

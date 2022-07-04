@@ -37,17 +37,18 @@ using namespace unum::ukv;
 using namespace unum;
 namespace fs = std::filesystem;
 
-struct stl_txn_t;
 struct stl_db_t;
+struct stl_collection_t;
+struct stl_txn_t;
 
-struct sequenced_value_t {
+struct stl_sequenced_value_t {
     buffer_t data;
     sequence_t sequence_number {0};
 };
 
 struct stl_collection_t {
     std::string name;
-    std::unordered_map<ukv_key_t, sequenced_value_t> pairs;
+    std::unordered_map<ukv_key_t, stl_sequenced_value_t> pairs;
 
     void reserve_more(std::size_t n) { pairs.reserve(pairs.size() + n); }
 };
@@ -83,58 +84,9 @@ struct stl_db_t {
     std::string persisted_path;
 };
 
-struct read_task_t {
-    stl_collection_t& collection;
-    ukv_key_t key;
-
-    inline located_key_t location() const noexcept { return located_key_t {&collection, key}; }
-};
-
-struct read_tasks_t {
-    stl_db_t& db;
-    strided_ptr_gt<ukv_collection_t> cols;
-    strided_ptr_gt<ukv_key_t const> keys;
-
-    inline read_task_t operator[](ukv_size_t i) const noexcept {
-        stl_collection_t& col = cols && cols[i] ? *reinterpret_cast<stl_collection_t*>(cols[i]) : db.unnamed;
-        ukv_key_t key = keys[i];
-        return {col, key};
-    }
-};
-
-struct write_task_t {
-    stl_collection_t& collection;
-    ukv_key_t key;
-    byte_t const* begin;
-    ukv_val_len_t length;
-
-    inline located_key_t location() const noexcept { return located_key_t {&collection, key}; }
-    buffer_t buffer() const { return {begin, begin + length}; }
-};
-
-struct write_tasks_t {
-    stl_db_t& db;
-    strided_ptr_gt<ukv_collection_t> cols;
-    strided_ptr_gt<ukv_key_t const> keys;
-    strided_ptr_gt<ukv_tape_ptr_t const> vals;
-    strided_ptr_gt<ukv_val_len_t const> lens;
-
-    inline write_task_t operator[](ukv_size_t i) const noexcept {
-        stl_collection_t& col = cols && cols[i] ? *reinterpret_cast<stl_collection_t*>(cols[i]) : db.unnamed;
-        ukv_key_t key = keys[i];
-        byte_t const* begin;
-        ukv_val_len_t len;
-        if (vals) {
-            begin = reinterpret_cast<byte_t const*>(vals[i]);
-            len = lens ? lens[i] : std::strlen(reinterpret_cast<char const*>(vals[i]));
-        }
-        else {
-            begin = nullptr;
-            len = 0;
-        }
-        return {col, key, begin, len};
-    }
-};
+stl_collection_t& stl_collection(stl_db_t& db, ukv_collection_t col) {
+    return col == ukv_default_collection_k ? db.unnamed : *reinterpret_cast<stl_collection_t*>(col);
+}
 
 void save_to_disk(stl_collection_t const& col, std::string const& path, ukv_error_t* c_error) {
     // Using the classical C++ IO mechanisms is a bad tone in the modern world.
@@ -224,7 +176,7 @@ void read_from_disk(stl_collection_t& col, std::string const& path, ukv_error_t*
             break;
         }
 
-        col.pairs.emplace(key, sequenced_value_t {std::move(val), sequence_t {0}});
+        col.pairs.emplace(key, stl_sequenced_value_t {std::move(val), sequence_t {0}});
     }
 
 cleanup:
@@ -288,7 +240,7 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
 
 void write_head( //
     stl_db_t& db,
-    write_tasks_t tasks,
+    write_tasks_soa_t tasks,
     ukv_size_t const n,
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
@@ -298,18 +250,20 @@ void write_head( //
     for (ukv_size_t i = 0; i != n; ++i) {
 
         write_task_t task = tasks[i];
-        auto key_iterator = task.collection.pairs.find(task.key);
+        stl_collection_t& col = stl_collection(db, task.collection);
+        auto key_iterator = col.pairs.find(task.key);
 
         // We want to insert a new entry, but let's check if we
         // can overwrite the existig value without causing reallocations.
         try {
-            if (key_iterator != task.collection.pairs.end()) {
+            if (key_iterator != col.pairs.end()) {
+                auto value = task.view();
                 key_iterator->second.sequence_number = ++db.youngest_sequence;
-                key_iterator->second.data.assign(task.begin, task.begin + task.length);
+                key_iterator->second.data.assign(value.begin(), value.end());
             }
             else {
-                sequenced_value_t sequenced_value = {task.buffer(), ++db.youngest_sequence};
-                task.collection.pairs.insert_or_assign(task.key, std::move(sequenced_value));
+                stl_sequenced_value_t sequenced_value = {task.buffer(), ++db.youngest_sequence};
+                col.pairs.insert_or_assign(task.key, std::move(sequenced_value));
             }
         }
         catch (...) {
@@ -325,7 +279,7 @@ void write_head( //
 
 void measure_head( //
     stl_db_t& db,
-    read_tasks_t tasks,
+    read_tasks_soa_t tasks,
     ukv_size_t const n,
     [[maybe_unused]] ukv_options_t const c_options,
     ukv_tape_ptr_t* c_tape,
@@ -335,7 +289,7 @@ void measure_head( //
     // 1. Allocate a tape for all the values to be pulled
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     std::shared_lock _ {db.mutex};
@@ -344,14 +298,15 @@ void measure_head( //
     auto lens = reinterpret_cast<ukv_val_len_t*>(tape);
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        auto key_iterator = task.collection.pairs.find(task.key);
-        lens[i] = key_iterator != task.collection.pairs.end() ? key_iterator->second.data.size() : 0;
+        stl_collection_t& col = stl_collection(db, task.collection);
+        auto key_iterator = col.pairs.find(task.key);
+        lens[i] = key_iterator != col.pairs.end() ? key_iterator->second.data.size() : 0;
     }
 }
 
 void read_head( //
     stl_db_t& db,
-    read_tasks_t tasks,
+    read_tasks_soa_t tasks,
     ukv_size_t const n,
     [[maybe_unused]] ukv_options_t const c_options,
     ukv_tape_ptr_t* c_tape,
@@ -364,14 +319,15 @@ void read_head( //
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        auto key_iterator = task.collection.pairs.find(task.key);
-        if (key_iterator != task.collection.pairs.end())
+        stl_collection_t& col = stl_collection(db, task.collection);
+        auto key_iterator = col.pairs.find(task.key);
+        if (key_iterator != col.pairs.end())
             total_bytes += key_iterator->second.data.size();
     }
 
     // 2. Allocate a tape for all the values to be fetched
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     // 3. Fetch the data
@@ -379,8 +335,9 @@ void read_head( //
     ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * n;
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        auto key_iterator = task.collection.pairs.find(task.key);
-        if (key_iterator != task.collection.pairs.end()) {
+        stl_collection_t& col = stl_collection(db, task.collection);
+        auto key_iterator = col.pairs.find(task.key);
+        if (key_iterator != col.pairs.end()) {
             auto len = key_iterator->second.data.size();
             std::memcpy(tape + exported_bytes, key_iterator->second.data.data(), len);
             lens[i] = static_cast<ukv_val_len_t>(len);
@@ -394,7 +351,7 @@ void read_head( //
 
 void write_txn( //
     stl_txn_t& txn,
-    write_tasks_t tasks,
+    write_tasks_soa_t tasks,
     ukv_size_t const n,
     [[maybe_unused]] ukv_options_t const c_options,
     ukv_error_t* c_error) {
@@ -419,7 +376,7 @@ void write_txn( //
 
 void measure_txn( //
     stl_txn_t& txn,
-    read_tasks_t tasks,
+    read_tasks_soa_t tasks,
     ukv_size_t const n,
     ukv_options_t const c_options,
     ukv_tape_ptr_t* c_tape,
@@ -429,7 +386,7 @@ void measure_txn( //
     // 1. Allocate a tape for all the values to be pulled
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     stl_db_t& db = *txn.db_ptr;
@@ -441,14 +398,14 @@ void measure_txn( //
     auto lens = reinterpret_cast<ukv_val_len_t*>(tape);
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
+        stl_collection_t& col = stl_collection(db, task.collection);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.new_values.find(task.location()); inner_iterator != txn.new_values.end()) {
             lens[i] = inner_iterator->second.size();
         }
         // Others should be pulled from the main store
-        else if (auto key_iterator = task.collection.pairs.find(task.key);
-                 key_iterator != task.collection.pairs.end()) {
+        else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
             if (entry_was_overwritten(key_iterator->second.sequence_number,
                                       txn.sequence_number,
                                       youngest_sequence_number)) {
@@ -472,7 +429,7 @@ void measure_txn( //
 
 void read_txn( //
     stl_txn_t& txn,
-    read_tasks_t tasks,
+    read_tasks_soa_t tasks,
     ukv_size_t const n,
     ukv_options_t const c_options,
     ukv_tape_ptr_t* c_tape,
@@ -488,14 +445,14 @@ void read_txn( //
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
+        stl_collection_t& col = stl_collection(db, task.collection);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.new_values.find(task.location()); inner_iterator != txn.new_values.end()) {
             total_bytes += inner_iterator->second.size();
         }
         // Others should be pulled from the main store
-        else if (auto key_iterator = task.collection.pairs.find(task.key);
-                 key_iterator != task.collection.pairs.end()) {
+        else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
             if (entry_was_overwritten(key_iterator->second.sequence_number,
                                       txn.sequence_number,
                                       youngest_sequence_number)) {
@@ -508,7 +465,7 @@ void read_txn( //
 
     // 2. Allocate a tape for all the values to be pulled
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     // 3. Pull the data
@@ -516,6 +473,7 @@ void read_txn( //
     ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * n;
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
+        stl_collection_t& col = stl_collection(db, task.collection);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.new_values.find(task.location()); inner_iterator != txn.new_values.end()) {
@@ -525,8 +483,7 @@ void read_txn( //
             exported_bytes += len;
         }
         // Others should be pulled from the main store
-        else if (auto key_iterator = task.collection.pairs.find(task.key);
-                 key_iterator != task.collection.pairs.end()) {
+        else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
             auto len = key_iterator->second.data.size();
             std::memcpy(tape + exported_bytes, key_iterator->second.data.data(), len);
             lens[i] = static_cast<ukv_val_len_t>(len);
@@ -567,7 +524,7 @@ void ukv_read( //
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    read_tasks_t tasks {db, cols, keys};
+    read_tasks_soa_t tasks {cols, keys};
 
     if (c_txn) {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_txn : &read_txn;
@@ -593,6 +550,9 @@ void ukv_write( //
     ukv_tape_ptr_t const* c_vals,
     ukv_size_t const c_vals_stride,
 
+    ukv_val_len_t const* c_offs,
+    ukv_size_t const c_offs_stride,
+
     ukv_val_len_t const* c_lens,
     ukv_size_t const c_lens_stride,
 
@@ -604,8 +564,9 @@ void ukv_write( //
     strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_ptr_gt<ukv_tape_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_ptr_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_ptr_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    write_tasks_t tasks {db, cols, keys, vals, lens};
+    write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
 
     return c_txn ? write_txn(txn, tasks, c_keys_count, c_options, c_error)
                  : write_head(db, tasks, c_keys_count, c_options, c_error);
@@ -795,7 +756,7 @@ void ukv_txn_commit( //
         }
         // A key was inserted:
         else {
-            sequenced_value_t sequenced_value {std::move(located_key_and_value.second), txn.sequence_number};
+            stl_sequenced_value_t sequenced_value {std::move(located_key_and_value.second), txn.sequence_number};
             col.pairs.insert_or_assign(located_key_and_value.first.key, std::move(sequenced_value));
         }
     }

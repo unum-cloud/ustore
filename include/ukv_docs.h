@@ -1,5 +1,5 @@
 /**
- * @file ukv.h
+ * @file ukv_docs.h
  * @author Ashot Vardanian
  * @date 27 Jun 2022
  * @brief C bindings for Unums Key-Value store collections of @b Documents.
