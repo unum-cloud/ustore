@@ -37,7 +37,7 @@ struct read_task_t {
     rocksdb::Slice key;
 };
 
-struct read_tasks_t {
+struct read_tasks_soa_t {
     rocks_db_t* db;
     strided_ptr_gt<rocks_col_t*> cols;
     strided_ptr_gt<ukv_key_t const> keys;
@@ -55,7 +55,7 @@ struct write_task_t {
     rocksdb::Slice value;
 };
 
-struct write_tasks_t {
+struct write_tasks_soa_t {
     rocks_db_t* db;
     strided_ptr_gt<rocks_col_t*> cols;
     strided_ptr_gt<ukv_key_t const> keys;
@@ -91,7 +91,7 @@ void ukv_open([[maybe_unused]] char const* c_config, ukv_t* c_db, ukv_error_t* c
 
 void write_head( //
     rocks_db_t* db,
-    write_tasks_t tasks,
+    write_tasks_soa_t tasks,
     ukv_size_t const n,
     [[maybe_unused]] ukv_options_t const c_options,
     ukv_error_t* c_error) {
@@ -109,7 +109,7 @@ void write_head( //
 
 void write_txn( //
     rocks_txn_t* txn,
-    write_tasks_t tasks,
+    write_tasks_soa_t tasks,
     ukv_size_t const n,
     [[maybe_unused]] ukv_options_t const c_options,
     ukv_error_t* c_error) {
@@ -157,7 +157,7 @@ void ukv_write( //
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_ptr_gt<ukv_tape_ptr_t const> vals {c_vals, c_vals_stride};
     strided_ptr_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    write_tasks_t tasks {db, cols, keys, vals, lens};
+    write_tasks_soa_t tasks {db, cols, keys, vals, lens};
 
     return txn ? write_txn(txn, tasks, c_keys_count, c_options, c_error)
                : write_head(db, tasks, c_keys_count, c_options, c_error);
@@ -165,7 +165,7 @@ void ukv_write( //
 
 void read_head( //
     rocks_db_t* db,
-    read_tasks_t tasks,
+    read_tasks_soa_t tasks,
     ukv_size_t const n,
     [[maybe_unused]] ukv_options_t const c_options,
     ukv_tape_ptr_t* c_tape,
@@ -188,7 +188,7 @@ void read_head( //
         total_bytes += values[i].size();
 
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
@@ -203,7 +203,7 @@ void read_head( //
 }
 void read_txn( //
     rocks_txn_t* txn,
-    read_tasks_t tasks,
+    read_tasks_soa_t tasks,
     ukv_size_t const n,
     [[maybe_unused]] ukv_options_t const c_options,
     ukv_tape_ptr_t* c_tape,
@@ -232,7 +232,7 @@ void read_txn( //
     }
 
     byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (!tape)
+    if (*c_error)
         return;
 
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
@@ -269,7 +269,7 @@ void ukv_read( //
 
     strided_ptr_gt<rocks_col_t*> cols {cols_ptr, c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    read_tasks_t tasks {db, cols, keys};
+    read_tasks_soa_t tasks {db, cols, keys};
 
     return txn ? read_txn(txn, tasks, c_keys_count, c_options, c_tape, c_capacity, c_error)
                : read_head(db, tasks, c_keys_count, c_options, c_tape, c_capacity, c_error);

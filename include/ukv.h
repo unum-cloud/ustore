@@ -168,7 +168,26 @@ void ukv_open( //
  * @param[in] options        Write options.
  * @param[in] values         Pointer to a tape of concatenated values to be imported.
  * @param[in] lengths        Pointer to lengths of chunks in packed into @p `values`.
+ * @param[in] lengths        Pointer to offsets of relevant content within @p `values` chunks.
  * @param[out] error         The error to be handled.
+ *
+ * @section Why use offsets?
+ * In the underlying layer, using offsets to adds no additional overhead,
+ * but what is the point of using them, if we can immediatelly pass adjusted
+ * pointers?
+ * It serves two primary purposes:
+ * > Supporting input tapes (values_stride = 0, offsets_stride != 0).
+ * > List-oriented wrappers (values_stride != 0, offsets_stride = 0).
+ *
+ * In the first case, we may have received a tape from `ukv_read`, which we
+ * update in-place and write back, without changing the size of the original
+ * entries.
+ *
+ * In the second case, we may be working with higher-level runtimes, like
+ * CPython, where objects metadata (like its length) is stored in front of
+ * the allocated region. In such cases, we may still need additional memory
+ * to store the lengths of the objects, unless those are NULL-terminated
+ * strings (lengths = NULL) or if all have the same length (length_stride = 0).
  */
 void ukv_write( //
     ukv_t const db,
@@ -183,6 +202,9 @@ void ukv_write( //
 
     ukv_tape_ptr_t const* values,
     ukv_size_t const values_stride,
+
+    ukv_val_len_t const* offsets,
+    ukv_size_t const offsets_stride,
 
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,

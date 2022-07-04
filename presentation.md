@@ -272,6 +272,8 @@ void ukv_write( //
 
     ukv_tape_ptr_t const* values,
     ukv_size_t const values_stride,
+    ukv_val_len_t const* offsets,
+    ukv_size_t const offsets_stride,
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
 
@@ -303,7 +305,7 @@ PYBIND11_MODULE(example, m) {
 ```cpp
 PYBIND11_MODULE(ukv, m) {
     auto db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase");
-    auto col = py::class_<py_collection_t, std::shared_ptr<py_collection_t>>(m, "Collection");
+    auto col = py::class_<py_col_t, std::shared_ptr<py_col_t>>(m, "Collection");
     auto txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction");
     
     db.def(py::init([](std::string const& config) { ... });

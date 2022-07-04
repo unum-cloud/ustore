@@ -144,6 +144,7 @@ void ukv_graph_upsert_edges( //
     }
 
     // Dump the data back to disk!
+    ukv_val_len_t offset_in_val = 0;
     ukv_write(c_db,
               c_txn,
               &updated_ids[0].collection,
@@ -153,6 +154,8 @@ void ukv_graph_upsert_edges( //
               sizeof(located_key_t),
               &updated_vals[0].ptr,
               sizeof(value_t),
+              &offset_in_val,
+              0,
               &updated_vals[0].length,
               sizeof(value_t),
               c_options,
@@ -301,6 +304,7 @@ void ukv_graph_remove_nodes( //
     }
 
     // Now we will go through all the explicitly deleted nodes
+    ukv_val_len_t offset_in_val = 0;
     ukv_write(c_db,
               c_txn,
               &updated_ids[0].collection,
@@ -310,6 +314,8 @@ void ukv_graph_remove_nodes( //
               sizeof(located_key_t),
               &updated_vals[0].ptr,
               sizeof(value_t),
+              &offset_in_val,
+              0,
               &updated_vals[0].length,
               sizeof(value_t),
               c_options,
