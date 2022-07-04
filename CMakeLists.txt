@@ -126,7 +126,11 @@ target_link_libraries(ukv_stl
   nlohmann_json::nlohmann_json
 )
 
-add_library(ukv_rocksdb src/ukv_rocksdb.cpp)
+add_library(ukv_rocksdb
+  src/ukv_rocksdb.cpp
+  src/ukv_graph_pfor.cpp
+)
+
 target_link_libraries(ukv_rocksdb
   rocksdb
 )
