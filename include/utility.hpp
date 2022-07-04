@@ -28,8 +28,16 @@ enum class byte_t : uint8_t {};
  */
 struct located_key_t {
 
-    ukv_collection_t collection = nullptr;
+    ukv_collection_t collection = ukv_default_collection_k;
     ukv_key_t key = 0;
+
+    located_key_t() = default;
+    located_key_t(located_key_t const&) = default;
+    located_key_t& operator=(located_key_t const&) = default;
+
+    inline located_key_t(ukv_collection_t c, ukv_key_t k) noexcept : collection(c), key(k) {}
+    inline located_key_t(ukv_key_t k) noexcept : key(k) {}
+    inline located_key_t in(ukv_collection_t col) noexcept { return {col, key}; }
 
     inline bool operator==(located_key_t const& other) const noexcept {
         return (collection == other.collection) & (key == other.key);
@@ -85,12 +93,13 @@ class expected_gt {
   public:
     expected_gt() = default;
     expected_gt(object_at&& object) : object_(std::move(object)) {}
-    expected_gt(error_t&& error) : error_(std::move(error)) {}
+    expected_gt(error_t&& error, object_at&& default_object = object_at {})
+        : error_(std::move(error)), object_(std::move(default_object)) {}
 
     operator bool() const noexcept { return !error_; }
     object_at&& operator*() && noexcept { return std::move(object_); }
     object_at const& operator*() const& noexcept { return object_; }
-    operator std::optional<object_at>() && noexcept {
+    operator std::optional<object_at>() && {
         return error_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
     }
 };
@@ -173,35 +182,35 @@ struct value_view_t {
     inline operator bool() const noexcept { return length; }
 };
 
-struct collections_t {
+struct collections_view_t {
     strided_range_gt<ukv_collection_t> range;
 
-    collections_t() noexcept {
+    collections_view_t() noexcept {
         range.raw = &ukv_default_collection_k;
         range.stride = 0;
         range.count = 1;
     }
 
-    collections_t(strided_range_gt<ukv_collection_t> r) noexcept : range(r) {}
+    collections_view_t(strided_range_gt<ukv_collection_t> r) noexcept : range(r) {}
 };
 
-struct keys_t {
+struct keys_view_t {
     strided_range_gt<ukv_key_t> range;
 };
 
-struct located_keys_t {
+struct located_keys_view_t {
     strided_range_gt<located_key_t> range;
 
-    keys_t keys() const noexcept {
-        keys_t result;
+    keys_view_t keys() const noexcept {
+        keys_view_t result;
         result.range.raw = &range.raw->key;
         result.range.count = range.count;
         result.range.stride = sizeof(located_key_t) * range.stride;
         return result;
     }
 
-    collections_t collections() const noexcept {
-        collections_t result;
+    collections_view_t collections() const noexcept {
+        collections_view_t result;
         result.range.raw = &range.raw->collection;
         result.range.count = range.count;
         result.range.stride = sizeof(located_key_t) * range.stride;
@@ -209,7 +218,7 @@ struct located_keys_t {
     }
 };
 
-struct disjoint_values_t {
+struct disjoint_values_view_t {
     strided_range_gt<ukv_tape_ptr_t> values_range;
     strided_range_gt<ukv_val_len_t> lengths_range;
 };
@@ -243,13 +252,13 @@ struct tape_iterator_t {
     inline bool operator!=(tape_iterator_t const& other) const noexcept { return lengths != other.lengths; }
 };
 
-struct taped_values_t {
+struct taped_values_view_t {
     ukv_val_len_t const* lengths = nullptr;
     ukv_tape_ptr_t values = nullptr;
     ukv_size_t count = 0;
 
-    inline taped_values_t() = default;
-    inline taped_values_t(ukv_tape_ptr_t ptr, ukv_size_t elements) noexcept
+    inline taped_values_view_t() = default;
+    inline taped_values_view_t(ukv_tape_ptr_t ptr, ukv_size_t elements) noexcept
         : lengths(reinterpret_cast<ukv_val_len_t*>(ptr)), values(ptr + sizeof(ukv_val_len_t) * elements),
           count(elements) {}
 
@@ -277,7 +286,7 @@ class managed_tape_t {
         capacity_ = 0;
     }
 
-    operator taped_values_t() const noexcept { return {memory_, capacity_}; }
+    operator taped_values_view_t() const noexcept { return {memory_, capacity_}; }
     ukv_tape_ptr_t* memory() noexcept { return &memory_; }
     ukv_size_t* capacity() noexcept { return &capacity_; }
 };
