@@ -65,7 +65,7 @@ struct write_tasks_t {
     inline write_task_t operator[](ukv_size_t i) const noexcept {
         rocks_col_t* col = cols && cols[i] ? cols[i] : db->DefaultColumnFamily();
         rocksdb::Slice key = to_slice(&keys[i]);
-        rocksdb::Slice value = to_slice(vals[i], lens[i]);
+        rocksdb::Slice value = lens[i] ? to_slice(vals[i], lens[i]) : rocksdb::Slice();
         return {col, key, value};
     }
 };
@@ -114,9 +114,14 @@ void write_txn( //
     [[maybe_unused]] ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
+    rocksdb::Status status;
+
     for (ukv_size_t i = 0; i != n; ++i) {
         write_task_t task = tasks[i];
-        rocksdb::Status status = txn->Put(task.collection, task.key, task.value);
+        if (!task.value.empty())
+            status = txn->Put(task.collection, task.key, task.value);
+        else
+            status = txn->Delete(task.collection, task.key);
         if (!status.ok()) {
             *c_error = "Transaction Write Error";
             return;
@@ -272,20 +277,20 @@ void ukv_read( //
 
 void ukv_collection_upsert( //
     ukv_t const c_db,
-    ukv_str_view_t name,
-    ukv_collection_t* collection,
-    ukv_error_t* error) {
+    ukv_str_view_t c_col_name,
+    ukv_collection_t* c_col,
+    ukv_error_t* c_error) {
 
     rocks_db_t* db = reinterpret_cast<rocks_db_t*>(c_db);
-    rocks_col_t* coll;
-    db->CreateColumnFamily(rocksdb::ColumnFamilyOptions(), name, &coll);
-    *collection = coll;
+    rocks_col_t* coll = reinterpret_cast<rocks_col_t*>(*c_col);
+    db->CreateColumnFamily(rocksdb::ColumnFamilyOptions(), c_col_name, &coll);
+    *c_col = coll;
 }
 
 void ukv_collection_remove( //
-    ukv_t const db,
-    ukv_str_view_t name,
-    ukv_error_t* error) {
+    ukv_t const c_db,
+    ukv_str_view_t c_col_name,
+    ukv_error_t* c_error) {
 }
 
 void ukv_control( //
