@@ -1,9 +1,8 @@
 import networkx as ukv
 
 
-def test_simple():
+def line(net):
     # 1 -> 2
-    net = ukv.DiGraph()
     assert not net.has_node(1)
     assert not net.has_node(2)
     assert not net.has_edge(1, 2)
@@ -22,9 +21,8 @@ def test_simple():
     assert not net.has_edge(1, 2)
 
 
-def test_triangle():
+def triangle(net):
     # 1 -> 2 -> 3
-    net = ukv.DiGraph()
 
     net.add_edge(1, 2)
     net.add_edge(2, 3)
@@ -39,13 +37,12 @@ def test_triangle():
     net.remove_edge(3, 1)
 
 
-def test_batch():
+def batch(net):
     nodes_count = 100
     edges = []
     for i in range(nodes_count-1):
         edges.append((i, i+1))
 
-    net = ukv.DiGraph()
     net.add_edges_from(edges)
 
     for i in range(nodes_count-1):
@@ -63,13 +60,12 @@ def test_batch():
         assert net.has_edge(edge[0], edge[1])
 
 
-def test_clear():
+def clear(net):
     nodes_count = 100
     edges = []
     for i in range(nodes_count-1):
         edges.append((i, i+1))
 
-    net = ukv.DiGraph()
     net.add_edges_from(edges)
 
     assert list(net.edges()) == edges
@@ -92,7 +88,7 @@ def test_clear():
         assert not net.has_node(node)
 
 
-def test_degree():
+def degree(net):
     nodes_count = 100
     net = ukv.Graph()
     edges = []
@@ -100,8 +96,32 @@ def test_degree():
         for j in range(i+1, nodes_count):
             edges.append((i, j))
 
-    net = ukv.DiGraph()
     net.add_edges_from(edges)
 
     for node in range(nodes_count):
         assert net.degree[node] == nodes_count-1
+
+
+def test():
+    net = ukv.DiGraph()
+    line(net)
+    triangle(net)
+    batch(net)
+    net.clear()
+    clear(net)
+    degree(net)
+
+
+# def test_named():
+#     net = ukv.Network(
+#         relation_name='views',
+#         source_attributes='people',
+#         target_attributes='movies',
+#         multi=False,
+#         attributed_relations=True,
+#     )
+#     line(net)
+#     triangle(net)
+#     batch(net)
+#     clear(net)
+#     degree(net)
