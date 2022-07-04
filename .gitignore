@@ -52,3 +52,4 @@ _deps/
 protos/
 openapitools.json
 build_version.cc
+*.code-workspace
