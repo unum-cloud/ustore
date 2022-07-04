@@ -37,97 +37,87 @@ using namespace unum;
 /**
  * @brief A generalization of the graph supported by NetworkX.
  *
+ * Sources and targets can match.
+ * Relations attributes can be banned all together.
+ *
+ * Example for simple non-atttributed undirected graphs:
+ * > relations_name: ".graph"
+ * > attributes_name: ""
+ * > sources_name: ""
+ * > targets_name: ""
+ *
+ * Example for recommender systems
+ * > relations_name: "views.graph"
+ * > attributes_name: "views.docs"
+ * > sources_name: "people.docs"
+ * > targets_name: "movies.docs"
  */
 struct network_t : public std::enable_shared_from_this<network_t> {
 
-    ukv_t db = NULL;
-    ukv_txn_t txn = NULL;
-    ukv_collection_t sources_attrs = NULL;
-    ukv_collection_t targets_attrs = NULL;
-    ukv_collection_t relations_attrs = NULL;
-    ukv_collection_t inverted_index = NULL;
-
-    std::string name;
-    managed_tape_t tape;
+    std::shared_ptr<py_col_t> inverted_index;
+    collection_t sources_attrs;
+    collection_t targets_attrs;
+    collection_t relations_attrs;
 
     bool is_directed_ = false;
     bool is_multi_ = false;
-    bool allows_self_loops_ = false;
-    bool has_source_attrs_ = false;
-    bool has_target_attrs_ = false;
-    bool has_edge_attrs_ = false;
+    bool allow_self_loops_ = false;
 
+    network_t() {}
     network_t(network_t&&) = delete;
     network_t(network_t const&) = delete;
-
-    /**
-     * @brief
-     * Sources and targets can match.
-     * Relations attributes can be banned all together.
-     *
-     * Example for simple non-atttributed undirected graphs:
-     * > sources_name: ""
-     * > targets_name: ""
-     * > relations_name: ".graph"
-     * > attributes_name: ""
-     *
-     * Example for recommender systems
-     * > sources_name: "people.docs"
-     * > targets_name: "movies.docs"
-     * > relations_name: "views.graph"
-     * > attributes_name: "views.docs"
-     */
-    network_t(ukv_t db,
-              std::string const& relations_name,
-              std::string const& sources_name,
-              std::string const& targets_name,
-              bool directed,
-              bool attributed_relations,
-              bool allow_self_loops,
-              bool allow_parallel_edges)
-        : tape(db) {}
-
-    network_t() : tape(nullptr) {}
     ~network_t() {}
+
+    inline ukv_t db() const noexcept { return inverted_index->db_ptr->native; }
+    inline ukv_txn_t txn() const noexcept { return inverted_index->txn_ptr->native; }
+    inline managed_tape_t& tape() noexcept {
+        return inverted_index->txn_ptr ? inverted_index->txn_ptr->native.tape()
+                                       : inverted_index->db_ptr->session.tape();
+    }
 };
 
 void ukv::wrap_network(py::module& m) {
 
     auto net = py::class_<network_t, std::shared_ptr<network_t>>(m, "Network", py::module_local());
-    net.def(py::init([](std::shared_ptr<py_db_t>,
-                        std::string relation_name,
+    net.def(py::init([](std::shared_ptr<py_col_t> index_collection,
                         std::optional<std::string> source_attributes,
                         std::optional<std::string> target_attributes,
+                        std::optional<std::string> relation_attributes,
+                        bool directed = false,
                         bool multi = false,
-                        bool attributed_relations = false) {
+                        bool loops = false) {
                 auto net_ptr = std::make_shared<network_t>();
-                // net_ptr->;
+                net_ptr->inverted_index = index_collection;
+                net_ptr->is_directed_ = directed;
+                net_ptr->is_multi_ = multi;
+                net_ptr->allow_self_loops_ = loops;
                 return net_ptr;
             }),
-            py::arg("db"),
-            py::arg("relation_name") = std::string(".graph"),
-            py::arg("source_attributes") = std::nullopt,
-            py::arg("target_attributes") = std::nullopt,
+            py::arg("index"),
+            py::arg("sources") = std::nullopt,
+            py::arg("targets") = std::nullopt,
+            py::arg("relations") = std::nullopt,
+            py::arg("directed") = false,
             py::arg("multi") = false,
-            py::arg("attributed_relations") = false);
+            py::arg("loops") = false);
 
     // Random scalar operations
     net.def("has_node", [](network_t& net, ukv_key_t v) {
         error_t error;
-        ukv_read(net.db,
-                 net.txn,
-                 &net.relations_attrs,
+        ukv_read(net.db(),
+                 net.txn(),
+                 net.inverted_index->native.internal_cptr(),
                  0,
                  &v,
                  1,
                  0,
                  ukv_option_read_lengths_k,
-                 net.tape.internal_memory(),
-                 net.tape.internal_capacity(),
+                 net.tape().internal_memory(),
+                 net.tape().internal_capacity(),
                  error.internal_cptr());
         error.throw_unhandled();
 
-        taped_values_view_t vals = net.tape.untape(1);
+        taped_values_view_t vals = net.tape().untape(1);
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
@@ -136,42 +126,42 @@ void ukv::wrap_network(py::module& m) {
 
     net.def("degree", [](network_t& net, ukv_key_t v) {
         error_t error;
-        ukv_graph_gather_neighbors(net.db,
-                                   net.txn,
-                                   &net.relations_attrs,
+        ukv_graph_gather_neighbors(net.db(),
+                                   net.txn(),
+                                   net.inverted_index->native.internal_cptr(),
                                    0,
                                    &v,
                                    1,
                                    0,
                                    ukv_options_default_k,
-                                   net.tape.internal_memory(),
-                                   net.tape.internal_capacity(),
+                                   net.tape().internal_memory(),
+                                   net.tape().internal_capacity(),
                                    error.internal_cptr());
         error.throw_unhandled();
 
-        taped_values_view_t vals = net.tape.untape(1);
+        taped_values_view_t vals = net.tape().untape(1);
         if (!vals.size())
             return 0ul;
         value_view_t val = *vals.begin();
         return neighbors(val, ukv_graph_node_any_k).size();
     });
 
-    net.def("count_edges", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
+    net.def("number_of_edges", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
         error_t error;
-        ukv_graph_gather_neighbors(net.db,
-                                   net.txn,
-                                   &net.relations_attrs,
+        ukv_graph_gather_neighbors(net.db(),
+                                   net.txn(),
+                                   net.inverted_index->native.internal_cptr(),
                                    0,
                                    &v1,
                                    1,
                                    0,
                                    ukv_options_default_k,
-                                   net.tape.internal_memory(),
-                                   net.tape.internal_capacity(),
+                                   net.tape().internal_memory(),
+                                   net.tape().internal_capacity(),
                                    error.internal_cptr());
         error.throw_unhandled();
 
-        taped_values_view_t vals = net.tape.untape(1);
+        taped_values_view_t vals = net.tape().untape(1);
         if (!vals.size())
             return 0ul;
         value_view_t val = *vals.begin();
@@ -182,20 +172,20 @@ void ukv::wrap_network(py::module& m) {
 
     net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
         error_t error;
-        ukv_graph_gather_neighbors(net.db,
-                                   net.txn,
-                                   &net.relations_attrs,
+        ukv_graph_gather_neighbors(net.db(),
+                                   net.txn(),
+                                   net.inverted_index->native.internal_cptr(),
                                    0,
                                    &v1,
                                    1,
                                    0,
                                    ukv_options_default_k,
-                                   net.tape.internal_memory(),
-                                   net.tape.internal_capacity(),
+                                   net.tape().internal_memory(),
+                                   net.tape().internal_capacity(),
                                    error.internal_cptr());
         error.throw_unhandled();
 
-        taped_values_view_t vals = net.tape.untape(1);
+        taped_values_view_t vals = net.tape().untape(1);
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
@@ -205,20 +195,20 @@ void ukv::wrap_network(py::module& m) {
 
     net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
         error_t error;
-        ukv_graph_gather_neighbors(net.db,
-                                   net.txn,
-                                   &net.relations_attrs,
+        ukv_graph_gather_neighbors(net.db(),
+                                   net.txn(),
+                                   net.inverted_index->native.internal_cptr(),
                                    0,
                                    &v1,
                                    1,
                                    0,
                                    ukv_options_default_k,
-                                   net.tape.internal_memory(),
-                                   net.tape.internal_capacity(),
+                                   net.tape().internal_memory(),
+                                   net.tape().internal_capacity(),
                                    error.internal_cptr());
         error.throw_unhandled();
 
-        taped_values_view_t vals = net.tape.untape(1);
+        taped_values_view_t vals = net.tape().untape(1);
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
