@@ -14,7 +14,44 @@ namespace py = pybind11;
 
 struct py_db_t;
 struct py_txn_t;
-struct py_collection_t;
+struct py_col_t;
+
+/**
+ * @brief Wrapper for `ukv::db_t`.
+ * Assumes that the Python client won't use more than one
+ * concurrent session, as multithreading in Pyhton is prohibitively
+ * expensive.
+ * We need to preserve the `config`, to allow re-opening.
+ */
+struct py_db_t : public std::enable_shared_from_this<py_db_t> {
+    db_t native;
+    session_t session;
+    std::string config;
+
+    py_db_t(db_t&& n, session_t&& s, std::string const& c) : native(n), session(s), config(c) {}
+};
+
+/**
+ * @brief Only adds reference counting to the native C++ interface.
+ */
+struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
+    std::shared_ptr<py_db_t> db_ptr;
+    txn_t native;
+
+    py_txn_t(std::shared_ptr<py_db_t>&& d, txn_t&& t) : db_ptr(d), native(t) {}
+};
+
+/**
+ * @brief Wrapper for `ukv::collection_t`.
+ * We need to preserve the `name`, to upsert again, after removing it in `clear`.
+ * We also keep the transaction pointer, to persist the context of operation.
+ */
+struct py_col_t : public std::enable_shared_from_this<py_col_t> {
+    std::shared_ptr<py_db_t> db_ptr;
+    std::shared_ptr<py_txn_t> txn_ptr;
+    collection_t native;
+    std::string name;
+};
 
 struct py_buffer_t {
     ~py_buffer_t() {

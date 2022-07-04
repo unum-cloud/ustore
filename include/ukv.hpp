@@ -74,7 +74,7 @@ struct sample_proxy_t {
                  options,
                  memory,
                  capacity,
-                 error.internals());
+                 error.internal_cptr());
         if (error)
             return {std::move(error)};
 
@@ -97,15 +97,14 @@ struct sample_proxy_t {
                   vals.lengths_range.begin().get(),
                   vals.lengths_range.stride(),
                   options,
-                  error.internals());
+                  error.internal_cptr());
         return error;
     }
 
     operator expected_gt<taped_values_view_t>() const noexcept { return get(); }
     sample_proxy_t& operator=(disjoint_values_view_t vals) noexcept(false) {
         auto error = set(vals);
-        if (error)
-            throw error;
+        error.throw_unhandled();
         return *this;
     }
 };
@@ -165,8 +164,8 @@ class txn_t {
         return sample_proxy_t {
             .db = db_,
             .txn = txn_,
-            .memory = read_tape_.memory(),
-            .capacity = read_tape_.capacity(),
+            .memory = read_tape_.internal_memory(),
+            .capacity = read_tape_.internal_capacity(),
             .cols = located.collections(),
             .keys = located.keys(),
         };
@@ -176,21 +175,21 @@ class txn_t {
         return sample_proxy_t {
             .db = db_,
             .txn = txn_,
-            .memory = read_tape_.memory(),
-            .capacity = read_tape_.capacity(),
+            .memory = read_tape_.internal_memory(),
+            .capacity = read_tape_.internal_capacity(),
             .keys = keys,
         };
     }
 
     error_t reset() {
         error_t error;
-        ukv_txn_begin(db_, 0, &txn_, error.internals());
+        ukv_txn_begin(db_, 0, &txn_, error.internal_cptr());
         return error;
     }
 
     error_t commit(ukv_options_t options = ukv_options_default_k) {
         error_t error;
-        ukv_txn_commit(txn_, options, error.internals());
+        ukv_txn_commit(txn_, options, error.internal_cptr());
         return error;
     }
 };
@@ -214,8 +213,8 @@ class session_t {
         return sample_proxy_t {
             .db = db_,
             .txn = nullptr,
-            .memory = read_tape_.memory(),
-            .capacity = read_tape_.capacity(),
+            .memory = read_tape_.internal_memory(),
+            .capacity = read_tape_.internal_capacity(),
             .cols = located.collections(),
             .keys = located.keys(),
         };
@@ -225,8 +224,8 @@ class session_t {
         return sample_proxy_t {
             .db = db_,
             .txn = nullptr,
-            .memory = read_tape_.memory(),
-            .capacity = read_tape_.capacity(),
+            .memory = read_tape_.internal_memory(),
+            .capacity = read_tape_.internal_capacity(),
             .keys = keys,
         };
     }
@@ -246,7 +245,7 @@ class session_t {
     expected_gt<txn_t> transact() {
         error_t error;
         ukv_txn_t raw = nullptr;
-        ukv_txn_begin(db_, 0, &raw, error.internals());
+        ukv_txn_begin(db_, 0, &raw, error.internal_cptr());
         if (error)
             return {std::move(error), txn_t {db_, nullptr}};
         else
@@ -266,7 +265,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
   public:
     error_t open(std::string const& config) {
         error_t error;
-        ukv_open(config.c_str(), &db_, error.internals());
+        ukv_open(config.c_str(), &db_, error.internal_cptr());
         return error;
     }
 
@@ -287,7 +286,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
     expected_gt<collection_t> collection(std::string const& name) {
         error_t error;
         ukv_collection_t col = nullptr;
-        ukv_collection_upsert(db_, name.c_str(), &col, error.internals());
+        ukv_collection_upsert(db_, name.c_str(), &col, error.internal_cptr());
         if (error)
             return error;
         else
@@ -296,7 +295,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
     error_t remove(std::string const& name) {
         error_t error;
-        ukv_collection_remove(db_, name.c_str(), error.internals());
+        ukv_collection_remove(db_, name.c_str(), error.internal_cptr());
         return error;
     }
 };

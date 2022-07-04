@@ -84,21 +84,28 @@ struct network_t : public std::enable_shared_from_this<network_t> {
               bool directed,
               bool attributed_relations,
               bool allow_self_loops,
-              bool allow_parallel_edges) {}
+              bool allow_parallel_edges)
+        : tape(db) {}
 
-    network_t() {}
+    network_t() : tape(nullptr) {}
     ~network_t() {}
 };
 
 void ukv::wrap_network(py::module& m) {
 
     auto net = py::class_<network_t, std::shared_ptr<network_t>>(m, "Network", py::module_local());
-    net.def(py::init([](std::string relation_name,
+    net.def(py::init([](std::shared_ptr<py_db_t>,
+                        std::string relation_name,
                         std::optional<std::string> source_attributes,
                         std::optional<std::string> target_attributes,
                         bool multi = false,
-                        bool attributed_relations = false) { return std::make_shared<network_t>(); }),
-            py::arg("relation_name") = ".graph",
+                        bool attributed_relations = false) {
+                auto net_ptr = std::make_shared<network_t>();
+                // net_ptr->;
+                return net_ptr;
+            }),
+            py::arg("db"),
+            py::arg("relation_name") = std::string(".graph"),
             py::arg("source_attributes") = std::nullopt,
             py::arg("target_attributes") = std::nullopt,
             py::arg("multi") = false,
@@ -115,13 +122,12 @@ void ukv::wrap_network(py::module& m) {
                  1,
                  0,
                  ukv_option_read_lengths_k,
-                 &net.tape.memory,
-                 &net.tape.capacity,
-                 &error.raw);
-        if (error)
-            throw error.release_exception();
+                 net.tape.internal_memory(),
+                 net.tape.internal_capacity(),
+                 error.internal_cptr());
+        error.throw_unhandled();
 
-        taped_values_t vals = net.tape;
+        taped_values_view_t vals = net.tape;
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
@@ -138,13 +144,12 @@ void ukv::wrap_network(py::module& m) {
                                    1,
                                    0,
                                    ukv_options_default_k,
-                                   &net.tape.memory,
-                                   &net.tape.capacity,
-                                   &error.raw);
-        if (error)
-            throw error.release_exception();
+                                   net.tape.internal_memory(),
+                                   net.tape.internal_capacity(),
+                                   error.internal_cptr());
+        error.throw_unhandled();
 
-        taped_values_t vals = net.tape;
+        taped_values_view_t vals = net.tape;
         if (!vals.size())
             return 0ul;
         value_view_t val = *vals.begin();
@@ -161,13 +166,12 @@ void ukv::wrap_network(py::module& m) {
                                    1,
                                    0,
                                    ukv_options_default_k,
-                                   &net.tape.memory,
-                                   &net.tape.capacity,
-                                   &error.raw);
-        if (error)
-            throw error.release_exception();
+                                   net.tape.internal_memory(),
+                                   net.tape.internal_capacity(),
+                                   error.internal_cptr());
+        error.throw_unhandled();
 
-        taped_values_t vals = net.tape;
+        taped_values_view_t vals = net.tape;
         if (!vals.size())
             return 0ul;
         value_view_t val = *vals.begin();
@@ -186,13 +190,12 @@ void ukv::wrap_network(py::module& m) {
                                    1,
                                    0,
                                    ukv_options_default_k,
-                                   &net.tape.memory,
-                                   &net.tape.capacity,
-                                   &error.raw);
-        if (error)
-            throw error.release_exception();
+                                   net.tape.internal_memory(),
+                                   net.tape.internal_capacity(),
+                                   error.internal_cptr());
+        error.throw_unhandled();
 
-        taped_values_t vals = net.tape;
+        taped_values_view_t vals = net.tape;
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
@@ -210,13 +213,12 @@ void ukv::wrap_network(py::module& m) {
                                    1,
                                    0,
                                    ukv_options_default_k,
-                                   &net.tape.memory,
-                                   &net.tape.capacity,
-                                   &error.raw);
-        if (error)
-            throw error.release_exception();
+                                   net.tape.internal_memory(),
+                                   net.tape.internal_capacity(),
+                                   error.internal_cptr());
+        error.throw_unhandled();
 
-        taped_values_t vals = net.tape;
+        taped_values_view_t vals = net.tape;
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
