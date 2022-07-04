@@ -10,15 +10,9 @@
  * Examples: Yugabyte, TiDB, and, optionally: Mongo, MySQL, Cassandra, MariaDB.
  */
 
-#include <rocksdb/status.h>
-#include <rocksdb/cache.h>
-#include <rocksdb/write_batch.h>
 #include <rocksdb/utilities/options_util.h>
 #include <rocksdb/utilities/transaction_db.h>
 #include <rocksdb/db.h>
-#include <rocksdb/options.h>
-#include <rocksdb/comparator.h>
-#include <rocksdb/filter_policy.h>
 
 #include "ukv.h"
 #include "helpers.hpp"
