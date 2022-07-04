@@ -1,8 +1,9 @@
 package ukv_test
 
 import (
-	. "golang/ukv"
 	"testing"
+
+	ukv "github.com/unum-cloud/ukv/golang"
 )
 
 func TestDataBaseSimple(t *testing.T) {
@@ -17,11 +18,11 @@ func TestDataBaseSimple(t *testing.T) {
 		t.Fatalf("Couldn't set value: %s", err)
 	}
 
-	if value, err := db.Get(42); err != nil {
+	if _, err := db.Get(42); err != nil {
 		t.Fatalf("Couldn't get value: %s", err)
 	}
 
-	if found, err := db.Contains(42); err != nil {
+	if _, err := db.Contains(42); err != nil {
 		t.Fatalf("Couldn't check value existance: %s", err)
 	}
 }
