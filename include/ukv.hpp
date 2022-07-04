@@ -135,6 +135,7 @@ class collection_t {
         return *this;
     }
     inline operator ukv_collection_t() const noexcept { return col_; }
+    inline ukv_collection_t* internal_cptr() noexcept { return &col_; }
     inline ukv_t db() const noexcept { return db_; }
 };
 
