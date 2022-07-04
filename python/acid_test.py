@@ -27,7 +27,7 @@ def test_transaction_remove():
         assert index not in db
 
 
-def test_set_by_2_transactions():
+def test_set_with_2_transactions():
     keys_count = 100
 
     db = ukv.DataBase()
@@ -46,7 +46,7 @@ def test_set_by_2_transactions():
         assert db.get(index) == str(index).encode()
 
 
-def test_remove_by_2_transactions():
+def test_remove_with_2_transactions():
     keys_count = 100
 
     db = ukv.DataBase()
@@ -67,7 +67,7 @@ def test_remove_by_2_transactions():
         assert index not in db
 
 
-def test_set_by_2_intersected_transactions():
+def test_set_with_2_interleaving_transactions():
     keys_count = 100
 
     db = ukv.DataBase()
@@ -87,7 +87,7 @@ def test_set_by_2_intersected_transactions():
         assert db[index] == 'b'.encode()
 
 
-def test_remove_by_2_intersected_transactions():
+def test_remove_with_2_interleaving_transactions():
     keys_count = 100
 
     db = ukv.DataBase()
@@ -106,31 +106,7 @@ def test_remove_by_2_intersected_transactions():
         txn1.commit()
 
 
-def test_multiple_transactions():
-    keys_count = 100
-
-    def set_same_value(value):
-        with ukv.Transaction(db) as txn:
-            for index in range(keys_count):
-                txn.set(index, value.encode())
-
-    def check_db(db, value):
-        for index in range(keys_count):
-            assert db.get(index) == value.encode()
-
-    db = ukv.DataBase()
-
-    set_same_value('a')
-    check_db(db, 'a')
-
-    set_same_value('b')
-    check_db(db, 'b')
-
-    set_same_value('c')
-    check_db(db, 'c')
-
-
-def test_transaction_set_get_with_multiple_collections():
+def test_transaction_with_multiple_collections():
     coll_count = 100
     keys_count = 100
     db = ukv.DataBase()
@@ -148,15 +124,15 @@ def test_transaction_set_get_with_multiple_collections():
                 assert index in db[str(col_index)]
 
 
-def test_transaction_get_fail():
-    # Set by db befor get
+def test_conflict():
+    # Set with db befor get
     db1 = ukv.DataBase()
     txn = ukv.Transaction(db1)
     db1.set(0, "value".encode())
     with pytest.raises(Exception):
         txn.get(0)
 
-    # Set by transaction before get
+    # Set with transaction before get
     db2 = ukv.DataBase()
     txn1 = ukv.Transaction(db2)
     with ukv.Transaction(db2) as txn2:
@@ -165,11 +141,11 @@ def test_transaction_get_fail():
         txn1.get(0)
 
 
-def test_transaction_fail():
+def test_transparent_reads():
     db = ukv.DataBase()
     txn = ukv.Transaction(db)
     txn.get(0)
     txn.set(1, "value".encode())
-    db.set(1, "value".encode())
+    db.set(0, "value".encode())
     with pytest.raises(Exception):
         txn.commit()
