@@ -173,7 +173,7 @@ struct write_tasks_soa_t {
             off = 0u;
             len = 0u;
         }
-        return {col, key, begin, len};
+        return {col, key, begin, off, len};
     }
 };
 
