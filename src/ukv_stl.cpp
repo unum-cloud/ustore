@@ -520,6 +520,11 @@ void ukv_read( //
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
+
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
@@ -558,6 +563,11 @@ void ukv_write( //
 
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
+
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
@@ -607,11 +617,21 @@ void ukv_collection_upsert(
     ukv_collection_t* c_col,
     ukv_error_t* c_error) {
 
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
+
+    auto name_len = std::strlen(c_col_name);
+    if (!name_len) {
+        *c_col = ukv_default_collection_k;
+        return;
+    }
+
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
-    auto name_len = std::strlen(c_col_name);
-    auto const col_name = std::string_view(c_col_name, name_len);
 
+    auto const col_name = std::string_view(c_col_name, name_len);
     auto col_it = db.named.find(col_name);
     if (col_it == db.named.end()) {
         try {
@@ -636,6 +656,11 @@ void ukv_collection_remove(
     // Outputs:
     [[maybe_unused]] ukv_error_t* c_error) {
 
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
+
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
     auto name_len = std::strlen(c_col_name);
@@ -653,6 +678,10 @@ void ukv_control( //
     ukv_str_view_t* c_response,
     ukv_error_t* c_error) {
 
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
     *c_response = NULL;
     *c_error = "Controls aren't supported in this implementation!";
 }
@@ -668,6 +697,11 @@ void ukv_txn_begin(
     // Outputs:
     ukv_txn_t* c_txn,
     ukv_error_t* c_error) {
+
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     if (!*c_txn) {
@@ -691,6 +725,11 @@ void ukv_txn_commit( //
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
+    if (!c_txn) {
+        *c_error = "Transaction is NULL!";
+        return;
+    }
+
     // This write may fail with out-of-memory errors, if Hash-Tables
     // bucket allocation fails, but no values will be copied, only moved.
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
@@ -700,7 +739,7 @@ void ukv_txn_commit( //
 
     // 1. Check for refreshes among fetched keys
     for (auto const& [located_key, located_sequence] : txn.requested_keys) {
-        stl_collection_t& col = *reinterpret_cast<stl_collection_t*>(located_key.collection);
+        stl_collection_t& col = stl_collection(db, located_key.collection);
         auto key_iterator = col.pairs.find(located_key.key);
         if (key_iterator != col.pairs.end()) {
             if (key_iterator->second.sequence_number != located_sequence) {
@@ -712,7 +751,7 @@ void ukv_txn_commit( //
 
     // 2. Check for collisions among incoming values
     for (auto const& [located_key, value] : txn.new_values) {
-        stl_collection_t& col = *reinterpret_cast<stl_collection_t*>(located_key.collection);
+        stl_collection_t& col = stl_collection(db, located_key.collection);
         auto key_iterator = col.pairs.find(located_key.key);
         if (key_iterator != col.pairs.end()) {
             if (key_iterator->second.sequence_number == txn.sequence_number) {
@@ -741,7 +780,7 @@ void ukv_txn_commit( //
 
     // 4. Import the data, as no collisions were detected
     for (auto& located_key_and_value : txn.new_values) {
-        stl_collection_t& col = *reinterpret_cast<stl_collection_t*>(located_key_and_value.first.collection);
+        stl_collection_t& col = stl_collection(db, located_key_and_value.first.collection);
         auto key_iterator = col.pairs.find(located_key_and_value.first.key);
         // A key was deleted:
         // if (located_key_and_value.second.empty()) {

@@ -45,7 +45,23 @@ def test_named_collections():
 
 def test_main_collection_txn():
 
+    db = ukv.DataBase()
+
+    txn = ukv.Transaction(db)
+    only_explicit(txn)
+    txn.commit()
+
+    txn = ukv.Transaction(db)
+    only_operators(txn)
+    txn.commit()
+
+
+def test_main_collection_txn_ctx():
+
     with ukv.DataBase() as db:
         with ukv.Transaction(db) as txn:
             only_explicit(txn)
+
+    with ukv.DataBase() as db:
+        with ukv.Transaction(db) as txn:
             only_operators(txn)

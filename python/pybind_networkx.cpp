@@ -127,7 +127,7 @@ void ukv::wrap_network(py::module& m) {
                  error.internal_cptr());
         error.throw_unhandled();
 
-        taped_values_view_t vals = net.tape;
+        taped_values_view_t vals = net.tape.untape(1);
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
@@ -149,7 +149,7 @@ void ukv::wrap_network(py::module& m) {
                                    error.internal_cptr());
         error.throw_unhandled();
 
-        taped_values_view_t vals = net.tape;
+        taped_values_view_t vals = net.tape.untape(1);
         if (!vals.size())
             return 0ul;
         value_view_t val = *vals.begin();
@@ -171,7 +171,7 @@ void ukv::wrap_network(py::module& m) {
                                    error.internal_cptr());
         error.throw_unhandled();
 
-        taped_values_view_t vals = net.tape;
+        taped_values_view_t vals = net.tape.untape(1);
         if (!vals.size())
             return 0ul;
         value_view_t val = *vals.begin();
@@ -195,7 +195,7 @@ void ukv::wrap_network(py::module& m) {
                                    error.internal_cptr());
         error.throw_unhandled();
 
-        taped_values_view_t vals = net.tape;
+        taped_values_view_t vals = net.tape.untape(1);
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
@@ -218,7 +218,7 @@ void ukv::wrap_network(py::module& m) {
                                    error.internal_cptr());
         error.throw_unhandled();
 
-        taped_values_view_t vals = net.tape;
+        taped_values_view_t vals = net.tape.untape(1);
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();

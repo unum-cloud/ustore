@@ -54,24 +54,25 @@
  *
  */
 
+#include <Python.h>
 #include "pybind.hpp"
 
 using namespace unum::ukv;
 using namespace unum;
 
 std::shared_ptr<py_txn_t> begin_if_needed(py_txn_t& py_txn) {
+    if (py_txn.native)
+        return py_txn.shared_from_this();
 
     [[maybe_unused]] py::gil_scoped_release release;
-    auto error = py_txn.native.reset();
-    error.throw_unhandled();
+    py_txn.native.reset().throw_unhandled();
     return py_txn.shared_from_this();
 }
 
-void commit(py_txn_t& py_txn) {
+void commit_txn(py_txn_t& py_txn) {
 
     [[maybe_unused]] py::gil_scoped_release release;
-    auto error = py_txn.native.commit();
-    error.throw_unhandled();
+    py_txn.native.commit().throw_unhandled();
 }
 
 bool contains_item( //
@@ -254,9 +255,8 @@ void export_matrix( //
     error.throw_unhandled();
 
     // Export the data into the matrix
-    taped_values_view_t inputs = tape;
+    taped_values_view_t inputs = tape.untape(keys_count);
     tape_iterator_t input_it = inputs.begin();
-    auto skipped_input_bytes = 0ul;
     for (ukv_size_t i = 0; i != keys_count; ++i, ++input_it) {
         value_view_t input = *input_it;
         auto input_bytes = reinterpret_cast<std::uint8_t const*>(input.begin());
@@ -271,7 +271,6 @@ void export_matrix( //
         std::memset(output_bytes + count_copy, padding_char, count_pads);
 
         output_length = count_copy;
-        skipped_input_bytes += input_length;
     }
 }
 
@@ -446,7 +445,7 @@ void ukv::wrap_database(py::module& m) {
 
     // Resource management
     py_txn.def("__enter__", &begin_if_needed);
-    py_txn.def("commit", &commit);
+    py_txn.def("commit", &commit_txn);
 
     py_db.def("__enter__", [](py_db_t& py_db) {
         if (!py_db.native)
@@ -459,17 +458,21 @@ void ukv::wrap_database(py::module& m) {
         "__exit__",
         [](py_db_t& py_db, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
             py_db.native.close();
+            return false;
         });
     py_txn.def(
         "__exit__",
         [](py_txn_t& py_txn, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
             try {
-                commit(py_txn);
+                commit_txn(py_txn);
             }
             catch (...) {
                 // We must now propagate this exception upwards:
+                // https://stackoverflow.com/a/35483461
                 // https://gist.github.com/YannickJadoul/f1fc8db711ed980cf02610277af058e4
+                // https://github.com/pybind/pybind11/commit/5a7d17ff16a01436f7228a688c62511ab8c3efde
             }
+            return false;
         });
 
     // Operator overaloads used to edit entries
