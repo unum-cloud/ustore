@@ -60,8 +60,8 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
     py_col_t() {}
     py_col_t(py_col_t const&) = delete;
     py_col_t(py_col_t&& other) noexcept
-        : db_ptr(std::move(other.db_ptr)).txn_ptr(std::move(other.txn_ptr)),
-    native(std::move(other.native)), name(std::move(other.name)) {}
+        : db_ptr(std::move(other.db_ptr)), txn_ptr(std::move(other.txn_ptr)), native(std::move(other.native)),
+          name(std::move(other.name)) {}
 };
 
 struct py_buffer_t {
