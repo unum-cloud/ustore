@@ -66,15 +66,15 @@ struct sample_proxy_t {
         error_t error;
         ukv_read(db,
                  txn,
-                 cols.range.raw,
-                 cols.range.stride,
-                 keys.range.raw,
-                 keys.range.count,
-                 keys.range.stride,
+                 cols.range.begin().get(),
+                 cols.range.stride(),
+                 keys.range.begin().get(),
+                 keys.range.count(),
+                 keys.range.stride(),
                  options,
                  memory,
                  capacity,
-                 &error.raw);
+                 error.internals());
         if (error)
             return {std::move(error)};
 
@@ -85,17 +85,19 @@ struct sample_proxy_t {
         error_t error;
         ukv_write(db,
                   txn,
-                  cols.range.raw,
-                  cols.range.stride,
-                  keys.range.raw,
-                  keys.range.count,
-                  keys.range.stride,
-                  vals.values_range.raw,
-                  vals.values_range.stride,
-                  vals.lengths_range.raw,
-                  vals.lengths_range.stride,
+                  cols.range.begin().get(),
+                  cols.range.stride(),
+                  keys.range.begin().get(),
+                  keys.range.count(),
+                  keys.range.stride(),
+                  vals.values_range.begin().get(),
+                  vals.values_range.stride(),
+                  vals.offsets_range.begin().get(),
+                  vals.offsets_range.stride(),
+                  vals.lengths_range.begin().get(),
+                  vals.lengths_range.stride(),
                   options,
-                  &error.raw);
+                  error.internals());
         return error;
     }
 
@@ -127,11 +129,14 @@ class collection_t {
         : db_(other.db_), col_(std::exchange(other.col_, ukv_default_collection_k)) {}
     inline ~collection_t() noexcept { ukv_collection_free(db_, col_); }
     inline collection_t& operator=(collection_t&& other) noexcept {
+        if (col_ != ukv_default_collection_k)
+            ukv_collection_free(db_, col_);
         db_ = other.db_;
         col_ = std::exchange(other.col_, ukv_default_collection_k);
         return *this;
     }
     inline operator ukv_collection_t() const noexcept { return col_; }
+    inline ukv_t db() const noexcept { return db_; }
 };
 
 /**
@@ -146,6 +151,10 @@ class txn_t {
 
   public:
     txn_t(ukv_t db, ukv_txn_t txn) : db_(db), txn_(txn), read_tape_(db) {}
+    inline ukv_t db() const noexcept { return db_; }
+    inline managed_tape_t& tape() noexcept { return read_tape_; }
+    inline operator ukv_txn_t() const noexcept { return txn_; }
+
     ~txn_t() {
         if (txn_)
             ukv_txn_free(db_, txn_);
@@ -175,13 +184,13 @@ class txn_t {
 
     error_t reset() {
         error_t error;
-        ukv_txn_begin(db_, 0, &txn_, &error.raw);
+        ukv_txn_begin(db_, 0, &txn_, error.internals());
         return error;
     }
 
     error_t commit(ukv_options_t options = ukv_options_default_k) {
         error_t error;
-        ukv_txn_commit(txn_, options, &error.raw);
+        ukv_txn_commit(txn_, options, error.internals());
         return error;
     }
 };
@@ -198,6 +207,8 @@ class session_t {
 
   public:
     session_t(ukv_t db) : db_(db), read_tape_(db) {}
+    inline ukv_t db() const noexcept { return db_; }
+    inline managed_tape_t& tape() noexcept { return read_tape_; }
 
     inline sample_proxy_t operator[](located_keys_view_t located) noexcept {
         return sample_proxy_t {
@@ -235,7 +246,7 @@ class session_t {
     expected_gt<txn_t> transact() {
         error_t error;
         ukv_txn_t raw = nullptr;
-        ukv_txn_begin(db_, 0, &raw, &error.raw);
+        ukv_txn_begin(db_, 0, &raw, error.internals());
         if (error)
             return {std::move(error), txn_t {db_, nullptr}};
         else
@@ -255,7 +266,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
   public:
     error_t open(std::string const& config) {
         error_t error;
-        ukv_open(config.c_str(), &db_, &error.raw);
+        ukv_open(config.c_str(), &db_, error.internals());
         return error;
     }
 
@@ -269,13 +280,14 @@ class db_t : public std::enable_shared_from_this<db_t> {
             close();
     }
 
+    inline operator ukv_t() const noexcept { return db_; }
     session_t session() { return {db_}; }
     expected_gt<collection_t> operator[](std::string const& name) { return collection(name); }
 
     expected_gt<collection_t> collection(std::string const& name) {
         error_t error;
         ukv_collection_t col = nullptr;
-        ukv_collection_upsert(db_, name.c_str(), &col, &error.raw);
+        ukv_collection_upsert(db_, name.c_str(), &col, error.internals());
         if (error)
             return error;
         else
@@ -284,7 +296,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
     error_t remove(std::string const& name) {
         error_t error;
-        ukv_collection_remove(db_, name.c_str(), &error.raw);
+        ukv_collection_remove(db_, name.c_str(), error.internals());
         return error;
     }
 };

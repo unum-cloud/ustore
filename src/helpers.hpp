@@ -170,8 +170,8 @@ struct write_tasks_soa_t {
         }
         else {
             begin = nullptr;
-            off = 0;
-            len = 0;
+            off = 0u;
+            len = 0u;
         }
         return {col, key, begin, len};
     }
