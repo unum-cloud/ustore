@@ -127,8 +127,9 @@ target_link_libraries(ukv_stl
 )
 
 add_library(ukv_rocksdb
-  src/ukv_rocksdb.cpp
-  src/ukv_graph_pfor.cpp
+  src/ukv_stl.cpp
+
+  # src/ukv_graph_pfor.cpp
 )
 
 target_link_libraries(ukv_rocksdb
@@ -137,10 +138,10 @@ target_link_libraries(ukv_rocksdb
 
 add_library(ukv_beast_client src/ukv_beast_client.cpp)
 
-add_executable(ukv_beast_server src/ukv_beast_server.cpp)
-target_link_libraries(ukv_beast_server
-  ukv_stl
-  pthread
-  fmt::fmt
-  nlohmann_json::nlohmann_json
-)
+# add_executable(ukv_beast_server src/ukv_beast_server.cpp)
+# target_link_libraries(ukv_beast_server
+# ukv_stl
+# pthread
+# fmt::fmt
+# nlohmann_json::nlohmann_json
+# )

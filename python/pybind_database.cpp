@@ -390,7 +390,7 @@ void ukv::wrap_database(py::module& m) {
         db.remove(py_col.name).throw_unhandled();
         auto maybe_col = db[py_col.name];
         maybe_col.throw_unhandled();
-        py_col.native = *maybe_col;
+        py_col.native = *std::move(maybe_col);
     });
 
     // `Transaction`:
