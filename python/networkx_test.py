@@ -1,4 +1,4 @@
-import networkx as ukv
+import ukv.stl as ukv
 
 
 def line(net):
@@ -90,7 +90,6 @@ def clear(net):
 
 def degree(net):
     nodes_count = 100
-    net = ukv.Graph()
     edges = []
     for i in range(nodes_count):
         for j in range(i+1, nodes_count):
@@ -103,7 +102,8 @@ def degree(net):
 
 
 def test():
-    net = ukv.DiGraph()
+    # net = ukv.DiGraph()
+    net = ukv.Network()
     line(net)
     triangle(net)
     batch(net)
