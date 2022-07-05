@@ -15,7 +15,7 @@
  *
  * Aside frim those, you can instantiate the most generic `ukv.Network`,
  * controlling wheather graph should be directed, allow loops, or have
- * attributes in source/target nodes or edges.
+ * attrs in source/target vertices or edges.
  *
  * @section Interface
  * Primary single element methods:
@@ -38,17 +38,17 @@ using namespace unum;
  * @brief A generalization of the graph supported by NetworkX.
  *
  * Sources and targets can match.
- * Relations attributes can be banned all together.
+ * Relations attrs can be banned all together.
  *
  * Example for simple non-atttributed undirected graphs:
  * > relations_name: ".graph"
- * > attributes_name: ""
+ * > attrs_name: ""
  * > sources_name: ""
  * > targets_name: ""
  *
  * Example for recommender systems
  * > relations_name: "views.graph"
- * > attributes_name: "views.docs"
+ * > attrs_name: "views.docs"
  * > sources_name: "people.docs"
  * > targets_name: "movies.docs"
  */
@@ -83,9 +83,9 @@ void ukv::wrap_network(py::module& m) {
 
     auto net = py::class_<network_t, std::shared_ptr<network_t>>(m, "Network", py::module_local());
     net.def(py::init([](std::shared_ptr<py_col_t> index_collection,
-                        std::optional<std::string> sources_attributes,
-                        std::optional<std::string> targets_attributes,
-                        std::optional<std::string> relations_attributes,
+                        std::optional<std::string> sources_attrs,
+                        std::optional<std::string> targets_attrs,
+                        std::optional<std::string> relations_attrs,
                         bool directed = false,
                         bool multi = false,
                         bool loops = false) {
@@ -97,18 +97,18 @@ void ukv::wrap_network(py::module& m) {
 
                 // Attach the additional collections
                 auto& db = index_collection->db_ptr->native;
-                if (sources_attributes) {
-                    auto col = db.collection(*sources_attributes);
+                if (sources_attrs) {
+                    auto col = db.collection(*sources_attrs);
                     col.throw_unhandled();
                     net_ptr->sources_attrs = *std::move(col);
                 }
-                if (targets_attributes) {
-                    auto col = db.collection(*targets_attributes);
+                if (targets_attrs) {
+                    auto col = db.collection(*targets_attrs);
                     col.throw_unhandled();
                     net_ptr->targets_attrs = *std::move(col);
                 }
-                if (relations_attributes) {
-                    auto col = db.collection(*relations_attributes);
+                if (relations_attrs) {
+                    auto col = db.collection(*relations_attrs);
                     col.throw_unhandled();
                     net_ptr->relations_attrs = *std::move(col);
                 }
@@ -138,6 +138,7 @@ void ukv::wrap_network(py::module& m) {
                  error.internal_cptr());
         error.throw_unhandled();
 
+        std::cout << "Received a tape of length" << *net.tape().internal_capacity() << std::endl;
         taped_values_view_t vals = net.tape().untape(1);
         if (!vals.size())
             return false;
@@ -165,7 +166,7 @@ void ukv::wrap_network(py::module& m) {
         if (!vals.size())
             return 0ul;
         value_view_t val = *vals.begin();
-        return neighbors(val, ukv_graph_node_any_k).size();
+        return neighbors(val, ukv_vertex_role_any_k).size();
     });
 
     net.def("number_of_edges", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
@@ -182,12 +183,13 @@ void ukv::wrap_network(py::module& m) {
                                    net.tape().internal_capacity(),
                                    error.internal_cptr());
         error.throw_unhandled();
+        std::cout << "Received a tape of length" << *net.tape().internal_capacity() << std::endl;
 
         taped_values_view_t vals = net.tape().untape(1);
         if (!vals.size())
             return 0ul;
         value_view_t val = *vals.begin();
-        auto neighbors_range = neighbors(val, ukv_graph_node_source_k);
+        auto neighbors_range = neighbors(val, ukv_vertex_source_k);
         auto matching_range = std::equal_range(neighbors_range.begin(), neighbors_range.end(), v2);
         return static_cast<std::size_t>(matching_range.second - matching_range.first);
     });
@@ -211,7 +213,7 @@ void ukv::wrap_network(py::module& m) {
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
-        auto neighbors_range = neighbors(val, ukv_graph_node_source_k);
+        auto neighbors_range = neighbors(val, ukv_vertex_source_k);
         return std::binary_search(neighbors_range.begin(), neighbors_range.end(), v2);
     });
 
@@ -234,7 +236,7 @@ void ukv::wrap_network(py::module& m) {
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
-        auto neighbors_range = neighbors(val, ukv_graph_node_source_k);
+        auto neighbors_range = neighbors(val, ukv_vertex_source_k);
         return std::binary_search(neighbors_range.begin(), neighbors_range.end(), neighborhood_t {v2, eid});
     });
 

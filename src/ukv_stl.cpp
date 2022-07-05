@@ -262,8 +262,8 @@ void write_head( //
                 key_iterator->second.data.assign(value.begin(), value.end());
             }
             else {
-                stl_sequenced_value_t sequenced_value = {task.buffer(), ++db.youngest_sequence};
-                col.pairs.insert_or_assign(task.key, std::move(sequenced_value));
+                stl_sequenced_value_t sequenced_value {task.buffer(), ++db.youngest_sequence};
+                col.pairs.emplace(task.key, std::move(sequenced_value));
             }
         }
         catch (...) {
@@ -638,7 +638,7 @@ void ukv_collection_upsert(
             auto new_col = std::make_unique<stl_collection_t>();
             new_col->name = col_name;
             *c_col = new_col.get();
-            db.named.insert_or_assign(new_col->name, std::move(new_col));
+            db.named.emplace(new_col->name, std::move(new_col));
         }
         catch (...) {
             *c_error = "Failed to create a new col!";
@@ -767,7 +767,7 @@ void ukv_txn_commit( //
         }
     }
 
-    // 3. Allocate space for more nodes across different cols
+    // 3. Allocate space for more vertices across different cols
     try {
         db.unnamed.reserve_more(txn.new_values.size());
         for (auto& name_and_col : db.named)
@@ -796,7 +796,7 @@ void ukv_txn_commit( //
         // A key was inserted:
         else {
             stl_sequenced_value_t sequenced_value {std::move(located_key_and_value.second), txn.sequence_number};
-            col.pairs.insert_or_assign(located_key_and_value.first.key, std::move(sequenced_value));
+            col.pairs.emplace(located_key_and_value.first.key, std::move(sequenced_value));
         }
     }
 
