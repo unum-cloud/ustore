@@ -1,4 +1,5 @@
 import ukv.stl as ukv
+nx = ukv
 
 
 def line(net):
@@ -103,7 +104,10 @@ def degree(net):
 
 def test():
     # net = ukv.DiGraph()
-    net = ukv.Network()
+    db = ukv.DataBase()
+    index = db['.graph']
+
+    net = ukv.Network(index)
     line(net)
     triangle(net)
     batch(net)

@@ -69,7 +69,10 @@ struct network_t : public std::enable_shared_from_this<network_t> {
     ~network_t() {}
 
     inline ukv_t db() const noexcept { return inverted_index->db_ptr->native; }
-    inline ukv_txn_t txn() const noexcept { return inverted_index->txn_ptr->native; }
+    inline ukv_txn_t txn() const noexcept {
+        return inverted_index->txn_ptr ? inverted_index->txn_ptr->native : ukv_txn_t(nullptr);
+    }
+    inline ukv_collection_t* index_col() const noexcept { return inverted_index->native.internal_cptr(); }
     inline managed_tape_t& tape() noexcept {
         return inverted_index->txn_ptr ? inverted_index->txn_ptr->native.tape()
                                        : inverted_index->db_ptr->session.tape();
@@ -80,9 +83,9 @@ void ukv::wrap_network(py::module& m) {
 
     auto net = py::class_<network_t, std::shared_ptr<network_t>>(m, "Network", py::module_local());
     net.def(py::init([](std::shared_ptr<py_col_t> index_collection,
-                        std::optional<std::string> source_attributes,
-                        std::optional<std::string> target_attributes,
-                        std::optional<std::string> relation_attributes,
+                        std::optional<std::string> sources_attributes,
+                        std::optional<std::string> targets_attributes,
+                        std::optional<std::string> relations_attributes,
                         bool directed = false,
                         bool multi = false,
                         bool loops = false) {
@@ -91,6 +94,24 @@ void ukv::wrap_network(py::module& m) {
                 net_ptr->is_directed_ = directed;
                 net_ptr->is_multi_ = multi;
                 net_ptr->allow_self_loops_ = loops;
+
+                // Attach the additional collections
+                auto& db = index_collection->db_ptr->native;
+                if (sources_attributes) {
+                    auto col = db.collection(*sources_attributes);
+                    col.throw_unhandled();
+                    net_ptr->sources_attrs = *std::move(col);
+                }
+                if (targets_attributes) {
+                    auto col = db.collection(*targets_attributes);
+                    col.throw_unhandled();
+                    net_ptr->targets_attrs = *std::move(col);
+                }
+                if (relations_attributes) {
+                    auto col = db.collection(*relations_attributes);
+                    col.throw_unhandled();
+                    net_ptr->relations_attrs = *std::move(col);
+                }
                 return net_ptr;
             }),
             py::arg("index"),
@@ -106,7 +127,7 @@ void ukv::wrap_network(py::module& m) {
         error_t error;
         ukv_read(net.db(),
                  net.txn(),
-                 net.inverted_index->native.internal_cptr(),
+                 net.index_col(),
                  0,
                  &v,
                  1,
@@ -121,6 +142,7 @@ void ukv::wrap_network(py::module& m) {
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
+
         return val.size() != 0;
     });
 
@@ -128,7 +150,7 @@ void ukv::wrap_network(py::module& m) {
         error_t error;
         ukv_graph_gather_neighbors(net.db(),
                                    net.txn(),
-                                   net.inverted_index->native.internal_cptr(),
+                                   net.index_col(),
                                    0,
                                    &v,
                                    1,
@@ -150,7 +172,7 @@ void ukv::wrap_network(py::module& m) {
         error_t error;
         ukv_graph_gather_neighbors(net.db(),
                                    net.txn(),
-                                   net.inverted_index->native.internal_cptr(),
+                                   net.index_col(),
                                    0,
                                    &v1,
                                    1,
@@ -174,7 +196,7 @@ void ukv::wrap_network(py::module& m) {
         error_t error;
         ukv_graph_gather_neighbors(net.db(),
                                    net.txn(),
-                                   net.inverted_index->native.internal_cptr(),
+                                   net.index_col(),
                                    0,
                                    &v1,
                                    1,
@@ -197,7 +219,7 @@ void ukv::wrap_network(py::module& m) {
         error_t error;
         ukv_graph_gather_neighbors(net.db(),
                                    net.txn(),
-                                   net.inverted_index->native.internal_cptr(),
+                                   net.index_col(),
                                    0,
                                    &v1,
                                    1,
@@ -256,4 +278,11 @@ void ukv::wrap_network(py::module& m) {
     net.def("neighbors_of_neighbors", [](network_t& net, ukv_key_t n) {
 
     });
+
+    // https://networkx.org/documentation/stable/reference/generated/networkx.classes.function.density.html
+    // https://networkx.org/documentation/stable/reference/generated/networkx.classes.function.is_directed.html?highlight=is_directed
+    m.def("is_directed", [](network_t& net) { return net.is_directed_; });
+    m.def("is_multi", [](network_t& net) { return net.is_multi_; });
+    m.def("allows_loops", [](network_t& net) { return net.allow_self_loops_; });
+    m.def("density", [](network_t& net) { return 0.0; });
 }
