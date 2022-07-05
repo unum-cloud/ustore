@@ -311,7 +311,9 @@ class managed_tape_t {
         : db_(other.db_), memory_(std::exchange(other.memory_, nullptr)),
           capacity_(std::exchange(other.capacity_, 0u)) {}
 
-    inline taped_values_view_t untape(ukv_size_t count) const noexcept { return {memory_, count}; }
+    inline taped_values_view_t untape(ukv_size_t count) const noexcept {
+        return {memory_, capacity_ >= count * sizeof(ukv_val_len_t) ? count : 0};
+    }
     inline ukv_tape_ptr_t* internal_memory() noexcept { return &memory_; }
     inline ukv_size_t* internal_capacity() noexcept { return &capacity_; }
 };
