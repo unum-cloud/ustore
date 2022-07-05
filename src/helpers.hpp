@@ -22,21 +22,22 @@ using sequence_t = std::int64_t;
  * friendly to our C API. Can't grow, but can shrink.
  * Just like humans after puberty :)
  */
-struct value_t {
-    ukv_tape_ptr_t ptr = nullptr;
-    ukv_val_len_t length = 0;
-    ukv_val_len_t cap = 0;
+class value_t {
+    ukv_tape_ptr_t ptr_ = nullptr;
+    ukv_val_len_t length_ = 0;
+    ukv_val_len_t cap_ = 0;
 
+  public:
     value_t(value_t const&) = delete;
     value_t& operator=(value_t const&) = delete;
 
     value_t(value_t&& v) noexcept
-        : ptr(std::exchange(v.ptr, nullptr)), length(std::exchange(v.length, 0)), cap(std::exchange(v.cap, 0)) {}
+        : ptr_(std::exchange(v.ptr_, nullptr)), length_(std::exchange(v.length_, 0)), cap_(std::exchange(v.cap_, 0)) {}
 
     value_t& operator=(value_t&& v) noexcept {
-        ptr = std::exchange(v.ptr, nullptr);
-        length = std::exchange(v.length, 0);
-        cap = std::exchange(v.cap, 0);
+        ptr_ = std::exchange(v.ptr_, nullptr);
+        length_ = std::exchange(v.length_, 0);
+        cap_ = std::exchange(v.cap_, 0);
         return *this;
     }
 
@@ -46,32 +47,58 @@ struct value_t {
         auto new_ptr = allocator_t {}.allocate(size);
         if (!new_ptr)
             throw std::bad_alloc();
-        ptr = reinterpret_cast<ukv_tape_ptr_t>(new_ptr);
-        cap = length = size;
+        ptr_ = reinterpret_cast<ukv_tape_ptr_t>(new_ptr);
+        cap_ = length_ = size;
     }
 
-    value_t(value_view_t view) : value_t(view.size()) { std::memcpy(ptr, view.begin(), view.size()); }
+    value_t(value_view_t view) : value_t(view.size()) { std::memcpy(ptr_, view.begin(), view.size()); }
 
     ~value_t() {
-        if (ptr)
-            allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr), cap);
-        ptr = nullptr;
-        length = 0;
-        cap = 0;
+        if (ptr_)
+            allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
+        ptr_ = nullptr;
+        length_ = 0;
+        cap_ = 0;
     }
 
     void resize(std::size_t size) {
-        if (size > cap)
+        if (size > cap_)
             throw std::runtime_error("Only shrinking is currently supported");
-        length = size;
+        length_ = size;
     }
 
-    inline byte_t* begin() const noexcept { return reinterpret_cast<byte_t*>(ptr); }
-    inline byte_t* end() const noexcept { return begin() + length; }
-    inline std::size_t size() const noexcept { return length; }
-    inline operator bool() const noexcept { return length; }
-    inline operator value_view_t() const noexcept { return {ptr, length}; }
-    inline void clear() noexcept { length = 0; }
+    void insert(std::size_t offset, byte_t const* inserted_begin, byte_t const* inserted_end) {
+        auto inserted_len = static_cast<ukv_val_len_t>(inserted_end - inserted_begin);
+        auto new_size = length_ + inserted_len;
+        if (new_size > cap_) {
+            auto new_ptr = allocator_t {}.allocate(new_size);
+            if (!new_ptr)
+                throw std::bad_alloc();
+            std::memcpy(new_ptr, ptr_, offset);
+            std::memcpy(new_ptr + offset, inserted_begin, inserted_len);
+            std::memcpy(new_ptr + offset + inserted_len, ptr_ + offset, length_ - offset);
+            allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
+
+            ptr_ = reinterpret_cast<ukv_tape_ptr_t>(new_ptr);
+            cap_ = length_ = new_size;
+        }
+        else {
+            std::memmove(ptr_ + offset + inserted_len, ptr_ + offset, inserted_len);
+            std::memcpy(ptr_ + offset, inserted_begin, inserted_len);
+            length_ = new_size;
+        }
+    }
+
+    inline byte_t* begin() const noexcept { return reinterpret_cast<byte_t*>(ptr_); }
+    inline byte_t* end() const noexcept { return begin() + length_; }
+    inline std::size_t size() const noexcept { return length_; }
+    inline operator bool() const noexcept { return length_; }
+    inline operator value_view_t() const noexcept { return {ptr_, length_}; }
+    inline void clear() noexcept { length_ = 0; }
+
+    inline ukv_tape_ptr_t* internal_cptr() noexcept { return &ptr_; }
+    inline ukv_val_len_t* internal_length() noexcept { return &length_; }
+    inline ukv_val_len_t* internal_cap() noexcept { return &cap_; }
 };
 
 /**
@@ -139,11 +166,11 @@ struct write_task_t {
     ukv_key_t key;
     byte_t const* begin;
     ukv_val_len_t offset;
-    ukv_val_len_t length;
+    ukv_val_len_t length_;
 
     inline located_key_t location() const noexcept { return located_key_t {collection, key}; }
-    value_view_t view() const { return {begin + offset, begin + offset + length}; }
-    buffer_t buffer() const { return {begin + offset, begin + offset + length}; }
+    value_view_t view() const { return {begin + offset, begin + offset + length_}; }
+    buffer_t buffer() const { return {begin + offset, begin + offset + length_}; }
 };
 
 /**
