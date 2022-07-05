@@ -31,9 +31,19 @@ std::size_t offset_in_sorted(std::vector<located_key_t> const& keys, located_key
     return std::lower_bound(keys.begin(), keys.end(), wanted) - keys.begin();
 }
 
-void upsert(value_t& value, ukv_graph_node_role_t role, ukv_key_t neighbor_id, ukv_key_t edge_id) {
+bool upsert(value_t& value, ukv_graph_node_role_t role, ukv_key_t neighbor_id, ukv_key_t edge_id) {
+    auto hood = neighborhood_t {neighbor_id, edge_id};
     auto node_degrees = reinterpret_cast<ukv_size_t*>(value.begin());
-    auto neighbor_and_edge_ids = reinterpret_cast<ukv_key_t*>(node_degrees + 2);
+    auto neighbors_range = neighbors(value, role);
+    auto it = std::lower_bound(neighbors_range.begin(), neighbors_range.end(), hood);
+    if (it != neighbors_range.end())
+        if (*it == hood)
+            return false;
+
+    auto off = reinterpret_cast<byte_t const*>(it) - value.begin();
+    auto hood_bytes = reinterpret_cast<byte_t const*>(&hood);
+    value.insert(off, hood_bytes, hood_bytes + sizeof(neighborhood_t));
+    return true;
 }
 
 void erase(value_t& value, ukv_graph_node_role_t role, ukv_key_t neighbor_id, std::optional<ukv_key_t> edge_id = {}) {
@@ -152,11 +162,11 @@ void ukv_graph_upsert_edges( //
               &updated_ids[0].key,
               static_cast<ukv_size_t>(updated_ids.size()),
               sizeof(located_key_t),
-              &updated_vals[0].ptr,
+              updated_vals[0].internal_cptr(),
               sizeof(value_t),
               &offset_in_val,
               0,
-              &updated_vals[0].length,
+              updated_vals[0].internal_length(),
               sizeof(value_t),
               c_options,
               c_error);
@@ -312,11 +322,11 @@ void ukv_graph_remove_nodes( //
               &updated_ids[0].key,
               static_cast<ukv_size_t>(updated_ids.size()),
               sizeof(located_key_t),
-              &updated_vals[0].ptr,
+              updated_vals[0].internal_cptr(),
               sizeof(value_t),
               &offset_in_val,
               0,
-              &updated_vals[0].length,
+              updated_vals[0].internal_length(),
               sizeof(value_t),
               c_options,
               c_error);
