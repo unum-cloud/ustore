@@ -8,16 +8,16 @@
  * and the data is transformed into @b Multi-Way @b Inverted-Index.
  *
  * Edges are represented as triplets: (first ID, second ID, edge ID), where the
- * last argument is optional. Multiple edges between same nodes are possible,
+ * last argument is optional. Multiple edges between same vertices are possible,
  * potentially forming a @b Directed-Multi-Graph, but only if you setedge IDs.
- * Every node ID is mapped to an entire list of relations that it forms.
+ * Every vertex ID is mapped to an entire list of relations that it forms.
  *
  * @section Supported Graph Kinds
- * 1. @b Undirected (Multi) Graph within nodes of same collection: (movies.graph)
- * 2. @b Directed (Multi) Graph within nodes of same collection: (movies.digraph)
+ * 1. @b Undirected (Multi) Graph over vertices of the same collection: (movies.graph)
+ * 2. @b Directed (Multi) Graph over vertices of the same collection: (movies.digraph)
  * 3. @b Joining (Multi) Graph linking two different collections: (movies->people.digraph)
  * In the last one, you can't choose directions at the level of edges, only collections.
- * In any one of those collections, storing metadata (a dictionary per each node/edge ID)
+ * In any one of those collections, storing metadata (a dictionary per each vertex/edge ID)
  * is @b optional. In theory, you may want to store metadata in a different DB, but that
  * would mean loosing ACID guarantees.
  *
@@ -37,8 +37,8 @@
  *      * movies->people.digraph
  *
  * @section Hyper-Graphs
- * If working with Hyper-Graphs (multiple nodes linked by one edge), you are expected
- * to use Undirected Graphs, with nodes and hyper-edges mixed together. You would be
+ * If working with Hyper-Graphs (multiple vertices linked by one edge), you are expected
+ * to use Undirected Graphs, with vertices and hyper-edges mixed together. You would be
  * differentiating them not by parent collection, but by stored metadata at runtime.
  */
 
@@ -57,19 +57,21 @@ extern "C" {
 extern ukv_key_t ukv_default_edge_id_k;
 
 /**
- * @brief Every node can be either a source or a target in a Directed Graph.
+ * @brief Every vertex can be either a source or a target in a Directed Graph.
  * When working with undirected graphs, this argument is irrelevant and
- * should be set to `ukv_graph_node_any_k`. With directed graphs, where
+ * should be set to `ukv_vertex_role_any_k`. With directed graphs, where
  * source and target can belong to different collections its @b crucial
  * that members of each collection are fixed to be either only sources
  * or only edges.
  */
-enum ukv_graph_node_role_t {
-    ukv_graph_node_unknown_k = 0,
-    ukv_graph_node_source_k = 1,
-    ukv_graph_node_target_k = 2,
-    ukv_graph_node_any_k = 3,
+enum ukv_vertex_role_t {
+    ukv_vertex_role_unknown_k = 0,
+    ukv_vertex_source_k = 1,
+    ukv_vertex_target_k = 2,
+    ukv_vertex_role_any_k = 3,
 };
+
+typedef uint32_t ukv_vertex_degree_t;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -77,25 +79,25 @@ enum ukv_graph_node_role_t {
 
 /**
  * @brief Finds and extracts all the related edges and
- * neighbor IDs for the provided nodes set. The results
+ * neighbor IDs for the provided vertices set. The results
  * are exported onto a tape in the following order:
- *      1. `ukv_size_t` number of outgoing edges per node
- *      2. `ukv_size_t` number of incoming edges per node
- *      3. outgoing edges per node:
+ *      1. `ukv_vertex_degree_t` number of outgoing edges per vertex
+ *      2. `ukv_vertex_degree_t` number of incoming edges per vertex
+ *      3. outgoing edges per vertex:
  *          1. `ukv_key_t` all target ids
  *          2. `ukv_key_t` all edge ids
- *      4. incoming edges per node:
+ *      4. incoming edges per vertex:
  *          1. `ukv_key_t` all source ids
  *          2. `ukv_key_t` all edge ids
- * A missing node will be represented with zero-length value,
+ * A missing vertex will be represented with zero-length value,
  * that will not even have degrees listed. While a detached
- * node will have both degrees set to zero.
+ * vertex will have both degrees set to zero.
  *
  * This function mostly forward to `ukv_read`, but adjusts the
  * behaviour of certain flags.
  *
- * @param[in] roles     The roles of passed @p `nodes` in wanted edges.
- * @param[in] options   To request node degrees, add the
+ * @param[in] roles     The roles of passed @p `vertices` in wanted edges.
+ * @param[in] options   To request vertex degrees, add the
  *                      @c `ukv_option_read_lengths_k` flag.
  */
 void ukv_graph_gather_neighbors( //
@@ -105,9 +107,9 @@ void ukv_graph_gather_neighbors( //
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
-    ukv_key_t const* nodes_ids,
-    ukv_size_t const nodes_count,
-    ukv_size_t const nodes_stride,
+    ukv_key_t const* vertices_ids,
+    ukv_size_t const vertices_count,
+    ukv_size_t const vertices_stride,
 
     ukv_options_t const options,
 
@@ -116,7 +118,7 @@ void ukv_graph_gather_neighbors( //
     ukv_error_t* error);
 
 /**
- * @brief Inserts edges between provided nodes.
+ * @brief Inserts edges between provided vertices.
  *
  * @param[in] edge_ids  Optional edge identifiers.
  *                      Necessary for edges storing a lot of metadata.
@@ -147,7 +149,7 @@ void ukv_graph_upsert_edges( //
 /**
  * @brief Removes edges from the graph.
  *
- * @param[in] member_ids Either source OR target node IDs.
+ * @param[in] member_ids Either source OR target vertex IDs.
  */
 void ukv_graph_remove_edges( //
     ukv_t const db,
@@ -163,7 +165,7 @@ void ukv_graph_remove_edges( //
     ukv_key_t const* member_ids,
     ukv_size_t const member_stride,
 
-    ukv_graph_node_role_t const* roles,
+    ukv_vertex_role_t const* roles,
     ukv_size_t const roles_stride,
 
     ukv_options_t const options,
@@ -173,23 +175,23 @@ void ukv_graph_remove_edges( //
     ukv_error_t* error);
 
 /**
- * @brief Removes nodes from the graph and exports deleted edge IDs.
+ * @brief Removes vertices from the graph and exports deleted edge IDs.
  * Those are then availiable in the tape in the following format:
  *      1. `ukv_size_t` counter for the number of edges
  *      2. `ukv_key_t`s edge IDs in no particular order
  */
-void ukv_graph_remove_nodes( //
+void ukv_graph_remove_vertices( //
     ukv_t const db,
     ukv_txn_t const txn,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
-    ukv_key_t const* nodes_ids,
-    ukv_size_t const nodes_count,
-    ukv_size_t const nodes_stride,
+    ukv_key_t const* vertices_ids,
+    ukv_size_t const vertices_count,
+    ukv_size_t const vertices_stride,
 
-    ukv_graph_node_role_t const* roles,
+    ukv_vertex_role_t const* roles,
     ukv_size_t const roles_stride,
 
     ukv_options_t const options,

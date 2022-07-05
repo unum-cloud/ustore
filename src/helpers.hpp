@@ -35,9 +35,9 @@ class value_t {
         : ptr_(std::exchange(v.ptr_, nullptr)), length_(std::exchange(v.length_, 0)), cap_(std::exchange(v.cap_, 0)) {}
 
     value_t& operator=(value_t&& v) noexcept {
-        ptr_ = std::exchange(v.ptr_, nullptr);
-        length_ = std::exchange(v.length_, 0);
-        cap_ = std::exchange(v.cap_, 0);
+        std::swap(v.ptr_, ptr_);
+        std::swap(v.length_, length_);
+        std::swap(v.cap_, cap_);
         return *this;
     }
 
@@ -77,7 +77,8 @@ class value_t {
             std::memcpy(new_ptr, ptr_, offset);
             std::memcpy(new_ptr + offset, inserted_begin, inserted_len);
             std::memcpy(new_ptr + offset + inserted_len, ptr_ + offset, length_ - offset);
-            allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
+            if (ptr_)
+                allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
 
             ptr_ = reinterpret_cast<ukv_tape_ptr_t>(new_ptr);
             cap_ = length_ = new_size;
@@ -126,12 +127,16 @@ inline byte_t* reserve_tape(ukv_tape_ptr_t* tape_ptr,
             if (tape)
                 allocator_t {}.deallocate(tape, *tape_length);
             tape = allocator_t {}.allocate(new_length);
+            if (!tape) {
+                *c_error = "Failed to allocate memory!";
+                return nullptr;
+            }
             *tape_ptr = reinterpret_cast<ukv_tape_ptr_t>(tape);
             *tape_length = new_length;
             return tape;
         }
         catch (...) {
-            *c_error = "Failed to allocate memory for exports!";
+            *c_error = "Failed to allocate memory!";
             return nullptr;
         }
     }
@@ -169,7 +174,7 @@ struct write_task_t {
     ukv_val_len_t length_;
 
     inline located_key_t location() const noexcept { return located_key_t {collection, key}; }
-    value_view_t view() const { return {begin + offset, begin + offset + length_}; }
+    value_view_t view() const noexcept { return {begin + offset, begin + offset + length_}; }
     buffer_t buffer() const { return {begin + offset, begin + offset + length_}; }
 };
 
