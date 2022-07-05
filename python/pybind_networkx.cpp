@@ -250,8 +250,44 @@ void ukv::wrap_network(py::module& m) {
     });
 
     // Random Writes
-    net.def("add_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {});
-    net.def("add_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {});
+    net.def("add_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
+        error_t error;
+        ukv_graph_upsert_edges(net.db(),
+                               net.txn(),
+                               net.index_col(),
+                               0,
+                               &ukv_default_edge_id_k,
+                               1,
+                               0,
+                               &v1,
+                               0,
+                               &v2,
+                               0,
+                               ukv_options_default_k,
+                               net.tape().internal_memory(),
+                               net.tape().internal_capacity(),
+                               error.internal_cptr());
+        error.throw_unhandled();
+    });
+    net.def("add_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
+        error_t error;
+        ukv_graph_upsert_edges(net.db(),
+                               net.txn(),
+                               net.index_col(),
+                               0,
+                               &eid,
+                               1,
+                               0,
+                               &v1,
+                               0,
+                               &v2,
+                               0,
+                               ukv_options_default_k,
+                               net.tape().internal_memory(),
+                               net.tape().internal_capacity(),
+                               error.internal_cptr());
+        error.throw_unhandled();
+    });
     net.def("remove_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {});
     net.def("remove_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {});
     net.def("add_edge_from", [](network_t& net, py::handle const& v1s, py::handle const& v2s) {});
