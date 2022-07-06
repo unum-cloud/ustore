@@ -239,42 +239,47 @@ struct disjoint_values_view_t {
  * contiguous memory range.
  *
  */
-struct tape_iterator_t {
+class tape_iterator_t {
 
-    ukv_val_len_t const* lengths = nullptr;
-    ukv_tape_ptr_t values = nullptr;
+    ukv_val_len_t const* lengths_ = nullptr;
+    ukv_tape_ptr_t values_ = nullptr;
 
+  public:
     inline tape_iterator_t(ukv_tape_ptr_t ptr, ukv_size_t elements) noexcept
-        : lengths(reinterpret_cast<ukv_val_len_t*>(ptr)), values(ptr + sizeof(ukv_val_len_t) * elements) {}
+        : lengths_(reinterpret_cast<ukv_val_len_t*>(ptr)), values_(ptr + sizeof(ukv_val_len_t) * elements) {}
 
-    inline tape_iterator_t(ukv_val_len_t const* lens, ukv_tape_ptr_t vals) noexcept : lengths(lens), values(vals) {}
+    inline tape_iterator_t(ukv_val_len_t const* lens, ukv_tape_ptr_t vals) noexcept : lengths_(lens), values_(vals) {}
 
     inline tape_iterator_t& operator++() noexcept {
-        values += *lengths;
-        ++lengths;
+        values_ += *lengths_;
+        ++lengths_;
         return *this;
     }
 
-    inline tape_iterator_t operator++(int) const noexcept { return {lengths + 1, values + *lengths}; }
-    inline operator bool() const noexcept { return *lengths; }
-    inline value_view_t operator*() const noexcept { return {values, *lengths}; }
+    inline tape_iterator_t operator++(int) const noexcept { return {lengths_ + 1, values_ + *lengths_}; }
+    inline operator bool() const noexcept { return *lengths_; }
+    inline value_view_t operator*() const noexcept { return {values_, *lengths_}; }
 
-    inline bool operator==(tape_iterator_t const& other) const noexcept { return lengths == other.lengths; }
-    inline bool operator!=(tape_iterator_t const& other) const noexcept { return lengths != other.lengths; }
+    inline bool operator==(tape_iterator_t const& other) const noexcept { return lengths_ == other.lengths_; }
+    inline bool operator!=(tape_iterator_t const& other) const noexcept { return lengths_ != other.lengths_; }
 };
 
-struct taped_values_view_t {
-    ukv_val_len_t const* lengths = nullptr;
-    ukv_tape_ptr_t values = nullptr;
+class taped_values_view_t {
+    ukv_val_len_t const* lengths_ = nullptr;
+    ukv_tape_ptr_t values_ = nullptr;
     ukv_size_t count = 0;
 
+  public:
     inline taped_values_view_t() = default;
     inline taped_values_view_t(ukv_tape_ptr_t ptr, ukv_size_t elements) noexcept
-        : lengths(reinterpret_cast<ukv_val_len_t*>(ptr)), values(ptr + sizeof(ukv_val_len_t) * elements),
+        : lengths_(reinterpret_cast<ukv_val_len_t*>(ptr)), values_(ptr + sizeof(ukv_val_len_t) * elements),
           count(elements) {}
 
-    inline tape_iterator_t begin() const noexcept { return {lengths, values}; }
-    inline tape_iterator_t end() const noexcept { return {lengths + count, values}; }
+    inline taped_values_view_t(ukv_val_len_t const* lens, ukv_tape_ptr_t vals, ukv_size_t elements) noexcept
+        : lengths_(lens), values_(vals), count(elements) {}
+
+    inline tape_iterator_t begin() const noexcept { return {lengths_, values_}; }
+    inline tape_iterator_t end() const noexcept { return {lengths_ + count, values_}; }
     inline std::size_t size() const noexcept { return count; }
 };
 
