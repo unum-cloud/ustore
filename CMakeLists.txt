@@ -153,8 +153,13 @@ add_library(ukv_beast_client src/ukv_beast_client.cpp)
 # fmt::fmt
 # nlohmann_json::nlohmann_json
 # )
-add_executable(ukv_test src/test.cpp)
+add_executable(ukv_test
+  src/test.cpp
+  src/ukv_stl.cpp
+
+  # src/ukv_docs_nlohmann.cpp
+  src/ukv_graph_pfor.cpp
+)
 target_link_libraries(ukv_test
-  ukv_stl
   gtest
 )
