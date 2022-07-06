@@ -78,7 +78,7 @@ struct sample_proxy_t {
         if (error)
             return {std::move(error)};
 
-        return {taped_values_view_t {*memory, *capacity}};
+        return {taped_values_view_t {*memory, static_cast<ukv_size_t>(keys.size())}};
     }
 
     [[nodiscard]] error_t set(disjoint_values_view_t vals) noexcept {
