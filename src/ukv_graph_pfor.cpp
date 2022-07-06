@@ -36,7 +36,7 @@ bool upsert(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, ukv_k
     auto ship = neighborship_t {neighbor_id, edge_id};
     if (!value.size()) {
         value = value_t(sizeof(ukv_vertex_degree_t) * 2 + sizeof(neighborship_t));
-        auto degrees = reinterpret_cast<ukv_size_t*>(value.begin());
+        auto degrees = reinterpret_cast<ukv_vertex_degree_t*>(value.begin());
         auto ships = reinterpret_cast<neighborship_t*>(degrees + 2);
         degrees[role != ukv_vertex_target_k] = 0;
         degrees[role == ukv_vertex_target_k] = 1;
@@ -53,6 +53,8 @@ bool upsert(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, ukv_k
     auto off = reinterpret_cast<byte_t const*>(it) - value.begin();
     auto ship_bytes = reinterpret_cast<byte_t const*>(&ship);
     value.insert(off, ship_bytes, ship_bytes + sizeof(neighborship_t));
+    auto degrees = reinterpret_cast<ukv_vertex_degree_t*>(value.begin());
+    degrees[role == ukv_vertex_target_k] += 1;
     return true;
 }
 

@@ -177,7 +177,7 @@ void ukv_graph_remove_edges( //
 /**
  * @brief Removes vertices from the graph and exports deleted edge IDs.
  * Those are then availiable in the tape in the following format:
- *      1. `ukv_size_t` counter for the number of edges
+ *      1. `ukv_vertex_degree_t` counter for the number of edges
  *      2. `ukv_key_t`s edge IDs in no particular order
  */
 void ukv_graph_remove_vertices( //
