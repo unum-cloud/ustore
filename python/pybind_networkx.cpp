@@ -237,7 +237,7 @@ void ukv::wrap_network(py::module& m) {
             return false;
         value_view_t val = *vals.begin();
         auto neighbors_range = neighbors(val, ukv_vertex_source_k);
-        return std::binary_search(neighbors_range.begin(), neighbors_range.end(), neighborhood_t {v2, eid});
+        return std::binary_search(neighbors_range.begin(), neighbors_range.end(), neighborship_t {v2, eid});
     });
 
     // Batch retrieval into dynamically sized NumPy arrays

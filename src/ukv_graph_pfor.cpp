@@ -33,26 +33,26 @@ std::size_t offset_in_sorted(std::vector<located_key_t> const& keys, located_key
 
 bool upsert(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, ukv_key_t edge_id) {
 
-    auto hood = neighborhood_t {neighbor_id, edge_id};
+    auto ship = neighborship_t {neighbor_id, edge_id};
     if (!value.size()) {
-        value = value_t(sizeof(ukv_vertex_degree_t) * 2 + sizeof(neighborhood_t));
+        value = value_t(sizeof(ukv_vertex_degree_t) * 2 + sizeof(neighborship_t));
         auto degrees = reinterpret_cast<ukv_size_t*>(value.begin());
-        auto hoods = reinterpret_cast<neighborhood_t*>(degrees + 2);
+        auto ships = reinterpret_cast<neighborship_t*>(degrees + 2);
         degrees[role != ukv_vertex_target_k] = 0;
         degrees[role == ukv_vertex_target_k] = 1;
-        hoods[0] = hood;
+        ships[0] = ship;
         return true;
     }
 
     auto neighbors_range = neighbors(value, role);
-    auto it = std::lower_bound(neighbors_range.begin(), neighbors_range.end(), hood);
+    auto it = std::lower_bound(neighbors_range.begin(), neighbors_range.end(), ship);
     if (it != neighbors_range.end())
-        if (*it == hood)
+        if (*it == ship)
             return false;
 
     auto off = reinterpret_cast<byte_t const*>(it) - value.begin();
-    auto hood_bytes = reinterpret_cast<byte_t const*>(&hood);
-    value.insert(off, hood_bytes, hood_bytes + sizeof(neighborhood_t));
+    auto ship_bytes = reinterpret_cast<byte_t const*>(&ship);
+    value.insert(off, ship_bytes, ship_bytes + sizeof(neighborship_t));
     return true;
 }
 
@@ -268,7 +268,7 @@ void ukv_graph_remove_vertices( //
 
             auto collection = collections[i];
             auto role = roles[i];
-            for (neighborhood_t n : neighbors(value, role))
+            for (neighborship_t n : neighbors(value, role))
                 updated_ids.push_back({collection, n.neighbor_id});
         }
     }
@@ -313,7 +313,7 @@ void ukv_graph_remove_vertices( //
             auto vertex_idx = offset_in_sorted(updated_ids, {collection, vertex_id});
             value_t& vertex_value = updated_vals[vertex_idx];
 
-            for (neighborhood_t n : neighbors(vertex_value, role)) {
+            for (neighborship_t n : neighbors(vertex_value, role)) {
                 auto neighbor_idx = offset_in_sorted(updated_ids, {collection, n.neighbor_id});
                 value_t& neighbor_value = updated_vals[neighbor_idx];
                 erase(neighbor_value, invert(role), vertex_id);
