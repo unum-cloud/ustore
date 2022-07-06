@@ -28,6 +28,7 @@ class value_t {
     ukv_val_len_t cap_ = 0;
 
   public:
+    value_t() = default;
     value_t(value_t const&) = delete;
     value_t& operator=(value_t const&) = delete;
 
@@ -41,9 +42,9 @@ class value_t {
         return *this;
     }
 
-    value_t() = default;
-
     value_t(std::size_t size) {
+        if (!size)
+            return;
         auto new_ptr = allocator_t {}.allocate(size);
         if (!new_ptr)
             throw std::bad_alloc();

@@ -119,12 +119,17 @@ class collection_t {
 
   public:
     inline collection_t() = default;
-    inline collection_t(ukv_t db_ptr, ukv_collection_t col_ptr) noexcept : db_(db_ptr), col_(col_ptr) {}
+    inline collection_t(ukv_t db_ptr, ukv_collection_t col_ptr = ukv_default_collection_k) noexcept
+        : db_(db_ptr), col_(col_ptr) {}
     inline collection_t(collection_t&& other) noexcept
         : db_(other.db_), col_(std::exchange(other.col_, ukv_default_collection_k)) {}
-    inline ~collection_t() noexcept { ukv_collection_free(db_, col_); }
+    inline ~collection_t() noexcept {
+        if (col_)
+            ukv_collection_free(db_, col_);
+        col_ = nullptr;
+    }
     inline collection_t& operator=(collection_t&& other) noexcept {
-        if (col_ != ukv_default_collection_k)
+        if (col_)
             ukv_collection_free(db_, col_);
         db_ = other.db_;
         col_ = std::exchange(other.col_, ukv_default_collection_k);
