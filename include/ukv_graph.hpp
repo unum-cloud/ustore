@@ -50,12 +50,19 @@ struct neighborship_t {
     }
 };
 
-using cneighborship_t = neighborship_t const;
-
 struct edges_soa_view_t {
     strided_range_gt<ukv_key_t const> source_ids;
     strided_range_gt<ukv_key_t const> target_ids;
     strided_range_gt<ukv_key_t const> edge_ids;
+
+    edges_soa_view_t() = default;
+    edges_soa_view_t(std::vector<edge_t> const& edges) noexcept {
+        auto ptr = edges.data();
+        auto strided = strided_range_gt<edge_t const>(ptr, ptr + edges.size());
+        source_ids = strided.members(&edge_t::source_id);
+        target_ids = strided.members(&edge_t::target_id);
+        edge_ids = strided.members(&edge_t::edge_id);
+    }
 };
 
 inline ukv_vertex_role_t invert(ukv_vertex_role_t role) {
@@ -68,13 +75,13 @@ inline ukv_vertex_role_t invert(ukv_vertex_role_t role) {
     __builtin_unreachable();
 }
 
-inline range_gt<cneighborship_t*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+inline range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
     // Handle missing vertices
     if (bytes.size() < 2 * sizeof(ukv_vertex_degree_t))
         return {};
 
     auto degrees = reinterpret_cast<ukv_vertex_degree_t const*>(bytes.begin());
-    auto ships = reinterpret_cast<cneighborship_t*>(degrees + 2);
+    auto ships = reinterpret_cast<neighborship_t const*>(degrees + 2);
 
     switch (role) {
     case ukv_vertex_source_k: return {ships, ships + degrees[0]};
@@ -87,8 +94,8 @@ inline range_gt<cneighborship_t*> neighbors(value_view_t bytes, ukv_vertex_role_
 
 struct neighborhood_t {
     ukv_key_t center = 0;
-    range_gt<cneighborship_t*> targets;
-    range_gt<cneighborship_t*> sources;
+    range_gt<neighborship_t const*> targets;
+    range_gt<neighborship_t const*> sources;
 
     neighborhood_t() = default;
     neighborhood_t(neighborhood_t const&) = default;
@@ -106,29 +113,68 @@ struct neighborhood_t {
     inline edges_soa_view_t outgoing_edges() const& {
         edges_soa_view_t edges;
         edges.source_ids = {&center, 0, targets.size()};
-        edges.target_ids = targets.strided().members(&cneighborship_t::neighbor_id);
-        edges.edge_ids = targets.strided().members(&cneighborship_t::edge_id);
+        edges.target_ids = targets.strided().members(&neighborship_t::neighbor_id);
+        edges.edge_ids = targets.strided().members(&neighborship_t::edge_id);
         return edges;
     }
 
     inline edges_soa_view_t incoming_edges() const& {
         edges_soa_view_t edges;
-        edges.source_ids = sources.strided().members(&cneighborship_t::neighbor_id);
+        edges.source_ids = sources.strided().members(&neighborship_t::neighbor_id);
         edges.target_ids = {&center, 0, sources.size()};
-        edges.edge_ids = sources.strided().members(&cneighborship_t::edge_id);
+        edges.edge_ids = sources.strided().members(&neighborship_t::edge_id);
         return edges;
     }
+
+    inline std::size_t size() const noexcept { return targets.size() + sources.size(); }
 };
 
-class inverted_index_t {
+class graph_collection_t {
     collection_t index_;
+    ukv_txn_t txn_ = nullptr;
+    managed_tape_t read_tape_;
 
   public:
-    inverted_index_t(collection_t&& col) : index_(std::move(col)) {}
+    graph_collection_t(collection_t&& col) : index_(std::move(col)), read_tape_(col.db()) {}
+    graph_collection_t(collection_t&& col, txn_t& txn) : index_(std::move(col)), txn_(txn), read_tape_(col.db()) {}
 
-    error_t upsert(edges_soa_view_t edges, ukv_txn_t txn = nullptr) {}
+    error_t upsert(edges_soa_view_t const& edges) noexcept {
+        error_t error;
+        ukv_graph_upsert_edges(index_.db(),
+                               txn_,
+                               index_.internal_cptr(),
+                               0,
+                               edges.edge_ids.begin().get(),
+                               edges.edge_ids.size(),
+                               edges.edge_ids.stride(),
+                               edges.source_ids.begin().get(),
+                               edges.source_ids.stride(),
+                               edges.target_ids.begin().get(),
+                               edges.target_ids.stride(),
+                               ukv_options_default_k,
+                               read_tape_.internal_memory(),
+                               read_tape_.internal_capacity(),
+                               error.internal_cptr());
+        return error;
+    }
 
-    expected_gt<neighborhood_t> neighbors(ukv_key_t vertex, ukv_txn_t txn = nullptr) const noexcept {}
+    expected_gt<neighborhood_t> neighbors(ukv_key_t vertex) noexcept {
+        error_t error;
+        ukv_graph_gather_neighbors(index_.db(),
+                                   txn_,
+                                   index_.internal_cptr(),
+                                   0,
+                                   &vertex,
+                                   1,
+                                   0,
+                                   ukv_options_default_k,
+                                   read_tape_.internal_memory(),
+                                   read_tape_.internal_capacity(),
+                                   error.internal_cptr());
+        if (error)
+            return error;
+        return neighborhood_t(vertex, *read_tape_.untape(1).begin());
+    }
 };
 
 } // namespace unum::ukv
