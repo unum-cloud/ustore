@@ -85,7 +85,7 @@ inline range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_
 
     switch (role) {
     case ukv_vertex_source_k: return {ships, ships + degrees[0]};
-    case ukv_vertex_target_k: return {ships + degrees[0], ships + degrees[1]};
+    case ukv_vertex_target_k: return {ships + degrees[0], ships + degrees[0] + degrees[1]};
     case ukv_vertex_role_any_k: return {ships, ships + degrees[0] + degrees[1]};
     case ukv_vertex_role_unknown_k: return {};
     }
