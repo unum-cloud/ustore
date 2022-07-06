@@ -176,6 +176,11 @@ class strided_range_gt {
     strided_range_gt(object_at* begin, ukv_size_t stride, ukv_size_t count) noexcept
         : begin_(begin), stride_(stride), count_(count) {}
 
+    strided_range_gt(strided_range_gt&&) = default;
+    strided_range_gt(strided_range_gt const&) = default;
+    strided_range_gt& operator=(strided_range_gt&&) = default;
+    strided_range_gt& operator=(strided_range_gt const&) = default;
+
     inline strided_ptr_gt<object_at> begin() const noexcept { return {begin_, stride_}; }
     inline strided_ptr_gt<object_at> end() const noexcept { return begin() + count_; }
     inline std::size_t size() const noexcept { return count_; }
@@ -184,10 +189,12 @@ class strided_range_gt {
     inline ukv_size_t count() const noexcept { return count_; }
 
     template <typename member_at, typename parent_at = object_at>
-    inline strided_range_gt<member_at> members(member_at parent_at::*member_ptr) const noexcept {
-        parent_at& first = *begin_;
-        member_at& first_member = first.*member_ptr;
-        return strided_range_gt<member_at> {&first_member, stride() * sizeof(parent_at), count()};
+    inline auto members(member_at parent_at::*member_ptr) const noexcept {
+        using parent_t = std::conditional_t<std::is_const_v<object_at>, parent_at const, parent_at>;
+        using member_t = std::conditional_t<std::is_const_v<object_at>, member_at const, member_at>;
+        parent_t& first = *begin_;
+        member_t& first_member = first.*member_ptr;
+        return strided_range_gt<member_t> {&first_member, stride() * sizeof(parent_at), count()};
     }
 };
 
