@@ -190,8 +190,15 @@ class strided_range_gt {
     inline strided_ptr_gt<object_at> end() const noexcept { return begin() + count_; }
     inline std::size_t size() const noexcept { return count_; }
     inline operator bool() const noexcept { return count_; }
-    ukv_size_t stride() const noexcept { return stride_; }
-    ukv_size_t count() const noexcept { return count_; }
+    inline ukv_size_t stride() const noexcept { return stride_; }
+    inline ukv_size_t count() const noexcept { return count_; }
+
+    template <typename member_at, typename parent_at = object_at>
+    inline strided_range_gt<member_at> members(member_at parent_at::*member_ptr) const noexcept {
+        parent_at& first = *begin_;
+        member_at& first_member = first.*member_ptr;
+        return strided_range_gt<member_at> {&first_member, stride() * sizeof(parent_at), count()};
+    }
 };
 
 class value_view_t {
@@ -210,31 +217,16 @@ class value_view_t {
     inline operator bool() const noexcept { return length_; }
 };
 
-struct collections_view_t {
-    strided_range_gt<ukv_collection_t> range;
+struct collections_view_t : public strided_range_gt<ukv_collection_t> {
+    using parent_t = strided_range_gt<ukv_collection_t>;
 
-    collections_view_t() noexcept : range(ukv_default_collection_k, 1) {}
-    collections_view_t(strided_range_gt<ukv_collection_t> r) noexcept : range(r) {}
+    collections_view_t() noexcept : parent_t(ukv_default_collection_k, 1) {}
+    collections_view_t(strided_range_gt<ukv_collection_t> r) noexcept : parent_t(r) {}
 };
 
-struct keys_view_t {
-    strided_range_gt<ukv_key_t> range;
-};
+using keys_view_t = strided_range_gt<ukv_key_t>;
 
-struct located_keys_view_t {
-    strided_range_gt<located_key_t> range;
-
-    keys_view_t keys() const noexcept {
-        return {
-            strided_range_gt<ukv_key_t> {&range.begin()->key, range.stride() * sizeof(located_key_t), range.count()}};
-    }
-
-    collections_view_t collections() const noexcept {
-        return {strided_range_gt<ukv_collection_t> {&range.begin()->collection,
-                                                    range.stride() * sizeof(located_key_t),
-                                                    range.count()}};
-    }
-};
+using located_keys_view_t = strided_range_gt<located_key_t>;
 
 struct disjoint_values_view_t {
     strided_range_gt<ukv_tape_ptr_t> values_range;
