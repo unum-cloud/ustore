@@ -66,11 +66,11 @@ struct sample_proxy_t {
         error_t error;
         ukv_read(db,
                  txn,
-                 cols.range.begin().get(),
-                 cols.range.stride(),
-                 keys.range.begin().get(),
-                 keys.range.count(),
-                 keys.range.stride(),
+                 cols.begin().get(),
+                 cols.stride(),
+                 keys.begin().get(),
+                 keys.count(),
+                 keys.stride(),
                  options,
                  memory,
                  capacity,
@@ -85,11 +85,11 @@ struct sample_proxy_t {
         error_t error;
         ukv_write(db,
                   txn,
-                  cols.range.begin().get(),
-                  cols.range.stride(),
-                  keys.range.begin().get(),
-                  keys.range.count(),
-                  keys.range.stride(),
+                  cols.begin().get(),
+                  cols.stride(),
+                  keys.begin().get(),
+                  keys.count(),
+                  keys.stride(),
                   vals.values_range.begin().get(),
                   vals.values_range.stride(),
                   vals.offsets_range.begin().get(),
@@ -171,8 +171,8 @@ class txn_t {
             .txn = txn_,
             .memory = read_tape_.internal_memory(),
             .capacity = read_tape_.internal_capacity(),
-            .cols = located.collections(),
-            .keys = located.keys(),
+            .cols = located.members(&located_key_t::collection),
+            .keys = located.members(&located_key_t::key),
         };
     }
 
@@ -224,8 +224,8 @@ class session_t {
             .txn = nullptr,
             .memory = read_tape_.internal_memory(),
             .capacity = read_tape_.internal_capacity(),
-            .cols = located.collections(),
-            .keys = located.keys(),
+            .cols = located.members(&located_key_t::collection),
+            .keys = located.members(&located_key_t::key),
         };
     }
 
