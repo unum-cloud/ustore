@@ -112,6 +112,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fpfor)
 
+# GTest
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG release-1.11.0
+)
+FetchContent_MakeAvailable(googletest)
+
 # Define the libraries we will need to build
 include_directories(include/ ${rocksdb_SOURCE_DIR}/include)
 
@@ -145,3 +153,8 @@ add_library(ukv_beast_client src/ukv_beast_client.cpp)
 # fmt::fmt
 # nlohmann_json::nlohmann_json
 # )
+add_executable(ukv_test src/test.cpp)
+target_link_libraries(ukv_test
+  ukv_stl
+  gtest
+)
