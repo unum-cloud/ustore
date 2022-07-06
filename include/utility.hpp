@@ -116,16 +116,6 @@ class expected_gt {
     }
 };
 
-template <typename pointer_at>
-struct range_gt {
-    pointer_at begin_ = nullptr;
-    pointer_at end_ = nullptr;
-
-    pointer_at begin() const noexcept { return begin_; }
-    pointer_at end() const noexcept { return end_; }
-    std::size_t size() const noexcept { return end_ - begin_; }
-};
-
 /**
  * @brief A smart pointer type with customizable jump length for increments.
  * In other words, it allows a strided data layout, common to HPC apps.
@@ -198,6 +188,21 @@ class strided_range_gt {
         parent_at& first = *begin_;
         member_at& first_member = first.*member_ptr;
         return strided_range_gt<member_at> {&first_member, stride() * sizeof(parent_at), count()};
+    }
+};
+
+template <typename pointer_at>
+struct range_gt {
+    pointer_at begin_ = nullptr;
+    pointer_at end_ = nullptr;
+
+    pointer_at begin() const noexcept { return begin_; }
+    pointer_at end() const noexcept { return end_; }
+    std::size_t size() const noexcept { return end_ - begin_; }
+    auto strided() const noexcept {
+        using element_t = std::remove_pointer_t<pointer_at>;
+        using strided_t = strided_range_gt<element_t>;
+        return strided_t {begin_, sizeof(element_t), static_cast<ukv_size_t>(size())};
     }
 };
 

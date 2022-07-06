@@ -22,33 +22,35 @@ struct edge_t {
 
 /**
  * @brief An asymmetric slice of a bond/relation.
- * Every vertex stores a list of such @c `neighborhood_t`s
+ * Every vertex stores a list of such @c `neighborship_t`s
  * in a sorted order.
  */
-struct neighborhood_t {
+struct neighborship_t {
     ukv_key_t neighbor_id = 0;
     ukv_key_t edge_id = 0;
 
-    friend inline bool operator<(neighborhood_t a, neighborhood_t b) noexcept {
+    friend inline bool operator<(neighborship_t a, neighborship_t b) noexcept {
         return (a.neighbor_id < b.neighbor_id) | ((a.neighbor_id == b.neighbor_id) | (a.edge_id < b.edge_id));
     }
-    friend inline bool operator==(neighborhood_t a, neighborhood_t b) noexcept {
+    friend inline bool operator==(neighborship_t a, neighborship_t b) noexcept {
         return (a.neighbor_id == b.neighbor_id) & (a.edge_id < b.edge_id);
     }
 
-    friend inline bool operator<(ukv_key_t a_vertex_id, neighborhood_t b) noexcept {
+    friend inline bool operator<(ukv_key_t a_vertex_id, neighborship_t b) noexcept {
         return a_vertex_id < b.neighbor_id;
     }
-    friend inline bool operator<(neighborhood_t a, ukv_key_t b_vertex_id) noexcept {
+    friend inline bool operator<(neighborship_t a, ukv_key_t b_vertex_id) noexcept {
         return a.neighbor_id < b_vertex_id;
     }
-    friend inline bool operator==(ukv_key_t a_vertex_id, neighborhood_t b) noexcept {
+    friend inline bool operator==(ukv_key_t a_vertex_id, neighborship_t b) noexcept {
         return a_vertex_id == b.neighbor_id;
     }
-    friend inline bool operator==(neighborhood_t a, ukv_key_t b_vertex_id) noexcept {
+    friend inline bool operator==(neighborship_t a, ukv_key_t b_vertex_id) noexcept {
         return a.neighbor_id == b_vertex_id;
     }
 };
+
+using cneighborship_t = neighborship_t const;
 
 struct edges_soa_view_t {
     strided_range_gt<ukv_key_t const> source_ids;
@@ -66,48 +68,67 @@ inline ukv_vertex_role_t invert(ukv_vertex_role_t role) {
     __builtin_unreachable();
 }
 
-inline range_gt<neighborhood_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+inline range_gt<cneighborship_t*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
     // Handle missing vertices
     if (bytes.size() < 2 * sizeof(ukv_vertex_degree_t))
         return {};
 
     auto degrees = reinterpret_cast<ukv_vertex_degree_t const*>(bytes.begin());
-    auto hoods = reinterpret_cast<neighborhood_t const*>(degrees + 2);
+    auto ships = reinterpret_cast<cneighborship_t*>(degrees + 2);
 
     switch (role) {
-    case ukv_vertex_source_k: return {hoods, hoods + degrees[0]};
-    case ukv_vertex_target_k: return {hoods + degrees[0], hoods + degrees[1]};
-    case ukv_vertex_role_any_k: return {hoods, hoods + degrees[0] + degrees[1]};
+    case ukv_vertex_source_k: return {ships, ships + degrees[0]};
+    case ukv_vertex_target_k: return {ships + degrees[0], ships + degrees[1]};
+    case ukv_vertex_role_any_k: return {ships, ships + degrees[0] + degrees[1]};
     case ukv_vertex_role_unknown_k: return {};
     }
     __builtin_unreachable();
 }
 
-/**
- * @brief Parses the a single `value_view_t` chunk from the output
- * of `ukv_graph_gather_neighbors`.
- */
-inline std::pair<edges_soa_view_t, edges_soa_view_t> edges_from_neighbors(ukv_key_t* key_ptr, value_view_t bytes) {
-    edges_soa_view_t outgoing, incoming;
-    auto targets = neighbors(bytes, ukv_vertex_source_k);
-    auto sources = neighbors(bytes, ukv_vertex_target_k);
+struct neighborhood_t {
+    ukv_key_t center = 0;
+    range_gt<cneighborship_t*> targets;
+    range_gt<cneighborship_t*> sources;
 
-    outgoing.source_ids = {key_ptr, 0, targets.size()};
-    outgoing.target_ids = {&targets.begin()->neighbor_id, sizeof(neighborhood_t), targets.size()};
-    outgoing.edge_ids = {&targets.begin()->edge_id, sizeof(neighborhood_t), targets.size()};
+    neighborhood_t() = default;
+    neighborhood_t(neighborhood_t const&) = default;
+    neighborhood_t(neighborhood_t&&) = default;
 
-    incoming.source_ids = {&sources.begin()->neighbor_id, sizeof(neighborhood_t), sources.size()};
-    incoming.target_ids = {key_ptr, 0, sources.size()};
-    incoming.edge_ids = {&sources.begin()->edge_id, sizeof(neighborhood_t), sources.size()};
+    /**
+     * @brief Parses the a single `value_view_t` chunk
+     * from the output of `ukv_graph_gather_neighbors`.
+     */
+    inline neighborhood_t(ukv_key_t center_vertex, value_view_t bytes) noexcept {
+        targets = neighbors(bytes, ukv_vertex_source_k);
+        sources = neighbors(bytes, ukv_vertex_target_k);
+    }
 
-    return {outgoing, incoming};
-}
+    inline edges_soa_view_t outgoing_edges() const& {
+        edges_soa_view_t edges;
+        edges.source_ids = {&center, 0, targets.size()};
+        edges.target_ids = targets.strided().members(&cneighborship_t::neighbor_id);
+        edges.edge_ids = targets.strided().members(&cneighborship_t::edge_id);
+        return edges;
+    }
 
-class graph_t {
+    inline edges_soa_view_t incoming_edges() const& {
+        edges_soa_view_t edges;
+        edges.source_ids = sources.strided().members(&cneighborship_t::neighbor_id);
+        edges.target_ids = {&center, 0, sources.size()};
+        edges.edge_ids = sources.strided().members(&cneighborship_t::edge_id);
+        return edges;
+    }
+};
+
+class inverted_index_t {
     collection_t index_;
-    collection_t sources_;
-    collection_t targets_;
-    collection_t relations_;
+
+  public:
+    inverted_index_t(collection_t&& col) : index_(std::move(col)) {}
+
+    error_t upsert(edges_soa_view_t edges, ukv_txn_t txn = nullptr) {}
+
+    expected_gt<neighborhood_t> neighbors(ukv_key_t vertex, ukv_txn_t txn = nullptr) const noexcept {}
 };
 
 } // namespace unum::ukv
