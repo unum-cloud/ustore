@@ -38,11 +38,7 @@ class appendable_tape_t {
     }
 
     operator taped_values_view_t() const noexcept {
-        taped_values_view_t view;
-        view.lengths = lengths_.data();
-        view.values = ukv_tape_ptr_t(data_.data());
-        view.count = data_.size();
-        return view;
+        return {lengths_.data(), ukv_tape_ptr_t(data_.data()), data_.size()};
     }
 };
 
