@@ -194,7 +194,7 @@ class strided_range_gt {
         using member_t = std::conditional_t<std::is_const_v<object_at>, member_at const, member_at>;
         parent_t& first = *begin_;
         member_t& first_member = first.*member_ptr;
-        return strided_range_gt<member_t> {&first_member, stride() * sizeof(parent_at), count()};
+        return strided_range_gt<member_t> {&first_member, stride(), count()};
     }
 };
 
