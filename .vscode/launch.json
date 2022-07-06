@@ -14,10 +14,6 @@
                 "--gtest_catch_exceptions=0"
             ],
             "cwd": "${workspaceFolder}",
-            "logging": {
-                "moduleLoad": false,
-                "trace": true
-            },
             "environment": [],
             "showDisplayString": true,
             "stopAtEntry": false,
