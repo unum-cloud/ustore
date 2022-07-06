@@ -48,6 +48,30 @@ TEST(db, basic) {
     }
 }
 
+TEST(db, net) {
+
+    db_t db;
+    EXPECT_FALSE(db.open(""));
+
+    graph_collection_t net {collection_t(db)};
+
+    std::vector<edge_t> triangle {
+        {1, 2, 9},
+        {2, 3, 10},
+        {3, 1, 11},
+    };
+
+    EXPECT_FALSE(net.upsert({triangle}));
+
+    auto maybe_neighbors = net.neighbors(1);
+    EXPECT_TRUE(maybe_neighbors);
+
+    auto neighbors = *maybe_neighbors;
+    EXPECT_EQ(neighbors.size(), 2ul);
+    EXPECT_EQ(neighbors.sources.size(), 1ul);
+    EXPECT_EQ(neighbors.targets.size(), 1ul);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
