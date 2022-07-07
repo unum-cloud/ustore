@@ -53,7 +53,7 @@ TEST(db, net) {
     db_t db;
     EXPECT_FALSE(db.open(""));
 
-    graph_collection_t net {collection_t(db)};
+    graph_collection_session_t net {collection_t(db)};
 
     std::vector<edge_t> triangle {
         {1, 2, 9},
@@ -70,6 +70,10 @@ TEST(db, net) {
     EXPECT_EQ(neighbors.size(), 2ul);
     EXPECT_EQ(neighbors.sources.size(), 1ul);
     EXPECT_EQ(neighbors.targets.size(), 1ul);
+
+    EXPECT_EQ(neighbors.incoming_from(3).size(), 1ul);
+    EXPECT_EQ(neighbors.outgoing_to(2).size(), 1ul);
+    EXPECT_EQ(neighbors.outgoing_to(3).size(), 0ul);
 }
 
 int main(int argc, char** argv) {
