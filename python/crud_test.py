@@ -8,6 +8,12 @@ def only_explicit(col):
     assert col.get(3) == 'x'.encode()
     assert col.get(4) == 'y'.encode()
 
+    # Overwrite with a different length string
+    col.set(4, 'yyyyyyy'.encode())
+    assert col.get(4) == 'yyyyyyy'.encode()
+    col.set(4, 'yy'.encode())
+    assert col.get(4) == 'yy'.encode()
+
 
 def only_operators(col):
 

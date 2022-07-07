@@ -158,8 +158,8 @@ void ukv_graph_upsert_edges( //
         auto target_id = targets_ids[i];
         auto edge_id = edges_ids[i];
 
-        auto& source_value = updated_vals[offset_in_sorted(updated_ids, {collection, target_id})];
-        auto& target_value = updated_vals[offset_in_sorted(updated_ids, {collection, source_id})];
+        auto& source_value = updated_vals[offset_in_sorted(updated_ids, {collection, source_id})];
+        auto& target_value = updated_vals[offset_in_sorted(updated_ids, {collection, target_id})];
 
         upsert(source_value, ukv_vertex_source_k, target_id, edge_id);
         upsert(target_value, ukv_vertex_target_k, source_id, edge_id);
