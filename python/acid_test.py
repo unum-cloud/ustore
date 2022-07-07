@@ -76,15 +76,12 @@ def test_set_with_2_interleaving_transactions():
 
     for index in range(keys_count):
         txn1.set(index, 'a'.encode())
-    for index in range(keys_count):
-        txn2.set(index, 'b'.encode())
-
-    txn2.commit()
     with pytest.raises(Exception):
-        txn1.commit()
+        for index in range(keys_count):
+            txn2.set(index, 'b'.encode())
 
-    for index in range(keys_count):
-        assert db[index] == 'b'.encode()
+        txn2.commit()
+        txn1.commit()
 
 
 def test_remove_with_2_interleaving_transactions():
@@ -98,11 +95,11 @@ def test_remove_with_2_interleaving_transactions():
     txn2 = ukv.Transaction(db)
     for index in range(keys_count):
         del txn1[index]
-    for index in range(keys_count):
-        del txn2[index]
-
-    txn2.commit()
     with pytest.raises(Exception):
+        for index in range(keys_count):
+            del txn2[index]
+
+        txn2.commit()
         txn1.commit()
 
 
