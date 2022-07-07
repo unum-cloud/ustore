@@ -28,7 +28,7 @@ using rocks_status_t = rocksdb::Status;
 ukv_collection_t ukv_default_collection_k = NULL;
 
 struct rocks_db_wrapper_t {
-    std::vector<rocks_col_t*> handles;
+    std::vector<rocks_col_t*> cf_handles;
     rocks_db_t* db = nullptr;
 };
 
@@ -56,7 +56,7 @@ void ukv_open([[maybe_unused]] char const* c_config, ukv_t* c_db, ukv_error_t* c
                               rocksdb::TransactionDBOptions(),
                               "./tmp",
                               cf_descs,
-                              &db_wrapper->handles,
+                              &db_wrapper->cf_handles,
                               &db_wrapper->db);
     if (!status.ok())
         *c_error = "Open Error";
@@ -161,7 +161,7 @@ void read_head( //
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 
-    std::vector<rocks_col_t*> handles(n);
+    std::vector<rocks_col_t*> cf_handles(n);
     std::vector<rocksdb::Slice> keys(n);
     std::vector<std::string> values(n);
 
@@ -169,12 +169,12 @@ void read_head( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         task_arr[i] = tasks[i];
-        handles[i] =
+        cf_handles[i] =
             task_arr[i].collection ? reinterpret_cast<rocks_col_t*>(task_arr[i].collection) : db->DefaultColumnFamily();
         keys[i] = to_slice(&task_arr[i].key);
     }
 
-    std::vector<rocks_status_t> statuses = db->MultiGet(rocksdb::ReadOptions(), handles, keys, &values);
+    std::vector<rocks_status_t> statuses = db->MultiGet(rocksdb::ReadOptions(), cf_handles, keys, &values);
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     for (std::size_t i = 0; i != values.size(); ++i)
         total_bytes += values[i].size();
@@ -205,7 +205,7 @@ void read_txn( //
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 
-    std::vector<rocks_col_t*> handles(n);
+    std::vector<rocks_col_t*> cf_handles(n);
     std::vector<rocksdb::Slice> keys(n);
     std::vector<std::string> values(n);
 
@@ -213,12 +213,12 @@ void read_txn( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         task_arr[i] = tasks[i];
-        handles[i] =
+        cf_handles[i] =
             task_arr[i].collection ? reinterpret_cast<rocks_col_t*>(task_arr[i].collection) : db->DefaultColumnFamily();
         keys[i] = to_slice(&task_arr[i].key);
     }
 
-    std::vector<rocks_status_t> statuses = txn->MultiGet(rocksdb::ReadOptions(), handles, keys, &values);
+    std::vector<rocks_status_t> statuses = txn->MultiGet(rocksdb::ReadOptions(), cf_handles, keys, &values);
 
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     for (std::size_t i = 0; i != values.size(); ++i)
@@ -288,9 +288,9 @@ void ukv_collection_upsert( //
     if (c_col_name) {
         status = db_wrapper->db->CreateColumnFamily(rocksdb::ColumnFamilyOptions(), c_col_name, &coll);
         if (status.ok())
-            db_wrapper->handles.push_back(coll);
+            db_wrapper->cf_handles.push_back(coll);
         else
-            for (auto handle : db_wrapper->handles) {
+            for (auto handle : db_wrapper->cf_handles) {
                 if (handle && handle->GetName() == c_col_name) {
                     *c_col = handle;
                     return;
@@ -309,7 +309,7 @@ void ukv_collection_remove( //
     ukv_error_t* c_error) {
 
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
-    for (auto handle : db_wrapper->handles) {
+    for (auto handle : db_wrapper->cf_handles) {
         if (c_col_name == handle->GetName()) {
             rocks_status_t status = db_wrapper->db->DestroyColumnFamilyHandle(handle);
             if (!status.ok())
