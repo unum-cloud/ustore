@@ -183,7 +183,6 @@ void ukv::wrap_network(py::module& m) {
                                    net.tape().internal_capacity(),
                                    error.internal_cptr());
         error.throw_unhandled();
-        std::cout << "Received a tape of length" << *net.tape().internal_capacity() << std::endl;
 
         taped_values_view_t vals = net.tape().untape(1);
         if (!vals.size())
@@ -191,7 +190,9 @@ void ukv::wrap_network(py::module& m) {
         value_view_t val = *vals.begin();
         auto neighbors_range = neighbors(val, ukv_vertex_source_k);
         auto matching_range = std::equal_range(neighbors_range.begin(), neighbors_range.end(), v2);
-        return static_cast<std::size_t>(matching_range.second - matching_range.first);
+        auto matching_len = static_cast<std::size_t>(matching_range.second - matching_range.first);
+        std::cout << val.size() << " neighbors " << neighbors_range.size() << " matching " << matching_len << std::endl;
+        return matching_len;
     });
 
     net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {

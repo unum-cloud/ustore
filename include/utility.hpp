@@ -148,6 +148,9 @@ class strided_ptr_gt {
 
     inline strided_ptr_gt operator++(int) const noexcept { return {raw_ + stride_, stride_}; }
     inline strided_ptr_gt operator--(int) const noexcept { return {raw_ - stride_, stride_}; }
+    inline strided_ptr_gt operator+(std::size_t n) const noexcept { return {raw_ + stride_ * n, stride_}; }
+    inline strided_ptr_gt operator-(std::size_t n) const noexcept { return {raw_ - stride_ * n, stride_}; }
+
     inline operator bool() const noexcept { return raw_ != nullptr; }
     inline bool repeats() const noexcept { return !stride_; }
     inline object_at& operator*() const noexcept { return *raw_; }
@@ -183,6 +186,8 @@ class strided_range_gt {
 
     inline strided_ptr_gt<object_at> begin() const noexcept { return {begin_, stride_}; }
     inline strided_ptr_gt<object_at> end() const noexcept { return begin() + count_; }
+    inline object_at& operator[](std::size_t i) const noexcept { return *(begin() + i); }
+
     inline std::size_t size() const noexcept { return count_; }
     inline operator bool() const noexcept { return count_; }
     inline ukv_size_t stride() const noexcept { return stride_; }
@@ -203,10 +208,14 @@ struct range_gt {
     pointer_at begin_ = nullptr;
     pointer_at end_ = nullptr;
 
-    pointer_at begin() const noexcept { return begin_; }
-    pointer_at end() const noexcept { return end_; }
-    std::size_t size() const noexcept { return end_ - begin_; }
-    auto strided() const noexcept {
+    inline pointer_at begin() const noexcept { return begin_; }
+    inline pointer_at end() const noexcept { return end_; }
+    inline decltype(auto) operator[](std::size_t i) const noexcept { return begin_[i]; }
+
+    inline std::size_t size() const noexcept { return end_ - begin_; }
+    inline bool empty() const noexcept { return end_ == begin_; }
+    inline operator bool() const noexcept { return end_ != begin_; }
+    inline auto strided() const noexcept {
         using element_t = std::remove_pointer_t<pointer_at>;
         using strided_t = strided_range_gt<element_t>;
         return strided_t {begin_, sizeof(element_t), static_cast<ukv_size_t>(size())};
