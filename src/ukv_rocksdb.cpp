@@ -10,9 +10,9 @@
  * Examples: Yugabyte, TiDB, and, optionally: Mongo, MySQL, Cassandra, MariaDB.
  */
 
+#include <rocksdb/db.h>
 #include <rocksdb/utilities/options_util.h>
 #include <rocksdb/utilities/transaction_db.h>
-#include <rocksdb/db.h>
 
 #include "ukv.h"
 #include "helpers.hpp"
@@ -28,8 +28,8 @@ using rocks_status_t = rocksdb::Status;
 ukv_collection_t ukv_default_collection_k = NULL;
 
 struct rocks_db_wrapper_t {
-    std::vector<rocks_col_t*> cf_handles;
-    rocks_db_t* db = nullptr;
+    std::vector<rocks_col_t*> columns;
+    std::unique_ptr<rocks_db_t> db;
 };
 
 inline rocksdb::Slice to_slice(ukv_key_t const* key) noexcept {
@@ -43,20 +43,20 @@ inline rocksdb::Slice to_slice(byte_t const* begin, ukv_val_len_t offset, ukv_va
 void ukv_open([[maybe_unused]] char const* c_config, ukv_t* c_db, ukv_error_t* c_error) {
     rocks_db_wrapper_t* db_wrapper = new rocks_db_wrapper_t;
 
-    std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
+    std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
     rocksdb::Options options;
     rocksdb::ConfigOptions config_options;
 
-    rocks_status_t status = rocksdb::LoadLatestOptions(config_options, "./tmp", &options, &cf_descs);
-    if (cf_descs.empty())
-        cf_descs.push_back({ROCKSDB_NAMESPACE::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
+    rocks_status_t status = rocksdb::LoadLatestOptions(config_options, "./tmp", &options, &column_descriptors);
+    if (column_descriptors.empty())
+        column_descriptors.push_back({ROCKSDB_NAMESPACE::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
 
     options.create_if_missing = true;
     status = rocks_db_t::Open(options,
                               rocksdb::TransactionDBOptions(),
                               "./tmp",
-                              cf_descs,
-                              &db_wrapper->cf_handles,
+                              column_descriptors,
+                              &db_wrapper->columns,
                               &db_wrapper->db);
     if (!status.ok())
         *c_error = "Open Error";
@@ -74,9 +74,9 @@ void write_head( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         task_arr[i] = tasks[i];
-        rocks_col_t* coll =
+        rocks_col_t* col =
             task_arr[i].collection ? reinterpret_cast<rocks_col_t*>(task_arr[i].collection) : db->DefaultColumnFamily();
-        rocks_status_t status = batch.Put(coll,
+        rocks_status_t status = batch.Put(col,
                                           to_slice(&task_arr[i].key),
                                           to_slice(task_arr[i].begin, task_arr[i].offset, task_arr[i].length_));
         if (!status.ok()) {
@@ -161,7 +161,7 @@ void read_head( //
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 
-    std::vector<rocks_col_t*> cf_handles(n);
+    std::vector<rocks_col_t*> columns(n);
     std::vector<rocksdb::Slice> keys(n);
     std::vector<std::string> values(n);
 
@@ -169,12 +169,12 @@ void read_head( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         task_arr[i] = tasks[i];
-        cf_handles[i] =
+        columns[i] =
             task_arr[i].collection ? reinterpret_cast<rocks_col_t*>(task_arr[i].collection) : db->DefaultColumnFamily();
         keys[i] = to_slice(&task_arr[i].key);
     }
 
-    std::vector<rocks_status_t> statuses = db->MultiGet(rocksdb::ReadOptions(), cf_handles, keys, &values);
+    std::vector<rocks_status_t> statuses = db->MultiGet(rocksdb::ReadOptions(), columns, keys, &values);
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     for (std::size_t i = 0; i != values.size(); ++i)
         total_bytes += values[i].size();
@@ -205,7 +205,7 @@ void read_txn( //
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 
-    std::vector<rocks_col_t*> cf_handles(n);
+    std::vector<rocks_col_t*> columns(n);
     std::vector<rocksdb::Slice> keys(n);
     std::vector<std::string> values(n);
 
@@ -213,12 +213,12 @@ void read_txn( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         task_arr[i] = tasks[i];
-        cf_handles[i] =
+        columns[i] =
             task_arr[i].collection ? reinterpret_cast<rocks_col_t*>(task_arr[i].collection) : db->DefaultColumnFamily();
         keys[i] = to_slice(&task_arr[i].key);
     }
 
-    std::vector<rocks_status_t> statuses = txn->MultiGet(rocksdb::ReadOptions(), cf_handles, keys, &values);
+    std::vector<rocks_status_t> statuses = txn->MultiGet(rocksdb::ReadOptions(), columns, keys, &values);
 
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     for (std::size_t i = 0; i != values.size(); ++i)
@@ -282,15 +282,15 @@ void ukv_collection_upsert( //
     [[maybe_unused]] ukv_error_t* c_error) {
 
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
-    rocks_col_t* coll = nullptr;
+    rocks_col_t* col = nullptr;
     rocks_status_t status;
 
     if (c_col_name) {
-        status = db_wrapper->db->CreateColumnFamily(rocksdb::ColumnFamilyOptions(), c_col_name, &coll);
+        status = db_wrapper->db->CreateColumnFamily(rocksdb::ColumnFamilyOptions(), c_col_name, &col);
         if (status.ok())
-            db_wrapper->cf_handles.push_back(coll);
+            db_wrapper->columns.push_back(col);
         else
-            for (auto handle : db_wrapper->cf_handles) {
+            for (auto handle : db_wrapper->columns) {
                 if (handle && handle->GetName() == c_col_name) {
                     *c_col = handle;
                     return;
@@ -298,9 +298,9 @@ void ukv_collection_upsert( //
             }
     }
     else
-        coll = db_wrapper->db->DefaultColumnFamily();
+        col = db_wrapper->db->DefaultColumnFamily();
 
-    *c_col = coll;
+    *c_col = col;
 }
 
 void ukv_collection_remove( //
@@ -309,7 +309,7 @@ void ukv_collection_remove( //
     ukv_error_t* c_error) {
 
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
-    for (auto handle : db_wrapper->cf_handles) {
+    for (auto handle : db_wrapper->columns) {
         if (c_col_name == handle->GetName()) {
             rocks_status_t status = db_wrapper->db->DestroyColumnFamilyHandle(handle);
             if (!status.ok())
