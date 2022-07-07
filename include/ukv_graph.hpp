@@ -169,6 +169,13 @@ struct neighborhood_t {
     }
 };
 
+/**
+ * @brief Wraps relational/linking operations with cleaner type system.
+ * Controls mainly just the inverted index collection and keeps a local
+ * memory buffer (tape) for read operations, so isn't thread-safe.
+ * You can have one such object in every working thread, even for the
+ * same graph collection. Supports updates/reads from within a transaction.
+ */
 class graph_collection_session_t {
     collection_t index_;
     ukv_txn_t txn_ = nullptr;
