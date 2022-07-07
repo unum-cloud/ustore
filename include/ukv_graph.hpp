@@ -50,18 +50,34 @@ struct neighborship_t {
     }
 };
 
+template <typename range_at, typename comparable_at>
+inline range_at equal_subrange(range_at range, comparable_at&& comparable) {
+    auto p = std::equal_range(range.begin(), range.end(), comparable);
+    return range_at {p.first, p.second};
+}
+
 struct edges_soa_view_t {
     strided_range_gt<ukv_key_t const> source_ids;
     strided_range_gt<ukv_key_t const> target_ids;
     strided_range_gt<ukv_key_t const> edge_ids;
 
-    edges_soa_view_t() = default;
-    edges_soa_view_t(std::vector<edge_t> const& edges) noexcept {
+    inline edges_soa_view_t() = default;
+    inline edges_soa_view_t(std::vector<edge_t> const& edges) noexcept {
         auto ptr = edges.data();
         auto strided = strided_range_gt<edge_t const>(ptr, ptr + edges.size());
         source_ids = strided.members(&edge_t::source_id);
         target_ids = strided.members(&edge_t::target_id);
         edge_ids = strided.members(&edge_t::edge_id);
+    }
+
+    inline std::size_t size() const noexcept { return edge_ids.size(); }
+
+    inline edge_t operator[](std::size_t i) const noexcept {
+        edge_t result;
+        result.source_id = source_ids[i];
+        result.target_id = target_ids[i];
+        result.edge_id = edge_ids[i];
+        return result;
     }
 };
 
@@ -110,6 +126,24 @@ struct neighborhood_t {
         sources = neighbors(bytes, ukv_vertex_target_k);
     }
 
+    inline std::size_t size() const noexcept { return targets.size() + sources.size(); }
+
+    inline edge_t operator[](std::size_t i) const noexcept {
+        edge_t result;
+        if (i > targets.size()) {
+            i -= targets.size();
+            result.source_id = center;
+            result.target_id = targets[i].neighbor_id;
+            result.edge_id = targets[i].edge_id;
+        }
+        else {
+            result.source_id = sources[i].neighbor_id;
+            result.target_id = center;
+            result.edge_id = sources[i].edge_id;
+        }
+        return result;
+    }
+
     inline edges_soa_view_t outgoing_edges() const& {
         edges_soa_view_t edges;
         edges.source_ids = {&center, 0, targets.size()};
@@ -126,17 +160,24 @@ struct neighborhood_t {
         return edges;
     }
 
-    inline std::size_t size() const noexcept { return targets.size() + sources.size(); }
+    inline range_gt<neighborship_t const*> outgoing_to(ukv_key_t target) const noexcept {
+        return equal_subrange(targets, target);
+    }
+
+    inline range_gt<neighborship_t const*> incoming_from(ukv_key_t source) const noexcept {
+        return equal_subrange(sources, source);
+    }
 };
 
-class graph_collection_t {
+class graph_collection_session_t {
     collection_t index_;
     ukv_txn_t txn_ = nullptr;
     managed_tape_t read_tape_;
 
   public:
-    graph_collection_t(collection_t&& col) : index_(std::move(col)), read_tape_(col.db()) {}
-    graph_collection_t(collection_t&& col, txn_t& txn) : index_(std::move(col)), txn_(txn), read_tape_(col.db()) {}
+    graph_collection_session_t(collection_t&& col) : index_(std::move(col)), read_tape_(col.db()) {}
+    graph_collection_session_t(collection_t&& col, txn_t& txn)
+        : index_(std::move(col)), txn_(txn), read_tape_(col.db()) {}
 
     error_t upsert(edges_soa_view_t const& edges) noexcept {
         error_t error;
