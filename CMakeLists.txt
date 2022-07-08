@@ -106,6 +106,9 @@ include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
 # RocksDB
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 
+# LevelDB
+include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+
 # FastPFor Integer Compression for 32-bit integers
 FetchContent_Declare(
   fpfor
@@ -125,6 +128,7 @@ FetchContent_MakeAvailable(googletest)
 
 # Define the libraries we will need to build
 include_directories(include/ ${rocksdb_SOURCE_DIR}/include)
+include_directories(include/ ${leveldb_SOURCE_DIR}/include)
 
 add_library(ukv_stl
   src/ukv_stl.cpp
@@ -138,13 +142,21 @@ target_link_libraries(ukv_stl
 )
 
 add_library(ukv_rocksdb
-  src/ukv_stl.cpp
+  src/ukv_rocksdb.cpp
+  src/ukv_graph_pfor.cpp
+)
 
-  # src/ukv_graph_pfor.cpp
+add_library(ukv_leveldb
+  src/ukv_leveldb.cpp
+  src/ukv_graph_pfor.cpp
 )
 
 target_link_libraries(ukv_rocksdb
   rocksdb
+)
+
+target_link_libraries(ukv_leveldb
+  leveldb
 )
 
 add_library(ukv_beast_client src/ukv_beast_client.cpp)
