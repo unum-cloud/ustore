@@ -21,29 +21,52 @@ using level_db_t = leveldb::DB;
 using level_options_t = leveldb::Options;
 using level_status_t = leveldb::Status;
 
-inline leveldb::Slice to_slice(ukv_key_t const* key) noexcept {
-    return {reinterpret_cast<char const*>(key), sizeof(ukv_key_t)};
+struct key_comparator_t final : public leveldb::Comparator {
+
+    int Compare(leveldb::Slice const& a, leveldb::Slice const& b) const override {
+        auto ai = *reinterpret_cast<ukv_key_t const*>(a.data());
+        auto bi = *reinterpret_cast<ukv_key_t const*>(b.data());
+        if (ai == bi)
+            return 0;
+        return ai < bi ? -1 : 1;
+    }
+
+    char const* Name() const override { return "Integral"; }
+
+    void FindShortestSeparator(std::string* start, leveldb::Slice const& limit) const override {}
+
+    void FindShortSuccessor(std::string* key) const override {
+        auto& int_key = *reinterpret_cast<ukv_key_t const*>(key->data());
+        ++int_key;
+    }
+};
+
+static key_comparator_t key_comparator_k = {};
+
+inline leveldb::Slice to_slice(ukv_key_t const& key) noexcept {
+    return {reinterpret_cast<char const*>(&key), sizeof(ukv_key_t)};
 }
 
-inline leveldb::Slice to_slice(byte_t const* begin, ukv_val_len_t offset, ukv_val_len_t length) {
-    return {reinterpret_cast<const char*>(begin + offset), length};
+inline leveldb::Slice to_slice(value_view_t value) noexcept {
+    return {reinterpret_cast<const char*>(value.begin()), value.size()};
 }
 
-void ukv_open([[maybe_unused]] char const* c_config, ukv_t* c_db, ukv_error_t* c_error) {
-    level_db_t* db;
+void ukv_open(char const* c_config, ukv_t* c_db, ukv_error_t* c_error) {
+    level_db_t* db_ptr = nullptr;
     level_options_t options;
     options.create_if_missing = true;
-    level_status_t status = level_db_t::Open(options, "./tmp/leveldb/", &db);
+    options.comparator = &key_comparator_k;
+    level_status_t status = level_db_t::Open(options, "./tmp/leveldb/", &db_ptr);
     if (!status.ok()) {
-        *c_error = "Open Error";
+        *c_error = "Couldn't open LevelDB";
         return;
     }
-    *c_db = db;
+    *c_db = db_ptr;
 }
 
 void ukv_write( //
     ukv_t const c_db,
-    [[maybe_unused]] ukv_txn_t const c_txn,
+    ukv_txn_t const c_txn,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
@@ -61,33 +84,49 @@ void ukv_write( //
     ukv_val_len_t const* c_lens,
     ukv_size_t const c_lens_stride,
 
-    [[maybe_unused]] ukv_options_t const c_options,
+    ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
-    level_db_t* db = reinterpret_cast<level_db_t*>(c_db);
-    leveldb::WriteBatch batch;
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
 
-    strided_ptr_gt<ukv_collection_t> colls {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
+    strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_ptr_gt<ukv_tape_ptr_t const> vals {c_vals, c_vals_stride};
     strided_ptr_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_ptr_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    write_tasks_soa_t tasks {colls, keys, vals, offs, lens};
-    std::vector<write_task_t> task_arr(c_keys_count);
+    write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
 
+    leveldb::WriteBatch batch;
     for (ukv_size_t i = 0; i != c_keys_count; ++i) {
-        task_arr[i] = tasks[i];
-        batch.Put(to_slice(&task_arr[i].key), to_slice(task_arr[i].begin, task_arr[i].offset, task_arr[i].length_));
+        auto task = tasks[i];
+        auto val = to_slice(task.view());
+        auto key = to_slice(task.key);
+        if (val.size())
+            batch.Put(key, val));
+        else
+            batch.Delete(key);
     }
 
-    level_status_t status = db->Write(leveldb::WriteOptions(), &batch);
-    if (!status.ok())
-        *c_error = "Write Error";
+    leveldb::WriteOptions options;
+    if (c_options & ukv_option_write_flush_k)
+        options.sync = true;
+
+    level_status_t status = db.Write(options, &batch);
+    if (!status.ok()) {
+        if (status.IsCorruption())
+            *c_error = "Write Failure: DB Corrpution";
+        else if (status.IsIOError())
+            *c_error = "Write Failure: IO  Error";
+        else if (status.IsInvalidArgument())
+            *c_error = "Write Failure: Invalid Argument";
+        else
+            *c_error = "Write Failure";
+    }
 }
 
 void ukv_read( //
     ukv_t const c_db,
-    [[maybe_unused]] ukv_txn_t const c_txn,
+    ukv_txn_t const c_txn,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
@@ -96,79 +135,63 @@ void ukv_read( //
     ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
-    [[maybe_unused]] ukv_options_t const c_options,
+    ukv_options_t const c_options,
 
     ukv_tape_ptr_t* c_tape,
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 
-    level_db_t* db = reinterpret_cast<level_db_t*>(c_db);
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {cols, keys};
 
-    std::vector<read_task_t> task_arr(c_keys_count);
-    std::vector<std::string> values(c_keys_count);
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    leveldb::ReadOptions options;
 
-    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
-        task_arr[i] = tasks[i];
-        db->Get(leveldb::ReadOptions(), to_slice(&task_arr[i].key), &values[i]);
-        total_bytes += values[i].size();
-    }
-
-    byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
-    if (*c_error)
-        return;
-
-    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * c_keys_count;
-
-    for (std::size_t i = 0; i != values.size(); ++i) {
-        if (!values[i].size())
-            lens[i] = 0;
-        auto len = values[i].size();
-        std::memcpy(tape + exported_bytes, values[i].data(), len);
-        lens[i] = static_cast<ukv_val_len_t>(len);
-        exported_bytes += len;
-    };
+    // TODO:
+    // Read entries one-by-one, exporting onto a tape.
+    // On every read, a `malloc` and `memcpy` may accure, if
+    // the tape is not long enough, but at least is not determined
+    // to happen.
+    *c_error = "Not Implemented!";
 }
 
 void ukv_collection_upsert( //
-    [[maybe_unused]] ukv_t const c_db,
-    [[maybe_unused]] ukv_str_view_t c_col_name,
-    [[maybe_unused]] ukv_collection_t* c_col,
+    ukv_t const,
+    ukv_str_view_t,
+    ukv_collection_t*,
     ukv_error_t* c_error) {
-    *c_error = "Collections Not Allowed";
+    *c_error = "Collections not supported by LevelDB!";
 }
 
 void ukv_collection_remove( //
-    [[maybe_unused]] ukv_t const c_db,
-    [[maybe_unused]] ukv_str_view_t c_col_name,
-    [[maybe_unused]] ukv_error_t* c_error) {
+    ukv_t const,
+    ukv_str_view_t,
+    ukv_error_t* c_error) {
+    *c_error = "Collections not supported by LevelDB!";
 }
 
 void ukv_control( //
-    [[maybe_unused]] ukv_t const c_db,
-    [[maybe_unused]] ukv_str_view_t c_request,
-    ukv_str_view_t* c_response,
+    ukv_t const,
+    ukv_str_view_t,
+    ukv_str_view_t*,
     ukv_error_t* c_error) {
-    *c_response = NULL;
-    *c_error = "Controls aren't supported in this implementation!";
+    *c_error = "Controls not supported by LevelDB!";
 }
 
 void ukv_txn_begin( //
-    [[maybe_unused]] ukv_t const c_db,
-    [[maybe_unused]] ukv_size_t const sequence_number,
-    [[maybe_unused]] ukv_txn_t* c_txn,
+    ukv_t const,
+    ukv_size_t const,
+    ukv_txn_t*,
     ukv_error_t* c_error) {
-    *c_error = "Transactions Not Allowed";
+    *c_error = "Transactions not supported by LevelDB!";
 }
 
 void ukv_txn_commit( //
-    [[maybe_unused]] ukv_txn_t const c_txn,
-    [[maybe_unused]] ukv_options_t const c_options,
-    [[maybe_unused]] ukv_error_t* c_error) {
+    ukv_txn_t const,
+    ukv_options_t const,
+    ukv_error_t* c_error) {
+    *c_error = "Transactions not supported by LevelDB!";
 }
 
 void ukv_tape_free(ukv_t const, ukv_tape_ptr_t c_ptr, ukv_size_t c_len) {
@@ -177,10 +200,10 @@ void ukv_tape_free(ukv_t const, ukv_tape_ptr_t c_ptr, ukv_size_t c_len) {
     allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
 }
 
-void ukv_txn_free([[maybe_unused]] ukv_t const, [[maybe_unused]] ukv_txn_t c_txn) {
+void ukv_txn_free(ukv_t const, ukv_txn_t) {
 }
 
-void ukv_collection_free([[maybe_unused]] ukv_t const db, [[maybe_unused]] ukv_collection_t const collection) {
+void ukv_collection_free(ukv_t const, ukv_collection_t const) {
 }
 
 void ukv_free(ukv_t c_db) {
@@ -188,5 +211,5 @@ void ukv_free(ukv_t c_db) {
     delete db;
 }
 
-void ukv_error_free([[maybe_unused]] ukv_error_t const error) {
+void ukv_error_free(ukv_error_t const) {
 }
