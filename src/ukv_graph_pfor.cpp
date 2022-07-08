@@ -31,6 +31,10 @@ std::size_t offset_in_sorted(std::vector<located_key_t> const& keys, located_key
     return std::lower_bound(keys.begin(), keys.end(), wanted) - keys.begin();
 }
 
+/**
+ * @return true  If such an entry didn't exist and was added.
+ * @return false In every other case.
+ */
 bool upsert(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, ukv_key_t edge_id) {
 
     auto ship = neighborship_t {neighbor_id, edge_id};
@@ -58,7 +62,42 @@ bool upsert(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, ukv_k
     return true;
 }
 
-void erase(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, std::optional<ukv_key_t> edge_id = {}) {
+/**
+ * @return true  If such a atching entry was found and deleted.
+ * @return false In every other case.
+ */
+bool erase(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, std::optional<ukv_key_t> edge_id = {}) {
+
+    if (!value.size())
+        return false;
+
+    std::size_t off = 0;
+    std::size_t len = 0;
+
+    auto neighbors_range = neighbors(value, role);
+    if (edge_id) {
+        auto ship = neighborship_t {neighbor_id, *edge_id};
+        auto it = std::lower_bound(neighbors_range.begin(), neighbors_range.end(), ship);
+        if (it != neighbors_range.end())
+            if (*it != ship)
+                return false;
+
+        off = reinterpret_cast<byte_t const*>(it) - value.begin();
+        len = sizeof(neighborship_t);
+    }
+    else {
+        auto pair = std::equal_range(neighbors_range.begin(), neighbors_range.end(), neighbor_id);
+        if (pair.first == pair.second)
+            return false;
+
+        off = reinterpret_cast<byte_t const*>(pair.first) - value.begin();
+        len = sizeof(neighborship_t) * (pair.second - pair.first);
+    }
+
+    value.erase(off, len);
+    auto degrees = reinterpret_cast<ukv_vertex_degree_t*>(value.begin());
+    degrees[role == ukv_vertex_target_k] -= 1;
+    return true;
 }
 
 void ukv_graph_gather_neighbors( //
@@ -91,7 +130,7 @@ void ukv_graph_gather_neighbors( //
                     c_error);
 }
 
-void ukv_graph_upsert_edges( //
+void _ukv_graph_update_edges( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
 
@@ -109,6 +148,7 @@ void ukv_graph_upsert_edges( //
     ukv_size_t const c_targets_stride,
 
     ukv_options_t const c_options,
+    bool const erase,
 
     ukv_tape_ptr_t* c_tape,
     ukv_size_t* c_capacity,
@@ -156,13 +196,23 @@ void ukv_graph_upsert_edges( //
         auto collection = collections[i];
         auto source_id = sources_ids[i];
         auto target_id = targets_ids[i];
-        auto edge_id = edges_ids[i];
 
         auto& source_value = updated_vals[offset_in_sorted(updated_ids, {collection, source_id})];
         auto& target_value = updated_vals[offset_in_sorted(updated_ids, {collection, target_id})];
 
-        upsert(source_value, ukv_vertex_source_k, target_id, edge_id);
-        upsert(target_value, ukv_vertex_target_k, source_id, edge_id);
+        if (erase) {
+            std::optional<ukv_key_t> edge_id;
+            if (edges_ids)
+                edge_id = edges_ids[i];
+
+            erase(source_value, ukv_vertex_source_k, target_id, edge_id);
+            erase(target_value, ukv_vertex_target_k, source_id, edge_id);
+        }
+        else {
+            auto edge_id = edges_ids[i];
+            upsert(source_value, ukv_vertex_source_k, target_id, edge_id);
+            upsert(target_value, ukv_vertex_target_k, source_id, edge_id);
+        }
     }
 
     // Dump the data back to disk!
@@ -182,6 +232,47 @@ void ukv_graph_upsert_edges( //
               sizeof(value_t),
               c_options,
               c_error);
+}
+
+void ukv_graph_upsert_edges( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
+
+    ukv_key_t const* c_edges_ids,
+    ukv_size_t const c_edges_count,
+    ukv_size_t const c_edges_stride,
+
+    ukv_key_t const* c_sources_ids,
+    ukv_size_t const c_sources_stride,
+
+    ukv_key_t const* c_targets_ids,
+    ukv_size_t const c_targets_stride,
+
+    ukv_options_t const c_options,
+
+    ukv_tape_ptr_t* c_tape,
+    ukv_size_t* c_capacity,
+    ukv_error_t* c_error) {
+
+    return _ukv_graph_update_edges(c_db,
+                                   c_txn,
+                                   c_collections,
+                                   c_collections_stride,
+                                   c_edges_ids,
+                                   c_edges_count,
+                                   c_edges_stride,
+                                   c_sources_ids,
+                                   c_sources_stride,
+                                   c_targets_ids,
+                                   c_targets_stride,
+                                   c_options,
+                                   false,
+                                   c_tape,
+                                   c_capacity,
+                                   c_error);
 }
 
 void ukv_graph_remove_edges( //
@@ -206,6 +297,23 @@ void ukv_graph_remove_edges( //
     ukv_tape_ptr_t* c_tape,
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
+
+    return _ukv_graph_update_edges(c_db,
+                                   c_txn,
+                                   c_collections,
+                                   c_collections_stride,
+                                   c_edges_ids,
+                                   c_edges_count,
+                                   c_edges_stride,
+                                   c_sources_ids,
+                                   c_sources_stride,
+                                   c_targets_ids,
+                                   c_targets_stride,
+                                   c_options,
+                                   true,
+                                   c_tape,
+                                   c_capacity,
+                                   c_error);
 }
 
 void ukv_graph_remove_vertices( //
