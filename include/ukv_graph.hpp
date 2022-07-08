@@ -206,6 +206,26 @@ class graph_collection_session_t {
         return error;
     }
 
+    error_t remove(edges_soa_view_t const& edges) noexcept {
+        error_t error;
+        ukv_graph_remove_edges(index_.db(),
+                               txn_,
+                               index_.internal_cptr(),
+                               0,
+                               edges.edge_ids.begin().get(),
+                               edges.edge_ids.size(),
+                               edges.edge_ids.stride(),
+                               edges.source_ids.begin().get(),
+                               edges.source_ids.stride(),
+                               edges.target_ids.begin().get(),
+                               edges.target_ids.stride(),
+                               ukv_options_default_k,
+                               read_tape_.internal_memory(),
+                               read_tape_.internal_capacity(),
+                               error.internal_cptr());
+        return error;
+    }
+
     expected_gt<neighborhood_t> neighbors(ukv_key_t vertex) noexcept {
         error_t error;
         ukv_graph_gather_neighbors(index_.db(),
