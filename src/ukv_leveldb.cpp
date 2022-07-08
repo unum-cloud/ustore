@@ -102,19 +102,18 @@ void ukv_read( //
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 
-    level_status_t status;
     level_db_t* db = reinterpret_cast<level_db_t*>(c_db);
-
     strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {cols, keys};
+
     std::vector<read_task_t> task_arr(c_keys_count);
     std::vector<std::string> values(c_keys_count);
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
 
     for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         task_arr[i] = tasks[i];
-        status = db->Get(leveldb::ReadOptions(), to_slice(&task_arr[i].key), &values[i]);
+        db->Get(leveldb::ReadOptions(), to_slice(&task_arr[i].key), &values[i]);
         total_bytes += values[i].size();
     }
 
