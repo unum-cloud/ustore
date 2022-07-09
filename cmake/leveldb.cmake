@@ -15,7 +15,6 @@ if(NOT leveldb_POPULATED)
     set(LEVELDB_BUILD_TESTS OFF CACHE BOOL "Build LevelDB's unit tests")
     set(LEVELDB_BUILD_BENCHMARKS OFF CACHE BOOL "Build LevelDB's benchmarks")
     set(HAVE_SNAPPY OFF CACHE BOOL "Build with snappy compression library")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
 
     FetchContent_Populate(leveldb)
     add_subdirectory(${leveldb_SOURCE_DIR} ${leveldb_BINARY_DIR} EXCLUDE_FROM_ALL)
