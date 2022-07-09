@@ -85,7 +85,7 @@ class error_t {
     }
 
     void throw_unhandled() {
-        if (*this) [[unlikely]]
+        if (__builtin_expect(*this, 0)) // C++20: [[unlikely]]
             throw release_exception();
     }
 
@@ -111,7 +111,7 @@ class expected_gt {
     }
 
     void throw_unhandled() {
-        if (error_) [[unlikely]]
+        if (__builtin_expect(error_, 0)) // C++20: [[unlikely]]
             throw error_.release_exception();
     }
 };
