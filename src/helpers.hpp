@@ -180,6 +180,7 @@ struct write_task_t {
     ukv_val_len_t length;
 
     inline located_key_t location() const noexcept { return located_key_t {collection, key}; }
+    inline bool is_deleted() const noexcept { return begin == nullptr; }
     value_view_t view() const noexcept { return {begin + offset, begin + offset + length}; }
     buffer_t buffer() const { return {begin + offset, begin + offset + length}; }
 };
