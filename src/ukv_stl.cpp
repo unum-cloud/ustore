@@ -201,7 +201,7 @@ void read_from_disk(stl_collection_t& col, std::string const& path, ukv_error_t*
             break;
         }
 
-        col.pairs.emplace(key, stl_sequenced_value_t {std::move(val), sequence_t {0}});
+        col.pairs.emplace(key, stl_sequenced_value_t {std::move(buf), sequence_t {0}, false});
     }
 
 cleanup:
@@ -505,7 +505,7 @@ void read_txn( //
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
             auto len = inner_iterator->second.size();
-            std::memcpy(tape + exported_bytes, inner_iterator->second.buffer(), len);
+            std::memcpy(tape + exported_bytes, inner_iterator->second.data(), len);
             lens[i] = static_cast<ukv_val_len_t>(len);
             exported_bytes += len;
         }
