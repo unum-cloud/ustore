@@ -167,6 +167,16 @@ struct neighborhood_t {
     inline range_gt<neighborship_t const*> incoming_from(ukv_key_t source) const noexcept {
         return equal_subrange(sources, source);
     }
+
+    inline neighborship_t const* outgoing_to(ukv_key_t target, ukv_key_t edge_id) const noexcept {
+        auto r = equal_subrange(targets, neighborship_t {target, edge_id});
+        return r.size() ? r.begin() : nullptr;
+    }
+
+    inline neighborship_t const* incoming_from(ukv_key_t source, ukv_key_t edge_id) const noexcept {
+        auto r = equal_subrange(sources, neighborship_t {source, edge_id});
+        return r.size() ? r.begin() : nullptr;
+    }
 };
 
 /**
@@ -185,6 +195,8 @@ class graph_collection_session_t {
     graph_collection_session_t(collection_t&& col) : index_(std::move(col)), read_tape_(col.db()) {}
     graph_collection_session_t(collection_t&& col, txn_t& txn)
         : index_(std::move(col)), txn_(txn), read_tape_(col.db()) {}
+
+    inline managed_tape_t& tape() noexcept { return read_tape_; }
 
     error_t upsert(edges_soa_view_t const& edges) noexcept {
         error_t error;
