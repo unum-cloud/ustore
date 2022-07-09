@@ -6,8 +6,9 @@
  * keys to string values
  */
 
-#include <leveldb/write_batch.h>
 #include <leveldb/db.h>
+#include <leveldb/comparator.h>
+#include <leveldb/write_batch.h>
 
 #include "ukv.h"
 #include "helpers.hpp"
@@ -36,7 +37,7 @@ struct key_comparator_t final : public leveldb::Comparator {
     void FindShortestSeparator(std::string* start, leveldb::Slice const& limit) const override {}
 
     void FindShortSuccessor(std::string* key) const override {
-        auto& int_key = *reinterpret_cast<ukv_key_t const*>(key->data());
+        auto& int_key = *reinterpret_cast<ukv_key_t*>(key->data());
         ++int_key;
     }
 };
@@ -102,7 +103,7 @@ void ukv_write( //
         auto val = to_slice(task.view());
         auto key = to_slice(task.key);
         if (val.size())
-            batch.Put(key, val));
+            batch.Put(key, val);
         else
             batch.Delete(key);
     }

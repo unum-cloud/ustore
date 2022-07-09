@@ -148,7 +148,7 @@ void _ukv_graph_update_edges( //
     ukv_size_t const c_targets_stride,
 
     ukv_options_t const c_options,
-    bool const erase,
+    bool const should_erase,
 
     ukv_tape_ptr_t* c_tape,
     ukv_size_t* c_capacity,
@@ -200,7 +200,7 @@ void _ukv_graph_update_edges( //
         auto& source_value = updated_vals[offset_in_sorted(updated_ids, {collection, source_id})];
         auto& target_value = updated_vals[offset_in_sorted(updated_ids, {collection, target_id})];
 
-        if (erase) {
+        if (should_erase) {
             std::optional<ukv_key_t> edge_id;
             if (edges_ids)
                 edge_id = edges_ids[i];

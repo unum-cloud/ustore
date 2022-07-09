@@ -35,6 +35,9 @@ struct neighborship_t {
     friend inline bool operator==(neighborship_t a, neighborship_t b) noexcept {
         return (a.neighbor_id == b.neighbor_id) & (a.edge_id < b.edge_id);
     }
+    friend inline bool operator!=(neighborship_t a, neighborship_t b) noexcept {
+        return (a.neighbor_id != b.neighbor_id) | (a.edge_id != b.edge_id);
+    }
 
     friend inline bool operator<(ukv_key_t a_vertex_id, neighborship_t b) noexcept {
         return a_vertex_id < b.neighbor_id;
