@@ -14,7 +14,9 @@
 #include <vector>
 #include <string>
 #include <string_view>
+#include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <shared_mutex>
 #include <atomic>     // Thread-safe sequence counters
 #include <filesystem> // Enumerating the directory
@@ -63,14 +65,18 @@ struct stl_collection_t {
      */
     std::atomic<std::size_t> unique_elements;
 
-    void reserve_more(std::size_t n) { pairs.reserve(pairs.size() + n); }
+    void reserve_more(std::size_t n) {
+        //  pairs.reserve(pairs.size() + n);
+    }
 };
 
 using stl_collection_ptr_t = std::unique_ptr<stl_collection_t>;
 
 struct stl_txn_t {
-    std::unordered_map<located_key_t, sequence_t, located_key_hash_t> requested_keys;
-    std::unordered_map<located_key_t, buffer_t, located_key_hash_t> new_values;
+    std::map<located_key_t, buffer_t> upserted;
+    std::unordered_map<located_key_t, sequence_t, located_key_hash_t> requested;
+    std::unordered_set<located_key_t, located_key_hash_t> removed;
+
     stl_db_t* db_ptr {nullptr};
     sequence_t sequence_number {0};
 };
@@ -168,7 +174,8 @@ void read_from_disk(stl_collection_t& col, std::string const& path, ukv_error_t*
     }
 
     // Load the entries
-    col.pairs.reserve(n);
+    col.pairs.clear();
+    col.reserve_more(n);
     col.unique_elements = n;
 
     for (ukv_size_t i = 0; i != n; ++i) {
@@ -280,9 +287,10 @@ void write_head( //
                 key_iterator->second.buffer.assign(value.begin(), value.end());
                 key_iterator->second.is_deleted = task.is_deleted();
             }
-            else {
+            else if (!task.is_deleted()) {
                 stl_sequenced_value_t sequenced_value {task.buffer(), ++db.youngest_sequence};
                 col.pairs.emplace(task.key, std::move(sequenced_value));
+                ++col.unique_elements;
             }
         }
         catch (...) {
@@ -384,7 +392,7 @@ void write_txn( //
         write_task_t task = tasks[i];
 
         try {
-            txn.new_values.insert_or_assign(task.location(), task.buffer());
+            txn.upserted.insert_or_assign(task.location(), task.buffer());
         }
         catch (...) {
             *c_error = "Failed to put into transaction!";
@@ -420,7 +428,7 @@ void measure_txn( //
         stl_collection_t& col = stl_collection(db, task.collection);
 
         // Some keys may already be overwritten inside of transaction
-        if (auto inner_iterator = txn.new_values.find(task.location()); inner_iterator != txn.new_values.end()) {
+        if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
             lens[i] = inner_iterator->second.size();
         }
         // Others should be pulled from the main store
@@ -434,14 +442,14 @@ void measure_txn( //
             lens[i] = key_iterator->second.buffer.size();
 
             if (should_track_requests)
-                txn.requested_keys.emplace(task.location(), key_iterator->second.sequence_number);
+                txn.requested.emplace(task.location(), key_iterator->second.sequence_number);
         }
         // But some will be missing
         else {
             lens[i] = ukv_val_len_missing_k;
 
             if (should_track_requests)
-                txn.requested_keys.emplace(task.location(), sequence_t {});
+                txn.requested.emplace(task.location(), sequence_t {});
         }
     }
 }
@@ -467,7 +475,7 @@ void read_txn( //
         stl_collection_t& col = stl_collection(db, task.collection);
 
         // Some keys may already be overwritten inside of transaction
-        if (auto inner_iterator = txn.new_values.find(task.location()); inner_iterator != txn.new_values.end()) {
+        if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
             total_bytes += inner_iterator->second.size();
         }
         // Others should be pulled from the main store
@@ -495,7 +503,7 @@ void read_txn( //
         stl_collection_t& col = stl_collection(db, task.collection);
 
         // Some keys may already be overwritten inside of transaction
-        if (auto inner_iterator = txn.new_values.find(task.location()); inner_iterator != txn.new_values.end()) {
+        if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
             auto len = inner_iterator->second.size();
             std::memcpy(tape + exported_bytes, inner_iterator->second.buffer(), len);
             lens[i] = static_cast<ukv_val_len_t>(len);
@@ -508,7 +516,7 @@ void read_txn( //
             lens[i] = static_cast<ukv_val_len_t>(len);
 
             if (should_track_requests)
-                txn.requested_keys.emplace(task.location(), key_iterator->second.sequence_number);
+                txn.requested.emplace(task.location(), key_iterator->second.sequence_number);
 
             exported_bytes += len;
         }
@@ -517,7 +525,7 @@ void read_txn( //
             lens[i] = ukv_val_len_missing_k;
 
             if (should_track_requests)
-                txn.requested_keys.emplace(task.location(), sequence_t {});
+                txn.requested.emplace(task.location(), sequence_t {});
         }
     }
 }
@@ -735,8 +743,8 @@ void ukv_txn_begin(
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(*c_txn);
     txn.db_ptr = &db;
     txn.sequence_number = c_sequence_number ? c_sequence_number : ++db.youngest_sequence;
-    txn.requested_keys.clear();
-    txn.new_values.clear();
+    txn.requested.clear();
+    txn.upserted.clear();
 }
 
 void ukv_txn_commit( //
@@ -757,7 +765,7 @@ void ukv_txn_commit( //
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
     // 1. Check for refreshes among fetched keys
-    for (auto const& [located_key, located_sequence] : txn.requested_keys) {
+    for (auto const& [located_key, located_sequence] : txn.requested) {
         stl_collection_t& col = stl_collection(db, located_key.collection);
         auto key_iterator = col.pairs.find(located_key.key);
         if (key_iterator != col.pairs.end()) {
@@ -769,7 +777,7 @@ void ukv_txn_commit( //
     }
 
     // 2. Check for collisions among incoming values
-    for (auto const& [located_key, value] : txn.new_values) {
+    for (auto const& [located_key, value] : txn.upserted) {
         stl_collection_t& col = stl_collection(db, located_key.collection);
         auto key_iterator = col.pairs.find(located_key.key);
         if (key_iterator != col.pairs.end()) {
@@ -788,9 +796,9 @@ void ukv_txn_commit( //
 
     // 3. Allocate space for more vertices across different cols
     try {
-        db.unnamed.reserve_more(txn.new_values.size());
+        db.unnamed.reserve_more(txn.upserted.size());
         for (auto& name_and_col : db.named)
-            name_and_col.second->reserve_more(txn.new_values.size());
+            name_and_col.second->reserve_more(txn.upserted.size());
     }
     catch (...) {
         *c_error = "Not enough memory!";
@@ -798,7 +806,7 @@ void ukv_txn_commit( //
     }
 
     // 4. Import the data, as no collisions were detected
-    for (auto& located_key_and_value : txn.new_values) {
+    for (auto& located_key_and_value : txn.upserted) {
         stl_collection_t& col = stl_collection(db, located_key_and_value.first.collection);
         auto key_iterator = col.pairs.find(located_key_and_value.first.key);
         // A key was deleted:
@@ -816,6 +824,7 @@ void ukv_txn_commit( //
         else {
             stl_sequenced_value_t sequenced_value {std::move(located_key_and_value.second), txn.sequence_number};
             col.pairs.emplace(located_key_and_value.first.key, std::move(sequenced_value));
+            ++col.unique_elements;
         }
     }
 

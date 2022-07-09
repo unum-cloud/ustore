@@ -166,11 +166,11 @@ void ukv_graph_remove_edges( //
     ukv_size_t const edges_count,
     ukv_size_t const edges_stride,
 
-    ukv_key_t const* member_ids,
-    ukv_size_t const member_stride,
+    ukv_key_t const* sources_ids,
+    ukv_size_t const sources_stride,
 
-    ukv_vertex_role_t const* roles,
-    ukv_size_t const roles_stride,
+    ukv_key_t const* targets_ids,
+    ukv_size_t const targets_stride,
 
     ukv_options_t const options,
 
