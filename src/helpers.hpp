@@ -152,7 +152,7 @@ inline byte_t* reserve_tape(ukv_tape_ptr_t* tape_ptr,
 
 struct read_task_t {
     ukv_collection_t collection;
-    ukv_key_t& key;
+    ukv_key_t const& key;
 
     inline located_key_t location() const noexcept { return located_key_t {collection, key}; }
 };
@@ -167,14 +167,14 @@ struct read_tasks_soa_t {
 
     inline read_task_t operator[](ukv_size_t i) const noexcept {
         ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
-        ukv_key_t& key = keys[i];
+        ukv_key_t const& key = keys[i];
         return {col, key};
     }
 };
 
 struct write_task_t {
     ukv_collection_t collection;
-    ukv_key_t& key;
+    ukv_key_t const& key;
     byte_t const* begin;
     ukv_val_len_t offset;
     ukv_val_len_t length;
@@ -198,7 +198,7 @@ struct write_tasks_soa_t {
 
     inline write_task_t operator[](ukv_size_t i) const noexcept {
         ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
-        ukv_key_t& key = keys[i];
+        ukv_key_t const& key = keys[i];
         byte_t const* begin;
         ukv_val_len_t off;
         ukv_val_len_t len;

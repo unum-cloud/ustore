@@ -122,6 +122,7 @@ struct neighborhood_t {
      * from the output of `ukv_graph_gather_neighbors`.
      */
     inline neighborhood_t(ukv_key_t center_vertex, value_view_t bytes) noexcept {
+        center = center_vertex;
         targets = neighbors(bytes, ukv_vertex_source_k);
         sources = neighbors(bytes, ukv_vertex_target_k);
     }
