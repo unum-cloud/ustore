@@ -15,6 +15,26 @@
 using namespace unum::ukv;
 using namespace unum;
 
+void round_trip(sample_proxy_t proxy, disjoint_values_view_t values) {
+
+    EXPECT_FALSE(proxy.set(values)) << "Failed to assign";
+
+    EXPECT_TRUE(proxy.get()) << "Failed to fetch inserted keys";
+
+    // Validate that values match
+    taped_values_view_t retrieved = *proxy.get();
+    EXPECT_EQ(retrieved.size(), proxy.keys.size());
+    tape_iterator_t it = retrieved.begin();
+    for (std::size_t i = 0; i != proxy.keys.size(); ++i, ++it) {
+        auto expected_len = static_cast<std::size_t>(values.lengths[i]);
+        auto expected_begin = reinterpret_cast<byte_t const*>(values.contents[i]) + values.offsets[i];
+
+        value_view_t val_view = *it;
+        EXPECT_EQ(val_view.size(), expected_len);
+        EXPECT_TRUE(std::equal(val_view.begin(), val_view.end(), expected_begin));
+    }
+}
+
 TEST(db, basic) {
 
     db_t db;
@@ -28,24 +48,20 @@ TEST(db, basic) {
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
-    session[keys] = disjoint_values_view_t {
-        .values_range = {&vals_begin, 0, 3},
-        .offsets_range = offs,
-        .lengths_range = {val_len, 1},
+    sample_proxy_t proxy = session[keys];
+    disjoint_values_view_t values {
+        .contents = {&vals_begin, 0, 3},
+        .offsets = offs,
+        .lengths = {val_len, 3},
     };
+    round_trip(proxy, values);
 
-    expected_gt<taped_values_view_t> maybe_retrieved = session[keys];
-    EXPECT_TRUE(maybe_retrieved);
+    // Overwrite those values with same size integers and try again
+    for (auto& val : vals)
+        val += 100;
+    round_trip(proxy, values);
 
-    taped_values_view_t retrieved = *maybe_retrieved;
-    EXPECT_EQ(retrieved.size(), keys.size());
-    tape_iterator_t it = retrieved.begin();
-    for (std::size_t i = 0; i != keys.size(); ++i, ++it) {
-        value_view_t val_view = *it;
-        EXPECT_EQ(val_view.size(), val_len);
-        auto casted = reinterpret_cast<std::uint64_t const*>(val_view.begin());
-        EXPECT_EQ(casted[0], vals[i]);
-    }
+    // TODO: Add tests for empty values
 }
 
 TEST(db, net) {
