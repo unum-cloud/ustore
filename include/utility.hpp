@@ -130,6 +130,12 @@ class strided_ptr_gt {
     ukv_size_t stride_ = 0;
 
   public:
+    using iterator_category = std::random_access_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = object_at;
+    using pointer = value_type*;
+    using reference = value_type&;
+
     inline strided_ptr_gt(object_at* raw, ukv_size_t stride = 0) noexcept : raw_(raw), stride_(stride) {}
 
     inline object_at& operator[](ukv_size_t idx) const noexcept {
@@ -149,8 +155,19 @@ class strided_ptr_gt {
 
     inline strided_ptr_gt operator++(int) const noexcept { return {raw_ + stride_, stride_}; }
     inline strided_ptr_gt operator--(int) const noexcept { return {raw_ - stride_, stride_}; }
-    inline strided_ptr_gt operator+(std::size_t n) const noexcept { return {raw_ + stride_ * n, stride_}; }
-    inline strided_ptr_gt operator-(std::size_t n) const noexcept { return {raw_ - stride_ * n, stride_}; }
+    inline strided_ptr_gt operator+(std::ptrdiff_t n) const noexcept { return {raw_ + stride_ * n, stride_}; }
+    inline strided_ptr_gt operator-(std::ptrdiff_t n) const noexcept { return {raw_ - stride_ * n, stride_}; }
+    inline strided_ptr_gt& operator+=(std::ptrdiff_t n) noexcept {
+        raw_ += stride_ * n;
+        return *this;
+    }
+    inline strided_ptr_gt& operator-=(std::ptrdiff_t n) noexcept {
+        raw_ -= stride_ * n;
+        return *this;
+    }
+    inline std::ptrdiff_t operator-(strided_ptr_gt other) const noexcept {
+        return stride_ ? (raw_ - other.raw_) * sizeof(object_at) / stride_ : 0;
+    }
 
     inline operator bool() const noexcept { return raw_ != nullptr; }
     inline bool repeats() const noexcept { return !stride_; }
@@ -171,14 +188,14 @@ class strided_range_gt {
 
   public:
     strided_range_gt() = default;
-    strided_range_gt(object_at& single, ukv_size_t repeats = 1) noexcept
-        : begin_(&single), stride_(0), count_(repeats) {}
+    strided_range_gt(object_at& single, std::size_t repeats = 1) noexcept
+        : begin_(&single), stride_(0), count_(static_cast<ukv_size_t>(repeats)) {}
     strided_range_gt(object_at* begin, object_at* end) noexcept
         : begin_(begin), stride_(sizeof(object_at)), count_(end - begin) {}
     strided_range_gt(std::vector<object_at>& vec) noexcept
         : begin_(vec.data()), stride_(sizeof(object_at)), count_(vec.size()) {}
-    strided_range_gt(object_at* begin, ukv_size_t stride, ukv_size_t count) noexcept
-        : begin_(begin), stride_(stride), count_(count) {}
+    strided_range_gt(object_at* begin, std::size_t stride, std::size_t count) noexcept
+        : begin_(begin), stride_(static_cast<ukv_size_t>(stride)), count_(static_cast<ukv_size_t>(count)) {}
 
     strided_range_gt(strided_range_gt&&) = default;
     strided_range_gt(strided_range_gt const&) = default;
@@ -186,8 +203,11 @@ class strided_range_gt {
     strided_range_gt& operator=(strided_range_gt const&) = default;
 
     inline strided_ptr_gt<object_at> begin() const noexcept { return {begin_, stride_}; }
-    inline strided_ptr_gt<object_at> end() const noexcept { return begin() + count_; }
-    inline object_at& operator[](std::size_t i) const noexcept { return *(begin() + i); }
+    inline strided_ptr_gt<object_at> end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
+    inline object_at& operator[](std::size_t i) const noexcept { return *(begin() + static_cast<std::ptrdiff_t>(i)); }
+    inline strided_range_gt subspan(std::size_t offset, std::size_t count) const noexcept {
+        return {begin_ + offset * stride_, stride_, count};
+    }
 
     inline bool empty() const noexcept { return !count_; }
     inline std::size_t size() const noexcept { return count_; }
@@ -292,6 +312,12 @@ class tape_iterator_t {
     ukv_val_ptr_t contents_ = nullptr;
 
   public:
+    using iterator_category = std::forward_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = value_view_t;
+    using pointer = void;
+    using reference = void;
+
     inline tape_iterator_t(ukv_val_ptr_t ptr, ukv_size_t elements) noexcept
         : lengths_(reinterpret_cast<ukv_val_len_t*>(ptr)), contents_(ptr + sizeof(ukv_val_len_t) * elements) {}
 
