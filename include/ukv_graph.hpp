@@ -63,7 +63,7 @@ struct edges_soa_view_t {
     inline edges_soa_view_t() = default;
     inline edges_soa_view_t(strided_range_gt<ukv_key_t const> sources,
                             strided_range_gt<ukv_key_t const> targets,
-                            strided_range_gt<ukv_key_t const> edges = {}) noexcept
+                            strided_range_gt<ukv_key_t const> edges = {ukv_default_edge_id_k}) noexcept
         : source_ids(sources), target_ids(targets), edge_ids(edges) {}
 
     inline edges_soa_view_t(edge_t const* ptr, edge_t const* end) noexcept {
