@@ -149,12 +149,12 @@ struct sample_proxy_t {
                   keys.begin().get(),
                   keys.count(),
                   keys.stride(),
-                  vals.values_range.begin().get(),
-                  vals.values_range.stride(),
-                  vals.offsets_range.begin().get(),
-                  vals.offsets_range.stride(),
-                  vals.lengths_range.begin().get(),
-                  vals.lengths_range.stride(),
+                  vals.contents.begin().get(),
+                  vals.contents.stride(),
+                  vals.offsets.begin().get(),
+                  vals.offsets.stride(),
+                  vals.lengths.begin().get(),
+                  vals.lengths.stride(),
                   flush ? ukv_option_write_flush_k : ukv_options_default_k,
                   arena,
                   error.internal_cptr());
@@ -371,6 +371,14 @@ class db_t : public std::enable_shared_from_this<db_t> {
         error_t error;
         ukv_collection_remove(db_, name.c_str(), error.internal_cptr());
         return error;
+    }
+
+    expected_gt<collection_t> clear(std::string const& name) {
+        error_t error;
+        ukv_collection_remove(db_, name.c_str(), error.internal_cptr());
+        if (error)
+            return {std::move(error)};
+        return collection(name);
     }
 };
 

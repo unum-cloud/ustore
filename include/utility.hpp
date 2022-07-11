@@ -130,6 +130,9 @@ class strided_ptr_gt {
     object_at* raw_ = nullptr;
     ukv_size_t stride_ = 0;
 
+    object_at* upshift(std::ptrdiff_t bytes) const noexcept { return (object_at*)((byte_t*)raw_ + bytes); }
+    object_at* downshift(std::ptrdiff_t bytes) const noexcept { return (object_at*)((byte_t*)raw_ - bytes); }
+
   public:
     using iterator_category = std::random_access_iterator_tag;
     using difference_type = std::ptrdiff_t;
@@ -138,32 +141,28 @@ class strided_ptr_gt {
     using reference = value_type&;
 
     inline strided_ptr_gt(object_at* raw, ukv_size_t stride = 0) noexcept : raw_(raw), stride_(stride) {}
-
-    inline object_at& operator[](ukv_size_t idx) const noexcept {
-        auto raw_bytes = (byte_t*)raw_ + stride_ * idx;
-        return *reinterpret_cast<object_at*>(raw_bytes);
-    }
+    inline object_at& operator[](ukv_size_t idx) const noexcept { return *upshift(stride_ * idx); }
 
     inline strided_ptr_gt& operator++() noexcept {
-        raw_ += stride_;
+        raw_ = upshift(stride_);
         return *this;
     }
 
     inline strided_ptr_gt& operator--() noexcept {
-        raw_ -= stride_;
+        raw_ = downshift(stride_);
         return *this;
     }
 
-    inline strided_ptr_gt operator++(int) const noexcept { return {raw_ + stride_, stride_}; }
-    inline strided_ptr_gt operator--(int) const noexcept { return {raw_ - stride_, stride_}; }
-    inline strided_ptr_gt operator+(std::ptrdiff_t n) const noexcept { return {raw_ + stride_ * n, stride_}; }
-    inline strided_ptr_gt operator-(std::ptrdiff_t n) const noexcept { return {raw_ - stride_ * n, stride_}; }
+    inline strided_ptr_gt operator++(int) const noexcept { return {upshift(stride_), stride_}; }
+    inline strided_ptr_gt operator--(int) const noexcept { return {downshift(stride_), stride_}; }
+    inline strided_ptr_gt operator+(std::ptrdiff_t n) const noexcept { return {upshift(n * stride_), stride_}; }
+    inline strided_ptr_gt operator-(std::ptrdiff_t n) const noexcept { return {downshift(n * stride_), stride_}; }
     inline strided_ptr_gt& operator+=(std::ptrdiff_t n) noexcept {
-        raw_ += stride_ * n;
+        raw_ = upshift(n * stride_);
         return *this;
     }
     inline strided_ptr_gt& operator-=(std::ptrdiff_t n) noexcept {
-        raw_ -= stride_ * n;
+        raw_ = downshift(n * stride_);
         return *this;
     }
 
@@ -320,7 +319,7 @@ class value_view_t {
         : ptr_(ukv_val_ptr_t(begin)), length_(static_cast<ukv_val_len_t>(end - begin)) {}
 
     inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
-    inline byte_t const* end() const noexcept { return begin(); }
+    inline byte_t const* end() const noexcept { return begin() + length_; }
     inline std::size_t size() const noexcept { return length_; }
     inline bool empty() const noexcept { return !length_; }
     inline operator bool() const noexcept { return ptr_ != nullptr; }
@@ -338,9 +337,9 @@ using keys_view_t = strided_range_gt<ukv_key_t const>;
 using located_keys_view_t = strided_range_gt<located_key_t const>;
 
 struct disjoint_values_view_t {
-    strided_range_gt<ukv_val_ptr_t> values_range;
-    strided_range_gt<ukv_val_len_t> offsets_range;
-    strided_range_gt<ukv_val_len_t> lengths_range;
+    strided_range_gt<ukv_val_ptr_t> contents;
+    strided_range_gt<ukv_val_len_t> offsets;
+    strided_range_gt<ukv_val_len_t> lengths;
 };
 
 /**
