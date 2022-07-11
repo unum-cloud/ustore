@@ -54,7 +54,10 @@ using namespace unum;
  */
 struct network_t : public std::enable_shared_from_this<network_t> {
 
-    std::shared_ptr<py_col_t> inverted_index;
+    std::shared_ptr<py_db_t> db_ptr;
+    std::shared_ptr<py_txn_t> txn_ptr;
+
+    graph_collection_session_t inverted_index;
     collection_t sources_attrs;
     collection_t targets_attrs;
     collection_t relations_attrs;
