@@ -124,19 +124,7 @@ void ukv::wrap_network(py::module& m) {
 
     // Random scalar operations
     net.def("has_node", [](network_t& net, ukv_key_t v) {
-        error_t error;
-        ukv_read(net.db(),
-                 net.txn(),
-                 net.index_col(),
-                 0,
-                 &v,
-                 1,
-                 0,
-                 ukv_option_read_lengths_k,
-                 net.arena().internal_cptr(),
-                 net.arena().internal_capacity(),
-                 error.internal_cptr());
-        error.throw_unhandled();
+        net.inverted_index.collection();
 
         taped_values_view_t vals = net.arena().untape(1);
         if (!vals.size())

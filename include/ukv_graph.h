@@ -72,6 +72,7 @@ enum ukv_vertex_role_t {
 };
 
 typedef uint32_t ukv_vertex_degree_t;
+extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -82,28 +83,24 @@ typedef uint32_t ukv_vertex_degree_t;
  * neighbor IDs for the provided vertices set. Can also be
  * used to retrieve vertex degrees.
  *
- * The results
- * are exported onto a tape in the following order:
- *      1. `ukv_vertex_degree_t` number of outgoing edges per vertex
- *      2. `ukv_vertex_degree_t` number of incoming edges per vertex
- *      3. outgoing edges per vertex:
- *          1. `ukv_key_t` all target ids
- *          2. `ukv_key_t` all edge ids
- *      4. incoming edges per vertex:
- *          1. `ukv_key_t` all source ids
- *          2. `ukv_key_t` all edge ids
- * A missing vertex will be represented with zero-length value,
- * that will not even have degrees listed. While a detached
- * vertex will have both degrees set to zero.
- *
- * This function mostly forward to `ukv_read`, but adjusts the
- * behaviour of certain flags.
- *
  * @param[in] roles     The roles of passed @p `vertices` in wanted edges.
  * @param[in] options   To request vertex degrees, add the
  *                      @c `ukv_option_read_lengths_k` flag.
+ *
+ * @section Output Form
+ * Similar to `ukv_read`, this function exports a tape-like data
+ * to minimize memory copies and colocate the relevant data in the
+ * global address space.
+ *
+ * Every edge will be represented by three @c `ukv_key_t`s:
+ * source, target and edge IDs respectively. It's not very
+ * space-efficient, but will simplify the iteration over the
+ * data in higher-level functions.
+ *
+ * Missing nodes will be exported with a "degree" set
+ * to `ukv_vertex_degree_missing_k`.
  */
-void ukv_graph_gather_neighbors( //
+void ukv_graph_find_edges( //
     ukv_t const db,
     ukv_txn_t const txn,
 
@@ -114,10 +111,13 @@ void ukv_graph_gather_neighbors( //
     ukv_size_t const vertices_count,
     ukv_size_t const vertices_stride,
 
+    ukv_vertex_role_t const* roles,
+    ukv_size_t const roles_stride,
+
     ukv_options_t const options,
 
     ukv_vertex_degree_t** degrees_per_vertex,
-    ukv_key_t** neighborships_per_vertex,
+    ukv_key_t** edges_per_vertex,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

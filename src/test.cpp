@@ -63,17 +63,15 @@ TEST(db, net) {
 
     EXPECT_FALSE(net.upsert({triangle}));
 
-    auto maybe_neighbors = net.neighborhood(1);
-    EXPECT_TRUE(maybe_neighbors);
+    EXPECT_TRUE(net.edges(1));
 
-    auto neighbors = *maybe_neighbors;
-    EXPECT_EQ(neighbors.size(), 2ul);
-    EXPECT_EQ(neighbors.sources.size(), 1ul);
-    EXPECT_EQ(neighbors.targets.size(), 1ul);
+    EXPECT_EQ(net.edges(1)->size(), 2ul);
+    EXPECT_EQ(net.edges(1, ukv_vertex_source_k)->size(), 1ul);
+    EXPECT_EQ(net.edges(1, ukv_vertex_target_k)->size(), 1ul);
 
-    EXPECT_EQ(neighbors.incoming_from(3).size(), 1ul);
-    EXPECT_EQ(neighbors.outgoing_to(2).size(), 1ul);
-    EXPECT_EQ(neighbors.outgoing_to(3).size(), 0ul);
+    EXPECT_EQ(net.edges(3, ukv_vertex_target_k)->size(), 1ul);
+    EXPECT_EQ(net.edges(2, ukv_vertex_source_k)->size(), 1ul);
+    EXPECT_EQ(net.edges(3, ukv_vertex_source_k)->size(), 0ul);
 }
 
 int main(int argc, char** argv) {
