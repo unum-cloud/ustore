@@ -245,7 +245,7 @@ class value_view_t {
   public:
     inline value_view_t() = default;
     inline value_view_t(ukv_val_ptr_t ptr, ukv_val_len_t length) noexcept {
-        if (length_ == ukv_val_len_missing_k) {
+        if (length == ukv_val_len_missing_k) {
             ptr_ = nullptr;
             length_ = 0;
         }
