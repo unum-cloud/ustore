@@ -294,7 +294,12 @@ void ukv::wrap_network(py::module& m) {
     net.def("clear_edges", [](network_t& net) {
 
     });
-    net.def("clear", [](network_t& net) {});
+    net.def("clear", [](network_t& net) {
+        net.inverted_index.collection().clear();
+        net.sources_attrs.clear();
+        targets_attrs.clear();
+        relations_attrs.clear();
+    });
 
     // Bulk Reads
     net.def("nodes", [](network_t& net) {});
