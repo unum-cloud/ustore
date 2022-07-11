@@ -99,6 +99,19 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
  *
  * Missing nodes will be exported with a "degree" set
  * to `ukv_vertex_degree_missing_k`.
+ *
+ * @section Output Order
+ * When only source or target roles are requested, a subsequence of edges
+ * related to the same input vertex ID will be sorted by the neighbor ID.
+ * When both are requested, first outgoinging edges will arrive, sorted by targets.
+ * Then the incoming edges, sorted by the source.
+ *
+ * @section Checking Entity Existance
+ * To check if a node or edge is present - a simpler query is possible.
+ * The `ukv_read(..., ukv_option_read_lengths_k...)` call will retrieve
+ * the length of the entry and if a node is present, it will never be equal
+ * to `ukv_vertex_degree_missing_k`. For edges, you will have to check the
+ * collection that stores the metadata of the edges.
  */
 void ukv_graph_find_edges( //
     ukv_t const db,
