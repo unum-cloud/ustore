@@ -55,7 +55,6 @@ using namespace unum;
 struct network_t : public std::enable_shared_from_this<network_t> {
 
     std::shared_ptr<py_db_t> db_ptr;
-    std::shared_ptr<py_txn_t> txn_ptr;
     graph_collection_session_t inverted_index;
     collection_t sources_attrs;
     collection_t targets_attrs;
@@ -68,15 +67,15 @@ struct network_t : public std::enable_shared_from_this<network_t> {
     Py_ssize_t last_buffer_shape[3];
     Py_ssize_t last_buffer_strides[3];
 
-    network_t() {}
+    network_t(graph_collection_session_t&& session) : inverted_index(std::move(session)) {}
     network_t(network_t&&) = delete;
     network_t(network_t const&) = delete;
     ~network_t() {}
 
-    inline ukv_t db() const noexcept { return db_ptr->native; }
-    inline ukv_txn_t txn() const noexcept { return txn_ptr ? txn_ptr->native : ukv_txn_t(nullptr); }
-    inline ukv_collection_t* index_col() const noexcept { return inverted_index->native.internal_cptr(); }
-    inline managed_arena_t& arena() noexcept { return txn_ptr ? txn_ptr->native.arena() : inverted_index.arena(); }
+    // inline ukv_t db() const noexcept { return db_ptr->native; }
+    // inline ukv_txn_t txn() const noexcept { return inverted_index.txn(); }
+    // inline ukv_collection_t* internal_cptr() const noexcept { return inverted_index.collection().internal_cptr(); }
+    // inline managed_arena_t& arena() noexcept { return inverted_index.arena(); }
 };
 
 void ukv::wrap_network(py::module& m) {
@@ -89,14 +88,24 @@ void ukv::wrap_network(py::module& m) {
                         bool directed = false,
                         bool multi = false,
                         bool loops = false) {
-                auto net_ptr = std::make_shared<network_t>();
-                net_ptr->inverted_index = index_collection;
+                //
+                if (!index_collection)
+                    return std::shared_ptr<network_t> {};
+
+                db_t& db = index_collection->db_ptr->native;
+                ukv_txn_t txn_raw = index_collection->txn_ptr ? index_collection->txn_ptr->native : ukv_txn_t(nullptr);
+                auto maybe_col = db.collection(index_collection->name);
+                maybe_col.throw_unhandled();
+
+                graph_collection_session_t g(*std::move(maybe_col), txn_raw);
+                auto net_ptr = std::make_shared<network_t>(std::move(g));
+
+                net_ptr->db_ptr = index_collection->db_ptr;
                 net_ptr->is_directed_ = directed;
                 net_ptr->is_multi_ = multi;
                 net_ptr->allow_self_loops_ = loops;
 
                 // Attach the additional collections
-                auto& db = index_collection->db_ptr->native;
                 if (sources_attrs) {
                     auto col = db.collection(*sources_attrs);
                     col.throw_unhandled();
@@ -124,57 +133,53 @@ void ukv::wrap_network(py::module& m) {
 
     // Random scalar operations
     net.def("has_node", [](network_t& net, ukv_key_t v) {
-        net.inverted_index.collection();
-
-        taped_values_view_t vals = net.arena().untape(1);
-        if (!vals.size())
-            return false;
-        value_view_t val = *vals.begin();
-
-        return val.size() != 0;
+        auto maybe_exists = net.inverted_index.contains(v);
+        maybe_exists.throw_unhandled();
+        return *maybe_exists;
     });
 
     net.def("degree", [](network_t& net, ukv_key_t v) {
-        auto maybe_neighbors = net.indeverted_index.neighbors(v);
-        maybe_neighbors.throw_unhandled();
-        return maybe_neighbors->size();
+        auto maybe_degree = net.inverted_index.degree(v);
+        maybe_degree.throw_unhandled();
+        return *maybe_degree;
     });
 
     net.def("number_of_edges", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
-        auto maybe_neighbors = net.indeverted_index.neighbors(v1);
-        maybe_neighbors.throw_unhandled();
-        return maybe_neighbors->outgoing_to(v2).size();
+        auto maybe_edges = net.inverted_index.edges(v1, v2);
+        maybe_edges.throw_unhandled();
+        return maybe_edges->size();
     });
 
     net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
-        auto maybe_neighbors = net.indeverted_index.neighbors(v1);
-        maybe_neighbors.throw_unhandled();
-        return maybe_neighbors->outgoing_to(v2).size() != 0;
+        auto maybe_edges = net.inverted_index.edges(v1, v2);
+        maybe_edges.throw_unhandled();
+        return maybe_edges->size() != 0;
     });
 
     net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
-        auto maybe_neighbors = net.indeverted_index.neighbors(v1);
-        maybe_neighbors.throw_unhandled();
-        return maybe_neighbors->outgoing_to(v2, eid) != nullptr;
+        auto maybe_edges = net.inverted_index.edges(v1, v2);
+        maybe_edges.throw_unhandled();
+        return std::find(maybe_edges->edge_ids.begin(), maybe_edges->edge_ids.end(), eid) !=
+               maybe_edges->edge_ids.end();
     });
 
     // Batch retrieval into dynamically sized NumPy arrays
     net.def("neighbors", [](network_t& net, ukv_key_t n) {
-        taped_values_view_t range = net.inverted_index().arena().untape(1);
-        value_view_t first = *range.begin();
-        neighborhood_t neighborhood {n, first};
-        // https://docs.python.org/3/c-api/buffer.html
-        struct Py_buffer py_buf;
-        py_buf.buf = neighborhood.targets.begin();
-        py_buf.obj = NULL;
-        py_buf.len = neighborhood.size() * sizeof(ukv_key_t);
-        py_buf.itemsize = sizeof(ukv_key_t);
-        // https://docs.python.org/3/library/struct.html#format-characters
-        py_buf.format = "Q";
-        py_buf.ndim = 1;
-        py_buf.shape = &net.last_buffer_shape[0];
-        py_buf.strides = &net.last_buffer_strides[0];
-        return py_buf;
+        // taped_values_view_t range = net.inverted_index().arena().untape(1);
+        // value_view_t first = *range.begin();
+        // neighborhood_t neighborhood {n, first};
+        // // https://docs.python.org/3/c-api/buffer.html
+        // struct Py_buffer py_buf;
+        // py_buf.buf = neighborhood.targets.begin();
+        // py_buf.obj = NULL;
+        // py_buf.len = neighborhood.size() * sizeof(ukv_key_t);
+        // py_buf.itemsize = sizeof(ukv_key_t);
+        // // https://docs.python.org/3/library/struct.html#format-characters
+        // py_buf.format = "Q";
+        // py_buf.ndim = 1;
+        // py_buf.shape = &net.last_buffer_shape[0];
+        // py_buf.strides = &net.last_buffer_strides[0];
+        // return py_buf;
     });
     net.def("successors", [](network_t& net, ukv_key_t n) {
 
@@ -186,31 +191,31 @@ void ukv::wrap_network(py::module& m) {
     // Random Writes
     net.def("add_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
         edges_soa_view_t edges {
-            .source_ids = strided_range_gt<ukv_key_t const>(v1),
-            .target_ids = strided_range_gt<ukv_key_t const>(v2),
+            strided_range_gt<ukv_key_t const>(v1),
+            strided_range_gt<ukv_key_t const>(v2),
         };
         net.inverted_index.upsert(edges).throw_unhandled();
     });
     net.def("add_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
         edges_soa_view_t edges {
-            .source_ids = strided_range_gt<ukv_key_t const>(v1),
-            .target_ids = strided_range_gt<ukv_key_t const>(v2),
-            .edge_ids = strided_range_gt<ukv_key_t const>(eid),
+            strided_range_gt<ukv_key_t const>(v1),
+            strided_range_gt<ukv_key_t const>(v2),
+            strided_range_gt<ukv_key_t const>(eid),
         };
         net.inverted_index.upsert(edges).throw_unhandled();
     });
     net.def("remove_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
         edges_soa_view_t edges {
-            .source_ids = strided_range_gt<ukv_key_t const>(v1),
-            .target_ids = strided_range_gt<ukv_key_t const>(v2),
+            strided_range_gt<ukv_key_t const>(v1),
+            strided_range_gt<ukv_key_t const>(v2),
         };
         net.inverted_index.remove(edges).throw_unhandled();
     });
     net.def("remove_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
         edges_soa_view_t edges {
-            .source_ids = strided_range_gt<ukv_key_t const>(v1),
-            .target_ids = strided_range_gt<ukv_key_t const>(v2),
-            .edge_ids = strided_range_gt<ukv_key_t const>(eid),
+            strided_range_gt<ukv_key_t const>(v1),
+            strided_range_gt<ukv_key_t const>(v2),
+            strided_range_gt<ukv_key_t const>(eid),
         };
         net.inverted_index.remove(edges).throw_unhandled();
     });
