@@ -65,7 +65,7 @@ json_t sample_fields(json_t&& original,
 /*****************	 Primary Functions	  ****************/
 /*********************************************************/
 
-json_t parse_any(ukv_tape_ptr_t bytes, ukv_val_len_t len, ukv_format_t const c_format, ukv_error_t* c_error) {
+json_t parse_any(ukv_val_ptr_t bytes, ukv_val_len_t len, ukv_format_t const c_format, ukv_error_t* c_error) {
     auto str = reinterpret_cast<char const*>(bytes);
     switch (c_format) {
     case ukv_format_json_k:
@@ -117,13 +117,13 @@ void ukv_docs_write( //
     ukv_options_t const c_options,
     ukv_format_t const c_format,
 
-    ukv_tape_ptr_t const* c_values,
+    ukv_val_ptr_t const* c_values,
     ukv_size_t const c_values_stride,
 
     ukv_val_len_t const* c_lengths,
     ukv_size_t const c_lengths_stride,
 
-    ukv_tape_ptr_t* c_tape,
+    ukv_val_ptr_t* c_tape,
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 
@@ -161,7 +161,7 @@ void ukv_docs_read( //
     ukv_options_t const c_options,
     ukv_format_t const c_format,
 
-    ukv_tape_ptr_t* c_tape,
+    ukv_val_ptr_t* c_tape,
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 }

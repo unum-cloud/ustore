@@ -22,7 +22,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstrict-vtable-pointers")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunknown-attributes")
 
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wnon-virtual-dtor -Woverloaded-virtual")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-field-initializers")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
@@ -30,7 +30,6 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunknown-attributes")
 endif()
 
 # Optimizations for common x86 CPUs.
@@ -102,7 +101,7 @@ include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
 
 # RocksDB
-include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
+# include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 
 # LevelDB
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
@@ -139,20 +138,18 @@ target_link_libraries(ukv_stl
   nlohmann_json::nlohmann_json
 )
 
-add_library(ukv_rocksdb
-  src/ukv_rocksdb.cpp
-  src/ukv_graph_pfor.cpp
-)
-
+# add_library(ukv_rocksdb
+# src/ukv_rocksdb.cpp
+# src/ukv_graph_pfor.cpp
+# )
 add_library(ukv_leveldb
   src/ukv_leveldb.cpp
   src/ukv_graph_pfor.cpp
 )
 
-target_link_libraries(ukv_rocksdb
-  rocksdb
-)
-
+# target_link_libraries(ukv_rocksdb
+# rocksdb
+# )
 target_link_libraries(ukv_leveldb
   leveldb
 )

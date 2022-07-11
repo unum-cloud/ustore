@@ -26,7 +26,7 @@ TEST(db, basic) {
     ukv_val_len_t val_len = sizeof(std::uint64_t);
     std::vector<std::uint64_t> vals {34, 35, 36};
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
-    auto vals_begin = reinterpret_cast<ukv_tape_ptr_t>(vals.data());
+    auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
     session[keys] = disjoint_values_view_t {
         .values_range = {&vals_begin, 0, 3},
@@ -63,7 +63,7 @@ TEST(db, net) {
 
     EXPECT_FALSE(net.upsert({triangle}));
 
-    auto maybe_neighbors = net.neighbors(1);
+    auto maybe_neighbors = net.neighborhood(1);
     EXPECT_TRUE(maybe_neighbors);
 
     auto neighbors = *maybe_neighbors;

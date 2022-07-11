@@ -309,7 +309,7 @@ void respond_to_one(session_t& session,
         std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
 
         error_t error;
-        ukv_collection_upsert(session.db(), col_name_buffer, &collection.raw, error.internal_cptr());
+        ukv_collection_upsert(session.db(), col_name_buffer, NULL, &collection.raw, error.internal_cptr());
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
     }
@@ -321,7 +321,7 @@ void respond_to_one(session_t& session,
         // Read the data:
     case http::verb::get: {
 
-        managed_tape_t tape(session.db());
+        managed_arena_t tape(session.db());
         error_t error;
         ukv_read(session.db(),
                  txn.raw,
@@ -337,7 +337,7 @@ void respond_to_one(session_t& session,
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
-        ukv_tape_ptr_t begin = tape.ptr + sizeof(ukv_val_len_t);
+        ukv_val_ptr_t begin = tape.ptr + sizeof(ukv_val_len_t);
         ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
         if (!len)
             return send_response(make_error(req, http::status::not_found, "Missing key"));
@@ -362,7 +362,7 @@ void respond_to_one(session_t& session,
         // Check the data:
     case http::verb::head: {
 
-        managed_tape_t tape(session.db());
+        managed_arena_t tape(session.db());
         error_t error;
         options = ukv_option_read_lengths_k;
         ukv_read(session.db(),
@@ -393,7 +393,7 @@ void respond_to_one(session_t& session,
 
     // Insert data if it's missing:
     case http::verb::post: {
-        managed_tape_t tape(session.db());
+        managed_arena_t tape(session.db());
         error_t error;
         options = ukv_option_read_lengths_k;
         ukv_read(session.db(),
@@ -433,7 +433,7 @@ void respond_to_one(session_t& session,
 
         error_t error;
         auto value = req.body();
-        auto value_ptr = reinterpret_cast<ukv_tape_ptr_t>(value.data());
+        auto value_ptr = reinterpret_cast<ukv_val_ptr_t>(value.data());
         auto value_len = static_cast<ukv_val_len_t>(*opt_payload_len);
         ukv_val_len_t value_off = 0;
         ukv_write(session.db(),
@@ -465,7 +465,7 @@ void respond_to_one(session_t& session,
     case http::verb::delete_: {
 
         error_t error;
-        ukv_tape_ptr_t value_ptr = nullptr;
+        ukv_val_ptr_t value_ptr = nullptr;
         ukv_val_len_t value_len = 0;
         ukv_val_len_t value_off = 0;
         ukv_write(session.db(),
@@ -530,7 +530,7 @@ void respond_to_aos(session_t& session,
 
         error_t error;
         collection_t collection(session.db());
-        ukv_collection_upsert(session.db(), col_name_buffer, &collection.raw, error.internal_cptr());
+        ukv_collection_upsert(session.db(), col_name_buffer, NULL, &collection.raw, error.internal_cptr());
         if (error.raw)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -587,7 +587,7 @@ void respond_to_aos(session_t& session,
         }
 
         // Pull the entire objects before we start sampling their fields
-        managed_tape_t tape(session.db());
+        managed_arena_t tape(session.db());
         error_t error;
         // ukv_read(session.db(),
         //          txn.raw,
@@ -602,12 +602,12 @@ void respond_to_aos(session_t& session,
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
         ukv_val_len_t const* values_lens = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
-        ukv_tape_ptr_t values_begin = tape.ptr + sizeof(ukv_val_len_t) * keys.size();
+        ukv_val_ptr_t values_begin = tape.ptr + sizeof(ukv_val_len_t) * keys.size();
 
         std::size_t exported_bytes = 0;
         std::vector<json_t> parsed_vals(keys.size());
         for (std::size_t key_idx = 0; key_idx != keys.size(); ++key_idx) {
-            ukv_tape_ptr_t begin = values_begin + exported_bytes;
+            ukv_val_ptr_t begin = values_begin + exported_bytes;
             ukv_val_len_t len = values_lens[key_idx];
             json_t& val = parsed_vals[key_idx];
             if (!len)

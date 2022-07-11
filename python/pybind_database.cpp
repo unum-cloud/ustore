@@ -79,11 +79,13 @@ bool contains_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_tape_t& tape,
+    managed_arena_t& arena,
     ukv_key_t key) {
 
     ukv::error_t error;
     ukv_options_t options = ukv_option_read_lengths_k;
+    ukv_val_len_t* found_lengths = nullptr;
+    ukv_val_ptr_t found_values = nullptr;
 
     [[maybe_unused]] py::gil_scoped_release release;
     ukv_read( //
@@ -95,24 +97,26 @@ bool contains_item( //
         1,
         0,
         options,
-        tape.internal_memory(),
-        tape.internal_capacity(),
+        &found_lengths,
+        &found_values,
+        arena.internal_cptr(),
         error.internal_cptr());
     error.throw_unhandled();
 
-    auto lengths = reinterpret_cast<ukv_val_len_t*>(*tape.internal_memory());
-    return lengths[0] != 0;
+    return found_lengths[0] != 0;
 }
 
 std::optional<py::bytes> get_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_tape_t& tape,
+    managed_arena_t& arena,
     ukv_key_t key) {
 
     ukv::error_t error;
     ukv_options_t options = ukv_options_default_k;
+    ukv_val_len_t* found_lengths = nullptr;
+    ukv_val_ptr_t found_values = nullptr;
 
     [[maybe_unused]] py::gil_scoped_release release;
     ukv_read( //
@@ -124,13 +128,13 @@ std::optional<py::bytes> get_item( //
         1,
         0,
         options,
-        tape.internal_memory(),
-        tape.internal_capacity(),
+        &found_lengths,
+        &found_values,
+        arena.internal_cptr(),
         error.internal_cptr());
     error.throw_unhandled();
 
-    auto lengths = reinterpret_cast<ukv_val_len_t*>(*tape.internal_memory());
-    if (!lengths[0])
+    if (!found_lengths[0])
         return {};
 
     // To fetch data without copies, there is a hacky way:
@@ -140,8 +144,8 @@ std::optional<py::bytes> get_item( //
     // https://github.com/pybind/pybind11/blob/a05bc3d2359d12840ef2329d68f613f1a7df9c5d/include/pybind11/pytypes.h#L1474
     // https://docs.python.org/3/c-api/bytes.html
     // https://github.com/python/cpython/blob/main/Objects/bytesobject.c
-    auto data = reinterpret_cast<char const*>(lengths + 1);
-    return py::bytes {data, lengths[0]};
+    auto data = reinterpret_cast<char const*>(found_values);
+    return py::bytes {data, found_lengths[0]};
 }
 
 /**
@@ -171,7 +175,7 @@ void export_matrix( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_tape_t& tape,
+    managed_arena_t& arena,
     py::handle keys_arr,
     py::handle values_arr,
     py::handle values_lengths_arr,
@@ -238,7 +242,10 @@ void export_matrix( //
     // Perform the read
     [[maybe_unused]] py::gil_scoped_release release;
     ukv::error_t error;
+    ukv_val_len_t* found_lengths = nullptr;
+    ukv_val_ptr_t found_values = nullptr;
     ukv_options_t options = ukv_options_default_k;
+
     ukv_read( //
         db_ptr,
         txn_ptr,
@@ -248,14 +255,15 @@ void export_matrix( //
         keys_count,
         sizeof(ukv_key_t),
         options,
-        tape.internal_memory(),
-        tape.internal_capacity(),
+        &found_lengths,
+        &found_values,
+        arena.internal_cptr(),
         error.internal_cptr());
 
     error.throw_unhandled();
 
     // Export the data into the matrix
-    taped_values_view_t inputs = tape.untape(keys_count);
+    taped_values_view_t inputs {found_lengths, found_values, keys_count};
     tape_iterator_t input_it = inputs.begin();
     for (ukv_size_t i = 0; i != keys_count; ++i, ++input_it) {
         value_view_t input = *input_it;
@@ -278,11 +286,12 @@ void set_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
+    managed_arena_t& arena,
     ukv_key_t key,
     py::bytes const* value = nullptr) {
 
     ukv_options_t options = ukv_options_default_k;
-    ukv_tape_ptr_t ptr = value ? ukv_tape_ptr_t(std::string_view {*value}.data()) : nullptr;
+    ukv_val_ptr_t ptr = value ? ukv_val_ptr_t(std::string_view {*value}.data()) : nullptr;
     ukv_val_len_t len = value ? static_cast<ukv_val_len_t>(std::string_view {*value}.size()) : 0;
     ukv::error_t error;
     ukv_val_len_t offset_in_val = 0;
@@ -303,6 +312,7 @@ void set_item( //
         &len,
         0,
         options,
+        arena.internal_cptr(),
         error.internal_cptr());
 
     error.throw_unhandled();
@@ -330,7 +340,7 @@ void ukv::wrap_database(py::module& m) {
     py_db.def(
         "get",
         [](py_db_t& py_db, ukv_key_t key) {
-            return get_item(py_db.native, nullptr, nullptr, py_db.session.tape(), key);
+            return get_item(py_db.native, nullptr, nullptr, py_db.session.arena(), key);
         },
         py::arg("key"));
 
@@ -339,7 +349,7 @@ void ukv::wrap_database(py::module& m) {
         [](py_db_t& py_db, std::string const& collection, ukv_key_t key) {
             auto maybe_col = py_db.native[collection];
             maybe_col.throw_unhandled();
-            return get_item(py_db.native, nullptr, *maybe_col, py_db.session.tape(), key);
+            return get_item(py_db.native, nullptr, *maybe_col, py_db.session.arena(), key);
         },
         py::arg("collection"),
         py::arg("key"));
@@ -373,7 +383,7 @@ void ukv::wrap_database(py::module& m) {
             return get_item(py_col.db_ptr->native,
                             py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                             py_col.native,
-                            py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
+                            py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
                             key);
         },
         py::arg("key"));
@@ -410,7 +420,7 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def(
         "get",
         [](py_txn_t& py_txn, ukv_key_t key) {
-            return get_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.tape(), key);
+            return get_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.arena(), key);
         },
         py::arg("key"));
 
@@ -419,7 +429,7 @@ void ukv::wrap_database(py::module& m) {
         [](py_txn_t& py_txn, std::string const& collection, ukv_key_t key) {
             auto maybe_col = py_txn.db_ptr->native[collection];
             maybe_col.throw_unhandled();
-            return get_item(py_txn.db_ptr->native, py_txn.native, *maybe_col, py_txn.native.tape(), key);
+            return get_item(py_txn.db_ptr->native, py_txn.native, *maybe_col, py_txn.native.arena(), key);
         },
         py::arg("collection"),
         py::arg("key"));
@@ -477,10 +487,10 @@ void ukv::wrap_database(py::module& m) {
 
     // Operator overaloads used to edit entries
     py_db.def("__contains__", [](py_db_t& py_db, ukv_key_t key) {
-        return contains_item(py_db.native, nullptr, nullptr, py_db.session.tape(), key);
+        return contains_item(py_db.native, nullptr, nullptr, py_db.session.arena(), key);
     });
     py_db.def("__getitem__", [](py_db_t& py_db, ukv_key_t key) {
-        return get_item(py_db.native, nullptr, nullptr, py_db.session.tape(), key);
+        return get_item(py_db.native, nullptr, nullptr, py_db.session.arena(), key);
     });
     py_db.def("__setitem__", [](py_db_t& py_db, ukv_key_t key, py::bytes const& value) {
         return set_item(py_db.native, nullptr, nullptr, key, &value);
@@ -489,10 +499,10 @@ void ukv::wrap_database(py::module& m) {
               [](py_db_t& py_db, ukv_key_t key) { return set_item(py_db.native, nullptr, nullptr, key); });
 
     py_txn.def("__contains__", [](py_txn_t& py_txn, ukv_key_t key) {
-        return contains_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.tape(), key);
+        return contains_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.arena(), key);
     });
     py_txn.def("__getitem__", [](py_txn_t& py_txn, ukv_key_t key) {
-        return get_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.tape(), key);
+        return get_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.arena(), key);
     });
     py_txn.def("__setitem__", [](py_txn_t& py_txn, ukv_key_t key, py::bytes const& value) {
         return set_item(py_txn.db_ptr->native, py_txn.native, nullptr, key, &value);
@@ -505,14 +515,14 @@ void ukv::wrap_database(py::module& m) {
         return contains_item(py_col.db_ptr->native,
                              py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                              py_col.native,
-                             py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
+                             py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
                              key);
     });
     py_col.def("__getitem__", [](py_col_t& py_col, ukv_key_t key) {
         return get_item(py_col.db_ptr->native,
                         py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                         py_col.native,
-                        py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
+                        py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
                         key);
     });
     py_col.def("__setitem__", [](py_col_t& py_col, ukv_key_t key, py::bytes const& value) {
@@ -567,7 +577,7 @@ void ukv::wrap_database(py::module& m) {
             return export_matrix(py_db.native,
                                  nullptr,
                                  nullptr,
-                                 py_db.session.tape(),
+                                 py_db.session.arena(),
                                  keys,
                                  values,
                                  values_lengths,
@@ -587,7 +597,7 @@ void ukv::wrap_database(py::module& m) {
             return export_matrix(py_col.db_ptr->native,
                                  py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                                  py_col.native,
-                                 py_col.txn_ptr ? py_col.txn_ptr->native.tape() : py_col.db_ptr->session.tape(),
+                                 py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
                                  keys,
                                  values,
                                  values_lengths,
@@ -607,7 +617,7 @@ void ukv::wrap_database(py::module& m) {
             return export_matrix(py_txn.db_ptr->native,
                                  py_txn.native,
                                  nullptr,
-                                 py_txn.native.tape(),
+                                 py_txn.native.arena(),
                                  keys,
                                  values,
                                  values_lengths,

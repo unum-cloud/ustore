@@ -76,7 +76,7 @@ struct network_t : public std::enable_shared_from_this<network_t> {
     inline ukv_t db() const noexcept { return db_ptr->native; }
     inline ukv_txn_t txn() const noexcept { return txn_ptr ? txn_ptr->native : ukv_txn_t(nullptr); }
     inline ukv_collection_t* index_col() const noexcept { return inverted_index->native.internal_cptr(); }
-    inline managed_tape_t& tape() noexcept { return txn_ptr ? txn_ptr->native.tape() : inverted_index.tape(); }
+    inline managed_arena_t& arena() noexcept { return txn_ptr ? txn_ptr->native.arena() : inverted_index.arena(); }
 };
 
 void ukv::wrap_network(py::module& m) {
@@ -133,12 +133,12 @@ void ukv::wrap_network(py::module& m) {
                  1,
                  0,
                  ukv_option_read_lengths_k,
-                 net.tape().internal_memory(),
-                 net.tape().internal_capacity(),
+                 net.arena().internal_cptr(),
+                 net.arena().internal_capacity(),
                  error.internal_cptr());
         error.throw_unhandled();
 
-        taped_values_view_t vals = net.tape().untape(1);
+        taped_values_view_t vals = net.arena().untape(1);
         if (!vals.size())
             return false;
         value_view_t val = *vals.begin();
@@ -172,7 +172,7 @@ void ukv::wrap_network(py::module& m) {
 
     // Batch retrieval into dynamically sized NumPy arrays
     net.def("neighbors", [](network_t& net, ukv_key_t n) {
-        taped_values_view_t range = net.inverted_index().tape().untape(1);
+        taped_values_view_t range = net.inverted_index().arena().untape(1);
         value_view_t first = *range.begin();
         neighborhood_t neighborhood {n, first};
         // https://docs.python.org/3/c-api/buffer.html

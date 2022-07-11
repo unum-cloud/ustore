@@ -85,7 +85,7 @@ typedef void* ukv_collection_t;
 
 typedef uint64_t ukv_key_t;
 typedef uint32_t ukv_val_len_t;
-typedef uint8_t* ukv_tape_ptr_t;
+typedef uint8_t* ukv_val_ptr_t;
 typedef uint64_t ukv_size_t;
 typedef char const* ukv_error_t;
 
@@ -95,6 +95,12 @@ typedef char const* ukv_error_t;
  * in its lifetime management in any way.
  */
 typedef char const* ukv_str_view_t;
+
+/**
+ * @brief Temporary memory handle, used mostly for read requests.
+ * It's allocated, resized and deallocated only by UKV itself.
+ */
+typedef void* ukv_arena_t;
 
 typedef enum {
 
@@ -206,7 +212,7 @@ void ukv_write( //
     ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
 
-    ukv_tape_ptr_t const* values,
+    ukv_val_ptr_t const* values,
     ukv_size_t const values_stride,
 
     ukv_val_len_t const* offsets,
@@ -216,6 +222,8 @@ void ukv_write( //
     ukv_size_t const lengths_stride,
 
     ukv_options_t const options,
+
+    ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
@@ -252,8 +260,7 @@ void ukv_write( //
  *                            During the first request you pass a `NULL`,
  *                            we allocate that buffer, put found values in it and
  *                            return you a pointer. You can later reuse it for future
- *                            requests, or `free` it via `ukv_tape_free`.
- * @param[inout] capacity     Current size of @p `tape`.
+ *                            requests, or `free` it via `ukv_arena_free`.
  * @param[out] error          The error message to be handled by callee.
  */
 void ukv_read( //
@@ -269,8 +276,10 @@ void ukv_read( //
 
     ukv_options_t const options,
 
-    ukv_tape_ptr_t* tape,
-    ukv_size_t* capacity,
+    ukv_val_len_t** found_lengths,
+    ukv_val_ptr_t* found_values,
+
+    ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
@@ -297,8 +306,10 @@ void ukv_scan( //
 
     ukv_options_t const options,
 
-    ukv_tape_ptr_t* tape,
-    ukv_size_t* capacity,
+    ukv_key_t** found_keys,
+    ukv_val_len_t** found_lengths,
+
+    ukv_arena_t* arena,
     ukv_error_t* error);
 
 /*********************************************************/
@@ -312,12 +323,14 @@ void ukv_scan( //
  *
  * @param[in] db           Already open database instance, @see `ukv_open`.
  * @param[in] name         A `NULL`-terminated collection name.
+ * @param[in] config       A `NULL`-terminated configuration string.
  * @param[out] collection  Address to which the collection handle will be expored.
  * @param[out] error       The error message to be handled by callee.
  */
 void ukv_collection_upsert( //
     ukv_t const db,
     ukv_str_view_t name,
+    ukv_str_view_t config,
     ukv_collection_t* collection,
     ukv_error_t* error);
 
@@ -396,7 +409,7 @@ void ukv_txn_commit( //
  * @brief A function to be used after `ukv_read` to
  * deallocate and return memory to UnumDB and OS.
  */
-void ukv_tape_free(ukv_t const db, ukv_tape_ptr_t, ukv_size_t);
+void ukv_arena_free(ukv_t const db, ukv_arena_t const arena);
 
 void ukv_txn_free(ukv_t const db, ukv_txn_t const txn);
 

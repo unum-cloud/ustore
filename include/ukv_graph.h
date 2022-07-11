@@ -79,7 +79,10 @@ typedef uint32_t ukv_vertex_degree_t;
 
 /**
  * @brief Finds and extracts all the related edges and
- * neighbor IDs for the provided vertices set. The results
+ * neighbor IDs for the provided vertices set. Can also be
+ * used to retrieve vertex degrees.
+ *
+ * The results
  * are exported onto a tape in the following order:
  *      1. `ukv_vertex_degree_t` number of outgoing edges per vertex
  *      2. `ukv_vertex_degree_t` number of incoming edges per vertex
@@ -113,8 +116,10 @@ void ukv_graph_gather_neighbors( //
 
     ukv_options_t const options,
 
-    ukv_tape_ptr_t* tape,
-    ukv_size_t* capacity,
+    ukv_vertex_degree_t** degrees_per_vertex,
+    ukv_key_t** neighborships_per_vertex,
+
+    ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
@@ -143,8 +148,7 @@ void ukv_graph_upsert_edges( //
 
     ukv_options_t const options,
 
-    ukv_tape_ptr_t* tape,
-    ukv_size_t* capacity,
+    ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
@@ -174,8 +178,7 @@ void ukv_graph_remove_edges( //
 
     ukv_options_t const options,
 
-    ukv_tape_ptr_t* tape,
-    ukv_size_t* capacity,
+    ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
@@ -202,8 +205,7 @@ void ukv_graph_remove_vertices( //
 
     ukv_options_t const options,
 
-    ukv_tape_ptr_t* tape,
-    ukv_size_t* capacity,
+    ukv_arena_t* arena,
     ukv_error_t* error);
 
 #ifdef __cplusplus

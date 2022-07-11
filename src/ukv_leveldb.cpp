@@ -76,7 +76,7 @@ void ukv_write( //
     ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
-    ukv_tape_ptr_t const* c_vals,
+    ukv_val_ptr_t const* c_vals,
     ukv_size_t const c_vals_stride,
 
     ukv_val_len_t const* c_offs,
@@ -86,13 +86,14 @@ void ukv_write( //
     ukv_size_t const c_lens_stride,
 
     ukv_options_t const c_options,
+    ukv_arena_t*,
     ukv_error_t* c_error) {
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
 
     strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_ptr_gt<ukv_tape_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_ptr_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_ptr_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_ptr_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
@@ -138,7 +139,7 @@ void ukv_read( //
 
     ukv_options_t const c_options,
 
-    ukv_tape_ptr_t* c_tape,
+    ukv_val_ptr_t* c_tape,
     ukv_size_t* c_capacity,
     ukv_error_t* c_error) {
 
@@ -159,6 +160,7 @@ void ukv_read( //
 
 void ukv_collection_upsert( //
     ukv_t const,
+    ukv_str_view_t,
     ukv_str_view_t,
     ukv_collection_t*,
     ukv_error_t* c_error) {
@@ -195,7 +197,7 @@ void ukv_txn_commit( //
     *c_error = "Transactions not supported by LevelDB!";
 }
 
-void ukv_tape_free(ukv_t const, ukv_tape_ptr_t c_ptr, ukv_size_t c_len) {
+void ukv_arena_free(ukv_t const, ukv_val_ptr_t c_ptr, ukv_size_t c_len) {
     if (!c_ptr || !c_len)
         return;
     allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
