@@ -103,10 +103,41 @@ std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(py::h
     if (raii.py.itemsize != sizeof(scalar_at))
         throw std::invalid_argument("Scalar type mismatch");
 
-    strided_range_gt<scalar_at> result;
-    result.raw = reinterpret_cast<scalar_at*>(raii.py.buf);
-    result.stride = static_cast<ukv_size_t>(raii.py.strides[0]);
-    result.count = static_cast<ukv_size_t>(raii.py.shape[0]);
+    strided_range_gt<scalar_at> result {
+        reinterpret_cast<scalar_at*>(raii.py.buf),
+        static_cast<ukv_size_t>(raii.py.strides[0]),
+        static_cast<ukv_size_t>(raii.py.shape[0]),
+    };
+    return {std::move(raii), result};
+}
+
+template <typename scalar_at>
+std::pair<py_received_buffer_t, strided_matrix_gt<scalar_at>> strided_matrix(py::handle handle) {
+    PyObject* obj = handle.ptr();
+    if (!PyObject_CheckBuffer(obj))
+        throw std::invalid_argument("Buffer protocol unsupported");
+
+    auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
+    if constexpr (std::is_const_v<scalar_at>)
+        flags |= PyBUF_WRITABLE;
+
+    py_received_buffer_t raii;
+    raii.initialized = PyObject_GetBuffer(obj, &raii.py, flags) == 0;
+    if (!raii.initialized)
+        throw std::invalid_argument("Couldn't obtain buffer overviews");
+    if (raii.py.ndim != 2)
+        throw std::invalid_argument("Expecting tensor rank 2");
+    if (!raii.py.shape)
+        throw std::invalid_argument("Shape wasn't inferred");
+    if (raii.py.itemsize != sizeof(scalar_at))
+        throw std::invalid_argument("Scalar type mismatch");
+
+    strided_matrix_gt<scalar_at> result {
+        reinterpret_cast<scalar_at*>(raii.py.buf),
+        static_cast<ukv_size_t>(raii.py.shape[0]),
+        static_cast<ukv_size_t>(raii.py.shape[1]),
+        static_cast<ukv_size_t>(raii.py.strides[0]),
+    };
     return {std::move(raii), result};
 }
 

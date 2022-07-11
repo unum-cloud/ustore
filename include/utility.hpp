@@ -261,6 +261,36 @@ struct range_gt {
     }
 };
 
+template <typename object_at>
+class strided_matrix_gt {
+
+    object_at* begin_ = nullptr;
+    ukv_size_t stride_ = 0;
+    ukv_size_t rows_ = 0;
+    ukv_size_t cols_ = 0;
+
+  public:
+    strided_matrix_gt() = default;
+    strided_matrix_gt(object_at* begin, std::size_t rows, std::size_t cols, std::size_t stride) noexcept
+        : begin_(begin), stride_(static_cast<ukv_size_t>(stride)), rows_(static_cast<ukv_size_t>(rows)),
+          cols_(static_cast<ukv_size_t>(cols)) {}
+
+    strided_matrix_gt(strided_matrix_gt&&) = default;
+    strided_matrix_gt(strided_matrix_gt const&) = default;
+    strided_matrix_gt& operator=(strided_matrix_gt&&) = default;
+    strided_matrix_gt& operator=(strided_matrix_gt const&) = default;
+
+    inline std::size_t size() const noexcept { return rows_ * cols_; }
+    inline object_at& operator()(std::size_t i, std::size_t j) noexcept { return row(i)[j]; }
+    inline object_at const& operator()(std::size_t i, std::size_t j) const noexcept { return row(i)[j]; }
+    inline strided_range_gt<object_at> col(std::size_t j) const noexcept { return {begin_ + j, stride_, rows_}; }
+    inline range_gt<object_at> row(std::size_t i) const noexcept {
+        return {begin_ + i * stride_ / sizeof(object_at), cols_};
+    }
+    inline std::size_t rows() const noexcept { return rows_; }
+    inline std::size_t cols() const noexcept { return cols_; }
+};
+
 /**
  * @brief Similar to `std::optional<std::string_view>`.
  * It's NULL state and "empty string" states are not identical.
