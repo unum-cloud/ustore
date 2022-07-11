@@ -17,7 +17,7 @@ namespace unum::ukv {
 
 using key_t = ukv_key_t;
 using val_len_t = ukv_val_len_t;
-using tape_ptr_t = ukv_tape_ptr_t;
+using tape_ptr_t = ukv_val_ptr_t;
 using size_t = ukv_size_t;
 
 enum class byte_t : uint8_t {};
@@ -225,13 +225,13 @@ struct range_gt {
 
 class value_view_t {
 
-    ukv_tape_ptr_t ptr_ = nullptr;
+    ukv_val_ptr_t ptr_ = nullptr;
     ukv_val_len_t length_ = 0;
 
   public:
-    inline value_view_t(ukv_tape_ptr_t ptr, ukv_val_len_t length) noexcept : ptr_(ptr), length_(length) {}
+    inline value_view_t(ukv_val_ptr_t ptr, ukv_val_len_t length) noexcept : ptr_(ptr), length_(length) {}
     inline value_view_t(byte_t const* begin, byte_t const* end) noexcept
-        : ptr_(ukv_tape_ptr_t(begin)), length_(static_cast<ukv_val_len_t>(end - begin)) {}
+        : ptr_(ukv_val_ptr_t(begin)), length_(static_cast<ukv_val_len_t>(end - begin)) {}
 
     inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
     inline byte_t const* end() const noexcept { return begin() + length_; }
@@ -252,7 +252,7 @@ using keys_view_t = strided_range_gt<ukv_key_t>;
 using located_keys_view_t = strided_range_gt<located_key_t>;
 
 struct disjoint_values_view_t {
-    strided_range_gt<ukv_tape_ptr_t> values_range;
+    strided_range_gt<ukv_val_ptr_t> values_range;
     strided_range_gt<ukv_val_len_t> offsets_range;
     strided_range_gt<ukv_val_len_t> lengths_range;
 };
@@ -265,13 +265,13 @@ struct disjoint_values_view_t {
 class tape_iterator_t {
 
     ukv_val_len_t const* lengths_ = nullptr;
-    ukv_tape_ptr_t contents_ = nullptr;
+    ukv_val_ptr_t contents_ = nullptr;
 
   public:
-    inline tape_iterator_t(ukv_tape_ptr_t ptr, ukv_size_t elements) noexcept
+    inline tape_iterator_t(ukv_val_ptr_t ptr, ukv_size_t elements) noexcept
         : lengths_(reinterpret_cast<ukv_val_len_t*>(ptr)), contents_(ptr + sizeof(ukv_val_len_t) * elements) {}
 
-    inline tape_iterator_t(ukv_val_len_t const* lens, ukv_tape_ptr_t vals) noexcept : lengths_(lens), contents_(vals) {}
+    inline tape_iterator_t(ukv_val_len_t const* lens, ukv_val_ptr_t vals) noexcept : lengths_(lens), contents_(vals) {}
 
     inline tape_iterator_t& operator++() noexcept {
         if (*lengths_ != ukv_val_len_missing_k)
@@ -290,16 +290,12 @@ class tape_iterator_t {
 
 class taped_values_view_t {
     ukv_val_len_t const* lengths_ = nullptr;
-    ukv_tape_ptr_t contents_ = nullptr;
+    ukv_val_ptr_t contents_ = nullptr;
     ukv_size_t count_ = 0;
 
   public:
     inline taped_values_view_t() = default;
-    inline taped_values_view_t(ukv_tape_ptr_t ptr, ukv_size_t elements) noexcept
-        : lengths_(reinterpret_cast<ukv_val_len_t*>(ptr)), contents_(ptr + sizeof(ukv_val_len_t) * elements),
-          count_(elements) {}
-
-    inline taped_values_view_t(ukv_val_len_t const* lens, ukv_tape_ptr_t vals, ukv_size_t elements) noexcept
+    inline taped_values_view_t(ukv_val_len_t const* lens, ukv_val_ptr_t vals, ukv_size_t elements) noexcept
         : lengths_(lens), contents_(vals), count_(elements) {}
 
     inline tape_iterator_t begin() const noexcept { return {lengths_, contents_}; }
@@ -307,39 +303,32 @@ class taped_values_view_t {
     inline std::size_t size() const noexcept { return count_; }
 
     ukv_val_len_t const* lengths() const noexcept { return lengths_; }
-    ukv_tape_ptr_t contents() const noexcept { return contents_; }
+    ukv_val_ptr_t contents() const noexcept { return contents_; }
 };
 
 /**
  * @brief A view of a tape received from the DB.
  * Allocates no memory, but is responsible for the cleanup.
  */
-class managed_tape_t {
+class managed_arena_t {
 
     ukv_t db_ = nullptr;
-    ukv_tape_ptr_t memory_ = nullptr;
-    ukv_size_t capacity_ = 0;
+    ukv_arena_t memory_ = nullptr;
 
   public:
-    managed_tape_t(ukv_t db) noexcept : db_(db) {}
-    managed_tape_t(managed_tape_t const&) = delete;
+    managed_arena_t(ukv_t db) noexcept : db_(db) {}
+    managed_arena_t(managed_arena_t const&) = delete;
 
-    ~managed_tape_t() {
+    ~managed_arena_t() {
         if (memory_)
-            ukv_tape_free(db_, memory_, capacity_);
+            ukv_arena_free(db_, memory_);
         memory_ = nullptr;
-        capacity_ = 0;
     }
 
-    inline managed_tape_t(managed_tape_t&& other) noexcept
-        : db_(other.db_), memory_(std::exchange(other.memory_, nullptr)),
-          capacity_(std::exchange(other.capacity_, 0u)) {}
+    inline managed_arena_t(managed_arena_t&& other) noexcept
+        : db_(other.db_), memory_(std::exchange(other.memory_, nullptr)) {}
 
-    inline taped_values_view_t untape(ukv_size_t count) const noexcept {
-        return {memory_, capacity_ >= count * sizeof(ukv_val_len_t) ? count : 0};
-    }
-    inline ukv_tape_ptr_t* internal_memory() noexcept { return &memory_; }
-    inline ukv_size_t* internal_capacity() noexcept { return &capacity_; }
+    inline ukv_arena_t* internal_cptr() noexcept { return &memory_; }
 };
 
 } // namespace unum::ukv

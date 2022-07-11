@@ -19,7 +19,7 @@ namespace unum::ukv {
 
 /**
  * @brief Append-only datastructure for variable length blobs.
- * Owns the underlying memory and is external to the underlying DB.
+ * Owns the underlying arena and is external to the underlying DB.
  * Is suited for data preparation before passing to the C API.
  */
 class appendable_tape_t {
@@ -38,7 +38,7 @@ class appendable_tape_t {
     }
 
     operator taped_values_view_t() const noexcept {
-        return {lengths_.data(), ukv_tape_ptr_t(data_.data()), data_.size()};
+        return {lengths_.data(), ukv_val_ptr_t(data_.data()), data_.size()};
     }
 };
 
@@ -51,14 +51,15 @@ struct sample_proxy_t {
 
     ukv_t db = nullptr;
     ukv_txn_t txn = nullptr;
-    ukv_tape_ptr_t* memory = nullptr;
-    ukv_size_t* capacity = 0;
+    ukv_arena_t* arena = nullptr;
     ukv_options_t options = ukv_options_default_k;
 
     collections_view_t cols;
     keys_view_t keys;
 
     [[nodiscard]] expected_gt<taped_values_view_t> get() const noexcept {
+        ukv_val_len_t* found_lengths = nullptr;
+        ukv_val_ptr_t found_values = nullptr;
         error_t error;
         ukv_read(db,
                  txn,
@@ -68,13 +69,14 @@ struct sample_proxy_t {
                  keys.count(),
                  keys.stride(),
                  options,
-                 memory,
-                 capacity,
+                 &found_lengths,
+                 &found_values,
+                 arena,
                  error.internal_cptr());
         if (error)
             return {std::move(error)};
 
-        return {taped_values_view_t {*memory, static_cast<ukv_size_t>(keys.size())}};
+        return {taped_values_view_t {found_lengths, found_values, static_cast<ukv_size_t>(keys.size())}};
     }
 
     [[nodiscard]] error_t set(disjoint_values_view_t vals) noexcept {
@@ -93,6 +95,7 @@ struct sample_proxy_t {
                   vals.lengths_range.begin().get(),
                   vals.lengths_range.stride(),
                   options,
+                  arena,
                   error.internal_cptr());
         return error;
     }
@@ -148,16 +151,16 @@ class collection_t {
 class txn_t {
     ukv_t db_ = nullptr;
     ukv_txn_t txn_ = nullptr;
-    managed_tape_t read_tape_;
+    managed_arena_t arena_;
 
   public:
-    txn_t(ukv_t db, ukv_txn_t txn) : db_(db), txn_(txn), read_tape_(db) {}
+    txn_t(ukv_t db, ukv_txn_t txn) : db_(db), txn_(txn), arena_(db) {}
     txn_t(txn_t const&) = delete;
     txn_t(txn_t&& other) noexcept
-        : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), read_tape_(std::move(other.read_tape_)) {}
+        : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), arena_(std::move(other.arena_)) {}
 
     inline ukv_t db() const noexcept { return db_; }
-    inline managed_tape_t& tape() noexcept { return read_tape_; }
+    inline managed_arena_t& arena() noexcept { return arena_; }
     inline operator ukv_txn_t() const noexcept { return txn_; }
 
     ~txn_t() {
@@ -170,8 +173,7 @@ class txn_t {
         return sample_proxy_t {
             .db = db_,
             .txn = txn_,
-            .memory = read_tape_.internal_memory(),
-            .capacity = read_tape_.internal_capacity(),
+            .arena = arena_.internal_cptr(),
             .cols = located.members(&located_key_t::collection),
             .keys = located.members(&located_key_t::key),
         };
@@ -181,8 +183,7 @@ class txn_t {
         return sample_proxy_t {
             .db = db_,
             .txn = txn_,
-            .memory = read_tape_.internal_memory(),
-            .capacity = read_tape_.internal_capacity(),
+            .arena = arena_.internal_cptr(),
             .keys = keys,
         };
     }
@@ -201,30 +202,29 @@ class txn_t {
 };
 
 /**
- * @brief A RAII abstraction to handle temporary aligned memory
+ * @brief A RAII abstraction to handle temporary aligned arena
  * for requests coming from a single user thread and planning the
  * lazy lookups.
  */
 class session_t {
     ukv_t db_ = nullptr;
-    managed_tape_t read_tape_;
+    managed_arena_t arena_;
     std::vector<located_key_t> lazy_lookups_;
 
   public:
-    session_t(ukv_t db) : db_(db), read_tape_(db) {}
+    session_t(ukv_t db) : db_(db), arena_(db) {}
     session_t(session_t const&) = delete;
     session_t(session_t&& other) noexcept
-        : db_(other.db_), read_tape_(std::move(other.read_tape_)), lazy_lookups_(std::move(other.lazy_lookups_)) {}
+        : db_(other.db_), arena_(std::move(other.arena_)), lazy_lookups_(std::move(other.lazy_lookups_)) {}
 
     inline ukv_t db() const noexcept { return db_; }
-    inline managed_tape_t& tape() noexcept { return read_tape_; }
+    inline managed_arena_t& arena() noexcept { return arena_; }
 
     inline sample_proxy_t operator[](located_keys_view_t located) noexcept {
         return sample_proxy_t {
             .db = db_,
             .txn = nullptr,
-            .memory = read_tape_.internal_memory(),
-            .capacity = read_tape_.internal_capacity(),
+            .arena = arena_.internal_cptr(),
             .cols = located.members(&located_key_t::collection),
             .keys = located.members(&located_key_t::key),
         };
@@ -234,8 +234,7 @@ class session_t {
         return sample_proxy_t {
             .db = db_,
             .txn = nullptr,
-            .memory = read_tape_.internal_memory(),
-            .capacity = read_tape_.internal_capacity(),
+            .arena = arena_.internal_cptr(),
             .keys = keys,
         };
     }
@@ -300,7 +299,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
     expected_gt<collection_t> collection(std::string const& name) {
         error_t error;
         ukv_collection_t col = nullptr;
-        ukv_collection_upsert(db_, name.c_str(), &col, error.internal_cptr());
+        ukv_collection_upsert(db_, name.c_str(), nullptr, &col, error.internal_cptr());
         if (error)
             return error;
         else

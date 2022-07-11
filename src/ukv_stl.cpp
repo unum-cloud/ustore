@@ -308,14 +308,15 @@ void measure_head( //
     stl_db_t& db,
     read_tasks_soa_t tasks,
     ukv_size_t const n,
-    [[maybe_unused]] ukv_options_t const c_options,
-    ukv_tape_ptr_t* c_tape,
-    ukv_size_t* c_capacity,
+    ukv_options_t const,
+    ukv_val_len_t** c_found_lengths,
+    ukv_val_ptr_t* c_found_values,
+    stl_arena_t& arena,
     ukv_error_t* c_error) {
 
     // 1. Allocate a tape for all the values to be pulled
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
-    byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
+    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
     if (*c_error)
         return;
 
@@ -335,9 +336,10 @@ void read_head( //
     stl_db_t& db,
     read_tasks_soa_t tasks,
     ukv_size_t const n,
-    [[maybe_unused]] ukv_options_t const c_options,
-    ukv_tape_ptr_t* c_tape,
-    ukv_size_t* c_capacity,
+    ukv_options_t const,
+    ukv_val_len_t** c_found_lengths,
+    ukv_val_ptr_t* c_found_values,
+    stl_arena_t& arena,
     ukv_error_t* c_error) {
 
     std::shared_lock _ {db.mutex};
@@ -353,13 +355,16 @@ void read_head( //
     }
 
     // 2. Allocate a tape for all the values to be fetched
-    byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
+    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
     if (*c_error)
         return;
 
     // 3. Fetch the data
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
     ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * n;
+    *c_found_lengths = lens;
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
+
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t& col = stl_collection(db, task.collection);
@@ -380,7 +385,7 @@ void write_txn( //
     stl_txn_t& txn,
     write_tasks_soa_t tasks,
     ukv_size_t const n,
-    [[maybe_unused]] ukv_options_t const c_options,
+    ukv_options_t const,
     ukv_error_t* c_error) {
 
     // No need for locking here, until we commit, unless, of course,
@@ -406,13 +411,14 @@ void measure_txn( //
     read_tasks_soa_t tasks,
     ukv_size_t const n,
     ukv_options_t const c_options,
-    ukv_tape_ptr_t* c_tape,
-    ukv_size_t* c_capacity,
+    ukv_val_len_t** c_found_lengths,
+    ukv_val_ptr_t* c_found_values,
+    stl_arena_t& arena,
     ukv_error_t* c_error) {
 
     // 1. Allocate a tape for all the values to be pulled
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
-    byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
+    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
     if (*c_error)
         return;
 
@@ -423,6 +429,9 @@ void measure_txn( //
 
     // 2. Pull the data
     auto lens = reinterpret_cast<ukv_val_len_t*>(tape);
+    *c_found_lengths = lens;
+    *c_found_values = nullptr;
+
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t& col = stl_collection(db, task.collection);
@@ -459,8 +468,9 @@ void read_txn( //
     read_tasks_soa_t tasks,
     ukv_size_t const n,
     ukv_options_t const c_options,
-    ukv_tape_ptr_t* c_tape,
-    ukv_size_t* c_capacity,
+    ukv_val_len_t** c_found_lengths,
+    ukv_val_ptr_t* c_found_values,
+    stl_arena_t& arena,
     ukv_error_t* c_error) {
 
     stl_db_t& db = *txn.db_ptr;
@@ -491,13 +501,16 @@ void read_txn( //
     }
 
     // 2. Allocate a tape for all the values to be pulled
-    byte_t* tape = reserve_tape(c_tape, c_capacity, total_bytes, c_error);
+    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
     if (*c_error)
         return;
 
     // 3. Pull the data
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
     ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * n;
+    *c_found_lengths = lens;
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
+
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t& col = stl_collection(db, task.collection);
@@ -543,14 +556,20 @@ void ukv_read( //
 
     ukv_options_t const c_options,
 
-    ukv_tape_ptr_t* c_tape,
-    ukv_size_t* c_capacity,
+    ukv_val_len_t** c_found_lengths,
+    ukv_val_ptr_t* c_found_values,
+
+    ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
     if (!c_db) {
         *c_error = "DataBase is NULL!";
         return;
     }
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
@@ -560,11 +579,11 @@ void ukv_read( //
 
     if (c_txn) {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_txn : &read_txn;
-        return func(txn, tasks, c_keys_count, c_options, c_tape, c_capacity, c_error);
+        return func(txn, tasks, c_keys_count, c_options, c_found_lengths, c_found_values, arena, c_error);
     }
     else {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_head : &read_head;
-        return func(db, tasks, c_keys_count, c_options, c_tape, c_capacity, c_error);
+        return func(db, tasks, c_keys_count, c_options, c_found_lengths, c_found_values, arena, c_error);
     }
 }
 
@@ -579,7 +598,7 @@ void ukv_write( //
     ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
-    ukv_tape_ptr_t const* c_vals,
+    ukv_val_ptr_t const* c_vals,
     ukv_size_t const c_vals_stride,
 
     ukv_val_len_t const* c_offs,
@@ -589,6 +608,7 @@ void ukv_write( //
     ukv_size_t const c_lens_stride,
 
     ukv_options_t const c_options,
+    ukv_arena_t*,
     ukv_error_t* c_error) {
 
     if (!c_db) {
@@ -600,7 +620,7 @@ void ukv_write( //
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_ptr_gt<ukv_tape_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_ptr_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_ptr_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_ptr_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
@@ -614,7 +634,7 @@ void ukv_write( //
 /*********************************************************/
 
 void ukv_open( //
-    char const* c_config,
+    ukv_str_view_t c_config,
     ukv_t* c_db,
     ukv_error_t* c_error) {
 
@@ -639,7 +659,8 @@ void ukv_open( //
 void ukv_collection_upsert(
     // Inputs:
     ukv_t const c_db,
-    char const* c_col_name,
+    ukv_str_view_t c_col_name,
+    ukv_str_view_t c_config,
     // Outputs:
     ukv_collection_t* c_col,
     ukv_error_t* c_error) {
@@ -679,9 +700,9 @@ void ukv_collection_upsert(
 void ukv_collection_remove(
     // Inputs:
     ukv_t const c_db,
-    char const* c_col_name,
+    ukv_str_view_t c_col_name,
     // Outputs:
-    [[maybe_unused]] ukv_error_t* c_error) {
+    ukv_error_t* c_error) {
 
     if (!c_db) {
         *c_error = "DataBase is NULL!";
@@ -700,13 +721,17 @@ void ukv_collection_remove(
 }
 
 void ukv_control( //
-    [[maybe_unused]] ukv_t const c_db,
-    [[maybe_unused]] ukv_str_view_t c_request,
+    ukv_t const c_db,
+    ukv_str_view_t c_request,
     ukv_str_view_t* c_response,
     ukv_error_t* c_error) {
 
     if (!c_db) {
         *c_error = "DataBase is NULL!";
+        return;
+    }
+    if (!c_request) {
+        *c_error = "Request is NULL!";
         return;
     }
     *c_response = NULL;
@@ -837,10 +862,11 @@ void ukv_txn_commit( //
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
-void ukv_tape_free(ukv_t const, ukv_tape_ptr_t c_ptr, ukv_size_t c_len) {
-    if (!c_ptr || !c_len)
+void ukv_arena_free(ukv_t const, ukv_arena_t c_arena) {
+    if (!c_arena)
         return;
-    allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
+    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
+    delete &arena;
 }
 
 void ukv_txn_free(ukv_t const, ukv_txn_t const c_txn) {

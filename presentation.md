@@ -206,7 +206,7 @@ typedef void* ukv_collection_t;
 
 typedef uint64_t ukv_key_t;
 typedef uint32_t ukv_val_len_t;
-typedef uint8_t* ukv_tape_ptr_t;
+typedef uint8_t* ukv_val_ptr_t;
 typedef uint64_t ukv_size_t;
 typedef char const* ukv_error_t;
 ```
@@ -270,7 +270,7 @@ void ukv_write( //
     ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
 
-    ukv_tape_ptr_t const* values,
+    ukv_val_ptr_t const* values,
     ukv_size_t const values_stride,
     ukv_val_len_t const* offsets,
     ukv_size_t const offsets_stride,
@@ -278,6 +278,7 @@ void ukv_write( //
     ukv_size_t const lengths_stride,
 
     ukv_options_t const options,
+    ukv_arena_t* arena,
     ukv_error_t* error);
 ```
 
@@ -463,8 +464,8 @@ func forwardError(error_c C.ukv_error_t) error {
 	return nil
 }
 
-func cleanTape(db *DataBase, tape_c C.ukv_tape_ptr_t, tape_length_c C.ukv_size_t) {
-	C.ukv_tape_free(db.raw, tape_c, tape_length_c)
+func cleanTape(db *DataBase, tape_c C.ukv_val_ptr_t, tape_length_c C.ukv_size_t) {
+	C.ukv_arena_free(db.raw, tape_c, tape_length_c)
 }
 
 func (db *DataBase) ReConnect(config string) error {

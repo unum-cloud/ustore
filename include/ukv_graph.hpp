@@ -94,13 +94,10 @@ inline ukv_vertex_role_t invert(ukv_vertex_role_t role) {
     __builtin_unreachable();
 }
 
-inline range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
-    // Handle missing vertices
-    if (bytes.size() < 2 * sizeof(ukv_vertex_degree_t))
-        return {};
-
-    auto degrees = reinterpret_cast<ukv_vertex_degree_t const*>(bytes.begin());
-    auto ships = reinterpret_cast<neighborship_t const*>(degrees + 2);
+inline range_gt<neighborship_t const*> neighbors(ukv_vertex_degree_t const* degrees,
+                                                 ukv_key_t const* neighborships,
+                                                 ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+    auto ships = reinterpret_cast<neighborship_t const*>(neighborships);
 
     switch (role) {
     case ukv_vertex_source_k: return {ships, ships + degrees[0]};
@@ -109,6 +106,15 @@ inline range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_
     case ukv_vertex_role_unknown_k: return {};
     }
     __builtin_unreachable();
+}
+
+inline range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+    // Handle missing vertices
+    if (bytes.size() < 2 * sizeof(ukv_vertex_degree_t))
+        return {};
+
+    auto degrees = reinterpret_cast<ukv_vertex_degree_t const*>(bytes.begin());
+    return neighbors(degrees, reinterpret_cast<ukv_key_t const*>(degrees + 2), role);
 }
 
 struct neighborhood_t {
@@ -128,6 +134,14 @@ struct neighborhood_t {
         center = center_vertex;
         targets = neighbors(bytes, ukv_vertex_source_k);
         sources = neighbors(bytes, ukv_vertex_target_k);
+    }
+
+    inline neighborhood_t(ukv_key_t center_vertex,
+                          ukv_vertex_degree_t const* degrees,
+                          ukv_key_t const* neighborships) noexcept {
+        center = center_vertex;
+        targets = neighbors(degrees, neighborships, ukv_vertex_source_k);
+        sources = neighbors(degrees, neighborships, ukv_vertex_target_k);
     }
 
     inline std::size_t size() const noexcept { return targets.size() + sources.size(); }
@@ -181,6 +195,67 @@ struct neighborhood_t {
         auto r = equal_subrange(sources, neighborship_t {source, edge_id});
         return r.size() ? r.begin() : nullptr;
     }
+
+    inline range_gt<neighborship_t const*> only(ukv_vertex_role_t role) const noexcept {
+        switch (role) {
+        case ukv_vertex_source_k: return targets;
+        case ukv_vertex_target_k: return sources;
+        default: return {};
+        }
+    }
+};
+
+struct neighborhoods_iterator_t {
+    strided_ptr_gt<ukv_key_t const> centers_;
+    ukv_vertex_degree_t const* degrees_per_vertex_ = nullptr;
+    ukv_key_t const* neighborships_per_vertex_ = nullptr;
+
+    neighborhoods_iterator_t(strided_ptr_gt<ukv_key_t const> centers,
+                             ukv_vertex_degree_t const* degrees_per_vertex,
+                             ukv_key_t const* neighborships_per_vertex) noexcept
+        : centers_(centers), degrees_per_vertex_(degrees_per_vertex),
+          neighborships_per_vertex_(neighborships_per_vertex) {}
+
+    inline neighborhood_t operator*() const noexcept {
+        return {*centers_, degrees_per_vertex_, neighborships_per_vertex_};
+    }
+    inline neighborhoods_iterator_t operator++(int) const noexcept {
+        return {
+            centers_++,
+            degrees_per_vertex_ + 2u,
+            neighborships_per_vertex_ + (degrees_per_vertex_[0] + degrees_per_vertex_[1]) * 2u,
+        };
+    }
+
+    inline neighborhoods_iterator_t& operator++() noexcept {
+        ++centers_;
+        neighborships_per_vertex_ += (degrees_per_vertex_[0] + degrees_per_vertex_[1]) * 2u;
+        degrees_per_vertex_ += 2u;
+        return *this;
+    }
+
+    inline bool operator==(neighborhoods_iterator_t const& other) const noexcept { return centers_ == other.centers_; }
+    inline bool operator!=(neighborhoods_iterator_t const& other) const noexcept { return centers_ != other.centers_; }
+};
+
+struct neighborhoods_t {
+    strided_range_gt<ukv_key_t const> centers_;
+    ukv_vertex_degree_t const* degrees_per_vertex_ = nullptr;
+    ukv_key_t const* neighborships_per_vertex_ = nullptr;
+
+    neighborhoods_t(strided_range_gt<ukv_key_t const> centers,
+                    ukv_vertex_degree_t const* degrees_per_vertex,
+                    ukv_key_t const* neighborships_per_vertex) noexcept
+        : centers_(centers), degrees_per_vertex_(degrees_per_vertex),
+          neighborships_per_vertex_(neighborships_per_vertex) {}
+
+    inline neighborhoods_iterator_t begin() const noexcept {
+        return {centers_.begin(), degrees_per_vertex_, neighborships_per_vertex_};
+    }
+    inline neighborhoods_iterator_t end() const noexcept {
+        return {centers_.end(), degrees_per_vertex_ + centers_.size() * 2u, nullptr};
+    }
+    inline std::size_t size() const noexcept { return centers_.size(); }
 };
 
 /**
@@ -193,14 +268,13 @@ struct neighborhood_t {
 class graph_collection_session_t {
     collection_t index_;
     ukv_txn_t txn_ = nullptr;
-    managed_tape_t read_tape_;
+    managed_arena_t arena_;
 
   public:
-    graph_collection_session_t(collection_t&& col) : index_(std::move(col)), read_tape_(col.db()) {}
-    graph_collection_session_t(collection_t&& col, txn_t& txn)
-        : index_(std::move(col)), txn_(txn), read_tape_(col.db()) {}
+    graph_collection_session_t(collection_t&& col) : index_(std::move(col)), arena_(col.db()) {}
+    graph_collection_session_t(collection_t&& col, txn_t& txn) : index_(std::move(col)), txn_(txn), arena_(col.db()) {}
 
-    inline managed_tape_t& tape() noexcept { return read_tape_; }
+    inline managed_arena_t& arena() noexcept { return arena_; }
 
     error_t upsert(edges_soa_view_t const& edges) noexcept {
         error_t error;
@@ -216,8 +290,7 @@ class graph_collection_session_t {
                                edges.target_ids.begin().get(),
                                edges.target_ids.stride(),
                                ukv_options_default_k,
-                               read_tape_.internal_memory(),
-                               read_tape_.internal_capacity(),
+                               arena_.internal_cptr(),
                                error.internal_cptr());
         return error;
     }
@@ -236,14 +309,16 @@ class graph_collection_session_t {
                                edges.target_ids.begin().get(),
                                edges.target_ids.stride(),
                                ukv_options_default_k,
-                               read_tape_.internal_memory(),
-                               read_tape_.internal_capacity(),
+                               arena_.internal_cptr(),
                                error.internal_cptr());
         return error;
     }
 
-    expected_gt<neighborhood_t> neighbors(ukv_key_t vertex) noexcept {
+    expected_gt<neighborhood_t> neighborhood(ukv_key_t vertex) noexcept {
         error_t error;
+        ukv_vertex_degree_t* degrees_per_vertex = NULL;
+        ukv_key_t* neighborships_per_vertex = NULL;
+
         ukv_graph_gather_neighbors(index_.db(),
                                    txn_,
                                    index_.internal_cptr(),
@@ -252,12 +327,13 @@ class graph_collection_session_t {
                                    1,
                                    0,
                                    ukv_options_default_k,
-                                   read_tape_.internal_memory(),
-                                   read_tape_.internal_capacity(),
+                                   &degrees_per_vertex,
+                                   &neighborships_per_vertex,
+                                   arena_.internal_cptr(),
                                    error.internal_cptr());
         if (error)
             return error;
-        return neighborhood_t(vertex, *read_tape_.untape(1).begin());
+        return neighborhood_t(vertex, degrees_per_vertex, neighborships_per_vertex);
     }
 };
 

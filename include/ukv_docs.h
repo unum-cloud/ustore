@@ -75,14 +75,13 @@ void ukv_docs_write( //
     ukv_options_t const options,
     ukv_format_t const format,
 
-    ukv_tape_ptr_t const* values,
+    ukv_val_ptr_t const* values,
     ukv_size_t const values_stride,
 
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
 
-    ukv_tape_ptr_t* tape,
-    ukv_size_t* capacity,
+    ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
@@ -115,8 +114,7 @@ void ukv_docs_read( //
     ukv_options_t const options,
     ukv_format_t const format,
 
-    ukv_tape_ptr_t* tape,
-    ukv_size_t* capacity,
+    ukv_arena_t* arena,
     ukv_error_t* error);
 
 #ifdef __cplusplus

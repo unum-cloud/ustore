@@ -23,7 +23,7 @@ using sequence_t = std::int64_t;
  * Just like humans after puberty :)
  */
 class value_t {
-    ukv_tape_ptr_t ptr_ = nullptr;
+    ukv_val_ptr_t ptr_ = nullptr;
     ukv_val_len_t length_ = 0;
     ukv_val_len_t cap_ = 0;
 
@@ -48,7 +48,7 @@ class value_t {
         auto new_ptr = allocator_t {}.allocate(size);
         if (!new_ptr)
             throw std::bad_alloc();
-        ptr_ = reinterpret_cast<ukv_tape_ptr_t>(new_ptr);
+        ptr_ = reinterpret_cast<ukv_val_ptr_t>(new_ptr);
         cap_ = length_ = size;
     }
 
@@ -81,7 +81,7 @@ class value_t {
             if (ptr_)
                 allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
 
-            ptr_ = reinterpret_cast<ukv_tape_ptr_t>(new_ptr);
+            ptr_ = reinterpret_cast<ukv_val_ptr_t>(new_ptr);
             cap_ = length_ = new_size;
         }
         else {
@@ -103,14 +103,50 @@ class value_t {
     inline operator value_view_t() const noexcept { return {ptr_, length_}; }
     inline void clear() noexcept { length_ = 0; }
 
-    inline ukv_tape_ptr_t* internal_cptr() noexcept { return &ptr_; }
+    inline ukv_val_ptr_t* internal_cptr() noexcept { return &ptr_; }
     inline ukv_val_len_t* internal_length() noexcept { return &length_; }
     inline ukv_val_len_t* internal_cap() noexcept { return &cap_; }
 };
 
-struct managed_memory_t {
-    std::vector<std::uint8_t> output_tape;
+struct stl_arena_t {
+    std::vector<byte_t> output_tape;
+    std::vector<byte_t> unpacked_tape;
+    /**
+     * In complex multi-step operations we need arrays
+     * of `located_key_t` to sort/navigate them more easily.
+     */
+    std::vector<located_key_t> updated_keys;
+    /**
+     * In complex multi-step operations we need disjoing arrays
+     * variable-length buffers to avoid expensive `memmove`s in
+     * big batch operations.
+     */
+    std::vector<value_t> updated_vals;
 };
+
+inline stl_arena_t* cast_arena(ukv_arena_t* c_arena, ukv_error_t* c_error) noexcept {
+    try {
+        if (!*c_arena)
+            *c_arena = new stl_arena_t;
+        return *reinterpret_cast<stl_arena_t**>(c_arena);
+    }
+    catch (...) {
+        *c_error = "Failed to allocate memory!";
+        return nullptr;
+    }
+}
+
+template <typename element_at>
+inline element_at* prepare_memory(std::vector<element_at>& elems, std::size_t n, ukv_error_t* c_error) noexcept {
+    try {
+        elems.resize(n);
+        return elems.data();
+    }
+    catch (...) {
+        *c_error = "Failed to allocate memory!";
+        return nullptr;
+    }
+}
 
 /**
  * @brief Solves the problem of modulo arithmetic and `sequence_t` overflow.
@@ -124,34 +160,6 @@ inline bool entry_was_overwritten(sequence_t entry_sequence,
     return transaction_sequence <= youngest_sequence
                ? ((entry_sequence >= transaction_sequence) & (entry_sequence <= youngest_sequence))
                : ((entry_sequence >= transaction_sequence) | (entry_sequence <= youngest_sequence));
-}
-
-inline byte_t* reserve_tape(ukv_tape_ptr_t* tape_ptr,
-                            ukv_size_t* tape_length,
-                            ukv_size_t new_length,
-                            ukv_error_t* c_error) {
-
-    byte_t* tape = *reinterpret_cast<byte_t**>(tape_ptr);
-    if (new_length >= *tape_length) {
-        try {
-            if (tape)
-                allocator_t {}.deallocate(tape, *tape_length);
-            tape = allocator_t {}.allocate(new_length);
-            if (!tape) {
-                *c_error = "Failed to allocate memory!";
-                return nullptr;
-            }
-            *tape_ptr = reinterpret_cast<ukv_tape_ptr_t>(tape);
-            *tape_length = new_length;
-            return tape;
-        }
-        catch (...) {
-            *c_error = "Failed to allocate memory!";
-            return nullptr;
-        }
-    }
-    else
-        return tape;
 }
 
 struct read_task_t {
@@ -196,7 +204,7 @@ struct write_task_t {
 struct write_tasks_soa_t {
     strided_ptr_gt<ukv_collection_t> cols;
     strided_ptr_gt<ukv_key_t const> keys;
-    strided_ptr_gt<ukv_tape_ptr_t const> vals;
+    strided_ptr_gt<ukv_val_ptr_t const> vals;
     strided_ptr_gt<ukv_val_len_t const> offs;
     strided_ptr_gt<ukv_val_len_t const> lens;
 
