@@ -47,45 +47,50 @@ void ukv_open([[maybe_unused]] char const* c_config, ukv_t* c_db, ukv_error_t* c
     rocksdb::Options options;
     rocksdb::ConfigOptions config_options;
 
-    rocks_status_t status = rocksdb::LoadLatestOptions(config_options, "./tmp", &options, &column_descriptors);
+    rocks_status_t status = rocksdb::LoadLatestOptions(config_options, "./tmp/rocksdb/", &options, &column_descriptors);
     if (column_descriptors.empty())
         column_descriptors.push_back({ROCKSDB_NAMESPACE::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
 
+    rocks_db_t* db = nullptr;
     options.create_if_missing = true;
     status = rocks_db_t::Open(options,
                               rocksdb::TransactionDBOptions(),
-                              "./tmp",
+                              "./tmp/rocksdb/",
                               column_descriptors,
                               &db_wrapper->columns,
-                              &db_wrapper->db);
+                              &db);
+
+    db_wrapper->db = std::unique_ptr<rocks_db_t>(db);
+
     if (!status.ok())
         *c_error = "Open Error";
     *c_db = db_wrapper;
 }
 
 void write_head( //
-    rocks_db_t* db,
+    rocks_db_wrapper_t* db_wrapper,
     write_tasks_soa_t tasks,
     ukv_size_t const n,
     ukv_error_t* c_error) {
 
+    rocks_status_t status;
     rocksdb::WriteBatch batch;
-    write_task_t task_arr[n];
+    std::vector<write_task_t> task_arr(n);
 
     for (ukv_size_t i = 0; i != n; ++i) {
         task_arr[i] = tasks[i];
-        rocks_col_t* col =
-            task_arr[i].collection ? reinterpret_cast<rocks_col_t*>(task_arr[i].collection) : db->DefaultColumnFamily();
-        rocks_status_t status = batch.Put(col,
-                                          to_slice(&task_arr[i].key),
-                                          to_slice(task_arr[i].begin, task_arr[i].offset, task_arr[i].length_));
+        rocks_col_t* col = task_arr[i].collection ? reinterpret_cast<rocks_col_t*>(task_arr[i].collection)
+                                                  : db_wrapper->db->DefaultColumnFamily();
+        status = batch.Put(col,
+                           to_slice(&task_arr[i].key),
+                           to_slice(task_arr[i].begin, task_arr[i].offset, task_arr[i].length_));
         if (!status.ok()) {
             *c_error = "Write Error";
             return;
         }
     }
 
-    rocks_status_t status = db->Write(rocksdb::WriteOptions(), &batch);
+    status = db_wrapper->db->Write(rocksdb::WriteOptions(), &batch);
     if (!status.ok())
         *c_error = "Write Error";
 }
@@ -97,7 +102,7 @@ void write_txn( //
     ukv_error_t* c_error) {
 
     rocks_status_t status;
-    write_task_t task_arr[n];
+    std::vector<write_task_t> task_arr(n);
 
     for (ukv_size_t i = 0; i != n; ++i) {
         task_arr[i] = tasks[i];
@@ -134,12 +139,7 @@ void ukv_write( //
     [[maybe_unused]] ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
-        return;
-    }
-
-    rocks_db_t* db = reinterpret_cast<rocks_db_wrapper_t*>(c_db)->db;
+    rocks_db_wrapper_t* db = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
     rocks_txn_t* txn = (rocks_txn_t*)(c_txn);
 
     strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
@@ -154,7 +154,7 @@ void ukv_write( //
 }
 
 void read_head( //
-    rocks_db_t* db,
+    rocks_db_wrapper_t* db_wrapper,
     read_tasks_soa_t tasks,
     ukv_size_t const n,
     ukv_tape_ptr_t* c_tape,
@@ -164,17 +164,16 @@ void read_head( //
     std::vector<rocks_col_t*> columns(n);
     std::vector<rocksdb::Slice> keys(n);
     std::vector<std::string> values(n);
-
-    read_task_t task_arr[n];
+    std::vector<read_task_t> task_arr(n);
 
     for (ukv_size_t i = 0; i != n; ++i) {
         task_arr[i] = tasks[i];
-        columns[i] =
-            task_arr[i].collection ? reinterpret_cast<rocks_col_t*>(task_arr[i].collection) : db->DefaultColumnFamily();
+        columns[i] = task_arr[i].collection ? reinterpret_cast<rocks_col_t*>(task_arr[i].collection)
+                                            : db_wrapper->db->DefaultColumnFamily();
         keys[i] = to_slice(&task_arr[i].key);
     }
 
-    std::vector<rocks_status_t> statuses = db->MultiGet(rocksdb::ReadOptions(), columns, keys, &values);
+    std::vector<rocks_status_t> statuses = db_wrapper->db->MultiGet(rocksdb::ReadOptions(), columns, keys, &values);
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     for (std::size_t i = 0; i != values.size(); ++i)
         total_bytes += values[i].size();
@@ -197,7 +196,7 @@ void read_head( //
 }
 
 void read_txn( //
-    rocks_db_t* db,
+    rocks_db_wrapper_t* db_wrapper,
     rocks_txn_t* txn,
     read_tasks_soa_t tasks,
     ukv_size_t const n,
@@ -208,13 +207,12 @@ void read_txn( //
     std::vector<rocks_col_t*> columns(n);
     std::vector<rocksdb::Slice> keys(n);
     std::vector<std::string> values(n);
-
-    read_task_t task_arr[n];
+    std::vector<read_task_t> task_arr(n);
 
     for (ukv_size_t i = 0; i != n; ++i) {
         task_arr[i] = tasks[i];
-        columns[i] =
-            task_arr[i].collection ? reinterpret_cast<rocks_col_t*>(task_arr[i].collection) : db->DefaultColumnFamily();
+        columns[i] = task_arr[i].collection ? reinterpret_cast<rocks_col_t*>(task_arr[i].collection)
+                                            : db_wrapper->db->DefaultColumnFamily();
         keys[i] = to_slice(&task_arr[i].key);
     }
 
@@ -271,8 +269,8 @@ void ukv_read( //
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {cols, keys};
 
-    return txn ? read_txn(db_wrapper->db, txn, tasks, c_keys_count, c_tape, c_capacity, c_error)
-               : read_head(db_wrapper->db, tasks, c_keys_count, c_tape, c_capacity, c_error);
+    return txn ? read_txn(db_wrapper, txn, tasks, c_keys_count, c_tape, c_capacity, c_error)
+               : read_head(db_wrapper, tasks, c_keys_count, c_tape, c_capacity, c_error);
 }
 
 void ukv_collection_upsert( //
@@ -334,7 +332,7 @@ void ukv_txn_begin( //
     ukv_txn_t* c_txn,
     ukv_error_t* c_error) {
 
-    rocks_db_t* db = reinterpret_cast<rocks_db_wrapper_t*>(c_db)->db;
+    rocks_db_t* db = reinterpret_cast<rocks_db_wrapper_t*>(c_db)->db.get();
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(*c_txn);
     txn = db->BeginTransaction(rocksdb::WriteOptions(), rocksdb::TransactionOptions(), txn);
     if (!txn)
@@ -367,7 +365,6 @@ void ukv_collection_free([[maybe_unused]] ukv_t const db, [[maybe_unused]] ukv_c
 
 void ukv_free(ukv_t c_db) {
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
-    delete db_wrapper->db;
     delete db_wrapper;
 }
 

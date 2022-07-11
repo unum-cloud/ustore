@@ -8,7 +8,7 @@
  *
  * @section Assumptions and Limitations (in current version):
  * > Keys are preset to 8-byte unsigned integers.
- * > Zero-length values are not allowed, same for values over 4GB.
+ * > Values over 4GB long are not allowed, zero length is OK.
  * > Fully @b synchronous for the simplicity of interface.
  * > Iterators often can't be fully consistent, to allow concurrency.
  * > Maximum collection name length is set to 64 characters. Postgres does 59 :)
@@ -22,7 +22,7 @@
  *
  * @section Iterators
  * Implementing consistent iterators over concurrent state is exceptionally
- * expensive, thus we plan to implement those via "Pagination" in the future.
+ * expensive, thus we plan to implement those via "Pagination".
  *
  * @section Interface Conventions
  * 1. We try to expose just opaque struct pointers and functions to
@@ -122,6 +122,7 @@ typedef enum {
 } ukv_options_t;
 
 extern ukv_collection_t ukv_default_collection_k;
+extern ukv_val_len_t ukv_val_len_missing_k;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -166,9 +167,14 @@ void ukv_open( //
  *                           is assumed. Instead of passing one collection for
  *                           each key, you can use `ukv_option_read_colocated`.
  * @param[in] options        Write options.
+ *
  * @param[in] values         Pointer to a tape of concatenated values to be imported.
+ *                           A NULL `value` means that the key mist be deleted.
+ *                           To clear the `value` without removing the key, just
+ *                           pass a zero length.
+ *
  * @param[in] lengths        Pointer to lengths of chunks in packed into @p `values`.
- * @param[in] lengths        Pointer to offsets of relevant content within @p `values` chunks.
+ * @param[in] offsets        Pointer to offsets of relevant content within @p `values` chunks.
  * @param[out] error         The error to be handled.
  *
  * @section Why use offsets?

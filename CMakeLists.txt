@@ -17,28 +17,26 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wnon-virtual-dtor -Woverloaded-virtual")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-field-initializers")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wreorder -Wunused-parameter")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wfatal-errors")
-
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fstrict-vtable-pointers")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstrict-vtable-pointers")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunknown-attributes")
+
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wnon-virtual-dtor -Woverloaded-virtual")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-field-initializers")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wreorder -Wunused-parameter")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunknown-attributes")
 endif()
 
-# Supported CPU architecture flags:
-# https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8-a+simd")
-
 # Optimizations for common x86 CPUs.
+# https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
 if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse4.2 -mavx2") # -march=native
-
-  if(UNIX AND NOT APPLE)
-    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx512f") # Conflicts with (ROCKSDB PORTABLE ON). Decide Conditions.
-  endif()
 endif()
 
 # Optimizations for ARM CPUs.
@@ -106,6 +104,9 @@ include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
 # RocksDB
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 
+# LevelDB
+include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+
 # FastPFor Integer Compression for 32-bit integers
 FetchContent_Declare(
   fpfor
@@ -125,6 +126,7 @@ FetchContent_MakeAvailable(googletest)
 
 # Define the libraries we will need to build
 include_directories(include/ ${rocksdb_SOURCE_DIR}/include)
+include_directories(include/ ${leveldb_SOURCE_DIR}/include)
 
 add_library(ukv_stl
   src/ukv_stl.cpp
@@ -138,13 +140,21 @@ target_link_libraries(ukv_stl
 )
 
 add_library(ukv_rocksdb
-  src/ukv_stl.cpp
+  src/ukv_rocksdb.cpp
+  src/ukv_graph_pfor.cpp
+)
 
-  # src/ukv_graph_pfor.cpp
+add_library(ukv_leveldb
+  src/ukv_leveldb.cpp
+  src/ukv_graph_pfor.cpp
 )
 
 target_link_libraries(ukv_rocksdb
   rocksdb
+)
+
+target_link_libraries(ukv_leveldb
+  leveldb
 )
 
 add_library(ukv_beast_client src/ukv_beast_client.cpp)

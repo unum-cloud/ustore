@@ -9,8 +9,8 @@
  */
 
 #pragma once
-#include <string_view> // `std::string_view`
-#include <memory>      // `std::enable_shared_from_this`
+#include <string> // NULL-terminated named
+#include <memory> // `std::enable_shared_from_this`
 
 #include "ukv.h"
 #include "utility.hpp"

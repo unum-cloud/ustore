@@ -187,7 +187,7 @@ void export_matrix( //
     // Take buffer protocol handles
     // Flags can be: https://docs.python.org/3/c-api/buffer.html#readonly-format
     auto output_flags = PyBUF_WRITABLE | PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
-    py_buffer_t keys, values, values_lengths;
+    py_received_buffer_t keys, values, values_lengths;
     keys.initialized = PyObject_GetBuffer(keys_obj, &keys.py, PyBUF_ANY_CONTIGUOUS) == 0;
     values.initialized = PyObject_GetBuffer(values_obj, &values.py, output_flags) == 0;
     values_lengths.initialized = PyObject_GetBuffer(values_lengths_obj, &values_lengths.py, output_flags) == 0;
