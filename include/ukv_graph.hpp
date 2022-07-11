@@ -110,8 +110,7 @@ class graph_collection_session_t {
     managed_arena_t arena_;
 
   public:
-    graph_collection_session_t(collection_t&& col) : collection_(std::move(col)), arena_(col.db()) {}
-    graph_collection_session_t(collection_t&& col, txn_t& txn)
+    graph_collection_session_t(collection_t&& col, ukv_txn_t txn = nullptr)
         : collection_(std::move(col)), txn_(txn), arena_(col.db()) {}
 
     graph_collection_session_t(graph_collection_session_t&& other) noexcept
@@ -221,7 +220,7 @@ class graph_collection_session_t {
         sample.db = collection_.db();
         sample.txn = txn_;
         sample.arena = arena_.internal_cptr();
-        sample.cols = strided_range_gt<ukv_collection_t const> {*collection_.internal_cptr()};
+        sample.cols = strided_range_gt<ukv_collection_t const> {collection_.internal_cptr(), 0, vertices.size()};
         sample.keys = vertices;
         return sample.contains(transparent);
     }
