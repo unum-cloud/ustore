@@ -12,7 +12,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "ukv_docs.h"
+#include "ukv_docs.hpp"
 #include "helpers.hpp"
 
 /*********************************************************/
@@ -41,7 +41,7 @@ json_t sample_fields(json_t&& original,
 
     json_t empty {nullptr};
     json_t result = json_t::object();
-    for (size_t ptr_idx = 0; ptr_idx != json_pointers.size(); ++ptr_idx) {
+    for (std::size_t ptr_idx = 0; ptr_idx != json_pointers.size(); ++ptr_idx) {
 
         auto const& ptr = json_pointers[ptr_idx];
         auto const& ptr_str = json_pointers_strs[ptr_idx];

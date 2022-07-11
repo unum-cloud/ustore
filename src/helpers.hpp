@@ -108,6 +108,10 @@ class value_t {
     inline ukv_val_len_t* internal_cap() noexcept { return &cap_; }
 };
 
+struct managed_memory_t {
+    std::vector<std::uint8_t> output_tape;
+};
+
 /**
  * @brief Solves the problem of modulo arithmetic and `sequence_t` overflow.
  * Still works correctly, when `max` has overflown, but `min` hasn't yet,
