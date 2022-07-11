@@ -324,6 +324,9 @@ void measure_head( //
 
     // 2. Pull the data
     auto lens = reinterpret_cast<ukv_val_len_t*>(tape);
+    *c_found_lengths = lens;
+    *c_found_values = nullptr;
+
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t& col = stl_collection(db, task.collection);
@@ -660,7 +663,7 @@ void ukv_collection_upsert(
     // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
-    ukv_str_view_t c_config,
+    ukv_str_view_t,
     // Outputs:
     ukv_collection_t* c_col,
     ukv_error_t* c_error) {
