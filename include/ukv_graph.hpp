@@ -188,6 +188,21 @@ class graph_collection_session_t {
         strided_keys_t edges(neighborships_per_vertex + 2, stride, deg);
         return edges_soa_view_t {sources, targets, edges};
     }
+
+    expected_gt<edges_soa_view_t> edges(ukv_key_t source, ukv_key_t target) noexcept {
+        auto maybe_all = edges(source, ukv_vertex_source_k);
+        if (!maybe_all)
+            return maybe_all;
+
+        edges_soa_view_t all = *maybe_all;
+        auto begin_and_end = std::equal_range(all.target_ids.begin(), all.target_ids.end(), target);
+        auto begin_offset = begin_and_end.first - all.target_ids.begin();
+        auto count = begin_and_end.second - begin_and_end.first;
+        all.source_ids = all.source_ids.subspan(begin_offset, count);
+        all.target_ids = all.target_ids.subspan(begin_offset, count);
+        all.edge_ids = all.edge_ids.subspan(begin_offset, count);
+        return all;
+    }
 };
 
 } // namespace unum::ukv
