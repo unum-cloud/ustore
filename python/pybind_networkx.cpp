@@ -220,12 +220,75 @@ void ukv::wrap_network(py::module& m) {
         net.inverted_index.remove(edges).throw_unhandled();
     });
 
-    net.def("add_edge_from", [](network_t& net, py::handle const& v1s, py::handle const& v2s) {});
-    net.def("add_edge_from",
-            [](network_t& net, py::handle const& v1s, py::handle const& v2s, py::handle const& eids) {});
-    net.def("remove_edge_from", [](network_t& net, py::handle const& v1s, py::handle const& v2s) {});
-    net.def("remove_edge_from",
-            [](network_t& net, py::handle const& v1s, py::handle const& v2s, py::handle const& eids) {});
+    net.def("add_edges_from", [](network_t& net, py::handle const& adjacency_list) {
+        auto handle_and_list = strided_array<ukv_key_t const>(adjacency_list);
+        if (handle_and_list.second.cols() != 2 || handle_and_list.second.cols() != 3)
+            throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
+
+        edges_soa_view_t edges {
+            handle_and_list.second.col(0),
+            handle_and_list.second.col(1),
+            handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
+                                               : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
+        };
+        net.inverted_index.upsert(edges).throw_unhandled();
+    });
+    net.def("remove_edges_from", [](network_t& net, py::handle const& adjacency_list) {
+        auto handle_and_list = strided_array<ukv_key_t const>(adjacency_list);
+        if (handle_and_list.second.cols() != 2 || handle_and_list.second.cols() != 3)
+            throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
+
+        edges_soa_view_t edges {
+            handle_and_list.second.col(0),
+            handle_and_list.second.col(1),
+            handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
+                                               : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
+        };
+        net.inverted_index.remove(edges).throw_unhandled();
+    });
+
+    net.def("add_edges_from", [](network_t& net, py::handle const& v1s, py::handle const& v2s) {
+        auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
+        auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
+        edges_soa_view_t edges {
+            handle_and_sources.second,
+            handle_and_targets.second,
+        };
+        net.inverted_index.upsert(edges).throw_unhandled();
+    });
+    net.def("remove_edges_from", [](network_t& net, py::handle const& v1s, py::handle const& v2s) {
+        auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
+        auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
+        edges_soa_view_t edges {
+            handle_and_sources.second,
+            handle_and_targets.second,
+        };
+        net.inverted_index.remove(edges).throw_unhandled();
+    });
+
+    net.def("add_edges_from", [](network_t& net, py::handle const& v1s, py::handle const& v2s, py::handle const& eids) {
+        auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
+        auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
+        auto handle_and_edge_ids = strided_array<ukv_key_t const>(eids);
+        edges_soa_view_t edges {
+            handle_and_sources.second,
+            handle_and_targets.second,
+            handle_and_edge_ids.second,
+        };
+        net.inverted_index.upsert(edges).throw_unhandled();
+    });
+    net.def("remove_edges_from",
+            [](network_t& net, py::handle const& v1s, py::handle const& v2s, py::handle const& eids) {
+                auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
+                auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
+                auto handle_and_edge_ids = strided_array<ukv_key_t const>(eids);
+                edges_soa_view_t edges {
+                    handle_and_sources.second,
+                    handle_and_targets.second,
+                    handle_and_edge_ids.second,
+                };
+                net.inverted_index.remove(edges).throw_unhandled();
+            });
 
     // Bulk Writes
     net.def("clear_edges", [](network_t& net) {
