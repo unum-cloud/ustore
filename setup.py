@@ -18,7 +18,7 @@ ext_modules = [
         include_dirs=['include/', 'python/'],
         library_dirs=['build/lib/'],
         libraries=['ukv_stl'],
-        extra_compile_args=['-Wfatal-errors'],
+        extra_compile_args=['-std=c++17', '-O3'],
         define_macros=[
             ('UKV_VERSION', __version__),
             ('UKV_PYTHON_MODULE_NAME', 'stl')
@@ -35,7 +35,7 @@ ext_modules = [
         include_dirs=['include/', 'python/'],
         library_dirs=['build/lib/'],
         libraries=['ukv_rocksdb', 'rocksdb'],
-        extra_compile_args=['-Wfatal-errors'],
+        extra_compile_args=['-std=c++17', '-O3'],
         define_macros=[
             ('UKV_VERSION', __version__),
             ('UKV_PYTHON_MODULE_NAME', 'rocks')
@@ -52,7 +52,7 @@ ext_modules = [
         include_dirs=['include/', 'python/'],
         library_dirs=['build/lib/'],
         libraries=['ukv_leveldb', 'leveldb'],
-        extra_compile_args=['-Wfatal-errors'],
+        extra_compile_args=['-std=c++17', '-O3'],
         define_macros=[
             ('UKV_VERSION', __version__),
             ('UKV_PYTHON_MODULE_NAME', 'level')
