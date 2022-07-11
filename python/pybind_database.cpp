@@ -357,7 +357,7 @@ void ukv::wrap_database(py::module& m) {
     py_db.def(
         "set",
         [](py_db_t& py_db, ukv_key_t key, py::bytes const& value) {
-            return set_item(py_db.native, nullptr, nullptr, key, &value);
+            return set_item(py_db.native, nullptr, nullptr, py_db.session.arena(), key, &value);
         },
         py::arg("key"),
         py::arg("value"));
@@ -367,7 +367,7 @@ void ukv::wrap_database(py::module& m) {
         [](py_db_t& py_db, std::string const& collection, ukv_key_t key, py::bytes const& value) {
             auto maybe_col = py_db.native[collection];
             maybe_col.throw_unhandled();
-            return set_item(py_db.native, nullptr, *maybe_col, key, &value);
+            return set_item(py_db.native, nullptr, *maybe_col, py_db.session.arena(), key, &value);
         },
         py::arg("collection"),
         py::arg("key"),
@@ -394,6 +394,7 @@ void ukv::wrap_database(py::module& m) {
             return set_item(py_col.db_ptr->native,
                             py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                             py_col.native,
+                            py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
                             key,
                             &value);
         },
@@ -437,7 +438,7 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def(
         "set",
         [](py_txn_t& py_txn, ukv_key_t key, py::bytes const& value) {
-            return set_item(py_txn.db_ptr->native, py_txn.native, nullptr, key, &value);
+            return set_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.arena(), key, &value);
         },
         py::arg("key"),
         py::arg("value"));
@@ -447,7 +448,7 @@ void ukv::wrap_database(py::module& m) {
         [](py_txn_t& py_txn, std::string const& collection, ukv_key_t key, py::bytes const& value) {
             auto maybe_col = py_txn.db_ptr->native[collection];
             maybe_col.throw_unhandled();
-            return set_item(py_txn.db_ptr->native, py_txn.native, *maybe_col, key, &value);
+            return set_item(py_txn.db_ptr->native, py_txn.native, *maybe_col, py_txn.native.arena(), key, &value);
         },
         py::arg("collection"),
         py::arg("key"),
@@ -493,10 +494,11 @@ void ukv::wrap_database(py::module& m) {
         return get_item(py_db.native, nullptr, nullptr, py_db.session.arena(), key);
     });
     py_db.def("__setitem__", [](py_db_t& py_db, ukv_key_t key, py::bytes const& value) {
-        return set_item(py_db.native, nullptr, nullptr, key, &value);
+        return set_item(py_db.native, nullptr, nullptr, py_db.session.arena(), key, &value);
     });
-    py_db.def("__delitem__",
-              [](py_db_t& py_db, ukv_key_t key) { return set_item(py_db.native, nullptr, nullptr, key); });
+    py_db.def("__delitem__", [](py_db_t& py_db, ukv_key_t key) {
+        return set_item(py_db.native, nullptr, nullptr, py_db.session.arena(), key);
+    });
 
     py_txn.def("__contains__", [](py_txn_t& py_txn, ukv_key_t key) {
         return contains_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.arena(), key);
@@ -505,10 +507,10 @@ void ukv::wrap_database(py::module& m) {
         return get_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.arena(), key);
     });
     py_txn.def("__setitem__", [](py_txn_t& py_txn, ukv_key_t key, py::bytes const& value) {
-        return set_item(py_txn.db_ptr->native, py_txn.native, nullptr, key, &value);
+        return set_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.arena(), key, &value);
     });
     py_txn.def("__delitem__", [](py_txn_t& py_txn, ukv_key_t key) {
-        return set_item(py_txn.db_ptr->native, py_txn.native, nullptr, key);
+        return set_item(py_txn.db_ptr->native, py_txn.native, nullptr, py_txn.native.arena(), key);
     });
 
     py_col.def("__contains__", [](py_col_t& py_col, ukv_key_t key) {
@@ -529,6 +531,7 @@ void ukv::wrap_database(py::module& m) {
         return set_item(py_col.db_ptr->native,
                         py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                         py_col.native,
+                        py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
                         key,
                         &value);
     });
@@ -536,6 +539,7 @@ void ukv::wrap_database(py::module& m) {
         return set_item(py_col.db_ptr->native,
                         py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                         py_col.native,
+                        py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
                         key);
     });
 
