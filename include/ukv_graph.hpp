@@ -63,7 +63,7 @@ struct edges_soa_view_t {
     inline edges_soa_view_t() = default;
     inline edges_soa_view_t(strided_range_gt<ukv_key_t const> sources,
                             strided_range_gt<ukv_key_t const> targets,
-                            strided_range_gt<ukv_key_t const> edges) noexcept
+                            strided_range_gt<ukv_key_t const> edges = {}) noexcept
         : source_ids(sources), target_ids(targets), edge_ids(edges) {}
 
     inline edges_soa_view_t(edge_t const* ptr, edge_t const* end) noexcept {
@@ -76,7 +76,7 @@ struct edges_soa_view_t {
     inline edges_soa_view_t(std::vector<edge_t> const& edges) noexcept
         : edges_soa_view_t(edges.data(), edges.data() + edges.size()) {}
 
-    inline std::size_t size() const noexcept { return edge_ids.size(); }
+    inline std::size_t size() const noexcept { return edge_ids.count(); }
 
     inline edge_t operator[](std::size_t i) const noexcept {
         edge_t result;
@@ -114,8 +114,13 @@ class graph_collection_session_t {
     graph_collection_session_t(collection_t&& col, txn_t& txn)
         : collection_(std::move(col)), txn_(txn), arena_(col.db()) {}
 
+    graph_collection_session_t(graph_collection_session_t&& other) noexcept
+        : collection_(std::move(other.collection_)), txn_(std::exchange(other.txn_, nullptr)),
+          arena_(std::move(other.arena_)) {}
+
     inline managed_arena_t& arena() noexcept { return arena_; }
     inline collection_t& collection() noexcept { return collection_; };
+    inline ukv_txn_t txn() const noexcept { return txn_; }
 
     error_t upsert(edges_soa_view_t const& edges) noexcept {
         error_t error;
@@ -124,7 +129,7 @@ class graph_collection_session_t {
                                collection_.internal_cptr(),
                                0,
                                edges.edge_ids.begin().get(),
-                               edges.edge_ids.size(),
+                               edges.edge_ids.count(),
                                edges.edge_ids.stride(),
                                edges.source_ids.begin().get(),
                                edges.source_ids.stride(),
@@ -143,7 +148,7 @@ class graph_collection_session_t {
                                collection_.internal_cptr(),
                                0,
                                edges.edge_ids.begin().get(),
-                               edges.edge_ids.size(),
+                               edges.edge_ids.count(),
                                edges.edge_ids.stride(),
                                edges.source_ids.begin().get(),
                                edges.source_ids.stride(),
@@ -155,7 +160,75 @@ class graph_collection_session_t {
         return error;
     }
 
-    expected_gt<edges_soa_view_t> edges(ukv_key_t vertex, ukv_vertex_role_t role = ukv_vertex_role_any_k) noexcept {
+    expected_gt<ukv_vertex_degree_t> degree(ukv_key_t vertex,
+                                            ukv_vertex_role_t role = ukv_vertex_role_any_k,
+                                            bool transparent = false) noexcept {
+
+        auto maybe_degrees = degrees({vertex}, {role}, transparent);
+        if (!maybe_degrees)
+            return maybe_degrees.release_error();
+        auto degrees = *maybe_degrees;
+        return ukv_vertex_degree_t(degrees[0]);
+    }
+
+    expected_gt<range_gt<ukv_vertex_degree_t const*>> degrees(
+        strided_range_gt<ukv_key_t const> vertices,
+        strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
+        bool transparent = false) noexcept {
+
+        error_t error;
+        ukv_vertex_degree_t* degrees_per_vertex = NULL;
+        ukv_key_t* neighborships_per_vertex = NULL;
+        ukv_options_t options = static_cast<ukv_options_t>(
+            (transparent ? ukv_option_read_transparent_k : ukv_options_default_k) | ukv_option_read_lengths_k);
+
+        ukv_graph_find_edges(collection_.db(),
+                             txn_,
+                             collection_.internal_cptr(),
+                             0,
+                             vertices.begin().get(),
+                             vertices.count(),
+                             vertices.stride(),
+                             roles.begin().get(),
+                             roles.stride(),
+                             options,
+                             &degrees_per_vertex,
+                             &neighborships_per_vertex,
+                             arena_.internal_cptr(),
+                             error.internal_cptr());
+        if (error)
+            return error;
+
+        return range_gt<ukv_vertex_degree_t const*> {degrees_per_vertex, degrees_per_vertex + vertices.size()};
+    }
+
+    expected_gt<bool> contains(ukv_key_t vertex, bool transparent = false) noexcept {
+
+        auto maybe_exists = contains(strided_range_gt<ukv_key_t const> {vertex}, transparent);
+        if (!maybe_exists)
+            return maybe_exists.release_error();
+        auto exists = *maybe_exists;
+        return bool(exists[0]);
+    }
+
+    /**
+     * @brief Checks if certain vertices are present in the graph.
+     * They maybe disconnected from everything else.
+     */
+    expected_gt<strided_range_gt<bool const>> contains(strided_range_gt<ukv_key_t const> vertices,
+                                                       bool transparent = false) noexcept {
+        sample_proxy_t sample;
+        sample.db = collection_.db();
+        sample.txn = txn_;
+        sample.arena = arena_.internal_cptr();
+        sample.cols = strided_range_gt<ukv_collection_t const> {*collection_.internal_cptr()};
+        sample.keys = vertices;
+        return sample.contains(transparent);
+    }
+
+    expected_gt<edges_soa_view_t> edges(ukv_key_t vertex,
+                                        ukv_vertex_role_t role = ukv_vertex_role_any_k,
+                                        bool transparent = false) noexcept {
         error_t error;
         ukv_vertex_degree_t* degrees_per_vertex = NULL;
         ukv_key_t* neighborships_per_vertex = NULL;
@@ -169,7 +242,7 @@ class graph_collection_session_t {
                              0,
                              &role,
                              0,
-                             ukv_options_default_k,
+                             transparent ? ukv_option_read_transparent_k : ukv_options_default_k,
                              &degrees_per_vertex,
                              &neighborships_per_vertex,
                              arena_.internal_cptr(),
@@ -189,8 +262,8 @@ class graph_collection_session_t {
         return edges_soa_view_t {sources, targets, edges};
     }
 
-    expected_gt<edges_soa_view_t> edges(ukv_key_t source, ukv_key_t target) noexcept {
-        auto maybe_all = edges(source, ukv_vertex_source_k);
+    expected_gt<edges_soa_view_t> edges(ukv_key_t source, ukv_key_t target, bool transparent = false) noexcept {
+        auto maybe_all = edges(source, ukv_vertex_source_k, transparent);
         if (!maybe_all)
             return maybe_all;
 
