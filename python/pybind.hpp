@@ -64,22 +64,26 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
           name(std::move(other.name)) {}
 };
 
-struct py_buffer_t {
-    ~py_buffer_t() {
+/**
+ * @brief RAII object for `py::handle` parsing purposes,
+ * which releases the buffer in the destructor.
+ */
+struct py_received_buffer_t {
+    ~py_received_buffer_t() {
         if (initialized)
             PyBuffer_Release(&py);
         initialized = false;
     }
-    py_buffer_t() = default;
-    py_buffer_t(py_buffer_t&&) = delete;
-    py_buffer_t(py_buffer_t const&) = delete;
+    py_received_buffer_t() = default;
+    py_received_buffer_t(py_received_buffer_t&&) = delete;
+    py_received_buffer_t(py_received_buffer_t const&) = delete;
 
     Py_buffer py;
     bool initialized = false;
 };
 
 template <typename scalar_at>
-std::pair<py_buffer_t, strided_range_gt<scalar_at>> strided_array(py::handle handle) {
+std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(py::handle handle) {
     PyObject* obj = handle.ptr();
     if (!PyObject_CheckBuffer(obj))
         throw std::invalid_argument("Buffer protocol unsupported");
@@ -88,7 +92,7 @@ std::pair<py_buffer_t, strided_range_gt<scalar_at>> strided_array(py::handle han
     if constexpr (std::is_const_v<scalar_at>)
         flags |= PyBUF_WRITABLE;
 
-    py_buffer_t raii;
+    py_received_buffer_t raii;
     raii.initialized = PyObject_GetBuffer(obj, &raii.py, flags) == 0;
     if (!raii.initialized)
         throw std::invalid_argument("Couldn't obtain buffer overviews");

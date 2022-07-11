@@ -35,6 +35,9 @@ struct neighborship_t {
     friend inline bool operator==(neighborship_t a, neighborship_t b) noexcept {
         return (a.neighbor_id == b.neighbor_id) & (a.edge_id < b.edge_id);
     }
+    friend inline bool operator!=(neighborship_t a, neighborship_t b) noexcept {
+        return (a.neighbor_id != b.neighbor_id) | (a.edge_id != b.edge_id);
+    }
 
     friend inline bool operator<(ukv_key_t a_vertex_id, neighborship_t b) noexcept {
         return a_vertex_id < b.neighbor_id;
@@ -122,6 +125,7 @@ struct neighborhood_t {
      * from the output of `ukv_graph_gather_neighbors`.
      */
     inline neighborhood_t(ukv_key_t center_vertex, value_view_t bytes) noexcept {
+        center = center_vertex;
         targets = neighbors(bytes, ukv_vertex_source_k);
         sources = neighbors(bytes, ukv_vertex_target_k);
     }
@@ -167,6 +171,16 @@ struct neighborhood_t {
     inline range_gt<neighborship_t const*> incoming_from(ukv_key_t source) const noexcept {
         return equal_subrange(sources, source);
     }
+
+    inline neighborship_t const* outgoing_to(ukv_key_t target, ukv_key_t edge_id) const noexcept {
+        auto r = equal_subrange(targets, neighborship_t {target, edge_id});
+        return r.size() ? r.begin() : nullptr;
+    }
+
+    inline neighborship_t const* incoming_from(ukv_key_t source, ukv_key_t edge_id) const noexcept {
+        auto r = equal_subrange(sources, neighborship_t {source, edge_id});
+        return r.size() ? r.begin() : nullptr;
+    }
 };
 
 /**
@@ -186,9 +200,31 @@ class graph_collection_session_t {
     graph_collection_session_t(collection_t&& col, txn_t& txn)
         : index_(std::move(col)), txn_(txn), read_tape_(col.db()) {}
 
+    inline managed_tape_t& tape() noexcept { return read_tape_; }
+
     error_t upsert(edges_soa_view_t const& edges) noexcept {
         error_t error;
         ukv_graph_upsert_edges(index_.db(),
+                               txn_,
+                               index_.internal_cptr(),
+                               0,
+                               edges.edge_ids.begin().get(),
+                               edges.edge_ids.size(),
+                               edges.edge_ids.stride(),
+                               edges.source_ids.begin().get(),
+                               edges.source_ids.stride(),
+                               edges.target_ids.begin().get(),
+                               edges.target_ids.stride(),
+                               ukv_options_default_k,
+                               read_tape_.internal_memory(),
+                               read_tape_.internal_capacity(),
+                               error.internal_cptr());
+        return error;
+    }
+
+    error_t remove(edges_soa_view_t const& edges) noexcept {
+        error_t error;
+        ukv_graph_remove_edges(index_.db(),
                                txn_,
                                index_.internal_cptr(),
                                0,

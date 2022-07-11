@@ -91,6 +91,11 @@ class value_t {
         }
     }
 
+    void erase(std::size_t offset, std::size_t length) noexcept {
+        std::memmove(ptr_ + offset, ptr_ + offset + length, length_ - offset - length);
+        length_ -= length;
+    }
+
     inline byte_t* begin() const noexcept { return reinterpret_cast<byte_t*>(ptr_); }
     inline byte_t* end() const noexcept { return begin() + length_; }
     inline std::size_t size() const noexcept { return length_; }
@@ -101,6 +106,10 @@ class value_t {
     inline ukv_tape_ptr_t* internal_cptr() noexcept { return &ptr_; }
     inline ukv_val_len_t* internal_length() noexcept { return &length_; }
     inline ukv_val_len_t* internal_cap() noexcept { return &cap_; }
+};
+
+struct managed_memory_t {
+    std::vector<std::uint8_t> output_tape;
 };
 
 /**
@@ -147,7 +156,7 @@ inline byte_t* reserve_tape(ukv_tape_ptr_t* tape_ptr,
 
 struct read_task_t {
     ukv_collection_t collection;
-    ukv_key_t key;
+    ukv_key_t const& key;
 
     inline located_key_t location() const noexcept { return located_key_t {collection, key}; }
 };
@@ -162,21 +171,22 @@ struct read_tasks_soa_t {
 
     inline read_task_t operator[](ukv_size_t i) const noexcept {
         ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
-        ukv_key_t key = keys[i];
+        ukv_key_t const& key = keys[i];
         return {col, key};
     }
 };
 
 struct write_task_t {
     ukv_collection_t collection;
-    ukv_key_t key;
+    ukv_key_t const& key;
     byte_t const* begin;
     ukv_val_len_t offset;
-    ukv_val_len_t length_;
+    ukv_val_len_t length;
 
     inline located_key_t location() const noexcept { return located_key_t {collection, key}; }
-    value_view_t view() const noexcept { return {begin + offset, begin + offset + length_}; }
-    buffer_t buffer() const { return {begin + offset, begin + offset + length_}; }
+    inline bool is_deleted() const noexcept { return begin == nullptr; }
+    value_view_t view() const noexcept { return {begin + offset, begin + offset + length}; }
+    buffer_t buffer() const { return {begin + offset, begin + offset + length}; }
 };
 
 /**
@@ -192,7 +202,7 @@ struct write_tasks_soa_t {
 
     inline write_task_t operator[](ukv_size_t i) const noexcept {
         ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
-        ukv_key_t key = keys[i];
+        ukv_key_t const& key = keys[i];
         byte_t const* begin;
         ukv_val_len_t off;
         ukv_val_len_t len;

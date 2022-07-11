@@ -122,6 +122,7 @@ void ukv_graph_gather_neighbors( //
  *
  * @param[in] edge_ids  Optional edge identifiers.
  *                      Necessary for edges storing a lot of metadata.
+ *                      Normal graphs would use `ukv_default_edge_id_k`.
  */
 void ukv_graph_upsert_edges( //
     ukv_t const db,
@@ -147,9 +148,12 @@ void ukv_graph_upsert_edges( //
     ukv_error_t* error);
 
 /**
- * @brief Removes edges from the graph.
+ * @brief Removed edges between provided vertices.
  *
- * @param[in] member_ids Either source OR target vertex IDs.
+ * @param[in] edge_ids  Optional edge identifiers.
+ *                      Normal graphs would use `ukv_default_edge_id_k`.
+ *                      If NULL is provided for a multi-graph with a deletion
+ *                      request, all edges between mentioned nodes will be removed.
  */
 void ukv_graph_remove_edges( //
     ukv_t const db,
@@ -162,11 +166,11 @@ void ukv_graph_remove_edges( //
     ukv_size_t const edges_count,
     ukv_size_t const edges_stride,
 
-    ukv_key_t const* member_ids,
-    ukv_size_t const member_stride,
+    ukv_key_t const* sources_ids,
+    ukv_size_t const sources_stride,
 
-    ukv_vertex_role_t const* roles,
-    ukv_size_t const roles_stride,
+    ukv_key_t const* targets_ids,
+    ukv_size_t const targets_stride,
 
     ukv_options_t const options,
 
@@ -179,6 +183,8 @@ void ukv_graph_remove_edges( //
  * Those are then availiable in the tape in the following format:
  *      1. `ukv_vertex_degree_t` counter for the number of edges
  *      2. `ukv_key_t`s edge IDs in no particular order
+ *
+ * @param roles[in] Needed only for @b Joining graphs.
  */
 void ukv_graph_remove_vertices( //
     ukv_t const db,
