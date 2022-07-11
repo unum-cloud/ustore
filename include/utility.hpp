@@ -165,8 +165,14 @@ class strided_ptr_gt {
         raw_ -= stride_ * n;
         return *this;
     }
+
+    /**
+     * ! Calling this function with "stride" different from zero or
+     * ! non-zero `sizeof(object_at)` multiple will cause Undefined
+     * ! Behaviour.
+     */
     inline std::ptrdiff_t operator-(strided_ptr_gt other) const noexcept {
-        return stride_ ? (raw_ - other.raw_) * sizeof(object_at) / stride_ : 0;
+        return stride_ ? (raw_ - other.raw_) / stride_ : 0;
     }
 
     inline operator bool() const noexcept { return raw_ != nullptr; }

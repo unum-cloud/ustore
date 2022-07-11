@@ -71,7 +71,8 @@ TEST(db, net) {
 
     EXPECT_EQ(net.edges(3, ukv_vertex_target_k)->size(), 1ul);
     EXPECT_EQ(net.edges(2, ukv_vertex_source_k)->size(), 1ul);
-    EXPECT_EQ(net.edges(3, ukv_vertex_source_k)->size(), 0ul);
+    EXPECT_EQ(net.edges(3, 1)->size(), 1ul);
+    EXPECT_EQ(net.edges(1, 3)->size(), 0ul);
 }
 
 int main(int argc, char** argv) {
