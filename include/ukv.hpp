@@ -52,15 +52,16 @@ struct sample_proxy_t {
     ukv_t db = nullptr;
     ukv_txn_t txn = nullptr;
     ukv_arena_t* arena = nullptr;
-    ukv_options_t options = ukv_options_default_k;
 
     collections_view_t cols;
     keys_view_t keys;
 
-    [[nodiscard]] expected_gt<taped_values_view_t> get() const noexcept {
+    [[nodiscard]] expected_gt<taped_values_view_t> get(bool transparent = false) const noexcept {
+
+        error_t error;
         ukv_val_len_t* found_lengths = nullptr;
         ukv_val_ptr_t found_values = nullptr;
-        error_t error;
+
         ukv_read(db,
                  txn,
                  cols.begin().get(),
@@ -68,7 +69,7 @@ struct sample_proxy_t {
                  keys.begin().get(),
                  keys.count(),
                  keys.stride(),
-                 options,
+                 transparent ? ukv_option_read_transparent_k : ukv_options_default_k,
                  &found_lengths,
                  &found_values,
                  arena,
@@ -76,10 +77,70 @@ struct sample_proxy_t {
         if (error)
             return {std::move(error)};
 
-        return {taped_values_view_t {found_lengths, found_values, static_cast<ukv_size_t>(keys.size())}};
+        return taped_values_view_t {found_lengths, found_values, static_cast<ukv_size_t>(keys.size())};
     }
 
-    [[nodiscard]] error_t set(disjoint_values_view_t vals) noexcept {
+    [[nodiscard]] expected_gt<range_gt<ukv_val_len_t const*>> lengths(bool transparent = false) const noexcept {
+
+        error_t error;
+        ukv_val_len_t* found_lengths = nullptr;
+        ukv_val_ptr_t found_values = nullptr;
+
+        ukv_read(db,
+                 txn,
+                 cols.begin().get(),
+                 cols.stride(),
+                 keys.begin().get(),
+                 keys.count(),
+                 keys.stride(),
+                 transparent ? ukv_option_read_transparent_k : ukv_options_default_k,
+                 &found_lengths,
+                 &found_values,
+                 arena,
+                 error.internal_cptr());
+        if (error)
+            return {std::move(error)};
+
+        return range_gt<ukv_val_len_t const*> {found_lengths, found_lengths + keys.count()};
+    }
+
+    /**
+     * @brief Checks if certain vertices are present in the graph.
+     * They maybe disconnected from everything else.
+     */
+    [[nodiscard]] expected_gt<strided_range_gt<bool const>> contains(bool transparent = false) const noexcept {
+
+        error_t error;
+        ukv_val_len_t* found_lengths = nullptr;
+        ukv_val_ptr_t found_values = nullptr;
+
+        ukv_read(db,
+                 txn,
+                 cols.begin().get(),
+                 cols.stride(),
+                 keys.begin().get(),
+                 keys.count(),
+                 keys.stride(),
+                 transparent ? ukv_option_read_transparent_k : ukv_options_default_k,
+                 &found_lengths,
+                 &found_values,
+                 arena,
+                 error.internal_cptr());
+        if (error)
+            return error;
+
+        // Transaform the `found_lengths` into booleans.
+        std::transform(found_lengths, found_lengths + keys.size(), found_lengths, [](ukv_val_len_t len) {
+            return len != ukv_val_len_missing_k;
+        });
+
+        // Cast assuming "Little-Endian" architecture
+        auto last_byte_offset = sizeof(ukv_val_len_t) - sizeof(bool);
+        auto booleans = reinterpret_cast<bool const*>(found_lengths);
+        return strided_range_gt<bool const> {booleans + last_byte_offset, sizeof(ukv_val_len_t), keys.size()};
+    }
+
+    [[nodiscard]] error_t set(disjoint_values_view_t vals, bool flush = false) noexcept {
         error_t error;
         ukv_write(db,
                   txn,
@@ -94,7 +155,7 @@ struct sample_proxy_t {
                   vals.offsets_range.stride(),
                   vals.lengths_range.begin().get(),
                   vals.lengths_range.stride(),
-                  options,
+                  flush ? ukv_option_write_flush_k : ukv_options_default_k,
                   arena,
                   error.internal_cptr());
         return error;

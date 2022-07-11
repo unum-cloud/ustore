@@ -115,6 +115,7 @@ class expected_gt {
         if (__builtin_expect(error_, 0)) // C++20: [[unlikely]]
             throw error_.release_exception();
     }
+    inline error_t release_error() { return std::exchange(error_, error_t {}); }
 };
 
 /**
@@ -198,10 +199,13 @@ class strided_range_gt {
         : begin_(&single), stride_(0), count_(static_cast<ukv_size_t>(repeats)) {}
     strided_range_gt(object_at* begin, object_at* end) noexcept
         : begin_(begin), stride_(sizeof(object_at)), count_(end - begin) {}
-    strided_range_gt(std::vector<object_at>& vec) noexcept
-        : begin_(vec.data()), stride_(sizeof(object_at)), count_(vec.size()) {}
     strided_range_gt(object_at* begin, std::size_t stride, std::size_t count) noexcept
         : begin_(begin), stride_(static_cast<ukv_size_t>(stride)), count_(static_cast<ukv_size_t>(count)) {}
+
+    strided_range_gt(std::vector<object_at>& vec) noexcept
+        : begin_(vec.data()), stride_(sizeof(object_at)), count_(vec.size()) {}
+    strided_range_gt(std::vector<std::remove_const_t<object_at>> const& vec) noexcept
+        : begin_(vec.data()), stride_(sizeof(object_at)), count_(vec.size()) {}
 
     strided_range_gt(strided_range_gt&&) = default;
     strided_range_gt(strided_range_gt const&) = default;
@@ -211,6 +215,8 @@ class strided_range_gt {
     inline strided_ptr_gt<object_at> begin() const noexcept { return {begin_, stride_}; }
     inline strided_ptr_gt<object_at> end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
     inline object_at& operator[](std::size_t i) const noexcept { return *(begin() + static_cast<std::ptrdiff_t>(i)); }
+
+    inline auto immutable() const noexcept { return strided_range_gt<object_at const>(begin_, stride_, count_); }
     inline strided_range_gt subspan(std::size_t offset, std::size_t count) const noexcept {
         return {begin_ + offset * stride_, stride_, count};
     }
@@ -259,7 +265,7 @@ struct range_gt {
  * @brief Similar to `std::optional<std::string_view>`.
  * It's NULL state and "empty string" states are not identical.
  * The NULL state generally reflects missing values.
- * Unlike `range_gt<byte_t>`, this classes layout allows
+ * Unlike `range_gt<byte_t const*>`, this classes layout allows
  * easily passing it to the internals of UKV implementations
  * without additional bit-twiddling.
  */
@@ -290,16 +296,16 @@ class value_view_t {
     inline operator bool() const noexcept { return ptr_ != nullptr; }
 };
 
-struct collections_view_t : public strided_range_gt<ukv_collection_t> {
-    using parent_t = strided_range_gt<ukv_collection_t>;
+struct collections_view_t : public strided_range_gt<ukv_collection_t const> {
+    using parent_t = strided_range_gt<ukv_collection_t const>;
 
     collections_view_t() noexcept : parent_t(ukv_default_collection_k, 1) {}
-    collections_view_t(strided_range_gt<ukv_collection_t> r) noexcept : parent_t(r) {}
+    collections_view_t(strided_range_gt<ukv_collection_t const> r) noexcept : parent_t(r) {}
 };
 
-using keys_view_t = strided_range_gt<ukv_key_t>;
+using keys_view_t = strided_range_gt<ukv_key_t const>;
 
-using located_keys_view_t = strided_range_gt<located_key_t>;
+using located_keys_view_t = strided_range_gt<located_key_t const>;
 
 struct disjoint_values_view_t {
     strided_range_gt<ukv_val_ptr_t> values_range;
