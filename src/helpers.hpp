@@ -8,6 +8,7 @@
 #include <memory>    // `std::allocator`
 #include <cstring>   // `std::memcpy`
 #include <stdexcept> // `std::runtime_error`
+#include <algorithm> // `std::sort`
 
 #include "ukv.hpp"
 
@@ -227,5 +228,22 @@ struct write_tasks_soa_t {
         return {col, key, begin, off, len};
     }
 };
+
+template <typename range_at, typename comparable_at>
+inline range_at equal_subrange(range_at range, comparable_at&& comparable) {
+    auto p = std::equal_range(range.begin(), range.end(), comparable);
+    return range_at {p.first, p.second};
+}
+
+template <typename element_at>
+void sort_and_deduplicate(std::vector<element_at>& elems) {
+    std::sort(elems.begin(), elems.end());
+    elems.erase(std::unique(elems.begin(), elems.end()), elems.end());
+}
+
+template <typename element_at>
+std::size_t offset_in_sorted(std::vector<element_at> const& elems, element_at const& wanted) {
+    return std::lower_bound(elems.begin(), elems.end(), wanted) - elems.begin();
+}
 
 } // namespace unum::ukv

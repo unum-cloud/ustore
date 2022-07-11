@@ -106,6 +106,7 @@ class expected_gt {
     operator bool() const noexcept { return !error_; }
     object_at&& operator*() && noexcept { return std::move(object_); }
     object_at const& operator*() const& noexcept { return object_; }
+    object_at const* operator->() const& noexcept { return &object_; }
     operator std::optional<object_at>() && {
         return error_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
     }
@@ -204,6 +205,11 @@ class strided_range_gt {
     }
 };
 
+/**
+ * @brief Similar to `std::optional<std::span>`.
+ * It's NULL state and "empty string" states are not identical.
+ * The NULL state generally reflects missing values.
+ */
 template <typename pointer_at>
 struct range_gt {
     pointer_at begin_ = nullptr;
@@ -223,18 +229,36 @@ struct range_gt {
     }
 };
 
+/**
+ * @brief Similar to `std::optional<std::string_view>`.
+ * It's NULL state and "empty string" states are not identical.
+ * The NULL state generally reflects missing values.
+ * Unlike `range_gt<byte_t>`, this classes layout allows
+ * easily passing it to the internals of UKV implementations
+ * without additional bit-twiddling.
+ */
 class value_view_t {
 
     ukv_val_ptr_t ptr_ = nullptr;
     ukv_val_len_t length_ = 0;
 
   public:
-    inline value_view_t(ukv_val_ptr_t ptr, ukv_val_len_t length) noexcept : ptr_(ptr), length_(length) {}
+    inline value_view_t() = default;
+    inline value_view_t(ukv_val_ptr_t ptr, ukv_val_len_t length) noexcept {
+        if (length_ == ukv_val_len_missing_k) {
+            ptr_ = nullptr;
+            length_ = 0;
+        }
+        else {
+            ptr_ = ptr;
+            length_ = length;
+        }
+    }
     inline value_view_t(byte_t const* begin, byte_t const* end) noexcept
         : ptr_(ukv_val_ptr_t(begin)), length_(static_cast<ukv_val_len_t>(end - begin)) {}
 
     inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
-    inline byte_t const* end() const noexcept { return begin() + length_; }
+    inline byte_t const* end() const noexcept { return begin(); }
     inline std::size_t size() const noexcept { return length_; }
     inline bool empty() const noexcept { return !length_; }
     inline operator bool() const noexcept { return ptr_ != nullptr; }
