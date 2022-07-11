@@ -336,41 +336,43 @@ void export_edge_tuples( //
         value_view_t value = *values_it;
         ukv_key_t vertex_id = vertices_ids[i];
         ukv_vertex_role_t role = roles[i];
+        ukv_vertex_degree_t& degree = degrees_per_vertex[i];
 
         // Some values may be missing
         if (value.empty()) {
-            degrees_per_vertex++[0] = ukv_vertex_degree_missing_k;
+            degree = ukv_vertex_degree_missing_k;
             continue;
         }
 
-        ukv_vertex_degree_t degree = 0;
+        degree = 0;
         if (role & ukv_vertex_source_k) {
             auto ns = neighbors(value, ukv_vertex_source_k);
-            for (neighborship_t n : ns) {
-                if constexpr (export_center_ak)
-                    neighborships_per_vertex[0] = vertex_id;
-                if constexpr (export_neighbor_ak)
-                    neighborships_per_vertex[1] = n.neighbor_id;
-                if constexpr (export_edge_ak)
-                    neighborships_per_vertex[2] = n.edge_id;
-                neighborships_per_vertex += 3;
-            }
+            if constexpr (tuple_size_k)
+                for (neighborship_t n : ns) {
+                    if constexpr (export_center_ak)
+                        neighborships_per_vertex[0] = vertex_id;
+                    if constexpr (export_neighbor_ak)
+                        neighborships_per_vertex[1] = n.neighbor_id;
+                    if constexpr (export_edge_ak)
+                        neighborships_per_vertex[2] = n.edge_id;
+                    neighborships_per_vertex += 3;
+                }
             degree += static_cast<ukv_vertex_degree_t>(ns.size());
         }
         if (role & ukv_vertex_target_k) {
             auto ns = neighbors(value, ukv_vertex_target_k);
-            for (neighborship_t n : ns) {
-                if constexpr (export_neighbor_ak)
-                    neighborships_per_vertex[0] = n.neighbor_id;
-                if constexpr (export_center_ak)
-                    neighborships_per_vertex[1] = vertex_id;
-                if constexpr (export_edge_ak)
-                    neighborships_per_vertex[2] = n.edge_id;
-                neighborships_per_vertex += 3;
-            }
+            if constexpr (tuple_size_k)
+                for (neighborship_t n : ns) {
+                    if constexpr (export_neighbor_ak)
+                        neighborships_per_vertex[0] = n.neighbor_id;
+                    if constexpr (export_center_ak)
+                        neighborships_per_vertex[1] = vertex_id;
+                    if constexpr (export_edge_ak)
+                        neighborships_per_vertex[2] = n.edge_id;
+                    neighborships_per_vertex += 3;
+                }
             degree += static_cast<ukv_vertex_degree_t>(ns.size());
         }
-        degrees_per_vertex++[0] = degree;
     }
 
     *c_degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(arena.unpacked_tape.data());
@@ -541,20 +543,22 @@ void ukv_graph_find_edges( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    return export_edge_tuples<true, true, true>(c_db,
-                                                c_txn,
-                                                c_collections,
-                                                c_collections_stride,
-                                                c_vertices_ids,
-                                                c_vertices_count,
-                                                c_vertices_stride,
-                                                c_roles,
-                                                c_roles_stride,
-                                                c_options,
-                                                c_degrees_per_vertex,
-                                                c_neighborships_per_vertex,
-                                                c_arena,
-                                                c_error);
+    auto func = (c_options & ukv_option_read_lengths_k) ? &export_edge_tuples<false, false, false>
+                                                        : &export_edge_tuples<true, true, true>;
+    return func(c_db,
+                c_txn,
+                c_collections,
+                c_collections_stride,
+                c_vertices_ids,
+                c_vertices_count,
+                c_vertices_stride,
+                c_roles,
+                c_roles_stride,
+                c_options,
+                c_degrees_per_vertex,
+                c_neighborships_per_vertex,
+                c_arena,
+                c_error);
 }
 
 void ukv_graph_upsert_edges( //
