@@ -511,6 +511,10 @@ void measure_txn( //
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
             lens[i] = inner_iterator->second.size();
         }
+        // Some may have been deleted inside the transaction
+        else if (auto inner_iterator = txn.removed.find(task.location()); inner_iterator != txn.removed.end()) {
+            lens[i] = ukv_val_len_missing_k;
+        }
         // Others should be pulled from the main store
         else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
             if (entry_was_overwritten(key_iterator->second.sequence_number,
@@ -559,6 +563,10 @@ void read_txn( //
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
             total_bytes += inner_iterator->second.size();
         }
+        // Some may have been deleted inside the transaction
+        else if (auto inner_iterator = txn.removed.find(task.location()); inner_iterator != txn.removed.end()) {
+            continue;
+        }
         // Others should be pulled from the main store
         else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
             if (entry_was_overwritten(key_iterator->second.sequence_number,
@@ -592,6 +600,10 @@ void read_txn( //
             std::memcpy(tape + exported_bytes, inner_iterator->second.data(), len);
             lens[i] = static_cast<ukv_val_len_t>(len);
             exported_bytes += len;
+        }
+        // Some may have been deleted inside the transaction
+        else if (auto inner_iterator = txn.removed.find(task.location()); inner_iterator != txn.removed.end()) {
+            lens[i] = ukv_val_len_missing_k;
         }
         // Others should be pulled from the main store
         else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
