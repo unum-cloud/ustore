@@ -142,6 +142,11 @@ std::pair<py_received_buffer_t, strided_matrix_gt<scalar_at>> strided_matrix(py:
     return std::make_pair<py_received_buffer_t, strided_matrix_gt<scalar_at>>(std::move(raii), std::move(result));
 }
 
+inline void throw_not_implemented() {
+    // https://github.com/pybind/pybind11/issues/1125#issuecomment-691552571
+    throw std::runtime_error("Not Implemented!");
+}
+
 void wrap_database(py::module&);
 void wrap_dataframe(py::module&);
 void wrap_network(py::module&);

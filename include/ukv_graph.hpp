@@ -53,28 +53,31 @@ struct neighborship_t {
     }
 };
 
-struct edges_soa_view_t {
-    strided_range_gt<ukv_key_t const> source_ids;
-    strided_range_gt<ukv_key_t const> target_ids;
-    strided_range_gt<ukv_key_t const> edge_ids;
+template <typename id_at>
+struct edges_range_gt {
+    strided_range_gt<id_at> source_ids;
+    strided_range_gt<id_at> target_ids;
+    strided_range_gt<id_at> edge_ids;
+
+    using tuple_t = std::conditional_t<std::is_const_v<id_at>, edge_t const, edge_t>;
 
     static_assert(sizeof(edge_t) == 3 * sizeof(ukv_key_t));
 
-    inline edges_soa_view_t() = default;
-    inline edges_soa_view_t(strided_range_gt<ukv_key_t const> sources,
-                            strided_range_gt<ukv_key_t const> targets,
-                            strided_range_gt<ukv_key_t const> edges = {ukv_default_edge_id_k}) noexcept
+    inline edges_range_gt() = default;
+    inline edges_range_gt(strided_range_gt<id_at> sources,
+                          strided_range_gt<id_at> targets,
+                          strided_range_gt<id_at> edges = {ukv_default_edge_id_k}) noexcept
         : source_ids(sources), target_ids(targets), edge_ids(edges) {}
 
-    inline edges_soa_view_t(edge_t const* ptr, edge_t const* end) noexcept {
+    inline edges_range_gt(edge_t const* ptr, edge_t const* end) noexcept {
         auto strided = strided_range_gt<edge_t const>(ptr, end);
         source_ids = strided.members(&edge_t::source_id);
         target_ids = strided.members(&edge_t::target_id);
         edge_ids = strided.members(&edge_t::edge_id);
     }
 
-    inline edges_soa_view_t(std::vector<edge_t> const& edges) noexcept
-        : edges_soa_view_t(edges.data(), edges.data() + edges.size()) {}
+    inline edges_range_gt(std::vector<edge_t> const& edges) noexcept
+        : edges_range_gt(edges.data(), edges.data() + edges.size()) {}
 
     inline std::size_t size() const noexcept { return edge_ids.count(); }
 
@@ -86,6 +89,9 @@ struct edges_soa_view_t {
         return result;
     }
 };
+
+using edges_span_t = edges_range_gt<ukv_key_t>;
+using edges_view_t = edges_range_gt<ukv_key_t const>;
 
 inline ukv_vertex_role_t invert(ukv_vertex_role_t role) {
     switch (role) {
@@ -121,7 +127,7 @@ class graph_collection_session_t {
     inline collection_t& collection() noexcept { return collection_; };
     inline ukv_txn_t txn() const noexcept { return txn_; }
 
-    error_t upsert(edges_soa_view_t const& edges) noexcept {
+    error_t upsert(edges_view_t const& edges) noexcept {
         error_t error;
         ukv_graph_upsert_edges(collection_.db(),
                                txn_,
@@ -140,7 +146,7 @@ class graph_collection_session_t {
         return error;
     }
 
-    error_t remove(edges_soa_view_t const& edges) noexcept {
+    error_t remove(edges_view_t const& edges) noexcept {
         error_t error;
         ukv_graph_remove_edges(collection_.db(),
                                txn_,
@@ -170,7 +176,7 @@ class graph_collection_session_t {
         return ukv_vertex_degree_t(degrees[0]);
     }
 
-    expected_gt<range_gt<ukv_vertex_degree_t const*>> degrees(
+    expected_gt<range_gt<ukv_vertex_degree_t*>> degrees(
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
         bool transparent = false) noexcept {
@@ -198,7 +204,7 @@ class graph_collection_session_t {
         if (error)
             return error;
 
-        return range_gt<ukv_vertex_degree_t const*> {degrees_per_vertex, degrees_per_vertex + vertices.size()};
+        return range_gt<ukv_vertex_degree_t*> {degrees_per_vertex, degrees_per_vertex + vertices.size()};
     }
 
     expected_gt<bool> contains(ukv_key_t vertex, bool transparent = false) noexcept {
@@ -215,8 +221,8 @@ class graph_collection_session_t {
      * @brief Checks if certain vertices are present in the graph.
      * They maybe disconnected from everything else.
      */
-    expected_gt<strided_range_gt<bool const>> contains(strided_range_gt<ukv_key_t const> vertices,
-                                                       bool transparent = false) noexcept {
+    expected_gt<strided_range_gt<bool>> contains(strided_range_gt<ukv_key_t const> vertices,
+                                                 bool transparent = false) noexcept {
         sample_proxy_t sample;
         sample.db = collection_.db();
         sample.txn = txn_;
@@ -226,9 +232,9 @@ class graph_collection_session_t {
         return sample.contains(transparent);
     }
 
-    expected_gt<edges_soa_view_t> edges(ukv_key_t vertex,
-                                        ukv_vertex_role_t role = ukv_vertex_role_any_k,
-                                        bool transparent = false) noexcept {
+    expected_gt<edges_span_t> edges(ukv_key_t vertex,
+                                    ukv_vertex_role_t role = ukv_vertex_role_any_k,
+                                    bool transparent = false) noexcept {
         error_t error;
         ukv_vertex_degree_t* degrees_per_vertex = NULL;
         ukv_key_t* neighborships_per_vertex = NULL;
@@ -252,22 +258,22 @@ class graph_collection_session_t {
 
         ukv_vertex_degree_t deg = degrees_per_vertex[0];
         if (deg == ukv_vertex_degree_missing_k)
-            return edges_soa_view_t {};
+            return edges_span_t {};
 
-        using strided_keys_t = strided_range_gt<ukv_key_t const>;
+        using strided_keys_t = strided_range_gt<ukv_key_t>;
         ukv_size_t stride = sizeof(ukv_key_t) * 3;
         strided_keys_t sources(neighborships_per_vertex, stride, deg);
         strided_keys_t targets(neighborships_per_vertex + 1, stride, deg);
         strided_keys_t edges(neighborships_per_vertex + 2, stride, deg);
-        return edges_soa_view_t {sources, targets, edges};
+        return edges_span_t {sources, targets, edges};
     }
 
-    expected_gt<edges_soa_view_t> edges(ukv_key_t source, ukv_key_t target, bool transparent = false) noexcept {
+    expected_gt<edges_span_t> edges(ukv_key_t source, ukv_key_t target, bool transparent = false) noexcept {
         auto maybe_all = edges(source, ukv_vertex_source_k, transparent);
         if (!maybe_all)
             return maybe_all;
 
-        edges_soa_view_t all = *maybe_all;
+        edges_span_t all = *maybe_all;
         auto begin_and_end = std::equal_range(all.target_ids.begin(), all.target_ids.end(), target);
         auto begin_offset = begin_and_end.first - all.target_ids.begin();
         auto count = begin_and_end.second - begin_and_end.first;
