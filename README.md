@@ -169,12 +169,15 @@ SUM:                            29            712           1061           2844
 
 Here are our next tasks
 
-* [ ] More tests in Python
+* [x] More tests in Python
+* [ ] Documents support
+* [ ] Rust Bindings
 * [ ] GoLang memory pinning Channel Batch Reads of [slices](https://stackoverflow.com/a/36546929)
 * [ ] Swift Bindings
-* [ ] Rust Bindings
 * [ ] Scala Bindings
 * [ ] Wolfram Language Bindings
 * [ ] Read/Write Apache Arrow Tables via C API
 * [ ] Java Apache Arrow support
+* [ ] ProtoBuf support
+* [ ] GraphQL support
 * [ ] Fill the [OpenAPI specification](openapi.yaml)
