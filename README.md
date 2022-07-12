@@ -89,8 +89,8 @@ Using it should be, again, familiar, as it mimics [`std::collections`](https://d
 
 ```rust
 let mut db = DataBase::new();
-if db.contains_key(42) {
-    db.remove(42);
+if db.contains_key(&42) {
+    db.remove(&42);
     db.insert(43, "New Meaning".to_string());
 }
 for (key, value) in &db {
