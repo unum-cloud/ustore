@@ -20,7 +20,8 @@ flowchart LR
   ukv --> Python;
   ukv --> GoLang;
   ukv --> Java;
-  ukv --> REST;
+  ukv --> Rust;
+  ukv --> RESTful API;
   
   %% ukv --> SQL;
   %% ukv ---> Redis;
@@ -51,13 +52,15 @@ To build and test any set of bindings:
 
 ### Python
 
-Current impleentation relies on [PyBind11](https://github.com/pybind/pybind11).
+Current implentation relies on [PyBind11](https://github.com/pybind/pybind11).
 It's feature-rich, but not very performant, supporting:
 
 * Named Collections
-* Transactions
-* Single & *Batch* Operations
-* Tensor Exports into anything that supports [Buffer Protocol](https://docs.python.org/3/c-api/buffer.html)
+* ACID Transactions
+* Single & Batch Operations
+* Tensors support via [Buffer Protocol](https://docs.python.org/3/c-api/buffer.html)
+* [NetworkX](https://networkx.org)-like interface for Graphs
+* [Pandas](https://pandas.pydata.org)-like interface for Document collections
 
 Using it can be as easy as:
 
@@ -73,10 +76,33 @@ assert len(db['sub-collection'][0]) == 15
 
 All familiar Pythonic stuff!
 
+### Rust
+
+Rust implementation is designed to support:
+
+* Named Collections
+* ACID Transactions
+* Single & Batch Operations
+* [Apache DataFusion](https://arrow.apache.org/datafusion/) `TableProvider` for SQL
+
+Using it should be, again, familiar, as it mimics [`std::collections`](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html):
+
+```rust
+let mut db = DataBase::new();
+if db.contains_key(42) {
+    db.remove(42);
+    db.insert(43, "New Meaning".to_string());
+}
+for (key, value) in &db {
+    println!("{key}: \"{value}\"");
+}
+db.clear();
+```
+
 ### Java
 
 These bindings are impemented via [Java Native Interface](https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/jniTOC.html).
-This interface is more performant than Python, but is feature complete yet.
+This interface is more performant than Python, but is not feature complete yet.
 It mimics native `HashMap` and `Ditionary` classes, but has no support for batch operations yet.
 
 ```java
@@ -116,7 +142,17 @@ To test the REST API:
 
 ```sh
 kill $(lsof -t -i:8080)
-cmake . && make && echo Compiled  && ./build/bin/ukv_beast_server 0.0.0.0 8080 1
+cmake . && make  && ./build/bin/ukv_beast_server 0.0.0.0 8080 1
+
+curl -X PUT \
+  -H "Accept: Application/json" \
+  -H "Content-Type: application/octet-stream" \
+  0.0.0.0/8080/one/42?col=sub \
+  -d 'purpose of life'
+
+curl -i \
+  -H "Accept: application/octet-stream" \
+  0.0.0.0/8080/one/42?col=sub
 ```
 
 We also provide a [`OneAPI` specification](/openapi.yaml), that is used as both a documentation point and an automatic client-library generator.
