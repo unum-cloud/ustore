@@ -2,7 +2,7 @@
  * @file ukv.h
  * @author Ashot Vardanian
  * @date 27 Jun 2022
- * @brief C bindings for Unums collections of relations.
+ * @brief C bindings collections of relations.
  * It essentially extends "ukv.h", to store @b Graphs.
  * Unlike raw values and docs collections, this is an index
  * and the data is transformed into @b Multi-Way @b Inverted-Index.
@@ -48,7 +48,7 @@
 extern "C" {
 #endif
 
-#include "ukv.h"
+#include "ukv/ukv.h"
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/

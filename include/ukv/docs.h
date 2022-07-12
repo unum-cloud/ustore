@@ -2,7 +2,7 @@
  * @file ukv_docs.h
  * @author Ashot Vardanian
  * @date 27 Jun 2022
- * @brief C bindings for Unums Key-Value store collections of @b Documents.
+ * @brief C bindings for collections of @b Documents.
  * It extends the basic "ukv.h" towards values storing hierarchical documents.
  * Examples: JSONs, MsgPacks, BSONs and a number of other similar formats.
  * Yet no guarantees are provided regarding the internal representation of the
@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#include "ukv.h"
+#include "ukv/ukv.h"
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/

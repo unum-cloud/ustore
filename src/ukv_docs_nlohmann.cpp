@@ -12,7 +12,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "ukv_docs.hpp"
+#include "ukv/docs.hpp"
 #include "helpers.hpp"
 
 /*********************************************************/

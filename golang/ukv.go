@@ -4,7 +4,7 @@ package ukv
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../include
 #cgo LDFLAGS: -L${SRCDIR}/../build/lib -lukv_stl -lstdc++
 
-#include "ukv.h"
+#include "ukv/ukv.h"
 #include <stdlib.h>
 
 ukv_val_len_t dereference_index(ukv_val_len_t lens, ukv_size_t idx) { return lens[idx]; }

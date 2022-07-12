@@ -8,9 +8,7 @@
 
 #include <gtest/gtest.h>
 
-#include "ukv.hpp"
-#include "ukv_graph.hpp"
-#include "ukv_docs.hpp"
+#include "ukv/ukv.hpp"
 
 using namespace unum::ukv;
 using namespace unum;

@@ -10,7 +10,7 @@
 #include <leveldb/comparator.h>
 #include <leveldb/write_batch.h>
 
-#include "ukv.h"
+#include "ukv/ukv.h"
 #include "helpers.hpp"
 
 ukv_collection_t ukv_default_collection_k = NULL;

@@ -10,7 +10,7 @@
 #include <optional> // `std::optional`
 #include <limits>   // `std::numeric_limits`
 
-#include "ukv_graph.hpp"
+#include "ukv/graph.hpp"
 #include "helpers.hpp"
 
 /*********************************************************/
@@ -351,7 +351,7 @@ void export_edge_tuples( //
         degree = 0;
         if (role & ukv_vertex_source_k) {
             auto ns = neighbors(value, ukv_vertex_source_k);
-            if constexpr (tuple_size_k)
+            if constexpr (tuple_size_k != 0)
                 for (neighborship_t n : ns) {
                     if constexpr (export_center_ak)
                         neighborships_per_vertex[0] = vertex_id;
@@ -365,7 +365,7 @@ void export_edge_tuples( //
         }
         if (role & ukv_vertex_target_k) {
             auto ns = neighbors(value, ukv_vertex_target_k);
-            if constexpr (tuple_size_k)
+            if constexpr (tuple_size_k != 0)
                 for (neighborship_t n : ns) {
                     if constexpr (export_neighbor_ak)
                         neighborships_per_vertex[0] = n.neighbor_id;
