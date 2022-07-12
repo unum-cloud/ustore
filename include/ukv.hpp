@@ -373,13 +373,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
         return error;
     }
 
-    expected_gt<collection_t> clear(std::string const& name) {
-        error_t error;
-        ukv_collection_remove(db_, name.c_str(), error.internal_cptr());
-        if (error)
-            return {std::move(error)};
-        return collection(name);
-    }
+    error_t clear(collection_t&) { return {}; }
 };
 
 } // namespace unum::ukv
