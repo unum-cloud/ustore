@@ -229,6 +229,31 @@ struct write_tasks_soa_t {
     }
 };
 
+/**
+ * @brief Append-only datastructure for variable length blobs.
+ * Owns the underlying arena and is external to the underlying DB.
+ * Is suited for data preparation before passing to the C API.
+ */
+class appendable_tape_t {
+    std::vector<ukv_val_len_t> lengths_;
+    std::vector<byte_t> data_;
+
+  public:
+    void push_back(value_view_t value) {
+        lengths_.push_back(static_cast<ukv_val_len_t>(value.size()));
+        data_.insert(data_.end(), value.begin(), value.end());
+    }
+
+    void clear() {
+        lengths_.clear();
+        data_.clear();
+    }
+
+    operator taped_values_view_t() const noexcept {
+        return {lengths_.data(), ukv_val_ptr_t(data_.data()), data_.size()};
+    }
+};
+
 template <typename range_at, typename comparable_at>
 inline range_at equal_subrange(range_at range, comparable_at&& comparable) {
     auto p = std::equal_range(range.begin(), range.end(), comparable);
