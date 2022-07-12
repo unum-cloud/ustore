@@ -189,9 +189,7 @@
 #elif defined(_MSC_VER)
 #endif
 
-#include "ukv.hpp"
-#include "ukv_graph.hpp"
-#include "ukv_docs.hpp"
+#include "ukv/ukv.hpp"
 
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>

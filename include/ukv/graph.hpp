@@ -9,8 +9,8 @@
  */
 
 #pragma once
-#include "ukv_graph.h"
-#include "ukv.hpp"
+#include "ukv/graph.h"
+#include "ukv/ukv.hpp"
 
 namespace unum::ukv {
 

@@ -439,7 +439,7 @@ package ukv
 /*
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../include
 #cgo LDFLAGS: -L${SRCDIR}/../build/lib -lukv_stl -lstdc++
-#include "ukv.h"
+#include "ukv/ukv.h"
 #include <stdlib.h>
 */
 import "C"

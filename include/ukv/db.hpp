@@ -1,8 +1,8 @@
 /**
- * @file ukv.hpp
+ * @file db.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings built on top of @see "ukv.h" with
+ * @brief C++ bindings built on top of @see "db.h" with
  * two primary purposes:
  * > @b RAII controls for non-trivial & potentially heavy objects.
  * > syntactic @b sugar, iterators, containers and other C++  stuff.
@@ -12,7 +12,7 @@
 #include <string> // NULL-terminated named
 #include <memory> // `std::enable_shared_from_this`
 
-#include "ukv.h"
+#include "ukv/ukv.h"
 #include "utility.hpp"
 
 namespace unum::ukv {

@@ -1,17 +1,8 @@
 /**
- * @file ukv.h
+ * @file db.h
  * @author Ashot Vardanian
  * @date 12 Jun 2022
- * @brief C bindings for Unums Key-Value store, that provide:
- * > ABI stability for the essential CRUD operations,
- * > Interoperability with higher-level languages.
- *
- * @section Assumptions and Limitations (in current version):
- * > Keys are preset to 8-byte unsigned integers.
- * > Values over 4GB long are not allowed, zero length is OK.
- * > Fully @b synchronous for the simplicity of interface.
- * > Iterators often can't be fully consistent, to allow concurrency.
- * > Maximum collection name length is set to 64 characters. Postgres does 59 :)
+ * @brief C bindings for binary collections.
  *
  * @section Why prefer batch APIs?
  * Using the batch APIs to issue a single read/write request
@@ -52,16 +43,6 @@
  * > retrieve an object
  * Interfaces for normal and transactional operations are identical,
  * exept for the `_txn_` name part.
- *
- * @section Reference Designs
- * This interface is design as a generalization over most CRUD APIs
- * for key-value stores. It can be used to wrap anything like:
- * * LevelDB:
- *      https://github.com/google/leveldb/blob/main/include/leveldb/c.h
- *      https://github.com/google/leveldb/blob/main/db/c.cc
- *      https://plyvel.readthedocs.io
- * * RocksDB:
- *      https://github.com/facebook/rocksdb/blob/main/include/rocksdb/c.h
  */
 
 #pragma once

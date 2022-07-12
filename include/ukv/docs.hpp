@@ -6,7 +6,7 @@
  */
 
 #pragma once
-#include "ukv_docs.h"
-#include "ukv.hpp"
+#include "ukv/docs.h"
+#include "ukv/ukv.hpp"
 
 namespace unum::ukv {} // namespace unum::ukv
