@@ -143,7 +143,7 @@ void ukv_write( //
     rocks_db_wrapper_t* db = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
     rocks_txn_t* txn = (rocks_txn_t*)(c_txn);
 
-    strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
+    strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_ptr_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_ptr_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
@@ -266,7 +266,7 @@ void ukv_read( //
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
 
-    strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
+    strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {cols, keys};
 

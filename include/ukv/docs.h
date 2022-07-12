@@ -69,7 +69,6 @@ void ukv_docs_write( //
     ukv_size_t const keys_stride,
 
     ukv_str_view_t const* fields,
-    ukv_size_t const fields_count,
     ukv_size_t const fields_stride,
 
     ukv_options_t const options,
@@ -108,11 +107,13 @@ void ukv_docs_read( //
     ukv_size_t const keys_stride,
 
     ukv_str_view_t const* fields,
-    ukv_size_t const fields_count,
     ukv_size_t const fields_stride,
 
     ukv_options_t const options,
     ukv_format_t const format,
+
+    ukv_val_len_t** found_lengths,
+    ukv_val_ptr_t* found_values,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
