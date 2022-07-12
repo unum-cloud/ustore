@@ -144,6 +144,133 @@ struct sample_proxy_t {
     }
 };
 
+class collection_keys_iterator_t {
+
+    ukv_t db = nullptr;
+    ukv_txn_t txn = nullptr;
+    ukv_arena_t* arena = nullptr;
+
+    ukv_collection_t col = ukv_default_collection_k;
+    ukv_size_t read_ahead = 0;
+
+    ukv_key_t next_min_key_ = 0;
+    range_gt<ukv_key_t*> prefetched_keys_;
+    std::size_t prefetched_offset_;
+
+    expected_gt<range_gt<ukv_key_t*>> prefetch_starting_with(ukv_key_t next_min_key_) {
+        ukv_key_t* found_keys = nullptr;
+        ukv_val_len_t* found_lens = nullptr;
+        error_t error;
+        ukv_scan(db,
+                 txn,
+                 &col,
+                 0,
+                 &next_min_key_,
+                 1,
+                 0,
+                 &read_ahead,
+                 0,
+                 ukv_options_default_k,
+                 &found_keys,
+                 &found_lens,
+                 arena,
+                 error.internal_cptr());
+        if (error)
+            return std::move(error);
+
+        auto present_end = std::find(found_keys, found_keys + read_ahead, ukv_key_unknown_k);
+        return range_gt<ukv_key_t*> {found_keys, present_end};
+    }
+
+  public:
+    using iterator_category = std::forward_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = ukv_key_t;
+    using pointer = ukv_key_t*;
+    using reference = ukv_key_t&;
+
+    error_t seek_to_first() {
+
+        prefetched_keys_ = {};
+        prefetched_offset_ = 0;
+        next_min_key_ = std::numeric_limits<ukv_key_t>::min();
+        auto batch = prefetch_starting_with(next_min_key_);
+        if (!batch)
+            return batch.release_error();
+
+        prefetched_keys_ = *batch;
+        if (prefetched_keys_.size() == 0) {
+            next_min_key_ = ukv_key_unknown_k;
+            return {};
+        }
+
+        ukv_key_t result = prefetched_keys_[0];
+        prefetched_offset_ = 0;
+        next_min_key_ = prefetched_keys_[prefetched_keys_.size() - 1] + 1;
+        return {};
+    }
+
+    error_t advance() {
+
+        if (prefetched_offset_ < prefetched_keys_.size()) {
+            ++prefetched_offset_;
+            return {};
+        }
+
+        auto batch = prefetch_starting_with(next_min_key_);
+        if (!batch)
+            return batch.release_error();
+
+        prefetched_keys_ = *batch;
+        if (prefetched_keys_.size() == 0) {
+            next_min_key_ = ukv_key_unknown_k;
+            return {};
+        }
+
+        prefetched_offset_ = 1;
+        next_min_key_ = prefetched_keys_[prefetched_keys_.size() - 1] + 1;
+        return {};
+    }
+
+    ukv_key_t key() const noexcept { return prefetched_keys_[prefetched_offset_]; }
+    ukv_key_t operator*() const noexcept { return key(); }
+    bool is_end() const noexcept {
+        return next_min_key_ == ukv_key_unknown_k && prefetched_offset_ >= prefetched_keys_.size();
+    }
+    bool operator==(collection_keys_iterator_t const& other) const noexcept {
+        if (col != other.col)
+            return false;
+        if (is_end() || other.is_end())
+            return is_end() == other.is_end();
+        return key() == other.key();
+    }
+    bool operator!=(collection_keys_iterator_t const& other) const noexcept {
+        if (col == other.col)
+            return true;
+        if (is_end() || other.is_end())
+            return is_end() != other.is_end();
+        return key() != other.key();
+    }
+};
+
+/**
+ * @brief Implements multi-way set intersection to join entities
+ * from different collections, that have matching identifiers.
+ */
+struct collections_join_t {
+
+    ukv_t db = nullptr;
+    ukv_txn_t txn = nullptr;
+    ukv_arena_t* arena = nullptr;
+
+    collections_view_t cols;
+    ukv_key_t next_min_key_ = 0;
+    ukv_size_t window_size = 0;
+
+    strided_range_gt<ukv_key_t*> prefetched_keys_;
+    strided_range_gt<ukv_val_len_t> prefetched_lengths;
+};
+
 class db_t;
 class session_t;
 class collection_t;
