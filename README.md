@@ -21,7 +21,7 @@ flowchart LR
   ukv --> GoLang;
   ukv --> Java;
   ukv --> Rust;
-  ukv --> RESTful API;
+  ukv --> REST;
   
   %% ukv --> SQL;
   %% ukv ---> Redis;
