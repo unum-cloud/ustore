@@ -185,6 +185,31 @@ struct read_tasks_soa_t {
     }
 };
 
+struct scan_task_t {
+    ukv_collection_t collection;
+    ukv_key_t const& min_key;
+    ukv_size_t length;
+
+    inline located_key_t location() const noexcept { return located_key_t {collection, min_key}; }
+};
+
+/**
+ * @brief Arguments of `ukv_scan` aggregated into a Structure-of-Arrays.
+ * Is used to validate various combinations of arguments, strides, NULLs, etc.
+ */
+struct scan_tasks_soa_t {
+    strided_ptr_gt<ukv_collection_t> cols;
+    strided_ptr_gt<ukv_key_t const> min_keys;
+    strided_ptr_gt<ukv_size_t const> lengths;
+
+    inline scan_task_t operator[](ukv_size_t i) const noexcept {
+        ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
+        ukv_key_t const& key = min_keys[i];
+        ukv_size_t len = lengths[i];
+        return {col, key, len};
+    }
+};
+
 struct write_task_t {
     ukv_collection_t collection;
     ukv_key_t const& key;
