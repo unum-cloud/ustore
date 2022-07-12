@@ -24,9 +24,6 @@ def only_overwrite(col):
 
 def only_operators(col):
 
-    assert 1 not in col
-    assert 2 not in col
-
     col[1] = b'a'
     col[2] = b'bb'
     assert 1 in col
@@ -59,7 +56,7 @@ def test_named_collections():
     only_operators(col_dub)
 
 
-def test_main_collection_txn():
+def test_main_collection_txn(): 
 
     db = ukv.DataBase()
 
