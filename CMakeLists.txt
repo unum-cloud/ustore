@@ -107,13 +107,13 @@ include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 
 # FastPFor Integer Compression for 32-bit integers
-FetchContent_Declare(
-  fpfor
-  GIT_REPOSITORY https://github.com/lemire/FastPFor.git
-  GIT_TAG v0.1.8
-  GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(fpfor)
+# FetchContent_Declare(
+#   fpfor
+#   GIT_REPOSITORY https://github.com/lemire/FastPFor.git
+#   GIT_TAG v0.1.8
+#   GIT_SHALLOW TRUE
+# )
+# FetchContent_MakeAvailable(fpfor)
 
 # GTest
 FetchContent_Declare(
