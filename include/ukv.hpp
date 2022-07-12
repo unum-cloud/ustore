@@ -135,7 +135,7 @@ struct sample_proxy_t {
         });
 
         // Cast assuming "Little-Endian" architecture
-        auto last_byte_offset = sizeof(ukv_val_len_t) - sizeof(bool);
+        auto last_byte_offset = 0; // sizeof(ukv_val_len_t) - sizeof(bool);
         auto booleans = reinterpret_cast<bool const*>(found_lengths);
         return strided_range_gt<bool const> {booleans + last_byte_offset, sizeof(ukv_val_len_t), keys.size()};
     }

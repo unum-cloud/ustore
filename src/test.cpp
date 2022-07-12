@@ -78,9 +78,13 @@ TEST(db, net) {
     };
 
     EXPECT_FALSE(net.upsert({triangle}));
+    EXPECT_TRUE(*net.contains(1));
+    EXPECT_TRUE(*net.contains(2));
+    EXPECT_FALSE(*net.contains(9));
+    EXPECT_FALSE(*net.contains(10));
+    EXPECT_FALSE(*net.contains(1000));
 
     EXPECT_TRUE(net.edges(1));
-
     EXPECT_EQ(net.edges(1)->size(), 2ul);
     EXPECT_EQ(net.edges(1, ukv_vertex_source_k)->size(), 1ul);
     EXPECT_EQ(net.edges(1, ukv_vertex_target_k)->size(), 1ul);

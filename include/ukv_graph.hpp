@@ -207,7 +207,8 @@ class graph_collection_session_t {
         if (!maybe_exists)
             return maybe_exists.release_error();
         auto exists = *maybe_exists;
-        return bool(exists[0]);
+        bool one_exists = exists[0];
+        return one_exists;
     }
 
     /**
