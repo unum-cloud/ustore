@@ -739,7 +739,7 @@ void ukv_read( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
+    strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {cols, keys};
 
@@ -784,7 +784,7 @@ void ukv_write( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
+    strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_ptr_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_ptr_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
@@ -828,7 +828,7 @@ void ukv_scan( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_ptr_gt<ukv_collection_t> cols {const_cast<ukv_collection_t*>(c_cols), c_cols_stride};
+    strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
     strided_ptr_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
     scan_tasks_soa_t tasks {cols, keys, lens};

@@ -99,19 +99,42 @@ buffer_t dump_any(json_t const& json, ukv_format_t const c_format, ukv_error_t* 
     return result;
 }
 
+void write( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+    write_docs_tasks_soa_t const& tasks,
+    ukv_size_t const n,
+    ukv_options_t const c_options,
+    stl_arena_t& arena,
+    ukv_error_t* c_error) {
+
+    // Multiple tasks may be targetting different fields of one document.
+    // To efficiently solve such cases, we need to locate and deduplcate those keys.
+
+    std::vector<json_t> parsed(n);
+    std::vector<std::string> fields_strs;
+    std::vector<json_ptr_t> fields_ptrs;
+
+    std::vector<buffer_t> serialized(n);
+
+    if (parsed[0].is_discarded()) {
+        *c_error = "Couldn't parse inputs";
+        return;
+    }
+}
+
 void ukv_docs_write( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_str_view_t const* c_fields,
-    ukv_size_t const c_fields_count,
     ukv_size_t const c_fields_stride,
 
     ukv_options_t const c_options,
@@ -123,23 +146,28 @@ void ukv_docs_write( //
     ukv_val_len_t const* c_lengths,
     ukv_size_t const c_lengths_stride,
 
-    ukv_val_ptr_t* c_tape,
-    ukv_size_t* c_capacity,
+    ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    std::vector<json_t> jsons(c_keys_count);
-
-    if (c_fields_count) {
-        strided_ptr_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
-        std::vector<std::string> fields_strs;
-        std::vector<json_ptr_t> fields_ptrs;
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
     }
 
-    std::vector<buffer_t> msgpacks(c_keys_count);
-
-    if (jsons[0].is_discarded()) {
-        *c_error = "Couldn't parse inputs";
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
         return;
+
+    strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_ptr_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
+    strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    write_docs_tasks_soa_t tasks;
+
+    try {
+        write(c_db, c_txn, tasks, c_keys_count, c_options, arena, c_error);
+    }
+    catch (std::bad_alloc) {
+        *c_error = "Failed to allocate memory!";
     }
 }
 
@@ -147,8 +175,8 @@ void ukv_docs_read( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_count,
@@ -161,7 +189,9 @@ void ukv_docs_read( //
     ukv_options_t const c_options,
     ukv_format_t const c_format,
 
-    ukv_val_ptr_t* c_tape,
-    ukv_size_t* c_capacity,
+    ukv_val_len_t** c_found_lengths,
+    ukv_val_ptr_t* c_found_values,
+
+    ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 }

@@ -175,7 +175,7 @@ struct read_task_t {
  * Is used to validate various combinations of arguments, strides, NULLs, etc.
  */
 struct read_tasks_soa_t {
-    strided_ptr_gt<ukv_collection_t> cols;
+    strided_ptr_gt<ukv_collection_t const> cols;
     strided_ptr_gt<ukv_key_t const> keys;
 
     inline read_task_t operator[](ukv_size_t i) const noexcept {
@@ -198,7 +198,7 @@ struct scan_task_t {
  * Is used to validate various combinations of arguments, strides, NULLs, etc.
  */
 struct scan_tasks_soa_t {
-    strided_ptr_gt<ukv_collection_t> cols;
+    strided_ptr_gt<ukv_collection_t const> cols;
     strided_ptr_gt<ukv_key_t const> min_keys;
     strided_ptr_gt<ukv_size_t const> lengths;
 
@@ -228,7 +228,7 @@ struct write_task_t {
  * Is used to validate various combinations of arguments, strides, NULLs, etc.
  */
 struct write_tasks_soa_t {
-    strided_ptr_gt<ukv_collection_t> cols;
+    strided_ptr_gt<ukv_collection_t const> cols;
     strided_ptr_gt<ukv_key_t const> keys;
     strided_ptr_gt<ukv_val_ptr_t const> vals;
     strided_ptr_gt<ukv_val_len_t const> offs;
@@ -252,6 +252,14 @@ struct write_tasks_soa_t {
         }
         return {col, key, begin, off, len};
     }
+};
+
+struct read_docs_tasks_soa_t : public read_tasks_soa_t {
+    strided_ptr_gt<ukv_str_view_t const> fields;
+};
+
+struct write_docs_tasks_soa_t : public write_tasks_soa_t {
+    strided_ptr_gt<ukv_str_view_t const> fields;
 };
 
 /**

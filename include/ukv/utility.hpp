@@ -140,7 +140,7 @@ class strided_ptr_gt {
     using pointer = value_type*;
     using reference = value_type&;
 
-    inline strided_ptr_gt(object_at* raw, ukv_size_t stride = 0) noexcept : raw_(raw), stride_(stride) {}
+    inline strided_ptr_gt(object_at* raw = nullptr, ukv_size_t stride = 0) noexcept : raw_(raw), stride_(stride) {}
     inline object_at& operator[](ukv_size_t idx) const noexcept { return *upshift(stride_ * idx); }
 
     inline strided_ptr_gt& operator++() noexcept {

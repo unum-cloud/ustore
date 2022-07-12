@@ -2,10 +2,7 @@
  * @file db.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings built on top of @see "db.h" with
- * two primary purposes:
- * > @b RAII controls for non-trivial & potentially heavy objects.
- * > syntactic @b sugar, iterators, containers and other C++  stuff.
+ * @brief C++ bindings for @see "db.h".
  */
 
 #pragma once
