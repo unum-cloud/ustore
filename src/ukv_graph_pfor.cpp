@@ -93,16 +93,16 @@ struct neighborhood_t {
         return result;
     }
 
-    inline edges_soa_view_t outgoing_edges() const& {
-        edges_soa_view_t edges;
+    inline edges_view_t outgoing_edges() const& {
+        edges_view_t edges;
         edges.source_ids = {&center, 0, targets.size()};
         edges.target_ids = targets.strided().members(&neighborship_t::neighbor_id);
         edges.edge_ids = targets.strided().members(&neighborship_t::edge_id);
         return edges;
     }
 
-    inline edges_soa_view_t incoming_edges() const& {
-        edges_soa_view_t edges;
+    inline edges_view_t incoming_edges() const& {
+        edges_view_t edges;
         edges.source_ids = sources.strided().members(&neighborship_t::neighbor_id);
         edges.target_ids = {&center, 0, sources.size()};
         edges.edge_ids = sources.strided().members(&neighborship_t::edge_id);

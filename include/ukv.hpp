@@ -55,7 +55,7 @@ struct sample_proxy_t {
         return taped_values_view_t {found_lengths, found_values, static_cast<ukv_size_t>(keys.size())};
     }
 
-    [[nodiscard]] expected_gt<range_gt<ukv_val_len_t const*>> lengths(bool transparent = false) const noexcept {
+    [[nodiscard]] expected_gt<range_gt<ukv_val_len_t*>> lengths(bool transparent = false) const noexcept {
 
         error_t error;
         ukv_val_len_t* found_lengths = nullptr;
@@ -76,14 +76,14 @@ struct sample_proxy_t {
         if (error)
             return {std::move(error)};
 
-        return range_gt<ukv_val_len_t const*> {found_lengths, found_lengths + keys.count()};
+        return range_gt<ukv_val_len_t*> {found_lengths, found_lengths + keys.count()};
     }
 
     /**
      * @brief Checks if certain vertices are present in the graph.
      * They maybe disconnected from everything else.
      */
-    [[nodiscard]] expected_gt<strided_range_gt<bool const>> contains(bool transparent = false) const noexcept {
+    [[nodiscard]] expected_gt<strided_range_gt<bool>> contains(bool transparent = false) const noexcept {
 
         error_t error;
         ukv_val_len_t* found_lengths = nullptr;
@@ -111,8 +111,8 @@ struct sample_proxy_t {
 
         // Cast assuming "Little-Endian" architecture
         auto last_byte_offset = 0; // sizeof(ukv_val_len_t) - sizeof(bool);
-        auto booleans = reinterpret_cast<bool const*>(found_lengths);
-        return strided_range_gt<bool const> {booleans + last_byte_offset, sizeof(ukv_val_len_t), keys.size()};
+        auto booleans = reinterpret_cast<bool*>(found_lengths);
+        return strided_range_gt<bool> {booleans + last_byte_offset, sizeof(ukv_val_len_t), keys.size()};
     }
 
     [[nodiscard]] error_t set(disjoint_values_view_t vals, bool flush = false) noexcept {

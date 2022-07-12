@@ -73,7 +73,41 @@ struct network_t : public std::enable_shared_from_this<network_t> {
     ~network_t() {}
 };
 
+struct degree_view_t : public std::enable_shared_from_this<degree_view_t> {
+    std::shared_ptr<network_t> net_ptr;
+    ukv_vertex_role_t roles = ukv_vertex_role_any_k;
+};
+
+template <typename element_at>
+Py_buffer wrap_into_buffer(network_t& net, strided_range_gt<element_at> ids) {
+    net.last_buffer_strides[0] = ids.stride();
+    net.last_buffer_strides[1] = net.last_buffer_strides[2] = 0;
+    net.last_buffer_shape[0] = ids.size();
+    net.last_buffer_shape[1] = net.last_buffer_shape[2] = 0;
+
+    // https://docs.python.org/3/c-api/buffer.html
+    Py_buffer py_buf;
+    py_buf.buf = (void*)ids.begin().get();
+    py_buf.obj = NULL;
+    py_buf.len = ids.size() * sizeof(element_at);
+    py_buf.itemsize = sizeof(element_at);
+    // https://docs.python.org/3/library/struct.html#format-characters
+    py_buf.format = (char*)"Q";
+    py_buf.ndim = 1;
+    py_buf.shape = &net.last_buffer_shape[0];
+    py_buf.strides = &net.last_buffer_strides[0];
+    return wrap_into_buffer(net, ids);
+}
+
 void ukv::wrap_network(py::module& m) {
+
+    auto degs = py::class_<degree_view_t, std::shared_ptr<degree_view_t>>(m, "DegreeView", py::module_local());
+    degs.def("__getitem__", [](degree_view_t& degs, ukv_key_t v) {
+        network_t& net = *degs.net_ptr;
+        auto maybe_degree = net.inverted_index.degree(v, degs.roles);
+        maybe_degree.throw_unhandled();
+        return *maybe_degree;
+    });
 
     auto net = py::class_<network_t, std::shared_ptr<network_t>>(m, "Network", py::module_local());
     net.def(py::init([](std::shared_ptr<py_col_t> index_collection,
@@ -126,217 +160,387 @@ void ukv::wrap_network(py::module& m) {
             py::arg("multi") = false,
             py::arg("loops") = false);
 
-    // Random scalar operations
-    net.def("has_node", [](network_t& net, ukv_key_t v) {
-        auto maybe_exists = net.inverted_index.contains(v);
-        maybe_exists.throw_unhandled();
-        return *maybe_exists;
-    });
+    // Counting nodes edges and neighbors
+    // https://networkx.org/documentation/stable/reference/classes/graph.html#counting-nodes-edges-and-neighbors
+    // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#counting-nodes-edges-and-neighbors
+    net.def(
+        "order",
+        [](network_t& net, ukv_key_t v) {
+            auto maybe = net.inverted_index.collection().size();
+            maybe.throw_unhandled();
+            return *maybe;
+        },
+        "Returns the number of nodes in the graph.");
+    net.def(
+        "number_of_nodes",
+        [](network_t& net, ukv_key_t v) {
+            auto maybe = net.inverted_index.collection().size();
+            maybe.throw_unhandled();
+            return *maybe;
+        },
+        "Returns the number of nodes in the graph.");
+    net.def(
+        "__len__",
+        [](network_t& net, ukv_key_t v) {
+            auto maybe = net.inverted_index.collection().size();
+            maybe.throw_unhandled();
+            return *maybe;
+        },
+        "Returns the number of nodes in the graph.");
+    net.def_property_readonly(
+        "degree",
+        [](network_t& net) {
+            auto degs_ptr = std::make_shared<degree_view_t>();
+            degs_ptr->net_ptr = net.shared_from_this();
+            degs_ptr->roles = ukv_vertex_role_any_k;
+            return degs_ptr;
+        },
+        "A DegreeView for the graph.");
+    net.def_property_readonly(
+        "in_degree",
+        [](network_t& net) {
+            auto degs_ptr = std::make_shared<degree_view_t>();
+            degs_ptr->net_ptr = net.shared_from_this();
+            degs_ptr->roles = ukv_vertex_target_k;
+            return degs_ptr;
+        },
+        "A DegreeView with the number incoming edges for each Vertex.");
+    net.def_property_readonly(
+        "out_degree",
+        [](network_t& net) {
+            auto degs_ptr = std::make_shared<degree_view_t>();
+            degs_ptr->net_ptr = net.shared_from_this();
+            degs_ptr->roles = ukv_vertex_source_k;
+            return degs_ptr;
+        },
+        "A DegreeView with the number outgoing edges for each Vertex.");
+    net.def(
+        "size",
+        [](network_t& net) {
+            auto maybe = net.relations_attrs.size();
+            maybe.throw_unhandled();
+            return *maybe;
+        },
+        "Returns the number of attributed edges.");
+    net.def(
+        "number_of_edges",
+        [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
+            auto maybe_edges = net.inverted_index.edges(v1, v2);
+            maybe_edges.throw_unhandled();
+            return maybe_edges->size();
+        },
+        "Returns the number of edges between two nodes.");
+
+    // Reporting nodes edges and neighbors
+    // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#reporting-nodes-edges-and-neighbors
+    net.def(
+        "nodes",
+        [](network_t& net) { throw_not_implemented(); },
+        "A NodeView of the graph.");
+    net.def(
+        "__iter__",
+        [](network_t& net) { throw_not_implemented(); },
+        "Iterate over the nodes.");
+    net.def(
+        "has_node",
+        [](network_t& net, ukv_key_t v) {
+            auto maybe_exists = net.inverted_index.contains(v);
+            maybe_exists.throw_unhandled();
+            return *maybe_exists;
+        },
+        py::arg("n"),
+        "Returns True if the graph contains the node n.");
+    net.def(
+        "__contains__",
+        [](network_t& net, ukv_key_t v) {
+            auto maybe_exists = net.inverted_index.contains(v);
+            maybe_exists.throw_unhandled();
+            return *maybe_exists;
+        },
+        py::arg("n"),
+        "Returns True if the graph contains the node n.");
+
+    net.def("edges", [](network_t& net) { throw_not_implemented(); });
+    net.def("out_edges", [](network_t& net) { throw_not_implemented(); });
+    net.def("in_edges", [](network_t& net) { throw_not_implemented(); });
+
+    net.def(
+        "has_edge",
+        [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
+            auto maybe_edges = net.inverted_index.edges(v1, v2);
+            maybe_edges.throw_unhandled();
+            return maybe_edges->size() != 0;
+        },
+        py::arg("u"),
+        py::arg("v"));
+    net.def(
+        "has_edge",
+        [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
+            auto maybe_edges = net.inverted_index.edges(v1, v2);
+            maybe_edges.throw_unhandled();
+            return std::find(maybe_edges->edge_ids.begin(), maybe_edges->edge_ids.end(), eid) !=
+                   maybe_edges->edge_ids.end();
+        },
+        py::arg("u"),
+        py::arg("v"),
+        py::arg("key"));
+    net.def(
+        "get_edge_data",
+        [](network_t& net, ukv_key_t v1, ukv_key_t v2) { throw_not_implemented(); },
+        py::arg("u"),
+        py::arg("v"));
 
     net.def("degree", [](network_t& net, ukv_key_t v) {
         auto maybe_degree = net.inverted_index.degree(v);
         maybe_degree.throw_unhandled();
         return *maybe_degree;
     });
+    net.def(
+        "neighbors",
+        [](network_t& net, ukv_key_t n) {
+            // Retrieving neighbors is trickier than just `successors` or `predecessors`.
+            // We are receiving an adjacency list, where both incoming an edges exist.
+            // So the stride/offset is not uniform across the entire list.
+            auto maybe_edges = net.inverted_index.edges(n, ukv_vertex_role_any_k);
+            maybe_edges.throw_unhandled();
 
-    net.def("number_of_edges", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
-        auto maybe_edges = net.inverted_index.edges(v1, v2);
-        maybe_edges.throw_unhandled();
-        return maybe_edges->size();
-    });
+            // We can gobble the contents a little bit by swapping the members of some
+            // edges to make it uniform.
+            auto edges = *maybe_edges;
+            auto count = edges.size();
+            for (std::size_t i = 0; i != count; ++i) {
+                ukv_key_t& u = const_cast<ukv_key_t&>(edges.source_ids[i]);
+                ukv_key_t& v = const_cast<ukv_key_t&>(edges.target_ids[i]);
+                if (u == n)
+                    std::swap(u, v);
+            }
 
-    net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
-        auto maybe_edges = net.inverted_index.edges(v1, v2);
-        maybe_edges.throw_unhandled();
-        return maybe_edges->size() != 0;
-    });
+            return wrap_into_buffer(net, edges.target_ids);
+        },
+        py::arg("n"),
+        "Returns an iterable of incoming and outgoing nodes of n. Potentially with duplicates.");
+    net.def(
+        "successors",
+        [](network_t& net, ukv_key_t n) {
+            auto maybe_edges = net.inverted_index.edges(n, ukv_vertex_source_k);
+            maybe_edges.throw_unhandled();
+            return wrap_into_buffer(net, maybe_edges->target_ids);
+        },
+        py::arg("n"),
+        "Returns an iterable of successor nodes of n.");
+    net.def(
+        "predecessors",
+        [](network_t& net, ukv_key_t n) {
+            auto maybe_edges = net.inverted_index.edges(n, ukv_vertex_target_k);
+            maybe_edges.throw_unhandled();
+            return wrap_into_buffer(net, maybe_edges->source_ids);
+        },
+        py::arg("n"),
+        "Returns an iterable of follower nodes of n.");
+    net.def(
+        "nbunch_iter",
+        [](network_t& net, py::handle const& vs) {
+            auto handle_and_ids = strided_array<ukv_key_t const>(vs);
+            auto maybe_exists = net.inverted_index.contains(handle_and_ids.second);
+            maybe_exists.throw_unhandled();
+            return wrap_into_buffer(net, *maybe_exists);
+        },
+        "Checks given nodes against graph members and returns a filtered iterable object");
 
-    net.def("has_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
-        auto maybe_edges = net.inverted_index.edges(v1, v2);
-        maybe_edges.throw_unhandled();
-        return std::find(maybe_edges->edge_ids.begin(), maybe_edges->edge_ids.end(), eid) !=
-               maybe_edges->edge_ids.end();
-    });
+    // Adding and Removing Nodes and Edges
+    // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#adding-and-removing-nodes-and-edges
+    net.def(
+        "add_edge",
+        [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
+            edges_view_t edges {
+                strided_range_gt<ukv_key_t const>(v1),
+                strided_range_gt<ukv_key_t const>(v2),
+            };
+            net.inverted_index.upsert(edges).throw_unhandled();
+        },
+        py::arg("u_for_edge"),
+        py::arg("v_for_edge"));
+    net.def(
+        "add_edge",
+        [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
+            edges_view_t edges {
+                strided_range_gt<ukv_key_t const>(v1),
+                strided_range_gt<ukv_key_t const>(v2),
+                strided_range_gt<ukv_key_t const>(eid),
+            };
+            net.inverted_index.upsert(edges).throw_unhandled();
+        },
+        py::arg("u_for_edge"),
+        py::arg("v_for_edge"),
+        py::arg("key"));
+    net.def(
+        "remove_edge",
+        [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
+            edges_view_t edges {
+                strided_range_gt<ukv_key_t const>(v1),
+                strided_range_gt<ukv_key_t const>(v2),
+            };
+            net.inverted_index.remove(edges).throw_unhandled();
+        },
+        py::arg("u_for_edge"),
+        py::arg("v_for_edge"));
+    net.def(
+        "remove_edge",
+        [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
+            edges_view_t edges {
+                strided_range_gt<ukv_key_t const>(v1),
+                strided_range_gt<ukv_key_t const>(v2),
+                strided_range_gt<ukv_key_t const>(eid),
+            };
+            net.inverted_index.remove(edges).throw_unhandled();
+        },
+        py::arg("u_for_edge"),
+        py::arg("v_for_edge"),
+        py::arg("key"));
+    net.def(
+        "add_edges_from",
+        [](network_t& net, py::handle const& adjacency_list) {
+            auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
+            if (handle_and_list.second.cols() != 2 || handle_and_list.second.cols() != 3)
+                throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
 
-    // Batch retrieval into dynamically sized NumPy arrays
-    net.def("neighbors", [](network_t& net, ukv_key_t n) {
+            edges_view_t edges {
+                handle_and_list.second.col(0),
+                handle_and_list.second.col(1),
+                handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
+                                                   : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
+            };
+            net.inverted_index.upsert(edges).throw_unhandled();
+        },
+        py::arg("ebunch_to_add"),
+        "Adds an adjacency list (in a form of 2 or 3 columnar matrix) to the graph.");
+    net.def(
+        "remove_edges_from",
+        [](network_t& net, py::handle const& adjacency_list) {
+            auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
+            if (handle_and_list.second.cols() != 2 || handle_and_list.second.cols() != 3)
+                throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
 
-    });
-    net.def("successors", [](network_t& net, ukv_key_t n) {
-        auto maybe_edges = net.inverted_index.edges(n, ukv_vertex_source_k);
-        maybe_edges.throw_unhandled();
-        strided_range_gt<ukv_key_t const> ids = maybe_edges->target_ids;
-        net.last_buffer_strides[0] = ids.stride();
-        net.last_buffer_strides[1] = net.last_buffer_strides[2] = 0;
-        net.last_buffer_shape[0] = ids.size();
-        net.last_buffer_shape[1] = net.last_buffer_shape[2] = 0;
+            edges_view_t edges {
+                handle_and_list.second.col(0),
+                handle_and_list.second.col(1),
+                handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
+                                                   : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
+            };
+            net.inverted_index.remove(edges).throw_unhandled();
+        },
+        py::arg("ebunch"),
+        "Removes all edges in supplied adjacency list (in a form of 2 or 3 columnar matrix) from the graph.");
 
-        // https://docs.python.org/3/c-api/buffer.html
-        Py_buffer py_buf;
-        py_buf.buf = (void*)ids.begin().get();
-        py_buf.obj = NULL;
-        py_buf.len = ids.size() * sizeof(ukv_key_t);
-        py_buf.itemsize = sizeof(ukv_key_t);
-        // https://docs.python.org/3/library/struct.html#format-characters
-        py_buf.format = (char*)"Q";
-        py_buf.ndim = 1;
-        py_buf.shape = &net.last_buffer_shape[0];
-        py_buf.strides = &net.last_buffer_strides[0];
-        return py_buf;
-    });
-    net.def("predecessors", [](network_t& net, ukv_key_t n) {
-        auto maybe_edges = net.inverted_index.edges(n, ukv_vertex_target_k);
-        maybe_edges.throw_unhandled();
-        strided_range_gt<ukv_key_t const> ids = maybe_edges->source_ids;
-        net.last_buffer_strides[0] = ids.stride();
-        net.last_buffer_strides[1] = net.last_buffer_strides[2] = 0;
-        net.last_buffer_shape[0] = ids.size();
-        net.last_buffer_shape[1] = net.last_buffer_shape[2] = 0;
+    net.def(
+        "add_edges_from",
+        [](network_t& net, py::handle const& v1s, py::handle const& v2s) {
+            auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
+            auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
+            edges_view_t edges {
+                handle_and_sources.second,
+                handle_and_targets.second,
+            };
+            net.inverted_index.upsert(edges).throw_unhandled();
+        },
+        py::arg("us"),
+        py::arg("vs"),
+        "Adds edges from members of the first array to members of the second array.");
+    net.def(
+        "remove_edges_from",
+        [](network_t& net, py::handle const& v1s, py::handle const& v2s) {
+            auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
+            auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
+            edges_view_t edges {
+                handle_and_sources.second,
+                handle_and_targets.second,
+            };
+            net.inverted_index.remove(edges).throw_unhandled();
+        },
+        py::arg("us"),
+        py::arg("vs"),
+        "Removes edges from members of the first array to members of the second array.");
 
-        // https://docs.python.org/3/c-api/buffer.html
-        Py_buffer py_buf;
-        py_buf.buf = (void*)ids.begin().get();
-        py_buf.obj = NULL;
-        py_buf.len = ids.size() * sizeof(ukv_key_t);
-        py_buf.itemsize = sizeof(ukv_key_t);
-        // https://docs.python.org/3/library/struct.html#format-characters
-        py_buf.format = (char*)"Q";
-        py_buf.ndim = 1;
-        py_buf.shape = &net.last_buffer_shape[0];
-        py_buf.strides = &net.last_buffer_strides[0];
-        return py_buf;
-    });
+    net.def(
+        "add_edges_from",
+        [](network_t& net, py::handle const& v1s, py::handle const& v2s, py::handle const& eids) {
+            auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
+            auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
+            auto handle_and_edge_ids = strided_array<ukv_key_t const>(eids);
+            edges_view_t edges {
+                handle_and_sources.second,
+                handle_and_targets.second,
+                handle_and_edge_ids.second,
+            };
+            net.inverted_index.upsert(edges).throw_unhandled();
+        },
+        py::arg("us"),
+        py::arg("vs"),
+        py::arg("keys"),
+        "Adds edges from members of the first array to members of the second array using keys from the third array.");
+    net.def(
+        "remove_edges_from",
+        [](network_t& net, py::handle const& v1s, py::handle const& v2s, py::handle const& eids) {
+            auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
+            auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
+            auto handle_and_edge_ids = strided_array<ukv_key_t const>(eids);
+            edges_view_t edges {
+                handle_and_sources.second,
+                handle_and_targets.second,
+                handle_and_edge_ids.second,
+            };
+            net.inverted_index.remove(edges).throw_unhandled();
+        },
+        py::arg("us"),
+        py::arg("vs"),
+        py::arg("keys"),
+        "Removes edges from members of the first array to members of the second array using keys from the third "
+        "array.");
+    net.def("clear_edges", [](network_t& net) { throw_not_implemented(); });
+    net.def(
+        "clear",
+        [](network_t& net) {
+            db_t& db = net.db_ptr->native;
+            db.clear(net.inverted_index.collection());
+            db.clear(net.sources_attrs);
+            db.clear(net.targets_attrs);
+            db.clear(net.relations_attrs);
+            throw_not_implemented();
+        },
+        "Removes both vertices and edges from the graph.");
 
-    // Random Writes
-    net.def("add_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
-        edges_soa_view_t edges {
-            strided_range_gt<ukv_key_t const>(v1),
-            strided_range_gt<ukv_key_t const>(v2),
-        };
-        net.inverted_index.upsert(edges).throw_unhandled();
-    });
-    net.def("add_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
-        edges_soa_view_t edges {
-            strided_range_gt<ukv_key_t const>(v1),
-            strided_range_gt<ukv_key_t const>(v2),
-            strided_range_gt<ukv_key_t const>(eid),
-        };
-        net.inverted_index.upsert(edges).throw_unhandled();
-    });
-    net.def("remove_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
-        edges_soa_view_t edges {
-            strided_range_gt<ukv_key_t const>(v1),
-            strided_range_gt<ukv_key_t const>(v2),
-        };
-        net.inverted_index.remove(edges).throw_unhandled();
-    });
-    net.def("remove_edge", [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
-        edges_soa_view_t edges {
-            strided_range_gt<ukv_key_t const>(v1),
-            strided_range_gt<ukv_key_t const>(v2),
-            strided_range_gt<ukv_key_t const>(eid),
-        };
-        net.inverted_index.remove(edges).throw_unhandled();
-    });
+    // Making copies and subgraphs
+    // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#making-copies-and-subgraphs
+    net.def("copy", [](network_t& net) { throw_not_implemented(); });
+    net.def("to_directed", [](network_t& net) { throw_not_implemented(); });
+    net.def("to_undirected", [](network_t& net) { throw_not_implemented(); });
+    net.def("reverse", [](network_t& net) { throw_not_implemented(); });
+    net.def("subgraph", [](network_t& net) { throw_not_implemented(); });
+    net.def("edge_subgraph", [](network_t& net) { throw_not_implemented(); });
+    net.def(
+        "subgraph",
+        [](network_t& net, py::handle ns) { throw_not_implemented(); },
+        "Returns a subgraph in a form of an adjacency list with 3 columns, where every edge (row) "
+        "contains at least one vertex from the supplied list. Some edges may be duplicated.");
+    net.def(
+        "subgraph",
+        [](network_t& net, ukv_key_t n, std::size_t hops) { throw_not_implemented(); },
+        "Returns a subgraph in a form of an adjacency list with 3 columns, where every edge (row) "
+        "contains at least one vertex from the supplied list at a distance withing a given number "
+        "`hops` from the supplied `n`.");
 
-    net.def("add_edges_from", [](network_t& net, py::handle const& adjacency_list) {
-        auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
-        if (handle_and_list.second.cols() != 2 || handle_and_list.second.cols() != 3)
-            throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
-
-        edges_soa_view_t edges {
-            handle_and_list.second.col(0),
-            handle_and_list.second.col(1),
-            handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
-                                               : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
-        };
-        net.inverted_index.upsert(edges).throw_unhandled();
-    });
-    net.def("remove_edges_from", [](network_t& net, py::handle const& adjacency_list) {
-        auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
-        if (handle_and_list.second.cols() != 2 || handle_and_list.second.cols() != 3)
-            throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
-
-        edges_soa_view_t edges {
-            handle_and_list.second.col(0),
-            handle_and_list.second.col(1),
-            handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
-                                               : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
-        };
-        net.inverted_index.remove(edges).throw_unhandled();
-    });
-
-    net.def("add_edges_from", [](network_t& net, py::handle const& v1s, py::handle const& v2s) {
-        auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
-        auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
-        edges_soa_view_t edges {
-            handle_and_sources.second,
-            handle_and_targets.second,
-        };
-        net.inverted_index.upsert(edges).throw_unhandled();
-    });
-    net.def("remove_edges_from", [](network_t& net, py::handle const& v1s, py::handle const& v2s) {
-        auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
-        auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
-        edges_soa_view_t edges {
-            handle_and_sources.second,
-            handle_and_targets.second,
-        };
-        net.inverted_index.remove(edges).throw_unhandled();
-    });
-
-    net.def("add_edges_from", [](network_t& net, py::handle const& v1s, py::handle const& v2s, py::handle const& eids) {
-        auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
-        auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
-        auto handle_and_edge_ids = strided_array<ukv_key_t const>(eids);
-        edges_soa_view_t edges {
-            handle_and_sources.second,
-            handle_and_targets.second,
-            handle_and_edge_ids.second,
-        };
-        net.inverted_index.upsert(edges).throw_unhandled();
-    });
-    net.def("remove_edges_from",
-            [](network_t& net, py::handle const& v1s, py::handle const& v2s, py::handle const& eids) {
-                auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
-                auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
-                auto handle_and_edge_ids = strided_array<ukv_key_t const>(eids);
-                edges_soa_view_t edges {
-                    handle_and_sources.second,
-                    handle_and_targets.second,
-                    handle_and_edge_ids.second,
-                };
-                net.inverted_index.remove(edges).throw_unhandled();
-            });
-
-    // Bulk Writes
-    net.def("clear_edges", [](network_t& net) {
-
-    });
-    net.def("clear", [](network_t& net) {
-        db_t& db = net.db_ptr->native;
-        db.clear(net.inverted_index.collection());
-        db.clear(net.sources_attrs);
-        db.clear(net.targets_attrs);
-        db.clear(net.relations_attrs);
-    });
-
-    // Bulk Reads
-    net.def("nodes", [](network_t& net) {});
-    net.def("edges", [](network_t& net) {});
-
-    // Two hop batch retrieval, not a classical API
-    net.def("neighbors_of_group", [](network_t& net, py::handle ns) {
-
-    });
-    net.def("neighbors_of_neighbors", [](network_t& net, ukv_key_t n) {
-
-    });
-
+    // Free-standing Functions and Properties
+    // https://networkx.org/documentation/stable/reference/functions.html#graph
     // https://networkx.org/documentation/stable/reference/generated/networkx.classes.function.density.html
     // https://networkx.org/documentation/stable/reference/generated/networkx.classes.function.is_directed.html?highlight=is_directed
+    net.def_property_readonly("is_directed", [](network_t& net) { return net.is_directed_; });
+    net.def_property_readonly("is_multi", [](network_t& net) { return net.is_multi_; });
+    net.def_property_readonly("allows_loops", [](network_t& net) { return net.allow_self_loops_; });
     m.def("is_directed", [](network_t& net) { return net.is_directed_; });
     m.def("is_multi", [](network_t& net) { return net.is_multi_; });
     m.def("allows_loops", [](network_t& net) { return net.allow_self_loops_; });
-    m.def("density", [](network_t& net) { return 0.0; });
+    m.def("density", [](network_t& net) {
+        throw_not_implemented();
+        return 0.0;
+    });
 }
