@@ -328,7 +328,7 @@ void export_edge_tuples( //
                                c_vertices_count * sizeof(ukv_vertex_degree_t));
 
     // Export into arena
-    auto degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(arena.unpacked_tape.data());
+    auto const degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(arena.unpacked_tape.data());
     auto neighborships_per_vertex = reinterpret_cast<ukv_key_t*>(degrees_per_vertex + c_vertices_count);
 
     tape_iterator_t values_it = values.begin();
@@ -352,10 +352,10 @@ void export_edge_tuples( //
                     if constexpr (export_center_ak)
                         neighborships_per_vertex[0] = vertex_id;
                     if constexpr (export_neighbor_ak)
-                        neighborships_per_vertex[1] = n.neighbor_id;
+                        neighborships_per_vertex[export_center_ak] = n.neighbor_id;
                     if constexpr (export_edge_ak)
-                        neighborships_per_vertex[2] = n.edge_id;
-                    neighborships_per_vertex += 3;
+                        neighborships_per_vertex[export_center_ak + export_neighbor_ak] = n.edge_id;
+                    neighborships_per_vertex += tuple_size_k;
                 }
             degree += static_cast<ukv_vertex_degree_t>(ns.size());
         }
@@ -366,17 +366,17 @@ void export_edge_tuples( //
                     if constexpr (export_neighbor_ak)
                         neighborships_per_vertex[0] = n.neighbor_id;
                     if constexpr (export_center_ak)
-                        neighborships_per_vertex[1] = vertex_id;
+                        neighborships_per_vertex[export_neighbor_ak] = vertex_id;
                     if constexpr (export_edge_ak)
-                        neighborships_per_vertex[2] = n.edge_id;
-                    neighborships_per_vertex += 3;
+                        neighborships_per_vertex[export_center_ak + export_neighbor_ak] = n.edge_id;
+                    neighborships_per_vertex += tuple_size_k;
                 }
             degree += static_cast<ukv_vertex_degree_t>(ns.size());
         }
     }
 
     *c_degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(arena.unpacked_tape.data());
-    *c_neighborships_per_vertex = reinterpret_cast<ukv_key_t*>(degrees_per_vertex);
+    *c_neighborships_per_vertex = reinterpret_cast<ukv_key_t*>(degrees_per_vertex + c_vertices_count);
 }
 
 void export_disjoint_edge_buffers( //
