@@ -18,31 +18,6 @@
 namespace unum::ukv {
 
 /**
- * @brief Append-only datastructure for variable length blobs.
- * Owns the underlying arena and is external to the underlying DB.
- * Is suited for data preparation before passing to the C API.
- */
-class appendable_tape_t {
-    std::vector<ukv_val_len_t> lengths_;
-    std::vector<byte_t> data_;
-
-  public:
-    void push_back(value_view_t value) {
-        lengths_.push_back(static_cast<ukv_val_len_t>(value.size()));
-        data_.insert(data_.end(), value.begin(), value.end());
-    }
-
-    void clear() {
-        lengths_.clear();
-        data_.clear();
-    }
-
-    operator taped_values_view_t() const noexcept {
-        return {lengths_.data(), ukv_val_ptr_t(data_.data()), data_.size()};
-    }
-};
-
-/**
  * @brief A proxy object, that allows both lookups and writes
  * with `[]` and assignment operators for a batch of keys
  * simultaneously.
@@ -202,6 +177,8 @@ class collection_t {
     inline operator ukv_collection_t() const noexcept { return col_; }
     inline ukv_collection_t* internal_cptr() noexcept { return &col_; }
     inline ukv_t db() const noexcept { return db_; }
+
+    inline expected_gt<std::size_t> size() const noexcept { return 0; }
 };
 
 /**
