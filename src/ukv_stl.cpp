@@ -629,7 +629,7 @@ void scan_txn( //
 
     // 1. Estimate the total size
     bool export_lengths = (options & ukv_option_read_lengths_k);
-    ukv_size_t total_lengths = std::accumulate(tasks.lengths, tasks.lengths + n, 0ul);
+    ukv_size_t total_lengths = std::accumulate(tasks.lengths, tasks.lengths + static_cast<std::ptrdiff_t>(n), 0ul);
     ukv_size_t total_bytes = total_lengths * sizeof(ukv_key_t);
     if (export_lengths)
         total_bytes += total_lengths * sizeof(ukv_val_len_t);
