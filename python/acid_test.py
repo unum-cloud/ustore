@@ -104,17 +104,17 @@ def test_remove_with_2_interleaving_transactions():
 
 
 def test_transaction_with_multiple_collections():
-    coll_count = 100
+    col_count = 100
     keys_count = 100
     db = ukv.DataBase()
 
     with ukv.Transaction(db) as txn:
-        for col_index in range(coll_count):
+        for col_index in range(col_count):
             for index in range(keys_count):
                 txn.set(str(col_index), index, str(index).encode())
 
     with ukv.Transaction(db) as txn:
-        for col_index in range(coll_count):
+        for col_index in range(col_count):
             for index in range(keys_count):
                 assert txn.get(str(col_index), index) == str(index).encode()
                 assert txn[str(col_index)][index] == str(index).encode()
