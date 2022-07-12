@@ -324,8 +324,12 @@ void export_edge_tuples( //
         }
     }
     constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
-    arena.unpacked_tape.resize(total_neighborships * sizeof(ukv_key_t) * tuple_size_k +
-                               c_vertices_count * sizeof(ukv_vertex_degree_t));
+    prepare_memory(arena.unpacked_tape,
+                   total_neighborships * sizeof(ukv_key_t) * tuple_size_k +
+                       c_vertices_count * sizeof(ukv_vertex_degree_t),
+                   c_error);
+    if (*c_error)
+        return;
 
     // Export into arena
     auto const degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(arena.unpacked_tape.data());
@@ -455,7 +459,9 @@ void update_neighborhoods( //
     strided_ptr_gt<ukv_key_t const> targets_ids {c_targets_ids, c_targets_stride};
 
     // Fetch all the data related to touched vertices
-    arena.updated_keys.resize(c_edges_count + c_edges_count);
+    prepare_memory(arena.updated_keys, c_edges_count + c_edges_count, c_error);
+    if (*c_error)
+        return;
     for (ukv_size_t i = 0; i != c_edges_count; ++i)
         arena.updated_keys[i] = {collections[i], sources_ids[i]};
     for (ukv_size_t i = 0; i != c_edges_count; ++i)
@@ -698,7 +704,9 @@ void ukv_graph_remove_vertices( //
     // Sorting the tasks would help us faster locate them in the future.
     // We may also face repetitions when connected vertices are removed.
     sort_and_deduplicate(arena.updated_keys);
-    arena.updated_vals.resize(arena.updated_keys.size());
+    prepare_memory(arena.updated_vals, arena.updated_keys.size(), c_error);
+    if (*c_error)
+        return;
 
     // Fetch the opposite ends, from which that same reference must be removed.
     // Here all the keys will be in the sorted order.
@@ -712,7 +720,7 @@ void ukv_graph_remove_vertices( //
                                  c_options,
                                  c_arena,
                                  c_error);
-    if (c_error)
+    if (*c_error)
         return;
 
     // From every sequence remove the matching range of neighbors
