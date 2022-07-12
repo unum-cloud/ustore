@@ -75,8 +75,9 @@ struct py_received_buffer_t {
         initialized = false;
     }
     py_received_buffer_t() = default;
-    py_received_buffer_t(py_received_buffer_t&&) = delete;
     py_received_buffer_t(py_received_buffer_t const&) = delete;
+    py_received_buffer_t(py_received_buffer_t&& other) noexcept
+        : py(other.py), initialized(std::exchange(other.initialized, false)) {}
 
     Py_buffer py;
     bool initialized = false;
@@ -108,7 +109,7 @@ std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(py::h
         static_cast<ukv_size_t>(raii.py.strides[0]),
         static_cast<ukv_size_t>(raii.py.shape[0]),
     };
-    return {std::move(raii), result};
+    return std::make_pair<py_received_buffer_t, strided_range_gt<scalar_at>>(std::move(raii), std::move(result));
 }
 
 template <typename scalar_at>
@@ -138,7 +139,7 @@ std::pair<py_received_buffer_t, strided_matrix_gt<scalar_at>> strided_matrix(py:
         static_cast<ukv_size_t>(raii.py.shape[1]),
         static_cast<ukv_size_t>(raii.py.strides[0]),
     };
-    return {std::move(raii), result};
+    return std::make_pair<py_received_buffer_t, strided_matrix_gt<scalar_at>>(std::move(raii), std::move(result));
 }
 
 void wrap_database(py::module&);

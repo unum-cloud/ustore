@@ -71,11 +71,6 @@ struct network_t : public std::enable_shared_from_this<network_t> {
     network_t(network_t&&) = delete;
     network_t(network_t const&) = delete;
     ~network_t() {}
-
-    // inline ukv_t db() const noexcept { return db_ptr->native; }
-    // inline ukv_txn_t txn() const noexcept { return inverted_index.txn(); }
-    // inline ukv_collection_t* internal_cptr() const noexcept { return inverted_index.collection().internal_cptr(); }
-    // inline managed_arena_t& arena() noexcept { return inverted_index.arena(); }
 };
 
 void ukv::wrap_network(py::module& m) {
@@ -165,27 +160,51 @@ void ukv::wrap_network(py::module& m) {
 
     // Batch retrieval into dynamically sized NumPy arrays
     net.def("neighbors", [](network_t& net, ukv_key_t n) {
-        // taped_values_view_t range = net.inverted_index().arena().untape(1);
-        // value_view_t first = *range.begin();
-        // neighborhood_t neighborhood {n, first};
-        // // https://docs.python.org/3/c-api/buffer.html
-        // struct Py_buffer py_buf;
-        // py_buf.buf = neighborhood.targets.begin();
-        // py_buf.obj = NULL;
-        // py_buf.len = neighborhood.size() * sizeof(ukv_key_t);
-        // py_buf.itemsize = sizeof(ukv_key_t);
-        // // https://docs.python.org/3/library/struct.html#format-characters
-        // py_buf.format = "Q";
-        // py_buf.ndim = 1;
-        // py_buf.shape = &net.last_buffer_shape[0];
-        // py_buf.strides = &net.last_buffer_strides[0];
-        // return py_buf;
+
     });
     net.def("successors", [](network_t& net, ukv_key_t n) {
+        auto maybe_edges = net.inverted_index.edges(n, ukv_vertex_source_k);
+        maybe_edges.throw_unhandled();
+        strided_range_gt<ukv_key_t const> ids = maybe_edges->target_ids;
+        net.last_buffer_strides[0] = ids.stride();
+        net.last_buffer_strides[1] = net.last_buffer_strides[2] = 0;
+        net.last_buffer_shape[0] = ids.size();
+        net.last_buffer_shape[1] = net.last_buffer_shape[2] = 0;
 
+        // https://docs.python.org/3/c-api/buffer.html
+        Py_buffer py_buf;
+        py_buf.buf = (void*)ids.begin().get();
+        py_buf.obj = NULL;
+        py_buf.len = ids.size() * sizeof(ukv_key_t);
+        py_buf.itemsize = sizeof(ukv_key_t);
+        // https://docs.python.org/3/library/struct.html#format-characters
+        py_buf.format = (char*)"Q";
+        py_buf.ndim = 1;
+        py_buf.shape = &net.last_buffer_shape[0];
+        py_buf.strides = &net.last_buffer_strides[0];
+        return py_buf;
     });
     net.def("predecessors", [](network_t& net, ukv_key_t n) {
+        auto maybe_edges = net.inverted_index.edges(n, ukv_vertex_target_k);
+        maybe_edges.throw_unhandled();
+        strided_range_gt<ukv_key_t const> ids = maybe_edges->source_ids;
+        net.last_buffer_strides[0] = ids.stride();
+        net.last_buffer_strides[1] = net.last_buffer_strides[2] = 0;
+        net.last_buffer_shape[0] = ids.size();
+        net.last_buffer_shape[1] = net.last_buffer_shape[2] = 0;
 
+        // https://docs.python.org/3/c-api/buffer.html
+        Py_buffer py_buf;
+        py_buf.buf = (void*)ids.begin().get();
+        py_buf.obj = NULL;
+        py_buf.len = ids.size() * sizeof(ukv_key_t);
+        py_buf.itemsize = sizeof(ukv_key_t);
+        // https://docs.python.org/3/library/struct.html#format-characters
+        py_buf.format = (char*)"Q";
+        py_buf.ndim = 1;
+        py_buf.shape = &net.last_buffer_shape[0];
+        py_buf.strides = &net.last_buffer_strides[0];
+        return py_buf;
     });
 
     // Random Writes
@@ -221,7 +240,7 @@ void ukv::wrap_network(py::module& m) {
     });
 
     net.def("add_edges_from", [](network_t& net, py::handle const& adjacency_list) {
-        auto handle_and_list = strided_array<ukv_key_t const>(adjacency_list);
+        auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
         if (handle_and_list.second.cols() != 2 || handle_and_list.second.cols() != 3)
             throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
 
@@ -234,7 +253,7 @@ void ukv::wrap_network(py::module& m) {
         net.inverted_index.upsert(edges).throw_unhandled();
     });
     net.def("remove_edges_from", [](network_t& net, py::handle const& adjacency_list) {
-        auto handle_and_list = strided_array<ukv_key_t const>(adjacency_list);
+        auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
         if (handle_and_list.second.cols() != 2 || handle_and_list.second.cols() != 3)
             throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
 
@@ -295,10 +314,11 @@ void ukv::wrap_network(py::module& m) {
 
     });
     net.def("clear", [](network_t& net) {
-        net.inverted_index.collection().clear();
-        net.sources_attrs.clear();
-        targets_attrs.clear();
-        relations_attrs.clear();
+        db_t& db = net.db_ptr->native;
+        db.clear(net.inverted_index.collection());
+        db.clear(net.sources_attrs);
+        db.clear(net.targets_attrs);
+        db.clear(net.relations_attrs);
     });
 
     // Bulk Reads
