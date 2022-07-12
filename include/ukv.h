@@ -129,6 +129,7 @@ typedef enum {
 
 extern ukv_collection_t ukv_default_collection_k;
 extern ukv_val_len_t ukv_val_len_missing_k;
+extern ukv_key_t ukv_key_unknown_k;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -250,7 +251,7 @@ void ukv_write( //
  *                            is assumed. Instead of passing one collection for
  *                            each key, you can use `ukv_option_read_colocated`.
  * @param[in] options         Read options:
- *                            > transaparent: Bypassed any ACID checks on next write.
+ *                            > transaparent: Bypasses any ACID checks on following write.
  *                            > lengths: Only fetches lengths of values, not content.
  *
  * @param[inout] tape         Points to a memory region that we use during
@@ -285,9 +286,11 @@ void ukv_read( //
 /**
  * @brief Retrieves the following (upto) `scan_length` keys starting
  * from `min_key` or the smallest following key in each collection.
+ * Values are not exported, for that - follow up with `ukv_read`.
+ * Fetching lengths of values is @b optional.
  *
  * @param[in] options   Read options:
- *                      > transaparent: Bypassed any ACID checks on next write.
+ *                      > transaparent: Bypasses any ACID checks on following write.
  *                      > lengths: Will fetches lengths of values, after the keys.
  */
 void ukv_scan( //
