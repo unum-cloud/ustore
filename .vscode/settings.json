@@ -101,5 +101,8 @@
     "java.project.sourcePaths": [
         "java",
         "java/com/unum/ukv"
+    ],
+    "java.project.referencedLibraries": [
+        "build/lib/**/*.jar"
     ]
 }
