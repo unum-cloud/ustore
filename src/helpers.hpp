@@ -96,7 +96,7 @@ class value_t {
     }
 
     void erase(std::size_t offset, std::size_t length) {
-        if (offset + length >= size())
+        if (offset + length > size())
             throw std::out_of_range("Can't erase");
 
         std::memmove(ptr_ + offset, ptr_ + offset + length, length_ - (offset + length));
