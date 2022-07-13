@@ -77,8 +77,8 @@ struct sample_proxy_t {
     }
 
     /**
-     * @brief Checks if certain vertices are present in the graph.
-     * They maybe disconnected from everything else.
+     * @brief Checks if requested keys are present in the store.
+     * ! Related values may be empty strings.
      */
     [[nodiscard]] expected_gt<strided_range_gt<bool>> contains(bool transparent = false) const noexcept {
 
@@ -112,6 +112,11 @@ struct sample_proxy_t {
         return strided_range_gt<bool> {booleans + last_byte_offset, sizeof(ukv_val_len_t), keys.size()};
     }
 
+    /**
+     * @brief Pair-wise assigns values to keys located in this proxy objects.
+     * @param flush Pass true, if you need the data to be persisted before returning.
+     * @return error_t Non-NULL if only an error had occured.
+     */
     [[nodiscard]] error_t set(disjoint_values_view_t vals, bool flush = false) noexcept {
         error_t error;
         ukv_write(db,
@@ -133,9 +138,34 @@ struct sample_proxy_t {
         return error;
     }
 
+    /**
+     * @brief Removes both the keys and the associated values.
+     * @param flush Pass true, if you need the data to be persisted before returning.
+     * @return error_t Non-NULL if only an error had occured.
+     */
+    [[nodiscard]] error_t erase(bool flush = false) noexcept { return set(disjoint_values_view_t {}, flush); }
+
+    /**
+     * @brief Keeps the keys, but clears the contents of associated values.
+     * @param flush Pass true, if you need the data to be persisted before returning.
+     * @return error_t Non-NULL if only an error had occured.
+     */
+    [[nodiscard]] error_t clear(bool flush = false) noexcept {
+        ukv_val_ptr_t any = reinterpret_cast<ukv_val_ptr_t>(this);
+        ukv_val_len_t len = 0;
+        return set(disjoint_values_view_t {.contents = {any}, .offsets = {}, .lengths = {len}}, flush);
+    }
+
     operator expected_gt<taped_values_view_t>() const noexcept { return get(); }
+
     sample_proxy_t& operator=(disjoint_values_view_t vals) noexcept(false) {
         auto error = set(vals);
+        error.throw_unhandled();
+        return *this;
+    }
+
+    sample_proxy_t& operator=(nullptr_t) noexcept(false) {
+        auto error = erase();
         error.throw_unhandled();
         return *this;
     }
@@ -173,7 +203,7 @@ class collection_keys_iterator_t {
                  arena,
                  error.internal_cptr());
         if (error)
-            return std::move(error);
+            return error;
 
         auto present_end = std::find(found_keys, found_keys + read_ahead, ukv_key_unknown_k);
         return range_gt<ukv_key_t*> {found_keys, present_end};
@@ -201,7 +231,6 @@ class collection_keys_iterator_t {
             return {};
         }
 
-        ukv_key_t result = prefetched_keys_[0];
         prefetched_offset_ = 0;
         next_min_key_ = prefetched_keys_[prefetched_keys_.size() - 1] + 1;
         return {};
