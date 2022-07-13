@@ -700,7 +700,7 @@ void ukv_graph_remove_vertices( //
     arena.updated_keys.reserve(count_edges * 2);
     for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++degrees_per_vertex) {
         auto collection = collections[i];
-        for (ukv_size_t j = 0; j != *degrees_per_vertex; ++i, ++neighbors_per_vertex)
+        for (ukv_size_t j = 0; j != *degrees_per_vertex; ++j, ++neighbors_per_vertex)
             arena.updated_keys.push_back({collection, *neighbors_per_vertex});
     }
 
@@ -741,7 +741,7 @@ void ukv_graph_remove_vertices( //
             erase(neighbor_value, invert(role), vertex_id);
         }
 
-        vertex_value.clear();
+        vertex_value.reset();
     }
 
     // Now we will go through all the explicitly deleted vertices
