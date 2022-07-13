@@ -14,7 +14,7 @@ namespace unum::ukv {
 struct edge_t {
     ukv_key_t source_id;
     ukv_key_t target_id;
-    ukv_key_t edge_id = ukv_default_edge_id_k;
+    ukv_key_t id = ukv_default_edge_id_k;
 };
 
 /**
@@ -70,7 +70,7 @@ struct edges_range_gt {
         auto strided = strided_range_gt<edge_t const>(ptr, end);
         source_ids = strided.members(&edge_t::source_id);
         target_ids = strided.members(&edge_t::target_id);
-        edge_ids = strided.members(&edge_t::edge_id);
+        edge_ids = strided.members(&edge_t::id);
     }
 
     inline edges_range_gt(std::vector<edge_t> const& edges) noexcept
@@ -82,7 +82,7 @@ struct edges_range_gt {
         edge_t result;
         result.source_id = source_ids[i];
         result.target_id = target_ids[i];
-        result.edge_id = edge_ids[i];
+        result.id = edge_ids[i];
         return result;
     }
 };

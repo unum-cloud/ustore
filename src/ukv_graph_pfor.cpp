@@ -83,12 +83,12 @@ struct neighborhood_t {
             i -= targets.size();
             result.source_id = center;
             result.target_id = targets[i].neighbor_id;
-            result.edge_id = targets[i].edge_id;
+            result.id = targets[i].edge_id;
         }
         else {
             result.source_id = sources[i].neighbor_id;
             result.target_id = center;
-            result.edge_id = sources[i].edge_id;
+            result.id = sources[i].edge_id;
         }
         return result;
     }
