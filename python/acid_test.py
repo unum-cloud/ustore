@@ -110,15 +110,42 @@ def test_transaction_with_multiple_collections():
 
     with ukv.Transaction(db) as txn:
         for col_index in range(col_count):
-            for index in range(keys_count):
-                txn.set(str(col_index), index, str(index).encode())
+            col_name = str(col_index)
 
+            for key_index in range(keys_count):
+                value = str(key_index).encode()
+                txn.set(col_name, key_index, value)
+
+                # Before we commit the transaction, the key shouldn't be present in the DB
+                assert key_index not in db[col_name]
+
+                # Still, from inside the transaction, those entries must be observable
+                assert txn.get(col_name, key_index) == value
+                assert txn[col_name][key_index] == value
+
+    # Let's check, that those entries are globally visible
+    for col_index in range(col_count):
+        col_name = str(col_index)
+        assert col_name in db, 'Auto-upserted collection not found!'
+
+        for key_index in range(keys_count):
+            value = str(key_index).encode()
+
+            assert key_index in db[col_name]
+            assert db.get(col_name, key_index) == value
+            assert db[col_name][key_index] == value
+
+    # Let's make sure, that updates are visible to other transactions
     with ukv.Transaction(db) as txn:
         for col_index in range(col_count):
-            for index in range(keys_count):
-                assert txn.get(str(col_index), index) == str(index).encode()
-                assert txn[str(col_index)][index] == str(index).encode()
-                assert index in db[str(col_index)]
+            col_name = str(col_index)
+
+            for key_index in range(keys_count):
+                value = str(key_index).encode()
+
+                assert key_index in db[col_name]
+                assert txn.get(col_name, key_index) == value
+                assert txn[col_name][key_index] == value
 
 
 def test_conflict():
