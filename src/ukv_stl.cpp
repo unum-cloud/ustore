@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <shared_mutex>
+#include <mutex>      // `std::unique_lock`
 #include <numeric>    // `std::accumulate`
 #include <atomic>     // Thread-safe sequence counters
 #include <filesystem> // Enumerating the directory
@@ -333,7 +334,9 @@ void measure_head( //
         read_task_t task = tasks[i];
         stl_collection_t& col = stl_collection(db, task.collection);
         auto key_iterator = col.pairs.find(task.key);
-        lens[i] = key_iterator != col.pairs.end() ? key_iterator->second.buffer.size() : ukv_val_len_missing_k;
+        lens[i] = key_iterator != col.pairs.end() && !key_iterator->second.is_deleted
+                      ? static_cast<ukv_val_len_t>(key_iterator->second.buffer.size())
+                      : ukv_val_len_missing_k;
     }
 }
 
@@ -374,7 +377,7 @@ void read_head( //
         read_task_t task = tasks[i];
         stl_collection_t& col = stl_collection(db, task.collection);
         auto key_iterator = col.pairs.find(task.key);
-        if (key_iterator != col.pairs.end()) {
+        if (key_iterator != col.pairs.end() && !key_iterator->second.is_deleted) {
             auto len = key_iterator->second.buffer.size();
             std::memcpy(tape + exported_bytes, key_iterator->second.buffer.data(), len);
             lens[i] = static_cast<ukv_val_len_t>(len);
@@ -523,7 +526,8 @@ void measure_txn( //
                 *c_error = "Requested key was already overwritten since the start of the transaction!";
                 return;
             }
-            lens[i] = key_iterator->second.buffer.size();
+            lens[i] = !key_iterator->second.is_deleted ? static_cast<ukv_val_len_t>(key_iterator->second.buffer.size())
+                                                       : ukv_val_len_missing_k;
 
             if (should_track_requests)
                 txn.requested.emplace(task.location(), key_iterator->second.sequence_number);
@@ -575,7 +579,8 @@ void read_txn( //
                 *c_error = "Requested key was already overwritten since the start of the transaction!";
                 return;
             }
-            total_bytes += key_iterator->second.buffer.size();
+            if (!key_iterator->second.is_deleted)
+                total_bytes += key_iterator->second.buffer.size();
         }
     }
 
@@ -607,14 +612,18 @@ void read_txn( //
         }
         // Others should be pulled from the main store
         else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
-            auto len = key_iterator->second.buffer.size();
-            std::memcpy(tape + exported_bytes, key_iterator->second.buffer.data(), len);
-            lens[i] = static_cast<ukv_val_len_t>(len);
+
+            if (!key_iterator->second.is_deleted) {
+                auto len = key_iterator->second.buffer.size();
+                std::memcpy(tape + exported_bytes, key_iterator->second.buffer.data(), len);
+                lens[i] = static_cast<ukv_val_len_t>(len);
+                exported_bytes += len;
+            }
+            else
+                lens[i] = ukv_val_len_missing_k;
 
             if (should_track_requests)
                 txn.requested.emplace(task.location(), key_iterator->second.sequence_number);
-
-            exported_bytes += len;
         }
         // But some will be missing
         else {
