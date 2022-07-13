@@ -29,6 +29,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wreorder -Wunused-parameter")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
 endif()
 
@@ -108,10 +109,10 @@ include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 
 # FastPFor Integer Compression for 32-bit integers
 # FetchContent_Declare(
-#   fpfor
-#   GIT_REPOSITORY https://github.com/lemire/FastPFor.git
-#   GIT_TAG v0.1.8
-#   GIT_SHALLOW TRUE
+# fpfor
+# GIT_REPOSITORY https://github.com/lemire/FastPFor.git
+# GIT_TAG v0.1.8
+# GIT_SHALLOW TRUE
 # )
 # FetchContent_MakeAvailable(fpfor)
 
