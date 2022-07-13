@@ -192,11 +192,11 @@ void single_read( //
     }
 
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    auto len = (*value).size();
+    auto len = value->size();
     prepare_memory(arena.output_tape, sizeof(ukv_size_t) + len, c_error);
     memcpy(arena.output_tape.data(), &len, sizeof(ukv_size_t));
     if (len)
-        memcpy(arena.output_tape.data() + sizeof(ukv_size_t), (*value).data(), len);
+        memcpy(arena.output_tape.data() + sizeof(ukv_size_t), value->data(), len);
 
     *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(arena.output_tape.data());
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(arena.output_tape.data() + sizeof(ukv_size_t));
@@ -257,12 +257,12 @@ void ukv_read( //
             return;
         }
 
-        auto len = (*value).size();
+        auto len = value->size();
         tape = prepare_memory(arena.output_tape, exported_bytes + len, c_error);
         ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(arena.output_tape.data());
 
         if (len) {
-            std::memcpy(tape + exported_bytes, (*value).data(), len);
+            std::memcpy(tape + exported_bytes, value->data(), len);
             lens[i] = static_cast<ukv_val_len_t>(len);
             exported_bytes += len;
         }
