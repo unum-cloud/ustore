@@ -65,11 +65,14 @@ class value_t {
 
     void resize(std::size_t size) {
         if (size > cap_)
-            throw std::runtime_error("Only shrinking is currently supported");
+            throw std::invalid_argument("Only shrinking is currently supported");
         length_ = size;
     }
 
     void insert(std::size_t offset, byte_t const* inserted_begin, byte_t const* inserted_end) {
+        if (offset > size())
+            throw std::out_of_range("Can't insert");
+
         auto inserted_len = static_cast<ukv_val_len_t>(inserted_end - inserted_begin);
         auto new_size = length_ + inserted_len;
         if (new_size > cap_) {
@@ -92,8 +95,11 @@ class value_t {
         }
     }
 
-    void erase(std::size_t offset, std::size_t length) noexcept {
-        std::memmove(ptr_ + offset, ptr_ + offset + length, length_ - offset - length);
+    void erase(std::size_t offset, std::size_t length) {
+        if (offset + length >= size())
+            throw std::out_of_range("Can't erase");
+
+        std::memmove(ptr_ + offset, ptr_ + offset + length, length_ - (offset + length));
         length_ -= length;
     }
 
