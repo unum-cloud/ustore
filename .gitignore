@@ -43,7 +43,6 @@ build_debug/
 build_release/
 tmp/
 *.log
-.vscode/settings.json
 __pycache__
 .pytest_cache/
 .gradle/
