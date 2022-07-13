@@ -242,16 +242,19 @@ bool erase(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, std::o
     if (edge_id) {
         auto ship = neighborship_t {neighbor_id, *edge_id};
         auto it = std::lower_bound(neighbors_range.begin(), neighbors_range.end(), ship);
-        if (it != neighbors_range.end())
-            if (*it != ship)
-                return false;
+        if (it == neighbors_range.end())
+            return false;
+        else if (*it != ship)
+            return false;
 
         off = reinterpret_cast<byte_t const*>(it) - value.begin();
         len = sizeof(neighborship_t);
     }
     else {
         auto pair = std::equal_range(neighbors_range.begin(), neighbors_range.end(), neighbor_id);
-        if (pair.first == pair.second)
+        if (pair.first == neighbors_range.end())
+            return false;
+        else if (pair.first == pair.second)
             return false;
 
         off = reinterpret_cast<byte_t const*>(pair.first) - value.begin();
@@ -492,7 +495,7 @@ void update_neighborhoods( //
         auto& source_value = arena.updated_vals[offset_in_sorted(arena.updated_keys, {collection, source_id})];
         auto& target_value = arena.updated_vals[offset_in_sorted(arena.updated_keys, {collection, target_id})];
 
-        if (erase_ak) {
+        if constexpr (erase_ak) {
             std::optional<ukv_key_t> edge_id;
             if (edges_ids)
                 edge_id = edges_ids[i];
