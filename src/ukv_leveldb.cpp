@@ -54,6 +54,17 @@ inline leveldb::Slice to_slice(value_view_t value) noexcept {
     return {reinterpret_cast<const char*>(value.begin()), value.size()};
 }
 
+inline std::unique_ptr<std::string> get_value(ukv_error_t* c_error) noexcept {
+    std::unique_ptr<std::string> value_uptr;
+    try {
+        value_uptr = std::make_unique<std::string>();
+    }
+    catch (...) {
+        *c_error = "Fail to allocate value";
+    }
+    return value_uptr;
+}
+
 void ukv_open(char const* c_config, ukv_t* c_db, ukv_error_t* c_error) {
     level_db_t* db_ptr = nullptr;
     level_options_t options;
@@ -65,6 +76,32 @@ void ukv_open(char const* c_config, ukv_t* c_db, ukv_error_t* c_error) {
         return;
     }
     *c_db = db_ptr;
+}
+
+void single_write( //
+    level_db_t& db,
+    ukv_key_t const* c_key,
+    ukv_val_ptr_t const* c_val,
+    ukv_val_len_t const* c_len,
+    leveldb::WriteOptions& options,
+    ukv_error_t* c_error) {
+
+    level_status_t status;
+    if (*c_len)
+        status = db.Put(options, to_slice(*c_key), to_slice(value_view_t(*c_val, *c_len)));
+    else
+        status = db.Delete(options, to_slice(*c_key));
+
+    if (!status.ok()) {
+        if (status.IsCorruption())
+            *c_error = "Write Failure: DB Corrpution";
+        else if (status.IsIOError())
+            *c_error = "Write Failure: IO  Error";
+        else if (status.IsInvalidArgument())
+            *c_error = "Write Failure: Invalid Argument";
+        else
+            *c_error = "Write Failure";
+    }
 }
 
 void ukv_write( //
@@ -92,6 +129,14 @@ void ukv_write( //
     ukv_error_t* c_error) {
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    leveldb::WriteOptions options;
+    if (c_options & ukv_option_write_flush_k)
+        options.sync = true;
+
+    if (c_keys_count == 1) {
+        single_write(db, c_keys, c_vals, c_lens, options, c_error);
+        return;
+    }
 
     strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
@@ -111,10 +156,6 @@ void ukv_write( //
             batch.Delete(key);
     }
 
-    leveldb::WriteOptions options;
-    if (c_options & ukv_option_write_flush_k)
-        options.sync = true;
-
     level_status_t status = db.Write(options, &batch);
     if (!status.ok()) {
         if (status.IsCorruption())
@@ -126,6 +167,40 @@ void ukv_write( //
         else
             *c_error = "Write Failure";
     }
+}
+
+void single_read( //
+    level_db_t& db,
+    ukv_key_t const* c_key,
+    ukv_val_len_t** c_found_lengths,
+    ukv_val_ptr_t* c_found_values,
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    auto value_uptr = get_value(c_error);
+    std::string* value = value_uptr.get();
+    leveldb::ReadOptions options;
+    level_status_t status = db.Get(options, to_slice(*c_key), value);
+
+    if (!status.IsNotFound() && !status.ok()) {
+        if (status.IsIOError())
+            *c_error = "Read Failure: IO  Error";
+        else if (status.IsInvalidArgument())
+            *c_error = "Read Failure: Invalid Argument";
+        else
+            *c_error = "Read Failure";
+        return;
+    }
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    auto len = (*value).size();
+    prepare_memory(arena.output_tape, sizeof(ukv_size_t) + len, c_error);
+    memcpy(arena.output_tape.data(), &len, sizeof(ukv_size_t));
+    if (len)
+        memcpy(arena.output_tape.data() + sizeof(ukv_size_t), (*value).data(), len);
+
+    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(arena.output_tape.data());
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(arena.output_tape.data() + sizeof(ukv_size_t));
 }
 
 void ukv_read( //
@@ -147,10 +222,14 @@ void ukv_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    std::string value;
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    if (c_keys_count == 1) {
+        single_read(db, c_keys, c_found_lengths, c_found_values, c_arena, c_error);
+        return;
+    }
+
     level_status_t status;
     leveldb::ReadOptions options;
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {strided_ptr_gt<ukv_collection_t const> {}, keys};
@@ -159,9 +238,16 @@ void ukv_read( //
     ukv_size_t exported_bytes = lens_bytes;
     byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
 
+    auto value_uptr = get_value(c_error);
+    std::string* value = value_uptr.get();
     for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         auto task = tasks[i];
-        status = db.Get(options, to_slice(task.key), &value);
+        try {
+            status = db.Get(options, to_slice(task.key), value);
+        }
+        catch (...) {
+            *c_error = "Fail to read";
+        }
         if (!status.IsNotFound() && !status.ok()) {
             if (status.IsIOError())
                 *c_error = "Read Failure: IO  Error";
@@ -172,12 +258,12 @@ void ukv_read( //
             return;
         }
 
-        auto len = value.size();
-        tape = prepare_memory(arena.output_tape, exported_bytes + value.size(), c_error);
+        auto len = (*value).size();
+        tape = prepare_memory(arena.output_tape, exported_bytes + len, c_error);
         ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(arena.output_tape.data());
 
         if (len) {
-            std::memcpy(tape + exported_bytes, value.data(), len);
+            std::memcpy(tape + exported_bytes, (*value).data(), len);
             lens[i] = static_cast<ukv_val_len_t>(len);
             exported_bytes += len;
         }
@@ -188,6 +274,38 @@ void ukv_read( //
     *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(arena.output_tape.data());
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + lens_bytes);
 }
+
+// void ukv_scan( //
+//     ukv_t const c_db,
+//     ukv_txn_t const,
+
+//     ukv_collection_t const*,
+//     ukv_size_t const,
+
+//     ukv_key_t const* c_min_keys,
+//     ukv_size_t const c_min_keys_count,
+//     ukv_size_t const c_min_keys_stride,
+
+//     ukv_size_t const* c_scan_lengths,
+//     ukv_size_t const c_scan_lengths_stride,
+
+//     ukv_options_t const,
+
+//     ukv_key_t** c_found_keys,
+//     ukv_val_len_t** c_found_lengths,
+
+//     ukv_arena_t* c_arena,
+//     ukv_error_t* c_error) {
+
+//     stl_arena_t& arena = *cast_arena(c_arena, c_error);
+//     if (*c_error)
+//         return;
+
+//     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+//     strided_ptr_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
+//     strided_ptr_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
+//     scan_tasks_soa_t tasks {{}, keys, lens};
+// }
 
 void ukv_collection_upsert( //
     ukv_t const,
