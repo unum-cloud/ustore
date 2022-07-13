@@ -27,10 +27,10 @@ struct neighborship_t {
     ukv_key_t edge_id = 0;
 
     friend inline bool operator<(neighborship_t a, neighborship_t b) noexcept {
-        return (a.neighbor_id < b.neighbor_id) | ((a.neighbor_id == b.neighbor_id) | (a.edge_id < b.edge_id));
+        return (a.neighbor_id < b.neighbor_id) | ((a.neighbor_id == b.neighbor_id) & (a.edge_id < b.edge_id));
     }
     friend inline bool operator==(neighborship_t a, neighborship_t b) noexcept {
-        return (a.neighbor_id == b.neighbor_id) & (a.edge_id < b.edge_id);
+        return (a.neighbor_id == b.neighbor_id) & (a.edge_id == b.edge_id);
     }
     friend inline bool operator!=(neighborship_t a, neighborship_t b) noexcept {
         return (a.neighbor_id != b.neighbor_id) | (a.edge_id != b.edge_id);
