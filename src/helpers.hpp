@@ -54,8 +54,9 @@ class value_t {
     }
 
     value_t(value_view_t view) : value_t(view.size()) { std::memcpy(ptr_, view.begin(), view.size()); }
+    ~value_t() { reset(); }
 
-    ~value_t() {
+    void reset() {
         if (ptr_)
             allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
         ptr_ = nullptr;
@@ -96,7 +97,7 @@ class value_t {
     }
 
     void erase(std::size_t offset, std::size_t length) {
-        if (offset + length >= size())
+        if (offset + length > size())
             throw std::out_of_range("Can't erase");
 
         std::memmove(ptr_ + offset, ptr_ + offset + length, length_ - (offset + length));

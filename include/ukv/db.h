@@ -64,7 +64,7 @@ typedef void* ukv_t;
 typedef void* ukv_txn_t;
 typedef void* ukv_collection_t;
 
-typedef uint64_t ukv_key_t;
+typedef int64_t ukv_key_t;
 typedef uint32_t ukv_val_len_t;
 typedef uint8_t* ukv_val_ptr_t;
 typedef uint64_t ukv_size_t;
