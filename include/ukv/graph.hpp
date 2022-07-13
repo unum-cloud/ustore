@@ -14,7 +14,7 @@ namespace unum::ukv {
 struct edge_t {
     ukv_key_t source_id;
     ukv_key_t target_id;
-    ukv_key_t edge_id = ukv_default_edge_id_k;
+    ukv_key_t id = ukv_default_edge_id_k;
 };
 
 /**
@@ -27,10 +27,10 @@ struct neighborship_t {
     ukv_key_t edge_id = 0;
 
     friend inline bool operator<(neighborship_t a, neighborship_t b) noexcept {
-        return (a.neighbor_id < b.neighbor_id) | ((a.neighbor_id == b.neighbor_id) | (a.edge_id < b.edge_id));
+        return (a.neighbor_id < b.neighbor_id) | ((a.neighbor_id == b.neighbor_id) & (a.edge_id < b.edge_id));
     }
     friend inline bool operator==(neighborship_t a, neighborship_t b) noexcept {
-        return (a.neighbor_id == b.neighbor_id) & (a.edge_id < b.edge_id);
+        return (a.neighbor_id == b.neighbor_id) & (a.edge_id == b.edge_id);
     }
     friend inline bool operator!=(neighborship_t a, neighborship_t b) noexcept {
         return (a.neighbor_id != b.neighbor_id) | (a.edge_id != b.edge_id);
@@ -70,7 +70,7 @@ struct edges_range_gt {
         auto strided = strided_range_gt<edge_t const>(ptr, end);
         source_ids = strided.members(&edge_t::source_id);
         target_ids = strided.members(&edge_t::target_id);
-        edge_ids = strided.members(&edge_t::edge_id);
+        edge_ids = strided.members(&edge_t::id);
     }
 
     inline edges_range_gt(std::vector<edge_t> const& edges) noexcept
@@ -82,7 +82,7 @@ struct edges_range_gt {
         edge_t result;
         result.source_id = source_ids[i];
         result.target_id = target_ids[i];
-        result.edge_id = edge_ids[i];
+        result.id = edge_ids[i];
         return result;
     }
 };
@@ -162,6 +162,28 @@ class graph_collection_session_t {
         return error;
     }
 
+    error_t remove(strided_range_gt<ukv_key_t const> vertices,
+                   strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
+                   bool transparent = false) noexcept {
+
+        error_t error;
+        ukv_options_t options = transparent ? ukv_option_read_transparent_k : ukv_options_default_k;
+
+        ukv_graph_remove_vertices(collection_.db(),
+                                  txn_,
+                                  collection_.internal_cptr(),
+                                  0,
+                                  vertices.begin().get(),
+                                  vertices.count(),
+                                  vertices.stride(),
+                                  roles.begin().get(),
+                                  roles.stride(),
+                                  options,
+                                  arena_.internal_cptr(),
+                                  error.internal_cptr());
+        return error;
+    }
+
     expected_gt<ukv_vertex_degree_t> degree(ukv_key_t vertex,
                                             ukv_vertex_role_t role = ukv_vertex_role_any_k,
                                             bool transparent = false) noexcept {
@@ -179,8 +201,8 @@ class graph_collection_session_t {
         bool transparent = false) noexcept {
 
         error_t error;
-        ukv_vertex_degree_t* degrees_per_vertex = NULL;
-        ukv_key_t* neighborships_per_vertex = NULL;
+        ukv_vertex_degree_t* degrees_per_vertex = nullptr;
+        ukv_key_t* neighborships_per_vertex = nullptr;
         ukv_options_t options = static_cast<ukv_options_t>(
             (transparent ? ukv_option_read_transparent_k : ukv_options_default_k) | ukv_option_read_lengths_k);
 
@@ -233,8 +255,8 @@ class graph_collection_session_t {
                                     ukv_vertex_role_t role = ukv_vertex_role_any_k,
                                     bool transparent = false) noexcept {
         error_t error;
-        ukv_vertex_degree_t* degrees_per_vertex = NULL;
-        ukv_key_t* neighborships_per_vertex = NULL;
+        ukv_vertex_degree_t* degrees_per_vertex = nullptr;
+        ukv_key_t* neighborships_per_vertex = nullptr;
 
         ukv_graph_find_edges(collection_.db(),
                              txn_,
