@@ -97,7 +97,7 @@ TEST(db, net) {
         {3, 1, 11},
     };
 
-    EXPECT_FALSE(net.upsert({triangle}));
+    EXPECT_FALSE(net.upsert(triangle));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_FALSE(*net.contains(9));
@@ -113,6 +113,15 @@ TEST(db, net) {
     EXPECT_EQ(net.edges(2, ukv_vertex_source_k)->size(), 1ul);
     EXPECT_EQ(net.edges(3, 1)->size(), 1ul);
     EXPECT_EQ(net.edges(1, 3)->size(), 0ul);
+
+    EXPECT_FALSE(net.remove({
+        .source_ids = {triangle[0].source_id},
+        .target_ids = {triangle[0].target_id},
+        .edge_ids = {triangle[0].id},
+    }));
+    EXPECT_TRUE(*net.contains(1));
+    EXPECT_TRUE(*net.contains(2));
+    EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
 }
 
 int main(int argc, char** argv) {
