@@ -14,6 +14,8 @@
 #include "helpers.hpp"
 
 ukv_collection_t ukv_default_collection_k = NULL;
+ukv_val_len_t ukv_val_len_missing_k = 0;
+ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 
 using namespace unum::ukv;
 using namespace unum;
@@ -128,34 +130,63 @@ void ukv_write( //
 
 void ukv_read( //
     ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_txn_t const,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const*,
+    ukv_size_t const,
 
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
-    ukv_options_t const c_options,
+    ukv_options_t const,
 
-    ukv_val_ptr_t* c_tape,
-    ukv_size_t* c_capacity,
+    ukv_val_len_t** c_found_lengths,
+    ukv_val_ptr_t* c_found_values,
+
+    ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
-    strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    read_tasks_soa_t tasks {cols, keys};
-
+    std::string value;
+    level_status_t status;
     leveldb::ReadOptions options;
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    read_tasks_soa_t tasks {strided_ptr_gt<ukv_collection_t const> {}, keys};
 
-    // TODO:
-    // Read entries one-by-one, exporting onto a tape.
-    // On every read, a `malloc` and `memcpy` may accure, if
-    // the tape is not long enough, but at least is not determined
-    // to happen.
-    *c_error = "Not Implemented!";
+    ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    ukv_size_t exported_bytes = lens_bytes;
+    byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
+
+    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
+        auto task = tasks[i];
+        status = db.Get(options, to_slice(task.key), &value);
+        if (!status.IsNotFound() && !status.ok()) {
+            if (status.IsIOError())
+                *c_error = "Read Failure: IO  Error";
+            else if (status.IsInvalidArgument())
+                *c_error = "Read Failure: Invalid Argument";
+            else
+                *c_error = "Read Failure";
+            return;
+        }
+
+        auto len = value.size();
+        tape = prepare_memory(arena.output_tape, exported_bytes + value.size(), c_error);
+        ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(arena.output_tape.data());
+
+        if (len) {
+            std::memcpy(tape + exported_bytes, value.data(), len);
+            lens[i] = static_cast<ukv_val_len_t>(len);
+            exported_bytes += len;
+        }
+        else
+            lens[i] = ukv_val_len_missing_k;
+    }
+
+    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(arena.output_tape.data());
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + lens_bytes);
 }
 
 void ukv_collection_upsert( //
@@ -197,10 +228,11 @@ void ukv_txn_commit( //
     *c_error = "Transactions not supported by LevelDB!";
 }
 
-void ukv_arena_free(ukv_t const, ukv_val_ptr_t c_ptr, ukv_size_t c_len) {
-    if (!c_ptr || !c_len)
+void ukv_arena_free(ukv_t const, ukv_arena_t c_arena) {
+    if (!c_arena)
         return;
-    allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
+    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
+    delete &arena;
 }
 
 void ukv_txn_free(ukv_t const, ukv_txn_t) {
