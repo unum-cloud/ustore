@@ -162,6 +162,28 @@ class graph_collection_session_t {
         return error;
     }
 
+    error_t remove(strided_range_gt<ukv_key_t const> vertices,
+                   strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
+                   bool transparent = false) noexcept {
+
+        error_t error;
+        ukv_options_t options = transparent ? ukv_option_read_transparent_k : ukv_options_default_k;
+
+        ukv_graph_remove_vertices(collection_.db(),
+                                  txn_,
+                                  collection_.internal_cptr(),
+                                  0,
+                                  vertices.begin().get(),
+                                  vertices.count(),
+                                  vertices.stride(),
+                                  roles.begin().get(),
+                                  roles.stride(),
+                                  options,
+                                  arena_.internal_cptr(),
+                                  error.internal_cptr());
+        return error;
+    }
+
     expected_gt<ukv_vertex_degree_t> degree(ukv_key_t vertex,
                                             ukv_vertex_role_t role = ukv_vertex_role_any_k,
                                             bool transparent = false) noexcept {
@@ -179,8 +201,8 @@ class graph_collection_session_t {
         bool transparent = false) noexcept {
 
         error_t error;
-        ukv_vertex_degree_t* degrees_per_vertex = NULL;
-        ukv_key_t* neighborships_per_vertex = NULL;
+        ukv_vertex_degree_t* degrees_per_vertex = nullptr;
+        ukv_key_t* neighborships_per_vertex = nullptr;
         ukv_options_t options = static_cast<ukv_options_t>(
             (transparent ? ukv_option_read_transparent_k : ukv_options_default_k) | ukv_option_read_lengths_k);
 
@@ -233,8 +255,8 @@ class graph_collection_session_t {
                                     ukv_vertex_role_t role = ukv_vertex_role_any_k,
                                     bool transparent = false) noexcept {
         error_t error;
-        ukv_vertex_degree_t* degrees_per_vertex = NULL;
-        ukv_key_t* neighborships_per_vertex = NULL;
+        ukv_vertex_degree_t* degrees_per_vertex = nullptr;
+        ukv_key_t* neighborships_per_vertex = nullptr;
 
         ukv_graph_find_edges(collection_.db(),
                              txn_,
