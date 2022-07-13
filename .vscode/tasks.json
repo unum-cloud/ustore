@@ -3,7 +3,7 @@
     "tasks": [
         {
             "label": "Build Native: Debug",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_test",
             "args": [],
             "type": "shell"
         },
