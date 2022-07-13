@@ -59,7 +59,29 @@ TEST(db, basic) {
         val += 100;
     round_trip(proxy, values);
 
-    // TODO: Add tests for empty values
+    // Overwrite with empty values, but check for existance
+    EXPECT_FALSE(proxy.clear());
+    for (ukv_key_t key : proxy.keys) {
+        expected_gt<strided_range_gt<bool>> indicators = session[key].contains();
+        EXPECT_TRUE(indicators);
+        EXPECT_TRUE((*indicators)[0]);
+
+        expected_gt<range_gt<ukv_val_len_t*>> lengths = session[key].lengths();
+        EXPECT_TRUE(lengths);
+        EXPECT_EQ((*lengths)[0], 0u);
+    }
+
+    // Remove all of the values and check that they are missing
+    EXPECT_FALSE(proxy.erase());
+    for (ukv_key_t key : proxy.keys) {
+        expected_gt<strided_range_gt<bool>> indicators = session[key].contains();
+        EXPECT_TRUE(indicators);
+        EXPECT_FALSE((*indicators)[0]);
+
+        expected_gt<range_gt<ukv_val_len_t*>> lengths = session[key].lengths();
+        EXPECT_TRUE(lengths);
+        EXPECT_EQ((*lengths)[0], ukv_val_len_missing_k);
+    }
 }
 
 TEST(db, net) {
