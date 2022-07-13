@@ -700,6 +700,7 @@ void ukv_graph_remove_vertices( //
     arena.updated_keys.reserve(count_edges * 2);
     for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++degrees_per_vertex) {
         auto collection = collections[i];
+        arena.updated_keys.push_back({collection, vertices_ids[i]});
         for (ukv_size_t j = 0; j != *degrees_per_vertex; ++j, ++neighbors_per_vertex)
             arena.updated_keys.push_back({collection, *neighbors_per_vertex});
     }
@@ -726,7 +727,7 @@ void ukv_graph_remove_vertices( //
     if (*c_error)
         return;
 
-    // From every sequence remove the matching range of neighbors
+    // From every opposite end - remove a match, and only then - the content itself
     for (ukv_size_t i = 0; i != arena.updated_keys.size(); ++i) {
         auto collection = collections[i];
         auto vertex_id = vertices_ids[i];
@@ -738,7 +739,12 @@ void ukv_graph_remove_vertices( //
         for (neighborship_t n : neighbors(vertex_value, role)) {
             auto neighbor_idx = offset_in_sorted(arena.updated_keys, {collection, n.neighbor_id});
             value_t& neighbor_value = arena.updated_vals[neighbor_idx];
-            erase(neighbor_value, invert(role), vertex_id);
+            if (role == ukv_vertex_role_any_k) {
+                erase(neighbor_value, ukv_vertex_source_k, vertex_id);
+                erase(neighbor_value, ukv_vertex_target_k, vertex_id);
+            }
+            else
+                erase(neighbor_value, invert(role), vertex_id);
         }
 
         vertex_value.reset();
