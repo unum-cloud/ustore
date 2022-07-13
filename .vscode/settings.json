@@ -97,4 +97,9 @@
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.autoTestDiscoverOnSaveEnabled": true,
+    "java.test.config": {},
+    "java.project.sourcePaths": [
+        "java",
+        "java/com/unum/ukv"
+    ]
 }

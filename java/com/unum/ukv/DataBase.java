@@ -4,6 +4,8 @@ import java.util.Map; // Map abstract class
 import java.lang.AutoCloseable; // Finalization
 import java.util.Arrays; // Arrays.equals
 
+import org.junit.Test;
+
 /**
  * @brief An Embedded Persistent Key-Value Store with
  *        ACID Transactions and mind-boggling speed,
@@ -311,7 +313,8 @@ public class DataBase {
         }
     }
 
-    public static void main(String[] args) {
+    @Test
+    public void test() {
         Context ctx = new Context("");
         ctx.put(42, "hey".getBytes());
         assert Arrays.equals(ctx.get(42), "hey".getBytes()) : "Received wrong value";
