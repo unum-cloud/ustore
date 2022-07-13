@@ -10,8 +10,9 @@ mainClassName = 'DataBase'
 repositories {
     mavenCentral()
 }
+
 dependencies {
-    testCompile('junit:junit:4.12')
+    testImplementation('junit:junit:4.12')
 }
 
 sourceCompatibility = 1.8

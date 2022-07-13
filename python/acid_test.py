@@ -120,6 +120,7 @@ def test_transaction_with_multiple_collections():
                 assert key_index not in db[col_name]
 
                 # Still, from inside the transaction, those entries must be observable
+                assert key_index in txn[col_name]
                 assert txn.get(col_name, key_index) == value
                 assert txn[col_name][key_index] == value
 
@@ -143,7 +144,7 @@ def test_transaction_with_multiple_collections():
             for key_index in range(keys_count):
                 value = str(key_index).encode()
 
-                assert key_index in db[col_name]
+                assert key_index in txn[col_name]
                 assert txn.get(col_name, key_index) == value
                 assert txn[col_name][key_index] == value
 
@@ -152,7 +153,7 @@ def test_conflict():
     # Set with db befor get
     db1 = ukv.DataBase()
     txn = ukv.Transaction(db1)
-    db1.set(0, "value".encode())
+    db1.set(0, 'value'.encode())
     with pytest.raises(Exception):
         txn.get(0)
 
@@ -169,7 +170,7 @@ def test_transparent_reads():
     db = ukv.DataBase()
     txn = ukv.Transaction(db)
     txn.get(0)
-    txn.set(1, "value".encode())
-    db.set(0, "value".encode())
+    txn.set(1, 'value'.encode())
+    db.set(0, 'value'.encode())
     with pytest.raises(Exception):
         txn.commit()
