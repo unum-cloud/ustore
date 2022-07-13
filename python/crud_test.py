@@ -5,21 +5,17 @@ def only_explicit(col):
 
     col.set(3, b'x')
     col.set(4, b'y')
+    assert 3 in col
+    assert 4 in col
+
     assert col.get(3) == b'x'
     assert col.get(4) == b'y'
     assert col.get(4) != b'yy'
 
-def only_overwrite(col):
-
-    col.set(7, b'y')
-    assert col.get(7) == b'y'
-    assert col.get(7) != b'yy'
-
-    # Overwrite with a different length string
-    col.set(7, b'jjjjjjjj')
-    assert col.get(7) == b'jjjjjjjj'
-    col.set(7, b'yy')
-    assert col.get(7) == b'yy'
+    del col[3]
+    del col[4]
+    assert 3 not in col
+    assert 4 not in col
 
 
 def only_operators(col):
@@ -35,6 +31,19 @@ def only_operators(col):
     del col[2]
     assert 1 not in col
     assert 2 not in col
+
+
+def only_overwrite(col):
+
+    col.set(7, b'y')
+    assert col.get(7) == b'y'
+    assert col.get(7) != b'yy'
+
+    # Overwrite with a different length string
+    col.set(7, b'jjjjjjjj')
+    assert col.get(7) == b'jjjjjjjj'
+    col.set(7, b'yy')
+    assert col.get(7) == b'yy'
 
 
 def test_main_collection():
@@ -56,7 +65,7 @@ def test_named_collections():
     only_operators(col_dub)
 
 
-def test_main_collection_txn(): 
+def test_main_collection_txn():
 
     db = ukv.DataBase()
 
