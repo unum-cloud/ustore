@@ -95,6 +95,12 @@ FetchContent_MakeAvailable(fmt)
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.10.5/json.tar.xz)
 FetchContent_MakeAvailable(json)
 
+# RocksDB
+include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
+
+# LevelDB
+include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+
 # LZ4 Compression
 # https://stackoverflow.com/questions/67537111/how-do-i-decide-between-lz4-and-snappy-compression
 include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
@@ -103,12 +109,6 @@ include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
 # https://github.com/powturbo/TurboPFor-Integer-Compression
 # https://github.com/topics/integer-compression
 # include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
-
-# RocksDB
-# include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
-
-# LevelDB
-include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 
 # FastPFor Integer Compression for 32-bit integers
 # FetchContent_Declare(
@@ -128,8 +128,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 
 # Define the libraries we will need to build
-include_directories(include/ ${rocksdb_SOURCE_DIR}/include)
-include_directories(include/ ${leveldb_SOURCE_DIR}/include)
+include_directories(include/)
+include_directories(${rocksdb_SOURCE_DIR}/include)
+include_directories(${leveldb_SOURCE_DIR}/include)
 
 add_library(ukv_stl
   src/ukv_stl.cpp
@@ -142,20 +143,22 @@ target_link_libraries(ukv_stl
   nlohmann_json::nlohmann_json
 )
 
-# add_library(ukv_rocksdb
-# src/ukv_rocksdb.cpp
-# src/ukv_graph_pfor.cpp
-# )
+add_library(ukv_rocksdb
+  src/ukv_rocksdb.cpp
+  src/ukv_graph_pfor.cpp
+)
 add_library(ukv_leveldb
   src/ukv_leveldb.cpp
   src/ukv_graph_pfor.cpp
 )
 
-# target_link_libraries(ukv_rocksdb
-# rocksdb
-# )
+target_link_libraries(ukv_rocksdb
+  rocksdb
+  nlohmann_json::nlohmann_json
+)
 target_link_libraries(ukv_leveldb
   leveldb
+  nlohmann_json::nlohmann_json
 )
 
 add_library(ukv_beast_client src/ukv_beast_client.cpp)
@@ -170,10 +173,10 @@ add_library(ukv_beast_client src/ukv_beast_client.cpp)
 add_executable(ukv_test
   src/test.cpp
   src/ukv_stl.cpp
-
-  # src/ukv_docs_nlohmann.cpp
+  src/ukv_docs_nlohmann.cpp
   src/ukv_graph_pfor.cpp
 )
 target_link_libraries(ukv_test
   gtest
+  nlohmann_json::nlohmann_json
 )
