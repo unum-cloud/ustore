@@ -103,12 +103,11 @@ void ukv_write( //
     leveldb::WriteBatch batch;
     for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         auto task = tasks[i];
-        auto val = to_slice(task.view());
         auto key = to_slice(task.key);
-        if (val.size())
-            batch.Put(key, val);
-        else
+        if (task.is_deleted())
             batch.Delete(key);
+        else
+            batch.Put(key, to_slice(task.view()));
     }
 
     leveldb::WriteOptions options;
@@ -242,6 +241,8 @@ void ukv_collection_free(ukv_t const, ukv_collection_t const) {
 }
 
 void ukv_free(ukv_t c_db) {
+    if (!c_db)
+        return;
     level_db_t* db = reinterpret_cast<level_db_t*>(c_db);
     delete db;
 }
