@@ -103,7 +103,7 @@ bool contains_item( //
         error.internal_cptr());
     error.throw_unhandled();
 
-    return found_lengths[0] != 0;
+    return found_lengths[0] != ukv_val_len_missing_k;
 }
 
 std::optional<py::bytes> get_item( //
@@ -134,8 +134,8 @@ std::optional<py::bytes> get_item( //
         error.internal_cptr());
     error.throw_unhandled();
 
-    if (!found_lengths[0])
-        return {};
+    if (found_lengths[0] == ukv_val_len_missing_k)
+        return std::nullopt;
 
     // To fetch data without copies, there is a hacky way:
     // https://github.com/pybind/pybind11/issues/1236#issuecomment-527730864
