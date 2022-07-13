@@ -59,6 +59,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fvisibility=hidden")
 # Debugging flags.
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DDEBUG_SAFE_MODE -g")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG_SAFE_MODE -g")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
+set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
 
 find_package(Threads REQUIRED)
 
@@ -99,7 +102,7 @@ include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
 # TurboPFor for 64-bit integers
 # https://github.com/powturbo/TurboPFor-Integer-Compression
 # https://github.com/topics/integer-compression
-include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
+# include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
 
 # RocksDB
 # include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")

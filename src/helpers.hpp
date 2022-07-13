@@ -75,6 +75,7 @@ class value_t {
             throw std::out_of_range("Can't insert");
 
         auto inserted_len = static_cast<ukv_val_len_t>(inserted_end - inserted_begin);
+        auto following_len = static_cast<ukv_val_len_t>(length_ - offset);
         auto new_size = length_ + inserted_len;
         if (new_size > cap_) {
             auto new_ptr = allocator_t {}.allocate(new_size);
@@ -82,7 +83,7 @@ class value_t {
                 throw std::bad_alloc();
             std::memcpy(new_ptr, ptr_, offset);
             std::memcpy(new_ptr + offset, inserted_begin, inserted_len);
-            std::memcpy(new_ptr + offset + inserted_len, ptr_ + offset, length_ - offset);
+            std::memcpy(new_ptr + offset + inserted_len, ptr_ + offset, following_len);
             if (ptr_)
                 allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
 
@@ -90,7 +91,7 @@ class value_t {
             cap_ = length_ = new_size;
         }
         else {
-            std::memmove(ptr_ + offset + inserted_len, ptr_ + offset, inserted_len);
+            std::memmove(ptr_ + offset + inserted_len, ptr_ + offset, following_len);
             std::memcpy(ptr_ + offset, inserted_begin, inserted_len);
             length_ = new_size;
         }
