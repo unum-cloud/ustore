@@ -101,7 +101,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
         return JNI_FALSE;
     }
 
-    jboolean result = found_lengths_c[0] != 0 ? JNI_TRUE : JNI_FALSE;
+    jboolean result = found_lengths_c[0] != ukv_val_len_missing_k ? JNI_TRUE : JNI_FALSE;
     ukv_arena_free(db_ptr_c, arena_c);
     return result;
 }
@@ -154,7 +154,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     // https://stackoverflow.com/a/4694102
     // result_java = (*env_java)->NewDirectByteBuffer(env_java, void* address, jlong capacity);
     jbyteArray result_java = NULL;
-    if (found_lengths_c[0]) {
+    if (found_lengths_c[0] != ukv_val_len_missing_k) {
         result_java = (*env_java)->NewByteArray(env_java, found_lengths_c[0]);
         if (result_java)
             (*env_java)->SetByteArrayRegion(env_java, result_java, 0, found_lengths_c[0], (jbyte const*)found_values_c);

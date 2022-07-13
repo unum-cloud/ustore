@@ -129,9 +129,13 @@ func (db *DataBase) Get(key uint64) ([]byte, error) {
 
 	// We can also jsut cast it to slice without copies
 	// pulled_value_go := (*[1 << 30]byte)(unsafe.Pointer(pulled_value_c))[:tape_length_c:tape_length_c]
-	pulled_value_go := C.GoBytes(unsafe.Pointer(pulled_values_c), C.int(C.dereference_index(pulled_values_lengths_c, 0)))
-	return pulled_value_go, nil
-
+	pulled_value_length_c := C.dereference_index(pulled_values_lengths_c, 0)
+	if pulled_value_length_c == C.ukv_val_len_missing_k {
+		return nil, nil
+	} else {
+		pulled_value_go := C.GoBytes(unsafe.Pointer(pulled_values_c), C.int(pulled_value_length_c))
+		return pulled_value_go, nil
+	}
 }
 
 func (db *DataBase) Contains(key uint64) (bool, error) {
@@ -162,5 +166,5 @@ func (db *DataBase) Contains(key uint64) (bool, error) {
 		return false, error_go
 	}
 
-	return C.dereference_index(pulled_values_lengths_c, 0) != 0, nil
+	return C.dereference_index(pulled_values_lengths_c, 0) != C.ukv_val_len_missing_k, nil
 }
