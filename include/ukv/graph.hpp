@@ -101,24 +101,37 @@ inline ukv_vertex_role_t invert(ukv_vertex_role_t role) {
 }
 
 /**
+ * @brief A stream of all @c `edge_t`s in a graph.
+ * No particular order is guaranteed.
+ */
+class graph_adjacency_stream_t {
+
+    ukv_key_t next_vertex_id_ = 0;
+    edges_span_t prefetched_keys_;
+    std::size_t prefetched_offset_ = 0;
+
+    keys_stream_t vertex_ids;
+
+  public:
+};
+
+/**
  * @brief Wraps relational/linking operations with cleaner type system.
  * Controls mainly just the inverted index collection and keeps a local
  * memory buffer (tape) for read operations, so isn't thread-safe.
  * You can have one such object in every working thread, even for the
  * same graph collection. Supports updates/reads from within a transaction.
  */
-class graph_collection_session_t {
-    collection_t collection_;
+class graph_t {
+    collection_t& collection_;
     ukv_txn_t txn_ = nullptr;
     managed_arena_t arena_;
 
   public:
-    graph_collection_session_t(collection_t&& col, ukv_txn_t txn = nullptr)
-        : collection_(std::move(col)), txn_(txn), arena_(col.db()) {}
+    graph_t(collection_t& col, ukv_txn_t txn = nullptr) : collection_(col), txn_(txn), arena_(col.db()) {}
 
-    graph_collection_session_t(graph_collection_session_t&& other) noexcept
-        : collection_(std::move(other.collection_)), txn_(std::exchange(other.txn_, nullptr)),
-          arena_(std::move(other.arena_)) {}
+    graph_t(graph_t&& other) noexcept
+        : collection_(other.collection_), txn_(std::exchange(other.txn_, nullptr)), arena_(std::move(other.arena_)) {}
 
     inline managed_arena_t& arena() noexcept { return arena_; }
     inline collection_t& collection() noexcept { return collection_; };
