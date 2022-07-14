@@ -174,7 +174,7 @@ void single_read( //
     std::string* value,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
-    ukv_arena_t* c_arena,
+    stl_arena_t& arena,
     ukv_error_t* c_error) {
 
     leveldb::ReadOptions options;
@@ -196,9 +196,10 @@ void single_read( //
         return;
     }
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
     auto len = value->size();
     prepare_memory(arena.output_tape, sizeof(ukv_size_t) + len, c_error);
+    if (*c_error)
+        return;
     std::memcpy(arena.output_tape.data(), &len, sizeof(ukv_size_t));
     if (len)
         std::memcpy(arena.output_tape.data() + sizeof(ukv_size_t), value->data(), len);
@@ -237,13 +238,15 @@ void ukv_read( //
     std::string* value = value_uptr.get();
 
     if (c_keys_count == 1) {
-        single_read(db, tasks[0], value, c_found_lengths, c_found_values, c_arena, c_error);
+        single_read(db, tasks[0], value, c_found_lengths, c_found_values, arena, c_error);
         return;
     }
 
     ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * c_keys_count;
     ukv_size_t exported_bytes = lens_bytes;
     byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
+    if (*c_error)
+        return;
 
     for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         auto task = tasks[i];
@@ -265,6 +268,8 @@ void ukv_read( //
 
         auto len = value->size();
         tape = prepare_memory(arena.output_tape, exported_bytes + len, c_error);
+        if (*c_error)
+            return;
         ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(arena.output_tape.data());
 
         if (len) {
