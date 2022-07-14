@@ -119,15 +119,17 @@ void save_to_disk(stl_collection_t const& col, std::string const& path, ukv_erro
     // POSIX API would have been even better, but LibC will provide
     // higher portability for this reference implementation.
     // https://www.ibm.com/docs/en/i/7.1?topic=functions-fopen-open-files
-    FILE* handle = fopen(path.c_str(), "wb+");
+    file_handle_t handle;
+    if ((*c_error = handle.open(path.c_str(), "wb+").release_error()))
+        return;
 
     // Save the collection size
     {
         auto n = static_cast<ukv_size_t>(col.unique_elements.load());
-        auto saved_len = fwrite(&n, sizeof(ukv_size_t), 1, handle);
+        auto saved_len = std::fwrite(&n, sizeof(ukv_size_t), 1, handle);
         if (saved_len != sizeof(ukv_size_t)) {
             *c_error = "Couldn't write anything to file.";
-            goto cleanup;
+            return;
         }
     }
 
@@ -136,43 +138,43 @@ void save_to_disk(stl_collection_t const& col, std::string const& path, ukv_erro
         if (seq_val.is_deleted)
             continue;
 
-        auto saved_len = fwrite(&key, sizeof(ukv_key_t), 1, handle);
+        auto saved_len = std::fwrite(&key, sizeof(ukv_key_t), 1, handle);
         if (saved_len != sizeof(ukv_key_t)) {
             *c_error = "Write partially failed on key.";
-            break;
+            return;
         }
 
         auto const& buf = seq_val.buffer;
         auto buf_len = static_cast<ukv_val_len_t>(buf.size());
-        saved_len = fwrite(&buf_len, sizeof(ukv_val_len_t), 1, handle);
+        saved_len = std::fwrite(&buf_len, sizeof(ukv_val_len_t), 1, handle);
         if (saved_len != sizeof(ukv_val_len_t)) {
             *c_error = "Write partially failed on value len.";
-            break;
+            return;
         }
 
-        saved_len = fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
+        saved_len = std::fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
         if (saved_len != buf.size()) {
             *c_error = "Write partially failed on value.";
-            break;
+            return;
         }
     }
 
-cleanup:
-    if (fclose(handle) == EOF)
-        *c_error = "Couldn't close the file after write.";
+    *c_error = handle.close().release_error();
 }
 
 void read_from_disk(stl_collection_t& col, std::string const& path, ukv_error_t* c_error) {
     // Similar to serialization, we don't use STL here
-    FILE* handle = fopen(path.c_str(), "rb+");
+    file_handle_t handle;
+    if ((*c_error = handle.open(path.c_str(), "rb+").release_error()))
+        return;
 
     // Get the col size, to preallocate entries
     auto n = ukv_size_t(0);
     {
-        auto read_len = fread(&n, sizeof(ukv_size_t), 1, handle);
+        auto read_len = std::fread(&n, sizeof(ukv_size_t), 1, handle);
         if (read_len != sizeof(ukv_size_t)) {
             *c_error = "Couldn't read anything from file.";
-            goto cleanup;
+            return;
         }
     }
 
@@ -184,32 +186,30 @@ void read_from_disk(stl_collection_t& col, std::string const& path, ukv_error_t*
     for (ukv_size_t i = 0; i != n; ++i) {
 
         auto key = ukv_key_t {};
-        auto read_len = fread(&key, sizeof(ukv_key_t), 1, handle);
+        auto read_len = std::fread(&key, sizeof(ukv_key_t), 1, handle);
         if (read_len != sizeof(ukv_key_t)) {
             *c_error = "Read partially failed on key.";
-            break;
+            return;
         }
 
         auto buf_len = ukv_val_len_t(0);
-        read_len = fread(&buf_len, sizeof(ukv_val_len_t), 1, handle);
+        read_len = std::fread(&buf_len, sizeof(ukv_val_len_t), 1, handle);
         if (read_len != sizeof(ukv_val_len_t)) {
             *c_error = "Read partially failed on value len.";
-            break;
+            return;
         }
 
         auto buf = buffer_t(buf_len);
-        read_len = fread(buf.data(), sizeof(byte_t), buf.size(), handle);
+        read_len = std::fread(buf.data(), sizeof(byte_t), buf.size(), handle);
         if (read_len != buf.size()) {
             *c_error = "Read partially failed on value.";
-            break;
+            return;
         }
 
         col.pairs.emplace(key, stl_sequenced_value_t {std::move(buf), sequence_t {0}, false});
     }
 
-cleanup:
-    if (fclose(handle) == EOF)
-        *c_error = "Couldn't close the file after reading.";
+    *c_error = handle.close().release_error();
 }
 
 void save_to_disk(stl_db_t const& db, ukv_error_t* c_error) {
