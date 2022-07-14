@@ -315,6 +315,7 @@ class file_handle_t {
             return "Couldn't close the file after write.";
         else
             handle_ = nullptr;
+        return {};
     }
 
     ~file_handle_t() {

@@ -36,7 +36,7 @@ void round_trip(sample_proxy_t proxy, disjoint_values_view_t values) {
 TEST(db, basic) {
 
     db_t db;
-    EXPECT_FALSE(db.open(""));
+    EXPECT_TRUE(db.open(""));
 
     session_t session = db.session();
 
@@ -96,7 +96,7 @@ TEST(db, basic) {
 TEST(db, net) {
 
     db_t db;
-    EXPECT_FALSE(db.open(""));
+    EXPECT_TRUE(db.open(""));
 
     collection_t col(db);
     graph_t net(col);
