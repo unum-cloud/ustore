@@ -64,6 +64,7 @@ struct network_t : public std::enable_shared_from_this<network_t> {
     bool is_multi_ = false;
     bool allow_self_loops_ = false;
 
+    Py_buffer last_buffer;
     Py_ssize_t last_buffer_shape[3];
     Py_ssize_t last_buffer_strides[3];
 
@@ -79,24 +80,27 @@ struct degree_view_t : public std::enable_shared_from_this<degree_view_t> {
 };
 
 template <typename element_at>
-Py_buffer wrap_into_buffer(network_t& net, strided_range_gt<element_at> ids) {
-    net.last_buffer_strides[0] = ids.stride();
-    net.last_buffer_strides[1] = net.last_buffer_strides[2] = 0;
-    net.last_buffer_shape[0] = ids.size();
-    net.last_buffer_shape[1] = net.last_buffer_shape[2] = 0;
+py::handle wrap_into_buffer(network_t& net, strided_range_gt<element_at> range) {
+
+    net.last_buffer_strides[0] = range.stride();
+    net.last_buffer_strides[1] = net.last_buffer_strides[2] = 1;
+    net.last_buffer_shape[0] = range.size();
+    net.last_buffer_shape[1] = net.last_buffer_shape[2] = 1;
 
     // https://docs.python.org/3/c-api/buffer.html
-    Py_buffer py_buf;
-    py_buf.buf = (void*)ids.begin().get();
-    py_buf.obj = NULL;
-    py_buf.len = ids.size() * sizeof(element_at);
-    py_buf.itemsize = sizeof(element_at);
+    net.last_buffer.buf = (void*)range.begin().get();
+    net.last_buffer.obj = NULL;
+    net.last_buffer.len = range.size() * sizeof(element_at);
+    net.last_buffer.itemsize = sizeof(element_at);
     // https://docs.python.org/3/library/struct.html#format-characters
-    py_buf.format = (char*)"Q";
-    py_buf.ndim = 1;
-    py_buf.shape = &net.last_buffer_shape[0];
-    py_buf.strides = &net.last_buffer_strides[0];
-    return wrap_into_buffer(net, ids);
+    net.last_buffer.format = (char*)format_code_gt<std::remove_const_t<element_at>>::format_k;
+    net.last_buffer.ndim = 1;
+    net.last_buffer.shape = &net.last_buffer_shape[0];
+    net.last_buffer.strides = &net.last_buffer_strides[0];
+    net.last_buffer.suboffsets = nullptr;
+    net.last_buffer.readonly = true;
+    net.last_buffer.internal = nullptr;
+    return PyMemoryView_FromBuffer(&net.last_buffer);
 }
 
 void ukv::wrap_network(py::module& m) {
@@ -106,7 +110,8 @@ void ukv::wrap_network(py::module& m) {
         network_t& net = *degs.net_ptr;
         auto maybe = net.inverted_index.degree(v, degs.roles);
         maybe.throw_unhandled();
-        return *maybe;
+        ukv_vertex_degree_t result = *maybe;
+        return result;
     });
     degs.def("__getitem__", [](degree_view_t& degs, py::handle vs) {
         network_t& net = *degs.net_ptr;
