@@ -52,7 +52,7 @@ struct sample_proxy_t {
         return taped_values_view_t {found_lengths, found_values, static_cast<ukv_size_t>(keys.size())};
     }
 
-    expected_gt<range_gt<ukv_val_len_t*>> lengths(bool transparent = false) const noexcept {
+    expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths(bool transparent = false) const noexcept {
 
         error_t error;
         ukv_val_len_t* found_lengths = nullptr;
@@ -73,7 +73,7 @@ struct sample_proxy_t {
         if (error)
             return {std::move(error)};
 
-        return range_gt<ukv_val_len_t*> {found_lengths, found_lengths + keys.count()};
+        return indexed_range_gt<ukv_val_len_t*> {found_lengths, found_lengths + keys.count()};
     }
 
     /**
@@ -188,7 +188,7 @@ class keys_stream_t {
     ukv_size_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
-    range_gt<ukv_key_t*> prefetched_keys_;
+    indexed_range_gt<ukv_key_t*> prefetched_keys_;
     std::size_t prefetched_offset_ = 0;
 
     error_t prefetch() noexcept {
@@ -217,7 +217,7 @@ class keys_stream_t {
             return error;
 
         auto present_end = std::find(found_keys, found_keys + read_ahead_, ukv_key_unknown_k);
-        prefetched_keys_ = range_gt<ukv_key_t*> {found_keys, present_end};
+        prefetched_keys_ = indexed_range_gt<ukv_key_t*> {found_keys, present_end};
         prefetched_offset_ = 0;
 
         auto count = static_cast<ukv_size_t>(prefetched_keys_.size());
@@ -287,7 +287,7 @@ class keys_stream_t {
      * @brief Exposes all the prefetched keys at once.
      * Should be used with `seek_to_next_batch`.
      */
-    range_gt<ukv_key_t const*> keys_batch() const noexcept {
+    indexed_range_gt<ukv_key_t const*> keys_batch() const noexcept {
         return {prefetched_keys_.begin() + prefetched_offset_, prefetched_keys_.end()};
     }
 
@@ -312,7 +312,7 @@ class keys_stream_t {
     }
 };
 
-using keys_range_t = raw_range_gt<keys_stream_t>;
+using keys_range_t = range_gt<keys_stream_t>;
 
 inline expected_gt<keys_range_t> keys_range(ukv_t db,
                                             ukv_collection_t col = ukv_default_collection_k,

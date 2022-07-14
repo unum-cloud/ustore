@@ -133,11 +133,11 @@ void ukv_write( //
 
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
     rocks_txn_ptr_t txn = reinterpret_cast<rocks_txn_ptr_t>(c_txn);
-    strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
-    strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_ptr_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
-    strided_ptr_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
-    strided_ptr_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
+    strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
 
     rocksdb::WriteOptions options;
@@ -251,8 +251,8 @@ void ukv_read( //
 
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
     rocks_txn_ptr_t txn = reinterpret_cast<rocks_txn_ptr_t>(c_txn);
-    strided_ptr_gt<ukv_collection_t const> cols_stride {c_cols, c_cols_stride};
-    strided_ptr_gt<ukv_key_t const> keys_stride {c_keys, c_keys_stride};
+    strided_iterator_gt<ukv_collection_t const> cols_stride {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_key_t const> keys_stride {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {cols_stride, keys_stride};
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
 

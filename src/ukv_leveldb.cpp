@@ -161,11 +161,11 @@ void ukv_write( //
     ukv_error_t* c_error) {
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
-    strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_ptr_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
-    strided_ptr_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
-    strided_ptr_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
+    strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
 
     leveldb::WriteOptions options;
@@ -273,7 +273,7 @@ void ukv_read( //
 
     leveldb::ReadOptions options;
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {{}, keys};
 
     auto value_uptr = make_value(c_error);
@@ -315,8 +315,8 @@ void ukv_read( //
 //         return;
 
 //     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-//     strided_ptr_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
-//     strided_ptr_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
+//     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
+//     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
 //     scan_tasks_soa_t tasks {{}, keys, lens};
 // }
 
