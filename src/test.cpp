@@ -71,6 +71,15 @@ TEST(db, basic) {
         EXPECT_EQ((*lengths)[0], 0u);
     }
 
+    // Check scans
+    EXPECT_TRUE(session.keys());
+    auto present_keys = *session.keys();
+    auto present_it = std::move(present_keys).begin();
+    auto expected_it = keys.begin();
+    for (; expected_it != keys.end(); ++present_it, ++expected_it) {
+        EXPECT_EQ(*expected_it, *present_it);
+    }
+
     // Remove all of the values and check that they are missing
     EXPECT_FALSE(proxy.erase());
     for (ukv_key_t key : proxy.keys) {

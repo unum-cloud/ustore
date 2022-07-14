@@ -28,7 +28,7 @@ struct sample_proxy_t {
     collections_view_t cols;
     keys_view_t keys;
 
-    [[nodiscard]] expected_gt<taped_values_view_t> get(bool transparent = false) const noexcept {
+    expected_gt<taped_values_view_t> get(bool transparent = false) const noexcept {
 
         error_t error;
         ukv_val_len_t* found_lengths = nullptr;
@@ -52,7 +52,7 @@ struct sample_proxy_t {
         return taped_values_view_t {found_lengths, found_values, static_cast<ukv_size_t>(keys.size())};
     }
 
-    [[nodiscard]] expected_gt<range_gt<ukv_val_len_t*>> lengths(bool transparent = false) const noexcept {
+    expected_gt<range_gt<ukv_val_len_t*>> lengths(bool transparent = false) const noexcept {
 
         error_t error;
         ukv_val_len_t* found_lengths = nullptr;
@@ -80,7 +80,7 @@ struct sample_proxy_t {
      * @brief Checks if requested keys are present in the store.
      * ! Related values may be empty strings.
      */
-    [[nodiscard]] expected_gt<strided_range_gt<bool>> contains(bool transparent = false) const noexcept {
+    expected_gt<strided_range_gt<bool>> contains(bool transparent = false) const noexcept {
 
         error_t error;
         ukv_val_len_t* found_lengths = nullptr;
@@ -117,7 +117,7 @@ struct sample_proxy_t {
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return error_t Non-NULL if only an error had occured.
      */
-    [[nodiscard]] error_t set(disjoint_values_view_t vals, bool flush = false) noexcept {
+    error_t set(disjoint_values_view_t vals, bool flush = false) noexcept {
         error_t error;
         ukv_write(db,
                   txn,
@@ -143,14 +143,14 @@ struct sample_proxy_t {
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return error_t Non-NULL if only an error had occured.
      */
-    [[nodiscard]] error_t erase(bool flush = false) noexcept { return set(disjoint_values_view_t {}, flush); }
+    error_t erase(bool flush = false) noexcept { return set(disjoint_values_view_t {}, flush); }
 
     /**
      * @brief Keeps the keys, but clears the contents of associated values.
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return error_t Non-NULL if only an error had occured.
      */
-    [[nodiscard]] error_t clear(bool flush = false) noexcept {
+    error_t clear(bool flush = false) noexcept {
         ukv_val_ptr_t any = reinterpret_cast<ukv_val_ptr_t>(this);
         ukv_val_len_t len = 0;
         return set(disjoint_values_view_t {.contents = {any}, .offsets = {}, .lengths = {len}}, flush);
@@ -171,42 +171,58 @@ struct sample_proxy_t {
     }
 };
 
-class collection_keys_iterator_t {
+/**
+ * @brief Iterator (almost) over the keys in a single collection.
+ * Manages it's own memory and may be expesive to construct.
+ * Prefer to `seek`, instead of re-creating such a stream.
+ * Unlike classical iterators, keeps an internal state,
+ * which makes it @b non copy-constructible!
+ */
+class keys_stream_t {
 
-    ukv_t db = nullptr;
-    ukv_txn_t txn = nullptr;
-    ukv_arena_t* arena = nullptr;
+    ukv_t db_ = nullptr;
+    ukv_collection_t col_ = ukv_default_collection_k;
+    ukv_txn_t txn_ = nullptr;
 
-    ukv_collection_t col = ukv_default_collection_k;
-    ukv_size_t read_ahead = 0;
+    managed_arena_t arena_;
+    ukv_size_t read_ahead_ = 0;
 
-    ukv_key_t next_min_key_ = 0;
+    ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
     range_gt<ukv_key_t*> prefetched_keys_;
-    std::size_t prefetched_offset_;
+    std::size_t prefetched_offset_ = 0;
 
-    expected_gt<range_gt<ukv_key_t*>> prefetch_starting_with(ukv_key_t next_min_key_) {
+    error_t prefetch() noexcept {
+
+        if (next_min_key_ == ukv_key_unknown_k)
+            return {};
+
         ukv_key_t* found_keys = nullptr;
         ukv_val_len_t* found_lens = nullptr;
         error_t error;
-        ukv_scan(db,
-                 txn,
-                 &col,
+        ukv_scan(db_,
+                 txn_,
+                 &col_,
                  0,
                  &next_min_key_,
                  1,
                  0,
-                 &read_ahead,
+                 &read_ahead_,
                  0,
                  ukv_options_default_k,
                  &found_keys,
                  &found_lens,
-                 arena,
+                 arena_.internal_cptr(),
                  error.internal_cptr());
         if (error)
             return error;
 
-        auto present_end = std::find(found_keys, found_keys + read_ahead, ukv_key_unknown_k);
-        return range_gt<ukv_key_t*> {found_keys, present_end};
+        auto present_end = std::find(found_keys, found_keys + read_ahead_, ukv_key_unknown_k);
+        prefetched_keys_ = range_gt<ukv_key_t*> {found_keys, present_end};
+        prefetched_offset_ = 0;
+
+        auto count = static_cast<ukv_size_t>(prefetched_keys_.size());
+        next_min_key_ = count < read_ahead_ ? ukv_key_unknown_k : prefetched_keys_[count - 1] + 1;
+        return {};
     }
 
   public:
@@ -216,62 +232,79 @@ class collection_keys_iterator_t {
     using pointer = ukv_key_t*;
     using reference = ukv_key_t&;
 
-    error_t seek_to_first() {
+    static constexpr std::size_t default_read_ahead_k = 256;
 
+    keys_stream_t(ukv_t db,
+                  ukv_collection_t col = ukv_default_collection_k,
+                  std::size_t read_ahead = keys_stream_t::default_read_ahead_k,
+                  ukv_txn_t txn = nullptr)
+        : db_(db), col_(col), txn_(txn), arena_(db), read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
+
+    keys_stream_t(keys_stream_t&&) = default;
+    keys_stream_t& operator=(keys_stream_t&&) = default;
+
+    keys_stream_t(keys_stream_t const&) = delete;
+    keys_stream_t& operator=(keys_stream_t const&) = delete;
+
+    error_t seek(ukv_key_t key) noexcept {
         prefetched_keys_ = {};
         prefetched_offset_ = 0;
-        next_min_key_ = std::numeric_limits<ukv_key_t>::min();
-        auto batch = prefetch_starting_with(next_min_key_);
-        if (!batch)
-            return batch.release_error();
+        next_min_key_ = key;
+        return prefetch();
+    }
 
-        prefetched_keys_ = *batch;
-        if (prefetched_keys_.size() == 0) {
-            next_min_key_ = ukv_key_unknown_k;
-            return {};
-        }
+    error_t advance() noexcept {
 
-        prefetched_offset_ = 0;
-        next_min_key_ = prefetched_keys_[prefetched_keys_.size() - 1] + 1;
+        if (prefetched_offset_ >= prefetched_keys_.size())
+            return prefetch();
+
+        ++prefetched_offset_;
         return {};
     }
 
-    error_t advance() {
+    /**
+     * ! Unlike the `advance()`, canonically returns a self-reference,
+     * ! meaning that the error must be propagated in a different way.
+     * ! So we promote this iterator to `end()`, once an error occurs.
+     */
+    inline keys_stream_t& operator++() noexcept {
+        error_t error = advance();
+        if (!error)
+            return *this;
 
-        if (prefetched_offset_ < prefetched_keys_.size()) {
-            ++prefetched_offset_;
-            return {};
-        }
-
-        auto batch = prefetch_starting_with(next_min_key_);
-        if (!batch)
-            return batch.release_error();
-
-        prefetched_keys_ = *batch;
-        if (prefetched_keys_.size() == 0) {
-            next_min_key_ = ukv_key_unknown_k;
-            return {};
-        }
-
-        prefetched_offset_ = 1;
-        next_min_key_ = prefetched_keys_[prefetched_keys_.size() - 1] + 1;
-        return {};
+        prefetched_keys_ = {};
+        prefetched_offset_ = 0;
+        next_min_key_ = ukv_key_unknown_k;
+        return *this;
     }
 
     ukv_key_t key() const noexcept { return prefetched_keys_[prefetched_offset_]; }
     ukv_key_t operator*() const noexcept { return key(); }
+    error_t seek_to_first() noexcept { return seek(std::numeric_limits<ukv_key_t>::min()); }
+    error_t seek_to_next_batch() noexcept { return seek(next_min_key_); }
+
+    /**
+     * @brief Exposes all the prefetched keys at once.
+     * Should be used with `seek_to_next_batch`.
+     */
+    range_gt<ukv_key_t const*> keys_batch() const noexcept {
+        return {prefetched_keys_.begin() + prefetched_offset_, prefetched_keys_.end()};
+    }
+
     bool is_end() const noexcept {
         return next_min_key_ == ukv_key_unknown_k && prefetched_offset_ >= prefetched_keys_.size();
     }
-    bool operator==(collection_keys_iterator_t const& other) const noexcept {
-        if (col != other.col)
+
+    bool operator==(keys_stream_t const& other) const noexcept {
+        if (col_ != other.col_)
             return false;
         if (is_end() || other.is_end())
             return is_end() == other.is_end();
         return key() == other.key();
     }
-    bool operator!=(collection_keys_iterator_t const& other) const noexcept {
-        if (col == other.col)
+
+    bool operator!=(keys_stream_t const& other) const noexcept {
+        if (col_ == other.col_)
             return true;
         if (is_end() || other.is_end())
             return is_end() != other.is_end();
@@ -279,9 +312,34 @@ class collection_keys_iterator_t {
     }
 };
 
+using keys_range_t = raw_range_gt<keys_stream_t>;
+
+inline expected_gt<keys_range_t> keys_range(ukv_t db,
+                                            ukv_collection_t col = ukv_default_collection_k,
+                                            ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+                                            ukv_key_t max_key = ukv_key_unknown_k,
+                                            std::size_t read_ahead = keys_stream_t::default_read_ahead_k,
+                                            ukv_txn_t txn = nullptr) {
+
+    keys_stream_t b {db, col, read_ahead, txn};
+    keys_stream_t e {db, col, read_ahead, txn};
+    error_t error = b.seek(min_key);
+    if (error)
+        return error;
+    error = e.seek(max_key);
+    if (error)
+        return error;
+
+    keys_range_t result {std::move(b), std::move(e)};
+    return result;
+}
+
 /**
  * @brief Implements multi-way set intersection to join entities
  * from different collections, that have matching identifiers.
+ *
+ * Implementation-wise, scans the smallest collection and batch-selects
+ * in others.
  */
 struct collections_join_t {
 
@@ -332,6 +390,12 @@ class collection_t {
     inline ukv_t db() const noexcept { return db_; }
 
     inline expected_gt<std::size_t> size() const noexcept { return 0; }
+
+    auto keys(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+              ukv_key_t max_key = ukv_key_unknown_k,
+              std::size_t read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
+        return keys_range(db_, col_, min_key, max_key, read_ahead, nullptr);
+    }
 };
 
 /**
@@ -389,6 +453,13 @@ class txn_t {
         error_t error;
         ukv_txn_commit(txn_, options, error.internal_cptr());
         return error;
+    }
+
+    auto keys(ukv_collection_t col = ukv_default_collection_k,
+              ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+              ukv_key_t max_key = ukv_key_unknown_k,
+              std::size_t read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
+        return keys_range(db_, col, min_key, max_key, read_ahead, txn_);
     }
 };
 
@@ -450,6 +521,13 @@ class session_t {
             return {std::move(error), txn_t {db_, nullptr}};
         else
             return txn_t {db_, raw};
+    }
+
+    auto keys(ukv_collection_t col = ukv_default_collection_k,
+              ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+              ukv_key_t max_key = ukv_key_unknown_k,
+              std::size_t read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
+        return keys_range(db_, col, min_key, max_key, read_ahead, nullptr);
     }
 };
 
