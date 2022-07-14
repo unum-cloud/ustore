@@ -301,6 +301,49 @@ class graph_collection_session_t {
         all.edge_ids = all.edge_ids.subspan(begin_offset, count);
         return all;
     }
+
+    /**
+     * @brief Finds all the edges, that have any of the supplied nodes in allowed roles.
+     * In undirected graphs, some edges may come with inverse duplicates.
+     */
+    expected_gt<edges_span_t> edges_containing(
+        strided_range_gt<ukv_key_t const> vertices,
+        strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k},
+        bool transparent = false) noexcept {
+
+        error_t error;
+        ukv_vertex_degree_t* degrees_per_vertex = nullptr;
+        ukv_key_t* neighborships_per_vertex = nullptr;
+
+        ukv_graph_find_edges(collection_.db(),
+                             txn_,
+                             collection_.internal_cptr(),
+                             0,
+                             vertices.begin().get(),
+                             vertices.count(),
+                             vertices.stride(),
+                             roles.begin().get(),
+                             roles.stride(),
+                             transparent ? ukv_option_read_transparent_k : ukv_options_default_k,
+                             &degrees_per_vertex,
+                             &neighborships_per_vertex,
+                             arena_.internal_cptr(),
+                             error.internal_cptr());
+        if (error)
+            return error;
+
+        std::size_t total_edges = 0;
+        for (ukv_size_t vertex_idx = 0; vertex_idx != vertices.count(); ++vertex_idx)
+            if (degrees_per_vertex[vertex_idx] != ukv_vertex_degree_missing_k)
+                total_edges += degrees_per_vertex[vertex_idx];
+
+        using strided_keys_t = strided_range_gt<ukv_key_t>;
+        ukv_size_t stride = sizeof(ukv_key_t) * 3;
+        strided_keys_t sources(neighborships_per_vertex, stride, total_edges);
+        strided_keys_t targets(neighborships_per_vertex + 1, stride, total_edges);
+        strided_keys_t edges(neighborships_per_vertex + 2, stride, total_edges);
+        return edges_span_t {sources, targets, edges};
+    }
 };
 
 } // namespace unum::ukv
