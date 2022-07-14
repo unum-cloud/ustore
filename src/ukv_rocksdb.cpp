@@ -20,16 +20,19 @@
 using namespace unum::ukv;
 using namespace unum;
 
-using rocks_db_t = rocksdb::TransactionDB;
-using rocks_txn_t = rocksdb::Transaction;
-using rocks_col_t = rocksdb::ColumnFamilyHandle;
 using rocks_status_t = rocksdb::Status;
+using rocks_db_t = rocksdb::TransactionDB;
 using rocks_value_t = rocksdb::PinnableSlice;
+using rocks_txn_ptr_t = rocksdb::Transaction*;
+using rocks_col_ptr_t = rocksdb::ColumnFamilyHandle*;
+using value_uptr_t = std::unique_ptr<rocks_value_t>;
 
 ukv_collection_t ukv_default_collection_k = NULL;
+ukv_val_len_t ukv_val_len_missing_k = 0;
+ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 
 struct rocks_db_wrapper_t {
-    std::vector<rocks_col_t*> columns;
+    std::vector<rocks_col_ptr_t> columns;
     std::unique_ptr<rocks_db_t> db;
 };
 
@@ -41,20 +44,8 @@ inline rocksdb::Slice to_slice(value_view_t value) noexcept {
     return {reinterpret_cast<const char*>(value.begin()), value.size()};
 }
 
-inline std::unique_ptr<rocks_value_t> get_value(ukv_error_t* c_error) noexcept {
-    std::unique_ptr<rocks_value_t> value_uptr;
-    try {
-        value_uptr = std::make_unique<rocks_value_t>();
-    }
-    catch (...) {
-        *c_error = "Fail to allocate value";
-    }
-    return value_uptr;
-}
-
 void ukv_open([[maybe_unused]] char const* c_config, ukv_t* c_db, ukv_error_t* c_error) {
     rocks_db_wrapper_t* db_wrapper = new rocks_db_wrapper_t;
-
     std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
     rocksdb::Options options;
     rocksdb::ConfigOptions config_options;
@@ -81,27 +72,27 @@ void ukv_open([[maybe_unused]] char const* c_config, ukv_t* c_db, ukv_error_t* c
 
 void single_write( //
     rocks_db_wrapper_t* db_wrapper,
-    rocks_txn_t* txn,
-    ukv_collection_t const* c_col,
-    ukv_key_t const* c_key,
-    ukv_val_ptr_t const* c_val,
-    ukv_val_len_t const* c_len,
+    rocks_txn_ptr_t txn,
+    write_task_t const& task,
     rocksdb::WriteOptions& options,
     ukv_error_t* c_error) {
 
     rocks_status_t status;
-    rocks_col_t* col = reinterpret_cast<rocks_col_t*>(*c_col);
+    auto key = to_slice(task.key);
+    rocks_col_ptr_t col =
+        task.collection ? reinterpret_cast<rocks_col_ptr_t>(task.collection) : db_wrapper->db->DefaultColumnFamily();
+
     if (txn) {
-        if (*c_len)
-            status = db_wrapper->db->Put(options, col, to_slice(*c_key), to_slice(value_view_t(*c_val, *c_len)));
+        if (task.is_deleted())
+            status = txn->Delete(col, key);
         else
-            status = db_wrapper->db->Delete(options, col, to_slice(*c_key));
+            status = txn->Put(col, key, to_slice(task.view()));
     }
     else {
-        if (*c_len)
-            status = txn->Put(col, to_slice(*c_key), to_slice(value_view_t(*c_val, *c_len)));
+        if (task.is_deleted())
+            status = db_wrapper->db->Delete(options, col, key);
         else
-            status = txn->Delete(col, to_slice(*c_key));
+            status = db_wrapper->db->Put(options, col, key, to_slice(task.view()));
     }
 
     if (!status.ok()) {
@@ -114,20 +105,6 @@ void single_write( //
         else
             *c_error = "Write Failure";
     }
-}
-
-void write_head( //
-    rocks_db_wrapper_t* db_wrapper,
-    write_tasks_soa_t tasks,
-    ukv_size_t const n,
-    ukv_error_t* c_error) {
-}
-
-void write_txn( //
-    rocks_txn_t* txn,
-    write_tasks_soa_t tasks,
-    ukv_size_t const n,
-    ukv_error_t* c_error) {
 }
 
 void ukv_write( //
@@ -155,36 +132,81 @@ void ukv_write( //
     ukv_error_t* c_error) {
 
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
-    rocks_txn_t* txn = (rocks_txn_t*)(c_txn);
+    rocks_txn_ptr_t txn = reinterpret_cast<rocks_txn_ptr_t>(c_txn);
+    strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    strided_ptr_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_ptr_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
+    strided_ptr_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
+    write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
+
     rocksdb::WriteOptions options;
     if (c_options & ukv_option_write_flush_k)
         options.sync = true;
 
     if (c_keys_count == 1) {
-        single_write(db_wrapper, txn, c_cols, c_keys, c_vals, c_lens, options, c_error);
+        single_write(db_wrapper, txn, tasks[0], options, c_error);
         return;
     }
+
+    if (txn) {
+        for (ukv_size_t i = 0; i != c_keys_count; ++i) {
+            write_task_t task = tasks[i];
+            txn->Put(reinterpret_cast<rocks_col_ptr_t>(task.collection), to_slice(task.key), to_slice(task.view()));
+        }
+        return;
+    }
+
+    rocksdb::WriteBatch batch;
+    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
+        write_task_t task = tasks[i];
+        rocks_col_ptr_t col = task.collection ? reinterpret_cast<rocks_col_ptr_t>(task.collection)
+                                              : db_wrapper->db->DefaultColumnFamily();
+        auto key = to_slice(task.key);
+        if (task.is_deleted())
+            batch.Delete(col, key);
+        else
+            batch.Put(col, key, to_slice(task.view()));
+    }
+
+    rocks_status_t status = db_wrapper->db->Write(options, &batch);
+    if (!status.ok())
+        *c_error = "Write Error";
 }
 
 void single_read( //
     rocks_db_wrapper_t* db_wrapper,
-    rocks_txn_t* txn,
-    ukv_collection_t const* c_col,
-    ukv_key_t const* c_key,
+    rocks_txn_ptr_t txn,
+    read_task_t const& task,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
-    ukv_arena_t* c_arena,
+    stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    auto value_uptr = get_value(c_error);
-    rocks_value_t* value = value_uptr.get();
-    rocks_col_t* col = reinterpret_cast<rocks_col_t*>(*c_col);
     rocksdb::ReadOptions options;
     rocks_status_t status;
-    if (txn)
-        status = db_wrapper->db->Get(options, col, to_slice(*c_key), value);
-    else
-        status = txn->Get(options, col, to_slice(*c_key), value);
+    rocks_col_ptr_t col =
+        task.collection ? reinterpret_cast<rocks_col_ptr_t>(task.collection) : db_wrapper->db->DefaultColumnFamily();
+
+    value_uptr_t value_uptr;
+    try {
+        value_uptr = std::make_unique<rocks_value_t>();
+    }
+    catch (...) {
+        *c_error = "Fail to allocate value";
+    }
+    rocks_value_t* value = value_uptr.get();
+
+    auto key = to_slice(task.key);
+    try {
+        if (txn)
+            status = txn->Get(options, col, key, value);
+        else
+            status = db_wrapper->db->Get(options, col, key, value);
+    }
+    catch (...) {
+        *c_error = "Fail to read";
+    }
 
     if (!status.IsNotFound() && !status.ok()) {
         if (status.IsIOError())
@@ -196,34 +218,16 @@ void single_read( //
         return;
     }
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
     auto len = value->size();
     prepare_memory(arena.output_tape, sizeof(ukv_size_t) + len, c_error);
-    memcpy(arena.output_tape.data(), &len, sizeof(ukv_size_t));
+    if (*c_error)
+        return;
+    std::memcpy(arena.output_tape.data(), &len, sizeof(ukv_size_t));
     if (len)
-        memcpy(arena.output_tape.data() + sizeof(ukv_size_t), value->data(), len);
+        std::memcpy(arena.output_tape.data() + sizeof(ukv_size_t), value->data(), len);
 
     *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(arena.output_tape.data());
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(arena.output_tape.data() + sizeof(ukv_size_t));
-}
-
-void read_head( //
-    rocks_db_wrapper_t* db_wrapper,
-    read_tasks_soa_t tasks,
-    ukv_size_t const n,
-    ukv_val_ptr_t* c_tape,
-    ukv_size_t* c_capacity,
-    ukv_error_t* c_error) {
-}
-
-void read_txn( //
-    rocks_db_wrapper_t* db_wrapper,
-    rocks_txn_t* txn,
-    read_tasks_soa_t tasks,
-    ukv_size_t const n,
-    ukv_val_ptr_t* c_tape,
-    ukv_size_t* c_capacity,
-    ukv_error_t* c_error) {
 }
 
 void ukv_read( //
@@ -246,11 +250,57 @@ void ukv_read( //
     ukv_error_t* c_error) {
 
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
-    rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
+    rocks_txn_ptr_t txn = reinterpret_cast<rocks_txn_ptr_t>(c_txn);
+    strided_ptr_gt<ukv_collection_t const> cols_stride {c_cols, c_cols_stride};
+    strided_ptr_gt<ukv_key_t const> keys_stride {c_keys, c_keys_stride};
+    read_tasks_soa_t tasks {cols_stride, keys_stride};
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
 
     if (c_keys_count == 1) {
-        single_read(db_wrapper, txn, c_cols, c_keys, c_found_lengths, c_found_values, c_arena, c_error);
+        single_read(db_wrapper, txn, tasks[0], c_found_lengths, c_found_values, arena, c_error);
         return;
+    }
+
+    std::vector<rocks_col_ptr_t> cols(c_keys_count);
+    std::vector<rocksdb::Slice> keys(c_keys_count);
+    std::vector<std::string> vals(c_keys_count);
+    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
+        read_task_t task = tasks[i];
+        cols[i] = task.collection ? reinterpret_cast<rocks_col_ptr_t>(task.collection)
+                                  : db_wrapper->db->DefaultColumnFamily();
+        keys[i] = to_slice(task.key);
+    }
+
+    if (txn)
+        txn->MultiGet(rocksdb::ReadOptions(), cols, keys, &vals);
+    else
+        db_wrapper->db->MultiGet(rocksdb::ReadOptions(), cols, keys, &vals);
+
+    // 1. Estimate the total size
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    for (std::size_t i = 0; i != c_keys_count; ++i)
+        total_bytes += vals[i].size();
+
+    // 2. Allocate a tape for all the values to be fetched
+    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
+    if (*c_error)
+        return;
+
+    // 3. Fetch the data
+    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
+    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    *c_found_lengths = lens;
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
+
+    for (std::size_t i = 0; i != c_keys_count; ++i) {
+        auto len = vals[i].size();
+        if (len) {
+            std::memcpy(tape + exported_bytes, vals[i].data(), len);
+            lens[i] = static_cast<ukv_val_len_t>(len);
+            exported_bytes += len;
+        }
+        else
+            lens[i] = ukv_val_len_missing_k;
     }
 }
 
@@ -262,7 +312,7 @@ void ukv_collection_upsert( //
     [[maybe_unused]] ukv_error_t* c_error) {
 
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
-    rocks_col_t* col = nullptr;
+    rocks_col_ptr_t col = nullptr;
     rocks_status_t status;
 
     if (c_col_name) {
@@ -315,7 +365,7 @@ void ukv_txn_begin( //
     ukv_error_t* c_error) {
 
     rocks_db_t* db = reinterpret_cast<rocks_db_wrapper_t*>(c_db)->db.get();
-    rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(*c_txn);
+    rocks_txn_ptr_t txn = reinterpret_cast<rocks_txn_ptr_t>(*c_txn);
     txn = db->BeginTransaction(rocksdb::WriteOptions(), rocksdb::TransactionOptions(), txn);
     if (!txn)
         *c_error = "Transaction Begin Error";
@@ -327,16 +377,17 @@ void ukv_txn_commit( //
     [[maybe_unused]] ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
-    rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
+    rocks_txn_ptr_t txn = reinterpret_cast<rocks_txn_ptr_t>(c_txn);
     rocks_status_t status = txn->Commit();
     if (!status.ok())
         *c_error = "Commit Error";
 }
 
-void ukv_arena_free(ukv_t const, ukv_val_ptr_t c_ptr, ukv_size_t c_len) {
-    if (!c_ptr || !c_len)
+void ukv_arena_free(ukv_t const, ukv_arena_t c_arena) {
+    if (!c_arena)
         return;
-    allocator_t {}.deallocate(reinterpret_cast<byte_t*>(c_ptr), c_len);
+    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
+    delete &arena;
 }
 
 void ukv_txn_free([[maybe_unused]] ukv_t const, [[maybe_unused]] ukv_txn_t c_txn) {
