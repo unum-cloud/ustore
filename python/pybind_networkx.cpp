@@ -55,7 +55,7 @@ using namespace unum;
 struct network_t : public std::enable_shared_from_this<network_t> {
 
     std::shared_ptr<py_db_t> db_ptr;
-    graph_collection_session_t inverted_index;
+    graph_t graph;
     collection_t sources_attrs;
     collection_t targets_attrs;
     collection_t relations_attrs;
@@ -68,7 +68,7 @@ struct network_t : public std::enable_shared_from_this<network_t> {
     Py_ssize_t last_buffer_shape[3];
     Py_ssize_t last_buffer_strides[3];
 
-    network_t(graph_collection_session_t&& session) : inverted_index(std::move(session)) {}
+    network_t(graph_t&& g) : graph(std::move(g)) {}
     network_t(network_t&&) = delete;
     network_t(network_t const&) = delete;
     ~network_t() {}
@@ -81,6 +81,7 @@ struct degree_view_t : public std::enable_shared_from_this<degree_view_t> {
 
 template <typename element_at>
 py::handle wrap_into_buffer(network_t& net, strided_range_gt<element_at> range) {
+    printf("received %i strided objects\n", (int)range.size());
 
     net.last_buffer_strides[0] = range.stride();
     net.last_buffer_strides[1] = net.last_buffer_strides[2] = 1;
@@ -108,7 +109,7 @@ void ukv::wrap_network(py::module& m) {
     auto degs = py::class_<degree_view_t, std::shared_ptr<degree_view_t>>(m, "DegreeView", py::module_local());
     degs.def("__getitem__", [](degree_view_t& degs, ukv_key_t v) {
         network_t& net = *degs.net_ptr;
-        auto maybe = net.inverted_index.degree(v, degs.roles);
+        auto maybe = net.graph.degree(v, degs.roles);
         maybe.throw_unhandled();
         ukv_vertex_degree_t result = *maybe;
         return result;
@@ -116,7 +117,7 @@ void ukv::wrap_network(py::module& m) {
     degs.def("__getitem__", [](degree_view_t& degs, py::handle vs) {
         network_t& net = *degs.net_ptr;
         auto handle_and_ids = strided_array<ukv_key_t const>(vs);
-        auto maybe = net.inverted_index.degrees(handle_and_ids.second, degs.roles);
+        auto maybe = net.graph.degrees(handle_and_ids.second, degs.roles);
         maybe.throw_unhandled();
         return wrap_into_buffer<ukv_vertex_degree_t const>(net, {maybe->begin(), maybe->end()});
     });
@@ -134,11 +135,10 @@ void ukv::wrap_network(py::module& m) {
                     return std::shared_ptr<network_t> {};
 
                 db_t& db = index_collection->db_ptr->native;
+                collection_t& col = index_collection->native;
                 ukv_txn_t txn_raw = index_collection->txn_ptr ? index_collection->txn_ptr->native : ukv_txn_t(nullptr);
-                auto maybe = db.collection(index_collection->name);
-                maybe.throw_unhandled();
 
-                graph_collection_session_t g(*std::move(maybe), txn_raw);
+                graph_t g(col, txn_raw);
                 auto net_ptr = std::make_shared<network_t>(std::move(g));
 
                 net_ptr->db_ptr = index_collection->db_ptr;
@@ -178,7 +178,7 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "order",
         [](network_t& net, ukv_key_t v) {
-            auto maybe = net.inverted_index.collection().size();
+            auto maybe = net.graph.collection().size();
             maybe.throw_unhandled();
             return *maybe;
         },
@@ -186,7 +186,7 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "number_of_nodes",
         [](network_t& net, ukv_key_t v) {
-            auto maybe = net.inverted_index.collection().size();
+            auto maybe = net.graph.collection().size();
             maybe.throw_unhandled();
             return *maybe;
         },
@@ -194,7 +194,7 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "__len__",
         [](network_t& net, ukv_key_t v) {
-            auto maybe = net.inverted_index.collection().size();
+            auto maybe = net.graph.collection().size();
             maybe.throw_unhandled();
             return *maybe;
         },
@@ -237,7 +237,7 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "number_of_edges",
         [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
-            auto maybe = net.inverted_index.edges(v1, v2);
+            auto maybe = net.graph.edges(v1, v2);
             maybe.throw_unhandled();
             return maybe->size();
         },
@@ -256,7 +256,7 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "has_node",
         [](network_t& net, ukv_key_t v) {
-            auto maybe = net.inverted_index.contains(v);
+            auto maybe = net.graph.contains(v);
             maybe.throw_unhandled();
             return *maybe;
         },
@@ -265,7 +265,7 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "__contains__",
         [](network_t& net, ukv_key_t v) {
-            auto maybe = net.inverted_index.contains(v);
+            auto maybe = net.graph.contains(v);
             maybe.throw_unhandled();
             return *maybe;
         },
@@ -279,7 +279,7 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "has_edge",
         [](network_t& net, ukv_key_t v1, ukv_key_t v2) {
-            auto maybe = net.inverted_index.edges(v1, v2);
+            auto maybe = net.graph.edges(v1, v2);
             maybe.throw_unhandled();
             return maybe->size() != 0;
         },
@@ -288,7 +288,7 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "has_edge",
         [](network_t& net, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
-            auto maybe = net.inverted_index.edges(v1, v2);
+            auto maybe = net.graph.edges(v1, v2);
             maybe.throw_unhandled();
             return std::find(maybe->edge_ids.begin(), maybe->edge_ids.end(), eid) != maybe->edge_ids.end();
         },
@@ -307,7 +307,7 @@ void ukv::wrap_network(py::module& m) {
             // Retrieving neighbors is trickier than just `successors` or `predecessors`.
             // We are receiving an adjacency list, where both incoming an edges exist.
             // So the stride/offset is not uniform across the entire list.
-            auto maybe = net.inverted_index.edges(n, ukv_vertex_role_any_k);
+            auto maybe = net.graph.edges(n, ukv_vertex_role_any_k);
             maybe.throw_unhandled();
 
             // We can gobble the contents a little bit by swapping the members of some
@@ -328,7 +328,7 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "successors",
         [](network_t& net, ukv_key_t n) {
-            auto maybe = net.inverted_index.edges(n, ukv_vertex_source_k);
+            auto maybe = net.graph.edges(n, ukv_vertex_source_k);
             maybe.throw_unhandled();
             return wrap_into_buffer(net, maybe->target_ids);
         },
@@ -337,7 +337,7 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "predecessors",
         [](network_t& net, ukv_key_t n) {
-            auto maybe = net.inverted_index.edges(n, ukv_vertex_target_k);
+            auto maybe = net.graph.edges(n, ukv_vertex_target_k);
             maybe.throw_unhandled();
             return wrap_into_buffer(net, maybe->source_ids);
         },
@@ -347,7 +347,7 @@ void ukv::wrap_network(py::module& m) {
         "nbunch_iter",
         [](network_t& net, py::handle const& vs) {
             auto handle_and_ids = strided_array<ukv_key_t const>(vs);
-            auto maybe = net.inverted_index.contains(handle_and_ids.second);
+            auto maybe = net.graph.contains(handle_and_ids.second);
             maybe.throw_unhandled();
             return wrap_into_buffer(net, *maybe);
         },
@@ -362,7 +362,7 @@ void ukv::wrap_network(py::module& m) {
                 strided_range_gt<ukv_key_t const>(v1),
                 strided_range_gt<ukv_key_t const>(v2),
             };
-            net.inverted_index.upsert(edges).throw_unhandled();
+            net.graph.upsert(edges).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"));
@@ -374,7 +374,7 @@ void ukv::wrap_network(py::module& m) {
                 strided_range_gt<ukv_key_t const>(v2),
                 strided_range_gt<ukv_key_t const>(eid),
             };
-            net.inverted_index.upsert(edges).throw_unhandled();
+            net.graph.upsert(edges).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"),
@@ -386,7 +386,7 @@ void ukv::wrap_network(py::module& m) {
                 strided_range_gt<ukv_key_t const>(v1),
                 strided_range_gt<ukv_key_t const>(v2),
             };
-            net.inverted_index.remove(edges).throw_unhandled();
+            net.graph.remove(edges).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"));
@@ -398,7 +398,7 @@ void ukv::wrap_network(py::module& m) {
                 strided_range_gt<ukv_key_t const>(v2),
                 strided_range_gt<ukv_key_t const>(eid),
             };
-            net.inverted_index.remove(edges).throw_unhandled();
+            net.graph.remove(edges).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"),
@@ -416,7 +416,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
                                                    : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
             };
-            net.inverted_index.upsert(edges).throw_unhandled();
+            net.graph.upsert(edges).throw_unhandled();
         },
         py::arg("ebunch_to_add"),
         "Adds an adjacency list (in a form of 2 or 3 columnar matrix) to the graph.");
@@ -433,7 +433,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
                                                    : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
             };
-            net.inverted_index.remove(edges).throw_unhandled();
+            net.graph.remove(edges).throw_unhandled();
         },
         py::arg("ebunch"),
         "Removes all edges in supplied adjacency list (in a form of 2 or 3 columnar matrix) from the graph.");
@@ -447,7 +447,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_sources.second,
                 handle_and_targets.second,
             };
-            net.inverted_index.upsert(edges).throw_unhandled();
+            net.graph.upsert(edges).throw_unhandled();
         },
         py::arg("us"),
         py::arg("vs"),
@@ -461,7 +461,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_sources.second,
                 handle_and_targets.second,
             };
-            net.inverted_index.remove(edges).throw_unhandled();
+            net.graph.remove(edges).throw_unhandled();
         },
         py::arg("us"),
         py::arg("vs"),
@@ -478,7 +478,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_targets.second,
                 handle_and_edge_ids.second,
             };
-            net.inverted_index.upsert(edges).throw_unhandled();
+            net.graph.upsert(edges).throw_unhandled();
         },
         py::arg("us"),
         py::arg("vs"),
@@ -495,7 +495,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_targets.second,
                 handle_and_edge_ids.second,
             };
-            net.inverted_index.remove(edges).throw_unhandled();
+            net.graph.remove(edges).throw_unhandled();
         },
         py::arg("us"),
         py::arg("vs"),
@@ -507,7 +507,7 @@ void ukv::wrap_network(py::module& m) {
         "clear",
         [](network_t& net) {
             db_t& db = net.db_ptr->native;
-            db.clear(net.inverted_index.collection());
+            db.clear(net.graph.collection());
             db.clear(net.sources_attrs);
             db.clear(net.targets_attrs);
             db.clear(net.relations_attrs);
@@ -549,4 +549,21 @@ void ukv::wrap_network(py::module& m) {
         throw_not_implemented();
         return 0.0;
     });
+
+    // Reading and Writing Graphs
+    // https://networkx.org/documentation/stable/reference/readwrite/
+    // https://networkx.org/documentation/stable/reference/readwrite/adjlist.html
+    // https://networkx.org/documentation/stable/reference/readwrite/json_graph.html
+    m.def(
+        "write_adjlist",
+        [](network_t& net,
+           std::string const& path,
+           std::string const& comments,
+           std::string const& delimiter,
+           std::string const& encoding) { return; },
+        py::arg("G"),
+        py::arg("path"),
+        py::arg("comments") = "#",
+        py::arg("delimiter") = " ",
+        py::arg("encoding") = "utf-8");
 }

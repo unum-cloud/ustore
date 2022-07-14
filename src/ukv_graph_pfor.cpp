@@ -25,9 +25,9 @@ ukv_vertex_degree_t ukv_vertex_degree_missing_k = std::numeric_limits<ukv_vertex
 
 constexpr std::size_t bytes_in_degrees_header_k = 2 * sizeof(ukv_vertex_degree_t);
 
-inline range_gt<neighborship_t const*> neighbors(ukv_vertex_degree_t const* degrees,
-                                                 ukv_key_t const* neighborships,
-                                                 ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+range_gt<neighborship_t const*> neighbors(ukv_vertex_degree_t const* degrees,
+                                          ukv_key_t const* neighborships,
+                                          ukv_vertex_role_t role = ukv_vertex_role_any_k) {
     auto ships = reinterpret_cast<neighborship_t const*>(neighborships);
 
     switch (role) {
@@ -39,7 +39,7 @@ inline range_gt<neighborship_t const*> neighbors(ukv_vertex_degree_t const* degr
     __builtin_unreachable();
 }
 
-inline range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
     // Handle missing vertices
     if (bytes.size() < 2 * sizeof(ukv_vertex_degree_t))
         return {};

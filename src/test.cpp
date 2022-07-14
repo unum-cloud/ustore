@@ -98,7 +98,8 @@ TEST(db, net) {
     db_t db;
     EXPECT_FALSE(db.open(""));
 
-    graph_collection_session_t net {collection_t(db)};
+    collection_t col(db);
+    graph_t net(col);
 
     std::vector<edge_t> triangle {
         {1, 2, 9},

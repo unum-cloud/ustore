@@ -57,7 +57,7 @@ struct located_key_hash_t {
     }
 };
 
-class error_t {
+class [[nodiscard]] error_t {
     ukv_error_t raw_ = nullptr;
 
   public:
@@ -90,10 +90,11 @@ class error_t {
     }
 
     ukv_error_t* internal_cptr() noexcept { return &raw_; }
+    ukv_error_t release_error() noexcept { return std::exchange(raw_, nullptr); }
 };
 
 template <typename object_at>
-class expected_gt {
+class [[nodiscard]] expected_gt {
     error_t error_;
     object_at object_;
 
@@ -260,6 +261,17 @@ struct range_gt {
     }
 };
 
+template <typename pointer_at>
+struct raw_range_gt {
+    pointer_at begin_ = nullptr;
+    pointer_at end_ = nullptr;
+
+    inline pointer_at const& begin() const& noexcept { return begin_; }
+    inline pointer_at const& end() const& noexcept { return end_; }
+    inline pointer_at&& begin() && noexcept { return std::move(begin_); }
+    inline pointer_at&& end() && noexcept { return std::move(end_); }
+};
+
 template <typename object_at>
 class strided_matrix_gt {
 
@@ -344,8 +356,7 @@ struct disjoint_values_view_t {
 
 /**
  * @brief A read-only iterator for values packed into a
- * contiguous memory range.
- *
+ * contiguous memory range. Doesn't own underlying memory.
  */
 class tape_iterator_t {
 
