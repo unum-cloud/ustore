@@ -176,6 +176,7 @@ add_executable(ukv_test
 )
 target_link_libraries(ukv_test
   gtest
+  fmt::fmt
   nlohmann_json::nlohmann_json
 )
 
@@ -188,5 +189,6 @@ add_executable(ukv_leveldb_test
 target_link_libraries(ukv_leveldb_test
   gtest
   leveldb
+  fmt::fmt
   nlohmann_json::nlohmann_json
 )

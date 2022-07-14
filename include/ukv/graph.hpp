@@ -6,10 +6,15 @@
  */
 
 #pragma once
+#include <fmt/core.h>
+
 #include "ukv/graph.h"
 #include "ukv/ukv.hpp"
 
 namespace unum::ukv {
+
+class graph_adjacency_stream_t;
+class graph_t;
 
 struct edge_t {
     ukv_key_t source_id;
@@ -357,6 +362,14 @@ class graph_t {
         strided_keys_t edges(neighborships_per_vertex + 2, stride, total_edges);
         return edges_span_t {sources, targets, edges};
     }
+
+    error_t export_adjacency_list(std::string const& path,
+                                  std::string_view column_separator,
+                                  std::string_view line_delimiter);
+
+    error_t import_adjacency_list(std::string const& path,
+                                  std::string_view column_separator,
+                                  std::string_view line_delimiter);
 };
 
 } // namespace unum::ukv
