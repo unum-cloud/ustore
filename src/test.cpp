@@ -104,6 +104,13 @@ TEST(db, net) {
     EXPECT_FALSE(*net.contains(10));
     EXPECT_FALSE(*net.contains(1000));
 
+    EXPECT_EQ(*net.degree(1), 2u);
+    EXPECT_EQ(*net.degree(2), 2u);
+    EXPECT_EQ(*net.degree(3), 2u);
+    EXPECT_EQ(*net.degree(1, ukv_vertex_source_k), 1u);
+    EXPECT_EQ(*net.degree(2, ukv_vertex_source_k), 1u);
+    EXPECT_EQ(*net.degree(3, ukv_vertex_source_k), 1u);
+
     EXPECT_TRUE(net.edges(1));
     EXPECT_EQ(net.edges(1)->size(), 2ul);
     EXPECT_EQ(net.edges(1, ukv_vertex_source_k)->size(), 1ul);
