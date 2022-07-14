@@ -142,8 +142,8 @@ class graph_t {
     inline collection_t& collection() noexcept { return collection_; };
     inline ukv_txn_t txn() const noexcept { return txn_; }
 
-    error_t upsert(edges_view_t const& edges) noexcept {
-        error_t error;
+    status_t upsert(edges_view_t const& edges) noexcept {
+        status_t status;
         ukv_graph_upsert_edges(collection_.db(),
                                txn_,
                                collection_.internal_cptr(),
@@ -157,12 +157,12 @@ class graph_t {
                                edges.target_ids.stride(),
                                ukv_options_default_k,
                                arena_.internal_cptr(),
-                               error.internal_cptr());
-        return error;
+                               status.internal_cptr());
+        return status;
     }
 
-    error_t remove(edges_view_t const& edges) noexcept {
-        error_t error;
+    status_t remove(edges_view_t const& edges) noexcept {
+        status_t status;
         ukv_graph_remove_edges(collection_.db(),
                                txn_,
                                collection_.internal_cptr(),
@@ -176,15 +176,15 @@ class graph_t {
                                edges.target_ids.stride(),
                                ukv_options_default_k,
                                arena_.internal_cptr(),
-                               error.internal_cptr());
-        return error;
+                               status.internal_cptr());
+        return status;
     }
 
-    error_t remove(strided_range_gt<ukv_key_t const> vertices,
-                   strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
-                   bool transparent = false) noexcept {
+    status_t remove(strided_range_gt<ukv_key_t const> vertices,
+                    strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
+                    bool transparent = false) noexcept {
 
-        error_t error;
+        status_t status;
         ukv_options_t options = transparent ? ukv_option_read_transparent_k : ukv_options_default_k;
 
         ukv_graph_remove_vertices(collection_.db(),
@@ -198,8 +198,8 @@ class graph_t {
                                   roles.stride(),
                                   options,
                                   arena_.internal_cptr(),
-                                  error.internal_cptr());
-        return error;
+                                  status.internal_cptr());
+        return status;
     }
 
     expected_gt<ukv_vertex_degree_t> degree(ukv_key_t vertex,
@@ -218,7 +218,7 @@ class graph_t {
         strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
         bool transparent = false) noexcept {
 
-        error_t error;
+        status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
         ukv_key_t* neighborships_per_vertex = nullptr;
         ukv_options_t options = static_cast<ukv_options_t>(
@@ -237,9 +237,9 @@ class graph_t {
                              &degrees_per_vertex,
                              &neighborships_per_vertex,
                              arena_.internal_cptr(),
-                             error.internal_cptr());
-        if (error)
-            return error;
+                             status.internal_cptr());
+        if (!status)
+            return status;
 
         return indexed_range_gt<ukv_vertex_degree_t*> {degrees_per_vertex, degrees_per_vertex + vertices.size()};
     }
@@ -272,7 +272,7 @@ class graph_t {
     expected_gt<edges_span_t> edges(ukv_key_t vertex,
                                     ukv_vertex_role_t role = ukv_vertex_role_any_k,
                                     bool transparent = false) noexcept {
-        error_t error;
+        status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
         ukv_key_t* neighborships_per_vertex = nullptr;
 
@@ -289,9 +289,9 @@ class graph_t {
                              &degrees_per_vertex,
                              &neighborships_per_vertex,
                              arena_.internal_cptr(),
-                             error.internal_cptr());
-        if (error)
-            return error;
+                             status.internal_cptr());
+        if (!status)
+            return status;
 
         ukv_vertex_degree_t deg = degrees_per_vertex[0];
         if (deg == ukv_vertex_degree_missing_k)
@@ -329,7 +329,7 @@ class graph_t {
         strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k},
         bool transparent = false) noexcept {
 
-        error_t error;
+        status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
         ukv_key_t* neighborships_per_vertex = nullptr;
 
@@ -346,9 +346,9 @@ class graph_t {
                              &degrees_per_vertex,
                              &neighborships_per_vertex,
                              arena_.internal_cptr(),
-                             error.internal_cptr());
-        if (error)
-            return error;
+                             status.internal_cptr());
+        if (!status)
+            return status;
 
         std::size_t total_edges = 0;
         for (ukv_size_t vertex_idx = 0; vertex_idx != vertices.count(); ++vertex_idx)
@@ -363,13 +363,13 @@ class graph_t {
         return edges_span_t {sources, targets, edges};
     }
 
-    error_t export_adjacency_list(std::string const& path,
-                                  std::string_view column_separator,
-                                  std::string_view line_delimiter);
+    status_t export_adjacency_list(std::string const& path,
+                                   std::string_view column_separator,
+                                   std::string_view line_delimiter);
 
-    error_t import_adjacency_list(std::string const& path,
-                                  std::string_view column_separator,
-                                  std::string_view line_delimiter);
+    status_t import_adjacency_list(std::string const& path,
+                                   std::string_view column_separator,
+                                   std::string_view line_delimiter);
 };
 
 } // namespace unum::ukv

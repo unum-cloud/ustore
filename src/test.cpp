@@ -15,7 +15,7 @@ using namespace unum;
 
 void round_trip(sample_proxy_t proxy, disjoint_values_view_t values) {
 
-    EXPECT_FALSE(proxy.set(values)) << "Failed to assign";
+    EXPECT_TRUE(proxy.set(values)) << "Failed to assign";
 
     EXPECT_TRUE(proxy.get()) << "Failed to fetch inserted keys";
 
@@ -60,7 +60,7 @@ TEST(db, basic) {
     round_trip(proxy, values);
 
     // Overwrite with empty values, but check for existance
-    EXPECT_FALSE(proxy.clear());
+    EXPECT_TRUE(proxy.clear());
     for (ukv_key_t key : proxy.keys) {
         expected_gt<strided_range_gt<bool>> indicators = session[key].contains();
         EXPECT_TRUE(indicators);
@@ -81,7 +81,7 @@ TEST(db, basic) {
     }
 
     // Remove all of the values and check that they are missing
-    EXPECT_FALSE(proxy.erase());
+    EXPECT_TRUE(proxy.erase());
     for (ukv_key_t key : proxy.keys) {
         expected_gt<strided_range_gt<bool>> indicators = session[key].contains();
         EXPECT_TRUE(indicators);
@@ -107,7 +107,7 @@ TEST(db, net) {
         {3, 1, 11},
     };
 
-    EXPECT_FALSE(net.upsert(triangle));
+    EXPECT_TRUE(net.upsert(triangle));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_FALSE(*net.contains(9));
@@ -135,7 +135,7 @@ TEST(db, net) {
     EXPECT_EQ(net.edges(1, 3)->size(), 0ul);
 
     // Remove a single edge, making sure that the nodes info persists
-    EXPECT_FALSE(net.remove({
+    EXPECT_TRUE(net.remove({
         .source_ids = {triangle[0].source_id},
         .target_ids = {triangle[0].target_id},
         .edge_ids = {triangle[0].id},
@@ -145,7 +145,7 @@ TEST(db, net) {
     EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
 
     // Bring that edge back
-    EXPECT_FALSE(net.upsert({
+    EXPECT_TRUE(net.upsert({
         .source_ids = {triangle[0].source_id},
         .target_ids = {triangle[0].target_id},
         .edge_ids = {triangle[0].id},
@@ -154,14 +154,14 @@ TEST(db, net) {
 
     // Remove a vertex
     ukv_key_t vertex_to_remove = 2;
-    EXPECT_FALSE(net.remove({vertex_to_remove}));
+    EXPECT_TRUE(net.remove({vertex_to_remove}));
     EXPECT_FALSE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
 
     // Bring back the whole graph
-    EXPECT_FALSE(net.upsert(triangle));
+    EXPECT_TRUE(net.upsert(triangle));
     EXPECT_TRUE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);

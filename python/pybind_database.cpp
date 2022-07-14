@@ -82,7 +82,7 @@ bool contains_item( //
     managed_arena_t& arena,
     ukv_key_t key) {
 
-    ukv::error_t error;
+    status_t status;
     ukv_options_t options = ukv_option_read_lengths_k;
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
@@ -100,8 +100,8 @@ bool contains_item( //
         &found_lengths,
         &found_values,
         arena.internal_cptr(),
-        error.internal_cptr());
-    error.throw_unhandled();
+        status.internal_cptr());
+    status.throw_unhandled();
 
     return found_lengths[0] != ukv_val_len_missing_k;
 }
@@ -113,7 +113,7 @@ std::optional<py::bytes> get_item( //
     managed_arena_t& arena,
     ukv_key_t key) {
 
-    ukv::error_t error;
+    status_t status;
     ukv_options_t options = ukv_options_default_k;
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
@@ -131,8 +131,8 @@ std::optional<py::bytes> get_item( //
         &found_lengths,
         &found_values,
         arena.internal_cptr(),
-        error.internal_cptr());
-    error.throw_unhandled();
+        status.internal_cptr());
+    status.throw_unhandled();
 
     if (found_lengths[0] == ukv_val_len_missing_k)
         return std::nullopt;
@@ -241,7 +241,7 @@ void export_matrix( //
 
     // Perform the read
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv::error_t error;
+    status_t status;
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
     ukv_options_t options = ukv_options_default_k;
@@ -258,9 +258,9 @@ void export_matrix( //
         &found_lengths,
         &found_values,
         arena.internal_cptr(),
-        error.internal_cptr());
+        status.internal_cptr());
 
-    error.throw_unhandled();
+    status.throw_unhandled();
 
     // Export the data into the matrix
     taped_values_view_t inputs {found_lengths, found_values, keys_count};
@@ -293,7 +293,7 @@ void set_item( //
     ukv_options_t options = ukv_options_default_k;
     ukv_val_ptr_t ptr = value ? ukv_val_ptr_t(std::string_view {*value}.data()) : nullptr;
     ukv_val_len_t len = value ? static_cast<ukv_val_len_t>(std::string_view {*value}.size()) : 0;
-    ukv::error_t error;
+    status_t status;
     ukv_val_len_t offset_in_val = 0;
 
     [[maybe_unused]] py::gil_scoped_release release;
@@ -313,9 +313,9 @@ void set_item( //
         0,
         options,
         arena.internal_cptr(),
-        error.internal_cptr());
+        status.internal_cptr());
 
-    error.throw_unhandled();
+    status.throw_unhandled();
 }
 
 void ukv::wrap_database(py::module& m) {
@@ -579,9 +579,8 @@ void ukv::wrap_database(py::module& m) {
         py_col->txn_ptr = py_txn.shared_from_this();
         return py_col;
     });
-    py_db.def("__delitem__", [](py_db_t& py_db, std::string const& collection) {
-        auto error = py_db.native.remove(collection);
-        error.throw_unhandled();
+    py_db.def("__delitem__", [](py_db_t& py_db, std::string const& collection) { //
+        py_db.native.remove(collection).throw_unhandled();
     });
 
     // Batch Matrix Operations

@@ -30,7 +30,7 @@ struct sample_proxy_t {
 
     expected_gt<taped_values_view_t> get(bool transparent = false) const noexcept {
 
-        error_t error;
+        status_t status;
         ukv_val_len_t* found_lengths = nullptr;
         ukv_val_ptr_t found_values = nullptr;
 
@@ -45,16 +45,16 @@ struct sample_proxy_t {
                  &found_lengths,
                  &found_values,
                  arena,
-                 error.internal_cptr());
-        if (error)
-            return {std::move(error)};
+                 status.internal_cptr());
+        if (!status)
+            return status;
 
         return taped_values_view_t {found_lengths, found_values, static_cast<ukv_size_t>(keys.size())};
     }
 
     expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths(bool transparent = false) const noexcept {
 
-        error_t error;
+        status_t status;
         ukv_val_len_t* found_lengths = nullptr;
         ukv_val_ptr_t found_values = nullptr;
 
@@ -69,9 +69,9 @@ struct sample_proxy_t {
                  &found_lengths,
                  &found_values,
                  arena,
-                 error.internal_cptr());
-        if (error)
-            return {std::move(error)};
+                 status.internal_cptr());
+        if (!status)
+            return {std::move(status)};
 
         return indexed_range_gt<ukv_val_len_t*> {found_lengths, found_lengths + keys.count()};
     }
@@ -82,7 +82,7 @@ struct sample_proxy_t {
      */
     expected_gt<strided_range_gt<bool>> contains(bool transparent = false) const noexcept {
 
-        error_t error;
+        status_t status;
         ukv_val_len_t* found_lengths = nullptr;
         ukv_val_ptr_t found_values = nullptr;
 
@@ -97,9 +97,9 @@ struct sample_proxy_t {
                  &found_lengths,
                  &found_values,
                  arena,
-                 error.internal_cptr());
-        if (error)
-            return error;
+                 status.internal_cptr());
+        if (!status)
+            return status;
 
         // Transaform the `found_lengths` into booleans.
         std::transform(found_lengths, found_lengths + keys.size(), found_lengths, [](ukv_val_len_t len) {
@@ -115,10 +115,10 @@ struct sample_proxy_t {
     /**
      * @brief Pair-wise assigns values to keys located in this proxy objects.
      * @param flush Pass true, if you need the data to be persisted before returning.
-     * @return error_t Non-NULL if only an error had occured.
+     * @return status_t Non-NULL if only an error had occured.
      */
-    error_t set(disjoint_values_view_t vals, bool flush = false) noexcept {
-        error_t error;
+    status_t set(disjoint_values_view_t vals, bool flush = false) noexcept {
+        status_t status;
         ukv_write(db,
                   txn,
                   cols.begin().get(),
@@ -134,23 +134,23 @@ struct sample_proxy_t {
                   vals.lengths.stride(),
                   flush ? ukv_option_write_flush_k : ukv_options_default_k,
                   arena,
-                  error.internal_cptr());
-        return error;
+                  status.internal_cptr());
+        return status;
     }
 
     /**
      * @brief Removes both the keys and the associated values.
      * @param flush Pass true, if you need the data to be persisted before returning.
-     * @return error_t Non-NULL if only an error had occured.
+     * @return status_t Non-NULL if only an error had occured.
      */
-    error_t erase(bool flush = false) noexcept { return set(disjoint_values_view_t {}, flush); }
+    status_t erase(bool flush = false) noexcept { return set(disjoint_values_view_t {}, flush); }
 
     /**
      * @brief Keeps the keys, but clears the contents of associated values.
      * @param flush Pass true, if you need the data to be persisted before returning.
-     * @return error_t Non-NULL if only an error had occured.
+     * @return status_t Non-NULL if only an error had occured.
      */
-    error_t clear(bool flush = false) noexcept {
+    status_t clear(bool flush = false) noexcept {
         ukv_val_ptr_t any = reinterpret_cast<ukv_val_ptr_t>(this);
         ukv_val_len_t len = 0;
         return set(disjoint_values_view_t {.contents = {any}, .offsets = {}, .lengths = {len}}, flush);
@@ -159,14 +159,14 @@ struct sample_proxy_t {
     operator expected_gt<taped_values_view_t>() const noexcept { return get(); }
 
     sample_proxy_t& operator=(disjoint_values_view_t vals) noexcept(false) {
-        auto error = set(vals);
-        error.throw_unhandled();
+        auto status = set(vals);
+        status.throw_unhandled();
         return *this;
     }
 
     sample_proxy_t& operator=(nullptr_t) noexcept(false) {
-        auto error = erase();
-        error.throw_unhandled();
+        auto status = erase();
+        status.throw_unhandled();
         return *this;
     }
 };
@@ -191,14 +191,14 @@ class keys_stream_t {
     indexed_range_gt<ukv_key_t*> prefetched_keys_;
     std::size_t prefetched_offset_ = 0;
 
-    error_t prefetch() noexcept {
+    status_t prefetch() noexcept {
 
         if (next_min_key_ == ukv_key_unknown_k)
             return {};
 
         ukv_key_t* found_keys = nullptr;
         ukv_val_len_t* found_lens = nullptr;
-        error_t error;
+        status_t status;
         ukv_scan(db_,
                  txn_,
                  &col_,
@@ -212,9 +212,9 @@ class keys_stream_t {
                  &found_keys,
                  &found_lens,
                  arena_.internal_cptr(),
-                 error.internal_cptr());
-        if (error)
-            return error;
+                 status.internal_cptr());
+        if (!status)
+            return status;
 
         auto present_end = std::find(found_keys, found_keys + read_ahead_, ukv_key_unknown_k);
         prefetched_keys_ = indexed_range_gt<ukv_key_t*> {found_keys, present_end};
@@ -246,14 +246,14 @@ class keys_stream_t {
     keys_stream_t(keys_stream_t const&) = delete;
     keys_stream_t& operator=(keys_stream_t const&) = delete;
 
-    error_t seek(ukv_key_t key) noexcept {
+    status_t seek(ukv_key_t key) noexcept {
         prefetched_keys_ = {};
         prefetched_offset_ = 0;
         next_min_key_ = key;
         return prefetch();
     }
 
-    error_t advance() noexcept {
+    status_t advance() noexcept {
 
         if (prefetched_offset_ >= prefetched_keys_.size())
             return prefetch();
@@ -268,8 +268,8 @@ class keys_stream_t {
      * ! So we promote this iterator to `end()`, once an error occurs.
      */
     inline keys_stream_t& operator++() noexcept {
-        error_t error = advance();
-        if (!error)
+        status_t status = advance();
+        if (status)
             return *this;
 
         prefetched_keys_ = {};
@@ -280,8 +280,8 @@ class keys_stream_t {
 
     ukv_key_t key() const noexcept { return prefetched_keys_[prefetched_offset_]; }
     ukv_key_t operator*() const noexcept { return key(); }
-    error_t seek_to_first() noexcept { return seek(std::numeric_limits<ukv_key_t>::min()); }
-    error_t seek_to_next_batch() noexcept { return seek(next_min_key_); }
+    status_t seek_to_first() noexcept { return seek(std::numeric_limits<ukv_key_t>::min()); }
+    status_t seek_to_next_batch() noexcept { return seek(next_min_key_); }
 
     /**
      * @brief Exposes all the prefetched keys at once.
@@ -323,12 +323,12 @@ inline expected_gt<keys_range_t> keys_range(ukv_t db,
 
     keys_stream_t b {db, col, read_ahead, txn};
     keys_stream_t e {db, col, read_ahead, txn};
-    error_t error = b.seek(min_key);
-    if (error)
-        return error;
-    error = e.seek(max_key);
-    if (error)
-        return error;
+    status_t status = b.seek(min_key);
+    if (!status)
+        return status;
+    status = e.seek(max_key);
+    if (!status)
+        return status;
 
     keys_range_t result {std::move(b), std::move(e)};
     return result;
@@ -443,16 +443,16 @@ class txn_t {
         };
     }
 
-    error_t reset() {
-        error_t error;
-        ukv_txn_begin(db_, 0, &txn_, error.internal_cptr());
-        return error;
+    status_t reset() {
+        status_t status;
+        ukv_txn_begin(db_, 0, &txn_, status.internal_cptr());
+        return status;
     }
 
-    error_t commit(ukv_options_t options = ukv_options_default_k) {
-        error_t error;
-        ukv_txn_commit(txn_, options, error.internal_cptr());
-        return error;
+    status_t commit(ukv_options_t options = ukv_options_default_k) {
+        status_t status;
+        ukv_txn_commit(txn_, options, status.internal_cptr());
+        return status;
     }
 
     auto keys(ukv_collection_t col = ukv_default_collection_k,
@@ -514,11 +514,11 @@ class session_t {
     inline sample_proxy_t sample() noexcept { return operator[](located_keys_view_t {lazy_lookups_}); }
 
     expected_gt<txn_t> transact() {
-        error_t error;
+        status_t status;
         ukv_txn_t raw = nullptr;
-        ukv_txn_begin(db_, 0, &raw, error.internal_cptr());
-        if (error)
-            return {std::move(error), txn_t {db_, nullptr}};
+        ukv_txn_begin(db_, 0, &raw, status.internal_cptr());
+        if (!status)
+            return {std::move(status), txn_t {db_, nullptr}};
         else
             return txn_t {db_, raw};
     }
@@ -545,10 +545,10 @@ class db_t : public std::enable_shared_from_this<db_t> {
     db_t(db_t const&) = delete;
     db_t(db_t&& other) noexcept : db_(std::exchange(other.db_, nullptr)) {}
 
-    error_t open(std::string const& config) {
-        error_t error;
-        ukv_open(config.c_str(), &db_, error.internal_cptr());
-        return error;
+    status_t open(std::string const& config) {
+        status_t status;
+        ukv_open(config.c_str(), &db_, status.internal_cptr());
+        return status;
     }
 
     void close() {
@@ -566,22 +566,22 @@ class db_t : public std::enable_shared_from_this<db_t> {
     expected_gt<collection_t> operator[](std::string const& name) { return collection(name); }
 
     expected_gt<collection_t> collection(std::string const& name) {
-        error_t error;
+        status_t status;
         ukv_collection_t col = nullptr;
-        ukv_collection_upsert(db_, name.c_str(), nullptr, &col, error.internal_cptr());
-        if (error)
-            return error;
+        ukv_collection_upsert(db_, name.c_str(), nullptr, &col, status.internal_cptr());
+        if (!status)
+            return status;
         else
             return collection_t {db_, col};
     }
 
-    error_t remove(std::string const& name) {
-        error_t error;
-        ukv_collection_remove(db_, name.c_str(), error.internal_cptr());
-        return error;
+    status_t remove(std::string const& name) {
+        status_t status;
+        ukv_collection_remove(db_, name.c_str(), status.internal_cptr());
+        return status;
     }
 
-    error_t clear(collection_t&) { return {}; }
+    status_t clear(collection_t&) { return {}; }
 };
 
 } // namespace unum::ukv

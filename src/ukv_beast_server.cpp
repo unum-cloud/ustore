@@ -306,9 +306,9 @@ void respond_to_one(session_t& session,
         char col_name_buffer[65] = {0};
         std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
 
-        error_t error;
+        status_t status;
         ukv_collection_upsert(session.db(), col_name_buffer, NULL, &collection.raw, error.internal_cptr());
-        if (error.raw)
+        if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
     }
 
@@ -320,7 +320,7 @@ void respond_to_one(session_t& session,
     case http::verb::get: {
 
         managed_arena_t tape(session.db());
-        error_t error;
+        status_t status;
         ukv_read(session.db(),
                  txn.raw,
                  &collection.raw,
@@ -332,7 +332,7 @@ void respond_to_one(session_t& session,
                  &tape.ptr,
                  &tape.capacity,
                  error.internal_cptr());
-        if (error.raw)
+        if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
         ukv_val_ptr_t begin = tape.ptr + sizeof(ukv_val_len_t);
@@ -361,7 +361,7 @@ void respond_to_one(session_t& session,
     case http::verb::head: {
 
         managed_arena_t tape(session.db());
-        error_t error;
+        status_t status;
         options = ukv_option_read_lengths_k;
         ukv_read(session.db(),
                  txn.raw,
@@ -374,7 +374,7 @@ void respond_to_one(session_t& session,
                  &tape.ptr,
                  &tape.capacity,
                  error.internal_cptr());
-        if (error.raw)
+        if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
         ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
@@ -392,7 +392,7 @@ void respond_to_one(session_t& session,
     // Insert data if it's missing:
     case http::verb::post: {
         managed_arena_t tape(session.db());
-        error_t error;
+        status_t status;
         options = ukv_option_read_lengths_k;
         ukv_read(session.db(),
                  txn.raw,
@@ -405,7 +405,7 @@ void respond_to_one(session_t& session,
                  &tape.ptr,
                  &tape.capacity,
                  error.internal_cptr());
-        if (error.raw)
+        if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
         ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
@@ -429,7 +429,7 @@ void respond_to_one(session_t& session,
             return send_response(
                 make_error(req, http::status::unsupported_media_type, "Only binary payload is allowed"));
 
-        error_t error;
+        status_t status;
         auto value = req.body();
         auto value_ptr = reinterpret_cast<ukv_val_ptr_t>(value.data());
         auto value_len = static_cast<ukv_val_len_t>(*opt_payload_len);
@@ -449,7 +449,7 @@ void respond_to_one(session_t& session,
                   0,
                   options,
                   error.internal_cptr());
-        if (error.raw)
+        if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
         http::response<http::empty_body> res;
@@ -462,7 +462,7 @@ void respond_to_one(session_t& session,
         // Upsert data:
     case http::verb::delete_: {
 
-        error_t error;
+        status_t status;
         ukv_val_ptr_t value_ptr = nullptr;
         ukv_val_len_t value_len = 0;
         ukv_val_len_t value_off = 0;
@@ -481,7 +481,7 @@ void respond_to_one(session_t& session,
                   0,
                   options,
                   error.internal_cptr());
-        if (error.raw)
+        if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
         http::response<http::empty_body> res;
@@ -526,10 +526,10 @@ void respond_to_aos(session_t& session,
         char col_name_buffer[65] = {0};
         std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
 
-        error_t error;
+        status_t status;
         collection_t collection(session.db());
         ukv_collection_upsert(session.db(), col_name_buffer, NULL, &collection.raw, error.internal_cptr());
-        if (error.raw)
+        if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
         collections.raw_array.emplace_back(std::exchange(collection.raw, nullptr));
@@ -586,7 +586,7 @@ void respond_to_aos(session_t& session,
 
         // Pull the entire objects before we start sampling their fields
         managed_arena_t tape(session.db());
-        error_t error;
+        status_t status;
         // ukv_read(session.db(),
         //          txn.raw,
         //          keys.data(),
@@ -596,7 +596,7 @@ void respond_to_aos(session_t& session,
         //          &tape.ptr,
         //          &tape.capacity,
         //          error.internal_cptr());
-        if (error.raw)
+        if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
         ukv_val_len_t const* values_lens = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
@@ -913,9 +913,9 @@ int main(int argc, char* argv[]) {
 
     // Check if we can initialize the DB
     auto session = std::make_shared<db_w_clients_t>();
-    error_t error;
+    status_t status;
     ukv_open(db_config.c_str(), &session->raw, error.internal_cptr());
-    if (error.raw) {
+    if (!status) {
         std::cerr << "Couldn't initialize DB: " << error.raw << std::endl;
         return EXIT_FAILURE;
     }
