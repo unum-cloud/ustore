@@ -293,6 +293,8 @@ void export_edge_tuples( //
     ukv_val_len_t* c_found_lengths = nullptr;
     ukv_val_ptr_t c_found_values = nullptr;
 
+    // Even if we need just the node degrees, we can't limit ourselves to just entry lengths.
+    // Those may be compressed. We need to read the first bytes to parse the degree of the node.
     ukv_read(c_db,
              c_txn,
              c_collections,
@@ -300,7 +302,7 @@ void export_edge_tuples( //
              c_vertices_ids,
              c_vertices_count,
              c_vertices_stride,
-             c_options,
+             static_cast<ukv_options_t>(c_options & ~ukv_option_read_lengths_k),
              &c_found_lengths,
              &c_found_values,
              c_arena,
