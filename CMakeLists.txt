@@ -103,7 +103,7 @@ include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 
 # LZ4 Compression
 # https://stackoverflow.com/questions/67537111/how-do-i-decide-between-lz4-and-snappy-compression
-include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
+# include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
 
 # TurboPFor for 64-bit integers
 # https://github.com/powturbo/TurboPFor-Integer-Compression
@@ -138,8 +138,6 @@ add_library(ukv_stl
   src/ukv_graph_pfor.cpp
 )
 target_link_libraries(ukv_stl
-  lz4
-  turbopfor
   nlohmann_json::nlohmann_json
 )
 
@@ -178,5 +176,17 @@ add_executable(ukv_test
 )
 target_link_libraries(ukv_test
   gtest
+  nlohmann_json::nlohmann_json
+)
+
+add_executable(ukv_leveldb_test
+  src/test.cpp
+  src/ukv_leveldb.cpp
+  src/ukv_docs_nlohmann.cpp
+  src/ukv_graph_pfor.cpp
+)
+target_link_libraries(ukv_leveldb_test
+  gtest
+  leveldb
   nlohmann_json::nlohmann_json
 )
