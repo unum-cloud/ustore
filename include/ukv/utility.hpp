@@ -57,22 +57,22 @@ struct located_key_hash_t {
     }
 };
 
-class [[nodiscard]] error_t {
+class [[nodiscard]] status_t {
     ukv_error_t raw_ = nullptr;
 
   public:
-    error_t(ukv_error_t err = nullptr) noexcept : raw_(err) {}
-    operator bool() const noexcept { return raw_; }
+    status_t(ukv_error_t err = nullptr) noexcept : raw_(err) {}
+    operator bool() const noexcept { return !raw_; }
 
-    error_t(error_t const&) = delete;
-    error_t& operator=(error_t const&) = delete;
+    status_t(status_t const&) = delete;
+    status_t& operator=(status_t const&) = delete;
 
-    error_t(error_t&& other) noexcept { raw_ = std::exchange(other.raw_, nullptr); }
-    error_t& operator=(error_t&& other) noexcept {
+    status_t(status_t&& other) noexcept { raw_ = std::exchange(other.raw_, nullptr); }
+    status_t& operator=(status_t&& other) noexcept {
         raw_ = std::exchange(other.raw_, nullptr);
         return *this;
     }
-    ~error_t() {
+    ~status_t() {
         if (raw_)
             ukv_error_free(raw_);
         raw_ = nullptr;
@@ -95,28 +95,28 @@ class [[nodiscard]] error_t {
 
 template <typename object_at>
 class [[nodiscard]] expected_gt {
-    error_t error_;
+    status_t status_;
     object_at object_;
 
   public:
     expected_gt() = default;
     expected_gt(object_at&& object) : object_(std::move(object)) {}
-    expected_gt(error_t&& error, object_at&& default_object = object_at {})
-        : error_(std::move(error)), object_(std::move(default_object)) {}
+    expected_gt(status_t&& status, object_at&& default_object = object_at {})
+        : status_(std::move(status)), object_(std::move(default_object)) {}
 
-    operator bool() const noexcept { return !error_; }
+    operator bool() const noexcept { return status_; }
     object_at&& operator*() && noexcept { return std::move(object_); }
     object_at const& operator*() const& noexcept { return object_; }
     object_at const* operator->() const& noexcept { return &object_; }
     operator std::optional<object_at>() && {
-        return error_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
+        return status_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
     }
 
     void throw_unhandled() {
-        if (__builtin_expect(error_, 0)) // C++20: [[unlikely]]
-            throw error_.release_exception();
+        if (!__builtin_expect(status_, 1)) // C++20: [[unlikely]]
+            throw status_.release_exception();
     }
-    inline error_t release_error() { return std::exchange(error_, error_t {}); }
+    inline status_t release_status() { return std::exchange(status_, status_t {}); }
 };
 
 /**

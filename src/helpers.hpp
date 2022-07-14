@@ -299,7 +299,7 @@ class file_handle_t {
     std::FILE* handle_ = nullptr;
 
   public:
-    error_t open(char const* path, char const* mode) {
+    status_t open(char const* path, char const* mode) {
         if (handle_)
             return "Close previous file before opening the new one!";
         handle_ = std::fopen(path, mode);
@@ -308,7 +308,7 @@ class file_handle_t {
         return {};
     }
 
-    error_t close() {
+    status_t close() {
         if (!handle_)
             return {};
         if (std::fclose(handle_) == EOF)
