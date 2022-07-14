@@ -25,9 +25,9 @@ ukv_vertex_degree_t ukv_vertex_degree_missing_k = std::numeric_limits<ukv_vertex
 
 constexpr std::size_t bytes_in_degrees_header_k = 2 * sizeof(ukv_vertex_degree_t);
 
-range_gt<neighborship_t const*> neighbors(ukv_vertex_degree_t const* degrees,
-                                          ukv_key_t const* neighborships,
-                                          ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+indexed_range_gt<neighborship_t const*> neighbors(ukv_vertex_degree_t const* degrees,
+                                                  ukv_key_t const* neighborships,
+                                                  ukv_vertex_role_t role = ukv_vertex_role_any_k) {
     auto ships = reinterpret_cast<neighborship_t const*>(neighborships);
 
     switch (role) {
@@ -39,7 +39,7 @@ range_gt<neighborship_t const*> neighbors(ukv_vertex_degree_t const* degrees,
     __builtin_unreachable();
 }
 
-range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+indexed_range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
     // Handle missing vertices
     if (bytes.size() < 2 * sizeof(ukv_vertex_degree_t))
         return {};
@@ -50,8 +50,8 @@ range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t 
 
 struct neighborhood_t {
     ukv_key_t center = 0;
-    range_gt<neighborship_t const*> targets;
-    range_gt<neighborship_t const*> sources;
+    indexed_range_gt<neighborship_t const*> targets;
+    indexed_range_gt<neighborship_t const*> sources;
 
     neighborhood_t() = default;
     neighborhood_t(neighborhood_t const&) = default;
@@ -109,11 +109,11 @@ struct neighborhood_t {
         return edges;
     }
 
-    inline range_gt<neighborship_t const*> outgoing_to(ukv_key_t target) const noexcept {
+    inline indexed_range_gt<neighborship_t const*> outgoing_to(ukv_key_t target) const noexcept {
         return equal_subrange(targets, target);
     }
 
-    inline range_gt<neighborship_t const*> incoming_from(ukv_key_t source) const noexcept {
+    inline indexed_range_gt<neighborship_t const*> incoming_from(ukv_key_t source) const noexcept {
         return equal_subrange(sources, source);
     }
 
@@ -127,7 +127,7 @@ struct neighborhood_t {
         return r.size() ? r.begin() : nullptr;
     }
 
-    inline range_gt<neighborship_t const*> only(ukv_vertex_role_t role) const noexcept {
+    inline indexed_range_gt<neighborship_t const*> only(ukv_vertex_role_t role) const noexcept {
         switch (role) {
         case ukv_vertex_source_k: return targets;
         case ukv_vertex_target_k: return sources;
@@ -143,11 +143,11 @@ struct neighborhood_t {
 };
 
 struct neighborhoods_iterator_t {
-    strided_ptr_gt<ukv_key_t const> centers_;
+    strided_iterator_gt<ukv_key_t const> centers_;
     ukv_vertex_degree_t const* degrees_per_vertex_ = nullptr;
     ukv_key_t const* neighborships_per_vertex_ = nullptr;
 
-    neighborhoods_iterator_t(strided_ptr_gt<ukv_key_t const> centers,
+    neighborhoods_iterator_t(strided_iterator_gt<ukv_key_t const> centers,
                              ukv_vertex_degree_t const* degrees_per_vertex,
                              ukv_key_t const* neighborships_per_vertex) noexcept
         : centers_(centers), degrees_per_vertex_(degrees_per_vertex),
@@ -316,7 +316,7 @@ void export_edge_tuples( //
 
     taped_values_view_t values {c_found_lengths, c_found_values, c_vertices_count};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
-    strided_ptr_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
+    strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
 
     // Estimate the amount of memory we will need for the arena
     std::size_t total_neighborships = 0;
@@ -458,10 +458,10 @@ void update_neighborhoods( //
     if (*c_error)
         return;
 
-    strided_ptr_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
-    strided_ptr_gt<ukv_key_t const> edges_ids {c_edges_ids, c_edges_stride};
-    strided_ptr_gt<ukv_key_t const> sources_ids {c_sources_ids, c_sources_stride};
-    strided_ptr_gt<ukv_key_t const> targets_ids {c_targets_ids, c_targets_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
+    strided_iterator_gt<ukv_key_t const> edges_ids {c_edges_ids, c_edges_stride};
+    strided_iterator_gt<ukv_key_t const> sources_ids {c_sources_ids, c_sources_stride};
+    strided_iterator_gt<ukv_key_t const> targets_ids {c_targets_ids, c_targets_stride};
 
     // Fetch all the data related to touched vertices
     prepare_memory(arena.updated_keys, c_edges_count + c_edges_count, c_error);
@@ -667,9 +667,9 @@ void ukv_graph_remove_vertices( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    strided_ptr_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
-    strided_ptr_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
+    strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
 
     // Initially, just retrieve the bare minimum information about the vertices
     ukv_vertex_degree_t* degrees_per_vertex = nullptr;

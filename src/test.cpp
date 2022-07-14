@@ -66,7 +66,7 @@ TEST(db, basic) {
         EXPECT_TRUE(indicators);
         EXPECT_TRUE((*indicators)[0]);
 
-        expected_gt<range_gt<ukv_val_len_t*>> lengths = session[key].lengths();
+        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = session[key].lengths();
         EXPECT_TRUE(lengths);
         EXPECT_EQ((*lengths)[0], 0u);
     }
@@ -87,7 +87,7 @@ TEST(db, basic) {
         EXPECT_TRUE(indicators);
         EXPECT_FALSE((*indicators)[0]);
 
-        expected_gt<range_gt<ukv_val_len_t*>> lengths = session[key].lengths();
+        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = session[key].lengths();
         EXPECT_TRUE(lengths);
         EXPECT_EQ((*lengths)[0], ukv_val_len_missing_k);
     }

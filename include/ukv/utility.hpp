@@ -126,7 +126,7 @@ class [[nodiscard]] expected_gt {
  * values with `stride` equal to zero.
  */
 template <typename object_at>
-class strided_ptr_gt {
+class strided_iterator_gt {
 
     object_at* raw_ = nullptr;
     ukv_size_t stride_ = 0;
@@ -141,28 +141,28 @@ class strided_ptr_gt {
     using pointer = value_type*;
     using reference = value_type&;
 
-    inline strided_ptr_gt(object_at* raw = nullptr, ukv_size_t stride = 0) noexcept : raw_(raw), stride_(stride) {}
+    inline strided_iterator_gt(object_at* raw = nullptr, ukv_size_t stride = 0) noexcept : raw_(raw), stride_(stride) {}
     inline object_at& operator[](ukv_size_t idx) const noexcept { return *upshift(stride_ * idx); }
 
-    inline strided_ptr_gt& operator++() noexcept {
+    inline strided_iterator_gt& operator++() noexcept {
         raw_ = upshift(stride_);
         return *this;
     }
 
-    inline strided_ptr_gt& operator--() noexcept {
+    inline strided_iterator_gt& operator--() noexcept {
         raw_ = downshift(stride_);
         return *this;
     }
 
-    inline strided_ptr_gt operator++(int) const noexcept { return {upshift(stride_), stride_}; }
-    inline strided_ptr_gt operator--(int) const noexcept { return {downshift(stride_), stride_}; }
-    inline strided_ptr_gt operator+(std::ptrdiff_t n) const noexcept { return {upshift(n * stride_), stride_}; }
-    inline strided_ptr_gt operator-(std::ptrdiff_t n) const noexcept { return {downshift(n * stride_), stride_}; }
-    inline strided_ptr_gt& operator+=(std::ptrdiff_t n) noexcept {
+    inline strided_iterator_gt operator++(int) const noexcept { return {upshift(stride_), stride_}; }
+    inline strided_iterator_gt operator--(int) const noexcept { return {downshift(stride_), stride_}; }
+    inline strided_iterator_gt operator+(std::ptrdiff_t n) const noexcept { return {upshift(n * stride_), stride_}; }
+    inline strided_iterator_gt operator-(std::ptrdiff_t n) const noexcept { return {downshift(n * stride_), stride_}; }
+    inline strided_iterator_gt& operator+=(std::ptrdiff_t n) noexcept {
         raw_ = upshift(n * stride_);
         return *this;
     }
-    inline strided_ptr_gt& operator-=(std::ptrdiff_t n) noexcept {
+    inline strided_iterator_gt& operator-=(std::ptrdiff_t n) noexcept {
         raw_ = downshift(n * stride_);
         return *this;
     }
@@ -172,7 +172,7 @@ class strided_ptr_gt {
      * ! non-zero `sizeof(object_at)` multiple will cause Undefined
      * ! Behaviour.
      */
-    inline std::ptrdiff_t operator-(strided_ptr_gt other) const noexcept {
+    inline std::ptrdiff_t operator-(strided_iterator_gt other) const noexcept {
         return stride_ ? (raw_ - other.raw_) * sizeof(object_at) / stride_ : 0;
     }
 
@@ -182,8 +182,8 @@ class strided_ptr_gt {
     inline object_at* operator->() const noexcept { return raw_; }
     inline object_at* get() const noexcept { return raw_; }
 
-    inline bool operator==(strided_ptr_gt const& other) const noexcept { return raw_ == other.raw_; }
-    inline bool operator!=(strided_ptr_gt const& other) const noexcept { return raw_ != other.raw_; }
+    inline bool operator==(strided_iterator_gt const& other) const noexcept { return raw_ == other.raw_; }
+    inline bool operator!=(strided_iterator_gt const& other) const noexcept { return raw_ != other.raw_; }
 };
 
 template <typename object_at>
@@ -212,8 +212,8 @@ class strided_range_gt {
     strided_range_gt& operator=(strided_range_gt&&) = default;
     strided_range_gt& operator=(strided_range_gt const&) = default;
 
-    inline strided_ptr_gt<object_at> begin() const noexcept { return {begin_, stride_}; }
-    inline strided_ptr_gt<object_at> end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
+    inline strided_iterator_gt<object_at> begin() const noexcept { return {begin_, stride_}; }
+    inline strided_iterator_gt<object_at> end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
     inline object_at& operator[](std::size_t i) const noexcept { return *(begin() + static_cast<std::ptrdiff_t>(i)); }
 
     inline auto immutable() const noexcept { return strided_range_gt<object_at const>(begin_, stride_, count_); }
@@ -243,7 +243,7 @@ class strided_range_gt {
  * The NULL state generally reflects missing values.
  */
 template <typename pointer_at>
-struct range_gt {
+struct indexed_range_gt {
     pointer_at begin_ = nullptr;
     pointer_at end_ = nullptr;
 
@@ -262,7 +262,7 @@ struct range_gt {
 };
 
 template <typename pointer_at>
-struct raw_range_gt {
+struct range_gt {
     pointer_at begin_ = nullptr;
     pointer_at end_ = nullptr;
 
@@ -295,7 +295,7 @@ class strided_matrix_gt {
     inline object_at& operator()(std::size_t i, std::size_t j) noexcept { return row(i)[j]; }
     inline object_at const& operator()(std::size_t i, std::size_t j) const noexcept { return row(i)[j]; }
     inline strided_range_gt<object_at> col(std::size_t j) const noexcept { return {begin_ + j, stride_, rows_}; }
-    inline range_gt<object_at> row(std::size_t i) const noexcept {
+    inline indexed_range_gt<object_at> row(std::size_t i) const noexcept {
         return {begin_ + i * stride_ / sizeof(object_at), cols_};
     }
     inline std::size_t rows() const noexcept { return rows_; }
@@ -306,7 +306,7 @@ class strided_matrix_gt {
  * @brief Similar to `std::optional<std::string_view>`.
  * It's NULL state and "empty string" states are not identical.
  * The NULL state generally reflects missing values.
- * Unlike `range_gt<byte_t const*>`, this classes layout allows
+ * Unlike `indexed_range_gt<byte_t const*>`, this classes layout allows
  * easily passing it to the internals of UKV implementations
  * without additional bit-twiddling.
  */

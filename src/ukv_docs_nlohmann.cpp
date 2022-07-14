@@ -158,9 +158,9 @@ void ukv_docs_write( //
     if (*c_error)
         return;
 
-    strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
-    strided_ptr_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
-    strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     write_docs_tasks_soa_t tasks;
 
     try {

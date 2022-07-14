@@ -213,7 +213,7 @@ class graph_t {
         return ukv_vertex_degree_t(degrees[0]);
     }
 
-    expected_gt<range_gt<ukv_vertex_degree_t*>> degrees(
+    expected_gt<indexed_range_gt<ukv_vertex_degree_t*>> degrees(
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
         bool transparent = false) noexcept {
@@ -241,7 +241,7 @@ class graph_t {
         if (error)
             return error;
 
-        return range_gt<ukv_vertex_degree_t*> {degrees_per_vertex, degrees_per_vertex + vertices.size()};
+        return indexed_range_gt<ukv_vertex_degree_t*> {degrees_per_vertex, degrees_per_vertex + vertices.size()};
     }
 
     expected_gt<bool> contains(ukv_key_t vertex, bool transparent = false) noexcept {
