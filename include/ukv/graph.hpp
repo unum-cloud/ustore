@@ -208,7 +208,7 @@ class graph_t {
 
         auto maybe_degrees = degrees({vertex}, {role}, transparent);
         if (!maybe_degrees)
-            return maybe_degrees.release_error();
+            return maybe_degrees.release_status();
         auto degrees = *maybe_degrees;
         return ukv_vertex_degree_t(degrees[0]);
     }
@@ -248,7 +248,7 @@ class graph_t {
 
         auto maybe_exists = contains(strided_range_gt<ukv_key_t const> {vertex}, transparent);
         if (!maybe_exists)
-            return maybe_exists.release_error();
+            return maybe_exists.release_status();
         auto exists = *maybe_exists;
         bool one_exists = exists[0];
         return one_exists;

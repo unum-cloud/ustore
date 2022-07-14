@@ -120,7 +120,7 @@ void save_to_disk(stl_collection_t const& col, std::string const& path, ukv_erro
     // higher portability for this reference implementation.
     // https://www.ibm.com/docs/en/i/7.1?topic=functions-fopen-open-files
     file_handle_t handle;
-    if ((*c_error = handle.open(path.c_str(), "wb+").release_status()))
+    if ((*c_error = handle.open(path.c_str(), "wb+").release_error()))
         return;
 
     // Save the collection size
@@ -159,13 +159,13 @@ void save_to_disk(stl_collection_t const& col, std::string const& path, ukv_erro
         }
     }
 
-    *c_error = handle.close().release_status();
+    *c_error = handle.close().release_error();
 }
 
 void read_from_disk(stl_collection_t& col, std::string const& path, ukv_error_t* c_error) {
     // Similar to serialization, we don't use STL here
     file_handle_t handle;
-    if ((*c_error = handle.open(path.c_str(), "rb+").release_status()))
+    if ((*c_error = handle.open(path.c_str(), "rb+").release_error()))
         return;
 
     // Get the col size, to preallocate entries
@@ -209,7 +209,7 @@ void read_from_disk(stl_collection_t& col, std::string const& path, ukv_error_t*
         col.pairs.emplace(key, stl_sequenced_value_t {std::move(buf), sequence_t {0}, false});
     }
 
-    *c_error = handle.close().release_status();
+    *c_error = handle.close().release_error();
 }
 
 void save_to_disk(stl_db_t const& db, ukv_error_t* c_error) {
