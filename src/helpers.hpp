@@ -295,6 +295,36 @@ class appendable_tape_t {
     }
 };
 
+class file_handle_t {
+    std::FILE* handle_ = nullptr;
+
+  public:
+    error_t open(char const* path, char const* mode) {
+        if (handle_)
+            return "Close previous file before opening the new one!";
+        handle_ = std::fopen(path, mode);
+        if (!handle_)
+            return "Failed to open a file";
+        return {};
+    }
+
+    error_t close() {
+        if (!handle_)
+            return {};
+        if (std::fclose(handle_) == EOF)
+            return "Couldn't close the file after write.";
+        else
+            handle_ = nullptr;
+    }
+
+    ~file_handle_t() {
+        if (handle_)
+            std::fclose(handle_);
+    }
+
+    operator std::FILE*() const noexcept { return handle_; }
+};
+
 template <typename range_at, typename comparable_at>
 inline range_at equal_subrange(range_at range, comparable_at&& comparable) {
     auto p = std::equal_range(range.begin(), range.end(), comparable);
