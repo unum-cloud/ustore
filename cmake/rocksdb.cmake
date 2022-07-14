@@ -1,8 +1,6 @@
 # RocksDB:
 # https://github.com/facebook/rocksdb/blob/main/CMakeLists.txt
 
-# RocksDB:
-# https://github.com/facebook/rocksdb/blob/main/CMakeLists.txt
 FetchContent_Declare(
     rocksdb
     GIT_REPOSITORY https://github.com/facebook/rocksdb.git
@@ -23,6 +21,7 @@ if(NOT rocksdb_POPULATED)
     set(WITH_JEMALLOC OFF CACHE INTERNAL "")
     set(USE_RTTI 1 CACHE INTERNAL "")
     set(PORTABLE ON CACHE INTERNAL "")
+
     set(FORCE_SSE42 ON CACHE INTERNAL "")
     set(BUILD_SHARED OFF CACHE INTERNAL "")
     set(WITH_TESTS OFF CACHE INTERNAL "")

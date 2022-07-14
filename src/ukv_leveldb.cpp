@@ -21,8 +21,9 @@ using namespace unum::ukv;
 using namespace unum;
 
 using level_db_t = leveldb::DB;
-using level_options_t = leveldb::Options;
 using level_status_t = leveldb::Status;
+using level_options_t = leveldb::Options;
+using value_uptr_t = std::unique_ptr<std::string>;
 
 struct key_comparator_t final : public leveldb::Comparator {
 
@@ -54,8 +55,8 @@ inline leveldb::Slice to_slice(value_view_t value) noexcept {
     return {reinterpret_cast<const char*>(value.begin()), value.size()};
 }
 
-inline std::unique_ptr<std::string> get_value(ukv_error_t* c_error) noexcept {
-    std::unique_ptr<std::string> value_uptr;
+inline value_uptr_t get_value(ukv_error_t* c_error) noexcept {
+    value_uptr_t value_uptr;
     try {
         value_uptr = std::make_unique<std::string>();
     }
@@ -80,17 +81,16 @@ void ukv_open(char const* c_config, ukv_t* c_db, ukv_error_t* c_error) {
 
 void single_write( //
     level_db_t& db,
-    ukv_key_t const* c_key,
-    ukv_val_ptr_t const* c_val,
-    ukv_val_len_t const* c_len,
+    write_task_t const& task,
     leveldb::WriteOptions& options,
     ukv_error_t* c_error) {
 
     level_status_t status;
-    if (*c_len)
-        status = db.Put(options, to_slice(*c_key), to_slice(value_view_t(*c_val, *c_len)));
+    auto key = to_slice(task.key);
+    if (task.is_deleted())
+        status = db.Delete(options, key);
     else
-        status = db.Delete(options, to_slice(*c_key));
+        status = db.Put(options, key, to_slice(task.view()));
 
     if (!status.ok()) {
         if (status.IsCorruption())
@@ -129,21 +129,21 @@ void ukv_write( //
     ukv_error_t* c_error) {
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    leveldb::WriteOptions options;
-    if (c_options & ukv_option_write_flush_k)
-        options.sync = true;
-
-    if (c_keys_count == 1) {
-        single_write(db, c_keys, c_vals, c_lens, options, c_error);
-        return;
-    }
-
     strided_ptr_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_ptr_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_ptr_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_ptr_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
+
+    leveldb::WriteOptions options;
+    if (c_options & ukv_option_write_flush_k)
+        options.sync = true;
+
+    if (c_keys_count == 1) {
+        single_write(db, tasks[0], options, c_error);
+        return;
+    }
 
     leveldb::WriteBatch batch;
     for (ukv_size_t i = 0; i != c_keys_count; ++i) {
@@ -170,16 +170,21 @@ void ukv_write( //
 
 void single_read( //
     level_db_t& db,
-    ukv_key_t const* c_key,
+    read_task_t const& task,
+    std::string* value,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
-    ukv_arena_t* c_arena,
+    stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    auto value_uptr = get_value(c_error);
-    std::string* value = value_uptr.get();
     leveldb::ReadOptions options;
-    level_status_t status = db.Get(options, to_slice(*c_key), value);
+    level_status_t status;
+    try {
+        status = db.Get(options, to_slice(task.key), value);
+    }
+    catch (...) {
+        *c_error = "Fail to read";
+    }
 
     if (!status.IsNotFound() && !status.ok()) {
         if (status.IsIOError())
@@ -191,12 +196,13 @@ void single_read( //
         return;
     }
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
     auto len = value->size();
     prepare_memory(arena.output_tape, sizeof(ukv_size_t) + len, c_error);
-    memcpy(arena.output_tape.data(), &len, sizeof(ukv_size_t));
+    if (*c_error)
+        return;
+    std::memcpy(arena.output_tape.data(), &len, sizeof(ukv_size_t));
     if (len)
-        memcpy(arena.output_tape.data() + sizeof(ukv_size_t), value->data(), len);
+        std::memcpy(arena.output_tape.data() + sizeof(ukv_size_t), value->data(), len);
 
     *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(arena.output_tape.data());
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(arena.output_tape.data() + sizeof(ukv_size_t));
@@ -222,23 +228,26 @@ void ukv_read( //
     ukv_error_t* c_error) {
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    if (c_keys_count == 1) {
-        single_read(db, c_keys, c_found_lengths, c_found_values, c_arena, c_error);
-        return;
-    }
 
     level_status_t status;
     leveldb::ReadOptions options;
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     strided_ptr_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    read_tasks_soa_t tasks {strided_ptr_gt<ukv_collection_t const> {}, keys};
+    read_tasks_soa_t tasks {{}, keys};
+    auto value_uptr = get_value(c_error);
+    std::string* value = value_uptr.get();
+
+    if (c_keys_count == 1) {
+        single_read(db, tasks[0], value, c_found_lengths, c_found_values, arena, c_error);
+        return;
+    }
 
     ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * c_keys_count;
     ukv_size_t exported_bytes = lens_bytes;
     byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
+    if (*c_error)
+        return;
 
-    auto value_uptr = get_value(c_error);
-    std::string* value = value_uptr.get();
     for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         auto task = tasks[i];
         try {
@@ -259,6 +268,8 @@ void ukv_read( //
 
         auto len = value->size();
         tape = prepare_memory(arena.output_tape, exported_bytes + len, c_error);
+        if (*c_error)
+            return;
         ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(arena.output_tape.data());
 
         if (len) {
