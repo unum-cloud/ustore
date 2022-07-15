@@ -332,7 +332,7 @@ void measure_head( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.collection);
         auto key_iterator = col.pairs.find(task.key);
         lens[i] = key_iterator != col.pairs.end() && !key_iterator->second.is_deleted
                       ? static_cast<ukv_val_len_t>(key_iterator->second.buffer.size())
@@ -356,7 +356,7 @@ void read_head( //
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.collection);
         auto key_iterator = col.pairs.find(task.key);
         if (key_iterator != col.pairs.end())
             total_bytes += key_iterator->second.buffer.size();
@@ -375,7 +375,7 @@ void read_head( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.collection);
         auto key_iterator = col.pairs.find(task.key);
         if (key_iterator != col.pairs.end() && !key_iterator->second.is_deleted) {
             auto len = key_iterator->second.buffer.size();
@@ -403,10 +403,7 @@ void scan_head( //
 
     // 1. Estimate the total size
     bool export_lengths = (options & ukv_option_read_lengths_k);
-    ukv_size_t total_lengths = 0;
-    for (ukv_size_t i = 0; i != n; ++i)
-        total_lengths += tasks.lengths[i];
-
+    ukv_size_t total_lengths = reduce_n(tasks.lengths, n, 0ul);
     ukv_size_t total_bytes = total_lengths * sizeof(ukv_key_t);
     if (export_lengths)
         total_bytes += total_lengths * sizeof(ukv_val_len_t);
@@ -424,7 +421,7 @@ void scan_head( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         scan_task_t task = tasks[i];
-        stl_collection_t& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.collection);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
         ukv_size_t j = 0;
 
@@ -511,7 +508,7 @@ void measure_txn( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.collection);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
@@ -564,7 +561,7 @@ void read_txn( //
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.collection);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
@@ -600,7 +597,7 @@ void read_txn( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.collection);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
@@ -653,9 +650,7 @@ void scan_txn( //
 
     // 1. Estimate the total size
     bool export_lengths = (options & ukv_option_read_lengths_k);
-    ukv_size_t total_lengths = 0;
-    for (ukv_size_t i = 0; i != n; ++i)
-        total_lengths += tasks.lengths[i];
+    ukv_size_t total_lengths = reduce_n(tasks.lengths, n, 0ul);
 
     ukv_size_t total_bytes = total_lengths * sizeof(ukv_key_t);
     if (export_lengths)
@@ -674,7 +669,7 @@ void scan_txn( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         scan_task_t task = tasks[i];
-        stl_collection_t& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.collection);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
         auto txn_iterator = txn.upserted.lower_bound(task.min_key);
         ukv_size_t j = 0;
@@ -850,6 +845,93 @@ void ukv_scan( //
 
     return c_txn ? scan_txn(txn, tasks, c_min_keys_count, c_options, c_found_keys, c_found_lengths, arena, c_error)
                  : scan_head(db, tasks, c_min_keys_count, c_options, c_found_keys, c_found_lengths, arena, c_error);
+}
+
+void ukv_size( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
+
+    ukv_key_t const* c_min_keys,
+    ukv_size_t const c_min_keys_count,
+    ukv_size_t const c_min_keys_stride,
+
+    ukv_key_t const* c_max_keys,
+    ukv_size_t const c_max_keys_stride,
+
+    ukv_options_t const c_options,
+
+    ukv_size_t** c_found_estimates,
+
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    ukv_size_t total_bytes = c_min_keys_count * 6 * sizeof(ukv_size_t);
+    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
+    ukv_size_t* found_estimates = reinterpret_cast<ukv_size_t*>(tape);
+    *c_found_estimates = found_estimates;
+    if (*c_error)
+        return;
+
+    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_key_t const> min_keys {c_min_keys, c_min_keys_stride};
+    strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
+
+    std::shared_lock _ {db.mutex};
+
+    for (ukv_size_t i = 0; i != n; ++i) {
+        stl_collection_t const& col = stl_collection(db, cols[i]);
+        ukv_key_t const min_key = min_keys[i];
+        ukv_key_t const max_key = max_keys[i];
+        std::size_t deleted_count = 0;
+
+        // Estimate the presence in the main store
+        std::size_t main_count = 0;
+        std::size_t main_bytes = 0;
+        auto min_iterator = col.pairs.lower_bound(min_key);
+        auto max_iterator = col.pairs.lower_bound(max_key);
+        for (; min_iterator != max_iterator; ++min_iterator) {
+            if (min_iterator->second.is_deleted) {
+                ++deleted_count;
+                continue;
+            }
+            ++main_count;
+            main_bytes += min_iterator->second.buffer.size();
+        }
+
+        // Estimate the metrics from within a transaction
+        std::size_t txn_count = 0;
+        std::size_t txn_bytes = 0;
+        if (c_txn) {
+            auto min_iterator = txn.upserted.lower_bound(min_key);
+            auto max_iterator = txn.upserted.lower_bound(max_key);
+            for (; min_iterator != max_iterator; ++min_iterator, ++txn_count)
+                txn_bytes += min_iterator->second.size();
+            deleted_count += txn.removed.size();
+        }
+
+        //
+        ukv_size_t* estimates = found_estimates + i * 6;
+        estimates[0] = static_cast<ukv_size_t>(main_count);
+        estimates[1] = static_cast<ukv_size_t>(main_count + txn_count);
+        estimates[2] = static_cast<ukv_size_t>(main_bytes);
+        estimates[3] = static_cast<ukv_size_t>(main_bytes + txn_bytes);
+        estimates[4] = estimates[0] * (sizeof(ukv_key_t) + sizeof(ukv_val_len_t)) + estimates[2];
+        estimates[5] = (estimates[1] + deleted_count) * (sizeof(ukv_key_t) + sizeof(ukv_val_len_t)) + estimates[3];
+    }
 }
 
 /*********************************************************/
