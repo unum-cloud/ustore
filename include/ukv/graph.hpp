@@ -240,10 +240,13 @@ class adjacency_stream_t {
     }
 
     /**
-     * @brief Exposes all the prefetched deges at once.
-     * Should be used with `seek_to_next_batch`.
+     * @brief Exposes all the prefetched edges at once, including the passed ones.
+     * Should be used with `seek_to_next_batch`. Next `advance` will do the same.
      */
-    edges_span_t edges_batch() const noexcept { return prefetched_edges_; }
+    edges_span_t edges_batch() noexcept {
+        prefetched_offset_ = prefetched_edges_.size();
+        return prefetched_edges_;
+    }
 
     bool is_end() const noexcept { return vertex_stream_.is_end() && prefetched_offset_ >= prefetched_edges_.size(); }
 

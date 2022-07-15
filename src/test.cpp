@@ -145,10 +145,13 @@ TEST(db, net) {
 
         auto present_edges = *net.edges();
         auto present_it = std::move(present_edges).begin();
+        auto count_results = 0;
         while (!present_it.is_end()) {
             exported_edges.insert(*present_it);
             ++present_it;
+            ++count_results;
         }
+        EXPECT_EQ(count_results, triangle.size() * 2);
         EXPECT_EQ(exported_edges, expected_edges);
     }
 

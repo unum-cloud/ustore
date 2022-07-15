@@ -284,11 +284,12 @@ class keys_stream_t {
     status_t seek_to_next_batch() noexcept { return seek(next_min_key_); }
 
     /**
-     * @brief Exposes all the prefetched keys at once.
-     * Should be used with `seek_to_next_batch`.
+     * @brief Exposes all the prefetched keys at once, including the passed ones.
+     * Should be used with `seek_to_next_batch`. Next `advance` will do the same.
      */
-    indexed_range_gt<ukv_key_t const*> keys_batch() const noexcept {
-        return {prefetched_keys_.begin() + prefetched_offset_, prefetched_keys_.end()};
+    indexed_range_gt<ukv_key_t const*> keys_batch() noexcept {
+        prefetched_offset_ = prefetched_keys_.size();
+        return {prefetched_keys_.begin(), prefetched_keys_.end()};
     }
 
     bool is_end() const noexcept {
