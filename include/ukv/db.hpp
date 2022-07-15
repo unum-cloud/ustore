@@ -445,7 +445,7 @@ class txn_t {
 
     status_t reset() {
         status_t status;
-        ukv_txn_begin(db_, 0, &txn_, status.internal_cptr());
+        ukv_txn_begin(db_, 0, ukv_options_default_k, &txn_, status.internal_cptr());
         return status;
     }
 
@@ -516,7 +516,7 @@ class session_t {
     expected_gt<txn_t> transact() {
         status_t status;
         ukv_txn_t raw = nullptr;
-        ukv_txn_begin(db_, 0, &raw, status.internal_cptr());
+        ukv_txn_begin(db_, 0, ukv_options_default_k, &raw, status.internal_cptr());
         if (!status)
             return {std::move(status), txn_t {db_, nullptr}};
         else
@@ -568,7 +568,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
     expected_gt<collection_t> collection(std::string const& name) {
         status_t status;
         ukv_collection_t col = nullptr;
-        ukv_collection_upsert(db_, name.c_str(), nullptr, &col, status.internal_cptr());
+        ukv_collection_open(db_, name.c_str(), nullptr, &col, status.internal_cptr());
         if (!status)
             return status;
         else
