@@ -65,8 +65,9 @@ json_t sample_fields(json_t&& original,
 /*****************	 Primary Functions	  ****************/
 /*********************************************************/
 
-json_t parse_any(ukv_val_ptr_t bytes, ukv_val_len_t len, ukv_format_t const c_format, ukv_error_t* c_error) {
-    auto str = reinterpret_cast<char const*>(bytes);
+json_t parse_any(value_view_t bytes, ukv_format_t const c_format, ukv_error_t* c_error) {
+    auto str = reinterpret_cast<char const*>(bytes.begin());
+    auto len = bytes.size();
     switch (c_format) {
     case ukv_format_json_k:
     case ukv_format_json_patch_k: return json_t::parse(str, str + len, nullptr, true, false);
@@ -99,20 +100,65 @@ buffer_t dump_any(json_t const& json, ukv_format_t const c_format, ukv_error_t* 
     return result;
 }
 
-void write( //
+void update_docs( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
-    write_docs_tasks_soa_t const& tasks,
+    write_tasks_soa_t const& tasks,
+    strided_iterator_gt<ukv_str_view_t const>,
     ukv_size_t const n,
     ukv_options_t const c_options,
+    ukv_format_t const c_format,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    // Multiple tasks may be targetting different fields of one document.
-    // To efficiently solve such cases, we need to locate and deduplcate those keys.
+    for (ukv_size_t i = 0; i != n; ++i) {
+        auto task = tasks[i];
+        if (task.is_deleted()) {
+            arena.updated_vals[i].reset();
+            continue;
+        }
+
+        auto parsed = parse_any(task.view(), c_format, c_error);
+        if (parsed.is_discarded()) {
+            *c_error = "Couldn't parse inputs";
+            return;
+        }
+
+        auto serial = dump_any(parsed, ukv_format_msgpack_k, c_error);
+        if (*c_error)
+            return;
+    }
+
+    ukv_val_len_t offset = 0;
+    ukv_write( //
+        c_db,
+        c_txn,
+        tasks.cols.get(),
+        n,
+        tasks.cols.stride(),
+        arena.updated_vals.front().internal_cptr(),
+        sizeof(value_t),
+        &offset,
+        0,
+        arena.updated_vals.front().internal_length(),
+        sizeof(value_t),
+        c_options,
+        &arena,
+        error);
+}
+
+void update_fields( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+    write_tasks_soa_t const& tasks,
+    strided_iterator_gt<ukv_str_view_t const> fields,
+    ukv_size_t const n,
+    ukv_options_t const c_options,
+    ukv_format_t const c_format,
+    stl_arena_t& arena,
+    ukv_error_t* c_error) {
 
     std::vector<json_t> parsed(n);
-    std::vector<std::string> fields_strs;
     std::vector<json_ptr_t> fields_ptrs;
 
     std::vector<buffer_t> serialized(n);
@@ -158,13 +204,17 @@ void ukv_docs_write( //
     if (*c_error)
         return;
 
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    write_docs_tasks_soa_t tasks;
+    strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
+    strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
+    write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
 
     try {
-        write(c_db, c_txn, tasks, c_keys_count, c_options, arena, c_error);
+        auto func = fields ? &update_fields : &update_docs;
+        func(c_db, c_txn, tasks, fields, c_keys_count, c_options, arena, c_error);
     }
     catch (std::bad_alloc) {
         *c_error = "Failed to allocate memory!";

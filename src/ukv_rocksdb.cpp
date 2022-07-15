@@ -80,7 +80,7 @@ void single_write( //
     rocks_status_t status;
     auto key = to_slice(task.key);
     rocks_col_ptr_t col =
-        task.collection ? reinterpret_cast<rocks_col_ptr_t>(task.collection) : db_wrapper->db->DefaultColumnFamily();
+        task.col ? reinterpret_cast<rocks_col_ptr_t>(task.col) : db_wrapper->db->DefaultColumnFamily();
 
     if (txn) {
         if (task.is_deleted())
@@ -152,7 +152,7 @@ void ukv_write( //
     if (txn) {
         for (ukv_size_t i = 0; i != c_keys_count; ++i) {
             write_task_t task = tasks[i];
-            txn->Put(reinterpret_cast<rocks_col_ptr_t>(task.collection), to_slice(task.key), to_slice(task.view()));
+            txn->Put(reinterpret_cast<rocks_col_ptr_t>(task.col), to_slice(task.key), to_slice(task.view()));
         }
         return;
     }
@@ -160,8 +160,8 @@ void ukv_write( //
     rocksdb::WriteBatch batch;
     for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         write_task_t task = tasks[i];
-        rocks_col_ptr_t col = task.collection ? reinterpret_cast<rocks_col_ptr_t>(task.collection)
-                                              : db_wrapper->db->DefaultColumnFamily();
+        rocks_col_ptr_t col =
+            task.col ? reinterpret_cast<rocks_col_ptr_t>(task.col) : db_wrapper->db->DefaultColumnFamily();
         auto key = to_slice(task.key);
         if (task.is_deleted())
             batch.Delete(col, key);
@@ -186,7 +186,7 @@ void single_read( //
     rocksdb::ReadOptions options;
     rocks_status_t status;
     rocks_col_ptr_t col =
-        task.collection ? reinterpret_cast<rocks_col_ptr_t>(task.collection) : db_wrapper->db->DefaultColumnFamily();
+        task.col ? reinterpret_cast<rocks_col_ptr_t>(task.col) : db_wrapper->db->DefaultColumnFamily();
 
     value_uptr_t value_uptr;
     try {
@@ -266,8 +266,7 @@ void ukv_read( //
     std::vector<std::string> vals(c_keys_count);
     for (ukv_size_t i = 0; i != c_keys_count; ++i) {
         read_task_t task = tasks[i];
-        cols[i] = task.collection ? reinterpret_cast<rocks_col_ptr_t>(task.collection)
-                                  : db_wrapper->db->DefaultColumnFamily();
+        cols[i] = task.col ? reinterpret_cast<rocks_col_ptr_t>(task.col) : db_wrapper->db->DefaultColumnFamily();
         keys[i] = to_slice(task.key);
     }
 

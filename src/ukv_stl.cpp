@@ -278,7 +278,7 @@ void write_head( //
     for (ukv_size_t i = 0; i != n; ++i) {
 
         write_task_t task = tasks[i];
-        stl_collection_t& col = stl_collection(db, task.collection);
+        stl_collection_t& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
 
         // We want to insert a new entry, but let's check if we
@@ -332,7 +332,7 @@ void measure_head( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
         lens[i] = key_iterator != col.pairs.end() && !key_iterator->second.is_deleted
                       ? static_cast<ukv_val_len_t>(key_iterator->second.buffer.size())
@@ -356,7 +356,7 @@ void read_head( //
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
         if (key_iterator != col.pairs.end())
             total_bytes += key_iterator->second.buffer.size();
@@ -375,7 +375,7 @@ void read_head( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
         if (key_iterator != col.pairs.end() && !key_iterator->second.is_deleted) {
             auto len = key_iterator->second.buffer.size();
@@ -421,7 +421,7 @@ void scan_head( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         scan_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
         ukv_size_t j = 0;
 
@@ -508,7 +508,7 @@ void measure_txn( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.col);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
@@ -561,7 +561,7 @@ void read_txn( //
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.col);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
@@ -597,7 +597,7 @@ void read_txn( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.col);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
@@ -669,7 +669,7 @@ void scan_txn( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         scan_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.collection);
+        stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
         auto txn_iterator = txn.upserted.lower_bound(task.min_key);
         ukv_size_t j = 0;
