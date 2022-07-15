@@ -6,6 +6,8 @@
  * @brief A set of tests implemented using Google Test.
  */
 
+#include <unordered_set>
+
 #include <gtest/gtest.h>
 
 #include "ukv/ukv.hpp"
@@ -79,6 +81,7 @@ TEST(db, basic) {
     for (; expected_it != keys.end(); ++present_it, ++expected_it) {
         EXPECT_EQ(*expected_it, *present_it);
     }
+    EXPECT_TRUE(present_it.is_end());
 
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(proxy.erase());
@@ -133,6 +136,21 @@ TEST(db, net) {
     EXPECT_EQ((*net.edges(3, ukv_vertex_target_k))[0].id, 10);
     EXPECT_EQ(net.edges(3, 1)->size(), 1ul);
     EXPECT_EQ(net.edges(1, 3)->size(), 0ul);
+
+    // Check scans
+    EXPECT_TRUE(net.edges());
+    {
+        std::unordered_set<edge_t, edge_hash_t> expected_edges {triangle.begin(), triangle.end()};
+        std::unordered_set<edge_t, edge_hash_t> exported_edges;
+
+        auto present_edges = *net.edges();
+        auto present_it = std::move(present_edges).begin();
+        while (!present_it.is_end()) {
+            exported_edges.insert(*present_it);
+            ++present_it;
+        }
+        EXPECT_EQ(exported_edges, expected_edges);
+    }
 
     // Remove a single edge, making sure that the nodes info persists
     EXPECT_TRUE(net.remove({

@@ -307,7 +307,7 @@ void respond_to_one(session_t& session,
         std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
 
         status_t status;
-        ukv_collection_upsert(session.db(), col_name_buffer, NULL, &collection.raw, error.internal_cptr());
+        ukv_collection_open(session.db(), col_name_buffer, NULL, &collection.raw, error.internal_cptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
     }
@@ -528,7 +528,7 @@ void respond_to_aos(session_t& session,
 
         status_t status;
         collection_t collection(session.db());
-        ukv_collection_upsert(session.db(), col_name_buffer, NULL, &collection.raw, error.internal_cptr());
+        ukv_collection_open(session.db(), col_name_buffer, NULL, &collection.raw, error.internal_cptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 

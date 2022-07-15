@@ -13,13 +13,30 @@
 
 namespace unum::ukv {
 
-class graph_adjacency_stream_t;
+class adjacency_stream_t;
 class graph_t;
 
 struct edge_t {
     ukv_key_t source_id;
     ukv_key_t target_id;
     ukv_key_t id = ukv_default_edge_id_k;
+
+    inline bool operator==(edge_t const& other) const noexcept {
+        return (source_id == other.source_id) & (target_id == other.target_id) & (id == other.id);
+    }
+    inline bool operator!=(edge_t const& other) const noexcept {
+        return (source_id != other.source_id) | (target_id != other.target_id) | (id != other.id);
+    }
+};
+
+struct edge_hash_t {
+    inline std::size_t operator()(edge_t const& edge) const noexcept {
+        std::size_t result = SIZE_MAX;
+        hash_combine(result, edge.source_id);
+        hash_combine(result, edge.target_id);
+        hash_combine(result, edge.id);
+        return result;
+    }
 };
 
 /**
@@ -57,22 +74,23 @@ struct neighborship_t {
 
 template <typename id_at>
 struct edges_range_gt {
-    strided_range_gt<id_at> source_ids;
-    strided_range_gt<id_at> target_ids;
-    strided_range_gt<id_at> edge_ids;
 
-    using tuple_t = std::conditional_t<std::is_const_v<id_at>, edge_t const, edge_t>;
+    using id_t = id_at;
+    using tuple_t = std::conditional_t<std::is_const_v<id_t>, edge_t const, edge_t>;
+    static_assert(sizeof(tuple_t) == 3 * sizeof(id_t));
 
-    static_assert(sizeof(edge_t) == 3 * sizeof(ukv_key_t));
+    strided_range_gt<id_t> source_ids;
+    strided_range_gt<id_t> target_ids;
+    strided_range_gt<id_t> edge_ids;
 
     inline edges_range_gt() = default;
-    inline edges_range_gt(strided_range_gt<id_at> sources,
-                          strided_range_gt<id_at> targets,
-                          strided_range_gt<id_at> edges = {ukv_default_edge_id_k}) noexcept
+    inline edges_range_gt(strided_range_gt<id_t> sources,
+                          strided_range_gt<id_t> targets,
+                          strided_range_gt<id_t> edges = {ukv_default_edge_id_k}) noexcept
         : source_ids(sources), target_ids(targets), edge_ids(edges) {}
 
-    inline edges_range_gt(edge_t const* ptr, edge_t const* end) noexcept {
-        auto strided = strided_range_gt<edge_t const>(ptr, end);
+    inline edges_range_gt(tuple_t* ptr, tuple_t* end) noexcept {
+        auto strided = strided_range_gt<tuple_t>(ptr, end);
         source_ids = strided.members(&edge_t::source_id);
         target_ids = strided.members(&edge_t::target_id);
         edge_ids = strided.members(&edge_t::id);
@@ -109,15 +127,133 @@ inline ukv_vertex_role_t invert(ukv_vertex_role_t role) {
  * @brief A stream of all @c `edge_t`s in a graph.
  * No particular order is guaranteed.
  */
-class graph_adjacency_stream_t {
+class adjacency_stream_t {
 
-    ukv_key_t next_vertex_id_ = 0;
-    edges_span_t prefetched_keys_;
+    ukv_t db_ = nullptr;
+    ukv_collection_t col_ = ukv_default_collection_k;
+    ukv_txn_t txn_ = nullptr;
+
+    edges_span_t prefetched_edges_ = {};
     std::size_t prefetched_offset_ = 0;
 
-    keys_stream_t vertex_ids;
+    managed_arena_t arena_;
+    keys_stream_t vertex_stream_;
+
+    status_t prefetch_gather() noexcept {
+
+        auto vertices = vertex_stream_.keys_batch().strided();
+
+        status_t status;
+        ukv_vertex_degree_t* degrees_per_vertex = nullptr;
+        ukv_key_t* neighborships_per_vertex = nullptr;
+        ukv_vertex_role_t role = ukv_vertex_role_any_k;
+        ukv_graph_find_edges(db_,
+                             txn_,
+                             &col_,
+                             0,
+                             vertices.begin().get(),
+                             vertices.count(),
+                             vertices.stride(),
+                             &role,
+                             0,
+                             ukv_options_default_k,
+                             &degrees_per_vertex,
+                             &neighborships_per_vertex,
+                             arena_.internal_cptr(),
+                             status.internal_cptr());
+        if (!status)
+            return status;
+
+        auto edges_begin = reinterpret_cast<edge_t*>(neighborships_per_vertex);
+        auto edges_count = transform_reduce_n(degrees_per_vertex, vertices.size(), 0ul, [](ukv_vertex_degree_t deg) {
+            return deg == ukv_vertex_degree_missing_k ? 0 : deg;
+        });
+        prefetched_offset_ = 0;
+        prefetched_edges_ = {edges_begin, edges_begin + edges_count};
+        return {};
+    }
 
   public:
+    using iterator_category = std::forward_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = ukv_key_t;
+    using pointer = ukv_key_t*;
+    using reference = ukv_key_t&;
+
+    static constexpr std::size_t default_read_ahead_k = 256;
+
+    adjacency_stream_t(ukv_t db,
+                       ukv_collection_t col = ukv_default_collection_k,
+                       std::size_t read_ahead_vertices = keys_stream_t::default_read_ahead_k,
+                       ukv_txn_t txn = nullptr)
+        : db_(db), col_(col), txn_(txn), arena_(db), vertex_stream_(db, col, read_ahead_vertices, txn) {}
+
+    adjacency_stream_t(adjacency_stream_t&&) = default;
+    adjacency_stream_t& operator=(adjacency_stream_t&&) = default;
+
+    adjacency_stream_t(adjacency_stream_t const&) = delete;
+    adjacency_stream_t& operator=(adjacency_stream_t const&) = delete;
+
+    status_t seek(ukv_key_t vertex_id) noexcept {
+        auto status = vertex_stream_.seek(vertex_id);
+        if (!status)
+            return status;
+        return prefetch_gather();
+    }
+
+    status_t advance() noexcept {
+
+        if (prefetched_offset_ >= prefetched_edges_.size()) {
+            auto status = vertex_stream_.seek_to_next_batch();
+            if (!status)
+                return status;
+            return prefetch_gather();
+        }
+
+        ++prefetched_offset_;
+        return {};
+    }
+
+    /**
+     * ! Unlike the `advance()`, canonically returns a self-reference,
+     * ! meaning that the error must be propagated in a different way.
+     * ! So we promote this iterator to `end()`, once an error occurs.
+     */
+    inline adjacency_stream_t& operator++() noexcept {
+        status_t status = advance();
+        if (status)
+            return *this;
+
+        prefetched_edges_ = {};
+        prefetched_offset_ = 0;
+        return *this;
+    }
+
+    edge_t edge() const noexcept { return prefetched_edges_[prefetched_offset_]; }
+    edge_t operator*() const noexcept { return edge(); }
+    status_t seek_to_first() noexcept { return seek(std::numeric_limits<ukv_key_t>::min()); }
+    status_t seek_to_next_batch() noexcept {
+        auto status = vertex_stream_.seek_to_next_batch();
+        if (!status)
+            return status;
+        return prefetch_gather();
+    }
+
+    /**
+     * @brief Exposes all the prefetched deges at once.
+     * Should be used with `seek_to_next_batch`.
+     */
+    edges_span_t edges_batch() const noexcept { return prefetched_edges_; }
+
+    bool is_end() const noexcept { return vertex_stream_.is_end() && prefetched_offset_ >= prefetched_edges_.size(); }
+
+    bool operator==(adjacency_stream_t const& other) const noexcept {
+        return vertex_stream_ == other.vertex_stream_ && prefetched_offset_ == other.prefetched_offset_;
+    }
+
+    bool operator!=(adjacency_stream_t const& other) const noexcept {
+        return vertex_stream_ != other.vertex_stream_ || prefetched_offset_ != other.prefetched_offset_;
+    }
 };
 
 /**
@@ -269,6 +405,24 @@ class graph_t {
         return sample.contains(transparent);
     }
 
+    using adjacency_range_t = range_gt<adjacency_stream_t>;
+
+    inline expected_gt<adjacency_range_t> edges(
+        std::size_t vertices_read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
+
+        adjacency_stream_t b {collection_.db(), collection_, vertices_read_ahead, txn_};
+        adjacency_stream_t e {collection_.db(), collection_, vertices_read_ahead, txn_};
+        status_t status = b.seek_to_first();
+        if (!status)
+            return status;
+        status = e.seek(ukv_key_unknown_k);
+        if (!status)
+            return status;
+
+        adjacency_range_t result {std::move(b), std::move(e)};
+        return result;
+    }
+
     expected_gt<edges_span_t> edges(ukv_key_t vertex,
                                     ukv_vertex_role_t role = ukv_vertex_role_any_k,
                                     bool transparent = false) noexcept {
@@ -293,16 +447,12 @@ class graph_t {
         if (!status)
             return status;
 
-        ukv_vertex_degree_t deg = degrees_per_vertex[0];
-        if (deg == ukv_vertex_degree_missing_k)
+        ukv_vertex_degree_t edges_count = degrees_per_vertex[0];
+        if (edges_count == ukv_vertex_degree_missing_k)
             return edges_span_t {};
 
-        using strided_keys_t = strided_range_gt<ukv_key_t>;
-        ukv_size_t stride = sizeof(ukv_key_t) * 3;
-        strided_keys_t sources(neighborships_per_vertex, stride, deg);
-        strided_keys_t targets(neighborships_per_vertex + 1, stride, deg);
-        strided_keys_t edges(neighborships_per_vertex + 2, stride, deg);
-        return edges_span_t {sources, targets, edges};
+        auto edges_begin = reinterpret_cast<edge_t*>(neighborships_per_vertex);
+        return edges_span_t {edges_begin, edges_begin + edges_count};
     }
 
     expected_gt<edges_span_t> edges(ukv_key_t source, ukv_key_t target, bool transparent = false) noexcept {
@@ -350,17 +500,12 @@ class graph_t {
         if (!status)
             return status;
 
-        std::size_t total_edges = 0;
-        for (ukv_size_t vertex_idx = 0; vertex_idx != vertices.count(); ++vertex_idx)
-            if (degrees_per_vertex[vertex_idx] != ukv_vertex_degree_missing_k)
-                total_edges += degrees_per_vertex[vertex_idx];
+        auto edges_begin = reinterpret_cast<edge_t*>(neighborships_per_vertex);
+        auto edges_count = transform_reduce_n(degrees_per_vertex, vertices.size(), 0ul, [](ukv_vertex_degree_t deg) {
+            return deg == ukv_vertex_degree_missing_k ? 0 : deg;
+        });
 
-        using strided_keys_t = strided_range_gt<ukv_key_t>;
-        ukv_size_t stride = sizeof(ukv_key_t) * 3;
-        strided_keys_t sources(neighborships_per_vertex, stride, total_edges);
-        strided_keys_t targets(neighborships_per_vertex + 1, stride, total_edges);
-        strided_keys_t edges(neighborships_per_vertex + 2, stride, total_edges);
-        return edges_span_t {sources, targets, edges};
+        return edges_span_t {edges_begin, edges_begin + edges_count};
     }
 
     status_t export_adjacency_list(std::string const& path,

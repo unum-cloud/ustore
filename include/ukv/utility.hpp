@@ -51,12 +51,6 @@ struct located_key_t {
     inline bool operator>=(located_key_t const& other) const noexcept { return key >= other.key; }
 };
 
-struct located_key_hash_t {
-    inline std::size_t operator()(located_key_t const& located) const noexcept {
-        return std::hash<ukv_key_t> {}(located.key);
-    }
-};
-
 class [[nodiscard]] status_t {
     ukv_error_t raw_ = nullptr;
 
@@ -431,6 +425,41 @@ class managed_arena_t {
         : db_(other.db_), memory_(std::exchange(other.memory_, nullptr)) {}
 
     inline ukv_arena_t* internal_cptr() noexcept { return &memory_; }
+};
+
+/**
+ * @brief Unlike the `std::accumulate` and `std::transform_reduce` takes an integer `n`
+ * instead of the end iterator. This helps with zero-strided iterators.
+ */
+template <typename element_at, typename transform_at, typename iterator_at>
+element_at transform_reduce_n(iterator_at begin, std::size_t n, element_at init, transform_at transform) {
+    for (std::size_t i = 0; i != n; ++i, ++begin)
+        init += transform(*begin);
+    return init;
+}
+
+template <typename element_at, typename iterator_at>
+element_at reduce_n(iterator_at begin, std::size_t n, element_at init) {
+    return transform_reduce_n(begin, n, init, [](auto x) { return x; });
+}
+
+/**
+ * @brief Trivial hash-mixing scheme from Boost.
+ * @see https://www.boost.org/doc/libs/1_37_0/doc/html/hash/reference.html#boost.hash_combine
+ */
+template <typename hashable_at>
+inline void hash_combine(std::size_t& seed, hashable_at const& v) {
+    std::hash<hashable_at> hasher;
+    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+struct located_key_hash_t {
+    inline std::size_t operator()(located_key_t const& located) const noexcept {
+        std::size_t result = SIZE_MAX;
+        hash_combine(result, located.key);
+        hash_combine(result, located.collection);
+        return result;
+    }
 };
 
 } // namespace unum::ukv

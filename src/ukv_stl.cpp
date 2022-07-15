@@ -851,17 +851,17 @@ void ukv_size( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_min_keys,
-    ukv_size_t const c_min_keys_count,
+    ukv_size_t const n,
     ukv_size_t const c_min_keys_stride,
 
     ukv_key_t const* c_max_keys,
     ukv_size_t const c_max_keys_stride,
 
-    ukv_options_t const c_options,
+    ukv_options_t const,
 
     ukv_size_t** c_found_estimates,
 
@@ -877,7 +877,7 @@ void ukv_size( //
     if (*c_error)
         return;
 
-    ukv_size_t total_bytes = c_min_keys_count * 6 * sizeof(ukv_size_t);
+    ukv_size_t total_bytes = n * 6 * sizeof(ukv_size_t);
     byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
     ukv_size_t* found_estimates = reinterpret_cast<ukv_size_t*>(tape);
     *c_found_estimates = found_estimates;
