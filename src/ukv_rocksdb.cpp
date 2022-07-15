@@ -304,7 +304,7 @@ void ukv_read( //
     }
 }
 
-void ukv_collection_upsert( //
+void ukv_collection_open( //
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
     ukv_str_view_t c_config,
@@ -360,7 +360,8 @@ void ukv_control( //
 
 void ukv_txn_begin( //
     ukv_t const c_db,
-    [[maybe_unused]] ukv_size_t const sequence_number,
+    ukv_size_t const,
+    ukv_options_t const,
     ukv_txn_t* c_txn,
     ukv_error_t* c_error) {
 

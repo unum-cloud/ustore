@@ -372,6 +372,7 @@ void ukv_control( //
 void ukv_txn_begin( //
     ukv_t const db,
     ukv_size_t const sequence_number,
+    ukv_options_t const options,
     ukv_txn_t* txn,
     ukv_error_t* error);
 

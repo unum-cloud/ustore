@@ -48,7 +48,7 @@ ukv_collection_t collection_ptr(JNIEnv* env_java, ukv_t db_ptr, jstring name_jav
 
     ukv_error_t error_c = NULL;
     ukv_collection_t collection_c = NULL;
-    ukv_collection_upsert(db_ptr, name_c, NULL, &collection_c, &error_c);
+    ukv_collection_open(db_ptr, name_c, NULL, &collection_c, &error_c);
 
     if (name_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseStringUTFChars(env_java, name_java, name_c);
