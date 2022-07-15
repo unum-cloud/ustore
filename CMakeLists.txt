@@ -138,6 +138,7 @@ add_library(ukv_stl
   src/ukv_graph_pfor.cpp
 )
 target_link_libraries(ukv_stl
+  fmt::fmt
   nlohmann_json::nlohmann_json
 )
 
@@ -152,10 +153,12 @@ add_library(ukv_leveldb
 
 target_link_libraries(ukv_rocksdb
   rocksdb
+  fmt::fmt
   nlohmann_json::nlohmann_json
 )
 target_link_libraries(ukv_leveldb
   leveldb
+  fmt::fmt
   nlohmann_json::nlohmann_json
 )
 

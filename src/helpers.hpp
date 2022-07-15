@@ -172,10 +172,10 @@ inline bool entry_was_overwritten(sequence_t entry_sequence,
 }
 
 struct read_task_t {
-    ukv_collection_t collection;
+    ukv_collection_t col;
     ukv_key_t const& key;
 
-    inline located_key_t location() const noexcept { return located_key_t {collection, key}; }
+    inline located_key_t location() const noexcept { return located_key_t {col, key}; }
 };
 
 /**
@@ -194,11 +194,11 @@ struct read_tasks_soa_t {
 };
 
 struct scan_task_t {
-    ukv_collection_t collection;
+    ukv_collection_t col;
     ukv_key_t const& min_key;
     ukv_size_t length;
 
-    inline located_key_t location() const noexcept { return located_key_t {collection, min_key}; }
+    inline located_key_t location() const noexcept { return located_key_t {col, min_key}; }
 };
 
 /**
@@ -219,13 +219,13 @@ struct scan_tasks_soa_t {
 };
 
 struct write_task_t {
-    ukv_collection_t collection;
+    ukv_collection_t col;
     ukv_key_t const& key;
     byte_t const* begin;
     ukv_val_len_t offset;
     ukv_val_len_t length;
 
-    inline located_key_t location() const noexcept { return located_key_t {collection, key}; }
+    inline located_key_t location() const noexcept { return located_key_t {col, key}; }
     inline bool is_deleted() const noexcept { return begin == nullptr; }
     value_view_t view() const noexcept { return {begin + offset, begin + offset + length}; }
     buffer_t buffer() const { return {begin + offset, begin + offset + length}; }
@@ -260,14 +260,6 @@ struct write_tasks_soa_t {
         }
         return {col, key, begin, off, len};
     }
-};
-
-struct read_docs_tasks_soa_t : public read_tasks_soa_t {
-    strided_iterator_gt<ukv_str_view_t const> fields;
-};
-
-struct write_docs_tasks_soa_t : public write_tasks_soa_t {
-    strided_iterator_gt<ukv_str_view_t const> fields;
 };
 
 /**

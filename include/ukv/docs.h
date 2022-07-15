@@ -56,7 +56,14 @@ typedef enum {
  *                         different format can be requested. Like importing
  *                         JSONs & BSONs from Mongo, but later exporting
  *                         Apache Arrow Tables.
- */
+
+ * @section Slicing Docs and Inferring IDs
+ * In other interfaces it's necessary to explicitly provide the @c `ukv_key_t`s
+ * and the number of input entries. With documents, if an array of obects is
+ * supplied as `values[0]`, we slice it into separate objects.
+ * With documents, we can often infer the ID from the documents @b "_id" field,
+ * similar to MongoDB and ElasticSearch.
+  */
 void ukv_docs_write( //
     ukv_t const db,
     ukv_txn_t const txn,
