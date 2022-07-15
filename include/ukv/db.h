@@ -102,9 +102,17 @@ typedef enum {
     /**
      * @brief When reading from a transaction, avoids tracking the keys.
      * Which will increase the probability of writes, but levels-down the
-     * consistency guarantees.
+     * consistency guarantees. Only works in transactions created with
+     * the `ukv_option_txn_snapshot_k` flag.
      */
     ukv_option_read_transparent_k = 1 << 3,
+    /**
+     * @brief When a transaction is started with this flag, a persistent
+     * snapsot is created. It guarantees that the global state of all the
+     * keys in the DB will be unchanged during the entire lifetime of the
+     * transaction. Will not affect the writes in any way.
+     */
+    ukv_option_txn_snapshot_k = 1 << 4,
 
 } ukv_options_t;
 
@@ -147,7 +155,7 @@ void ukv_open( //
  *
  * @param[in] db             Already open database instance, @see `ukv_open`.
  * @param[in] txn            Transaction, through which the operation must go.
- *                           Can be `NULL`.
+ *                           Can be NULL.
  * @param[in] keys           Array of keys in one or more collections.
  * @param[in] keys_count     Number of elements in @p `keys`.
  * @param[in] collections    Array of collections owning the @p `keys`.
@@ -224,7 +232,7 @@ void ukv_write( //
  *
  * @param[in] db              Already open database instance, @see `ukv_open`.
  * @param[in] txn             Transaction or the snapshot, through which the
- *                            operation must go. Can be `NULL`.
+ *                            operation must go. Can be NULL.
  * @param[in] keys            Array of keys in one or more collections.
  * @param[in] keys_count      Number of elements in @p `keys`.
  * @param[in] collections     Array of collections owning the @p `keys`.
@@ -239,7 +247,7 @@ void ukv_write( //
  *                            this request. If it's too small (@p `capacity`),
  *                            we `realloc` a new buffer. You can't pass a memory
  *                            allocated by a third-party allocator.
- *                            During the first request you pass a `NULL`,
+ *                            During the first request you pass a NULL,
  *                            we allocate that buffer, put found values in it and
  *                            return you a pointer. You can later reuse it for future
  *                            requests, or `free` it via `ukv_arena_free`.
@@ -296,22 +304,50 @@ void ukv_scan( //
     ukv_arena_t* arena,
     ukv_error_t* error);
 
+/**
+ * @brief Estimates the number of entries within a range of keys.
+ * Outputs are exported in @b six-tuples:
+ * > min & max cardinality,
+ * > min & max bytes in values,
+ * > min & max (persistent) memory usage.
+ */
+void ukv_size( //
+    ukv_t const db,
+    ukv_txn_t const txn,
+
+    ukv_collection_t const* collections,
+    ukv_size_t const collections_stride,
+
+    ukv_key_t const* min_keys,
+    ukv_size_t const min_keys_count,
+    ukv_size_t const min_keys_stride,
+
+    ukv_key_t const* max_keys,
+    ukv_size_t const max_keys_stride,
+
+    ukv_options_t const options,
+
+    ukv_size_t** found_estimates,
+
+    ukv_arena_t* arena,
+    ukv_error_t* error);
+
 /*********************************************************/
 /***************** Collection Management  ****************/
 /*********************************************************/
 
 /**
- * @brief Upserts a new named collection into DB.
- * This function may never be called, as the default
- * unnamed collection always exists.
+ * @brief Inserts a new named collection into DB or opens existing one.
+ * This function may never be called, as the default unnamed collection
+ * always exists and can be addressed via `ukv_default_collection_k`.
  *
  * @param[in] db           Already open database instance, @see `ukv_open`.
- * @param[in] name         A `NULL`-terminated collection name.
- * @param[in] config       A `NULL`-terminated configuration string.
+ * @param[in] name         A NULL-terminated collection name.
+ * @param[in] config       A NULL-terminated configuration string.
  * @param[out] collection  Address to which the collection handle will be expored.
  * @param[out] error       The error message to be handled by callee.
  */
-void ukv_collection_upsert( //
+void ukv_collection_open( //
     ukv_t const db,
     ukv_str_view_t name,
     ukv_str_view_t config,
@@ -319,12 +355,24 @@ void ukv_collection_upsert( //
     ukv_error_t* error);
 
 /**
+ * @brief Retrieves a list of collection names in a comma-delimited form.
+ *
+ * @param[in] db     Already open database instance, @see `ukv_open`.
+ * @param[out] names A NULL-terminated output string with comma-delimited column names.
+ * @param[out] error The error message to be handled by callee.
+ */
+void ukv_collection_list( //
+    ukv_t const db,
+    ukv_str_view_t* names,
+    ukv_error_t* error);
+
+/**
  * @brief Removes collection and all of its conntents from DB.
  * The default unnamed collection can't be removed, but it
- * will be @b cleared, if you pass a `NULL` as `name`.
+ * will be @b cleared, if you pass a NULL as `name`.
  *
  * @param[in] db      Already open database instance, @see `ukv_open`.
- * @param[in] name    A `NULL`-terminated collection name.
+ * @param[in] name    A NULL-terminated collection name.
  * @param[out] error  The error message to be handled by callee.
  */
 void ukv_collection_remove( //
