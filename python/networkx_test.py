@@ -23,13 +23,18 @@ def line(net):
 
 
 def triangle(net):
-    # 1 -> 2 -> 3
+    # 1 -> 2 -> 3 -> 1
 
     net.add_edge(1, 2)
     net.add_edge(2, 3)
     net.add_edge(3, 1)
 
     assert net.has_node(1) and net.has_node(2) and net.has_node(3)
+
+    assert net.number_of_edges(1, 2) == 1
+    assert net.number_of_edges(2, 3) == 1
+    assert net.number_of_edges(3, 1) == 1
+
     assert len(list(net.successors(1))) == 1
     assert len(list(net.predecessors(1))) == 1
 
