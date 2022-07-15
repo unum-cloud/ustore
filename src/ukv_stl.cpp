@@ -876,10 +876,10 @@ void ukv_open( //
 }
 
 /*********************************************************/
-/*****************	cols Management	  ****************/
+/*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_upsert(
+void ukv_collection_open(
     // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
@@ -969,6 +969,7 @@ void ukv_txn_begin(
     // Inputs:
     ukv_t const c_db,
     ukv_size_t const c_sequence_number,
+    ukv_options_t const,
     // Outputs:
     ukv_txn_t* c_txn,
     ukv_error_t* c_error) {

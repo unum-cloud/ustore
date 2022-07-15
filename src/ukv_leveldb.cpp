@@ -320,7 +320,7 @@ void ukv_read( //
 //     scan_tasks_soa_t tasks {{}, keys, lens};
 // }
 
-void ukv_collection_upsert( //
+void ukv_collection_open( //
     ukv_t const,
     ukv_str_view_t,
     ukv_str_view_t,
@@ -347,6 +347,7 @@ void ukv_control( //
 void ukv_txn_begin( //
     ukv_t const,
     ukv_size_t const,
+    ukv_options_t const,
     ukv_txn_t*,
     ukv_error_t* c_error) {
     *c_error = "Transactions not supported by LevelDB!";
