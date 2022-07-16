@@ -63,7 +63,7 @@ class [[nodiscard]] status_t {
 
     status_t(status_t&& other) noexcept { raw_ = std::exchange(other.raw_, nullptr); }
     status_t& operator=(status_t&& other) noexcept {
-        raw_ = std::exchange(other.raw_, nullptr);
+        std::swap(raw_, other.raw_);
         return *this;
     }
     ~status_t() {
@@ -172,6 +172,7 @@ class strided_iterator_gt {
 
     inline operator bool() const noexcept { return raw_ != nullptr; }
     inline bool repeats() const noexcept { return !stride_; }
+    inline ukv_size_t stride() const noexcept { return stride_; }
     inline object_at& operator*() const noexcept { return *raw_; }
     inline object_at* operator->() const noexcept { return raw_; }
     inline object_at* get() const noexcept { return raw_; }
@@ -423,6 +424,12 @@ class managed_arena_t {
 
     inline managed_arena_t(managed_arena_t&& other) noexcept
         : db_(other.db_), memory_(std::exchange(other.memory_, nullptr)) {}
+
+    inline managed_arena_t& operator=(managed_arena_t&& other) noexcept {
+        std::swap(db_, other.db_);
+        std::swap(memory_, other.memory_);
+        return *this;
+    }
 
     inline ukv_arena_t* internal_cptr() noexcept { return &memory_; }
 };

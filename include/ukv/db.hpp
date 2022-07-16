@@ -380,10 +380,8 @@ class collection_t {
         col_ = nullptr;
     }
     inline collection_t& operator=(collection_t&& other) noexcept {
-        if (col_)
-            ukv_collection_free(db_, col_);
-        db_ = other.db_;
-        col_ = std::exchange(other.col_, ukv_default_collection_k);
+        std::swap(db_, other.db_);
+        std::swap(col_, other.col_);
         return *this;
     }
     inline operator ukv_collection_t() const noexcept { return col_; }
