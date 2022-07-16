@@ -88,7 +88,9 @@
         "rope": "cpp",
         "slist": "cpp",
         "scoped_allocator": "cpp",
-        "span": "cpp"
+        "span": "cpp",
+        "csetjmp": "cpp",
+        "strstream": "cpp"
     },
     "java.configuration.updateBuildConfiguration": "automatic",
     "python.testing.pytestEnabled": true,
