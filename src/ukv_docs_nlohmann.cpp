@@ -24,7 +24,6 @@ using namespace unum;
 
 using json_t = nlohmann::json;
 using json_ptr_t = json_t::json_pointer;
-using serializer_t = nlohmann::detail::serializer<json_t>;
 
 /**
  * @brief Extracts a select subset of keys by from input document.
@@ -65,7 +64,26 @@ json_t sample_fields(json_t&& original,
 /*****************	 Primary Functions	  ****************/
 /*********************************************************/
 
+struct export_to_value_t : public nlohmann::detail::output_adapter_protocol<char>,
+                           public std::enable_shared_from_this<export_to_value_t> {
+    value_t* value_ptr = nullptr;
+
+    export_to_value_t() = default;
+    export_to_value_t(value_t& value) noexcept : value_ptr(&value) {}
+
+    void write_character(char c) override {
+        auto ptr = reinterpret_cast<byte_t const*>(&c);
+        value_ptr->insert(value_ptr->size(), ptr, ptr + 1);
+    }
+
+    void write_characters(char const* s, std::size_t length) override {
+        auto ptr = reinterpret_cast<byte_t const*>(s);
+        value_ptr->insert(value_ptr->size(), ptr, ptr + length);
+    }
+};
+
 json_t parse_any(value_view_t bytes, ukv_format_t const c_format, ukv_error_t* c_error) {
+    // iterator_input_adapter
     auto str = reinterpret_cast<char const*>(bytes.begin());
     auto len = bytes.size();
     switch (c_format) {
@@ -79,25 +97,29 @@ json_t parse_any(value_view_t bytes, ukv_format_t const c_format, ukv_error_t* c
     }
 }
 
-buffer_t dump_any(json_t const& json, ukv_format_t const c_format, ukv_error_t* c_error) {
-    buffer_t result;
-    // Yes, it's a dirty hack, but it works :)
-    // nlohmann::detail::output_vector_adapter<byte_t> output(result);
-    auto& result_chars = reinterpret_cast<std::vector<char>&>(result);
+/**
+ * The JSON package provides a number of simple interfaces, whic only work with simplest STL types
+ * and always allocate the output objects, without the ability to reuse previously allocated memory,
+ * including: `dump`, `to_msgpack`, `to_bson`, `to_cbor`, `to_ubjson`.
+ * They have more flexible alternatives in the form of `nlohmann::detail::serializer`s,
+ * that will accept our castum adapter. Unfortunately, they require a bogus shared pointer. WHY?!
+ */
+void dump_any(json_t const& json,
+              ukv_format_t const c_format,
+              std::shared_ptr<export_to_value_t> const& value,
+              ukv_error_t* c_error) {
+
+    using text_serializer_t = nlohmann::detail::serializer<json_t>;
+    using binary_serializer_t = nlohmann::detail::binary_writer<json_t, char>;
+
     switch (c_format) {
-    case ukv_format_json_k: {
-        auto adapt = std::make_shared<nlohmann::detail::output_vector_adapter<char>>(result_chars);
-        serializer_t(adapt, ' ').dump(json, false, false, 0, 0);
-        break;
-    }
-    case ukv_format_msgpack_k: json_t::to_msgpack(json, result_chars); break;
-    case ukv_format_bson_k: json_t::to_bson(json, result_chars); break;
-    case ukv_format_cbor_k: json_t::to_cbor(json, result_chars); break;
-    case ukv_format_ubjson_k: json_t::to_ubjson(json, result_chars); break;
+    case ukv_format_json_k: return text_serializer_t(value, ' ').dump(json, false, false, 0, 0);
+    case ukv_format_msgpack_k: return binary_serializer_t(value).write_msgpack(json);
+    case ukv_format_bson_k: return binary_serializer_t(value).write_bson(json);
+    case ukv_format_cbor_k: return binary_serializer_t(value).write_cbor(json);
+    case ukv_format_ubjson_k: return binary_serializer_t(value).write_ubjson(json, true, true);
     default: *c_error = "Unsupported unput format"; break;
     }
-
-    return result;
 }
 
 void update_docs( //
@@ -111,10 +133,16 @@ void update_docs( //
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
+    prepare_memory(arena.updated_vals, n, c_error);
+    if (*c_error)
+        return;
+
+    auto wrapped_adapter = std::make_shared<export_to_value_t>();
     for (ukv_size_t i = 0; i != n; ++i) {
         auto task = tasks[i];
+        auto& serialized = arena.updated_vals[i];
         if (task.is_deleted()) {
-            arena.updated_vals[i].reset();
+            serialized.reset();
             continue;
         }
 
@@ -124,7 +152,8 @@ void update_docs( //
             return;
         }
 
-        auto serial = dump_any(parsed, ukv_format_msgpack_k, c_error);
+        wrapped_adapter->value_ptr = &serialized;
+        dump_any(parsed, ukv_format_msgpack_k, wrapped_adapter, c_error);
         if (*c_error)
             return;
     }
