@@ -130,12 +130,15 @@ void update_docs( //
     }
 
     ukv_val_len_t offset = 0;
+    ukv_arena_t arena_ptr = &arena;
     ukv_write( //
         c_db,
         c_txn,
         tasks.cols.get(),
-        n,
         tasks.cols.stride(),
+        tasks.keys.get(),
+        n,
+        tasks.keys.stride(),
         arena.updated_vals.front().internal_cptr(),
         sizeof(value_t),
         &offset,
@@ -143,8 +146,8 @@ void update_docs( //
         arena.updated_vals.front().internal_length(),
         sizeof(value_t),
         c_options,
-        &arena,
-        error);
+        &arena_ptr,
+        c_error);
 }
 
 void update_fields( //
@@ -186,11 +189,11 @@ void ukv_docs_write( //
     ukv_options_t const c_options,
     ukv_format_t const c_format,
 
-    ukv_val_ptr_t const* c_values,
-    ukv_size_t const c_values_stride,
+    ukv_val_ptr_t const* c_vals,
+    ukv_size_t const c_vals_stride,
 
-    ukv_val_len_t const* c_lengths,
-    ukv_size_t const c_lengths_stride,
+    ukv_val_len_t const* c_lens,
+    ukv_size_t const c_lens_stride,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -208,13 +211,13 @@ void ukv_docs_write( //
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
-    strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
+    strided_iterator_gt<ukv_val_len_t const> offs {nullptr, 0};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
 
     try {
         auto func = fields ? &update_fields : &update_docs;
-        func(c_db, c_txn, tasks, fields, c_keys_count, c_options, arena, c_error);
+        func(c_db, c_txn, tasks, fields, c_keys_count, c_options, c_format, arena, c_error);
     }
     catch (std::bad_alloc) {
         *c_error = "Failed to allocate memory!";
