@@ -8,6 +8,7 @@ flowchart LR
   ukv(((UKV)))
 
   id1[In-Memory Store using STL] --> ukv;
+  id7[Persistent Store using LevelDB] --> ukv;
   id3[Persistent Store using RocksDB] --> ukv;
   id2[In-Memory Store by Unum] --> ukv;
   id4[Persistent Store by Unum] --> ukv;
@@ -32,7 +33,52 @@ flowchart LR
   style id4 stroke:#743cce,stroke-width:2px;
 ```
 
-Assumptions and limitations:
+## Backends
+
+Backends differ in their functionality and purposes.
+The underlying embedded key value stores include:
+
+| Name    |      OSes       | ACID  | Collections | Persistent |
+| :------ | :-------------: | :---: | :---------: | :--------: |
+| STL     | POSIX + Windows |   ✅   |      ✅      |     ❌      |
+| LevelDB | POSIX + Windows |   ❌   |      ❌      |     ✅      |
+| RocksDB | POSIX + Windows |   ✅   |      ✅      |     ✅      |
+| UnumDB  |      Linux      |   ✅   |      ✅      |     ✅      |
+
+The STL backend originally served educational purposes, yet, with a proper web-server implementation, is comparable to other in-memory stores like Redis, MemCached or ETCD.
+LevelDB is Key-Value stored designed at Google and extensively adopted across the industry.
+RocksDB originally forked LevelDB to extend its functionality with transactions, collections, and higher performance.
+
+Future work includes:
+
+* SQL Server
+* Distributed Sharded Backend
+* GraphQL Server
+
+## Frontends
+
+Currently, at Proo-of-Concept stage, we support only the essential functionality in select programming languages.
+
+| Name      | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy |
+| :-------- | :------: | :-----: | :---------: | :---: | :----: | :-------: |
+| C++       |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |
+| Python    |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     |
+| Java      |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |
+| GoLang    |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✔️     |
+| REST API  |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |
+| Arrow RPC |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |
+
+Future work would include:
+
+* Arrow Flight RPC,
+* Bindings for C#,
+* Bindings for Rust,
+* Bindings for Dart,
+* Bindings for JavaScript,
+* Bindings for Wolfram Language
+* GoLang Channel [Batch Reads](https://stackoverflow.com/a/36546929)
+
+## Assumptions and Limitations
 
 * Keys are constant length native integer types. High-performance solutions are impossible with variable size keys. 64-bit unsigned integers are currently chosen as the smallest native numeric type, that can address modern datasets.
 * Values are serialized into variable-length byte strings.
@@ -116,7 +162,10 @@ All `get` requests cause memory allocations in Java Runtime and export data into
 Most `set` requests will simply cast and forward values without additional copies.
 Aside from opening and closing this class is **thread-safe** for higher interop with other Java-based tools.
 
-Implementation follows the ["best practices" defined by IBM](https://developer.ibm.com/articles/j-jni/).
+Implementation follows the ["best practices" defined by IBM](https://developer.ibm.com/articles/j-jni/). It was tested with:
+
+* JVM
+* *[GraalVM](https://www.graalvm.org/22.1/reference-manual/native-image/JNI/)*
 
 ### GoLang
 
@@ -135,15 +184,19 @@ Implementation-wise, GoLang variant performs `memcpy`s on essentially every call
 As GoLang has no exceptions in the classical OOP sense, most functions return multiple values, error being the last one in each pack.
 Batch lookup operations are imlemented via channels sending slices, to avoid reallocations.
 
+### JavaScript
+
+* Node.js
+* V8
+* Deno
+* [`bun:ffi`](https://twitter.com/jarredsumner/status/1521527222514774017)
+
 ### RESTful API & Clients
 
 We implement a REST server using `Boost.Beast` and the underlying `Boost.Asio`, as the go-to Web-Dev libraries in C++.
-To test the REST API:
+To test the REST API, `./src/run_rest.sh` and then cURL into it:
 
 ```sh
-kill $(lsof -t -i:8080)
-cmake . && make  && ./build/bin/ukv_beast_server 0.0.0.0 8080 1
-
 curl -X PUT \
   -H "Accept: Application/json" \
   -H "Content-Type: application/octet-stream" \
@@ -155,66 +208,4 @@ curl -i \
   0.0.0.0/8080/one/42?col=sub
 ```
 
-We also provide a [`OneAPI` specification](/openapi.yaml), that is used as both a documentation point and an automatic client-library generator.
-The entire list of generators is [available here](https://openapi-generator.tech/docs/generators/);
-
-```sh
-npm install @openapitools/openapi-generator-cli -g
-npx openapi-generator-cli generate -i openapi.yaml -g html2 -o /tmp/
-```
-
-Or via Docker:
-
-```sh
-docker run --rm -v "${PWD}:/local" openapitools/openapi-generator-cli generate \
-    -i "/local/openapi.yaml" \
-    -g html2 \
-    -o "/local/tmp/"
-```
-
-## TODOs
-
-At this point we alerady have a pretty big number of frontends and backends ready.
-
-```sh
-cloc $(git ls-files)
-```
-
-Yields following output:
-
-```txt
--------------------------------------------------------------------------------
-Language                     files          blank        comment           code
--------------------------------------------------------------------------------
-C++                             12            704            731           3615
-C/C++ Header                    14            392            715           1536
-Markdown                         2            191              0            524
-Python                           6            139             42            421
-C                                3             68             21            323
-CMake                            8             57             69            230
-Java                             1             45            133            150
-Go                               2             33             29            131
-YAML                             2             11              1            104
-JSON                             3              0              0             79
-Protocol Buffers                 1             19              0             49
-Gradle                           1              9             15             34
-Bourne Shell                     3              3              8             15
--------------------------------------------------------------------------------
-SUM:                            58           1671           1764           7211
--------------------------------------------------------------------------------
-```
-
-Here are our next tasks
-
-* [x] More tests in Python
-* [ ] Documents support
-* [ ] Rust Bindings
-* [ ] GoLang memory pinning Channel Batch Reads of [slices](https://stackoverflow.com/a/36546929)
-* [ ] Swift Bindings
-* [ ] Scala Bindings
-* [ ] Wolfram Language Bindings
-* [ ] Read/Write Apache Arrow Tables via C API
-* [ ] Java Apache Arrow support
-* [ ] ProtoBuf support
-* [ ] GraphQL support
-* [ ] Fill the [OpenAPI specification](openapi.yaml)
+The [`OneAPI` specification](/openapi.yaml) documentation is in-development.
