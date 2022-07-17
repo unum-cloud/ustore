@@ -2,8 +2,8 @@
  * @file ukv_leveldb.cpp
  * @author Ashot Vardanian
  *
- * @brief LevelDB is a fast key-value storage library written at Google that provides an ordered mapping from string
- * keys to string values
+ * @brief Embedded Persistent Key-Value Store on top of @b LevelDB.
+ * Has no support for collections, transactions or any non-CRUD jobs.
  */
 
 #include <leveldb/db.h>

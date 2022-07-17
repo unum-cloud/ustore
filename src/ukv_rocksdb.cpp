@@ -2,12 +2,19 @@
  * @file ukv_rocksdb.cpp
  * @author Ashot Vardanian
  *
- * @brief Embedded Persistent Key-Value Store on top of RocksDB.
+ * @brief Embedded Persistent Key-Value Store on top of @b RocksDB.
  * It natively supports ACID transactions and iterators (range queries)
- * and is implemented via Log Structured Merge Tree. This makes RocksDB
+ * and is implemented via @b Log-Structured-Merge-Tree. This makes RocksDB
  * great for write-intensive operations. It's already a common engine
  * choice for various Relational Database, built on top of it.
  * Examples: Yugabyte, TiDB, and, optionally: Mongo, MySQL, Cassandra, MariaDB.
+ *
+ * @section @b `PlainTable` vs `BlockBasedTable` Format
+ * We use fixed-length integer keys, which are natively supported by `PlainTable`.
+ * It, however, doesn't support @b non-prefix-based-`Seek()` in scans. 
+ * Moreover, not being the default variant, its significantly less optimized,
+ * so after numerous tests we decided to stick to `BlockBasedTable`.
+ * https://github.com/facebook/rocksdb/wiki/PlainTable-Format
  */
 
 #include <rocksdb/db.h>

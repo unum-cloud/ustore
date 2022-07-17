@@ -173,7 +173,17 @@ void ukv_open( //
  * @param[in] offsets        Pointer to offsets of relevant content within @p `values` chunks.
  * @param[out] error         The error to be handled.
  *
+ * @section Upserts, Updates & Inserts
+ * Higher-level interfaces may choose to implement any of those verbs:
+ * 1. Insert: add if missing.
+ * 2. Update: overwrite if present.
+ * 3. Upsert: write.
+ * Instead of adding all three to C interface, we focus on better ACID transactions, 
+ * which can be used to implement any advanced multi-step operations (often including
+ * conditionals), like Compare-And-Swap, without losing atomicity.
+ *
  * @section Why use offsets?
+ *
  * In the underlying layer, using offsets to adds no additional overhead,
  * but what is the point of using them, if we can immediatelly pass adjusted
  * pointers?
@@ -190,6 +200,18 @@ void ukv_open( //
  * the allocated region. In such cases, we may still need additional memory
  * to store the lengths of the objects, unless those are NULL-terminated
  * strings (lengths = NULL) or if all have the same length (length_stride = 0).
+ *
+ * Further reading on the implementation of strings and arrays of strings in
+ * different languages:
+ * > Python/CPython:
+ *      https://docs.python.org/3/c-api/bytes.html
+ * > JavaScript/V8:
+ *      https://github.com/v8/v8/blob/main/include/v8-data.h
+ *      https://github.com/v8/v8/blob/main/include/v8-array-buffer.h
+ * > GoLang:
+ *      https://boakye.yiadom.org/go/strings/
+ *      https://github.com/golang/go/blob/master/src/runtime/string.go (`stringStruct`)
+ *      https://github.com/golang/go/blob/master/src/runtime/slice.go (`slice`)
  */
 void ukv_write( //
     ukv_t const db,
