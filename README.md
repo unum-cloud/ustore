@@ -1,6 +1,20 @@
 # Universal Key-Values
 
-Universal Key-Value store interface for both in-memory and persistent ACID transactional collections written in C/C++ and Assembly with bindings for [Python](#python), [GoLang](#golang), [Java](#java), JavaScript, C#.
+Imagine having a standardized cross-lingual interface for all your things "Data":
+
+* Storing binary blobs
+* Building up graphs & indexes
+* Querying structured documents
+* Handling JSON, BSON, MsgPacks
+* ACID transactional guarantees
+* Familiar interfaces for data & graph analytics
+* Bindings for your fav languages
+
+UVV does just that, abstracting away the implementation from the user.
+In under 10K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
+
+This way you get the freedom to switch between in-memory vs persistent DBs, between ACID and eventually consistent designs without rewriting you application.
+All with a better performance than with alternative solutions.
 
 ```mermaid
 flowchart LR
@@ -18,11 +32,13 @@ flowchart LR
   %% id2 -.-> id5 
   %% id4 -.-> id6 
   
+  ukv --> C++;
   ukv --> Python;
+  ukv -..-> RPC;
   ukv --> GoLang;
+  ukv -..-> SQL;
   ukv --> Java;
-  ukv --> Rust;
-  ukv --> REST;
+  ukv -..-> REST;
   
   %% ukv --> SQL;
   %% ukv ---> Redis;
@@ -71,10 +87,10 @@ Currently, at Proo-of-Concept stage, we support only the essential functionality
 Future work would include:
 
 * Arrow Flight RPC,
-* Bindings for C#,
-* Bindings for Rust,
-* Bindings for Dart,
-* Bindings for JavaScript,
+* Bindings for C#
+* Bindings for Rust
+* Bindings for Dart
+* Bindings for JavaScript
 * Bindings for Wolfram Language
 * GoLang Channel [Batch Reads](https://stackoverflow.com/a/36546929)
 
