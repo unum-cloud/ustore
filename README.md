@@ -7,8 +7,9 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 * Querying structured documents
 * Handling JSON, BSON, MsgPacks
 * ACID transactional guarantees
-* Familiar interfaces for data & graph analytics
-* Bindings for your fav languages
+* Familiar interfaces for tabular & graph analytics
+* Bindings for your favourite languages
+* Interoperability with Apache Arrow
 
 UVV does just that, abstracting away the implementation from the user.
 In under 10K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
@@ -34,11 +35,9 @@ flowchart LR
   
   ukv --> C++;
   ukv --> Python;
-  ukv -..-> RPC;
   ukv --> GoLang;
-  ukv -..-> SQL;
   ukv --> Java;
-  ukv -..-> REST;
+  ukv -.-> REST;
   
   %% ukv --> SQL;
   %% ukv ---> Redis;
