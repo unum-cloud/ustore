@@ -42,7 +42,7 @@
  * It's identical for `PyBytes_FromStringAndSize`, `PyUnicode_New`, `PyList_New`.
  *
  * Same way for lists of lists. The `PyListObject` stores a vector of pointers
- * to it's internal entries in a member @p `ob_item`. So we forward thatlist directly
+ * to it's internal entries in a member @p `ob_item`. So we forward that list directly
  * to our C bindings, checking beforehand, that the internal objects are either strings,
  * byte-strings, or NumPy arrays.
  *

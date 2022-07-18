@@ -20,22 +20,24 @@
  * complex DBMS on top of it.
  *
  * @section Backends
+ *
  * @subsection Embedded Backends
  * Any of the following systems runs within the same process as a
- * library of persistent associative datastructures:
+ * library of persistent associative data-structures:
  * * FOSS LevelDB: https://github.com/google/leveldb/
  * * FOSS RocksDB: https://github.com/facebook/rocksdb
  * * FOSS STL-based In-Memory
  * * Unums Persistent Transactional Embedded Key-Value Store
  * * Unums In-Memory Transactional Key-Value Store
- * @subsection Stanalone Backends
+ *
+ * @subsection Standalone Backends
  * Any of the above embedded stores can be wrapped into any of
- * the following standlone systems, running as separate processes:
+ * the following standalone systems, running as separate processes:
  * * FOSS RESTful Server with Boost.Beast: https://github.com/boostorg/beast
  * * FOSS gRPC Server:
- * * Unums RPC Server
+ * * Unum RPC Server
  * * Unum Distributed RPCs server
- * The RPC variants are compatiable with all frontends.
+ * The RPC variants are compatible with all frontends.
  *
  * @section Frontends
  * * Python: transactions ✓, batch ops ✓, NetworkX-like graphs ✓

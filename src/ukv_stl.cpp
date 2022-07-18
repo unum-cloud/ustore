@@ -86,7 +86,7 @@ struct stl_txn_t {
 
 struct stl_db_t {
     std::shared_mutex mutex;
-    stl_collection_t unnamed;
+    stl_collection_t nameless;
 
     /**
      * @brief A variable-size set of named cols.
@@ -107,7 +107,7 @@ struct stl_db_t {
 };
 
 stl_collection_t& stl_collection(stl_db_t& db, ukv_collection_t col) {
-    return col == ukv_default_collection_k ? db.unnamed : *reinterpret_cast<stl_collection_t*>(col);
+    return col == ukv_default_collection_k ? db.nameless : *reinterpret_cast<stl_collection_t*>(col);
 }
 
 void save_to_disk(stl_collection_t const& col, std::string const& path, ukv_error_t* c_error) {
@@ -219,7 +219,7 @@ void save_to_disk(stl_db_t const& db, ukv_error_t* c_error) {
         return;
     }
 
-    save_to_disk(db.unnamed, dir_path / ".stl.ukv", c_error);
+    save_to_disk(db.nameless, dir_path / ".stl.ukv", c_error);
     if (*c_error)
         return;
 
@@ -238,10 +238,10 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
         return;
     }
 
-    // Parse the main unnamed col
+    // Parse the main nameless col
     if (fs::path path = dir_path / ".stl.ukv"; fs::is_regular_file(path)) {
         auto path_str = path.native();
-        read_from_disk(db.unnamed, path_str, c_error);
+        read_from_disk(db.nameless, path_str, c_error);
     }
 
     // Parse all the named cols we can find
@@ -1186,7 +1186,7 @@ void ukv_txn_commit( //
 
     // 4. Allocate space for more vertices across different cols
     try {
-        db.unnamed.reserve_more(txn.upserted.size());
+        db.nameless.reserve_more(txn.upserted.size());
         for (auto& name_and_col : db.named)
             name_and_col.second->reserve_more(txn.upserted.size());
     }
