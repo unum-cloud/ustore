@@ -282,7 +282,7 @@ void write_head( //
         auto key_iterator = col.pairs.find(task.key);
 
         // We want to insert a new entry, but let's check if we
-        // can overwrite the existig value without causing reallocations.
+        // can overwrite the existing value without causing reallocations.
         try {
             if (key_iterator != col.pairs.end()) {
                 auto value = task.view();
