@@ -222,6 +222,9 @@ void ukv_docs_write( //
     ukv_val_ptr_t const* c_vals,
     ukv_size_t const c_vals_stride,
 
+    ukv_val_len_t const* c_offs,
+    ukv_size_t const c_offs_stride,
+
     ukv_val_len_t const* c_lens,
     ukv_size_t const c_lens_stride,
 
@@ -241,7 +244,7 @@ void ukv_docs_write( //
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
-    strided_iterator_gt<ukv_val_len_t const> offs {nullptr, 0};
+    strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
 
@@ -324,7 +327,7 @@ void ukv_docs_read( //
              &found_values,
              c_arena,
              c_error);
-    if (c_error)
+    if (*c_error)
         return;
 
     try {
