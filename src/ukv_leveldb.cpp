@@ -287,6 +287,7 @@ void ukv_read( //
         *c_error = "Read Failure";
     }
 }
+
 void ukv_scan( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
