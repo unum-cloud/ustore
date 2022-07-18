@@ -3,7 +3,7 @@
  * @author Ashot Vardanian
  *
  * @brief Document storage using "nlohmann/JSON" lib.
- * Sits on top of any @see "ukv.h"-compatiable system.
+ * Sits on top of any @see "ukv.h"-compatible system.
  */
 
 #include <vector>
@@ -137,7 +137,7 @@ void update_docs( //
     if (*c_error)
         return;
 
-    auto wrapped_adapter = std::make_shared<export_to_value_t>();
+    auto exporter_on_heap = std::make_shared<export_to_value_t>();
     for (ukv_size_t i = 0; i != n; ++i) {
         auto task = tasks[i];
         auto& serialized = arena.updated_vals[i];
@@ -152,8 +152,8 @@ void update_docs( //
             return;
         }
 
-        wrapped_adapter->value_ptr = &serialized;
-        dump_any(parsed, ukv_format_msgpack_k, wrapped_adapter, c_error);
+        exporter_on_heap->value_ptr = &serialized;
+        dump_any(parsed, ukv_format_msgpack_k, exporter_on_heap, c_error);
         if (*c_error)
             return;
     }
@@ -163,10 +163,10 @@ void update_docs( //
     ukv_write( //
         c_db,
         c_txn,
+        n,
         tasks.cols.get(),
         tasks.cols.stride(),
         tasks.keys.get(),
-        n,
         tasks.keys.stride(),
         arena.updated_vals.front().internal_cptr(),
         sizeof(value_t),
@@ -190,6 +190,12 @@ void update_fields( //
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
+    // When only specific fields are of interest, we are forced to:
+    // 1. read the entire entries,
+    // 2. parse them,
+    // 3. locate the requested keys,
+    // 4. replace them with provided values, or patch nested objects.
+
     std::vector<json_t> parsed(n);
     std::vector<json_ptr_t> fields_ptrs;
 
@@ -204,12 +210,12 @@ void update_fields( //
 void ukv_docs_write( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_str_view_t const* c_fields,
@@ -246,9 +252,9 @@ void ukv_docs_write( //
 
     try {
         auto func = fields ? &update_fields : &update_docs;
-        func(c_db, c_txn, tasks, fields, c_keys_count, c_options, c_format, arena, c_error);
+        func(c_db, c_txn, tasks, fields, c_tasks_count, c_options, c_format, arena, c_error);
     }
-    catch (std::bad_alloc) {
+    catch (std::bad_alloc const&) {
         *c_error = "Failed to allocate memory!";
     }
 }
@@ -261,7 +267,7 @@ void ukv_docs_read( //
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
+    ukv_size_t const n,
     ukv_size_t const c_keys_stride,
 
     ukv_str_view_t const* c_fields,
@@ -276,4 +282,66 @@ void ukv_docs_read( //
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
+
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    prepare_memory(arena.updated_keys, n, c_error);
+    if (*c_error)
+        return;
+    prepare_memory(arena.updated_vals, n, c_error);
+    if (*c_error)
+        return;
+
+    strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    read_tasks_soa_t tasks {cols, keys};
+
+    // We can now detect collisions among requested keys,
+    // if different fields from the same docs are requested.
+    // In that case, we must only fetch the doc once and later
+    // slice it into output fields.
+    for (ukv_size_t i = 0; i != n; ++i)
+        arena.updated_keys[i] = tasks[i].location();
+    sort_and_deduplicate(arena.updated_keys);
+    // TODO: Handle the common case of requesting the non-colliding
+    // all-ascending input sequences of document IDs received during scans
+    // without the sort and extra memory.
+
+    ukv_val_len_t* found_lengths = nullptr;
+    ukv_val_ptr_t found_values = nullptr;
+    ukv_size_t found_count = static_cast<ukv_size_t>(arena.updated_keys.size());
+    ukv_read(c_db,
+             c_txn,
+             found_count,
+             &arena.updated_keys[0].collection,
+             sizeof(located_key_t),
+             &arena.updated_keys[0].key,
+             sizeof(located_key_t),
+             c_options,
+             &found_lengths,
+             &found_values,
+             c_arena,
+             c_error);
+
+    // Now, we need to parse all the entries to later export them into a target format.
+    // Potentially sampling certain sub-fields again along the way.
+    auto exporter_on_heap = std::make_shared<export_to_value_t>();
+    auto parsed_values = std::vector<json_t>(n);
+    auto serialized_docs = taped_values_view_t(found_lengths, found_values, found_count);
+    auto serialized_it = serialized_docs.begin();
+
+    for (ukv_size_t i = 0; i != n; ++i, ++serialized_it) {
+        auto task = tasks[i];
+        auto value_idx = offset_in_sorted(arena.updated_keys, task.location());
+        value_t& parsed = arena.updated_vals[value_idx];
+        value_view_t serialized = *serialized_it;
+    }
 }

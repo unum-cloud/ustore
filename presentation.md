@@ -262,12 +262,12 @@ std::vector<float> z;
 void ukv_write( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
-    ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
 
     ukv_val_ptr_t const* values,

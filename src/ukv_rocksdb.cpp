@@ -11,7 +11,7 @@
  *
  * @section @b `PlainTable` vs `BlockBasedTable` Format
  * We use fixed-length integer keys, which are natively supported by `PlainTable`.
- * It, however, doesn't support @b non-prefix-based-`Seek()` in scans. 
+ * It, however, doesn't support @b non-prefix-based-`Seek()` in scans.
  * Moreover, not being the default variant, its significantly less optimized,
  * so after numerous tests we decided to stick to `BlockBasedTable`.
  * https://github.com/facebook/rocksdb/wiki/PlainTable-Format
@@ -117,12 +117,12 @@ void single_write( //
 void ukv_write( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_val_ptr_t const* c_vals,
@@ -151,13 +151,13 @@ void ukv_write( //
     if (c_options & ukv_option_write_flush_k)
         options.sync = true;
 
-    if (c_keys_count == 1) {
+    if (c_tasks_count == 1) {
         single_write(db_wrapper, txn, tasks[0], options, c_error);
         return;
     }
 
     if (txn) {
-        for (ukv_size_t i = 0; i != c_keys_count; ++i) {
+        for (ukv_size_t i = 0; i != c_tasks_count; ++i) {
             write_task_t task = tasks[i];
             txn->Put(reinterpret_cast<rocks_col_ptr_t>(task.col), to_slice(task.key), to_slice(task.view()));
         }
@@ -165,7 +165,7 @@ void ukv_write( //
     }
 
     rocksdb::WriteBatch batch;
-    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
+    for (ukv_size_t i = 0; i != c_tasks_count; ++i) {
         write_task_t task = tasks[i];
         rocks_col_ptr_t col =
             task.col ? reinterpret_cast<rocks_col_ptr_t>(task.col) : db_wrapper->db->DefaultColumnFamily();
@@ -245,7 +245,7 @@ void ukv_read( //
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
+    ukv_size_t const c_tasks_count,
     ukv_size_t const c_keys_stride,
 
     ukv_options_t const,
@@ -263,15 +263,15 @@ void ukv_read( //
     read_tasks_soa_t tasks {cols_stride, keys_stride};
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
 
-    if (c_keys_count == 1) {
+    if (c_tasks_count == 1) {
         single_read(db_wrapper, txn, tasks[0], c_found_lengths, c_found_values, arena, c_error);
         return;
     }
 
-    std::vector<rocks_col_ptr_t> cols(c_keys_count);
-    std::vector<rocksdb::Slice> keys(c_keys_count);
-    std::vector<std::string> vals(c_keys_count);
-    for (ukv_size_t i = 0; i != c_keys_count; ++i) {
+    std::vector<rocks_col_ptr_t> cols(c_tasks_count);
+    std::vector<rocksdb::Slice> keys(c_tasks_count);
+    std::vector<std::string> vals(c_tasks_count);
+    for (ukv_size_t i = 0; i != c_tasks_count; ++i) {
         read_task_t task = tasks[i];
         cols[i] = task.col ? reinterpret_cast<rocks_col_ptr_t>(task.col) : db_wrapper->db->DefaultColumnFamily();
         keys[i] = to_slice(task.key);
@@ -283,8 +283,8 @@ void ukv_read( //
         db_wrapper->db->MultiGet(rocksdb::ReadOptions(), cols, keys, &vals);
 
     // 1. Estimate the total size
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * c_keys_count;
-    for (std::size_t i = 0; i != c_keys_count; ++i)
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * c_tasks_count;
+    for (std::size_t i = 0; i != c_tasks_count; ++i)
         total_bytes += vals[i].size();
 
     // 2. Allocate a tape for all the values to be fetched
@@ -294,11 +294,11 @@ void ukv_read( //
 
     // 3. Fetch the data
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * c_keys_count;
+    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * c_tasks_count;
     *c_found_lengths = lens;
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
 
-    for (std::size_t i = 0; i != c_keys_count; ++i) {
+    for (std::size_t i = 0; i != c_tasks_count; ++i) {
         auto len = vals[i].size();
         if (len) {
             std::memcpy(tape + exported_bytes, vals[i].data(), len);

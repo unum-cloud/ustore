@@ -36,10 +36,10 @@ struct sample_proxy_t {
 
         ukv_read(db,
                  txn,
+                 keys.count(),
                  cols.begin().get(),
                  cols.stride(),
                  keys.begin().get(),
-                 keys.count(),
                  keys.stride(),
                  transparent ? ukv_option_read_transparent_k : ukv_options_default_k,
                  &found_lengths,
@@ -60,10 +60,10 @@ struct sample_proxy_t {
 
         ukv_read(db,
                  txn,
+                 keys.count(),
                  cols.begin().get(),
                  cols.stride(),
                  keys.begin().get(),
-                 keys.count(),
                  keys.stride(),
                  transparent ? ukv_option_read_transparent_k : ukv_options_default_k,
                  &found_lengths,
@@ -88,10 +88,10 @@ struct sample_proxy_t {
 
         ukv_read(db,
                  txn,
+                 keys.count(),
                  cols.begin().get(),
                  cols.stride(),
                  keys.begin().get(),
-                 keys.count(),
                  keys.stride(),
                  transparent ? ukv_option_read_transparent_k : ukv_options_default_k,
                  &found_lengths,
@@ -115,16 +115,16 @@ struct sample_proxy_t {
     /**
      * @brief Pair-wise assigns values to keys located in this proxy objects.
      * @param flush Pass true, if you need the data to be persisted before returning.
-     * @return status_t Non-NULL if only an error had occured.
+     * @return status_t Non-NULL if only an error had occurred.
      */
     status_t set(disjoint_values_view_t vals, bool flush = false) noexcept {
         status_t status;
         ukv_write(db,
                   txn,
+                  keys.count(),
                   cols.begin().get(),
                   cols.stride(),
                   keys.begin().get(),
-                  keys.count(),
                   keys.stride(),
                   vals.contents.begin().get(),
                   vals.contents.stride(),
@@ -141,14 +141,14 @@ struct sample_proxy_t {
     /**
      * @brief Removes both the keys and the associated values.
      * @param flush Pass true, if you need the data to be persisted before returning.
-     * @return status_t Non-NULL if only an error had occured.
+     * @return status_t Non-NULL if only an error had occurred.
      */
     status_t erase(bool flush = false) noexcept { return set(disjoint_values_view_t {}, flush); }
 
     /**
      * @brief Keeps the keys, but clears the contents of associated values.
      * @param flush Pass true, if you need the data to be persisted before returning.
-     * @return status_t Non-NULL if only an error had occured.
+     * @return status_t Non-NULL if only an error had occurred.
      */
     status_t clear(bool flush = false) noexcept {
         ukv_val_ptr_t any = reinterpret_cast<ukv_val_ptr_t>(this);
@@ -201,10 +201,10 @@ class keys_stream_t {
         status_t status;
         ukv_scan(db_,
                  txn_,
+                 1,
                  &col_,
                  0,
                  &next_min_key_,
-                 1,
                  0,
                  &read_ahead_,
                  0,

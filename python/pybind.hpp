@@ -19,7 +19,7 @@ struct py_col_t;
 /**
  * @brief Wrapper for `ukv::db_t`.
  * Assumes that the Python client won't use more than one
- * concurrent session, as multithreading in Pyhton is
+ * concurrent session, as multithreading in Python is
  * prohibitively expensive.
  * We need to preserve the `config`, to allow re-opening.
  */
