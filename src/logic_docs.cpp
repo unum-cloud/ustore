@@ -25,6 +25,8 @@ using namespace unum;
 using json_t = nlohmann::json;
 using json_ptr_t = json_t::json_pointer;
 
+constexpr ukv_format_t internal_format_k = ukv_format_msgpack_k;
+
 /**
  * @brief Extracts a select subset of keys by from input document.
  *
@@ -142,6 +144,8 @@ void update_docs( //
         }
 
         auto parsed = parse_any(task.view(), c_format, c_error);
+        if (*c_error)
+            return;
         if (parsed.is_discarded()) {
             *c_error = "Couldn't parse inputs";
             return;
@@ -231,6 +235,26 @@ void ukv_docs_write( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    // If user wants the entire doc in the same format, as the one we use internally,
+    // this request can be passed entirely to the underlying Key-Value store.
+    if (!c_fields && c_format == internal_format_k)
+        return ukv_write(c_db,
+                         c_txn,
+                         c_tasks_count,
+                         c_cols,
+                         c_cols_stride,
+                         c_keys,
+                         c_keys_stride,
+                         c_options,
+                         c_vals,
+                         c_vals_stride,
+                         c_offs,
+                         c_offs_stride,
+                         c_lens,
+                         c_lens_stride,
+                         c_arena,
+                         c_error);
+
     if (!c_db) {
         *c_error = "DataBase is NULL!";
         return;
@@ -279,6 +303,22 @@ void ukv_docs_read( //
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
+
+    // If user wants the entire doc in the same format, as the one we use internally,
+    // this request can be passed entirely to the underlying Key-Value store.
+    if (!c_fields && c_format == internal_format_k)
+        return ukv_read(c_db,
+                        c_txn,
+                        n,
+                        c_cols,
+                        c_cols_stride,
+                        c_keys,
+                        c_keys_stride,
+                        c_options,
+                        c_found_lengths,
+                        c_found_values,
+                        c_arena,
+                        c_error);
 
     if (!c_db) {
         *c_error = "DataBase is NULL!";
