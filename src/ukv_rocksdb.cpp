@@ -326,7 +326,8 @@ void ukv_read( //
     read_tasks_soa_t tasks {cols_stride, keys_stride};
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     rocksdb::ReadOptions options;
-
+    if (txn)
+        options.snapshot = txn->GetSnapshot();
     try {
         auto func = c_tasks_count == 1 ? &read_one : &read_many;
         func(db_wrapper, txn, tasks, c_tasks_count, options, c_found_lengths, c_found_values, arena, c_error);
@@ -470,7 +471,9 @@ void ukv_txn_begin(
 
     rocks_db_t* db = reinterpret_cast<rocks_db_wrapper_t*>(c_db)->db.get();
     rocks_txn_ptr_t txn = reinterpret_cast<rocks_txn_ptr_t>(*c_txn);
-    txn = db->BeginTransaction(rocksdb::WriteOptions(), rocksdb::TransactionOptions(), txn);
+    rocksdb::TransactionOptions options;
+    options.set_snapshot = true;
+    txn = db->BeginTransaction(rocksdb::WriteOptions(), options, txn);
     if (!txn)
         *c_error = "Couldn't start a transaction!";
     else
