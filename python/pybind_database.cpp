@@ -1,5 +1,5 @@
 /**
- * @brief Python bindings for Unums Key Value Store.
+ * @brief Python bindings for UKV.
  *
  * @section Interface
  *
