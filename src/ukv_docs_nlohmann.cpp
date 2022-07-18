@@ -163,10 +163,10 @@ void update_docs( //
     ukv_write( //
         c_db,
         c_txn,
+        n,
         tasks.cols.get(),
         tasks.cols.stride(),
         tasks.keys.get(),
-        n,
         tasks.keys.stride(),
         arena.updated_vals.front().internal_cptr(),
         sizeof(value_t),
@@ -210,12 +210,12 @@ void update_fields( //
 void ukv_docs_write( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_str_view_t const* c_fields,
@@ -252,7 +252,7 @@ void ukv_docs_write( //
 
     try {
         auto func = fields ? &update_fields : &update_docs;
-        func(c_db, c_txn, tasks, fields, c_keys_count, c_options, c_format, arena, c_error);
+        func(c_db, c_txn, tasks, fields, c_tasks_count, c_options, c_format, arena, c_error);
     }
     catch (std::bad_alloc const&) {
         *c_error = "Failed to allocate memory!";
@@ -320,10 +320,10 @@ void ukv_docs_read( //
     ukv_size_t found_count = static_cast<ukv_size_t>(arena.updated_keys.size());
     ukv_read(c_db,
              c_txn,
+             found_count,
              &arena.updated_keys[0].collection,
              sizeof(located_key_t),
              &arena.updated_keys[0].key,
-             found_count,
              sizeof(located_key_t),
              c_options,
              &found_lengths,

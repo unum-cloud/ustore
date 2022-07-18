@@ -116,12 +116,12 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
 void ukv_graph_find_edges( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* vertices_ids,
-    ukv_size_t const vertices_count,
     ukv_size_t const vertices_stride,
 
     ukv_vertex_role_t const* roles,
@@ -145,12 +145,12 @@ void ukv_graph_find_edges( //
 void ukv_graph_upsert_edges( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* edges_ids,
-    ukv_size_t const edges_count,
     ukv_size_t const edges_stride,
 
     ukv_key_t const* sources_ids,
@@ -175,12 +175,12 @@ void ukv_graph_upsert_edges( //
 void ukv_graph_remove_edges( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* edges_ids,
-    ukv_size_t const edges_count,
     ukv_size_t const edges_stride,
 
     ukv_key_t const* sources_ids,
@@ -201,12 +201,12 @@ void ukv_graph_remove_edges( //
 void ukv_graph_remove_vertices( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* vertices_ids,
-    ukv_size_t const vertices_count,
     ukv_size_t const vertices_stride,
 
     ukv_vertex_role_t const* roles,

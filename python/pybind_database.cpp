@@ -91,10 +91,10 @@ bool contains_item( //
     ukv_read( //
         db_ptr,
         txn_ptr,
+        1,
         &collection_ptr,
         0,
         &key,
-        1,
         0,
         options,
         &found_lengths,
@@ -122,10 +122,10 @@ std::optional<py::bytes> get_item( //
     ukv_read( //
         db_ptr,
         txn_ptr,
+        1,
         &collection_ptr,
         0,
         &key,
-        1,
         0,
         options,
         &found_lengths,
@@ -207,7 +207,7 @@ void export_matrix( //
         throw std::invalid_argument("Keys must be placed in a coninuous 1 dimensional array");
     if (keys.py.strides[0] != sizeof(ukv_key_t))
         throw std::invalid_argument("Keys can't be strided");
-    ukv_size_t const keys_count = static_cast<ukv_size_t>(keys.py.len / keys.py.itemsize);
+    ukv_size_t const tasks_count = static_cast<ukv_size_t>(keys.py.len / keys.py.itemsize);
     ukv_key_t const* keys_ptr = reinterpret_cast<ukv_key_t const*>(keys.py.buf);
 
     // Validate the format of `values`
@@ -219,7 +219,7 @@ void export_matrix( //
         throw std::invalid_argument("Output tensor sides can't be zero");
     if ((values.py.strides[0] <= 0) || values.py.strides[1] <= 0)
         throw std::invalid_argument("Output tensor strides can't be negative");
-    if (keys_count != static_cast<ukv_size_t>(values.py.shape[0]))
+    if (tasks_count != static_cast<ukv_size_t>(values.py.shape[0]))
         throw std::invalid_argument("Number of input keys and output slots doesn't match");
     auto outputs_bytes = reinterpret_cast<std::uint8_t*>(values.py.buf);
     auto outputs_bytes_stride = static_cast<std::size_t>(values.py.strides[0]);
@@ -234,7 +234,7 @@ void export_matrix( //
         throw std::invalid_argument("Lengths tensor sides can't be zero");
     if (values_lengths.py.strides[0] <= 0)
         throw std::invalid_argument("Lengths tensor strides can't be negative");
-    if (keys_count != static_cast<ukv_size_t>(values_lengths.py.shape[0]))
+    if (tasks_count != static_cast<ukv_size_t>(values_lengths.py.shape[0]))
         throw std::invalid_argument("Number of input keys and output slots doesn't match");
     auto outputs_lengths_bytes = reinterpret_cast<std::uint8_t*>(values_lengths.py.buf);
     auto outputs_lengths_bytes_stride = static_cast<std::size_t>(values_lengths.py.strides[0]);
@@ -249,10 +249,10 @@ void export_matrix( //
     ukv_read( //
         db_ptr,
         txn_ptr,
+        tasks_count,
         &collection_ptr,
         0,
         keys_ptr,
-        keys_count,
         sizeof(ukv_key_t),
         options,
         &found_lengths,
@@ -263,9 +263,9 @@ void export_matrix( //
     status.throw_unhandled();
 
     // Export the data into the matrix
-    taped_values_view_t inputs {found_lengths, found_values, keys_count};
+    taped_values_view_t inputs {found_lengths, found_values, tasks_count};
     tape_iterator_t input_it = inputs.begin();
-    for (ukv_size_t i = 0; i != keys_count; ++i, ++input_it) {
+    for (ukv_size_t i = 0; i != tasks_count; ++i, ++input_it) {
         value_view_t input = *input_it;
         auto input_bytes = reinterpret_cast<std::uint8_t const*>(input.begin());
         auto input_length = static_cast<ukv_val_len_t const>(input.size());
@@ -300,10 +300,10 @@ void set_item( //
     ukv_write( //
         db_ptr,
         txn_ptr,
+        1,
         &collection_ptr,
         0,
         &key,
-        1,
         0,
         &ptr,
         0,

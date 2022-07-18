@@ -271,12 +271,12 @@ template <bool export_center_ak = true, bool export_neighbor_ak = true, bool exp
 void export_edge_tuples( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_vertices_count,
 
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_vertices_ids,
-    ukv_size_t const c_vertices_count,
     ukv_size_t const c_vertices_stride,
 
     ukv_vertex_role_t const* c_roles,
@@ -297,10 +297,10 @@ void export_edge_tuples( //
     // Those may be compressed. We need to read the first bytes to parse the degree of the node.
     ukv_read(c_db,
              c_txn,
+             c_vertices_count,
              c_collections,
              c_collections_stride,
              c_vertices_ids,
-             c_vertices_count,
              c_vertices_stride,
              static_cast<ukv_options_t>(c_options & ~ukv_option_read_lengths_k),
              &c_found_lengths,
@@ -391,12 +391,12 @@ void export_edge_tuples( //
 void export_disjoint_edge_buffers( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_vertices_count,
 
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_vertices_ids,
-    ukv_size_t const c_vertices_count,
     ukv_size_t const c_vertices_stride,
 
     ukv_options_t const c_options,
@@ -409,10 +409,10 @@ void export_disjoint_edge_buffers( //
 
     ukv_read(c_db,
              c_txn,
+             c_vertices_count,
              c_collections,
              c_collections_stride,
              c_vertices_ids,
-             c_vertices_count,
              c_vertices_stride,
              c_options,
              &c_found_lengths,
@@ -435,12 +435,12 @@ template <bool erase_ak>
 void update_neighborhoods( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_edges_ids,
-    ukv_size_t const c_edges_count,
     ukv_size_t const c_edges_stride,
 
     ukv_key_t const* c_sources_ids,
@@ -464,23 +464,23 @@ void update_neighborhoods( //
     strided_iterator_gt<ukv_key_t const> targets_ids {c_targets_ids, c_targets_stride};
 
     // Fetch all the data related to touched vertices
-    prepare_memory(arena.updated_keys, c_edges_count + c_edges_count, c_error);
+    prepare_memory(arena.updated_keys, c_tasks_count + c_tasks_count, c_error);
     if (*c_error)
         return;
-    for (ukv_size_t i = 0; i != c_edges_count; ++i)
+    for (ukv_size_t i = 0; i != c_tasks_count; ++i)
         arena.updated_keys[i] = {collections[i], sources_ids[i]};
-    for (ukv_size_t i = 0; i != c_edges_count; ++i)
-        arena.updated_keys[c_edges_count + i] = {collections[i], targets_ids[i]};
+    for (ukv_size_t i = 0; i != c_tasks_count; ++i)
+        arena.updated_keys[c_tasks_count + i] = {collections[i], targets_ids[i]};
 
     // Keep only the unique items
     sort_and_deduplicate(arena.updated_keys);
 
     export_disjoint_edge_buffers(c_db,
                                  c_txn,
+                                 static_cast<ukv_size_t>(arena.updated_keys.size()),
                                  &arena.updated_keys[0].collection,
                                  sizeof(located_key_t),
                                  &arena.updated_keys[0].key,
-                                 static_cast<ukv_size_t>(arena.updated_keys.size()),
                                  sizeof(located_key_t),
                                  c_options,
                                  c_arena,
@@ -489,7 +489,7 @@ void update_neighborhoods( //
         return;
 
     // Upsert into in-memory arrays
-    for (ukv_size_t i = 0; i != c_edges_count; ++i) {
+    for (ukv_size_t i = 0; i != c_tasks_count; ++i) {
         auto collection = collections[i];
         auto source_id = sources_ids[i];
         auto target_id = targets_ids[i];
@@ -516,10 +516,10 @@ void update_neighborhoods( //
     ukv_val_len_t offset_in_val = 0;
     ukv_write(c_db,
               c_txn,
+              static_cast<ukv_size_t>(arena.updated_keys.size()),
               &arena.updated_keys[0].collection,
               sizeof(located_key_t),
               &arena.updated_keys[0].key,
-              static_cast<ukv_size_t>(arena.updated_keys.size()),
               sizeof(located_key_t),
               arena.updated_vals[0].internal_cptr(),
               sizeof(value_t),
@@ -535,12 +535,12 @@ void update_neighborhoods( //
 void ukv_graph_find_edges( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_vertices_count,
 
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_vertices_ids,
-    ukv_size_t const c_vertices_count,
     ukv_size_t const c_vertices_stride,
 
     ukv_vertex_role_t const* c_roles,
@@ -558,10 +558,10 @@ void ukv_graph_find_edges( //
                                                         : &export_edge_tuples<true, true, true>;
     return func(c_db,
                 c_txn,
+                c_vertices_count,
                 c_collections,
                 c_collections_stride,
                 c_vertices_ids,
-                c_vertices_count,
                 c_vertices_stride,
                 c_roles,
                 c_roles_stride,
@@ -575,12 +575,12 @@ void ukv_graph_find_edges( //
 void ukv_graph_upsert_edges( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_edges_ids,
-    ukv_size_t const c_edges_count,
     ukv_size_t const c_edges_stride,
 
     ukv_key_t const* c_sources_ids,
@@ -596,10 +596,10 @@ void ukv_graph_upsert_edges( //
 
     return update_neighborhoods<false>(c_db,
                                        c_txn,
+                                       c_tasks_count,
                                        c_collections,
                                        c_collections_stride,
                                        c_edges_ids,
-                                       c_edges_count,
                                        c_edges_stride,
                                        c_sources_ids,
                                        c_sources_stride,
@@ -613,12 +613,12 @@ void ukv_graph_upsert_edges( //
 void ukv_graph_remove_edges( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_edges_ids,
-    ukv_size_t const c_edges_count,
     ukv_size_t const c_edges_stride,
 
     ukv_key_t const* c_sources_ids,
@@ -634,10 +634,10 @@ void ukv_graph_remove_edges( //
 
     return update_neighborhoods<true>(c_db,
                                       c_txn,
+                                      c_tasks_count,
                                       c_collections,
                                       c_collections_stride,
                                       c_edges_ids,
-                                      c_edges_count,
                                       c_edges_stride,
                                       c_sources_ids,
                                       c_sources_stride,
@@ -651,12 +651,12 @@ void ukv_graph_remove_edges( //
 void ukv_graph_remove_vertices( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_vertices_count,
 
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_vertices_ids,
-    ukv_size_t const c_vertices_count,
     ukv_size_t const c_vertices_stride,
 
     ukv_vertex_role_t const* c_roles,
@@ -676,10 +676,10 @@ void ukv_graph_remove_vertices( //
     ukv_key_t* neighbors_per_vertex = nullptr;
     export_edge_tuples<false, true, false>(c_db,
                                            c_txn,
+                                           c_vertices_count,
                                            c_collections,
                                            c_collections_stride,
                                            c_vertices_ids,
-                                           c_vertices_count,
                                            c_vertices_stride,
                                            c_roles,
                                            c_roles_stride,
@@ -718,10 +718,10 @@ void ukv_graph_remove_vertices( //
     // Here all the keys will be in the sorted order.
     export_disjoint_edge_buffers(c_db,
                                  c_txn,
+                                 static_cast<ukv_size_t>(arena.updated_keys.size()),
                                  &arena.updated_keys[0].collection,
                                  sizeof(located_key_t),
                                  &arena.updated_keys[0].key,
-                                 static_cast<ukv_size_t>(arena.updated_keys.size()),
                                  sizeof(located_key_t),
                                  c_options,
                                  c_arena,
@@ -756,10 +756,10 @@ void ukv_graph_remove_vertices( //
     ukv_val_len_t offset_in_val = 0;
     ukv_write(c_db,
               c_txn,
+              static_cast<ukv_size_t>(arena.updated_keys.size()),
               &arena.updated_keys[0].collection,
               sizeof(located_key_t),
               &arena.updated_keys[0].key,
-              static_cast<ukv_size_t>(arena.updated_keys.size()),
               sizeof(located_key_t),
               arena.updated_vals[0].internal_cptr(),
               sizeof(value_t),
