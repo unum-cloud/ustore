@@ -2,7 +2,7 @@
  * @file db.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings for @see "db.h".
+ * @brief C++ bindings for @see "ukv/db.h".
  */
 
 #pragma once
@@ -11,7 +11,7 @@
 #include <memory>  // `std::enable_shared_from_this`
 
 #include "ukv/ukv.h"
-#include "utility.hpp"
+#include "ukv/utility.hpp"
 
 namespace unum::ukv {
 

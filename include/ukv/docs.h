@@ -1,5 +1,5 @@
 /**
- * @file ukv_docs.h
+ * @file docs.h
  * @author Ashot Vardanian
  * @date 27 Jun 2022
  *
