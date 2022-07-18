@@ -326,7 +326,8 @@ void ukv_read( //
     read_tasks_soa_t tasks {cols_stride, keys_stride};
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     rocksdb::ReadOptions options;
-
+    if (txn)
+        options.snapshot = txn->GetSnapshot();
     try {
         auto func = c_tasks_count == 1 ? &read_one : &read_many;
         func(db_wrapper, txn, tasks, c_tasks_count, options, c_found_lengths, c_found_values, arena, c_error);
@@ -376,12 +377,16 @@ void ukv_scan( //
 
     rocksdb::ReadOptions options;
     options.fill_cache = false;
-    ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * c_min_tasks_count;
-    byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
+    ukv_size_t keys_bytes = sizeof(ukv_key_t) * c_min_tasks_count;
+    ukv_size_t val_len_bytes = sizeof(ukv_val_len_t) * c_min_tasks_count;
+    byte_t* tape = prepare_memory(arena.output_tape, keys_bytes + val_len_bytes, c_error);
     if (*c_error)
         return;
-    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    std::fill_n(lens, c_min_tasks_count, 0);
+
+    ukv_key_t* scanned_keys = reinterpret_cast<ukv_key_t*>(tape);
+    ukv_val_len_t* scanned_lens = reinterpret_cast<ukv_val_len_t*>(tape + keys_bytes);
+    *c_found_keys = scanned_keys;
+    *c_found_lengths = scanned_lens;
 
     for (ukv_size_t i = 0; i != c_min_tasks_count; ++i) {
         scan_task_t task = tasks[i];
@@ -397,13 +402,8 @@ void ukv_scan( //
         }
         it->Seek(to_slice(task.min_key));
         for (; it->Valid() && i != task.length; i++, it->Next()) {
-            auto old_tape_len = arena.output_tape.size();
-            auto bytes_in_value = it->value().size();
-            tape = prepare_memory(arena.output_tape, old_tape_len + bytes_in_value, c_error);
-            if (*c_error)
-                return;
-            std::memcpy(tape + old_tape_len, it->value().data(), bytes_in_value);
-            lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
+            std::memcpy(&scanned_keys[i], it->key().data(), sizeof(ukv_key_t));
+            scanned_lens[i] = static_cast<ukv_val_len_t>(it->value().size());
         }
     }
 }
@@ -471,7 +471,9 @@ void ukv_txn_begin(
 
     rocks_db_t* db = reinterpret_cast<rocks_db_wrapper_t*>(c_db)->db.get();
     rocks_txn_ptr_t txn = reinterpret_cast<rocks_txn_ptr_t>(*c_txn);
-    txn = db->BeginTransaction(rocksdb::WriteOptions(), rocksdb::TransactionOptions(), txn);
+    rocksdb::TransactionOptions options;
+    options.set_snapshot = true;
+    txn = db->BeginTransaction(rocksdb::WriteOptions(), options, txn);
     if (!txn)
         *c_error = "Couldn't start a transaction!";
     else
