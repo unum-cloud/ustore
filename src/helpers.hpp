@@ -9,6 +9,7 @@
 #include <cstring>   // `std::memcpy`
 #include <stdexcept> // `std::runtime_error`
 #include <algorithm> // `std::sort`
+#include <limits.h>  // `CHAR_BIT`
 
 #include "ukv/ukv.hpp"
 
@@ -17,6 +18,10 @@ namespace unum::ukv {
 using allocator_t = std::allocator<byte_t>;
 using buffer_t = std::vector<byte_t, allocator_t>;
 using sequence_t = std::int64_t;
+
+inline std::size_t next_power_of_two(std::size_t x) {
+    return 1ull << (sizeof(std::size_t) * CHAR_BIT - __builtin_clzll(x));
+}
 
 /**
  * @brief An `std::vector`-like class, with open layout,
@@ -156,9 +161,7 @@ class growing_tape_t {
         data_.clear();
     }
 
-    operator taped_values_view_t() const noexcept {
-        return {lengths_.data(), ukv_val_ptr_t(data_.data()), data_.size()};
-    }
+    operator taped_values_view_t() noexcept { return {lengths_.data(), ukv_val_ptr_t(data_.data()), data_.size()}; }
 };
 
 struct stl_arena_t {
@@ -353,6 +356,13 @@ void sort_and_deduplicate(std::vector<element_at>& elems) {
 template <typename element_at>
 std::size_t offset_in_sorted(std::vector<element_at> const& elems, element_at const& wanted) {
     return std::lower_bound(elems.begin(), elems.end(), wanted) - elems.begin();
+}
+
+template <typename element_at>
+void inplace_inclusive_prefix_sum(element_at* begin, element_at* const end) {
+    element_at sum = 0;
+    for (; begin != end; ++begin)
+        sum += std::exchange(*begin, *begin + sum);
 }
 
 } // namespace unum::ukv
