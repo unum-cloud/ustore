@@ -28,6 +28,7 @@ using level_db_t = leveldb::DB;
 using level_status_t = leveldb::Status;
 using level_options_t = leveldb::Options;
 using value_uptr_t = std::unique_ptr<std::string>;
+using level_iter_uptr = std::unique_ptr<leveldb::Iterator>;
 
 struct key_comparator_t final : public leveldb::Comparator {
 
@@ -241,9 +242,9 @@ void read_many( //
         auto old_tape_len = arena.output_tape.size();
         auto bytes_in_value = value.size();
         tape = prepare_memory(arena.output_tape, old_tape_len + bytes_in_value, c_error);
-        lens = reinterpret_cast<ukv_val_len_t*>(tape);
         if (*c_error)
             return;
+        lens = reinterpret_cast<ukv_val_len_t*>(tape);
 
         std::memcpy(tape + old_tape_len, value.data(), bytes_in_value);
         lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
@@ -321,7 +322,14 @@ void ukv_scan( //
 
     leveldb::ReadOptions options;
     options.fill_cache = false;
-    std::unique_ptr<leveldb::Iterator> it(db.NewIterator(options));
+    level_iter_uptr it;
+    try {
+        it = level_iter_uptr(db.NewIterator(options));
+    }
+    catch (...) {
+        *c_error = "Fail To Create Iterator";
+        return;
+    }
     ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * c_min_tasks_count;
     byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
     if (*c_error)
@@ -336,7 +344,8 @@ void ukv_scan( //
             auto old_tape_len = arena.output_tape.size();
             auto bytes_in_value = it->value().size();
             tape = prepare_memory(arena.output_tape, old_tape_len + bytes_in_value, c_error);
-
+            if (*c_error)
+                return;
             std::memcpy(tape + old_tape_len, it->value().data(), bytes_in_value);
             lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
         }
