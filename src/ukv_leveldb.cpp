@@ -229,6 +229,8 @@ void read_many( //
 
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
     std::fill_n(lens, n, 0);
+    *c_found_lengths = lens;
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + lens_bytes);
 
     for (ukv_size_t i = 0; i != n; ++i) {
         read_task_t task = tasks[i];
@@ -321,6 +323,18 @@ void ukv_scan( //
 
     leveldb::ReadOptions options;
     options.fill_cache = false;
+
+    ukv_size_t keys_bytes = sizeof(ukv_key_t) * c_min_tasks_count;
+    ukv_size_t val_len_bytes = sizeof(ukv_val_len_t) * c_min_tasks_count;
+    byte_t* tape = prepare_memory(arena.output_tape, keys_bytes + val_len_bytes, c_error);
+    if (*c_error)
+        return;
+
+    ukv_key_t* scanned_keys = reinterpret_cast<ukv_key_t*>(tape);
+    ukv_val_len_t* scanned_lens = reinterpret_cast<ukv_val_len_t*>(tape + keys_bytes);
+    *c_found_keys = scanned_keys;
+    *c_found_lengths = scanned_lens;
+
     level_iter_uptr_t it;
     try {
         it = level_iter_uptr_t(db.NewIterator(options));
@@ -329,24 +343,12 @@ void ukv_scan( //
         *c_error = "Fail To Create Iterator";
         return;
     }
-    ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * c_min_tasks_count;
-    byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
-    if (*c_error)
-        return;
-    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    std::fill_n(lens, c_min_tasks_count, 0);
-
     for (ukv_size_t i = 0; i != c_min_tasks_count; ++i) {
         scan_task_t task = tasks[i];
         it->Seek(to_slice(task.min_key));
         for (; it->Valid() && i != task.length; i++, it->Next()) {
-            auto old_tape_len = arena.output_tape.size();
-            auto bytes_in_value = it->value().size();
-            tape = prepare_memory(arena.output_tape, old_tape_len + bytes_in_value, c_error);
-            if (*c_error)
-                return;
-            std::memcpy(tape + old_tape_len, it->value().data(), bytes_in_value);
-            lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
+            std::memcpy(&scanned_keys[i], it->key().data(), sizeof(ukv_key_t));
+            scanned_lens[i] = static_cast<ukv_val_len_t>(it->value().size());
         }
     }
 }
