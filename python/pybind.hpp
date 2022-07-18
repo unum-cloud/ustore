@@ -25,10 +25,11 @@ struct py_col_t;
  */
 struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     db_t native;
-    session_t session;
+    db_session_t session;
     std::string config;
 
-    py_db_t(db_t&& n, session_t&& s, std::string const& c) : native(std::move(n)), session(std::move(s)), config(c) {}
+    py_db_t(db_t&& n, db_session_t&& s, std::string const& c)
+        : native(std::move(n)), session(std::move(s)), config(c) {}
     py_db_t(py_db_t const&) = delete;
     py_db_t(py_db_t&& other) noexcept
         : native(std::move(other.native)), session(std::move(other.session)), config(std::move(config)) {}
