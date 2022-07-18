@@ -71,11 +71,7 @@ struct export_to_value_t : public nlohmann::detail::output_adapter_protocol<char
     export_to_value_t() = default;
     export_to_value_t(value_t& value) noexcept : value_ptr(&value) {}
 
-    void write_character(char c) override {
-        auto ptr = reinterpret_cast<byte_t const*>(&c);
-        value_ptr->insert(value_ptr->size(), ptr, ptr + 1);
-    }
-
+    void write_character(char c) override { value_ptr->push_back(static_cast<byte_t>(c)); }
     void write_characters(char const* s, std::size_t length) override {
         auto ptr = reinterpret_cast<byte_t const*>(s);
         value_ptr->insert(value_ptr->size(), ptr, ptr + length);

@@ -70,6 +70,25 @@ class value_t {
         length_ = size;
     }
 
+    void push_back(byte_t byte) {
+        auto new_size = length_ + 1;
+        if (new_size > cap_) {
+            auto new_cap = next_power_of_two(new_size);
+            auto new_ptr = allocator_t {}.allocate(new_cap);
+            if (!new_ptr)
+                throw std::bad_alloc();
+            std::memcpy(new_ptr, ptr_, length_);
+            if (ptr_)
+                allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
+
+            ptr_ = reinterpret_cast<ukv_val_ptr_t>(new_ptr);
+            cap_ = new_cap;
+        }
+
+        reinterpret_cast<byte_t*>(ptr_)[length_] = byte;
+        length_ = new_size;
+    }
+
     void insert(std::size_t offset, byte_t const* inserted_begin, byte_t const* inserted_end) {
         if (offset > size())
             throw std::out_of_range("Can't insert");
