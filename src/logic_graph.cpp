@@ -1,5 +1,5 @@
 /**
- * @file ukv_graph_pfor.cpp
+ * @file logic_graphs.cpp
  * @author Ashot Vardanian
  *
  * @brief Graph implementation using fast integer compression.

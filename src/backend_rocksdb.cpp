@@ -1,5 +1,5 @@
 /**
- * @file ukv_rocksdb.cpp
+ * @file backend_rocksdb.cpp
  * @author Ashot Vardanian
  *
  * @brief Embedded Persistent Key-Value Store on top of @b RocksDB.

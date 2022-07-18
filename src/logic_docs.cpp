@@ -1,5 +1,5 @@
 /**
- * @file ukv_docs_nlohmann.cpp
+ * @file logic_docs.cpp
  * @author Ashot Vardanian
  *
  * @brief Document storage using "nlohmann/JSON" lib.
