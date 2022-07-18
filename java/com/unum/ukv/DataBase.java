@@ -22,7 +22,7 @@ import org.junit.Test;
  *          which will encapsulate all your reads & updates. The interface of
  *          the "HEAD" and transaction-based operations is identical.
  * 
- *          In both cases we mimic native Java `HashMap` & `Ditionary` classes.
+ *          In both cases we mimic native Java `HashMap` & `Dictionary` classes.
  *          Aside from that, most objects are `AutoCloseable`, to simplify the
  *          resource usage and potentially auto-commit transactions on cleanup.
  * 
@@ -38,7 +38,7 @@ import org.junit.Test;
  *          > putIfAbsent(key, value)
  *          > getOrDefault(key, defaultValue)
  *          > putAll(Map<Key, Value>)
- *          You can expect similar behaviour to native classes described here:
+ *          You can expect similar behavior to native classes described here:
  *          https://docs.oracle.com/javase/7/docs/api/java/util/Dictionary.html
  *          https://docs.oracle.com/javase/7/docs/api/java/util/Hashtable.html
  * 
@@ -78,7 +78,7 @@ public class DataBase {
         public boolean autoCommit = true;
 
         /**
-         * When enabled, the transaction is being commited on close.
+         * When enabled, the transaction is being committed on close.
          * If the commit fails, an exception is raised.
          */
         public void setAutoCommit(boolean state) {
@@ -93,7 +93,7 @@ public class DataBase {
 
         /**
          * @brief Commits all the writes to DBMS, checking for collisions in the
-         *        process. Both in writes and "non-transaparent" reads. Returns
+         *        process. Both in writes and "non-transparent" reads. Returns
          *        operation result, but doesn't throw exceptions.
          * 
          * @return true if the operation was submitted and the state of DBMS updated.
@@ -222,7 +222,7 @@ public class DataBase {
          * Removes the entry for the specified key only if it is currently
          * mapped to the specified value.
          * 
-         * @return True, iff key was found, value was equal and the removal occured.
+         * @return True, iff key was found, value was equal and the removal occurred.
          */
         public boolean remove(String collection, long key, byte[] value) {
             byte[] old = get(collection, key);
@@ -270,7 +270,7 @@ public class DataBase {
 
         /**
          * @brief Begins a new transaction with an auto-incremented identifier.
-         *        By default, the transaction will be commited on `close`.
+         *        By default, the transaction will be committed on `close`.
          */
         public native Transaction transaction();
 
