@@ -1,5 +1,5 @@
 /**
- * @file ukv_leveldb.cpp
+ * @file backend_leveldb.cpp
  * @author Ashot Vardanian
  *
  * @brief Embedded Persistent Key-Value Store on top of @b LevelDB.

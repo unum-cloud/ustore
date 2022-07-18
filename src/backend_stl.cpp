@@ -1,5 +1,5 @@
 /**
- * @file ukv_stl.cpp
+ * @file backend_stl.cpp
  * @author Ashot Vardanian
  *
  * @brief Embedded In-Memory Key-Value Store implementation using only @b STL.
