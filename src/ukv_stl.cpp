@@ -1025,6 +1025,46 @@ void ukv_collection_remove(
     }
 }
 
+void ukv_collection_list( //
+    ukv_t const c_db,
+    ukv_size_t* c_count,
+    ukv_str_view_t* c_names,
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+    std::unique_lock _ {db.mutex};
+
+    std::size_t total_length = 0;
+    for (auto const& name_and_contents : db.named)
+        total_length += name_and_contents.first.size();
+
+    // Every string will be null-terminated
+    total_length += db.named.size();
+    *c_count = static_cast<ukv_size_t>(db.named.size());
+
+    auto tape = prepare_memory(arena.output_tape, total_length, c_error);
+    if (*c_error)
+        return;
+
+    *c_names = reinterpret_cast<ukv_str_view_t>(tape);
+    for (auto const& name_and_contents : db.named) {
+        auto len = name_and_contents.first.size();
+        std::memcpy(tape, name_and_contents.first.data(), len);
+        tape[len] = byte_t {0};
+        tape += len;
+    }
+}
+
 void ukv_control( //
     ukv_t const c_db,
     ukv_str_view_t c_request,

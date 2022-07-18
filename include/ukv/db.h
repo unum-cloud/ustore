@@ -385,7 +385,9 @@ void ukv_collection_open( //
  */
 void ukv_collection_list( //
     ukv_t const db,
+    ukv_size_t* count,
     ukv_str_view_t* names,
+    ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
