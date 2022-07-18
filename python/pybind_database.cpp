@@ -331,7 +331,7 @@ void ukv::wrap_database(py::module& m) {
             db_t db;
             if (open)
                 db.open(config).throw_unhandled();
-            session_t session = db.session();
+            db_session_t session = db.session();
             return std::make_shared<py_db_t>(std::move(db), std::move(session), config);
         }),
         py::arg("config") = "",
@@ -491,7 +491,7 @@ void ukv::wrap_database(py::module& m) {
             return false;
         });
 
-    // Operator overaloads used to edit entries
+    // Operator overloads used to edit entries
     py_db.def("__contains__", [](py_db_t& py_db, ukv_key_t key) {
         return contains_item(py_db.native, nullptr, ukv_default_collection_k, py_db.session.arena(), key);
     });
@@ -557,7 +557,12 @@ void ukv::wrap_database(py::module& m) {
                         key);
     });
 
-    // Operator overaloads used to access collections
+    // Operator overloads used to access collections
+    py_db.def("__contains__", [](py_db_t& py_db, std::string const& collection) {
+        auto maybe = py_db.native.contains(collection);
+        maybe.throw_unhandled();
+        return *maybe;
+    });
     py_db.def("__getitem__", [](py_db_t& py_db, std::string const& collection) {
         auto maybe_col = py_db.native[collection];
         maybe_col.throw_unhandled();

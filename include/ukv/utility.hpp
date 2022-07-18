@@ -341,6 +341,7 @@ struct collections_view_t : public strided_range_gt<ukv_collection_t const> {
 };
 
 using keys_view_t = strided_range_gt<ukv_key_t const>;
+using fields_view_t = strided_range_gt<ukv_str_view_t const>;
 
 using located_keys_view_t = strided_range_gt<located_key_t const>;
 
