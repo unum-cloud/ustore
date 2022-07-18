@@ -506,12 +506,12 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "clear",
         [](network_t& net) {
-            db_t& db = net.db_ptr->native;
-            db.clear(net.graph.collection());
-            db.clear(net.sources_attrs);
-            db.clear(net.targets_attrs);
-            db.clear(net.relations_attrs);
-            throw_not_implemented();
+            // db_t& db = net.db_ptr->native;
+            // db.clear(net.graph.collection());
+            // db.clear(net.sources_attrs);
+            // db.clear(net.targets_attrs);
+            // db.clear(net.relations_attrs);
+            // throw_not_implemented();
         },
         "Removes both vertices and edges from the graph.");
 

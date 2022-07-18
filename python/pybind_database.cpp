@@ -204,7 +204,7 @@ void export_matrix( //
     if (keys.py.itemsize != sizeof(ukv_key_t))
         throw std::invalid_argument("Keys type mismatch");
     if (keys.py.ndim != 1 || !PyBuffer_IsContiguous(&keys.py, 'A'))
-        throw std::invalid_argument("Keys must be placed in a coninuous 1 dimensional array");
+        throw std::invalid_argument("Keys must be placed in a continuous 1 dimensional array");
     if (keys.py.strides[0] != sizeof(ukv_key_t))
         throw std::invalid_argument("Keys can't be strided");
     ukv_size_t const tasks_count = static_cast<ukv_size_t>(keys.py.len / keys.py.itemsize);
@@ -559,7 +559,7 @@ void ukv::wrap_database(py::module& m) {
 
     // Operator overloads used to access collections
     py_db.def("__contains__", [](py_db_t& py_db, std::string const& collection) {
-        auto maybe = py_db.native.contains(collection);
+        auto maybe = py_db.session.contains(collection);
         maybe.throw_unhandled();
         return *maybe;
     });
