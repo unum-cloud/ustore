@@ -287,38 +287,60 @@ void ukv_read( //
         *c_error = "Read Failure";
     }
 }
+void ukv_scan( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+    ukv_size_t const c_min_tasks_count,
 
-// void ukv_scan( //
-//     ukv_t const c_db,
-//     ukv_txn_t const,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
-//     ukv_collection_t const*,
-//     ukv_size_t const,
+    ukv_key_t const* c_min_keys,
+    ukv_size_t const c_min_keys_stride,
 
-//     ukv_key_t const* c_min_keys,
-//     ukv_size_t const c_min_tasks_count,
-//     ukv_size_t const c_min_keys_stride,
+    ukv_size_t const* c_scan_lengths,
+    ukv_size_t const c_scan_lengths_stride,
 
-//     ukv_size_t const* c_scan_lengths,
-//     ukv_size_t const c_scan_lengths_stride,
+    ukv_options_t const c_options,
 
-//     ukv_options_t const,
+    ukv_key_t** c_found_keys,
+    ukv_val_len_t** c_found_lengths,
 
-//     ukv_key_t** c_found_keys,
-//     ukv_val_len_t** c_found_lengths,
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
 
-//     ukv_arena_t* c_arena,
-//     ukv_error_t* c_error) {
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
 
-//     stl_arena_t& arena = *cast_arena(c_arena, c_error);
-//     if (*c_error)
-//         return;
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
+    strided_iterator_gt<ukv_size_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
+    scan_tasks_soa_t tasks {{}, keys, lengths};
 
-//     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-//     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
-//     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
-//     scan_tasks_soa_t tasks {{}, keys, lens};
-// }
+    leveldb::ReadOptions options;
+    options.fill_cache = false;
+    std::unique_ptr<leveldb::Iterator> it(db.NewIterator(options));
+    ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * c_min_tasks_count;
+    byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
+    if (*c_error)
+        return;
+    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
+    std::fill_n(lens, c_min_tasks_count, 0);
+
+    for (ukv_size_t i = 0; i != c_min_tasks_count; ++i) {
+        scan_task_t task = tasks[i];
+        it->Seek(to_slice(task.min_key));
+        for (; it->Valid() && i != task.length; i++, it->Next()) {
+            auto old_tape_len = arena.output_tape.size();
+            auto bytes_in_value = it->value().size();
+            tape = prepare_memory(arena.output_tape, old_tape_len + bytes_in_value, c_error);
+
+            std::memcpy(tape + old_tape_len, it->value().data(), bytes_in_value);
+            lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
+        }
+    }
+}
 
 void ukv_collection_open( //
     ukv_t const,
