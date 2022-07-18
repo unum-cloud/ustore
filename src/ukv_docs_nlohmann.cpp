@@ -254,7 +254,7 @@ void ukv_docs_write( //
         auto func = fields ? &update_fields : &update_docs;
         func(c_db, c_txn, tasks, fields, c_keys_count, c_options, c_format, arena, c_error);
     }
-    catch (std::bad_alloc) {
+    catch (std::bad_alloc const&) {
         *c_error = "Failed to allocate memory!";
     }
 }
@@ -267,7 +267,7 @@ void ukv_docs_read( //
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
+    ukv_size_t const n,
     ukv_size_t const c_keys_stride,
 
     ukv_str_view_t const* c_fields,
@@ -292,10 +292,10 @@ void ukv_docs_read( //
     if (*c_error)
         return;
 
-    prepare_memory(arena.updated_keys, c_keys_count, c_error);
+    prepare_memory(arena.updated_keys, n, c_error);
     if (*c_error)
         return;
-    prepare_memory(arena.updated_vals, c_keys_count, c_error);
+    prepare_memory(arena.updated_vals, n, c_error);
     if (*c_error)
         return;
 
@@ -308,7 +308,7 @@ void ukv_docs_read( //
     // if different fields from the same docs are requested.
     // In that case, we must only fetch the doc once and later
     // slice it into output fields.
-    for (ukv_size_t i = 0; i != c_keys_count; ++i)
+    for (ukv_size_t i = 0; i != n; ++i)
         arena.updated_keys[i] = tasks[i].location();
     sort_and_deduplicate(arena.updated_keys);
     // TODO: Handle the common case of requesting the non-colliding
@@ -317,46 +317,31 @@ void ukv_docs_read( //
 
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
-    ukv_read(
-        c_db,
-        c_txn,
-        &arena.updated_keys[0].collection,
-        sizeof(located_key_t),
-        &arena.updated_keys[0].key,
-        static_cast<ukv_size_t>(arena.updated_keys.size()),
-        sizeof(located_key_t),
-        arena.updated_vals.front().internal_cptr(),
-        c_options,
-        &found_lengths,
-        &found_values,
-        c_arena,
-        c_error);
+    ukv_size_t found_count = static_cast<ukv_size_t>(arena.updated_keys.size());
+    ukv_read(c_db,
+             c_txn,
+             &arena.updated_keys[0].collection,
+             sizeof(located_key_t),
+             &arena.updated_keys[0].key,
+             found_count,
+             sizeof(located_key_t),
+             c_options,
+             &found_lengths,
+             &found_values,
+             c_arena,
+             c_error);
 
     // Now, we need to parse all the entries to later export them into a target format.
     // Potentially sampling certain sub-fields again along the way.
     auto exporter_on_heap = std::make_shared<export_to_value_t>();
     auto parsed_values = std::vector<json_t>(n);
-    auto serialized_docs = taped_values_view_t(found_lengths, found_values);
+    auto serialized_docs = taped_values_view_t(found_lengths, found_values, found_count);
+    auto serialized_it = serialized_docs.begin();
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != n; ++i, ++serialized_it) {
         auto task = tasks[i];
-        auto value_idx = offset_in_sorted(arena.updated_keys, task.location());        
-        auto& parsed = arena.updated_vals[value_idx];
-        auto &serialized = arena.updated_vals[value_idx];
-        if (task.is_deleted()) {
-            serialized.reset();
-            continue;
-        }
-
-        auto parsed = parse_any(task.view(), c_format, c_error);
-        if (parsed.is_discarded()) {
-            *c_error = "Couldn't parse inputs";
-            return;
-        }
-
-        exporter_on_heap->value_ptr = &serialized;
-        dump_any(parsed, ukv_format_msgpack_k, exporter_on_heap, c_error);
-        if (*c_error)
-            return;
+        auto value_idx = offset_in_sorted(arena.updated_keys, task.location());
+        value_t& parsed = arena.updated_vals[value_idx];
+        value_view_t serialized = *serialized_it;
     }
 }
