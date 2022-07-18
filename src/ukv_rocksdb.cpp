@@ -33,6 +33,7 @@ using rocks_value_t = rocksdb::PinnableSlice;
 using rocks_txn_ptr_t = rocksdb::Transaction*;
 using rocks_col_ptr_t = rocksdb::ColumnFamilyHandle*;
 using value_uptr_t = std::unique_ptr<rocks_value_t>;
+using rocks_iter_uptr = std::unique_ptr<rocksdb::Iterator>;
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -375,15 +376,21 @@ void ukv_scan( //
         scan_task_t task = tasks[i];
         auto col = task.col ? reinterpret_cast<rocks_col_ptr_t>(task.col) : db_wrapper->db->DefaultColumnFamily();
 
-        std::unique_ptr<rocksdb::Iterator> it =
-            txn ? std::unique_ptr<rocksdb::Iterator>(txn->GetIterator(options, col))
-                : std::unique_ptr<rocksdb::Iterator>(db_wrapper->db->NewIterator(options, col));
+        rocks_iter_uptr it;
+        try {
+            it = txn ? rocks_iter_uptr(txn->GetIterator(options, col))
+                     : rocks_iter_uptr(db_wrapper->db->NewIterator(options, col));
+        }
+        catch (...) {
+            *c_error = "Fail To Create Iterator";
+        }
         it->Seek(to_slice(task.min_key));
         for (; it->Valid() && i != task.length; i++, it->Next()) {
             auto old_tape_len = arena.output_tape.size();
             auto bytes_in_value = it->value().size();
             tape = prepare_memory(arena.output_tape, old_tape_len + bytes_in_value, c_error);
-
+            if (*c_error)
+                return;
             std::memcpy(tape + old_tape_len, it->value().data(), bytes_in_value);
             lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
         }
