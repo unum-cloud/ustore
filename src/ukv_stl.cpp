@@ -722,12 +722,12 @@ void scan_txn( //
 void ukv_read( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_options_t const c_options,
@@ -755,23 +755,23 @@ void ukv_read( //
 
     if (c_txn) {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_txn : &read_txn;
-        return func(txn, tasks, c_keys_count, c_options, c_found_lengths, c_found_values, arena, c_error);
+        return func(txn, tasks, c_tasks_count, c_options, c_found_lengths, c_found_values, arena, c_error);
     }
     else {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_head : &read_head;
-        return func(db, tasks, c_keys_count, c_options, c_found_lengths, c_found_values, arena, c_error);
+        return func(db, tasks, c_tasks_count, c_options, c_found_lengths, c_found_values, arena, c_error);
     }
 }
 
 void ukv_write( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_val_ptr_t const* c_vals,
@@ -801,19 +801,19 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
 
-    return c_txn ? write_txn(txn, tasks, c_keys_count, c_options, c_error)
-                 : write_head(db, tasks, c_keys_count, c_options, c_error);
+    return c_txn ? write_txn(txn, tasks, c_tasks_count, c_options, c_error)
+                 : write_head(db, tasks, c_tasks_count, c_options, c_error);
 }
 
 void ukv_scan( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_min_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_min_keys,
-    ukv_size_t const c_min_keys_count,
     ukv_size_t const c_min_keys_stride,
 
     ukv_size_t const* c_scan_lengths,
@@ -843,8 +843,8 @@ void ukv_scan( //
     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
     scan_tasks_soa_t tasks {cols, keys, lens};
 
-    return c_txn ? scan_txn(txn, tasks, c_min_keys_count, c_options, c_found_keys, c_found_lengths, arena, c_error)
-                 : scan_head(db, tasks, c_min_keys_count, c_options, c_found_keys, c_found_lengths, arena, c_error);
+    return c_txn ? scan_txn(txn, tasks, c_min_tasks_count, c_options, c_found_keys, c_found_lengths, arena, c_error)
+                 : scan_head(db, tasks, c_min_tasks_count, c_options, c_found_keys, c_found_lengths, arena, c_error);
 }
 
 void ukv_size( //

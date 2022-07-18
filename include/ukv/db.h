@@ -157,7 +157,7 @@ void ukv_open( //
  * @param[in] txn            Transaction, through which the operation must go.
  *                           Can be NULL.
  * @param[in] keys           Array of keys in one or more collections.
- * @param[in] keys_count     Number of elements in @p `keys`.
+ * @param[in] tasks_count    Number of elements in @p `keys`.
  * @param[in] collections    Array of collections owning the @p `keys`.
  *                           If NULL is passed, the default collection
  *                           is assumed. Instead of passing one collection for
@@ -178,7 +178,7 @@ void ukv_open( //
  * 1. Insert: add if missing.
  * 2. Update: overwrite if present.
  * 3. Upsert: write.
- * Instead of adding all three to C interface, we focus on better ACID transactions, 
+ * Instead of adding all three to C interface, we focus on better ACID transactions,
  * which can be used to implement any advanced multi-step operations (often including
  * conditionals), like Compare-And-Swap, without losing atomicity.
  *
@@ -216,12 +216,12 @@ void ukv_open( //
 void ukv_write( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
-    ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
 
     ukv_val_ptr_t const* values,
@@ -241,7 +241,7 @@ void ukv_write( //
 /**
  * @brief The primary "getter" interface.
  * If a fail had occured, @p `error` will be set to non-NULL.
- * Otherwise, the tape will be populated with @p `keys_count` objects
+ * Otherwise, the tape will be populated with @p `tasks_count` objects
  * of type `ukv_val_len_t`, describing the lengths of objects packed
  * right after the lengths themselves.
  * If a key wasn't found in target collection, the length will be zero.
@@ -256,7 +256,7 @@ void ukv_write( //
  * @param[in] txn             Transaction or the snapshot, through which the
  *                            operation must go. Can be NULL.
  * @param[in] keys            Array of keys in one or more collections.
- * @param[in] keys_count      Number of elements in @p `keys`.
+ * @param[in] tasks_count     Number of elements in @p `keys`.
  * @param[in] collections     Array of collections owning the @p `keys`.
  *                            If NULL is passed, the default collection
  *                            is assumed. Instead of passing one collection for
@@ -278,12 +278,12 @@ void ukv_write( //
 void ukv_read( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
-    ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
 
     ukv_options_t const options,
@@ -307,12 +307,12 @@ void ukv_read( //
 void ukv_scan( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* min_keys,
-    ukv_size_t const min_keys_count,
     ukv_size_t const min_keys_stride,
 
     ukv_size_t const* scan_lengths,
@@ -336,12 +336,12 @@ void ukv_scan( //
 void ukv_size( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* min_keys,
-    ukv_size_t const min_keys_count,
     ukv_size_t const min_keys_stride,
 
     ukv_key_t const* max_keys,

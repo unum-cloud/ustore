@@ -139,12 +139,12 @@ void write_many( //
 void ukv_write( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_val_ptr_t const* c_vals,
@@ -173,8 +173,8 @@ void ukv_write( //
         options.sync = true;
 
     try {
-        auto func = c_keys_count == 1 ? &write_one : &write_many;
-        func(db, tasks, c_keys_count, options, c_error);
+        auto func = c_tasks_count == 1 ? &write_one : &write_many;
+        func(db, tasks, c_tasks_count, options, c_error);
     }
     catch (...) {
         *c_error = "Write Failure";
@@ -253,12 +253,12 @@ void read_many( //
 void ukv_read( //
     ukv_t const c_db,
     ukv_txn_t const,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const*,
     ukv_size_t const,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_options_t const,
@@ -280,8 +280,8 @@ void ukv_read( //
     std::string& value = *value_uptr.get();
 
     try {
-        auto func = c_keys_count == 1 ? &read_one : &read_many;
-        func(db, tasks, c_keys_count, options, value, c_found_lengths, c_found_values, arena, c_error);
+        auto func = c_tasks_count == 1 ? &read_one : &read_many;
+        func(db, tasks, c_tasks_count, options, value, c_found_lengths, c_found_values, arena, c_error);
     }
     catch (...) {
         *c_error = "Read Failure";
@@ -296,7 +296,7 @@ void ukv_read( //
 //     ukv_size_t const,
 
 //     ukv_key_t const* c_min_keys,
-//     ukv_size_t const c_min_keys_count,
+//     ukv_size_t const c_min_tasks_count,
 //     ukv_size_t const c_min_keys_stride,
 
 //     ukv_size_t const* c_scan_lengths,

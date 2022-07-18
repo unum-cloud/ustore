@@ -75,7 +75,14 @@ func (db *DataBase) Set(key uint64, value *[]byte) error {
 	defer C.free(value_go)
 	defer cleanTape(db, arena_c)
 
-	C.ukv_write(db.raw, nil, collection_c, 0, &key_c, 1, 0, &value_ptr_c, 0, &value_offset_c, 0, &value_length_c, 0, options_c, &arena_c, &error_c)
+	C.ukv_write(
+		db.raw, nil, 1,
+		collection_c, 0,
+		&key_c, 0,
+		&value_ptr_c, 0,
+		&value_offset_c, 0,
+		&value_length_c, 0,
+		options_c, &arena_c, &error_c)
 	return forwardError(error_c)
 }
 
@@ -95,7 +102,14 @@ func (db *DataBase) Delete(key uint64) error {
 	arena_c := (C.ukv_arena_t)(nil)
 	defer cleanTape(db, arena_c)
 
-	C.ukv_write(db.raw, nil, collection_c, 0, &key_c, 1, 0, &value_ptr_c, 0, &value_offset_c, 0, &value_length_c, 0, options_c, &arena_c, &error_c)
+	C.ukv_write(
+		db.raw, nil, 1,
+		collection_c, 0,
+		&key_c, 0,
+		&value_ptr_c, 0,
+		&value_offset_c, 0,
+		&value_length_c, 0,
+		options_c, &arena_c, &error_c)
 	return forwardError(error_c)
 }
 
@@ -113,9 +127,9 @@ func (db *DataBase) Get(key uint64) ([]byte, error) {
 	defer cleanTape(db, arena_c)
 
 	C.ukv_read(
-		db.raw, nil,
+		db.raw, nil, 1,
 		collection_c, 0,
-		&key_c, 1, 0,
+		&key_c, 0,
 		options_c,
 		&pulled_values_lengths_c,
 		&pulled_values_c,
@@ -152,9 +166,9 @@ func (db *DataBase) Contains(key uint64) (bool, error) {
 	defer cleanTape(db, arena_c)
 
 	C.ukv_read(
-		db.raw, nil,
+		db.raw, nil, 1,
 		collection_c, 0,
-		&key_c, 1, 0,
+		&key_c, 0,
 		options_c,
 		&pulled_values_lengths_c,
 		&pulled_values_c,
