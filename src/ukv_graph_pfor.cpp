@@ -3,7 +3,7 @@
  * @author Ashot Vardanian
  *
  * @brief Graph implementation using fast integer compression.
- * Sits on top of any @see "ukv.h"-compatiable system.
+ * Sits on top of any @see "ukv.h"-compatible system.
  */
 
 #include <numeric>  // `std::accumulate`

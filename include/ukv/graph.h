@@ -2,6 +2,7 @@
  * @file ukv.h
  * @author Ashot Vardanian
  * @date 27 Jun 2022
+ *
  * @brief C bindings collections of relations.
  * It essentially extends "ukv.h", to store @b Graphs.
  * Unlike raw values and docs collections, this is an index
@@ -9,7 +10,7 @@
  *
  * Edges are represented as triplets: (first ID, second ID, edge ID), where the
  * last argument is optional. Multiple edges between same vertices are possible,
- * potentially forming a @b Directed-Multi-Graph, but only if you setedge IDs.
+ * potentially forming a @b Directed-Multi-Graph, but only if you set edge IDs.
  * Every vertex ID is mapped to an entire list of relations that it forms.
  *
  * @section Supported Graph Kinds
@@ -103,10 +104,10 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
  * @section Output Order
  * When only source or target roles are requested, a subsequence of edges
  * related to the same input vertex ID will be sorted by the neighbor ID.
- * When both are requested, first outgoinging edges will arrive, sorted by targets.
+ * When both are requested, first outgoing edges will arrive, sorted by targets.
  * Then the incoming edges, sorted by the source.
  *
- * @section Checking Entity Existance
+ * @section Checking Entity Existence
  * To check if a node or edge is present - a simpler query is possible.
  * The `ukv_read(..., ukv_option_read_lengths_k...)` call will retrieve
  * the length of the entry and if a node is present, it will never be equal

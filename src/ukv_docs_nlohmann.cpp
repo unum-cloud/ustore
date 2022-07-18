@@ -3,7 +3,7 @@
  * @author Ashot Vardanian
  *
  * @brief Document storage using "nlohmann/JSON" lib.
- * Sits on top of any @see "ukv.h"-compatiable system.
+ * Sits on top of any @see "ukv.h"-compatible system.
  */
 
 #include <vector>

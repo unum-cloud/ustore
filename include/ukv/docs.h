@@ -2,6 +2,7 @@
  * @file ukv_docs.h
  * @author Ashot Vardanian
  * @date 27 Jun 2022
+ *
  * @brief C bindings for collections of @b Documents.
  * It extends the basic "ukv.h" towards values storing hierarchical documents.
  * Examples: JSONs, MsgPacks, BSONs and a number of other similar formats.
@@ -10,7 +11,7 @@
  * you may not get the exact same bytes as you have provided in.
  *
  * @section Number of Keys vs Number of Fields
- * One of the biggest questions to API is prefering "Zips" vs the "Cartesian Product"
+ * One of the biggest questions to API is preferring "Zips" vs the "Cartesian Product"
  * of "Key" and "Field" combinations. When writing we may want to discard a certain
  * subset of fields in every document, but we may also be interested in having a
  * more targetted approach.
@@ -75,7 +76,7 @@ typedef enum {
 
  * @section Slicing Docs and Inferring IDs
  * In other interfaces it's necessary to explicitly provide the @c `ukv_key_t`s
- * and the number of input entries. With documents, if an array of obects is
+ * and the number of input entries. With documents, if an array of objects is
  * supplied as `values[0]`, we slice it into separate objects.
  * With documents, we can often infer the ID from the documents @b "_id" field,
  * similar to MongoDB and ElasticSearch.
