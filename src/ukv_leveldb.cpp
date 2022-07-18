@@ -27,8 +27,7 @@ ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 using level_db_t = leveldb::DB;
 using level_status_t = leveldb::Status;
 using level_options_t = leveldb::Options;
-using value_uptr_t = std::unique_ptr<std::string>;
-using level_iter_uptr = std::unique_ptr<leveldb::Iterator>;
+using level_iter_uptr_t = std::unique_ptr<leveldb::Iterator>;
 
 struct key_comparator_t final : public leveldb::Comparator {
 
@@ -64,8 +63,8 @@ inline leveldb::Slice to_slice(value_view_t value) noexcept {
     return {reinterpret_cast<const char*>(value.begin()), value.size()};
 }
 
-inline value_uptr_t make_value(ukv_error_t* c_error) noexcept {
-    value_uptr_t value_uptr;
+inline std::unique_ptr<std::string> make_value(ukv_error_t* c_error) noexcept {
+    std::unique_ptr<std::string> value_uptr;
     try {
         value_uptr = std::make_unique<std::string>();
     }
@@ -80,7 +79,7 @@ bool export_error(level_status_t const& status, ukv_error_t* c_error) {
         return false;
 
     if (status.IsCorruption())
-        *c_error = "Failure: DB Corrpution";
+        *c_error = "Failure: DB Corruption";
     else if (status.IsIOError())
         *c_error = "Failure: IO  Error";
     else if (status.IsInvalidArgument())
@@ -322,9 +321,9 @@ void ukv_scan( //
 
     leveldb::ReadOptions options;
     options.fill_cache = false;
-    level_iter_uptr it;
+    level_iter_uptr_t it;
     try {
-        it = level_iter_uptr(db.NewIterator(options));
+        it = level_iter_uptr_t(db.NewIterator(options));
     }
     catch (...) {
         *c_error = "Fail To Create Iterator";
