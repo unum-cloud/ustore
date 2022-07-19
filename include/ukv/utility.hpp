@@ -80,7 +80,7 @@ class [[nodiscard]] status_t {
     }
 
     void throw_unhandled() {
-        if (__builtin_expect(*this, 0)) // C++20: [[unlikely]]
+        if (raw_ != nullptr) // C++20: [[unlikely]]
             throw release_exception();
     }
 
@@ -108,7 +108,7 @@ class [[nodiscard]] expected_gt {
     }
 
     void throw_unhandled() {
-        if (!__builtin_expect(status_, 1)) // C++20: [[unlikely]]
+        if (!status_) // C++20: [[unlikely]]
             throw status_.release_exception();
     }
     inline status_t release_status() { return std::exchange(status_, status_t {}); }
