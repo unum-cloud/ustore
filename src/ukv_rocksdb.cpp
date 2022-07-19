@@ -43,6 +43,24 @@ ukv_collection_t ukv_default_collection_k = NULL;
 ukv_val_len_t ukv_val_len_missing_k = std::numeric_limits<ukv_val_len_t>::max();
 ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 
+struct key_comparator_t final : public rocksdb::Comparator {
+    inline int Compare(rocksdb::Slice const& a, rocksdb::Slice const& b) const override {
+        auto ai = *reinterpret_cast<ukv_key_t const*>(a.data());
+        auto bi = *reinterpret_cast<ukv_key_t const*>(b.data());
+        if (ai == bi)
+            return 0;
+        return ai < bi ? -1 : 1;
+    }
+    const char* Name() const { return "Integral"; }
+    void FindShortestSeparator(std::string*, const rocksdb::Slice&) const override {}
+    void FindShortSuccessor(std::string* key) const override {
+        auto& int_key = *reinterpret_cast<ukv_key_t*>(key->data());
+        ++int_key;
+    }
+};
+
+static key_comparator_t key_comparator_k = {};
+
 struct rocks_db_wrapper_t {
     std::vector<rocks_col_ptr_t> columns;
     std::unique_ptr<rocks_db_t> db;
@@ -94,6 +112,7 @@ void ukv_open([[maybe_unused]] char const* c_config, ukv_t* c_db, ukv_error_t* c
 
     rocks_db_t* db = nullptr;
     options.create_if_missing = true;
+    options.comparator = &key_comparator_k;
     status = rocks_db_t::Open(options,
                               rocksdb::TransactionDBOptions(),
                               "./tmp/rocksdb/",
@@ -523,6 +542,45 @@ void ukv_collection_remove( //
             if (export_error(status, c_error))
                 return;
         }
+    }
+}
+
+void ukv_collection_list( //
+    ukv_t const c_db,
+    ukv_size_t* c_count,
+    ukv_str_view_t* c_names,
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
+    std::size_t total_length = 0;
+
+    for (auto const& column : db_wrapper->columns)
+        total_length += column->GetName().size();
+
+    // Every string will be null-terminated
+    total_length += db_wrapper->columns.size();
+    *c_count = static_cast<ukv_size_t>(db_wrapper->columns.size());
+
+    auto tape = prepare_memory(arena.output_tape, total_length, c_error);
+    if (*c_error)
+        return;
+
+    *c_names = reinterpret_cast<ukv_str_view_t>(tape);
+    for (auto const& column : db_wrapper->columns) {
+        auto len = column->GetName().size();
+        std::memcpy(tape, column->GetName().data(), len);
+        tape[len] = byte_t {0};
+        tape += len;
     }
 }
 
