@@ -153,17 +153,17 @@ std::optional<py::bytes> get_item( //
  *        The most performant batch-reading method, ideal for ML.
  *
  * Contrary to most data types exposed by the Python interpreter,
- * buffers are not PyObject pointers but rather simple C structures.
+ * buffers are not @c `PyObject` pointers but rather simple C structures.
  * This allows them to be created and copied very simply.
- * When a generic wrapper around a buffer is needed, a memoryview
+ * When a generic wrapper around a buffer is needed, a @c `memoryview`
  * object can be created.
  * https://docs.python.org/3/c-api/buffer.html#buffer-structure
  *
- * @param keys      A NumPy array of keys.
- * @param valus     A buffer-protocol object, whose `shape` has 2 dims
- *                  the `itemsize` is just one byte. The first dimensions
- *                  must match with `len(keys)` and the second one must be
- *                  at least 8 for us be able to efficiently reuse that memory.
+ * @param keys       A NumPy array of keys.
+ * @param values_arr A buffer-protocol object, whose `shape` has 2 dims
+ *                   the `itemsize` is just one byte. The first dimensions
+ *                   must match with `len(keys)` and the second one must be
+ *                   at least 8 for us be able to efficiently reuse that memory.
  *
  * @param values_lengths May be nullptr.
  *
@@ -204,7 +204,7 @@ void export_matrix( //
     if (keys.py.itemsize != sizeof(ukv_key_t))
         throw std::invalid_argument("Keys type mismatch");
     if (keys.py.ndim != 1 || !PyBuffer_IsContiguous(&keys.py, 'A'))
-        throw std::invalid_argument("Keys must be placed in a coninuous 1 dimensional array");
+        throw std::invalid_argument("Keys must be placed in a continuous 1 dimensional array");
     if (keys.py.strides[0] != sizeof(ukv_key_t))
         throw std::invalid_argument("Keys can't be strided");
     ukv_size_t const tasks_count = static_cast<ukv_size_t>(keys.py.len / keys.py.itemsize);
@@ -559,7 +559,7 @@ void ukv::wrap_database(py::module& m) {
 
     // Operator overloads used to access collections
     py_db.def("__contains__", [](py_db_t& py_db, std::string const& collection) {
-        auto maybe = py_db.native.contains(collection);
+        auto maybe = py_db.session.contains(collection);
         maybe.throw_unhandled();
         return *maybe;
     });

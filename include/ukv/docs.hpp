@@ -1,8 +1,8 @@
 /**
- * @file ukv_docs.hpp
+ * @file docs.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
- * @brief C++ bindings for @see "ukv_docs.h".
+ * @brief C++ bindings for @see "ukv/docs.h".
  */
 
 #pragma once
