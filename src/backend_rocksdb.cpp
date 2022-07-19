@@ -72,7 +72,7 @@ bool export_error(rocks_status_t const& status, ukv_error_t* c_error) {
         return false;
 
     if (status.IsCorruption())
-        *c_error = "Failure: DB Corrpution";
+        *c_error = "Failure: DB Corruption";
     else if (status.IsIOError())
         *c_error = "Failure: IO  Error";
     else if (status.IsInvalidArgument())
