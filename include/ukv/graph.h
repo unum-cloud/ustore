@@ -1,5 +1,5 @@
 /**
- * @file ukv.h
+ * @file graph.h
  * @author Ashot Vardanian
  * @date 27 Jun 2022
  *

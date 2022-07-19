@@ -1,11 +1,11 @@
 /**
- * @file ukv_beast_server.cpp
+ * @file rest_server.cpp
  * @author Ashot Vardanian
  * @date 2022-06-18
  *
- * @brief A web server implementint @b REST backend on top of any other
+ * @brief A web server implementing @b REST backend on top of any other
  * UKV implementation using pre-release draft of C++23 Networking TS,
- * through the means of @b Boost.Beast, @b Boost.ASIO and @b nlohmann.JSON.
+ * through the means of @b Boost.Beast, @b Boost.ASIO and @b NLohmann.JSON.
  *
  * @section Supported Endpoints
  *

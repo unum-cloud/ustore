@@ -1,8 +1,8 @@
 /**
- * @file ukv_graph.hpp
+ * @file graph.hpp
  * @author Ashot Vardanian
  * @date 30 Jun 2022
- * @brief C++ bindings for @see "ukv_graph.h".
+ * @brief C++ bindings for @see "ukv/graph.h".
  */
 
 #pragma once
