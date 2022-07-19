@@ -404,19 +404,16 @@ void ukv_docs_read( //
             json_t& parsed = parsed_values[parsed_idx];
 
             if (fields && fields[i]) {
-                try {
-                    if (fields[i][0] == '/') {
-                        json_ptr_t field_ptr {fields[i]};
-                        json_t& sub = parsed.at(field_ptr);
-                        dump_any(sub, c_format, heapy_exporter, c_error);
-                    }
-                    else {
-                        json_t const& sub = parsed.at(fields[i]);
-                        dump_any(sub, c_format, heapy_exporter, c_error);
-                    }
+                if (fields[i][0] == '/') {
+                    // This libraries doesn't implement `find` for JSON-Pointers:
+                    json_ptr_t field_ptr {fields[i]};
+                    parsed.contains(field_ptr) ? dump_any(parsed.at(field_ptr), c_format, heapy_exporter, c_error)
+                                               : dump_any(null_object, c_format, heapy_exporter, c_error);
                 }
-                catch (nlohmann::json::out_of_range&) {
-                    dump_any(null_object, c_format, heapy_exporter, c_error);
+                else {
+                    auto it = parsed.find(fields[i]);
+                    it != parsed.end() ? dump_any(it.value(), c_format, heapy_exporter, c_error)
+                                       : dump_any(null_object, c_format, heapy_exporter, c_error);
                 }
             }
             else {
