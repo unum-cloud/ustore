@@ -17,8 +17,10 @@
  * more targetted approach.
  *
  * @section Type Checking and Casting
- * Ideally, the data shouldn't be parsed more than once, to avoid performance.
- * So the primary interfaces of
+ * Ideally, the data shouldn't be parsed more than once, to avoid performance loss.
+ * So the primary interfaces of Docs Store are type-agnostic. Vectorized "gather"
+ * operations perform the best effort to convert into the requested format, but
+ * it's not always possible.
  */
 
 #pragma once
@@ -180,14 +182,26 @@ void ukv_docs_gist( //
 
 /**
  * @brief The vectorized "gather" interface, that collects, type-checks and
- * casts (N*M) @c `int`/`float`s from M fields in N docs into columnar format.
+ * casts (N*M) @c `int`/`float`s from M fields in N docs into a @b columnar format.
  *
- * We may have used Apache Arrow RecordBatch directly with ArrowSchema, ArrowArray.
- * It, however, would have provided less consistency with other APIs.
+ * We may have used Apache Arrow @c `RecordBatch` directly with @c `ArrowSchema`
+ * or @c `ArrowArray`. It, however, would be inconsistent with other UKV APIs.
  *
  * @param fields[in]    JSON-Pointer paths to scalars in desired documents.
  *                      If `fields_stride` is set to zero, we assume that all paths
  *                      are concatenated with a NULL-character delimiter.
+ *
+ * @param columns_validities[in]   Bitset, which indicates validity of gather objects.
+ * @param columns_conversions[in]  @b Optional bitset, which indicates type conversions.
+ * @param columns_collisions[in]   @b Optional bitset, which indicates key collisions.
+ * @param columns_scalars[in]      Buffers for scalars to be exported to.
+ *
+ * Collisions imply, that a key was found, but it's internal contents can't be
+ * converted to the requested scalar type.
+ * Conversions mean, that the export/cast changes the semantics.
+ * There we identify following classes of leafs: booleans, integers, floats, strings.
+ * Any downcasting conversion between them will be done with best-effort, but may not be lossless.
+ * Meaning that @c `bool` to @c `int` isn't considered a downcast, same as @c `bool` to @c `double`.
  */
 void ukv_docs_gather_scalars( //
     ukv_t const db,
@@ -209,15 +223,17 @@ void ukv_docs_gather_scalars( //
 
     ukv_options_t const options,
 
-    ukv_val_ptr_t found_indicators,
-    ukv_val_ptr_t found_values,
+    ukv_val_ptr_t const columns_validities,
+    ukv_val_ptr_t const columns_conversions,
+    ukv_val_ptr_t const columns_collisions,
+    ukv_val_ptr_t const columns_scalars,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
  * @brief The vectorized "gather" interface, that collects, type-checks and
- * casts (N*M) @c `string`s from M fields in N docs into columnar format.
+ * casts (N*M) @c `string`s from M fields in N docs into a @b row-wise format.
  *
  * Strings will be organized in the document-wise order.
  * All strings are delimited by a null-termination character.
