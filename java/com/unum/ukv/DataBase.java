@@ -1,31 +1,31 @@
 package com.unum.ukv;
 
+import org.junit.Test;
+
 import java.util.Map; // Map abstract class
 import java.lang.AutoCloseable; // Finalization
 import java.util.Arrays; // Arrays.equals
-
-import org.junit.Test;
 
 /**
  * @brief An Embedded Persistent Key-Value Store with
  *        ACID Transactions and mind-boggling speed,
  *        implemented in C/C++/CUDA and wrapped into JNI.
- * 
+ *
  * @section API Usage
  *          We provide two primary classes: `Context` and `Transaction`.
  *          You start by creating a `Context` to link to the underlying DB,
  *          allocate memory and perform CRUD operations on the "HEAD" state.
  *          Those operations will not be consistent and may even partially fail
  *          without you knowing, which part of the input was absorbed.
- * 
+ *
  *          To make your operations ACID, you must request a `ctx.transaction()`
  *          which will encapsulate all your reads & updates. The interface of
  *          the "HEAD" and transaction-based operations is identical.
- * 
- *          In both cases we mimic native Java `HashMap` & `Dictionary` classes.
+ *
+ *          In both cases we mimic native Java `HashMap` & `Ditionary` classes.
  *          Aside from that, most objects are `AutoCloseable`, to simplify the
  *          resource usage and potentially auto-commit transactions on cleanup.
- * 
+ *
  *          Furthermore, each DB has both a "primary" collection and "named"
  *          collections. To access those, pass the `String` name of the target
  *          collection as the first argument to any of the following functions:
@@ -38,10 +38,10 @@ import org.junit.Test;
  *          > putIfAbsent(key, value)
  *          > getOrDefault(key, defaultValue)
  *          > putAll(Map<Key, Value>)
- *          You can expect similar behavior to native classes described here:
+ *          You can expect similar behaviour to native classes described here:
  *          https://docs.oracle.com/javase/7/docs/api/java/util/Dictionary.html
  *          https://docs.oracle.com/javase/7/docs/api/java/util/Hashtable.html
- * 
+ *
  *          In case of transactions you also get:
  *          > rollback: To reset the state of the transaction.
  *          > commit: To submit the transaction to underlying DBMS.
@@ -53,18 +53,7 @@ import org.junit.Test;
  *          * https://github.com/jankotek/mapdb/
  *          * https://github.com/yahoo/HaloDB
  */
-public class DataBase {
-
-    static {
-        try {
-            System.loadLibrary("ukv_java");
-        } catch (UnsatisfiedLinkError e) {
-            String paths = System.getProperty("java.library.path");
-            System.err.println("Native code library failed to load.\n" + e);
-            System.err.println("Shared libraries must be placed at:" + paths + "\n");
-            System.exit(1);
-        }
-    }
+public abstract class DataBase {
 
     /**
      * Partially implements the JDBC interface, as well as a classical
@@ -78,7 +67,7 @@ public class DataBase {
         public boolean autoCommit = true;
 
         /**
-         * When enabled, the transaction is being committed on close.
+         * When enabled, the transaction is being commited on close.
          * If the commit fails, an exception is raised.
          */
         public void setAutoCommit(boolean state) {
@@ -93,7 +82,7 @@ public class DataBase {
 
         /**
          * @brief Commits all the writes to DBMS, checking for collisions in the
-         *        process. Both in writes and "non-transparent" reads. Returns
+         *        process. Both in writes and "non-transaparent" reads. Returns
          *        operation result, but doesn't throw exceptions.
          * 
          * @return true if the operation was submitted and the state of DBMS updated.
@@ -222,7 +211,7 @@ public class DataBase {
          * Removes the entry for the specified key only if it is currently
          * mapped to the specified value.
          * 
-         * @return True, iff key was found, value was equal and the removal occurred.
+         * @return True, iff key was found, value was equal and the removal occured.
          */
         public boolean remove(String collection, long key, byte[] value) {
             byte[] old = get(collection, key);
@@ -270,7 +259,7 @@ public class DataBase {
 
         /**
          * @brief Begins a new transaction with an auto-incremented identifier.
-         *        By default, the transaction will be committed on `close`.
+         *        By default, the transaction will be commited on `close`.
          */
         public native Transaction transaction();
 
