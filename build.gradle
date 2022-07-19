@@ -1,25 +1,32 @@
-apply plugin: 'java'
-apply plugin: 'application'
-apply plugin: 'c'
+import org.gradle.internal.jvm.Jvm
 
-
-// Based on following tutorial:
-// https://www.jetbrains.com/help/idea/setting-up-jni-development-in-gradle-project.html#adding_jni_support
-mainClassName = 'DataBase'
+plugins {
+    id 'java-library'
+    id 'c'
+}
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    testImplementation('junit:junit:4.12')
+    implementation('junit:junit:4.13.2')
 }
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
-test {
-    systemProperty "java.library.path", file("${buildDir}/lib/ukv_java").absolutePath
+sourceSets {
+    main {
+        java {
+            srcDir "java/"
+        }
+    }
+    test {
+        java {
+            srcDir "java/"
+        }
+    }
 }
 
 model {
@@ -28,32 +35,87 @@ model {
             architecture "x64"
         }
     }
+    buildTypes{
+        stl
+        rocks
+        level
+    }
 
     components {
         ukv(NativeLibrarySpec) {
-            binaries.all {
+            sources {
+                c {
+                    source {
+                        srcDirs "java/com/unum/ukv"
+                        include "**/*.c"
+                    }
+                    logger.quiet("Here ${Jvm.current().javaHome}")
+                    exportedHeaders {
+                        srcDirs "include", "${Jvm.current().javaHome}/include"
+                    }
+                }
+            }
+            binaries.withType(StaticLibraryBinarySpec) {
+                buildable = false
+            }
+            binaries.withType(SharedLibraryBinarySpec) {
                 if (targetPlatform.operatingSystem.linux) {
-                    cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include"
-                    cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include/linux"
+                    cCompiler.args '-I', "${Jvm.current().javaHome}/include/linux"
                     cCompiler.args '-D_FILE_OFFSET_BITS=64'
+                }
 
-                // Skip other platforms for now:
-                // } else if (targetPlatform.operatingSystem.macOsX) {
-                //     cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include"
-                //     cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include/darwin"
-                //     cCompiler.args '-mmacosx-version-min=10.4'
-                //     linker.args '-mmacosx-version-min=10.4'
-                // } else if (targetPlatform.operatingSystem.windows) {
-                //     cCompiler.args "-I${org.gradle.internal.jvm.Jvm.current().javaHome}/include"
-                //     cCompiler.args "-I${org.gradle.internal.jvm.Jvm.current().javaHome}/include/win32"
-                //     linker.args "Shlwapi.lib", "Advapi32.lib"
-                // } else if (targetPlatform.operatingSystem.freeBSD) {
-                //     cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include"
-                //     cCompiler.args '-I', "${org.gradle.internal.jvm.Jvm.current().javaHome}/include/freebsd"
-                } 
+                if (buildType == buildTypes.stl) {
+                    linker.args '-L', "${projectDir}/build/lib", "-l", "ukv_stl", "-l", "c"
+                } else if (buildType == buildTypes.rocks) {
+                    linker.args '-L', "${projectDir}/build/lib", "-l", "ukv_rocksdb", "-l", "rocksdb", "-l", "c"
+                } else if (buildType == buildTypes.level) {
+                    linker.args '-L', "${projectDir}/build/lib", "-l", "ukv_leveldb", "-l", "leveldb", "-l", "c"
+                }
             }
         }
     }
 }
 
-test.dependsOn 'ukvSharedLib'
+jar.enabled = false
+test.forkEvery 1
+
+task ukv_stl(type: Jar) {
+    from (sourceSets.main.output) {
+        exclude "com/unum/ukv/DataBaseRocks.class"
+        exclude "com/unum/ukv/DataBaseLevel.class"
+    }
+    baseName "ukvSTL"
+    dependsOn("ukvStlSharedLibrary")
+    from("$buildDir/libs/ukv/shared/stl/libukv.so")
+    from("$buildDir/lib/libukv_stl.a")
+}
+
+task ukv_rocks(type: Jar) {
+    from (sourceSets.main.output) {
+        exclude "com/unum/ukv/DataBaseSTL.class"
+        exclude "com/unum/ukv/DataBaseLevel.class"
+    }
+    baseName "ukvRocks"
+    dependsOn("ukvRocksSharedLibrary")
+    from("$buildDir/libs/ukv/shared/rocks/libukv.so")
+    from("$buildDir/lib/libukv_rocksdb.a")
+    from("$buildDir/lib/librocksdb.a")
+}
+
+task ukv_level(type: Jar) {
+    from (sourceSets.main.output) {
+        exclude "com/unum/ukv/DataBaseRocks.class"
+        exclude "com/unum/ukv/DataBaseSTL.class"
+    }
+    baseName "ukvLevel"
+    dependsOn("ukvLevelSharedLibrary")
+    from("$buildDir/libs/ukv/shared/level/libukv.so")
+    from("$buildDir/lib/libukv_leveldb.a")
+    from("$buildDir/lib/libleveldb.a")
+}
+
+artifacts {
+    archives ukv_stl
+    archives ukv_rocks
+    archives ukv_level
+}
