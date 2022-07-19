@@ -134,7 +134,7 @@ void update_docs( //
     if (*c_error)
         return;
 
-    auto exporter_on_heap = std::make_shared<export_to_value_t>();
+    auto heapy_exporter = std::make_shared<export_to_value_t>();
     for (ukv_size_t i = 0; i != n; ++i) {
         auto task = tasks[i];
         auto& serialized = arena.updated_vals[i];
@@ -151,8 +151,8 @@ void update_docs( //
             return;
         }
 
-        exporter_on_heap->value_ptr = &serialized;
-        dump_any(parsed, ukv_format_msgpack_k, exporter_on_heap, c_error);
+        heapy_exporter->value_ptr = &serialized;
+        dump_any(parsed, ukv_format_msgpack_k, heapy_exporter, c_error);
         if (*c_error)
             return;
     }
@@ -391,9 +391,9 @@ void ukv_docs_read( //
 
         // Now, we need to parse all the entries to later export them into a target format.
         // Potentially sampling certain sub-fields again along the way.
-        auto exporter_on_heap = std::make_shared<export_to_value_t>();
+        auto heapy_exporter = std::make_shared<export_to_value_t>();
         auto temporary_buffer = value_t();
-        exporter_on_heap->value_ptr = &temporary_buffer;
+        heapy_exporter->value_ptr = &temporary_buffer;
         auto null_object = json_t(nullptr);
         arena.growing_tape.clear();
 
@@ -407,19 +407,19 @@ void ukv_docs_read( //
                     if (fields[i][0] == '/') {
                         json_ptr_t field_ptr {fields[i]};
                         json_t& sub = parsed.at(field_ptr);
-                        dump_any(sub, c_format, exporter_on_heap, c_error);
+                        dump_any(sub, c_format, heapy_exporter, c_error);
                     }
                     else {
                         json_t const& sub = parsed.at(fields[i]);
-                        dump_any(sub, c_format, exporter_on_heap, c_error);
+                        dump_any(sub, c_format, heapy_exporter, c_error);
                     }
                 }
                 catch (nlohmann::json::out_of_range&) {
-                    dump_any(null_object, c_format, exporter_on_heap, c_error);
+                    dump_any(null_object, c_format, heapy_exporter, c_error);
                 }
             }
             else {
-                dump_any(parsed, c_format, exporter_on_heap, c_error);
+                dump_any(parsed, c_format, heapy_exporter, c_error);
             }
             if (*c_error)
                 return;
@@ -436,5 +436,88 @@ void ukv_docs_read( //
     }
     catch (std::bad_alloc const&) {
         *c_error = "Failed to allocate memory!";
+    }
+}
+
+void ukv_docs_gist( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
+
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
+
+    ukv_key_t const* c_keys,
+    ukv_size_t const c_keys_stride,
+
+    ukv_options_t const c_options,
+
+    ukv_size_t* c_found_fields_count,
+    ukv_str_view_t* c_found_fields,
+
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    ukv_val_len_t* found_lengths = nullptr;
+    ukv_val_ptr_t found_values = nullptr;
+    ukv_read(c_db,
+             c_txn,
+             c_tasks_count,
+             c_cols,
+             c_cols_stride,
+             c_keys,
+             c_keys_stride,
+             c_options,
+             &found_lengths,
+             &found_values,
+             c_arena,
+             c_error);
+    if (*c_error)
+        return;
+
+    strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+
+    taped_values_view_t binary_docs {c_found_lengths, c_found_values, c_tasks_count};
+    tape_iterator_t binary_docs_it = binary_docs.begin();
+
+    try {
+
+        std::unordered_set<json_ptr_t> paths;
+
+        for (ukv_size_t i = 0; i != n; ++i, ++binary_docs_it) {
+            value_view_t binary_doc = *binary_docs_it;
+            json_t parsed = parse_any(binary_doc, internal_format_k, c_error);
+            if (*c_error)
+                return;
+            json_t parsed_flat = parsed.flatten();
+            paths.reserve(paths.size() + parsed_flat.size());
+            for (auto& pair : parsed_flat.items())
+                paths.emplace(pair.key());
+        }
+
+        std::size_t total_length = 0;
+        for (auto const& path : paths)
+            total_length += path.size();
+        total_length += paths.size();
+
+        auto tape = prepare_memory(arena.unpacked_tape, total_length, c_error);
+        if (*c_error)
+            return;
+
+        *c_found_fields_count = static_cast<ukv_size_t>(paths.size());
+        *c_found_fields = reinterpret_cast<ukv_str_view_t>(tape);
+        for (auto const& path : paths)
+            std::memcpy(std::exchange(tape, tape + path.size() + 1), path.c_str(), path.size() + 1);
     }
 }
