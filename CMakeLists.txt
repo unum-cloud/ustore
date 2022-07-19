@@ -129,6 +129,7 @@ FetchContent_MakeAvailable(googletest)
 
 # Define the libraries we will need to build
 include_directories(include/)
+include_directories(${fmt_SOURCE_DIR}/include)
 include_directories(${rocksdb_SOURCE_DIR}/include)
 include_directories(${leveldb_SOURCE_DIR}/include)
 
