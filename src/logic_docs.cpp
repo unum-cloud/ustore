@@ -9,6 +9,8 @@
 #include <vector>
 #include <string>
 #include <string_view>
+#include <unordered_set>
+#include <variant>
 
 #include <nlohmann/json.hpp>
 
@@ -90,6 +92,9 @@ json_t parse_any(value_view_t bytes, ukv_format_t const c_format, ukv_error_t* c
     case ukv_format_bson_k: return json_t::from_bson(str, str + len, true, false);
     case ukv_format_cbor_k: return json_t::from_cbor(str, str + len, true, false);
     case ukv_format_ubjson_k: return json_t::from_ubjson(str, str + len, true, false);
+    case ukv_format_binary_k:
+        return json_t::binary(
+            {reinterpret_cast<std::int8_t const*>(bytes.begin()), reinterpret_cast<std::int8_t const*>(bytes.end())});
     default: *c_error = "Unsupported unput format"; return {};
     }
 }
@@ -245,20 +250,18 @@ void ukv_docs_write( //
                          c_cols_stride,
                          c_keys,
                          c_keys_stride,
-                         c_options,
                          c_vals,
                          c_vals_stride,
                          c_offs,
                          c_offs_stride,
                          c_lens,
                          c_lens_stride,
+                         c_options,
                          c_arena,
                          c_error);
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
@@ -320,10 +323,8 @@ void ukv_docs_read( //
                         c_arena,
                         c_error);
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
@@ -442,10 +443,10 @@ void ukv_docs_read( //
 void ukv_docs_gist( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
-    ukv_size_t const c_tasks_count,
+    ukv_size_t const c_docs_count,
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_stride,
@@ -458,20 +459,11 @@ void ukv_docs_gist( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
-        return;
-    }
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
-        return;
-
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
     ukv_read(c_db,
              c_txn,
-             c_tasks_count,
+             c_docs_count,
              c_cols,
              c_cols_stride,
              c_keys,
@@ -484,18 +476,21 @@ void ukv_docs_gist( //
     if (*c_error)
         return;
 
-    strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
 
-    taped_values_view_t binary_docs {c_found_lengths, c_found_values, c_tasks_count};
+    taped_values_view_t binary_docs {found_lengths, found_values, c_docs_count};
     tape_iterator_t binary_docs_it = binary_docs.begin();
 
     try {
 
-        std::unordered_set<json_ptr_t> paths;
+        std::unordered_set<std::string> paths;
 
-        for (ukv_size_t i = 0; i != n; ++i, ++binary_docs_it) {
+        for (ukv_size_t i = 0; i != c_docs_count; ++i, ++binary_docs_it) {
             value_view_t binary_doc = *binary_docs_it;
             json_t parsed = parse_any(binary_doc, internal_format_k, c_error);
             if (*c_error)
@@ -519,5 +514,112 @@ void ukv_docs_gist( //
         *c_found_fields = reinterpret_cast<ukv_str_view_t>(tape);
         for (auto const& path : paths)
             std::memcpy(std::exchange(tape, tape + path.size() + 1), path.c_str(), path.size() + 1);
+    }
+    catch (std::bad_alloc const&) {
+        *c_error = "Out of memory!";
+    }
+}
+
+void ukv_docs_gather_scalars( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+    ukv_size_t const c_docs_count,
+    ukv_size_t const c_fields_count,
+
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
+
+    ukv_key_t const* c_keys,
+    ukv_size_t const c_keys_stride,
+
+    ukv_str_view_t const* c_fields,
+    ukv_size_t const c_fields_stride,
+
+    ukv_type_t const* c_types,
+    ukv_size_t const c_types_stride,
+
+    ukv_options_t const c_options,
+
+    ukv_val_ptr_t c_found_indicators,
+    ukv_val_ptr_t c_found_values,
+
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    ukv_val_len_t* found_lengths = nullptr;
+    ukv_val_ptr_t found_values = nullptr;
+    ukv_read(c_db,
+             c_txn,
+             c_docs_count,
+             c_cols,
+             c_cols_stride,
+             c_keys,
+             c_keys_stride,
+             c_options,
+             &found_lengths,
+             &found_values,
+             c_arena,
+             c_error);
+    if (*c_error)
+        return;
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
+    strided_iterator_gt<ukv_type_t const> types {c_types, c_types_stride};
+
+    taped_values_view_t binary_docs {found_lengths, found_values, c_docs_count};
+    tape_iterator_t binary_docs_it = binary_docs.begin();
+
+    try {
+
+        // Parse all the field names
+        std::vector<std::variant<std::string, json_ptr_t>> heapy_fields(c_fields_count);
+        for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx) {
+            ukv_type_t type = types[field_idx];
+            switch (type) {
+            case ukv_type_bool_k: break;
+            case ukv_type_i64_k: break;
+            case ukv_type_f64_k: break;
+            case ukv_type_uuid_k: break;
+            default: *c_error = "Only scalar fields are allowed!"; return;
+            }
+
+            ukv_str_view_t field = fields[field_idx];
+            if (!field && (*c_error = "NULL JSON-Pointers are not allowed!"))
+                return;
+
+            if (field[0] == '/')
+                heapy_fields[field_idx] = json_ptr_t {field};
+            else
+                heapy_fields[field_idx] = std::string {field};
+        }
+
+        // Go though all the documents extracting and type-checking the relevant parts
+        for (ukv_size_t i = 0; i != c_docs_count; ++i, ++binary_docs_it) {
+            value_view_t binary_doc = *binary_docs_it;
+            json_t parsed = parse_any(binary_doc, internal_format_k, c_error);
+            if (*c_error)
+                return;
+
+            for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx) {
+                ukv_type_t type = types[field_idx];
+                auto const& name_or_path = heapy_fields[field_idx];
+
+                switch (type) {
+                case ukv_type_bool_k: break;
+                case ukv_type_i64_k: break;
+                case ukv_type_f64_k: break;
+                case ukv_type_uuid_k: break;
+                }
+            }
+        }
+    }
+    catch (std::bad_alloc const&) {
+        *c_error = "Out of memory!";
     }
 }

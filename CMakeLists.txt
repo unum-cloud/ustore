@@ -135,7 +135,7 @@ include_directories(${leveldb_SOURCE_DIR}/include)
 add_library(ukv_stl
   src/backend_stl.cpp
   src/logic_docs.cpp
-  src/logic_graphs.cpp
+  src/logic_graph.cpp
 )
 target_link_libraries(ukv_stl
   fmt::fmt
@@ -144,11 +144,11 @@ target_link_libraries(ukv_stl
 
 add_library(ukv_rocksdb
   src/backend_rocksdb.cpp
-  src/logic_graphs.cpp
+  src/logic_graph.cpp
 )
 add_library(ukv_leveldb
   src/backend_leveldb.cpp
-  src/logic_graphs.cpp
+  src/logic_graph.cpp
 )
 
 target_link_libraries(ukv_rocksdb
@@ -162,10 +162,10 @@ target_link_libraries(ukv_leveldb
   nlohmann_json::nlohmann_json
 )
 
-add_library(ukv_beast_client src/ukv_beast_client.cpp)
+add_library(ukv_rpc_client src/rpc_client.cpp)
 
-# add_executable(ukv_beast_server src/rest_server.cpp)
-# target_link_libraries(ukv_beast_server
+# add_executable(ukv_rest_server src/rest_server.cpp)
+# target_link_libraries(ukv_rest_server
 # ukv_stl
 # pthread
 # fmt::fmt
@@ -175,7 +175,7 @@ add_executable(ukv_test
   src/test.cpp
   src/backend_stl.cpp
   src/logic_docs.cpp
-  src/logic_graphs.cpp
+  src/logic_graph.cpp
 )
 target_link_libraries(ukv_test
   gtest
@@ -187,7 +187,7 @@ add_executable(ukv_leveldb_test
   src/test.cpp
   src/backend_leveldb.cpp
   src/logic_docs.cpp
-  src/logic_graphs.cpp
+  src/logic_graph.cpp
 )
 target_link_libraries(ukv_leveldb_test
   gtest
