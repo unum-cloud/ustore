@@ -11,6 +11,7 @@
 #include <string_view>
 #include <unordered_set>
 #include <variant>
+#include <charconv>
 
 #include <nlohmann/json.hpp>
 
@@ -140,9 +141,9 @@ void update_docs( //
         return;
 
     auto heapy_exporter = std::make_shared<export_to_value_t>();
-    for (ukv_size_t i = 0; i != n; ++i) {
-        auto task = tasks[i];
-        auto& serialized = arena.updated_vals[i];
+    for (ukv_size_t doc_idx = 0; doc_idx != n; ++doc_idx) {
+        auto task = tasks[doc_idx];
+        auto& serialized = arena.updated_vals[doc_idx];
         if (task.is_deleted()) {
             serialized.reset();
             continue;
@@ -198,7 +199,7 @@ void update_fields( //
     // 1. read the entire entries,
     // 2. parse them,
     // 3. locate the requested keys,
-    // 4. replace them with provided values, or patch nested objects.
+    // 4. replace them with provided scalars, or patch nested objects.
 
     std::vector<json_t> parsed(n);
     std::vector<json_ptr_t> fields_ptrs;
@@ -346,8 +347,8 @@ void ukv_docs_read( //
     // if different fields from the same docs are requested.
     // In that case, we must only fetch the doc once and later
     // slice it into output fields.
-    for (ukv_size_t i = 0; i != n; ++i)
-        arena.updated_keys[i] = tasks[i].location();
+    for (ukv_size_t doc_idx = 0; doc_idx != n; ++doc_idx)
+        arena.updated_keys[doc_idx] = tasks[doc_idx].location();
     sort_and_deduplicate(arena.updated_keys);
     // TODO: Handle the common case of requesting the non-colliding
     // all-ascending input sequences of document IDs received during scans
@@ -380,9 +381,9 @@ void ukv_docs_read( //
         auto parsed_values = std::vector<json_t>(n);
         auto found_tape = taped_values_view_t(found_lengths, found_values, found_count);
         auto found_tape_it = found_tape.begin();
-        for (ukv_size_t i = 0; i != found_count; ++i, ++found_tape_it) {
+        for (ukv_size_t doc_idx = 0; doc_idx != found_count; ++doc_idx, ++found_tape_it) {
             value_view_t found_value = *found_tape_it;
-            json_t& parsed = parsed_values[i];
+            json_t& parsed = parsed_values[doc_idx];
             parsed = parse_any(found_value, c_format, c_error);
 
             // This error is extremely unlikely, as we have previously accepted the data into the store.
@@ -398,20 +399,20 @@ void ukv_docs_read( //
         auto null_object = json_t(nullptr);
         arena.growing_tape.clear();
 
-        for (ukv_size_t i = 0; i != n; ++i) {
-            auto task = tasks[i];
+        for (ukv_size_t task_idx = 0; task_idx != n; ++task_idx) {
+            auto task = tasks[task_idx];
             auto parsed_idx = offset_in_sorted(arena.updated_keys, task.location());
             json_t& parsed = parsed_values[parsed_idx];
 
-            if (fields && fields[i]) {
-                if (fields[i][0] == '/') {
+            if (fields && fields[task_idx]) {
+                if (fields[task_idx][0] == '/') {
                     // This libraries doesn't implement `find` for JSON-Pointers:
-                    json_ptr_t field_ptr {fields[i]};
+                    json_ptr_t field_ptr {fields[task_idx]};
                     parsed.contains(field_ptr) ? dump_any(parsed.at(field_ptr), c_format, heapy_exporter, c_error)
                                                : dump_any(null_object, c_format, heapy_exporter, c_error);
                 }
                 else {
-                    auto it = parsed.find(fields[i]);
+                    auto it = parsed.find(fields[task_idx]);
                     it != parsed.end() ? dump_any(it.value(), c_format, heapy_exporter, c_error)
                                        : dump_any(null_object, c_format, heapy_exporter, c_error);
                 }
@@ -487,7 +488,7 @@ void ukv_docs_gist( //
 
         std::unordered_set<std::string> paths;
 
-        for (ukv_size_t i = 0; i != c_docs_count; ++i, ++binary_docs_it) {
+        for (ukv_size_t doc_idx = 0; doc_idx != c_docs_count; ++doc_idx, ++binary_docs_it) {
             value_view_t binary_doc = *binary_docs_it;
             json_t parsed = parse_any(binary_doc, internal_format_k, c_error);
             if (*c_error)
@@ -537,14 +538,16 @@ void ukv_docs_gather_scalars( //
 
     ukv_options_t const c_options,
 
-    ukv_val_ptr_t c_found_indicators,
-    ukv_val_ptr_t c_found_values,
+    ukv_val_ptr_t c_result_bitmap_valid,
+    ukv_val_ptr_t c_result_bitmap_converted,
+    ukv_val_ptr_t c_result_bitmap_collision,
+    ukv_val_ptr_t c_result_scalars,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
     ukv_val_len_t* found_lengths = nullptr;
-    ukv_val_ptr_t found_values = nullptr;
+    ukv_val_ptr_t found_docs = nullptr;
     ukv_read(c_db,
              c_txn,
              c_docs_count,
@@ -554,7 +557,7 @@ void ukv_docs_gather_scalars( //
              c_keys_stride,
              c_options,
              &found_lengths,
-             &found_values,
+             &found_docs,
              c_arena,
              c_error);
     if (*c_error)
@@ -569,8 +572,17 @@ void ukv_docs_gather_scalars( //
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     strided_iterator_gt<ukv_type_t const> types {c_types, c_types_stride};
 
-    taped_values_view_t binary_docs {found_lengths, found_values, c_docs_count};
+    taped_values_view_t binary_docs {found_lengths, found_docs, c_docs_count};
     tape_iterator_t binary_docs_it = binary_docs.begin();
+
+    // If those pointers were not provided, we can reuse the validity bitmap
+    // It will allow us to avoid extra checks later.
+    // ! Still, in every sequence of updates, validity is the last bit to be set,
+    // ! to avoid overwriting.
+    if (!c_result_bitmap_converted)
+        c_result_bitmap_converted = c_result_bitmap_valid;
+    if (!c_result_bitmap_collision)
+        c_result_bitmap_collision = c_result_bitmap_valid;
 
     try {
 
@@ -597,22 +609,233 @@ void ukv_docs_gather_scalars( //
         }
 
         // Go though all the documents extracting and type-checking the relevant parts
-        for (ukv_size_t i = 0; i != c_docs_count; ++i, ++binary_docs_it) {
+        auto null_object = json_t(nullptr);
+        for (ukv_size_t doc_idx = 0; doc_idx != c_docs_count; ++doc_idx, ++binary_docs_it) {
             value_view_t binary_doc = *binary_docs_it;
             json_t parsed = parse_any(binary_doc, internal_format_k, c_error);
             if (*c_error)
                 return;
 
+            auto column_bitmap_valid = reinterpret_cast<std::uint8_t*>(c_result_bitmap_valid);
+            auto column_bitmap_converted = reinterpret_cast<std::uint8_t*>(c_result_bitmap_converted);
+            auto column_bitmap_collision = reinterpret_cast<std::uint8_t*>(c_result_bitmap_collision);
+            auto column_scalars = reinterpret_cast<std::uint8_t*>(c_result_scalars);
+
             for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx) {
+
+                // Find this field within document
                 ukv_type_t type = types[field_idx];
                 auto const& name_or_path = heapy_fields[field_idx];
+                json_t::iterator found_value_it = parsed.end();
+                json_t const& found_value =
+                    name_or_path.index() //
+                        ?
+                        // This libraries doesn't implement `find` for JSON-Pointers:
+                        (parsed.contains(std::get<1>(name_or_path)) //
+                             ? parsed.at(std::get<1>(name_or_path))
+                             : null_object)
+                        // But with simple names we can query members with iterators:
+                        : ((found_value_it = parsed.find(std::get<0>(name_or_path))) != parsed.end() //
+                               ? found_value_it.value()
+                               : null_object);
 
+                // Resolve output addresses
+                std::size_t bytes_per_scalar;
                 switch (type) {
-                case ukv_type_bool_k: break;
-                case ukv_type_i64_k: break;
-                case ukv_type_f64_k: break;
-                case ukv_type_uuid_k: break;
+                case ukv_type_bool_k: bytes_per_scalar = 1; break;
+                case ukv_type_i64_k: bytes_per_scalar = 8; break;
+                case ukv_type_f64_k: bytes_per_scalar = 8; break;
+                case ukv_type_uuid_k: bytes_per_scalar = 16; break;
+                default: bytes_per_scalar = 0; break;
                 }
+
+                // Bitmaps are indexed from the last bit within every byte
+                // https://arrow.apache.org/docs/format/Columnar.html#validity-bitmaps
+                std::uint8_t mask_bitmap = static_cast<std::uint8_t>(1 << (doc_idx % CHAR_BIT));
+                std::uint8_t* byte_bitmap_valid = column_bitmap_valid + doc_idx / CHAR_BIT;
+                std::uint8_t* byte_bitmap_converted = column_bitmap_converted + doc_idx / CHAR_BIT;
+                std::uint8_t* byte_bitmap_collision = column_bitmap_collision + doc_idx / CHAR_BIT;
+                std::uint8_t* byte_scalars = column_scalars + doc_idx * bytes_per_scalar;
+
+                // Export the types
+                switch (type) {
+
+                    // Exporting booleans
+                case ukv_type_bool_k:
+                    switch (found_value.type()) {
+                    case json_t::value_t::null:
+                        *byte_bitmap_converted &= ~mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid &= ~mask_bitmap;
+                        break;
+                    case json_t::value_t::object:
+                    case json_t::value_t::array:
+                    case json_t::value_t::string: // TODO
+                    case json_t::value_t::binary: // TODO
+                    case json_t::value_t::discarded:
+                        *byte_bitmap_converted &= ~mask_bitmap;
+                        *byte_bitmap_collision |= mask_bitmap;
+                        *byte_bitmap_valid &= ~mask_bitmap;
+                        break;
+                    case json_t::value_t::boolean:
+                        *byte_scalars = found_value.get<bool>();
+                        *byte_bitmap_converted &= ~mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    case json_t::value_t::number_integer:
+                        *byte_scalars = found_value.get<std::int64_t>() != 0;
+                        *byte_bitmap_converted |= mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    case json_t::value_t::number_unsigned:
+                        *byte_scalars = found_value.get<std::uint64_t>() != 0;
+                        *byte_bitmap_converted |= mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    case json_t::value_t::number_float:
+                        *byte_scalars = found_value.get<double>() != 0;
+                        *byte_bitmap_converted |= mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    }
+                    break;
+
+                    // Exporting integers
+                case ukv_type_i64_k:
+                    switch (found_value.type()) {
+                    case json_t::value_t::null:
+                        *byte_bitmap_converted &= ~mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid &= ~mask_bitmap;
+                        break;
+                    case json_t::value_t::object:
+                    case json_t::value_t::array:
+                    case json_t::value_t::binary: // TODO
+                    case json_t::value_t::discarded:
+                        *byte_bitmap_converted &= ~mask_bitmap;
+                        *byte_bitmap_collision |= mask_bitmap;
+                        *byte_bitmap_valid &= ~mask_bitmap;
+                        break;
+                    case json_t::value_t::string: {
+                        std::string const& str = found_value.get_ref<std::string const&>();
+                        std::from_chars_result result = std::from_chars(str.data(),
+                                                                        str.data() + str.size(),
+                                                                        *reinterpret_cast<std::int64_t*>(byte_scalars));
+                        *byte_bitmap_converted |= mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        bool entire_string_is_number =
+                            result.ec != std::errc() && result.ptr == str.data() + str.size();
+                        if (entire_string_is_number)
+                            *byte_bitmap_valid |= mask_bitmap;
+                        else
+                            *byte_bitmap_valid &= ~mask_bitmap;
+
+                        break;
+                    }
+                    case json_t::value_t::boolean:
+                        *reinterpret_cast<std::int64_t*>(byte_scalars) = found_value.get<bool>();
+                        *byte_bitmap_converted &= ~mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    case json_t::value_t::number_integer:
+                        *reinterpret_cast<std::int64_t*>(byte_scalars) = found_value.get<std::int64_t>();
+                        *byte_bitmap_converted &= ~mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    case json_t::value_t::number_unsigned:
+                        *reinterpret_cast<std::int64_t*>(byte_scalars) =
+                            static_cast<std::int64_t>(found_value.get<std::uint64_t>());
+                        *byte_bitmap_converted |= mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    case json_t::value_t::number_float:
+                        *reinterpret_cast<std::int64_t*>(byte_scalars) =
+                            static_cast<std::int64_t>(found_value.get<double>());
+                        *byte_bitmap_converted |= mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    }
+                    break;
+
+                    // Exporting floats
+                case ukv_type_f64_k:
+                    switch (found_value.type()) {
+                    case json_t::value_t::null:
+                        *byte_bitmap_converted &= ~mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid &= ~mask_bitmap;
+                        break;
+                    case json_t::value_t::object:
+                    case json_t::value_t::array:
+                    case json_t::value_t::binary: // TODO
+                    case json_t::value_t::discarded:
+                        *byte_bitmap_converted &= ~mask_bitmap;
+                        *byte_bitmap_collision |= mask_bitmap;
+                        *byte_bitmap_valid &= ~mask_bitmap;
+                        break;
+                    case json_t::value_t::string: {
+                        std::string const& str = found_value.get_ref<std::string const&>();
+                        char* end = nullptr;
+                        *reinterpret_cast<double*>(byte_scalars) = std::strtod(str.data(), &end);
+                        *byte_bitmap_converted |= mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+
+                        bool entire_string_is_number = end == str.data() + str.size();
+                        if (entire_string_is_number)
+                            *byte_bitmap_valid |= mask_bitmap;
+                        else
+                            *byte_bitmap_valid &= ~mask_bitmap;
+                        break;
+                    }
+                    case json_t::value_t::boolean:
+                        *reinterpret_cast<double*>(byte_scalars) = static_cast<double>(found_value.get<bool>());
+                        *byte_bitmap_converted &= ~mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    case json_t::value_t::number_integer:
+                        *reinterpret_cast<double*>(byte_scalars) = static_cast<double>(found_value.get<std::int64_t>());
+                        *byte_bitmap_converted |= mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    case json_t::value_t::number_unsigned:
+                        *reinterpret_cast<double*>(byte_scalars) =
+                            static_cast<double>(found_value.get<std::uint64_t>());
+                        *byte_bitmap_converted |= mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    case json_t::value_t::number_float:
+                        *reinterpret_cast<double*>(byte_scalars) = found_value.get<double>();
+                        *byte_bitmap_converted &= ~mask_bitmap;
+                        *byte_bitmap_collision &= ~mask_bitmap;
+                        *byte_bitmap_valid |= mask_bitmap;
+                        break;
+                    }
+                    break;
+
+                    // TODO: Exporting Unique Universal IDentifiers
+                case ukv_type_uuid_k:
+                    *byte_bitmap_converted &= ~mask_bitmap;
+                    *byte_bitmap_collision &= ~mask_bitmap;
+                    *byte_bitmap_valid &= ~mask_bitmap;
+                    break;
+
+                default: break;
+                }
+
+                // Jump forward to the next column
+                column_bitmap_valid += c_docs_count / CHAR_BIT;
+                column_scalars += c_docs_count * bytes_per_scalar;
             }
         }
     }
