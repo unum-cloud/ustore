@@ -207,6 +207,40 @@ void ukv_write( //
     }
 }
 
+void measure_one( //
+    rocks_db_wrapper_t* db_wrapper,
+    rocks_txn_ptr_t txn,
+    read_tasks_soa_t const& tasks,
+    ukv_size_t const,
+    rocksdb::ReadOptions const& options,
+    ukv_val_len_t** c_found_lengths,
+    ukv_val_ptr_t*,
+    stl_arena_t& arena,
+    ukv_error_t* c_error) {
+
+    read_task_t task = tasks[0];
+    rocks_col_ptr_t col =
+        task.col ? reinterpret_cast<rocks_col_ptr_t>(task.col) : db_wrapper->db->DefaultColumnFamily();
+
+    auto value_uptr = make_value(c_error);
+    rocks_value_t& value = *value_uptr.get();
+
+    auto key = to_slice(task.key);
+    rocks_status_t status = txn ? txn->Get(options, col, key, &value) : db_wrapper->db->Get(options, col, key, &value);
+
+    if (!status.IsNotFound())
+        if (export_error(status, c_error))
+            return;
+
+    auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : static_cast<ukv_size_t>(value.size());
+    auto tape = prepare_memory(arena.output_tape, sizeof(ukv_size_t), c_error);
+    if (*c_error)
+        return;
+
+    std::memcpy(tape, &exported_len, sizeof(ukv_size_t));
+    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
+}
+
 void read_one( //
     rocks_db_wrapper_t* db_wrapper,
     rocks_txn_ptr_t txn,
@@ -242,6 +276,41 @@ void read_one( //
 
     *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + sizeof(ukv_size_t));
+}
+
+void measure_many( //
+    rocks_db_wrapper_t* db_wrapper,
+    rocks_txn_ptr_t txn,
+    read_tasks_soa_t const& tasks,
+    ukv_size_t const n,
+    rocksdb::ReadOptions const& options,
+    ukv_val_len_t** c_found_lengths,
+    ukv_val_ptr_t*,
+    stl_arena_t& arena,
+    ukv_error_t* c_error) {
+
+    std::vector<rocks_col_ptr_t> cols(n);
+    std::vector<rocksdb::Slice> keys(n);
+    std::vector<std::string> vals(n);
+    for (ukv_size_t i = 0; i != n; ++i) {
+        read_task_t task = tasks[i];
+        cols[i] = task.col ? reinterpret_cast<rocks_col_ptr_t>(task.col) : db_wrapper->db->DefaultColumnFamily();
+        keys[i] = to_slice(task.key);
+    }
+
+    std::vector<rocks_status_t> statuses =
+        txn ? txn->MultiGet(options, cols, keys, &vals) : db_wrapper->db->MultiGet(options, cols, keys, &vals);
+
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
+    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
+    if (*c_error)
+        return;
+
+    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
+    *c_found_lengths = lens;
+
+    for (ukv_size_t i = 0; i != n; ++i)
+        lens[i] = statuses[i].IsNotFound() ? ukv_val_len_missing_k : vals[i].size();
 }
 
 void read_many( //
@@ -329,8 +398,14 @@ void ukv_read( //
     if (txn)
         options.snapshot = txn->GetSnapshot();
     try {
-        auto func = c_tasks_count == 1 ? &read_one : &read_many;
-        func(db_wrapper, txn, tasks, c_tasks_count, options, c_found_lengths, c_found_values, arena, c_error);
+        if (c_tasks_count == 1) {
+            auto func = (c_options & ukv_option_read_lengths_k) ? &measure_one : &read_one;
+            func(db_wrapper, txn, tasks, c_tasks_count, options, c_found_lengths, c_found_values, arena, c_error);
+        }
+        else {
+            auto func = (c_options & ukv_option_read_lengths_k) ? &measure_many : &read_many;
+            func(db_wrapper, txn, tasks, c_tasks_count, options, c_found_lengths, c_found_values, arena, c_error);
+        }
     }
     catch (...) {
         *c_error = "Read Failure";
