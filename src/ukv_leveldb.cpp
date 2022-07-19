@@ -431,6 +431,15 @@ void ukv_collection_remove( //
     *c_error = "Collections not supported by LevelDB!";
 }
 
+void ukv_collection_list( //
+    ukv_t const,
+    ukv_size_t*,
+    ukv_str_view_t*,
+    ukv_arena_t*,
+    ukv_error_t* c_error) {
+    *c_error = "Collections not supported by LevelDB!";
+}
+
 void ukv_control( //
     ukv_t const,
     ukv_str_view_t,
