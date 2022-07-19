@@ -15,6 +15,10 @@
  * of "Key" and "Field" combinations. When writing we may want to discard a certain
  * subset of fields in every document, but we may also be interested in having a
  * more targetted approach.
+ *
+ * @section Type Checking and Casting
+ * Ideally, the data shouldn't be parsed more than once, to avoid performance.
+ * So the primary interfaces of
  */
 
 #pragma once
@@ -31,14 +35,17 @@ extern "C" {
 
 typedef enum {
     ukv_format_binary_k = 0,
+
+    // Flexible dynamically-typed document formats
     ukv_format_json_k = 1,
     ukv_format_msgpack_k = 2,
     ukv_format_bson_k = 3,
-    ukv_format_arrow_k = 4,
-    ukv_format_parquet_k = 5,
+    ukv_format_cbor_k = 4,
+    ukv_format_ubjson_k = 5,
+
+    // Patches and modifiers
     ukv_format_json_patch_k = 6,
-    ukv_format_cbor_k = 7,
-    ukv_format_ubjson_k = 8,
+
     ukv_format_unknown_k = 0xFFFFFFFF,
 } ukv_format_t;
 
@@ -49,13 +56,14 @@ typedef enum {
  * are used. Aside from those
  */
 typedef enum {
+    ukv_type_null_k = 0,
+    ukv_type_bool_k = 1,
+    ukv_type_i64_k = 2,
+    ukv_type_f64_k = 3,
+    ukv_type_uuid_k = 4,
+    ukv_type_str_k = 5,
 
-    ukv_type_bool_k = 1 << 0,
-    ukv_type_i64_k = 1 << 1,
-    ukv_type_f64_k = 1 << 2,
-    ukv_type_uuid_k = 1 << 3,
-    ukv_type_str_k = 1 << 4,
-
+    ukv_type_any_k = 0xFFFFFFFF,
 } ukv_type_t;
 
 /*********************************************************/
@@ -146,10 +154,42 @@ void ukv_docs_read( //
     ukv_error_t* error);
 
 /**
- * @brief The vectorized "gather" interface, that collects, type-checks
- * and casts (N*M) values for M fields in N documents.
+ * @brief Describes the statistics (presence) of select or all fields among
+ * specified documents. Will export a histogram of frequencies of every @c `ukv_type_t`
+ * under every field. Can be used as a preparation step before `ukv_docs_gather`
+ * or `ukv_docs_read`.
  */
-void ukv_docs_gather( //
+void ukv_docs_gist( //
+    ukv_t const db,
+    ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
+
+    ukv_collection_t const* collections,
+    ukv_size_t const collections_stride,
+
+    ukv_key_t const* keys,
+    ukv_size_t const keys_stride,
+
+    ukv_options_t const options,
+
+    ukv_size_t* found_fields_count,
+    ukv_str_view_t* found_fields,
+
+    ukv_arena_t* arena,
+    ukv_error_t* error);
+
+/**
+ * @brief The vectorized "gather" interface, that collects, type-checks and
+ * casts (N*M) @c `int`/`float`s from M fields in N docs into columnar format.
+ *
+ * We may have used Apache Arrow RecordBatch directly with ArrowSchema, ArrowArray.
+ * It, however, would have provided less consistency with other APIs.
+ *
+ * @param fields[in]    JSON-Pointer paths to scalars in desired documents.
+ *                      If `fields_stride` is set to zero, we assume that all paths
+ *                      are concatenated with a NULL-character delimiter.
+ */
+void ukv_docs_gather_scalars( //
     ukv_t const db,
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
@@ -168,21 +208,22 @@ void ukv_docs_gather( //
     ukv_size_t const types_stride,
 
     ukv_options_t const options,
-    ukv_format_t const format,
 
-    ukv_val_len_t** found_lengths,
-    ukv_val_ptr_t* found_values,
+    ukv_val_ptr_t found_indicators,
+    ukv_val_ptr_t found_values,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
- * @brief Describes the statistics (presence) of select or all fields among
- * specified documents. Will export a histogram of frequencies of every @c `ukv_type_t`
- * under every field. Can be used as a preparation step before `ukv_docs_gather`
- * or `ukv_docs_read`.
+ * @brief The vectorized "gather" interface, that collects, type-checks and
+ * casts (N*M) @c `string`s from M fields in N docs into columnar format.
+ *
+ * Strings will be organized in the document-wise order.
+ * All strings are delimited by a null-termination character.
+ * That characters length is included into length.
  */
-void ukv_docs_gist( //
+void ukv_docs_gather_strings( //
     ukv_t const db,
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
@@ -198,10 +239,9 @@ void ukv_docs_gist( //
     ukv_size_t const fields_stride,
 
     ukv_options_t const options,
-    ukv_format_t const format,
 
-    ukv_str_view_t** found_fields,
-    ukv_size_t* found_frequencies,
+    ukv_val_len_t** found_lengths,
+    ukv_str_view_t* found_joined_strings,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
