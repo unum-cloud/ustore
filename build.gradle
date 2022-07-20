@@ -91,19 +91,14 @@ jar {
 
     into("stl") {
         from("$buildDir/libs/ukv/shared/stl/libukv.so")
-        from("$buildDir/lib/libukv_stl.a")
     }
 
     into("rocks") {
         from("$buildDir/libs/ukv/shared/rocks/libukv.so")
-        from("$buildDir/lib/libukv_rocksdb.a")
-        from("$buildDir/lib/librocksdb.a")
     }
 
     into("level") {
         from("$buildDir/libs/ukv/shared/level/libukv.so")
-        from("$buildDir/lib/libukv_leveldb.a")
-        from("$buildDir/lib/libleveldb.a")
     }
 }
 
