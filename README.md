@@ -5,11 +5,11 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 * Storing binary blobs
 * Building up graphs & indexes
 * Querying structured documents
-* Handling JSON, BSON, MsgPacks
-* ACID transactional guarantees
-* Familiar interfaces for tabular & graph analytics
-* Bindings for your favorite languages
-* Interoperability with Apache Arrow
+* Handling JSON, [BSON](https://www.mongodb.com/json-and-bson), [MsgPack](https://msgpack.org/index.html)
+* [JSON-Pointers](https://datatracker.ietf.org/doc/html/rfc6901) & [Field-level Patches](https://datatracker.ietf.org/doc/html/rfc6902), no custom Query Languages
+* [ACID](https://en.wikipedia.org/wiki/ACID) transactions across tables, docs & graphs
+* Familiar high-level [drivers](#frontends) for tabular & graph analytics
+* [Apache Arrow](https://arrow.apache.org/) exports, [Flight RPC](https://arrow.apache.org/docs/format/Flight.html) and [DataFusion SQL](https://github.com/apache/arrow-datafusion) support
 
 UVV does just that, abstracting away the implementation from the user.
 In under 10K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
