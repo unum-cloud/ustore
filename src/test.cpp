@@ -116,8 +116,8 @@ TEST(db, named) {
 
     db_session_t session = db.session();
     entries_ref_t ref = session[keys];
-    EXPECT_TRUE(session.contains("col"));
-    EXPECT_FALSE(session.contains("unknown_col"));
+    EXPECT_TRUE(*session.contains("col"));
+    EXPECT_FALSE(*session.contains("unknown_col"));
     round_trip(ref, values);
 
     // Check scans
@@ -226,7 +226,7 @@ TEST(db, net) {
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
-    ::testing::GTEST_FLAG(filter) = "db.named";
+    // ::testing::GTEST_FLAG(filter) = "db.named";
 
     return RUN_ALL_TESTS();
 }
