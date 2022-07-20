@@ -399,7 +399,7 @@ class graph_t {
      */
     expected_gt<strided_range_gt<bool>> contains(strided_range_gt<ukv_key_t const> vertices,
                                                  bool transparent = false) noexcept {
-        return entries_ref_t {
+        return binary_refs_t {
             collection_.db(),
             txn_,
             arena_.internal_cptr(),
