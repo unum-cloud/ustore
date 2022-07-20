@@ -452,6 +452,16 @@ element_at reduce_n(iterator_at begin, std::size_t n, element_at init) {
     return transform_reduce_n(begin, n, init, [](auto x) { return x; });
 }
 
+template <typename iterator_at>
+bool all_ascending(iterator_at begin, std::size_t n) {
+    auto previous = begin;
+    ++begin;
+    for (std::size_t i = 1; i != n; ++i, ++begin)
+        if (*begin <= *std::exchange(previous, begin))
+            return false;
+    return true;
+}
+
 /**
  * @brief Trivial hash-mixing scheme from Boost.
  * @see https://www.boost.org/doc/libs/1_37_0/doc/html/hash/reference.html#boost.hash_combine
