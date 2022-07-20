@@ -564,6 +564,9 @@ class db_session_t {
     }
 
     expected_gt<bool> contains(std::string_view name) noexcept {
+        if (name.empty())
+            return true;
+
         status_t status;
         ukv_size_t count = 0;
         ukv_str_view_t names = nullptr;
