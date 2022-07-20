@@ -77,9 +77,11 @@ model {
 
 test {
     forkEvery 1
-    dependsOn("ukvStlSharedLibrary")
-    dependsOn("ukvRocksSharedLibrary")
-    dependsOn("ukvLevelSharedLibrary")
+
+    dependsOn jar
+
+    // Rearrange test classpath, add compiled JAR instead of main classes
+    classpath = project.sourceSets.test.output + configurations.testRuntimeClasspath + files(jar.archiveFile)
 }
 
 jar {

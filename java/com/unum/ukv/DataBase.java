@@ -1,5 +1,10 @@
 package com.unum.ukv;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Map; // Map abstract class
 import java.lang.AutoCloseable; // Finalization
 import java.util.Arrays; // Arrays.equals
@@ -58,6 +63,31 @@ public abstract class DataBase {
      * Java `Dictionary` API using Java Native Interface.
      * https://www.ibm.com/docs/en/informix-servers/12.10?topic=operations-handle-transactions
      */
+
+    private static String extractLibrary(String backend) throws IOException {
+        File file = File.createTempFile("libukv", ".so");
+        if (file.exists()) {
+            InputStream link = (DataBase.class.getResourceAsStream("/" + backend + "/libukv.so"));
+
+            if (link != null) {
+                Files.copy(
+                        link,
+                        file.getAbsoluteFile().toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+                return file.getAbsoluteFile().toPath().toString();
+            }
+        }
+        throw new IOException("Failed to extract library");
+    }
+
+    protected static void loadLibrary(String backend) {
+        try {
+            System.load(extractLibrary(backend));
+        } catch (IOException e) {
+            throw new RuntimeException(e.getMessage());
+        }
+    }
+
     public static class Transaction implements AutoCloseable {
 
         public long transactionAddress = 0;
@@ -74,16 +104,15 @@ public abstract class DataBase {
 
         /**
          * @breif Resets the state of the transaction and creates a new "sequence
-         *        number" or "transaction ID" for it. Can't be used after `commit`.
+         * number" or "transaction ID" for it. Can't be used after `commit`.
          */
         public native void rollback();
 
         /**
-         * @brief Commits all the writes to DBMS, checking for collisions in the
-         *        process. Both in writes and "non-transaparent" reads. Returns
-         *        operation result, but doesn't throw exceptions.
-         * 
          * @return true if the operation was submitted and the state of DBMS updated.
+         * @brief Commits all the writes to DBMS, checking for collisions in the
+         * process. Both in writes and "non-transaparent" reads. Returns
+         * operation result, but doesn't throw exceptions.
          */
         public native boolean commit();
 
@@ -126,7 +155,7 @@ public abstract class DataBase {
 
         /**
          * Removes the key (and its corresponding value) from this collection.
-         * 
+         *
          * @return Previously held value.
          */
         public byte[] remove(String collection, long key) {
@@ -208,7 +237,7 @@ public abstract class DataBase {
         /**
          * Removes the entry for the specified key only if it is currently
          * mapped to the specified value.
-         * 
+         *
          * @return True, iff key was found, value was equal and the removal occured.
          */
         public boolean remove(String collection, long key, byte[] value) {
@@ -245,7 +274,7 @@ public abstract class DataBase {
 
         /**
          * @brief Initializes and opens a connection using passed config.
-         *        No need to call `open` or `close` after than.
+         * No need to call `open` or `close` after than.
          */
         public Context(String config_json) {
             open(config_json);
@@ -257,25 +286,25 @@ public abstract class DataBase {
 
         /**
          * @brief Begins a new transaction with an auto-incremented identifier.
-         *        By default, the transaction will be commited on `close`.
+         * By default, the transaction will be commited on `close`.
          */
         public native Transaction transaction();
 
         /**
          * @brief Clears the entire DB so that it contains no keys, but keeps collection
-         *        names. Imposes a global lock on the entire collection, so use rarely.
+         * names. Imposes a global lock on the entire collection, so use rarely.
          */
         public native void clear();
 
         /**
          * @brief Clears this collection so that it contains no keys.
-         *        Imposes a global lock on the entire collection, so use rarely.
+         * Imposes a global lock on the entire collection, so use rarely.
          */
         public native void clear(String collection);
 
         /**
          * @brief Removes a collection and all the keys in it.
-         *        Imposes a global lock on the entire collection, so use rarely.
+         * Imposes a global lock on the entire collection, so use rarely.
          */
         public native void remove(String collection);
 
