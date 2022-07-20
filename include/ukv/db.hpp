@@ -129,8 +129,7 @@ class entries_ref_t {
 
     expected_gt<taped_values_view_t> get(ukv_format_t format = ukv_format_binary_k,
                                          bool transparent = false) const noexcept {
-        auto options = static_cast<ukv_options_t>(
-            (transparent ? ukv_option_read_transparent_k : ukv_options_default_k) | ukv_option_read_lengths_k);
+        auto options = transparent ? ukv_option_read_transparent_k : ukv_options_default_k;
         return any_get(format, options);
     }
 
