@@ -20,7 +20,7 @@ namespace unum::ukv {
  * with `[]` and assignment operators for a batch of keys
  * simultaneously.
  */
-class entries_ref_t {
+class binary_refs_t {
 
     ukv_t db_ = nullptr;
     ukv_txn_t txn_ = nullptr;
@@ -119,7 +119,7 @@ class entries_ref_t {
     }
 
   public:
-    entries_ref_t(ukv_t db,
+    binary_refs_t(ukv_t db,
                   ukv_txn_t txn,
                   ukv_arena_t* arena,
                   collections_view_t cols,
@@ -200,13 +200,13 @@ class entries_ref_t {
 
     operator expected_gt<taped_values_view_t>() const noexcept { return get(); }
 
-    entries_ref_t& operator=(disjoint_values_view_t vals) noexcept(false) {
+    binary_refs_t& operator=(disjoint_values_view_t vals) noexcept(false) {
         auto status = set(vals);
         status.throw_unhandled();
         return *this;
     }
 
-    entries_ref_t& operator=(nullptr_t) noexcept(false) {
+    binary_refs_t& operator=(nullptr_t) noexcept(false) {
         auto status = erase();
         status.throw_unhandled();
         return *this;
@@ -468,7 +468,7 @@ class txn_t {
         txn_ = nullptr;
     }
 
-    inline entries_ref_t operator[](located_keys_view_t located) noexcept {
+    inline binary_refs_t operator[](located_keys_view_t located) noexcept {
         return {
             db_,
             txn_,
@@ -478,7 +478,7 @@ class txn_t {
         };
     }
 
-    inline entries_ref_t operator[](keys_view_t keys) noexcept { return {db_, txn_, arena_.internal_cptr(), {}, keys}; }
+    inline binary_refs_t operator[](keys_view_t keys) noexcept { return {db_, txn_, arena_.internal_cptr(), {}, keys}; }
 
     status_t reset() {
         status_t status;
@@ -519,8 +519,8 @@ class db_session_t {
     inline ukv_t db() const noexcept { return db_; }
     inline managed_arena_t& arena() noexcept { return arena_; }
 
-    inline entries_ref_t operator[](located_keys_view_t located) noexcept {
-        return entries_ref_t {
+    inline binary_refs_t operator[](located_keys_view_t located) noexcept {
+        return binary_refs_t {
             db_,
             nullptr,
             arena_.internal_cptr(),
@@ -529,8 +529,8 @@ class db_session_t {
         };
     }
 
-    inline entries_ref_t operator[](keys_view_t keys) noexcept {
-        return entries_ref_t {db_, nullptr, arena_.internal_cptr(), {}, keys};
+    inline binary_refs_t operator[](keys_view_t keys) noexcept {
+        return binary_refs_t {db_, nullptr, arena_.internal_cptr(), {}, keys};
     }
 
     inline db_session_t& new_plan() noexcept {
@@ -543,7 +543,7 @@ class db_session_t {
         return *this;
     }
 
-    inline entries_ref_t sample() noexcept { return operator[](located_keys_view_t {lazy_lookups_}); }
+    inline binary_refs_t sample() noexcept { return operator[](located_keys_view_t {lazy_lookups_}); }
 
     expected_gt<txn_t> transact() {
         status_t status;

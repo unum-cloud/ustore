@@ -15,7 +15,7 @@
 using namespace unum::ukv;
 using namespace unum;
 
-void round_trip(entries_ref_t ref, disjoint_values_view_t values) {
+void round_trip(binary_refs_t ref, disjoint_values_view_t values) {
 
     EXPECT_TRUE(ref.set(values)) << "Failed to assign";
 
@@ -48,7 +48,7 @@ TEST(db, basic) {
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
-    entries_ref_t ref = session[keys];
+    binary_refs_t ref = session[keys];
     disjoint_values_view_t values {
         .contents = {&vals_begin, 0, 3},
         .offsets = offs,
@@ -115,7 +115,7 @@ TEST(db, named) {
     };
 
     db_session_t session = db.session();
-    entries_ref_t ref = session[keys];
+    binary_refs_t ref = session[keys];
     EXPECT_TRUE(*session.contains("col"));
     EXPECT_FALSE(*session.contains("unknown_col"));
     round_trip(ref, values);
