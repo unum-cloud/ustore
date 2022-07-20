@@ -233,6 +233,9 @@ struct read_task_t {
 struct read_tasks_soa_t {
     strided_iterator_gt<ukv_collection_t const> cols;
     strided_iterator_gt<ukv_key_t const> keys;
+    ukv_size_t count = 0;
+
+    inline std::size_t size() const noexcept { return count; }
 
     inline read_task_t operator[](ukv_size_t i) const noexcept {
         ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
@@ -257,6 +260,9 @@ struct scan_tasks_soa_t {
     strided_iterator_gt<ukv_collection_t const> cols;
     strided_iterator_gt<ukv_key_t const> min_keys;
     strided_iterator_gt<ukv_size_t const> lengths;
+    ukv_size_t count = 0;
+
+    inline std::size_t size() const noexcept { return count; }
 
     inline scan_task_t operator[](ukv_size_t i) const noexcept {
         ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
@@ -289,6 +295,9 @@ struct write_tasks_soa_t {
     strided_iterator_gt<ukv_val_ptr_t const> vals;
     strided_iterator_gt<ukv_val_len_t const> offs;
     strided_iterator_gt<ukv_val_len_t const> lens;
+    ukv_size_t count = 0;
+
+    inline std::size_t size() const noexcept { return count; }
 
     inline write_task_t operator[](ukv_size_t i) const noexcept {
         ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;

@@ -110,7 +110,6 @@ void ukv_open(ukv_str_view_t, ukv_t* c_db, ukv_error_t* c_error) {
 void write_one( //
     level_db_t& db,
     write_tasks_soa_t const& tasks,
-    ukv_size_t const,
     leveldb::WriteOptions const& options,
     ukv_error_t* c_error) {
 
@@ -123,12 +122,11 @@ void write_one( //
 void write_many( //
     level_db_t& db,
     write_tasks_soa_t const& tasks,
-    ukv_size_t const n,
     leveldb::WriteOptions const& options,
     ukv_error_t* c_error) {
 
     leveldb::WriteBatch batch;
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         auto task = tasks[i];
         auto key = to_slice(task.key);
         if (task.is_deleted())
@@ -176,7 +174,7 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
+    write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
 
     leveldb::WriteOptions options;
     if (c_options & ukv_option_write_flush_k)
@@ -184,7 +182,7 @@ void ukv_write( //
 
     try {
         auto func = c_tasks_count == 1 ? &write_one : &write_many;
-        func(db, tasks, c_tasks_count, options, c_error);
+        func(db, tasks, options, c_error);
     }
     catch (...) {
         *c_error = "Write Failure";
@@ -194,7 +192,6 @@ void ukv_write( //
 void measure_one( //
     level_db_t& db,
     read_tasks_soa_t const& tasks,
-    ukv_size_t const,
     leveldb::ReadOptions const& options,
     std::string& value,
     ukv_val_len_t** c_found_lengths,
@@ -220,7 +217,6 @@ void measure_one( //
 void read_one( //
     level_db_t& db,
     read_tasks_soa_t const& tasks,
-    ukv_size_t const,
     leveldb::ReadOptions const& options,
     std::string& value,
     ukv_val_len_t** c_found_lengths,
@@ -250,7 +246,6 @@ void read_one( //
 void measure_many( //
     level_db_t& db,
     read_tasks_soa_t const& tasks,
-    ukv_size_t const n,
     leveldb::ReadOptions const& options,
     std::string& value,
     ukv_val_len_t** c_found_lengths,
@@ -258,15 +253,15 @@ void measure_many( //
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    byte_t* tape = prepare_memory(arena.output_tape, sizeof(ukv_val_len_t) * n, c_error);
+    byte_t* tape = prepare_memory(arena.output_tape, sizeof(ukv_val_len_t) * tasks.count, c_error);
     if (*c_error)
         return;
 
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    std::fill_n(lens, n, 0);
+    std::fill_n(lens, tasks.count, 0);
     *c_found_lengths = lens;
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         level_status_t status = db.Get(options, to_slice(task.key), &value);
         if (status.IsNotFound())
@@ -280,7 +275,6 @@ void measure_many( //
 void read_many( //
     level_db_t& db,
     read_tasks_soa_t const& tasks,
-    ukv_size_t const n,
     leveldb::ReadOptions const& options,
     std::string& value,
     ukv_val_len_t** c_found_lengths,
@@ -288,17 +282,17 @@ void read_many( //
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * n;
+    ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * tasks.count;
     byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
     if (*c_error)
         return;
 
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    std::fill_n(lens, n, 0);
+    std::fill_n(lens, tasks.count, 0);
     *c_found_lengths = lens;
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + lens_bytes);
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         level_status_t status = db.Get(options, to_slice(task.key), &value);
         if (status.IsNotFound())
@@ -342,7 +336,7 @@ void ukv_read( //
     leveldb::ReadOptions options;
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    read_tasks_soa_t tasks {{}, keys};
+    read_tasks_soa_t tasks {{}, keys, c_tasks_count};
 
     auto value_uptr = make_value(c_error);
     std::string& value = *value_uptr.get();
@@ -350,11 +344,11 @@ void ukv_read( //
     try {
         if (c_tasks_count == 1) {
             auto func = (c_options & ukv_option_read_lengths_k) ? &measure_one : &read_one;
-            func(db, tasks, c_tasks_count, options, value, c_found_lengths, c_found_values, arena, c_error);
+            func(db, tasks, options, value, c_found_lengths, c_found_values, arena, c_error);
         }
         else {
             auto func = (c_options & ukv_option_read_lengths_k) ? &measure_many : &read_many;
-            func(db, tasks, c_tasks_count, options, value, c_found_lengths, c_found_values, arena, c_error);
+            func(db, tasks, options, value, c_found_lengths, c_found_values, arena, c_error);
         }
     }
     catch (...) {
@@ -391,7 +385,7 @@ void ukv_scan( //
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_size_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
-    scan_tasks_soa_t tasks {{}, keys, lengths};
+    scan_tasks_soa_t tasks {{}, keys, lengths, c_min_tasks_count};
 
     bool export_lengths = (c_options & ukv_option_read_lengths_k);
     leveldb::ReadOptions options;

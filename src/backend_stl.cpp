@@ -269,13 +269,12 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
 void write_head( //
     stl_db_t& db,
     write_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
     std::unique_lock _ {db.mutex};
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
 
         write_task_t task = tasks[i];
         stl_collection_t& col = stl_collection(db, task.col);
@@ -310,7 +309,6 @@ void write_head( //
 void measure_head( //
     stl_db_t& db,
     read_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
@@ -318,7 +316,7 @@ void measure_head( //
     ukv_error_t* c_error) {
 
     // 1. Allocate a tape for all the values to be pulled
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
     byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
     if (*c_error)
         return;
@@ -330,7 +328,7 @@ void measure_head( //
     *c_found_lengths = lens;
     *c_found_values = nullptr;
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
@@ -343,7 +341,6 @@ void measure_head( //
 void read_head( //
     stl_db_t& db,
     read_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
@@ -353,8 +350,8 @@ void read_head( //
     std::shared_lock _ {db.mutex};
 
     // 1. Estimate the total size
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
-    for (ukv_size_t i = 0; i != n; ++i) {
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
@@ -369,11 +366,11 @@ void read_head( //
 
     // 3. Fetch the data
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * n;
+    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * tasks.count;
     *c_found_lengths = lens;
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
@@ -392,7 +389,6 @@ void read_head( //
 void scan_head( //
     stl_db_t& db,
     scan_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const options,
     ukv_key_t** c_found_keys,
     ukv_val_len_t** c_found_lengths,
@@ -403,7 +399,7 @@ void scan_head( //
 
     // 1. Estimate the total size
     bool export_lengths = (options & ukv_option_read_lengths_k);
-    ukv_size_t total_lengths = reduce_n(tasks.lengths, n, 0ul);
+    ukv_size_t total_lengths = reduce_n(tasks.lengths, tasks.count, 0ul);
     ukv_size_t total_bytes = total_lengths * sizeof(ukv_key_t);
     if (export_lengths)
         total_bytes += total_lengths * sizeof(ukv_val_len_t);
@@ -419,7 +415,7 @@ void scan_head( //
     *c_found_keys = found_keys;
     *c_found_lengths = export_lengths ? found_lens : nullptr;
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         scan_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
@@ -455,7 +451,6 @@ void scan_head( //
 void write_txn( //
     stl_txn_t& txn,
     write_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const,
     ukv_error_t* c_error) {
 
@@ -464,7 +459,7 @@ void write_txn( //
     stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         write_task_t task = tasks[i];
 
         try {
@@ -486,7 +481,6 @@ void write_txn( //
 void measure_txn( //
     stl_txn_t& txn,
     read_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const c_options,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
@@ -494,7 +488,7 @@ void measure_txn( //
     ukv_error_t* c_error) {
 
     // 1. Allocate a tape for all the values to be pulled
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
     byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
     if (*c_error)
         return;
@@ -509,7 +503,7 @@ void measure_txn( //
     *c_found_lengths = lens;
     *c_found_values = nullptr;
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
 
@@ -549,7 +543,6 @@ void measure_txn( //
 void read_txn( //
     stl_txn_t& txn,
     read_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const c_options,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
@@ -562,8 +555,8 @@ void read_txn( //
     bool should_track_requests = !(c_options & ukv_option_read_transparent_k);
 
     // 1. Estimate the total size of keys
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
-    for (ukv_size_t i = 0; i != n; ++i) {
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
 
@@ -595,11 +588,11 @@ void read_txn( //
 
     // 3. Pull the data
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * n;
+    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * tasks.count;
     *c_found_lengths = lens;
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
 
@@ -642,7 +635,6 @@ void read_txn( //
 void scan_txn( //
     stl_txn_t& txn,
     scan_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const options,
     ukv_key_t** c_found_keys,
     ukv_val_len_t** c_found_lengths,
@@ -654,7 +646,7 @@ void scan_txn( //
 
     // 1. Estimate the total size
     bool export_lengths = (options & ukv_option_read_lengths_k);
-    ukv_size_t total_lengths = reduce_n(tasks.lengths, n, 0ul);
+    ukv_size_t total_lengths = reduce_n(tasks.lengths, tasks.count, 0ul);
 
     ukv_size_t total_bytes = total_lengths * sizeof(ukv_key_t);
     if (export_lengths)
@@ -671,7 +663,7 @@ void scan_txn( //
     *c_found_keys = found_keys;
     *c_found_lengths = export_lengths ? found_lens : nullptr;
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         scan_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
@@ -756,15 +748,15 @@ void ukv_read( //
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    read_tasks_soa_t tasks {cols, keys};
+    read_tasks_soa_t tasks {cols, keys, c_tasks_count};
 
     if (c_txn) {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_txn : &read_txn;
-        return func(txn, tasks, c_tasks_count, c_options, c_found_lengths, c_found_values, arena, c_error);
+        return func(txn, tasks, c_options, c_found_lengths, c_found_values, arena, c_error);
     }
     else {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_head : &read_head;
-        return func(db, tasks, c_tasks_count, c_options, c_found_lengths, c_found_values, arena, c_error);
+        return func(db, tasks, c_options, c_found_lengths, c_found_values, arena, c_error);
     }
 }
 
@@ -802,10 +794,9 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
+    write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
 
-    return c_txn ? write_txn(txn, tasks, c_tasks_count, c_options, c_error)
-                 : write_head(db, tasks, c_tasks_count, c_options, c_error);
+    return c_txn ? write_txn(txn, tasks, c_options, c_error) : write_head(db, tasks, c_options, c_error);
 }
 
 void ukv_scan( //
@@ -842,10 +833,10 @@ void ukv_scan( //
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
-    scan_tasks_soa_t tasks {cols, keys, lens};
+    scan_tasks_soa_t tasks {cols, keys, lens, c_min_tasks_count};
 
-    return c_txn ? scan_txn(txn, tasks, c_min_tasks_count, c_options, c_found_keys, c_found_lengths, arena, c_error)
-                 : scan_head(db, tasks, c_min_tasks_count, c_options, c_found_keys, c_found_lengths, arena, c_error);
+    return c_txn ? scan_txn(txn, tasks, c_options, c_found_keys, c_found_lengths, arena, c_error)
+                 : scan_head(db, tasks, c_options, c_found_keys, c_found_lengths, arena, c_error);
 }
 
 void ukv_size( //
