@@ -179,7 +179,8 @@ void write_many( //
         auto col = task.col == ukv_default_collection_k ? db_wrapper->db->DefaultColumnFamily()
                                                         : reinterpret_cast<rocks_col_ptr_t>(task.col);
         auto key = to_slice(task.key);
-        task.is_deleted() ? batch.Delete(col, key) : batch.Put(col, key, to_slice(task.view())); // status
+        auto status = task.is_deleted() ? batch.Delete(col, key) : batch.Put(col, key, to_slice(task.view()));
+        export_error(status, c_error);
     }
 
     rocks_status_t status = db_wrapper->db->Write(options, &batch);
@@ -554,7 +555,7 @@ void ukv_collection_open( //
 
     rocks_col_ptr_t col = nullptr;
     rocks_status_t status = db_wrapper->db->CreateColumnFamily(rocksdb::ColumnFamilyOptions(), c_col_name, &col);
-    if (export_error(status, c_error)) {
+    if (!export_error(status, c_error)) {
         db_wrapper->columns.push_back(col);
         *c_col = col;
     }
@@ -649,6 +650,8 @@ void ukv_txn_commit( //
     ukv_options_t const,
     ukv_error_t* c_error) {
 
+    if (!c_txn)
+        return;
     rocks_txn_ptr_t txn = reinterpret_cast<rocks_txn_ptr_t>(c_txn);
     rocks_status_t status = txn->Commit();
     export_error(status, c_error);
