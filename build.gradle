@@ -1,11 +1,13 @@
 import org.gradle.internal.jvm.Jvm
 
-// section - General
-
 plugins {
     id 'java-library'
     id 'c'
+    id 'maven-publish'
 }
+
+group "com.unum.ukv"
+version = "0.0.1"
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -14,28 +16,24 @@ repositories {
     mavenCentral()
 }
 
-dependencies {
-    implementation('junit:junit:4.13.2')
-}
-
-
 sourceSets {
     main {
         java {
             srcDir "java/"
+            exclude "test/"
         }
     }
     test {
         java {
-            srcDir "java/"
+            srcDir "java/test"
         }
     }
 }
 
-jar.enabled = false // Disable main jar, as it is not needed.
-test.forkEvery 1 // Run each test in a separate environment.
+dependencies {
+    testImplementation('junit:junit:4.13.2')
+}
 
-// section - JNI components
 model {
     buildTypes{
         stl
@@ -77,44 +75,58 @@ model {
     }
 }
 
-// section - Jars
-task ukv_stl(type: Jar) {
-    from (sourceSets.main.output) {
-        exclude "com/unum/ukv/DataBaseRocks.class"
-        exclude "com/unum/ukv/DataBaseLevel.class"
-    }
-    baseName "ukvSTL"
+test {
+    forkEvery 1
     dependsOn("ukvStlSharedLibrary")
-    from("$buildDir/libs/ukv/shared/stl/libukv.so")
-    from("$buildDir/lib/libukv_stl.a")
 }
 
-task ukv_rocks(type: Jar) {
-    from (sourceSets.main.output) {
-        exclude "com/unum/ukv/DataBaseSTL.class"
-        exclude "com/unum/ukv/DataBaseLevel.class"
+jar {
+    dependsOn("ukvStlSharedLibrary")
+
+    into("stl") {
+        from("$buildDir/libs/ukv/shared/stl/libukv.so")
+        from("$buildDir/lib/libukv_stl.a")
     }
-    baseName "ukvRocks"
-    dependsOn("ukvRocksSharedLibrary")
-    from("$buildDir/libs/ukv/shared/rocks/libukv.so")
-    from("$buildDir/lib/libukv_rocksdb.a")
-    from("$buildDir/lib/librocksdb.a")
-}
 
-task ukv_level(type: Jar) {
-    from (sourceSets.main.output) {
-        exclude "com/unum/ukv/DataBaseRocks.class"
-        exclude "com/unum/ukv/DataBaseSTL.class"
+    into("rocks") {
+        from("$buildDir/libs/ukv/shared/rocks/libukv.so")
+        from("$buildDir/lib/libukv_rocksdb.a")
+        from("$buildDir/lib/librocksdb.a")
     }
-    baseName "ukvLevel"
-    dependsOn("ukvLevelSharedLibrary")
-    from("$buildDir/libs/ukv/shared/level/libukv.so")
-    from("$buildDir/lib/libukv_leveldb.a")
-    from("$buildDir/lib/libleveldb.a")
+
+    into("level") {
+        from("$buildDir/libs/ukv/shared/level/libukv.so")
+        from("$buildDir/lib/libukv_leveldb.a")
+        from("$buildDir/lib/libleveldb.a")
+    }
 }
 
-artifacts {
-    archives ukv_stl
-    archives ukv_rocks
-    archives ukv_level
+publishing {
+    publications {
+        library(MavenPublication) {
+            from components.java
+
+            pom {
+                name = "UKV"
+                description = "Universal Key-Value store interface for both in-memory and persistent transactional collections for Java"
+                url = "https://github.com/unum-cloud/UKV"
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+         maven {
+             name = "OSSRH"
+             url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+             credentials {
+                 username = System.getenv("MAVEN_USERNAME")
+                 password = System.getenv("MAVEN_PASSWORD")
+             }
+         }
+    }
 }
