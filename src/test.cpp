@@ -54,12 +54,12 @@ TEST(db, basic) {
         .offsets = offs,
         .lengths = {val_len, 3},
     };
-    // round_trip(ref, values);
+    round_trip(ref, values);
 
     // Overwrite those values with same size integers and try again
     for (auto& val : vals)
         val += 100;
-    // round_trip(ref, values);
+    round_trip(ref, values);
 
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(ref.clear());
