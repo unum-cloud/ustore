@@ -78,10 +78,14 @@ model {
 test {
     forkEvery 1
     dependsOn("ukvStlSharedLibrary")
+    dependsOn("ukvRocksSharedLibrary")
+    dependsOn("ukvLevelSharedLibrary")
 }
 
 jar {
     dependsOn("ukvStlSharedLibrary")
+    dependsOn("ukvRocksSharedLibrary")
+    dependsOn("ukvLevelSharedLibrary")
 
     into("stl") {
         from("$buildDir/libs/ukv/shared/stl/libukv.so")
