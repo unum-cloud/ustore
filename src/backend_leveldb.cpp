@@ -391,14 +391,17 @@ void ukv_scan( //
     leveldb::ReadOptions options;
     options.fill_cache = false;
 
-    ukv_size_t keys_bytes = sizeof(ukv_key_t) * c_min_tasks_count;
-    ukv_size_t val_len_bytes = export_lengths ? sizeof(ukv_val_len_t) * c_min_tasks_count : 0;
-    byte_t* tape = prepare_memory(arena.output_tape, keys_bytes + val_len_bytes, c_error);
+    ukv_size_t total_lengths = reduce_n(tasks.lengths, tasks.count, 0ul);
+    ukv_size_t total_bytes = total_lengths * sizeof(ukv_key_t);
+    if (export_lengths)
+        total_bytes += total_lengths * sizeof(ukv_val_len_t);
+
+    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
     if (*c_error)
         return;
 
     ukv_key_t* found_keys = reinterpret_cast<ukv_key_t*>(tape);
-    ukv_val_len_t* found_lens = reinterpret_cast<ukv_val_len_t*>(tape + keys_bytes);
+    ukv_val_len_t* found_lens = reinterpret_cast<ukv_val_len_t*>(found_keys + total_lengths);
     *c_found_keys = found_keys;
     *c_found_lengths = export_lengths ? found_lens : nullptr;
 
