@@ -49,7 +49,7 @@
 extern "C" {
 #endif
 
-#include "ukv/ukv.h"
+#include "ukv/db.h"
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
