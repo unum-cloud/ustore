@@ -137,7 +137,6 @@ void write_one( //
     rocks_db_wrapper_t* db_wrapper,
     rocks_txn_ptr_t txn,
     write_tasks_soa_t const& tasks,
-    ukv_size_t const,
     rocksdb::WriteOptions const& options,
     ukv_error_t* c_error) {
 
@@ -159,12 +158,11 @@ void write_many( //
     rocks_db_wrapper_t* db_wrapper,
     rocks_txn_ptr_t txn,
     write_tasks_soa_t const& tasks,
-    ukv_size_t const n,
     rocksdb::WriteOptions const& options,
     ukv_error_t* c_error) {
 
     if (txn) {
-        for (ukv_size_t i = 0; i != n; ++i) {
+        for (ukv_size_t i = 0; i != tasks.count; ++i) {
             auto task = tasks[i];
             auto col = task.col == ukv_default_collection_k ? db_wrapper->db->DefaultColumnFamily()
                                                             : reinterpret_cast<rocks_col_ptr_t>(task.col);
@@ -176,7 +174,7 @@ void write_many( //
     }
 
     rocksdb::WriteBatch batch;
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         auto task = tasks[i];
         auto col = task.col == ukv_default_collection_k ? db_wrapper->db->DefaultColumnFamily()
                                                         : reinterpret_cast<rocks_col_ptr_t>(task.col);
@@ -224,7 +222,7 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
+    write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
 
     rocksdb::WriteOptions options;
     if (c_options & ukv_option_write_flush_k)
@@ -232,7 +230,7 @@ void ukv_write( //
 
     try {
         auto func = c_tasks_count == 1 ? &write_one : &write_many;
-        func(db_wrapper, txn, tasks, c_tasks_count, options, c_error);
+        func(db_wrapper, txn, tasks, options, c_error);
     }
     catch (...) {
         *c_error = "Write Failure";
@@ -243,7 +241,6 @@ void measure_one( //
     rocks_db_wrapper_t* db_wrapper,
     rocks_txn_ptr_t txn,
     read_tasks_soa_t const& tasks,
-    ukv_size_t const,
     rocksdb::ReadOptions const& options,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t*,
@@ -277,7 +274,6 @@ void read_one( //
     rocks_db_wrapper_t* db_wrapper,
     rocks_txn_ptr_t txn,
     read_tasks_soa_t const& tasks,
-    ukv_size_t const,
     rocksdb::ReadOptions const& options,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
@@ -314,17 +310,16 @@ void measure_many( //
     rocks_db_wrapper_t* db_wrapper,
     rocks_txn_ptr_t txn,
     read_tasks_soa_t const& tasks,
-    ukv_size_t const n,
     rocksdb::ReadOptions const& options,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t*,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    std::vector<rocks_col_ptr_t> cols(n);
-    std::vector<rocksdb::Slice> keys(n);
-    std::vector<std::string> vals(n);
-    for (ukv_size_t i = 0; i != n; ++i) {
+    std::vector<rocks_col_ptr_t> cols(tasks.count);
+    std::vector<rocksdb::Slice> keys(tasks.count);
+    std::vector<std::string> vals(tasks.count);
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         cols[i] = task.col == ukv_default_collection_k ? db_wrapper->db->DefaultColumnFamily()
                                                        : reinterpret_cast<rocks_col_ptr_t>(task.col);
@@ -334,7 +329,7 @@ void measure_many( //
     std::vector<rocks_status_t> statuses =
         txn ? txn->MultiGet(options, cols, keys, &vals) : db_wrapper->db->MultiGet(options, cols, keys, &vals);
 
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
     byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
     if (*c_error)
         return;
@@ -342,7 +337,7 @@ void measure_many( //
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
     *c_found_lengths = lens;
 
-    for (ukv_size_t i = 0; i != n; ++i)
+    for (ukv_size_t i = 0; i != tasks.count; ++i)
         lens[i] = statuses[i].IsNotFound() ? ukv_val_len_missing_k : vals[i].size();
 }
 
@@ -350,17 +345,16 @@ void read_many( //
     rocks_db_wrapper_t* db_wrapper,
     rocks_txn_ptr_t txn,
     read_tasks_soa_t const& tasks,
-    ukv_size_t const n,
     rocksdb::ReadOptions const& options,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    std::vector<rocks_col_ptr_t> cols(n);
-    std::vector<rocksdb::Slice> keys(n);
-    std::vector<std::string> vals(n);
-    for (ukv_size_t i = 0; i != n; ++i) {
+    std::vector<rocks_col_ptr_t> cols(tasks.count);
+    std::vector<rocksdb::Slice> keys(tasks.count);
+    std::vector<std::string> vals(tasks.count);
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         cols[i] = task.col == ukv_default_collection_k ? db_wrapper->db->DefaultColumnFamily()
                                                        : reinterpret_cast<rocks_col_ptr_t>(task.col);
@@ -371,8 +365,8 @@ void read_many( //
         txn ? txn->MultiGet(options, cols, keys, &vals) : db_wrapper->db->MultiGet(options, cols, keys, &vals);
 
     // 1. Estimate the total size
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
-    for (ukv_size_t i = 0; i != n; ++i)
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
+    for (ukv_size_t i = 0; i != tasks.count; ++i)
         total_bytes += vals[i].size();
 
     // 2. Allocate a tape for all the values to be fetched
@@ -382,11 +376,11 @@ void read_many( //
 
     // 3. Fetch the data
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * n;
+    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * tasks.count;
     *c_found_lengths = lens;
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         auto bytes_in_value = vals[i].size();
         if (bytes_in_value) {
             std::memcpy(tape + exported_bytes, vals[i].data(), bytes_in_value);
@@ -431,7 +425,7 @@ void ukv_read( //
     rocks_txn_ptr_t txn = reinterpret_cast<rocks_txn_ptr_t>(c_txn);
     strided_iterator_gt<ukv_collection_t const> cols_stride {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys_stride {c_keys, c_keys_stride};
-    read_tasks_soa_t tasks {cols_stride, keys_stride};
+    read_tasks_soa_t tasks {cols_stride, keys_stride, c_tasks_count};
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     rocksdb::ReadOptions options;
     if (txn && (c_options & ukv_option_txn_snapshot_k))
@@ -439,11 +433,11 @@ void ukv_read( //
     try {
         if (c_tasks_count == 1) {
             auto func = (c_options & ukv_option_read_lengths_k) ? &measure_one : &read_one;
-            func(db_wrapper, txn, tasks, c_tasks_count, options, c_found_lengths, c_found_values, arena, c_error);
+            func(db_wrapper, txn, tasks, options, c_found_lengths, c_found_values, arena, c_error);
         }
         else {
             auto func = (c_options & ukv_option_read_lengths_k) ? &measure_many : &read_many;
-            func(db_wrapper, txn, tasks, c_tasks_count, options, c_found_lengths, c_found_values, arena, c_error);
+            func(db_wrapper, txn, tasks, options, c_found_lengths, c_found_values, arena, c_error);
         }
     }
     catch (...) {
@@ -487,7 +481,7 @@ void ukv_scan( //
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_size_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
-    scan_tasks_soa_t tasks {cols, keys, lengths};
+    scan_tasks_soa_t tasks {cols, keys, lengths, c_min_tasks_count};
 
     bool export_lengths = (c_options & ukv_option_read_lengths_k);
     rocksdb::ReadOptions options;
