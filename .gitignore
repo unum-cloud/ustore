@@ -43,6 +43,7 @@ build_debug/
 build_release/
 tmp/
 *.log
+bin/
 __pycache__
 .pytest_cache/
 .gradle/
@@ -52,3 +53,6 @@ openapitools.json
 build_version.cc
 CPackConfig.cmake
 CPackSourceConfig.cmake
+
+# Allow
+!gradle/wrapper/gradle-wrapper.jar
