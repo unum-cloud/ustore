@@ -273,8 +273,8 @@ void export_edge_tuples( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_vertices_count,
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_vertices_ids,
     ukv_size_t const c_vertices_stride,
@@ -298,8 +298,8 @@ void export_edge_tuples( //
     ukv_read(c_db,
              c_txn,
              c_vertices_count,
-             c_collections,
-             c_collections_stride,
+             c_cols,
+             c_cols_stride,
              c_vertices_ids,
              c_vertices_stride,
              static_cast<ukv_options_t>(c_options & ~ukv_option_read_lengths_k),
@@ -393,8 +393,8 @@ void export_disjoint_edge_buffers( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_vertices_count,
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_vertices_ids,
     ukv_size_t const c_vertices_stride,
@@ -410,8 +410,8 @@ void export_disjoint_edge_buffers( //
     ukv_read(c_db,
              c_txn,
              c_vertices_count,
-             c_collections,
-             c_collections_stride,
+             c_cols,
+             c_cols_stride,
              c_vertices_ids,
              c_vertices_stride,
              c_options,
@@ -437,8 +437,8 @@ void update_neighborhoods( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_edges_ids,
     ukv_size_t const c_edges_stride,
@@ -458,7 +458,7 @@ void update_neighborhoods( //
     if (*c_error)
         return;
 
-    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> edges_ids {c_edges_ids, c_edges_stride};
     strided_iterator_gt<ukv_key_t const> sources_ids {c_sources_ids, c_sources_stride};
     strided_iterator_gt<ukv_key_t const> targets_ids {c_targets_ids, c_targets_stride};
@@ -537,8 +537,8 @@ void ukv_graph_find_edges( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_vertices_count,
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_vertices_ids,
     ukv_size_t const c_vertices_stride,
@@ -559,8 +559,8 @@ void ukv_graph_find_edges( //
     return func(c_db,
                 c_txn,
                 c_vertices_count,
-                c_collections,
-                c_collections_stride,
+                c_cols,
+                c_cols_stride,
                 c_vertices_ids,
                 c_vertices_stride,
                 c_roles,
@@ -577,8 +577,8 @@ void ukv_graph_upsert_edges( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_edges_ids,
     ukv_size_t const c_edges_stride,
@@ -597,8 +597,8 @@ void ukv_graph_upsert_edges( //
     return update_neighborhoods<false>(c_db,
                                        c_txn,
                                        c_tasks_count,
-                                       c_collections,
-                                       c_collections_stride,
+                                       c_cols,
+                                       c_cols_stride,
                                        c_edges_ids,
                                        c_edges_stride,
                                        c_sources_ids,
@@ -615,8 +615,8 @@ void ukv_graph_remove_edges( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_edges_ids,
     ukv_size_t const c_edges_stride,
@@ -635,8 +635,8 @@ void ukv_graph_remove_edges( //
     return update_neighborhoods<true>(c_db,
                                       c_txn,
                                       c_tasks_count,
-                                      c_collections,
-                                      c_collections_stride,
+                                      c_cols,
+                                      c_cols_stride,
                                       c_edges_ids,
                                       c_edges_stride,
                                       c_sources_ids,
@@ -653,8 +653,8 @@ void ukv_graph_remove_vertices( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_vertices_count,
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_vertices_ids,
     ukv_size_t const c_vertices_stride,
@@ -667,7 +667,7 @@ void ukv_graph_remove_vertices( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_cols, c_cols_stride};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
 
@@ -677,8 +677,8 @@ void ukv_graph_remove_vertices( //
     export_edge_tuples<false, true, false>(c_db,
                                            c_txn,
                                            c_vertices_count,
-                                           c_collections,
-                                           c_collections_stride,
+                                           c_cols,
+                                           c_cols_stride,
                                            c_vertices_ids,
                                            c_vertices_stride,
                                            c_roles,
