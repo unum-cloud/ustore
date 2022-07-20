@@ -1,7 +1,5 @@
 package com.unum.ukv;
 
-import org.junit.Test;
-
 import java.util.Map; // Map abstract class
 import java.lang.AutoCloseable; // Finalization
 import java.util.Arrays; // Arrays.equals
@@ -300,21 +298,5 @@ public abstract class DataBase {
         public boolean commit() {
             return false;
         }
-    }
-
-    @Test
-    public void test() {
-        Context ctx = new Context("");
-        ctx.put(42, "hey".getBytes());
-        assert Arrays.equals(ctx.get(42), "hey".getBytes()) : "Received wrong value";
-
-        Transaction txn = ctx.transaction();
-        txn.put("any", 42, "meaning of life".getBytes());
-        assert Arrays.equals(txn.get("any", 42), "meaning of life".getBytes()) : "Wrong philosophy";
-        txn.commit();
-        assert Arrays.equals(ctx.get("any", 42), "meaning of life".getBytes()) : "Accepted wrong philosophy";
-
-        ctx.close();
-        System.out.println("Success!");
     }
 }
