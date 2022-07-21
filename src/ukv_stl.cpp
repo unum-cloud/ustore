@@ -86,7 +86,7 @@ struct stl_txn_t {
 
 struct stl_db_t {
     std::shared_mutex mutex;
-    stl_collection_t unnamed;
+    stl_collection_t nameless;
 
     /**
      * @brief A variable-size set of named cols.
@@ -107,7 +107,7 @@ struct stl_db_t {
 };
 
 stl_collection_t& stl_collection(stl_db_t& db, ukv_collection_t col) {
-    return col == ukv_default_collection_k ? db.unnamed : *reinterpret_cast<stl_collection_t*>(col);
+    return col == ukv_default_collection_k ? db.nameless : *reinterpret_cast<stl_collection_t*>(col);
 }
 
 void save_to_disk(stl_collection_t const& col, std::string const& path, ukv_error_t* c_error) {
@@ -219,7 +219,7 @@ void save_to_disk(stl_db_t const& db, ukv_error_t* c_error) {
         return;
     }
 
-    save_to_disk(db.unnamed, dir_path / ".stl.ukv", c_error);
+    save_to_disk(db.nameless, dir_path / ".stl.ukv", c_error);
     if (*c_error)
         return;
 
@@ -238,10 +238,10 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
         return;
     }
 
-    // Parse the main unnamed col
+    // Parse the main nameless col
     if (fs::path path = dir_path / ".stl.ukv"; fs::is_regular_file(path)) {
         auto path_str = path.native();
-        read_from_disk(db.unnamed, path_str, c_error);
+        read_from_disk(db.nameless, path_str, c_error);
     }
 
     // Parse all the named cols we can find
@@ -282,7 +282,7 @@ void write_head( //
         auto key_iterator = col.pairs.find(task.key);
 
         // We want to insert a new entry, but let's check if we
-        // can overwrite the existig value without causing reallocations.
+        // can overwrite the existing value without causing reallocations.
         try {
             if (key_iterator != col.pairs.end()) {
                 auto value = task.view();
@@ -722,12 +722,12 @@ void scan_txn( //
 void ukv_read( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_options_t const c_options,
@@ -755,23 +755,23 @@ void ukv_read( //
 
     if (c_txn) {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_txn : &read_txn;
-        return func(txn, tasks, c_keys_count, c_options, c_found_lengths, c_found_values, arena, c_error);
+        return func(txn, tasks, c_tasks_count, c_options, c_found_lengths, c_found_values, arena, c_error);
     }
     else {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_head : &read_head;
-        return func(db, tasks, c_keys_count, c_options, c_found_lengths, c_found_values, arena, c_error);
+        return func(db, tasks, c_tasks_count, c_options, c_found_lengths, c_found_values, arena, c_error);
     }
 }
 
 void ukv_write( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_val_ptr_t const* c_vals,
@@ -801,19 +801,19 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
 
-    return c_txn ? write_txn(txn, tasks, c_keys_count, c_options, c_error)
-                 : write_head(db, tasks, c_keys_count, c_options, c_error);
+    return c_txn ? write_txn(txn, tasks, c_tasks_count, c_options, c_error)
+                 : write_head(db, tasks, c_tasks_count, c_options, c_error);
 }
 
 void ukv_scan( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_min_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_min_keys,
-    ukv_size_t const c_min_keys_count,
     ukv_size_t const c_min_keys_stride,
 
     ukv_size_t const* c_scan_lengths,
@@ -843,8 +843,8 @@ void ukv_scan( //
     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
     scan_tasks_soa_t tasks {cols, keys, lens};
 
-    return c_txn ? scan_txn(txn, tasks, c_min_keys_count, c_options, c_found_keys, c_found_lengths, arena, c_error)
-                 : scan_head(db, tasks, c_min_keys_count, c_options, c_found_keys, c_found_lengths, arena, c_error);
+    return c_txn ? scan_txn(txn, tasks, c_min_tasks_count, c_options, c_found_keys, c_found_lengths, arena, c_error)
+                 : scan_head(db, tasks, c_min_tasks_count, c_options, c_found_keys, c_found_lengths, arena, c_error);
 }
 
 void ukv_size( //
@@ -1025,6 +1025,46 @@ void ukv_collection_remove(
     }
 }
 
+void ukv_collection_list( //
+    ukv_t const c_db,
+    ukv_size_t* c_count,
+    ukv_str_view_t* c_names,
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    if (!c_db) {
+        *c_error = "DataBase is NULL!";
+        return;
+    }
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+    std::unique_lock _ {db.mutex};
+
+    std::size_t total_length = 0;
+    for (auto const& name_and_contents : db.named)
+        total_length += name_and_contents.first.size();
+
+    // Every string will be null-terminated
+    total_length += db.named.size();
+    *c_count = static_cast<ukv_size_t>(db.named.size());
+
+    auto tape = prepare_memory(arena.output_tape, total_length, c_error);
+    if (*c_error)
+        return;
+
+    *c_names = reinterpret_cast<ukv_str_view_t>(tape);
+    for (auto const& name_and_contents : db.named) {
+        auto len = name_and_contents.first.size();
+        std::memcpy(tape, name_and_contents.first.data(), len);
+        tape[len] = byte_t {0};
+        tape += len;
+    }
+}
+
 void ukv_control( //
     ukv_t const c_db,
     ukv_str_view_t c_request,
@@ -1146,7 +1186,7 @@ void ukv_txn_commit( //
 
     // 4. Allocate space for more vertices across different cols
     try {
-        db.unnamed.reserve_more(txn.upserted.size());
+        db.nameless.reserve_more(txn.upserted.size());
         for (auto& name_and_col : db.named)
             name_and_col.second->reserve_more(txn.upserted.size());
     }

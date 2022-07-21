@@ -27,7 +27,7 @@ ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 using level_db_t = leveldb::DB;
 using level_status_t = leveldb::Status;
 using level_options_t = leveldb::Options;
-using value_uptr_t = std::unique_ptr<std::string>;
+using level_iter_uptr_t = std::unique_ptr<leveldb::Iterator>;
 
 struct key_comparator_t final : public leveldb::Comparator {
 
@@ -63,8 +63,8 @@ inline leveldb::Slice to_slice(value_view_t value) noexcept {
     return {reinterpret_cast<const char*>(value.begin()), value.size()};
 }
 
-inline value_uptr_t make_value(ukv_error_t* c_error) noexcept {
-    value_uptr_t value_uptr;
+inline std::unique_ptr<std::string> make_value(ukv_error_t* c_error) noexcept {
+    std::unique_ptr<std::string> value_uptr;
     try {
         value_uptr = std::make_unique<std::string>();
     }
@@ -79,7 +79,7 @@ bool export_error(level_status_t const& status, ukv_error_t* c_error) {
         return false;
 
     if (status.IsCorruption())
-        *c_error = "Failure: DB Corrpution";
+        *c_error = "Failure: DB Corruption";
     else if (status.IsIOError())
         *c_error = "Failure: IO  Error";
     else if (status.IsInvalidArgument())
@@ -139,12 +139,12 @@ void write_many( //
 void ukv_write( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_val_ptr_t const* c_vals,
@@ -173,8 +173,8 @@ void ukv_write( //
         options.sync = true;
 
     try {
-        auto func = c_keys_count == 1 ? &write_one : &write_many;
-        func(db, tasks, c_keys_count, options, c_error);
+        auto func = c_tasks_count == 1 ? &write_one : &write_many;
+        func(db, tasks, c_tasks_count, options, c_error);
     }
     catch (...) {
         *c_error = "Write Failure";
@@ -241,9 +241,9 @@ void read_many( //
         auto old_tape_len = arena.output_tape.size();
         auto bytes_in_value = value.size();
         tape = prepare_memory(arena.output_tape, old_tape_len + bytes_in_value, c_error);
-        lens = reinterpret_cast<ukv_val_len_t*>(tape);
         if (*c_error)
             return;
+        lens = reinterpret_cast<ukv_val_len_t*>(tape);
 
         std::memcpy(tape + old_tape_len, value.data(), bytes_in_value);
         lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
@@ -253,12 +253,12 @@ void read_many( //
 void ukv_read( //
     ukv_t const c_db,
     ukv_txn_t const,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const*,
     ukv_size_t const,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_options_t const,
@@ -280,45 +280,76 @@ void ukv_read( //
     std::string& value = *value_uptr.get();
 
     try {
-        auto func = c_keys_count == 1 ? &read_one : &read_many;
-        func(db, tasks, c_keys_count, options, value, c_found_lengths, c_found_values, arena, c_error);
+        auto func = c_tasks_count == 1 ? &read_one : &read_many;
+        func(db, tasks, c_tasks_count, options, value, c_found_lengths, c_found_values, arena, c_error);
     }
     catch (...) {
         *c_error = "Read Failure";
     }
 }
 
-// void ukv_scan( //
-//     ukv_t const c_db,
-//     ukv_txn_t const,
+void ukv_scan( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+    ukv_size_t const c_min_tasks_count,
 
-//     ukv_collection_t const*,
-//     ukv_size_t const,
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
 
-//     ukv_key_t const* c_min_keys,
-//     ukv_size_t const c_min_keys_count,
-//     ukv_size_t const c_min_keys_stride,
+    ukv_key_t const* c_min_keys,
+    ukv_size_t const c_min_keys_stride,
 
-//     ukv_size_t const* c_scan_lengths,
-//     ukv_size_t const c_scan_lengths_stride,
+    ukv_size_t const* c_scan_lengths,
+    ukv_size_t const c_scan_lengths_stride,
 
-//     ukv_options_t const,
+    ukv_options_t const c_options,
 
-//     ukv_key_t** c_found_keys,
-//     ukv_val_len_t** c_found_lengths,
+    ukv_key_t** c_found_keys,
+    ukv_val_len_t** c_found_lengths,
 
-//     ukv_arena_t* c_arena,
-//     ukv_error_t* c_error) {
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
 
-//     stl_arena_t& arena = *cast_arena(c_arena, c_error);
-//     if (*c_error)
-//         return;
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
 
-//     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-//     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
-//     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
-//     scan_tasks_soa_t tasks {{}, keys, lens};
-// }
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
+    strided_iterator_gt<ukv_size_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
+    scan_tasks_soa_t tasks {{}, keys, lengths};
+
+    leveldb::ReadOptions options;
+    options.fill_cache = false;
+    level_iter_uptr_t it;
+    try {
+        it = level_iter_uptr_t(db.NewIterator(options));
+    }
+    catch (...) {
+        *c_error = "Fail To Create Iterator";
+        return;
+    }
+    ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * c_min_tasks_count;
+    byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
+    if (*c_error)
+        return;
+    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
+    std::fill_n(lens, c_min_tasks_count, 0);
+
+    for (ukv_size_t i = 0; i != c_min_tasks_count; ++i) {
+        scan_task_t task = tasks[i];
+        it->Seek(to_slice(task.min_key));
+        for (; it->Valid() && i != task.length; i++, it->Next()) {
+            auto old_tape_len = arena.output_tape.size();
+            auto bytes_in_value = it->value().size();
+            tape = prepare_memory(arena.output_tape, old_tape_len + bytes_in_value, c_error);
+            if (*c_error)
+                return;
+            std::memcpy(tape + old_tape_len, it->value().data(), bytes_in_value);
+            lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
+        }
+    }
+}
 
 void ukv_collection_open( //
     ukv_t const,

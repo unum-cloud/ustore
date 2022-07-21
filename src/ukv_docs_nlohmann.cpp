@@ -3,7 +3,7 @@
  * @author Ashot Vardanian
  *
  * @brief Document storage using "nlohmann/JSON" lib.
- * Sits on top of any @see "ukv.h"-compatiable system.
+ * Sits on top of any @see "ukv.h"-compatible system.
  */
 
 #include <vector>
@@ -71,11 +71,7 @@ struct export_to_value_t : public nlohmann::detail::output_adapter_protocol<char
     export_to_value_t() = default;
     export_to_value_t(value_t& value) noexcept : value_ptr(&value) {}
 
-    void write_character(char c) override {
-        auto ptr = reinterpret_cast<byte_t const*>(&c);
-        value_ptr->insert(value_ptr->size(), ptr, ptr + 1);
-    }
-
+    void write_character(char c) override { value_ptr->push_back(static_cast<byte_t>(c)); }
     void write_characters(char const* s, std::size_t length) override {
         auto ptr = reinterpret_cast<byte_t const*>(s);
         value_ptr->insert(value_ptr->size(), ptr, ptr + length);
@@ -83,7 +79,6 @@ struct export_to_value_t : public nlohmann::detail::output_adapter_protocol<char
 };
 
 json_t parse_any(value_view_t bytes, ukv_format_t const c_format, ukv_error_t* c_error) {
-    // iterator_input_adapter
     auto str = reinterpret_cast<char const*>(bytes.begin());
     auto len = bytes.size();
     switch (c_format) {
@@ -98,11 +93,11 @@ json_t parse_any(value_view_t bytes, ukv_format_t const c_format, ukv_error_t* c
 }
 
 /**
- * The JSON package provides a number of simple interfaces, whic only work with simplest STL types
+ * The JSON package provides a number of simple interfaces, which only work with simplest STL types
  * and always allocate the output objects, without the ability to reuse previously allocated memory,
  * including: `dump`, `to_msgpack`, `to_bson`, `to_cbor`, `to_ubjson`.
  * They have more flexible alternatives in the form of `nlohmann::detail::serializer`s,
- * that will accept our castum adapter. Unfortunately, they require a bogus shared pointer. WHY?!
+ * that will accept our custom adapter. Unfortunately, they require a bogus shared pointer. WHY?!
  */
 void dump_any(json_t const& json,
               ukv_format_t const c_format,
@@ -163,10 +158,10 @@ void update_docs( //
     ukv_write( //
         c_db,
         c_txn,
+        n,
         tasks.cols.get(),
         tasks.cols.stride(),
         tasks.keys.get(),
-        n,
         tasks.keys.stride(),
         arena.updated_vals.front().internal_cptr(),
         sizeof(value_t),
@@ -210,12 +205,12 @@ void update_fields( //
 void ukv_docs_write( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_str_view_t const* c_fields,
@@ -226,6 +221,9 @@ void ukv_docs_write( //
 
     ukv_val_ptr_t const* c_vals,
     ukv_size_t const c_vals_stride,
+
+    ukv_val_len_t const* c_offs,
+    ukv_size_t const c_offs_stride,
 
     ukv_val_len_t const* c_lens,
     ukv_size_t const c_lens_stride,
@@ -246,15 +244,15 @@ void ukv_docs_write( //
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
-    strided_iterator_gt<ukv_val_len_t const> offs {nullptr, 0};
+    strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
 
     try {
         auto func = fields ? &update_fields : &update_docs;
-        func(c_db, c_txn, tasks, fields, c_keys_count, c_options, c_format, arena, c_error);
+        func(c_db, c_txn, tasks, fields, c_tasks_count, c_options, c_format, arena, c_error);
     }
-    catch (std::bad_alloc) {
+    catch (std::bad_alloc const&) {
         *c_error = "Failed to allocate memory!";
     }
 }
@@ -262,16 +260,15 @@ void ukv_docs_write( //
 void ukv_docs_read( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
+    ukv_size_t const n,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_count,
     ukv_size_t const c_keys_stride,
 
     ukv_str_view_t const* c_fields,
-    ukv_size_t const c_fields_count,
     ukv_size_t const c_fields_stride,
 
     ukv_options_t const c_options,
@@ -292,10 +289,10 @@ void ukv_docs_read( //
     if (*c_error)
         return;
 
-    prepare_memory(arena.updated_keys, c_keys_count, c_error);
+    prepare_memory(arena.updated_keys, n, c_error);
     if (*c_error)
         return;
-    prepare_memory(arena.updated_vals, c_keys_count, c_error);
+    prepare_memory(arena.updated_vals, n, c_error);
     if (*c_error)
         return;
 
@@ -308,7 +305,7 @@ void ukv_docs_read( //
     // if different fields from the same docs are requested.
     // In that case, we must only fetch the doc once and later
     // slice it into output fields.
-    for (ukv_size_t i = 0; i != c_keys_count; ++i)
+    for (ukv_size_t i = 0; i != n; ++i)
         arena.updated_keys[i] = tasks[i].location();
     sort_and_deduplicate(arena.updated_keys);
     // TODO: Handle the common case of requesting the non-colliding
@@ -317,46 +314,87 @@ void ukv_docs_read( //
 
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
-    ukv_read(
-        c_db,
-        c_txn,
-        &arena.updated_keys[0].collection,
-        sizeof(located_key_t),
-        &arena.updated_keys[0].key,
-        static_cast<ukv_size_t>(arena.updated_keys.size()),
-        sizeof(located_key_t),
-        arena.updated_vals.front().internal_cptr(),
-        c_options,
-        &found_lengths,
-        &found_values,
-        c_arena,
-        c_error);
+    ukv_size_t found_count = static_cast<ukv_size_t>(arena.updated_keys.size());
+    ukv_read(c_db,
+             c_txn,
+             found_count,
+             &arena.updated_keys[0].collection,
+             sizeof(located_key_t),
+             &arena.updated_keys[0].key,
+             sizeof(located_key_t),
+             c_options,
+             &found_lengths,
+             &found_values,
+             c_arena,
+             c_error);
+    if (*c_error)
+        return;
 
-    // Now, we need to parse all the entries to later export them into a target format.
-    // Potentially sampling certain sub-fields again along the way.
-    auto exporter_on_heap = std::make_shared<export_to_value_t>();
-    auto parsed_values = std::vector<json_t>(n);
-    auto serialized_docs = taped_values_view_t(found_lengths, found_values);
+    try {
+        // We will later need to locate the data for every separate request.
+        // Doing it in O(N) tape iterations every time is too slow.
+        // Once we transform to inclusive sums, it will be O(1).
+        //      inplace_inclusive_prefix_sum(found_lengths, found_lengths + found_count);
+        // Alternatively we can compensate it with additional memory:
+        auto parsed_values = std::vector<json_t>(n);
+        auto found_tape = taped_values_view_t(found_lengths, found_values, found_count);
+        auto found_tape_it = found_tape.begin();
+        for (ukv_size_t i = 0; i != found_count; ++i, ++found_tape_it) {
+            value_view_t found_value = *found_tape_it;
+            json_t& parsed = parsed_values[i];
+            parsed = parse_any(found_value, c_format, c_error);
 
-    for (ukv_size_t i = 0; i != n; ++i) {
-        auto task = tasks[i];
-        auto value_idx = offset_in_sorted(arena.updated_keys, task.location());        
-        auto& parsed = arena.updated_vals[value_idx];
-        auto &serialized = arena.updated_vals[value_idx];
-        if (task.is_deleted()) {
-            serialized.reset();
-            continue;
+            // This error is extremely unlikely, as we have previously accepted the data into the store.
+            if (*c_error)
+                return;
         }
 
-        auto parsed = parse_any(task.view(), c_format, c_error);
-        if (parsed.is_discarded()) {
-            *c_error = "Couldn't parse inputs";
-            return;
+        // Now, we need to parse all the entries to later export them into a target format.
+        // Potentially sampling certain sub-fields again along the way.
+        auto exporter_on_heap = std::make_shared<export_to_value_t>();
+        auto temporary_buffer = value_t();
+        exporter_on_heap->value_ptr = &temporary_buffer;
+        auto null_object = json_t(nullptr);
+        arena.growing_tape.clear();
+
+        for (ukv_size_t i = 0; i != n; ++i) {
+            auto task = tasks[i];
+            auto parsed_idx = offset_in_sorted(arena.updated_keys, task.location());
+            json_t& parsed = parsed_values[parsed_idx];
+
+            if (fields && fields[i]) {
+                try {
+                    if (fields[i][0] == '/') {
+                        json_ptr_t field_ptr {fields[i]};
+                        json_t& sub = parsed.at(field_ptr);
+                        dump_any(sub, c_format, exporter_on_heap, c_error);
+                    }
+                    else {
+                        json_t const& sub = parsed.at(fields[i]);
+                        dump_any(sub, c_format, exporter_on_heap, c_error);
+                    }
+                }
+                catch (nlohmann::json::out_of_range&) {
+                    dump_any(null_object, c_format, exporter_on_heap, c_error);
+                }
+            }
+            else {
+                dump_any(parsed, c_format, exporter_on_heap, c_error);
+            }
+            if (*c_error)
+                return;
+
+            if (c_format == ukv_format_json_k)
+                temporary_buffer.push_back(byte_t {0});
+
+            arena.growing_tape.push_back(temporary_buffer);
+            temporary_buffer.clear();
         }
 
-        exporter_on_heap->value_ptr = &serialized;
-        dump_any(parsed, ukv_format_msgpack_k, exporter_on_heap, c_error);
-        if (*c_error)
-            return;
+        *c_found_lengths = taped_values_view_t(arena.growing_tape).lengths();
+        *c_found_values = taped_values_view_t(arena.growing_tape).contents();
+    }
+    catch (std::bad_alloc const&) {
+        *c_error = "Failed to allocate memory!";
     }
 }

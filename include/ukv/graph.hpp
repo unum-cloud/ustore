@@ -133,8 +133,8 @@ class adjacency_stream_t {
     ukv_collection_t col_ = ukv_default_collection_k;
     ukv_txn_t txn_ = nullptr;
 
-    edges_span_t prefetched_edges_ = {};
-    std::size_t prefetched_offset_ = 0;
+    edges_span_t fetched_edges_ = {};
+    std::size_t fetched_offset_ = 0;
 
     managed_arena_t arena_;
     keys_stream_t vertex_stream_;
@@ -149,10 +149,10 @@ class adjacency_stream_t {
         ukv_vertex_role_t role = ukv_vertex_role_any_k;
         ukv_graph_find_edges(db_,
                              txn_,
+                             vertices.count(),
                              &col_,
                              0,
                              vertices.begin().get(),
-                             vertices.count(),
                              vertices.stride(),
                              &role,
                              0,
@@ -168,8 +168,8 @@ class adjacency_stream_t {
         auto edges_count = transform_reduce_n(degrees_per_vertex, vertices.size(), 0ul, [](ukv_vertex_degree_t deg) {
             return deg == ukv_vertex_degree_missing_k ? 0 : deg;
         });
-        prefetched_offset_ = 0;
-        prefetched_edges_ = {edges_begin, edges_begin + edges_count};
+        fetched_offset_ = 0;
+        fetched_edges_ = {edges_begin, edges_begin + edges_count};
         return {};
     }
 
@@ -203,14 +203,14 @@ class adjacency_stream_t {
 
     status_t advance() noexcept {
 
-        if (prefetched_offset_ >= prefetched_edges_.size()) {
+        if (fetched_offset_ >= fetched_edges_.size()) {
             auto status = vertex_stream_.seek_to_next_batch();
             if (!status)
                 return status;
             return prefetch_gather();
         }
 
-        ++prefetched_offset_;
+        ++fetched_offset_;
         return {};
     }
 
@@ -224,12 +224,12 @@ class adjacency_stream_t {
         if (status)
             return *this;
 
-        prefetched_edges_ = {};
-        prefetched_offset_ = 0;
+        fetched_edges_ = {};
+        fetched_offset_ = 0;
         return *this;
     }
 
-    edge_t edge() const noexcept { return prefetched_edges_[prefetched_offset_]; }
+    edge_t edge() const noexcept { return fetched_edges_[fetched_offset_]; }
     edge_t operator*() const noexcept { return edge(); }
     status_t seek_to_first() noexcept { return seek(std::numeric_limits<ukv_key_t>::min()); }
     status_t seek_to_next_batch() noexcept {
@@ -240,22 +240,22 @@ class adjacency_stream_t {
     }
 
     /**
-     * @brief Exposes all the prefetched edges at once, including the passed ones.
+     * @brief Exposes all the fetched edges at once, including the passed ones.
      * Should be used with `seek_to_next_batch`. Next `advance` will do the same.
      */
     edges_span_t edges_batch() noexcept {
-        prefetched_offset_ = prefetched_edges_.size();
-        return prefetched_edges_;
+        fetched_offset_ = fetched_edges_.size();
+        return fetched_edges_;
     }
 
-    bool is_end() const noexcept { return vertex_stream_.is_end() && prefetched_offset_ >= prefetched_edges_.size(); }
+    bool is_end() const noexcept { return vertex_stream_.is_end() && fetched_offset_ >= fetched_edges_.size(); }
 
     bool operator==(adjacency_stream_t const& other) const noexcept {
-        return vertex_stream_ == other.vertex_stream_ && prefetched_offset_ == other.prefetched_offset_;
+        return vertex_stream_ == other.vertex_stream_ && fetched_offset_ == other.fetched_offset_;
     }
 
     bool operator!=(adjacency_stream_t const& other) const noexcept {
-        return vertex_stream_ != other.vertex_stream_ || prefetched_offset_ != other.prefetched_offset_;
+        return vertex_stream_ != other.vertex_stream_ || fetched_offset_ != other.fetched_offset_;
     }
 };
 
@@ -285,10 +285,10 @@ class graph_t {
         status_t status;
         ukv_graph_upsert_edges(collection_.db(),
                                txn_,
+                               edges.edge_ids.count(),
                                collection_.internal_cptr(),
                                0,
                                edges.edge_ids.begin().get(),
-                               edges.edge_ids.count(),
                                edges.edge_ids.stride(),
                                edges.source_ids.begin().get(),
                                edges.source_ids.stride(),
@@ -304,10 +304,10 @@ class graph_t {
         status_t status;
         ukv_graph_remove_edges(collection_.db(),
                                txn_,
+                               edges.edge_ids.count(),
                                collection_.internal_cptr(),
                                0,
                                edges.edge_ids.begin().get(),
-                               edges.edge_ids.count(),
                                edges.edge_ids.stride(),
                                edges.source_ids.begin().get(),
                                edges.source_ids.stride(),
@@ -328,10 +328,10 @@ class graph_t {
 
         ukv_graph_remove_vertices(collection_.db(),
                                   txn_,
+                                  vertices.count(),
                                   collection_.internal_cptr(),
                                   0,
                                   vertices.begin().get(),
-                                  vertices.count(),
                                   vertices.stride(),
                                   roles.begin().get(),
                                   roles.stride(),
@@ -365,10 +365,10 @@ class graph_t {
 
         ukv_graph_find_edges(collection_.db(),
                              txn_,
+                             vertices.count(),
                              collection_.internal_cptr(),
                              0,
                              vertices.begin().get(),
-                             vertices.count(),
                              vertices.stride(),
                              roles.begin().get(),
                              roles.stride(),
@@ -399,13 +399,14 @@ class graph_t {
      */
     expected_gt<strided_range_gt<bool>> contains(strided_range_gt<ukv_key_t const> vertices,
                                                  bool transparent = false) noexcept {
-        sample_proxy_t sample;
-        sample.db = collection_.db();
-        sample.txn = txn_;
-        sample.arena = arena_.internal_cptr();
-        sample.cols = strided_range_gt<ukv_collection_t const> {collection_.internal_cptr(), 0, vertices.size()};
-        sample.keys = vertices;
-        return sample.contains(transparent);
+        return entries_ref_t {
+            collection_.db(),
+            txn_,
+            arena_.internal_cptr(),
+            strided_range_gt<ukv_collection_t const> {collection_.internal_cptr(), 0, vertices.size()},
+            vertices,
+        }
+            .contains(ukv_format_binary_k, transparent);
     }
 
     using adjacency_range_t = range_gt<adjacency_stream_t>;
@@ -435,10 +436,10 @@ class graph_t {
 
         ukv_graph_find_edges(collection_.db(),
                              txn_,
+                             1,
                              collection_.internal_cptr(),
                              0,
                              &vertex,
-                             1,
                              0,
                              &role,
                              0,
@@ -488,10 +489,10 @@ class graph_t {
 
         ukv_graph_find_edges(collection_.db(),
                              txn_,
+                             vertices.count(),
                              collection_.internal_cptr(),
                              0,
                              vertices.begin().get(),
-                             vertices.count(),
                              vertices.stride(),
                              roles.begin().get(),
                              roles.stride(),
