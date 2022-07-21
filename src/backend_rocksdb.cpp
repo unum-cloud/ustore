@@ -670,8 +670,11 @@ void ukv_arena_free(ukv_t const, ukv_arena_t c_arena) {
     delete &arena;
 }
 
-void ukv_txn_free(ukv_t const, ukv_txn_t const c_txn) {
-    if (!c_txn)
+void ukv_txn_free(ukv_t const c_db, ukv_txn_t c_txn) {
+    if (!c_db || !c_txn)
+        return;
+    rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
+    if (!db_wrapper->db)
         return;
     rocks_txn_ptr_t txn = reinterpret_cast<rocks_txn_ptr_t>(c_txn);
     delete txn;
@@ -686,6 +689,7 @@ void ukv_free(ukv_t c_db) {
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
     for (rocks_col_ptr_t cf : db_wrapper->columns)
         db_wrapper->db->DestroyColumnFamilyHandle(cf);
+    db_wrapper->db.reset();
     delete db_wrapper;
 }
 
