@@ -10,7 +10,7 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 * Handling JSON, BSON, MsgPacks
 * ACID transactional guarantees
 * Familiar interfaces for tabular & graph analytics
-* Bindings for your favourite languages
+* Bindings for your favorite languages
 * Interoperability with Apache Arrow
 
 UKV does just that, abstracting away the implementation from the user.
@@ -81,7 +81,7 @@ To build and test any set of bindings:
 
 ### Python
 
-Current implentation relies on [PyBind11](https://github.com/pybind/pybind11).
+Current implementation relies on [PyBind11](https://github.com/pybind/pybind11).
 It's feature-rich, but not very performant, supporting:
 
 * Named Collections
@@ -130,9 +130,9 @@ db.clear();
 
 ### Java
 
-These bindings are impemented via [Java Native Interface](https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/jniTOC.html).
+These bindings are implemented via [Java Native Interface](https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/jniTOC.html).
 This interface is more performant than Python, but is not feature complete yet.
-It mimics native `HashMap` and `Ditionary` classes, but has no support for batch operations yet.
+It mimics native `HashMap` and `Dictionary` classes, but has no support for batch operations yet.
 
 ```java
 DataBase db = new DataBase("");
@@ -165,7 +165,7 @@ db.Get(42)
 
 Implementation-wise, GoLang variant performs `memcpy`s on essentially every call.
 As GoLang has no exceptions in the classical OOP sense, most functions return multiple values, error being the last one in each pack.
-Batch lookup operations are imlemented via channels sending slices, to avoid reallocations.
+Batch lookup operations are implemented via channels sending slices, to avoid reallocations.
 
 ### JavaScript
 

@@ -9,6 +9,7 @@
 #include <cstring>   // `std::memcpy`
 #include <stdexcept> // `std::runtime_error`
 #include <algorithm> // `std::sort`
+#include <limits.h>  // `CHAR_BIT`
 
 #include "ukv/ukv.hpp"
 
@@ -17,6 +18,10 @@ namespace unum::ukv {
 using allocator_t = std::allocator<byte_t>;
 using buffer_t = std::vector<byte_t, allocator_t>;
 using sequence_t = std::int64_t;
+
+inline std::size_t next_power_of_two(std::size_t x) {
+    return 1ull << (sizeof(std::size_t) * CHAR_BIT - __builtin_clzll(x));
+}
 
 /**
  * @brief An `std::vector`-like class, with open layout,
@@ -70,6 +75,25 @@ class value_t {
         length_ = size;
     }
 
+    void push_back(byte_t byte) {
+        auto new_size = length_ + 1;
+        if (new_size > cap_) {
+            auto new_cap = next_power_of_two(new_size);
+            auto new_ptr = allocator_t {}.allocate(new_cap);
+            if (!new_ptr)
+                throw std::bad_alloc();
+            std::memcpy(new_ptr, ptr_, length_);
+            if (ptr_)
+                allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
+
+            ptr_ = reinterpret_cast<ukv_val_ptr_t>(new_ptr);
+            cap_ = new_cap;
+        }
+
+        reinterpret_cast<byte_t*>(ptr_)[length_] = byte;
+        length_ = new_size;
+    }
+
     void insert(std::size_t offset, byte_t const* inserted_begin, byte_t const* inserted_end) {
         if (offset > size())
             throw std::out_of_range("Can't insert");
@@ -117,16 +141,40 @@ class value_t {
     inline ukv_val_len_t* internal_cap() noexcept { return &cap_; }
 };
 
+/**
+ * @brief Append-only data-structure for variable length blobs.
+ * Owns the underlying arena and is external to the underlying DB.
+ * Is suited for data preparation before passing to the C API.
+ */
+class growing_tape_t {
+    std::vector<ukv_val_len_t> lengths_;
+    std::vector<byte_t> data_;
+
+  public:
+    void push_back(value_view_t value) {
+        lengths_.push_back(static_cast<ukv_val_len_t>(value.size()));
+        data_.insert(data_.end(), value.begin(), value.end());
+    }
+
+    void clear() {
+        lengths_.clear();
+        data_.clear();
+    }
+
+    operator taped_values_view_t() noexcept { return {lengths_.data(), ukv_val_ptr_t(data_.data()), data_.size()}; }
+};
+
 struct stl_arena_t {
     std::vector<byte_t> output_tape;
     std::vector<byte_t> unpacked_tape;
+    growing_tape_t growing_tape;
     /**
      * In complex multi-step operations we need arrays
      * of `located_key_t` to sort/navigate them more easily.
      */
     std::vector<located_key_t> updated_keys;
     /**
-     * In complex multi-step operations we need disjoing arrays
+     * In complex multi-step operations we need disjoint arrays
      * variable-length buffers to avoid expensive `memmove`s in
      * big batch operations.
      */
@@ -262,31 +310,6 @@ struct write_tasks_soa_t {
     }
 };
 
-/**
- * @brief Append-only datastructure for variable length blobs.
- * Owns the underlying arena and is external to the underlying DB.
- * Is suited for data preparation before passing to the C API.
- */
-class appendable_tape_t {
-    std::vector<ukv_val_len_t> lengths_;
-    std::vector<byte_t> data_;
-
-  public:
-    void push_back(value_view_t value) {
-        lengths_.push_back(static_cast<ukv_val_len_t>(value.size()));
-        data_.insert(data_.end(), value.begin(), value.end());
-    }
-
-    void clear() {
-        lengths_.clear();
-        data_.clear();
-    }
-
-    operator taped_values_view_t() const noexcept {
-        return {lengths_.data(), ukv_val_ptr_t(data_.data()), data_.size()};
-    }
-};
-
 class file_handle_t {
     std::FILE* handle_ = nullptr;
 
@@ -333,6 +356,13 @@ void sort_and_deduplicate(std::vector<element_at>& elems) {
 template <typename element_at>
 std::size_t offset_in_sorted(std::vector<element_at> const& elems, element_at const& wanted) {
     return std::lower_bound(elems.begin(), elems.end(), wanted) - elems.begin();
+}
+
+template <typename element_at>
+void inplace_inclusive_prefix_sum(element_at* begin, element_at* const end) {
+    element_at sum = 0;
+    for (; begin != end; ++begin)
+        sum += std::exchange(*begin, *begin + sum);
 }
 
 } // namespace unum::ukv

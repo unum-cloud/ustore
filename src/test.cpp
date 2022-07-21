@@ -15,17 +15,17 @@
 using namespace unum::ukv;
 using namespace unum;
 
-void round_trip(sample_proxy_t proxy, disjoint_values_view_t values) {
+void round_trip(entries_ref_t ref, disjoint_values_view_t values) {
 
-    EXPECT_TRUE(proxy.set(values)) << "Failed to assign";
+    EXPECT_TRUE(ref.set(values)) << "Failed to assign";
 
-    EXPECT_TRUE(proxy.get()) << "Failed to fetch inserted keys";
+    EXPECT_TRUE(ref.get()) << "Failed to fetch inserted keys";
 
     // Validate that values match
-    taped_values_view_t retrieved = *proxy.get();
-    EXPECT_EQ(retrieved.size(), proxy.keys.size());
+    taped_values_view_t retrieved = *ref.get();
+    EXPECT_EQ(retrieved.size(), ref.keys().size());
     tape_iterator_t it = retrieved.begin();
-    for (std::size_t i = 0; i != proxy.keys.size(); ++i, ++it) {
+    for (std::size_t i = 0; i != ref.keys().size(); ++i, ++it) {
         auto expected_len = static_cast<std::size_t>(values.lengths[i]);
         auto expected_begin = reinterpret_cast<byte_t const*>(values.contents[i]) + values.offsets[i];
 
@@ -40,7 +40,7 @@ TEST(db, basic) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    session_t session = db.session();
+    db_session_t session = db.session();
 
     std::vector<ukv_key_t> keys {34, 35, 36};
     ukv_val_len_t val_len = sizeof(std::uint64_t);
@@ -48,22 +48,22 @@ TEST(db, basic) {
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
-    sample_proxy_t proxy = session[keys];
+    entries_ref_t ref = session[keys];
     disjoint_values_view_t values {
         .contents = {&vals_begin, 0, 3},
         .offsets = offs,
         .lengths = {val_len, 3},
     };
-    round_trip(proxy, values);
+    round_trip(ref, values);
 
     // Overwrite those values with same size integers and try again
     for (auto& val : vals)
         val += 100;
-    round_trip(proxy, values);
+    round_trip(ref, values);
 
-    // Overwrite with empty values, but check for existance
-    EXPECT_TRUE(proxy.clear());
-    for (ukv_key_t key : proxy.keys) {
+    // Overwrite with empty values, but check for existence
+    EXPECT_TRUE(ref.clear());
+    for (ukv_key_t key : ref.keys()) {
         expected_gt<strided_range_gt<bool>> indicators = session[key].contains();
         EXPECT_TRUE(indicators);
         EXPECT_TRUE((*indicators)[0]);
@@ -84,8 +84,8 @@ TEST(db, basic) {
     EXPECT_TRUE(present_it.is_end());
 
     // Remove all of the values and check that they are missing
-    EXPECT_TRUE(proxy.erase());
-    for (ukv_key_t key : proxy.keys) {
+    EXPECT_TRUE(ref.erase());
+    for (ukv_key_t key : ref.keys()) {
         expected_gt<strided_range_gt<bool>> indicators = session[key].contains();
         EXPECT_TRUE(indicators);
         EXPECT_FALSE((*indicators)[0]);

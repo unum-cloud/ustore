@@ -1,5 +1,5 @@
 /**
- * @brief Python bindings for Unums Graph Store, that mimics NetworkX.
+ * @brief Python bindings for a Graph index, that mimics NetworkX.
  * Is similar in it's purpose to a pure-Python NetworkXum:
  * https://github.com/unum-cloud/NetworkXum
  *
@@ -13,8 +13,8 @@
  *      | MultiGraph     | undirected   | Yes        | Yes            |
  *      | MultiDiGraph   | directed     | Yes        | Yes            |
  *
- * Aside frim those, you can instantiate the most generic `ukv.Network`,
- * controlling wheather graph should be directed, allow loops, or have
+ * Aside from those, you can instantiate the most generic `ukv.Network`,
+ * controlling whether graph should be directed, allow loops, or have
  * attrs in source/target vertices or edges.
  *
  * @section Interface

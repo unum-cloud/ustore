@@ -2,6 +2,7 @@
  * @file utility.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
+ *
  * @brief Smart Pointers, Monads and Range-like abstractions for C++ bindings.
  */
 
@@ -340,6 +341,7 @@ struct collections_view_t : public strided_range_gt<ukv_collection_t const> {
 };
 
 using keys_view_t = strided_range_gt<ukv_key_t const>;
+using fields_view_t = strided_range_gt<ukv_str_view_t const>;
 
 using located_keys_view_t = strided_range_gt<located_key_t const>;
 
@@ -386,20 +388,20 @@ class tape_iterator_t {
 };
 
 class taped_values_view_t {
-    ukv_val_len_t const* lengths_ = nullptr;
+    ukv_val_len_t* lengths_ = nullptr;
     ukv_val_ptr_t contents_ = nullptr;
     ukv_size_t count_ = 0;
 
   public:
     inline taped_values_view_t() = default;
-    inline taped_values_view_t(ukv_val_len_t const* lens, ukv_val_ptr_t vals, ukv_size_t elements) noexcept
+    inline taped_values_view_t(ukv_val_len_t* lens, ukv_val_ptr_t vals, ukv_size_t elements) noexcept
         : lengths_(lens), contents_(vals), count_(elements) {}
 
     inline tape_iterator_t begin() const noexcept { return {lengths_, contents_}; }
     inline tape_iterator_t end() const noexcept { return {lengths_ + count_, contents_}; }
     inline std::size_t size() const noexcept { return count_; }
 
-    ukv_val_len_t const* lengths() const noexcept { return lengths_; }
+    ukv_val_len_t* lengths() const noexcept { return lengths_; }
     ukv_val_ptr_t contents() const noexcept { return contents_; }
 };
 

@@ -30,19 +30,6 @@
  *    instead of SoA. To minimize the need of copies and data re-layout,
  *    we use byte-length strides arguments, similar to BLAS libraries.
  *    Passing Zero as a "stride" means repeating the same value.
- *
- * @section Choosing between more functions vs more argument per function
- * We try to preserve balance in the number of function calls exposed in
- * this C API/ABI layer and the complexity of each call. As a result,
- * the @b write methods can be used to:
- * > insert
- * > update
- * > detele
- * and the @b read methods can be used to:
- * > check object existance or it's length
- * > retrieve an object
- * Interfaces for normal and transactional operations are identical,
- * exept for the `_txn_` name part.
  */
 
 #pragma once
@@ -108,7 +95,7 @@ typedef enum {
     ukv_option_read_transparent_k = 1 << 3,
     /**
      * @brief When a transaction is started with this flag, a persistent
-     * snapsot is created. It guarantees that the global state of all the
+     * snapshot is created. It guarantees that the global state of all the
      * keys in the DB will be unchanged during the entire lifetime of the
      * transaction. Will not affect the writes in any way.
      */
@@ -143,7 +130,7 @@ void ukv_open( //
 /**
  * @brief The primary "setter" interface.
  * Passing NULLs into @p `values` is identical to deleting entries.
- * If a fail had occured, @p `error` will be set to non-NULL.
+ * If a fail had occurred, @p `error` will be set to non-NULL.
  *
  * @section Functionality Matrix
  * This is one of the two primary methods, that knots together various kinds of reads:
@@ -157,7 +144,7 @@ void ukv_open( //
  * @param[in] txn            Transaction, through which the operation must go.
  *                           Can be NULL.
  * @param[in] keys           Array of keys in one or more collections.
- * @param[in] keys_count     Number of elements in @p `keys`.
+ * @param[in] tasks_count    Number of elements in @p `keys`.
  * @param[in] collections    Array of collections owning the @p `keys`.
  *                           If NULL is passed, the default collection
  *                           is assumed. Instead of passing one collection for
@@ -178,14 +165,14 @@ void ukv_open( //
  * 1. Insert: add if missing.
  * 2. Update: overwrite if present.
  * 3. Upsert: write.
- * Instead of adding all three to C interface, we focus on better ACID transactions, 
+ * Instead of adding all three to C interface, we focus on better ACID transactions,
  * which can be used to implement any advanced multi-step operations (often including
  * conditionals), like Compare-And-Swap, without losing atomicity.
  *
  * @section Why use offsets?
  *
  * In the underlying layer, using offsets to adds no additional overhead,
- * but what is the point of using them, if we can immediatelly pass adjusted
+ * but what is the point of using them, if we can immediately pass adjusted
  * pointers?
  * It serves two primary purposes:
  * > Supporting input tapes (values_stride = 0, offsets_stride != 0).
@@ -216,12 +203,12 @@ void ukv_open( //
 void ukv_write( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
-    ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
 
     ukv_val_ptr_t const* values,
@@ -240,8 +227,8 @@ void ukv_write( //
 
 /**
  * @brief The primary "getter" interface.
- * If a fail had occured, @p `error` will be set to non-NULL.
- * Otherwise, the tape will be populated with @p `keys_count` objects
+ * If a fail had occurred, @p `error` will be set to non-NULL.
+ * Otherwise, the tape will be populated with @p `tasks_count` objects
  * of type `ukv_val_len_t`, describing the lengths of objects packed
  * right after the lengths themselves.
  * If a key wasn't found in target collection, the length will be zero.
@@ -256,13 +243,13 @@ void ukv_write( //
  * @param[in] txn             Transaction or the snapshot, through which the
  *                            operation must go. Can be NULL.
  * @param[in] keys            Array of keys in one or more collections.
- * @param[in] keys_count      Number of elements in @p `keys`.
+ * @param[in] tasks_count     Number of elements in @p `keys`.
  * @param[in] collections     Array of collections owning the @p `keys`.
  *                            If NULL is passed, the default collection
  *                            is assumed. Instead of passing one collection for
  *                            each key, you can use `ukv_option_read_colocated`.
  * @param[in] options         Read options:
- *                            > transaparent: Bypasses any ACID checks on following write.
+ *                            > transparent: Bypasses any ACID checks on following write.
  *                            > lengths: Only fetches lengths of values, not content.
  *
  * @param[inout] tape         Points to a memory region that we use during
@@ -278,12 +265,12 @@ void ukv_write( //
 void ukv_read( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
-    ukv_size_t const keys_count,
     ukv_size_t const keys_stride,
 
     ukv_options_t const options,
@@ -301,18 +288,18 @@ void ukv_read( //
  * Fetching lengths of values is @b optional.
  *
  * @param[in] options   Read options:
- *                      > transaparent: Bypasses any ACID checks on following write.
+ *                      > transparent: Bypasses any ACID checks on following write.
  *                      > lengths: Will fetches lengths of values, after the keys.
  */
 void ukv_scan( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* min_keys,
-    ukv_size_t const min_keys_count,
     ukv_size_t const min_keys_stride,
 
     ukv_size_t const* scan_lengths,
@@ -336,12 +323,12 @@ void ukv_scan( //
 void ukv_size( //
     ukv_t const db,
     ukv_txn_t const txn,
+    ukv_size_t const tasks_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* min_keys,
-    ukv_size_t const min_keys_count,
     ukv_size_t const min_keys_stride,
 
     ukv_key_t const* max_keys,
@@ -360,13 +347,13 @@ void ukv_size( //
 
 /**
  * @brief Inserts a new named collection into DB or opens existing one.
- * This function may never be called, as the default unnamed collection
+ * This function may never be called, as the default nameless collection
  * always exists and can be addressed via `ukv_default_collection_k`.
  *
  * @param[in] db           Already open database instance, @see `ukv_open`.
  * @param[in] name         A NULL-terminated collection name.
  * @param[in] config       A NULL-terminated configuration string.
- * @param[out] collection  Address to which the collection handle will be expored.
+ * @param[out] collection  Address to which the collection handle will be exported.
  * @param[out] error       The error message to be handled by callee.
  */
 void ukv_collection_open( //
@@ -377,20 +364,24 @@ void ukv_collection_open( //
     ukv_error_t* error);
 
 /**
- * @brief Retrieves a list of collection names in a comma-delimited form.
+ * @brief Retrieves a list of collection names in a NULL-delimited form.
+ * The default nameless collection won't be described in any form.
  *
  * @param[in] db     Already open database instance, @see `ukv_open`.
+ * @param[out] count The number of found unique collections.
  * @param[out] names A NULL-terminated output string with comma-delimited column names.
  * @param[out] error The error message to be handled by callee.
  */
 void ukv_collection_list( //
     ukv_t const db,
+    ukv_size_t* count,
     ukv_str_view_t* names,
+    ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
- * @brief Removes collection and all of its conntents from DB.
- * The default unnamed collection can't be removed, but it
+ * @brief Removes collection and all of its contents from DB.
+ * The default nameless collection can't be removed, but it
  * will be @b cleared, if you pass a NULL as `name`.
  *
  * @param[in] db      Already open database instance, @see `ukv_open`.
@@ -403,17 +394,17 @@ void ukv_collection_remove( //
     ukv_error_t* error);
 
 /**
- * @brief Performs free-form queries on the DB, that may not necesserily
+ * @brief Performs free-form queries on the DB, that may not necessarily
  * have a stable API and a fixed format output. Generally, those requests
  * are very expensive and shouldn't be executed in most applications.
- * This is the "kitchensink" of UKV interface, similar to `fcntl` & `ioctl`.
+ * This is the "kitchen-sink" of UKV interface, similar to `fcntl` & `ioctl`.
  *
  * @param[in] db        Already open database instance, @see `ukv_open`.
  * @param[in] request   Textual representation of the command.
  * @param[out] response Output text of the request.
  * @param[out] error    The error message to be handled by callee.
  *
- * @section Supported Commands
+ * @section Available Commands
  * > "clear":   Removes all the data from DB, while keeping collection names.
  * > "reset":   Removes all the data from DB, including collection names.
  * > "compact": Flushes and compacts all the data in LSM-tree implementations.

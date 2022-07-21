@@ -273,7 +273,7 @@ std::optional<beast::string_view> param_value(beast::string_view query_params, b
 }
 
 template <typename body_at, typename allocator_at, typename send_response_at>
-void respond_to_one(session_t& session,
+void respond_to_one(db_session_t& session,
                     http::request<body_at, http::basic_fields<allocator_at>>&& req,
                     send_response_at&& send_response) {
 
@@ -499,7 +499,7 @@ void respond_to_one(session_t& session,
 }
 
 template <typename body_at, typename allocator_at, typename send_response_at>
-void respond_to_aos(session_t& session,
+void respond_to_aos(db_session_t& session,
                     http::request<body_at, http::basic_fields<allocator_at>>&& req,
                     send_response_at&& send_response) {
 
@@ -672,7 +672,7 @@ void respond_to_aos(session_t& session,
  *        into underlying UKV calls, preparing results and sending back.
  */
 template <typename body_at, typename allocator_at, typename send_response_at>
-void route_request(session_t& session,
+void route_request(db_session_t& session,
                    http::request<body_at, http::basic_fields<allocator_at>>&& req,
                    send_response_at&& send_response) {
 
@@ -716,13 +716,13 @@ void route_request(session_t& session,
 /**
  * @brief A communication channel/session for a single client.
  */
-class web_session_t : public std::enable_shared_from_this<web_session_t> {
+class web_db_session_t : public std::enable_shared_from_this<web_db_session_t> {
     // This is the C++11 equivalent of a generic lambda.
     // The function object is used to send an HTTP message.
     struct send_request_t {
-        web_session_t& self_;
+        web_db_session_t& self_;
 
-        explicit send_request_t(web_session_t& self) noexcept : self_(self) {}
+        explicit send_request_t(web_db_session_t& self) noexcept : self_(self) {}
 
         template <bool ir_request_ak, typename body_at, typename fields_at>
         void operator()(http::message<ir_request_ak, body_at, fields_at>&& msg) const {
@@ -739,20 +739,20 @@ class web_session_t : public std::enable_shared_from_this<web_session_t> {
             http::async_write(
                 self_.stream_,
                 *sp,
-                beast::bind_front_handler(&web_session_t::on_write, self_.shared_from_this(), sp->need_eof()));
+                beast::bind_front_handler(&web_db_session_t::on_write, self_.shared_from_this(), sp->need_eof()));
         }
     };
 
     beast::tcp_stream stream_;
     beast::flat_buffer buffer_;
     std::shared_ptr<db_w_clients_t> db_;
-    session_t db_session_;
+    db_session_t db_session_;
     http::request<http::string_body> req_;
     std::shared_ptr<void> res_;
     send_request_t send_request_;
 
   public:
-    web_session_t(tcp::socket&& socket, std::shared_ptr<db_w_clients_t> const& session)
+    web_db_session_t(tcp::socket&& socket, std::shared_ptr<db_w_clients_t> const& session)
         : stream_(std::move(socket)), db_(session), db_session_(session->session()), send_request_(*this) {}
 
     /**
@@ -760,10 +760,11 @@ class web_session_t : public std::enable_shared_from_this<web_session_t> {
      */
     void run() {
         // We need to be executing within a strand to perform async operations
-        // on the I/O objects in this web_session_t. Although not strictly necessary
+        // on the I/O objects in this web_db_session_t. Although not strictly necessary
         // for single-threaded contexts, this example code is written to be
         // thread-safe by default.
-        net::dispatch(stream_.get_executor(), beast::bind_front_handler(&web_session_t::do_read, shared_from_this()));
+        net::dispatch(stream_.get_executor(),
+                      beast::bind_front_handler(&web_db_session_t::do_read, shared_from_this()));
     }
 
     void do_read() {
@@ -778,7 +779,7 @@ class web_session_t : public std::enable_shared_from_this<web_session_t> {
         http::async_read(stream_,
                          buffer_,
                          req_,
-                         beast::bind_front_handler(&web_session_t::on_read, shared_from_this()));
+                         beast::bind_front_handler(&web_db_session_t::on_read, shared_from_this()));
     }
 
     void on_read(beast::error_code ec, std::size_t bytes_transferred) {
@@ -823,7 +824,7 @@ class web_session_t : public std::enable_shared_from_this<web_session_t> {
 
 /**
  * @brief Spins on sockets, listening for new connection requests.
- *        Once accepted, allocates and dispatches a new @c `web_session_t`.
+ *        Once accepted, allocates and dispatches a new @c `web_db_session_t`.
  */
 class listener_t : public std::enable_shared_from_this<listener_t> {
     net::io_context& io_context_;
@@ -851,8 +852,8 @@ class listener_t : public std::enable_shared_from_this<listener_t> {
             // To avoid infinite loop
             return log_failure(ec, "accept");
 
-        // Create the web_session_t and run it
-        std::make_shared<web_session_t>(std::move(socket), db_)->run();
+        // Create the web_db_session_t and run it
+        std::make_shared<web_db_session_t>(std::move(socket), db_)->run();
         // Accept another connection
         do_accept();
     }

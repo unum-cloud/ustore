@@ -8,7 +8,7 @@
  *   https://stackoverflow.com/a/55205951
  *
  * @section Low-level CPython bindings
- * The complexit of implementing the low-level interface boils
+ * The complexity of implementing the low-level interface boils
  * down to frequent manual calls to `PyArg_ParseTuple()`.
  * It also gives us a more fine-grained control over `PyGILState_Release()`.
  * https://docs.python.org/3/extending/extending.html

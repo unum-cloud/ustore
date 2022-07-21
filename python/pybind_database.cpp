@@ -1,5 +1,5 @@
 /**
- * @brief Python bindings for Unums Key Value Store.
+ * @brief Python bindings for UKV.
  *
  * @section Interface
  *
@@ -42,7 +42,7 @@
  * It's identical for `PyBytes_FromStringAndSize`, `PyUnicode_New`, `PyList_New`.
  *
  * Same way for lists of lists. The `PyListObject` stores a vector of pointers
- * to it's internal entries in a member @p `ob_item`. So we forward thatlist directly
+ * to it's internal entries in a member @p `ob_item`. So we forward that list directly
  * to our C bindings, checking beforehand, that the internal objects are either strings,
  * byte-strings, or NumPy arrays.
  *
@@ -91,10 +91,10 @@ bool contains_item( //
     ukv_read( //
         db_ptr,
         txn_ptr,
+        1,
         &collection_ptr,
         0,
         &key,
-        1,
         0,
         options,
         &found_lengths,
@@ -122,10 +122,10 @@ std::optional<py::bytes> get_item( //
     ukv_read( //
         db_ptr,
         txn_ptr,
+        1,
         &collection_ptr,
         0,
         &key,
-        1,
         0,
         options,
         &found_lengths,
@@ -207,7 +207,7 @@ void export_matrix( //
         throw std::invalid_argument("Keys must be placed in a coninuous 1 dimensional array");
     if (keys.py.strides[0] != sizeof(ukv_key_t))
         throw std::invalid_argument("Keys can't be strided");
-    ukv_size_t const keys_count = static_cast<ukv_size_t>(keys.py.len / keys.py.itemsize);
+    ukv_size_t const tasks_count = static_cast<ukv_size_t>(keys.py.len / keys.py.itemsize);
     ukv_key_t const* keys_ptr = reinterpret_cast<ukv_key_t const*>(keys.py.buf);
 
     // Validate the format of `values`
@@ -219,7 +219,7 @@ void export_matrix( //
         throw std::invalid_argument("Output tensor sides can't be zero");
     if ((values.py.strides[0] <= 0) || values.py.strides[1] <= 0)
         throw std::invalid_argument("Output tensor strides can't be negative");
-    if (keys_count != static_cast<ukv_size_t>(values.py.shape[0]))
+    if (tasks_count != static_cast<ukv_size_t>(values.py.shape[0]))
         throw std::invalid_argument("Number of input keys and output slots doesn't match");
     auto outputs_bytes = reinterpret_cast<std::uint8_t*>(values.py.buf);
     auto outputs_bytes_stride = static_cast<std::size_t>(values.py.strides[0]);
@@ -234,7 +234,7 @@ void export_matrix( //
         throw std::invalid_argument("Lengths tensor sides can't be zero");
     if (values_lengths.py.strides[0] <= 0)
         throw std::invalid_argument("Lengths tensor strides can't be negative");
-    if (keys_count != static_cast<ukv_size_t>(values_lengths.py.shape[0]))
+    if (tasks_count != static_cast<ukv_size_t>(values_lengths.py.shape[0]))
         throw std::invalid_argument("Number of input keys and output slots doesn't match");
     auto outputs_lengths_bytes = reinterpret_cast<std::uint8_t*>(values_lengths.py.buf);
     auto outputs_lengths_bytes_stride = static_cast<std::size_t>(values_lengths.py.strides[0]);
@@ -249,10 +249,10 @@ void export_matrix( //
     ukv_read( //
         db_ptr,
         txn_ptr,
+        tasks_count,
         &collection_ptr,
         0,
         keys_ptr,
-        keys_count,
         sizeof(ukv_key_t),
         options,
         &found_lengths,
@@ -263,9 +263,9 @@ void export_matrix( //
     status.throw_unhandled();
 
     // Export the data into the matrix
-    taped_values_view_t inputs {found_lengths, found_values, keys_count};
+    taped_values_view_t inputs {found_lengths, found_values, tasks_count};
     tape_iterator_t input_it = inputs.begin();
-    for (ukv_size_t i = 0; i != keys_count; ++i, ++input_it) {
+    for (ukv_size_t i = 0; i != tasks_count; ++i, ++input_it) {
         value_view_t input = *input_it;
         auto input_bytes = reinterpret_cast<std::uint8_t const*>(input.begin());
         auto input_length = static_cast<ukv_val_len_t const>(input.size());
@@ -300,10 +300,10 @@ void set_item( //
     ukv_write( //
         db_ptr,
         txn_ptr,
+        1,
         &collection_ptr,
         0,
         &key,
-        1,
         0,
         &ptr,
         0,
@@ -331,7 +331,7 @@ void ukv::wrap_database(py::module& m) {
             db_t db;
             if (open)
                 db.open(config).throw_unhandled();
-            session_t session = db.session();
+            db_session_t session = db.session();
             return std::make_shared<py_db_t>(std::move(db), std::move(session), config);
         }),
         py::arg("config") = "",
@@ -491,7 +491,7 @@ void ukv::wrap_database(py::module& m) {
             return false;
         });
 
-    // Operator overaloads used to edit entries
+    // Operator overloads used to edit entries
     py_db.def("__contains__", [](py_db_t& py_db, ukv_key_t key) {
         return contains_item(py_db.native, nullptr, ukv_default_collection_k, py_db.session.arena(), key);
     });
@@ -557,7 +557,12 @@ void ukv::wrap_database(py::module& m) {
                         key);
     });
 
-    // Operator overaloads used to access collections
+    // Operator overloads used to access collections
+    py_db.def("__contains__", [](py_db_t& py_db, std::string const& collection) {
+        auto maybe = py_db.native.contains(collection);
+        maybe.throw_unhandled();
+        return *maybe;
+    });
     py_db.def("__getitem__", [](py_db_t& py_db, std::string const& collection) {
         auto maybe_col = py_db.native[collection];
         maybe_col.throw_unhandled();
