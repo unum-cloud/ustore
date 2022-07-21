@@ -15,7 +15,7 @@
 using namespace unum::ukv;
 using namespace unum;
 
-void round_trip(binary_refs_t ref, disjoint_values_view_t values) {
+void round_trip(value_refs_t& ref, disjoint_values_view_t values) {
 
     EXPECT_TRUE(ref.set(values)) << "Failed to assign";
 
@@ -40,7 +40,9 @@ TEST(db, basic) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    db_session_t session = db.session();
+    // Try getting the main collection
+    EXPECT_TRUE(db.collection());
+    collection_t col = *db.collection();
 
     std::vector<ukv_key_t> keys {34, 35, 36};
     ukv_val_len_t val_len = sizeof(std::uint64_t);
@@ -48,7 +50,7 @@ TEST(db, basic) {
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
-    binary_refs_t ref = session[keys];
+    value_refs_t ref = col[keys];
     disjoint_values_view_t values {
         .contents = {&vals_begin, 0, 3},
         .offsets = offs,
@@ -64,19 +66,19 @@ TEST(db, basic) {
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(ref.clear());
     for (ukv_key_t key : ref.keys()) {
-        expected_gt<strided_range_gt<bool>> indicators = session[key].contains();
+        expected_gt<strided_range_gt<bool>> indicators = col[key].contains();
         EXPECT_TRUE(indicators);
         EXPECT_TRUE((*indicators)[0]);
 
-        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = session[key].lengths();
+        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = col[key].lengths();
         EXPECT_TRUE(lengths);
         EXPECT_EQ((*lengths)[0], 0u);
     }
 
     // Check scans
-    EXPECT_TRUE(session.keys());
-    auto present_keys = *session.keys();
-    auto present_it = std::move(present_keys).begin();
+    EXPECT_TRUE(col.keys());
+    keys_range_t present_keys = *col.keys();
+    keys_stream_t present_it = std::move(present_keys).begin();
     auto expected_it = keys.begin();
     for (; expected_it != keys.end(); ++present_it, ++expected_it) {
         EXPECT_EQ(*expected_it, *present_it);
@@ -86,11 +88,11 @@ TEST(db, basic) {
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
     for (ukv_key_t key : ref.keys()) {
-        expected_gt<strided_range_gt<bool>> indicators = session[key].contains();
+        expected_gt<strided_range_gt<bool>> indicators = col[key].contains();
         EXPECT_TRUE(indicators);
         EXPECT_FALSE((*indicators)[0]);
 
-        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = session[key].lengths();
+        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = col[key].lengths();
         EXPECT_TRUE(lengths);
         EXPECT_EQ((*lengths)[0], ukv_val_len_missing_k);
     }
@@ -100,12 +102,11 @@ TEST(db, named) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    expected_gt<collection_t> col1 = db["col1"];
-    expected_gt<collection_t> col2 = db["col2"];
+    collection_t col1 = *(db["col1"]);
+    collection_t col2 = *(db["col2"]);
 
-    std::vector<located_key_t> keys_col1 {{*col1, 34}, {*col1, 35}, {*col1, 36}};
-    std::vector<located_key_t> keys_col2 {{*col2, 34}, {*col2, 35}, {*col2, 36}};
     ukv_val_len_t val_len = sizeof(std::uint64_t);
+    std::vector<ukv_key_t> keys {34, 35, 36};
     std::vector<std::uint64_t> vals {34, 35, 36};
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
@@ -116,28 +117,27 @@ TEST(db, named) {
         .lengths = {val_len, 3},
     };
 
-    db_session_t session = db.session();
-    binary_refs_t ref1 = session[keys_col1];
-    binary_refs_t ref2 = session[keys_col2];
-    EXPECT_TRUE(*session.contains("col1"));
-    EXPECT_TRUE(*session.contains("col2"));
-    EXPECT_FALSE(*session.contains("unknown_col"));
+    value_refs_t ref1 = col1[keys];
+    value_refs_t ref2 = col2[keys];
+    EXPECT_TRUE(*db.contains("col1"));
+    EXPECT_TRUE(*db.contains("col2"));
+    EXPECT_FALSE(*db.contains("unknown_col"));
     round_trip(ref1, values);
     round_trip(ref2, values);
 
     // Check scans
-    EXPECT_TRUE(session.keys(*col1));
-    EXPECT_TRUE(session.keys(*col2));
-    auto present_keys1 = *session.keys(*col1);
-    auto present_keys2 = *session.keys(*col2);
+    EXPECT_TRUE(col1.keys());
+    EXPECT_TRUE(col2.keys());
+    auto present_keys1 = *(col1.keys());
+    auto present_keys2 = *(col2.keys());
     auto present_it1 = std::move(present_keys1).begin();
     auto present_it2 = std::move(present_keys2).begin();
-    auto expected_it1 = keys_col1.begin();
-    auto expected_it2 = keys_col2.begin();
-    for (; expected_it1 != keys_col1.end(), expected_it2 != keys_col2.end();
+    auto expected_it1 = keys.begin();
+    auto expected_it2 = keys.begin();
+    for (; expected_it1 != keys.end(), expected_it2 != keys.end();
          ++present_it1, ++expected_it1, ++present_it2, ++expected_it2) {
-        EXPECT_EQ(expected_it1->key, *present_it1);
-        EXPECT_EQ(expected_it2->key, *present_it2);
+        EXPECT_EQ(*expected_it1, *present_it1);
+        EXPECT_EQ(*expected_it2, *present_it2);
     }
     EXPECT_TRUE(present_it1.is_end());
     EXPECT_TRUE(present_it2.is_end());
@@ -149,7 +149,7 @@ TEST(db, net) {
     EXPECT_TRUE(db.open(""));
 
     collection_t col(db);
-    graph_t net(col);
+    graph_ref_t net(col);
 
     std::vector<edge_t> triangle {
         {1, 2, 9},
