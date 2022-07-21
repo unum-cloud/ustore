@@ -1,31 +1,34 @@
 package com.unum.ukv;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Map; // Map abstract class
 import java.lang.AutoCloseable; // Finalization
 import java.util.Arrays; // Arrays.equals
-
-import org.junit.Test;
 
 /**
  * @brief An Embedded Persistent Key-Value Store with
  *        ACID Transactions and mind-boggling speed,
  *        implemented in C/C++/CUDA and wrapped into JNI.
- * 
+ *
  * @section API Usage
  *          We provide two primary classes: `Context` and `Transaction`.
  *          You start by creating a `Context` to link to the underlying DB,
  *          allocate memory and perform CRUD operations on the "HEAD" state.
  *          Those operations will not be consistent and may even partially fail
  *          without you knowing, which part of the input was absorbed.
- * 
+ *
  *          To make your operations ACID, you must request a `ctx.transaction()`
  *          which will encapsulate all your reads & updates. The interface of
  *          the "HEAD" and transaction-based operations is identical.
- * 
- *          In both cases we mimic native Java `HashMap` & `Dictionary` classes.
+ *
+ *          In both cases we mimic native Java `HashMap` & `Ditionary` classes.
  *          Aside from that, most objects are `AutoCloseable`, to simplify the
  *          resource usage and potentially auto-commit transactions on cleanup.
- * 
+ *
  *          Furthermore, each DB has both a "primary" collection and "named"
  *          collections. To access those, pass the `String` name of the target
  *          collection as the first argument to any of the following functions:
@@ -38,10 +41,10 @@ import org.junit.Test;
  *          > putIfAbsent(key, value)
  *          > getOrDefault(key, defaultValue)
  *          > putAll(Map<Key, Value>)
- *          You can expect similar behavior to native classes described here:
+ *          You can expect similar behaviour to native classes described here:
  *          https://docs.oracle.com/javase/7/docs/api/java/util/Dictionary.html
  *          https://docs.oracle.com/javase/7/docs/api/java/util/Hashtable.html
- * 
+ *
  *          In case of transactions you also get:
  *          > rollback: To reset the state of the transaction.
  *          > commit: To submit the transaction to underlying DBMS.
@@ -53,24 +56,38 @@ import org.junit.Test;
  *          * https://github.com/jankotek/mapdb/
  *          * https://github.com/yahoo/HaloDB
  */
-public class DataBase {
-
-    static {
-        try {
-            System.loadLibrary("ukv_java");
-        } catch (UnsatisfiedLinkError e) {
-            String paths = System.getProperty("java.library.path");
-            System.err.println("Native code library failed to load.\n" + e);
-            System.err.println("Shared libraries must be placed at:" + paths + "\n");
-            System.exit(1);
-        }
-    }
+public abstract class DataBase {
 
     /**
      * Partially implements the JDBC interface, as well as a classical
      * Java `Dictionary` API using Java Native Interface.
      * https://www.ibm.com/docs/en/informix-servers/12.10?topic=operations-handle-transactions
      */
+
+    private static String extractLibrary(String backend) throws IOException {
+        File file = File.createTempFile("libukv", ".so");
+        if (file.exists()) {
+            InputStream link = (DataBase.class.getResourceAsStream("/" + backend + "/libukv.so"));
+
+            if (link != null) {
+                Files.copy(
+                        link,
+                        file.getAbsoluteFile().toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+                return file.getAbsoluteFile().toPath().toString();
+            }
+        }
+        throw new IOException("Failed to extract library");
+    }
+
+    protected static void loadLibrary(String backend) {
+        try {
+            System.load(extractLibrary(backend));
+        } catch (IOException e) {
+            throw new RuntimeException(e.getMessage());
+        }
+    }
+
     public static class Transaction implements AutoCloseable {
 
         public long transactionAddress = 0;
@@ -78,7 +95,7 @@ public class DataBase {
         public boolean autoCommit = true;
 
         /**
-         * When enabled, the transaction is being committed on close.
+         * When enabled, the transaction is being commited on close.
          * If the commit fails, an exception is raised.
          */
         public void setAutoCommit(boolean state) {
@@ -87,16 +104,15 @@ public class DataBase {
 
         /**
          * @breif Resets the state of the transaction and creates a new "sequence
-         *        number" or "transaction ID" for it. Can't be used after `commit`.
+         * number" or "transaction ID" for it. Can't be used after `commit`.
          */
         public native void rollback();
 
         /**
-         * @brief Commits all the writes to DBMS, checking for collisions in the
-         *        process. Both in writes and "non-transparent" reads. Returns
-         *        operation result, but doesn't throw exceptions.
-         * 
          * @return true if the operation was submitted and the state of DBMS updated.
+         * @brief Commits all the writes to DBMS, checking for collisions in the
+         * process. Both in writes and "non-transaparent" reads. Returns
+         * operation result, but doesn't throw exceptions.
          */
         public native boolean commit();
 
@@ -139,7 +155,7 @@ public class DataBase {
 
         /**
          * Removes the key (and its corresponding value) from this collection.
-         * 
+         *
          * @return Previously held value.
          */
         public byte[] remove(String collection, long key) {
@@ -221,8 +237,8 @@ public class DataBase {
         /**
          * Removes the entry for the specified key only if it is currently
          * mapped to the specified value.
-         * 
-         * @return True, iff key was found, value was equal and the removal occurred.
+         *
+         * @return True, iff key was found, value was equal and the removal occured.
          */
         public boolean remove(String collection, long key, byte[] value) {
             byte[] old = get(collection, key);
@@ -258,7 +274,7 @@ public class DataBase {
 
         /**
          * @brief Initializes and opens a connection using passed config.
-         *        No need to call `open` or `close` after than.
+         * No need to call `open` or `close` after than.
          */
         public Context(String config_json) {
             open(config_json);
@@ -270,25 +286,25 @@ public class DataBase {
 
         /**
          * @brief Begins a new transaction with an auto-incremented identifier.
-         *        By default, the transaction will be committed on `close`.
+         * By default, the transaction will be commited on `close`.
          */
         public native Transaction transaction();
 
         /**
          * @brief Clears the entire DB so that it contains no keys, but keeps collection
-         *        names. Imposes a global lock on the entire collection, so use rarely.
+         * names. Imposes a global lock on the entire collection, so use rarely.
          */
         public native void clear();
 
         /**
          * @brief Clears this collection so that it contains no keys.
-         *        Imposes a global lock on the entire collection, so use rarely.
+         * Imposes a global lock on the entire collection, so use rarely.
          */
         public native void clear(String collection);
 
         /**
          * @brief Removes a collection and all the keys in it.
-         *        Imposes a global lock on the entire collection, so use rarely.
+         * Imposes a global lock on the entire collection, so use rarely.
          */
         public native void remove(String collection);
 
@@ -311,21 +327,5 @@ public class DataBase {
         public boolean commit() {
             return false;
         }
-    }
-
-    @Test
-    public void test() {
-        Context ctx = new Context("");
-        ctx.put(42, "hey".getBytes());
-        assert Arrays.equals(ctx.get(42), "hey".getBytes()) : "Received wrong value";
-
-        Transaction txn = ctx.transaction();
-        txn.put("any", 42, "meaning of life".getBytes());
-        assert Arrays.equals(txn.get("any", 42), "meaning of life".getBytes()) : "Wrong philosophy";
-        txn.commit();
-        assert Arrays.equals(ctx.get("any", 42), "meaning of life".getBytes()) : "Accepted wrong philosophy";
-
-        ctx.close();
-        System.out.println("Success!");
     }
 }

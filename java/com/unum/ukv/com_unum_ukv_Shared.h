@@ -3,7 +3,7 @@
 #define _Included_com_unum_ukv_Shared
 
 #include <jni.h>
-#include "ukv/ukv.h"
+#include "ukv/docs.h"
 
 #ifdef __cplusplus
 extern "C" {

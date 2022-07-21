@@ -80,7 +80,7 @@ class [[nodiscard]] status_t {
     }
 
     void throw_unhandled() {
-        if (__builtin_expect(*this, 0)) // C++20: [[unlikely]]
+        if (raw_ != nullptr) // C++20: [[unlikely]]
             throw release_exception();
     }
 
@@ -108,7 +108,7 @@ class [[nodiscard]] expected_gt {
     }
 
     void throw_unhandled() {
-        if (!__builtin_expect(status_, 1)) // C++20: [[unlikely]]
+        if (!status_) // C++20: [[unlikely]]
             throw status_.release_exception();
     }
     inline status_t release_status() { return std::exchange(status_, status_t {}); }
@@ -417,6 +417,7 @@ class managed_arena_t {
   public:
     managed_arena_t(ukv_t db) noexcept : db_(db) {}
     managed_arena_t(managed_arena_t const&) = delete;
+    managed_arena_t& operator=(managed_arena_t const&) = delete;
 
     ~managed_arena_t() {
         if (memory_)
@@ -436,6 +437,25 @@ class managed_arena_t {
     inline ukv_arena_t* internal_cptr() noexcept { return &memory_; }
 };
 
+class any_arena_t {
+
+    managed_arena_t owned_;
+    managed_arena_t* accessible_ = nullptr;
+
+  public:
+    any_arena_t(ukv_t db) noexcept : owned_(db), accessible_(nullptr) {}
+    any_arena_t(managed_arena_t& accessible) noexcept : owned_(nullptr), accessible_(&accessible) {}
+
+    any_arena_t(any_arena_t&&) = default;
+    any_arena_t& operator=(any_arena_t&&) = default;
+
+    any_arena_t(any_arena_t const&) = delete;
+    any_arena_t& operator=(any_arena_t const&) = delete;
+
+    managed_arena_t& managed() noexcept { return accessible_ ? *accessible_ : owned_; }
+    ukv_arena_t* internal_cptr() noexcept { return managed().internal_cptr(); }
+};
+
 /**
  * @brief Unlike the `std::accumulate` and `std::transform_reduce` takes an integer `n`
  * instead of the end iterator. This helps with zero-strided iterators.
@@ -450,6 +470,16 @@ element_at transform_reduce_n(iterator_at begin, std::size_t n, element_at init,
 template <typename element_at, typename iterator_at>
 element_at reduce_n(iterator_at begin, std::size_t n, element_at init) {
     return transform_reduce_n(begin, n, init, [](auto x) { return x; });
+}
+
+template <typename iterator_at>
+bool all_ascending(iterator_at begin, std::size_t n) {
+    auto previous = begin;
+    ++begin;
+    for (std::size_t i = 1; i != n; ++i, ++begin)
+        if (*begin <= *std::exchange(previous, begin))
+            return false;
+    return true;
 }
 
 /**

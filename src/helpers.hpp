@@ -34,7 +34,7 @@ class value_t {
     ukv_val_len_t cap_ = 0;
 
   public:
-    value_t() = default;
+    value_t() noexcept = default;
     value_t(value_t const&) = delete;
     value_t& operator=(value_t const&) = delete;
 
@@ -147,21 +147,30 @@ class value_t {
  * Is suited for data preparation before passing to the C API.
  */
 class growing_tape_t {
+    std::vector<ukv_val_len_t> offsets_;
     std::vector<ukv_val_len_t> lengths_;
-    std::vector<byte_t> data_;
+    std::vector<byte_t> contents_;
 
   public:
     void push_back(value_view_t value) {
+        offsets_.push_back(static_cast<ukv_val_len_t>(contents_.size()));
         lengths_.push_back(static_cast<ukv_val_len_t>(value.size()));
-        data_.insert(data_.end(), value.begin(), value.end());
+        contents_.insert(contents_.end(), value.begin(), value.end());
     }
 
     void clear() {
+        offsets_.clear();
         lengths_.clear();
-        data_.clear();
+        contents_.clear();
     }
 
-    operator taped_values_view_t() noexcept { return {lengths_.data(), ukv_val_ptr_t(data_.data()), data_.size()}; }
+    strided_range_gt<ukv_val_len_t> offsets() noexcept { return offsets_; }
+    strided_range_gt<ukv_val_len_t> lengths() noexcept { return lengths_; }
+    strided_range_gt<byte_t> contents() noexcept { return contents_; }
+
+    operator taped_values_view_t() noexcept {
+        return {lengths_.data(), ukv_val_ptr_t(contents_.data()), contents_.size()};
+    }
 };
 
 struct stl_arena_t {
@@ -233,6 +242,9 @@ struct read_task_t {
 struct read_tasks_soa_t {
     strided_iterator_gt<ukv_collection_t const> cols;
     strided_iterator_gt<ukv_key_t const> keys;
+    ukv_size_t count = 0;
+
+    inline std::size_t size() const noexcept { return count; }
 
     inline read_task_t operator[](ukv_size_t i) const noexcept {
         ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
@@ -257,6 +269,9 @@ struct scan_tasks_soa_t {
     strided_iterator_gt<ukv_collection_t const> cols;
     strided_iterator_gt<ukv_key_t const> min_keys;
     strided_iterator_gt<ukv_size_t const> lengths;
+    ukv_size_t count = 0;
+
+    inline std::size_t size() const noexcept { return count; }
 
     inline scan_task_t operator[](ukv_size_t i) const noexcept {
         ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
@@ -289,6 +304,9 @@ struct write_tasks_soa_t {
     strided_iterator_gt<ukv_val_ptr_t const> vals;
     strided_iterator_gt<ukv_val_len_t const> offs;
     strided_iterator_gt<ukv_val_len_t const> lens;
+    ukv_size_t count = 0;
+
+    inline std::size_t size() const noexcept { return count; }
 
     inline write_task_t operator[](ukv_size_t i) const noexcept {
         ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
