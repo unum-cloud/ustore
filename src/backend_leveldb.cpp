@@ -289,8 +289,6 @@ void read_many( //
 
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
     std::fill_n(lens, tasks.count, 0);
-    *c_found_lengths = lens;
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + lens_bytes);
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
@@ -310,6 +308,9 @@ void read_many( //
         std::memcpy(tape + old_tape_len, value.data(), bytes_in_value);
         lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
     }
+
+    *c_found_lengths = lens;
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + lens_bytes);
 }
 
 void ukv_read( //
