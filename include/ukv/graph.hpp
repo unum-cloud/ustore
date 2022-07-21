@@ -14,7 +14,7 @@
 namespace unum::ukv {
 
 class adjacency_stream_t;
-class graph_t;
+class graph_ref_t;
 
 struct edge_t {
     ukv_key_t source_id;
@@ -266,25 +266,26 @@ class adjacency_stream_t {
  * You can have one such object in every working thread, even for the
  * same graph collection. Supports updates/reads from within a transaction.
  */
-class graph_t {
+class graph_ref_t {
     collection_t& collection_;
-    ukv_txn_t txn_ = nullptr;
-    managed_arena_t arena_;
+    any_arena_t arena_;
 
   public:
-    graph_t(collection_t& col, ukv_txn_t txn = nullptr) : collection_(col), txn_(txn), arena_(col.db()) {}
+    graph_ref_t(collection_t& col) noexcept : collection_(col), arena_(col.db()) {}
 
-    graph_t(graph_t&& other) noexcept
-        : collection_(other.collection_), txn_(std::exchange(other.txn_, nullptr)), arena_(std::move(other.arena_)) {}
+    graph_ref_t(graph_ref_t&& other) noexcept : collection_(other.collection_), arena_(std::move(other.arena_)) {}
 
-    inline managed_arena_t& arena() noexcept { return arena_; }
-    inline collection_t& collection() noexcept { return collection_; };
-    inline ukv_txn_t txn() const noexcept { return txn_; }
+    managed_arena_t& arena() noexcept { return arena_.managed(); }
+    collection_t& collection() noexcept { return collection_; };
+    graph_ref_t& on(managed_arena_t& arena) noexcept {
+        arena_ = arena;
+        return *this;
+    }
 
     status_t upsert(edges_view_t const& edges) noexcept {
         status_t status;
         ukv_graph_upsert_edges(collection_.db(),
-                               txn_,
+                               collection_.txn(),
                                edges.size(),
                                collection_.internal_cptr(),
                                0,
@@ -303,7 +304,7 @@ class graph_t {
     status_t remove(edges_view_t const& edges) noexcept {
         status_t status;
         ukv_graph_remove_edges(collection_.db(),
-                               txn_,
+                               collection_.txn(),
                                edges.size(),
                                collection_.internal_cptr(),
                                0,
@@ -327,7 +328,7 @@ class graph_t {
         ukv_options_t options = transparent ? ukv_option_read_transparent_k : ukv_options_default_k;
 
         ukv_graph_remove_vertices(collection_.db(),
-                                  txn_,
+                                  collection_.txn(),
                                   vertices.count(),
                                   collection_.internal_cptr(),
                                   0,
@@ -364,7 +365,7 @@ class graph_t {
             (transparent ? ukv_option_read_transparent_k : ukv_options_default_k) | ukv_option_read_lengths_k);
 
         ukv_graph_find_edges(collection_.db(),
-                             txn_,
+                             collection_.txn(),
                              vertices.count(),
                              collection_.internal_cptr(),
                              0,
@@ -399,13 +400,13 @@ class graph_t {
      */
     expected_gt<strided_range_gt<bool>> contains(strided_range_gt<ukv_key_t const> vertices,
                                                  bool transparent = false) noexcept {
-        return binary_refs_t {
+        return value_refs_t {
             collection_.db(),
-            txn_,
-            arena_.internal_cptr(),
+            collection_.txn(),
             strided_range_gt<ukv_collection_t const> {collection_.internal_cptr(), 0, vertices.size()},
             vertices,
         }
+            .on(arena())
             .contains(ukv_format_binary_k, transparent);
     }
 
@@ -414,8 +415,8 @@ class graph_t {
     inline expected_gt<adjacency_range_t> edges(
         std::size_t vertices_read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
 
-        adjacency_stream_t b {collection_.db(), collection_, vertices_read_ahead, txn_};
-        adjacency_stream_t e {collection_.db(), collection_, vertices_read_ahead, txn_};
+        adjacency_stream_t b {collection_.db(), collection_, vertices_read_ahead, collection_.txn()};
+        adjacency_stream_t e {collection_.db(), collection_, vertices_read_ahead, collection_.txn()};
         status_t status = b.seek_to_first();
         if (!status)
             return status;
@@ -435,7 +436,7 @@ class graph_t {
         ukv_key_t* neighborships_per_vertex = nullptr;
 
         ukv_graph_find_edges(collection_.db(),
-                             txn_,
+                             collection_.txn(),
                              1,
                              collection_.internal_cptr(),
                              0,
@@ -488,7 +489,7 @@ class graph_t {
         ukv_key_t* neighborships_per_vertex = nullptr;
 
         ukv_graph_find_edges(collection_.db(),
-                             txn_,
+                             collection_.txn(),
                              vertices.count(),
                              collection_.internal_cptr(),
                              0,
