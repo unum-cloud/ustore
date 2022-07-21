@@ -42,14 +42,14 @@ Future work includes:
 
 Currently, at Proo-of-Concept stage, we support only the essential functionality in select programming languages.
 
-| Name      | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy |
-| :-------- | :------: | :-----: | :---------: | :---: | :----: | :-------: |
-| C++       |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |
-| Python    |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     |
-| Java      |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |
-| GoLang    |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✔️     |
-| REST API  |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |
-| Arrow RPC |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |
+| Name      | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy | Extras                         |
+| :-------- | :------: | :-----: | :---------: | :---: | :----: | :-------: | :----------------------------- |
+| C++       |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |                                |
+| Python    |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Image Decoding, Tensor Packing |
+| Java      |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |                                |
+| GoLang    |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✔️     |                                |
+| REST API  |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                                |
+| Arrow RPC |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                                |
 
 Future work would include:
 
