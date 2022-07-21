@@ -121,12 +121,12 @@ TEST(db, named) {
     round_trip(ref, values);
 
     // Check scans
-    EXPECT_TRUE(session.keys());
-    auto present_keys = *session.keys();
+    EXPECT_TRUE(session.keys(*col));
+    auto present_keys = *session.keys(*col);
     auto present_it = std::move(present_keys).begin();
     auto expected_it = keys.begin();
     for (; expected_it != keys.end(); ++present_it, ++expected_it) {
-        EXPECT_EQ(*expected_it, *present_it);
+        EXPECT_EQ(expected_it->key, *present_it);
     }
     EXPECT_TRUE(present_it.is_end());
 }
@@ -226,7 +226,5 @@ TEST(db, net) {
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
-    // ::testing::GTEST_FLAG(filter) = "db.named";
-
     return RUN_ALL_TESTS();
 }
