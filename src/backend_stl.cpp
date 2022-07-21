@@ -1045,7 +1045,7 @@ void ukv_collection_list( //
         auto len = name_and_contents.first.size();
         std::memcpy(tape, name_and_contents.first.data(), len);
         tape[len] = byte_t {0};
-        tape += len;
+        tape += len + 1;
     }
 }
 
