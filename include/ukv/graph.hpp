@@ -99,7 +99,7 @@ struct edges_range_gt {
     inline edges_range_gt(std::vector<edge_t> const& edges) noexcept
         : edges_range_gt(edges.data(), edges.data() + edges.size()) {}
 
-    inline std::size_t size() const noexcept { return edge_ids.count(); }
+    inline std::size_t size() const noexcept { return std::min(source_ids.count(), target_ids.count()); }
 
     inline edge_t operator[](std::size_t i) const noexcept {
         edge_t result;
@@ -285,7 +285,7 @@ class graph_t {
         status_t status;
         ukv_graph_upsert_edges(collection_.db(),
                                txn_,
-                               edges.edge_ids.count(),
+                               edges.size(),
                                collection_.internal_cptr(),
                                0,
                                edges.edge_ids.begin().get(),
@@ -304,7 +304,7 @@ class graph_t {
         status_t status;
         ukv_graph_remove_edges(collection_.db(),
                                txn_,
-                               edges.edge_ids.count(),
+                               edges.size(),
                                collection_.internal_cptr(),
                                0,
                                edges.edge_ids.begin().get(),
