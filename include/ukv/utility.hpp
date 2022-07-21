@@ -417,6 +417,7 @@ class managed_arena_t {
   public:
     managed_arena_t(ukv_t db) noexcept : db_(db) {}
     managed_arena_t(managed_arena_t const&) = delete;
+    managed_arena_t& operator=(managed_arena_t const&) = delete;
 
     ~managed_arena_t() {
         if (memory_)
@@ -434,6 +435,25 @@ class managed_arena_t {
     }
 
     inline ukv_arena_t* internal_cptr() noexcept { return &memory_; }
+};
+
+class any_arena_t {
+
+    managed_arena_t owned_;
+    managed_arena_t* accessible_ = nullptr;
+
+  public:
+    any_arena_t(ukv_t db) noexcept : owned_(db), accessible_(nullptr) {}
+    any_arena_t(managed_arena_t& accessible) noexcept : owned_(nullptr), accessible_(&accessible) {}
+
+    any_arena_t(any_arena_t&&) = default;
+    any_arena_t& operator=(any_arena_t&&) = default;
+
+    any_arena_t(any_arena_t const&) = delete;
+    any_arena_t& operator=(any_arena_t const&) = delete;
+
+    managed_arena_t& managed() noexcept { return accessible_ ? *accessible_ : owned_; }
+    ukv_arena_t* internal_cptr() noexcept { return managed().internal_cptr(); }
 };
 
 /**
