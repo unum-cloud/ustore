@@ -684,6 +684,8 @@ void ukv_free(ukv_t c_db) {
     if (!c_db)
         return;
     rocks_db_wrapper_t* db_wrapper = reinterpret_cast<rocks_db_wrapper_t*>(c_db);
+    for (rocks_col_ptr_t cf : db_wrapper->columns)
+        db_wrapper->db->DestroyColumnFamilyHandle(cf);
     delete db_wrapper;
 }
 
