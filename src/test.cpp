@@ -100,9 +100,11 @@ TEST(db, named) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    expected_gt<collection_t> col = db["col"];
+    expected_gt<collection_t> col1 = db["col1"];
+    expected_gt<collection_t> col2 = db["col2"];
 
-    std::vector<located_key_t> keys {{*col, 34}, {*col, 35}, {*col, 36}};
+    std::vector<located_key_t> keys_col1 {{*col1, 34}, {*col1, 35}, {*col1, 36}};
+    std::vector<located_key_t> keys_col2 {{*col2, 34}, {*col2, 35}, {*col2, 36}};
     ukv_val_len_t val_len = sizeof(std::uint64_t);
     std::vector<std::uint64_t> vals {34, 35, 36};
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
@@ -115,20 +117,30 @@ TEST(db, named) {
     };
 
     db_session_t session = db.session();
-    binary_refs_t ref = session[keys];
-    EXPECT_TRUE(*session.contains("col"));
+    binary_refs_t ref1 = session[keys_col1];
+    binary_refs_t ref2 = session[keys_col2];
+    EXPECT_TRUE(*session.contains("col1"));
+    EXPECT_TRUE(*session.contains("col2"));
     EXPECT_FALSE(*session.contains("unknown_col"));
-    round_trip(ref, values);
+    round_trip(ref1, values);
+    round_trip(ref2, values);
 
     // Check scans
-    EXPECT_TRUE(session.keys(*col));
-    auto present_keys = *session.keys(*col);
-    auto present_it = std::move(present_keys).begin();
-    auto expected_it = keys.begin();
-    for (; expected_it != keys.end(); ++present_it, ++expected_it) {
-        EXPECT_EQ(expected_it->key, *present_it);
+    EXPECT_TRUE(session.keys(*col1));
+    EXPECT_TRUE(session.keys(*col2));
+    auto present_keys1 = *session.keys(*col1);
+    auto present_keys2 = *session.keys(*col2);
+    auto present_it1 = std::move(present_keys1).begin();
+    auto present_it2 = std::move(present_keys2).begin();
+    auto expected_it1 = keys_col1.begin();
+    auto expected_it2 = keys_col2.begin();
+    for (; expected_it1 != keys_col1.end(), expected_it2 != keys_col2.end();
+         ++present_it1, ++expected_it1, ++present_it2, ++expected_it2) {
+        EXPECT_EQ(expected_it1->key, *present_it1);
+        EXPECT_EQ(expected_it2->key, *present_it2);
     }
-    EXPECT_TRUE(present_it.is_end());
+    EXPECT_TRUE(present_it1.is_end());
+    EXPECT_TRUE(present_it2.is_end());
 }
 
 TEST(db, net) {
