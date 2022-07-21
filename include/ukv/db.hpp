@@ -2,140 +2,88 @@
  * @file db.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings for @see "db.h".
+ * @brief C++ bindings for @see "ukv/db.h".
  */
 
 #pragma once
 #include <string>  // NULL-terminated names
 #include <cstring> // `std::strlen`
 #include <memory>  // `std::enable_shared_from_this`
+#include <variant> // `std::variant`
+#include <mutex>   // `std::mutex` for `default_arena_`
 
 #include "ukv/ukv.h"
-#include "utility.hpp"
+#include "ukv/utility.hpp"
 
 namespace unum::ukv {
+
+class value_refs_t;
+class collection_t;
+class txn_t;
+class db_t;
 
 /**
  * @brief A proxy object, that allows both lookups and writes
  * with `[]` and assignment operators for a batch of keys
  * simultaneously.
  */
-class entries_ref_t {
-
+class value_refs_t {
+  protected:
     ukv_t db_ = nullptr;
     ukv_txn_t txn_ = nullptr;
-    ukv_arena_t* arena_ = nullptr;
 
     collections_view_t cols_;
     keys_view_t keys_;
     fields_view_t fields_;
 
-    expected_gt<taped_values_view_t> any_get(ukv_format_t format, ukv_options_t options) const noexcept {
+    any_arena_t arena_;
 
-        status_t status;
-        ukv_val_len_t* found_lengths = nullptr;
-        ukv_val_ptr_t found_values = nullptr;
-
-        if (fields_ || format != ukv_format_binary_k)
-            ukv_docs_read(db_,
-                          txn_,
-                          keys_.count(),
-                          cols_.begin().get(),
-                          cols_.stride(),
-                          keys_.begin().get(),
-                          keys_.stride(),
-                          fields_.begin().get(),
-                          fields_.stride(),
-                          options,
-                          format,
-                          &found_lengths,
-                          &found_values,
-                          arena_,
-                          status.internal_cptr());
-        else
-            ukv_read(db_,
-                     txn_,
-                     keys_.count(),
-                     cols_.begin().get(),
-                     cols_.stride(),
-                     keys_.begin().get(),
-                     keys_.stride(),
-                     options,
-                     &found_lengths,
-                     &found_values,
-                     arena_,
-                     status.internal_cptr());
-        if (!status)
-            return status;
-
-        return taped_values_view_t {found_lengths, found_values, keys_.count()};
-    }
-
-    /**
-     * @brief Pair-wise assigns values to keys_ located in this proxy objects.
-     * @param flush Pass true, if you need the data to be persisted before returning.
-     * @return status_t Non-NULL if only an error had occurred.
-     */
-    status_t any_set(disjoint_values_view_t vals, ukv_format_t format, ukv_options_t options) noexcept {
-        status_t status;
-        if (fields_ || format != ukv_format_binary_k)
-            ukv_docs_write(db_,
-                           txn_,
-                           keys_.count(),
-                           cols_.begin().get(),
-                           cols_.stride(),
-                           keys_.begin().get(),
-                           keys_.stride(),
-                           fields_.begin().get(),
-                           fields_.stride(),
-                           options,
-                           format,
-                           vals.contents.begin().get(),
-                           vals.contents.stride(),
-                           vals.offsets.begin().get(),
-                           vals.offsets.stride(),
-                           vals.lengths.begin().get(),
-                           vals.lengths.stride(),
-                           arena_,
-                           status.internal_cptr());
-        else
-            ukv_write(db_,
-                      txn_,
-                      keys_.count(),
-                      cols_.begin().get(),
-                      cols_.stride(),
-                      keys_.begin().get(),
-                      keys_.stride(),
-                      vals.contents.begin().get(),
-                      vals.contents.stride(),
-                      vals.offsets.begin().get(),
-                      vals.offsets.stride(),
-                      vals.lengths.begin().get(),
-                      vals.lengths.stride(),
-                      options,
-                      arena_,
-                      status.internal_cptr());
-        return status;
-    }
+    inline expected_gt<taped_values_view_t> any_get(ukv_format_t format, ukv_options_t options) noexcept;
+    inline status_t any_set(disjoint_values_view_t vals, ukv_format_t format, ukv_options_t options) noexcept;
 
   public:
-    entries_ref_t(ukv_t db,
-                  ukv_txn_t txn,
-                  ukv_arena_t* arena,
-                  collections_view_t cols,
-                  keys_view_t keys,
-                  fields_view_t fields = {}) noexcept
-        : db_(db), txn_(txn), arena_(arena), cols_(cols), keys_(keys), fields_(fields) {}
+    inline value_refs_t(
+        ukv_t db, ukv_txn_t txn, collections_view_t cols, keys_view_t keys, fields_view_t fields = {}) noexcept
+        : db_(db), txn_(txn), cols_(cols), keys_(keys), fields_(fields), arena_(db) {}
 
-    expected_gt<taped_values_view_t> get(ukv_format_t format = ukv_format_binary_k,
-                                         bool transparent = false) const noexcept {
-        auto options = static_cast<ukv_options_t>(
-            (transparent ? ukv_option_read_transparent_k : ukv_options_default_k) | ukv_option_read_lengths_k);
+    inline value_refs_t(value_refs_t const&) = delete;
+    inline value_refs_t& operator=(value_refs_t const&) = delete;
+
+    inline value_refs_t(value_refs_t&& other) noexcept
+        : db_(std::exchange(other.db_, nullptr)), txn_(std::exchange(other.txn_, nullptr)),
+          cols_(std::exchange(other.cols_, {})), keys_(std::exchange(other.keys_, {})),
+          fields_(std::exchange(other.fields_, {})), arena_(std::move(other.arena_)) {}
+
+    inline value_refs_t& operator=(value_refs_t&& other) noexcept {
+        std::swap(db_, other.db_);
+        std::swap(txn_, other.txn_);
+        std::swap(cols_, other.cols_);
+        std::swap(keys_, other.keys_);
+        std::swap(fields_, other.fields_);
+        std::swap(arena_, other.arena_);
+        return *this;
+    }
+
+    inline value_refs_t& on(managed_arena_t& arena) noexcept {
+        arena_ = arena;
+        return *this;
+    }
+
+    inline value_refs_t& from(ukv_txn_t txn) noexcept {
+        txn_ = txn;
+        return *this;
+    }
+
+    inline expected_gt<taped_values_view_t> get( //
+        ukv_format_t format = ukv_format_binary_k,
+        bool transparent = false) noexcept {
+        auto options = transparent ? ukv_option_read_transparent_k : ukv_options_default_k;
         return any_get(format, options);
     }
 
-    expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths(ukv_format_t format = ukv_format_binary_k,
-                                                          bool transparent = false) const noexcept {
+    inline expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths( //
+        ukv_format_t format = ukv_format_binary_k,
+        bool transparent = false) noexcept {
 
         auto options = static_cast<ukv_options_t>(
             (transparent ? ukv_option_read_transparent_k : ukv_options_default_k) | ukv_option_read_lengths_k);
@@ -151,8 +99,9 @@ class entries_ref_t {
      * @brief Checks if requested keys_ are present in the store.
      * ! Related values may be empty strings.
      */
-    expected_gt<strided_range_gt<bool>> contains(ukv_format_t format = ukv_format_binary_k,
-                                                 bool transparent = false) const noexcept {
+    inline expected_gt<strided_range_gt<bool>> contains( //
+        ukv_format_t format = ukv_format_binary_k,
+        bool transparent = false) noexcept {
 
         auto maybe = lengths(format, transparent);
         if (!maybe)
@@ -175,7 +124,10 @@ class entries_ref_t {
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return status_t Non-NULL if only an error had occurred.
      */
-    status_t set(disjoint_values_view_t vals, ukv_format_t format = ukv_format_binary_k, bool flush = false) noexcept {
+    inline status_t set( //
+        disjoint_values_view_t vals,
+        ukv_format_t format = ukv_format_binary_k,
+        bool flush = false) noexcept {
         return any_set(vals, format, flush ? ukv_option_write_flush_k : ukv_options_default_k);
     }
 
@@ -184,14 +136,16 @@ class entries_ref_t {
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return status_t Non-NULL if only an error had occurred.
      */
-    status_t erase(bool flush = false) noexcept { return set(disjoint_values_view_t {}, ukv_format_binary_k, flush); }
+    inline status_t erase(bool flush = false) noexcept { //
+        return set(disjoint_values_view_t {}, ukv_format_binary_k, flush);
+    }
 
     /**
      * @brief Keeps the keys_, but clears the contents of associated values.
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return status_t Non-NULL if only an error had occurred.
      */
-    status_t clear(bool flush = false) noexcept {
+    inline status_t clear(bool flush = false) noexcept {
         ukv_val_ptr_t any = reinterpret_cast<ukv_val_ptr_t>(this);
         ukv_val_len_t len = 0;
         return set(disjoint_values_view_t {.contents = {any}, .offsets = {}, .lengths = {len}},
@@ -199,22 +153,36 @@ class entries_ref_t {
                    flush);
     }
 
-    operator expected_gt<taped_values_view_t>() const noexcept { return get(); }
+    inline operator expected_gt<taped_values_view_t>() noexcept { return get(); }
 
-    entries_ref_t& operator=(disjoint_values_view_t vals) noexcept(false) {
+    inline value_refs_t& operator=(disjoint_values_view_t vals) noexcept(false) {
         auto status = set(vals);
         status.throw_unhandled();
         return *this;
     }
 
-    entries_ref_t& operator=(nullptr_t) noexcept(false) {
+    inline value_refs_t& operator=(nullptr_t) noexcept(false) {
         auto status = erase();
         status.throw_unhandled();
         return *this;
     }
 
-    collections_view_t cols() const noexcept { return cols_; }
-    keys_view_t keys() const noexcept { return keys_; }
+    inline collections_view_t cols() const noexcept { return cols_; }
+    inline keys_view_t keys() const noexcept { return keys_; }
+    inline fields_view_t fields() const noexcept { return fields_; }
+
+    inline value_refs_t& cols(collections_view_t cols) noexcept {
+        cols_ = cols;
+        return *this;
+    }
+    inline value_refs_t& keys(keys_view_t keys) noexcept {
+        keys_ = keys;
+        return *this;
+    }
+    inline value_refs_t& fields(fields_view_t fields) noexcept {
+        fields_ = fields;
+        return *this;
+    }
 };
 
 /**
@@ -381,65 +349,55 @@ inline expected_gt<keys_range_t> keys_range(ukv_t db,
     return result;
 }
 
-/**
- * @brief Implements multi-way set intersection to join entities
- * from different collections, that have matching identifiers.
- *
- * Implementation-wise, scans the smallest collection and batch-selects
- * in others.
- */
-struct collections_join_t {
-
-    ukv_t db = nullptr;
-    ukv_txn_t txn = nullptr;
-    ukv_arena_t* arena = nullptr;
-
-    collections_view_t cols;
-    ukv_key_t next_min_key_ = 0;
-    ukv_size_t window_size = 0;
-
-    strided_range_gt<ukv_key_t*> fetched_keys_;
-    strided_range_gt<ukv_val_len_t> fetched_lengths;
-};
-
 class db_t;
 class db_session_t;
 class collection_t;
 
 /**
  * @brief RAII abstraction wrapping a collection handle.
- * Generally cheap to construct.
+ * Generally cheap to construct. Can address both collections
+ * "HEAD" state, as well as some "snapshot"/"transaction" view.
  */
 class collection_t {
     ukv_t db_ = nullptr;
     ukv_collection_t col_ = ukv_default_collection_k;
+    ukv_txn_t txn_ = nullptr;
 
   public:
     inline collection_t() = default;
-    inline collection_t(ukv_t db_ptr, ukv_collection_t col_ptr = ukv_default_collection_k) noexcept
-        : db_(db_ptr), col_(col_ptr) {}
+    inline collection_t(ukv_t db_ptr,
+                        ukv_collection_t col_ptr = ukv_default_collection_k,
+                        ukv_txn_t txn = nullptr) noexcept
+        : db_(db_ptr), col_(col_ptr), txn_(txn) {}
+
     inline collection_t(collection_t&& other) noexcept
-        : db_(other.db_), col_(std::exchange(other.col_, ukv_default_collection_k)) {}
+        : db_(other.db_), col_(std::exchange(other.col_, ukv_default_collection_k)),
+          txn_(std::exchange(other.txn_, nullptr)) {}
     inline ~collection_t() noexcept {
         if (col_)
             ukv_collection_free(db_, col_);
-        col_ = nullptr;
     }
     inline collection_t& operator=(collection_t&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(col_, other.col_);
+        std::swap(txn_, other.txn_);
         return *this;
     }
     inline operator ukv_collection_t() const noexcept { return col_; }
     inline ukv_collection_t* internal_cptr() noexcept { return &col_; }
     inline ukv_t db() const noexcept { return db_; }
+    inline ukv_txn_t txn() const noexcept { return txn_; }
 
     inline expected_gt<std::size_t> size() const noexcept { return 0; }
 
-    auto keys(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-              ukv_key_t max_key = ukv_key_unknown_k,
-              std::size_t read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
+    inline auto keys(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+                     ukv_key_t max_key = ukv_key_unknown_k,
+                     std::size_t read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
         return keys_range(db_, col_, min_key, max_key, read_ahead, nullptr);
+    }
+
+    inline value_refs_t operator[](keys_view_t keys) const noexcept { //
+        return {db_, txn_, strided_range_gt<ukv_collection_t const> {&col_, 0, keys.size()}, keys, fields_view_t {}};
     }
 };
 
@@ -451,144 +409,70 @@ class collection_t {
 class txn_t {
     ukv_t db_ = nullptr;
     ukv_txn_t txn_ = nullptr;
-    managed_arena_t arena_;
 
   public:
-    txn_t(ukv_t db, ukv_txn_t txn) : db_(db), txn_(txn), arena_(db) {}
+    txn_t(ukv_t db, ukv_txn_t txn) : db_(db), txn_(txn) {}
     txn_t(txn_t const&) = delete;
-    txn_t(txn_t&& other) noexcept
-        : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), arena_(std::move(other.arena_)) {}
+    txn_t(txn_t&& other) noexcept : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)) {}
 
     inline ukv_t db() const noexcept { return db_; }
-    inline managed_arena_t& arena() noexcept { return arena_; }
     inline operator ukv_txn_t() const noexcept { return txn_; }
 
-    ~txn_t() {
+    ~txn_t() noexcept {
         if (txn_)
             ukv_txn_free(db_, txn_);
-        txn_ = nullptr;
     }
 
-    inline entries_ref_t operator[](located_keys_view_t located) noexcept {
+    value_refs_t operator[](located_keys_view_t located) noexcept {
         return {
             db_,
             txn_,
-            arena_.internal_cptr(),
             located.members(&located_key_t::collection),
             located.members(&located_key_t::key),
         };
     }
 
-    inline entries_ref_t operator[](keys_view_t keys) noexcept { return {db_, txn_, arena_.internal_cptr(), {}, keys}; }
+    value_refs_t operator[](keys_view_t keys) noexcept { //
+        return {db_, txn_, {}, keys};
+    }
 
-    status_t reset() {
+    status_t reset(bool snapshot = false) noexcept {
         status_t status;
-        ukv_txn_begin(db_, 0, ukv_options_default_k, &txn_, status.internal_cptr());
+        auto options = snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k;
+        ukv_txn_begin(db_, 0, options, &txn_, status.internal_cptr());
         return status;
     }
 
-    status_t commit(ukv_options_t options = ukv_options_default_k) {
+    status_t commit(bool flush = false) noexcept {
         status_t status;
+        auto options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
         ukv_txn_commit(txn_, options, status.internal_cptr());
         return status;
     }
 
-    auto keys(ukv_collection_t col = ukv_default_collection_k,
-              ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-              ukv_key_t max_key = ukv_key_unknown_k,
-              std::size_t read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
-        return keys_range(db_, col, min_key, max_key, read_ahead, txn_);
-    }
-};
+    expected_gt<collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
+    operator expected_gt<collection_t>() noexcept { return collection(""); }
 
-/**
- * @brief A RAII abstraction to handle temporary aligned arena
- * for requests coming from a single user thread and planning the
- * lazy lookups.
- */
-class db_session_t {
-    ukv_t db_ = nullptr;
-    managed_arena_t arena_;
-    std::vector<located_key_t> lazy_lookups_;
-
-  public:
-    db_session_t(ukv_t db) : db_(db), arena_(db) {}
-    db_session_t(db_session_t const&) = delete;
-    db_session_t(db_session_t&& other) noexcept
-        : db_(other.db_), arena_(std::move(other.arena_)), lazy_lookups_(std::move(other.lazy_lookups_)) {}
-
-    inline ukv_t db() const noexcept { return db_; }
-    inline managed_arena_t& arena() noexcept { return arena_; }
-
-    inline entries_ref_t operator[](located_keys_view_t located) noexcept {
-        return entries_ref_t {
-            db_,
-            nullptr,
-            arena_.internal_cptr(),
-            located.members(&located_key_t::collection),
-            located.members(&located_key_t::key),
-        };
-    }
-
-    inline entries_ref_t operator[](keys_view_t keys) noexcept {
-        return entries_ref_t {db_, nullptr, arena_.internal_cptr(), {}, keys};
-    }
-
-    inline db_session_t& new_plan() noexcept {
-        lazy_lookups_.clear();
-        return *this;
-    }
-
-    inline db_session_t& plan(located_key_t located) {
-        lazy_lookups_.push_back(located);
-        return *this;
-    }
-
-    inline entries_ref_t sample() noexcept { return operator[](located_keys_view_t {lazy_lookups_}); }
-
-    expected_gt<txn_t> transact() {
+    expected_gt<collection_t> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
-        ukv_txn_t raw = nullptr;
-        ukv_txn_begin(db_, 0, ukv_options_default_k, &raw, status.internal_cptr());
-        if (!status)
-            return {std::move(status), txn_t {db_, nullptr}};
-        else
-            return txn_t {db_, raw};
-    }
-
-    auto keys(ukv_collection_t col = ukv_default_collection_k,
-              ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-              ukv_key_t max_key = ukv_key_unknown_k,
-              std::size_t read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
-        return keys_range(db_, col, min_key, max_key, read_ahead, nullptr);
-    }
-
-    expected_gt<bool> contains(std::string_view name) noexcept {
-        status_t status;
-        ukv_size_t count = 0;
-        ukv_str_view_t names = nullptr;
-        ukv_collection_list(db_, &count, &names, arena_.internal_cptr(), status.internal_cptr());
+        ukv_collection_t col = nullptr;
+        ukv_collection_open(db_, name, nullptr, &col, status.internal_cptr());
         if (!status)
             return status;
-
-        while (count) {
-            auto len = std::strlen(names);
-            auto found = std::string_view(names, len);
-            if (found == name)
-                return true;
-
-            names += len + 1;
-            --count;
-        }
-        return false;
+        else
+            return collection_t {db_, col, txn_};
     }
 };
 
 /**
- * @brief DataBase instance encapsulator, which is responsible for
+ * @brief Thread-Safe DataBase instance encapsulator, which is responsible for
  * > session-allocation for fine-grained operations,
  * > globally blocking operations, like restructuring.
  * This object must leave at least as long, as the last session using it.
+ *
+ * @section Thread Safety
+ * Matches the C implementation. Everything except `open`/`close` can be called
+ * from any thread.
  */
 class db_t : public std::enable_shared_from_this<db_t> {
     ukv_t db_ = nullptr;
@@ -615,25 +499,176 @@ class db_t : public std::enable_shared_from_this<db_t> {
     }
 
     inline operator ukv_t() const noexcept { return db_; }
-    db_session_t session() { return {db_}; }
 
-    expected_gt<collection_t> operator[](std::string const& name) noexcept { return collection(name); }
+    /**
+     * @brief Checks if a collection with requested `name` is present in the DB.
+     * @param memory Temporary memory required for storing the execution results.
+     */
+    expected_gt<bool> contains(std::string_view name, managed_arena_t& memory) noexcept {
+        if (name.empty())
+            return true;
 
-    expected_gt<collection_t> collection(std::string const& name) noexcept {
+        status_t status;
+        ukv_size_t count = 0;
+        ukv_str_view_t names = nullptr;
+        ukv_collection_list(db_, &count, &names, memory.internal_cptr(), status.internal_cptr());
+        if (!status)
+            return status;
+
+        while (count) {
+            auto len = std::strlen(names);
+            auto found = std::string_view(names, len);
+            if (found == name)
+                return true;
+
+            names += len + 1;
+            --count;
+        }
+        return false;
+    }
+
+    /**
+     * @brief Checks if a collection with requested `name` is present in the DB.
+     */
+    expected_gt<bool> contains(std::string_view name) noexcept {
+        managed_arena_t arena(db_);
+        return contains(name, arena);
+    }
+
+    expected_gt<collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
+    operator expected_gt<collection_t>() noexcept { return collection(""); }
+
+    expected_gt<collection_t> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
         ukv_collection_t col = nullptr;
-        ukv_collection_open(db_, name.c_str(), nullptr, &col, status.internal_cptr());
+        ukv_collection_open(db_, name, nullptr, &col, status.internal_cptr());
         if (!status)
             return status;
         else
             return collection_t {db_, col};
     }
 
-    status_t remove(std::string const& name) noexcept {
+    status_t remove(ukv_str_view_t name) noexcept {
         status_t status;
-        ukv_collection_remove(db_, name.c_str(), status.internal_cptr());
+        ukv_collection_remove(db_, name, status.internal_cptr());
         return status;
     }
+
+    expected_gt<txn_t> transact() {
+        status_t status;
+        ukv_txn_t raw = nullptr;
+        ukv_txn_begin(db_, 0, ukv_options_default_k, &raw, status.internal_cptr());
+        if (!status)
+            return {std::move(status), txn_t {db_, nullptr}};
+        else
+            return txn_t {db_, raw};
+    }
 };
+
+/**
+ * @brief Implements multi-way set intersection to join entities
+ * from different collections, that have matching identifiers.
+ *
+ * Implementation-wise, scans the smallest collection and batch-selects
+ * in others.
+ */
+struct collections_join_t {
+
+    ukv_t db = nullptr;
+    ukv_txn_t txn = nullptr;
+    ukv_arena_t* arena = nullptr;
+
+    collections_view_t cols;
+    ukv_key_t next_min_key_ = 0;
+    ukv_size_t window_size = 0;
+
+    strided_range_gt<ukv_key_t*> fetched_keys_;
+    strided_range_gt<ukv_val_len_t> fetched_lengths;
+};
+
+inline expected_gt<taped_values_view_t> value_refs_t::any_get(ukv_format_t format, ukv_options_t options) noexcept {
+
+    status_t status;
+    ukv_val_len_t* found_lengths = nullptr;
+    ukv_val_ptr_t found_values = nullptr;
+
+    if (fields_ || format != ukv_format_binary_k)
+        ukv_docs_read(db_,
+                      txn_,
+                      keys_.count(),
+                      cols_.begin().get(),
+                      cols_.stride(),
+                      keys_.begin().get(),
+                      keys_.stride(),
+                      fields_.begin().get(),
+                      fields_.stride(),
+                      options,
+                      format,
+                      &found_lengths,
+                      &found_values,
+                      arena_.internal_cptr(),
+                      status.internal_cptr());
+    else
+        ukv_read(db_,
+                 txn_,
+                 keys_.count(),
+                 cols_.begin().get(),
+                 cols_.stride(),
+                 keys_.begin().get(),
+                 keys_.stride(),
+                 options,
+                 &found_lengths,
+                 &found_values,
+                 arena_.internal_cptr(),
+                 status.internal_cptr());
+    if (!status)
+        return status;
+
+    return taped_values_view_t {found_lengths, found_values, keys_.count()};
+}
+
+inline status_t value_refs_t::any_set(disjoint_values_view_t vals,
+                                      ukv_format_t format,
+                                      ukv_options_t options) noexcept {
+    status_t status;
+    if (fields_ || format != ukv_format_binary_k)
+        ukv_docs_write(db_,
+                       txn_,
+                       keys_.count(),
+                       cols_.begin().get(),
+                       cols_.stride(),
+                       keys_.begin().get(),
+                       keys_.stride(),
+                       fields_.begin().get(),
+                       fields_.stride(),
+                       options,
+                       format,
+                       vals.contents.begin().get(),
+                       vals.contents.stride(),
+                       vals.offsets.begin().get(),
+                       vals.offsets.stride(),
+                       vals.lengths.begin().get(),
+                       vals.lengths.stride(),
+                       arena_.internal_cptr(),
+                       status.internal_cptr());
+    else
+        ukv_write(db_,
+                  txn_,
+                  keys_.count(),
+                  cols_.begin().get(),
+                  cols_.stride(),
+                  keys_.begin().get(),
+                  keys_.stride(),
+                  vals.contents.begin().get(),
+                  vals.contents.stride(),
+                  vals.offsets.begin().get(),
+                  vals.offsets.stride(),
+                  vals.lengths.begin().get(),
+                  vals.lengths.stride(),
+                  options,
+                  arena_.internal_cptr(),
+                  status.internal_cptr());
+    return status;
+}
 
 } // namespace unum::ukv

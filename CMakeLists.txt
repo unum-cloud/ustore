@@ -29,7 +29,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wreorder -Wunused-parameter")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
 endif()
 
@@ -129,13 +128,14 @@ FetchContent_MakeAvailable(googletest)
 
 # Define the libraries we will need to build
 include_directories(include/)
+include_directories(${fmt_SOURCE_DIR}/include)
 include_directories(${rocksdb_SOURCE_DIR}/include)
 include_directories(${leveldb_SOURCE_DIR}/include)
 
 add_library(ukv_stl
-  src/ukv_stl.cpp
-  src/ukv_docs_nlohmann.cpp
-  src/ukv_graph_pfor.cpp
+  src/backend_stl.cpp
+  src/logic_docs.cpp
+  src/logic_graph.cpp
 )
 target_link_libraries(ukv_stl
   fmt::fmt
@@ -143,12 +143,12 @@ target_link_libraries(ukv_stl
 )
 
 add_library(ukv_rocksdb
-  src/ukv_rocksdb.cpp
-  src/ukv_graph_pfor.cpp
+  src/backend_rocksdb.cpp
+  src/logic_graph.cpp
 )
 add_library(ukv_leveldb
-  src/ukv_leveldb.cpp
-  src/ukv_graph_pfor.cpp
+  src/backend_leveldb.cpp
+  src/logic_graph.cpp
 )
 
 target_link_libraries(ukv_rocksdb
@@ -162,10 +162,10 @@ target_link_libraries(ukv_leveldb
   nlohmann_json::nlohmann_json
 )
 
-add_library(ukv_beast_client src/ukv_beast_client.cpp)
+add_library(ukv_rpc_client src/rpc_client.cpp)
 
-# add_executable(ukv_beast_server src/ukv_beast_server.cpp)
-# target_link_libraries(ukv_beast_server
+# add_executable(ukv_rest_server src/rest_server.cpp)
+# target_link_libraries(ukv_rest_server
 # ukv_stl
 # pthread
 # fmt::fmt
@@ -173,9 +173,9 @@ add_library(ukv_beast_client src/ukv_beast_client.cpp)
 # )
 add_executable(ukv_test
   src/test.cpp
-  src/ukv_stl.cpp
-  src/ukv_docs_nlohmann.cpp
-  src/ukv_graph_pfor.cpp
+  src/backend_stl.cpp
+  src/logic_docs.cpp
+  src/logic_graph.cpp
 )
 target_link_libraries(ukv_test
   gtest
@@ -185,13 +185,26 @@ target_link_libraries(ukv_test
 
 add_executable(ukv_leveldb_test
   src/test.cpp
-  src/ukv_leveldb.cpp
-  src/ukv_docs_nlohmann.cpp
-  src/ukv_graph_pfor.cpp
+  src/backend_leveldb.cpp
+  src/logic_docs.cpp
+  src/logic_graph.cpp
 )
 target_link_libraries(ukv_leveldb_test
   gtest
   leveldb
+  fmt::fmt
+  nlohmann_json::nlohmann_json
+)
+
+add_executable(ukv_rocksdb_test
+  src/test.cpp
+  src/backend_rocksdb.cpp
+  src/logic_docs.cpp
+  src/logic_graph.cpp
+)
+target_link_libraries(ukv_rocksdb_test
+  gtest
+  rocksdb
   fmt::fmt
   nlohmann_json::nlohmann_json
 )

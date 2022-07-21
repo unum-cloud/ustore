@@ -52,7 +52,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
               options_c,
               &arena_c,
               &error_c);
-    ukv_free_arena(db_ptr_c, arena_c);
+    ukv_arena_free(db_ptr_c, arena_c);
 
     if (value_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseByteArrayElements(env_java, value_java, value_ptr_java, 0);
@@ -205,7 +205,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
               options_c,
               &arena_c,
               &error_c);
-    ukv_free_arena(db_ptr_c, arena_c);
+    ukv_arena_free(db_ptr_c, arena_c);
     forward_ukv_error(env_java, error_c);
 }
 

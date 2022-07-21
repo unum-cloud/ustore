@@ -149,7 +149,7 @@ inline void throw_not_implemented() {
 }
 
 /**
- * @brief Defines the naming convesion for C types to be exposed to Python.
+ * @brief Defines the naming conversion for C types to be exposed to Python.
  */
 template <typename element_at>
 struct format_code_gt {};

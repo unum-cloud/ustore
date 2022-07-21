@@ -55,7 +55,7 @@ using namespace unum;
 struct network_t : public std::enable_shared_from_this<network_t> {
 
     std::shared_ptr<py_db_t> db_ptr;
-    graph_t graph;
+    graph_ref_t graph;
     collection_t sources_attrs;
     collection_t targets_attrs;
     collection_t relations_attrs;
@@ -68,7 +68,7 @@ struct network_t : public std::enable_shared_from_this<network_t> {
     Py_ssize_t last_buffer_shape[3];
     Py_ssize_t last_buffer_strides[3];
 
-    network_t(graph_t&& g) : graph(std::move(g)) {}
+    network_t(graph_ref_t&& g) : graph(std::move(g)) {}
     network_t(network_t&&) = delete;
     network_t(network_t const&) = delete;
     ~network_t() {}
@@ -138,7 +138,7 @@ void ukv::wrap_network(py::module& m) {
                 collection_t& col = index_collection->native;
                 ukv_txn_t txn_raw = index_collection->txn_ptr ? index_collection->txn_ptr->native : ukv_txn_t(nullptr);
 
-                graph_t g(col, txn_raw);
+                graph_ref_t g(col, txn_raw);
                 auto net_ptr = std::make_shared<network_t>(std::move(g));
 
                 net_ptr->db_ptr = index_collection->db_ptr;
@@ -506,12 +506,12 @@ void ukv::wrap_network(py::module& m) {
     net.def(
         "clear",
         [](network_t& net) {
-            db_t& db = net.db_ptr->native;
-            db.clear(net.graph.collection());
-            db.clear(net.sources_attrs);
-            db.clear(net.targets_attrs);
-            db.clear(net.relations_attrs);
-            throw_not_implemented();
+            // db_t& db = net.db_ptr->native;
+            // db.clear(net.graph.collection());
+            // db.clear(net.sources_attrs);
+            // db.clear(net.targets_attrs);
+            // db.clear(net.relations_attrs);
+            // throw_not_implemented();
         },
         "Removes both vertices and edges from the graph.");
 

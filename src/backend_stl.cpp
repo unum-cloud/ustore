@@ -1,5 +1,5 @@
 /**
- * @file ukv_stl.cpp
+ * @file backend_stl.cpp
  * @author Ashot Vardanian
  *
  * @brief Embedded In-Memory Key-Value Store implementation using only @b STL.
@@ -269,13 +269,12 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
 void write_head( //
     stl_db_t& db,
     write_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
     std::unique_lock _ {db.mutex};
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
 
         write_task_t task = tasks[i];
         stl_collection_t& col = stl_collection(db, task.col);
@@ -310,7 +309,6 @@ void write_head( //
 void measure_head( //
     stl_db_t& db,
     read_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
@@ -318,7 +316,7 @@ void measure_head( //
     ukv_error_t* c_error) {
 
     // 1. Allocate a tape for all the values to be pulled
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
     byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
     if (*c_error)
         return;
@@ -330,7 +328,7 @@ void measure_head( //
     *c_found_lengths = lens;
     *c_found_values = nullptr;
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
@@ -343,7 +341,6 @@ void measure_head( //
 void read_head( //
     stl_db_t& db,
     read_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
@@ -353,8 +350,8 @@ void read_head( //
     std::shared_lock _ {db.mutex};
 
     // 1. Estimate the total size
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
-    for (ukv_size_t i = 0; i != n; ++i) {
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
@@ -369,11 +366,11 @@ void read_head( //
 
     // 3. Fetch the data
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * n;
+    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * tasks.count;
     *c_found_lengths = lens;
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
@@ -392,7 +389,6 @@ void read_head( //
 void scan_head( //
     stl_db_t& db,
     scan_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const options,
     ukv_key_t** c_found_keys,
     ukv_val_len_t** c_found_lengths,
@@ -403,7 +399,7 @@ void scan_head( //
 
     // 1. Estimate the total size
     bool export_lengths = (options & ukv_option_read_lengths_k);
-    ukv_size_t total_lengths = reduce_n(tasks.lengths, n, 0ul);
+    ukv_size_t total_lengths = reduce_n(tasks.lengths, tasks.count, 0ul);
     ukv_size_t total_bytes = total_lengths * sizeof(ukv_key_t);
     if (export_lengths)
         total_bytes += total_lengths * sizeof(ukv_val_len_t);
@@ -419,7 +415,7 @@ void scan_head( //
     *c_found_keys = found_keys;
     *c_found_lengths = export_lengths ? found_lens : nullptr;
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         scan_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
@@ -446,13 +442,15 @@ void scan_head( //
             for (; j != task.length; ++j)
                 found_keys[j] = ukv_key_unknown_k;
         }
+
+        found_keys += task.length;
+        found_lens += task.length;
     }
 }
 
 void write_txn( //
     stl_txn_t& txn,
     write_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const,
     ukv_error_t* c_error) {
 
@@ -461,7 +459,7 @@ void write_txn( //
     stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         write_task_t task = tasks[i];
 
         try {
@@ -483,7 +481,6 @@ void write_txn( //
 void measure_txn( //
     stl_txn_t& txn,
     read_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const c_options,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
@@ -491,7 +488,7 @@ void measure_txn( //
     ukv_error_t* c_error) {
 
     // 1. Allocate a tape for all the values to be pulled
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
     byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
     if (*c_error)
         return;
@@ -506,7 +503,7 @@ void measure_txn( //
     *c_found_lengths = lens;
     *c_found_values = nullptr;
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
 
@@ -520,12 +517,13 @@ void measure_txn( //
         }
         // Others should be pulled from the main store
         else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
+
             if (entry_was_overwritten(key_iterator->second.sequence_number,
                                       txn.sequence_number,
-                                      youngest_sequence_number)) {
-                *c_error = "Requested key was already overwritten since the start of the transaction!";
+                                      youngest_sequence_number) &&
+                (*c_error = "Requested key was already overwritten since the start of the transaction!"))
                 return;
-            }
+
             lens[i] = !key_iterator->second.is_deleted ? static_cast<ukv_val_len_t>(key_iterator->second.buffer.size())
                                                        : ukv_val_len_missing_k;
 
@@ -545,7 +543,6 @@ void measure_txn( //
 void read_txn( //
     stl_txn_t& txn,
     read_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const c_options,
     ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
@@ -558,8 +555,8 @@ void read_txn( //
     bool should_track_requests = !(c_options & ukv_option_read_transparent_k);
 
     // 1. Estimate the total size of keys
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * n;
-    for (ukv_size_t i = 0; i != n; ++i) {
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
 
@@ -575,10 +572,10 @@ void read_txn( //
         else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
             if (entry_was_overwritten(key_iterator->second.sequence_number,
                                       txn.sequence_number,
-                                      youngest_sequence_number)) {
-                *c_error = "Requested key was already overwritten since the start of the transaction!";
+                                      youngest_sequence_number) &&
+                (*c_error = "Requested key was already overwritten since the start of the transaction!"))
                 return;
-            }
+
             if (!key_iterator->second.is_deleted)
                 total_bytes += key_iterator->second.buffer.size();
         }
@@ -591,11 +588,11 @@ void read_txn( //
 
     // 3. Pull the data
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * n;
+    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * tasks.count;
     *c_found_lengths = lens;
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
 
@@ -638,7 +635,6 @@ void read_txn( //
 void scan_txn( //
     stl_txn_t& txn,
     scan_tasks_soa_t tasks,
-    ukv_size_t const n,
     ukv_options_t const options,
     ukv_key_t** c_found_keys,
     ukv_val_len_t** c_found_lengths,
@@ -650,7 +646,7 @@ void scan_txn( //
 
     // 1. Estimate the total size
     bool export_lengths = (options & ukv_option_read_lengths_k);
-    ukv_size_t total_lengths = reduce_n(tasks.lengths, n, 0ul);
+    ukv_size_t total_lengths = reduce_n(tasks.lengths, tasks.count, 0ul);
 
     ukv_size_t total_bytes = total_lengths * sizeof(ukv_key_t);
     if (export_lengths)
@@ -667,7 +663,7 @@ void scan_txn( //
     *c_found_keys = found_keys;
     *c_found_lengths = export_lengths ? found_lens : nullptr;
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != tasks.count; ++i) {
         scan_task_t task = tasks[i];
         stl_collection_t const& col = stl_collection(db, task.col);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
@@ -709,13 +705,16 @@ void scan_txn( //
             ++j;
         }
 
-        // Append NULLs to overwite older noise:
+        // Append NULLs to overwrite older noise:
         while (j != task.length) {
             found_keys[j] = ukv_key_unknown_k;
             if (export_lengths)
                 found_lens[j] = ukv_val_len_missing_k;
             ++j;
         }
+
+        found_keys += task.length;
+        found_lens += task.length;
     }
 }
 
@@ -738,10 +737,8 @@ void ukv_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
@@ -751,15 +748,15 @@ void ukv_read( //
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    read_tasks_soa_t tasks {cols, keys};
+    read_tasks_soa_t tasks {cols, keys, c_tasks_count};
 
     if (c_txn) {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_txn : &read_txn;
-        return func(txn, tasks, c_tasks_count, c_options, c_found_lengths, c_found_values, arena, c_error);
+        return func(txn, tasks, c_options, c_found_lengths, c_found_values, arena, c_error);
     }
     else {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_head : &read_head;
-        return func(db, tasks, c_tasks_count, c_options, c_found_lengths, c_found_values, arena, c_error);
+        return func(db, tasks, c_options, c_found_lengths, c_found_values, arena, c_error);
     }
 }
 
@@ -787,10 +784,8 @@ void ukv_write( //
     ukv_arena_t*,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
@@ -799,10 +794,9 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    write_tasks_soa_t tasks {cols, keys, vals, offs, lens};
+    write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
 
-    return c_txn ? write_txn(txn, tasks, c_tasks_count, c_options, c_error)
-                 : write_head(db, tasks, c_tasks_count, c_options, c_error);
+    return c_txn ? write_txn(txn, tasks, c_options, c_error) : write_head(db, tasks, c_options, c_error);
 }
 
 void ukv_scan( //
@@ -827,10 +821,8 @@ void ukv_scan( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
@@ -841,10 +833,10 @@ void ukv_scan( //
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
-    scan_tasks_soa_t tasks {cols, keys, lens};
+    scan_tasks_soa_t tasks {cols, keys, lens, c_min_tasks_count};
 
-    return c_txn ? scan_txn(txn, tasks, c_min_tasks_count, c_options, c_found_keys, c_found_lengths, arena, c_error)
-                 : scan_head(db, tasks, c_min_tasks_count, c_options, c_found_keys, c_found_lengths, arena, c_error);
+    return c_txn ? scan_txn(txn, tasks, c_options, c_found_keys, c_found_lengths, arena, c_error)
+                 : scan_head(db, tasks, c_options, c_found_keys, c_found_lengths, arena, c_error);
 }
 
 void ukv_size( //
@@ -868,10 +860,8 @@ void ukv_size( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
@@ -953,7 +943,7 @@ void ukv_open( //
         *c_db = db_ptr;
     }
     catch (...) {
-        *c_error = "Failed to initizalize the database";
+        *c_error = "Failed to initialize the database";
     }
 }
 
@@ -970,10 +960,8 @@ void ukv_collection_open(
     ukv_collection_t* c_col,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     auto name_len = std::strlen(c_col_name);
     if (!name_len) {
@@ -1009,10 +997,8 @@ void ukv_collection_remove(
     // Outputs:
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
@@ -1032,10 +1018,8 @@ void ukv_collection_list( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
@@ -1061,7 +1045,7 @@ void ukv_collection_list( //
         auto len = name_and_contents.first.size();
         std::memcpy(tape, name_and_contents.first.data(), len);
         tape[len] = byte_t {0};
-        tape += len;
+        tape += len + 1;
     }
 }
 
@@ -1071,14 +1055,12 @@ void ukv_control( //
     ukv_str_view_t* c_response,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
-    if (!c_request) {
-        *c_error = "Request is NULL!";
+
+    if (!c_request && (*c_error = "Request is NULL!"))
         return;
-    }
+
     *c_response = NULL;
     *c_error = "Controls aren't supported in this implementation!";
 }
@@ -1096,10 +1078,8 @@ void ukv_txn_begin(
     ukv_txn_t* c_txn,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     if (!*c_txn) {
@@ -1107,7 +1087,7 @@ void ukv_txn_begin(
             *c_txn = new stl_txn_t();
         }
         catch (...) {
-            *c_error = "Failed to initizalize the transaction";
+            *c_error = "Failed to initialize the transaction";
         }
     }
 
@@ -1124,10 +1104,8 @@ void ukv_txn_commit( //
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
-    if (!c_txn) {
-        *c_error = "Transaction is NULL!";
+    if (!c_txn && (*c_error = "Transaction is NULL!"))
         return;
-    }
 
     // This write may fail with out-of-memory errors, if Hash-Tables
     // bucket allocation fails, but no values will be copied, only moved.
@@ -1140,48 +1118,47 @@ void ukv_txn_commit( //
     for (auto const& [located_key, located_sequence] : txn.requested) {
         stl_collection_t& col = stl_collection(db, located_key.collection);
         auto key_iterator = col.pairs.find(located_key.key);
-        if (key_iterator != col.pairs.end()) {
-            if (key_iterator->second.sequence_number != located_sequence) {
-                *c_error = "Requested key was already overwritten since the start of the transaction!";
-                return;
-            }
-        }
+        if (key_iterator == col.pairs.end())
+            continue;
+        if (key_iterator->second.sequence_number != located_sequence &&
+            (*c_error = "Requested key was already overwritten since the start of the transaction!"))
+            return;
     }
 
     // 2. Check for collisions among incoming values
     for (auto const& [located_key, value] : txn.upserted) {
         stl_collection_t& col = stl_collection(db, located_key.collection);
         auto key_iterator = col.pairs.find(located_key.key);
-        if (key_iterator != col.pairs.end()) {
-            if (key_iterator->second.sequence_number == txn.sequence_number) {
-                *c_error = "Can't commit same entry more than once!";
-                return;
-            }
-            if (entry_was_overwritten(key_iterator->second.sequence_number,
-                                      txn.sequence_number,
-                                      youngest_sequence_number)) {
-                *c_error = "Incoming key collides with newer entry!";
-                return;
-            }
-        }
+        if (key_iterator == col.pairs.end())
+            continue;
+
+        if (key_iterator->second.sequence_number == txn.sequence_number &&
+            (*c_error = "Can't commit same entry more than once!"))
+            return;
+
+        if (entry_was_overwritten(key_iterator->second.sequence_number,
+                                  txn.sequence_number,
+                                  youngest_sequence_number) &&
+            (*c_error = "Incoming key collides with newer entry!"))
+            return;
     }
 
     // 3. Check for collisions among deleted values
     for (auto const& located_key : txn.removed) {
         stl_collection_t& col = stl_collection(db, located_key.collection);
         auto key_iterator = col.pairs.find(located_key.key);
-        if (key_iterator != col.pairs.end()) {
-            if (key_iterator->second.sequence_number == txn.sequence_number) {
-                *c_error = "Can't commit same entry more than once!";
-                return;
-            }
-            if (entry_was_overwritten(key_iterator->second.sequence_number,
-                                      txn.sequence_number,
-                                      youngest_sequence_number)) {
-                *c_error = "Removed key collides with newer entry!";
-                return;
-            }
-        }
+        if (key_iterator == col.pairs.end())
+            continue;
+
+        if (key_iterator->second.sequence_number == txn.sequence_number &&
+            (*c_error = "Can't commit same entry more than once!"))
+            return;
+
+        if (entry_was_overwritten(key_iterator->second.sequence_number,
+                                  txn.sequence_number,
+                                  youngest_sequence_number) &&
+            (*c_error = "Removed key collides with newer entry!"))
+            return;
     }
 
     // 4. Allocate space for more vertices across different cols
@@ -1222,11 +1199,12 @@ void ukv_txn_commit( //
     for (auto const& located_key : txn.removed) {
         stl_collection_t& col = stl_collection(db, located_key.collection);
         auto key_iterator = col.pairs.find(located_key.key);
-        if (key_iterator != col.pairs.end()) {
-            key_iterator->second.is_deleted = true;
-            key_iterator->second.sequence_number = txn.sequence_number;
-            key_iterator->second.buffer.clear();
-        }
+        if (key_iterator == col.pairs.end())
+            continue;
+
+        key_iterator->second.is_deleted = true;
+        key_iterator->second.sequence_number = txn.sequence_number;
+        key_iterator->second.buffer.clear();
     }
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO

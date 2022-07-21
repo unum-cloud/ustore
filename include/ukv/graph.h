@@ -1,5 +1,5 @@
 /**
- * @file ukv.h
+ * @file graph.h
  * @author Ashot Vardanian
  * @date 27 Jun 2022
  *
@@ -49,7 +49,7 @@
 extern "C" {
 #endif
 
-#include "ukv/ukv.h"
+#include "ukv/db.h"
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
