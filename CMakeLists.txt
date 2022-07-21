@@ -29,7 +29,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wreorder -Wunused-parameter")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
 endif()
 
@@ -193,6 +192,19 @@ add_executable(ukv_leveldb_test
 target_link_libraries(ukv_leveldb_test
   gtest
   leveldb
+  fmt::fmt
+  nlohmann_json::nlohmann_json
+)
+
+add_executable(ukv_rocksdb_test
+  src/test.cpp
+  src/backend_rocksdb.cpp
+  src/logic_docs.cpp
+  src/logic_graph.cpp
+)
+target_link_libraries(ukv_rocksdb_test
+  gtest
+  rocksdb
   fmt::fmt
   nlohmann_json::nlohmann_json
 )
