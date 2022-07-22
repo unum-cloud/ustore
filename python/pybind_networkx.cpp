@@ -136,9 +136,8 @@ void ukv::wrap_network(py::module& m) {
 
                 db_t& db = index_collection->db_ptr->native;
                 collection_t& col = index_collection->native;
-                ukv_txn_t txn_raw = index_collection->txn_ptr ? index_collection->txn_ptr->native : ukv_txn_t(nullptr);
 
-                graph_ref_t g(col, txn_raw);
+                graph_ref_t g(col);
                 auto net_ptr = std::make_shared<network_t>(std::move(g));
 
                 net_ptr->db_ptr = index_collection->db_ptr;
@@ -148,17 +147,17 @@ void ukv::wrap_network(py::module& m) {
 
                 // Attach the additional collections
                 if (sources_attrs) {
-                    auto col = db.collection(*sources_attrs);
+                    auto col = db.collection(sources_attrs->c_str());
                     col.throw_unhandled();
                     net_ptr->sources_attrs = *std::move(col);
                 }
                 if (targets_attrs) {
-                    auto col = db.collection(*targets_attrs);
+                    auto col = db.collection(targets_attrs->c_str());
                     col.throw_unhandled();
                     net_ptr->targets_attrs = *std::move(col);
                 }
                 if (relations_attrs) {
-                    auto col = db.collection(*relations_attrs);
+                    auto col = db.collection(relations_attrs->c_str());
                     col.throw_unhandled();
                     net_ptr->relations_attrs = *std::move(col);
                 }

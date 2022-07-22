@@ -330,8 +330,7 @@ void ukv::wrap_database(py::module& m) {
             db_t db;
             if (open)
                 db.open(config).throw_unhandled();
-            db_session_t session = db.session();
-            return std::make_shared<py_db_t>(std::move(db), std::move(session), config);
+            return std::make_shared<py_db_t>(std::move(db), config);
         }),
         py::arg("config") = "",
         py::arg("open") = true);
@@ -339,16 +338,16 @@ void ukv::wrap_database(py::module& m) {
     py_db.def(
         "get",
         [](py_db_t& py_db, ukv_key_t key) {
-            return get_item(py_db.native, nullptr, ukv_default_collection_k, py_db.session.arena(), key);
+            return get_item(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, key);
         },
         py::arg("key"));
 
     py_db.def(
         "get",
         [](py_db_t& py_db, std::string const& collection, ukv_key_t key) {
-            auto maybe_col = py_db.native[collection];
+            auto maybe_col = py_db.native.collection(collection.c_str());
             maybe_col.throw_unhandled();
-            return get_item(py_db.native, nullptr, *maybe_col, py_db.session.arena(), key);
+            return get_item(py_db.native, nullptr, *maybe_col, py_db.arena, key);
         },
         py::arg("collection"),
         py::arg("key"));
@@ -356,7 +355,7 @@ void ukv::wrap_database(py::module& m) {
     py_db.def(
         "set",
         [](py_db_t& py_db, ukv_key_t key, py::bytes const& value) {
-            return set_item(py_db.native, nullptr, ukv_default_collection_k, py_db.session.arena(), key, &value);
+            return set_item(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, key, &value);
         },
         py::arg("key"),
         py::arg("value"));
@@ -364,9 +363,9 @@ void ukv::wrap_database(py::module& m) {
     py_db.def(
         "set",
         [](py_db_t& py_db, std::string const& collection, ukv_key_t key, py::bytes const& value) {
-            auto maybe_col = py_db.native[collection];
+            auto maybe_col = py_db.native.collection(collection.c_str());
             maybe_col.throw_unhandled();
-            return set_item(py_db.native, nullptr, *maybe_col, py_db.session.arena(), key, &value);
+            return set_item(py_db.native, nullptr, *maybe_col, py_db.arena, key, &value);
         },
         py::arg("collection"),
         py::arg("key"),
@@ -382,7 +381,7 @@ void ukv::wrap_database(py::module& m) {
             return get_item(py_col.db_ptr->native,
                             py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                             py_col.native,
-                            py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
+                            py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
                             key);
         },
         py::arg("key"));
@@ -393,7 +392,7 @@ void ukv::wrap_database(py::module& m) {
             return set_item(py_col.db_ptr->native,
                             py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                             py_col.native,
-                            py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
+                            py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
                             key,
                             &value);
         },
@@ -401,8 +400,8 @@ void ukv::wrap_database(py::module& m) {
         py::arg("value"));
     py_col.def("clear", [](py_col_t& py_col) {
         db_t& db = py_col.db_ptr->native;
-        db.remove(py_col.name).throw_unhandled();
-        auto maybe_col = db[py_col.name];
+        db.remove(py_col.name.c_str()).throw_unhandled();
+        auto maybe_col = db.collection(py_col.name.c_str());
         maybe_col.throw_unhandled();
         py_col.native = *std::move(maybe_col);
     });
@@ -411,7 +410,7 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def( //
         py::init([](py_db_t& py_db, bool begin) {
             auto db_ptr = py_db.shared_from_this();
-            auto maybe_txn = py_db.session.transact();
+            auto maybe_txn = py_db.native.transact();
             maybe_txn.throw_unhandled();
             return std::make_shared<py_txn_t>(std::move(db_ptr), *std::move(maybe_txn));
         }),
@@ -420,16 +419,16 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def(
         "get",
         [](py_txn_t& py_txn, ukv_key_t key) {
-            return get_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.native.arena(), key);
+            return get_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, key);
         },
         py::arg("key"));
 
     py_txn.def(
         "get",
         [](py_txn_t& py_txn, std::string const& collection, ukv_key_t key) {
-            auto maybe_col = py_txn.db_ptr->native[collection];
+            auto maybe_col = py_txn.db_ptr->native.collection(collection.c_str());
             maybe_col.throw_unhandled();
-            return get_item(py_txn.db_ptr->native, py_txn.native, *maybe_col, py_txn.native.arena(), key);
+            return get_item(py_txn.db_ptr->native, py_txn.native, *maybe_col, py_txn.arena, key);
         },
         py::arg("collection"),
         py::arg("key"));
@@ -437,12 +436,7 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def(
         "set",
         [](py_txn_t& py_txn, ukv_key_t key, py::bytes const& value) {
-            return set_item(py_txn.db_ptr->native,
-                            py_txn.native,
-                            ukv_default_collection_k,
-                            py_txn.native.arena(),
-                            key,
-                            &value);
+            return set_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, key, &value);
         },
         py::arg("key"),
         py::arg("value"));
@@ -450,9 +444,9 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def(
         "set",
         [](py_txn_t& py_txn, std::string const& collection, ukv_key_t key, py::bytes const& value) {
-            auto maybe_col = py_txn.db_ptr->native[collection];
+            auto maybe_col = py_txn.db_ptr->native.collection(collection.c_str());
             maybe_col.throw_unhandled();
-            return set_item(py_txn.db_ptr->native, py_txn.native, *maybe_col, py_txn.native.arena(), key, &value);
+            return set_item(py_txn.db_ptr->native, py_txn.native, *maybe_col, py_txn.arena, key, &value);
         },
         py::arg("collection"),
         py::arg("key"),
@@ -492,59 +486,50 @@ void ukv::wrap_database(py::module& m) {
 
     // Operator overloads used to edit entries
     py_db.def("__contains__", [](py_db_t& py_db, ukv_key_t key) {
-        return contains_item(py_db.native, nullptr, ukv_default_collection_k, py_db.session.arena(), key);
+        return contains_item(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, key);
     });
     py_db.def("__getitem__", [](py_db_t& py_db, ukv_key_t key) {
-        return get_item(py_db.native, nullptr, ukv_default_collection_k, py_db.session.arena(), key);
+        return get_item(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, key);
     });
     py_db.def("__setitem__", [](py_db_t& py_db, ukv_key_t key, py::bytes const& value) {
-        return set_item(py_db.native, nullptr, ukv_default_collection_k, py_db.session.arena(), key, &value);
+        return set_item(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, key, &value);
     });
     py_db.def("__delitem__", [](py_db_t& py_db, ukv_key_t key) {
-        return set_item(py_db.native, nullptr, ukv_default_collection_k, py_db.session.arena(), key);
+        return set_item(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, key);
     });
 
     py_txn.def("__contains__", [](py_txn_t& py_txn, ukv_key_t key) {
-        return contains_item(py_txn.db_ptr->native,
-                             py_txn.native,
-                             ukv_default_collection_k,
-                             py_txn.native.arena(),
-                             key);
+        return contains_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, key);
     });
     py_txn.def("__getitem__", [](py_txn_t& py_txn, ukv_key_t key) {
-        return get_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.native.arena(), key);
+        return get_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, key);
     });
     py_txn.def("__setitem__", [](py_txn_t& py_txn, ukv_key_t key, py::bytes const& value) {
-        return set_item(py_txn.db_ptr->native,
-                        py_txn.native,
-                        ukv_default_collection_k,
-                        py_txn.native.arena(),
-                        key,
-                        &value);
+        return set_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, key, &value);
     });
     py_txn.def("__delitem__", [](py_txn_t& py_txn, ukv_key_t key) {
-        return set_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.native.arena(), key);
+        return set_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, key);
     });
 
     py_col.def("__contains__", [](py_col_t& py_col, ukv_key_t key) {
         return contains_item(py_col.db_ptr->native,
                              py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                              py_col.native,
-                             py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
+                             py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
                              key);
     });
     py_col.def("__getitem__", [](py_col_t& py_col, ukv_key_t key) {
         return get_item(py_col.db_ptr->native,
                         py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                         py_col.native,
-                        py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
+                        py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
                         key);
     });
     py_col.def("__setitem__", [](py_col_t& py_col, ukv_key_t key, py::bytes const& value) {
         return set_item(py_col.db_ptr->native,
                         py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                         py_col.native,
-                        py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
+                        py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
                         key,
                         &value);
     });
@@ -552,18 +537,18 @@ void ukv::wrap_database(py::module& m) {
         return set_item(py_col.db_ptr->native,
                         py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                         py_col.native,
-                        py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
+                        py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
                         key);
     });
 
     // Operator overloads used to access collections
     py_db.def("__contains__", [](py_db_t& py_db, std::string const& collection) {
-        auto maybe = py_db.session.contains(collection);
+        auto maybe = py_db.native.contains(collection.c_str());
         maybe.throw_unhandled();
         return *maybe;
     });
     py_db.def("__getitem__", [](py_db_t& py_db, std::string const& collection) {
-        auto maybe_col = py_db.native[collection];
+        auto maybe_col = py_db.native.collection(collection.c_str());
         maybe_col.throw_unhandled();
 
         auto py_col = std::make_shared<py_col_t>();
@@ -573,7 +558,7 @@ void ukv::wrap_database(py::module& m) {
         return py_col;
     });
     py_txn.def("__getitem__", [](py_txn_t& py_txn, std::string const& collection) {
-        auto maybe_col = py_txn.db_ptr->native[collection];
+        auto maybe_col = py_txn.db_ptr->native.collection(collection.c_str());
         maybe_col.throw_unhandled();
 
         auto py_col = std::make_shared<py_col_t>();
@@ -584,7 +569,7 @@ void ukv::wrap_database(py::module& m) {
         return py_col;
     });
     py_db.def("__delitem__", [](py_db_t& py_db, std::string const& collection) { //
-        py_db.native.remove(collection).throw_unhandled();
+        py_db.native.remove(collection.c_str()).throw_unhandled();
     });
 
     // Batch Matrix Operations
@@ -598,7 +583,7 @@ void ukv::wrap_database(py::module& m) {
             return fill_tensor(py_db.native,
                                nullptr,
                                ukv_default_collection_k,
-                               py_db.session.arena(),
+                               py_db.arena,
                                keys,
                                values,
                                values_lengths,
@@ -618,7 +603,7 @@ void ukv::wrap_database(py::module& m) {
             return fill_tensor(py_col.db_ptr->native,
                                py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                                py_col.native,
-                               py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
+                               py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
                                keys,
                                values,
                                values_lengths,
@@ -638,7 +623,7 @@ void ukv::wrap_database(py::module& m) {
             return fill_tensor(py_txn.db_ptr->native,
                                py_txn.native,
                                ukv_default_collection_k,
-                               py_txn.native.arena(),
+                               py_txn.arena,
                                keys,
                                values,
                                values_lengths,
