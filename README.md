@@ -1,5 +1,7 @@
 # Universal Key-Values
 
+![Universal Key Values by Unum](UKV.png)
+
 Imagine having a standardized cross-lingual interface for all your things "Data":
 
 * Storing binary blobs
@@ -11,42 +13,8 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 * Familiar high-level [drivers](#frontends) for tabular & graph analytics
 * [Apache Arrow](https://arrow.apache.org/) exports, [Flight RPC](https://arrow.apache.org/docs/format/Flight.html) and [DataFusion SQL](https://github.com/apache/arrow-datafusion) support
 
-UVV does just that, abstracting away the implementation from the user.
+UKV does just that, abstracting away the implementation from the user.
 In under 10K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
-
-This way you get the freedom to switch between in-memory vs persistent DBs, between ACID and eventually consistent designs without rewriting you application.
-All with a better performance than with alternative solutions.
-
-```mermaid
-flowchart LR
-  
-  ukv(((UKV)))
-
-  id1[In-Memory Store using STL] --> ukv;
-  id7[Persistent Store using LevelDB] --> ukv;
-  id3[Persistent Store using RocksDB] --> ukv;
-  id2[In-Memory Store by Unum] --> ukv;
-  id4[Persistent Store by Unum] --> ukv;
-  %% id5[In-Memory Distributed Store by Unum] --> ukv;
-  %% id6[Persistent Distributed Store by Unum] --> ukv;
-  
-  %% id2 -.-> id5 
-  %% id4 -.-> id6 
-  
-  ukv --> C++;
-  ukv --> Python;
-  ukv --> GoLang;
-  ukv --> Java;
-  ukv -.-> REST;
-  
-  %% ukv --> SQL;
-  %% ukv ---> Redis;
-  %% ukv ---> Lucene;
-  %% ukv ---> MongoDB;
-  
-  style id2 stroke:#743cce,stroke-width:2px;
-  style id4 stroke:#743cce,stroke-width:2px;
-```
 
 ## Backends
 
@@ -74,14 +42,14 @@ Future work includes:
 
 Currently, at Proo-of-Concept stage, we support only the essential functionality in select programming languages.
 
-| Name      | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy |
-| :-------- | :------: | :-----: | :---------: | :---: | :----: | :-------: |
-| C++       |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |
-| Python    |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     |
-| Java      |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |
-| GoLang    |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✔️     |
-| REST API  |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |
-| Arrow RPC |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |
+| Name      | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy | Extras                         |
+| :-------- | :------: | :-----: | :---------: | :---: | :----: | :-------: | :----------------------------- |
+| C++       |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |                                |
+| Python    |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Image Decoding, Tensor Packing |
+| Java      |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |                                |
+| GoLang    |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✔️     |                                |
+| REST API  |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                                |
+| Arrow RPC |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                                |
 
 Future work would include:
 
