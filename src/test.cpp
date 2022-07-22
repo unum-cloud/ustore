@@ -131,7 +131,7 @@ TEST(db, named) {
     keys_stream_t present_it2 = present_keys2.begin();
     auto expected_it1 = keys.begin();
     auto expected_it2 = keys.begin();
-    for (; expected_it1 != keys.end(), expected_it2 != keys.end();
+    for (; expected_it1 != keys.end() && expected_it2 != keys.end();
          ++present_it1, ++expected_it1, ++present_it2, ++expected_it2) {
         EXPECT_EQ(*expected_it1, *present_it1);
         EXPECT_EQ(*expected_it2, *present_it2);

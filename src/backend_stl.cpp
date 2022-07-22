@@ -262,9 +262,7 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
     }
 }
 
-/*********************************************************/
-/*****************	 Primary Functions	  ****************/
-/*********************************************************/
+
 
 void write_head( //
     stl_db_t& db,
@@ -718,6 +716,30 @@ void scan_txn( //
     }
 }
 
+
+/*********************************************************/
+/*****************	    C Interface 	  ****************/
+/*********************************************************/
+
+void ukv_open( //
+    ukv_str_view_t c_config,
+    ukv_t* c_db,
+    ukv_error_t* c_error) {
+
+    try {
+        auto db_ptr = new stl_db_t {};
+        auto len = std::strlen(c_config);
+        if (len) {
+            db_ptr->persisted_path = std::string(c_config, len);
+            read_from_disk(*db_ptr, c_error);
+        }
+        *c_db = db_ptr;
+    }
+    catch (...) {
+        *c_error = "Failed to initialize the database";
+    }
+}
+
 void ukv_read( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
@@ -921,29 +943,6 @@ void ukv_size( //
         estimates[3] = static_cast<ukv_size_t>(main_bytes + txn_bytes);
         estimates[4] = estimates[0] * (sizeof(ukv_key_t) + sizeof(ukv_val_len_t)) + estimates[2];
         estimates[5] = (estimates[1] + deleted_count) * (sizeof(ukv_key_t) + sizeof(ukv_val_len_t)) + estimates[3];
-    }
-}
-
-/*********************************************************/
-/*****************	    C Interface 	  ****************/
-/*********************************************************/
-
-void ukv_open( //
-    ukv_str_view_t c_config,
-    ukv_t* c_db,
-    ukv_error_t* c_error) {
-
-    try {
-        auto db_ptr = new stl_db_t {};
-        auto len = std::strlen(c_config);
-        if (len) {
-            db_ptr->persisted_path = std::string(c_config, len);
-            read_from_disk(*db_ptr, c_error);
-        }
-        *c_db = db_ptr;
-    }
-    catch (...) {
-        *c_error = "Failed to initialize the database";
     }
 }
 
