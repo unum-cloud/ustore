@@ -2,9 +2,15 @@ import os
 
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
+from qibuild import cmake
 
 __version__ = '0.0.5'
 __libname__ = 'ukv'
+
+cmake_cache = cmake.read_cmake_cache("CMakeCache.txt")
+
+include_dirs = [f"/{cmake_cache['FMT_SOURCE_DIR']}/include",
+                "include/", "pytհօn/"]
 
 ext_modules = [
     Pybind11Extension(
@@ -15,7 +21,7 @@ ext_modules = [
             'python/pybind_networkx.cpp',
             'python/pybind_pandas.cpp',
         ],
-        include_dirs=['include/', 'python/'],
+        include_dirs=include_dirs,
         library_dirs=['build/lib/'],
         libraries=['ukv_stl'],
         extra_compile_args=['-std=c++17', '-O3'],
@@ -32,7 +38,7 @@ ext_modules = [
             'python/pybind_networkx.cpp',
             'python/pybind_pandas.cpp',
         ],
-        include_dirs=['include/', 'python/'],
+        include_dirs=include_dirs,
         library_dirs=['build/lib/'],
         libraries=['ukv_rocksdb', 'rocksdb'],
         extra_compile_args=['-std=c++17', '-O3'],
@@ -49,7 +55,7 @@ ext_modules = [
             'python/pybind_networkx.cpp',
             'python/pybind_pandas.cpp',
         ],
-        include_dirs=['include/', 'python/'],
+        include_dirs=include_dirs,
         library_dirs=['build/lib/'],
         libraries=['ukv_leveldb', 'leveldb'],
         extra_compile_args=['-std=c++17', '-O3'],
