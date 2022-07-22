@@ -142,7 +142,7 @@ TEST(db, named) {
     EXPECT_TRUE(present_it2.is_end());
 }
 
-TEST(db, net) {
+TEST(db, net_batch) {
 
     db_t db;
     EXPECT_TRUE(db.open(""));
@@ -229,6 +229,103 @@ TEST(db, net) {
 
     // Bring back the whole graph
     EXPECT_TRUE(net.upsert(triangle));
+    EXPECT_TRUE(*net.contains(vertex_to_remove));
+    EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
+    EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
+    EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+}
+
+TEST(db, net) {
+
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+
+    collection_t col(db);
+    graph_ref_t net(col);
+
+    // triangle
+    std::vector<edge_t> edge1 {{1, 2, 9}};
+    std::vector<edge_t> edge2 {{2, 3, 10}};
+    std::vector<edge_t> edge3 {{3, 1, 11}};
+
+    EXPECT_TRUE(net.upsert(edge1));
+    EXPECT_TRUE(net.upsert(edge2));
+    EXPECT_TRUE(net.upsert(edge3));
+
+    EXPECT_TRUE(*net.contains(1));
+    EXPECT_TRUE(*net.contains(2));
+    EXPECT_FALSE(*net.contains(9));
+    EXPECT_FALSE(*net.contains(10));
+    EXPECT_FALSE(*net.contains(1000));
+
+    EXPECT_EQ(*net.degree(1), 2u);
+    EXPECT_EQ(*net.degree(2), 2u);
+    EXPECT_EQ(*net.degree(3), 2u);
+    EXPECT_EQ(*net.degree(1, ukv_vertex_source_k), 1u);
+    EXPECT_EQ(*net.degree(2, ukv_vertex_source_k), 1u);
+    EXPECT_EQ(*net.degree(3, ukv_vertex_source_k), 1u);
+
+    EXPECT_TRUE(net.edges(1));
+    EXPECT_EQ(net.edges(1)->size(), 2ul);
+    EXPECT_EQ(net.edges(1, ukv_vertex_source_k)->size(), 1ul);
+    EXPECT_EQ(net.edges(1, ukv_vertex_target_k)->size(), 1ul);
+
+    EXPECT_EQ(net.edges(3, ukv_vertex_target_k)->size(), 1ul);
+    EXPECT_EQ(net.edges(2, ukv_vertex_source_k)->size(), 1ul);
+    EXPECT_EQ((*net.edges(3, ukv_vertex_target_k))[0].source_id, 2);
+    EXPECT_EQ((*net.edges(3, ukv_vertex_target_k))[0].target_id, 3);
+    EXPECT_EQ((*net.edges(3, ukv_vertex_target_k))[0].id, 10);
+    EXPECT_EQ(net.edges(3, 1)->size(), 1ul);
+    EXPECT_EQ(net.edges(1, 3)->size(), 0ul);
+
+    // Check scans
+    EXPECT_TRUE(net.edges());
+    {
+        std::unordered_set<edge_t, edge_hash_t> expected_edges {edge1[0], edge2[0], edge3[0]};
+        std::unordered_set<edge_t, edge_hash_t> exported_edges;
+
+        auto present_edges = *net.edges();
+        auto present_it = std::move(present_edges).begin();
+        auto count_results = 0;
+        while (!present_it.is_end()) {
+            exported_edges.insert(*present_it);
+            ++present_it;
+            ++count_results;
+        }
+        EXPECT_EQ(count_results, 6);
+        EXPECT_EQ(exported_edges, expected_edges);
+    }
+
+    // Remove a single edge, making sure that the nodes info persists
+    EXPECT_TRUE(net.remove({
+        .source_ids = {edge1.front().source_id},
+        .target_ids = {edge1.front().target_id},
+        .edge_ids = {edge1.front().id},
+    }));
+    EXPECT_TRUE(*net.contains(1));
+    EXPECT_TRUE(*net.contains(2));
+    EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
+
+    // Bring that edge back
+    EXPECT_TRUE(net.upsert({
+        .source_ids = {edge1.front().source_id},
+        .target_ids = {edge1.front().target_id},
+        .edge_ids = {edge1.front().id},
+    }));
+    EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
+
+    // Remove a vertex
+    ukv_key_t vertex_to_remove = 2;
+    EXPECT_TRUE(net.remove({vertex_to_remove}));
+    EXPECT_FALSE(*net.contains(vertex_to_remove));
+    EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
+    EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);
+    EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+
+    // Bring back the whole graph
+    EXPECT_TRUE(net.upsert(edge1));
+    EXPECT_TRUE(net.upsert(edge2));
+    EXPECT_TRUE(net.upsert(edge3));
     EXPECT_TRUE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
