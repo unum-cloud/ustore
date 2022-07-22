@@ -99,12 +99,20 @@ class [[nodiscard]] expected_gt {
     expected_gt(status_t&& status, object_at&& default_object = object_at {})
         : status_(std::move(status)), object_(std::move(default_object)) {}
 
+    expected_gt(expected_gt&& other) noexcept : status_(std::move(other.status_)), object_(std::move(other.object_)) {}
+
+    expected_gt& operator=(expected_gt&& other) noexcept {
+        std::swap(status_, other.status_);
+        std::swap(object_, other.object_);
+        return *this;
+    }
+
     operator bool() const noexcept { return status_; }
     object_at&& operator*() && noexcept { return std::move(object_); }
     object_at const& operator*() const& noexcept { return object_; }
     object_at const* operator->() const& noexcept { return &object_; }
     operator std::optional<object_at>() && {
-        return status_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
+        return !status_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
     }
 
     void throw_unhandled() {
