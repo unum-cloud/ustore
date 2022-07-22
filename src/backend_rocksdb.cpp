@@ -222,10 +222,8 @@ void ukv_write( //
     ukv_arena_t*,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
@@ -421,10 +419,8 @@ void ukv_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     if (c_txn && (c_options & ukv_option_read_track_k)) {
         *c_error = "RocksDB only supports transparent reads!";
@@ -597,10 +593,8 @@ void ukv_collection_list( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db) {
-        *c_error = "DataBase is NULL!";
+    if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
-    }
 
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
