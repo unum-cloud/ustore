@@ -227,7 +227,7 @@ bool upsert(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, ukv_k
 }
 
 /**
- * @return true  If such a atching entry was found and deleted.
+ * @return true  If a matching entry was found and deleted.
  * @return false In every other case.
  */
 bool erase(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, std::optional<ukv_key_t> edge_id = {}) {
@@ -427,8 +427,9 @@ void export_disjoint_edge_buffers( //
         return;
 
     taped_values_view_t values {c_found_lengths, c_found_values, c_vertices_count};
+    std::size_t value_idx = 0;
     for (value_view_t value : values)
-        arena.updated_vals.emplace_back(value);
+        arena.updated_vals[value_idx++] = value;
 }
 
 template <bool erase_ak>
@@ -474,6 +475,9 @@ void update_neighborhoods( //
 
     // Keep only the unique items
     sort_and_deduplicate(arena.updated_keys);
+    prepare_memory(arena.updated_vals, arena.updated_keys.size(), c_error);
+    if (*c_error)
+        return;
 
     export_disjoint_edge_buffers(c_db,
                                  c_txn,
@@ -494,8 +498,10 @@ void update_neighborhoods( //
         auto source_id = sources_ids[i];
         auto target_id = targets_ids[i];
 
-        auto& source_value = arena.updated_vals[offset_in_sorted(arena.updated_keys, {collection, source_id})];
-        auto& target_value = arena.updated_vals[offset_in_sorted(arena.updated_keys, {collection, target_id})];
+        auto source_idx = offset_in_sorted(arena.updated_keys, {collection, source_id});
+        auto target_idx = offset_in_sorted(arena.updated_keys, {collection, target_id});
+        auto& source_value = arena.updated_vals[source_idx];
+        auto& target_value = arena.updated_vals[target_idx];
 
         if constexpr (erase_ak) {
             std::optional<ukv_key_t> edge_id;
