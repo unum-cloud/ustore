@@ -15,8 +15,7 @@
  *      * TODO: update(mapping) ~ Batch Insert/Put
  *
  * Additional Batch Methods:
- *      * TODO: get_matrix(collection?, keys, max_length: int, padding: byte)
- *      * TODO: get_table(collection?, keys, field_ids)
+ *      * fill_tensor(collection?, keys, max_length: int, padding: byte)
  *
  * Intentionally not implemented:
  *      * __len__() ~ It's hard to consistently estimate the collection.
@@ -149,7 +148,7 @@ std::optional<py::bytes> get_item( //
 }
 
 /**
- * @brief Exports keys into a 2-dimensional preallocated NumPy buffer.
+ * @brief Exports values into preallocated multi-dimensional NumPy-like buffers.
  *        The most performant batch-reading method, ideal for ML.
  *
  * Contrary to most data types exposed by the Python interpreter,
@@ -171,7 +170,7 @@ std::optional<py::bytes> get_item( //
  * https://pybind11.readthedocs.io/en/stable/advanced/cast/overview.html#list-of-all-builtin-conversions
  * https://docs.python.org/3/c-api/buffer.html
  */
-void export_matrix( //
+void fill_tensor( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
@@ -590,60 +589,60 @@ void ukv::wrap_database(py::module& m) {
 
     // Batch Matrix Operations
     py_db.def(
-        "fill_matrix",
+        "fill_tensor",
         [](py_db_t& py_db,
            py::handle keys,
            py::handle values,
            py::handle values_lengths,
            std::uint8_t padding_char = 0) {
-            return export_matrix(py_db.native,
-                                 nullptr,
-                                 ukv_default_collection_k,
-                                 py_db.session.arena(),
-                                 keys,
-                                 values,
-                                 values_lengths,
-                                 padding_char);
+            return fill_tensor(py_db.native,
+                               nullptr,
+                               ukv_default_collection_k,
+                               py_db.session.arena(),
+                               keys,
+                               values,
+                               values_lengths,
+                               padding_char);
         },
         py::arg("keys"),
         py::arg("values"),
         py::arg("values_lengths"),
         py::arg("padding") = 0);
     py_col.def(
-        "fill_matrix",
+        "fill_tensor",
         [](py_col_t& py_col,
            py::handle keys,
            py::handle values,
            py::handle values_lengths,
            std::uint8_t padding_char = 0) {
-            return export_matrix(py_col.db_ptr->native,
-                                 py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
-                                 py_col.native,
-                                 py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
-                                 keys,
-                                 values,
-                                 values_lengths,
-                                 padding_char);
+            return fill_tensor(py_col.db_ptr->native,
+                               py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
+                               py_col.native,
+                               py_col.txn_ptr ? py_col.txn_ptr->native.arena() : py_col.db_ptr->session.arena(),
+                               keys,
+                               values,
+                               values_lengths,
+                               padding_char);
         },
         py::arg("keys"),
         py::arg("values"),
         py::arg("values_lengths"),
         py::arg("padding") = 0);
     py_txn.def(
-        "fill_matrix",
+        "fill_tensor",
         [](py_txn_t& py_txn,
            py::handle keys,
            py::handle values,
            py::handle values_lengths,
            std::uint8_t padding_char = 0) {
-            return export_matrix(py_txn.db_ptr->native,
-                                 py_txn.native,
-                                 ukv_default_collection_k,
-                                 py_txn.native.arena(),
-                                 keys,
-                                 values,
-                                 values_lengths,
-                                 padding_char);
+            return fill_tensor(py_txn.db_ptr->native,
+                               py_txn.native,
+                               ukv_default_collection_k,
+                               py_txn.native.arena(),
+                               keys,
+                               values,
+                               values_lengths,
+                               padding_char);
         },
         py::arg("keys"),
         py::arg("values"),

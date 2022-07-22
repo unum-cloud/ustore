@@ -353,7 +353,7 @@ values.initialized = PyObject_GetBuffer(values_obj, &values.py, output_flags) ==
 ### Wrapping: CPython 🥩
 
 ```cpp
-void export_matrix( //
+void fill_tensor( //
     ...
     py::handle keys_arr,
     py::handle values_arr,
