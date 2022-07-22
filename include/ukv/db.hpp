@@ -78,14 +78,14 @@ class value_refs_t {
 
     inline expected_gt<taped_values_view_t> get( //
         ukv_doc_format_t format = ukv_doc_format_binary_k,
-        bool track = false) noexcept {
+        bool track = false) & noexcept {
         auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
         return any_get(format, options);
     }
 
     inline expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths( //
         ukv_doc_format_t format = ukv_doc_format_binary_k,
-        bool track = false) noexcept {
+        bool track = false) & noexcept {
 
         auto options = static_cast<ukv_options_t>((track ? ukv_option_read_track_k : ukv_options_default_k) |
                                                   ukv_option_read_lengths_k);
@@ -103,7 +103,7 @@ class value_refs_t {
      */
     inline expected_gt<strided_range_gt<bool>> contains( //
         ukv_doc_format_t format = ukv_doc_format_binary_k,
-        bool track = false) noexcept {
+        bool track = false) & noexcept {
 
         auto maybe = lengths(format, track);
         if (!maybe)
@@ -155,7 +155,7 @@ class value_refs_t {
                    flush);
     }
 
-    inline operator expected_gt<taped_values_view_t>() noexcept { return get(); }
+    inline operator expected_gt<taped_values_view_t>() & noexcept { return get(); }
 
     inline value_refs_t& operator=(disjoint_values_view_t vals) noexcept(false) {
         auto status = set(vals);

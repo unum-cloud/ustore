@@ -66,11 +66,12 @@ TEST(db, basic) {
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(ref.clear());
     for (ukv_key_t key : ref.keys()) {
-        expected_gt<strided_range_gt<bool>> indicators = col[key].contains();
+        value_refs_t matches = col[key];
+        expected_gt<strided_range_gt<bool>> indicators = matches.contains();
         EXPECT_TRUE(indicators);
         EXPECT_TRUE((*indicators)[0]);
 
-        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = col[key].lengths();
+        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = matches.lengths();
         EXPECT_TRUE(lengths);
         EXPECT_EQ((*lengths)[0], 0u);
     }
@@ -87,11 +88,12 @@ TEST(db, basic) {
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
     for (ukv_key_t key : ref.keys()) {
-        expected_gt<strided_range_gt<bool>> indicators = col[key].contains();
+        value_refs_t matches = col[key];
+        expected_gt<strided_range_gt<bool>> indicators = matches.contains();
         EXPECT_TRUE(indicators);
         EXPECT_FALSE((*indicators)[0]);
 
-        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = col[key].lengths();
+        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = matches.lengths();
         EXPECT_TRUE(lengths);
         EXPECT_EQ((*lengths)[0], ukv_val_len_missing_k);
     }
