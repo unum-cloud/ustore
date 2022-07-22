@@ -118,7 +118,7 @@ extern ukv_key_t ukv_key_unknown_k;
  * > remote in-memory transactional KVS
  *
  * @param[in] config  A NULL-terminated @b JSON string with configuration specs.
- * @param[out] db     A pointer to the opened KVS, unless @p `error` is filled.
+ * @param[out] db     A pointer to the opened KVS, unless @param error is filled.
  * @param[out] error  The error message to be handled by callee.
  */
 void ukv_open( //
@@ -128,8 +128,8 @@ void ukv_open( //
 
 /**
  * @brief The primary "setter" interface.
- * Passing NULLs into @p `values` is identical to deleting entries.
- * If a fail had occurred, @p `error` will be set to non-NULL.
+ * Passing NULLs into @param values is identical to deleting entries.
+ * If a fail had occurred, @param error will be set to non-NULL.
  *
  * @section Functionality Matrix
  * This is one of the two primary methods, that knots together various kinds of reads:
@@ -143,8 +143,8 @@ void ukv_open( //
  * @param[in] txn            Transaction, through which the operation must go.
  *                           Can be NULL.
  * @param[in] keys           Array of keys in one or more collections.
- * @param[in] tasks_count    Number of elements in @p `keys`.
- * @param[in] collections    Array of collections owning the @p `keys`.
+ * @param[in] tasks_count    Number of elements in @param keys.
+ * @param[in] collections    Array of collections owning the @param keys.
  *                           If NULL is passed, the default collection
  *                           is assumed. Instead of passing one collection for
  *                           each key, you can use `ukv_option_read_colocated`.
@@ -155,8 +155,8 @@ void ukv_open( //
  *                           To clear the `value` without removing the key, just
  *                           pass a zero length.
  *
- * @param[in] lengths        Pointer to lengths of chunks in packed into @p `values`.
- * @param[in] offsets        Pointer to offsets of relevant content within @p `values` chunks.
+ * @param[in] lengths        Pointer to lengths of chunks in packed into @param values.
+ * @param[in] offsets        Pointer to offsets of relevant content within @param values chunks.
  * @param[out] error         The error to be handled.
  *
  * @section Upserts, Updates & Inserts
@@ -226,8 +226,8 @@ void ukv_write( //
 
 /**
  * @brief The primary "getter" interface.
- * If a fail had occurred, @p `error` will be set to non-NULL.
- * Otherwise, the tape will be populated with @p `tasks_count` objects
+ * If a fail had occurred, @param error will be set to non-NULL.
+ * Otherwise, the tape will be populated with @param tasks_count objects
  * of type `ukv_val_len_t`, describing the lengths of objects packed
  * right after the lengths themselves.
  * If a key wasn't found in target collection, the length will be zero.
@@ -242,8 +242,8 @@ void ukv_write( //
  * @param[in] txn             Transaction or the snapshot, through which the
  *                            operation must go. Can be NULL.
  * @param[in] keys            Array of keys in one or more collections.
- * @param[in] tasks_count     Number of elements in @p `keys`.
- * @param[in] collections     Array of collections owning the @p `keys`.
+ * @param[in] tasks_count     Number of elements in @param keys.
+ * @param[in] collections     Array of collections owning the @param keys.
  *                            If NULL is passed, the default collection
  *                            is assumed. Instead of passing one collection for
  *                            each key, you can use `ukv_option_read_colocated`.
@@ -252,7 +252,7 @@ void ukv_write( //
  *                            > lengths: Only fetches lengths of values, not content.
  *
  * @param[inout] tape         Points to a memory region that we use during
- *                            this request. If it's too small (@p `capacity`),
+ *                            this request. If it's too small (@param capacity),
  *                            we `realloc` a new buffer. You can't pass a memory
  *                            allocated by a third-party allocator.
  *                            During the first request you pass a NULL,
@@ -426,7 +426,7 @@ void ukv_control( //
  * @param db                Already open database instance, @see `ukv_open`.
  * @param sequence_number   If equal to 0, a new number will be generated on the fly.
  * @param txn               May be pointing to an existing transaction.
- *                          In that case, it's reset to new @p `sequence_number`.
+ *                          In that case, it's reset to new @param sequence_number.
  * @param error             The error message to be handled by callee.
  */
 void ukv_txn_begin( //

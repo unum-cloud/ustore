@@ -166,7 +166,7 @@ void ukv_docs_read( //
 void ukv_docs_gist( //
     ukv_t const db,
     ukv_txn_t const txn,
-    ukv_size_t const tasks_count,
+    ukv_size_t const docs_count,
 
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
@@ -185,30 +185,54 @@ void ukv_docs_gist( //
 /**
  * @brief The vectorized "gather" interface, that collects, type-checks and
  * casts (N*M) @c `int`/`float`s from M fields in N docs into a @b columnar format.
+ * Works with externally provided memory, as the volume of needed memory can be
+ * easily calculated by the user.
  *
+ * @param fields[in]
+ *              JSON-Pointer paths to scalars in desired documents.
+ *              If `fields_stride` is set to zero, we assume that all paths
+ *              are concatenated with a NULL-character delimiter.
+ *
+ * @param columns_validities[in]
+ *              Bitset, which will indicate validity of gather objects.
+ *              It must contain enough bits to consecutively stores the validity
+ *              indicators for every cell in the exported table of scalars.
+ *              The layout is:
+ *                  * 1st column bitset: `docs_count` bits rounded up to 8 multiple.
+ *                  * 2nd column bitset: `docs_count` bits rounded up to 8 multiple.
+ *                  * 3rd column bitset: `docs_count` bits rounded up to 8 multiple.
+ *              And so on for `fields_count` columns.
+ *              Indexing (little-endian vs BIG-endian) is identical to Apache Arrow.
+ *              The @param columns_conversions and @param columns_collisions have
+ *              same sizes and layouts, but are not supported by Apache Arrow.
+ *
+ * @param columns_conversions[in]
+ *              An @b Optional bitset, which will indicate type conversions.
+ *              Conversions mean, that the export/cast changes the semantics.
+ *              We identify following type groups: booleans, integers, floats, strings.
+ *              Any downcasting conversion between them will be done with best-effort,
+ *              but may not be lossless. Meaning that @c `bool` to @c `int` isn't
+ *              considered a downcast, same as @c `bool` to @c `double`.
+ *
+ * @param columns_collisions[in]
+ *              An @b Optional bitset, which will indicate key collisions.
+ *              Collisions imply, that a key was found, but it's internal
+ *              contents can't be converted to the requested scalar type.
+ *
+ * @param columns_scalars[in]
+ *              Buffers for scalars to be exported to.
+ *              The ordering of it's element is identical to @param columns_validities,
+ *              but every column only needs: `docs_count * sizeof(scalar)`
+ *
+ *
+ * @section Apache Arrow
  * We may have used Apache Arrow @c `RecordBatch` directly with @c `ArrowSchema`
  * or @c `ArrowArray`. It, however, would be inconsistent with other UKV APIs.
- *
- * @param fields[in]    JSON-Pointer paths to scalars in desired documents.
- *                      If `fields_stride` is set to zero, we assume that all paths
- *                      are concatenated with a NULL-character delimiter.
- *
- * @param columns_validities[in]   Bitset, which indicates validity of gather objects.
- * @param columns_conversions[in]  @b Optional bitset, which indicates type conversions.
- * @param columns_collisions[in]   @b Optional bitset, which indicates key collisions.
- * @param columns_scalars[in]      Buffers for scalars to be exported to.
- *
- * Collisions imply, that a key was found, but it's internal contents can't be
- * converted to the requested scalar type.
- * Conversions mean, that the export/cast changes the semantics.
- * There we identify following classes of leafs: booleans, integers, floats, strings.
- * Any downcasting conversion between them will be done with best-effort, but may not be lossless.
- * Meaning that @c `bool` to @c `int` isn't considered a downcast, same as @c `bool` to @c `double`.
  */
 void ukv_docs_gather_scalars( //
     ukv_t const db,
     ukv_txn_t const txn,
-    ukv_size_t const tasks_count,
+    ukv_size_t const docs_count,
     ukv_size_t const fields_count,
 
     ukv_collection_t const* collections,
@@ -244,7 +268,7 @@ void ukv_docs_gather_scalars( //
 void ukv_docs_gather_strings( //
     ukv_t const db,
     ukv_txn_t const txn,
-    ukv_size_t const tasks_count,
+    ukv_size_t const docs_count,
     ukv_size_t const fields_count,
 
     ukv_collection_t const* collections,
