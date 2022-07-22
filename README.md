@@ -12,6 +12,7 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 * [ACID](https://en.wikipedia.org/wiki/ACID) transactions across tables, docs & graphs
 * Familiar high-level [drivers](#frontends) for tabular & graph analytics
 * [Apache Arrow](https://arrow.apache.org/) exports, [Flight RPC](https://arrow.apache.org/docs/format/Flight.html) and [DataFusion SQL](https://github.com/apache/arrow-datafusion) support
+* Packing Tensors for [PyTorch](https://pytorch.org/) and [TensorFlow](tensorflow.org)
 
 UKV does just that, abstracting away the implementation from the user.
 In under 10K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
@@ -21,45 +22,29 @@ In under 10K LOC you get a reference implementation in C++, support for any clas
 Backends differ in their functionality and purposes.
 The underlying embedded key value stores include:
 
-| Name    |      OSes       | ACID  | Collections | Persistent |
-| :------ | :-------------: | :---: | :---------: | :--------: |
-| STL     | POSIX + Windows |   ✅   |      ✅      |     ❌      |
-| LevelDB | POSIX + Windows |   ❌   |      ❌      |     ✅      |
-| RocksDB | POSIX + Windows |   ✅   |      ✅      |     ✅      |
-| UnumDB  |      Linux      |   ✅   |      ✅      |     ✅      |
+| Name    |      OSes       | ACID  | Collections | Persistent | Safe Reads |
+| :------ | :-------------: | :---: | :---------: | :--------: | :--------: |
+| STL     | POSIX + Windows |   ✅   |      ✅      |     ❌      |     ✅      |
+| LevelDB | POSIX + Windows |   ❌   |      ❌      |     ✅      |     ❌      |
+| RocksDB | POSIX + Windows |   ✅   |      ✅      |     ✅      |     ❌      |
+| UnumDB  |      Linux      |   ✅   |      ✅      |     ✅      |     ✅      |
 
 The STL backend originally served educational purposes, yet, with a proper web-server implementation, is comparable to other in-memory stores like Redis, MemCached or ETCD.
 LevelDB is Key-Value stored designed at Google and extensively adopted across the industry.
 RocksDB originally forked LevelDB to extend its functionality with transactions, collections, and higher performance.
 
-Future work includes:
-
-* SQL Server
-* Distributed Sharded Backend
-* GraphQL Server
-
 ## Frontends
 
-Currently, at Proo-of-Concept stage, we support only the essential functionality in select programming languages.
+Currently, at Proof-of-Concept stage, we support only the essential functionality in select programming languages.
 
-| Name      | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy | Extras                         |
-| :-------- | :------: | :-----: | :---------: | :---: | :----: | :-------: | :----------------------------- |
-| C++       |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |                                |
-| Python    |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Image Decoding, Tensor Packing |
-| Java      |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |                                |
-| GoLang    |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✔️     |                                |
-| REST API  |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                                |
-| Arrow RPC |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                                |
-
-Future work would include:
-
-* Arrow Flight RPC,
-* Bindings for C#
-* Bindings for Rust
-* Bindings for Dart
-* Bindings for JavaScript
-* Bindings for Wolfram Language
-* GoLang Channel [Batch Reads](https://stackoverflow.com/a/36546929)
+| Name      | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy | Extras         |
+| :-------- | :------: | :-----: | :---------: | :---: | :----: | :-------: | :------------- |
+| C++       |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |                |
+| Python    |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Tensor Packing |
+| Java      |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |                |
+| GoLang    |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✔️     |                |
+| REST API  |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                |
+| Arrow RPC |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                |
 
 ## Assumptions and Limitations
 
