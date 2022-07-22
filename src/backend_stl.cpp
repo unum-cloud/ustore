@@ -496,7 +496,7 @@ void measure_txn( //
     stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
-    bool should_track_requests = !(c_options & ukv_option_read_transparent_k);
+    bool should_track_requests = (c_options & ukv_option_read_track_k);
 
     // 2. Pull the data
     auto lens = reinterpret_cast<ukv_val_len_t*>(tape);
@@ -552,7 +552,7 @@ void read_txn( //
     stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
-    bool should_track_requests = !(c_options & ukv_option_read_transparent_k);
+    bool should_track_requests = (c_options & ukv_option_read_track_k);
 
     // 1. Estimate the total size of keys
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;

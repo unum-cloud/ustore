@@ -87,12 +87,11 @@ typedef enum {
      */
     ukv_option_write_flush_k = 1 << 2,
     /**
-     * @brief When reading from a transaction, avoids tracking the keys.
-     * Which will increase the probability of writes, but levels-down the
-     * consistency guarantees. Only works in transactions created with
-     * the `ukv_option_txn_snapshot_k` flag.
+     * @brief When reading from a transaction, tracks requested keys.
+     * If the requested key was updated since the read, the transaction
+     * will fail on commit or prior to that.
      */
-    ukv_option_read_transparent_k = 1 << 3,
+    ukv_option_read_track_k = 1 << 3,
     /**
      * @brief When a transaction is started with this flag, a persistent
      * snapshot is created. It guarantees that the global state of all the
@@ -249,7 +248,7 @@ void ukv_write( //
  *                            is assumed. Instead of passing one collection for
  *                            each key, you can use `ukv_option_read_colocated`.
  * @param[in] options         Read options:
- *                            > transparent: Bypasses any ACID checks on following write.
+ *                            > track: Adds collision-detection on keys read through txn.
  *                            > lengths: Only fetches lengths of values, not content.
  *
  * @param[inout] tape         Points to a memory region that we use during
@@ -288,7 +287,7 @@ void ukv_read( //
  * Fetching lengths of values is @b optional.
  *
  * @param[in] options   Read options:
- *                      > transparent: Bypasses any ACID checks on following write.
+ *                      > track: Adds collision-detection on keys read through txn.
  *                      > lengths: Will fetches lengths of values, after the keys.
  */
 void ukv_scan( //
