@@ -207,25 +207,25 @@ static constexpr char const* mime_cbor_k = "application/cbor";
 static constexpr char const* mime_bson_k = "application/bson";
 static constexpr char const* mime_ubjson_k = "application/ubjson";
 
-ukv_format_t mime_to_format(beast::string_view mime) {
+ukv_doc_format_t mime_to_format(beast::string_view mime) {
     if (mime == mime_json_k)
-        return ukv_format_json_k;
+        return ukv_doc_format_json_k;
     else if (mime == "application/json-patch+json")
-        return ukv_format_json_patch_k;
+        return ukv_doc_format_json_patch_k;
     else if (mime == mime_msgpack_k)
-        return ukv_format_msgpack_k;
+        return ukv_doc_format_msgpack_k;
     else if (mime == mime_bson_k)
-        return ukv_format_bson_k;
+        return ukv_doc_format_bson_k;
     else if (mime == mime_cbor_k)
-        return ukv_format_cbor_k;
+        return ukv_doc_format_cbor_k;
     else if (mime == mime_ubjson_k)
-        return ukv_format_ubjson_k;
+        return ukv_doc_format_ubjson_k;
     else if (mime == "application/vnd.apache.arrow.stream" || mime == "application/vnd.apache.arrow.file")
-        return ukv_format_arrow_k;
+        return ukv_doc_format_arrow_k;
     else if (mime == "application/vnd.apache.parquet")
-        return ukv_format_parquet_k;
+        return ukv_doc_format_parquet_k;
     else
-        return ukv_format_unknown_k;
+        return ukv_doc_format_unknown_k;
 }
 
 struct db_w_clients_t : public std::enable_shared_from_this<db_w_clients_t> {

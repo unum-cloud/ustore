@@ -40,8 +40,8 @@ class value_refs_t {
 
     any_arena_t arena_;
 
-    inline expected_gt<taped_values_view_t> any_get(ukv_format_t format, ukv_options_t options) noexcept;
-    inline status_t any_set(disjoint_values_view_t vals, ukv_format_t format, ukv_options_t options) noexcept;
+    inline expected_gt<taped_values_view_t> any_get(ukv_doc_format_t format, ukv_options_t options) noexcept;
+    inline status_t any_set(disjoint_values_view_t vals, ukv_doc_format_t format, ukv_options_t options) noexcept;
 
   public:
     inline value_refs_t(
@@ -77,14 +77,14 @@ class value_refs_t {
     }
 
     inline expected_gt<taped_values_view_t> get( //
-        ukv_format_t format = ukv_format_binary_k,
+        ukv_doc_format_t format = ukv_doc_format_binary_k,
         bool track = false) noexcept {
         auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
         return any_get(format, options);
     }
 
     inline expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths( //
-        ukv_format_t format = ukv_format_binary_k,
+        ukv_doc_format_t format = ukv_doc_format_binary_k,
         bool track = false) noexcept {
 
         auto options = static_cast<ukv_options_t>((track ? ukv_option_read_track_k : ukv_options_default_k) |
@@ -102,7 +102,7 @@ class value_refs_t {
      * ! Related values may be empty strings.
      */
     inline expected_gt<strided_range_gt<bool>> contains( //
-        ukv_format_t format = ukv_format_binary_k,
+        ukv_doc_format_t format = ukv_doc_format_binary_k,
         bool track = false) noexcept {
 
         auto maybe = lengths(format, track);
@@ -128,7 +128,7 @@ class value_refs_t {
      */
     inline status_t set( //
         disjoint_values_view_t vals,
-        ukv_format_t format = ukv_format_binary_k,
+        ukv_doc_format_t format = ukv_doc_format_binary_k,
         bool flush = false) noexcept {
         return any_set(vals, format, flush ? ukv_option_write_flush_k : ukv_options_default_k);
     }
@@ -139,7 +139,7 @@ class value_refs_t {
      * @return status_t Non-NULL if only an error had occurred.
      */
     inline status_t erase(bool flush = false) noexcept { //
-        return set(disjoint_values_view_t {}, ukv_format_binary_k, flush);
+        return set(disjoint_values_view_t {}, ukv_doc_format_binary_k, flush);
     }
 
     /**
@@ -151,7 +151,7 @@ class value_refs_t {
         ukv_val_ptr_t any = reinterpret_cast<ukv_val_ptr_t>(this);
         ukv_val_len_t len = 0;
         return set(disjoint_values_view_t {.contents = {any}, .offsets = {}, .lengths = {len}},
-                   ukv_format_binary_k,
+                   ukv_doc_format_binary_k,
                    flush);
     }
 
@@ -616,13 +616,13 @@ struct collections_join_t {
     strided_range_gt<ukv_val_len_t> fetched_lengths;
 };
 
-inline expected_gt<taped_values_view_t> value_refs_t::any_get(ukv_format_t format, ukv_options_t options) noexcept {
+inline expected_gt<taped_values_view_t> value_refs_t::any_get(ukv_doc_format_t format, ukv_options_t options) noexcept {
 
     status_t status;
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
 
-    if (fields_ || format != ukv_format_binary_k)
+    if (fields_ || format != ukv_doc_format_binary_k)
         ukv_docs_read(db_,
                       txn_,
                       keys_.count(),
@@ -658,10 +658,10 @@ inline expected_gt<taped_values_view_t> value_refs_t::any_get(ukv_format_t forma
 }
 
 inline status_t value_refs_t::any_set(disjoint_values_view_t vals,
-                                      ukv_format_t format,
+                                      ukv_doc_format_t format,
                                       ukv_options_t options) noexcept {
     status_t status;
-    if (fields_ || format != ukv_format_binary_k)
+    if (fields_ || format != ukv_doc_format_binary_k)
         ukv_docs_write(db_,
                        txn_,
                        keys_.count(),

@@ -36,22 +36,22 @@ extern "C" {
 /*********************************************************/
 
 typedef enum {
-    ukv_format_binary_k = 0,
+    ukv_doc_format_binary_k = 0,
 
     // Flexible dynamically-typed document formats
-    ukv_format_json_k = 1,
-    ukv_format_msgpack_k = 2,
-    ukv_format_bson_k = 3,
-    ukv_format_cbor_k = 4,
-    ukv_format_ubjson_k = 5,
+    ukv_doc_format_json_k = 1,
+    ukv_doc_format_msgpack_k = 2,
+    ukv_doc_format_bson_k = 3,
+    ukv_doc_format_cbor_k = 4,
+    ukv_doc_format_ubjson_k = 5,
 
     // Patches and modifiers
     // https://stackoverflow.com/a/64882070/2766161
-    ukv_format_json_patch_k = 6,
-    ukv_format_json_merge_patch_k = 7,
+    ukv_doc_format_json_patch_k = 6,
+    ukv_doc_format_json_merge_patch_k = 7,
 
-    ukv_format_unknown_k = 0xFFFFFFFF,
-} ukv_format_t;
+    ukv_doc_format_unknown_k = 0xFFFFFFFF,
+} ukv_doc_format_t;
 
 /**
  * Type IDs needed to describe the values stored in the leafs of
@@ -108,7 +108,7 @@ void ukv_docs_write( //
     ukv_size_t const fields_stride,
 
     ukv_options_t const options,
-    ukv_format_t const format,
+    ukv_doc_format_t const format,
 
     ukv_val_ptr_t const* values,
     ukv_size_t const values_stride,
@@ -149,7 +149,7 @@ void ukv_docs_read( //
     ukv_size_t const fields_stride,
 
     ukv_options_t const options,
-    ukv_format_t const format,
+    ukv_doc_format_t const format,
 
     ukv_val_len_t** found_lengths,
     ukv_val_ptr_t* found_values,
