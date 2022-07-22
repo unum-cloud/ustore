@@ -438,6 +438,69 @@ void ukv_scan( //
     }
 }
 
+void ukv_size( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+
+    ukv_collection_t const* c_cols,
+    ukv_size_t const c_cols_stride,
+
+    ukv_key_t const* c_min_keys,
+    ukv_size_t const n,
+    ukv_size_t const c_min_keys_stride,
+
+    ukv_key_t const* c_max_keys,
+    ukv_size_t const c_max_keys_stride,
+
+    ukv_options_t const,
+
+    ukv_size_t** c_found_estimates,
+
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    ukv_size_t total_bytes = n * 6 * sizeof(ukv_size_t);
+    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
+    ukv_size_t* found_estimates = reinterpret_cast<ukv_size_t*>(tape);
+    *c_found_estimates = found_estimates;
+    if (*c_error)
+        return;
+
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    strided_iterator_gt<ukv_key_t const> min_keys {c_min_keys, c_min_keys_stride};
+    strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
+    std::vector<uint64_t> sizes;
+
+    for (ukv_size_t i = 0; i != n; ++i) {
+        ukv_size_t* estimates = found_estimates + i * 6;
+        estimates[0] = static_cast<ukv_size_t>(0);
+        estimates[1] = static_cast<ukv_size_t>(0);
+        estimates[2] = static_cast<ukv_size_t>(0);
+        estimates[3] = static_cast<ukv_size_t>(0);
+
+        ukv_key_t const min_key = min_keys[i];
+        ukv_key_t const max_key = max_keys[i];
+        leveldb::Range range(to_slice(min_key), to_slice(max_key));
+        try {
+            db.GetApproximateSizes(&range, 1, sizes.data());
+            std::string memory_usage;
+            db.GetProperty("leveldb.approximate-memory-usage", &memory_usage);
+            estimates[4] = sizes.size();
+            estimates[5] = std::stoi(memory_usage);
+        }
+        catch (...) {
+            *c_error = "Property Read Failure";
+        }
+    }
+}
+
 void ukv_collection_open( //
     ukv_t const,
     ukv_str_view_t,
@@ -464,11 +527,19 @@ void ukv_collection_list( //
 }
 
 void ukv_control( //
-    ukv_t const,
-    ukv_str_view_t,
-    ukv_str_view_t*,
+    ukv_t const c_db,
+    ukv_str_view_t c_request,
+    ukv_str_view_t* c_response,
     ukv_error_t* c_error) {
-    *c_error = "Controls not supported by LevelDB!";
+
+    if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
+
+    if (!c_request && (*c_error = "Request is NULL!"))
+        return;
+
+    *c_response = NULL;
+    *c_error = "Controls aren't supported in this implementation!";
 }
 
 void ukv_txn_begin( //
