@@ -76,9 +76,8 @@ TEST(db, basic) {
     }
 
     // Check scans
-    EXPECT_TRUE(col.keys());
-    keys_range_t present_keys = *col.keys();
-    keys_stream_t present_it = std::move(present_keys).begin();
+    keys_range_t present_keys = col.keys();
+    keys_stream_t present_it = present_keys.begin();
     auto expected_it = keys.begin();
     for (; expected_it != keys.end(); ++present_it, ++expected_it) {
         EXPECT_EQ(*expected_it, *present_it);
@@ -126,12 +125,10 @@ TEST(db, named) {
     round_trip(ref2, values);
 
     // Check scans
-    EXPECT_TRUE(col1.keys());
-    EXPECT_TRUE(col2.keys());
-    auto present_keys1 = *(col1.keys());
-    auto present_keys2 = *(col2.keys());
-    auto present_it1 = std::move(present_keys1).begin();
-    auto present_it2 = std::move(present_keys2).begin();
+    keys_range_t present_keys1 = col1.keys();
+    keys_range_t present_keys2 = col2.keys();
+    keys_stream_t present_it1 = present_keys1.begin();
+    keys_stream_t present_it2 = present_keys2.begin();
     auto expected_it1 = keys.begin();
     auto expected_it2 = keys.begin();
     for (; expected_it1 != keys.end(), expected_it2 != keys.end();
