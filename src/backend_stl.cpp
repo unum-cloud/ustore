@@ -24,7 +24,7 @@
 #include <filesystem> // Enumerating the directory
 #include <stdio.h>    // Saving/reading from disk
 
-#include "ukv/ukv.h"
+#include "ukv/db.h"
 #include "helpers.hpp"
 
 /*********************************************************/
@@ -261,8 +261,6 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
         db.named.emplace(std::string_view(col->name), std::move(col));
     }
 }
-
-
 
 void write_head( //
     stl_db_t& db,
@@ -715,7 +713,6 @@ void scan_txn( //
         found_lens += task.length;
     }
 }
-
 
 /*********************************************************/
 /*****************	    C Interface 	  ****************/

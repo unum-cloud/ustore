@@ -407,7 +407,7 @@ class graph_ref_t {
             vertices,
         }
             .on(arena())
-            .contains(ukv_format_binary_k, track);
+            .contains(ukv_doc_format_binary_k, track);
     }
 
     using adjacency_range_t = range_gt<adjacency_stream_t>;
