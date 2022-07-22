@@ -322,10 +322,10 @@ class graph_ref_t {
 
     status_t remove(strided_range_gt<ukv_key_t const> vertices,
                     strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
-                    bool transparent = false) noexcept {
+                    bool track = false) noexcept {
 
         status_t status;
-        ukv_options_t options = transparent ? ukv_option_read_transparent_k : ukv_options_default_k;
+        ukv_options_t options = track ? ukv_option_read_track_k : ukv_options_default_k;
 
         ukv_graph_remove_vertices(collection_.db(),
                                   collection_.txn(),
@@ -344,9 +344,9 @@ class graph_ref_t {
 
     expected_gt<ukv_vertex_degree_t> degree(ukv_key_t vertex,
                                             ukv_vertex_role_t role = ukv_vertex_role_any_k,
-                                            bool transparent = false) noexcept {
+                                            bool track = false) noexcept {
 
-        auto maybe_degrees = degrees({vertex}, {role}, transparent);
+        auto maybe_degrees = degrees({vertex}, {role}, track);
         if (!maybe_degrees)
             return maybe_degrees.release_status();
         auto degrees = *maybe_degrees;
@@ -356,13 +356,13 @@ class graph_ref_t {
     expected_gt<indexed_range_gt<ukv_vertex_degree_t*>> degrees(
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
-        bool transparent = false) noexcept {
+        bool track = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
         ukv_key_t* neighborships_per_vertex = nullptr;
-        ukv_options_t options = static_cast<ukv_options_t>(
-            (transparent ? ukv_option_read_transparent_k : ukv_options_default_k) | ukv_option_read_lengths_k);
+        ukv_options_t options = static_cast<ukv_options_t>((track ? ukv_option_read_track_k : ukv_options_default_k) |
+                                                           ukv_option_read_lengths_k);
 
         ukv_graph_find_edges(collection_.db(),
                              collection_.txn(),
@@ -384,9 +384,9 @@ class graph_ref_t {
         return indexed_range_gt<ukv_vertex_degree_t*> {degrees_per_vertex, degrees_per_vertex + vertices.size()};
     }
 
-    expected_gt<bool> contains(ukv_key_t vertex, bool transparent = false) noexcept {
+    expected_gt<bool> contains(ukv_key_t vertex, bool track = false) noexcept {
 
-        auto maybe_exists = contains(strided_range_gt<ukv_key_t const> {vertex}, transparent);
+        auto maybe_exists = contains(strided_range_gt<ukv_key_t const> {vertex}, track);
         if (!maybe_exists)
             return maybe_exists.release_status();
         auto exists = *maybe_exists;
@@ -399,7 +399,7 @@ class graph_ref_t {
      * They maybe disconnected from everything else.
      */
     expected_gt<strided_range_gt<bool>> contains(strided_range_gt<ukv_key_t const> vertices,
-                                                 bool transparent = false) noexcept {
+                                                 bool track = false) noexcept {
         return value_refs_t {
             collection_.db(),
             collection_.txn(),
@@ -407,7 +407,7 @@ class graph_ref_t {
             vertices,
         }
             .on(arena())
-            .contains(ukv_format_binary_k, transparent);
+            .contains(ukv_format_binary_k, track);
     }
 
     using adjacency_range_t = range_gt<adjacency_stream_t>;
@@ -430,7 +430,7 @@ class graph_ref_t {
 
     expected_gt<edges_span_t> edges(ukv_key_t vertex,
                                     ukv_vertex_role_t role = ukv_vertex_role_any_k,
-                                    bool transparent = false) noexcept {
+                                    bool track = false) noexcept {
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
         ukv_key_t* neighborships_per_vertex = nullptr;
@@ -444,7 +444,7 @@ class graph_ref_t {
                              0,
                              &role,
                              0,
-                             transparent ? ukv_option_read_transparent_k : ukv_options_default_k,
+                             track ? ukv_option_read_track_k : ukv_options_default_k,
                              &degrees_per_vertex,
                              &neighborships_per_vertex,
                              arena_.internal_cptr(),
@@ -460,8 +460,8 @@ class graph_ref_t {
         return edges_span_t {edges_begin, edges_begin + edges_count};
     }
 
-    expected_gt<edges_span_t> edges(ukv_key_t source, ukv_key_t target, bool transparent = false) noexcept {
-        auto maybe_all = edges(source, ukv_vertex_source_k, transparent);
+    expected_gt<edges_span_t> edges(ukv_key_t source, ukv_key_t target, bool track = false) noexcept {
+        auto maybe_all = edges(source, ukv_vertex_source_k, track);
         if (!maybe_all)
             return maybe_all;
 
@@ -482,7 +482,7 @@ class graph_ref_t {
     expected_gt<edges_span_t> edges_containing(
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k},
-        bool transparent = false) noexcept {
+        bool track = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
@@ -497,7 +497,7 @@ class graph_ref_t {
                              vertices.stride(),
                              roles.begin().get(),
                              roles.stride(),
-                             transparent ? ukv_option_read_transparent_k : ukv_options_default_k,
+                             track ? ukv_option_read_track_k : ukv_options_default_k,
                              &degrees_per_vertex,
                              &neighborships_per_vertex,
                              arena_.internal_cptr(),

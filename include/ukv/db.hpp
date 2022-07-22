@@ -78,17 +78,17 @@ class value_refs_t {
 
     inline expected_gt<taped_values_view_t> get( //
         ukv_format_t format = ukv_format_binary_k,
-        bool transparent = false) noexcept {
-        auto options = transparent ? ukv_option_read_transparent_k : ukv_options_default_k;
+        bool track = false) noexcept {
+        auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
         return any_get(format, options);
     }
 
     inline expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths( //
         ukv_format_t format = ukv_format_binary_k,
-        bool transparent = false) noexcept {
+        bool track = false) noexcept {
 
-        auto options = static_cast<ukv_options_t>(
-            (transparent ? ukv_option_read_transparent_k : ukv_options_default_k) | ukv_option_read_lengths_k);
+        auto options = static_cast<ukv_options_t>((track ? ukv_option_read_track_k : ukv_options_default_k) |
+                                                  ukv_option_read_lengths_k);
         auto maybe = any_get(format, options);
         if (!maybe)
             return maybe.release_status();
@@ -103,9 +103,9 @@ class value_refs_t {
      */
     inline expected_gt<strided_range_gt<bool>> contains( //
         ukv_format_t format = ukv_format_binary_k,
-        bool transparent = false) noexcept {
+        bool track = false) noexcept {
 
-        auto maybe = lengths(format, transparent);
+        auto maybe = lengths(format, track);
         if (!maybe)
             return maybe.release_status();
 

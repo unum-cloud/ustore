@@ -417,7 +417,7 @@ void ukv_read( //
         return;
     }
 
-    if (c_txn && !(c_options & ukv_option_read_transparent_k)) {
+    if (c_txn && (c_options & ukv_option_read_track_k)) {
         *c_error = "RocksDB only supports transparent reads!";
         return;
     }
@@ -468,7 +468,7 @@ void ukv_scan( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (c_txn && !(c_options & ukv_option_read_transparent_k)) {
+    if (c_txn && (c_options & ukv_option_read_track_k)) {
         *c_error = "RocksDB only supports transparent reads!";
         return;
     }
