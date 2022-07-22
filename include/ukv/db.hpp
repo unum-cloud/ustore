@@ -446,7 +446,7 @@ class txn_t {
     ukv_txn_t txn_ = nullptr;
 
   public:
-    txn_t(ukv_t db, ukv_txn_t txn) : db_(db), txn_(txn) {}
+    txn_t(ukv_t db, ukv_txn_t txn) noexcept : db_(db), txn_(txn) {}
     txn_t(txn_t const&) = delete;
     txn_t(txn_t&& other) noexcept : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)) {}
 
