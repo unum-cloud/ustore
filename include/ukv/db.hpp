@@ -19,6 +19,8 @@ namespace unum::ukv {
 
 class value_refs_t;
 class collection_t;
+class keys_stream_t;
+class keys_range_t;
 class txn_t;
 class db_t;
 
@@ -281,7 +283,7 @@ class keys_stream_t {
      * ! meaning that the error must be propagated in a different way.
      * ! So we promote this iterator to `end()`, once an error occurs.
      */
-    inline keys_stream_t& operator++() noexcept {
+    keys_stream_t& operator++() noexcept {
         status_t status = advance();
         if (status)
             return *this;
@@ -327,31 +329,64 @@ class keys_stream_t {
     }
 };
 
-using keys_range_t = range_gt<keys_stream_t>;
+struct size_range_t {
+    std::size_t min = 0;
+    std::size_t max = 0;
+};
 
-inline expected_gt<keys_range_t> keys_range(ukv_t db,
-                                            ukv_collection_t col = ukv_default_collection_k,
-                                            ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-                                            ukv_key_t max_key = ukv_key_unknown_k,
-                                            std::size_t read_ahead = keys_stream_t::default_read_ahead_k,
-                                            ukv_txn_t txn = nullptr) {
+struct size_estimates_t {
+    size_range_t cardinality;
+    size_range_t bytes_in_values;
+    size_range_t bytes_on_disk;
+};
 
-    keys_stream_t b {db, col, read_ahead, txn};
-    keys_stream_t e {db, col, read_ahead, txn};
-    status_t status = b.seek(min_key);
-    if (!status)
-        return status;
-    status = e.seek(max_key);
-    if (!status)
-        return status;
+class keys_range_t {
 
-    keys_range_t result {std::move(b), std::move(e)};
-    return result;
-}
+    ukv_t db_;
+    ukv_txn_t txn_;
+    ukv_collection_t col_;
+    ukv_key_t min_key_;
+    ukv_key_t max_key_;
+    std::size_t read_ahead_;
 
-class db_t;
-class db_session_t;
-class collection_t;
+  public:
+    keys_range_t(ukv_t db,
+                 ukv_txn_t txn = nullptr,
+                 ukv_collection_t col = ukv_default_collection_k,
+                 ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+                 ukv_key_t max_key = ukv_key_unknown_k,
+                 std::size_t read_ahead = keys_stream_t::default_read_ahead_k) noexcept
+        : db_(db), txn_(txn), col_(col), min_key_(min_key), max_key_(max_key), read_ahead_(read_ahead) {}
+
+    keys_range_t(keys_range_t const&) = default;
+    keys_range_t& operator=(keys_range_t const&) = default;
+
+    expected_gt<keys_stream_t> find_begin() noexcept {
+        keys_stream_t stream {db_, col_, read_ahead_, txn_};
+        status_t status = stream.seek(min_key_);
+        return {std::move(status), std::move(stream)};
+    }
+
+    expected_gt<keys_stream_t> find_end() noexcept {
+        keys_stream_t stream {db_, col_, read_ahead_, txn_};
+        status_t status = stream.seek(max_key_);
+        return {std::move(status), std::move(stream)};
+    }
+
+    expected_gt<size_estimates_t> find_size() noexcept;
+
+    keys_stream_t begin() noexcept(false) {
+        auto maybe = find_begin();
+        maybe.throw_unhandled();
+        return *std::move(maybe);
+    }
+
+    keys_stream_t end() noexcept(false) {
+        auto maybe = find_end();
+        maybe.throw_unhandled();
+        return *std::move(maybe);
+    }
+};
 
 /**
  * @brief RAII abstraction wrapping a collection handle.
@@ -390,10 +425,10 @@ class collection_t {
 
     inline expected_gt<std::size_t> size() const noexcept { return 0; }
 
-    inline auto keys(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-                     ukv_key_t max_key = ukv_key_unknown_k,
-                     std::size_t read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
-        return keys_range(db_, col_, min_key, max_key, read_ahead, nullptr);
+    inline keys_range_t keys(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+                             ukv_key_t max_key = ukv_key_unknown_k,
+                             std::size_t read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
+        return {db_, txn_, col_, min_key, max_key, read_ahead};
     }
 
     inline value_refs_t operator[](keys_view_t keys) const noexcept { //
@@ -424,12 +459,7 @@ class txn_t {
     }
 
     value_refs_t operator[](located_keys_view_t located) noexcept {
-        return {
-            db_,
-            txn_,
-            located.members(&located_key_t::collection),
-            located.members(&located_key_t::key),
-        };
+        return {db_, txn_, located.members(&located_key_t::collection), located.members(&located_key_t::key)};
     }
 
     value_refs_t operator[](keys_view_t keys) noexcept { //
