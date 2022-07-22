@@ -84,9 +84,6 @@ class docs_table_t {
 
     template <typename scalar_at>
     field_column_view_gt<scalar_at> column(std::size_t column_idx) {}
-
-    template <typename scalar_at>
-    field_column_view_gt<scalar_at> column(std::size_t column_idx) {}
 };
 
 } // namespace unum::ukv
