@@ -471,7 +471,27 @@ class keys_range_t {
         return {std::move(status), std::move(stream)};
     }
 
-    expected_gt<size_estimates_t> find_size() noexcept;
+    expected_gt<size_estimates_t> find_size() noexcept {
+        status_t status;
+        managed_arena_t arena(db_);
+        size_estimates_t result;
+        ukv_size(db_,
+                 txn_,
+                 1,
+                 &col_,
+                 0,
+                 &min_key_,
+                 0,
+                 &max_key_,
+                 0,
+                 ukv_options_default_k,
+                 &result.cardinality.min,
+                 arena.member_ptr(),
+                 status.member_ptr());
+        if (!status)
+            return status;
+        return result;
+    }
 
     keys_stream_t begin() noexcept(false) {
         auto maybe = find_begin();
