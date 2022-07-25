@@ -335,7 +335,7 @@ void ukv_size( //
 
     ukv_options_t const options,
 
-    ukv_size_t** found_estimates,
+    ukv_size_t* found_estimates,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
