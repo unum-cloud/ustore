@@ -111,8 +111,8 @@ TEST(db, named) {
     collection_t col2 = *(db["col2"]);
 
     ukv_val_len_t val_len = sizeof(std::uint64_t);
-    std::vector<ukv_key_t> keys {34, 35, 36};
-    std::vector<std::uint64_t> vals {34, 35, 36};
+    std::vector<ukv_key_t> keys {44, 45, 46};
+    std::vector<std::uint64_t> vals {44, 45, 46};
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
@@ -144,6 +144,91 @@ TEST(db, named) {
     }
     EXPECT_TRUE(present_it1.is_end());
     EXPECT_TRUE(present_it2.is_end());
+
+    db.remove("col1");
+    db.remove("col2");
+    EXPECT_FALSE(*db.contains("col1"));
+    EXPECT_FALSE(*db.contains("col2"));
+}
+
+TEST(db, txn) {
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.transact());
+    txn_t txn = *db.transact();
+
+    std::vector<ukv_key_t> keys {54, 55, 56};
+    ukv_val_len_t val_len = sizeof(std::uint64_t);
+    std::vector<std::uint64_t> vals {54, 55, 56};
+    std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
+
+    disjoint_values_view_t values {
+        .contents = {&vals_begin, 0, 3},
+        .offsets = offs,
+        .lengths = {val_len, 3},
+    };
+
+    value_refs_t ref = txn[keys];
+    round_trip(ref, values);
+
+    EXPECT_TRUE(db.collection());
+    collection_t col = *db.collection();
+    ref = col[keys];
+
+    // Check for missing values before commit
+    taped_values_view_t retrieved = *ref.get();
+    tape_iterator_t it = retrieved.begin();
+    for (std::size_t i = 0; i != ref.keys().size(); ++i, ++it) {
+        value_view_t val_view = *it;
+        EXPECT_EQ(val_view.size(), 0u);
+    }
+
+    txn.commit();
+    txn.reset();
+
+    // Validate that values match after commit
+    retrieved = *ref.get();
+    it = retrieved.begin();
+    for (std::size_t i = 0; i != ref.keys().size(); ++i, ++it) {
+        auto expected_len = static_cast<std::size_t>(values.lengths[i]);
+        auto expected_begin = reinterpret_cast<byte_t const*>(values.contents[i]) + values.offsets[i];
+
+        value_view_t val_view = *it;
+        EXPECT_EQ(val_view.size(), expected_len);
+        EXPECT_TRUE(std::equal(val_view.begin(), val_view.end(), expected_begin));
+    }
+
+    // Transaction with named collection
+    EXPECT_TRUE(db.collection("named_col"));
+    collection_t named_col = *db.collection("named_col");
+    std::vector<located_key_t> located_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
+    ref = txn[located_keys];
+    round_trip(ref, values);
+
+    // Check for missing values before commit
+    ref = named_col[keys];
+    retrieved = *ref.get();
+    it = retrieved.begin();
+    for (std::size_t i = 0; i != ref.keys().size(); ++i, ++it) {
+        value_view_t val_view = *it;
+        EXPECT_EQ(val_view.size(), 0u);
+    }
+
+    txn.commit();
+    txn.reset();
+
+    // Validate that values match after commit
+    retrieved = *ref.get();
+    it = retrieved.begin();
+    for (std::size_t i = 0; i != ref.keys().size(); ++i, ++it) {
+        auto expected_len = static_cast<std::size_t>(values.lengths[i]);
+        auto expected_begin = reinterpret_cast<byte_t const*>(values.contents[i]) + values.offsets[i];
+
+        value_view_t val_view = *it;
+        EXPECT_EQ(val_view.size(), expected_len);
+        EXPECT_TRUE(std::equal(val_view.begin(), val_view.end(), expected_begin));
+    }
 }
 
 TEST(db, nested_docs) {
