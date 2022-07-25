@@ -76,6 +76,13 @@ TEST(db, intro) {
     }
     _ = main.keys(100, 200).find_size()->cardinality;
 
+    // Supporting options
+    _ = main[{43, 44}].on(arena).clear(/*flush:*/ false);
+    _ = main[{43, 44}].on(arena).erase(/*flush:*/ false);
+    _ = main[{43, 44}].on(arena).present(/*track:*/ false);
+    _ = main[{43, 44}].on(arena).length(/*format:*/ ukv_doc_format_binary_k, /*track:*/ false);
+    _ = main[{43, 44}].on(arena).value(/*format:*/ ukv_doc_format_binary_k, /*track:*/ false);
+
     // Working with sub documents
     main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
 }
