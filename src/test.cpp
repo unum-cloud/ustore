@@ -25,29 +25,56 @@ TEST(db, intro) {
     EXPECT_TRUE(db.collection());
     collection_t main = *db.collection();
 
+    // Single-element access
     main[42] = "purpose of life";
-    db["prefixes"]->at(42) = "purpose";
-    db["suffixes"]->at(42) = "of life";
+    main.at(42) = "purpose of life";
+    EXPECT_EQ(main[42].value()->first, "purpose of life");
+    main[42].clear();
 
+    // Mapping multiple keys to same values
     main[{43, 44}] = "same value";
 
+    // Operations on smart-references
+    main[{43, 44}].clear();
+    main[{43, 44}].erase();
+    main[{43, 44}].present();
+    main[{43, 44}].length();
+    main[{43, 44}].value();
+    for (value_view_t value : main[{100, 101}].value()->first) {
+    }
+
+    // Accessing named collections
+    collection_t prefixes = *db.collection("prefixes");
+    prefixes.at(42) = "purpose";
+    db["articles"]->at(42) = "of";
+    db["suffixes"]->at(42) = "life";
+
+    // Reusable memory
     managed_arena_t arena(db);
     expected_gt<taped_values_view_t> tapes = main[{100, 101}].on(arena);
 
-    ukv_key_t keys[] = {10, 11, 12};
-    char const* values[] = {"Dav", "Ash", "D"};
-    main[keys] = values;
+    // Batch-assignment: many keys to many values
+    main[std::array<ukv_key_t, 3> {65, 66, 67}] = std::array {"A", "B", "C"};
+    main[std::array {sub(prefixes, 65), sub(66), sub(67)}] = std::array {"A", "B", "C"};
 
+    // Iterating over collections
+    for (ukv_key_t key : main.keys()) {
+    }
+    for (ukv_key_t key : main.keys(100, 200)) {
+    }
+    main.keys(100, 200).find_size()->cardinality;
+
+    // Working with sub documents
     main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
 }
 
 template <typename locations_at>
 void check_missing(member_refs_gt<locations_at>& ref) {
 
-    EXPECT_TRUE(ref.get()) << "Failed to fetch missing keys";
+    EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
 
     // Validate that values match
-    std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.get();
+    std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.value();
     taped_values_view_t retrieved = retrieved_and_arena.first;
     ukv_size_t count = location_get_count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
@@ -59,14 +86,14 @@ void check_missing(member_refs_gt<locations_at>& ref) {
     }
 
     // Check boolean indicators
-    auto maybe_indicators_and_arena = ref.contains();
+    auto maybe_indicators_and_arena = ref.present();
     EXPECT_TRUE(maybe_indicators_and_arena);
     for (std::size_t i = 0; i != count; ++i, ++it) {
         EXPECT_FALSE(maybe_indicators_and_arena->first[i]);
     }
 
     // Check length estimates
-    auto maybe_lengths_and_arena = ref.lengths();
+    auto maybe_lengths_and_arena = ref.length();
     EXPECT_TRUE(maybe_lengths_and_arena);
     for (std::size_t i = 0; i != count; ++i, ++it) {
         EXPECT_EQ(maybe_lengths_and_arena->first[i], ukv_val_len_missing_k);
@@ -76,10 +103,10 @@ void check_missing(member_refs_gt<locations_at>& ref) {
 template <typename locations_at>
 void check_equalities(member_refs_gt<locations_at>& ref, values_arg_t values) {
 
-    EXPECT_TRUE(ref.get()) << "Failed to fetch present keys";
+    EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
 
     // Validate that values match
-    std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.get();
+    std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.value();
     taped_values_view_t retrieved = retrieved_and_arena.first;
     EXPECT_EQ(retrieved.size(), location_get_count(ref.locations()));
 
@@ -97,7 +124,7 @@ void check_equalities(member_refs_gt<locations_at>& ref, values_arg_t values) {
 
 template <typename locations_at>
 void round_trip(member_refs_gt<locations_at>& ref, values_arg_t values) {
-    EXPECT_TRUE(ref.set(values)) << "Failed to assign";
+    EXPECT_TRUE(ref.assign(values)) << "Failed to assign";
     check_equalities(ref, values);
 }
 
@@ -144,16 +171,7 @@ TEST(db, basic) {
 
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
-    for (ukv_key_t key : keys) {
-        auto matches = col[key];
-        auto maybe_indicators_and_arena = matches.contains();
-        EXPECT_TRUE(maybe_indicators_and_arena);
-        EXPECT_FALSE(maybe_indicators_and_arena->first[0]);
-
-        auto maybe_lengths_and_arena = matches.lengths();
-        EXPECT_TRUE(maybe_lengths_and_arena);
-        EXPECT_EQ(maybe_lengths_and_arena->first[0], ukv_val_len_missing_k);
-    }
+    check_missing(ref);
 }
 
 TEST(db, named) {
@@ -241,8 +259,8 @@ TEST(db, txn) {
     // Transaction with named collection
     EXPECT_TRUE(db.collection("named_col"));
     collection_t named_col = *db.collection("named_col");
-    std::vector<located_key_t> located_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
-    ref = txn[located_keys];
+    std::vector<sub_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
+    ref = txn[sub_keys];
     round_trip(ref, values);
 
     // Check for missing values before commit

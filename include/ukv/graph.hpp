@@ -385,13 +385,7 @@ class graph_ref_t {
     }
 
     expected_gt<bool> contains(ukv_key_t vertex, bool track = false) noexcept {
-
-        auto maybe_exists = contains(strided_range_gt<ukv_key_t const> {vertex}, track);
-        if (!maybe_exists)
-            return maybe_exists.release_status();
-        auto exists = *maybe_exists;
-        bool one_exists = exists[0];
-        return one_exists;
+        return collection_[vertex].on(arena()).present(track);
     }
 
     /**
@@ -400,7 +394,7 @@ class graph_ref_t {
      */
     expected_gt<strided_range_gt<bool>> contains(strided_range_gt<ukv_key_t const> vertices,
                                                  bool track = false) noexcept {
-        return collection_[vertices].on(arena()).contains(ukv_doc_format_binary_k, track);
+        return collection_[vertices].on(arena()).present(track);
     }
 
     using adjacency_range_t = range_gt<adjacency_stream_t>;

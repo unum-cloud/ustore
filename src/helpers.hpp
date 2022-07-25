@@ -179,9 +179,9 @@ struct stl_arena_t {
     growing_tape_t growing_tape;
     /**
      * In complex multi-step operations we need arrays
-     * of `located_key_t` to sort/navigate them more easily.
+     * of `sub_key_t` to sort/navigate them more easily.
      */
-    std::vector<located_key_t> updated_keys;
+    std::vector<sub_key_t> updated_keys;
     /**
      * In complex multi-step operations we need disjoint arrays
      * variable-length buffers to avoid expensive `memmove`s in
@@ -232,7 +232,7 @@ struct read_task_t {
     ukv_collection_t col;
     ukv_key_t const& key;
 
-    inline located_key_t location() const noexcept { return located_key_t {col, key}; }
+    inline sub_key_t location() const noexcept { return sub_key_t {col, key}; }
 };
 
 /**
@@ -258,7 +258,7 @@ struct scan_task_t {
     ukv_key_t const& min_key;
     ukv_size_t length;
 
-    inline located_key_t location() const noexcept { return located_key_t {col, min_key}; }
+    inline sub_key_t location() const noexcept { return sub_key_t {col, min_key}; }
 };
 
 /**
@@ -288,7 +288,7 @@ struct write_task_t {
     ukv_val_len_t offset;
     ukv_val_len_t length;
 
-    inline located_key_t location() const noexcept { return located_key_t {col, key}; }
+    inline sub_key_t location() const noexcept { return sub_key_t {col, key}; }
     inline bool is_deleted() const noexcept { return begin == nullptr; }
     value_view_t view() const noexcept { return {begin + offset, begin + offset + length}; }
     buffer_t buffer() const { return {begin + offset, begin + offset + length}; }
