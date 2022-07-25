@@ -7,10 +7,12 @@ from qibuild import cmake
 __version__ = '0.0.5'
 __libname__ = 'ukv'
 
-cmake_cache = cmake.read_cmake_cache("CMakeCache.txt")
+cmake_cache = cmake.read_cmake_cache('CMakeCache.txt')
 
-include_dirs = [f"/{cmake_cache['FMT_SOURCE_DIR']}/include",
-                "include/", "python/"]
+include_dirs = [
+    f"{cmake_cache['FMT_SOURCE_DIR']}/include",
+    'include/',
+    'python/']
 
 ext_modules = [
     Pybind11Extension(
