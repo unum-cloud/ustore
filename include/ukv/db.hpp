@@ -549,16 +549,21 @@ class collection_t {
         return {db_, txn_, col_, min_key, max_key, read_ahead};
     }
 
-    inline member_refs_gt<keys_arg_t> operator[](keys_view_t keys) const noexcept {
+    inline member_refs_gt<keys_arg_t> operator[](keys_view_t keys) noexcept {
         keys_arg_t located;
         located.collections_begin = &col_;
         located.keys_begin = keys.begin();
         located.count = keys.size();
-        return {db_, txn_, std::move(located)};
+        return at(std::move(located));
     }
 
     template <typename keys_arg_at>
     member_refs_gt<keys_arg_at> operator[](keys_arg_at&& keys) noexcept { //
+        return at(std::forward<keys_arg_at>(keys));
+    }
+
+    template <typename keys_arg_at>
+    member_refs_gt<keys_arg_at> at(keys_arg_at&& keys) noexcept { //
         return {db_, txn_, std::forward<keys_arg_at>(keys)};
     }
 };
@@ -651,7 +656,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
     db_t(db_t const&) = delete;
     db_t(db_t&& other) noexcept : db_(std::exchange(other.db_, nullptr)) {}
 
-    status_t open(std::string const& config) {
+    status_t open(std::string const& config = "") {
         status_t status;
         ukv_open(config.c_str(), &db_, status.member_ptr());
         return status;
@@ -807,7 +812,7 @@ expected_gt<taped_values_view_t> managed_refs_gt<locations_at>::any_get(doc_fmt_
 
 template <typename locations_at>
 template <typename values_arg_at>
-status_t managed_refs_gt<locations_at>::any_set(values_arg_at&& vals,
+status_t managed_refs_gt<locations_at>::any_set(values_arg_at&& vals_ref,
                                                 doc_fmt_t format,
                                                 ukv_options_t options) noexcept {
     status_t status;
@@ -817,6 +822,7 @@ status_t managed_refs_gt<locations_at>::any_set(values_arg_at&& vals,
     auto cols = location_get_cols(locations_);
     auto fields = location_get_fields(locations_);
 
+    auto vals = vals_ref;
     auto contents = value_get_contents(vals);
     auto offsets = value_get_offsets(vals);
     auto lengths = value_get_lengths(vals);

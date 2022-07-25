@@ -110,7 +110,8 @@ class [[nodiscard]] expected_gt {
     operator bool() const noexcept { return status_; }
     object_at&& operator*() && noexcept { return std::move(object_); }
     object_at const& operator*() const& noexcept { return object_; }
-    object_at const* operator->() const& noexcept { return &object_; }
+    object_at* operator->() noexcept { return &object_; }
+    object_at const* operator->() const noexcept { return &object_; }
     operator std::optional<object_at>() && {
         return !status_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
     }
@@ -210,6 +211,10 @@ class strided_range_gt {
         : begin_(vec.data()), stride_(sizeof(object_at)), count_(vec.size()) {}
     strided_range_gt(std::vector<std::remove_const_t<object_at>> const& vec) noexcept
         : begin_(vec.data()), stride_(sizeof(object_at)), count_(vec.size()) {}
+
+    template <std::size_t count_ak>
+    strided_range_gt(object_at (&c_array)[count_ak]) noexcept
+        : begin_(&c_array[0]), stride_(sizeof(object_at)), count_(count_ak) {}
 
     strided_range_gt(strided_range_gt&&) = default;
     strided_range_gt(strided_range_gt const&) = default;
@@ -599,7 +604,7 @@ template <typename at> inline strided_iterator_gt<ukv_str_view_t const> location
     } else return {};
 }
 
-inline strided_iterator_gt<ukv_val_ptr_t const> value_get_contents(char const **strings) noexcept { return {(ukv_val_ptr_t const*)(strings), sizeof(char const*)}; }
+inline strided_iterator_gt<ukv_val_ptr_t const> value_get_contents(char const **&strings) noexcept { return {(ukv_val_ptr_t const*)(strings), sizeof(char const*)}; }
 inline strided_iterator_gt<ukv_val_len_t const> value_get_offsets(char const **) noexcept { return {}; }
 inline strided_iterator_gt<ukv_val_len_t const> value_get_lengths(char const **) noexcept { return {}; }
 
@@ -608,8 +613,8 @@ inline strided_iterator_gt<ukv_val_len_t const> value_get_offsets(char const *) 
 inline strided_iterator_gt<ukv_val_len_t const> value_get_lengths(char const *) noexcept { return {}; }
 
 inline strided_iterator_gt<ukv_val_ptr_t const> value_get_contents(value_view_t const &one) noexcept { return {one.member_ptr(), 0}; }
-inline strided_iterator_gt<ukv_val_len_t const> value_get_offsets(value_view_t) noexcept { return {}; }
-inline strided_iterator_gt<ukv_val_len_t const> value_get_lengths(value_view_t one) noexcept { return {one.member_length(), 0}; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_offsets(value_view_t const &) noexcept { return {}; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_lengths(value_view_t const &one) noexcept { return {one.member_length(), 0}; }
 
 inline strided_iterator_gt<ukv_val_ptr_t const> value_get_contents(values_arg_t const &native) noexcept { return native.contents_begin; }
 inline strided_iterator_gt<ukv_val_len_t const> value_get_offsets(values_arg_t const &native) noexcept { return native.offsets_begin; }
