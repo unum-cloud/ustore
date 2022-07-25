@@ -875,6 +875,7 @@ void ukv_size( //
     ukv_options_t const,
 
     ukv_size_t* c_found_estimates,
+    ukv_arena_t*,
     ukv_error_t* c_error) {
 
     if (!c_db && (*c_error = "DataBase is NULL!"))

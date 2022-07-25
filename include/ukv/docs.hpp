@@ -57,9 +57,9 @@ class strings_tape_iterator_t {
 
 template <typename scalar_at>
 class field_cell_gt {
-    bool valid = nullptr;
-    bool converted = nullptr;
-    bool collides = nullptr;
+    bool valid = false;
+    bool converted = false;
+    bool collides = false;
     scalar_at* scalars_ = nullptr;
 };
 
