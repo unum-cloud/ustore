@@ -104,15 +104,15 @@ public abstract class DataBase {
 
         /**
          * @breif Resets the state of the transaction and creates a new "sequence
-         * number" or "transaction ID" for it. Can't be used after `commit`.
+         *        number" or "transaction ID" for it. Can't be used after `commit`.
          */
         public native void rollback();
 
         /**
          * @return true if the operation was submitted and the state of DBMS updated.
          * @brief Commits all the writes to DBMS, checking for collisions in the
-         * process. Both in writes and "non-transaparent" reads. Returns
-         * operation result, but doesn't throw exceptions.
+         *        process. Both in writes and "non-transaparent" reads. Returns
+         *        operation result, but doesn't throw exceptions.
          */
         public native boolean commit();
 
@@ -274,7 +274,7 @@ public abstract class DataBase {
 
         /**
          * @brief Initializes and opens a connection using passed config.
-         * No need to call `open` or `close` after than.
+         *        No need to call `open` or `close` after than.
          */
         public Context(String config_json) {
             open(config_json);
@@ -286,25 +286,25 @@ public abstract class DataBase {
 
         /**
          * @brief Begins a new transaction with an auto-incremented identifier.
-         * By default, the transaction will be commited on `close`.
+         *        By default, the transaction will be commited on `close`.
          */
         public native Transaction transaction();
 
         /**
          * @brief Clears the entire DB so that it contains no keys, but keeps collection
-         * names. Imposes a global lock on the entire collection, so use rarely.
+         *        names. Imposes a global lock on the entire collection, so use rarely.
          */
         public native void clear();
 
         /**
          * @brief Clears this collection so that it contains no keys.
-         * Imposes a global lock on the entire collection, so use rarely.
+         *        Imposes a global lock on the entire collection, so use rarely.
          */
         public native void clear(String collection);
 
         /**
          * @brief Removes a collection and all the keys in it.
-         * Imposes a global lock on the entire collection, so use rarely.
+         *        Imposes a global lock on the entire collection, so use rarely.
          */
         public native void remove(String collection);
 
