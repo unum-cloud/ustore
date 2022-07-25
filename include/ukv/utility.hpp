@@ -25,32 +25,40 @@ enum class byte_t : uint8_t {};
 
 /**
  * @brief An OOP-friendly location representation for objects in the DB.
- * Should be used with `stride` set to `sizeof(located_key_t)`.
+ * Should be used with `stride` set to `sizeof(sub_key_t)`.
  */
-struct located_key_t {
+struct sub_key_t {
 
     ukv_collection_t collection = ukv_default_collection_k;
     ukv_key_t key = 0;
 
-    located_key_t() = default;
-    located_key_t(located_key_t const&) = default;
-    located_key_t& operator=(located_key_t const&) = default;
+    sub_key_t() = default;
+    sub_key_t(sub_key_t const&) = default;
+    sub_key_t& operator=(sub_key_t const&) = default;
 
-    inline located_key_t(ukv_collection_t c, ukv_key_t k) noexcept : collection(c), key(k) {}
-    inline located_key_t(ukv_key_t k) noexcept : key(k) {}
-    inline located_key_t in(ukv_collection_t col) noexcept { return {col, key}; }
+    inline sub_key_t(ukv_collection_t c, ukv_key_t k) noexcept : collection(c), key(k) {}
+    inline sub_key_t(ukv_key_t k) noexcept : key(k) {}
+    inline sub_key_t in(ukv_collection_t col) noexcept { return {col, key}; }
 
-    inline bool operator==(located_key_t const& other) const noexcept {
+    inline bool operator==(sub_key_t const& other) const noexcept {
         return (collection == other.collection) & (key == other.key);
     }
-    inline bool operator!=(located_key_t const& other) const noexcept {
+    inline bool operator!=(sub_key_t const& other) const noexcept {
         return (collection != other.collection) | (key != other.key);
     }
-    inline bool operator<(located_key_t const& other) const noexcept { return key < other.key; }
-    inline bool operator>(located_key_t const& other) const noexcept { return key > other.key; }
-    inline bool operator<=(located_key_t const& other) const noexcept { return key <= other.key; }
-    inline bool operator>=(located_key_t const& other) const noexcept { return key >= other.key; }
+    inline bool operator<(sub_key_t const& other) const noexcept { return key < other.key; }
+    inline bool operator>(sub_key_t const& other) const noexcept { return key > other.key; }
+    inline bool operator<=(sub_key_t const& other) const noexcept { return key <= other.key; }
+    inline bool operator>=(sub_key_t const& other) const noexcept { return key >= other.key; }
 };
+
+inline sub_key_t sub(ukv_collection_t collection, ukv_key_t key) {
+    return {collection, key};
+}
+
+inline sub_key_t sub(ukv_key_t key) {
+    return {key};
+}
 
 class [[nodiscard]] status_t {
     ukv_error_t raw_ = nullptr;
@@ -88,6 +96,10 @@ class [[nodiscard]] status_t {
     ukv_error_t release_error() noexcept { return std::exchange(raw_, nullptr); }
 };
 
+/**
+ * @brief Wraps a potentially non-trivial type, like "optional",
+ * often controlling the underlying memory of the object.
+ */
 template <typename object_at>
 class [[nodiscard]] expected_gt {
     status_t status_;
@@ -121,6 +133,26 @@ class [[nodiscard]] expected_gt {
             throw status_.release_exception();
     }
     inline status_t release_status() { return std::exchange(status_, status_t {}); }
+
+    template <typename hetero_at>
+    bool operator==(expected_gt<hetero_at> const& other) const noexcept {
+        return status_ == other.status_ && object_ == other.object_;
+    }
+
+    template <typename hetero_at>
+    bool operator!=(expected_gt<hetero_at> const& other) const noexcept {
+        return status_ != other.status_ || object_ != other.object_;
+    }
+
+    template <typename hetero_at>
+    bool operator==(hetero_at const& other) const noexcept {
+        return status_ && object_ == other;
+    }
+
+    template <typename hetero_at>
+    bool operator!=(hetero_at const& other) const noexcept {
+        return status_ || object_ != other;
+    }
 };
 
 /**
@@ -215,6 +247,10 @@ class strided_range_gt {
     template <std::size_t count_ak>
     strided_range_gt(object_at (&c_array)[count_ak]) noexcept
         : begin_(&c_array[0]), stride_(sizeof(object_at)), count_(count_ak) {}
+
+    template <std::size_t count_ak>
+    strided_range_gt(std::array<object_at, count_ak> const& array) noexcept
+        : begin_(array.data()), stride_(sizeof(object_at)), count_(count_ak) {}
 
     strided_range_gt(strided_range_gt&&) = default;
     strided_range_gt(strided_range_gt const&) = default;
@@ -336,8 +372,12 @@ class value_view_t {
             length_ = length;
         }
     }
+
     inline value_view_t(byte_t const* begin, byte_t const* end) noexcept
         : ptr_(ukv_val_ptr_t(begin)), length_(static_cast<ukv_val_len_t>(end - begin)) {}
+
+    inline value_view_t(char const* c_str) noexcept
+        : ptr_(ukv_val_ptr_t(c_str)), length_(static_cast<ukv_val_len_t>(std::strlen(c_str))) {}
 
     inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
     inline byte_t const* end() const noexcept { return begin() + length_; }
@@ -366,7 +406,7 @@ struct collections_view_t : public strided_range_gt<ukv_collection_t const> {
 using keys_view_t = strided_range_gt<ukv_key_t const>;
 using fields_view_t = strided_range_gt<ukv_str_view_t const>;
 
-using located_keys_view_t = strided_range_gt<located_key_t const>;
+using sub_keys_view_t = strided_range_gt<sub_key_t const>;
 
 /**
  * Working with batched data is ugly in C++.
@@ -538,20 +578,20 @@ inline void hash_combine(std::size_t& seed, hashable_at const& v) {
     seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
-struct located_key_hash_t {
-    inline std::size_t operator()(located_key_t const& located) const noexcept {
+struct sub_key_hash_t {
+    inline std::size_t operator()(sub_key_t const& sub) const noexcept {
         std::size_t result = SIZE_MAX;
-        hash_combine(result, located.key);
-        hash_combine(result, located.collection);
+        hash_combine(result, sub.key);
+        hash_combine(result, sub.collection);
         return result;
     }
 };
 
 // clang-format off
-inline ukv_size_t location_get_count(located_key_t&) noexcept { return 1; }
-inline strided_iterator_gt<ukv_key_t const> location_get_keys(located_key_t& one) noexcept { return {&one.key}; }
-inline strided_iterator_gt<ukv_collection_t const> location_get_cols(located_key_t& one) noexcept { return {&one.collection}; }
-inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(located_key_t&) noexcept { return {}; }
+inline ukv_size_t location_get_count(sub_key_t&) noexcept { return 1; }
+inline strided_iterator_gt<ukv_key_t const> location_get_keys(sub_key_t& one) noexcept { return {&one.key}; }
+inline strided_iterator_gt<ukv_collection_t const> location_get_cols(sub_key_t& one) noexcept { return {&one.collection}; }
+inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(sub_key_t&) noexcept { return {}; }
 
 inline ukv_size_t location_get_count(keys_arg_t const& arg) noexcept { return arg.count; }
 inline strided_iterator_gt<ukv_key_t const> location_get_keys(keys_arg_t const& arg) noexcept { return arg.keys_begin; }

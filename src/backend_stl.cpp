@@ -76,9 +76,9 @@ struct stl_collection_t {
 using stl_collection_ptr_t = std::unique_ptr<stl_collection_t>;
 
 struct stl_txn_t {
-    std::map<located_key_t, buffer_t> upserted;
-    std::unordered_map<located_key_t, sequence_t, located_key_hash_t> requested;
-    std::unordered_set<located_key_t, located_key_hash_t> removed;
+    std::map<sub_key_t, buffer_t> upserted;
+    std::unordered_map<sub_key_t, sequence_t, sub_key_hash_t> requested;
+    std::unordered_set<sub_key_t, sub_key_hash_t> removed;
 
     stl_db_t* db_ptr {nullptr};
     sequence_t sequence_number {0};
@@ -1098,20 +1098,20 @@ void ukv_txn_commit( //
     sequence_t const youngest_sequence_number = db.youngest_sequence.load();
 
     // 1. Check for refreshes among fetched keys
-    for (auto const& [located_key, located_sequence] : txn.requested) {
-        stl_collection_t& col = stl_collection(db, located_key.collection);
-        auto key_iterator = col.pairs.find(located_key.key);
+    for (auto const& [sub_key, sub_sequence] : txn.requested) {
+        stl_collection_t& col = stl_collection(db, sub_key.collection);
+        auto key_iterator = col.pairs.find(sub_key.key);
         if (key_iterator == col.pairs.end())
             continue;
-        if (key_iterator->second.sequence_number != located_sequence &&
+        if (key_iterator->second.sequence_number != sub_sequence &&
             (*c_error = "Requested key was already overwritten since the start of the transaction!"))
             return;
     }
 
     // 2. Check for collisions among incoming values
-    for (auto const& [located_key, value] : txn.upserted) {
-        stl_collection_t& col = stl_collection(db, located_key.collection);
-        auto key_iterator = col.pairs.find(located_key.key);
+    for (auto const& [sub_key, value] : txn.upserted) {
+        stl_collection_t& col = stl_collection(db, sub_key.collection);
+        auto key_iterator = col.pairs.find(sub_key.key);
         if (key_iterator == col.pairs.end())
             continue;
 
@@ -1127,9 +1127,9 @@ void ukv_txn_commit( //
     }
 
     // 3. Check for collisions among deleted values
-    for (auto const& located_key : txn.removed) {
-        stl_collection_t& col = stl_collection(db, located_key.collection);
-        auto key_iterator = col.pairs.find(located_key.key);
+    for (auto const& sub_key : txn.removed) {
+        stl_collection_t& col = stl_collection(db, sub_key.collection);
+        auto key_iterator = col.pairs.find(sub_key.key);
         if (key_iterator == col.pairs.end())
             continue;
 
@@ -1156,11 +1156,11 @@ void ukv_txn_commit( //
     }
 
     // 5. Import the data, as no collisions were detected
-    for (auto& located_key_and_value : txn.upserted) {
-        stl_collection_t& col = stl_collection(db, located_key_and_value.first.collection);
-        auto key_iterator = col.pairs.find(located_key_and_value.first.key);
+    for (auto& sub_key_and_value : txn.upserted) {
+        stl_collection_t& col = stl_collection(db, sub_key_and_value.first.collection);
+        auto key_iterator = col.pairs.find(sub_key_and_value.first.key);
         // A key was deleted:
-        // if (located_key_and_value.second.empty()) {
+        // if (sub_key_and_value.second.empty()) {
         //     if (key_iterator != col.pairs.end())
         //         col.pairs.erase(key_iterator);
         // }
@@ -1168,20 +1168,20 @@ void ukv_txn_commit( //
         // else
         if (key_iterator != col.pairs.end()) {
             key_iterator->second.sequence_number = txn.sequence_number;
-            std::swap(key_iterator->second.buffer, located_key_and_value.second);
+            std::swap(key_iterator->second.buffer, sub_key_and_value.second);
         }
         // A key was inserted:
         else {
-            stl_sequenced_value_t sequenced_value {std::move(located_key_and_value.second), txn.sequence_number};
-            col.pairs.emplace(located_key_and_value.first.key, std::move(sequenced_value));
+            stl_sequenced_value_t sequenced_value {std::move(sub_key_and_value.second), txn.sequence_number};
+            col.pairs.emplace(sub_key_and_value.first.key, std::move(sequenced_value));
             ++col.unique_elements;
         }
     }
 
     // 6. Remove the requested entries
-    for (auto const& located_key : txn.removed) {
-        stl_collection_t& col = stl_collection(db, located_key.collection);
-        auto key_iterator = col.pairs.find(located_key.key);
+    for (auto const& sub_key : txn.removed) {
+        stl_collection_t& col = stl_collection(db, sub_key.collection);
+        auto key_iterator = col.pairs.find(sub_key.key);
         if (key_iterator == col.pairs.end())
             continue;
 
