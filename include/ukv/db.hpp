@@ -17,93 +17,80 @@
 
 namespace unum::ukv {
 
-class value_refs_t;
 class collection_t;
 class keys_stream_t;
 class keys_range_t;
 class txn_t;
 class db_t;
 
+using doc_fmt_t = ukv_doc_format_t;
+
+template <typename locations_at>
+class member_refs_gt;
+
 /**
- * @brief A proxy object, that allows both lookups and writes
- * with `[]` and assignment operators for a batch of keys
- * simultaneously.
+ * @brief Unlike `member_refs_gt`, yields results on a temporary arena,
+ * which is less efficient, but requires less code. To reuse a memory
+ * buffer, just call `.on(arena)` to convert to `member_refs_gt`.
  */
-class value_refs_t {
+template <typename locations_at>
+class managed_refs_gt {
   protected:
     ukv_t db_ = nullptr;
     ukv_txn_t txn_ = nullptr;
+    ukv_arena_t* arena_ = nullptr;
 
-    collections_view_t cols_;
-    keys_view_t keys_;
-    fields_view_t fields_;
+    locations_at locations_;
 
-    any_arena_t arena_;
-
-    inline expected_gt<taped_values_view_t> any_get(ukv_doc_format_t format, ukv_options_t options) noexcept;
-    inline status_t any_set(disjoint_values_view_t vals, ukv_doc_format_t format, ukv_options_t options) noexcept;
+    template <typename values_arg_at>
+    status_t any_set(values_arg_at&&, doc_fmt_t, ukv_options_t) noexcept;
+    expected_gt<taped_values_view_t> any_get(doc_fmt_t, ukv_options_t) noexcept;
 
   public:
-    inline value_refs_t(
-        ukv_t db, ukv_txn_t txn, collections_view_t cols, keys_view_t keys, fields_view_t fields = {}) noexcept
-        : db_(db), txn_(txn), cols_(cols), keys_(keys), fields_(fields), arena_(db) {}
+    using contains_t = strided_range_gt<bool>;
+    using lengths_t = indexed_range_gt<ukv_val_len_t*>;
+    operator expected_gt<taped_values_view_t>() noexcept { return get(); }
+    locations_at& locations() noexcept { return locations_; }
+    locations_at const& locations() const noexcept { return locations_; }
 
-    inline value_refs_t(value_refs_t const&) = delete;
-    inline value_refs_t& operator=(value_refs_t const&) = delete;
+    managed_refs_gt(ukv_t db, ukv_txn_t txn, managed_arena_t& arena, locations_at&& locations) noexcept
+        : db_(db), txn_(txn), arena_(arena.member_ptr()), locations_(std::forward<locations_at>(locations)) {}
 
-    inline value_refs_t(value_refs_t&& other) noexcept
+    managed_refs_gt(managed_refs_gt const&) = delete;
+    managed_refs_gt& operator=(managed_refs_gt const&) = delete;
+
+    managed_refs_gt(managed_refs_gt&& other) noexcept
         : db_(std::exchange(other.db_, nullptr)), txn_(std::exchange(other.txn_, nullptr)),
-          cols_(std::exchange(other.cols_, {})), keys_(std::exchange(other.keys_, {})),
-          fields_(std::exchange(other.fields_, {})), arena_(std::move(other.arena_)) {}
+          txn_(std::exchange(other.arena_, nullptr)), locations_(std::move(other.locations_)) {}
 
-    inline value_refs_t& operator=(value_refs_t&& other) noexcept {
+    managed_refs_gt& operator=(managed_refs_gt&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(txn_, other.txn_);
-        std::swap(cols_, other.cols_);
-        std::swap(keys_, other.keys_);
-        std::swap(fields_, other.fields_);
         std::swap(arena_, other.arena_);
+        std::swap(locations_, other.locations_);
         return *this;
     }
 
-    inline value_refs_t& on(managed_arena_t& arena) noexcept {
-        arena_ = arena;
-        return *this;
-    }
-
-    inline value_refs_t& from(ukv_txn_t txn) noexcept {
-        txn_ = txn;
-        return *this;
-    }
-
-    inline expected_gt<taped_values_view_t> get( //
-        ukv_doc_format_t format = ukv_doc_format_binary_k,
-        bool track = false) & noexcept {
+    expected_gt<taped_values_view_t> get(doc_fmt_t format = ukv_doc_format_binary_k, bool track = false) noexcept {
         auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
         return any_get(format, options);
     }
 
-    inline expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths( //
-        ukv_doc_format_t format = ukv_doc_format_binary_k,
-        bool track = false) & noexcept {
-
-        auto options = static_cast<ukv_options_t>((track ? ukv_option_read_track_k : ukv_options_default_k) |
-                                                  ukv_option_read_lengths_k);
-        auto maybe = any_get(format, options);
+    expected_gt<lengths_t> lengths(doc_fmt_t format = ukv_doc_format_binary_k, bool track = false) noexcept {
+        auto options = (track ? ukv_option_read_track_k : ukv_options_default_k) | ukv_option_read_lengths_k;
+        auto maybe = any_get(format, static_cast<ukv_options_t>(options));
         if (!maybe)
             return maybe.release_status();
 
         auto found_lengths = maybe->lengths();
-        return indexed_range_gt<ukv_val_len_t*> {found_lengths, found_lengths + keys_.count()};
+        return lengths_t {found_lengths, found_lengths + location_get_count(locations_)};
     }
 
     /**
-     * @brief Checks if requested keys_ are present in the store.
+     * @brief Checks if requested keys are present in the store.
      * ! Related values may be empty strings.
      */
-    inline expected_gt<strided_range_gt<bool>> contains( //
-        ukv_doc_format_t format = ukv_doc_format_binary_k,
-        bool track = false) & noexcept {
+    expected_gt<contains_t> contains(doc_fmt_t format = ukv_doc_format_binary_k, bool track = false) noexcept {
 
         auto maybe = lengths(format, track);
         if (!maybe)
@@ -111,78 +98,189 @@ class value_refs_t {
 
         // Transform the `found_lengths` into booleans.
         auto found_lengths = maybe->begin();
-        std::transform(found_lengths, found_lengths + keys_.size(), found_lengths, [](ukv_val_len_t len) {
-            return len != ukv_val_len_missing_k;
-        });
+        std::transform(found_lengths,
+                       found_lengths + location_get_count(locations_),
+                       found_lengths,
+                       [](ukv_val_len_t len) { return len != ukv_val_len_missing_k; });
 
         // Cast assuming "Little-Endian" architecture
         auto last_byte_offset = 0; // sizeof(ukv_val_len_t) - sizeof(bool);
         auto booleans = reinterpret_cast<bool*>(found_lengths);
-        return strided_range_gt<bool> {booleans + last_byte_offset, sizeof(ukv_val_len_t), keys_.size()};
+        return contains_t {booleans + last_byte_offset, sizeof(ukv_val_len_t), location_get_count(locations_)};
     }
 
     /**
-     * @brief Pair-wise assigns values to keys_ located in this proxy objects.
+     * @brief Pair-wise assigns values to keys located in this proxy objects.
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return status_t Non-NULL if only an error had occurred.
      */
-    inline status_t set( //
-        disjoint_values_view_t vals,
-        ukv_doc_format_t format = ukv_doc_format_binary_k,
-        bool flush = false) noexcept {
-        return any_set(vals, format, flush ? ukv_option_write_flush_k : ukv_options_default_k);
+    template <typename values_arg_at>
+    status_t set(values_arg_at&& vals, doc_fmt_t format = ukv_doc_format_binary_k, bool flush = false) noexcept {
+        return any_set(std::forward<values_arg_at>(vals),
+                       format,
+                       flush ? ukv_option_write_flush_k : ukv_options_default_k);
     }
 
     /**
-     * @brief Removes both the keys_ and the associated values.
+     * @brief Removes both the keys and the associated values.
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return status_t Non-NULL if only an error had occurred.
      */
-    inline status_t erase(bool flush = false) noexcept { //
-        return set(disjoint_values_view_t {}, ukv_doc_format_binary_k, flush);
+    status_t erase(bool flush = false) noexcept { //
+        return set(nullptr, ukv_doc_format_binary_k, flush);
     }
 
     /**
-     * @brief Keeps the keys_, but clears the contents of associated values.
+     * @brief Keeps the locations_, but clears the contents of associated values.
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return status_t Non-NULL if only an error had occurred.
      */
-    inline status_t clear(bool flush = false) noexcept {
+    status_t clear(bool flush = false) noexcept {
         ukv_val_ptr_t any = reinterpret_cast<ukv_val_ptr_t>(this);
         ukv_val_len_t len = 0;
-        return set(disjoint_values_view_t {.contents = {any}, .offsets = {}, .lengths = {len}},
-                   ukv_doc_format_binary_k,
-                   flush);
+        return set(
+            values_arg_t {
+                .contents_begin = {&any},
+                .offsets_begin = {},
+                .lengths_begin = {&len},
+            },
+            ukv_doc_format_binary_k,
+            flush);
     }
 
-    inline operator expected_gt<taped_values_view_t>() & noexcept { return get(); }
-
-    inline value_refs_t& operator=(disjoint_values_view_t vals) noexcept(false) {
-        auto status = set(vals);
+    template <typename values_arg_at>
+    managed_refs_gt& operator=(values_arg_at&& vals) noexcept(false) {
+        auto status = set(std::forward<values_arg_at>(vals));
         status.throw_unhandled();
         return *this;
     }
 
-    inline value_refs_t& operator=(nullptr_t) noexcept(false) {
+    managed_refs_gt& operator=(nullptr_t) noexcept(false) {
         auto status = erase();
         status.throw_unhandled();
         return *this;
     }
+};
 
-    inline collections_view_t cols() const noexcept { return cols_; }
-    inline keys_view_t keys() const noexcept { return keys_; }
-    inline fields_view_t fields() const noexcept { return fields_; }
+/**
+ * @brief A proxy object, that allows both lookups and writes
+ * with `[]` and assignment operators for a batch of keys
+ * simultaneously.
+ * Following assignment combinations are possible:
+ * > one value to many keys
+ * > many values to many keys
+ * > one value to one key
+ * The only impossible combination is assigning many values to one key.
+ *
+ * @tparam locations_at Type describing the address of a value in DBMS.
+ * > (ukv_collection_t?, ukv_key_t, ukv_field_t?): Single KV-pair location.
+ * > (ukv_collection_t*, ukv_key_t*, ukv_field_t*): Externally owned range of keys.
+ * > (ukv_collection_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
+ *
+ * @tparam arena_at Either a
+ */
+template <typename locations_at>
+class member_refs_gt {
+  protected:
+    ukv_t db_ = nullptr;
+    ukv_txn_t txn_ = nullptr;
 
-    inline value_refs_t& cols(collections_view_t cols) noexcept {
-        cols_ = cols;
+    locations_at locations_;
+
+  public:
+    using contains_t = strided_range_gt<bool>;
+    using lengths_t = indexed_range_gt<ukv_val_len_t*>;
+    operator expected_gt<std::pair<taped_values_view_t, managed_arena_t>>() noexcept { return get(); }
+    locations_at& locations() noexcept { return locations_; }
+    locations_at const& locations() const noexcept { return locations_; }
+
+    member_refs_gt(ukv_t db, ukv_txn_t txn, locations_at&& location) noexcept
+        : db_(db), txn_(txn), locations_(std::forward<locations_at>(location)) {}
+
+    member_refs_gt(member_refs_gt const&) = delete;
+    member_refs_gt& operator=(member_refs_gt const&) = delete;
+
+    member_refs_gt(member_refs_gt&& other) noexcept
+        : db_(std::exchange(other.db_, nullptr)), txn_(std::exchange(other.txn_, nullptr)),
+          locations_(std::move(other.locations_)) {}
+
+    member_refs_gt& operator=(member_refs_gt&& other) noexcept {
+        std::swap(db_, other.db_);
+        std::swap(txn_, other.txn_);
+        std::swap(locations_, other.locations_);
         return *this;
     }
-    inline value_refs_t& keys(keys_view_t keys) noexcept {
-        keys_ = keys;
+
+    member_refs_gt& from(ukv_txn_t txn) noexcept {
+        txn_ = txn;
         return *this;
     }
-    inline value_refs_t& fields(fields_view_t fields) noexcept {
-        fields_ = fields;
+
+    managed_refs_gt<locations_at> on(managed_arena_t& arena) && noexcept {
+        return {db_, txn_, arena, std::forward<locations_at>(locations_)};
+    }
+
+    managed_refs_gt<locations_at const&> on(managed_arena_t& arena) const& noexcept {
+        return {db_, txn_, arena, locations_};
+    }
+
+    expected_gt<std::pair<taped_values_view_t, managed_arena_t>> //
+    get(doc_fmt_t format = ukv_doc_format_binary_k, bool track = false) noexcept {
+        managed_arena_t arena(db_);
+        auto maybe = on(arena).get(format, track);
+        if (!maybe)
+            return {maybe.release_status(), {{}, std::move(arena)}};
+        return std::make_pair(*std::move(maybe), std::move(arena));
+    }
+
+    expected_gt<std::pair<lengths_t, managed_arena_t>> //
+    lengths(doc_fmt_t format = ukv_doc_format_binary_k, bool track = false) noexcept {
+        managed_arena_t arena(db_);
+        auto maybe = on(arena).lengths(format, track);
+        if (!maybe)
+            return {maybe.release_status(), {{}, std::move(arena)}};
+        return std::make_pair(*std::move(maybe), std::move(arena));
+    }
+
+    expected_gt<std::pair<contains_t, managed_arena_t>> //
+    contains(doc_fmt_t format = ukv_doc_format_binary_k, bool track = false) noexcept {
+        managed_arena_t arena(db_);
+        auto maybe = on(arena).contains(format, track);
+        if (!maybe)
+            return {maybe.release_status(), {{}, std::move(arena)}};
+        return std::make_pair(*std::move(maybe), std::move(arena));
+    }
+
+    template <typename values_arg_at>
+    expected_gt<managed_arena_t> //
+    set(values_arg_at&& vals, doc_fmt_t format = ukv_doc_format_binary_k, bool flush = false) noexcept {
+        managed_arena_t arena(db_);
+        auto maybe = on(arena).set(std::forward<values_arg_at>(vals), format, flush);
+        return {std::move(maybe), std::move(arena)};
+    }
+
+    expected_gt<managed_arena_t> erase(bool flush = false) noexcept { //
+        managed_arena_t arena(db_);
+        auto maybe = on(arena).erase(flush);
+        return {std::move(maybe), std::move(arena)};
+    }
+
+    expected_gt<managed_arena_t> clear(bool flush = false) noexcept {
+        managed_arena_t arena(db_);
+        auto maybe = on(arena).clear(flush);
+        return {std::move(maybe), std::move(arena)};
+    }
+
+    template <typename values_arg_at>
+    member_refs_gt& operator=(values_arg_at&& vals) noexcept(false) {
+        auto status = set(std::forward<values_arg_at>(vals));
+        status.throw_unhandled();
+        return *this;
+    }
+
+    member_refs_gt& operator=(nullptr_t) noexcept(false) {
+        auto status = erase();
+        status.throw_unhandled();
         return *this;
     }
 };
@@ -227,8 +325,8 @@ class keys_stream_t {
                  ukv_options_default_k,
                  &found_keys,
                  &found_lens,
-                 arena_.internal_cptr(),
-                 status.internal_cptr());
+                 arena_.member_ptr(),
+                 status.member_ptr());
         if (!status)
             return status;
 
@@ -419,7 +517,7 @@ class collection_t {
         return *this;
     }
     inline operator ukv_collection_t() const noexcept { return col_; }
-    inline ukv_collection_t* internal_cptr() noexcept { return &col_; }
+    inline ukv_collection_t* member_ptr() noexcept { return &col_; }
     inline ukv_t db() const noexcept { return db_; }
     inline ukv_txn_t txn() const noexcept { return txn_; }
 
@@ -431,8 +529,17 @@ class collection_t {
         return {db_, txn_, col_, min_key, max_key, read_ahead};
     }
 
-    inline value_refs_t operator[](keys_view_t keys) const noexcept { //
-        return {db_, txn_, strided_range_gt<ukv_collection_t const> {&col_, 0, keys.size()}, keys, fields_view_t {}};
+    inline member_refs_gt<keys_arg_t> operator[](keys_view_t keys) const noexcept {
+        keys_arg_t located;
+        located.collections_begin = &col_;
+        located.keys_begin = keys.begin();
+        located.count = keys.size();
+        return {db_, txn_, std::move(located)};
+    }
+
+    template <typename keys_arg_at>
+    member_refs_gt<keys_arg_at> operator[](keys_arg_at&& keys) noexcept { //
+        return {db_, txn_, std::forward<keys_arg_at>(keys)};
     }
 };
 
@@ -458,25 +565,37 @@ class txn_t {
             ukv_txn_free(db_, txn_);
     }
 
-    value_refs_t operator[](located_keys_view_t located) noexcept {
-        return {db_, txn_, located.members(&located_key_t::collection), located.members(&located_key_t::key)};
+    member_refs_gt<keys_arg_t> operator[](located_keys_view_t cols_and_keys) noexcept {
+        keys_arg_t located;
+        located.collections_begin = cols_and_keys.members(&located_key_t::collection).begin();
+        located.keys_begin = cols_and_keys.members(&located_key_t::key).begin();
+        located.count = cols_and_keys.size();
+        return {db_, txn_, std::move(located)};
     }
 
-    value_refs_t operator[](keys_view_t keys) noexcept { //
-        return {db_, txn_, {}, keys};
+    member_refs_gt<keys_arg_t> operator[](keys_view_t keys) noexcept { //
+        keys_arg_t located;
+        located.keys_begin = keys.begin();
+        located.count = keys.size();
+        return {db_, txn_, std::move(located)};
+    }
+
+    template <typename keys_arg_at>
+    member_refs_gt<keys_arg_at> operator[](keys_arg_at keys) noexcept { //
+        return {db_, txn_, std::move(keys)};
     }
 
     status_t reset(bool snapshot = false) noexcept {
         status_t status;
         auto options = snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k;
-        ukv_txn_begin(db_, 0, options, &txn_, status.internal_cptr());
+        ukv_txn_begin(db_, 0, options, &txn_, status.member_ptr());
         return status;
     }
 
     status_t commit(bool flush = false) noexcept {
         status_t status;
         auto options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
-        ukv_txn_commit(txn_, options, status.internal_cptr());
+        ukv_txn_commit(txn_, options, status.member_ptr());
         return status;
     }
 
@@ -486,7 +605,7 @@ class txn_t {
     expected_gt<collection_t> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
         ukv_collection_t col = nullptr;
-        ukv_collection_open(db_, name, nullptr, &col, status.internal_cptr());
+        ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
@@ -514,7 +633,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
     status_t open(std::string const& config) {
         status_t status;
-        ukv_open(config.c_str(), &db_, status.internal_cptr());
+        ukv_open(config.c_str(), &db_, status.member_ptr());
         return status;
     }
 
@@ -541,7 +660,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
         status_t status;
         ukv_size_t count = 0;
         ukv_str_view_t names = nullptr;
-        ukv_collection_list(db_, &count, &names, memory.internal_cptr(), status.internal_cptr());
+        ukv_collection_list(db_, &count, &names, memory.member_ptr(), status.member_ptr());
         if (!status)
             return status;
 
@@ -571,7 +690,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
     expected_gt<collection_t> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
         ukv_collection_t col = nullptr;
-        ukv_collection_open(db_, name, nullptr, &col, status.internal_cptr());
+        ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
@@ -580,14 +699,14 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
     status_t remove(ukv_str_view_t name) noexcept {
         status_t status;
-        ukv_collection_remove(db_, name, status.internal_cptr());
+        ukv_collection_remove(db_, name, status.member_ptr());
         return status;
     }
 
     expected_gt<txn_t> transact() {
         status_t status;
         ukv_txn_t raw = nullptr;
-        ukv_txn_begin(db_, 0, ukv_options_default_k, &raw, status.internal_cptr());
+        ukv_txn_begin(db_, 0, ukv_options_default_k, &raw, status.member_ptr());
         if (!status)
             return {std::move(status), txn_t {db_, nullptr}};
         else
@@ -616,88 +735,111 @@ struct collections_join_t {
     strided_range_gt<ukv_val_len_t> fetched_lengths;
 };
 
-inline expected_gt<taped_values_view_t> value_refs_t::any_get(ukv_doc_format_t format, ukv_options_t options) noexcept {
-
+template <typename locations_at>
+expected_gt<taped_values_view_t> managed_refs_gt<locations_at>::any_get(doc_fmt_t format,
+                                                                        ukv_options_t options) noexcept {
     status_t status;
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
 
-    if (fields_ || format != ukv_doc_format_binary_k)
-        ukv_docs_read(db_,
-                      txn_,
-                      keys_.count(),
-                      cols_.begin().get(),
-                      cols_.stride(),
-                      keys_.begin().get(),
-                      keys_.stride(),
-                      fields_.begin().get(),
-                      fields_.stride(),
-                      options,
-                      format,
-                      &found_lengths,
-                      &found_values,
-                      arena_.internal_cptr(),
-                      status.internal_cptr());
+    auto count = location_get_count(locations_);
+    auto keys = location_get_keys(locations_);
+    auto cols = location_get_cols(locations_);
+    auto fields = location_get_fields(locations_);
+
+    if (fields || format != ukv_doc_format_binary_k)
+        ukv_docs_read( //
+            db_,
+            txn_,
+            count,
+            cols.get(),
+            cols.stride(),
+            keys.get(),
+            keys.stride(),
+            fields.get(),
+            fields.stride(),
+            options,
+            format,
+            &found_lengths,
+            &found_values,
+            arena_,
+            status.member_ptr());
     else
-        ukv_read(db_,
-                 txn_,
-                 keys_.count(),
-                 cols_.begin().get(),
-                 cols_.stride(),
-                 keys_.begin().get(),
-                 keys_.stride(),
-                 options,
-                 &found_lengths,
-                 &found_values,
-                 arena_.internal_cptr(),
-                 status.internal_cptr());
+        ukv_read( //
+            db_,
+            txn_,
+            count,
+            cols.get(),
+            cols.stride(),
+            keys.get(),
+            keys.stride(),
+            options,
+            &found_lengths,
+            &found_values,
+            arena_,
+            status.member_ptr());
+
     if (!status)
         return status;
 
-    return taped_values_view_t {found_lengths, found_values, keys_.count()};
+    return taped_values_view_t {found_lengths, found_values, count};
 }
 
-inline status_t value_refs_t::any_set(disjoint_values_view_t vals,
-                                      ukv_doc_format_t format,
-                                      ukv_options_t options) noexcept {
+template <typename locations_at>
+template <typename values_arg_at>
+status_t managed_refs_gt<locations_at>::any_set(values_arg_at&& vals,
+                                                doc_fmt_t format,
+                                                ukv_options_t options) noexcept {
     status_t status;
-    if (fields_ || format != ukv_doc_format_binary_k)
-        ukv_docs_write(db_,
-                       txn_,
-                       keys_.count(),
-                       cols_.begin().get(),
-                       cols_.stride(),
-                       keys_.begin().get(),
-                       keys_.stride(),
-                       fields_.begin().get(),
-                       fields_.stride(),
-                       options,
-                       format,
-                       vals.contents.begin().get(),
-                       vals.contents.stride(),
-                       vals.offsets.begin().get(),
-                       vals.offsets.stride(),
-                       vals.lengths.begin().get(),
-                       vals.lengths.stride(),
-                       arena_.internal_cptr(),
-                       status.internal_cptr());
+
+    auto count = location_get_count(locations_);
+    auto keys = location_get_keys(locations_);
+    auto cols = location_get_cols(locations_);
+    auto fields = location_get_fields(locations_);
+
+    auto contents = value_get_contents(vals);
+    auto offsets = value_get_offsets(vals);
+    auto lengths = value_get_lengths(vals);
+
+    if (fields || format != ukv_doc_format_binary_k)
+        ukv_docs_write( //
+            db_,
+            txn_,
+            count,
+            cols.get(),
+            cols.stride(),
+            keys.get(),
+            keys.stride(),
+            fields.get(),
+            fields.stride(),
+            options,
+            format,
+            contents.get(),
+            contents.stride(),
+            offsets.get(),
+            offsets.stride(),
+            lengths.get(),
+            lengths.stride(),
+            arena_,
+            status.member_ptr());
     else
-        ukv_write(db_,
-                  txn_,
-                  keys_.count(),
-                  cols_.begin().get(),
-                  cols_.stride(),
-                  keys_.begin().get(),
-                  keys_.stride(),
-                  vals.contents.begin().get(),
-                  vals.contents.stride(),
-                  vals.offsets.begin().get(),
-                  vals.offsets.stride(),
-                  vals.lengths.begin().get(),
-                  vals.lengths.stride(),
-                  options,
-                  arena_.internal_cptr(),
-                  status.internal_cptr());
+        ukv_write( //
+            db_,
+            txn_,
+            count,
+            cols.get(),
+            cols.stride(),
+            keys.get(),
+            keys.stride(),
+            contents.get(),
+            contents.stride(),
+            offsets.get(),
+            offsets.stride(),
+            lengths.get(),
+            lengths.stride(),
+            options,
+            arena_,
+            status.member_ptr());
     return status;
 }
 

@@ -159,8 +159,8 @@ class adjacency_stream_t {
                              ukv_options_default_k,
                              &degrees_per_vertex,
                              &neighborships_per_vertex,
-                             arena_.internal_cptr(),
-                             status.internal_cptr());
+                             arena_.member_ptr(),
+                             status.member_ptr());
         if (!status)
             return status;
 
@@ -287,7 +287,7 @@ class graph_ref_t {
         ukv_graph_upsert_edges(collection_.db(),
                                collection_.txn(),
                                edges.size(),
-                               collection_.internal_cptr(),
+                               collection_.member_ptr(),
                                0,
                                edges.edge_ids.begin().get(),
                                edges.edge_ids.stride(),
@@ -296,8 +296,8 @@ class graph_ref_t {
                                edges.target_ids.begin().get(),
                                edges.target_ids.stride(),
                                ukv_options_default_k,
-                               arena_.internal_cptr(),
-                               status.internal_cptr());
+                               arena_.member_ptr(),
+                               status.member_ptr());
         return status;
     }
 
@@ -306,7 +306,7 @@ class graph_ref_t {
         ukv_graph_remove_edges(collection_.db(),
                                collection_.txn(),
                                edges.size(),
-                               collection_.internal_cptr(),
+                               collection_.member_ptr(),
                                0,
                                edges.edge_ids.begin().get(),
                                edges.edge_ids.stride(),
@@ -315,8 +315,8 @@ class graph_ref_t {
                                edges.target_ids.begin().get(),
                                edges.target_ids.stride(),
                                ukv_options_default_k,
-                               arena_.internal_cptr(),
-                               status.internal_cptr());
+                               arena_.member_ptr(),
+                               status.member_ptr());
         return status;
     }
 
@@ -330,15 +330,15 @@ class graph_ref_t {
         ukv_graph_remove_vertices(collection_.db(),
                                   collection_.txn(),
                                   vertices.count(),
-                                  collection_.internal_cptr(),
+                                  collection_.member_ptr(),
                                   0,
                                   vertices.begin().get(),
                                   vertices.stride(),
                                   roles.begin().get(),
                                   roles.stride(),
                                   options,
-                                  arena_.internal_cptr(),
-                                  status.internal_cptr());
+                                  arena_.member_ptr(),
+                                  status.member_ptr());
         return status;
     }
 
@@ -367,7 +367,7 @@ class graph_ref_t {
         ukv_graph_find_edges(collection_.db(),
                              collection_.txn(),
                              vertices.count(),
-                             collection_.internal_cptr(),
+                             collection_.member_ptr(),
                              0,
                              vertices.begin().get(),
                              vertices.stride(),
@@ -376,8 +376,8 @@ class graph_ref_t {
                              options,
                              &degrees_per_vertex,
                              &neighborships_per_vertex,
-                             arena_.internal_cptr(),
-                             status.internal_cptr());
+                             arena_.member_ptr(),
+                             status.member_ptr());
         if (!status)
             return status;
 
@@ -399,15 +399,8 @@ class graph_ref_t {
      * They maybe disconnected from everything else.
      */
     expected_gt<strided_range_gt<bool>> contains(strided_range_gt<ukv_key_t const> vertices,
-                                                 bool track = false) & noexcept {
-        return value_refs_t {
-            collection_.db(),
-            collection_.txn(),
-            strided_range_gt<ukv_collection_t const> {collection_.internal_cptr(), 0, vertices.size()},
-            vertices,
-        }
-            .on(arena())
-            .contains(ukv_doc_format_binary_k, track);
+                                                 bool track = false) noexcept {
+        return collection_[vertices].on(arena()).contains(ukv_doc_format_binary_k, track);
     }
 
     using adjacency_range_t = range_gt<adjacency_stream_t>;
@@ -438,7 +431,7 @@ class graph_ref_t {
         ukv_graph_find_edges(collection_.db(),
                              collection_.txn(),
                              1,
-                             collection_.internal_cptr(),
+                             collection_.member_ptr(),
                              0,
                              &vertex,
                              0,
@@ -447,8 +440,8 @@ class graph_ref_t {
                              track ? ukv_option_read_track_k : ukv_options_default_k,
                              &degrees_per_vertex,
                              &neighborships_per_vertex,
-                             arena_.internal_cptr(),
-                             status.internal_cptr());
+                             arena_.member_ptr(),
+                             status.member_ptr());
         if (!status)
             return status;
 
@@ -491,7 +484,7 @@ class graph_ref_t {
         ukv_graph_find_edges(collection_.db(),
                              collection_.txn(),
                              vertices.count(),
-                             collection_.internal_cptr(),
+                             collection_.member_ptr(),
                              0,
                              vertices.begin().get(),
                              vertices.stride(),
@@ -500,8 +493,8 @@ class graph_ref_t {
                              track ? ukv_option_read_track_k : ukv_options_default_k,
                              &degrees_per_vertex,
                              &neighborships_per_vertex,
-                             arena_.internal_cptr(),
-                             status.internal_cptr());
+                             arena_.member_ptr(),
+                             status.member_ptr());
         if (!status)
             return status;
 

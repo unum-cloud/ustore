@@ -136,9 +136,9 @@ class value_t {
     inline operator value_view_t() const noexcept { return {ptr_, length_}; }
     inline void clear() noexcept { length_ = 0; }
 
-    inline ukv_val_ptr_t* internal_cptr() noexcept { return &ptr_; }
-    inline ukv_val_len_t* internal_length() noexcept { return &length_; }
-    inline ukv_val_len_t* internal_cap() noexcept { return &cap_; }
+    inline ukv_val_ptr_t* member_ptr() noexcept { return &ptr_; }
+    inline ukv_val_len_t* member_length() noexcept { return &length_; }
+    inline ukv_val_len_t* member_cap() noexcept { return &cap_; }
 };
 
 /**
