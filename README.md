@@ -17,6 +17,13 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 UKV does just that, abstracting away the implementation from the user.
 In under 10K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
 
+Common use-cases of UKV would be:
+
+* Python, GoLang, Java and other high-level bindnigs for RocksDB and LevelDB
+* Performant embedded store in the foundation of your in-house storage solution
+* Document store, that is simpler and faster than putting JSONs in MongoDB or Postgres
+* Graph database, with the feel of NetworkX, speed of GunRock and scale of Hadoop
+
 ## Backends
 
 Backends differ in their functionality and purposes.
@@ -177,3 +184,27 @@ curl -i \
 ```
 
 The [`OneAPI` specification](/openapi.yaml) documentation is in-development.
+
+## FAQ
+
+<details>
+<summary>Why not use LevelDB interface (which was also adopted by RocksDB)?</summary>
+1. Dynamic polymorphism
+2. Dependancy on STL
+3. No support for custom allocators
+</details>
+
+<details>
+<summary>Why mix Docs and Graphs?</summary>
+Modern Relational databases try to handle flexible-schema documents, but do it poorly.
+Similarly, they hardly scale, when the number of "relations" is high.
+So users are left with no good multi-purpose solutions.
+Having collections of both kinds would solve that.
+</details>
+
+<details>
+<summary>Why not adapt MQL or Cypher?</summary>
+Mongo Query Language and Cypher by Neo4J are widely adopted, but are both vendor-specific.
+Futhermore, as for core functionality, using text-based protocols in 2022 is inefficient.
+CRUD operations are implemented in all binary interfaces and for document-level patches well standardized JSON-Pointer, JSON-Patch and JSON-MergePAth RFCs have been implemented.
+</details>
