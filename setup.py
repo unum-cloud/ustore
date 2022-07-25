@@ -10,7 +10,7 @@ __libname__ = 'ukv'
 cmake_cache = cmake.read_cmake_cache("CMakeCache.txt")
 
 include_dirs = [f"/{cmake_cache['FMT_SOURCE_DIR']}/include",
-                "include/", "pytհօn/"]
+                "include/", "python/"]
 
 ext_modules = [
     Pybind11Extension(
@@ -23,7 +23,7 @@ ext_modules = [
         ],
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
-        libraries=['ukv_stl'],
+        libraries=['ukv_stl', 'fmt'],
         extra_compile_args=['-std=c++17', '-O3'],
         define_macros=[
             ('UKV_VERSION', __version__),
@@ -40,7 +40,7 @@ ext_modules = [
         ],
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
-        libraries=['ukv_rocksdb', 'rocksdb'],
+        libraries=['ukv_rocksdb', 'rocksdb', 'fmt'],
         extra_compile_args=['-std=c++17', '-O3'],
         define_macros=[
             ('UKV_VERSION', __version__),
@@ -57,7 +57,7 @@ ext_modules = [
         ],
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
-        libraries=['ukv_leveldb', 'leveldb'],
+        libraries=['ukv_leveldb', 'leveldb', 'fmt'],
         extra_compile_args=['-std=c++17', '-O3'],
         define_macros=[
             ('UKV_VERSION', __version__),
