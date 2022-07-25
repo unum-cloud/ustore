@@ -620,7 +620,7 @@ void ukv_collection_open( //
     ukv_error_t* c_error) {
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    if (!c_col_name) {
+    if (!c_col_name || (c_col_name && !std::strlen(c_col_name))) {
         *c_col = db.native->DefaultColumnFamily();
         return;
     }
