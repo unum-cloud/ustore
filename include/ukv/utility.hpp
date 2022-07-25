@@ -588,7 +588,12 @@ struct sub_key_hash_t {
 };
 
 // clang-format off
-inline ukv_size_t location_get_count(sub_key_t&) noexcept { return 1; }
+constexpr ukv_size_t location_get_count(ukv_key_t&) noexcept { return 1; }
+inline strided_iterator_gt<ukv_key_t const> location_get_keys(ukv_key_t& one) noexcept { return {&one}; }
+inline strided_iterator_gt<ukv_collection_t const> location_get_cols(ukv_key_t&) noexcept { return {}; }
+inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(ukv_key_t&) noexcept { return {}; }
+
+constexpr ukv_size_t location_get_count(sub_key_t&) noexcept { return 1; }
 inline strided_iterator_gt<ukv_key_t const> location_get_keys(sub_key_t& one) noexcept { return {&one.key}; }
 inline strided_iterator_gt<ukv_collection_t const> location_get_cols(sub_key_t& one) noexcept { return {&one.collection}; }
 inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(sub_key_t&) noexcept { return {}; }
@@ -598,36 +603,21 @@ inline strided_iterator_gt<ukv_key_t const> location_get_keys(keys_arg_t const& 
 inline strided_iterator_gt<ukv_collection_t const> location_get_cols(keys_arg_t const& arg) noexcept { return arg.collections_begin; }
 inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(keys_arg_t const& arg) noexcept { return arg.fields_begin; }
 
-inline ukv_size_t location_get_count(std::vector<ukv_key_t> const& arg) noexcept { return arg.size(); }
-inline strided_iterator_gt<ukv_key_t const> location_get_keys(std::vector<ukv_key_t> const& arg) noexcept { return {arg.data(), sizeof(ukv_key_t)}; }
-inline strided_iterator_gt<ukv_collection_t const> location_get_cols(std::vector<ukv_key_t> const&) noexcept { return {}; }
-inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(std::vector<ukv_key_t> const&) noexcept { return {}; }
-
 inline ukv_size_t location_get_count(strided_range_gt<ukv_key_t const> arg) noexcept { return arg.size(); }
 inline strided_iterator_gt<ukv_key_t const> location_get_keys(strided_range_gt<ukv_key_t const> arg) noexcept { return arg.begin(); }
 inline strided_iterator_gt<ukv_collection_t const> location_get_cols(strided_range_gt<ukv_key_t const>) noexcept { return {}; }
 inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(strided_range_gt<ukv_key_t const>) noexcept { return {}; }
+
+template <typename allocator_at> ukv_size_t location_get_count(std::vector<ukv_key_t, allocator_at> const& arg) noexcept { return arg.size(); }
+template <typename allocator_at> strided_iterator_gt<ukv_key_t const> location_get_keys(std::vector<ukv_key_t, allocator_at> const& arg) noexcept { return {arg.data(), sizeof(ukv_key_t)}; }
+template <typename allocator_at> strided_iterator_gt<ukv_collection_t const> location_get_cols(std::vector<ukv_key_t, allocator_at> const&) noexcept { return {}; }
+template <typename allocator_at> strided_iterator_gt<ukv_str_view_t const> location_get_fields(std::vector<ukv_key_t, allocator_at> const&) noexcept { return {}; }
 
 template <typename at, typename = int> struct has_collection_sfinae_gt : std::false_type {};
 template <typename at> struct has_collection_sfinae_gt<at, decltype((void)at::collection, 0)> : std::true_type {};
 
 template <typename at, typename = int> struct has_field_sfinae_gt : std::false_type {};
 template <typename at> struct has_field_sfinae_gt<at, decltype((void)at::field, 0)> : std::true_type {};
-
-template <typename at> ukv_size_t location_get_count(std::vector<at> const& arg) noexcept { return arg.size(); }
-template <typename at> strided_iterator_gt<ukv_key_t const> location_get_keys(std::vector<at> const& arg) noexcept { return strided_range_gt<at const>(arg).members(&at::key); }
-template <typename at> strided_iterator_gt<ukv_collection_t const> location_get_cols(std::vector<at> const& arg) noexcept {
-    if constexpr (has_collection_sfinae_gt<at>::value) {
-        static_assert(std::is_same_v<at::field, ukv_collection_t>);
-        return strided_range_gt<at const>(arg).members(&at::collection); 
-    } else return {};
-}
-template <typename at> strided_iterator_gt<ukv_str_view_t const> location_get_fields(std::vector<at> const& arg) noexcept {
-    if constexpr (has_field_sfinae_gt<at>::value) {
-        static_assert(std::is_same_v<at::field, ukv_str_view_t>);
-        return strided_range_gt<at const>(arg).members(&at::field); 
-    } else return {};
-}
 
 template <typename at> ukv_size_t location_get_count(strided_range_gt<at> const& arg) noexcept { return arg.size(); }
 template <typename at> strided_iterator_gt<ukv_key_t const> location_get_keys(strided_range_gt<at> const& arg) noexcept { return arg.members(&at::key); }
@@ -641,6 +631,32 @@ template <typename at> inline strided_iterator_gt<ukv_str_view_t const> location
     if constexpr (has_field_sfinae_gt<at>::value) {
         static_assert(std::is_same_v<at::field, ukv_str_view_t>);
         return arg.members(&at::field); 
+    } else return {};
+}
+
+template <typename container_at> ukv_size_t location_get_count(container_at const& arg) noexcept { return arg.size(); }
+template <typename container_at> strided_iterator_gt<ukv_key_t const> location_get_keys(container_at const& arg) noexcept {    
+    using element_t = typename container_at::value_type;
+    auto strided = strided_range_gt<element_t const>(arg.data(), arg.data() + arg.size());
+    if constexpr (std::is_same_v<element_t, ukv_key_t>)
+        return strided;
+    else
+        return strided.members(&element_t::key);
+}
+template <typename container_at> strided_iterator_gt<ukv_collection_t const> location_get_cols(container_at const& arg) noexcept {
+    using element_t = typename container_at::value_type;
+    if constexpr (has_collection_sfinae_gt<element_t>::value) {
+        static_assert(std::is_same_v<element_t::collection, ukv_collection_t>);
+        auto strided = strided_range_gt<element_t const>(arg.data(), arg.data() + arg.size());
+        return strided.members(&element_t::collection); 
+    } else return {};
+}
+template <typename container_at> strided_iterator_gt<ukv_str_view_t const> location_get_fields(container_at const& arg) noexcept {
+    using element_t = typename container_at::value_type;
+    if constexpr (has_field_sfinae_gt<element_t>::value) {
+        static_assert(std::is_same_v<element_t::field, ukv_str_view_t>);
+        auto strided = strided_range_gt<element_t const>(arg.data(), arg.data() + arg.size());
+        return strided.members(&element_t::field); 
     } else return {};
 }
 
