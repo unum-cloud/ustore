@@ -16,6 +16,10 @@
 using namespace unum::ukv;
 using namespace unum;
 
+#define macro_concat_(prefix, suffix) prefix##suffix
+#define macro_concat(prefix, suffix) macro_concat_(prefix, suffix)
+#define _ auto macro_concat(_, __LINE__)
+
 TEST(db, intro) {
 
     db_t db;
@@ -29,17 +33,19 @@ TEST(db, intro) {
     main[42] = "purpose of life";
     main.at(42) = "purpose of life";
     EXPECT_EQ(main[42].value()->first, "purpose of life");
-    main[42].clear();
+    _ = main[42].clear();
 
     // Mapping multiple keys to same values
     main[{43, 44}] = "same value";
 
     // Operations on smart-references
-    main[{43, 44}].clear();
-    main[{43, 44}].erase();
-    main[{43, 44}].present();
-    main[{43, 44}].length();
-    main[{43, 44}].value();
+    _ = main[{43, 44}].clear();
+    _ = main[{43, 44}].erase();
+    _ = main[{43, 44}].present();
+    _ = main[{43, 44}].length();
+    _ = main[{43, 44}].value();
+    _ = main[std::array<ukv_key_t, 3> {65, 66, 67}];
+    _ = main[std::vector<ukv_key_t> {65, 66, 67, 68}];
     for (value_view_t value : main[{100, 101}].value()->first) {
     }
 
@@ -50,19 +56,25 @@ TEST(db, intro) {
     db["suffixes"]->at(42) = "life";
 
     // Reusable memory
+    // This interface not just more performant, but also provides nicer interface:
+    //  expected_gt<taped_values_view_t> tapes = main[{100, 101}].on(arena);
     managed_arena_t arena(db);
-    expected_gt<taped_values_view_t> tapes = main[{100, 101}].on(arena);
+    _ = main[{43, 44}].on(arena).clear();
+    _ = main[{43, 44}].on(arena).erase();
+    _ = main[{43, 44}].on(arena).present();
+    _ = main[{43, 44}].on(arena).length();
+    _ = main[{43, 44}].on(arena).value();
 
     // Batch-assignment: many keys to many values
-    main[std::array<ukv_key_t, 3> {65, 66, 67}] = std::array {"A", "B", "C"};
-    main[std::array {sub(prefixes, 65), sub(66), sub(67)}] = std::array {"A", "B", "C"};
+    // main[std::array<ukv_key_t, 3> {65, 66, 67}] = std::array {"A", "B", "C"};
+    // main[std::array {sub(prefixes, 65), sub(66), sub(67)}] = std::array {"A", "B", "C"};
 
     // Iterating over collections
     for (ukv_key_t key : main.keys()) {
     }
     for (ukv_key_t key : main.keys(100, 200)) {
     }
-    main.keys(100, 200).find_size()->cardinality;
+    _ = main.keys(100, 200).find_size()->cardinality;
 
     // Working with sub documents
     main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
@@ -216,8 +228,8 @@ TEST(db, named) {
     EXPECT_TRUE(present_it1.is_end());
     EXPECT_TRUE(present_it2.is_end());
 
-    db.remove("col1");
-    db.remove("col2");
+    _ = db.remove("col1");
+    _ = db.remove("col2");
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
 }
@@ -277,7 +289,7 @@ TEST(db, txn) {
 
 TEST(db, nested_docs) {
     db_t db;
-    db.open("");
+    _ = db.open();
     collection_t col = *db.collection();
 }
 
@@ -344,9 +356,9 @@ TEST(db, net) {
 
     // Remove a single edge, making sure that the nodes info persists
     EXPECT_TRUE(net.remove({
-        .source_ids = {edge1.front().source_id},
-        .target_ids = {edge1.front().target_id},
-        .edge_ids = {edge1.front().id},
+        {edge1.front().source_id},
+        {edge1.front().target_id},
+        {edge1.front().id},
     }));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
@@ -354,9 +366,9 @@ TEST(db, net) {
 
     // Bring that edge back
     EXPECT_TRUE(net.upsert({
-        .source_ids = {edge1.front().source_id},
-        .target_ids = {edge1.front().target_id},
-        .edge_ids = {edge1.front().id},
+        {edge1.front().source_id},
+        {edge1.front().target_id},
+        {edge1.front().id},
     }));
     EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
 
@@ -438,20 +450,20 @@ TEST(db, net_batch) {
     }
 
     // Remove a single edge, making sure that the nodes info persists
-    EXPECT_TRUE(net.remove({
-        .source_ids = {triangle[0].source_id},
-        .target_ids = {triangle[0].target_id},
-        .edge_ids = {triangle[0].id},
+    EXPECT_TRUE(net.remove(edges_view_t {
+        {triangle[0].source_id},
+        {triangle[0].target_id},
+        {triangle[0].id},
     }));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
 
     // Bring that edge back
-    EXPECT_TRUE(net.upsert({
-        .source_ids = {triangle[0].source_id},
-        .target_ids = {triangle[0].target_id},
-        .edge_ids = {triangle[0].id},
+    EXPECT_TRUE(net.upsert(edges_view_t {
+        {triangle[0].source_id},
+        {triangle[0].target_id},
+        {triangle[0].id},
     }));
     EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
 
