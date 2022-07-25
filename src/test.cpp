@@ -16,6 +16,31 @@
 using namespace unum::ukv;
 using namespace unum;
 
+TEST(db, intro) {
+
+    db_t db;
+    EXPECT_TRUE(db.open());
+
+    // Try getting the main collection
+    EXPECT_TRUE(db.collection());
+    collection_t main = *db.collection();
+
+    main[42] = "purpose of life";
+    db["prefixes"]->at(42) = "purpose";
+    db["suffixes"]->at(42) = "of life";
+
+    main[{43, 44}] = "same value";
+
+    managed_arena_t arena(db);
+    expected_gt<taped_values_view_t> tapes = main[{100, 101}].on(arena);
+
+    ukv_key_t keys[] = {10, 11, 12};
+    char const* values[] = {"Dav", "Ash", "D"};
+    main[keys] = values;
+
+    main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
+}
+
 template <typename locations_at>
 void check_missing(member_refs_gt<locations_at>& ref) {
 
@@ -236,9 +261,6 @@ TEST(db, nested_docs) {
     db_t db;
     db.open("");
     collection_t col = *db.collection();
-
-    auto doc = R"( {"hello": "world", "answer": 42} )"_json;
-    col[101] = doc.dump().c_str();
 }
 
 TEST(db, net) {
