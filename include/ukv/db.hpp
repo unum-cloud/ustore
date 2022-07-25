@@ -554,7 +554,7 @@ class keys_range_t {
                  &max_key_,
                  0,
                  ukv_options_default_k,
-                 &result.cardinality.min,
+                 reinterpret_cast<ukv_size_t*>(&result.cardinality.min),
                  arena.member_ptr(),
                  status.member_ptr());
         if (!status)
