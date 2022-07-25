@@ -49,7 +49,7 @@ struct key_comparator_t final : public leveldb::Comparator {
     }
 };
 
-static key_comparator_t key_comparator_k = {};
+static key_comparator_t const key_comparator_k = {};
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
