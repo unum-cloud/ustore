@@ -140,6 +140,11 @@ TEST(db, named) {
     }
     EXPECT_TRUE(present_it1.is_end());
     EXPECT_TRUE(present_it2.is_end());
+
+    db.remove("col1");
+    db.remove("col2");
+    EXPECT_FALSE(*db.contains("col1"));
+    EXPECT_FALSE(*db.contains("col2"));
 }
 
 TEST(db, txn) {
