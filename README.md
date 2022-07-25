@@ -87,6 +87,9 @@ Using it can be as easy as:
 
 ```python
 import ukv.stl as ukv
+# import ukv.level as ukv
+# import ukv.rocks as ukv
+# import ukv.lerner as ukv
 
 db = ukv.DataBase()
 db[42] = 'purpose of life'.encode()
@@ -150,7 +153,7 @@ Instead we mimic the interfaces of most commonly used ORMs.
 
 ```go
 db := DataBase{}
-db.Reconnect("")
+db.Reconnect()
 db.Set(42, &[]byte{4, 2})
 db.Get(42)
 ```
