@@ -9,29 +9,33 @@
 #include <unordered_set>
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include "ukv/ukv.hpp"
 
 using namespace unum::ukv;
 using namespace unum;
 
-void round_trip(value_refs_t& ref, disjoint_values_view_t values) {
+template <typename locations_at>
+void round_trip(member_refs_gt<locations_at>& ref, values_arg_t values) {
 
     EXPECT_TRUE(ref.set(values)) << "Failed to assign";
 
     EXPECT_TRUE(ref.get()) << "Failed to fetch inserted keys";
 
     // Validate that values match
-    taped_values_view_t retrieved = *ref.get();
-    EXPECT_EQ(retrieved.size(), ref.keys().size());
+    std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.get();
+    taped_values_view_t retrieved = retrieved_and_arena.first;
+    EXPECT_EQ(retrieved.size(), location_get_count(ref.locations()));
     tape_iterator_t it = retrieved.begin();
-    for (std::size_t i = 0; i != ref.keys().size(); ++i, ++it) {
-        auto expected_len = static_cast<std::size_t>(values.lengths[i]);
-        auto expected_begin = reinterpret_cast<byte_t const*>(values.contents[i]) + values.offsets[i];
+    for (std::size_t i = 0; i != location_get_count(ref.locations()); ++i, ++it) {
+        auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
+        auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
 
         value_view_t val_view = *it;
+        value_view_t expected_view(expected_begin, expected_begin + expected_len);
         EXPECT_EQ(val_view.size(), expected_len);
-        EXPECT_TRUE(std::equal(val_view.begin(), val_view.end(), expected_begin));
+        EXPECT_EQ(val_view, expected_view);
     }
 }
 
@@ -50,11 +54,11 @@ TEST(db, basic) {
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
-    value_refs_t ref = col[keys];
-    disjoint_values_view_t values {
-        .contents = {&vals_begin, 0, 3},
-        .offsets = offs,
-        .lengths = {val_len, 3},
+    auto ref = col[keys];
+    values_arg_t values {
+        .contents_begin = {&vals_begin, 0},
+        .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
+        .lengths_begin = {&val_len, 0},
     };
     round_trip(ref, values);
 
@@ -65,15 +69,15 @@ TEST(db, basic) {
 
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(ref.clear());
-    for (ukv_key_t key : ref.keys()) {
-        value_refs_t matches = col[key];
-        expected_gt<strided_range_gt<bool>> indicators = matches.contains();
-        EXPECT_TRUE(indicators);
-        EXPECT_TRUE((*indicators)[0]);
+    for (ukv_key_t key : keys) {
+        auto matches = col[key];
+        auto maybe_indicators_and_arena = matches.contains();
+        EXPECT_TRUE(maybe_indicators_and_arena);
+        EXPECT_TRUE(maybe_indicators_and_arena->first[0]);
 
-        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = matches.lengths();
-        EXPECT_TRUE(lengths);
-        EXPECT_EQ((*lengths)[0], 0u);
+        auto maybe_lengths_and_arena = matches.lengths();
+        EXPECT_TRUE(maybe_lengths_and_arena);
+        EXPECT_EQ(maybe_lengths_and_arena->first[0], 0u);
     }
 
     // Check scans
@@ -87,15 +91,15 @@ TEST(db, basic) {
 
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
-    for (ukv_key_t key : ref.keys()) {
-        value_refs_t matches = col[key];
-        expected_gt<strided_range_gt<bool>> indicators = matches.contains();
-        EXPECT_TRUE(indicators);
-        EXPECT_FALSE((*indicators)[0]);
+    for (ukv_key_t key : keys) {
+        auto matches = col[key];
+        auto maybe_indicators_and_arena = matches.contains();
+        EXPECT_TRUE(maybe_indicators_and_arena);
+        EXPECT_FALSE(maybe_indicators_and_arena->first[0]);
 
-        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = matches.lengths();
-        EXPECT_TRUE(lengths);
-        EXPECT_EQ((*lengths)[0], ukv_val_len_missing_k);
+        auto maybe_lengths_and_arena = matches.lengths();
+        EXPECT_TRUE(maybe_lengths_and_arena);
+        EXPECT_EQ(maybe_lengths_and_arena->first[0], ukv_val_len_missing_k);
     }
 }
 
@@ -112,14 +116,14 @@ TEST(db, named) {
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
-    disjoint_values_view_t values {
-        .contents = {&vals_begin, 0, 3},
-        .offsets = offs,
-        .lengths = {val_len, 3},
+    values_arg_t values {
+        .contents_begin = {&vals_begin, 0},
+        .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
+        .lengths_begin = {&val_len, 0},
     };
 
-    value_refs_t ref1 = col1[keys];
-    value_refs_t ref2 = col2[keys];
+    auto ref1 = col1[keys];
+    auto ref2 = col2[keys];
     EXPECT_TRUE(*db.contains("col1"));
     EXPECT_TRUE(*db.contains("col2"));
     EXPECT_FALSE(*db.contains("unknown_col"));
@@ -140,6 +144,15 @@ TEST(db, named) {
     }
     EXPECT_TRUE(present_it1.is_end());
     EXPECT_TRUE(present_it2.is_end());
+}
+
+TEST(db, nested_docs) {
+    db_t db;
+    db.open("");
+    collection_t col = *db.collection();
+
+    auto doc = R"( {"hello": "world", "answer": 42} )"_json;
+    col[101] = doc.dump().c_str();
 }
 
 TEST(db, net) {

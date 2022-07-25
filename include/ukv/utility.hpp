@@ -84,7 +84,7 @@ class [[nodiscard]] status_t {
             throw release_exception();
     }
 
-    ukv_error_t* internal_cptr() noexcept { return &raw_; }
+    ukv_error_t* member_ptr() noexcept { return &raw_; }
     ukv_error_t release_error() noexcept { return std::exchange(raw_, nullptr); }
 };
 
@@ -125,7 +125,7 @@ class [[nodiscard]] expected_gt {
 /**
  * @brief A smart pointer type with customizable jump length for increments.
  * In other words, it allows a strided data layout, common to HPC apps.
- * Cool @b hint, you can use this to represent an inifinite array of repeating
+ * Cool @b hint, you can use this to represent an infinite array of repeating
  * values with `stride` equal to zero.
  */
 template <typename object_at>
@@ -339,6 +339,16 @@ class value_view_t {
     inline std::size_t size() const noexcept { return length_; }
     inline bool empty() const noexcept { return !length_; }
     inline operator bool() const noexcept { return ptr_ != nullptr; }
+
+    ukv_val_ptr_t const* member_ptr() const noexcept { return &ptr_; }
+    ukv_val_len_t const* member_length() const noexcept { return &length_; }
+
+    bool operator==(value_view_t other) const noexcept {
+        return size() == other.size() && std::equal(begin(), end(), other.begin());
+    }
+    bool operator!=(value_view_t other) const noexcept {
+        return size() != other.size() || !std::equal(begin(), end(), other.begin());
+    }
 };
 
 struct collections_view_t : public strided_range_gt<ukv_collection_t const> {
@@ -353,10 +363,33 @@ using fields_view_t = strided_range_gt<ukv_str_view_t const>;
 
 using located_keys_view_t = strided_range_gt<located_key_t const>;
 
-struct disjoint_values_view_t {
-    strided_range_gt<ukv_val_ptr_t> contents;
-    strided_range_gt<ukv_val_len_t> offsets;
-    strided_range_gt<ukv_val_len_t> lengths;
+/**
+ * Working with batched data is ugly in C++.
+ * This handle doesn't help in the general case,
+ * but at least allow reusing the arguments.
+ */
+struct keys_arg_t {
+    strided_iterator_gt<ukv_collection_t const> collections_begin;
+    strided_iterator_gt<ukv_key_t const> keys_begin;
+    strided_iterator_gt<ukv_str_view_t const> fields_begin;
+    ukv_size_t count = 0;
+};
+
+struct key_arg_t {
+    ukv_collection_t collection;
+    ukv_key_t key;
+    ukv_str_view_t field;
+};
+
+/**
+ * Working with batched data is ugly in C++.
+ * This handle doesn't help in the general case,
+ * but at least allow reusing the arguments.
+ */
+struct values_arg_t {
+    strided_iterator_gt<ukv_val_ptr_t const> contents_begin;
+    strided_iterator_gt<ukv_val_len_t const> offsets_begin;
+    strided_iterator_gt<ukv_val_len_t const> lengths_begin;
 };
 
 /**
@@ -442,7 +475,7 @@ class managed_arena_t {
         return *this;
     }
 
-    inline ukv_arena_t* internal_cptr() noexcept { return &memory_; }
+    inline ukv_arena_t* member_ptr() noexcept { return &memory_; }
 };
 
 class any_arena_t {
@@ -461,7 +494,7 @@ class any_arena_t {
     any_arena_t& operator=(any_arena_t const&) = delete;
 
     managed_arena_t& managed() noexcept { return accessible_ ? *accessible_ : owned_; }
-    ukv_arena_t* internal_cptr() noexcept { return managed().internal_cptr(); }
+    ukv_arena_t* member_ptr() noexcept { return managed().member_ptr(); }
 };
 
 /**
@@ -508,5 +541,84 @@ struct located_key_hash_t {
         return result;
     }
 };
+
+// clang-format off
+inline ukv_size_t location_get_count(located_key_t&) noexcept { return 1; }
+inline strided_iterator_gt<ukv_key_t const> location_get_keys(located_key_t& one) noexcept { return {&one.key}; }
+inline strided_iterator_gt<ukv_collection_t const> location_get_cols(located_key_t& one) noexcept { return {&one.collection}; }
+inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(located_key_t&) noexcept { return {}; }
+
+inline ukv_size_t location_get_count(keys_arg_t const& arg) noexcept { return arg.count; }
+inline strided_iterator_gt<ukv_key_t const> location_get_keys(keys_arg_t const& arg) noexcept { return arg.keys_begin; }
+inline strided_iterator_gt<ukv_collection_t const> location_get_cols(keys_arg_t const& arg) noexcept { return arg.collections_begin; }
+inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(keys_arg_t const& arg) noexcept { return arg.fields_begin; }
+
+inline ukv_size_t location_get_count(std::vector<ukv_key_t> const& arg) noexcept { return arg.size(); }
+inline strided_iterator_gt<ukv_key_t const> location_get_keys(std::vector<ukv_key_t> const& arg) noexcept { return {arg.data(), sizeof(ukv_key_t)}; }
+inline strided_iterator_gt<ukv_collection_t const> location_get_cols(std::vector<ukv_key_t> const&) noexcept { return {}; }
+inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(std::vector<ukv_key_t> const&) noexcept { return {}; }
+
+inline ukv_size_t location_get_count(strided_range_gt<ukv_key_t const> arg) noexcept { return arg.size(); }
+inline strided_iterator_gt<ukv_key_t const> location_get_keys(strided_range_gt<ukv_key_t const> arg) noexcept { return arg.begin(); }
+inline strided_iterator_gt<ukv_collection_t const> location_get_cols(strided_range_gt<ukv_key_t const>) noexcept { return {}; }
+inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(strided_range_gt<ukv_key_t const>) noexcept { return {}; }
+
+template <typename at, typename = int> struct has_collection_sfinae_gt : std::false_type {};
+template <typename at> struct has_collection_sfinae_gt<at, decltype((void)at::collection, 0)> : std::true_type {};
+
+template <typename at, typename = int> struct has_field_sfinae_gt : std::false_type {};
+template <typename at> struct has_field_sfinae_gt<at, decltype((void)at::field, 0)> : std::true_type {};
+
+template <typename at> ukv_size_t location_get_count(std::vector<at> const& arg) noexcept { return arg.size(); }
+template <typename at> strided_iterator_gt<ukv_key_t const> location_get_keys(std::vector<at> const& arg) noexcept { return strided_range_gt<at const>(arg).members(&at::key); }
+template <typename at> strided_iterator_gt<ukv_collection_t const> location_get_cols(std::vector<at> const& arg) noexcept {
+    if constexpr (has_collection_sfinae_gt<at>::value) {
+        static_assert(std::is_same_v<at::field, ukv_collection_t>);
+        return strided_range_gt<at const>(arg).members(&at::collection); 
+    } else return {};
+}
+template <typename at> strided_iterator_gt<ukv_str_view_t const> location_get_fields(std::vector<at> const& arg) noexcept {
+    if constexpr (has_field_sfinae_gt<at>::value) {
+        static_assert(std::is_same_v<at::field, ukv_str_view_t>);
+        return strided_range_gt<at const>(arg).members(&at::field); 
+    } else return {};
+}
+
+template <typename at> ukv_size_t location_get_count(strided_range_gt<at> const& arg) noexcept { return arg.size(); }
+template <typename at> strided_iterator_gt<ukv_key_t const> location_get_keys(strided_range_gt<at> const& arg) noexcept { return arg.members(&at::key); }
+template <typename at> strided_iterator_gt<ukv_collection_t const> location_get_cols(strided_range_gt<at> const& arg) noexcept {
+    if constexpr (has_collection_sfinae_gt<at>::value) {
+        static_assert(std::is_same_v<at::field, ukv_collection_t>);
+        return arg.members(&at::collection); 
+    } else return {};
+}
+template <typename at> inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(strided_range_gt<at> const& arg) noexcept {
+    if constexpr (has_field_sfinae_gt<at>::value) {
+        static_assert(std::is_same_v<at::field, ukv_str_view_t>);
+        return arg.members(&at::field); 
+    } else return {};
+}
+
+inline strided_iterator_gt<ukv_val_ptr_t const> value_get_contents(char const **strings) noexcept { return {(ukv_val_ptr_t const*)(strings), sizeof(char const*)}; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_offsets(char const **) noexcept { return {}; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_lengths(char const **) noexcept { return {}; }
+
+inline strided_iterator_gt<ukv_val_ptr_t const> value_get_contents(char const *&one) noexcept { return {(ukv_val_ptr_t const*)(&one), 0}; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_offsets(char const *) noexcept { return {}; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_lengths(char const *) noexcept { return {}; }
+
+inline strided_iterator_gt<ukv_val_ptr_t const> value_get_contents(value_view_t const &one) noexcept { return {one.member_ptr(), 0}; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_offsets(value_view_t) noexcept { return {}; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_lengths(value_view_t one) noexcept { return {one.member_length(), 0}; }
+
+inline strided_iterator_gt<ukv_val_ptr_t const> value_get_contents(values_arg_t const &native) noexcept { return native.contents_begin; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_offsets(values_arg_t const &native) noexcept { return native.offsets_begin; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_lengths(values_arg_t const &native) noexcept { return native.lengths_begin; }
+
+inline strided_iterator_gt<ukv_val_ptr_t const> value_get_contents(nullptr_t) noexcept { return {}; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_offsets(nullptr_t) noexcept { return {}; }
+inline strided_iterator_gt<ukv_val_len_t const> value_get_lengths(nullptr_t) noexcept { return {}; }
+
+// clang-format on
 
 } // namespace unum::ukv
