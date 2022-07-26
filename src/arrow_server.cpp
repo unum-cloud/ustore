@@ -9,6 +9,28 @@
  * https://arrow.apache.org/cookbook/cpp/flight.html
  */
 
+#include <arrow/buffer.h>
+#include <arrow/filesystem/filesystem.h>
+#include <arrow/filesystem/localfs.h>
+#include <arrow/flight/client.h>
+#include <arrow/flight/server.h>
+#include <arrow/pretty_print.h>
+#include <arrow/result.h>
+#include <arrow/status.h>
+#include <arrow/table.h>
+#include <arrow/type.h>
+
+#include <parquet/arrow/reader.h>
+#include <parquet/arrow/writer.h>
+
+#include <algorithm>
+#include <memory>
+#include <numeric>
+#include <vector>
+
+using namespace arrow::flight;
+using namespace arrow;
+
 class ParquetStorageService : public arrow::flight::FlightServerBase {
   public:
     const arrow::flight::ActionType kActionDropDataset {"drop_dataset", "Delete a dataset."};
@@ -137,50 +159,18 @@ class ParquetStorageService : public arrow::flight::FlightServerBase {
 
 int main(int argc, char* argv[]) {
 
-    // Check command line arguments
-    if (argc < 4) {
-        std::cerr << "Usage: ukv_beast_server <address> <port> <threads> <db_config_path>?\n"
-                  << "Example:\n"
-                  << "    ukv_beast_server 0.0.0.0 8080 1\n"
-                  << "    ukv_beast_server 0.0.0.0 8080 1 ./config.json\n"
-                  << "";
-        return EXIT_FAILURE;
-    }
+    auto fs = std::make_shared<arrow::fs::LocalFileSystem>();
+    ARROW_RETURN_NOT_OK(fs->CreateDir("./flight_datasets/"));
+    ARROW_RETURN_NOT_OK(fs->DeleteDirContents("./flight_datasets/"));
+    auto root = std::make_shared<arrow::fs::SubTreeFileSystem>("./flight_datasets/", fs);
 
-    // Parse the arguments
-    auto const address = net::ip::make_address(argv[1]);
-    auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
-    auto const threads = std::max<int>(1, std::atoi(argv[3]));
-    auto db_config = std::string();
+    arrow::flight::Location server_location;
+    ARROW_ASSIGN_OR_RAISE(server_location, arrow::flight::Location::ForGrpcTcp("0.0.0.0", 0));
 
-    // Read the configuration file
-    if (argc >= 5) {
-        auto const db_config_path = std::string(argv[4]);
-        if (!db_config_path.empty()) {
-            std::ifstream ifs(db_config_path);
-            db_config = std::string(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
-        }
-    }
-
-    // Check if we can initialize the DB
-    auto session = std::make_shared<db_w_clients_t>();
-    status_t status;
-    ukv_open(db_config.c_str(), &session->raw, error.member_ptr());
-    if (!status) {
-        std::cerr << "Couldn't initialize DB: " << error.raw << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    // Create and launch a listening port
-    auto io_context = net::io_context {threads};
-    std::make_shared<listener_t>(io_context, tcp::endpoint {address, port}, session)->run();
-
-    // Run the I/O service on the requested number of threads
-    std::vector<std::thread> v;
-    v.reserve(threads - 1);
-    for (auto i = threads - 1; i > 0; --i)
-        v.emplace_back([&io_context] { io_context.run(); });
-    io_context.run();
+    arrow::flight::FlightServerOptions options(server_location);
+    auto server = std::unique_ptr<arrow::flight::FlightServerBase>(new ParquetStorageService(std::move(root)));
+    ARROW_RETURN_NOT_OK(server->Init(options));
+    rout << "Listening on port " << server->port() << std::endl;
 
     return EXIT_SUCCESS;
 }
