@@ -488,7 +488,7 @@ class keys_stream_t {
     }
 
     bool operator!=(keys_stream_t const& other) const noexcept {
-        if (col_ == other.col_)
+        if (col_ != other.col_)
             return true;
         if (is_end() || other.is_end())
             return is_end() != other.is_end();
