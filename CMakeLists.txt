@@ -69,24 +69,16 @@ include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
 # Boost:
-set(Boost_USE_STATIC_LIBS ON)
-set(Boost_USE_STATIC_RUNTIME ON)
-set(Boost_NO_SYSTEM_PATHS TRUE)
+set(Boost_USE_STATIC_LIBS OFF)
+set(Boost_USE_DEBUG_LIBS OFF) # ignore debug libs and
+set(Boost_USE_RELEASE_LIBS ON) # only find release libsset(Boost_USE_STATIC_RUNTIME ON)
+set(Boost_NO_SYSTEM_PATHS ON)
+set(Boost_NO_BOOST_CMAKE ON)
 FetchContent_Declare(boost
   URL https://boostorg.jfrog.io/artifactory/main/release/1.79.0/source/boost_1_79_0.tar.bz2
   URL_HASH SHA256=475d589d51a7f8b3ba2ba4eda022b170e562ca3b760ee922c146b6c65856ef39
 )
 FetchContent_MakeAvailable(boost)
-
-# FetchContent_GetProperties(boost SOURCE_DIR Boost_SRC_DIR INCLUDE_DIR INCLUDE_DIRS)
-# FetchContent_GetProperties(boost SOURCE_DIR Boost_SRC_DIR)
-# include_directories(${Boost_SRC_DIR})
-# include_directories(${BOOST_ROOTS})
-# set(Boost_SOURCE ${Boost_SOURCE_DIR})
-# message("Found BOOST_ROOT" ${BOOST_ROOT})
-# message("Found boost_INCLUDE_DIR" ${boost_INCLUDE_DIR})
-# message("Found boost_INCLUDE_DIRS" ${boost_INCLUDE_DIRS})
-# message("Found boost_SOURCE_DIR" ${boost_SOURCE_DIR})
 set(BOOST_ROOT ${boost_SOURCE_DIR})
 
 # FMT:
@@ -183,8 +175,7 @@ add_library(ukv_rpc_client src/rpc_client.cpp)
 # fmt::fmt
 # nlohmann_json::nlohmann_json
 # )
-add_executable(ukv_arrow_server src/arrow_server2.cpp)
-add_dependencies(ukv_arrow_server arrow)
+add_executable(ukv_arrow_server src/arrow_server.cpp)
 target_link_libraries(ukv_arrow_server
   ukv_stl
   pthread

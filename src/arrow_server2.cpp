@@ -22,7 +22,7 @@ struct MyFlightServer : public FlightServerBase {
         std::vector<FlightInfo> flights;
 
         FlightDescriptor::Path({"gyumri", ""});
-        auto f = FlightInfo::Make(Schema(), , {}, );
+        auto f = FlightInfo::Make(Schema(), {}, {}, 0, 0);
         *listings = std::unique_ptr<FlightListing>(new SimpleFlightListing(flights));
         return Status::OK();
     }
