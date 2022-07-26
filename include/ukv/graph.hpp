@@ -392,7 +392,7 @@ class graph_ref_t {
      * @brief Checks if certain vertices are present in the graph.
      * They maybe disconnected from everything else.
      */
-    expected_gt<strided_range_gt<bool>> contains(strided_range_gt<ukv_key_t const> vertices,
+    expected_gt<strided_range_gt<bool>> contains(strided_range_gt<ukv_key_t const> const& vertices,
                                                  bool track = false) noexcept {
         return collection_[vertices].on(arena()).present(track);
     }
