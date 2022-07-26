@@ -18,7 +18,7 @@ using namespace unum;
 
 #define macro_concat_(prefix, suffix) prefix##suffix
 #define macro_concat(prefix, suffix) macro_concat_(prefix, suffix)
-#define _ auto macro_concat(_, __LINE__)
+#define _ [[maybe_unused]] auto macro_concat(_, __LINE__)
 
 TEST(db, intro) {
 
@@ -88,9 +88,11 @@ TEST(db, intro) {
 }
 
 template <typename locations_at>
-void check_missing(member_refs_gt<locations_at>& ref) {
+void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_length) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
+
+    auto const expects_missing = expected_length == ukv_val_len_missing_k;
 
     // Validate that values match
     std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.value();
@@ -101,21 +103,21 @@ void check_missing(member_refs_gt<locations_at>& ref) {
     // Check views
     tape_iterator_t it = retrieved.begin();
     for (std::size_t i = 0; i != count; ++i, ++it) {
-        EXPECT_EQ((*it).size(), 0u);
+        EXPECT_EQ((*it).size(), expects_missing ? 0 : expected_length);
     }
 
     // Check boolean indicators
     auto maybe_indicators_and_arena = ref.present();
     EXPECT_TRUE(maybe_indicators_and_arena);
     for (std::size_t i = 0; i != count; ++i, ++it) {
-        EXPECT_FALSE(maybe_indicators_and_arena->first[i]);
+        EXPECT_EQ(maybe_indicators_and_arena->first[i], !expects_missing);
     }
 
     // Check length estimates
     auto maybe_lengths_and_arena = ref.length();
     EXPECT_TRUE(maybe_lengths_and_arena);
     for (std::size_t i = 0; i != count; ++i, ++it) {
-        EXPECT_EQ(maybe_lengths_and_arena->first[i], ukv_val_len_missing_k);
+        EXPECT_EQ(maybe_lengths_and_arena->first[i], expected_length);
     }
 }
 
@@ -177,7 +179,7 @@ TEST(db, basic) {
 
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(ref.clear());
-    check_missing(ref);
+    check_length(ref, 0);
 
     // Check scans
     keys_range_t present_keys = col.keys();
@@ -190,7 +192,7 @@ TEST(db, basic) {
 
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
-    check_missing(ref);
+    check_length(ref, ukv_val_len_missing_k);
 }
 
 TEST(db, named) {
@@ -267,7 +269,7 @@ TEST(db, txn) {
     ref = col[keys];
 
     // Check for missing values before commit
-    check_missing();
+    check_length();
 
     txn.commit();
     txn.reset();
@@ -284,7 +286,7 @@ TEST(db, txn) {
 
     // Check for missing values before commit
     ref = named_col[keys];
-    check_missing(ref);
+    check_length(ref);
 
     txn.commit();
     txn.reset();
