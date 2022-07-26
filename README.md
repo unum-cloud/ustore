@@ -19,10 +19,11 @@ In under 10K LOC you get a reference implementation in C++, support for any clas
 
 Common use-cases of UKV would be:
 
-* Python, GoLang, Java and other high-level bindnigs for RocksDB and LevelDB
-* Performant embedded store in the foundation of your in-house storage solution
-* Document store, that is simpler and faster than putting JSONs in MongoDB or Postgres
-* Graph database, with the feel of NetworkX, speed of GunRock and scale of Hadoop
+* Python, GoLang, Java and other high-level bindnigs for RocksDB and LevelDB.
+* Performant embedded store in the foundation of your in-house storage solution.
+* Document store, that is simpler and faster than putting JSONs in MongoDB or Postgres.
+* Graph database, with the feel of NetworkX, speed of GunRock and scale of Hadoop.
+* Low-latency media storage for games, CDNs and ML/BI pipelines.
 
 ## Backends
 
@@ -44,14 +45,16 @@ RocksDB originally forked LevelDB to extend its functionality with transactions,
 
 Currently, at Proof-of-Concept stage, we support only the essential functionality in select programming languages.
 
-| Name      | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy | Extras         |
-| :-------- | :------: | :-----: | :---------: | :---: | :----: | :-------: | :------------- |
-| C++       |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |                |
-| Python    |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Tensor Packing |
-| Java      |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |                |
-| GoLang    |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✔️     |                |
-| REST API  |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                |
-| Arrow RPC |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                |
+| Name            | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy | Extras         |
+| :-------------- | :------: | :-----: | :---------: | :---: | :----: | :-------: | :------------- |
+| C++             |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |                |
+| Python          |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Tensor Packing |
+| Java            |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |                |
+| GoLang          |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✅     |                |
+| TODO: C#        |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✅     |                |
+| TODO: REST API  |    ✅     |    ✅    |      ✅      |   ✅   |   ❌    |     ✅     |                |
+| TODO: Arrow RPC |    ✅     |    ✅    |      ✅      |   ✅   |   ❌    |     ✅     | Tensor Packing |
+| TODO: Wolfram   |    ❌     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Tensor Packing |
 
 ## Assumptions and Limitations
 
