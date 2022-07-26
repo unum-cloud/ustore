@@ -440,11 +440,11 @@ void ukv_scan( //
 
 void ukv_size( //
     ukv_t const c_db,
-    ukv_txn_t const c_txn,
-    ukv_size_t const n,
+    ukv_txn_t const,
+    ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const*,
+    ukv_size_t const,
 
     ukv_key_t const* c_min_keys,
     ukv_size_t const c_min_keys_stride,
@@ -467,7 +467,7 @@ void ukv_size( //
     strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
     std::vector<uint64_t> sizes;
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != c_tasks_count; ++i) {
         ukv_size_t* estimates = c_found_estimates + i * 6;
         estimates[0] = static_cast<ukv_size_t>(0);
         estimates[1] = static_cast<ukv_size_t>(0);
