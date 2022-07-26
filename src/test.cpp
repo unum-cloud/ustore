@@ -46,8 +46,8 @@ TEST(db, intro) {
     _ = main[{43, 44}].value();
     _ = main[std::array<ukv_key_t, 3> {65, 66, 67}];
     _ = main[std::vector<ukv_key_t> {65, 66, 67, 68}];
-    for (value_view_t value : main[{100, 101}].value()->first)
-        (void)value;
+    // for (value_view_t value : main[{100, 101}].value()->first)
+    //     (void)value;
 
     // Accessing named collections
     collection_t prefixes = *db.collection("prefixes");
@@ -108,18 +108,18 @@ void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_leng
         EXPECT_EQ((*it).size(), expects_missing ? 0 : expected_length);
     }
 
-    // Check boolean indicators
-    auto maybe_indicators_and_arena = ref.present();
-    EXPECT_TRUE(maybe_indicators_and_arena);
-    for (std::size_t i = 0; i != count; ++i, ++it) {
-        EXPECT_EQ(maybe_indicators_and_arena->first[i], !expects_missing);
-    }
-
     // Check length estimates
     auto maybe_lengths_and_arena = ref.length();
     EXPECT_TRUE(maybe_lengths_and_arena);
-    for (std::size_t i = 0; i != count; ++i, ++it) {
+    for (std::size_t i = 0; i != count; ++i) {
         EXPECT_EQ(maybe_lengths_and_arena->first[i], expected_length);
+    }
+
+    // Check boolean indicators
+    auto maybe_indicators_and_arena = ref.present();
+    EXPECT_TRUE(maybe_indicators_and_arena);
+    for (std::size_t i = 0; i != count; ++i) {
+        EXPECT_EQ(maybe_indicators_and_arena->first[i], !expects_missing);
     }
 }
 

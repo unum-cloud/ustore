@@ -128,10 +128,7 @@ class [[nodiscard]] expected_gt {
         return !status_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
     }
 
-    void throw_unhandled() {
-        if (!status_) // C++20: [[unlikely]]
-            throw status_.release_exception();
-    }
+    void throw_unhandled() { return status_.throw_unhandled(); }
     inline status_t release_status() { return std::exchange(status_, status_t {}); }
 
     template <typename hetero_at>
@@ -476,8 +473,10 @@ class tape_iterator_t {
         return *this;
     }
 
-    inline tape_iterator_t operator++(int) const noexcept { return {lengths_ + 1, contents_ + *lengths_}; }
-    inline operator bool() const noexcept { return *lengths_; }
+    inline tape_iterator_t operator++(int) const noexcept {
+        return {lengths_ + 1, *lengths_ != ukv_val_len_missing_k ? contents_ + *lengths_ : contents_};
+    }
+
     inline value_view_t operator*() const noexcept { return {contents_, *lengths_}; }
 
     inline bool operator==(tape_iterator_t const& other) const noexcept { return lengths_ == other.lengths_; }
@@ -705,6 +704,8 @@ struct location_extractor_gt {
         ukv_size_t stride = 0;
         if constexpr (std::is_same_v<location_t, strided_range_gt<element_t>>)
             stride = arg.stride();
+        else if constexpr (!is_one_k)
+            stride = sizeof(element_t);
 
         auto strided = strided_iterator_gt<element_t const>(begin, stride);
         if constexpr (std::is_same_v<element_t, ukv_key_t>)
@@ -724,6 +725,8 @@ struct location_extractor_gt {
             ukv_size_t stride = 0;
             if constexpr (std::is_same_v<location_t, strided_range_gt<element_t>>)
                 stride = arg.stride();
+            else if constexpr (!is_one_k)
+                stride = sizeof(element_t);
 
             auto strided = strided_iterator_gt<element_t const>(begin, stride);
             return strided.members(&element_t::collection);
@@ -743,6 +746,8 @@ struct location_extractor_gt {
             ukv_size_t stride = 0;
             if constexpr (std::is_same_v<location_t, strided_range_gt<element_t>>)
                 stride = arg.stride();
+            else if constexpr (!is_one_k)
+                stride = sizeof(element_t);
 
             auto strided = strided_iterator_gt<element_t const>(begin, stride);
             return strided.members(&element_t::field);

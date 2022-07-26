@@ -811,8 +811,9 @@ managed_refs_gt<locations_store_t>::any_get(doc_fmt_t format, ukv_options_t opti
     auto keys = extractor_t {}.keys(locs);
     auto cols = extractor_t {}.cols(locs);
     auto fields = extractor_t {}.fields(locs);
+    auto has_fields = fields && (!fields.repeats() || *fields);
 
-    if (fields || format != ukv_doc_format_binary_k)
+    if (has_fields || format != ukv_doc_format_binary_k)
         ukv_docs_read( //
             db_,
             txn_,
@@ -866,13 +867,14 @@ status_t managed_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref
     auto keys = extractor_t {}.keys(locs);
     auto cols = extractor_t {}.cols(locs);
     auto fields = extractor_t {}.fields(locs);
+    auto has_fields = fields && (!fields.repeats() || *fields);
 
     auto vals = vals_ref;
     auto contents = value_extractor_t {}.contents(vals);
     auto offsets = value_extractor_t {}.offsets(vals);
     auto lengths = value_extractor_t {}.lengths(vals);
 
-    if (fields || format != ukv_doc_format_binary_k)
+    if (has_fields || format != ukv_doc_format_binary_k)
         ukv_docs_write( //
             db_,
             txn_,
