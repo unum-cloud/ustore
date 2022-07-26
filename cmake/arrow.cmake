@@ -1,0 +1,21 @@
+
+include(ExternalProject)
+
+message("BOOST_ROOT: " ${BOOST_ROOT})
+
+ExternalProject_Add(
+    arrow
+    PREFIX _deps/arrow
+    GIT_REPOSITORY "https://github.com/apache/arrow.git"
+    GIT_TAG apache-arrow-8.0.1
+    INSTALL_COMMAND ""
+    CMAKE_ARGS -DARROW_BUILD_STATIC=ON -DARROW_COMPUTE=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBOOST_ROOT=${BOOST_ROOT} -DBoost_NO_WARN_NEW_VERSIONS=ON -DARROW_PARQUET=ON -DPARQUET_BUILD_EXAMPLES=OFF -DARROW_COMPUTE=ON -DARROW_FLIGHT=ON -DARROW_BUILD_TESTS=OFF -DARROW_BUILD_INTEGRATION=OFF
+
+    SOURCE_SUBDIR cpp)
+
+ExternalProject_Get_Property(arrow SOURCE_DIR)
+ExternalProject_Get_Property(arrow BINARY_DIR)
+
+set(ARROW_INCLUDE_DIR "${SOURCE_DIR}/cpp/src")
+set(ARROW_INCLUDE_GEN_DIR "${BINARY_DIR}/src")
+include_directories(${ARROW_INCLUDE_DIR} ${ARROW_INCLUDE_GEN_DIR})
