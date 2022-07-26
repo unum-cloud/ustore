@@ -373,14 +373,8 @@ class value_view_t {
   public:
     inline value_view_t() = default;
     inline value_view_t(ukv_val_ptr_t ptr, ukv_val_len_t length) noexcept {
-        if (length == ukv_val_len_missing_k) {
-            ptr_ = nullptr;
-            length_ = 0;
-        }
-        else {
-            ptr_ = ptr;
-            length_ = length;
-        }
+        ptr_ = ptr;
+        length_ = length;
     }
 
     inline value_view_t(byte_t const* begin, byte_t const* end) noexcept
@@ -390,10 +384,10 @@ class value_view_t {
         : ptr_(ukv_val_ptr_t(c_str)), length_(static_cast<ukv_val_len_t>(std::strlen(c_str))) {}
 
     inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
-    inline byte_t const* end() const noexcept { return begin() + length_; }
-    inline std::size_t size() const noexcept { return length_; }
-    inline bool empty() const noexcept { return !length_; }
-    inline operator bool() const noexcept { return ptr_ != nullptr; }
+    inline byte_t const* end() const noexcept { return begin() + size(); }
+    inline std::size_t size() const noexcept { return length_ == ukv_val_len_missing_k ? 0 : length_; }
+    inline bool empty() const noexcept { return !size(); }
+    inline operator bool() const noexcept { return length_ != ukv_val_len_missing_k; }
 
     ukv_val_ptr_t const* member_ptr() const noexcept { return &ptr_; }
     ukv_val_len_t const* member_length() const noexcept { return &length_; }
