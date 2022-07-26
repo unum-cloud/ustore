@@ -49,10 +49,8 @@ class managed_refs_gt {
     static_assert(!std::is_rvalue_reference_v<locations_at>, "The internal object can't be an R-value Reference");
 
     using locations_plain_t = std::remove_reference_t<locations_at>;
-    static constexpr bool is_ref_k = std::is_reference_v<locations_at> && !std::is_integral_v<locations_plain_t>;
-    static constexpr bool is_single_k = std::is_integral_v<locations_plain_t> ||
-                                        std::is_same_v<locations_plain_t, sub_key_t> ||
-                                        std::is_same_v<locations_plain_t, key_arg_t>;
+    static constexpr bool is_single_k = sfinae_is_scalar_gt<locations_plain_t>::value;
+    static constexpr bool is_ref_k = std::is_reference_v<locations_at> && !is_single_k;
 
     using locations_t = std::conditional_t<std::is_integral_v<locations_plain_t>, ukv_key_t, locations_at>;
     using locations_store_t = std::conditional_t<is_ref_k, locations_plain_t*, locations_t>;
@@ -627,8 +625,18 @@ class collection_t {
     }
 
     template <typename keys_arg_at>
-    member_refs_gt<keys_arg_at> operator[](keys_arg_at&& keys) noexcept { //
-        return at(std::forward<keys_arg_at>(keys));
+    member_refs_gt<keys_arg_t> operator[](keys_arg_at& keys) noexcept {
+        keys_arg_t arg;
+        arg.collections_begin = location_get_cols(keys);
+        arg.keys_begin = location_get_keys(keys);
+        arg.fields_begin = location_get_fields(keys);
+        arg.count = location_get_count(keys);
+        return at(std::move(arg));
+    }
+
+    template <typename keys_arg_at>
+    member_refs_gt<locations_in_collections_gt<keys_arg_at>> operator[](keys_arg_at&& keys) noexcept { //
+        return at<locations_in_collections_gt<keys_arg_at>>({std::forward<keys_arg_at>(keys), col_});
     }
 
     template <typename keys_arg_at>

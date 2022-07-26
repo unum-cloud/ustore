@@ -46,8 +46,8 @@ TEST(db, intro) {
     _ = main[{43, 44}].value();
     _ = main[std::array<ukv_key_t, 3> {65, 66, 67}];
     _ = main[std::vector<ukv_key_t> {65, 66, 67, 68}];
-    for (value_view_t value : main[{100, 101}].value()->first) {
-    }
+    for (value_view_t value : main[{100, 101}].value()->first)
+        (void)value;
 
     // Accessing named collections
     collection_t prefixes = *db.collection("prefixes");
@@ -70,10 +70,11 @@ TEST(db, intro) {
     // main[std::array {sub(prefixes, 65), sub(66), sub(67)}] = std::array {"A", "B", "C"};
 
     // Iterating over collections
-    for (ukv_key_t key : main.keys()) {
-    }
-    for (ukv_key_t key : main.keys(100, 200)) {
-    }
+    for (ukv_key_t key : main.keys())
+        (void)key;
+    for (ukv_key_t key : main.keys(100, 200))
+        (void)key;
+
     _ = main.keys(100, 200).find_size()->cardinality;
 
     // Supporting options
