@@ -94,11 +94,12 @@ void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_leng
     EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
 
     auto const expects_missing = expected_length == ukv_val_len_missing_k;
+    using extractor_t = location_extractor_gt<locations_at>;
 
     // Validate that values match
     std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.value();
     taped_values_view_t retrieved = retrieved_and_arena.first;
-    ukv_size_t count = location_get_count(ref.locations());
+    ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
 
     // Check views
@@ -126,14 +127,15 @@ template <typename locations_at>
 void check_equalities(member_refs_gt<locations_at>& ref, values_arg_t values) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
+    using extractor_t = location_extractor_gt<locations_at>;
 
     // Validate that values match
     std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.value();
     taped_values_view_t retrieved = retrieved_and_arena.first;
-    EXPECT_EQ(retrieved.size(), location_get_count(ref.locations()));
+    EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
     tape_iterator_t it = retrieved.begin();
-    for (std::size_t i = 0; i != location_get_count(ref.locations()); ++i, ++it) {
+    for (std::size_t i = 0; i != extractor_t {}.count(ref.locations()); ++i, ++it) {
         auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
         auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
 
