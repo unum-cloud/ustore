@@ -110,7 +110,7 @@ class managed_refs_gt {
             return maybe.release_status();
 
         if constexpr (is_single_k) {
-            return maybe->size();
+            return *maybe ? maybe->size() : ukv_val_len_missing_k;
         }
         else {
             auto found_lengths = maybe->lengths();
