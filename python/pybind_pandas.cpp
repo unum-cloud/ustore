@@ -29,6 +29,8 @@ void ukv::wrap_dataframe(py::module& m) {
     auto df = py::class_<frame_t, std::shared_ptr<frame_t>>(m, "DataFrame", py::module_local());
     df.def(py::init([](std::vector<std::string> fields) { return std::make_shared<frame_t>(); }));
 
+    df.def("columns", [](frame_t& df) -> py::list {});
+
     // Batch Access
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.iloc.html#pandas.DataFrame.loc
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.iloc.html#pandas.DataFrame.iloc
