@@ -587,6 +587,12 @@ struct sub_key_hash_t {
     }
 };
 
+template <typename locations_without_collections_at>
+struct locations_in_collections_gt {
+    locations_without_collections_at without;
+    ukv_collection_t collection;
+};
+
 // clang-format off
 constexpr ukv_size_t location_get_count(ukv_key_t&) noexcept { return 1; }
 inline strided_iterator_gt<ukv_key_t const> location_get_keys(ukv_key_t& one) noexcept { return {&one}; }
@@ -608,27 +614,38 @@ inline strided_iterator_gt<ukv_key_t const> location_get_keys(strided_range_gt<u
 inline strided_iterator_gt<ukv_collection_t const> location_get_cols(strided_range_gt<ukv_key_t const>) noexcept { return {}; }
 inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(strided_range_gt<ukv_key_t const>) noexcept { return {}; }
 
+template <typename at> ukv_size_t location_get_count(locations_in_collections_gt<at> const& arg) noexcept { return location_get_count(arg.without); }
+template <typename at> strided_iterator_gt<ukv_key_t const> location_get_keys(locations_in_collections_gt<at> const& arg) noexcept { return location_get_keys(arg.without); }
+template <typename at> strided_iterator_gt<ukv_collection_t const> location_get_cols(locations_in_collections_gt<at> const& arg) noexcept { return {&arg.collection}; }
+template <typename at> strided_iterator_gt<ukv_str_view_t const> location_get_fields(locations_in_collections_gt<at> const& arg) noexcept { return location_get_fields(arg.without); }
+
 template <typename allocator_at> ukv_size_t location_get_count(std::vector<ukv_key_t, allocator_at> const& arg) noexcept { return arg.size(); }
 template <typename allocator_at> strided_iterator_gt<ukv_key_t const> location_get_keys(std::vector<ukv_key_t, allocator_at> const& arg) noexcept { return {arg.data(), sizeof(ukv_key_t)}; }
 template <typename allocator_at> strided_iterator_gt<ukv_collection_t const> location_get_cols(std::vector<ukv_key_t, allocator_at> const&) noexcept { return {}; }
 template <typename allocator_at> strided_iterator_gt<ukv_str_view_t const> location_get_fields(std::vector<ukv_key_t, allocator_at> const&) noexcept { return {}; }
 
-template <typename at, typename = int> struct has_collection_sfinae_gt : std::false_type {};
-template <typename at> struct has_collection_sfinae_gt<at, decltype((void)at::collection, 0)> : std::true_type {};
+template <typename at, typename = int> struct sfinae_is_scalar_gt : std::is_integral<std::remove_reference_t<at>> {};
+template <> struct sfinae_is_scalar_gt<ukv_key_t> : std::true_type {};
+template <> struct sfinae_is_scalar_gt<sub_key_t> : std::true_type {};
+template <> struct sfinae_is_scalar_gt<key_arg_t> : std::true_type {};
+template <typename at> struct sfinae_is_scalar_gt<locations_in_collections_gt<at>> : sfinae_is_scalar_gt<at> {};
 
-template <typename at, typename = int> struct has_field_sfinae_gt : std::false_type {};
-template <typename at> struct has_field_sfinae_gt<at, decltype((void)at::field, 0)> : std::true_type {};
+template <typename at, typename = int> struct sfinae_has_collection_gt : std::false_type {};
+template <typename at> struct sfinae_has_collection_gt<at, decltype((void)at::collection, 0)> : std::true_type {};
+
+template <typename at, typename = int> struct sfinae_has_field_gt : std::false_type {};
+template <typename at> struct sfinae_has_field_gt<at, decltype((void)at::field, 0)> : std::true_type {};
 
 template <typename at> ukv_size_t location_get_count(strided_range_gt<at> const& arg) noexcept { return arg.size(); }
 template <typename at> strided_iterator_gt<ukv_key_t const> location_get_keys(strided_range_gt<at> const& arg) noexcept { return arg.members(&at::key); }
 template <typename at> strided_iterator_gt<ukv_collection_t const> location_get_cols(strided_range_gt<at> const& arg) noexcept {
-    if constexpr (has_collection_sfinae_gt<at>::value) {
+    if constexpr (sfinae_has_collection_gt<at>::value) {
         static_assert(std::is_same_v<at::field, ukv_collection_t>);
         return arg.members(&at::collection); 
     } else return {};
 }
 template <typename at> inline strided_iterator_gt<ukv_str_view_t const> location_get_fields(strided_range_gt<at> const& arg) noexcept {
-    if constexpr (has_field_sfinae_gt<at>::value) {
+    if constexpr (sfinae_has_field_gt<at>::value) {
         static_assert(std::is_same_v<at::field, ukv_str_view_t>);
         return arg.members(&at::field); 
     } else return {};
@@ -645,7 +662,7 @@ template <typename container_at> strided_iterator_gt<ukv_key_t const> location_g
 }
 template <typename container_at> strided_iterator_gt<ukv_collection_t const> location_get_cols(container_at const& arg) noexcept {
     using element_t = typename container_at::value_type;
-    if constexpr (has_collection_sfinae_gt<element_t>::value) {
+    if constexpr (sfinae_has_collection_gt<element_t>::value) {
         static_assert(std::is_same_v<element_t::collection, ukv_collection_t>);
         auto strided = strided_range_gt<element_t const>(arg.data(), arg.data() + arg.size());
         return strided.members(&element_t::collection); 
@@ -653,7 +670,7 @@ template <typename container_at> strided_iterator_gt<ukv_collection_t const> loc
 }
 template <typename container_at> strided_iterator_gt<ukv_str_view_t const> location_get_fields(container_at const& arg) noexcept {
     using element_t = typename container_at::value_type;
-    if constexpr (has_field_sfinae_gt<element_t>::value) {
+    if constexpr (sfinae_has_field_gt<element_t>::value) {
         static_assert(std::is_same_v<element_t::field, ukv_str_view_t>);
         auto strided = strided_range_gt<element_t const>(arg.data(), arg.data() + arg.size());
         return strided.members(&element_t::field); 
