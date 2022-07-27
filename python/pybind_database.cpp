@@ -403,6 +403,39 @@ void set_item( //
     status.throw_unhandled();
 }
 
+std::optional<py::array_t<ukv_key_t>> scan( //
+    ukv_t db_ptr,
+    ukv_txn_t txn_ptr,
+    ukv_collection_t collection_ptr,
+    managed_arena_t& arena,
+    ukv_key_t min_key,
+    ukv_size_t scan_length) {
+
+    ukv_key_t* found_keys = nullptr;
+    ukv_val_len_t* found_lengths = nullptr;
+    ukv_options_t options = ukv_options_default_k;
+    status_t status;
+
+    ukv_scan( //
+        db_ptr,
+        txn_ptr,
+        1,
+        &collection_ptr,
+        0,
+        &min_key,
+        0,
+        &scan_length,
+        0,
+        options,
+        &found_keys,
+        &found_lengths,
+        arena.member_ptr(),
+        status.member_ptr());
+
+    status.throw_unhandled();
+    return py::array_t<ukv_key_t>(scan_length, found_keys);
+}
+
 void ukv::wrap_database(py::module& m) {
 
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
@@ -503,6 +536,7 @@ void ukv::wrap_database(py::module& m) {
         },
         py::arg("key"),
         py::arg("value"));
+
     py_col.def("clear", [](py_col_t& py_col) {
         db_t& db = py_col.db_ptr->native;
         db.remove(py_col.name.c_str()).throw_unhandled();
@@ -523,6 +557,15 @@ void ukv::wrap_database(py::module& m) {
         },
         py::arg("keys"),
         py::arg("values"));
+
+    py_col.def("scan", [](py_col_t& py_col, ukv_key_t min_key, ukv_size_t length) {
+        return scan(py_col.db_ptr->native,
+                    py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
+                    py_col.native,
+                    py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
+                    min_key,
+                    length);
+    });
 
     // `Transaction`:
     py_txn.def( //
