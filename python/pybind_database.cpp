@@ -380,8 +380,8 @@ void set_item( //
         &offsets[0].second,
         sizeof(ukv_val_len_t) * 2,
         options,
-        arena.internal_cptr(),
-        status.internal_cptr());
+        arena.member_ptr(),
+        status.member_ptr());
 
     status.throw_unhandled();
 }
