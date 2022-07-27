@@ -513,6 +513,10 @@ void ukv::wrap_database(py::module& m) {
         // TODO:
     });
 
+    py_db.def("scan", [](py_db_t& py_db, ukv_key_t min_key, ukv_size_t length) {
+        return scan(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, min_key, length);
+    });
+
     // Define `Collection`s member method, without defining any external constructors
     py_col.def(
         "get",
