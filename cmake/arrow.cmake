@@ -1,7 +1,7 @@
 include(ExternalProject)
 
 ExternalProject_Add(
-    arrow
+    arrow-external
     GIT_REPOSITORY https://github.com/apache/arrow.git
     GIT_TAG "apache-arrow-8.0.1"
     GIT_SHALLOW TRUE
@@ -30,9 +30,12 @@ ExternalProject_Add(
     -DARROW_DATASET=OFF
 )
 
-ExternalProject_Get_Property(arrow SOURCE_DIR)
-ExternalProject_Get_Property(arrow BINARY_DIR)
+ExternalProject_Get_Property(arrow-external SOURCE_DIR)
+ExternalProject_Get_Property(arrow-external BINARY_DIR)
 
 set(ARROW_INCLUDE_DIR "${SOURCE_DIR}/cpp/src")
 set(ARROW_INCLUDE_GEN_DIR "${BINARY_DIR}/src")
 include_directories(${ARROW_INCLUDE_DIR} ${ARROW_INCLUDE_GEN_DIR})
+link_directories("${BINARY_DIR}/release/")
+
+# find_library(arrow_bundled_dependencies REQUIRED PATHS  NO_DEFAULT_PATH)

@@ -181,6 +181,7 @@ target_link_libraries(ukv_arrow_server
   pthread
   fmt::fmt
   nlohmann_json::nlohmann_json
+  arrow
   arrow_bundled_dependencies
 )
 
