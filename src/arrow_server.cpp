@@ -20,25 +20,23 @@
 #include <arrow/table.h>
 #include <arrow/type.h>
 
-#include <parquet/arrow/reader.h>
-#include <parquet/arrow/writer.h>
-
 #include <algorithm>
 #include <memory>
 #include <numeric>
 #include <vector>
+#include <iostream>
 
 using namespace arrow::flight;
 using namespace arrow;
 
-class ParquetStorageService : public arrow::flight::FlightServerBase {
+class UKVService : public arrow::flight::FlightServerBase {
   public:
     const arrow::flight::ActionType kActionDropDataset {"drop_dataset", "Delete a dataset."};
 
-    explicit ParquetStorageService(std::shared_ptr<arrow::fs::FileSystem> root) : root_(std::move(root)) {}
+    explicit UKVService(std::shared_ptr<arrow::fs::FileSystem> root) : root_(std::move(root)) {}
 
-    arrow::Status ListFlights(const arrow::flight::ServerCallContext&,
-                              const arrow::flight::Criteria*,
+    arrow::Status ListFlights(arrow::flight::ServerCallContext const&,
+                              arrow::flight::Criteria const*,
                               std::unique_ptr<arrow::flight::FlightListing>* listings) override {
         arrow::fs::FileSelector selector;
         selector.base_dir = "/";
@@ -57,8 +55,8 @@ class ParquetStorageService : public arrow::flight::FlightServerBase {
         return arrow::Status::OK();
     }
 
-    arrow::Status GetFlightInfo(const arrow::flight::ServerCallContext&,
-                                const arrow::flight::FlightDescriptor& descriptor,
+    arrow::Status GetFlightInfo(arrow::flight::ServerCallContext const&,
+                                arrow::flight::FlightDescriptor const& descriptor,
                                 std::unique_ptr<arrow::flight::FlightInfo>* info) override {
         ARROW_ASSIGN_OR_RAISE(auto file_info, FileInfoFromDescriptor(descriptor));
         ARROW_ASSIGN_OR_RAISE(auto flight_info, MakeFlightInfo(file_info));
@@ -66,37 +64,38 @@ class ParquetStorageService : public arrow::flight::FlightServerBase {
         return arrow::Status::OK();
     }
 
-    arrow::Status DoPut(const arrow::flight::ServerCallContext&,
+    arrow::Status DoPut(arrow::flight::ServerCallContext const&,
                         std::unique_ptr<arrow::flight::FlightMessageReader> reader,
                         std::unique_ptr<arrow::flight::FlightMetadataWriter>) override {
-        ARROW_ASSIGN_OR_RAISE(auto file_info, FileInfoFromDescriptor(reader->descriptor()));
-        ARROW_ASSIGN_OR_RAISE(auto sink, root_->OpenOutputStream(file_info.path()));
-        ARROW_ASSIGN_OR_RAISE(std::shared_ptr<arrow::Table> table, reader->ToTable());
+        // ARROW_ASSIGN_OR_RAISE(auto file_info, FileInfoFromDescriptor(reader->descriptor()));
+        // ARROW_ASSIGN_OR_RAISE(auto sink, root_->OpenOutputStream(file_info.path()));
+        // ARROW_ASSIGN_OR_RAISE(std::shared_ptr<arrow::Table> table, reader->ToTable());
 
-        ARROW_RETURN_NOT_OK(
-            parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink, /*chunk_size=*/65536));
+        // ARROW_RETURN_NOT_OK(
+        //     parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink, /*chunk_size=*/65536));
         return arrow::Status::OK();
     }
 
-    arrow::Status DoGet(const arrow::flight::ServerCallContext&,
-                        const arrow::flight::Ticket& request,
+    arrow::Status DoGet(arrow::flight::ServerCallContext const&,
+                        arrow::flight::Ticket const& request,
                         std::unique_ptr<arrow::flight::FlightDataStream>* stream) override {
-        ARROW_ASSIGN_OR_RAISE(auto input, root_->OpenInputFile(request.ticket));
-        std::unique_ptr<parquet::arrow::FileReader> reader;
-        ARROW_RETURN_NOT_OK(parquet::arrow::OpenFile(std::move(input), arrow::default_memory_pool(), &reader));
+        // ARROW_ASSIGN_OR_RAISE(auto input, root_->OpenInputFile(request.ticket));
+        // std::unique_ptr<parquet::arrow::FileReader> reader;
+        // ARROW_RETURN_NOT_OK(parquet::arrow::OpenFile(std::move(input), arrow::default_memory_pool(), &reader));
 
-        std::shared_ptr<arrow::Table> table;
-        ARROW_RETURN_NOT_OK(reader->ReadTable(&table));
-        // Note that we can't directly pass TableBatchReader to
-        // RecordBatchStream because TableBatchReader keeps a non-owning
-        // reference to the underlying Table, which would then get freed
-        // when we exit this function
-        std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
-        arrow::TableBatchReader batch_reader(*table);
-        ARROW_ASSIGN_OR_RAISE(batches, batch_reader.ToRecordBatches());
+        // std::shared_ptr<arrow::Table> table;
+        // ARROW_RETURN_NOT_OK(reader->ReadTable(&table));
+        // // Note that we can't directly pass TableBatchReader to
+        // // RecordBatchStream because TableBatchReader keeps a non-owning
+        // // reference to the underlying Table, which would then get freed
+        // // when we exit this function
+        // std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
+        // arrow::TableBatchReader batch_reader(*table);
+        // ARROW_ASSIGN_OR_RAISE(batches, batch_reader.ToRecordBatches());
 
-        ARROW_ASSIGN_OR_RAISE(auto owning_reader, arrow::RecordBatchReader::Make(std::move(batches), table->schema()));
-        *stream = std::unique_ptr<arrow::flight::FlightDataStream>(new arrow::flight::RecordBatchStream(owning_reader));
+        // ARROW_ASSIGN_OR_RAISE(auto owning_reader, arrow::RecordBatchReader::Make(std::move(batches),
+        // table->schema())); *stream = std::unique_ptr<arrow::flight::FlightDataStream>(new
+        // arrow::flight::RecordBatchStream(owning_reader));
 
         return arrow::Status::OK();
     }
@@ -119,12 +118,12 @@ class ParquetStorageService : public arrow::flight::FlightServerBase {
 
   private:
     arrow::Result<arrow::flight::FlightInfo> MakeFlightInfo(const arrow::fs::FileInfo& file_info) {
-        ARROW_ASSIGN_OR_RAISE(auto input, root_->OpenInputFile(file_info));
-        std::unique_ptr<parquet::arrow::FileReader> reader;
-        ARROW_RETURN_NOT_OK(parquet::arrow::OpenFile(std::move(input), arrow::default_memory_pool(), &reader));
+        // ARROW_ASSIGN_OR_RAISE(auto input, root_->OpenInputFile(file_info));
+        // std::unique_ptr<parquet::arrow::FileReader> reader;
+        // ARROW_RETURN_NOT_OK(parquet::arrow::OpenFile(std::move(input), arrow::default_memory_pool(), &reader));
 
         std::shared_ptr<arrow::Schema> schema;
-        ARROW_RETURN_NOT_OK(reader->GetSchema(&schema));
+        // ARROW_RETURN_NOT_OK(reader->GetSchema(&schema));
 
         auto descriptor = arrow::flight::FlightDescriptor::Path({file_info.base_name()});
 
@@ -134,7 +133,7 @@ class ParquetStorageService : public arrow::flight::FlightServerBase {
         ARROW_ASSIGN_OR_RAISE(location, arrow::flight::Location::ForGrpcTcp("localhost", port()));
         endpoint.locations.push_back(location);
 
-        int64_t total_records = reader->parquet_reader()->metadata()->num_rows();
+        int64_t total_records = 0; // reader->parquet_reader()->metadata()->num_rows();
         int64_t total_bytes = file_info.size();
 
         return arrow::flight::FlightInfo::Make(*schema, descriptor, {endpoint}, total_records, total_bytes);
@@ -153,12 +152,9 @@ class ParquetStorageService : public arrow::flight::FlightServerBase {
     arrow::Status DoActionDropDataset(const std::string& key) { return root_->DeleteFile(key); }
 
     std::shared_ptr<arrow::fs::FileSystem> root_;
-}; // end ParquetStorageService
+};
 
-//------------------------------------------------------------------------------
-
-int main(int argc, char* argv[]) {
-
+arrow::Status run_server() {
     auto fs = std::make_shared<arrow::fs::LocalFileSystem>();
     ARROW_RETURN_NOT_OK(fs->CreateDir("./flight_datasets/"));
     ARROW_RETURN_NOT_OK(fs->DeleteDirContents("./flight_datasets/"));
@@ -168,9 +164,14 @@ int main(int argc, char* argv[]) {
     ARROW_ASSIGN_OR_RAISE(server_location, arrow::flight::Location::ForGrpcTcp("0.0.0.0", 0));
 
     arrow::flight::FlightServerOptions options(server_location);
-    auto server = std::unique_ptr<arrow::flight::FlightServerBase>(new ParquetStorageService(std::move(root)));
+    auto server = std::unique_ptr<arrow::flight::FlightServerBase>(new UKVService(std::move(root)));
     ARROW_RETURN_NOT_OK(server->Init(options));
-    rout << "Listening on port " << server->port() << std::endl;
+    std::cout << "Listening on port " << server->port() << std::endl;
+    return arrow::Status::OK();
+}
 
-    return EXIT_SUCCESS;
+//------------------------------------------------------------------------------
+
+int main(int argc, char* argv[]) {
+    return run_server().ok() ? EXIT_SUCCESS : EXIT_FAILURE;
 }
