@@ -4,7 +4,7 @@ from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 from qibuild import cmake
 
-__version__ = '0.0.5'
+__version__ = open("VERSION", "r").read()
 __libname__ = 'ukv'
 
 cmake_cache = cmake.read_cmake_cache('CMakeCache.txt')
