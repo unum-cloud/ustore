@@ -32,6 +32,10 @@
 using namespace arrow::flight;
 using namespace arrow;
 
+// To later implement a C-ABI stable binding:
+// https://arrow.apache.org/docs/format/CDataInterface.html#example-use-case
+// void ukv_export_arrow(struct ArrowSchema*, struct ArrowArray*);
+
 class UKVService : public arrow::flight::FlightServerBase {
   public:
     const arrow::flight::ActionType kActionDropDataset {"drop_dataset", "Delete a dataset."};
@@ -70,6 +74,10 @@ class UKVService : public arrow::flight::FlightServerBase {
     arrow::Status DoPut(arrow::flight::ServerCallContext const&,
                         std::unique_ptr<arrow::flight::FlightMessageReader> reader,
                         std::unique_ptr<arrow::flight::FlightMetadataWriter>) override {
+
+        // ARROW_ASSIGN_OR_RAISE(arrow::Result<std::shared_ptr<arrow::Schema>> schema, reader->GetSchema());
+        // ARROW_ASSIGN_OR_RAISE(arrow::Result<arrow::flight::FlightStreamChunk> chunk, reader->Next());
+
         ARROW_ASSIGN_OR_RAISE(auto file_info, FileInfoFromDescriptor(reader->descriptor()));
         ARROW_ASSIGN_OR_RAISE(auto sink, root_->OpenOutputStream(file_info.path()));
         ARROW_ASSIGN_OR_RAISE(std::shared_ptr<arrow::Table> table, reader->ToTable());
@@ -102,14 +110,14 @@ class UKVService : public arrow::flight::FlightServerBase {
         return arrow::Status::OK();
     }
 
-    arrow::Status ListActions(const arrow::flight::ServerCallContext&,
+    arrow::Status ListActions(arrow::flight::ServerCallContext const&,
                               std::vector<arrow::flight::ActionType>* actions) override {
         *actions = {kActionDropDataset};
         return arrow::Status::OK();
     }
 
-    arrow::Status DoAction(const arrow::flight::ServerCallContext&,
-                           const arrow::flight::Action& action,
+    arrow::Status DoAction(arrow::flight::ServerCallContext const&,
+                           arrow::flight::Action const& action,
                            std::unique_ptr<arrow::flight::ResultStream>* result) override {
         if (action.type == kActionDropDataset.type) {
             *result = std::unique_ptr<arrow::flight::ResultStream>(new arrow::flight::SimpleResultStream({}));
@@ -119,7 +127,7 @@ class UKVService : public arrow::flight::FlightServerBase {
     }
 
   private:
-    arrow::Result<arrow::flight::FlightInfo> MakeFlightInfo(const arrow::fs::FileInfo& file_info) {
+    arrow::Result<arrow::flight::FlightInfo> MakeFlightInfo(arrow::fs::FileInfo const& file_info) {
         ARROW_ASSIGN_OR_RAISE(auto input, root_->OpenInputFile(file_info));
         std::unique_ptr<parquet::arrow::FileReader> reader;
         ARROW_RETURN_NOT_OK(parquet::arrow::OpenFile(std::move(input), arrow::default_memory_pool(), &reader));
@@ -141,7 +149,7 @@ class UKVService : public arrow::flight::FlightServerBase {
         return arrow::flight::FlightInfo::Make(*schema, descriptor, {endpoint}, total_records, total_bytes);
     }
 
-    arrow::Result<arrow::fs::FileInfo> FileInfoFromDescriptor(const arrow::flight::FlightDescriptor& descriptor) {
+    arrow::Result<arrow::fs::FileInfo> FileInfoFromDescriptor(arrow::flight::FlightDescriptor const& descriptor) {
         if (descriptor.type != arrow::flight::FlightDescriptor::PATH) {
             return arrow::Status::Invalid("Must provide PATH-type FlightDescriptor");
         }
@@ -151,7 +159,7 @@ class UKVService : public arrow::flight::FlightServerBase {
         return root_->GetFileInfo(descriptor.path[0]);
     }
 
-    arrow::Status DoActionDropDataset(const std::string& key) { return root_->DeleteFile(key); }
+    arrow::Status DoActionDropDataset(std::string const& key) { return root_->DeleteFile(key); }
 
     std::shared_ptr<arrow::fs::FileSystem> root_;
 };
@@ -163,13 +171,13 @@ arrow::Status run_server() {
     auto root = std::make_shared<arrow::fs::SubTreeFileSystem>("./flight_datasets/", fs);
 
     arrow::flight::Location server_location;
-    ARROW_ASSIGN_OR_RAISE(server_location, arrow::flight::Location::ForGrpcTcp("0.0.0.0", 0));
+    ARROW_ASSIGN_OR_RAISE(server_location, arrow::flight::Location::ForGrpcTcp("0.0.0.0", 38709));
 
     arrow::flight::FlightServerOptions options(server_location);
     auto server = std::unique_ptr<arrow::flight::FlightServerBase>(new UKVService(std::move(root)));
     ARROW_RETURN_NOT_OK(server->Init(options));
     std::cout << "Listening on port " << server->port() << std::endl;
-    return arrow::Status::OK();
+    return server->Serve();
 }
 
 //------------------------------------------------------------------------------
