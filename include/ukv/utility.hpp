@@ -102,6 +102,7 @@ class [[nodiscard]] status_t {
  */
 template <typename object_at>
 class [[nodiscard]] expected_gt {
+  protected:
     status_t status_;
     object_at object_;
 
@@ -150,6 +151,44 @@ class [[nodiscard]] expected_gt {
     bool operator!=(hetero_at const& other) const noexcept {
         return status_ || object_ != other;
     }
+};
+
+template <typename object_at>
+class [[nodiscard]] given_gt : public expected_gt<object_at> {
+  protected:
+    using base_t = expected_gt<object_at>;
+    using base_t::object_;
+    using base_t::status_;
+    arena_t arena_;
+
+  public:
+    given_gt() = default;
+    given_gt(object_at&& object, arena_t&& arena) : given_gt(std::move(object)) {}
+    given_gt(status_t&& status, object_at&& default_object = object_at {}, arena_t&& arena = {nullptr})
+        : given_gt(std::move(status), std::move(default_object)), arena_(std::move(arena)) {}
+
+    given_gt(given_gt&& other) noexcept
+        : base_t(std::move(other.status_, other.object_)), arena_(std::move(other.arena_)) {}
+
+    given_gt& operator=(given_gt&& other) noexcept {
+        std::swap(status_, other.status_);
+        std::swap(object_, other.object_);
+        std::swap(arena_, other.arena_);
+        return *this;
+    }
+
+    using base_t::operator bool;
+    using base_t::operator==;
+    using base_t::operator!=;
+
+    object_at const& operator*() const& noexcept { return object_; }
+    object_at const* operator->() const& noexcept { return &object_; }
+
+    operator std::optional<object_at>() && = delete;
+    object_at&& operator*() && noexcept = delete;
+    object_at* operator->() noexcept = delete;
+
+    inline arena_t release_arena() noexcept { return std::exchange(arena_, {arena_.db()}); }
 };
 
 /**
@@ -505,42 +544,42 @@ class taped_values_view_t {
  * @brief A view of a tape received from the DB.
  * Allocates no memory, but is responsible for the cleanup.
  */
-class managed_arena_t {
+class arena_t {
 
     ukv_t db_ = nullptr;
     ukv_arena_t memory_ = nullptr;
 
   public:
-    managed_arena_t(ukv_t db) noexcept : db_(db) {}
-    managed_arena_t(managed_arena_t const&) = delete;
-    managed_arena_t& operator=(managed_arena_t const&) = delete;
+    arena_t(ukv_t db) noexcept : db_(db) {}
+    arena_t(arena_t const&) = delete;
+    arena_t& operator=(arena_t const&) = delete;
 
-    ~managed_arena_t() {
+    ~arena_t() {
         if (memory_)
             ukv_arena_free(db_, memory_);
         memory_ = nullptr;
     }
 
-    inline managed_arena_t(managed_arena_t&& other) noexcept
-        : db_(other.db_), memory_(std::exchange(other.memory_, nullptr)) {}
+    inline arena_t(arena_t&& other) noexcept : db_(other.db_), memory_(std::exchange(other.memory_, nullptr)) {}
 
-    inline managed_arena_t& operator=(managed_arena_t&& other) noexcept {
+    inline arena_t& operator=(arena_t&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(memory_, other.memory_);
         return *this;
     }
 
     inline ukv_arena_t* member_ptr() noexcept { return &memory_; }
+    inline ukv_t db() const noexcept { return db_; }
 };
 
 class any_arena_t {
 
-    managed_arena_t owned_;
-    managed_arena_t* accessible_ = nullptr;
+    arena_t owned_;
+    arena_t* accessible_ = nullptr;
 
   public:
     any_arena_t(ukv_t db) noexcept : owned_(db), accessible_(nullptr) {}
-    any_arena_t(managed_arena_t& accessible) noexcept : owned_(nullptr), accessible_(&accessible) {}
+    any_arena_t(arena_t& accessible) noexcept : owned_(nullptr), accessible_(&accessible) {}
 
     any_arena_t(any_arena_t&&) = default;
     any_arena_t& operator=(any_arena_t&&) = default;
@@ -548,8 +587,9 @@ class any_arena_t {
     any_arena_t(any_arena_t const&) = delete;
     any_arena_t& operator=(any_arena_t const&) = delete;
 
-    managed_arena_t& managed() noexcept { return accessible_ ? *accessible_ : owned_; }
-    ukv_arena_t* member_ptr() noexcept { return managed().member_ptr(); }
+    arena_t& arena() noexcept { return accessible_ ? *accessible_ : owned_; }
+    ukv_arena_t* member_ptr() noexcept { return arena().member_ptr(); }
+    arena_t release_owned() noexcept { return std::exchange(owned_, arena_t {owned_.db()}); }
 };
 
 /**

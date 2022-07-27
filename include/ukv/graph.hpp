@@ -136,7 +136,7 @@ class adjacency_stream_t {
     edges_span_t fetched_edges_ = {};
     std::size_t fetched_offset_ = 0;
 
-    managed_arena_t arena_;
+    arena_t arena_;
     keys_stream_t vertex_stream_;
 
     status_t prefetch_gather() noexcept {
@@ -275,9 +275,9 @@ class graph_ref_t {
 
     graph_ref_t(graph_ref_t&& other) noexcept : collection_(other.collection_), arena_(std::move(other.arena_)) {}
 
-    managed_arena_t& arena() noexcept { return arena_.managed(); }
+    arena_t& arena() noexcept { return arena_.arena(); }
     collection_t& collection() noexcept { return collection_; };
-    graph_ref_t& on(managed_arena_t& arena) noexcept {
+    graph_ref_t& on(arena_t& arena) noexcept {
         arena_ = arena;
         return *this;
     }

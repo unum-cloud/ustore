@@ -319,7 +319,7 @@ void respond_to_one(db_session_t& session,
         // Read the data:
     case http::verb::get: {
 
-        managed_arena_t tape(session.db());
+        arena_t tape(session.db());
         status_t status;
         ukv_read(session.db(),
                  txn.raw,
@@ -360,7 +360,7 @@ void respond_to_one(db_session_t& session,
         // Check the data:
     case http::verb::head: {
 
-        managed_arena_t tape(session.db());
+        arena_t tape(session.db());
         status_t status;
         options = ukv_option_read_lengths_k;
         ukv_read(session.db(),
@@ -391,7 +391,7 @@ void respond_to_one(db_session_t& session,
 
     // Insert data if it's missing:
     case http::verb::post: {
-        managed_arena_t tape(session.db());
+        arena_t tape(session.db());
         status_t status;
         options = ukv_option_read_lengths_k;
         ukv_read(session.db(),
@@ -585,7 +585,7 @@ void respond_to_aos(db_session_t& session,
         }
 
         // Pull the entire objects before we start sampling their fields
-        managed_arena_t tape(session.db());
+        arena_t tape(session.db());
         status_t status;
         // ukv_read(session.db(),
         //          txn.raw,

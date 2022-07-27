@@ -58,7 +58,7 @@ TEST(db, intro) {
     // Reusable memory
     // This interface not just more performant, but also provides nicer interface:
     //  expected_gt<taped_values_view_t> tapes = main[{100, 101}].on(arena);
-    managed_arena_t arena(db);
+    arena_t arena(db);
     _ = main[{43, 44}].on(arena).clear();
     _ = main[{43, 44}].on(arena).erase();
     _ = main[{43, 44}].on(arena).present();
@@ -85,7 +85,7 @@ TEST(db, intro) {
     _ = main[{43, 44}].on(arena).value(/*format:*/ ukv_doc_format_binary_k, /*track:*/ false);
 
     // Working with sub documents
-    main[56] = R"( {"Hello": "World", "answer": 42} )"_json.dump().c_str();
+    main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
 }
 
 template <typename locations_at>
@@ -97,7 +97,7 @@ void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_leng
     using extractor_t = location_extractor_gt<locations_at>;
 
     // Validate that values match
-    std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.value();
+    std::pair<taped_values_view_t, arena_t> retrieved_and_arena = *ref.value();
     taped_values_view_t retrieved = retrieved_and_arena.first;
     ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
@@ -130,7 +130,7 @@ void check_equalities(member_refs_gt<locations_at>& ref, values_arg_t values) {
     using extractor_t = location_extractor_gt<locations_at>;
 
     // Validate that values match
-    std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.value();
+    std::pair<taped_values_view_t, arena_t> retrieved_and_arena = *ref.value();
     taped_values_view_t retrieved = retrieved_and_arena.first;
     EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
