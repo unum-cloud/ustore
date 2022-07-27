@@ -403,7 +403,7 @@ void set_item( //
     status.throw_unhandled();
 }
 
-std::optional<py::array_t<ukv_key_t>> scan( //
+std::optional<py::tuple> scan( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
@@ -413,7 +413,7 @@ std::optional<py::array_t<ukv_key_t>> scan( //
 
     ukv_key_t* found_keys = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options = ukv_option_read_lengths_k;
     status_t status;
 
     ukv_scan( //
@@ -433,7 +433,8 @@ std::optional<py::array_t<ukv_key_t>> scan( //
         status.member_ptr());
 
     status.throw_unhandled();
-    return py::array_t<ukv_key_t>(scan_length, found_keys);
+    return py::make_tuple(py::array_t<ukv_key_t>(scan_length, found_keys),
+                          py::array_t<ukv_val_len_t>(scan_length, found_lengths));
 }
 
 void ukv::wrap_database(py::module& m) {
