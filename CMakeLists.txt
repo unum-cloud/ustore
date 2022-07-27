@@ -64,10 +64,6 @@ set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fs
 
 find_package(Threads REQUIRED)
 
-include_directories(include/)
-include_directories($ENV{CONDA_PREFIX}/include)
-link_directories($ENV{CONDA_PREFIX}/lib)
-message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Install 3rd Party Packages
 include(FetchContent)
@@ -86,6 +82,11 @@ include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(Arrow-external Boost-external)
 endif()
+
+include_directories(include/)
+include_directories($ENV{CONDA_PREFIX}/include)
+link_directories($ENV{CONDA_PREFIX}/lib)
+message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
 add_library(ukv_stl
