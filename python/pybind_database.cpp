@@ -357,9 +357,14 @@ void set_item( //
 
     // TODO: if matrix contains bytes (not characters), use the full length
     // TODO: support non-continuous buffers and lists
-    // Pairs should become
-    // key_arg_t
-    // val_arg_t
+    // Pairs should become: <key_arg_t, val_arg_t>
+    // If we can't cast to lists or buffers, we can use iterators:
+    //   Lists: PyList_Check, PyList_Size, PyList_GetItem
+    //   Tuples: https://docs.python.org/3/c-api/tuple.html
+    //   Iterators: PyIter_Check, PyIter_Next: https://docs.python.org/3/c-api/iter.html
+    // On every value (in non-tensor case) we should check, what kind of sequence it is:
+    //   Bytes: PyByteArray_Size, PyByteArray_AsString:  https://docs.python.org/3/c-api/bytearray.html
+    //   Unicode Strings: https://docs.python.org/3/c-api/unicode.html#unicode-type
     std::vector<std::pair<ukv_val_len_t, ukv_val_len_t>> offsets(tasks_count);
     ukv_val_len_t max_size = values.py.itemsize;
 
