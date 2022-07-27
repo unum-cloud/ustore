@@ -365,6 +365,10 @@ void set_item( //
     // On every value (in non-tensor case) we should check, what kind of sequence it is:
     //   Bytes: PyByteArray_Size, PyByteArray_AsString:  https://docs.python.org/3/c-api/bytearray.html
     //   Unicode Strings: https://docs.python.org/3/c-api/unicode.html#unicode-type
+    // Mappings could be sliced into keys and values, but it shouldn't be faster,
+    // than doing it natively in Python. Raw `dict`s, however, provide a nice
+    // iterator through CPython API: https://docs.python.org/3/c-api/dict.html#c.PyDict_Next
+    // https://docs.python.org/3/c-api/mapping.html#c.PyMapping_Keys
     std::vector<std::pair<ukv_val_len_t, ukv_val_len_t>> offsets(tasks_count);
     ukv_val_len_t max_size = values.py.itemsize;
 
