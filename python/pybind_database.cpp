@@ -55,6 +55,9 @@
 
 #include <Python.h>
 #include "pybind.hpp"
+#include <vector>
+#include <utility>
+#include <algorithm>
 
 using namespace unum::ukv;
 using namespace unum;
@@ -317,6 +320,72 @@ void set_item( //
     status.throw_unhandled();
 }
 
+
+void set_item( //
+    ukv_t db_ptr,
+    ukv_txn_t txn_ptr,
+    ukv_collection_t collection_ptr,
+    managed_arena_t& arena,
+    py::handle keys_arr,
+    py::handle values_arr) {
+    PyObject* keys_obj = keys_arr.ptr();
+    PyObject* values_obj = values_arr.ptr();
+    
+    if (!PyObject_CheckBuffer(keys_obj) | !PyObject_CheckBuffer(values_obj))
+        throw std::invalid_argument("All arguments must implement the buffer protocol");
+
+    py_received_buffer_t keys, values;
+    keys.initialized = PyObject_GetBuffer(keys_obj, &keys.py, PyBUF_ANY_CONTIGUOUS) == 0;
+    values.initialized = PyObject_GetBuffer(values_obj, &values.py, PyBUF_ANY_CONTIGUOUS) == 0;
+    
+    if (!keys.initialized | !values.initialized)
+        throw std::invalid_argument("Couldn't obtain buffer overviews");
+    
+    // Validate the format of `keys`
+    if (keys.py.itemsize != sizeof(ukv_key_t))
+        throw std::invalid_argument("Keys type mismatch");
+    if (keys.py.ndim != 1 || !PyBuffer_IsContiguous(&keys.py, 'A'))
+        throw std::invalid_argument("Keys must be placed in a continuous 1 dimensional array");
+    if (keys.py.strides[0] != sizeof(ukv_key_t))
+        throw std::invalid_argument("Keys can't be strided");
+    ukv_size_t const tasks_count = static_cast<ukv_size_t>(keys.py.len / keys.py.itemsize);
+    ukv_key_t const* keys_ptr = reinterpret_cast<ukv_key_t const*>(keys.py.buf);
+    ukv_val_ptr_t const* values_ptr = reinterpret_cast<ukv_val_ptr_t const*>(&values.py.buf);
+    
+    std::vector<std::pair<ukv_val_len_t,ukv_val_len_t>> offsets(tasks_count);
+    ukv_val_len_t max_size = values.py.itemsize;
+
+    for (size_t i = 0; i < tasks_count; ++i){
+        ukv_val_len_t off = max_size * i;
+        ukv_val_len_t slen = std::strlen(reinterpret_cast<char const*>(*values_ptr + off));
+        offsets[i] = std::make_pair(off, std::min<ukv_val_len_t>(slen, max_size));
+    }
+
+    ukv_options_t options = ukv_options_default_k;
+    status_t status;
+
+    [[maybe_unused]] py::gil_scoped_release release;
+    ukv_write( //
+        db_ptr,
+        txn_ptr,
+        tasks_count,
+        &collection_ptr,
+        0,
+        keys_ptr,
+        sizeof(ukv_key_t),
+        values_ptr,
+        0,
+        &offsets[0].first,
+        sizeof(ukv_val_len_t) * 2,
+        &offsets[0].second,
+        sizeof(ukv_val_len_t) * 2,
+        options,
+        arena.member_ptr(),
+        status.member_ptr());
+
+    status.throw_unhandled();
+}
+
 void ukv::wrap_database(py::module& m) {
 
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
@@ -370,6 +439,25 @@ void ukv::wrap_database(py::module& m) {
         py::arg("collection"),
         py::arg("key"),
         py::arg("value"));
+
+    py_db.def(
+        "set",
+        [](py_db_t& py_db, py::handle keys, py::handle values) {
+            return set_item(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, keys, values);
+        },
+        py::arg("keys"),
+        py::arg("values"));
+
+    py_db.def(
+        "set",
+        [](py_db_t& py_db, std::string const& collection, py::handle keys, py::handle values) {
+            auto maybe_col = py_db.native.collection(collection.c_str());
+            maybe_col.throw_unhandled();
+            return set_item(py_db.native, nullptr, *maybe_col, py_db.arena, keys, values);
+        },
+        py::arg("collection"),
+        py::arg("keys"),
+        py::arg("values"));
     py_col.def("clear", [](py_db_t& py_db) {
         // TODO:
     });
@@ -405,6 +493,19 @@ void ukv::wrap_database(py::module& m) {
         maybe_col.throw_unhandled();
         py_col.native = *std::move(maybe_col);
     });
+
+    py_col.def(
+        "set",
+        [](py_col_t& py_col, py::handle keys, py::handle values) {
+            return set_item(py_col.db_ptr->native,
+                            py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
+                            py_col.native,
+                            py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
+                            keys,
+                            values);
+        },
+        py::arg("keys"),
+        py::arg("values"));
 
     // `Transaction`:
     py_txn.def( //
@@ -452,6 +553,27 @@ void ukv::wrap_database(py::module& m) {
         py::arg("key"),
         py::arg("value"));
 
+
+    py_txn.def(
+        "set",
+        [](py_txn_t& py_txn, py::handle keys, py::handle values) {
+            return set_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, keys, values);
+        },
+        py::arg("keys"),
+        py::arg("values"));
+
+    py_txn.def(
+        "set",
+        [](py_txn_t& py_txn, std::string const& collection, py::handle keys, py::handle values) {
+            auto maybe_col = py_txn.db_ptr->native.collection(collection.c_str());
+            maybe_col.throw_unhandled();
+            return set_item(py_txn.db_ptr->native, py_txn.native, *maybe_col, py_txn.arena, keys, values);
+        },
+        py::arg("collection"),
+        py::arg("keys"),
+        py::arg("values"));
+
+
     // Resource management
     py_txn.def("__enter__", &begin_if_needed);
     py_txn.def("commit", &commit_txn);
@@ -497,6 +619,9 @@ void ukv::wrap_database(py::module& m) {
     py_db.def("__delitem__", [](py_db_t& py_db, ukv_key_t key) {
         return set_item(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, key);
     });
+    py_db.def("__setitem__", [](py_db_t& py_db, py::handle keys, py::handle values) {
+        return set_item(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, keys, values);
+    });
 
     py_txn.def("__contains__", [](py_txn_t& py_txn, ukv_key_t key) {
         return contains_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, key);
@@ -510,6 +635,10 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def("__delitem__", [](py_txn_t& py_txn, ukv_key_t key) {
         return set_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, key);
     });
+        py_txn.def("__setitem__", [](py_txn_t& py_txn, py::handle keys, py::handle values) {
+        return set_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, keys, values);
+    });
+
 
     py_col.def("__contains__", [](py_col_t& py_col, ukv_key_t key) {
         return contains_item(py_col.db_ptr->native,
@@ -540,7 +669,14 @@ void ukv::wrap_database(py::module& m) {
                         py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
                         key);
     });
-
+    py_col.def("__setitem__", [](py_col_t& py_col, py::handle keys, py::handle values) {
+        return set_item(py_col.db_ptr->native,
+                        py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
+                        py_col.native,
+                        py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
+                        keys,
+                        values);
+    });
     // Operator overloads used to access collections
     py_db.def("__contains__", [](py_db_t& py_db, std::string const& collection) {
         auto maybe = py_db.native.contains(collection.c_str());

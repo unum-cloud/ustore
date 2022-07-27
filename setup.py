@@ -7,10 +7,14 @@ from qibuild import cmake
 __version__ = '0.0.5'
 __libname__ = 'ukv'
 
-cmake_cache = cmake.read_cmake_cache("CMakeCache.txt")
+cmake_cache = cmake.read_cmake_cache('CMakeCache.txt')
 
-include_dirs = [f"/{cmake_cache['FMT_SOURCE_DIR']}/include",
-                "include/", "python/"]
+include_dirs = [
+    f"{cmake_cache['FMT_SOURCE_DIR']}/include",
+    'include/',
+    'python/']
+
+compile_args = ['-std=c++17', '-O3']
 
 ext_modules = [
     Pybind11Extension(
@@ -24,7 +28,7 @@ ext_modules = [
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
         libraries=['ukv_stl', 'fmt'],
-        extra_compile_args=['-std=c++17', '-O3'],
+        extra_compile_args=compile_args,
         define_macros=[
             ('UKV_VERSION', __version__),
             ('UKV_PYTHON_MODULE_NAME', 'stl')
@@ -41,7 +45,7 @@ ext_modules = [
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
         libraries=['ukv_rocksdb', 'rocksdb', 'fmt'],
-        extra_compile_args=['-std=c++17', '-O3'],
+        extra_compile_args=compile_args,
         define_macros=[
             ('UKV_VERSION', __version__),
             ('UKV_PYTHON_MODULE_NAME', 'rocks')
@@ -58,7 +62,7 @@ ext_modules = [
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
         libraries=['ukv_leveldb', 'leveldb', 'fmt'],
-        extra_compile_args=['-std=c++17', '-O3'],
+        extra_compile_args=compile_args,
         define_macros=[
             ('UKV_VERSION', __version__),
             ('UKV_PYTHON_MODULE_NAME', 'level')
