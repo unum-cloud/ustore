@@ -126,7 +126,8 @@ class strided_range_gt {
 
     inline strided_iterator_gt<object_at> begin() const noexcept { return {begin_, stride_}; }
     inline strided_iterator_gt<object_at> end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
-    inline object_at& operator[](std::size_t i) const noexcept { return *(begin() + static_cast<std::ptrdiff_t>(i)); }
+    inline object_at& at(std::size_t i) const noexcept { return *(begin() + static_cast<std::ptrdiff_t>(i)); }
+    inline object_at& operator[](std::size_t i) const noexcept { return at(i); }
     inline object_at* data() const noexcept { return begin_; }
 
     inline auto immutable() const noexcept { return strided_range_gt<object_at const>(begin_, stride_, count_); }
@@ -161,6 +162,7 @@ struct indexed_range_gt {
     inline pointer_at begin() const noexcept { return begin_; }
     inline pointer_at end() const noexcept { return end_; }
     inline decltype(auto) operator[](std::size_t i) const noexcept { return begin_[i]; }
+    inline decltype(auto) at(std::size_t i) const noexcept { return begin_[i]; }
 
     inline std::size_t size() const noexcept { return end_ - begin_; }
     inline bool empty() const noexcept { return end_ == begin_; }
