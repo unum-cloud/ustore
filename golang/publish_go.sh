@@ -2,12 +2,12 @@
 
 set -e
 
-version="go_v0.0.1"
-
 if [ ! -f ukv_stl.go ]; then
     echo "### Must run from root of go module."
     exit 1
 fi
+
+version=$(cat ../VERSION)
 
 echo "### Tidy up"
 go mod tidy
@@ -31,9 +31,7 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 1
 fi
 
-read -p "Enter version (ex. 0.0.1): " -r &&
-    version="go_$REPLY" &&
-    echo "### Taging your commit with $version" &&
+echo "### Taging your commit with $version" &&
     git tag $version &&
     echo "### Pushing" &&
     git push origin $version &&

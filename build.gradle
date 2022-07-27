@@ -7,7 +7,7 @@ plugins {
 }
 
 group "com.unum.ukv"
-version = "0.0.1"
+version = file("VERSION").text.trim()
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
