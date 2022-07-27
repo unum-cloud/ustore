@@ -17,6 +17,14 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 UKV does just that, abstracting away the implementation from the user.
 In under 10K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
 
+Common use-cases of UKV would be:
+
+* Python, GoLang, Java and other high-level bindnigs for RocksDB and LevelDB.
+* Performant embedded store in the foundation of your in-house storage solution.
+* Document store, that is simpler and faster than putting JSONs in MongoDB or Postgres.
+* Graph database, with the feel of NetworkX, speed of GunRock and scale of Hadoop.
+* Low-latency media storage for games, CDNs and ML/BI pipelines.
+
 ## Backends
 
 Backends differ in their functionality and purposes.
@@ -37,14 +45,16 @@ RocksDB originally forked LevelDB to extend its functionality with transactions,
 
 Currently, at Proof-of-Concept stage, we support only the essential functionality in select programming languages.
 
-| Name      | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy | Extras         |
-| :-------- | :------: | :-----: | :---------: | :---: | :----: | :-------: | :------------- |
-| C++       |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |                |
-| Python    |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Tensor Packing |
-| Java      |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |                |
-| GoLang    |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✔️     |                |
-| REST API  |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                |
-| Arrow RPC |    ✔️     |    ✔️    |      ✔️      |   ✔️   |   ❌    |     ✔️     |                |
+| Name            | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy | Extras         |
+| :-------------- | :------: | :-----: | :---------: | :---: | :----: | :-------: | :------------- |
+| C++             |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |                |
+| Python          |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Tensor Packing |
+| Java            |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |                |
+| GoLang          |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✅     |                |
+| TODO: C#        |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✅     |                |
+| TODO: REST API  |    ✅     |    ✅    |      ✅      |   ✅   |   ❌    |     ✅     |                |
+| TODO: Arrow RPC |    ✅     |    ✅    |      ✅      |   ✅   |   ❌    |     ✅     | Tensor Packing |
+| TODO: Wolfram   |    ❌     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Tensor Packing |
 
 ## Assumptions and Limitations
 
@@ -80,6 +90,9 @@ Using it can be as easy as:
 
 ```python
 import ukv.stl as ukv
+# import ukv.level as ukv
+# import ukv.rocks as ukv
+# import ukv.lerner as ukv
 
 db = ukv.DataBase()
 db[42] = 'purpose of life'.encode()
@@ -143,7 +156,7 @@ Instead we mimic the interfaces of most commonly used ORMs.
 
 ```go
 db := DataBase{}
-db.Reconnect("")
+db.Reconnect()
 db.Set(42, &[]byte{4, 2})
 db.Get(42)
 ```
@@ -177,3 +190,27 @@ curl -i \
 ```
 
 The [`OneAPI` specification](/openapi.yaml) documentation is in-development.
+
+## FAQ
+
+<details>
+<summary>Why not use LevelDB interface (which was also adopted by RocksDB)?</summary>
+1. Dynamic polymorphism
+2. Dependancy on STL
+3. No support for custom allocators
+</details>
+
+<details>
+<summary>Why mix Docs and Graphs?</summary>
+Modern Relational databases try to handle flexible-schema documents, but do it poorly.
+Similarly, they hardly scale, when the number of "relations" is high.
+So users are left with no good multi-purpose solutions.
+Having collections of both kinds would solve that.
+</details>
+
+<details>
+<summary>Why not adapt MQL or Cypher?</summary>
+Mongo Query Language and Cypher by Neo4J are widely adopted, but are both vendor-specific.
+Futhermore, as for core functionality, using text-based protocols in 2022 is inefficient.
+CRUD operations are implemented in all binary interfaces and for document-level patches well standardized JSON-Pointer, JSON-Patch and JSON-MergePAth RFCs have been implemented.
+</details>

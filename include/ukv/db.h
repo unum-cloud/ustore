@@ -28,7 +28,7 @@
  *    interface functions.
  * 5. Strides! Higher level systems may pack groups of arguments into AoS
  *    instead of SoA. To minimize the need of copies and data re-layout,
- *    we use byte-length strides arguments, similar to BLAS libraries.
+ *    we use @b byte-length strides arguments, similar to BLAS libraries.
  *    Passing Zero as a "stride" means repeating the same value.
  */
 
@@ -142,22 +142,32 @@ void ukv_open( //
  * @param[in] db             Already open database instance, @see `ukv_open`.
  * @param[in] txn            Transaction, through which the operation must go.
  *                           Can be NULL.
- * @param[in] keys           Array of keys in one or more collections.
  * @param[in] tasks_count    Number of elements in @param keys.
+ *
  * @param[in] collections    Array of collections owning the @param keys.
- *                           If NULL is passed, the default collection
- *                           is assumed. Instead of passing one collection for
- *                           each key, you can use `ukv_option_read_colocated`.
+ *                           If NULL is passed, the default collection is assumed.
+ *                           If multiple collections are passed, the step between
+ *                           them is equal to @param collections_stride @b bytes!
+ *                           Zero stride would redirect all the keys to the same collection.
+ * @param[in] keys           Array of keys in one or more collections.
+ *                           If multiple keys are passed, the step between
+ *                           them is equal to @param keys_stride @b bytes!
+ *                           Zero stride is not allowed!
+ *
  * @param[in] options        Write options.
  *
  * @param[in] values         Pointer to a tape of concatenated values to be imported.
  *                           A NULL `value` means that the key mist be deleted.
  *                           To clear the `value` without removing the key, just
  *                           pass a zero length.
+ *                           If multiple values are passed, the step between their
+ *                           begin pointers is equal to @param values_stride @b bytes!
+ *                           Zero stride would map all the keys to the same value.
  *
  * @param[in] lengths        Pointer to lengths of chunks in packed into @param values.
  * @param[in] offsets        Pointer to offsets of relevant content within @param values chunks.
  * @param[out] error         The error to be handled.
+ * @param[inout] arena       Temporary memory region, that can be reused between operations.
  *
  * @section Upserts, Updates & Inserts
  * Higher-level interfaces may choose to implement any of those verbs:
@@ -238,28 +248,32 @@ void ukv_write( //
  * > Single and Batch
  * > Size Estimates and Exports
  *
- * @param[in] db              Already open database instance, @see `ukv_open`.
- * @param[in] txn             Transaction or the snapshot, through which the
- *                            operation must go. Can be NULL.
- * @param[in] keys            Array of keys in one or more collections.
- * @param[in] tasks_count     Number of elements in @param keys.
- * @param[in] collections     Array of collections owning the @param keys.
- *                            If NULL is passed, the default collection
- *                            is assumed. Instead of passing one collection for
- *                            each key, you can use `ukv_option_read_colocated`.
- * @param[in] options         Read options:
- *                            > track: Adds collision-detection on keys read through txn.
- *                            > lengths: Only fetches lengths of values, not content.
+ * @param[in] db             Already open database instance, @see `ukv_open`.
+ * @param[in] txn            Transaction or the snapshot, through which the
+ * @param[in] tasks_count    Number of elements in @param keys.
  *
- * @param[inout] tape         Points to a memory region that we use during
- *                            this request. If it's too small (@param capacity),
- *                            we `realloc` a new buffer. You can't pass a memory
- *                            allocated by a third-party allocator.
- *                            During the first request you pass a NULL,
- *                            we allocate that buffer, put found values in it and
- *                            return you a pointer. You can later reuse it for future
- *                            requests, or `free` it via `ukv_arena_free`.
- * @param[out] error          The error message to be handled by callee.
+ * @param[in] collections    Array of collections owning the @param keys.
+ *                           If NULL is passed, the default collection is assumed.
+ *                           If multiple collections are passed, the step between
+ *                           them is equal to @param collections_stride @b bytes!
+ *                           Zero stride would redirect all the keys to the same collection.
+ * @param[in] keys           Array of keys in one or more collections.
+ *                           If multiple keys are passed, the step between
+ *                           them is equal to @param keys_stride @b bytes!
+ *                           Zero stride is not allowed!
+ *
+ * @param[in] options        Read options:
+ *                           > track: Adds collision-detection on keys read through txn.
+ *                           > lengths: Only fetches lengths of values, not content.
+ *
+ * @param[out] found_lengths Will contain @param tasks_count lengths for the requested values.
+ * @param[out] found_values  Will contain @param tasks_count values concatenated one after another.
+ *                           Instead of allocating every "string" separately, we join them into
+ *                           a single "tape" structure, which later be exported into (often disjoint)
+ *                           runtime- or library-specific implementations.
+ *
+ * @param[out] error         The error message to be handled by callee.
+ * @param[inout] arena       Temporary memory region, that can be reused between operations.
  */
 void ukv_read( //
     ukv_t const db,
@@ -286,9 +300,29 @@ void ukv_read( //
  * Values are not exported, for that - follow up with `ukv_read`.
  * Fetching lengths of values is @b optional.
  *
- * @param[in] options   Read options:
- *                      > track: Adds collision-detection on keys read through txn.
- *                      > lengths: Will fetches lengths of values, after the keys.
+ * @param[in] db             Already open database instance, @see `ukv_open`.
+ * @param[in] txn            Transaction or the snapshot, through which the
+ * @param[in] tasks_count    Number of elements in @param keys.
+ *
+ * @param[in] collections    Array of collections owning the @param keys.
+ *                           If NULL is passed, the default collection is assumed.
+ *                           If multiple collections are passed, the step between
+ *                           them is equal to @param collections_stride @b bytes!
+ *                           Zero stride would redirect all the keys to the same collection.
+ * @param[in] keys           Array of keys in one or more collections.
+ *                           If multiple keys are passed, the step between
+ *                           them is equal to @param keys_stride @b bytes!
+ *                           Zero stride is not allowed!
+ *
+ * @param[in] options        Read options:
+ *                           > track: Adds collision-detection on keys read through txn.
+ *                           > lengths: Will fetches lengths of values, after the keys.
+ *
+ * @param[out] found_keys    Will contain @param tasks_count identifiers of following keys.
+ * @param[out] found_lengths Will contain @param tasks_count lengths of following values.
+ *
+ * @param[out] error         The error message to be handled by callee.
+ * @param[inout] arena       Temporary memory region, that can be reused between operations.
  */
 void ukv_scan( //
     ukv_t const db,
@@ -313,11 +347,28 @@ void ukv_scan( //
     ukv_error_t* error);
 
 /**
- * @brief Estimates the number of entries within a range of keys.
- * Outputs are exported in @b six-tuples:
- * > min & max cardinality,
- * > min & max bytes in values,
- * > min & max (persistent) memory usage.
+ * @brief Estimates the number of entries and memory usage for a range of keys.
+ *
+ * @param[in] db             Already open database instance, @see `ukv_open`.
+ * @param[in] txn            Transaction or the snapshot, through which the
+ * @param[in] tasks_count    Number ranges to be introspected.
+ *
+ * @param[in] collections    Array of collections owning the @param keys.
+ *                           If NULL is passed, the default collection is assumed.
+ *                           If multiple collections are passed, the step between
+ *                           them is equal to @param collections_stride @b bytes!
+ *                           Zero stride would redirect all the keys to the same collection.
+ * @param[in] min_keys       For every task contains the beginning of range-of-interest.
+ * @param[in] max_keys       For every task contains the ending of range-of-interest.
+ *
+ * @param[inout] estimates   For every task (range) will export @b six integers:
+ *                           > min & max cardinality,
+ *                           > min & max bytes in values,
+ *                           > min & max (persistent) memory usage.
+ *                           The memory must be allocated and provided by the user.
+ *
+ * @param[out] error         The error message to be handled by callee.
+ * @param[inout] arena       Temporary memory region, that can be reused between operations.
  */
 void ukv_size( //
     ukv_t const db,
@@ -335,7 +386,7 @@ void ukv_size( //
 
     ukv_options_t const options,
 
-    ukv_size_t** found_estimates,
+    ukv_size_t* estimates,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -452,16 +503,31 @@ void ukv_txn_commit( //
 
 /**
  * @brief A function to be used after `ukv_read` to
- * deallocate and return memory to UnumDB and OS.
+ * deallocate and return memory to the OS.
+ * Passing NULLs is safe.
  */
 void ukv_arena_free(ukv_t const db, ukv_arena_t const arena);
 
+/**
+ * @brief Deallocates memory used by transaction.
+ * If snapshot was created via `ukv_option_txn_snapshot_k`,
+ * it will be released.
+ * Passing NULLs is safe.
+ */
 void ukv_txn_free(ukv_t const db, ukv_txn_t const txn);
 
+/**
+ * @brief Deallocates memory used by collection handle.
+ * Collection would still persist on disk. To remove a
+ * collection @see `ukv_collection_remove`.
+ * Passing NULLs is safe.
+ */
 void ukv_collection_free(ukv_t const db, ukv_collection_t const collection);
 
 /**
  * @brief Closes the DB and deallocates the state.
+ * The database would still persist on disk.
+ * Passing NULLs is safe.
  */
 void ukv_free(ukv_t const db);
 
@@ -469,6 +535,7 @@ void ukv_free(ukv_t const db);
  * @brief A function to be called after any function failure,
  * that resulted in a non-NULL `ukv_error_t`, even `ukv_open`.
  * That's why, unlike other `...free` methods, doesn't need `db`.
+ * Passing NULLs is safe.
  */
 void ukv_error_free(ukv_error_t const error);
 

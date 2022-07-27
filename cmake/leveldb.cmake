@@ -17,9 +17,7 @@ if(NOT leveldb_POPULATED)
     set(HAVE_SNAPPY OFF CACHE BOOL "Build with snappy compression library")
     set(RTTI ON CACHE BOOL "Build with RTTI")
 
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
-    endif()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 
     FetchContent_Populate(leveldb)
     add_subdirectory(${leveldb_SOURCE_DIR} ${leveldb_BINARY_DIR} EXCLUDE_FROM_ALL)

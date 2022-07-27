@@ -90,7 +90,8 @@
         "scoped_allocator": "cpp",
         "span": "cpp",
         "csetjmp": "cpp",
-        "strstream": "cpp"
+        "strstream": "cpp",
+        "core": "cpp"
     },
     "java.configuration.updateBuildConfiguration": "automatic",
     "python.testing.pytestEnabled": true,

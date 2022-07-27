@@ -546,12 +546,12 @@ void ukv_scan( //
 void ukv_size( //
     ukv_t const c_db,
     ukv_txn_t const,
+    ukv_size_t const n,
 
     ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_min_keys,
-    ukv_size_t const n,
     ukv_size_t const c_min_keys_stride,
 
     ukv_key_t const* c_max_keys,
@@ -559,23 +559,12 @@ void ukv_size( //
 
     ukv_options_t const,
 
-    ukv_size_t** c_found_estimates,
+    ukv_size_t* c_found_estimates,
 
-    ukv_arena_t* c_arena,
+    ukv_arena_t*,
     ukv_error_t* c_error) {
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
-        return;
-
-    ukv_size_t total_bytes = n * 6 * sizeof(ukv_size_t);
-    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
-    ukv_size_t* found_estimates = reinterpret_cast<ukv_size_t*>(tape);
-    *c_found_estimates = found_estimates;
-    if (*c_error)
         return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -602,7 +591,7 @@ void ukv_size( //
             *c_error = "Property Read Failure";
         }
 
-        ukv_size_t* estimates = found_estimates + i * 6;
+        ukv_size_t* estimates = c_found_estimates + i * 6;
         estimates[0] = static_cast<ukv_size_t>(0);
         estimates[1] = static_cast<ukv_size_t>(keys_size);
         estimates[2] = static_cast<ukv_size_t>(0);
@@ -620,7 +609,7 @@ void ukv_collection_open( //
     ukv_error_t* c_error) {
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    if (!c_col_name) {
+    if (!c_col_name || (c_col_name && !std::strlen(c_col_name))) {
         *c_col = db.native->DefaultColumnFamily();
         return;
     }

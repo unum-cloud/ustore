@@ -9,30 +9,147 @@
 #include <unordered_set>
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include "ukv/ukv.hpp"
 
 using namespace unum::ukv;
 using namespace unum;
 
-void round_trip(value_refs_t& ref, disjoint_values_view_t values) {
+#define macro_concat_(prefix, suffix) prefix##suffix
+#define macro_concat(prefix, suffix) macro_concat_(prefix, suffix)
+#define _ [[maybe_unused]] auto macro_concat(_, __LINE__)
 
-    EXPECT_TRUE(ref.set(values)) << "Failed to assign";
+TEST(db, intro) {
 
-    EXPECT_TRUE(ref.get()) << "Failed to fetch inserted keys";
+    db_t db;
+    EXPECT_TRUE(db.open());
+
+    // Try getting the main collection
+    EXPECT_TRUE(db.collection());
+    collection_t main = *db.collection();
+
+    // Single-element access
+    main[42] = "purpose of life";
+    main.at(42) = "purpose of life";
+    EXPECT_EQ(main[42].value()->first, "purpose of life");
+    _ = main[42].clear();
+
+    // Mapping multiple keys to same values
+    main[{43, 44}] = "same value";
+
+    // Operations on smart-references
+    _ = main[{43, 44}].clear();
+    _ = main[{43, 44}].erase();
+    _ = main[{43, 44}].present();
+    _ = main[{43, 44}].length();
+    _ = main[{43, 44}].value();
+    _ = main[std::array<ukv_key_t, 3> {65, 66, 67}];
+    _ = main[std::vector<ukv_key_t> {65, 66, 67, 68}];
+    // for (value_view_t value : main[{100, 101}].value()->first)
+    //     (void)value;
+
+    // Accessing named collections
+    collection_t prefixes = *db.collection("prefixes");
+    prefixes.at(42) = "purpose";
+    db["articles"]->at(42) = "of";
+    db["suffixes"]->at(42) = "life";
+
+    // Reusable memory
+    // This interface not just more performant, but also provides nicer interface:
+    //  expected_gt<taped_values_view_t> tapes = main[{100, 101}].on(arena);
+    managed_arena_t arena(db);
+    _ = main[{43, 44}].on(arena).clear();
+    _ = main[{43, 44}].on(arena).erase();
+    _ = main[{43, 44}].on(arena).present();
+    _ = main[{43, 44}].on(arena).length();
+    _ = main[{43, 44}].on(arena).value();
+
+    // Batch-assignment: many keys to many values
+    // main[std::array<ukv_key_t, 3> {65, 66, 67}] = std::array {"A", "B", "C"};
+    // main[std::array {sub(prefixes, 65), sub(66), sub(67)}] = std::array {"A", "B", "C"};
+
+    // Iterating over collections
+    for (ukv_key_t key : main.keys())
+        (void)key;
+    for (ukv_key_t key : main.keys(100, 200))
+        (void)key;
+
+    _ = main.keys(100, 200).find_size()->cardinality;
+
+    // Supporting options
+    _ = main[{43, 44}].on(arena).clear(/*flush:*/ false);
+    _ = main[{43, 44}].on(arena).erase(/*flush:*/ false);
+    _ = main[{43, 44}].on(arena).present(/*track:*/ false);
+    _ = main[{43, 44}].on(arena).length(/*format:*/ ukv_doc_format_binary_k, /*track:*/ false);
+    _ = main[{43, 44}].on(arena).value(/*format:*/ ukv_doc_format_binary_k, /*track:*/ false);
+
+    // Working with sub documents
+    main[56] = R"( {"Hello": "World", "answer": 42} )"_json.dump().c_str();
+}
+
+template <typename locations_at>
+void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_length) {
+
+    EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
+
+    auto const expects_missing = expected_length == ukv_val_len_missing_k;
+    using extractor_t = location_extractor_gt<locations_at>;
 
     // Validate that values match
-    taped_values_view_t retrieved = *ref.get();
-    EXPECT_EQ(retrieved.size(), ref.keys().size());
+    std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.value();
+    taped_values_view_t retrieved = retrieved_and_arena.first;
+    ukv_size_t count = extractor_t {}.count(ref.locations());
+    EXPECT_EQ(retrieved.size(), count);
+
+    // Check views
     tape_iterator_t it = retrieved.begin();
-    for (std::size_t i = 0; i != ref.keys().size(); ++i, ++it) {
-        auto expected_len = static_cast<std::size_t>(values.lengths[i]);
-        auto expected_begin = reinterpret_cast<byte_t const*>(values.contents[i]) + values.offsets[i];
+    for (std::size_t i = 0; i != count; ++i, ++it) {
+        EXPECT_EQ((*it).size(), expects_missing ? 0 : expected_length);
+    }
+
+    // Check length estimates
+    auto maybe_lengths_and_arena = ref.length();
+    EXPECT_TRUE(maybe_lengths_and_arena);
+    for (std::size_t i = 0; i != count; ++i) {
+        EXPECT_EQ(maybe_lengths_and_arena->first[i], expected_length);
+    }
+
+    // Check boolean indicators
+    auto maybe_indicators_and_arena = ref.present();
+    EXPECT_TRUE(maybe_indicators_and_arena);
+    for (std::size_t i = 0; i != count; ++i) {
+        EXPECT_EQ(maybe_indicators_and_arena->first[i], !expects_missing);
+    }
+}
+
+template <typename locations_at>
+void check_equalities(member_refs_gt<locations_at>& ref, values_arg_t values) {
+
+    EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
+    using extractor_t = location_extractor_gt<locations_at>;
+
+    // Validate that values match
+    std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.value();
+    taped_values_view_t retrieved = retrieved_and_arena.first;
+    EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
+
+    tape_iterator_t it = retrieved.begin();
+    for (std::size_t i = 0; i != extractor_t {}.count(ref.locations()); ++i, ++it) {
+        auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
+        auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
 
         value_view_t val_view = *it;
+        value_view_t expected_view(expected_begin, expected_begin + expected_len);
         EXPECT_EQ(val_view.size(), expected_len);
-        EXPECT_TRUE(std::equal(val_view.begin(), val_view.end(), expected_begin));
+        EXPECT_EQ(val_view, expected_view);
     }
+}
+
+template <typename locations_at>
+void round_trip(member_refs_gt<locations_at>& ref, values_arg_t values) {
+    EXPECT_TRUE(ref.assign(values)) << "Failed to assign";
+    check_equalities(ref, values);
 }
 
 TEST(db, basic) {
@@ -50,11 +167,11 @@ TEST(db, basic) {
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
-    value_refs_t ref = col[keys];
-    disjoint_values_view_t values {
-        .contents = {&vals_begin, 0, 3},
-        .offsets = offs,
-        .lengths = {val_len, 3},
+    auto ref = col[keys];
+    values_arg_t values {
+        .contents_begin = {&vals_begin, 0},
+        .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
+        .lengths_begin = {&val_len, 0},
     };
     round_trip(ref, values);
 
@@ -65,16 +182,7 @@ TEST(db, basic) {
 
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(ref.clear());
-    for (ukv_key_t key : ref.keys()) {
-        value_refs_t matches = col[key];
-        expected_gt<strided_range_gt<bool>> indicators = matches.contains();
-        EXPECT_TRUE(indicators);
-        EXPECT_TRUE((*indicators)[0]);
-
-        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = matches.lengths();
-        EXPECT_TRUE(lengths);
-        EXPECT_EQ((*lengths)[0], 0u);
-    }
+    check_length(ref, 0);
 
     // Check scans
     keys_range_t present_keys = col.keys();
@@ -87,16 +195,7 @@ TEST(db, basic) {
 
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
-    for (ukv_key_t key : ref.keys()) {
-        value_refs_t matches = col[key];
-        expected_gt<strided_range_gt<bool>> indicators = matches.contains();
-        EXPECT_TRUE(indicators);
-        EXPECT_FALSE((*indicators)[0]);
-
-        expected_gt<indexed_range_gt<ukv_val_len_t*>> lengths = matches.lengths();
-        EXPECT_TRUE(lengths);
-        EXPECT_EQ((*lengths)[0], ukv_val_len_missing_k);
-    }
+    check_length(ref, ukv_val_len_missing_k);
 }
 
 TEST(db, named) {
@@ -107,19 +206,19 @@ TEST(db, named) {
     collection_t col2 = *(db["col2"]);
 
     ukv_val_len_t val_len = sizeof(std::uint64_t);
-    std::vector<ukv_key_t> keys {34, 35, 36};
-    std::vector<std::uint64_t> vals {34, 35, 36};
+    std::vector<ukv_key_t> keys {44, 45, 46};
+    std::vector<std::uint64_t> vals {44, 45, 46};
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
-    disjoint_values_view_t values {
-        .contents = {&vals_begin, 0, 3},
-        .offsets = offs,
-        .lengths = {val_len, 3},
+    values_arg_t values {
+        .contents_begin = {&vals_begin, 0},
+        .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
+        .lengths_begin = {&val_len, 0},
     };
 
-    value_refs_t ref1 = col1[keys];
-    value_refs_t ref2 = col2[keys];
+    auto ref1 = col1[keys];
+    auto ref2 = col2[keys];
     EXPECT_TRUE(*db.contains("col1"));
     EXPECT_TRUE(*db.contains("col2"));
     EXPECT_FALSE(*db.contains("unknown_col"));
@@ -140,6 +239,70 @@ TEST(db, named) {
     }
     EXPECT_TRUE(present_it1.is_end());
     EXPECT_TRUE(present_it2.is_end());
+
+    _ = db.remove("col1");
+    _ = db.remove("col2");
+    EXPECT_FALSE(*db.contains("col1"));
+    EXPECT_FALSE(*db.contains("col2"));
+}
+
+TEST(db, txn) {
+#if 0
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.transact());
+    txn_t txn = *db.transact();
+
+    std::vector<ukv_key_t> keys {54, 55, 56};
+    ukv_val_len_t val_len = sizeof(std::uint64_t);
+    std::vector<std::uint64_t> vals {54, 55, 56};
+    std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
+
+    values_arg_t values {
+        .contents_begin = {&vals_begin, 0},
+        .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
+        .lengths_begin = {&val_len, 0},
+    };
+
+    round_trip(txn[keys], values);
+
+    EXPECT_TRUE(db.collection());
+    collection_t col = *db.collection();
+    ref = col[keys];
+
+    // Check for missing values before commit
+    check_length();
+
+    txn.commit();
+    txn.reset();
+
+    // Validate that values match after commit
+    check_equalities(ref, values);
+
+    // Transaction with named collection
+    EXPECT_TRUE(db.collection("named_col"));
+    collection_t named_col = *db.collection("named_col");
+    std::vector<sub_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
+    ref = txn[sub_keys];
+    round_trip(ref, values);
+
+    // Check for missing values before commit
+    ref = named_col[keys];
+    check_length(ref);
+
+    txn.commit();
+    txn.reset();
+
+    // Validate that values match after commit
+    check_equalities(ref, values);
+#endif
+}
+
+TEST(db, nested_docs) {
+    db_t db;
+    _ = db.open();
+    collection_t col = *db.collection();
 }
 
 TEST(db, net) {
@@ -205,9 +368,9 @@ TEST(db, net) {
 
     // Remove a single edge, making sure that the nodes info persists
     EXPECT_TRUE(net.remove({
-        .source_ids = {edge1.front().source_id},
-        .target_ids = {edge1.front().target_id},
-        .edge_ids = {edge1.front().id},
+        {edge1.front().source_id},
+        {edge1.front().target_id},
+        {edge1.front().id},
     }));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
@@ -215,9 +378,9 @@ TEST(db, net) {
 
     // Bring that edge back
     EXPECT_TRUE(net.upsert({
-        .source_ids = {edge1.front().source_id},
-        .target_ids = {edge1.front().target_id},
-        .edge_ids = {edge1.front().id},
+        {edge1.front().source_id},
+        {edge1.front().target_id},
+        {edge1.front().id},
     }));
     EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
 
@@ -299,20 +462,20 @@ TEST(db, net_batch) {
     }
 
     // Remove a single edge, making sure that the nodes info persists
-    EXPECT_TRUE(net.remove({
-        .source_ids = {triangle[0].source_id},
-        .target_ids = {triangle[0].target_id},
-        .edge_ids = {triangle[0].id},
+    EXPECT_TRUE(net.remove(edges_view_t {
+        {triangle[0].source_id},
+        {triangle[0].target_id},
+        {triangle[0].id},
     }));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
 
     // Bring that edge back
-    EXPECT_TRUE(net.upsert({
-        .source_ids = {triangle[0].source_id},
-        .target_ids = {triangle[0].target_id},
-        .edge_ids = {triangle[0].id},
+    EXPECT_TRUE(net.upsert(edges_view_t {
+        {triangle[0].source_id},
+        {triangle[0].target_id},
+        {triangle[0].id},
     }));
     EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
 

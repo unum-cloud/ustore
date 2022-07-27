@@ -101,8 +101,8 @@ bool contains_item( //
         options,
         &found_lengths,
         &found_values,
-        arena.internal_cptr(),
-        status.internal_cptr());
+        arena.member_ptr(),
+        status.member_ptr());
     status.throw_unhandled();
 
     return found_lengths[0] != ukv_val_len_missing_k;
@@ -132,8 +132,8 @@ std::optional<py::bytes> get_item( //
         options,
         &found_lengths,
         &found_values,
-        arena.internal_cptr(),
-        status.internal_cptr());
+        arena.member_ptr(),
+        status.member_ptr());
     status.throw_unhandled();
 
     if (found_lengths[0] == ukv_val_len_missing_k)
@@ -259,8 +259,8 @@ void fill_tensor( //
         options,
         &found_lengths,
         &found_values,
-        arena.internal_cptr(),
-        status.internal_cptr());
+        arena.member_ptr(),
+        status.member_ptr());
 
     status.throw_unhandled();
 
@@ -314,8 +314,8 @@ void set_item( //
         &len,
         0,
         options,
-        arena.internal_cptr(),
-        status.internal_cptr());
+        arena.member_ptr(),
+        status.member_ptr());
 
     status.throw_unhandled();
 }

@@ -4,7 +4,7 @@
  * @date 4 Jul 2022
  * @brief C++ bindings for @see "ukv/docs.h".
  *
- * Most field-level operations are still accessible through normal @c `value_refs_t`.
+ * Most field-level operations are still accessible through normal @c `member_refs_t`.
  * This interface mostly helps with tabular and SoA <-> AoS operations involving:
  * > ukv_docs_gist(...)
  * > ukv_docs_gather_scalars(...)
@@ -57,9 +57,9 @@ class strings_tape_iterator_t {
 
 template <typename scalar_at>
 class field_cell_gt {
-    bool valid = nullptr;
-    bool converted = nullptr;
-    bool collides = nullptr;
+    bool valid = false;
+    bool converted = false;
+    bool collides = false;
     scalar_at* scalars_ = nullptr;
 };
 
@@ -81,7 +81,7 @@ class doc_row_view_t {
     std::uint8_t* all_collisions_ = nullptr;
     std::uint8_t* all_scalars_ = nullptr;
 
-    located_key_t row_id_;
+    sub_key_t row_id_;
     std::uint8_t row_mask_ = 0;
     std::size_t row_idx_ = 0;
 };
@@ -116,8 +116,8 @@ class docs_table_view_t {
   public:
     docs_table_view_t(std::size_t docs_count,
                       std::size_t fields_count,
-                      strided_iterator_gt<ukv_str_view_t> fields,
-                      strided_iterator_gt<ukv_type_t> types,
+                      strided_iterator_gt<ukv_str_view_t const> fields,
+                      strided_iterator_gt<ukv_type_t const> types,
                       ukv_val_ptr_t columns_validities,
                       ukv_val_ptr_t columns_conversions,
                       ukv_val_ptr_t columns_collisions,
@@ -169,7 +169,25 @@ class docs_table_t {
         buffer_.clear();
     }
 
-    docs_table_view_t view() const noexcept {}
+    ukv_val_ptr_t data() const noexcept { return ukv_val_ptr_t(buffer_.data()); }
+    ukv_val_ptr_t validities() const noexcept { return data() + bytes_in_bitset_column(docs_count_) * 0; }
+    ukv_val_ptr_t conversions() const noexcept { return data() + bytes_in_bitset_column(docs_count_) * 1; }
+    ukv_val_ptr_t collisions() const noexcept { return data() + bytes_in_bitset_column(docs_count_) * 2; }
+    ukv_val_ptr_t scalars() const noexcept { return data() + bytes_in_bitset_column(docs_count_) * 3; }
+
+    docs_table_view_t view() const noexcept {
+        auto cols = strided_range_gt<column_info_t const>(columns_);
+        return {
+            docs_count_,
+            columns_.size(),
+            cols.members(&column_info_t::field).begin(),
+            cols.members(&column_info_t::type).begin(),
+            validities(),
+            conversions(),
+            collisions(),
+            scalars(),
+        };
+    }
 };
 
 } // namespace unum::ukv
