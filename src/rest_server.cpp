@@ -180,8 +180,6 @@
 #include <boost/asio/strand.hpp>
 #include <boost/config.hpp>
 
-#include <fmt/core.h>
-
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #elif defined(__GNUC__) || defined(__GNUG__)

@@ -77,7 +77,6 @@ set(UKV_PREINSTALLED_ARROW ON)
 set(UKV_PREINSTALLED_TURBOPFOR ON)
 
 include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
@@ -95,7 +94,6 @@ add_library(ukv_stl
   src/logic_graph.cpp
 )
 target_link_libraries(ukv_stl
-  fmt::fmt
   nlohmann_json::nlohmann_json
 )
 
@@ -110,12 +108,10 @@ add_library(ukv_leveldb
 
 target_link_libraries(ukv_rocksdb
   rocksdb
-  fmt::fmt
   nlohmann_json::nlohmann_json
 )
 target_link_libraries(ukv_leveldb
   leveldb
-  fmt::fmt
   nlohmann_json::nlohmann_json
 )
 
@@ -133,7 +129,6 @@ add_executable(ukv_arrow_server src/arrow_server.cpp)
 target_link_libraries(ukv_arrow_server
   ukv_stl
   pthread
-  fmt::fmt
   nlohmann_json::nlohmann_json
   arrow
   arrow_flight
@@ -149,7 +144,6 @@ add_executable(ukv_test
 )
 target_link_libraries(ukv_test
   gtest
-  fmt::fmt
   nlohmann_json::nlohmann_json
 )
 
@@ -162,7 +156,6 @@ add_executable(ukv_leveldb_test
 target_link_libraries(ukv_leveldb_test
   gtest
   leveldb
-  fmt::fmt
   nlohmann_json::nlohmann_json
 )
 
@@ -175,6 +168,5 @@ add_executable(ukv_rocksdb_test
 target_link_libraries(ukv_rocksdb_test
   gtest
   rocksdb
-  fmt::fmt
   nlohmann_json::nlohmann_json
 )

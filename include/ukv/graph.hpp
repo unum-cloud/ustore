@@ -6,8 +6,6 @@
  */
 
 #pragma once
-#include <fmt/core.h>
-
 #include "ukv/graph.h"
 #include "ukv/ukv.hpp"
 

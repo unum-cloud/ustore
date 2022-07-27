@@ -1149,10 +1149,11 @@ void ukv_docs_gather_strings( //
             }
             case json_t::value_t::number_float: {
                 // Parsing and dumping floating-point numbers is still not fully implemented in STL:
-                // std::to_chars_result result = std::to_chars(&str_buffer[0], str_buffer + str_buffer_len_k, scalar);
                 auto scalar = found_value.get<double>();
-                auto end_ptr = fmt::format_to(str_buffer, "{}", scalar);
-                bool fits_null_terminated = end_ptr < str_buffer + str_buffer_len_k;
+                // auto end_ptr = fmt::format_to(str_buffer, "{}", scalar);
+                // bool fits_null_terminated = end_ptr < str_buffer + str_buffer_len_k;
+                std::to_chars_result result = std::to_chars(&str_buffer[0], str_buffer + str_buffer_len_k, scalar);
+                bool fits_null_terminated = result.ec != std::errc() && result.ptr < str_buffer + str_buffer_len_k;
                 if (fits_null_terminated) {
                     *end_ptr = '\0';
                     arena.growing_tape.push_back(to_view(str_buffer, end_ptr + 1 - str_buffer));
