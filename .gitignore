@@ -42,6 +42,7 @@ build/
 build_debug/
 build_release/
 tmp/
+lib/
 *.log
 bin/
 __pycache__
