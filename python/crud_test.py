@@ -138,22 +138,22 @@ def test_scan():
     col[50] = b'aaaaa'
     col[60] = b'aaaaaa'
 
-    scanned = col.scan(10, 6)
-    assert np.array_equal(scanned[0], [10, 20, 30, 40, 50, 60])
-    assert np.array_equal(scanned[1], [1, 2, 3, 4, 5, 6])
+    keys, lengths = col.scan(10, 6)
+    assert np.array_equal(keys, [10, 20, 30, 40, 50, 60])
+    assert np.array_equal(lengths, [1, 2, 3, 4, 5, 6])
 
-    scanned = col.scan(20, 5)
-    assert np.array_equal(scanned[0], [20, 30, 40, 50, 60])
-    assert np.array_equal(scanned[1], [2, 3, 4, 5, 6])
+    keys, lengths = col.scan(20, 5)
+    assert np.array_equal(keys, [20, 30, 40, 50, 60])
+    assert np.array_equal(lengths, [2, 3, 4, 5, 6])
 
-    scanned = col.scan(30, 1)
-    assert np.array_equal(scanned[0], [30])
-    assert np.array_equal(scanned[1], [3])
+    keys, lengths = col.scan(30, 1)
+    assert np.array_equal(keys, [30])
+    assert np.array_equal(lengths, [3])
 
-    scanned = col.scan(40, 2)
-    assert np.array_equal(scanned[0], [40, 50])
-    assert np.array_equal(scanned[1], [4, 5])
+    keys, lengths = col.scan(40, 2)
+    assert np.array_equal(keys, [40, 50])
+    assert np.array_equal(lengths, [4, 5])
 
-    scanned = col.scan(60, 1)
-    assert np.array_equal(scanned[0], [60])
-    assert np.array_equal(scanned[1], [6])
+    keys, lengths = col.scan(60, 1)
+    assert np.array_equal(keys, [60])
+    assert np.array_equal(lengths, [6])
