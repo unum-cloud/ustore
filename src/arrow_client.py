@@ -2,8 +2,8 @@ import pyarrow as pa
 import pyarrow.flight as pf
 import pandas as pd
 
+# https://arrow.apache.org/docs/python/generated/pyarrow.flight.FlightClient.html?highlight=flightclient#pyarrow.flight.FlightClient
 connection: pf.FlightClient = pf.connect('grpc://0.0.0.0:38709')
-print(connection)
 
 assert len(list(connection.list_flights())) <= 1, 'Must be empty'
 
@@ -36,6 +36,12 @@ writer.done_writing()
 print('Received write reply with metadata', reader.read())
 writer.close()
 
+# Check which columns are available
+# https://arrow.apache.org/docs/python/generated/pyarrow.flight.FlightClient.html?highlight=flightclient#pyarrow.flight.FlightClient.get_schema
+schema = connection.get_schema(descriptor).read()
+
+
+# Retrieve the entire table and check if the contents are matching
 df_out = connection.do_get(pf.Ticket('some_name.parquet')).read_pandas()
 table_out = connection.do_get(pf.Ticket('some_name.parquet')).read_all()
 assert df_in.equals(table_out.to_pandas()), 'Returned table has changed'
