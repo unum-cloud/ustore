@@ -357,7 +357,7 @@ void set_item( //
 
     // TODO: if matrix contains bytes (not characters), use the full length
     // TODO: support non-continuous buffers and lists
-    // Pairs should become: <key_arg_t, val_arg_t>
+    // Pairs should become: <col_key_field_t, val_arg_t>
     // If we can't cast to lists or buffers, we can use iterators:
     //   Lists: PyList_Check, PyList_Size, PyList_GetItem
     //   Tuples: https://docs.python.org/3/c-api/tuple.html

@@ -244,9 +244,9 @@ read_tasks_soa_t read_docs(ukv_t const c_db,
              c_txn,
              unique_docs_count,
              &arena.updated_keys[0].collection,
-             sizeof(sub_key_t),
+             sizeof(col_key_t),
              &arena.updated_keys[0].key,
-             sizeof(sub_key_t),
+             sizeof(col_key_t),
              c_options,
              &binary_docs_lens,
              &binary_docs_begin,
@@ -290,9 +290,9 @@ read_tasks_soa_t read_docs(ukv_t const c_db,
     }
 
     auto cnt = static_cast<ukv_size_t>(arena.updated_keys.size());
-    auto sub_keys_range = strided_range_gt<sub_key_t const>(arena.updated_keys);
-    strided_range_gt<ukv_collection_t const> cols = sub_keys_range.members(&sub_key_t::collection);
-    strided_range_gt<ukv_key_t const> keys = sub_keys_range.members(&sub_key_t::key);
+    auto sub_keys_range = strided_range_gt<col_key_t const>(arena.updated_keys);
+    strided_range_gt<ukv_collection_t const> cols = sub_keys_range.members(&col_key_t::collection);
+    strided_range_gt<ukv_key_t const> keys = sub_keys_range.members(&col_key_t::key);
     return {cols.begin(), keys.begin(), cnt};
 }
 
