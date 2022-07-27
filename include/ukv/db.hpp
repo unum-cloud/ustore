@@ -23,8 +23,6 @@ class keys_range_t;
 class txn_t;
 class db_t;
 
-using doc_fmt_t = ukv_doc_format_t;
-
 template <typename locations_store_t>
 class member_refs_gt;
 
@@ -44,9 +42,10 @@ class member_refs_gt;
  * > (ukv_collection_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
  */
 template <typename locations_at>
-class managed_refs_gt {
+class member_refs_gt {
   public:
-    static_assert(!std::is_rvalue_reference_v<locations_at>, "The internal object can't be an R-value Reference");
+    static_assert(!std::is_rvalue_reference_v<locations_at>, //
+                  "The internal object can't be an R-value Reference");
 
     using locations_store_t = location_store_gt<locations_at>;
     using locations_plain_t = typename locations_store_t::plain_t;
@@ -60,52 +59,66 @@ class managed_refs_gt {
   protected:
     ukv_t db_ = nullptr;
     ukv_txn_t txn_ = nullptr;
-    ukv_arena_t* arena_ = nullptr;
-
+    any_arena_t arena_;
     locations_store_t locations_;
+    ukv_doc_format_t format_ = ukv_doc_format_binary_k;
 
     template <typename values_arg_at>
-    status_t any_assign(values_arg_at&&, doc_fmt_t, ukv_options_t) noexcept;
-    expected_gt<value_t> any_get(doc_fmt_t, ukv_options_t) noexcept;
+    status_t any_assign(values_arg_at&&, ukv_options_t) noexcept;
+    expected_gt<value_t> any_get(ukv_options_t) noexcept;
 
   public:
-    managed_refs_gt(ukv_t db, ukv_txn_t txn, managed_arena_t& arena, locations_store_t locations) noexcept
-        : db_(db), txn_(txn), arena_(arena.member_ptr()), locations_(locations) {}
+    member_refs_gt(ukv_t db, ukv_txn_t txn, locations_store_t locations) noexcept
+        : db_(db), txn_(txn), locations_(locations) {}
 
-    managed_refs_gt(managed_refs_gt const&) = delete;
-    managed_refs_gt& operator=(managed_refs_gt const&) = delete;
+    member_refs_gt(member_refs_gt const&) = delete;
+    member_refs_gt& operator=(member_refs_gt const&) = delete;
 
-    managed_refs_gt(managed_refs_gt&& other) noexcept
+    member_refs_gt(member_refs_gt&& other) noexcept
         : db_(std::exchange(other.db_, nullptr)), txn_(std::exchange(other.txn_, nullptr)),
-          arena_(std::exchange(other.arena_, nullptr)), locations_(std::move(other.locations_)) {}
+          arena_(std::exchange(other.arena_, any_arena_t {db_})), locations_(std::move(other.locations_)),
+          format(other.format_) {}
 
-    managed_refs_gt& operator=(managed_refs_gt&& other) noexcept {
+    member_refs_gt& operator=(member_refs_gt&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(txn_, other.txn_);
         std::swap(arena_, other.arena_);
         std::swap(locations_, other.locations_);
+        std::swap(format_, other.format_);
         return *this;
     }
 
-    expected_gt<value_t> value(doc_fmt_t format = ukv_doc_format_binary_k, bool track = false) noexcept {
-        auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
-        return any_get(format, options);
+    member_refs_gt& on(arena_t& arena) noexcept {
+        arena_ = arena;
+        return *this;
     }
 
-    operator expected_gt<value_t>() noexcept { return value(); }
+    member_refs_gt& as(ukv_doc_format_t format) noexcept {
+        format_ = format;
+        return *this;
+    }
 
-    expected_gt<length_t> length(doc_fmt_t format = ukv_doc_format_binary_k, bool track = false) noexcept {
+    given_gt<value_t> value(bool track = false) noexcept {
+        return any_get(track ? ukv_option_read_track_k : ukv_options_default_k);
+    }
+
+    operator given_gt<value_t>() noexcept { return value(); }
+
+    given_gt<length_t> length(bool track = false) noexcept {
         auto options = (track ? ukv_option_read_track_k : ukv_options_default_k) | ukv_option_read_lengths_k;
-        auto maybe = any_get(format, static_cast<ukv_options_t>(options));
+        auto maybe = any_get(static_cast<ukv_options_t>(options));
         if (!maybe)
             return maybe.release_status();
 
         if constexpr (is_one_k) {
-            return *maybe ? maybe->size() : ukv_val_len_missing_k;
+            length_t result = *maybe ? maybe->size() : ukv_val_len_missing_k;
+            return {result, maybe.release_arena()};
         }
         else {
             auto found_lengths = maybe->lengths();
-            return length_t {found_lengths, found_lengths + extractor_t {}.count(locations_.ref())};
+            auto count = extractor_t {}.count(locations_.ref();
+            length_t result {found_lengths, found_lengths +  count};
+            return {result, maybe.release_arena()};
         }
     }
 
@@ -113,14 +126,15 @@ class managed_refs_gt {
      * @brief Checks if requested keys are present in the store.
      * ! Related values may be empty strings.
      */
-    expected_gt<present_t> present(bool track = false) noexcept {
+    given_gt<present_t> present(bool track = false) noexcept {
 
-        auto maybe = length(ukv_doc_format_binary_k, track);
+        auto maybe = length(track);
         if (!maybe)
             return maybe.release_status();
 
         if constexpr (is_one_k) {
-            return *maybe != ukv_val_len_missing_k;
+            present_t result = *maybe != ukv_val_len_missing_k;
+            return {result, maybe.release_arena()};
         }
         else {
             // Transform the `found_lengths` into booleans.
@@ -133,7 +147,8 @@ class managed_refs_gt {
             // Cast assuming "Little-Endian" architecture
             auto last_byte_offset = 0; // sizeof(ukv_val_len_t) - sizeof(bool);
             auto booleans = reinterpret_cast<bool*>(found_lengths);
-            return present_t {booleans + last_byte_offset, sizeof(ukv_val_len_t), count};
+            present_t result {booleans + last_byte_offset, sizeof(ukv_val_len_t), count};
+            return {result, maybe.release_arena()};
         }
     }
 
@@ -143,10 +158,8 @@ class managed_refs_gt {
      * @return status_t Non-NULL if only an error had occurred.
      */
     template <typename values_arg_at>
-    status_t assign(values_arg_at&& vals, doc_fmt_t format = ukv_doc_format_binary_k, bool flush = false) noexcept {
-        return any_assign(std::forward<values_arg_at>(vals),
-                          format,
-                          flush ? ukv_option_write_flush_k : ukv_options_default_k);
+    status_t assign(values_arg_at&& vals, bool flush = false) noexcept {
+        return any_assign(std::forward<values_arg_at>(vals), flush ? ukv_option_write_flush_k : ukv_options_default_k);
     }
 
     /**
@@ -155,7 +168,7 @@ class managed_refs_gt {
      * @return status_t Non-NULL if only an error had occurred.
      */
     status_t erase(bool flush = false) noexcept { //
-        return assign(nullptr, ukv_doc_format_binary_k, flush);
+        return assign(nullptr, flush);
     }
 
     /**
@@ -166,123 +179,12 @@ class managed_refs_gt {
     status_t clear(bool flush = false) noexcept {
         ukv_val_ptr_t any = reinterpret_cast<ukv_val_ptr_t>(this);
         ukv_val_len_t len = 0;
-        return assign(
-            values_arg_t {
-                .contents_begin = {&any},
-                .offsets_begin = {},
-                .lengths_begin = {&len},
-            },
-            ukv_doc_format_binary_k,
-            flush);
-    }
-
-    template <typename values_arg_at>
-    managed_refs_gt& operator=(values_arg_at&& vals) noexcept(false) {
-        auto status = assign(std::forward<values_arg_at>(vals));
-        status.throw_unhandled();
-        return *this;
-    }
-
-    managed_refs_gt& operator=(nullptr_t) noexcept(false) {
-        auto status = erase();
-        status.throw_unhandled();
-        return *this;
-    }
-
-    locations_plain_t& locations() noexcept { return locations_.ref(); }
-    locations_plain_t& locations() const noexcept { return locations_.ref(); }
-};
-
-static_assert(managed_refs_gt<ukv_key_t>::is_one_k);
-static_assert(std::is_same_v<managed_refs_gt<ukv_key_t>::value_t, value_view_t>);
-static_assert(managed_refs_gt<ukv_key_t>::is_one_k);
-static_assert(!managed_refs_gt<keys_arg_t>::is_one_k);
-
-/**
- * @brief Unlike `managed_refs_gt`, yields results on a temporary arena,
- * which is less efficient, but requires less code. To reuse a memory
- * buffer, just call `.on(arena)` to convert to `managed_refs_gt`.
- */
-template <typename locations_at>
-class member_refs_gt {
-  public:
-    using managed_t = managed_refs_gt<locations_at>;
-    using locations_store_t = typename managed_t::locations_store_t;
-    using locations_plain_t = typename managed_t::locations_plain_t;
-    using extractor_t = typename managed_t::extractor_t;
-    using value_t = typename managed_t::value_t;
-    using present_t = typename managed_t::present_t;
-    using length_t = typename managed_t::length_t;
-    static constexpr bool is_one_k = managed_t::is_one_k;
-    static constexpr bool is_ref_k = managed_t::is_ref_k;
-
-  protected:
-    ukv_t db_ = nullptr;
-    ukv_txn_t txn_ = nullptr;
-
-    locations_store_t locations_;
-
-  public:
-    member_refs_gt(ukv_t db, ukv_txn_t txn, locations_store_t locations) noexcept
-        : db_(db), txn_(txn), locations_(std::move(locations)) {}
-
-    member_refs_gt(member_refs_gt const&) = delete;
-    member_refs_gt& operator=(member_refs_gt const&) = delete;
-
-    member_refs_gt(member_refs_gt&& other) noexcept
-        : db_(std::exchange(other.db_, nullptr)), txn_(std::exchange(other.txn_, nullptr)),
-          locations_(std::move(other.locations_)) {}
-
-    member_refs_gt from(ukv_txn_t txn) noexcept { return {db_, txn, locations_.ref()}; }
-    managed_t on(managed_arena_t& arena) noexcept { return {db_, txn_, arena, locations_.ref()}; }
-
-    expected_gt<std::pair<value_t, managed_arena_t>> //
-    value(doc_fmt_t format = ukv_doc_format_binary_k, bool track = false) noexcept {
-        managed_arena_t arena(db_);
-        auto maybe = on(arena).value(format, track);
-        if (!maybe)
-            return {maybe.release_status(), {value_t {}, std::move(arena)}};
-        return std::pair<value_t, managed_arena_t>(*std::move(maybe), std::move(arena));
-    }
-
-    operator expected_gt<value_t>() noexcept { return value(); }
-
-    expected_gt<std::pair<length_t, managed_arena_t>> //
-    length(doc_fmt_t format = ukv_doc_format_binary_k, bool track = false) noexcept {
-        managed_arena_t arena(db_);
-        auto maybe = on(arena).length(format, track);
-        if (!maybe)
-            return {maybe.release_status(), {length_t {}, std::move(arena)}};
-        return std::pair<length_t, managed_arena_t>(*std::move(maybe), std::move(arena));
-    }
-
-    expected_gt<std::pair<present_t, managed_arena_t>> //
-    present(bool track = false) noexcept {
-        managed_arena_t arena(db_);
-        auto maybe = on(arena).present(track);
-        if (!maybe)
-            return {maybe.release_status(), {present_t {}, std::move(arena)}};
-        return std::pair<present_t, managed_arena_t>(*std::move(maybe), std::move(arena));
-    }
-
-    template <typename values_arg_at>
-    expected_gt<managed_arena_t> //
-    assign(values_arg_at&& vals, doc_fmt_t format = ukv_doc_format_binary_k, bool flush = false) noexcept {
-        managed_arena_t arena(db_);
-        auto maybe = on(arena).assign(std::forward<values_arg_at>(vals), format, flush);
-        return {std::move(maybe), std::move(arena)};
-    }
-
-    expected_gt<managed_arena_t> erase(bool flush = false) noexcept { //
-        managed_arena_t arena(db_);
-        auto maybe = on(arena).erase(flush);
-        return {std::move(maybe), std::move(arena)};
-    }
-
-    expected_gt<managed_arena_t> clear(bool flush = false) noexcept {
-        managed_arena_t arena(db_);
-        auto maybe = on(arena).clear(flush);
-        return {std::move(maybe), std::move(arena)};
+        values_arg_t arg {
+            .contents_begin = {&any},
+            .offsets_begin = {},
+            .lengths_begin = {&len},
+        };
+        return assign(arg, flush);
     }
 
     template <typename values_arg_at>
@@ -302,6 +204,11 @@ class member_refs_gt {
     locations_plain_t& locations() const noexcept { return locations_.ref(); }
 };
 
+static_assert(member_refs_gt<ukv_key_t>::is_one_k);
+static_assert(std::is_same_v<member_refs_gt<ukv_key_t>::value_t, value_view_t>);
+static_assert(member_refs_gt<ukv_key_t>::is_one_k);
+static_assert(!member_refs_gt<keys_arg_t>::is_one_k);
+
 /**
  * @brief Iterator (almost) over the keys in a single collection.
  * Manages it's own memory and may be expressive to construct.
@@ -315,7 +222,7 @@ class keys_stream_t {
     ukv_collection_t col_ = ukv_default_collection_k;
     ukv_txn_t txn_ = nullptr;
 
-    managed_arena_t arena_;
+    arena_t arena_;
     ukv_size_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
@@ -490,7 +397,7 @@ class keys_range_t {
 
     expected_gt<size_estimates_t> find_size() noexcept {
         status_t status;
-        managed_arena_t arena(db_);
+        arena_t arena(db_);
         size_estimates_t result;
         ukv_size(db_,
                  txn_,
@@ -716,7 +623,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
      * @brief Checks if a collection with requested `name` is present in the DB.
      * @param memory Temporary memory required for storing the execution results.
      */
-    expected_gt<bool> contains(std::string_view name, managed_arena_t& memory) noexcept {
+    expected_gt<bool> contains(std::string_view name, arena_t& memory) noexcept {
         if (name.empty())
             return true;
 
@@ -743,7 +650,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
      * @brief Checks if a collection with requested `name` is present in the DB.
      */
     expected_gt<bool> contains(std::string_view name) noexcept {
-        managed_arena_t arena(db_);
+        arena_t arena(db_);
         return contains(name, arena);
     }
 
@@ -800,8 +707,8 @@ struct collections_join_t {
 };
 
 template <typename locations_store_t>
-expected_gt<typename managed_refs_gt<locations_store_t>::value_t> //
-managed_refs_gt<locations_store_t>::any_get(doc_fmt_t format, ukv_options_t options) noexcept {
+expected_gt<typename member_refs_gt<locations_store_t>::value_t> //
+member_refs_gt<locations_store_t>::any_get(ukv_doc_format_t format, ukv_options_t options) noexcept {
     status_t status;
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
@@ -856,9 +763,9 @@ managed_refs_gt<locations_store_t>::any_get(doc_fmt_t format, ukv_options_t opti
 
 template <typename locations_store_t>
 template <typename values_arg_at>
-status_t managed_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref,
-                                                        doc_fmt_t format,
-                                                        ukv_options_t options) noexcept {
+status_t member_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref,
+                                                       ukv_doc_format_t format,
+                                                       ukv_options_t options) noexcept {
     status_t status;
     using value_extractor_t = value_extractor_gt<std::remove_reference_t<values_arg_at>>;
 

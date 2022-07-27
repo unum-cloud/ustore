@@ -83,7 +83,7 @@ bool contains_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     ukv_key_t key) {
 
     status_t status;
@@ -114,7 +114,7 @@ std::optional<py::bytes> get_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     ukv_key_t key) {
 
     status_t status;
@@ -179,7 +179,7 @@ void fill_tensor( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     py::handle keys_arr,
     py::handle values_arr,
     py::handle values_lengths_arr,
@@ -291,7 +291,7 @@ void set_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     ukv_key_t key,
     py::bytes const* value = nullptr) {
 
@@ -327,7 +327,7 @@ void set_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     py::handle const& keys_arr,
     py::handle const& values_arr) {
 
@@ -407,7 +407,7 @@ std::optional<py::tuple> scan( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     ukv_key_t min_key,
     ukv_size_t scan_length) {
 
