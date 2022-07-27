@@ -30,3 +30,5 @@ if(NOT rocksdb_POPULATED)
     FetchContent_Populate(rocksdb)
     add_subdirectory(${rocksdb_SOURCE_DIR} ${rocksdb_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
+
+include_directories(${rocksdb_SOURCE_DIR}/include)

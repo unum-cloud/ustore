@@ -64,63 +64,31 @@ set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fs
 
 find_package(Threads REQUIRED)
 
+include_directories(include/)
+include_directories($ENV{CONDA_PREFIX}/include)
+link_directories($ENV{CONDA_PREFIX}/lib)
+message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
+
 # Install 3rd Party Packages
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
+set(UKV_PREINSTALLED_BOOST ON)
+set(UKV_PREINSTALLED_ARROW ON)
+set(UKV_PREINSTALLED_TURBOPFOR ON)
 
-# Boost:
+include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
-add_dependencies(arrow-external boost-external)
 
-# FMT:
-FetchContent_Declare(
-  fmt
-  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-  GIT_TAG 8.1.1
-  GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(fmt)
-
-# JSON:
-# https://json.nlohmann.me/integration/cmake/#fetchcontent
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.10.5/json.tar.xz)
-FetchContent_MakeAvailable(json)
-
-# LZ4 Compression
-# https://stackoverflow.com/questions/67537111/how-do-i-decide-between-lz4-and-snappy-compression
-# include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
-
-# TurboPFor for 64-bit integers
-# https://github.com/powturbo/TurboPFor-Integer-Compression
-# https://github.com/topics/integer-compression
-# include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
-
-# FastPFor Integer Compression for 32-bit integers
-# FetchContent_Declare(
-# fpfor
-# GIT_REPOSITORY https://github.com/lemire/FastPFor.git
-# GIT_TAG v0.1.8
-# GIT_SHALLOW TRUE
-# )
-# FetchContent_MakeAvailable(fpfor)
-
-# GTest
-FetchContent_Declare(
-  googletest
-  GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG release-1.11.0
-)
-FetchContent_MakeAvailable(googletest)
+if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
+  add_dependencies(Arrow-external Boost-external)
+endif()
 
 # Define the libraries we will need to build
-include_directories(include/)
-include_directories(${fmt_SOURCE_DIR}/include)
-include_directories(${rocksdb_SOURCE_DIR}/include)
-include_directories(${leveldb_SOURCE_DIR}/include)
-
 add_library(ukv_stl
   src/backend_stl.cpp
   src/logic_docs.cpp
@@ -158,6 +126,7 @@ add_library(ukv_rpc_client src/rpc_client.cpp)
 # ukv_stl
 # pthread
 # fmt::fmt
+# Boost::headers
 # nlohmann_json::nlohmann_json
 # )
 add_executable(ukv_arrow_server src/arrow_server.cpp)
@@ -166,10 +135,8 @@ target_link_libraries(ukv_arrow_server
   pthread
   fmt::fmt
   nlohmann_json::nlohmann_json
-  arrow::arrow
-  arrow::cuda
-  arrow::flight
-  arrow::bundled
+  arrow
+  arrow_flight
 )
 
 add_executable(ukv_test

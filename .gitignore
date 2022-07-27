@@ -1,5 +1,6 @@
 # Prerequisites
 *.d
+*.deb
 
 # Compiled Object files
 *.slo
