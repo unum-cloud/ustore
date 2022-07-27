@@ -85,7 +85,7 @@ TEST(db, intro) {
     _ = main[{43, 44}].on(arena).value(/*format:*/ ukv_doc_format_binary_k, /*track:*/ false);
 
     // Working with sub documents
-    main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
+    main[56] = R"( {"Hello": "World", "answer": 42} )"_json.dump().c_str();
 }
 
 template <typename locations_at>

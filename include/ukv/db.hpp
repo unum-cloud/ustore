@@ -648,7 +648,7 @@ class txn_t {
         return {db_, txn_, std::move(keys)};
     }
 
-    status_t reassign(bool snapshot = false) noexcept {
+    status_t reset(bool snapshot = false) noexcept {
         status_t status;
         auto options = snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k;
         ukv_txn_begin(db_, 0, options, &txn_, status.member_ptr());
