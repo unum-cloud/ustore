@@ -11,7 +11,8 @@
 #include <string_view>
 #include <unordered_set>
 #include <variant>
-#include <charconv>
+#include <charconv> // `std::to_chars`
+#include <cstdio>   // `std::snprintf`
 
 #include <nlohmann/json.hpp>
 
@@ -1148,16 +1149,17 @@ void ukv_docs_gather_strings( //
                 break;
             }
             case json_t::value_t::number_float: {
-                // Parsing and dumping floating-point numbers is still not fully implemented in STL:
-                // auto end_ptr = fmt::format_to(str_buffer, "{}", scalar);
-                // bool fits_null_terminated = end_ptr < str_buffer + str_buffer_len_k;
                 auto scalar = found_value.get<double>();
-                std::to_chars_result result = std::to_chars(&str_buffer[0], str_buffer + str_buffer_len_k, scalar);
-                bool fits_null_terminated = result.ec != std::errc() && result.ptr < str_buffer + str_buffer_len_k;
-                if (fits_null_terminated) {
-                    *end_ptr = '\0';
-                    arena.growing_tape.push_back(to_view(str_buffer, end_ptr + 1 - str_buffer));
-                }
+                // Parsing and dumping floating-point numbers is still not fully implemented in STL:
+                //  std::to_chars_result result = std::to_chars(&str_buffer[0], str_buffer + str_buffer_len_k, scalar);
+                //  bool fits_null_terminated = result.ec != std::errc() && result.ptr < str_buffer + str_buffer_len_k;
+                // Using FMT would cause an extra dependency:
+                //  auto end_ptr = fmt::format_to(str_buffer, "{}", scalar);
+                //  bool fits_null_terminated = end_ptr < str_buffer + str_buffer_len_k;
+                // If we use `std::snprintf`, the result would be NULL-terminted:
+                auto result = std::snprintf(str_buffer, str_buffer_len_k, "%f", scalar);
+                if (result >= 0)
+                    arena.growing_tape.push_back(to_view(str_buffer, result));
                 else
                     arena.growing_tape.push_back({});
                 break;
