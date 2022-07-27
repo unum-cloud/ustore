@@ -81,8 +81,8 @@ TEST(db, intro) {
     _ = main[{43, 44}].on(arena).clear(/*flush:*/ false);
     _ = main[{43, 44}].on(arena).erase(/*flush:*/ false);
     _ = main[{43, 44}].on(arena).present(/*track:*/ false);
-    _ = main[{43, 44}].on(arena).length(/*format:*/ ukv_doc_format_binary_k, /*track:*/ false);
-    _ = main[{43, 44}].on(arena).value(/*format:*/ ukv_doc_format_binary_k, /*track:*/ false);
+    _ = main[{43, 44}].on(arena).length(/*track:*/ false);
+    _ = main[{43, 44}].on(arena).value(/*track:*/ false);
 
     // Working with sub documents
     main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
@@ -97,8 +97,8 @@ void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_leng
     using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    std::pair<taped_values_view_t, arena_t> retrieved_and_arena = *ref.value();
-    taped_values_view_t retrieved = retrieved_and_arena.first;
+    given_gt<taped_values_view_t> retrieved_and_arena = ref.value();
+    taped_values_view_t const& retrieved = *retrieved_and_arena;
     ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
 
@@ -130,8 +130,8 @@ void check_equalities(member_refs_gt<locations_at>& ref, values_arg_t values) {
     using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    std::pair<taped_values_view_t, arena_t> retrieved_and_arena = *ref.value();
-    taped_values_view_t retrieved = retrieved_and_arena.first;
+    given_gt<taped_values_view_t> retrieved_and_arena = ref.value();
+    taped_values_view_t const& retrieved = *retrieved_and_arena;
     EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
     tape_iterator_t it = retrieved.begin();

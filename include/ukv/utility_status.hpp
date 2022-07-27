@@ -142,9 +142,9 @@ class [[nodiscard]] given_gt : public expected_gt<object_at> {
     object_at const& operator*() const& noexcept { return object_; }
     object_at const* operator->() const& noexcept { return &object_; }
 
-    operator std::optional<object_at>() && = delete;
-    object_at&& operator*() && noexcept = delete;
-    object_at* operator->() && noexcept = delete;
+    // operator std::optional<object_at>() && = delete;
+    // object_at&& operator*() && noexcept = delete;
+    // object_at* operator->() && noexcept = delete;
 
     inline arena_t release_arena() noexcept { return std::exchange(arena_, {arena_.db()}); }
 };

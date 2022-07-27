@@ -65,14 +65,14 @@ class member_refs_gt {
 
     template <typename values_arg_at>
     status_t any_assign(values_arg_at&&, ukv_options_t) noexcept;
-    expected_gt<value_t> any_get(ukv_options_t) noexcept;
+    given_gt<value_t> any_get(ukv_options_t) noexcept;
 
   public:
     member_refs_gt(ukv_t db,
                    ukv_txn_t txn,
                    locations_store_t locations,
                    ukv_doc_format_t format = ukv_doc_format_binary_k) noexcept
-        : db_(db), txn_(txn), locations_(locations), format_(format) {}
+        : db_(db), txn_(txn), arena_(db), locations_(locations), format_(format) {}
 
     member_refs_gt(member_refs_gt const&) = delete;
     member_refs_gt& operator=(member_refs_gt const&) = delete;
@@ -115,13 +115,13 @@ class member_refs_gt {
 
         if constexpr (is_one_k) {
             length_t result = *maybe ? maybe->size() : ukv_val_len_missing_k;
-            return {result, maybe.release_arena()};
+            return {std::move(result), maybe.release_arena()};
         }
         else {
             auto found_lengths = maybe->lengths();
             auto count = keys_extractor_t {}.count(locations_.ref());
             length_t result {found_lengths, found_lengths + count};
-            return {result, maybe.release_arena()};
+            return {std::move(result), maybe.release_arena()};
         }
     }
 
@@ -137,7 +137,7 @@ class member_refs_gt {
 
         if constexpr (is_one_k) {
             present_t result = *maybe != ukv_val_len_missing_k;
-            return {result, maybe.release_arena()};
+            return {std::move(result), maybe.release_arena()};
         }
         else {
             // Transform the `found_lengths` into booleans.
@@ -151,7 +151,7 @@ class member_refs_gt {
             auto last_byte_offset = 0; // sizeof(ukv_val_len_t) - sizeof(bool);
             auto booleans = reinterpret_cast<bool*>(found_lengths);
             present_t result {booleans + last_byte_offset, sizeof(ukv_val_len_t), count};
-            return {result, maybe.release_arena()};
+            return {std::move(result), maybe.release_arena()};
         }
     }
 
@@ -454,15 +454,17 @@ class collection_t {
 
     inline collection_t(collection_t&& other) noexcept
         : db_(other.db_), col_(std::exchange(other.col_, ukv_default_collection_k)),
-          txn_(std::exchange(other.txn_, nullptr)) {}
+          txn_(std::exchange(other.txn_, nullptr)), format_(std::exchange(other.format_, ukv_doc_format_binary_k)) {}
+
     inline ~collection_t() noexcept {
-        if (col_)
-            ukv_collection_free(db_, col_);
+        ukv_collection_free(db_, col_);
+        col_ = nullptr;
     }
     inline collection_t& operator=(collection_t&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(col_, other.col_);
         std::swap(txn_, other.txn_);
+        std::swap(format_, other.format_);
         return *this;
     }
     inline operator ukv_collection_t() const noexcept { return col_; }
@@ -684,7 +686,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
         if (!status)
             return status;
         else
-            return collection_t {db_, col, format};
+            return collection_t {db_, col, nullptr, format};
     }
 
     status_t remove(ukv_str_view_t name) noexcept {
@@ -726,7 +728,7 @@ struct collections_join_t {
 };
 
 template <typename locations_store_t>
-expected_gt<typename member_refs_gt<locations_store_t>::value_t> //
+given_gt<typename member_refs_gt<locations_store_t>::value_t> //
 member_refs_gt<locations_store_t>::any_get(ukv_options_t options) noexcept {
     status_t status;
     ukv_val_len_t* found_lengths = nullptr;
@@ -754,7 +756,7 @@ member_refs_gt<locations_store_t>::any_get(ukv_options_t options) noexcept {
             format_,
             &found_lengths,
             &found_values,
-            arena_,
+            arena_.member_ptr(),
             status.member_ptr());
     else
         ukv_read( //
@@ -768,16 +770,16 @@ member_refs_gt<locations_store_t>::any_get(ukv_options_t options) noexcept {
             options,
             &found_lengths,
             &found_values,
-            arena_,
+            arena_.member_ptr(),
             status.member_ptr());
 
     if (!status)
         return status;
 
     if constexpr (is_one_k)
-        return value_view_t {found_values, *found_lengths};
+        return {value_view_t {found_values, *found_lengths}, arena_.release_owned()};
     else
-        return taped_values_view_t {found_lengths, found_values, count};
+        return {taped_values_view_t {found_lengths, found_values, count}, arena_.release_owned()};
 }
 
 template <typename locations_store_t>
@@ -817,7 +819,7 @@ status_t member_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref,
             offsets.stride(),
             lengths.get(),
             lengths.stride(),
-            arena_,
+            arena_.member_ptr(),
             status.member_ptr());
     else
         ukv_write( //
@@ -835,7 +837,7 @@ status_t member_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref,
             lengths.get(),
             lengths.stride(),
             options,
-            arena_,
+            arena_.member_ptr(),
             status.member_ptr());
     return status;
 }
