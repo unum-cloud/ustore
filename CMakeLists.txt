@@ -69,17 +69,11 @@ include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
 # Boost:
-set(Boost_USE_STATIC_LIBS OFF)
-set(Boost_USE_DEBUG_LIBS OFF) # ignore debug libs and
-set(Boost_USE_RELEASE_LIBS ON) # only find release libsset(Boost_USE_STATIC_RUNTIME ON)
-set(Boost_NO_SYSTEM_PATHS ON)
-set(Boost_NO_BOOST_CMAKE ON)
-FetchContent_Declare(boost
-  URL https://boostorg.jfrog.io/artifactory/main/release/1.79.0/source/boost_1_79_0.tar.bz2
-  URL_HASH SHA256=475d589d51a7f8b3ba2ba4eda022b170e562ca3b760ee922c146b6c65856ef39
-)
-FetchContent_MakeAvailable(boost)
-set(BOOST_ROOT ${boost_SOURCE_DIR})
+include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
+add_dependencies(arrow-external boost-external)
 
 # FMT:
 FetchContent_Declare(
@@ -94,15 +88,6 @@ FetchContent_MakeAvailable(fmt)
 # https://json.nlohmann.me/integration/cmake/#fetchcontent
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.10.5/json.tar.xz)
 FetchContent_MakeAvailable(json)
-
-# RocksDB
-include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
-
-# LevelDB
-include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
-
-# Apache Arrow
-include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
 
 # LZ4 Compression
 # https://stackoverflow.com/questions/67537111/how-do-i-decide-between-lz4-and-snappy-compression
@@ -181,8 +166,10 @@ target_link_libraries(ukv_arrow_server
   pthread
   fmt::fmt
   nlohmann_json::nlohmann_json
-  arrow
-  arrow_bundled_dependencies
+  arrow::arrow
+  arrow::cuda
+  arrow::flight
+  arrow::bundled
 )
 
 add_executable(ukv_test
