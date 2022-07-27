@@ -12,6 +12,8 @@
  */
 
 #pragma once
+#include <vector>
+
 #include "ukv/docs.h"
 #include "ukv/ukv.hpp"
 
