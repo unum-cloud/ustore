@@ -126,3 +126,20 @@ def test_main_collection_txn_ctx():
     with ukv.DataBase() as db:
         with ukv.Transaction(db) as txn:
             batch_insert(txn)
+
+
+def test_scan():
+    db = ukv.DataBase()
+    col = db['col']
+    col[10] = b'a'
+    col[20] = b'a'
+    col[30] = b'a'
+    col[40] = b'a'
+    col[50] = b'a'
+    col[60] = b'a'
+
+    assert np.array_equal(col.scan(10, 6), [10, 20, 30, 40, 50, 60])
+    assert np.array_equal(col.scan(20, 5), [20, 30, 40, 50, 60])
+    assert np.array_equal(col.scan(30, 1), [30])
+    assert np.array_equal(col.scan(40, 2), [40, 50])
+    assert np.array_equal(col.scan(60, 1), [60])
