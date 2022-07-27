@@ -137,6 +137,8 @@ target_link_libraries(ukv_arrow_server
   nlohmann_json::nlohmann_json
   arrow
   arrow_flight
+  arrow_dataset
+  parquet
 )
 
 add_executable(ukv_test

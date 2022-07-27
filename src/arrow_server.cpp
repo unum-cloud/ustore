@@ -20,6 +20,9 @@
 #include <arrow/table.h>
 #include <arrow/type.h>
 
+#include <parquet/arrow/reader.h>
+#include <parquet/arrow/writer.h>
+
 #include <algorithm>
 #include <memory>
 #include <numeric>
@@ -67,35 +70,34 @@ class UKVService : public arrow::flight::FlightServerBase {
     arrow::Status DoPut(arrow::flight::ServerCallContext const&,
                         std::unique_ptr<arrow::flight::FlightMessageReader> reader,
                         std::unique_ptr<arrow::flight::FlightMetadataWriter>) override {
-        // ARROW_ASSIGN_OR_RAISE(auto file_info, FileInfoFromDescriptor(reader->descriptor()));
-        // ARROW_ASSIGN_OR_RAISE(auto sink, root_->OpenOutputStream(file_info.path()));
-        // ARROW_ASSIGN_OR_RAISE(std::shared_ptr<arrow::Table> table, reader->ToTable());
+        ARROW_ASSIGN_OR_RAISE(auto file_info, FileInfoFromDescriptor(reader->descriptor()));
+        ARROW_ASSIGN_OR_RAISE(auto sink, root_->OpenOutputStream(file_info.path()));
+        ARROW_ASSIGN_OR_RAISE(std::shared_ptr<arrow::Table> table, reader->ToTable());
 
-        // ARROW_RETURN_NOT_OK(
-        //     parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink, /*chunk_size=*/65536));
+        ARROW_RETURN_NOT_OK(
+            parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink, /*chunk_size=*/65536));
         return arrow::Status::OK();
     }
 
     arrow::Status DoGet(arrow::flight::ServerCallContext const&,
                         arrow::flight::Ticket const& request,
                         std::unique_ptr<arrow::flight::FlightDataStream>* stream) override {
-        // ARROW_ASSIGN_OR_RAISE(auto input, root_->OpenInputFile(request.ticket));
-        // std::unique_ptr<parquet::arrow::FileReader> reader;
-        // ARROW_RETURN_NOT_OK(parquet::arrow::OpenFile(std::move(input), arrow::default_memory_pool(), &reader));
+        ARROW_ASSIGN_OR_RAISE(auto input, root_->OpenInputFile(request.ticket));
+        std::unique_ptr<parquet::arrow::FileReader> reader;
+        ARROW_RETURN_NOT_OK(parquet::arrow::OpenFile(std::move(input), arrow::default_memory_pool(), &reader));
 
-        // std::shared_ptr<arrow::Table> table;
-        // ARROW_RETURN_NOT_OK(reader->ReadTable(&table));
-        // // Note that we can't directly pass TableBatchReader to
-        // // RecordBatchStream because TableBatchReader keeps a non-owning
-        // // reference to the underlying Table, which would then get freed
-        // // when we exit this function
-        // std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
-        // arrow::TableBatchReader batch_reader(*table);
-        // ARROW_ASSIGN_OR_RAISE(batches, batch_reader.ToRecordBatches());
+        std::shared_ptr<arrow::Table> table;
+        ARROW_RETURN_NOT_OK(reader->ReadTable(&table));
+        // Note that we can't directly pass TableBatchReader to
+        // RecordBatchStream because TableBatchReader keeps a non-owning
+        // reference to the underlying Table, which would then get freed
+        // when we exit this function
+        std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
+        arrow::TableBatchReader batch_reader(*table);
+        ARROW_ASSIGN_OR_RAISE(batches, batch_reader.ToRecordBatches());
 
-        // ARROW_ASSIGN_OR_RAISE(auto owning_reader, arrow::RecordBatchReader::Make(std::move(batches),
-        // table->schema())); *stream = std::unique_ptr<arrow::flight::FlightDataStream>(new
-        // arrow::flight::RecordBatchStream(owning_reader));
+        ARROW_ASSIGN_OR_RAISE(auto owning_reader, arrow::RecordBatchReader::Make(std::move(batches), table->schema()));
+        *stream = std::unique_ptr<arrow::flight::FlightDataStream>(new arrow::flight::RecordBatchStream(owning_reader));
 
         return arrow::Status::OK();
     }
@@ -118,12 +120,12 @@ class UKVService : public arrow::flight::FlightServerBase {
 
   private:
     arrow::Result<arrow::flight::FlightInfo> MakeFlightInfo(const arrow::fs::FileInfo& file_info) {
-        // ARROW_ASSIGN_OR_RAISE(auto input, root_->OpenInputFile(file_info));
-        // std::unique_ptr<parquet::arrow::FileReader> reader;
-        // ARROW_RETURN_NOT_OK(parquet::arrow::OpenFile(std::move(input), arrow::default_memory_pool(), &reader));
+        ARROW_ASSIGN_OR_RAISE(auto input, root_->OpenInputFile(file_info));
+        std::unique_ptr<parquet::arrow::FileReader> reader;
+        ARROW_RETURN_NOT_OK(parquet::arrow::OpenFile(std::move(input), arrow::default_memory_pool(), &reader));
 
         std::shared_ptr<arrow::Schema> schema;
-        // ARROW_RETURN_NOT_OK(reader->GetSchema(&schema));
+        ARROW_RETURN_NOT_OK(reader->GetSchema(&schema));
 
         auto descriptor = arrow::flight::FlightDescriptor::Path({file_info.base_name()});
 
