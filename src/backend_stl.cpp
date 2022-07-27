@@ -76,9 +76,9 @@ struct stl_collection_t {
 using stl_collection_ptr_t = std::unique_ptr<stl_collection_t>;
 
 struct stl_txn_t {
-    std::map<sub_key_t, buffer_t> upserted;
-    std::unordered_map<sub_key_t, sequence_t, sub_key_hash_t> requested;
-    std::unordered_set<sub_key_t, sub_key_hash_t> removed;
+    std::map<col_key_t, buffer_t> upserted;
+    std::unordered_map<col_key_t, sequence_t, sub_key_hash_t> requested;
+    std::unordered_set<col_key_t, sub_key_hash_t> removed;
 
     stl_db_t* db_ptr {nullptr};
     sequence_t sequence_number {0};

@@ -49,8 +49,8 @@ class member_refs_gt {
 
     using locations_store_t = location_store_gt<locations_at>;
     using locations_plain_t = typename locations_store_t::plain_t;
-    using extractor_t = location_extractor_gt<locations_plain_t>;
-    static constexpr bool is_one_k = extractor_t::is_one_k;
+    using keys_extractor_t = keys_arg_extractor_gt<locations_plain_t>;
+    static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
     using value_t = std::conditional_t<is_one_k, value_view_t, taped_values_view_t>;
     using present_t = std::conditional_t<is_one_k, bool, strided_range_gt<bool>>;
@@ -77,7 +77,7 @@ class member_refs_gt {
     member_refs_gt(member_refs_gt&& other) noexcept
         : db_(std::exchange(other.db_, nullptr)), txn_(std::exchange(other.txn_, nullptr)),
           arena_(std::exchange(other.arena_, any_arena_t {db_})), locations_(std::move(other.locations_)),
-          format(other.format_) {}
+          format_(other.format_) {}
 
     member_refs_gt& operator=(member_refs_gt&& other) noexcept {
         std::swap(db_, other.db_);
@@ -116,8 +116,8 @@ class member_refs_gt {
         }
         else {
             auto found_lengths = maybe->lengths();
-            auto count = extractor_t {}.count(locations_.ref();
-            length_t result {found_lengths, found_lengths +  count};
+            auto count = keys_extractor_t {}.count(locations_.ref());
+            length_t result {found_lengths, found_lengths + count};
             return {result, maybe.release_arena()};
         }
     }
@@ -139,7 +139,7 @@ class member_refs_gt {
         else {
             // Transform the `found_lengths` into booleans.
             auto found_lengths = maybe->begin();
-            auto count = extractor_t {}.count(locations_.ref());
+            auto count = keys_extractor_t {}.count(locations_.ref());
             std::transform(found_lengths, found_lengths + count, found_lengths, [](ukv_val_len_t len) {
                 return len != ukv_val_len_missing_k;
             });
@@ -491,10 +491,10 @@ class collection_t {
     auto at(keys_arg_at&& keys) noexcept { //
         constexpr bool is_one_k = is_one<keys_arg_at>();
         if constexpr (is_one_k) {
-            using result_t = member_refs_gt<key_arg_t>;
+            using result_t = member_refs_gt<col_key_field_t>;
             using plain_t = std::remove_reference_t<keys_arg_at>;
             static_assert(!sfinae_has_collection_gt<plain_t>::value, "Overwriting existing collection!");
-            key_arg_t arg;
+            col_key_field_t arg;
             arg.collection = col_;
             if constexpr (std::is_integral_v<plain_t>)
                 arg.key = keys;
@@ -535,10 +535,19 @@ class txn_t {
             ukv_txn_free(db_, txn_);
     }
 
-    member_refs_gt<keys_arg_t> operator[](sub_keys_view_t cols_and_keys) noexcept {
+    member_refs_gt<keys_arg_t> operator[](strided_range_gt<col_key_t const> cols_and_keys) noexcept {
         keys_arg_t arg;
-        arg.collections_begin = cols_and_keys.members(&sub_key_t::collection).begin();
-        arg.keys_begin = cols_and_keys.members(&sub_key_t::key).begin();
+        arg.collections_begin = cols_and_keys.members(&col_key_t::collection).begin();
+        arg.keys_begin = cols_and_keys.members(&col_key_t::key).begin();
+        arg.count = cols_and_keys.size();
+        return {db_, txn_, std::move(arg)};
+    }
+
+    member_refs_gt<keys_arg_t> operator[](strided_range_gt<col_key_field_t const> cols_and_keys) noexcept {
+        keys_arg_t arg;
+        arg.collections_begin = cols_and_keys.members(&col_key_field_t::collection).begin();
+        arg.keys_begin = cols_and_keys.members(&col_key_field_t::key).begin();
+        arg.fields_begin = cols_and_keys.members(&col_key_field_t::field).begin();
         arg.count = cols_and_keys.size();
         return {db_, txn_, std::move(arg)};
     }
@@ -698,7 +707,7 @@ struct collections_join_t {
     ukv_txn_t txn = nullptr;
     ukv_arena_t* arena = nullptr;
 
-    collections_view_t cols;
+    strided_range_gt<ukv_collection_t const> cols;
     ukv_key_t next_min_key_ = 0;
     ukv_size_t window_size = 0;
 
@@ -708,19 +717,19 @@ struct collections_join_t {
 
 template <typename locations_store_t>
 expected_gt<typename member_refs_gt<locations_store_t>::value_t> //
-member_refs_gt<locations_store_t>::any_get(ukv_doc_format_t format, ukv_options_t options) noexcept {
+member_refs_gt<locations_store_t>::any_get(ukv_options_t options) noexcept {
     status_t status;
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
 
     decltype(auto) locs = locations_.ref();
-    auto count = extractor_t {}.count(locs);
-    auto keys = extractor_t {}.keys(locs);
-    auto cols = extractor_t {}.cols(locs);
-    auto fields = extractor_t {}.fields(locs);
+    auto count = keys_extractor_t {}.count(locs);
+    auto keys = keys_extractor_t {}.keys(locs);
+    auto cols = keys_extractor_t {}.cols(locs);
+    auto fields = keys_extractor_t {}.fields(locs);
     auto has_fields = fields && (!fields.repeats() || *fields);
 
-    if (has_fields || format != ukv_doc_format_binary_k)
+    if (has_fields || format_ != ukv_doc_format_binary_k)
         ukv_docs_read( //
             db_,
             txn_,
@@ -732,7 +741,7 @@ member_refs_gt<locations_store_t>::any_get(ukv_doc_format_t format, ukv_options_
             fields.get(),
             fields.stride(),
             options,
-            format,
+            format_,
             &found_lengths,
             &found_values,
             arena_,
@@ -763,17 +772,15 @@ member_refs_gt<locations_store_t>::any_get(ukv_doc_format_t format, ukv_options_
 
 template <typename locations_store_t>
 template <typename values_arg_at>
-status_t member_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref,
-                                                       ukv_doc_format_t format,
-                                                       ukv_options_t options) noexcept {
+status_t member_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref, ukv_options_t options) noexcept {
     status_t status;
-    using value_extractor_t = value_extractor_gt<std::remove_reference_t<values_arg_at>>;
+    using value_extractor_t = values_arg_extractor_gt<std::remove_reference_t<values_arg_at>>;
 
     decltype(auto) locs = locations_.ref();
-    auto count = extractor_t {}.count(locs);
-    auto keys = extractor_t {}.keys(locs);
-    auto cols = extractor_t {}.cols(locs);
-    auto fields = extractor_t {}.fields(locs);
+    auto count = keys_extractor_t {}.count(locs);
+    auto keys = keys_extractor_t {}.keys(locs);
+    auto cols = keys_extractor_t {}.cols(locs);
+    auto fields = keys_extractor_t {}.fields(locs);
     auto has_fields = fields && (!fields.repeats() || *fields);
 
     auto vals = vals_ref;
@@ -781,7 +788,7 @@ status_t member_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref,
     auto offsets = value_extractor_t {}.offsets(vals);
     auto lengths = value_extractor_t {}.lengths(vals);
 
-    if (has_fields || format != ukv_doc_format_binary_k)
+    if (has_fields || format_ != ukv_doc_format_binary_k)
         ukv_docs_write( //
             db_,
             txn_,
@@ -793,7 +800,7 @@ status_t member_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref,
             fields.get(),
             fields.stride(),
             options,
-            format,
+            format_,
             contents.get(),
             contents.stride(),
             offsets.get(),
