@@ -53,11 +53,13 @@
  *
  */
 
-#include <Python.h>
-#include "pybind.hpp"
 #include <vector>
 #include <utility>
 #include <algorithm>
+
+#include <Python.h>
+
+#include "pybind.hpp"
 
 using namespace unum::ukv;
 using namespace unum;
@@ -183,6 +185,7 @@ void fill_tensor( //
     py::handle values_lengths_arr,
     std::uint8_t padding_char = 0) {
 
+    // TODO: Reuse strided_range and strided_matrix converters
     // Check if we are receiving protocol buffers
     PyObject* keys_obj = keys_arr.ptr();
     PyObject* values_obj = values_arr.ptr();
@@ -320,27 +323,27 @@ void set_item( //
     status.throw_unhandled();
 }
 
-
 void set_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
     managed_arena_t& arena,
-    py::handle keys_arr,
-    py::handle values_arr) {
+    py::handle const& keys_arr,
+    py::handle const& values_arr) {
+
     PyObject* keys_obj = keys_arr.ptr();
     PyObject* values_obj = values_arr.ptr();
-    
+
     if (!PyObject_CheckBuffer(keys_obj) | !PyObject_CheckBuffer(values_obj))
         throw std::invalid_argument("All arguments must implement the buffer protocol");
 
     py_received_buffer_t keys, values;
     keys.initialized = PyObject_GetBuffer(keys_obj, &keys.py, PyBUF_ANY_CONTIGUOUS) == 0;
     values.initialized = PyObject_GetBuffer(values_obj, &values.py, PyBUF_ANY_CONTIGUOUS) == 0;
-    
+
     if (!keys.initialized | !values.initialized)
         throw std::invalid_argument("Couldn't obtain buffer overviews");
-    
+
     // Validate the format of `keys`
     if (keys.py.itemsize != sizeof(ukv_key_t))
         throw std::invalid_argument("Keys type mismatch");
@@ -351,11 +354,16 @@ void set_item( //
     ukv_size_t const tasks_count = static_cast<ukv_size_t>(keys.py.len / keys.py.itemsize);
     ukv_key_t const* keys_ptr = reinterpret_cast<ukv_key_t const*>(keys.py.buf);
     ukv_val_ptr_t const* values_ptr = reinterpret_cast<ukv_val_ptr_t const*>(&values.py.buf);
-    
-    std::vector<std::pair<ukv_val_len_t,ukv_val_len_t>> offsets(tasks_count);
+
+    // TODO: if matrix contains bytes (not characters), use the full length
+    // TODO: support non-continuous buffers and lists
+    // Pairs should become
+    // key_arg_t
+    // val_arg_t
+    std::vector<std::pair<ukv_val_len_t, ukv_val_len_t>> offsets(tasks_count);
     ukv_val_len_t max_size = values.py.itemsize;
 
-    for (size_t i = 0; i < tasks_count; ++i){
+    for (size_t i = 0; i < tasks_count; ++i) {
         ukv_val_len_t off = max_size * i;
         ukv_val_len_t slen = std::strlen(reinterpret_cast<char const*>(*values_ptr + off));
         offsets[i] = std::make_pair(off, std::min<ukv_val_len_t>(slen, max_size));
@@ -553,7 +561,6 @@ void ukv::wrap_database(py::module& m) {
         py::arg("key"),
         py::arg("value"));
 
-
     py_txn.def(
         "set",
         [](py_txn_t& py_txn, py::handle keys, py::handle values) {
@@ -572,7 +579,6 @@ void ukv::wrap_database(py::module& m) {
         py::arg("collection"),
         py::arg("keys"),
         py::arg("values"));
-
 
     // Resource management
     py_txn.def("__enter__", &begin_if_needed);
@@ -635,10 +641,9 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def("__delitem__", [](py_txn_t& py_txn, ukv_key_t key) {
         return set_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, key);
     });
-        py_txn.def("__setitem__", [](py_txn_t& py_txn, py::handle keys, py::handle values) {
+    py_txn.def("__setitem__", [](py_txn_t& py_txn, py::handle keys, py::handle values) {
         return set_item(py_txn.db_ptr->native, py_txn.native, ukv_default_collection_k, py_txn.arena, keys, values);
     });
-
 
     py_col.def("__contains__", [](py_col_t& py_col, ukv_key_t key) {
         return contains_item(py_col.db_ptr->native,
