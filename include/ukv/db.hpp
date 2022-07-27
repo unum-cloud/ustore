@@ -68,8 +68,11 @@ class member_refs_gt {
     expected_gt<value_t> any_get(ukv_options_t) noexcept;
 
   public:
-    member_refs_gt(ukv_t db, ukv_txn_t txn, locations_store_t locations) noexcept
-        : db_(db), txn_(txn), locations_(locations) {}
+    member_refs_gt(ukv_t db,
+                   ukv_txn_t txn,
+                   locations_store_t locations,
+                   ukv_doc_format_t format = ukv_doc_format_binary_k) noexcept
+        : db_(db), txn_(txn), locations_(locations), format_(format) {}
 
     member_refs_gt(member_refs_gt const&) = delete;
     member_refs_gt& operator=(member_refs_gt const&) = delete;
@@ -439,13 +442,15 @@ class collection_t {
     ukv_t db_ = nullptr;
     ukv_collection_t col_ = ukv_default_collection_k;
     ukv_txn_t txn_ = nullptr;
+    ukv_doc_format_t format_ = ukv_doc_format_binary_k;
 
   public:
     inline collection_t() = default;
     inline collection_t(ukv_t db_ptr,
                         ukv_collection_t col_ptr = ukv_default_collection_k,
-                        ukv_txn_t txn = nullptr) noexcept
-        : db_(db_ptr), col_(col_ptr), txn_(txn) {}
+                        ukv_txn_t txn = nullptr,
+                        ukv_doc_format_t format = ukv_doc_format_binary_k) noexcept
+        : db_(db_ptr), col_(col_ptr), txn_(txn), format_(format) {}
 
     inline collection_t(collection_t&& other) noexcept
         : db_(other.db_), col_(std::exchange(other.col_, ukv_default_collection_k)),
@@ -466,6 +471,10 @@ class collection_t {
     inline ukv_txn_t txn() const noexcept { return txn_; }
 
     inline expected_gt<std::size_t> size() const noexcept { return 0; }
+    collection_t& as(ukv_doc_format_t format) noexcept {
+        format_ = format;
+        return *this;
+    }
 
     inline keys_range_t keys(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
                              ukv_key_t max_key = ukv_key_unknown_k,
@@ -479,7 +488,7 @@ class collection_t {
         arg.collections_begin = &col_;
         arg.keys_begin = keys.begin();
         arg.count = keys.size();
-        return {db_, txn_, {std::move(arg)}};
+        return {db_, txn_, {std::move(arg)}, format_};
     }
 
     template <typename keys_arg_at>
@@ -503,12 +512,12 @@ class collection_t {
 
             if constexpr (sfinae_has_field_gt<plain_t>::value)
                 arg.field = keys.field;
-            return result_t {db_, txn_, arg};
+            return result_t {db_, txn_, arg, format_};
         }
         else {
             using locations_t = locations_in_collection_gt<keys_arg_at>;
             using result_t = member_refs_gt<locations_t>;
-            return result_t {db_, txn_, locations_t {std::forward<keys_arg_at>(keys), col_}};
+            return result_t {db_, txn_, locations_t {std::forward<keys_arg_at>(keys), col_}, format_};
         }
     }
 };
@@ -667,14 +676,15 @@ class db_t : public std::enable_shared_from_this<db_t> {
     operator expected_gt<collection_t>() noexcept { return collection(""); }
     expected_gt<collection_t> operator*() noexcept { return collection(""); }
 
-    expected_gt<collection_t> collection(ukv_str_view_t name = "") noexcept {
+    expected_gt<collection_t> collection(ukv_str_view_t name = "",
+                                         ukv_doc_format_t format = ukv_doc_format_binary_k) noexcept {
         status_t status;
         ukv_collection_t col = nullptr;
         ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
-            return collection_t {db_, col};
+            return collection_t {db_, col, format};
     }
 
     status_t remove(ukv_str_view_t name) noexcept {
