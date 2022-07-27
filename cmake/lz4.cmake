@@ -1,6 +1,6 @@
-# ---------------------------------------------------------------------------
-# cengine
-# ---------------------------------------------------------------------------
+# LZ4 Compression
+# https://stackoverflow.com/questions/67537111/how-do-i-decide-between-lz4-and-snappy-compression
+# include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
 
 include(ExternalProject)
 find_package(Git REQUIRED)

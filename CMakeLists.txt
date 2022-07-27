@@ -64,74 +64,31 @@ set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fs
 
 find_package(Threads REQUIRED)
 
+include_directories(include/)
+include_directories($ENV{CONDA_PREFIX}/include)
+link_directories($ENV{CONDA_PREFIX}/lib)
+message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
+
 # Install 3rd Party Packages
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
+set(UKV_PREINSTALLED_BOOST ON)
+set(UKV_PREINSTALLED_ARROW ON)
+set(UKV_PREINSTALLED_TURBOPFOR ON)
 
-# Boost:
-set(Boost_USE_STATIC_LIBS ON)
-set(Boost_USE_STATIC_RUNTIME ON)
-FetchContent_Declare(boost
-  URL https://boostorg.jfrog.io/artifactory/main/release/1.79.0/source/boost_1_79_0.tar.bz2
-  URL_HASH SHA256=475d589d51a7f8b3ba2ba4eda022b170e562ca3b760ee922c146b6c65856ef39
-)
-FetchContent_MakeAvailable(boost)
-FetchContent_GetProperties(boost SOURCE_DIR BOOST_SRC_DIR)
-include_directories(${BOOST_SRC_DIR})
-include_directories(${Boost_INCLUDE_DIRS})
-
-# FMT:
-FetchContent_Declare(
-  fmt
-  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-  GIT_TAG 8.1.1
-  GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(fmt)
-
-# JSON:
-# https://json.nlohmann.me/integration/cmake/#fetchcontent
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.10.5/json.tar.xz)
-FetchContent_MakeAvailable(json)
-
-# RocksDB
+include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
-
-# LevelDB
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
 
-# LZ4 Compression
-# https://stackoverflow.com/questions/67537111/how-do-i-decide-between-lz4-and-snappy-compression
-# include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
-
-# TurboPFor for 64-bit integers
-# https://github.com/powturbo/TurboPFor-Integer-Compression
-# https://github.com/topics/integer-compression
-# include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
-
-# FastPFor Integer Compression for 32-bit integers
-# FetchContent_Declare(
-# fpfor
-# GIT_REPOSITORY https://github.com/lemire/FastPFor.git
-# GIT_TAG v0.1.8
-# GIT_SHALLOW TRUE
-# )
-# FetchContent_MakeAvailable(fpfor)
-
-# GTest
-FetchContent_Declare(
-  googletest
-  GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG release-1.11.0
-)
-FetchContent_MakeAvailable(googletest)
+if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
+  add_dependencies(Arrow-external Boost-external)
+endif()
 
 # Define the libraries we will need to build
-include_directories(include/)
-include_directories(${fmt_SOURCE_DIR}/include)
-include_directories(${rocksdb_SOURCE_DIR}/include)
-include_directories(${leveldb_SOURCE_DIR}/include)
-
 add_library(ukv_stl
   src/backend_stl.cpp
   src/logic_docs.cpp
@@ -169,8 +126,21 @@ add_library(ukv_rpc_client src/rpc_client.cpp)
 # ukv_stl
 # pthread
 # fmt::fmt
+# Boost::headers
 # nlohmann_json::nlohmann_json
 # )
+add_executable(ukv_arrow_server src/arrow_server.cpp)
+target_link_libraries(ukv_arrow_server
+  ukv_stl
+  pthread
+  fmt::fmt
+  nlohmann_json::nlohmann_json
+  arrow
+  arrow_flight
+  arrow_dataset
+  parquet
+)
+
 add_executable(ukv_test
   src/test.cpp
   src/backend_stl.cpp
