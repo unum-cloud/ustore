@@ -71,6 +71,12 @@ class UKVService : public arrow::flight::FlightServerBase {
         return arrow::Status::OK();
     }
 
+    arrow::Status GetSchema(arrow::flight::ServerCallContext const& context,
+                            arrow::flight::FlightDescriptor const& request,
+                            std::unique_ptr<arrow::flight::SchemaResult>* schema) override {
+        return arrow::Status::OK();
+    }
+
     arrow::Status DoPut(arrow::flight::ServerCallContext const&,
                         std::unique_ptr<arrow::flight::FlightMessageReader> reader,
                         std::unique_ptr<arrow::flight::FlightMetadataWriter>) override {

@@ -26,6 +26,9 @@ struct frame_t : public std::enable_shared_from_this<frame_t> {
 
 void ukv::wrap_dataframe(py::module& m) {
 
+    // Once packed, our DataFrames output Apache Arrow Tables / RecordBatches:
+    // https://stackoverflow.com/a/57907044/2766161
+    // https://arrow.apache.org/docs/python/integration/extending.html
     auto df = py::class_<frame_t, std::shared_ptr<frame_t>>(m, "DataFrame", py::module_local());
     df.def(py::init([](std::vector<std::string> fields) { return std::make_shared<frame_t>(); }));
 
