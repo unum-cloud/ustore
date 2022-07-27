@@ -132,14 +132,28 @@ def test_scan():
     db = ukv.DataBase()
     col = db['col']
     col[10] = b'a'
-    col[20] = b'a'
-    col[30] = b'a'
-    col[40] = b'a'
-    col[50] = b'a'
-    col[60] = b'a'
+    col[20] = b'aa'
+    col[30] = b'aaa'
+    col[40] = b'aaaa'
+    col[50] = b'aaaaa'
+    col[60] = b'aaaaaa'
 
-    assert np.array_equal(col.scan(10, 6), [10, 20, 30, 40, 50, 60])
-    assert np.array_equal(col.scan(20, 5), [20, 30, 40, 50, 60])
-    assert np.array_equal(col.scan(30, 1), [30])
-    assert np.array_equal(col.scan(40, 2), [40, 50])
-    assert np.array_equal(col.scan(60, 1), [60])
+    scanned = col.scan(10, 6)
+    assert np.array_equal(scanned[0], [10, 20, 30, 40, 50, 60])
+    assert np.array_equal(scanned[1], [1, 2, 3, 4, 5, 6])
+
+    scanned = col.scan(20, 5)
+    assert np.array_equal(scanned[0], [20, 30, 40, 50, 60])
+    assert np.array_equal(scanned[1], [2, 3, 4, 5, 6])
+
+    scanned = col.scan(30, 1)
+    assert np.array_equal(scanned[0], [30])
+    assert np.array_equal(scanned[1], [3])
+
+    scanned = col.scan(40, 2)
+    assert np.array_equal(scanned[0], [40, 50])
+    assert np.array_equal(scanned[1], [4, 5])
+
+    scanned = col.scan(60, 1)
+    assert np.array_equal(scanned[0], [60])
+    assert np.array_equal(scanned[1], [6])
