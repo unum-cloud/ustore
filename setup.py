@@ -14,6 +14,8 @@ include_dirs = [
     'include/',
     'python/']
 
+compile_args = ['-std=c++17', '-O3']
+
 ext_modules = [
     Pybind11Extension(
         'ukv/stl',
@@ -26,7 +28,7 @@ ext_modules = [
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
         libraries=['ukv_stl', 'fmt'],
-        extra_compile_args=['-std=c++17', '-O3'],
+        extra_compile_args=compile_args,
         define_macros=[
             ('UKV_VERSION', __version__),
             ('UKV_PYTHON_MODULE_NAME', 'stl')
@@ -43,7 +45,7 @@ ext_modules = [
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
         libraries=['ukv_rocksdb', 'rocksdb', 'fmt'],
-        extra_compile_args=['-std=c++17', '-O3'],
+        extra_compile_args=compile_args,
         define_macros=[
             ('UKV_VERSION', __version__),
             ('UKV_PYTHON_MODULE_NAME', 'rocks')
@@ -60,7 +62,7 @@ ext_modules = [
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
         libraries=['ukv_leveldb', 'leveldb', 'fmt'],
-        extra_compile_args=['-std=c++17', '-O3'],
+        extra_compile_args=compile_args,
         define_macros=[
             ('UKV_VERSION', __version__),
             ('UKV_PYTHON_MODULE_NAME', 'level')

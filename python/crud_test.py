@@ -1,4 +1,5 @@
 import ukv.stl as ukv
+import numpy as np
 
 
 def only_explicit(col):
@@ -46,11 +47,35 @@ def only_overwrite(col):
     assert col.get(7) == b'yy'
 
 
+def batch_insert(col):
+    count_keys: int = 20
+    keys: list[int] = list(range(1, count_keys + 1))
+    keeper = []
+
+    for i in keys[:count_keys//2]:
+        keeper.append((f'{i}' * i).encode())
+
+    for i in keys[count_keys//2:]:
+        keeper.append((f'{i}' * int(i-count_keys//2)).encode())
+
+    keys = np.array(keys, dtype=np.uint64)
+    values = np.array(keeper)
+
+    col.set(keys, values)
+
+    for i in keys[:count_keys//2]:
+        assert col.get(i) == (f'{i}' * i).encode()
+
+    for i in keys[count_keys//2:]:
+        assert col.get(i) == (f'{i}' * int(i-count_keys//2)).encode()
+
+
 def test_main_collection():
     db = ukv.DataBase()
     only_explicit(db)
     only_overwrite(db)
     only_operators(db)
+    batch_insert(db)
 
 
 def test_named_collections():
@@ -63,6 +88,8 @@ def test_named_collections():
     only_overwrite(col_dub)
     only_operators(col_sub)
     only_operators(col_dub)
+    batch_insert(col_sub)
+    batch_insert(col_dub)
 
 
 def test_main_collection_txn():
@@ -81,6 +108,10 @@ def test_main_collection_txn():
     only_operators(txn)
     txn.commit()
 
+    txn = ukv.Transaction(db)
+    batch_insert(txn)
+    txn.commit()
+
 
 def test_main_collection_txn_ctx():
 
@@ -91,3 +122,7 @@ def test_main_collection_txn_ctx():
     with ukv.DataBase() as db:
         with ukv.Transaction(db) as txn:
             only_operators(txn)
+
+    with ukv.DataBase() as db:
+        with ukv.Transaction(db) as txn:
+            batch_insert(txn)
