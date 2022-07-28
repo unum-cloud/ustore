@@ -10,9 +10,10 @@ __libname__ = 'ukv'
 cmake_cache = cmake.read_cmake_cache('CMakeCache.txt')
 
 include_dirs = [
-    f"{cmake_cache['FMT_SOURCE_DIR']}/include",
+    # f"{cmake_cache['FMT_SOURCE_DIR']}/include",
     'include/',
-    'python/']
+    'python/'
+]
 
 compile_args = ['-std=c++17', '-O3']
 
@@ -27,7 +28,7 @@ ext_modules = [
         ],
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
-        libraries=['ukv_stl', 'fmt'],
+        libraries=['ukv_stl'],
         extra_compile_args=compile_args,
         define_macros=[
             ('UKV_VERSION', __version__),
@@ -44,7 +45,7 @@ ext_modules = [
         ],
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
-        libraries=['ukv_rocksdb', 'rocksdb', 'fmt'],
+        libraries=['ukv_rocksdb', 'rocksdb'],
         extra_compile_args=compile_args,
         define_macros=[
             ('UKV_VERSION', __version__),
@@ -61,7 +62,7 @@ ext_modules = [
         ],
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
-        libraries=['ukv_leveldb', 'leveldb', 'fmt'],
+        libraries=['ukv_leveldb', 'leveldb'],
         extra_compile_args=compile_args,
         define_macros=[
             ('UKV_VERSION', __version__),
@@ -83,7 +84,7 @@ setup(
     author='Ashot Vardanian',
     author_email='info@unum.cloud',
     url='https://github.com/unum-cloud/UKV',
-    description='Python bindings for Unum\'s Univeral Key-Value store.',
+    description='Python bindings for Unum\'s Universal Key-Value store.',
     long_description=long_description,
     long_description_content_type='text/markdown',
     zip_safe=False,
