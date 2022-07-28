@@ -64,7 +64,6 @@ set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fs
 
 find_package(Threads REQUIRED)
 
-
 # Install 3rd Party Packages
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
