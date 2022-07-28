@@ -18,18 +18,19 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstrict-vtable-pointers")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunknown-attributes")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunknown-pragmas") # Allow "pragma region" source sections
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wnon-virtual-dtor -Woverloaded-virtual")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-field-initializers")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wreorder -Wunused-parameter")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
 endif()
 
 # Optimizations for common x86 CPUs.
@@ -67,38 +68,21 @@ find_package(Threads REQUIRED)
 # Install 3rd Party Packages
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
+set(UKV_PREINSTALLED_BOOST ON)
+set(UKV_PREINSTALLED_ARROW ON)
+set(UKV_PREINSTALLED_TURBOPFOR ON)
 
-# Boost:
-set(Boost_USE_STATIC_LIBS ON)
-set(Boost_USE_STATIC_RUNTIME ON)
-FetchContent_Declare(boost
-  URL https://boostorg.jfrog.io/artifactory/main/release/1.79.0/source/boost_1_79_0.tar.bz2
-  URL_HASH SHA256=475d589d51a7f8b3ba2ba4eda022b170e562ca3b760ee922c146b6c65856ef39
-)
-FetchContent_MakeAvailable(boost)
-FetchContent_GetProperties(boost SOURCE_DIR BOOST_SRC_DIR)
-include_directories(${BOOST_SRC_DIR})
-include_directories(${Boost_INCLUDE_DIRS})
-
-# FMT:
-FetchContent_Declare(
-  fmt
-  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-  GIT_TAG 8.1.1
-  GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(fmt)
-
-# JSON:
-# https://json.nlohmann.me/integration/cmake/#fetchcontent
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.10.5/json.tar.xz)
-FetchContent_MakeAvailable(json)
-
-# RocksDB
+include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
-
-# LevelDB
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
+
+
+if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
+  add_dependencies(Arrow-external Boost-external)
+endif()
 
 # Jemalloc
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
@@ -129,13 +113,19 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-# Define the libraries we will need to build
 include_directories(include/)
+
+include_directories($ENV{CONDA_PREFIX}/include)
+link_directories($ENV{CONDA_PREFIX}/lib)
+message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
+
 include_directories(${fmt_SOURCE_DIR}/include)
 include_directories(${jemalloc_SOURCE_DIR}/include)
 include_directories(${rocksdb_SOURCE_DIR}/include)
 include_directories(${leveldb_SOURCE_DIR}/include)
 
+
+# Define the libraries we will need to build
 add_library(ukv_stl
   src/backend_stl.cpp
   src/logic_docs.cpp
@@ -143,7 +133,6 @@ add_library(ukv_stl
 )
 add_dependencies(ukv_stl jemalloc)
 target_link_libraries(ukv_stl
-  fmt::fmt
   nlohmann_json::nlohmann_json
   ${jemalloc_LIBRARIES}
 )
@@ -161,13 +150,11 @@ add_dependencies(ukv_leveldb jemalloc)
 
 target_link_libraries(ukv_rocksdb
   rocksdb
-  fmt::fmt
   nlohmann_json::nlohmann_json
   ${jemalloc_LIBRARIES}
 )
 target_link_libraries(ukv_leveldb
   leveldb
-  fmt::fmt
   nlohmann_json::nlohmann_json
   ${jemalloc_LIBRARIES}
 )
@@ -180,8 +167,20 @@ add_dependencies(ukv_rpc_client jemalloc)
 # ukv_stl
 # pthread
 # fmt::fmt
+# Boost::headers
 # nlohmann_json::nlohmann_json
 # )
+add_executable(ukv_arrow_server src/arrow_server.cpp)
+target_link_libraries(ukv_arrow_server
+  ukv_stl
+  pthread
+  nlohmann_json::nlohmann_json
+  arrow
+  arrow_flight
+  arrow_dataset
+  parquet
+)
+
 add_executable(ukv_test
   src/test.cpp
   src/backend_stl.cpp
@@ -191,7 +190,6 @@ add_executable(ukv_test
 add_dependencies(ukv_test jemalloc)
 target_link_libraries(ukv_test
   gtest
-  fmt::fmt
   nlohmann_json::nlohmann_json
   ${jemalloc_LIBRARIES}
 )
@@ -206,7 +204,6 @@ add_dependencies(ukv_leveldb_test jemalloc)
 target_link_libraries(ukv_leveldb_test
   gtest
   leveldb
-  fmt::fmt
   nlohmann_json::nlohmann_json
   ${jemalloc_LIBRARIES}
 )
@@ -221,7 +218,6 @@ add_dependencies(ukv_rocksdb_test jemalloc)
 target_link_libraries(ukv_rocksdb_test
   gtest
   rocksdb
-  fmt::fmt
   nlohmann_json::nlohmann_json
   ${jemalloc_LIBRARIES}
 )

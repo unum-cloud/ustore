@@ -70,8 +70,38 @@ def batch_insert(col):
         assert col.get(i) == (f'{i}' * int(i-count_keys//2)).encode()
 
 
+def scan(col):
+    col[10] = b'a'
+    col[20] = b'aa'
+    col[30] = b'aaa'
+    col[40] = b'aaaa'
+    col[50] = b'aaaaa'
+    col[60] = b'aaaaaa'
+
+    keys, lengths = col.scan(10, 6)
+    assert np.array_equal(keys, [10, 20, 30, 40, 50, 60])
+    assert np.array_equal(lengths, [1, 2, 3, 4, 5, 6])
+
+    keys, lengths = col.scan(20, 5)
+    assert np.array_equal(keys, [20, 30, 40, 50, 60])
+    assert np.array_equal(lengths, [2, 3, 4, 5, 6])
+
+    keys, lengths = col.scan(30, 1)
+    assert np.array_equal(keys, [30])
+    assert np.array_equal(lengths, [3])
+
+    keys, lengths = col.scan(40, 2)
+    assert np.array_equal(keys, [40, 50])
+    assert np.array_equal(lengths, [4, 5])
+
+    keys, lengths = col.scan(60, 1)
+    assert np.array_equal(keys, [60])
+    assert np.array_equal(lengths, [6])
+
+
 def test_main_collection():
     db = ukv.DataBase()
+    scan(db)
     only_explicit(db)
     only_overwrite(db)
     only_operators(db)
@@ -82,6 +112,8 @@ def test_named_collections():
     db = ukv.DataBase()
     col_sub = db['sub']
     col_dub = db['dub']
+    scan(col_sub)
+    scan(col_dub)
     only_explicit(col_sub)
     only_explicit(col_dub)
     only_overwrite(col_sub)
@@ -126,20 +158,3 @@ def test_main_collection_txn_ctx():
     with ukv.DataBase() as db:
         with ukv.Transaction(db) as txn:
             batch_insert(txn)
-
-
-def test_scan():
-    db = ukv.DataBase()
-    col = db['col']
-    col[10] = b'a'
-    col[20] = b'a'
-    col[30] = b'a'
-    col[40] = b'a'
-    col[50] = b'a'
-    col[60] = b'a'
-
-    assert np.array_equal(col.scan(10, 6), [10, 20, 30, 40, 50, 60])
-    assert np.array_equal(col.scan(20, 5), [20, 30, 40, 50, 60])
-    assert np.array_equal(col.scan(30, 1), [30])
-    assert np.array_equal(col.scan(40, 2), [40, 50])
-    assert np.array_equal(col.scan(60, 1), [60])

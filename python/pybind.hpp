@@ -25,7 +25,7 @@ struct py_col_t;
  */
 struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     db_t native;
-    managed_arena_t arena;
+    arena_t arena;
     std::string config;
 
     py_db_t(db_t&& n, std::string const& c) : native(std::move(n)), arena(native), config(c) {}
@@ -40,7 +40,7 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
 struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
     std::shared_ptr<py_db_t> db_ptr;
     txn_t native;
-    managed_arena_t arena;
+    arena_t arena;
 
     py_txn_t(std::shared_ptr<py_db_t>&& d, txn_t&& t) noexcept
         : db_ptr(std::move(d)), native(std::move(t)), arena(db_ptr->native) {}

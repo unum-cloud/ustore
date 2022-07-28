@@ -83,7 +83,7 @@ bool contains_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     ukv_key_t key) {
 
     status_t status;
@@ -114,7 +114,7 @@ std::optional<py::bytes> get_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     ukv_key_t key) {
 
     status_t status;
@@ -179,7 +179,7 @@ void fill_tensor( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     py::handle keys_arr,
     py::handle values_arr,
     py::handle values_lengths_arr,
@@ -291,7 +291,7 @@ void set_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     ukv_key_t key,
     py::bytes const* value = nullptr) {
 
@@ -327,7 +327,7 @@ void set_item( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     py::handle const& keys_arr,
     py::handle const& values_arr) {
 
@@ -357,7 +357,7 @@ void set_item( //
 
     // TODO: if matrix contains bytes (not characters), use the full length
     // TODO: support non-continuous buffers and lists
-    // Pairs should become: <key_arg_t, val_arg_t>
+    // Pairs should become: <col_key_field_t, val_arg_t>
     // If we can't cast to lists or buffers, we can use iterators:
     //   Lists: PyList_Check, PyList_Size, PyList_GetItem
     //   Tuples: https://docs.python.org/3/c-api/tuple.html
@@ -403,17 +403,17 @@ void set_item( //
     status.throw_unhandled();
 }
 
-std::optional<py::array_t<ukv_key_t>> scan( //
+std::optional<py::tuple> scan( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
-    managed_arena_t& arena,
+    arena_t& arena,
     ukv_key_t min_key,
     ukv_size_t scan_length) {
 
     ukv_key_t* found_keys = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options = ukv_option_read_lengths_k;
     status_t status;
 
     ukv_scan( //
@@ -433,15 +433,54 @@ std::optional<py::array_t<ukv_key_t>> scan( //
         status.member_ptr());
 
     status.throw_unhandled();
-    return py::array_t<ukv_key_t>(scan_length, found_keys);
+    return py::make_tuple(py::array_t<ukv_key_t>(scan_length, found_keys),
+                          py::array_t<ukv_val_len_t>(scan_length, found_lengths));
 }
 
-void ukv::wrap_database(py::module& m) {
+py::object punned_collection( //
+    py_db_t* py_db_ptr,
+    py_txn_t* py_txn_ptr,
+    std::string const& collection,
+    ukv_format_t format) {
+
+    db_t& db = py_db_ptr->native;
+    auto maybe_col = db.collection(collection.c_str());
+    maybe_col.throw_unhandled();
+    maybe_col->as(format);
+    if (py_txn_ptr)
+        maybe_col->from(py_txn_ptr->native);
+
+    if (format == ukv_format_graph_k) {
+        graph_ref_t g(*maybe_col);
+        auto net_ptr = std::make_shared<network_t>(std::move(g));
+        net_ptr->db_ptr = index_collection->db_ptr;
+        return net_ptr;
+    }
+    else {
+        auto py_col = std::make_shared<py_col_t>();
+        py_col->name = collection;
+        py_col->native = *std::move(maybe_col);
+        py_col->db_ptr = py_db_ptr->shared_from_this();
+        return py_col;
+    }
+}
+,
+
+    void ukv::wrap_database(py::module& m) {
 
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
     auto py_db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
     auto py_col = py::class_<py_col_t, std::shared_ptr<py_col_t>>(m, "Collection", py::module_local());
     auto py_txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction", py::module_local());
+
+    py::enum_<ukv_format_t>(m, "Format", py::module_local())
+        .value("Binary", ukv_format_doc_binary_k)
+        .value("Graph", ukv_format_doc_graph_k)
+        .value("MsgPack", ukv_format_doc_msgpack_k)
+        .value("JSON", ukv_format_doc_json_k)
+        .value("BSON", ukv_format_doc_bson_k)
+        .value("CBOR", ukv_format_doc_cbor_k)
+        .value("UBJSON", ukv_format_doc_ubjson_k);
 
     // Define `DataBase`
     py_db.def( //
@@ -510,6 +549,10 @@ void ukv::wrap_database(py::module& m) {
         py::arg("values"));
     py_col.def("clear", [](py_db_t& py_db) {
         // TODO:
+    });
+
+    py_db.def("scan", [](py_db_t& py_db, ukv_key_t min_key, ukv_size_t length) {
+        return scan(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, min_key, length);
     });
 
     // Define `Collection`s member method, without defining any external constructors
@@ -735,32 +778,28 @@ void ukv::wrap_database(py::module& m) {
                         values);
     });
     // Operator overloads used to access collections
-    py_db.def("__contains__", [](py_db_t& py_db, std::string const& collection) {
-        auto maybe = py_db.native.contains(collection.c_str());
-        maybe.throw_unhandled();
-        return *maybe;
-    });
-    py_db.def("__getitem__", [](py_db_t& py_db, std::string const& collection) {
-        auto maybe_col = py_db.native.collection(collection.c_str());
-        maybe_col.throw_unhandled();
-
-        auto py_col = std::make_shared<py_col_t>();
-        py_col->name = collection;
-        py_col->native = *std::move(maybe_col);
-        py_col->db_ptr = py_db.shared_from_this();
-        return py_col;
-    });
-    py_txn.def("__getitem__", [](py_txn_t& py_txn, std::string const& collection) {
-        auto maybe_col = py_txn.db_ptr->native.collection(collection.c_str());
-        maybe_col.throw_unhandled();
-
-        auto py_col = std::make_shared<py_col_t>();
-        py_col->name = collection;
-        py_col->native = *std::move(maybe_col);
-        py_col->db_ptr = py_txn.db_ptr;
-        py_col->txn_ptr = py_txn.shared_from_this();
-        return py_col;
-    });
+    py_db.def(
+        "__contains__",
+        [](py_db_t& py_db, std::string const& collection) {
+            auto maybe = py_db.native.contains(collection.c_str());
+            maybe.throw_unhandled();
+            return *maybe;
+        },
+        py::arg());
+    py_db.def(
+        "__getitem__",
+        [](py_db_t& py_db, std::string const& collection, ukv_format_t format) -> py::object {
+            return punned_collection(&py_db, nullptr, collection, format);
+        },
+        py::arg(),
+        py::arg("format") = ukv_format_binary_k);
+    py_txn.def(
+        "__getitem__",
+        [](py_txn_t& py_txn, std::string const& collection, ukv_format_t format) {
+            return punned_collection(py_txn.db_ptr.get(), &py_txn, collection, format);
+        },
+        py::arg(),
+        py::arg("format") = ukv_format_binary_k);
     py_db.def("__delitem__", [](py_db_t& py_db, std::string const& collection) { //
         py_db.native.remove(collection.c_str()).throw_unhandled();
     });

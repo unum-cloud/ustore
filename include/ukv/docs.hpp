@@ -12,6 +12,8 @@
  */
 
 #pragma once
+#include <vector>
+
 #include "ukv/docs.h"
 #include "ukv/ukv.hpp"
 
@@ -81,7 +83,7 @@ class doc_row_view_t {
     std::uint8_t* all_collisions_ = nullptr;
     std::uint8_t* all_scalars_ = nullptr;
 
-    sub_key_t row_id_;
+    col_key_t row_id_;
     std::uint8_t row_mask_ = 0;
     std::size_t row_idx_ = 0;
 };

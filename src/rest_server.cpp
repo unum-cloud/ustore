@@ -180,8 +180,6 @@
 #include <boost/asio/strand.hpp>
 #include <boost/config.hpp>
 
-#include <fmt/core.h>
-
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #elif defined(__GNUC__) || defined(__GNUG__)
@@ -207,25 +205,25 @@ static constexpr char const* mime_cbor_k = "application/cbor";
 static constexpr char const* mime_bson_k = "application/bson";
 static constexpr char const* mime_ubjson_k = "application/ubjson";
 
-ukv_doc_format_t mime_to_format(beast::string_view mime) {
+ukv_format_t mime_to_format(beast::string_view mime) {
     if (mime == mime_json_k)
-        return ukv_doc_format_json_k;
+        return ukv_format_doc_json_k;
     else if (mime == "application/json-patch+json")
-        return ukv_doc_format_json_patch_k;
+        return ukv_format_doc_json_patch_k;
     else if (mime == mime_msgpack_k)
-        return ukv_doc_format_msgpack_k;
+        return ukv_format_doc_msgpack_k;
     else if (mime == mime_bson_k)
-        return ukv_doc_format_bson_k;
+        return ukv_format_doc_bson_k;
     else if (mime == mime_cbor_k)
-        return ukv_doc_format_cbor_k;
+        return ukv_format_doc_cbor_k;
     else if (mime == mime_ubjson_k)
-        return ukv_doc_format_ubjson_k;
+        return ukv_format_doc_ubjson_k;
     else if (mime == "application/vnd.apache.arrow.stream" || mime == "application/vnd.apache.arrow.file")
-        return ukv_doc_format_arrow_k;
+        return ukv_format_doc_arrow_k;
     else if (mime == "application/vnd.apache.parquet")
-        return ukv_doc_format_parquet_k;
+        return ukv_format_doc_parquet_k;
     else
-        return ukv_doc_format_unknown_k;
+        return ukv_format_doc_unknown_k;
 }
 
 struct db_w_clients_t : public std::enable_shared_from_this<db_w_clients_t> {
@@ -319,7 +317,7 @@ void respond_to_one(db_session_t& session,
         // Read the data:
     case http::verb::get: {
 
-        managed_arena_t tape(session.db());
+        arena_t tape(session.db());
         status_t status;
         ukv_read(session.db(),
                  txn.raw,
@@ -360,7 +358,7 @@ void respond_to_one(db_session_t& session,
         // Check the data:
     case http::verb::head: {
 
-        managed_arena_t tape(session.db());
+        arena_t tape(session.db());
         status_t status;
         options = ukv_option_read_lengths_k;
         ukv_read(session.db(),
@@ -391,7 +389,7 @@ void respond_to_one(db_session_t& session,
 
     // Insert data if it's missing:
     case http::verb::post: {
-        managed_arena_t tape(session.db());
+        arena_t tape(session.db());
         status_t status;
         options = ukv_option_read_lengths_k;
         ukv_read(session.db(),
@@ -585,7 +583,7 @@ void respond_to_aos(db_session_t& session,
         }
 
         // Pull the entire objects before we start sampling their fields
-        managed_arena_t tape(session.db());
+        arena_t tape(session.db());
         status_t status;
         // ukv_read(session.db(),
         //          txn.raw,
