@@ -36,10 +36,20 @@ class member_refs_gt;
  * > one value to one key
  * The only impossible combination is assigning many values to one key.
  *
- * @tparam locations_store_t Type describing the address of a value in DBMS.
+ * @tparam locations_at Type describing the address of a value in DBMS.
  * > (ukv_collection_t?, ukv_key_t, ukv_field_t?): Single KV-pair location.
  * > (ukv_collection_t*, ukv_key_t*, ukv_field_t*): Externally owned range of keys.
  * > (ukv_collection_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
+ *
+ * @section Memory Management
+ * Every "container" that overloads the @b [] operator has an internal "arena",
+ * that is shared between all the `member_refs_gt`s produced from it. That will
+ * work great, unless:
+ * > multiple threads are working with same collection handle or transaction.
+ * > reading responses interleaves with new requests, which gobbles temporary memory.
+ * For those cases, you can create a separate `arena_t` and pass it to `.on(...)`
+ * member function. In such HPC environments we would recommend to @b reuse one such
+ * are on every thread.
  */
 template <typename locations_at>
 class member_refs_gt {
@@ -59,18 +69,19 @@ class member_refs_gt {
   protected:
     ukv_t db_ = nullptr;
     ukv_txn_t txn_ = nullptr;
-    any_arena_t arena_;
+    ukv_arena_t* arena_ = nullptr;
     locations_store_t locations_;
     ukv_format_t format_ = ukv_format_binary_k;
 
     template <typename values_arg_at>
     status_t any_assign(values_arg_at&&, ukv_options_t) noexcept;
-    given_gt<value_t> any_get(ukv_options_t) noexcept;
+    expected_gt<value_t> any_get(ukv_options_t) noexcept;
 
   public:
     member_refs_gt(ukv_t db,
                    ukv_txn_t txn,
                    locations_store_t locations,
+                   arena_t& arena,
                    ukv_format_t format = ukv_format_binary_k) noexcept
         : db_(db), txn_(txn), arena_(db), locations_(locations), format_(format) {}
 
@@ -92,7 +103,7 @@ class member_refs_gt {
     }
 
     member_refs_gt& on(arena_t& arena) noexcept {
-        arena_ = arena;
+        arena_ = arena.member_ptr();
         return *this;
     }
 
@@ -101,27 +112,24 @@ class member_refs_gt {
         return *this;
     }
 
-    given_gt<value_t> value(bool track = false) noexcept {
+    expected_gt<value_t> value(bool track = false) noexcept {
         return any_get(track ? ukv_option_read_track_k : ukv_options_default_k);
     }
 
-    operator given_gt<value_t>() noexcept { return value(); }
+    operator expected_gt<value_t>() noexcept { return value(); }
 
-    given_gt<length_t> length(bool track = false) noexcept {
+    expected_gt<length_t> length(bool track = false) noexcept {
         auto options = (track ? ukv_option_read_track_k : ukv_options_default_k) | ukv_option_read_lengths_k;
         auto maybe = any_get(static_cast<ukv_options_t>(options));
         if (!maybe)
             return maybe.release_status();
 
-        if constexpr (is_one_k) {
-            length_t result = *maybe ? maybe->size() : ukv_val_len_missing_k;
-            return {std::move(result), maybe.release_arena()};
-        }
+        if constexpr (is_one_k)
+            return length_t {*maybe ? maybe->size() : ukv_val_len_missing_k};
         else {
             auto found_lengths = maybe->lengths();
             auto count = keys_extractor_t {}.count(locations_.ref());
-            length_t result {found_lengths, found_lengths + count};
-            return {std::move(result), maybe.release_arena()};
+            return length_t {found_lengths, found_lengths + count};
         }
     }
 
@@ -129,16 +137,14 @@ class member_refs_gt {
      * @brief Checks if requested keys are present in the store.
      * ! Related values may be empty strings.
      */
-    given_gt<present_t> present(bool track = false) noexcept {
+    expected_gt<present_t> present(bool track = false) noexcept {
 
         auto maybe = length(track);
         if (!maybe)
             return maybe.release_status();
 
-        if constexpr (is_one_k) {
-            present_t result = *maybe != ukv_val_len_missing_k;
-            return {std::move(result), maybe.release_arena()};
-        }
+        if constexpr (is_one_k)
+            return present_t {*maybe != ukv_val_len_missing_k};
         else {
             // Transform the `found_lengths` into booleans.
             auto found_lengths = maybe->begin();
@@ -150,8 +156,7 @@ class member_refs_gt {
             // Cast assuming "Little-Endian" architecture
             auto last_byte_offset = 0; // sizeof(ukv_val_len_t) - sizeof(bool);
             auto booleans = reinterpret_cast<bool*>(found_lengths);
-            present_t result {booleans + last_byte_offset, sizeof(ukv_val_len_t), count};
-            return {std::move(result), maybe.release_arena()};
+            return present_t {booleans + last_byte_offset, sizeof(ukv_val_len_t), count};
         }
     }
 
@@ -218,6 +223,12 @@ static_assert(!member_refs_gt<keys_arg_t>::is_one_k);
  * Prefer to `seek`, instead of re-creating such a stream.
  * Unlike classical iterators, keeps an internal state,
  * which makes it @b non copy-constructible!
+ *
+ * @section Class Specs
+ * > Concurrency: Must be used from a single thread!
+ * > Lifetime: @b Must live shorter then the collection it belongs to.
+ * > Copyable: No.
+ * > Exceptions: Never.
  */
 class keys_stream_t {
 
@@ -365,6 +376,20 @@ struct size_estimates_t {
     size_range_t bytes_on_disk;
 };
 
+/**
+ * @brief Slice of keys stored in a single collection.
+ * In Python terms: @b `dict().keys()[:]`.
+ * Supports C++ range-based loops: `for (auto key : collection.keys())`
+ * It can also be use for @b loose cardinality and disk-usage estimates.
+ *
+ * @section Class Specs
+ * > Concurrency: Thread-safe.
+ * > Lifetime: @b Must live shorter then the collection it belongs to.
+ * > Copyable: Yes.
+ * > Exceptions: Possible on `begin()`, `end()` calls.
+ *   That interface, however, may through exceptions.
+ *   For exception-less interface use `find_begin()`, `find_end()`.
+ */
 class keys_range_t {
 
     ukv_t db_;
@@ -402,22 +427,11 @@ class keys_range_t {
         status_t status;
         arena_t arena(db_);
         size_estimates_t result;
-        ukv_size(db_,
-                 txn_,
-                 1,
-                 &col_,
-                 0,
-                 &min_key_,
-                 0,
-                 &max_key_,
-                 0,
-                 ukv_options_default_k,
-                 reinterpret_cast<ukv_size_t*>(&result.cardinality.min),
-                 arena.member_ptr(),
-                 status.member_ptr());
-        if (!status)
-            return status;
-        return result;
+        auto o = reinterpret_cast<ukv_size_t*>(&result.cardinality.min);
+        auto a = arena.member_ptr();
+        auto s = status.member_ptr();
+        ukv_size(db_, txn_, 1, &col_, 0, &min_key_, 0, &max_key_, 0, ukv_options_default_k, o, a, s);
+        return {std::move(status), std::move(result)};
     }
 
     keys_stream_t begin() noexcept(false) {
@@ -434,27 +448,48 @@ class keys_range_t {
 };
 
 /**
- * @brief RAII abstraction wrapping a collection handle.
+ * @brief Collection is persistent associative container,
+ * essentially a transactional @b `map<id,string>`.
+ * Or in Python terms: @b `dict[int,str]`.
+ *
  * Generally cheap to construct. Can address both collections
  * "HEAD" state, as well as some "snapshot"/"transaction" view.
+ *
+ * @section Class Specs
+ * > Concurrency: Thread-safe, for @b unique arenas.
+ *   For details, @see `member_refs_gt` @section "Memory Management"
+ * > Lifetime: @b Must live shorter then the DB it belongs to.
+ * > Copyable: No.
+ * > Exceptions: Never.
+ *
+ * @section Formats
+ * Formats @b loosely describe the data stored in the collection
+ * and @b exactly define the communication through this exact handle.
+ * Example: Same collection can accept similar formats, such
+ * as `ukv_format_json_k` and `ukv_format_msgpack_k`. Both will be
+ * converted into some internal hierarchical representation
+ * in "Document Collections", and can later be queried with
+ * any "Document Format".
  */
 class collection_t {
     ukv_t db_ = nullptr;
     ukv_collection_t col_ = ukv_default_collection_k;
     ukv_txn_t txn_ = nullptr;
+    arena_t arena_;
     ukv_format_t format_ = ukv_format_binary_k;
 
   public:
-    inline collection_t() = default;
+    inline collection_t() noexcept : arena_(nullptr) {}
     inline collection_t(ukv_t db_ptr,
                         ukv_collection_t col_ptr = ukv_default_collection_k,
                         ukv_txn_t txn = nullptr,
                         ukv_format_t format = ukv_format_binary_k) noexcept
-        : db_(db_ptr), col_(col_ptr), txn_(txn), format_(format) {}
+        : db_(db_ptr), col_(col_ptr), txn_(txn), arena_(db_), format_(format) {}
 
     inline collection_t(collection_t&& other) noexcept
         : db_(other.db_), col_(std::exchange(other.col_, ukv_default_collection_k)),
-          txn_(std::exchange(other.txn_, nullptr)), format_(std::exchange(other.format_, ukv_format_binary_k)) {}
+          txn_(std::exchange(other.txn_, nullptr)), arena_(std::exchange(other.arena_, {nullptr})),
+          format_(std::exchange(other.format_, ukv_format_binary_k)) {}
 
     inline ~collection_t() noexcept {
         ukv_collection_free(db_, col_);
@@ -464,16 +499,17 @@ class collection_t {
         std::swap(db_, other.db_);
         std::swap(col_, other.col_);
         std::swap(txn_, other.txn_);
+        std::swap(arena_, other.arena_);
         std::swap(format_, other.format_);
         return *this;
     }
+
     inline operator ukv_collection_t() const noexcept { return col_; }
     inline ukv_collection_t* member_ptr() noexcept { return &col_; }
     inline ukv_t db() const noexcept { return db_; }
     inline ukv_txn_t txn() const noexcept { return txn_; }
-
     inline expected_gt<std::size_t> size() const noexcept { return 0; }
-    collection_t& as(ukv_format_t format) noexcept {
+    inline collection_t& as(ukv_format_t format) noexcept {
         format_ = format;
         return *this;
     }
@@ -490,7 +526,7 @@ class collection_t {
         arg.collections_begin = &col_;
         arg.keys_begin = keys.begin();
         arg.count = keys.size();
-        return {db_, txn_, {std::move(arg)}, format_};
+        return {db_, txn_, {std::move(arg)}, arena_, format_};
     }
 
     template <typename keys_arg_at>
@@ -514,36 +550,56 @@ class collection_t {
 
             if constexpr (sfinae_has_field_gt<plain_t>::value)
                 arg.field = keys.field;
-            return result_t {db_, txn_, arg, format_};
+            return result_t {db_, txn_, arg, arena_, format_};
         }
         else {
             using locations_t = locations_in_collection_gt<keys_arg_at>;
             using result_t = member_refs_gt<locations_t>;
-            return result_t {db_, txn_, locations_t {std::forward<keys_arg_at>(keys), col_}, format_};
+            return result_t {db_, txn_, locations_t {std::forward<keys_arg_at>(keys), col_}, arena_, format_};
         }
     }
 };
 
 /**
- * @brief Unlike `db_session_t`, not only allows planning and batching read
- * requests together, but also stores all the writes in it's internal state
- * until being `commit()`-ed.
+ * @brief Transaction in a classical DBMS sense.
+ *
+ * May be used not only as a consistency warrant, but also a performance
+ * optimization, as batched writes will be stored in a DB-optimal way
+ * until being commited, which reduces the preprocessing overhead for DB.
+ * For details, @see ACID: https://en.wikipedia.org/wiki/ACID
+ *
+ * @section Class Specs
+ * > Concurrency: Thread-safe, for @b unique arenas.
+ *   For details, @see `member_refs_gt` @section "Memory Management"
+ * > Lifetime: Doesn't commit on destruction. @see `txn_guard_t`.
+ * > Copyable: No.
+ * > Exceptions: Never.
  */
 class txn_t {
     ukv_t db_ = nullptr;
     ukv_txn_t txn_ = nullptr;
+    arena_t arena_;
 
   public:
-    txn_t(ukv_t db, ukv_txn_t txn) noexcept : db_(db), txn_(txn) {}
-    txn_t(txn_t const&) = delete;
-    txn_t(txn_t&& other) noexcept : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)) {}
+    inline txn_t() noexcept : arena_(nullptr) {}
+    inline txn_t(ukv_t db, ukv_txn_t txn) noexcept : db_(db), txn_(txn), arena_(db) {}
+    inline txn_t(txn_t const&) = delete;
+    inline txn_t(txn_t&& other) noexcept
+        : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), arena_(std::exchange(other.arena_, {nullptr})) {}
+
+    inline txn_t& operator=(txn_t&& other) noexcept {
+        std::swap(db_, other.db_);
+        std::swap(txn_, other.txn_);
+        std::swap(arena_, other.arena_);
+        return *this;
+    }
 
     inline ukv_t db() const noexcept { return db_; }
     inline operator ukv_txn_t() const noexcept { return txn_; }
 
-    ~txn_t() noexcept {
-        if (txn_)
-            ukv_txn_free(db_, txn_);
+    inline ~txn_t() noexcept {
+        ukv_txn_free(db_, txn_);
+        txn_ = nullptr;
     }
 
     member_refs_gt<keys_arg_t> operator[](strided_range_gt<col_key_t const> cols_and_keys) noexcept {
@@ -551,7 +607,7 @@ class txn_t {
         arg.collections_begin = cols_and_keys.members(&col_key_t::collection).begin();
         arg.keys_begin = cols_and_keys.members(&col_key_t::key).begin();
         arg.count = cols_and_keys.size();
-        return {db_, txn_, std::move(arg)};
+        return {db_, txn_, std::move(arg), arena_};
     }
 
     member_refs_gt<keys_arg_t> operator[](strided_range_gt<col_key_field_t const> cols_and_keys) noexcept {
@@ -560,21 +616,30 @@ class txn_t {
         arg.keys_begin = cols_and_keys.members(&col_key_field_t::key).begin();
         arg.fields_begin = cols_and_keys.members(&col_key_field_t::field).begin();
         arg.count = cols_and_keys.size();
-        return {db_, txn_, std::move(arg)};
+        return {db_, txn_, std::move(arg), arena_};
     }
 
     member_refs_gt<keys_arg_t> operator[](keys_view_t keys) noexcept { //
         keys_arg_t arg;
         arg.keys_begin = keys.begin();
         arg.count = keys.size();
-        return {db_, txn_, std::move(arg)};
+        return {db_, txn_, std::move(arg), arena_};
     }
 
     template <typename keys_arg_at>
     member_refs_gt<keys_arg_at> operator[](keys_arg_at keys) noexcept { //
-        return {db_, txn_, std::move(keys)};
+        return {db_, txn_, std::move(keys), arena_};
     }
 
+    /**
+     * @brief Clears the stare of transaction, preserving the underlying memory,
+     * cleaning it, and labeling it with a new "sequence number" or "generation".
+     *
+     * @param snapshot Controls whether a consistent view of the entirety of DB
+     *                 must be created for this transaction. Is required for
+     *                 long-running analytical tasks with strong consistency
+     *                 requirements.
+     */
     status_t reset(bool snapshot = false) noexcept {
         status_t status;
         auto options = snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k;
@@ -582,6 +647,10 @@ class txn_t {
         return status;
     }
 
+    /**
+     * @brief Attempts to commit all the updates to the DB.
+     * Fails if any single one of the updates fails.
+     */
     status_t commit(bool flush = false) noexcept {
         status_t status;
         auto options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
@@ -592,6 +661,9 @@ class txn_t {
     expected_gt<collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
     operator expected_gt<collection_t>() noexcept { return collection(""); }
 
+    /**
+     * @brief Provides a view of a single collection synchronized with the transaction.
+     */
     expected_gt<collection_t> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
         ukv_collection_t col = nullptr;
@@ -604,14 +676,15 @@ class txn_t {
 };
 
 /**
- * @brief Thread-Safe DataBase instance encapsulator, which is responsible for
- * > session-allocation for fine-grained operations,
- * > globally blocking operations, like restructuring.
- * This object must leave at least as long, as the last session using it.
+ * @brief DataBase is a "collection of named collections",
+ * essentially a transactional @b `map<string,map<id,string>>`.
+ * Or in Python terms: @b `dict[str,dict[int,str]]`.
  *
- * @section Thread Safety
- * Matches the C implementation. Everything except `open`/`close` can be called
- * from any thread.
+ * @section Class Specs
+ * > Concurrency: @b Thread-Safe, except for `open`, `close`.
+ * > Lifetime: @b Must live longer then last collection referencing it.
+ * > Copyable: No.
+ * > Exceptions: Never.
  */
 class db_t : public std::enable_shared_from_this<db_t> {
     ukv_t db_ = nullptr;
@@ -727,7 +800,7 @@ struct collections_join_t {
 };
 
 template <typename locations_store_t>
-given_gt<typename member_refs_gt<locations_store_t>::value_t> //
+expected_gt<typename member_refs_gt<locations_store_t>::value_t> //
 member_refs_gt<locations_store_t>::any_get(ukv_options_t options) noexcept {
     status_t status;
     ukv_val_len_t* found_lengths = nullptr;
@@ -755,7 +828,7 @@ member_refs_gt<locations_store_t>::any_get(ukv_options_t options) noexcept {
             format_,
             &found_lengths,
             &found_values,
-            arena_.member_ptr(),
+            arena_,
             status.member_ptr());
     else
         ukv_read( //
@@ -769,16 +842,16 @@ member_refs_gt<locations_store_t>::any_get(ukv_options_t options) noexcept {
             options,
             &found_lengths,
             &found_values,
-            arena_.member_ptr(),
+            arena_,
             status.member_ptr());
 
     if (!status)
         return status;
 
     if constexpr (is_one_k)
-        return {value_view_t {found_values, *found_lengths}, arena_.release_owned()};
+        return value_view_t {found_values, *found_lengths};
     else
-        return {taped_values_view_t {found_lengths, found_values, count}, arena_.release_owned()};
+        return taped_values_view_t {found_lengths, found_values, count};
 }
 
 template <typename locations_store_t>
@@ -818,7 +891,7 @@ status_t member_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref,
             offsets.stride(),
             lengths.get(),
             lengths.stride(),
-            arena_.member_ptr(),
+            arena_,
             status.member_ptr());
     else
         ukv_write( //
@@ -836,7 +909,7 @@ status_t member_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref,
             lengths.get(),
             lengths.stride(),
             options,
-            arena_.member_ptr(),
+            arena_,
             status.member_ptr());
     return status;
 }

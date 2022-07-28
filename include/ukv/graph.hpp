@@ -265,11 +265,11 @@ class adjacency_stream_t {
  * same graph collection. Supports updates/reads from within a transaction.
  */
 class graph_ref_t {
-    collection_t& collection_;
+    collection_t collection_;
     any_arena_t arena_;
 
   public:
-    graph_ref_t(collection_t& col) noexcept : collection_(col), arena_(col.db()) {}
+    graph_ref_t(collection_t&& col) noexcept : collection_(std::move(col)), arena_(col.db()) {}
 
     graph_ref_t(graph_ref_t&& other) noexcept : collection_(other.collection_), arena_(std::move(other.arena_)) {}
 
@@ -342,7 +342,7 @@ class graph_ref_t {
 
     expected_gt<ukv_vertex_degree_t> degree(ukv_key_t vertex,
                                             ukv_vertex_role_t role = ukv_vertex_role_any_k,
-                                            bool track = false) & noexcept {
+                                            bool track = false) noexcept {
 
         auto maybe_degrees = degrees({vertex}, {role}, track);
         if (!maybe_degrees)
@@ -354,7 +354,7 @@ class graph_ref_t {
     expected_gt<indexed_range_gt<ukv_vertex_degree_t*>> degrees(
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
-        bool track = false) & noexcept {
+        bool track = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
@@ -415,7 +415,7 @@ class graph_ref_t {
 
     expected_gt<edges_span_t> edges(ukv_key_t vertex,
                                     ukv_vertex_role_t role = ukv_vertex_role_any_k,
-                                    bool track = false) & noexcept {
+                                    bool track = false) noexcept {
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
         ukv_key_t* neighborships_per_vertex = nullptr;
@@ -445,7 +445,7 @@ class graph_ref_t {
         return edges_span_t {edges_begin, edges_begin + edges_count};
     }
 
-    expected_gt<edges_span_t> edges(ukv_key_t source, ukv_key_t target, bool track = false) & noexcept {
+    expected_gt<edges_span_t> edges(ukv_key_t source, ukv_key_t target, bool track = false) noexcept {
         auto maybe_all = edges(source, ukv_vertex_source_k, track);
         if (!maybe_all)
             return maybe_all;
@@ -467,7 +467,7 @@ class graph_ref_t {
     expected_gt<edges_span_t> edges_containing(
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k},
-        bool track = false) & noexcept {
+        bool track = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;

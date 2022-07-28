@@ -20,7 +20,7 @@
 #include <shared_mutex>
 #include <mutex>      // `std::unique_lock`
 #include <numeric>    // `std::accumulate`
-#include <atomic>     // Thread-safe sequence counters
+#include <atomic>     // Thread-safe generation counters
 #include <filesystem> // Enumerating the directory
 #include <stdio.h>    // Saving/reading from disk
 
@@ -47,9 +47,9 @@ struct stl_db_t;
 struct stl_collection_t;
 struct stl_txn_t;
 
-struct stl_sequenced_value_t {
+struct stl_generationd_value_t {
     buffer_t buffer;
-    sequence_t sequence_number {0};
+    generation_t generation {0};
     bool is_deleted {false};
 };
 
@@ -59,7 +59,7 @@ struct stl_collection_t {
      * @brief Primary data-store.
      * Associative container is used to allow scans.
      */
-    std::map<ukv_key_t, stl_sequenced_value_t> pairs;
+    std::map<ukv_key_t, stl_generationd_value_t> pairs;
 
     /**
      * @brief Keeps the number of unique elements submitted to the store.
@@ -77,11 +77,11 @@ using stl_collection_ptr_t = std::unique_ptr<stl_collection_t>;
 
 struct stl_txn_t {
     std::map<col_key_t, buffer_t> upserted;
-    std::unordered_map<col_key_t, sequence_t, sub_key_hash_t> requested;
+    std::unordered_map<col_key_t, generation_t, sub_key_hash_t> requested;
     std::unordered_set<col_key_t, sub_key_hash_t> removed;
 
     stl_db_t* db_ptr {nullptr};
-    sequence_t sequence_number {0};
+    generation_t generation {0};
 };
 
 struct stl_db_t {
@@ -95,10 +95,10 @@ struct stl_db_t {
      */
     std::unordered_map<std::string_view, stl_collection_ptr_t> named;
     /**
-     * @brief The sequence/transactions ID of the most recent update.
+     * @brief The generation/transactions ID of the most recent update.
      * This can be updated even outside of the main @p `mutex` on HEAD state.
      */
-    std::atomic<sequence_t> youngest_sequence {0};
+    std::atomic<generation_t> youngest_generation {0};
     /**
      * @brief Path on disk, from which the data will be read.
      * When closed, we will try saving the DB on disk.
@@ -206,7 +206,7 @@ void read_from_disk(stl_collection_t& col, std::string const& path, ukv_error_t*
             return;
         }
 
-        col.pairs.emplace(key, stl_sequenced_value_t {std::move(buf), sequence_t {0}, false});
+        col.pairs.emplace(key, stl_generationd_value_t {std::move(buf), generation_t {0}, false});
     }
 
     *c_error = handle.close().release_error();
@@ -281,13 +281,13 @@ void write_head( //
         try {
             if (key_iterator != col.pairs.end()) {
                 auto value = task.view();
-                key_iterator->second.sequence_number = ++db.youngest_sequence;
+                key_iterator->second.generation = ++db.youngest_generation;
                 key_iterator->second.buffer.assign(value.begin(), value.end());
                 key_iterator->second.is_deleted = task.is_deleted();
             }
             else if (!task.is_deleted()) {
-                stl_sequenced_value_t sequenced_value {task.buffer(), ++db.youngest_sequence};
-                col.pairs.emplace(task.key, std::move(sequenced_value));
+                stl_generationd_value_t generationd_value {task.buffer(), ++db.youngest_generation};
+                col.pairs.emplace(task.key, std::move(generationd_value));
                 ++col.unique_elements;
             }
         }
@@ -491,7 +491,7 @@ void measure_txn( //
 
     stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
-    sequence_t const youngest_sequence_number = db.youngest_sequence.load();
+    generation_t const youngest_generation = db.youngest_generation.load();
     bool should_track_requests = (c_options & ukv_option_read_track_k);
 
     // 2. Pull the data
@@ -514,9 +514,7 @@ void measure_txn( //
         // Others should be pulled from the main store
         else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
 
-            if (entry_was_overwritten(key_iterator->second.sequence_number,
-                                      txn.sequence_number,
-                                      youngest_sequence_number) &&
+            if (entry_was_overwritten(key_iterator->second.generation, txn.generation, youngest_generation) &&
                 (*c_error = "Requested key was already overwritten since the start of the transaction!"))
                 return;
 
@@ -524,14 +522,14 @@ void measure_txn( //
                                                        : ukv_val_len_missing_k;
 
             if (should_track_requests)
-                txn.requested.emplace(task.location(), key_iterator->second.sequence_number);
+                txn.requested.emplace(task.location(), key_iterator->second.generation);
         }
         // But some will be missing
         else {
             lens[i] = ukv_val_len_missing_k;
 
             if (should_track_requests)
-                txn.requested.emplace(task.location(), sequence_t {});
+                txn.requested.emplace(task.location(), generation_t {});
         }
     }
 }
@@ -547,7 +545,7 @@ void read_txn( //
 
     stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
-    sequence_t const youngest_sequence_number = db.youngest_sequence.load();
+    generation_t const youngest_generation = db.youngest_generation.load();
     bool should_track_requests = (c_options & ukv_option_read_track_k);
 
     // 1. Estimate the total size of keys
@@ -566,9 +564,7 @@ void read_txn( //
         }
         // Others should be pulled from the main store
         else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
-            if (entry_was_overwritten(key_iterator->second.sequence_number,
-                                      txn.sequence_number,
-                                      youngest_sequence_number) &&
+            if (entry_was_overwritten(key_iterator->second.generation, txn.generation, youngest_generation) &&
                 (*c_error = "Requested key was already overwritten since the start of the transaction!"))
                 return;
 
@@ -616,14 +612,14 @@ void read_txn( //
                 lens[i] = ukv_val_len_missing_k;
 
             if (should_track_requests)
-                txn.requested.emplace(task.location(), key_iterator->second.sequence_number);
+                txn.requested.emplace(task.location(), key_iterator->second.generation);
         }
         // But some will be missing
         else {
             lens[i] = ukv_val_len_missing_k;
 
             if (should_track_requests)
-                txn.requested.emplace(task.location(), sequence_t {});
+                txn.requested.emplace(task.location(), generation_t {});
         }
     }
 }
@@ -1056,7 +1052,7 @@ void ukv_control( //
 void ukv_txn_begin(
     // Inputs:
     ukv_t const c_db,
-    ukv_size_t const c_sequence_number,
+    ukv_size_t const c_generation,
     ukv_options_t const,
     // Outputs:
     ukv_txn_t* c_txn,
@@ -1077,7 +1073,7 @@ void ukv_txn_begin(
 
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(*c_txn);
     txn.db_ptr = &db;
-    txn.sequence_number = c_sequence_number ? c_sequence_number : ++db.youngest_sequence;
+    txn.generation = c_generation ? c_generation : ++db.youngest_generation;
     txn.requested.clear();
     txn.upserted.clear();
     txn.removed.clear();
@@ -1096,15 +1092,15 @@ void ukv_txn_commit( //
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     stl_db_t& db = *txn.db_ptr;
     std::unique_lock _ {db.mutex};
-    sequence_t const youngest_sequence_number = db.youngest_sequence.load();
+    generation_t const youngest_generation = db.youngest_generation.load();
 
     // 1. Check for refreshes among fetched keys
-    for (auto const& [sub_key, sub_sequence] : txn.requested) {
+    for (auto const& [sub_key, sub_generation] : txn.requested) {
         stl_collection_t& col = stl_collection(db, sub_key.collection);
         auto key_iterator = col.pairs.find(sub_key.key);
         if (key_iterator == col.pairs.end())
             continue;
-        if (key_iterator->second.sequence_number != sub_sequence &&
+        if (key_iterator->second.generation != sub_generation &&
             (*c_error = "Requested key was already overwritten since the start of the transaction!"))
             return;
     }
@@ -1116,13 +1112,10 @@ void ukv_txn_commit( //
         if (key_iterator == col.pairs.end())
             continue;
 
-        if (key_iterator->second.sequence_number == txn.sequence_number &&
-            (*c_error = "Can't commit same entry more than once!"))
+        if (key_iterator->second.generation == txn.generation && (*c_error = "Can't commit same entry more than once!"))
             return;
 
-        if (entry_was_overwritten(key_iterator->second.sequence_number,
-                                  txn.sequence_number,
-                                  youngest_sequence_number) &&
+        if (entry_was_overwritten(key_iterator->second.generation, txn.generation, youngest_generation) &&
             (*c_error = "Incoming key collides with newer entry!"))
             return;
     }
@@ -1134,13 +1127,10 @@ void ukv_txn_commit( //
         if (key_iterator == col.pairs.end())
             continue;
 
-        if (key_iterator->second.sequence_number == txn.sequence_number &&
-            (*c_error = "Can't commit same entry more than once!"))
+        if (key_iterator->second.generation == txn.generation && (*c_error = "Can't commit same entry more than once!"))
             return;
 
-        if (entry_was_overwritten(key_iterator->second.sequence_number,
-                                  txn.sequence_number,
-                                  youngest_sequence_number) &&
+        if (entry_was_overwritten(key_iterator->second.generation, txn.generation, youngest_generation) &&
             (*c_error = "Removed key collides with newer entry!"))
             return;
     }
@@ -1168,13 +1158,13 @@ void ukv_txn_commit( //
         // A keys was updated:
         // else
         if (key_iterator != col.pairs.end()) {
-            key_iterator->second.sequence_number = txn.sequence_number;
+            key_iterator->second.generation = txn.generation;
             std::swap(key_iterator->second.buffer, sub_key_and_value.second);
         }
         // A key was inserted:
         else {
-            stl_sequenced_value_t sequenced_value {std::move(sub_key_and_value.second), txn.sequence_number};
-            col.pairs.emplace(sub_key_and_value.first.key, std::move(sequenced_value));
+            stl_generationd_value_t generationd_value {std::move(sub_key_and_value.second), txn.generation};
+            col.pairs.emplace(sub_key_and_value.first.key, std::move(generationd_value));
             ++col.unique_elements;
         }
     }
@@ -1187,7 +1177,7 @@ void ukv_txn_commit( //
             continue;
 
         key_iterator->second.is_deleted = true;
-        key_iterator->second.sequence_number = txn.sequence_number;
+        key_iterator->second.generation = txn.generation;
         key_iterator->second.buffer.clear();
     }
 

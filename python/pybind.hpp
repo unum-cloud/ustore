@@ -86,6 +86,46 @@ struct py_received_buffer_t {
     bool initialized = false;
 };
 
+/**
+ * @brief A generalization of the graph supported by NetworkX.
+ *
+ * Sources and targets can match.
+ * Relations attrs can be banned all together.
+ *
+ * Example for simple non-attributed undirected graphs:
+ * > relations_name: ".graph"
+ * > attrs_name: ""
+ * > sources_name: ""
+ * > targets_name: ""
+ *
+ * Example for recommender systems
+ * > relations_name: "views.graph"
+ * > attrs_name: "views.docs"
+ * > sources_name: "people.docs"
+ * > targets_name: "movies.docs"
+ */
+struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
+
+    std::shared_ptr<py_db_t> db_ptr;
+    graph_ref_t graph;
+    collection_t sources_attrs;
+    collection_t targets_attrs;
+    collection_t relations_attrs;
+
+    bool is_directed_ = false;
+    bool is_multi_ = false;
+    bool allow_self_loops_ = false;
+
+    Py_buffer last_buffer;
+    Py_ssize_t last_buffer_shape[3];
+    Py_ssize_t last_buffer_strides[3];
+
+    py_graph_t(graph_ref_t&& g) : graph(std::move(g)) {}
+    py_graph_t(py_graph_t&&) = delete;
+    py_graph_t(py_graph_t const&) = delete;
+    ~py_graph_t() {}
+};
+
 template <typename scalar_at>
 std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(py::handle handle) {
     PyObject* obj = handle.ptr();
