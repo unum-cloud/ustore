@@ -32,7 +32,7 @@ TEST(db, intro) {
     // Single-element access
     main[42] = "purpose of life";
     main.at(42) = "purpose of life";
-    EXPECT_EQ(main[42].value()->first, "purpose of life");
+    EXPECT_EQ(*(main[42].value()), "purpose of life");
     _ = main[42].clear();
 
     // Mapping multiple keys to same values
@@ -46,7 +46,7 @@ TEST(db, intro) {
     _ = main[{43, 44}].value();
     _ = main[std::array<ukv_key_t, 3> {65, 66, 67}];
     _ = main[std::vector<ukv_key_t> {65, 66, 67, 68}];
-    // for (value_view_t value : main[{100, 101}].value()->first)
+    // for (value_view_t value : *main[{100, 101}].value())
     //     (void)value;
 
     // Accessing named collections
@@ -58,7 +58,7 @@ TEST(db, intro) {
     // Reusable memory
     // This interface not just more performant, but also provides nicer interface:
     //  expected_gt<taped_values_view_t> tapes = main[{100, 101}].on(arena);
-    managed_arena_t arena(db);
+    arena_t arena(db);
     _ = main[{43, 44}].on(arena).clear();
     _ = main[{43, 44}].on(arena).erase();
     _ = main[{43, 44}].on(arena).present();
@@ -67,7 +67,7 @@ TEST(db, intro) {
 
     // Batch-assignment: many keys to many values
     // main[std::array<ukv_key_t, 3> {65, 66, 67}] = std::array {"A", "B", "C"};
-    // main[std::array {sub(prefixes, 65), sub(66), sub(67)}] = std::array {"A", "B", "C"};
+    // main[std::array {ckf(prefixes, 65), ckf(66), ckf(67)}] = std::array {"A", "B", "C"};
 
     // Iterating over collections
     for (ukv_key_t key : main.keys())
@@ -81,11 +81,11 @@ TEST(db, intro) {
     _ = main[{43, 44}].on(arena).clear(/*flush:*/ false);
     _ = main[{43, 44}].on(arena).erase(/*flush:*/ false);
     _ = main[{43, 44}].on(arena).present(/*track:*/ false);
-    _ = main[{43, 44}].on(arena).length(/*format:*/ ukv_doc_format_binary_k, /*track:*/ false);
-    _ = main[{43, 44}].on(arena).value(/*format:*/ ukv_doc_format_binary_k, /*track:*/ false);
+    _ = main[{43, 44}].on(arena).length(/*track:*/ false);
+    _ = main[{43, 44}].on(arena).value(/*track:*/ false);
 
     // Working with sub documents
-    main[56] = R"( {"Hello": "World", "answer": 42} )"_json.dump().c_str();
+    main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
 }
 
 template <typename locations_at>
@@ -94,11 +94,11 @@ void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_leng
     EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
 
     auto const expects_missing = expected_length == ukv_val_len_missing_k;
-    using extractor_t = location_extractor_gt<locations_at>;
+    using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.value();
-    taped_values_view_t retrieved = retrieved_and_arena.first;
+    given_gt<taped_values_view_t> retrieved_and_arena = ref.value();
+    taped_values_view_t const& retrieved = *retrieved_and_arena;
     ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
 
@@ -112,14 +112,14 @@ void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_leng
     auto maybe_lengths_and_arena = ref.length();
     EXPECT_TRUE(maybe_lengths_and_arena);
     for (std::size_t i = 0; i != count; ++i) {
-        EXPECT_EQ(maybe_lengths_and_arena->first[i], expected_length);
+        EXPECT_EQ(maybe_lengths_and_arena->at(i), expected_length);
     }
 
     // Check boolean indicators
     auto maybe_indicators_and_arena = ref.present();
     EXPECT_TRUE(maybe_indicators_and_arena);
     for (std::size_t i = 0; i != count; ++i) {
-        EXPECT_EQ(maybe_indicators_and_arena->first[i], !expects_missing);
+        EXPECT_EQ(maybe_indicators_and_arena->at(i), !expects_missing);
     }
 }
 
@@ -127,11 +127,11 @@ template <typename locations_at>
 void check_equalities(member_refs_gt<locations_at>& ref, values_arg_t values) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
-    using extractor_t = location_extractor_gt<locations_at>;
+    using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    std::pair<taped_values_view_t, managed_arena_t> retrieved_and_arena = *ref.value();
-    taped_values_view_t retrieved = retrieved_and_arena.first;
+    given_gt<taped_values_view_t> retrieved_and_arena = ref.value();
+    taped_values_view_t const& retrieved = *retrieved_and_arena;
     EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
     tape_iterator_t it = retrieved.begin();
@@ -283,7 +283,7 @@ TEST(db, txn) {
     // Transaction with named collection
     EXPECT_TRUE(db.collection("named_col"));
     collection_t named_col = *db.collection("named_col");
-    std::vector<sub_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
+    std::vector<col_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
     ref = txn[sub_keys];
     round_trip(ref, values);
 

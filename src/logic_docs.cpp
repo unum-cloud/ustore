@@ -11,7 +11,8 @@
 #include <string_view>
 #include <unordered_set>
 #include <variant>
-#include <charconv>
+#include <charconv> // `std::to_chars`
+#include <cstdio>   // `std::snprintf`
 
 #include <nlohmann/json.hpp>
 
@@ -28,7 +29,7 @@ using namespace unum;
 using json_t = nlohmann::json;
 using json_ptr_t = json_t::json_pointer;
 
-constexpr ukv_doc_format_t internal_format_k = ukv_doc_format_msgpack_k;
+constexpr ukv_format_t internal_format_k = ukv_format_doc_msgpack_k;
 
 static constexpr char const* true_k = "true";
 static constexpr char const* false_k = "false";
@@ -78,20 +79,20 @@ json_t& lookup_field(json_t& json, ukv_str_view_t field, json_t& default_json) n
     }
 }
 
-json_t parse_any(value_view_t bytes, ukv_doc_format_t const c_format, ukv_error_t* c_error) noexcept {
+json_t parse_any(value_view_t bytes, ukv_format_t const c_format, ukv_error_t* c_error) noexcept {
 
     try {
         auto str = reinterpret_cast<char const*>(bytes.begin());
         auto len = bytes.size();
         switch (c_format) {
-        case ukv_doc_format_json_patch_k:
-        case ukv_doc_format_json_merge_patch_k:
-        case ukv_doc_format_json_k: return json_t::parse(str, str + len, nullptr, true, false);
-        case ukv_doc_format_msgpack_k: return json_t::from_msgpack(str, str + len, true, false);
-        case ukv_doc_format_bson_k: return json_t::from_bson(str, str + len, true, false);
-        case ukv_doc_format_cbor_k: return json_t::from_cbor(str, str + len, true, false);
-        case ukv_doc_format_ubjson_k: return json_t::from_ubjson(str, str + len, true, false);
-        case ukv_doc_format_binary_k:
+        case ukv_format_doc_json_patch_k:
+        case ukv_format_doc_json_merge_patch_k:
+        case ukv_format_doc_json_k: return json_t::parse(str, str + len, nullptr, true, false);
+        case ukv_format_doc_msgpack_k: return json_t::from_msgpack(str, str + len, true, false);
+        case ukv_format_doc_bson_k: return json_t::from_bson(str, str + len, true, false);
+        case ukv_format_doc_cbor_k: return json_t::from_cbor(str, str + len, true, false);
+        case ukv_format_doc_ubjson_k: return json_t::from_ubjson(str, str + len, true, false);
+        case ukv_format_binary_k:
             return json_t::binary({reinterpret_cast<std::int8_t const*>(bytes.begin()),
                                    reinterpret_cast<std::int8_t const*>(bytes.end())});
         default: *c_error = "Unsupported input format"; return {};
@@ -111,7 +112,7 @@ json_t parse_any(value_view_t bytes, ukv_doc_format_t const c_format, ukv_error_
  * that will accept our custom adapter. Unfortunately, they require a bogus shared pointer. WHY?!
  */
 void dump_any(json_t const& json,
-              ukv_doc_format_t const c_format,
+              ukv_format_t const c_format,
               std::shared_ptr<export_to_value_t> const& value,
               ukv_error_t* c_error) noexcept {
 
@@ -120,11 +121,11 @@ void dump_any(json_t const& json,
 
     try {
         switch (c_format) {
-        case ukv_doc_format_json_k: return text_serializer_t(value, ' ').dump(json, false, false, 0, 0);
-        case ukv_doc_format_msgpack_k: return binary_serializer_t(value).write_msgpack(json);
-        case ukv_doc_format_bson_k: return binary_serializer_t(value).write_bson(json);
-        case ukv_doc_format_cbor_k: return binary_serializer_t(value).write_cbor(json);
-        case ukv_doc_format_ubjson_k: return binary_serializer_t(value).write_ubjson(json, true, true);
+        case ukv_format_doc_json_k: return text_serializer_t(value, ' ').dump(json, false, false, 0, 0);
+        case ukv_format_doc_msgpack_k: return binary_serializer_t(value).write_msgpack(json);
+        case ukv_format_doc_bson_k: return binary_serializer_t(value).write_bson(json);
+        case ukv_format_doc_cbor_k: return binary_serializer_t(value).write_cbor(json);
+        case ukv_format_doc_ubjson_k: return binary_serializer_t(value).write_ubjson(json, true, true);
         default: *c_error = "Unsupported output format"; break;
         }
     }
@@ -141,14 +142,14 @@ class serializing_tape_ref_t {
   public:
     serializing_tape_ref_t(stl_arena_t& a) noexcept : arena_(a) { arena_.growing_tape.clear(); }
 
-    void push_back(json_t const& doc, ukv_doc_format_t c_format, ukv_error_t* c_error) noexcept(false) {
+    void push_back(json_t const& doc, ukv_format_t c_format, ukv_error_t* c_error) noexcept(false) {
         if (!shared_exporter_)
             shared_exporter_ = std::make_shared<export_to_value_t>();
         shared_exporter_->value_ptr = &single_doc_buffer_;
 
         single_doc_buffer_.clear();
         dump_any(doc, c_format, shared_exporter_, c_error);
-        if (c_format == ukv_doc_format_json_k)
+        if (c_format == ukv_format_doc_json_k)
             single_doc_buffer_.push_back(byte_t {0});
 
         arena_.growing_tape.push_back(single_doc_buffer_);
@@ -244,9 +245,9 @@ read_tasks_soa_t read_docs(ukv_t const c_db,
              c_txn,
              unique_docs_count,
              &arena.updated_keys[0].collection,
-             sizeof(sub_key_t),
+             sizeof(col_key_t),
              &arena.updated_keys[0].key,
-             sizeof(sub_key_t),
+             sizeof(col_key_t),
              c_options,
              &binary_docs_lens,
              &binary_docs_begin,
@@ -290,9 +291,9 @@ read_tasks_soa_t read_docs(ukv_t const c_db,
     }
 
     auto cnt = static_cast<ukv_size_t>(arena.updated_keys.size());
-    auto sub_keys_range = strided_range_gt<sub_key_t const>(arena.updated_keys);
-    strided_range_gt<ukv_collection_t const> cols = sub_keys_range.members(&sub_key_t::collection);
-    strided_range_gt<ukv_key_t const> keys = sub_keys_range.members(&sub_key_t::key);
+    auto sub_keys_range = strided_range_gt<col_key_t const>(arena.updated_keys);
+    strided_range_gt<ukv_collection_t const> cols = sub_keys_range.members(&col_key_t::collection);
+    strided_range_gt<ukv_key_t const> keys = sub_keys_range.members(&col_key_t::key);
     return {cols.begin(), keys.begin(), cnt};
 }
 
@@ -302,7 +303,7 @@ void replace_docs( //
     write_tasks_soa_t const& tasks,
     strided_iterator_gt<ukv_str_view_t const>,
     ukv_options_t const c_options,
-    ukv_doc_format_t const c_format,
+    ukv_format_t const c_format,
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 
@@ -367,7 +368,7 @@ void read_modify_write( //
     write_tasks_soa_t const& tasks,
     strided_iterator_gt<ukv_str_view_t const> fields,
     ukv_options_t const c_options,
-    ukv_doc_format_t const c_format,
+    ukv_format_t const c_format,
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 
@@ -390,12 +391,12 @@ void read_modify_write( //
             json_t& parsed_part = lookup_field(parsed, field, null_object);
             if (&parsed != &null_object) {
                 switch (c_format) {
-                case ukv_doc_format_json_patch_k: parsed_part = parsed_part.patch(parsed_task); break;
-                case ukv_doc_format_json_merge_patch_k: parsed_part.merge_patch(parsed_task); break;
+                case ukv_format_doc_json_patch_k: parsed_part = parsed_part.patch(parsed_task); break;
+                case ukv_format_doc_json_merge_patch_k: parsed_part.merge_patch(parsed_task); break;
                 default: parsed_part = parsed_task; break;
                 }
             }
-            else if (c_format != ukv_doc_format_json_patch_k && c_format != ukv_doc_format_json_merge_patch_k) {
+            else if (c_format != ukv_format_doc_json_patch_k && c_format != ukv_format_doc_json_merge_patch_k) {
                 json_t::string_t heapy_field {field};
                 parsed = parsed.flatten();
                 parsed.emplace(heapy_field, parsed_task);
@@ -487,7 +488,7 @@ void ukv_docs_write( //
     ukv_size_t const c_fields_stride,
 
     ukv_options_t const c_options,
-    ukv_doc_format_t const c_format,
+    ukv_format_t const c_format,
 
     ukv_val_ptr_t const* c_vals,
     ukv_size_t const c_vals_stride,
@@ -536,7 +537,7 @@ void ukv_docs_write( //
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
 
-    auto func = fields || c_format == ukv_doc_format_json_patch_k || c_format == ukv_doc_format_json_merge_patch_k
+    auto func = fields || c_format == ukv_format_doc_json_patch_k || c_format == ukv_format_doc_json_merge_patch_k
                     ? &read_modify_write
                     : &replace_docs;
 
@@ -558,7 +559,7 @@ void ukv_docs_read( //
     ukv_size_t const c_fields_stride,
 
     ukv_options_t const c_options,
-    ukv_doc_format_t const c_format,
+    ukv_format_t const c_format,
 
     ukv_val_len_t** c_binary_docs_lens,
     ukv_val_ptr_t* c_binary_docs_begin,
@@ -1148,15 +1149,17 @@ void ukv_docs_gather_strings( //
                 break;
             }
             case json_t::value_t::number_float: {
-                // Parsing and dumping floating-point numbers is still not fully implemented in STL:
-                // std::to_chars_result result = std::to_chars(&str_buffer[0], str_buffer + str_buffer_len_k, scalar);
                 auto scalar = found_value.get<double>();
-                auto end_ptr = fmt::format_to(str_buffer, "{}", scalar);
-                bool fits_null_terminated = end_ptr < str_buffer + str_buffer_len_k;
-                if (fits_null_terminated) {
-                    *end_ptr = '\0';
-                    arena.growing_tape.push_back(to_view(str_buffer, end_ptr + 1 - str_buffer));
-                }
+                // Parsing and dumping floating-point numbers is still not fully implemented in STL:
+                //  std::to_chars_result result = std::to_chars(&str_buffer[0], str_buffer + str_buffer_len_k, scalar);
+                //  bool fits_null_terminated = result.ec != std::errc() && result.ptr < str_buffer + str_buffer_len_k;
+                // Using FMT would cause an extra dependency:
+                //  auto end_ptr = fmt::format_to(str_buffer, "{}", scalar);
+                //  bool fits_null_terminated = end_ptr < str_buffer + str_buffer_len_k;
+                // If we use `std::snprintf`, the result would be NULL-terminted:
+                auto result = std::snprintf(str_buffer, str_buffer_len_k, "%f", scalar);
+                if (result >= 0)
+                    arena.growing_tape.push_back(to_view(str_buffer, result));
                 else
                     arena.growing_tape.push_back({});
                 break;

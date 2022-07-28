@@ -22,3 +22,5 @@ if(NOT leveldb_POPULATED)
     FetchContent_Populate(leveldb)
     add_subdirectory(${leveldb_SOURCE_DIR} ${leveldb_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
+
+include_directories(${leveldb_SOURCE_DIR}/include)
