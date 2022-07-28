@@ -100,6 +100,9 @@ include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 # LevelDB
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 
+# Jemalloc
+include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
+
 # LZ4 Compression
 # https://stackoverflow.com/questions/67537111/how-do-i-decide-between-lz4-and-snappy-compression
 # include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
@@ -129,6 +132,7 @@ FetchContent_MakeAvailable(googletest)
 # Define the libraries we will need to build
 include_directories(include/)
 include_directories(${fmt_SOURCE_DIR}/include)
+include_directories(${jemalloc_SOURCE_DIR}/include)
 include_directories(${rocksdb_SOURCE_DIR}/include)
 include_directories(${leveldb_SOURCE_DIR}/include)
 
@@ -137,9 +141,11 @@ add_library(ukv_stl
   src/logic_docs.cpp
   src/logic_graph.cpp
 )
+add_dependencies(ukv_stl jemalloc)
 target_link_libraries(ukv_stl
   fmt::fmt
   nlohmann_json::nlohmann_json
+  ${jemalloc_LIBRARIES}
 )
 
 add_library(ukv_rocksdb
@@ -150,19 +156,24 @@ add_library(ukv_leveldb
   src/backend_leveldb.cpp
   src/logic_graph.cpp
 )
+add_dependencies(ukv_rocksdb jemalloc)
+add_dependencies(ukv_leveldb jemalloc)
 
 target_link_libraries(ukv_rocksdb
   rocksdb
   fmt::fmt
   nlohmann_json::nlohmann_json
+  ${jemalloc_LIBRARIES}
 )
 target_link_libraries(ukv_leveldb
   leveldb
   fmt::fmt
   nlohmann_json::nlohmann_json
+  ${jemalloc_LIBRARIES}
 )
 
 add_library(ukv_rpc_client src/rpc_client.cpp)
+add_dependencies(ukv_rpc_client jemalloc)
 
 # add_executable(ukv_rest_server src/rest_server.cpp)
 # target_link_libraries(ukv_rest_server
@@ -177,10 +188,12 @@ add_executable(ukv_test
   src/logic_docs.cpp
   src/logic_graph.cpp
 )
+add_dependencies(ukv_test jemalloc)
 target_link_libraries(ukv_test
   gtest
   fmt::fmt
   nlohmann_json::nlohmann_json
+  ${jemalloc_LIBRARIES}
 )
 
 add_executable(ukv_leveldb_test
@@ -189,11 +202,13 @@ add_executable(ukv_leveldb_test
   src/logic_docs.cpp
   src/logic_graph.cpp
 )
+add_dependencies(ukv_leveldb_test jemalloc)
 target_link_libraries(ukv_leveldb_test
   gtest
   leveldb
   fmt::fmt
   nlohmann_json::nlohmann_json
+  ${jemalloc_LIBRARIES}
 )
 
 add_executable(ukv_rocksdb_test
@@ -202,9 +217,11 @@ add_executable(ukv_rocksdb_test
   src/logic_docs.cpp
   src/logic_graph.cpp
 )
+add_dependencies(ukv_rocksdb_test jemalloc)
 target_link_libraries(ukv_rocksdb_test
   gtest
   rocksdb
   fmt::fmt
   nlohmann_json::nlohmann_json
+  ${jemalloc_LIBRARIES}
 )
