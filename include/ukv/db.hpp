@@ -61,7 +61,7 @@ class member_refs_gt {
     ukv_txn_t txn_ = nullptr;
     any_arena_t arena_;
     locations_store_t locations_;
-    ukv_doc_format_t format_ = ukv_doc_format_binary_k;
+    ukv_format_t format_ = ukv_format_binary_k;
 
     template <typename values_arg_at>
     status_t any_assign(values_arg_at&&, ukv_options_t) noexcept;
@@ -71,7 +71,7 @@ class member_refs_gt {
     member_refs_gt(ukv_t db,
                    ukv_txn_t txn,
                    locations_store_t locations,
-                   ukv_doc_format_t format = ukv_doc_format_binary_k) noexcept
+                   ukv_format_t format = ukv_format_binary_k) noexcept
         : db_(db), txn_(txn), arena_(db), locations_(locations), format_(format) {}
 
     member_refs_gt(member_refs_gt const&) = delete;
@@ -96,7 +96,7 @@ class member_refs_gt {
         return *this;
     }
 
-    member_refs_gt& as(ukv_doc_format_t format) noexcept {
+    member_refs_gt& as(ukv_format_t format) noexcept {
         format_ = format;
         return *this;
     }
@@ -442,19 +442,19 @@ class collection_t {
     ukv_t db_ = nullptr;
     ukv_collection_t col_ = ukv_default_collection_k;
     ukv_txn_t txn_ = nullptr;
-    ukv_doc_format_t format_ = ukv_doc_format_binary_k;
+    ukv_format_t format_ = ukv_format_binary_k;
 
   public:
     inline collection_t() = default;
     inline collection_t(ukv_t db_ptr,
                         ukv_collection_t col_ptr = ukv_default_collection_k,
                         ukv_txn_t txn = nullptr,
-                        ukv_doc_format_t format = ukv_doc_format_binary_k) noexcept
+                        ukv_format_t format = ukv_format_binary_k) noexcept
         : db_(db_ptr), col_(col_ptr), txn_(txn), format_(format) {}
 
     inline collection_t(collection_t&& other) noexcept
         : db_(other.db_), col_(std::exchange(other.col_, ukv_default_collection_k)),
-          txn_(std::exchange(other.txn_, nullptr)), format_(std::exchange(other.format_, ukv_doc_format_binary_k)) {}
+          txn_(std::exchange(other.txn_, nullptr)), format_(std::exchange(other.format_, ukv_format_binary_k)) {}
 
     inline ~collection_t() noexcept {
         ukv_collection_free(db_, col_);
@@ -473,7 +473,7 @@ class collection_t {
     inline ukv_txn_t txn() const noexcept { return txn_; }
 
     inline expected_gt<std::size_t> size() const noexcept { return 0; }
-    collection_t& as(ukv_doc_format_t format) noexcept {
+    collection_t& as(ukv_format_t format) noexcept {
         format_ = format;
         return *this;
     }
@@ -678,8 +678,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
     operator expected_gt<collection_t>() noexcept { return collection(""); }
     expected_gt<collection_t> operator*() noexcept { return collection(""); }
 
-    expected_gt<collection_t> collection(ukv_str_view_t name = "",
-                                         ukv_doc_format_t format = ukv_doc_format_binary_k) noexcept {
+    expected_gt<collection_t> collection(ukv_str_view_t name = "", ukv_format_t format = ukv_format_binary_k) noexcept {
         status_t status;
         ukv_collection_t col = nullptr;
         ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
@@ -741,7 +740,7 @@ member_refs_gt<locations_store_t>::any_get(ukv_options_t options) noexcept {
     auto fields = keys_extractor_t {}.fields(locs);
     auto has_fields = fields && (!fields.repeats() || *fields);
 
-    if (has_fields || format_ != ukv_doc_format_binary_k)
+    if (has_fields || format_ != ukv_format_binary_k)
         ukv_docs_read( //
             db_,
             txn_,
@@ -800,7 +799,7 @@ status_t member_refs_gt<locations_store_t>::any_assign(values_arg_at&& vals_ref,
     auto offsets = value_extractor_t {}.offsets(vals);
     auto lengths = value_extractor_t {}.lengths(vals);
 
-    if (has_fields || format_ != ukv_doc_format_binary_k)
+    if (has_fields || format_ != ukv_format_binary_k)
         ukv_docs_write( //
             db_,
             txn_,

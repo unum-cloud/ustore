@@ -35,23 +35,47 @@ extern "C" {
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
+/**
+ * @brief Formats describing contents of collections.
+ * The low-level interface
+ *
+ * Many of the numerical values are set to their RFC proposal numbers.
+ * https://en.wikipedia.org/wiki/List_of_RFCs
+ */
 typedef enum {
-    ukv_doc_format_binary_k = 0,
+    ukv_format_binary_k = 0,
+    ukv_format_graph_k = 1,
 
     // Flexible dynamically-typed document formats
-    ukv_doc_format_json_k = 1,
-    ukv_doc_format_msgpack_k = 2,
-    ukv_doc_format_bson_k = 3,
-    ukv_doc_format_cbor_k = 4,
-    ukv_doc_format_ubjson_k = 5,
+    // https://github.com/msgpack/msgpack/blob/master/spec.md#type-system
+    ukv_format_doc_k = 10,
+    ukv_format_doc_msgpack_k = 11,
+    ukv_format_doc_bson_k = 12,
+    ukv_format_doc_ubjson_k = 13,
+    ukv_format_doc_json_k = 7159,
+    ukv_format_doc_cbor_k = 7049,
+    ukv_format_doc_csv_k = 4180,
 
-    // Patches and modifiers
+    // Patches and modifiers to documents
     // https://stackoverflow.com/a/64882070/2766161
-    ukv_doc_format_json_patch_k = 6,
-    ukv_doc_format_json_merge_patch_k = 7,
+    ukv_format_doc_json_patch_k = 6902,       // RFC
+    ukv_format_doc_json_merge_patch_k = 7386, // RFC
 
-    ukv_doc_format_unknown_k = 0xFFFFFFFF,
-} ukv_doc_format_t;
+    // Generic text-based formats, that  generally come in long chunks
+    // would benefit from compression and may require full-text search.
+    ukv_format_text_k = 20,
+    ukv_format_text_xml_k = 3470,
+    ukv_format_text_html_k = 1866,
+
+    // Image formats
+    ukv_format_img_k = 50,
+    ukv_format_img_jpeg200_k = 3745, // RFC
+    ukv_format_img_jpeg_k = 1314,    // RFC
+    ukv_format_img_png_k = 2083,     // RFC
+    ukv_format_img_gif_k = 51,
+    ukv_format_img_webp_k = 52,
+
+} ukv_format_t;
 
 /**
  * Type IDs needed to describe the values stored in the leafs of
@@ -108,7 +132,7 @@ void ukv_docs_write( //
     ukv_size_t const fields_stride,
 
     ukv_options_t const options,
-    ukv_doc_format_t const format,
+    ukv_format_t const format,
 
     ukv_val_ptr_t const* values,
     ukv_size_t const values_stride,
@@ -149,7 +173,7 @@ void ukv_docs_read( //
     ukv_size_t const fields_stride,
 
     ukv_options_t const options,
-    ukv_doc_format_t const format,
+    ukv_format_t const format,
 
     ukv_val_len_t** found_lengths,
     ukv_val_ptr_t* found_values,
