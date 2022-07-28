@@ -138,6 +138,8 @@ class [[nodiscard]] given_gt : public expected_gt<object_at> {
     using base_t::operator bool;
     using base_t::operator==;
     using base_t::operator!=;
+    using base_t::release_status;
+    using base_t::throw_unhandled;
 
     object_at const& operator*() const& noexcept { return object_; }
     object_at const* operator->() const& noexcept { return &object_; }
@@ -147,6 +149,7 @@ class [[nodiscard]] given_gt : public expected_gt<object_at> {
     // object_at* operator->() && noexcept = delete;
 
     inline arena_t release_arena() noexcept { return std::exchange(arena_, {arena_.db()}); }
+    inline base_t release_expected() noexcept { return {std::move(status_), std::move(object_)}; }
 };
 
 } // namespace unum::ukv

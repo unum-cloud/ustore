@@ -383,7 +383,7 @@ class graph_ref_t {
     }
 
     expected_gt<bool> contains(ukv_key_t vertex, bool track = false) noexcept {
-        return collection_[vertex].on(arena()).present(track);
+        return collection_[vertex].on(arena()).present(track).release_expected();
     }
 
     /**
@@ -392,7 +392,7 @@ class graph_ref_t {
      */
     expected_gt<strided_range_gt<bool>> contains(strided_range_gt<ukv_key_t const> const& vertices,
                                                  bool track = false) noexcept {
-        return collection_[vertices].on(arena()).present(track);
+        return collection_[vertices].on(arena()).present(track).release_expected();
     }
 
     using adjacency_range_t = range_gt<adjacency_stream_t>;
