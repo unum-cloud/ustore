@@ -444,29 +444,28 @@ py::object punned_collection( //
     ukv_format_t format) {
 
     db_t& db = py_db_ptr->native;
-    auto maybe_col = db.collection(collection.c_str());
+    txn_t& txn = py_txn_ptr->native;
+
+    auto maybe_col = !py_txn_ptr ? db.collection(collection.c_str()) : txn.collection(collection.c_str());
     maybe_col.throw_unhandled();
     maybe_col->as(format);
-    if (py_txn_ptr)
-        maybe_col->from(py_txn_ptr->native);
 
     if (format == ukv_format_graph_k) {
         graph_ref_t g(*maybe_col);
-        auto net_ptr = std::make_shared<network_t>(std::move(g));
-        net_ptr->db_ptr = index_collection->db_ptr;
-        return net_ptr;
+        auto net_ptr = std::make_shared<py_graph_t>(std::move(g));
+        net_ptr->db_ptr = py_db_ptr->shared_from_this();
+        return py::cast(net_ptr);
     }
     else {
         auto py_col = std::make_shared<py_col_t>();
         py_col->name = collection;
         py_col->native = *std::move(maybe_col);
         py_col->db_ptr = py_db_ptr->shared_from_this();
-        return py_col;
+        return py::cast(py_col);
     }
 }
-,
 
-    void ukv::wrap_database(py::module& m) {
+void ukv::wrap_database(py::module& m) {
 
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
     auto py_db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
@@ -474,13 +473,13 @@ py::object punned_collection( //
     auto py_txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction", py::module_local());
 
     py::enum_<ukv_format_t>(m, "Format", py::module_local())
-        .value("Binary", ukv_format_doc_binary_k)
-        .value("Graph", ukv_format_doc_graph_k)
-        .value("MsgPack", ukv_format_doc_msgpack_k)
-        .value("JSON", ukv_format_doc_json_k)
-        .value("BSON", ukv_format_doc_bson_k)
-        .value("CBOR", ukv_format_doc_cbor_k)
-        .value("UBJSON", ukv_format_doc_ubjson_k);
+        .value("Binary", ukv_format_binary_k)
+        .value("Graph", ukv_format_graph_k)
+        .value("MsgPack", ukv_format_msgpack_k)
+        .value("JSON", ukv_format_json_k)
+        .value("BSON", ukv_format_bson_k)
+        .value("CBOR", ukv_format_cbor_k)
+        .value("UBJSON", ukv_format_ubjson_k);
 
     // Define `DataBase`
     py_db.def( //

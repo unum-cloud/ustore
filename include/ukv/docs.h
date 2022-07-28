@@ -48,18 +48,19 @@ typedef enum {
 
     // Flexible dynamically-typed document formats
     // https://github.com/msgpack/msgpack/blob/master/spec.md#type-system
-    ukv_format_doc_k = 10,
-    ukv_format_doc_msgpack_k = 11,
-    ukv_format_doc_bson_k = 12,
-    ukv_format_doc_ubjson_k = 13,
-    ukv_format_doc_json_k = 7159,
-    ukv_format_doc_cbor_k = 7049,
-    ukv_format_doc_csv_k = 4180,
+    ukv_format_msgpack_k = 11,
+    ukv_format_bson_k = 12,
+    ukv_format_ubjson_k = 13,
+    ukv_format_json_k = 7159,
+    ukv_format_cbor_k = 7049,
 
     // Patches and modifiers to documents
     // https://stackoverflow.com/a/64882070/2766161
-    ukv_format_doc_json_patch_k = 6902,       // RFC
-    ukv_format_doc_json_merge_patch_k = 7386, // RFC
+    ukv_format_json_patch_k = 6902,       // RFC
+    ukv_format_json_merge_patch_k = 7386, // RFC
+
+    ukv_format_csv_k = 4180,
+    ukv_format_arrow_k = 14,
 
     // Generic text-based formats, that  generally come in long chunks
     // would benefit from compression and may require full-text search.
@@ -68,7 +69,6 @@ typedef enum {
     ukv_format_text_html_k = 1866,
 
     // Image formats
-    ukv_format_img_k = 50,
     ukv_format_img_jpeg200_k = 3745, // RFC
     ukv_format_img_jpeg_k = 1314,    // RFC
     ukv_format_img_png_k = 2083,     // RFC
@@ -109,14 +109,24 @@ typedef enum {
  *                         different format can be requested. Like importing
  *                         JSONs & BSONs from Mongo, but later exporting
  *                         Apache Arrow Tables.
-
+ *
+ * @section Supported Formats
+ * > ukv_format_json_k
+ *      Most frequently used text-based format.
+ * > ukv_format_msgpack_k, ukv_format_bson_k
+ * > ukv_format_ubjson_k, ukv_format_cbor_k
+ *      Commonly used binary alternatives to JSON.
+ * > ukv_format_json_patch_k, ukv_format_json_merge_patch_k
+ *      Describe a set of transforms to be applied at document & sub-document
+ *      level. Transforms themselves are standardized and packed in JSON.
+ *
  * @section Slicing Docs and Inferring IDs
  * In other interfaces it's necessary to explicitly provide the @c `ukv_key_t`s
  * and the number of input entries. With documents, if an array of objects is
  * supplied as `values[0]`, we slice it into separate objects.
  * With documents, we can often infer the ID from the documents @b "_id" field,
  * similar to MongoDB and ElasticSearch.
-  */
+ */
 void ukv_docs_write( //
     ukv_t const db,
     ukv_txn_t const txn,
@@ -157,6 +167,16 @@ void ukv_docs_write( //
  *                         different format can be requested. Like importing
  *                         JSONs & BSONs from Mongo, but later exporting
  *                         Apache Arrow Tables.
+ *
+ * @section Supported Formats
+ * > ukv_format_json_k
+ *      Most frequently used text-based format.
+ * > ukv_format_msgpack_k, ukv_format_bson_k
+ * > ukv_format_ubjson_k, ukv_format_cbor_k
+ *      Commonly used binary alternatives to JSON.
+ * > ukv_format_json_patch_k, ukv_format_json_merge_patch_k
+ *      Describe a set of transforms to be applied at document & sub-document
+ *      level. Transforms themselves are standardized and packed in JSON.
  */
 void ukv_docs_read( //
     ukv_t const db,

@@ -417,10 +417,10 @@ void ukv_collection_open( //
  * @brief Retrieves a list of collection names in a NULL-delimited form.
  * The default nameless collection won't be described in any form.
  *
- * @param[in] db     Already open database instance, @see `ukv_open`.
- * @param[out] count The number of found unique collections.
- * @param[out] names A NULL-terminated output string with comma-delimited column names.
- * @param[out] error The error message to be handled by callee.
+ * @param[in] db        Already open database instance, @see `ukv_open`.
+ * @param[inout] count  Will contain the number of found unique collections.
+ * @param[inout] names  A NULL-terminated output string with comma-delimited column names.
+ * @param[out] error    The error message to be handled by callee.
  */
 void ukv_collection_list( //
     ukv_t const db,
@@ -474,23 +474,24 @@ void ukv_control( //
 /**
  * @brief Begins a new ACID transaction or resets an existing one.
  *
- * @param db                Already open database instance, @see `ukv_open`.
- * @param sequence_number   If equal to 0, a new number will be generated on the fly.
- * @param txn               May be pointing to an existing transaction.
- *                          In that case, it's reset to new @param sequence_number.
- * @param error             The error message to be handled by callee.
+ * @param db[in]            Already open database instance, @see `ukv_open`.
+ * @param generation[in]    If equal to 0, a new number will be generated on the fly.
+ * @param txn[inout]        May be pointing to an existing transaction.
+ *                          In that case, it's reset to new @param generation.
+ * @param error[out]        The error message to be handled by callee.
  */
 void ukv_txn_begin( //
     ukv_t const db,
-    ukv_size_t const sequence_number,
+    ukv_size_t const generation,
     ukv_options_t const options,
     ukv_txn_t* txn,
     ukv_error_t* error);
 
 /**
  * @brief Commits an ACID transaction.
- * On success, the transaction content is wiped clean.
- * On failure, the entire transaction state is preserved to allow retries.
+ * Regardless of result, the content is preserved to allow further
+ * logging, serialization or retries. The underlying memory can be
+ * cleaned and reused by consecutive `ukv_txn_begin` call.
  */
 void ukv_txn_commit( //
     ukv_txn_t const txn,

@@ -29,7 +29,7 @@ using namespace unum;
 using json_t = nlohmann::json;
 using json_ptr_t = json_t::json_pointer;
 
-constexpr ukv_format_t internal_format_k = ukv_format_doc_msgpack_k;
+constexpr ukv_format_t internal_format_k = ukv_format_msgpack_k;
 
 static constexpr char const* true_k = "true";
 static constexpr char const* false_k = "false";
@@ -85,13 +85,13 @@ json_t parse_any(value_view_t bytes, ukv_format_t const c_format, ukv_error_t* c
         auto str = reinterpret_cast<char const*>(bytes.begin());
         auto len = bytes.size();
         switch (c_format) {
-        case ukv_format_doc_json_patch_k:
-        case ukv_format_doc_json_merge_patch_k:
-        case ukv_format_doc_json_k: return json_t::parse(str, str + len, nullptr, true, false);
-        case ukv_format_doc_msgpack_k: return json_t::from_msgpack(str, str + len, true, false);
-        case ukv_format_doc_bson_k: return json_t::from_bson(str, str + len, true, false);
-        case ukv_format_doc_cbor_k: return json_t::from_cbor(str, str + len, true, false);
-        case ukv_format_doc_ubjson_k: return json_t::from_ubjson(str, str + len, true, false);
+        case ukv_format_json_patch_k:
+        case ukv_format_json_merge_patch_k:
+        case ukv_format_json_k: return json_t::parse(str, str + len, nullptr, true, false);
+        case ukv_format_msgpack_k: return json_t::from_msgpack(str, str + len, true, false);
+        case ukv_format_bson_k: return json_t::from_bson(str, str + len, true, false);
+        case ukv_format_cbor_k: return json_t::from_cbor(str, str + len, true, false);
+        case ukv_format_ubjson_k: return json_t::from_ubjson(str, str + len, true, false);
         case ukv_format_binary_k:
             return json_t::binary({reinterpret_cast<std::int8_t const*>(bytes.begin()),
                                    reinterpret_cast<std::int8_t const*>(bytes.end())});
@@ -121,11 +121,11 @@ void dump_any(json_t const& json,
 
     try {
         switch (c_format) {
-        case ukv_format_doc_json_k: return text_serializer_t(value, ' ').dump(json, false, false, 0, 0);
-        case ukv_format_doc_msgpack_k: return binary_serializer_t(value).write_msgpack(json);
-        case ukv_format_doc_bson_k: return binary_serializer_t(value).write_bson(json);
-        case ukv_format_doc_cbor_k: return binary_serializer_t(value).write_cbor(json);
-        case ukv_format_doc_ubjson_k: return binary_serializer_t(value).write_ubjson(json, true, true);
+        case ukv_format_json_k: return text_serializer_t(value, ' ').dump(json, false, false, 0, 0);
+        case ukv_format_msgpack_k: return binary_serializer_t(value).write_msgpack(json);
+        case ukv_format_bson_k: return binary_serializer_t(value).write_bson(json);
+        case ukv_format_cbor_k: return binary_serializer_t(value).write_cbor(json);
+        case ukv_format_ubjson_k: return binary_serializer_t(value).write_ubjson(json, true, true);
         default: *c_error = "Unsupported output format"; break;
         }
     }
@@ -149,7 +149,7 @@ class serializing_tape_ref_t {
 
         single_doc_buffer_.clear();
         dump_any(doc, c_format, shared_exporter_, c_error);
-        if (c_format == ukv_format_doc_json_k)
+        if (c_format == ukv_format_json_k)
             single_doc_buffer_.push_back(byte_t {0});
 
         arena_.growing_tape.push_back(single_doc_buffer_);
@@ -391,12 +391,12 @@ void read_modify_write( //
             json_t& parsed_part = lookup_field(parsed, field, null_object);
             if (&parsed != &null_object) {
                 switch (c_format) {
-                case ukv_format_doc_json_patch_k: parsed_part = parsed_part.patch(parsed_task); break;
-                case ukv_format_doc_json_merge_patch_k: parsed_part.merge_patch(parsed_task); break;
+                case ukv_format_json_patch_k: parsed_part = parsed_part.patch(parsed_task); break;
+                case ukv_format_json_merge_patch_k: parsed_part.merge_patch(parsed_task); break;
                 default: parsed_part = parsed_task; break;
                 }
             }
-            else if (c_format != ukv_format_doc_json_patch_k && c_format != ukv_format_doc_json_merge_patch_k) {
+            else if (c_format != ukv_format_json_patch_k && c_format != ukv_format_json_merge_patch_k) {
                 json_t::string_t heapy_field {field};
                 parsed = parsed.flatten();
                 parsed.emplace(heapy_field, parsed_task);
@@ -537,7 +537,7 @@ void ukv_docs_write( //
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
 
-    auto func = fields || c_format == ukv_format_doc_json_patch_k || c_format == ukv_format_doc_json_merge_patch_k
+    auto func = fields || c_format == ukv_format_json_patch_k || c_format == ukv_format_json_merge_patch_k
                     ? &read_modify_write
                     : &replace_docs;
 

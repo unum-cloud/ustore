@@ -86,6 +86,7 @@ TEST(db, intro) {
 
     // Working with sub documents
     main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
+    main[ckf(56, "hello")].value() == "world";
 }
 
 template <typename locations_at>

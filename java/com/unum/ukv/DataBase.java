@@ -25,7 +25,7 @@ import java.util.Arrays; // Arrays.equals
  *          which will encapsulate all your reads & updates. The interface of
  *          the "HEAD" and transaction-based operations is identical.
  *
- *          In both cases we mimic native Java `HashMap` & `Ditionary` classes.
+ *          In both cases we mimic native Java `HashMap` & `Dictionary` classes.
  *          Aside from that, most objects are `AutoCloseable`, to simplify the
  *          resource usage and potentially auto-commit transactions on cleanup.
  *
@@ -41,7 +41,7 @@ import java.util.Arrays; // Arrays.equals
  *          > putIfAbsent(key, value)
  *          > getOrDefault(key, defaultValue)
  *          > putAll(Map<Key, Value>)
- *          You can expect similar behaviour to native classes described here:
+ *          You can expect similar behavior to native classes described here:
  *          https://docs.oracle.com/javase/7/docs/api/java/util/Dictionary.html
  *          https://docs.oracle.com/javase/7/docs/api/java/util/Hashtable.html
  *
@@ -95,7 +95,7 @@ public abstract class DataBase {
         public boolean autoCommit = true;
 
         /**
-         * When enabled, the transaction is being commited on close.
+         * When enabled, the transaction is being committed on close.
          * If the commit fails, an exception is raised.
          */
         public void setAutoCommit(boolean state) {
@@ -103,7 +103,7 @@ public abstract class DataBase {
         }
 
         /**
-         * @breif Resets the state of the transaction and creates a new "sequence
+         * @brief Resets the state of the transaction and creates a new "generation
          *        number" or "transaction ID" for it. Can't be used after `commit`.
          */
         public native void rollback();
@@ -111,7 +111,7 @@ public abstract class DataBase {
         /**
          * @return true if the operation was submitted and the state of DBMS updated.
          * @brief Commits all the writes to DBMS, checking for collisions in the
-         *        process. Both in writes and "non-transaparent" reads. Returns
+         *        process. Both in writes and "non-transparent" reads. Returns
          *        operation result, but doesn't throw exceptions.
          */
         public native boolean commit();
@@ -286,7 +286,7 @@ public abstract class DataBase {
 
         /**
          * @brief Begins a new transaction with an auto-incremented identifier.
-         *        By default, the transaction will be commited on `close`.
+         *        By default, the transaction will be committed on `close`.
          */
         public native Transaction transaction();
 
