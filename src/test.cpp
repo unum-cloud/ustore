@@ -19,6 +19,8 @@ using namespace unum;
 #define macro_concat_(prefix, suffix) prefix##suffix
 #define macro_concat(prefix, suffix) macro_concat_(prefix, suffix)
 #define _ [[maybe_unused]] auto macro_concat(_, __LINE__)
+#define M_EXPECT_EQ_JSON(str1, str2) EXPECT_EQ(json_t(str1), json_t(str2));
+#define M_EXPECT_EQ_MSG(str1, str2) EXPECT_EQ(json_t::from_msgpack(str1), json_t(str2));
 
 TEST(db, intro) {
 
@@ -32,7 +34,7 @@ TEST(db, intro) {
     // Single-element access
     main[42] = "purpose of life";
     main.at(42) = "purpose of life";
-    EXPECT_EQ(*(main[42].value()), "purpose of life");
+    EXPECT_EQ(*main[42].value(), "purpose of life");
     _ = main[42].clear();
 
     // Mapping multiple keys to same values
@@ -245,6 +247,31 @@ TEST(db, named) {
     _ = db.remove("col2");
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
+}
+
+TEST(db, docs) {
+    using json_t = nlohmann::json;
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+
+    // JSON
+    collection_t col = *db.collection("docs", ukv_format_json_k);
+    auto json = R"( {"person": "Davit", "age": 24} )"_json.dump();
+    col[1] = json.c_str();
+    M_EXPECT_EQ_JSON(col[1].value()->c_str(), json.c_str());
+    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Davit\"");
+    M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "24");
+
+    // MSGPACK
+    col.as(ukv_format_msgpack_k);
+    M_EXPECT_EQ_MSG(col[1].value()->c_str(), json.c_str());
+    M_EXPECT_EQ_MSG(col[ckf(1, "person")].value()->c_str(), "\"Davit\"");
+    M_EXPECT_EQ_MSG(col[ckf(1, "age")].value()->c_str(), "24");
+
+    // Binary
+    col.as(ukv_format_binary_k);
+    EXPECT_EQ(col[ckf(1, "person")].value()->c_str(), "Davit");
+    EXPECT_EQ(col[ckf(1, "age")].value()->c_str(), "24");
 }
 
 TEST(db, txn) {
@@ -498,5 +525,6 @@ TEST(db, net_batch) {
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
+    ::testing::GTEST_FLAG(filter) = "db.docs";
     return RUN_ALL_TESTS();
 }
