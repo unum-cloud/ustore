@@ -219,7 +219,7 @@ template <> struct format_code_gt<double> { inline static char const *format_k =
 // clang-format on
 
 void wrap_database(py::module&);
-void wrap_dataframe(py::module&);
-void wrap_network(py::module&);
+void wrap_pandas(py::module&);
+void wrap_networkx(py::module&);
 
 } // namespace unum::ukv

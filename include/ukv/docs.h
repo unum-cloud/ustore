@@ -143,6 +143,7 @@ void ukv_docs_write( //
 
     ukv_options_t const options,
     ukv_format_t const format,
+    ukv_type_t const type,
 
     ukv_val_ptr_t const* values,
     ukv_size_t const values_stride,
@@ -152,6 +153,8 @@ void ukv_docs_write( //
 
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
+
+    ukv_key_t** generated_keys,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -195,6 +198,7 @@ void ukv_docs_read( //
     ukv_options_t const options,
     ukv_format_t const format,
 
+    ukv_type_t** found_types,
     ukv_val_len_t** found_lengths,
     ukv_val_ptr_t* found_values,
 
@@ -206,6 +210,10 @@ void ukv_docs_read( //
  * specified documents. Will export a histogram of frequencies of every @c `ukv_type_t`
  * under every field. Can be used as a preparation step before `ukv_docs_gather`
  * or `ukv_docs_read`.
+ *
+ * @param[in] keys      Optional. Passing nothing will find all the unique keys
+ *                      appearing in all the documents. That might be a very heavy
+ *                      query for big collections of flexible schema documents.
  */
 void ukv_docs_gist( //
     ukv_t const db,
