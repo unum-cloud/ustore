@@ -9,8 +9,8 @@
 #pragma once
 #include <type_traits> // `std::void_t`
 
-#include "ukv/utility_types.hpp"
-#include "ukv/utility_ranges.hpp"
+#include "ukv/cpp/types.hpp"
+#include "ukv/cpp/ranges.hpp"
 
 namespace unum::ukv {
 

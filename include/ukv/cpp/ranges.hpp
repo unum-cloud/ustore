@@ -7,7 +7,7 @@
  */
 
 #pragma once
-#include "ukv/utility_types.hpp" // `value_view_t`
+#include "ukv/cpp/types.hpp" // `value_view_t`
 
 namespace unum::ukv {
 
@@ -303,7 +303,7 @@ bool all_ascending(iterator_at begin, std::size_t n) {
     return true;
 }
 
-#pragma region - Aliases& Packs
+#pragma region - Aliases and Packs
 
 using keys_view_t = strided_range_gt<ukv_key_t const>;
 using fields_view_t = strided_range_gt<ukv_str_view_t const>;
@@ -332,5 +332,46 @@ struct values_arg_t {
     strided_iterator_gt<ukv_val_len_t const> offsets_begin;
     strided_iterator_gt<ukv_val_len_t const> lengths_begin;
 };
+
+template <typename id_at>
+struct edges_range_gt {
+
+    using id_t = id_at;
+    using tuple_t = std::conditional_t<std::is_const_v<id_t>, edge_t const, edge_t>;
+    static_assert(sizeof(tuple_t) == 3 * sizeof(id_t));
+
+    strided_range_gt<id_t> source_ids;
+    strided_range_gt<id_t> target_ids;
+    strided_range_gt<id_t> edge_ids;
+
+    inline edges_range_gt() = default;
+    inline edges_range_gt(strided_range_gt<id_t> sources,
+                          strided_range_gt<id_t> targets,
+                          strided_range_gt<id_t> edges = {ukv_default_edge_id_k}) noexcept
+        : source_ids(sources), target_ids(targets), edge_ids(edges) {}
+
+    inline edges_range_gt(tuple_t* ptr, tuple_t* end) noexcept {
+        auto strided = strided_range_gt<tuple_t>(ptr, end);
+        source_ids = strided.members(&edge_t::source_id);
+        target_ids = strided.members(&edge_t::target_id);
+        edge_ids = strided.members(&edge_t::id);
+    }
+
+    inline edges_range_gt(std::vector<edge_t> const& edges) noexcept
+        : edges_range_gt(edges.data(), edges.data() + edges.size()) {}
+
+    inline std::size_t size() const noexcept { return std::min(source_ids.count(), target_ids.count()); }
+
+    inline edge_t operator[](std::size_t i) const noexcept {
+        edge_t result;
+        result.source_id = source_ids[i];
+        result.target_id = target_ids[i];
+        result.id = edge_ids[i];
+        return result;
+    }
+};
+
+using edges_span_t = edges_range_gt<ukv_key_t>;
+using edges_view_t = edges_range_gt<ukv_key_t const>;
 
 } // namespace unum::ukv
