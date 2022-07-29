@@ -19,8 +19,9 @@ using namespace unum;
 #define macro_concat_(prefix, suffix) prefix##suffix
 #define macro_concat(prefix, suffix) macro_concat_(prefix, suffix)
 #define _ [[maybe_unused]] auto macro_concat(_, __LINE__)
-#define M_EXPECT_EQ_JSON(str1, str2) EXPECT_EQ(json_t(str1), json_t(str2));
-#define M_EXPECT_EQ_MSG(str1, str2) EXPECT_EQ(json_t::from_msgpack(str1), json_t(str2));
+#define M_EXPECT_EQ_JSON(str1, str2) EXPECT_EQ(json_t::parse((str1)), json_t::parse((str2)));
+#define M_EXPECT_EQ_MSG(str1, str2) \
+    EXPECT_EQ(json_t::from_msgpack((str1).c_str(), (str1).c_str() + (str1).size()), json_t::parse((str2)));
 
 TEST(db, intro) {
 
@@ -262,11 +263,11 @@ TEST(db, docs) {
     M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Davit\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "24");
 
-    // MSGPACK
+    // MsgPack
     col.as(ukv_format_msgpack_k);
-    M_EXPECT_EQ_MSG(col[1].value()->c_str(), json.c_str());
-    M_EXPECT_EQ_MSG(col[ckf(1, "person")].value()->c_str(), "\"Davit\"");
-    M_EXPECT_EQ_MSG(col[ckf(1, "age")].value()->c_str(), "24");
+    M_EXPECT_EQ_MSG(*col[1].value(), json.c_str());
+    M_EXPECT_EQ_MSG(*col[ckf(1, "person")].value(), "\"Davit\"");
+    M_EXPECT_EQ_MSG(*col[ckf(1, "age")].value(), "24");
 
     // Binary
     col.as(ukv_format_binary_k);
