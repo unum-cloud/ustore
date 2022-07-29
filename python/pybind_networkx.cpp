@@ -29,7 +29,7 @@
  */
 
 #include "pybind.hpp"
-#include "ukv/graph.hpp"
+#include "ukv/ukv.hpp"
 
 using namespace unum::ukv;
 using namespace unum;
@@ -69,7 +69,7 @@ void ukv::wrap_network(py::module& m) {
     auto degs = py::class_<degree_view_t, std::shared_ptr<degree_view_t>>(m, "DegreeView", py::module_local());
     degs.def("__getitem__", [](degree_view_t& degs, ukv_key_t v) {
         py_graph_t& g = *degs.net_ptr;
-        auto maybe = g.graph.degree(v, degs.roles);
+        auto maybe = g.ref().degree(v, degs.roles);
         maybe.throw_unhandled();
         ukv_vertex_degree_t result = *maybe;
         return result;
@@ -77,14 +77,15 @@ void ukv::wrap_network(py::module& m) {
     degs.def("__getitem__", [](degree_view_t& degs, py::handle vs) {
         py_graph_t& g = *degs.net_ptr;
         auto handle_and_ids = strided_array<ukv_key_t const>(vs);
-        auto maybe = g.graph.degrees(handle_and_ids.second, degs.roles);
+        auto maybe = g.ref().degrees(handle_and_ids.second, degs.roles);
         maybe.throw_unhandled();
         return wrap_into_buffer<ukv_vertex_degree_t const>(g, {maybe->begin(), maybe->end()});
     });
 
     auto g = py::class_<py_graph_t, std::shared_ptr<py_graph_t>>(m, "Network", py::module_local());
     g.def( //
-        py::init([](std::shared_ptr<py_col_t> index_collection,
+        py::init([](std::shared_ptr<py_db_t> py_db,
+                    std::optional<std::string> index,
                     std::optional<std::string> sources_attrs,
                     std::optional<std::string> targets_attrs,
                     std::optional<std::string> relations_attrs,
@@ -92,19 +93,22 @@ void ukv::wrap_network(py::module& m) {
                     bool multi = false,
                     bool loops = false) {
             //
-            if (!index_collection)
+            if (!py_db)
                 return std::shared_ptr<py_graph_t> {};
 
-            db_t& db = index_collection->db_ptr->native;
-            collection_t& col = index_collection->native;
-
-            auto net_ptr = std::make_shared<py_graph_t>(graph_ref_t(col););
-
-            net_ptr->db_ptr = index_collection->db_ptr;
+            auto net_ptr = std::make_shared<py_graph_t>();
+            net_ptr->db_ptr = py_db;
             net_ptr->is_directed_ = directed;
             net_ptr->is_multi_ = multi;
             net_ptr->allow_self_loops_ = loops;
 
+            // Attach the primary collection
+            db_t& db = py_db->native;
+            {
+                auto col = db.collection(index ? index->c_str() : "");
+                col.throw_unhandled();
+                net_ptr->index = *std::move(col);
+            }
             // Attach the additional collections
             if (sources_attrs) {
                 auto col = db.collection(sources_attrs->c_str());
@@ -123,6 +127,7 @@ void ukv::wrap_network(py::module& m) {
             }
             return net_ptr;
         }),
+        py::arg("db"),
         py::arg("index"),
         py::arg("sources") = std::nullopt,
         py::arg("targets") = std::nullopt,
@@ -136,27 +141,15 @@ void ukv::wrap_network(py::module& m) {
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#counting-nodes-edges-and-neighbors
     g.def(
         "order",
-        [](py_graph_t& g, ukv_key_t v) {
-            auto maybe = g.graph.collection().size();
-            maybe.throw_unhandled();
-            return *maybe;
-        },
+        [](py_graph_t& g, ukv_key_t v) { return g.index.size(); },
         "Returns the number of nodes in the graph.");
     g.def(
         "number_of_nodes",
-        [](py_graph_t& g, ukv_key_t v) {
-            auto maybe = g.graph.collection().size();
-            maybe.throw_unhandled();
-            return *maybe;
-        },
+        [](py_graph_t& g, ukv_key_t v) { return g.index.size(); },
         "Returns the number of nodes in the graph.");
     g.def(
         "__len__",
-        [](py_graph_t& g, ukv_key_t v) {
-            auto maybe = g.graph.collection().size();
-            maybe.throw_unhandled();
-            return *maybe;
-        },
+        [](py_graph_t& g, ukv_key_t v) { return g.index.size(); },
         "Returns the number of nodes in the graph.");
     g.def_property_readonly(
         "degree",
@@ -187,16 +180,12 @@ void ukv::wrap_network(py::module& m) {
         "A DegreeView with the number outgoing edges for each Vertex.");
     g.def(
         "size",
-        [](py_graph_t& g) {
-            auto maybe = g.relations_attrs.size();
-            maybe.throw_unhandled();
-            return *maybe;
-        },
+        [](py_graph_t& g) { return g.relations_attrs.size(); },
         "Returns the number of attributed edges.");
     g.def(
         "number_of_edges",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) {
-            auto maybe = g.graph.edges(v1, v2);
+            auto maybe = g.ref().edges(v1, v2);
             maybe.throw_unhandled();
             return maybe->size();
         },
@@ -215,7 +204,7 @@ void ukv::wrap_network(py::module& m) {
     g.def(
         "has_node",
         [](py_graph_t& g, ukv_key_t v) {
-            auto maybe = g.graph.contains(v);
+            auto maybe = g.ref().contains(v);
             maybe.throw_unhandled();
             return *maybe;
         },
@@ -224,7 +213,7 @@ void ukv::wrap_network(py::module& m) {
     g.def(
         "__contains__",
         [](py_graph_t& g, ukv_key_t v) {
-            auto maybe = g.graph.contains(v);
+            auto maybe = g.ref().contains(v);
             maybe.throw_unhandled();
             return *maybe;
         },
@@ -238,7 +227,7 @@ void ukv::wrap_network(py::module& m) {
     g.def(
         "has_edge",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) {
-            auto maybe = g.graph.edges(v1, v2);
+            auto maybe = g.ref().edges(v1, v2);
             maybe.throw_unhandled();
             return maybe->size() != 0;
         },
@@ -247,7 +236,7 @@ void ukv::wrap_network(py::module& m) {
     g.def(
         "has_edge",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
-            auto maybe = g.graph.edges(v1, v2);
+            auto maybe = g.ref().edges(v1, v2);
             maybe.throw_unhandled();
             return std::find(maybe->edge_ids.begin(), maybe->edge_ids.end(), eid) != maybe->edge_ids.end();
         },
@@ -266,7 +255,7 @@ void ukv::wrap_network(py::module& m) {
             // Retrieving neighbors is trickier than just `successors` or `predecessors`.
             // We are receiving an adjacency list, where both incoming an edges exist.
             // So the stride/offset is not uniform across the entire list.
-            auto maybe = g.graph.edges(n, ukv_vertex_role_any_k);
+            auto maybe = g.ref().edges(n, ukv_vertex_role_any_k);
             maybe.throw_unhandled();
 
             // We can gobble the contents a little bit by swapping the members of some
@@ -287,7 +276,7 @@ void ukv::wrap_network(py::module& m) {
     g.def(
         "successors",
         [](py_graph_t& g, ukv_key_t n) {
-            auto maybe = g.graph.edges(n, ukv_vertex_source_k);
+            auto maybe = g.ref().edges(n, ukv_vertex_source_k);
             maybe.throw_unhandled();
             return wrap_into_buffer(g, maybe->target_ids);
         },
@@ -296,7 +285,7 @@ void ukv::wrap_network(py::module& m) {
     g.def(
         "predecessors",
         [](py_graph_t& g, ukv_key_t n) {
-            auto maybe = g.graph.edges(n, ukv_vertex_target_k);
+            auto maybe = g.ref().edges(n, ukv_vertex_target_k);
             maybe.throw_unhandled();
             return wrap_into_buffer(g, maybe->source_ids);
         },
@@ -306,7 +295,7 @@ void ukv::wrap_network(py::module& m) {
         "nbunch_iter",
         [](py_graph_t& g, py::handle const& vs) {
             auto handle_and_ids = strided_array<ukv_key_t const>(vs);
-            auto maybe = g.graph.contains(handle_and_ids.second);
+            auto maybe = g.ref().contains(handle_and_ids.second);
             maybe.throw_unhandled();
             return wrap_into_buffer(g, *maybe);
         },
@@ -321,7 +310,7 @@ void ukv::wrap_network(py::module& m) {
                 strided_range_gt<ukv_key_t const>(v1),
                 strided_range_gt<ukv_key_t const>(v2),
             };
-            g.graph.upsert(edges).throw_unhandled();
+            g.ref().upsert(edges).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"));
@@ -333,7 +322,7 @@ void ukv::wrap_network(py::module& m) {
                 strided_range_gt<ukv_key_t const>(v2),
                 strided_range_gt<ukv_key_t const>(eid),
             };
-            g.graph.upsert(edges).throw_unhandled();
+            g.ref().upsert(edges).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"),
@@ -345,7 +334,7 @@ void ukv::wrap_network(py::module& m) {
                 strided_range_gt<ukv_key_t const>(v1),
                 strided_range_gt<ukv_key_t const>(v2),
             };
-            g.graph.remove(edges).throw_unhandled();
+            g.ref().remove(edges).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"));
@@ -357,7 +346,7 @@ void ukv::wrap_network(py::module& m) {
                 strided_range_gt<ukv_key_t const>(v2),
                 strided_range_gt<ukv_key_t const>(eid),
             };
-            g.graph.remove(edges).throw_unhandled();
+            g.ref().remove(edges).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"),
@@ -375,7 +364,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
                                                    : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
             };
-            g.graph.upsert(edges).throw_unhandled();
+            g.ref().upsert(edges).throw_unhandled();
         },
         py::arg("ebunch_to_add"),
         "Adds an adjacency list (in a form of 2 or 3 columnar matrix) to the graph.");
@@ -392,7 +381,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
                                                    : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
             };
-            g.graph.remove(edges).throw_unhandled();
+            g.ref().remove(edges).throw_unhandled();
         },
         py::arg("ebunch"),
         "Removes all edges in supplied adjacency list (in a form of 2 or 3 columnar matrix) from the graph.");
@@ -406,7 +395,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_sources.second,
                 handle_and_targets.second,
             };
-            g.graph.upsert(edges).throw_unhandled();
+            g.ref().upsert(edges).throw_unhandled();
         },
         py::arg("us"),
         py::arg("vs"),
@@ -420,7 +409,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_sources.second,
                 handle_and_targets.second,
             };
-            g.graph.remove(edges).throw_unhandled();
+            g.ref().remove(edges).throw_unhandled();
         },
         py::arg("us"),
         py::arg("vs"),
@@ -437,7 +426,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_targets.second,
                 handle_and_edge_ids.second,
             };
-            g.graph.upsert(edges).throw_unhandled();
+            g.ref().upsert(edges).throw_unhandled();
         },
         py::arg("us"),
         py::arg("vs"),
@@ -454,7 +443,7 @@ void ukv::wrap_network(py::module& m) {
                 handle_and_targets.second,
                 handle_and_edge_ids.second,
             };
-            g.graph.remove(edges).throw_unhandled();
+            g.ref().remove(edges).throw_unhandled();
         },
         py::arg("us"),
         py::arg("vs"),
@@ -466,7 +455,7 @@ void ukv::wrap_network(py::module& m) {
         "clear",
         [](py_graph_t& g) {
             // db_t& db = g.db_ptr->native;
-            // db.clear(g.graph.collection());
+            // db.clear(g.index);
             // db.clear(g.sources_attrs);
             // db.clear(g.targets_attrs);
             // db.clear(g.relations_attrs);

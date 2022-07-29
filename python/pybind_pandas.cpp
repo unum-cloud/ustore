@@ -32,21 +32,21 @@ void ukv::wrap_dataframe(py::module& m) {
     auto df = py::class_<frame_t, std::shared_ptr<frame_t>>(m, "DataFrame", py::module_local());
     df.def(py::init([](std::vector<std::string> fields) { return std::make_shared<frame_t>(); }));
 
-    df.def("columns", [](frame_t& df) -> py::list {});
+    df.def("columns", [](frame_t& df) {});
 
     // Batch Access
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.iloc.html#pandas.DataFrame.loc
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.iloc.html#pandas.DataFrame.iloc
-    df.def("loc", [](frame_t& df, py::handle const ids, ukv_doc_format_t) {});
-    df.def("iloc", [](frame_t& df, py::handle const ids, ukv_doc_format_t) {});
+    df.def("loc", [](frame_t& df, py::handle const ids, ukv_format_t) {});
+    df.def("iloc", [](frame_t& df, py::handle const ids, ukv_format_t) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.sample.html
     df.def("sample", [](frame_t& df, std::size_t count, bool replace) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.append.html
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.append.html
-    df.def("append", [](frame_t& df, py::bytes const& data, ukv_doc_format_t) {});
-    df.def("assign", [](frame_t& df, py::bytes const& data, ukv_doc_format_t) {});
+    df.def("append", [](frame_t& df, py::bytes const& data, ukv_format_t) {});
+    df.def("assign", [](frame_t& df, py::bytes const& data, ukv_format_t) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_json.html
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_parquet.html
