@@ -64,7 +64,7 @@ py::handle wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
     return PyMemoryView_FromBuffer(&g.last_buffer);
 }
 
-void ukv::wrap_network(py::module& m) {
+void ukv::wrap_networkx(py::module& m) {
 
     auto degs = py::class_<degree_view_t, std::shared_ptr<degree_view_t>>(m, "DegreeView", py::module_local());
     degs.def("__getitem__", [](degree_view_t& degs, ukv_key_t v) {

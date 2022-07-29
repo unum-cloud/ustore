@@ -37,10 +37,15 @@ PYBIND11_MODULE(UKV_PYTHON_MODULE_NAME, m) {
     m.attr("__name__") = "ukv." stringify_value_m(UKV_PYTHON_MODULE_NAME);
     m.doc() =
         "Python bindings for Universal Key Value store library.\n"
-        "Supports most basic collection operations, just like `dict`.\n"
+        "Supports:\n"
+        "> Collection-level CRUD operations, like `dict`.\n"
+        "> Batch operations & ACID transactions.\n"
+        "> Graph collections, mimicking `networkx`.\n"
+        "> Tabular views, mimicking `pandas`.\n"
+        "> Apache Arrow exports for inter-process communication.\n"
         "---------------------------------------------\n";
 
     wrap_database(m);
-    wrap_dataframe(m);
-    wrap_network(m);
+    wrap_pandas(m);
+    wrap_networkx(m);
 }
