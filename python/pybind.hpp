@@ -107,7 +107,7 @@ struct py_received_buffer_t {
 struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
 
     std::shared_ptr<py_db_t> db_ptr;
-    graph_ref_t graph;
+    collection_t index;
     collection_t sources_attrs;
     collection_t targets_attrs;
     collection_t relations_attrs;
@@ -120,10 +120,12 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     Py_ssize_t last_buffer_shape[3];
     Py_ssize_t last_buffer_strides[3];
 
-    py_graph_t(graph_ref_t&& g) : graph(std::move(g)) {}
+    py_graph_t() {}
     py_graph_t(py_graph_t&&) = delete;
     py_graph_t(py_graph_t const&) = delete;
     ~py_graph_t() {}
+
+    graph_ref_t ref() { return index.as_graph(); }
 };
 
 template <typename scalar_at>

@@ -30,7 +30,7 @@ namespace unum::ukv {
  *   For details, @see `members_ref_gt` @section "Memory Management"
  * > Lifetime: @b Must live shorter then the DB it belongs to.
  * > Copyable: No.
- * > Exceptions: Never.
+ * > Exceptions: Only the `size` method.
  *
  * @section Formats
  * Formats @b loosely describe the data stored in the collection
@@ -78,7 +78,6 @@ class collection_t {
     inline ukv_collection_t* member_ptr() noexcept { return &col_; }
     inline ukv_t db() const noexcept { return db_; }
     inline ukv_txn_t txn() const noexcept { return txn_; }
-    inline expected_gt<std::size_t> size() const noexcept { return 0; }
     inline graph_ref_t as_graph() noexcept { return {db_, txn_, col_, arena_}; }
     inline collection_t& as(ukv_format_t format) noexcept {
         format_ = format;
@@ -89,6 +88,17 @@ class collection_t {
                              ukv_key_t max_key = ukv_key_unknown_k,
                              std::size_t read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
         return {db_, txn_, col_, min_key, max_key, read_ahead};
+    }
+
+    inline expected_gt<size_range_t> size_range() const noexcept {
+        auto maybe = keys().find_size();
+        return {maybe.release_status(), std::move(maybe->cardinality)};
+    }
+
+    std::size_t size() const noexcept(false) {
+        auto maybe = size_range();
+        maybe.throw_unhandled();
+        return (maybe->min + maybe->max) / 2;
     }
 
     inline members_ref_gt<keys_arg_t> operator[](keys_view_t const& keys) noexcept { return at(keys); }

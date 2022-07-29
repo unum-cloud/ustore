@@ -451,16 +451,16 @@ py::object punned_collection( //
     maybe_col->as(format);
 
     if (format == ukv_format_graph_k) {
-        graph_ref_t g(*maybe_col);
-        auto net_ptr = std::make_shared<py_graph_t>(std::move(g));
-        net_ptr->db_ptr = py_db_ptr->shared_from_this();
-        return py::cast(net_ptr);
+        auto py_graph = std::make_shared<py_graph_t>();
+        py_graph->db_ptr = py_db_ptr->shared_from_this();
+        py_graph->index = *std::move(maybe_col);
+        return py::cast(py_graph);
     }
     else {
         auto py_col = std::make_shared<py_col_t>();
         py_col->name = collection;
-        py_col->native = *std::move(maybe_col);
         py_col->db_ptr = py_db_ptr->shared_from_this();
+        py_col->native = *std::move(maybe_col);
         return py::cast(py_col);
     }
 }
