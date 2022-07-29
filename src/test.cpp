@@ -275,7 +275,6 @@ TEST(db, docs) {
 }
 
 TEST(db, txn) {
-#if 0
     db_t db;
     EXPECT_TRUE(db.open(""));
     EXPECT_TRUE(db.transact());
@@ -293,38 +292,42 @@ TEST(db, txn) {
         .lengths_begin = {&val_len, 0},
     };
 
-    round_trip(txn[keys], values);
+    auto txn_ref = txn[keys];
+    round_trip(txn_ref, values);
 
     EXPECT_TRUE(db.collection());
     collection_t col = *db.collection();
-    ref = col[keys];
+    auto col_ref = col[keys];
 
     // Check for missing values before commit
-    check_length();
+    check_length(col_ref, ukv_val_len_missing_k);
 
-    txn.commit();
-    txn.reset();
+    auto status = txn.commit();
+    status.throw_unhandled();
+    status = txn.reset();
+    status.throw_unhandled();
 
     // Validate that values match after commit
-    check_equalities(ref, values);
+    check_equalities(col_ref, values);
 
     // Transaction with named collection
     EXPECT_TRUE(db.collection("named_col"));
     collection_t named_col = *db.collection("named_col");
     std::vector<col_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
-    ref = txn[sub_keys];
-    round_trip(ref, values);
+    auto txn_ref2 = txn[sub_keys];
+    round_trip(txn_ref2, values);
 
     // Check for missing values before commit
-    ref = named_col[keys];
-    check_length(ref);
+    auto named_col_ref = named_col[keys];
+    check_length(named_col_ref, ukv_val_len_missing_k);
 
-    txn.commit();
-    txn.reset();
+    status = txn.commit();
+    status.throw_unhandled();
+    status = txn.reset();
+    status.throw_unhandled();
 
     // Validate that values match after commit
-    check_equalities(ref, values);
-#endif
+    check_equalities(named_col_ref, values);
 }
 
 TEST(db, nested_docs) {
@@ -525,6 +528,6 @@ TEST(db, net_batch) {
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
-    ::testing::GTEST_FLAG(filter) = "db.docs";
+    ::testing::GTEST_FLAG(filter) = "db.txn";
     return RUN_ALL_TESTS();
 }
