@@ -314,8 +314,8 @@ TEST(db, txn) {
     EXPECT_TRUE(db.collection("named_col"));
     collection_t named_col = *db.collection("named_col");
     std::vector<col_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
-    auto txn_ref2 = txn[sub_keys];
-    round_trip(txn_ref2, values);
+    auto txn_named_col_ref = txn[sub_keys];
+    round_trip(txn_named_col_ref, values);
 
     // Check for missing values before commit
     auto named_col_ref = named_col[keys];
@@ -528,6 +528,6 @@ TEST(db, net_batch) {
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
-    ::testing::GTEST_FLAG(filter) = "db.txn";
+    ::testing::GTEST_FLAG(filter) = "db.net";
     return RUN_ALL_TESTS();
 }
