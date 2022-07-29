@@ -149,6 +149,7 @@ class value_view_t {
 
     inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
     inline byte_t const* end() const noexcept { return begin() + size(); }
+    inline char const* c_str() const noexcept { return reinterpret_cast<char const*>(ptr_); }
     inline std::size_t size() const noexcept { return length_ == ukv_val_len_missing_k ? 0 : length_; }
     inline bool empty() const noexcept { return !size(); }
     inline operator bool() const noexcept { return length_ != ukv_val_len_missing_k; }
