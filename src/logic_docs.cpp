@@ -537,7 +537,8 @@ void ukv_docs_write( //
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
 
-    auto func = fields || c_format == ukv_format_json_patch_k || c_format == ukv_format_json_merge_patch_k
+    auto has_fields = fields && (!fields.repeats() || *fields);
+    auto func = has_fields || c_format == ukv_format_json_patch_k || c_format == ukv_format_json_merge_patch_k
                     ? &read_modify_write
                     : &replace_docs;
 
