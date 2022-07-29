@@ -90,7 +90,7 @@ TEST(db, intro) {
 }
 
 template <typename locations_at>
-void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_length) {
+void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_length) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
 
@@ -98,7 +98,7 @@ void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_leng
     using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    given_gt<taped_values_view_t> retrieved_and_arena = ref.value();
+    expected_gt<taped_values_view_t> retrieved_and_arena = ref.value();
     taped_values_view_t const& retrieved = *retrieved_and_arena;
     ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
@@ -125,13 +125,13 @@ void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_leng
 }
 
 template <typename locations_at>
-void check_equalities(member_refs_gt<locations_at>& ref, values_arg_t values) {
+void check_equalities(members_ref_gt<locations_at>& ref, values_arg_t values) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
     using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    given_gt<taped_values_view_t> retrieved_and_arena = ref.value();
+    expected_gt<taped_values_view_t> retrieved_and_arena = ref.value();
     taped_values_view_t const& retrieved = *retrieved_and_arena;
     EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
@@ -148,7 +148,7 @@ void check_equalities(member_refs_gt<locations_at>& ref, values_arg_t values) {
 }
 
 template <typename locations_at>
-void round_trip(member_refs_gt<locations_at>& ref, values_arg_t values) {
+void round_trip(members_ref_gt<locations_at>& ref, values_arg_t values) {
     EXPECT_TRUE(ref.assign(values)) << "Failed to assign";
     check_equalities(ref, values);
 }
@@ -311,8 +311,8 @@ TEST(db, net) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    collection_t col(db);
-    graph_ref_t net(col);
+    collection_t main = *db.collection();
+    graph_ref_t net = main.as_graph();
 
     // triangle
     std::vector<edge_t> edge1 {{1, 2, 9}};
@@ -408,8 +408,8 @@ TEST(db, net_batch) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    collection_t col(db);
-    graph_ref_t net(col);
+    collection_t main = *db.collection();
+    graph_ref_t net = main.as_graph();
 
     std::vector<edge_t> triangle {
         {1, 2, 9},

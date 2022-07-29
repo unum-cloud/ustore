@@ -8,6 +8,4 @@
  */
 
 #pragma once
-#include "ukv/db.hpp"
-#include "ukv/docs.hpp"
-#include "ukv/graph.hpp"
+#include "ukv/cpp/db.hpp"
