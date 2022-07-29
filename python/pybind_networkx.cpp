@@ -355,7 +355,7 @@ void ukv::wrap_network(py::module& m) {
         "add_edges_from",
         [](py_graph_t& g, py::handle const& adjacency_list) {
             auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
-            if (handle_and_list.second.cols() != 2 || handle_and_list.second.cols() != 3)
+            if (handle_and_list.second.cols() != 2 && handle_and_list.second.cols() != 3)
                 throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
 
             edges_view_t edges {
@@ -372,7 +372,7 @@ void ukv::wrap_network(py::module& m) {
         "remove_edges_from",
         [](py_graph_t& g, py::handle const& adjacency_list) {
             auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
-            if (handle_and_list.second.cols() != 2 || handle_and_list.second.cols() != 3)
+            if (handle_and_list.second.cols() != 2 && handle_and_list.second.cols() != 3)
                 throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
 
             edges_view_t edges {
