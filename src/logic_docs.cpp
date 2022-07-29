@@ -61,6 +61,11 @@ struct export_to_value_t final : public nlohmann::detail::output_adapter_protoco
         auto ptr = reinterpret_cast<byte_t const*>(s);
         value_ptr->insert(value_ptr->size(), ptr, ptr + length);
     }
+
+    template <typename at>
+    void write_scalar(at scalar) {
+        write_characters(reinterpret_cast<char const*>(&scalar), sizeof(at));
+    }
 };
 
 json_t& lookup_field(json_t& json, ukv_str_view_t field, json_t& default_json) noexcept(false) {
@@ -126,6 +131,28 @@ void dump_any(json_t const& json,
         case ukv_format_bson_k: return binary_serializer_t(value).write_bson(json);
         case ukv_format_cbor_k: return binary_serializer_t(value).write_cbor(json);
         case ukv_format_ubjson_k: return binary_serializer_t(value).write_ubjson(json, true, true);
+        case ukv_format_binary_k: {
+            switch (json.type()) {
+            case json_t::value_t::null: break;
+            case json_t::value_t::discarded: break;
+            case json_t::value_t::object: *c_error = "Can't export a nested dictionary in binary form!"; break;
+            case json_t::value_t::array: *c_error = "Can't export a nested dictionary in binary form!"; break;
+            case json_t::value_t::binary: {
+                json_t::binary_t const& str = json.get_ref<json_t::binary_t const&>();
+                value->write_characters(reinterpret_cast<char const*>(str.data()), str.size());
+                break;
+            }
+            case json_t::value_t::string: {
+                json_t::string_t const& str = json.get_ref<json_t::string_t const&>();
+                value->write_characters(str.data(), str.size());
+                break;
+            }
+            case json_t::value_t::boolean: value->write_character(json.get<bool>()); break;
+            case json_t::value_t::number_integer: value->write_scalar(json.get<std::int64_t>()); break;
+            case json_t::value_t::number_unsigned: value->write_scalar(json.get<std::uint64_t>()); break;
+            case json_t::value_t::number_float: value->write_scalar(json.get<double>()); break;
+            }
+        }
         default: *c_error = "Unsupported output format"; break;
         }
     }
@@ -1153,8 +1180,9 @@ void ukv_docs_gather_strings( //
             case json_t::value_t::number_float: {
                 auto scalar = found_value.get<double>();
                 // Parsing and dumping floating-point numbers is still not fully implemented in STL:
-                //  std::to_chars_result result = std::to_chars(&str_buffer[0], str_buffer + str_buffer_len_k, scalar);
-                //  bool fits_null_terminated = result.ec != std::errc() && result.ptr < str_buffer + str_buffer_len_k;
+                //  std::to_chars_result result = std::to_chars(&str_buffer[0], str_buffer + str_buffer_len_k,
+                //  scalar); bool fits_null_terminated = result.ec != std::errc() && result.ptr < str_buffer +
+                //  str_buffer_len_k;
                 // Using FMT would cause an extra dependency:
                 //  auto end_ptr = fmt::format_to(str_buffer, "{}", scalar);
                 //  bool fits_null_terminated = end_ptr < str_buffer + str_buffer_len_k;
