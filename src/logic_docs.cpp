@@ -504,7 +504,9 @@ void ukv_docs_write( //
 
     // If user wants the entire doc in the same format, as the one we use internally,
     // this request can be passed entirely to the underlying Key-Value store.
-    if (!c_fields && c_format == internal_format_k)
+    strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
+    auto has_fields = fields && (!fields.repeats() || *fields);
+    if (!has_fields && c_format == internal_format_k)
         return ukv_write(c_db,
                          c_txn,
                          c_tasks_count,
@@ -529,7 +531,6 @@ void ukv_docs_write( //
     if (*c_error)
         return;
 
-    strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
@@ -537,7 +538,6 @@ void ukv_docs_write( //
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
 
-    auto has_fields = fields && (!fields.repeats() || *fields);
     auto func = has_fields || c_format == ukv_format_json_patch_k || c_format == ukv_format_json_merge_patch_k
                     ? &read_modify_write
                     : &replace_docs;
@@ -570,7 +570,9 @@ void ukv_docs_read( //
 
     // If user wants the entire doc in the same format, as the one we use internally,
     // this request can be passed entirely to the underlying Key-Value store.
-    if (!c_fields && c_format == internal_format_k)
+    strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
+    auto has_fields = fields && (!fields.repeats() || *fields);
+    if (!has_fields && c_format == internal_format_k)
         return ukv_read(c_db,
                         c_txn,
                         c_tasks_count,
@@ -591,7 +593,6 @@ void ukv_docs_read( //
     if (*c_error)
         return;
 
-    strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
 
