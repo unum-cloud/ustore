@@ -110,9 +110,7 @@ def degree(net):
 def test():
     # net = ukv.DiGraph()
     db = ukv.DataBase()
-    index = db['.graph']
-
-    net = ukv.Network(index)
+    net = ukv.Network(db, '.graph')
     line(net)
     triangle(net)
     batch(net)
