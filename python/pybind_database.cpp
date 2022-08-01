@@ -403,50 +403,17 @@ void set_item( //
     status.throw_unhandled();
 }
 
-std::optional<py::array_t<ukv_key_t>> scan( //
+std::optional<py::tuple> scan( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
     arena_t& arena,
+    ukv_options_t options,
     ukv_key_t min_key,
     ukv_size_t scan_length) {
 
     ukv_key_t* found_keys = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
-    status_t status;
-    ukv_options_t options = ukv_options_default_k;
-
-    ukv_scan( //
-        db_ptr,
-        txn_ptr,
-        1,
-        &collection_ptr,
-        0,
-        &min_key,
-        0,
-        &scan_length,
-        0,
-        options,
-        &found_keys,
-        &found_lengths,
-        arena.member_ptr(),
-        status.member_ptr());
-
-    status.throw_unhandled();
-    return py::array_t<ukv_key_t>(scan_length, found_keys);
-}
-
-std::optional<py::tuple> scan_lengths( //
-    ukv_t db_ptr,
-    ukv_txn_t txn_ptr,
-    ukv_collection_t collection_ptr,
-    arena_t& arena,
-    ukv_key_t min_key,
-    ukv_size_t scan_length) {
-
-    ukv_key_t* found_keys = nullptr;
-    ukv_val_len_t* found_lengths = nullptr;
-    ukv_options_t options = ukv_option_read_lengths_k;
     status_t status;
 
     ukv_scan( //
@@ -466,8 +433,9 @@ std::optional<py::tuple> scan_lengths( //
         status.member_ptr());
 
     status.throw_unhandled();
-    return py::make_tuple(py::array_t<ukv_key_t>(scan_length, found_keys),
-                          py::array_t<ukv_val_len_t>(scan_length, found_lengths));
+    return options == ukv_options_default_k ? py::make_tuple(py::array_t<ukv_key_t>(scan_length, found_keys))
+                                            : py::make_tuple(py::array_t<ukv_key_t>(scan_length, found_keys),
+                                                             py::array_t<ukv_val_len_t>(scan_length, found_lengths));
 }
 
 py::object punned_collection( //
@@ -584,11 +552,19 @@ void ukv::wrap_database(py::module& m) {
     });
 
     py_db.def("scan", [](py_db_t& py_db, ukv_key_t min_key, ukv_size_t length) {
-        return scan(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, min_key, length);
+        return py::detail::accessor_policies::tuple_item::get(
+            *scan(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, ukv_options_default_k, min_key, length),
+            (py::ssize_t)0);
     });
 
-    py_db.def("scan_lengths", [](py_db_t& py_db, ukv_key_t min_key, ukv_size_t length) {
-        return scan_lengths(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, min_key, length);
+    py_db.def("scan_with_lengths", [](py_db_t& py_db, ukv_key_t min_key, ukv_size_t length) {
+        return scan(py_db.native,
+                    nullptr,
+                    ukv_default_collection_k,
+                    py_db.arena,
+                    ukv_option_read_lengths_k,
+                    min_key,
+                    length);
     });
 
     // Define `Collection`s member method, without defining any external constructors
@@ -638,21 +614,25 @@ void ukv::wrap_database(py::module& m) {
         py::arg("values"));
 
     py_col.def("scan", [](py_col_t& py_col, ukv_key_t min_key, ukv_size_t length) {
+        return py::detail::accessor_policies::tuple_item::get(
+            *scan(py_col.db_ptr->native,
+                  py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
+                  py_col.native,
+                  py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
+                  ukv_options_default_k,
+                  min_key,
+                  length),
+            (py::ssize_t)0);
+    });
+
+    py_col.def("scan_with_lengths", [](py_col_t& py_col, ukv_key_t min_key, ukv_size_t length) {
         return scan(py_col.db_ptr->native,
                     py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                     py_col.native,
                     py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
+                    ukv_option_read_lengths_k,
                     min_key,
                     length);
-    });
-
-    py_col.def("scan_lengths", [](py_col_t& py_col, ukv_key_t min_key, ukv_size_t length) {
-        return scan_lengths(py_col.db_ptr->native,
-                            py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
-                            py_col.native,
-                            py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
-                            min_key,
-                            length);
     });
 
     // `Transaction`:
