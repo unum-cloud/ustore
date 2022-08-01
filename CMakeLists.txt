@@ -78,14 +78,12 @@ include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
 
 
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(Arrow-external Boost-external)
 endif()
-
-# Jemalloc
-include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
 
 # LZ4 Compression
 # https://stackoverflow.com/questions/67537111/how-do-i-decide-between-lz4-and-snappy-compression
