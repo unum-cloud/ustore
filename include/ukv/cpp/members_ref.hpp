@@ -75,16 +75,15 @@ class members_ref_gt {
     members_ref_gt(ukv_t db,
                    ukv_txn_t txn,
                    locations_store_t locations,
-                   arena_t& arena,
+                   ukv_arena_t* arena,
                    ukv_format_t format = ukv_format_binary_k) noexcept
-        : db_(db), txn_(txn), arena_(arena.member_ptr()), locations_(locations), format_(format) {}
+        : db_(db), txn_(txn), arena_(arena), locations_(locations), format_(format) {}
 
     members_ref_gt(members_ref_gt&&) = default;
     members_ref_gt& operator=(members_ref_gt&&) = default;
     members_ref_gt(members_ref_gt const&) = default;
     members_ref_gt& operator=(members_ref_gt const&) = default;
 
-    arena_t& arena() const noexcept { return *reinterpret_cast<arena_t*>(arena_); }
     members_ref_gt& on(arena_t& arena) noexcept {
         arena_ = arena.member_ptr();
         return *this;

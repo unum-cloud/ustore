@@ -164,12 +164,12 @@ class growing_tape_t {
         contents_.clear();
     }
 
-    strided_range_gt<ukv_val_len_t> offsets() noexcept { return offsets_; }
-    strided_range_gt<ukv_val_len_t> lengths() noexcept { return lengths_; }
-    strided_range_gt<byte_t> contents() noexcept { return contents_; }
+    strided_range_gt<ukv_val_len_t> offsets() noexcept { return strided_range(offsets_); }
+    strided_range_gt<ukv_val_len_t> lengths() noexcept { return strided_range(lengths_); }
+    strided_range_gt<byte_t> contents() noexcept { return strided_range(contents_); }
 
     operator taped_values_view_t() noexcept {
-        return {lengths_.data(), ukv_val_ptr_t(contents_.data()), contents_.size()};
+        return {lengths_.data(), ukv_val_ptr_t(contents_.data()), lengths_.size()};
     }
 };
 

@@ -195,6 +195,7 @@ class arena_t {
     }
 
     inline ukv_arena_t* member_ptr() noexcept { return &memory_; }
+    inline operator ukv_arena_t*() & noexcept { return member_ptr(); }
     inline ukv_t db() const noexcept { return db_; }
 };
 
@@ -213,9 +214,10 @@ class any_arena_t {
     any_arena_t(any_arena_t const&) = delete;
     any_arena_t& operator=(any_arena_t const&) = delete;
 
-    arena_t& arena() noexcept { return accessible_ ? *accessible_ : owned_; }
-    ukv_arena_t* member_ptr() noexcept { return arena().member_ptr(); }
-    arena_t release_owned() noexcept { return std::exchange(owned_, arena_t {owned_.db()}); }
+    inline arena_t& arena() noexcept { return accessible_ ? *accessible_ : owned_; }
+    inline ukv_arena_t* member_ptr() noexcept { return arena().member_ptr(); }
+    inline operator ukv_arena_t*() & noexcept { return member_ptr(); }
+    inline arena_t release_owned() noexcept { return std::exchange(owned_, arena_t {owned_.db()}); }
 };
 
 #pragma region - Adapters
