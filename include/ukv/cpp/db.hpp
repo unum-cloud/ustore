@@ -101,8 +101,13 @@ class collection_t {
         return (maybe->min + maybe->max) / 2;
     }
 
-    inline members_ref_gt<keys_arg_t> operator[](keys_view_t const& keys) noexcept { return at(keys); }
-    inline members_ref_gt<keys_arg_t> at(keys_view_t const& keys) noexcept {
+    inline members_ref_gt<keys_arg_t> operator[](std::initializer_list<ukv_key_t> keys) noexcept { return at(keys); }
+    inline members_ref_gt<keys_arg_t> at(std::initializer_list<ukv_key_t> keys) noexcept { //
+        return at(strided_range(keys));
+    }
+
+    inline members_ref_gt<keys_arg_t> operator[](keys_view_t keys) noexcept { return at(keys); }
+    inline members_ref_gt<keys_arg_t> at(keys_view_t keys) noexcept {
         keys_arg_t arg;
         arg.collections_begin = &col_;
         arg.keys_begin = keys.begin();
