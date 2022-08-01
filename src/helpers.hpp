@@ -5,11 +5,12 @@
  * @brief Helper functions for the C++ backend implementations.
  */
 #pragma once
-#include <memory>    // `std::allocator`
+#include <limits.h>  // `CHAR_BIT`
 #include <cstring>   // `std::memcpy`
 #include <stdexcept> // `std::runtime_error`
+#include <memory>    // `std::allocator`
+#include <vector>    // `std::vector`
 #include <algorithm> // `std::sort`
-#include <limits.h>  // `CHAR_BIT`
 
 #include "ukv/ukv.hpp"
 

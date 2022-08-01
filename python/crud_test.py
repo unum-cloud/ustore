@@ -6,17 +6,17 @@ def only_explicit(col):
 
     col.set(3, b'x')
     col.set(4, b'y')
-    assert col.contains(3)
-    assert col.contains(4)
+    assert col.has_key(3)
+    assert col.has_key(4)
 
     assert col.get(3) == b'x'
     assert col.get(4) == b'y'
     assert col.get(4) != b'yy'
 
-    col.remove(3)
-    col.remove(4)
-    assert not col.contains(3)
-    assert not col.contains(4)
+    col.pop(3)
+    col.pop(4)
+    assert not col.has_key(3)
+    assert not col.has_key(4)
 
 
 def only_explicit_batch(col):
@@ -24,13 +24,13 @@ def only_explicit_batch(col):
     col.set((3, 4), (b'xx', b'yy'))
     col.set([3, 4], (b'x', b'y'))
     col.get((3, 4))
-    assert col.contains((3, 4)) == (True, True)
+    assert col.has_key((3, 4)) == (True, True)
     assert col.get((3, 4)) == (b'x', b'y')
 
     col.set((3, 4), None)
-    assert col.contains((3, 4)) == (False, False)
+    assert col.has_key((3, 4)) == (False, False)
 
-    col.remove((3, 4))
+    col.pop((3, 4))
 
 
 def only_operators(col):
