@@ -271,8 +271,8 @@ TEST(db, docs) {
 
     // Binary
     col.as(ukv_format_binary_k);
-    EXPECT_EQ(col[ckf(1, "person")].value()->c_str(), "Davit");
-    EXPECT_EQ(col[ckf(1, "age")].value()->c_str(), "24");
+    auto maybe_person = col[ckf(1, "person")].value();
+    EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Davit"));
 }
 
 TEST(db, txn) {
