@@ -403,7 +403,40 @@ void set_item( //
     status.throw_unhandled();
 }
 
-std::optional<py::tuple> scan( //
+std::optional<py::array_t<ukv_key_t>> scan( //
+    ukv_t db_ptr,
+    ukv_txn_t txn_ptr,
+    ukv_collection_t collection_ptr,
+    arena_t& arena,
+    ukv_key_t min_key,
+    ukv_size_t scan_length) {
+
+    ukv_key_t* found_keys = nullptr;
+    ukv_val_len_t* found_lengths = nullptr;
+    status_t status;
+    ukv_options_t options = ukv_options_default_k;
+
+    ukv_scan( //
+        db_ptr,
+        txn_ptr,
+        1,
+        &collection_ptr,
+        0,
+        &min_key,
+        0,
+        &scan_length,
+        0,
+        options,
+        &found_keys,
+        &found_lengths,
+        arena.member_ptr(),
+        status.member_ptr());
+
+    status.throw_unhandled();
+    return py::array_t<ukv_key_t>(scan_length, found_keys);
+}
+
+std::optional<py::tuple> scan_lengths( //
     ukv_t db_ptr,
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
@@ -554,6 +587,10 @@ void ukv::wrap_database(py::module& m) {
         return scan(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, min_key, length);
     });
 
+    py_db.def("scan_lengths", [](py_db_t& py_db, ukv_key_t min_key, ukv_size_t length) {
+        return scan_lengths(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, min_key, length);
+    });
+
     // Define `Collection`s member method, without defining any external constructors
     py_col.def(
         "get",
@@ -607,6 +644,15 @@ void ukv::wrap_database(py::module& m) {
                     py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
                     min_key,
                     length);
+    });
+
+    py_col.def("scan_lengths", [](py_col_t& py_col, ukv_key_t min_key, ukv_size_t length) {
+        return scan_lengths(py_col.db_ptr->native,
+                            py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
+                            py_col.native,
+                            py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
+                            min_key,
+                            length);
     });
 
     // `Transaction`:
@@ -790,7 +836,6 @@ void ukv::wrap_database(py::module& m) {
         [](py_db_t& py_db, ukv_format_t format) -> py::object {
             return punned_collection(&py_db, nullptr, "", format);
         },
-        py::arg(),
         py::arg("format") = ukv_format_binary_k);
     py_db.def(
         "__getitem__",
