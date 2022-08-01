@@ -19,10 +19,10 @@ In under 10K LOC you get a reference implementation in C++, support for any clas
 
 Common use-cases of UKV would be:
 
-* Python, GoLang, Java and other high-level bindnigs for RocksDB and LevelDB.
+* Python, GoLang, Java and other high-level bindnigs for [RocksDB](rocksdb.org) and [LevelDB](https://github.com/google/leveldb).
 * Performant embedded store in the foundation of your in-house storage solution.
 * Document store, that is simpler and faster than putting JSONs in MongoDB or Postgres.
-* Graph database, with the feel of NetworkX, speed of GunRock and scale of Hadoop.
+* Graph database, with the feel of [NetworkX](https://networkx.org), speed of [GunRock](http://gunrock.github.io) and scale of [Hadoop](https://hadoop.apache.org).
 * Low-latency media storage for games, CDNs and ML/BI pipelines.
 
 ## Backends
@@ -45,16 +45,22 @@ RocksDB originally forked LevelDB to extend its functionality with transactions,
 
 Currently, at Proof-of-Concept stage, we support only the essential functionality in select programming languages.
 
-| Name            | Transact | Batches | Collections | Docs  | Graphs | Zero-Copy | Extras         |
-| :-------------- | :------: | :-----: | :---------: | :---: | :----: | :-------: | :------------- |
-| C++             |    ✅     |    ✅    |      ✅      |   ✅   |   ✅    |     ✅     |                |
-| Python          |    ✅     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Tensor Packing |
-| Java            |    ✅     |    ❌    |      ❌      |   ❌   |   ❌    |     ❌     |                |
-| GoLang          |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✅     |                |
-| TODO: C#        |    ❌     |    ❌    |      ❌      |   ❌   |   ❌    |     ✅     |                |
-| TODO: REST API  |    ✅     |    ✅    |      ✅      |   ✅   |   ❌    |     ✅     |                |
-| TODO: Arrow RPC |    ✅     |    ✅    |      ✅      |   ✅   |   ❌    |     ✅     | Tensor Packing |
-| TODO: Wolfram   |    ❌     |    ❌    |      ✅      |   ❌   |   ✅    |     ✅     | Tensor Packing |
+| Name        | Transact | Collections | Batches | Docs  | Graphs | Copies |
+| :---------- | :------: | :---------: | :-----: | :---: | :----: | :----: |
+| C++ ³       |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
+| Python ¹ ³  |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  0-1   |
+| GoLang      |    ✅     |      ✅      |    ✅    |   ❌   |   ❌    |   1    |
+| Java        |    ✅     |      ✅      |    ❌    |   ❌   |   ❌    |   1    |
+| C# ²        |    ❌     |      ❌      |    ❌    |   ❌   |   ❌    |        |
+| REST API ²  |    ✅     |      ✅      |    ✅    |   ✅   |   ❌    |        |
+| Arrow RPC ² |    ✅     |      ✅      |    ✅    |   ✅   |   ❌    |        |
+| Wolfram ¹ ² |    ❌     |      ✅      |    ✅    |   ❌   |   ✅    |        |
+
+* Copies: Number of re-allocations/conversions per byte.
+* ¹: Support tensor lookups and media data.
+* ²: Missing, to be implemented.
+* ³: Supports tabular Arrow exports.
+⁴
 
 ## Assumptions and Limitations
 
