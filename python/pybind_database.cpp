@@ -786,6 +786,13 @@ void ukv::wrap_database(py::module& m) {
         },
         py::arg());
     py_db.def(
+        "main",
+        [](py_db_t& py_db, ukv_format_t format) -> py::object {
+            return punned_collection(&py_db, nullptr, "", format);
+        },
+        py::arg(),
+        py::arg("format") = ukv_format_binary_k);
+    py_db.def(
         "__getitem__",
         [](py_db_t& py_db, std::string const& collection, ukv_format_t format) -> py::object {
             return punned_collection(&py_db, nullptr, collection, format);
