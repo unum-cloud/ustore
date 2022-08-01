@@ -56,10 +56,9 @@ struct col_key_field_t {
 
     col_key_field_t() = default;
 
-    col_key_field_t(ukv_key_t key, ukv_collection_t col = ukv_default_collection_k) noexcept
-        : collection(col), key(key), field(nullptr) {}
+    col_key_field_t(ukv_key_t key) noexcept : collection(ukv_default_collection_k), key(key), field(nullptr) {}
 
-    col_key_field_t(ukv_collection_t col, ukv_key_t key, ukv_str_view_t field) noexcept
+    col_key_field_t(ukv_collection_t col, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
         : collection(col), key(key), field(field) {}
 
     col_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept
@@ -70,6 +69,57 @@ template <typename... args_at>
 inline col_key_field_t ckf(args_at&&... args) {
     return {std::forward<args_at>(args)...};
 }
+
+/**
+ * @brief Graph Edge, or in DBMS terms - a relationship.
+ */
+struct edge_t {
+    ukv_key_t source_id;
+    ukv_key_t target_id;
+    ukv_key_t id = ukv_default_edge_id_k;
+
+    inline bool operator==(edge_t const& other) const noexcept {
+        return (source_id == other.source_id) & (target_id == other.target_id) & (id == other.id);
+    }
+    inline bool operator!=(edge_t const& other) const noexcept {
+        return (source_id != other.source_id) | (target_id != other.target_id) | (id != other.id);
+    }
+};
+
+/**
+ * @brief An asymmetric slice of a bond/relation.
+ * Every vertex stores a list of such @c `neighborship_t`s
+ * in a sorted order.
+ */
+struct neighborship_t {
+    ukv_key_t neighbor_id = 0;
+    ukv_key_t edge_id = 0;
+
+    friend inline bool operator<(neighborship_t a, neighborship_t b) noexcept {
+        return (a.neighbor_id < b.neighbor_id) | ((a.neighbor_id == b.neighbor_id) & (a.edge_id < b.edge_id));
+    }
+    friend inline bool operator==(neighborship_t a, neighborship_t b) noexcept {
+        return (a.neighbor_id == b.neighbor_id) & (a.edge_id == b.edge_id);
+    }
+    friend inline bool operator!=(neighborship_t a, neighborship_t b) noexcept {
+        return (a.neighbor_id != b.neighbor_id) | (a.edge_id != b.edge_id);
+    }
+
+    friend inline bool operator<(ukv_key_t a_vertex_id, neighborship_t b) noexcept {
+        return a_vertex_id < b.neighbor_id;
+    }
+    friend inline bool operator<(neighborship_t a, ukv_key_t b_vertex_id) noexcept {
+        return a.neighbor_id < b_vertex_id;
+    }
+    friend inline bool operator==(ukv_key_t a_vertex_id, neighborship_t b) noexcept {
+        return a_vertex_id == b.neighbor_id;
+    }
+    friend inline bool operator==(neighborship_t a, ukv_key_t b_vertex_id) noexcept {
+        return a.neighbor_id == b_vertex_id;
+    }
+};
+
+#pragma region - Variable Length Views
 
 /**
  * @brief Similar to `std::optional<std::string_view>`.
@@ -99,6 +149,7 @@ class value_view_t {
 
     inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
     inline byte_t const* end() const noexcept { return begin() + size(); }
+    inline char const* c_str() const noexcept { return reinterpret_cast<char const*>(ptr_); }
     inline std::size_t size() const noexcept { return length_ == ukv_val_len_missing_k ? 0 : length_; }
     inline bool empty() const noexcept { return !size(); }
     inline operator bool() const noexcept { return length_ != ukv_val_len_missing_k; }
@@ -187,5 +238,25 @@ struct sub_key_hash_t {
         return result;
     }
 };
+
+struct edge_hash_t {
+    inline std::size_t operator()(edge_t const& edge) const noexcept {
+        std::size_t result = SIZE_MAX;
+        hash_combine(result, edge.source_id);
+        hash_combine(result, edge.target_id);
+        hash_combine(result, edge.id);
+        return result;
+    }
+};
+
+inline ukv_vertex_role_t invert(ukv_vertex_role_t role) {
+    switch (role) {
+    case ukv_vertex_source_k: return ukv_vertex_target_k;
+    case ukv_vertex_target_k: return ukv_vertex_source_k;
+    case ukv_vertex_role_any_k: return ukv_vertex_role_unknown_k;
+    case ukv_vertex_role_unknown_k: return ukv_vertex_role_any_k;
+    }
+    __builtin_unreachable();
+}
 
 } // namespace unum::ukv

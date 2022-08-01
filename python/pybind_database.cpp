@@ -408,12 +408,12 @@ std::optional<py::tuple> scan( //
     ukv_txn_t txn_ptr,
     ukv_collection_t collection_ptr,
     arena_t& arena,
+    ukv_options_t options,
     ukv_key_t min_key,
     ukv_size_t scan_length) {
 
     ukv_key_t* found_keys = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
-    ukv_options_t options = ukv_option_read_lengths_k;
     status_t status;
 
     ukv_scan( //
@@ -433,8 +433,9 @@ std::optional<py::tuple> scan( //
         status.member_ptr());
 
     status.throw_unhandled();
-    return py::make_tuple(py::array_t<ukv_key_t>(scan_length, found_keys),
-                          py::array_t<ukv_val_len_t>(scan_length, found_lengths));
+    return options == ukv_options_default_k ? py::make_tuple(py::array_t<ukv_key_t>(scan_length, found_keys))
+                                            : py::make_tuple(py::array_t<ukv_key_t>(scan_length, found_keys),
+                                                             py::array_t<ukv_val_len_t>(scan_length, found_lengths));
 }
 
 py::object punned_collection( //
@@ -444,29 +445,28 @@ py::object punned_collection( //
     ukv_format_t format) {
 
     db_t& db = py_db_ptr->native;
-    auto maybe_col = db.collection(collection.c_str());
+    txn_t& txn = py_txn_ptr->native;
+
+    auto maybe_col = !py_txn_ptr ? db.collection(collection.c_str()) : txn.collection(collection.c_str());
     maybe_col.throw_unhandled();
     maybe_col->as(format);
-    if (py_txn_ptr)
-        maybe_col->from(py_txn_ptr->native);
 
     if (format == ukv_format_graph_k) {
-        graph_ref_t g(*maybe_col);
-        auto net_ptr = std::make_shared<network_t>(std::move(g));
-        net_ptr->db_ptr = index_collection->db_ptr;
-        return net_ptr;
+        auto py_graph = std::make_shared<py_graph_t>();
+        py_graph->db_ptr = py_db_ptr->shared_from_this();
+        py_graph->index = *std::move(maybe_col);
+        return py::cast(py_graph);
     }
     else {
         auto py_col = std::make_shared<py_col_t>();
         py_col->name = collection;
-        py_col->native = *std::move(maybe_col);
         py_col->db_ptr = py_db_ptr->shared_from_this();
-        return py_col;
+        py_col->native = *std::move(maybe_col);
+        return py::cast(py_col);
     }
 }
-,
 
-    void ukv::wrap_database(py::module& m) {
+void ukv::wrap_database(py::module& m) {
 
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
     auto py_db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
@@ -474,13 +474,13 @@ py::object punned_collection( //
     auto py_txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction", py::module_local());
 
     py::enum_<ukv_format_t>(m, "Format", py::module_local())
-        .value("Binary", ukv_format_doc_binary_k)
-        .value("Graph", ukv_format_doc_graph_k)
-        .value("MsgPack", ukv_format_doc_msgpack_k)
-        .value("JSON", ukv_format_doc_json_k)
-        .value("BSON", ukv_format_doc_bson_k)
-        .value("CBOR", ukv_format_doc_cbor_k)
-        .value("UBJSON", ukv_format_doc_ubjson_k);
+        .value("Binary", ukv_format_binary_k)
+        .value("Graph", ukv_format_graph_k)
+        .value("MsgPack", ukv_format_msgpack_k)
+        .value("JSON", ukv_format_json_k)
+        .value("BSON", ukv_format_bson_k)
+        .value("CBOR", ukv_format_cbor_k)
+        .value("UBJSON", ukv_format_ubjson_k);
 
     // Define `DataBase`
     py_db.def( //
@@ -552,7 +552,19 @@ py::object punned_collection( //
     });
 
     py_db.def("scan", [](py_db_t& py_db, ukv_key_t min_key, ukv_size_t length) {
-        return scan(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, min_key, length);
+        return py::detail::accessor_policies::tuple_item::get(
+            *scan(py_db.native, nullptr, ukv_default_collection_k, py_db.arena, ukv_options_default_k, min_key, length),
+            (py::ssize_t)0);
+    });
+
+    py_db.def("scan_with_lengths", [](py_db_t& py_db, ukv_key_t min_key, ukv_size_t length) {
+        return scan(py_db.native,
+                    nullptr,
+                    ukv_default_collection_k,
+                    py_db.arena,
+                    ukv_option_read_lengths_k,
+                    min_key,
+                    length);
     });
 
     // Define `Collection`s member method, without defining any external constructors
@@ -602,10 +614,23 @@ py::object punned_collection( //
         py::arg("values"));
 
     py_col.def("scan", [](py_col_t& py_col, ukv_key_t min_key, ukv_size_t length) {
+        return py::detail::accessor_policies::tuple_item::get(
+            *scan(py_col.db_ptr->native,
+                  py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
+                  py_col.native,
+                  py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
+                  ukv_options_default_k,
+                  min_key,
+                  length),
+            (py::ssize_t)0);
+    });
+
+    py_col.def("scan_with_lengths", [](py_col_t& py_col, ukv_key_t min_key, ukv_size_t length) {
         return scan(py_col.db_ptr->native,
                     py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
                     py_col.native,
                     py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
+                    ukv_option_read_lengths_k,
                     min_key,
                     length);
     });
@@ -786,6 +811,12 @@ py::object punned_collection( //
             return *maybe;
         },
         py::arg());
+    py_db.def(
+        "main",
+        [](py_db_t& py_db, ukv_format_t format) -> py::object {
+            return punned_collection(&py_db, nullptr, "", format);
+        },
+        py::arg("format") = ukv_format_binary_k);
     py_db.def(
         "__getitem__",
         [](py_db_t& py_db, std::string const& collection, ukv_format_t format) -> py::object {

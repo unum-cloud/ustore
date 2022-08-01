@@ -19,6 +19,9 @@ using namespace unum;
 #define macro_concat_(prefix, suffix) prefix##suffix
 #define macro_concat(prefix, suffix) macro_concat_(prefix, suffix)
 #define _ [[maybe_unused]] auto macro_concat(_, __LINE__)
+#define M_EXPECT_EQ_JSON(str1, str2) EXPECT_EQ(json_t::parse((str1)), json_t::parse((str2)));
+#define M_EXPECT_EQ_MSG(str1, str2) \
+    EXPECT_EQ(json_t::from_msgpack((str1).c_str(), (str1).c_str() + (str1).size()), json_t::parse((str2)));
 
 TEST(db, intro) {
 
@@ -32,7 +35,7 @@ TEST(db, intro) {
     // Single-element access
     main[42] = "purpose of life";
     main.at(42) = "purpose of life";
-    EXPECT_EQ(*(main[42].value()), "purpose of life");
+    EXPECT_EQ(*main[42].value(), "purpose of life");
     _ = main[42].clear();
 
     // Mapping multiple keys to same values
@@ -86,10 +89,11 @@ TEST(db, intro) {
 
     // Working with sub documents
     main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
+    main[ckf(56, "hello")].value() == "world";
 }
 
 template <typename locations_at>
-void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_length) {
+void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_length) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
 
@@ -97,7 +101,7 @@ void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_leng
     using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    given_gt<taped_values_view_t> retrieved_and_arena = ref.value();
+    expected_gt<taped_values_view_t> retrieved_and_arena = ref.value();
     taped_values_view_t const& retrieved = *retrieved_and_arena;
     ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
@@ -124,13 +128,13 @@ void check_length(member_refs_gt<locations_at>& ref, ukv_val_len_t expected_leng
 }
 
 template <typename locations_at>
-void check_equalities(member_refs_gt<locations_at>& ref, values_arg_t values) {
+void check_equalities(members_ref_gt<locations_at>& ref, values_arg_t values) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
     using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    given_gt<taped_values_view_t> retrieved_and_arena = ref.value();
+    expected_gt<taped_values_view_t> retrieved_and_arena = ref.value();
     taped_values_view_t const& retrieved = *retrieved_and_arena;
     EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
@@ -147,7 +151,7 @@ void check_equalities(member_refs_gt<locations_at>& ref, values_arg_t values) {
 }
 
 template <typename locations_at>
-void round_trip(member_refs_gt<locations_at>& ref, values_arg_t values) {
+void round_trip(members_ref_gt<locations_at>& ref, values_arg_t values) {
     EXPECT_TRUE(ref.assign(values)) << "Failed to assign";
     check_equalities(ref, values);
 }
@@ -246,8 +250,32 @@ TEST(db, named) {
     EXPECT_FALSE(*db.contains("col2"));
 }
 
+TEST(db, docs) {
+    using json_t = nlohmann::json;
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+
+    // JSON
+    collection_t col = *db.collection("docs", ukv_format_json_k);
+    auto json = R"( {"person": "Davit", "age": 24} )"_json.dump();
+    col[1] = json.c_str();
+    M_EXPECT_EQ_JSON(col[1].value()->c_str(), json.c_str());
+    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Davit\"");
+    M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "24");
+
+    // MsgPack
+    col.as(ukv_format_msgpack_k);
+    M_EXPECT_EQ_MSG(*col[1].value(), json.c_str());
+    M_EXPECT_EQ_MSG(*col[ckf(1, "person")].value(), "\"Davit\"");
+    M_EXPECT_EQ_MSG(*col[ckf(1, "age")].value(), "24");
+
+    // Binary
+    col.as(ukv_format_binary_k);
+    EXPECT_EQ(col[ckf(1, "person")].value()->c_str(), "Davit");
+    EXPECT_EQ(col[ckf(1, "age")].value()->c_str(), "24");
+}
+
 TEST(db, txn) {
-#if 0
     db_t db;
     EXPECT_TRUE(db.open(""));
     EXPECT_TRUE(db.transact());
@@ -265,38 +293,42 @@ TEST(db, txn) {
         .lengths_begin = {&val_len, 0},
     };
 
-    round_trip(txn[keys], values);
+    auto txn_ref = txn[keys];
+    round_trip(txn_ref, values);
 
     EXPECT_TRUE(db.collection());
     collection_t col = *db.collection();
-    ref = col[keys];
+    auto col_ref = col[keys];
 
     // Check for missing values before commit
-    check_length();
+    check_length(col_ref, ukv_val_len_missing_k);
 
-    txn.commit();
-    txn.reset();
+    auto status = txn.commit();
+    status.throw_unhandled();
+    status = txn.reset();
+    status.throw_unhandled();
 
     // Validate that values match after commit
-    check_equalities(ref, values);
+    check_equalities(col_ref, values);
 
     // Transaction with named collection
     EXPECT_TRUE(db.collection("named_col"));
     collection_t named_col = *db.collection("named_col");
     std::vector<col_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
-    ref = txn[sub_keys];
-    round_trip(ref, values);
+    auto txn_named_col_ref = txn[sub_keys];
+    round_trip(txn_named_col_ref, values);
 
     // Check for missing values before commit
-    ref = named_col[keys];
-    check_length(ref);
+    auto named_col_ref = named_col[keys];
+    check_length(named_col_ref, ukv_val_len_missing_k);
 
-    txn.commit();
-    txn.reset();
+    status = txn.commit();
+    status.throw_unhandled();
+    status = txn.reset();
+    status.throw_unhandled();
 
     // Validate that values match after commit
-    check_equalities(ref, values);
-#endif
+    check_equalities(named_col_ref, values);
 }
 
 TEST(db, nested_docs) {
@@ -310,8 +342,8 @@ TEST(db, net) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    collection_t col(db);
-    graph_ref_t net(col);
+    collection_t main = *db.collection();
+    graph_ref_t net = main.as_graph();
 
     // triangle
     std::vector<edge_t> edge1 {{1, 2, 9}};
@@ -407,8 +439,8 @@ TEST(db, net_batch) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    collection_t col(db);
-    graph_ref_t net(col);
+    collection_t main = *db.collection();
+    graph_ref_t net = main.as_graph();
 
     std::vector<edge_t> triangle {
         {1, 2, 9},
