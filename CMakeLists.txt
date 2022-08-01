@@ -78,52 +78,26 @@ include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
 
 
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(Arrow-external Boost-external)
 endif()
-
-# Jemalloc
-include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
-
-# LZ4 Compression
-# https://stackoverflow.com/questions/67537111/how-do-i-decide-between-lz4-and-snappy-compression
-# include("${CMAKE_SOURCE_DIR}/cmake/lz4.cmake")
-
-# TurboPFor for 64-bit integers
-# https://github.com/powturbo/TurboPFor-Integer-Compression
-# https://github.com/topics/integer-compression
-# include("${CMAKE_SOURCE_DIR}/cmake/turbopfor.cmake")
-
-# FastPFor Integer Compression for 32-bit integers
-# FetchContent_Declare(
-# fpfor
-# GIT_REPOSITORY https://github.com/lemire/FastPFor.git
-# GIT_TAG v0.1.8
-# GIT_SHALLOW TRUE
-# )
-# FetchContent_MakeAvailable(fpfor)
-
-# GTest
-FetchContent_Declare(
-  googletest
-  GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG release-1.11.0
-)
-FetchContent_MakeAvailable(googletest)
+if (!APPLE)
+add_dependencies(ukv_stl jemalloc)
+add_dependencies(ukv_rocksdb jemalloc)
+add_dependencies(ukv_leveldb jemalloc)
+add_dependencies(ukv_rpc_client jemalloc)
+add_dependencies(ukv_test jemalloc)
+add_dependencies(ukv_leveldb_test jemalloc)
+add_dependencies(ukv_rocksdb_test jemalloc)
+endif()
 
 include_directories(include/)
-
 include_directories($ENV{CONDA_PREFIX}/include)
 link_directories($ENV{CONDA_PREFIX}/lib)
 message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
-
-include_directories(${fmt_SOURCE_DIR}/include)
-include_directories(${jemalloc_SOURCE_DIR}/include)
-include_directories(${rocksdb_SOURCE_DIR}/include)
-include_directories(${leveldb_SOURCE_DIR}/include)
-
 
 # Define the libraries we will need to build
 add_library(ukv_stl
@@ -131,7 +105,6 @@ add_library(ukv_stl
   src/logic_docs.cpp
   src/logic_graph.cpp
 )
-add_dependencies(ukv_stl jemalloc)
 target_link_libraries(ukv_stl
   nlohmann_json::nlohmann_json
   ${jemalloc_LIBRARIES}
@@ -145,8 +118,6 @@ add_library(ukv_leveldb
   src/backend_leveldb.cpp
   src/logic_graph.cpp
 )
-add_dependencies(ukv_rocksdb jemalloc)
-add_dependencies(ukv_leveldb jemalloc)
 
 target_link_libraries(ukv_rocksdb
   rocksdb
@@ -160,7 +131,6 @@ target_link_libraries(ukv_leveldb
 )
 
 add_library(ukv_rpc_client src/rpc_client.cpp)
-add_dependencies(ukv_rpc_client jemalloc)
 
 # add_executable(ukv_rest_server src/rest_server.cpp)
 # target_link_libraries(ukv_rest_server
@@ -170,16 +140,16 @@ add_dependencies(ukv_rpc_client jemalloc)
 # Boost::headers
 # nlohmann_json::nlohmann_json
 # )
-add_executable(ukv_arrow_server src/arrow_server.cpp)
-target_link_libraries(ukv_arrow_server
-  ukv_stl
-  pthread
-  nlohmann_json::nlohmann_json
-  arrow
-  arrow_flight
-  arrow_dataset
-  parquet
-)
+# add_executable(ukv_arrow_server src/arrow_server.cpp)
+# target_link_libraries(ukv_arrow_server
+#   ukv_stl
+#   pthread
+#   nlohmann_json::nlohmann_json
+#   arrow
+#   arrow_flight
+#   arrow_dataset
+#   parquet
+# )
 
 add_executable(ukv_test
   src/test.cpp
@@ -187,7 +157,7 @@ add_executable(ukv_test
   src/logic_docs.cpp
   src/logic_graph.cpp
 )
-add_dependencies(ukv_test jemalloc)
+
 target_link_libraries(ukv_test
   gtest
   nlohmann_json::nlohmann_json
@@ -200,7 +170,7 @@ add_executable(ukv_leveldb_test
   src/logic_docs.cpp
   src/logic_graph.cpp
 )
-add_dependencies(ukv_leveldb_test jemalloc)
+
 target_link_libraries(ukv_leveldb_test
   gtest
   leveldb
@@ -214,7 +184,7 @@ add_executable(ukv_rocksdb_test
   src/logic_docs.cpp
   src/logic_graph.cpp
 )
-add_dependencies(ukv_rocksdb_test jemalloc)
+
 target_link_libraries(ukv_rocksdb_test
   gtest
   rocksdb
