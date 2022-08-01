@@ -78,12 +78,18 @@ class graph_ref_t {
         return status;
     }
 
+    status_t remove(ukv_key_t const vertex,
+                    ukv_vertex_role_t const role = ukv_vertex_role_any_k,
+                    bool flush = false) noexcept {
+        return remove({&vertex}, {&role}, flush);
+    }
+
     status_t remove(strided_range_gt<ukv_key_t const> vertices,
-                    strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
-                    bool track = false) noexcept {
+                    strided_range_gt<ukv_vertex_role_t const> roles,
+                    bool flush = false) noexcept {
 
         status_t status;
-        ukv_options_t options = track ? ukv_option_read_track_k : ukv_options_default_k;
+        ukv_options_t options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
 
         ukv_graph_remove_vertices(db_,
                                   txn_,
@@ -104,17 +110,16 @@ class graph_ref_t {
                                             ukv_vertex_role_t role = ukv_vertex_role_any_k,
                                             bool track = false) noexcept {
 
-        auto maybe_degrees = degrees({vertex}, {role}, track);
+        auto maybe_degrees = degrees({&vertex}, {&role}, track);
         if (!maybe_degrees)
             return maybe_degrees.release_status();
         auto degrees = *maybe_degrees;
         return ukv_vertex_degree_t(degrees[0]);
     }
 
-    expected_gt<indexed_range_gt<ukv_vertex_degree_t*>> degrees(
-        strided_range_gt<ukv_key_t const> vertices,
-        strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k, 1},
-        bool track = false) noexcept {
+    expected_gt<indexed_range_gt<ukv_vertex_degree_t*>> degrees(strided_range_gt<ukv_key_t const> vertices,
+                                                                strided_range_gt<ukv_vertex_role_t const> roles,
+                                                                bool track = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
@@ -228,10 +233,9 @@ class graph_ref_t {
      * @brief Finds all the edges, that have any of the supplied nodes in allowed roles.
      * In undirected graphs, some edges may come with inverse duplicates.
      */
-    expected_gt<edges_span_t> edges_containing(
-        strided_range_gt<ukv_key_t const> vertices,
-        strided_range_gt<ukv_vertex_role_t const> roles = {ukv_vertex_role_any_k},
-        bool track = false) noexcept {
+    expected_gt<edges_span_t> edges_containing(strided_range_gt<ukv_key_t const> vertices,
+                                               strided_range_gt<ukv_vertex_role_t const> roles,
+                                               bool track = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
