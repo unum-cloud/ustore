@@ -41,6 +41,8 @@ struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
     std::shared_ptr<py_db_t> db_ptr;
     txn_t native;
     arena_t arena;
+    bool track_reads = false;
+    bool flush_writes = false;
 
     py_txn_t(std::shared_ptr<py_db_t>&& d, txn_t&& t) noexcept
         : db_ptr(std::move(d)), native(std::move(t)), arena(db_ptr->native) {}
@@ -66,6 +68,10 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
         : db_ptr(std::move(other.db_ptr)), txn_ptr(std::move(other.txn_ptr)), native(std::move(other.native)),
           name(std::move(other.name)) {}
 };
+
+struct py_col_obj_t : public py_col_t {};
+
+struct py_col_img_t : public py_col_t {};
 
 /**
  * @brief RAII object for `py::handle` parsing purposes,
@@ -128,12 +134,12 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     graph_ref_t ref() { return index.as_graph(); }
 };
 
+/**
+ * @brief Provides a typed view of 1D potentially-strided tensor.
+ * @param obj Must implement the "Buffer protocol".
+ */
 template <typename scalar_at>
-std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(py::handle handle) {
-    PyObject* obj = handle.ptr();
-    if (!PyObject_CheckBuffer(obj))
-        throw std::invalid_argument("Buffer protocol unsupported");
-
+std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(PyObject* obj) {
     auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
     if constexpr (std::is_const_v<scalar_at>)
         flags |= PyBUF_WRITABLE;
@@ -157,12 +163,12 @@ std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(py::h
     return std::make_pair<py_received_buffer_t, strided_range_gt<scalar_at>>(std::move(raii), std::move(result));
 }
 
+/**
+ * @brief Provides a typed view of 2D potentially-strided tensor.
+ * @param obj Must implement the "Buffer protocol".
+ */
 template <typename scalar_at>
-std::pair<py_received_buffer_t, strided_matrix_gt<scalar_at>> strided_matrix(py::handle handle) {
-    PyObject* obj = handle.ptr();
-    if (!PyObject_CheckBuffer(obj))
-        throw std::invalid_argument("Buffer protocol unsupported");
-
+std::pair<py_received_buffer_t, strided_matrix_gt<scalar_at>> strided_matrix(PyObject* obj) {
     auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
     if constexpr (std::is_const_v<scalar_at>)
         flags |= PyBUF_WRITABLE;
@@ -190,6 +196,61 @@ std::pair<py_received_buffer_t, strided_matrix_gt<scalar_at>> strided_matrix(py:
 inline void throw_not_implemented() {
     // https://github.com/pybind/pybind11/issues/1125#issuecomment-691552571
     throw std::runtime_error("Not Implemented!");
+}
+
+bool is_seq(PyObject* obj) {
+    return PyTuple_Check(obj) || PyList_Check(obj) || PyIter_Check(obj);
+}
+
+/**
+ * @brief Iterates over Python `tuple`, `list`, or any `iter`.
+ * @param call Callback for member `PyObject`s.
+ * @return true If a supported iterable type was detected.
+ */
+template <typename member_callback_at>
+bool scan_seq(PyObject* obj, member_callback_at&& call) {
+
+    if (PyTuple_Check(obj)) {
+        size_t n = PyTuple_Size(obj);
+        for (size_t i = 0; i != n; ++i)
+            call(PyTuple_GetItem(obj, i));
+        return true;
+    }
+    else if (PyList_Check(obj)) {
+        size_t n = PyList_Size(obj);
+        for (size_t i = 0; i != n; ++i)
+            call(PyList_GetItem(obj, i));
+        return true;
+    }
+    else if (PyIter_Check(obj)) {
+        PyObject* item = nullptr;
+        while ((item = PyIter_Next(obj))) {
+            call(item);
+            Py_DECREF(item);
+        }
+        return true;
+    }
+    else
+        return false;
+}
+
+/**
+ * @brief Iterates over Python `dict`-like object.
+ * @param call Callback for the key and value `PyObject`s.
+ * @return true If a supported iterable type was detected.
+ */
+template <typename member_callback_at>
+bool scan_dict(PyObject* obj, member_callback_at&& call) {
+    bool is_dict = PyDict_Check(obj);
+    if (!is_dict)
+        return false;
+    PyObject* key = nullptr;
+    PyObject* value = nullptr;
+    Py_ssize_t pos = 0;
+
+    while (PyDict_Next(obj, &pos, &key, &value))
+        call(key, value);
+    return true;
 }
 
 /**
