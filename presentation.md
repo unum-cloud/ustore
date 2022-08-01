@@ -464,7 +464,7 @@ func forwardError(error_c C.ukv_error_t) error {
 	return nil
 }
 
-func cleanTape(db *DataBase, tape_c C.ukv_val_ptr_t, tape_length_c C.ukv_size_t) {
+func cleanArena(db *DataBase, tape_c C.ukv_val_ptr_t, tape_length_c C.ukv_size_t) {
 	C.ukv_arena_free(db.raw, tape_c, tape_length_c)
 }
 
