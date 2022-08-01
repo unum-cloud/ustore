@@ -40,7 +40,7 @@ struct degree_view_t : public std::enable_shared_from_this<degree_view_t> {
 };
 
 template <typename element_at>
-py::handle wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
+PyObject* wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
     printf("received %i strided objects\n", (int)range.size());
 
     g.last_buffer_strides[0] = range.stride();
@@ -54,7 +54,7 @@ py::handle wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
     g.last_buffer.len = range.size() * sizeof(element_at);
     g.last_buffer.itemsize = sizeof(element_at);
     // https://docs.python.org/3/library/struct.html#format-characters
-    g.last_buffer.format = (char*)format_code_gt<std::remove_const_t<element_at>>::format_k;
+    g.last_buffer.format = (char*)&format_code_gt<std::remove_const_t<element_at>>::value;
     g.last_buffer.ndim = 1;
     g.last_buffer.shape = &g.last_buffer_shape[0];
     g.last_buffer.strides = &g.last_buffer_strides[0];
@@ -74,10 +74,10 @@ void ukv::wrap_networkx(py::module& m) {
         ukv_vertex_degree_t result = *maybe;
         return result;
     });
-    degs.def("__getitem__", [](degree_view_t& degs, py::handle vs) {
+    degs.def("__getitem__", [](degree_view_t& degs, PyObject* vs) {
         py_graph_t& g = *degs.net_ptr;
         auto handle_and_ids = strided_array<ukv_key_t const>(vs);
-        auto maybe = g.ref().degrees(handle_and_ids.second, degs.roles);
+        auto maybe = g.ref().degrees(handle_and_ids.second, {&degs.roles});
         maybe.throw_unhandled();
         return wrap_into_buffer<ukv_vertex_degree_t const>(g, {maybe->begin(), maybe->end()});
     });
@@ -235,10 +235,10 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("v"));
     g.def(
         "has_edge",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t e) {
             auto maybe = g.ref().edges(v1, v2);
             maybe.throw_unhandled();
-            return std::find(maybe->edge_ids.begin(), maybe->edge_ids.end(), eid) != maybe->edge_ids.end();
+            return std::find(maybe->edge_ids.begin(), maybe->edge_ids.end(), e) != maybe->edge_ids.end();
         },
         py::arg("u"),
         py::arg("v"),
@@ -293,7 +293,7 @@ void ukv::wrap_networkx(py::module& m) {
         "Returns an iterable of follower nodes of n.");
     g.def(
         "nbunch_iter",
-        [](py_graph_t& g, py::handle const& vs) {
+        [](py_graph_t& g, PyObject* vs) {
             auto handle_and_ids = strided_array<ukv_key_t const>(vs);
             auto maybe = g.ref().contains(handle_and_ids.second);
             maybe.throw_unhandled();
@@ -307,8 +307,8 @@ void ukv::wrap_networkx(py::module& m) {
         "add_edge",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) {
             edges_view_t edges {
-                strided_range_gt<ukv_key_t const>(v1),
-                strided_range_gt<ukv_key_t const>(v2),
+                strided_range_gt<ukv_key_t const>(&v1),
+                strided_range_gt<ukv_key_t const>(&v2),
             };
             g.ref().upsert(edges).throw_unhandled();
         },
@@ -316,11 +316,11 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("v_for_edge"));
     g.def(
         "add_edge",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t e) {
             edges_view_t edges {
-                strided_range_gt<ukv_key_t const>(v1),
-                strided_range_gt<ukv_key_t const>(v2),
-                strided_range_gt<ukv_key_t const>(eid),
+                strided_range_gt<ukv_key_t const>(&v1),
+                strided_range_gt<ukv_key_t const>(&v2),
+                strided_range_gt<ukv_key_t const>(&e),
             };
             g.ref().upsert(edges).throw_unhandled();
         },
@@ -331,8 +331,8 @@ void ukv::wrap_networkx(py::module& m) {
         "remove_edge",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) {
             edges_view_t edges {
-                strided_range_gt<ukv_key_t const>(v1),
-                strided_range_gt<ukv_key_t const>(v2),
+                strided_range_gt<ukv_key_t const>(&v1),
+                strided_range_gt<ukv_key_t const>(&v2),
             };
             g.ref().remove(edges).throw_unhandled();
         },
@@ -340,11 +340,11 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("v_for_edge"));
     g.def(
         "remove_edge",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t eid) {
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t e) {
             edges_view_t edges {
-                strided_range_gt<ukv_key_t const>(v1),
-                strided_range_gt<ukv_key_t const>(v2),
-                strided_range_gt<ukv_key_t const>(eid),
+                strided_range_gt<ukv_key_t const>(&v1),
+                strided_range_gt<ukv_key_t const>(&v2),
+                strided_range_gt<ukv_key_t const>(&e),
             };
             g.ref().remove(edges).throw_unhandled();
         },
@@ -353,7 +353,7 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("key"));
     g.def(
         "add_edges_from",
-        [](py_graph_t& g, py::handle const& adjacency_list) {
+        [](py_graph_t& g, PyObject* adjacency_list) {
             auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
             if (handle_and_list.second.cols() != 2 && handle_and_list.second.cols() != 3)
                 throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
@@ -362,7 +362,7 @@ void ukv::wrap_networkx(py::module& m) {
                 handle_and_list.second.col(0),
                 handle_and_list.second.col(1),
                 handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
-                                                   : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
+                                                   : strided_range_gt<ukv_key_t const>(&ukv_default_edge_id_k),
             };
             g.ref().upsert(edges).throw_unhandled();
         },
@@ -370,7 +370,7 @@ void ukv::wrap_networkx(py::module& m) {
         "Adds an adjacency list (in a form of 2 or 3 columnar matrix) to the graph.");
     g.def(
         "remove_edges_from",
-        [](py_graph_t& g, py::handle const& adjacency_list) {
+        [](py_graph_t& g, PyObject* adjacency_list) {
             auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
             if (handle_and_list.second.cols() != 2 && handle_and_list.second.cols() != 3)
                 throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
@@ -379,7 +379,7 @@ void ukv::wrap_networkx(py::module& m) {
                 handle_and_list.second.col(0),
                 handle_and_list.second.col(1),
                 handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
-                                                   : strided_range_gt<ukv_key_t const>(ukv_default_edge_id_k),
+                                                   : strided_range_gt<ukv_key_t const>(&ukv_default_edge_id_k),
             };
             g.ref().remove(edges).throw_unhandled();
         },
@@ -388,7 +388,7 @@ void ukv::wrap_networkx(py::module& m) {
 
     g.def(
         "add_edges_from",
-        [](py_graph_t& g, py::handle const& v1s, py::handle const& v2s) {
+        [](py_graph_t& g, PyObject* v1s, PyObject* v2s) {
             auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
             auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
             edges_view_t edges {
@@ -402,7 +402,7 @@ void ukv::wrap_networkx(py::module& m) {
         "Adds edges from members of the first array to members of the second array.");
     g.def(
         "remove_edges_from",
-        [](py_graph_t& g, py::handle const& v1s, py::handle const& v2s) {
+        [](py_graph_t& g, PyObject* v1s, PyObject* v2s) {
             auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
             auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
             edges_view_t edges {
@@ -417,10 +417,10 @@ void ukv::wrap_networkx(py::module& m) {
 
     g.def(
         "add_edges_from",
-        [](py_graph_t& g, py::handle const& v1s, py::handle const& v2s, py::handle const& eids) {
+        [](py_graph_t& g, PyObject* v1s, PyObject* v2s, PyObject* es) {
             auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
             auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
-            auto handle_and_edge_ids = strided_array<ukv_key_t const>(eids);
+            auto handle_and_edge_ids = strided_array<ukv_key_t const>(es);
             edges_view_t edges {
                 handle_and_sources.second,
                 handle_and_targets.second,
@@ -434,10 +434,10 @@ void ukv::wrap_networkx(py::module& m) {
         "Adds edges from members of the first array to members of the second array using keys from the third array.");
     g.def(
         "remove_edges_from",
-        [](py_graph_t& g, py::handle const& v1s, py::handle const& v2s, py::handle const& eids) {
+        [](py_graph_t& g, PyObject* v1s, PyObject* v2s, PyObject* es) {
             auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
             auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
-            auto handle_and_edge_ids = strided_array<ukv_key_t const>(eids);
+            auto handle_and_edge_ids = strided_array<ukv_key_t const>(es);
             edges_view_t edges {
                 handle_and_sources.second,
                 handle_and_targets.second,
@@ -473,7 +473,7 @@ void ukv::wrap_networkx(py::module& m) {
     g.def("edge_subgraph", [](py_graph_t& g) { throw_not_implemented(); });
     g.def(
         "subgraph",
-        [](py_graph_t& g, py::handle ns) { throw_not_implemented(); },
+        [](py_graph_t& g, PyObject* ns) { throw_not_implemented(); },
         "Returns a subgraph in a form of an adjacency list with 3 columns, where every edge (row) "
         "contains at least one vertex from the supplied list. Some edges may be duplicated.");
     g.def(

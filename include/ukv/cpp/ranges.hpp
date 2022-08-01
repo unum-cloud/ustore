@@ -370,7 +370,7 @@ struct edges_range_gt {
     inline edges_range_gt() = default;
     inline edges_range_gt(strided_range_gt<id_t> sources,
                           strided_range_gt<id_t> targets,
-                          strided_range_gt<id_t> edges = {ukv_default_edge_id_k}) noexcept
+                          strided_range_gt<id_t> edges = {&ukv_default_edge_id_k}) noexcept
         : source_ids(sources), target_ids(targets), edge_ids(edges) {}
 
     inline edges_range_gt(tuple_t* ptr, tuple_t* end) noexcept {

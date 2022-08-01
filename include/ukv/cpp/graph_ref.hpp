@@ -85,7 +85,7 @@ class graph_ref_t {
     }
 
     status_t remove(strided_range_gt<ukv_key_t const> vertices,
-                    strided_range_gt<ukv_vertex_role_t const> roles,
+                    strided_range_gt<ukv_vertex_role_t const> roles = {},
                     bool flush = false) noexcept {
 
         status_t status;
@@ -118,7 +118,7 @@ class graph_ref_t {
     }
 
     expected_gt<indexed_range_gt<ukv_vertex_degree_t*>> degrees(strided_range_gt<ukv_key_t const> vertices,
-                                                                strided_range_gt<ukv_vertex_role_t const> roles,
+                                                                strided_range_gt<ukv_vertex_role_t const> roles = {},
                                                                 bool track = false) noexcept {
 
         status_t status;
@@ -234,7 +234,7 @@ class graph_ref_t {
      * In undirected graphs, some edges may come with inverse duplicates.
      */
     expected_gt<edges_span_t> edges_containing(strided_range_gt<ukv_key_t const> vertices,
-                                               strided_range_gt<ukv_vertex_role_t const> roles,
+                                               strided_range_gt<ukv_vertex_role_t const> roles = {},
                                                bool track = false) noexcept {
 
         status_t status;
