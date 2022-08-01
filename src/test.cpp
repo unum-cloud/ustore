@@ -529,6 +529,5 @@ TEST(db, net_batch) {
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
-    ::testing::GTEST_FLAG(filter) = "db.net";
     return RUN_ALL_TESTS();
 }
