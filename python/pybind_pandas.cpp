@@ -15,7 +15,7 @@ struct col_name_t {
 };
 
 struct col_keys_range_t {
-    ukv_collection_t col = ukv_collection_default_k;
+    ukv_collection_t col = ukv_default_collection_k;
     ukv_key_t min = std::numeric_limits<ukv_key_t>::min();
     ukv_key_t max = std::numeric_limits<ukv_key_t>::max();
     std::size_t limit = std::numeric_limits<std::size_t>::max();

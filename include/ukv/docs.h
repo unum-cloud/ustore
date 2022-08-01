@@ -143,7 +143,7 @@ void ukv_docs_write( //
 
     ukv_options_t const options,
     ukv_format_t const format,
-    ukv_type_t const type,
+    // ukv_type_t const type,
 
     ukv_val_ptr_t const* values,
     ukv_size_t const values_stride,
@@ -153,8 +153,6 @@ void ukv_docs_write( //
 
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
-
-    ukv_key_t** generated_keys,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -198,7 +196,7 @@ void ukv_docs_read( //
     ukv_options_t const options,
     ukv_format_t const format,
 
-    ukv_type_t** found_types,
+    // ukv_type_t** found_types,
     ukv_val_len_t** found_lengths,
     ukv_val_ptr_t* found_values,
 

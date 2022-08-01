@@ -152,8 +152,9 @@ std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(PyObj
         throw std::invalid_argument("Expecting tensor rank 1");
     if (!raii.py.shape)
         throw std::invalid_argument("Shape wasn't inferred");
-    if (raii.py.itemsize != sizeof(scalar_at))
-        throw std::invalid_argument("Scalar type mismatch");
+    if constexpr (!std::is_same_v<scalar_at, void> && !std::is_same_v<scalar_at, void const>)
+        if (raii.py.itemsize != sizeof(scalar_at))
+            throw std::invalid_argument("Scalar type mismatch");
 
     strided_range_gt<scalar_at> result {
         reinterpret_cast<scalar_at*>(raii.py.buf),
@@ -198,29 +199,26 @@ inline void throw_not_implemented() {
     throw std::runtime_error("Not Implemented!");
 }
 
-bool is_seq(PyObject* obj) {
+inline bool is_pyseq(PyObject* obj) {
     return PyTuple_Check(obj) || PyList_Check(obj) || PyIter_Check(obj);
 }
 
 /**
  * @brief Iterates over Python `tuple`, `list`, or any `iter`.
  * @param call Callback for member `PyObject`s.
- * @return true If a supported iterable type was detected.
  */
 template <typename member_callback_at>
-bool scan_seq(PyObject* obj, member_callback_at&& call) {
+void scan_pyseq(PyObject* obj, member_callback_at&& call) {
 
     if (PyTuple_Check(obj)) {
         size_t n = PyTuple_Size(obj);
         for (size_t i = 0; i != n; ++i)
             call(PyTuple_GetItem(obj, i));
-        return true;
     }
     else if (PyList_Check(obj)) {
         size_t n = PyList_Size(obj);
         for (size_t i = 0; i != n; ++i)
             call(PyList_GetItem(obj, i));
-        return true;
     }
     else if (PyIter_Check(obj)) {
         PyObject* item = nullptr;
@@ -228,10 +226,7 @@ bool scan_seq(PyObject* obj, member_callback_at&& call) {
             call(item);
             Py_DECREF(item);
         }
-        return true;
     }
-    else
-        return false;
 }
 
 /**
@@ -240,17 +235,14 @@ bool scan_seq(PyObject* obj, member_callback_at&& call) {
  * @return true If a supported iterable type was detected.
  */
 template <typename member_callback_at>
-bool scan_dict(PyObject* obj, member_callback_at&& call) {
-    bool is_dict = PyDict_Check(obj);
-    if (!is_dict)
-        return false;
+void scan_pydict(PyObject* obj, member_callback_at&& call) {
+
     PyObject* key = nullptr;
     PyObject* value = nullptr;
     Py_ssize_t pos = 0;
 
     while (PyDict_Next(obj, &pos, &key, &value))
         call(key, value);
-    return true;
 }
 
 /**
@@ -260,22 +252,22 @@ template <typename element_at>
 struct format_code_gt {};
 
 // clang-format off
-template <> struct format_code_gt<bool> { inline static char value = '?'; };
-template <> struct format_code_gt<char> { inline static char value = 'c'; };
-template <> struct format_code_gt<signed char> { inline static char value = 'b'; };
-template <> struct format_code_gt<unsigned char> { inline static char value = 'B'; };
+template <> struct format_code_gt<bool> { inline static constexpr char value = '?'; };
+template <> struct format_code_gt<char> { inline static constexpr char value = 'c'; };
+template <> struct format_code_gt<signed char> { inline static constexpr char value = 'b'; };
+template <> struct format_code_gt<unsigned char> { inline static constexpr char value = 'B'; };
 
-template <> struct format_code_gt<short> { inline static char value = 'h'; };
-template <> struct format_code_gt<unsigned short> { inline static char value = 'H'; };
-template <> struct format_code_gt<int> { inline static char value = 'i'; };
-template <> struct format_code_gt<unsigned int> { inline static char value = 'I'; };
-template <> struct format_code_gt<long> { inline static char value = 'l'; };
-template <> struct format_code_gt<unsigned long> { inline static char value = 'L'; };
-template <> struct format_code_gt<long long> { inline static char value = 'q'; };
-template <> struct format_code_gt<unsigned long long> { inline static char value = 'Q'; };
+template <> struct format_code_gt<short> { inline static constexpr char value = 'h'; };
+template <> struct format_code_gt<unsigned short> { inline static constexpr char value = 'H'; };
+template <> struct format_code_gt<int> { inline static constexpr char value = 'i'; };
+template <> struct format_code_gt<unsigned int> { inline static constexpr char value = 'I'; };
+template <> struct format_code_gt<long> { inline static constexpr char value = 'l'; };
+template <> struct format_code_gt<unsigned long> { inline static constexpr char value = 'L'; };
+template <> struct format_code_gt<long long> { inline static constexpr char value = 'q'; };
+template <> struct format_code_gt<unsigned long long> { inline static constexpr char value = 'Q'; };
 
-template <> struct format_code_gt<float> { inline static char value = 'f'; };
-template <> struct format_code_gt<double> { inline static char value = 'd'; };
+template <> struct format_code_gt<float> { inline static constexpr char value = 'f'; };
+template <> struct format_code_gt<double> { inline static constexpr char value = 'd'; };
 // clang-format on
 
 void wrap_database(py::module&);

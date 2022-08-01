@@ -17,15 +17,19 @@ def only_json(col):
     retrieved = json.loads(col[1].decode())
     assert original == retrieved, 'Failed to recover document'
 
-    # Batch lookup
+    # Batch lookups, via lists AND via tuples
     col[(1, 2, 3, 4)]
+    col[[1, 2, 3, 4]]
+
+    # Batch checks and deletions
+    (1, 2, 3, 4) in col
+    del col[(1, 2, 3, 4)]
 
     # Batch field lookup
+    # Supporting JSON-Pointers
+    col[1 / '/US']
     col[1]['US']
     col[(1, 2, 3)][('US', 'Phone', 'Name')]
-
-    # Supporting JSON-Pointers
-    col[1]['/US']
 
     # Listing a range of documents
     col[1:]
