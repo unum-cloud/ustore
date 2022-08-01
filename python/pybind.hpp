@@ -199,23 +199,22 @@ template <typename element_at>
 struct format_code_gt {};
 
 // clang-format off
-template <> struct format_code_gt<bool> { inline static char const *format_k = "?"; };
-template <> struct format_code_gt<char> { inline static char const *format_k = "c"; };
-template <> struct format_code_gt<signed char> { inline static char const *format_k = "b"; };
-template <> struct format_code_gt<unsigned char> { inline static char const *format_k = "B"; };
+template <> struct format_code_gt<bool> { inline static char value = '?'; };
+template <> struct format_code_gt<char> { inline static char value = 'c'; };
+template <> struct format_code_gt<signed char> { inline static char value = 'b'; };
+template <> struct format_code_gt<unsigned char> { inline static char value = 'B'; };
 
-template <> struct format_code_gt<short> { inline static char const *format_k = "h"; };
-template <> struct format_code_gt<unsigned short> { inline static char const *format_k = "H"; };
-template <> struct format_code_gt<int> { inline static char const *format_k = "i"; };
-template <> struct format_code_gt<unsigned int> { inline static char const *format_k = "I"; };
-template <> struct format_code_gt<long> { inline static char const *format_k = "l"; };
-template <> struct format_code_gt<unsigned long> { inline static char const *format_k = "L"; };
-template <> struct format_code_gt<long long> { inline static char const *format_k = "q"; };
-template <> struct format_code_gt<unsigned long long> { inline static char const *format_k = "Q"; };
+template <> struct format_code_gt<short> { inline static char value = 'h'; };
+template <> struct format_code_gt<unsigned short> { inline static char value = 'H'; };
+template <> struct format_code_gt<int> { inline static char value = 'i'; };
+template <> struct format_code_gt<unsigned int> { inline static char value = 'I'; };
+template <> struct format_code_gt<long> { inline static char value = 'l'; };
+template <> struct format_code_gt<unsigned long> { inline static char value = 'L'; };
+template <> struct format_code_gt<long long> { inline static char value = 'q'; };
+template <> struct format_code_gt<unsigned long long> { inline static char value = 'Q'; };
 
-template <> struct format_code_gt<float> { inline static char const *format_k = "f"; };
-template <> struct format_code_gt<double> { inline static char const *format_k = "d"; };
-
+template <> struct format_code_gt<float> { inline static char value = 'f'; };
+template <> struct format_code_gt<double> { inline static char value = 'd'; };
 // clang-format on
 
 void wrap_database(py::module&);
