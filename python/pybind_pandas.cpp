@@ -51,8 +51,8 @@ void ukv::wrap_pandas(py::module& m) {
     // Batch Access
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.iloc.html#pandas.DataFrame.loc
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.iloc.html#pandas.DataFrame.iloc
-    df.def("loc", [](py_frame_t& df, py::handle const ids, ukv_format_t) {});
-    df.def("iloc", [](py_frame_t& df, py::handle const ids, ukv_format_t) {});
+    df.def("loc", [](py_frame_t& df, py::handle ids, ukv_format_t) {});
+    df.def("iloc", [](py_frame_t& df, py::handle ids, ukv_format_t) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.sample.html
     df.def("sample", [](py_frame_t& df, std::size_t count, bool replace) {});
@@ -69,8 +69,8 @@ void ukv::wrap_pandas(py::module& m) {
     df.def("to_json", [](py_frame_t& df, py::object const& path_or_buf) {});
     df.def("to_parquet", [](py_frame_t& df, py::object const& path_or_buf) {});
     df.def("to_csv", [](py_frame_t& df, py::object const& path_or_buf) {});
-    df.def("to_numpy", [](py_frame_t& df, py::handle const& mat) {});
-    df.def("to_arrow", [](py_frame_t& df, py::handle const& mat) {});
+    df.def("to_numpy", [](py_frame_t& df, py::handle mat) {});
+    df.def("to_arrow", [](py_frame_t& df, py::handle mat) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.replace.html
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.merge.html
