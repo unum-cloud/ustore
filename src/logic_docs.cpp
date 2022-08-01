@@ -151,7 +151,9 @@ void dump_any(json_t const& json,
             case json_t::value_t::number_integer: value->write_scalar(json.get<std::int64_t>()); break;
             case json_t::value_t::number_unsigned: value->write_scalar(json.get<std::uint64_t>()); break;
             case json_t::value_t::number_float: value->write_scalar(json.get<double>()); break;
+            default: *c_error = "Unsupported member type"; break;
             }
+            break;
         }
         default: *c_error = "Unsupported output format"; break;
         }
@@ -318,7 +320,7 @@ read_tasks_soa_t read_docs(ukv_t const c_db,
     }
 
     auto cnt = static_cast<ukv_size_t>(arena.updated_keys.size());
-    auto sub_keys_range = strided_range_gt<col_key_t const>(arena.updated_keys);
+    auto sub_keys_range = strided_range(arena.updated_keys).immutable();
     strided_range_gt<ukv_collection_t const> cols = sub_keys_range.members(&col_key_t::collection);
     strided_range_gt<ukv_key_t const> keys = sub_keys_range.members(&col_key_t::key);
     return {cols.begin(), keys.begin(), cnt};
