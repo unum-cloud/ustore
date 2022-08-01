@@ -106,19 +106,6 @@ class strided_range_gt {
     strided_range_gt(object_at* begin, std::size_t stride, std::size_t count) noexcept
         : begin_(begin), stride_(static_cast<ukv_size_t>(stride)), count_(static_cast<ukv_size_t>(count)) {}
 
-    strided_range_gt(std::vector<object_at>& vec) noexcept
-        : begin_(vec.data()), stride_(sizeof(object_at)), count_(vec.size()) {}
-    strided_range_gt(std::vector<std::remove_const_t<object_at>> const& vec) noexcept
-        : begin_(vec.data()), stride_(sizeof(object_at)), count_(vec.size()) {}
-
-    template <std::size_t count_ak>
-    strided_range_gt(object_at (&c_array)[count_ak]) noexcept
-        : begin_(&c_array[0]), stride_(sizeof(object_at)), count_(count_ak) {}
-
-    template <std::size_t count_ak>
-    strided_range_gt(std::array<object_at, count_ak> const& array) noexcept
-        : begin_(array.data()), stride_(sizeof(object_at)), count_(count_ak) {}
-
     strided_range_gt(strided_range_gt&&) = default;
     strided_range_gt(strided_range_gt const&) = default;
     strided_range_gt& operator=(strided_range_gt&&) = default;
@@ -148,6 +135,26 @@ class strided_range_gt {
         return strided_range_gt<member_t> {begin_members.get(), begin_members.stride(), count()};
     }
 };
+
+template <typename at>
+strided_range_gt<at> strided_range(std::vector<at>& vec) noexcept {
+    return {vec.data(), sizeof(at), vec.size()};
+}
+
+template <typename at>
+strided_range_gt<at> strided_range(std::vector<at> const& vec) noexcept {
+    return {vec.data(), sizeof(at), vec.size()};
+}
+
+template <typename at, std::size_t count_ak>
+strided_range_gt<at> strided_range(at (&c_array)[count_ak]) noexcept {
+    return {&c_array[0], sizeof(at), count_ak};
+}
+
+template <typename at, std::size_t count_ak>
+strided_range_gt<at const> strided_range(std::array<at, count_ak> const& array) noexcept {
+    return {array.data(), sizeof(at), count_ak};
+}
 
 /**
  * @brief Similar to `std::optional<std::span>`.

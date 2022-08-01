@@ -27,15 +27,14 @@ class graph_ref_t {
     ukv_arena_t* arena_ = nullptr;
 
   public:
-    graph_ref_t(ukv_t db, ukv_txn_t txn, ukv_collection_t col, arena_t& arena) noexcept
-        : db_(db), txn_(txn), col_(col), arena_(arena.member_ptr()) {}
+    graph_ref_t(ukv_t db, ukv_txn_t txn, ukv_collection_t col, ukv_arena_t* arena) noexcept
+        : db_(db), txn_(txn), col_(col), arena_(arena) {}
 
     graph_ref_t(graph_ref_t&&) = default;
     graph_ref_t& operator=(graph_ref_t&&) = default;
     graph_ref_t(graph_ref_t const&) = default;
     graph_ref_t& operator=(graph_ref_t const&) = default;
 
-    arena_t& arena() const noexcept { return *reinterpret_cast<arena_t*>(arena_); }
     graph_ref_t& on(arena_t& arena) noexcept {
         arena_ = arena.member_ptr();
         return *this;
@@ -144,7 +143,7 @@ class graph_ref_t {
     }
 
     expected_gt<bool> contains(ukv_key_t vertex, bool track = false) noexcept {
-        return members_ref_gt<col_key_field_t>(db_, txn_, ckf(col_, vertex), arena()).present(track);
+        return members_ref_gt<col_key_field_t>(db_, txn_, ckf(col_, vertex), arena_).present(track);
     }
 
     /**
@@ -157,7 +156,7 @@ class graph_ref_t {
         arg.collections_begin = {&col_, 0};
         arg.keys_begin = vertices.begin();
         arg.count = vertices.count();
-        return members_ref_gt<keys_arg_t>(db_, txn_, arg, arena()).present(track);
+        return members_ref_gt<keys_arg_t>(db_, txn_, arg, arena_).present(track);
     }
 
     using adjacency_range_t = range_gt<edges_stream_t>;
