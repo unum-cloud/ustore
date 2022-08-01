@@ -99,8 +99,7 @@ class strided_range_gt {
     using value_type = object_at;
 
     strided_range_gt() = default;
-    strided_range_gt(object_at& single, std::size_t repeats = 1) noexcept
-        : begin_(&single), stride_(0), count_(static_cast<ukv_size_t>(repeats)) {}
+    strided_range_gt(object_at* single) noexcept : begin_(single), stride_(0), count_(1) {}
     strided_range_gt(object_at* begin, object_at* end) noexcept
         : begin_(begin), stride_(sizeof(object_at)), count_(end - begin) {}
     strided_range_gt(object_at* begin, std::size_t stride, std::size_t count) noexcept
@@ -111,11 +110,23 @@ class strided_range_gt {
     strided_range_gt& operator=(strided_range_gt&&) = default;
     strided_range_gt& operator=(strided_range_gt const&) = default;
 
-    inline strided_iterator_gt<object_at> begin() const noexcept { return {begin_, stride_}; }
-    inline strided_iterator_gt<object_at> end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
-    inline object_at& at(std::size_t i) const noexcept { return *(begin() + static_cast<std::ptrdiff_t>(i)); }
-    inline object_at& operator[](std::size_t i) const noexcept { return at(i); }
     inline object_at* data() const noexcept { return begin_; }
+    inline decltype(auto) begin() const noexcept {
+        if constexpr (!std::is_void_v<object_at>)
+            return strided_iterator_gt<object_at> {begin_, stride_};
+    }
+    inline decltype(auto) end() const noexcept {
+        if constexpr (!std::is_void_v<object_at>)
+            return begin() + static_cast<std::ptrdiff_t>(count_);
+    }
+    inline decltype(auto) at(std::size_t i) const noexcept {
+        if constexpr (!std::is_void_v<object_at>)
+            return *(begin() + static_cast<std::ptrdiff_t>(i));
+    }
+    inline decltype(auto) operator[](std::size_t i) const noexcept {
+        if constexpr (!std::is_void_v<object_at>)
+            return at(i);
+    }
 
     inline auto immutable() const noexcept { return strided_range_gt<object_at const>(begin_, stride_, count_); }
     inline strided_range_gt subspan(std::size_t offset, std::size_t count) const noexcept {
