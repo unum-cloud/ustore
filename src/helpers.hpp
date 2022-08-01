@@ -17,7 +17,7 @@ namespace unum::ukv {
 
 using allocator_t = std::allocator<byte_t>;
 using buffer_t = std::vector<byte_t, allocator_t>;
-using sequence_t = std::int64_t;
+using generation_t = std::int64_t;
 
 inline std::size_t next_power_of_two(std::size_t x) {
     return 1ull << (sizeof(std::size_t) * CHAR_BIT - __builtin_clzll(x));
@@ -215,17 +215,17 @@ inline element_at* prepare_memory(std::vector<element_at>& elems, std::size_t n,
 }
 
 /**
- * @brief Solves the problem of modulo arithmetic and `sequence_t` overflow.
+ * @brief Solves the problem of modulo arithmetic and `generation_t` overflow.
  * Still works correctly, when `max` has overflown, but `min` hasn't yet,
  * so `min` can be bigger than `max`.
  */
-inline bool entry_was_overwritten(sequence_t entry_sequence,
-                                  sequence_t transaction_sequence,
-                                  sequence_t youngest_sequence) noexcept {
+inline bool entry_was_overwritten(generation_t entry_generation,
+                                  generation_t transaction_generation,
+                                  generation_t youngest_generation) noexcept {
 
-    return transaction_sequence <= youngest_sequence
-               ? ((entry_sequence >= transaction_sequence) & (entry_sequence <= youngest_sequence))
-               : ((entry_sequence >= transaction_sequence) | (entry_sequence <= youngest_sequence));
+    return transaction_generation <= youngest_generation
+               ? ((entry_generation >= transaction_generation) & (entry_generation <= youngest_generation))
+               : ((entry_generation >= transaction_generation) | (entry_generation <= youngest_generation));
 }
 
 struct read_task_t {

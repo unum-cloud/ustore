@@ -78,24 +78,34 @@ def scan(col):
     col[50] = b'aaaaa'
     col[60] = b'aaaaaa'
 
-    keys, lengths = col.scan(10, 6)
+    keys, lengths = col.scan_with_lengths(10, 6)
+    only_keys = col.scan(10, 6)
     assert np.array_equal(keys, [10, 20, 30, 40, 50, 60])
+    assert np.array_equal(only_keys, [10, 20, 30, 40, 50, 60])
     assert np.array_equal(lengths, [1, 2, 3, 4, 5, 6])
 
-    keys, lengths = col.scan(20, 5)
+    keys, lengths = col.scan_with_lengths(20, 5)
+    only_keys = col.scan(20, 5)
     assert np.array_equal(keys, [20, 30, 40, 50, 60])
+    assert np.array_equal(only_keys, [20, 30, 40, 50, 60])
     assert np.array_equal(lengths, [2, 3, 4, 5, 6])
 
-    keys, lengths = col.scan(30, 1)
+    keys, lengths = col.scan_with_lengths(30, 1)
+    only_keys = col.scan(30, 1)
     assert np.array_equal(keys, [30])
+    assert np.array_equal(only_keys, [30])
     assert np.array_equal(lengths, [3])
 
-    keys, lengths = col.scan(40, 2)
+    keys, lengths = col.scan_with_lengths(40, 2)
+    only_keys = col.scan(40, 2)
     assert np.array_equal(keys, [40, 50])
+    assert np.array_equal(only_keys, [40, 50])
     assert np.array_equal(lengths, [4, 5])
 
-    keys, lengths = col.scan(60, 1)
+    keys, lengths = col.scan_with_lengths(60, 1)
+    only_keys = col.scan(60, 1)
     assert np.array_equal(keys, [60])
+    assert np.array_equal(only_keys, [60])
     assert np.array_equal(lengths, [6])
 
 
