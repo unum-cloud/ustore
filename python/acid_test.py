@@ -166,11 +166,10 @@ def test_conflict():
         txn1.get(0)
 
 
-def test_transparent_reads():
+def test_tracking_reads():
     db = ukv.DataBase()
     txn = ukv.Transaction(db)
-    txn.get(0)
-    txn.set(1, 'value'.encode())
+    txn.get(0, track=True)
     db.set(0, 'value'.encode())
     with pytest.raises(Exception):
         txn.commit()
