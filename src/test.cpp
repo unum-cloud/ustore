@@ -400,9 +400,9 @@ TEST(db, net) {
 
     // Remove a single edge, making sure that the nodes info persists
     EXPECT_TRUE(net.remove({
-        {edge1.front().source_id},
-        {edge1.front().target_id},
-        {edge1.front().id},
+        {&edge1.front().source_id},
+        {&edge1.front().target_id},
+        {&edge1.front().id},
     }));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
@@ -410,15 +410,15 @@ TEST(db, net) {
 
     // Bring that edge back
     EXPECT_TRUE(net.upsert({
-        {edge1.front().source_id},
-        {edge1.front().target_id},
-        {edge1.front().id},
+        {&edge1.front().source_id},
+        {&edge1.front().target_id},
+        {&edge1.front().id},
     }));
     EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
 
     // Remove a vertex
     ukv_key_t vertex_to_remove = 2;
-    EXPECT_TRUE(net.remove({vertex_to_remove}));
+    EXPECT_TRUE(net.remove(vertex_to_remove));
     EXPECT_FALSE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);
@@ -495,9 +495,9 @@ TEST(db, net_batch) {
 
     // Remove a single edge, making sure that the nodes info persists
     EXPECT_TRUE(net.remove(edges_view_t {
-        {triangle[0].source_id},
-        {triangle[0].target_id},
-        {triangle[0].id},
+        {&triangle[0].source_id},
+        {&triangle[0].target_id},
+        {&triangle[0].id},
     }));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
@@ -505,15 +505,15 @@ TEST(db, net_batch) {
 
     // Bring that edge back
     EXPECT_TRUE(net.upsert(edges_view_t {
-        {triangle[0].source_id},
-        {triangle[0].target_id},
-        {triangle[0].id},
+        {&triangle[0].source_id},
+        {&triangle[0].target_id},
+        {&triangle[0].id},
     }));
     EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
 
     // Remove a vertex
     ukv_key_t vertex_to_remove = 2;
-    EXPECT_TRUE(net.remove({vertex_to_remove}));
+    EXPECT_TRUE(net.remove(vertex_to_remove));
     EXPECT_FALSE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);

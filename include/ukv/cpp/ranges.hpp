@@ -167,6 +167,11 @@ strided_range_gt<at const> strided_range(std::array<at, count_ak> const& array) 
     return {array.data(), sizeof(at), count_ak};
 }
 
+template <typename at>
+strided_range_gt<at const> strided_range(std::initializer_list<at> list) noexcept {
+    return {list.begin(), sizeof(at), list.size()};
+}
+
 /**
  * @brief Similar to `std::optional<std::span>`.
  * It's NULL state and "empty string" states are not identical.
