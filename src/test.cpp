@@ -7,6 +7,7 @@
  */
 
 #include <unordered_set>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -89,7 +90,7 @@ TEST(db, intro) {
 
     // Working with sub documents
     main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
-    main[ckf(56, "hello")].value() == "world";
+    _ = main[ckf(56, "hello")].value() == "world";
 }
 
 template <typename locations_at>
@@ -346,9 +347,9 @@ TEST(db, net) {
     graph_ref_t net = main.as_graph();
 
     // triangle
-    std::vector<edge_t> edge1 {{1, 2, 9}};
-    std::vector<edge_t> edge2 {{2, 3, 10}};
-    std::vector<edge_t> edge3 {{3, 1, 11}};
+    edge_t edge1 {1, 2, 9};
+    edge_t edge2 {2, 3, 10};
+    edge_t edge3 {3, 1, 11};
 
     EXPECT_TRUE(net.upsert(edge1));
     EXPECT_TRUE(net.upsert(edge2));
@@ -383,7 +384,7 @@ TEST(db, net) {
     // Check scans
     EXPECT_TRUE(net.edges());
     {
-        std::unordered_set<edge_t, edge_hash_t> expected_edges {edge1[0], edge2[0], edge3[0]};
+        std::unordered_set<edge_t, edge_hash_t> expected_edges {edge1, edge2, edge3};
         std::unordered_set<edge_t, edge_hash_t> exported_edges;
 
         auto present_edges = *net.edges();
@@ -400,9 +401,9 @@ TEST(db, net) {
 
     // Remove a single edge, making sure that the nodes info persists
     EXPECT_TRUE(net.remove({
-        {&edge1.front().source_id},
-        {&edge1.front().target_id},
-        {&edge1.front().id},
+        {&edge1.source_id},
+        {&edge1.target_id},
+        {&edge1.id},
     }));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
@@ -410,9 +411,9 @@ TEST(db, net) {
 
     // Bring that edge back
     EXPECT_TRUE(net.upsert({
-        {&edge1.front().source_id},
-        {&edge1.front().target_id},
-        {&edge1.front().id},
+        {&edge1.source_id},
+        {&edge1.target_id},
+        {&edge1.id},
     }));
     EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
 
@@ -448,7 +449,7 @@ TEST(db, net_batch) {
         {3, 1, 11},
     };
 
-    EXPECT_TRUE(net.upsert(triangle));
+    EXPECT_TRUE(net.upsert(edges(triangle)));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_FALSE(*net.contains(9));
@@ -520,7 +521,7 @@ TEST(db, net_batch) {
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
 
     // Bring back the whole graph
-    EXPECT_TRUE(net.upsert(triangle));
+    EXPECT_TRUE(net.upsert(edges(triangle)));
     EXPECT_TRUE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);

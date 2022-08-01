@@ -26,8 +26,8 @@
  * DataBase level.
  *
  * Full @c `dict` API:
- * https://docs.python.org/3/library/stdtypes.html#mapping-types-dict
  * https://python-reference.readthedocs.io/en/latest/docs/dict/
+ * https://docs.python.org/3/library/stdtypes.html#mapping-types-dict
  * https://docs.python.org/3/tutorial/datastructures.html#dictionaries
  * https://docs.python.org/3/c-api/dict.html
  *
@@ -188,25 +188,19 @@ void populate_vals(PyObject* obj, std::vector<py_bin_req_t>& reqs) {
  * @param key_py Must be a `PyLong`.
  * @param val_py Can be anything.
  */
-void py_write_one( //
-    ukv_t db_ptr,
-    ukv_txn_t txn_ptr,
-    ukv_collection_t col_ptr,
-    arena_t& arena,
-    PyObject* key_py,
-    PyObject* val_py) {
+void py_write_one(py_col_t& py_col, py::handle key_py, py::handle val_py) {
 
     status_t status;
     py_bin_req_t req;
-    populate_key(key_py, req);
-    populate_val(val_py, req);
+    populate_key(key_py.ptr(), req);
+    populate_val(val_py.ptr(), req);
     ukv_options_t options = ukv_options_default_k;
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_write(db_ptr,
-              txn_ptr,
+    ukv_write(py_col.db(),
+              py_col.txn(),
               1,
-              &col_ptr,
+              py_col.col(),
               0,
               &req.key,
               0,
@@ -217,33 +211,27 @@ void py_write_one( //
               &req.len,
               0,
               options,
-              arena.member_ptr(),
+              py_col.arena(),
               status.member_ptr());
     status.throw_unhandled();
 }
 
-void py_write_many( //
-    ukv_t db_ptr,
-    ukv_txn_t txn_ptr,
-    ukv_collection_t col_ptr,
-    arena_t& arena,
-    PyObject* keys_py,
-    PyObject* vals_py) {
+void py_write_many(py_col_t& py_col, py::handle keys_py, py::handle vals_py) {
 
     std::vector<py_bin_req_t> reqs;
-    populate_keys(keys_py, reqs);
+    populate_keys(keys_py.ptr(), reqs);
     if (vals_py != Py_None)
-        populate_vals(vals_py, reqs);
+        populate_vals(vals_py.ptr(), reqs);
 
     status_t status;
     ukv_size_t step = sizeof(py_bin_req_t);
     ukv_options_t options = ukv_options_default_k;
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_write(db_ptr,
-              txn_ptr,
+    ukv_write(py_col.db(),
+              py_col.txn(),
               static_cast<ukv_size_t>(reqs.size()),
-              &col_ptr,
+              py_col.col(),
               0,
               &reqs[0].key,
               step,
@@ -254,40 +242,33 @@ void py_write_many( //
               &reqs[0].len,
               step,
               options,
-              arena.member_ptr(),
+              py_col.arena(),
               status.member_ptr());
     status.throw_unhandled();
 }
 
-void py_write( //
-    ukv_t db_ptr,
-    ukv_txn_t txn_ptr,
-    ukv_collection_t col_ptr,
-    arena_t& arena,
-    PyObject* key_py,
-    PyObject* val_py = Py_None) {
+void py_write(py_col_t& py_col, py::handle key_py, py::handle val_py) {
 
-    auto is_single = PyLong_Check(key_py);
+    auto is_single = PyLong_Check(key_py.ptr());
     auto func = is_single ? &py_write_one : &py_write_many;
-    return func(db_ptr, txn_ptr, col_ptr, arena, key_py, val_py);
+    return func(py_col, key_py, val_py);
 }
 
-void py_update( //
-    ukv_t db_ptr,
-    ukv_txn_t txn_ptr,
-    ukv_collection_t col_ptr,
-    arena_t& arena,
-    PyObject* dict_py) {
+void py_remove(py_col_t& py_col, py::handle key_py) {
+    return py_write(py_col, key_py, Py_None)
+}
+
+void py_update(py_col_t& py_col, py::handle dict_py) {
 
     status_t status;
     ukv_size_t step = sizeof(py_bin_req_t);
     ukv_options_t options = ukv_options_default_k;
 
     std::vector<py_bin_req_t> reqs;
-    reqs.reserve(PyDict_Size(dict_py));
+    reqs.reserve(PyDict_Size(dict_py.ptr()));
 
     std::size_t i = 0;
-    scan_pydict(dict_py, [&](PyObject* key_obj, PyObject* val_obj) {
+    scan_pydict(dict_py.ptr(), [&](PyObject* key_obj, PyObject* val_obj) {
         py_bin_req_t& req = reqs[i];
         populate_key(key_obj, req);
         populate_val(val_obj, req);
@@ -295,10 +276,10 @@ void py_update( //
     });
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_write(db_ptr,
-              txn_ptr,
+    ukv_write(py_col.db(),
+              py_col.txn(),
               static_cast<ukv_size_t>(reqs.size()),
-              &col_ptr,
+              py_col.col(),
               0,
               &reqs[0].key,
               step,
@@ -309,39 +290,34 @@ void py_update( //
               &reqs[0].len,
               step,
               options,
-              arena.member_ptr(),
+              py_col.arena(),
               status.member_ptr());
     status.throw_unhandled();
 }
 
 #pragma region Reads
 
-py::object py_read_one( //
-    ukv_t db_ptr,
-    ukv_txn_t txn_ptr,
-    ukv_collection_t col_ptr,
-    arena_t& arena,
-    PyObject* key_py) {
+py::object py_read_one(py_col_t& py_col, py::handle key_py) {
 
     status_t status;
-    ukv_key_t key = static_cast<ukv_key_t>(PyLong_AsUnsignedLong(key_py));
+    ukv_key_t key = static_cast<ukv_key_t>(PyLong_AsUnsignedLong(key_py.ptr()));
     ukv_options_t options = ukv_options_default_k;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
-        ukv_read(db_ptr,
-                 txn_ptr,
+        ukv_read(py_col.db(),
+                 py_col.txn(),
                  1,
-                 &col_ptr,
+                 py_col.col(),
                  0,
                  &key,
                  0,
                  options,
                  &found_lengths,
                  &found_values,
-                 arena.member_ptr(),
+                 py_col.arena(),
                  status.member_ptr());
         status.throw_unhandled();
     }
@@ -359,34 +335,29 @@ py::object py_read_one( //
     return py::reinterpret_borrow<py::object>(obj_ptr);
 }
 
-py::object py_read_many( //
-    ukv_t db_ptr,
-    ukv_txn_t txn_ptr,
-    ukv_collection_t col_ptr,
-    arena_t& arena,
-    PyObject* keys_py) {
+py::object py_read_many(py_col_t& py_col, py::handle keys_py) {
 
     status_t status;
-    std::vector<py_bin_req_t> reqs;
     ukv_options_t options = ukv_options_default_k;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
+    std::vector<py_bin_req_t> reqs;
     populate_keys(keys_py, reqs);
     ukv_size_t step = sizeof(py_bin_req_t);
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
-        ukv_read(db_ptr,
-                 txn_ptr,
+        ukv_read(py_col.db(),
+                 py_col.txn(),
                  1,
-                 &col_ptr,
+                 py_col.col(),
                  0,
                  &reqs[0].key,
                  step,
                  options,
                  &found_lengths,
                  &found_values,
-                 arena.member_ptr(),
+                 py_col.arena(),
                  status.member_ptr());
         status.throw_unhandled();
     }
@@ -401,34 +372,83 @@ py::object py_read_many( //
     return py::reinterpret_borrow<py::object>(tuple_ptr);
 }
 
-py::object py_measure_many( //
-    ukv_t db_ptr,
-    ukv_txn_t txn_ptr,
-    ukv_collection_t col_ptr,
-    arena_t& arena,
-    PyObject* keys_py) {
-    return {};
-}
-
-py::object py_measure_one( //
-    ukv_t db_ptr,
-    ukv_txn_t txn_ptr,
-    ukv_collection_t col_ptr,
-    arena_t& arena,
-    PyObject* key_py) {
-    return {};
-}
-
-py::object py_read( //
-    ukv_t db_ptr,
-    ukv_txn_t txn_ptr,
-    ukv_collection_t col_ptr,
-    arena_t& arena,
-    PyObject* key_py) {
+py::object py_read(py_col_t& py_col, py::handle key_py) {
 
     auto is_single = PyLong_Check(key_py);
     auto func = is_single ? &py_read_one : &py_read_many;
-    return func(db_ptr, txn_ptr, col_ptr, arena, key_py);
+    return func(py_col, key_py);
+}
+
+py::object py_has_many(py_col_t& py_col, py::handle keys_py) {
+
+    status_t status;
+    ukv_options_t options = ukv_option_read_lengths_k;
+    ukv_val_ptr_t found_values = nullptr;
+    ukv_val_len_t* found_lengths = nullptr;
+
+    std::vector<py_bin_req_t> reqs;
+    populate_keys(keys_py, reqs);
+    ukv_size_t step = sizeof(py_bin_req_t);
+
+    {
+        [[maybe_unused]] py::gil_scoped_release release;
+        ukv_read(py_col.db(),
+                 py_col.txn(),
+                 1,
+                 py_col.col(),
+                 step,
+                 &reqs[0].key,
+                 step,
+                 options,
+                 &found_lengths,
+                 &found_values,
+                 py_col.arena(),
+                 status.member_ptr());
+        status.throw_unhandled();
+    }
+
+    PyObject* tuple_ptr = PyTuple_New(reqs.size());
+    for (std::size_t i = 0; i != reqs.size(); ++i, ++tape_it) {
+        PyObject* obj_ptr = found_lengths[i] == ukv_val_len_missing_k ? Py_True : Py_False;
+        PyTuple_SetItem(tuple_ptr, i, obj_ptr);
+    }
+    return py::reinterpret_borrow<py::object>(tuple_ptr);
+}
+
+py::object py_has_one(py_col_t& py_col, py::handle key_py) {
+
+    status_t status;
+    ukv_key_t key = static_cast<ukv_key_t>(PyLong_AsUnsignedLong(key_py));
+    ukv_options_t options = ukv_option_read_lengths_k;
+    ukv_val_ptr_t found_values = nullptr;
+    ukv_val_len_t* found_lengths = nullptr;
+
+    {
+        [[maybe_unused]] py::gil_scoped_release release;
+        ukv_read(py_col.db(),
+                 py_col.txn(),
+                 1,
+                 py_col.col(),
+                 0,
+                 &key,
+                 0,
+                 options,
+                 &found_lengths,
+                 &found_values,
+                 py_col.arena(),
+                 status.member_ptr());
+        status.throw_unhandled();
+    }
+
+    PyObject* obj_ptr = *found_lengths == ukv_val_len_missing_k ? Py_True : Py_False;
+    return py::reinterpret_borrow<py::object>(obj_ptr);
+}
+
+py::object py_has(py_col_t& py_col, py::handle key_py) {
+
+    auto is_single = PyLong_Check(key_py);
+    auto func = is_single ? &py_has_one : &py_has_many;
+    return func(py_col, key_py);
 }
 
 py::object punned_collection( //
@@ -436,6 +456,7 @@ py::object punned_collection( //
     py_txn_t* py_txn_ptr,
     std::string const& collection,
     ukv_format_t format) {
+
     db_t& db = py_db_ptr->native;
     txn_t& txn = py_txn_ptr->native;
 
@@ -493,31 +514,10 @@ void ukv::wrap_database(py::module& m) {
     // py_col.def("__getattr__", [](py_txn_t& py_db, PyObject* attr_name) {});
 
     // Define `Collection`s member method, without defining any external constructors
-    py_col.def(
-        "get",
-        [](py_col_t& py_col, py::handle keys_py, bool track) {
-            return py_read(py_col.db_ptr->native,
-                           py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
-                           py_col.native,
-                           py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
-                           keys_py.ptr());
-        },
-        py::arg(),
-        py::arg("track") = false);
-
-    py_col.def(
-        "set",
-        [](py_col_t& py_col, py::handle keys_py, py::handle vals_py, bool flush) {
-            return py_write(py_col.db_ptr->native,
-                            py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
-                            py_col.native,
-                            py_col.txn_ptr ? py_col.txn_ptr->arena : py_col.db_ptr->arena,
-                            keys_py.ptr(),
-                            vals_py.ptr());
-        },
-        py::arg(),
-        py::arg(),
-        py::arg("flush") = false);
+    py_col.def("set", &py_write);
+    py_col.def("pop", &py_write);   // Unlike Python, won't return the result
+    py_col.def("has_key", &py_has); // Similar to Python 2
+    py_col.def("get", &py_read);
 
     py_col.def("clear", [](py_col_t& py_col) {
         db_t& db = py_col.db_ptr->native;

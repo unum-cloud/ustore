@@ -368,6 +368,11 @@ struct edges_range_gt {
     strided_range_gt<id_t> edge_ids;
 
     inline edges_range_gt() = default;
+    inline edges_range_gt(edges_range_gt&&) = default;
+    inline edges_range_gt(edges_range_gt const&) = default;
+    inline edges_range_gt& operator=(edges_range_gt&&) = default;
+    inline edges_range_gt& operator=(edges_range_gt const&) = default;
+
     inline edges_range_gt(strided_range_gt<id_t> sources,
                           strided_range_gt<id_t> targets,
                           strided_range_gt<id_t> edges = {&ukv_default_edge_id_k}) noexcept
@@ -379,9 +384,6 @@ struct edges_range_gt {
         target_ids = strided.members(&edge_t::target_id);
         edge_ids = strided.members(&edge_t::id);
     }
-
-    inline edges_range_gt(std::vector<edge_t> const& edges) noexcept
-        : edges_range_gt(edges.data(), edges.data() + edges.size()) {}
 
     inline std::size_t size() const noexcept { return std::min(source_ids.count(), target_ids.count()); }
 
@@ -396,5 +398,11 @@ struct edges_range_gt {
 
 using edges_span_t = edges_range_gt<ukv_key_t>;
 using edges_view_t = edges_range_gt<ukv_key_t const>;
+
+template <typename tuples_at>
+edges_view_t edges(tuples_at&& tuples) noexcept {
+    auto ptr = std::data(tuples);
+    return edges_view_t(ptr, ptr + std::size(tuples));
+}
 
 } // namespace unum::ukv

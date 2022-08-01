@@ -78,6 +78,9 @@ class graph_ref_t {
         return status;
     }
 
+    status_t upsert(edge_t const& edge) noexcept { return upsert(edges_view_t {&edge, &edge + 1}); }
+    status_t remove(edge_t const& edge) noexcept { return remove(edges_view_t {&edge, &edge + 1}); }
+
     status_t remove(ukv_key_t const vertex,
                     ukv_vertex_role_t const role = ukv_vertex_role_any_k,
                     bool flush = false) noexcept {
