@@ -85,9 +85,8 @@ class collection_t {
     }
 
     inline keys_range_t keys(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-                             ukv_key_t max_key = ukv_key_unknown_k,
-                             std::size_t read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
-        return {db_, txn_, col_, min_key, max_key, read_ahead};
+                             ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+        return {db_, txn_, col_, min_key, max_key};
     }
 
     inline expected_gt<size_range_t> size_range() const noexcept {
