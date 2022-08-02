@@ -53,7 +53,7 @@ py::object wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
     g.last_buffer.len = range.size() * sizeof(element_at);
     g.last_buffer.itemsize = sizeof(element_at);
     // https://docs.python.org/3/library/struct.html#format-characters
-    g.last_buffer.format = (char*)&format_code_gt<std::remove_const_t<element_at>>::value;
+    g.last_buffer.format = (char*)&format_code_gt<std::remove_const_t<element_at>>::value[0];
     g.last_buffer.ndim = 1;
     g.last_buffer.shape = &g.last_buffer_shape[0];
     g.last_buffer.strides = &g.last_buffer_strides[0];
