@@ -126,6 +126,8 @@ void dump_any(json_t const& json,
 
     try {
         switch (c_format) {
+        case ukv_format_json_patch_k:
+        case ukv_format_json_merge_patch_k:
         case ukv_format_json_k: return text_serializer_t(value, ' ').dump(json, false, false, 0, 0);
         case ukv_format_msgpack_k: return binary_serializer_t(value).write_msgpack(json);
         case ukv_format_bson_k: return binary_serializer_t(value).write_bson(json);
@@ -153,9 +155,9 @@ void dump_any(json_t const& json,
             case json_t::value_t::number_float: value->write_scalar(json.get<double>()); break;
             default: *c_error = "Unsupported member type"; break;
             }
-            break;
+            return;
         }
-        default: *c_error = "Unsupported output format"; break;
+        default: *c_error = "Unsupported output format"; return;
         }
     }
     catch (...) {
@@ -178,7 +180,9 @@ class serializing_tape_ref_t {
 
         single_doc_buffer_.clear();
         dump_any(doc, c_format, shared_exporter_, c_error);
-        if (c_format == ukv_format_json_k)
+        if ((c_format == ukv_format_json_k) |       //
+            (c_format == ukv_format_json_patch_k) | //
+            (c_format == ukv_format_json_merge_patch_k))
             single_doc_buffer_.push_back(byte_t {0});
 
         arena_.growing_tape.push_back(single_doc_buffer_);

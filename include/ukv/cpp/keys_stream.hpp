@@ -215,7 +215,7 @@ class keys_range_t {
     }
 
     expected_gt<keys_stream_t> find_end() noexcept {
-        auto read_ahead = max_key_ == ukv_key_unknown_k ? 0 : 1;
+        auto read_ahead = max_key_ == ukv_key_unknown_k ? 0u : 1u;
         keys_stream_t stream {db_, col_, read_ahead, txn_};
         status_t status = stream.seek(max_key_);
         return {std::move(status), std::move(stream)};
