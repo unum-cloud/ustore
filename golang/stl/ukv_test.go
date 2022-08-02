@@ -1,14 +1,14 @@
-package ukv_stl_test
+package ukv_test
 
 import (
 	"testing"
 
-	ukv_stl "github.com/unum-cloud/UKV/golang"
+	ukv "github.com/unum-cloud/UKV/golang/stl"
 )
 
 func TestDataBaseSimple(t *testing.T) {
 
-	db := ukv_stl.DataBase{}
+	db := ukv.CreateDB()
 	if err := db.ReConnect(""); err != nil {
 		t.Fatalf("Couldn't open db: %s", err)
 	}
