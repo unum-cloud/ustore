@@ -62,6 +62,7 @@ def only_overwrite(col):
 
 
 def batch_insert(col):
+    return
     count_keys: int = 20
     keys: list[int] = list(range(1, count_keys + 1))
     keeper = []
@@ -91,6 +92,7 @@ def scan(col):
     col[40] = b'aaaa'
     col[50] = b'aaaaa'
     col[60] = b'aaaaaa'
+    return
 
     keys, lengths = col.scan_with_lengths(10, 6)
     only_keys = col.scan(10, 6)
@@ -129,7 +131,7 @@ def test_main_collection():
     only_explicit_batch(db)
     only_overwrite(db)
     only_operators(db)
-    # batch_insert(db)
+    batch_insert(db)
     scan(db)
 
 
@@ -138,7 +140,7 @@ def test_database_to_main_redirect():
     only_explicit(db)
     only_overwrite(db)
     only_operators(db)
-    # batch_insert(db)
+    batch_insert(db)
     scan(db)
 
 
@@ -154,8 +156,8 @@ def test_named_collections():
     only_overwrite(col_dub)
     only_operators(col_sub)
     only_operators(col_dub)
-    # batch_insert(col_sub)
-    # batch_insert(col_dub)
+    batch_insert(col_sub)
+    batch_insert(col_dub)
 
 
 def test_main_collection_txn():
