@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
 project(UKV)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 set(CMAKE_CXX_STANDARD 17)
@@ -80,18 +79,18 @@ include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
 
-
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(Arrow-external Boost-external)
 endif()
-if (!APPLE)
-add_dependencies(ukv_stl jemalloc)
-add_dependencies(ukv_rocksdb jemalloc)
-add_dependencies(ukv_leveldb jemalloc)
-add_dependencies(ukv_rpc_client jemalloc)
-add_dependencies(ukv_test jemalloc)
-add_dependencies(ukv_leveldb_test jemalloc)
-add_dependencies(ukv_rocksdb_test jemalloc)
+
+if(!APPLE)
+  add_dependencies(ukv_stl jemalloc)
+  add_dependencies(ukv_rocksdb jemalloc)
+  add_dependencies(ukv_leveldb jemalloc)
+  add_dependencies(ukv_rpc_client jemalloc)
+  add_dependencies(ukv_test jemalloc)
+  add_dependencies(ukv_leveldb_test jemalloc)
+  add_dependencies(ukv_rocksdb_test jemalloc)
 endif()
 
 include_directories(include/)
@@ -142,15 +141,14 @@ add_library(ukv_rpc_client src/rpc_client.cpp)
 # )
 # add_executable(ukv_arrow_server src/arrow_server.cpp)
 # target_link_libraries(ukv_arrow_server
-#   ukv_stl
-#   pthread
-#   nlohmann_json::nlohmann_json
-#   arrow
-#   arrow_flight
-#   arrow_dataset
-#   parquet
+# ukv_stl
+# pthread
+# nlohmann_json::nlohmann_json
+# arrow
+# arrow_flight
+# arrow_dataset
+# parquet
 # )
-
 add_executable(ukv_test
   src/test.cpp
   src/backend_stl.cpp
