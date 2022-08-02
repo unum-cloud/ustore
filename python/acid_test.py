@@ -127,7 +127,7 @@ def test_transaction_with_multiple_collections():
     # Let's check, that those entries are globally visible
     for col_index in range(col_count):
         col_name = str(col_index)
-        assert col_name in db, 'Auto-upserted collection not found!'
+        assert col_name in db, 'Auto-inserted collection not found!'
 
         for key_index in range(keys_count):
             value = str(key_index).encode()
@@ -150,7 +150,7 @@ def test_transaction_with_multiple_collections():
 
 
 def test_conflict():
-    # Set with db befor get
+    # Set with db before get
     db1 = ukv.DataBase()
     txn = ukv.Transaction(db1)
     db1.set(0, 'value'.encode())
@@ -168,8 +168,8 @@ def test_conflict():
 
 def test_tracking_reads():
     db = ukv.DataBase()
-    txn = ukv.Transaction(db)
-    txn.get(0, track=True)
+    txn = ukv.Transaction(db, track_reads=True)
+    txn.get(0)
     db.set(0, 'value'.encode())
     with pytest.raises(Exception):
         txn.commit()
