@@ -433,7 +433,7 @@ void read_modify_write( //
             }
 
             // Save onto output tape
-            serializing_tape.push_back(parsed_part, c_format, c_error);
+            serializing_tape.push_back(parsed_part, internal_format_k, c_error);
             if (*c_error)
                 return;
         }
