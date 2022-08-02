@@ -550,18 +550,6 @@ void ukv::wrap_database(py::module& m) {
     py_col.def("get", &py_read<py_col_t>);
     py_col.def("update", &py_update<py_col_t>);
 
-    py_db.def("set", &py_write<py_db_t>);
-    py_db.def("pop", &py_remove<py_db_t>);  // Unlike Python, won't return the result
-    py_db.def("has_key", &py_has<py_db_t>); // Similar to Python 2
-    py_db.def("get", &py_read<py_db_t>);
-    py_db.def("update", &py_update<py_db_t>);
-
-    py_txn.def("set", &py_write<py_txn_t>);
-    py_txn.def("pop", &py_remove<py_txn_t>);  // Unlike Python, won't return the result
-    py_txn.def("has_key", &py_has<py_txn_t>); // Similar to Python 2
-    py_txn.def("get", &py_read<py_txn_t>);
-    py_txn.def("update", &py_update<py_txn_t>);
-
     py_col.def("clear", [](py_col_t& py_col) {
         db_t& db = py_col.db_ptr->native;
         db.remove(py_col.name.c_str()).throw_unhandled();
@@ -572,14 +560,20 @@ void ukv::wrap_database(py::module& m) {
 
     // `Transaction`:
     py_txn.def( //
-        py::init([](py_db_t& py_db, bool begin) {
+        py::init([](py_db_t& py_db, bool begin, bool track_reads, bool flush_writes, bool snapshot) {
             auto db_ptr = py_db.shared_from_this();
-            auto maybe_txn = py_db.native.transact();
+            auto maybe_txn = py_db.native.transact(snapshot);
             maybe_txn.throw_unhandled();
-            return std::make_shared<py_txn_t>(std::move(db_ptr), *std::move(maybe_txn));
+            auto py_txn_ptr = std::make_shared<py_txn_t>(std::move(db_ptr), *std::move(maybe_txn));
+            py_txn_ptr->track_reads = track_reads;
+            py_txn_ptr->flush_writes = flush_writes;
+            return py_txn_ptr;
         }),
         py::arg("db"),
-        py::arg("begin") = true);
+        py::arg("begin") = true,
+        py::arg("track_reads") = false,
+        py::arg("flush_writes") = false,
+        py::arg("snapshot") = false);
 
     // Resource management
     py_txn.def("__enter__", &begin_if_needed);
@@ -645,6 +639,19 @@ void ukv::wrap_database(py::module& m) {
     py_db.def("__delitem__", [](py_db_t& py_db, std::string const& collection) { //
         py_db.native.remove(collection.c_str()).throw_unhandled();
     });
+
+    // Shortcuts for main collection
+    py_db.def("set", &py_write<py_db_t>);
+    py_db.def("pop", &py_remove<py_db_t>);  // Unlike Python, won't return the result
+    py_db.def("has_key", &py_has<py_db_t>); // Similar to Python 2
+    py_db.def("get", &py_read<py_db_t>);
+    py_db.def("update", &py_update<py_db_t>);
+
+    py_txn.def("set", &py_write<py_txn_t>);
+    py_txn.def("pop", &py_remove<py_txn_t>);  // Unlike Python, won't return the result
+    py_txn.def("has_key", &py_has<py_txn_t>); // Similar to Python 2
+    py_txn.def("get", &py_read<py_txn_t>);
+    py_txn.def("update", &py_update<py_txn_t>);
 
     // Additional operator overloads
     py_col.def("__setitem__", &py_write<py_col_t>);

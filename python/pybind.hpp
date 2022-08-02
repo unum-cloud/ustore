@@ -25,6 +25,7 @@ struct py_task_ctx_t {
     ukv_txn_t txn = nullptr;
     ukv_collection_t* col = nullptr;
     ukv_arena_t* arena = nullptr;
+    ukv_options_t options = ukv_options_default_k;
 };
 
 /**
@@ -44,13 +45,8 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     py_db_t(py_db_t&& other) noexcept
         : native(std::move(other.native)), arena(std::move(other.arena)), config(std::move(config)) {}
 
-    operator py_task_ctx_t() noexcept {
-        return {
-            native,
-            nullptr,
-            nullptr,
-            arena.member_ptr(),
-        };
+    operator py_task_ctx_t() & noexcept {
+        return {native, nullptr, nullptr, arena.member_ptr(), ukv_options_default_k};
     }
 };
 
@@ -70,13 +66,12 @@ struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
     py_txn_t(py_txn_t&& other) noexcept
         : db_ptr(std::move(other.db_ptr)), native(std::move(other.native)), arena(std::move(other.arena)) {}
 
-    operator py_task_ctx_t() noexcept {
-        return {
-            db_ptr->native,
-            native,
-            nullptr,
-            arena.member_ptr(),
-        };
+    operator py_task_ctx_t() & noexcept {
+        auto options = static_cast<ukv_options_t>( //
+            ukv_options_default_k |                //
+            (track_reads ? ukv_option_read_track_k : ukv_options_default_k) |
+            (flush_writes ? ukv_option_write_flush_k : ukv_options_default_k));
+        return {db_ptr->native, native, nullptr, arena.member_ptr(), options};
     }
 };
 
@@ -98,12 +93,9 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
           name(std::move(other.name)) {}
 
     operator py_task_ctx_t() & noexcept {
-        return {
-            db_ptr->native,
-            txn_ptr ? txn_ptr->native : ukv_txn_t(nullptr),
-            native.member_ptr(),
-            txn_ptr ? txn_ptr->arena.member_ptr() : db_ptr->arena.member_ptr(),
-        };
+        py_task_ctx_t result = txn_ptr ? py_task_ctx_t(*txn_ptr) : py_task_ctx_t(*db_ptr);
+        result.col = native.member_ptr();
+        return result;
     }
 };
 
