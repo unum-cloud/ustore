@@ -136,15 +136,14 @@ void populate_keys(PyObject* obj, std::vector<py_bin_req_t>& reqs) {
         return scan_pyseq(obj, [&](PyObject* obj) { populate_key(obj, at_growing(reqs, i)), ++i; });
 
     if (is_buffer) {
-        auto [buf, range] = strided_array<void const>(obj);
+        auto buf = py_strided_buffer(obj);
         auto fmt_len = std::strlen(buf.py.format);
         if (fmt_len != 1)
             throw std::invalid_argument("Unsupported keys scalar type");
 
         auto export_as = [&](auto type_example) {
             using scalar_t = decltype(type_example);
-            auto begin = reinterpret_cast<scalar_t const*>(range.data());
-            auto typed = strided_range_gt<scalar_t const>(begin, range.stride(), range.size());
+            auto typed = py_strided_range<scalar_t const>(buf);
             for (; i != typed.size(); ++i)
                 at_growing(reqs, i).key = static_cast<ukv_key_t>(typed[i]);
         };
@@ -179,8 +178,36 @@ void populate_vals(PyObject* obj, std::vector<py_bin_req_t>& reqs) {
         scan_pyseq(obj, [&](PyObject* obj) { populate_val(obj, at_growing(reqs, i)), ++i; });
 
     if (is_buffer) {
-        // auto [buf, range] = strided_matrix<void const>(obj);
-        throw_not_implemented();
+        auto buf = py_strided_buffer(obj);
+        auto fmt_len = std::strlen(buf.py.format);
+        if (fmt_len != 1)
+            throw std::invalid_argument("Unsupported keys scalar type");
+
+        auto export_as = [&](auto type_example) {
+            using scalar_t = decltype(type_example);
+            auto typed = py_strided_matrix<scalar_t const>(buf);
+            for (; i != typed.rows(); ++i) {
+                auto row = typed.row(i);
+                at_growing(reqs, i).key = value_view_t(reinterpret_cast<byte_t const*>(row.begin()),
+                                                       reinterpret_cast<byte_t const*>(row.end()));
+            }
+        };
+
+        switch (buf.py.format[0]) {
+        case format_code_gt<char>::value: export_as((char)(0)); break;
+        case format_code_gt<signed char>::value: export_as((signed char)(0)); break;
+        case format_code_gt<unsigned char>::value: export_as((unsigned char)(0)); break;
+
+        case format_code_gt<short>::value: export_as((short)(0)); break;
+        case format_code_gt<unsigned short>::value: export_as((unsigned short)(0)); break;
+        case format_code_gt<int>::value: export_as((int)(0)); break;
+        case format_code_gt<unsigned int>::value: export_as((unsigned int)(0)); break;
+        case format_code_gt<long>::value: export_as((long)(0)); break;
+        case format_code_gt<unsigned long>::value: export_as((unsigned long)(0)); break;
+        case format_code_gt<long long>::value: export_as((long long)(0)); break;
+        case format_code_gt<unsigned long long>::value: export_as((unsigned long long)(0)); break;
+        default: throw std::invalid_argument("Unsupported keys scalar type"); break;
+        }
     }
 }
 
