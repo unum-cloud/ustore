@@ -274,6 +274,30 @@ TEST(db, docs) {
     col.as(ukv_format_binary_k);
     auto maybe_person = col[ckf(1, "person")].value();
     EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Davit"));
+
+    // Json Patching
+    col.as(ukv_format_json_patch_k);
+    auto json_patch =
+        R"( [
+            { "op": "replace", "path": "/person", "value": "Ashot" },
+            { "op": "add", "path": "/hello", "value": ["world"] },
+            { "op": "remove", "path": "/age" }
+            ] )"_json.dump();
+    auto expected_json = R"( {"person": "Ashot", "hello": "world"} )"_json.dump();
+    col[1] = json_patch.c_str();
+    M_EXPECT_EQ_JSON(col[1].value()->c_str(), expected_json.c_str());
+    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Ashot\"");
+    M_EXPECT_EQ_JSON(col[ckf(1, "hello")].value()->c_str(), "\"world\"");
+
+    // Json Merging
+    col.as(ukv_format_json_merge_patch_k);
+    auto json_to_merge = R"( {"person": "Darvin", "age": 28} )"_json.dump();
+    expected_json = R"( {"person": "Darvin", "hello": "world","age": 28} )"_json.dump();
+    col[1] = json_to_merge.c_str();
+    M_EXPECT_EQ_JSON(col[1].value()->c_str(), expected_json.c_str());
+    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Darvin\"");
+    M_EXPECT_EQ_JSON(col[ckf(1, "hello")].value()->c_str(), "\"world\"");
+    M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "28");
 }
 
 TEST(db, txn) {
