@@ -17,6 +17,17 @@ struct py_txn_t;
 struct py_col_t;
 
 /**
+ * @brief Python tasks are generally called for a single collection.
+ * That greatly simplifies the implementation.
+ */
+struct py_task_ctx_t {
+    ukv_t db = nullptr;
+    ukv_txn_t txn = nullptr;
+    ukv_collection_t* col = nullptr;
+    ukv_arena_t* arena = nullptr;
+};
+
+/**
  * @brief Wrapper for `ukv::db_t`.
  * Assumes that the Python client won't use more than one
  * concurrent session, as multithreading in Python is
@@ -32,6 +43,15 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     py_db_t(py_db_t const&) = delete;
     py_db_t(py_db_t&& other) noexcept
         : native(std::move(other.native)), arena(std::move(other.arena)), config(std::move(config)) {}
+
+    operator py_task_ctx_t() noexcept {
+        return {
+            native,
+            nullptr,
+            nullptr,
+            arena.member_ptr(),
+        };
+    }
 };
 
 /**
@@ -49,6 +69,15 @@ struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
     py_txn_t(py_txn_t const&) = delete;
     py_txn_t(py_txn_t&& other) noexcept
         : db_ptr(std::move(other.db_ptr)), native(std::move(other.native)), arena(std::move(other.arena)) {}
+
+    operator py_task_ctx_t() noexcept {
+        return {
+            db_ptr->native,
+            native,
+            nullptr,
+            arena.member_ptr(),
+        };
+    }
 };
 
 /**
@@ -68,10 +97,14 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
         : db_ptr(std::move(other.db_ptr)), txn_ptr(std::move(other.txn_ptr)), native(std::move(other.native)),
           name(std::move(other.name)) {}
 
-    ukv_t db() noexcept { return db_ptr->native; }
-    ukv_txn_t txn() noexcept { return txn_ptr ? txn_ptr->native : ukv_txn_t(nullptr); }
-    ukv_collection_t* col() noexcept { return native.member_ptr(); }
-    ukv_arena_t* arena() noexcept { return txn_ptr ? txn_ptr->arena.member_ptr() : db_ptr->arena.member_ptr(); }
+    operator py_task_ctx_t() & noexcept {
+        return {
+            db_ptr->native,
+            txn_ptr ? txn_ptr->native : ukv_txn_t(nullptr),
+            native.member_ptr(),
+            txn_ptr ? txn_ptr->arena.member_ptr() : db_ptr->arena.member_ptr(),
+        };
+    }
 };
 
 /**
