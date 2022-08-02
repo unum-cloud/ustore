@@ -196,28 +196,26 @@ class keys_range_t {
     ukv_collection_t col_;
     ukv_key_t min_key_;
     ukv_key_t max_key_;
-    std::size_t read_ahead_;
 
   public:
     keys_range_t(ukv_t db,
                  ukv_txn_t txn = nullptr,
                  ukv_collection_t col = ukv_default_collection_k,
                  ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-                 ukv_key_t max_key = ukv_key_unknown_k,
-                 std::size_t read_ahead = keys_stream_t::default_read_ahead_k) noexcept
-        : db_(db), txn_(txn), col_(col), min_key_(min_key), max_key_(max_key), read_ahead_(read_ahead) {}
+                 ukv_key_t max_key = ukv_key_unknown_k) noexcept
+        : db_(db), txn_(txn), col_(col), min_key_(min_key), max_key_(max_key) {}
 
     keys_range_t(keys_range_t const&) = default;
     keys_range_t& operator=(keys_range_t const&) = default;
 
-    expected_gt<keys_stream_t> find_begin() noexcept {
-        keys_stream_t stream {db_, col_, read_ahead_, txn_};
+    expected_gt<keys_stream_t> find_begin(std::size_t read_ahead = keys_stream_t::default_read_ahead_k) noexcept {
+        keys_stream_t stream {db_, col_, read_ahead, txn_};
         status_t status = stream.seek(min_key_);
         return {std::move(status), std::move(stream)};
     }
 
     expected_gt<keys_stream_t> find_end() noexcept {
-        keys_stream_t stream {db_, col_, read_ahead_, txn_};
+        keys_stream_t stream {db_, col_, 0, txn_};
         status_t status = stream.seek(max_key_);
         return {std::move(status), std::move(stream)};
     }
@@ -233,8 +231,8 @@ class keys_range_t {
         return {std::move(status), std::move(result)};
     }
 
-    keys_stream_t begin() noexcept(false) {
-        auto maybe = find_begin();
+    keys_stream_t begin(std::size_t read_ahead = keys_stream_t::default_read_ahead_k) noexcept(false) {
+        auto maybe = find_begin(read_ahead);
         maybe.throw_unhandled();
         return *std::move(maybe);
     }
