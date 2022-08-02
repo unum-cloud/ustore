@@ -40,8 +40,7 @@ struct degree_view_t : public std::enable_shared_from_this<degree_view_t> {
 };
 
 template <typename element_at>
-PyObject* wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
-    printf("received %i strided objects\n", (int)range.size());
+py::object wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
 
     g.last_buffer_strides[0] = range.stride();
     g.last_buffer_strides[1] = g.last_buffer_strides[2] = 1;
@@ -61,7 +60,8 @@ PyObject* wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
     g.last_buffer.suboffsets = nullptr;
     g.last_buffer.readonly = true;
     g.last_buffer.internal = nullptr;
-    return PyMemoryView_FromBuffer(&g.last_buffer);
+    PyObject* obj = PyMemoryView_FromBuffer(&g.last_buffer);
+    return py::reinterpret_steal<py::object>(obj);
 }
 
 void ukv::wrap_networkx(py::module& m) {
