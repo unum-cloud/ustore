@@ -68,15 +68,11 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
         : db_ptr(std::move(other.db_ptr)), txn_ptr(std::move(other.txn_ptr)), native(std::move(other.native)),
           name(std::move(other.name)) {}
 
-    ukv_db_t db() const noexcept { return db_ptr->native; }
-    ukv_txn_t txn() const noexcept { return txn_ptr ? txn_ptr->native : ukv_txn_t(nullptr); }
-    ukv_collection_t* col() const noexcept { return &native; }
-    ukv_arena_t* arena() const noexcept { return txn_ptr ? txn_ptr->arena.member_ptr() : db_ptr->arena.member_ptr(); }
+    ukv_t db() noexcept { return db_ptr->native; }
+    ukv_txn_t txn() noexcept { return txn_ptr ? txn_ptr->native : ukv_txn_t(nullptr); }
+    ukv_collection_t* col() noexcept { return native.member_ptr(); }
+    ukv_arena_t* arena() noexcept { return txn_ptr ? txn_ptr->arena.member_ptr() : db_ptr->arena.member_ptr(); }
 };
-
-struct py_col_obj_t : public py_col_t {};
-
-struct py_col_img_t : public py_col_t {};
 
 /**
  * @brief RAII object for `py::handle` parsing purposes,

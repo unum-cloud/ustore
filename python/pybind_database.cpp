@@ -89,7 +89,7 @@ struct py_bin_req_t {
 
 template <typename at>
 at& at_growing(std::vector<at>& vec, std::size_t i) {
-    if (i > vec.size())
+    if (i >= vec.size())
         vec.resize(i + 1);
     return vec[i];
 }
@@ -108,11 +108,13 @@ void populate_val(PyObject* obj, py_bin_req_t& req) {
         PyBytes_AsStringAndSize(obj, &buffer, &length);
         req.ptr = reinterpret_cast<ukv_val_ptr_t>(buffer);
         req.len = static_cast<ukv_val_len_t>(length);
+        req.off = 0;
     }
     else if (obj == Py_None) {
         // Means the object must be deleted
         req.ptr = nullptr;
         req.len = 0;
+        req.off = 0;
     }
     else
         throw std::invalid_argument("Value must be representable as a byte array");
@@ -174,7 +176,7 @@ void populate_vals(PyObject* obj, std::vector<py_bin_req_t>& reqs) {
 
     std::size_t i = 0;
     if (is_seq)
-        return scan_pyseq(obj, [&](PyObject* obj) { populate_val(obj, at_growing(reqs, i)), ++i; });
+        scan_pyseq(obj, [&](PyObject* obj) { populate_val(obj, at_growing(reqs, i)), ++i; });
 
     if (is_buffer) {
         // auto [buf, range] = strided_matrix<void const>(obj);
@@ -220,7 +222,7 @@ void py_write_many(py_col_t& py_col, py::handle keys_py, py::handle vals_py) {
 
     std::vector<py_bin_req_t> reqs;
     populate_keys(keys_py.ptr(), reqs);
-    if (vals_py != Py_None)
+    if (vals_py.ptr() != Py_None)
         populate_vals(vals_py.ptr(), reqs);
 
     status_t status;
@@ -247,18 +249,19 @@ void py_write_many(py_col_t& py_col, py::handle keys_py, py::handle vals_py) {
     status.throw_unhandled();
 }
 
-void py_write(py_col_t& py_col, py::handle key_py, py::handle val_py) {
-
+void py_write(py_col_t& py_col, py::object key_py, py::object val_py) {
     auto is_single = PyLong_Check(key_py.ptr());
     auto func = is_single ? &py_write_one : &py_write_many;
     return func(py_col, key_py, val_py);
 }
 
-void py_remove(py_col_t& py_col, py::handle key_py) {
-    return py_write(py_col, key_py, Py_None)
+void py_remove(py_col_t& py_col, py::object key_py) {
+    auto is_single = PyLong_Check(key_py.ptr());
+    auto func = is_single ? &py_write_one : &py_write_many;
+    return func(py_col, key_py, Py_None);
 }
 
-void py_update(py_col_t& py_col, py::handle dict_py) {
+void py_update(py_col_t& py_col, py::object dict_py) {
 
     status_t status;
     ukv_size_t step = sizeof(py_bin_req_t);
@@ -342,14 +345,14 @@ py::object py_read_many(py_col_t& py_col, py::handle keys_py) {
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
     std::vector<py_bin_req_t> reqs;
-    populate_keys(keys_py, reqs);
+    populate_keys(keys_py.ptr(), reqs);
     ukv_size_t step = sizeof(py_bin_req_t);
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
         ukv_read(py_col.db(),
                  py_col.txn(),
-                 1,
+                 static_cast<ukv_size_t>(reqs.size()),
                  py_col.col(),
                  0,
                  &reqs[0].key,
@@ -369,12 +372,11 @@ py::object py_read_many(py_col_t& py_col, py::handle keys_py) {
         PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
         PyTuple_SetItem(tuple_ptr, i, obj_ptr);
     }
-    return py::reinterpret_borrow<py::object>(tuple_ptr);
+    return py::reinterpret_steal<py::object>(tuple_ptr);
 }
 
-py::object py_read(py_col_t& py_col, py::handle key_py) {
-
-    auto is_single = PyLong_Check(key_py);
+py::object py_read(py_col_t& py_col, py::object key_py) {
+    auto is_single = PyLong_Check(key_py.ptr());
     auto func = is_single ? &py_read_one : &py_read_many;
     return func(py_col, key_py);
 }
@@ -387,16 +389,16 @@ py::object py_has_many(py_col_t& py_col, py::handle keys_py) {
     ukv_val_len_t* found_lengths = nullptr;
 
     std::vector<py_bin_req_t> reqs;
-    populate_keys(keys_py, reqs);
+    populate_keys(keys_py.ptr(), reqs);
     ukv_size_t step = sizeof(py_bin_req_t);
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
         ukv_read(py_col.db(),
                  py_col.txn(),
-                 1,
+                 static_cast<ukv_size_t>(reqs.size()),
                  py_col.col(),
-                 step,
+                 0,
                  &reqs[0].key,
                  step,
                  options,
@@ -408,17 +410,17 @@ py::object py_has_many(py_col_t& py_col, py::handle keys_py) {
     }
 
     PyObject* tuple_ptr = PyTuple_New(reqs.size());
-    for (std::size_t i = 0; i != reqs.size(); ++i, ++tape_it) {
-        PyObject* obj_ptr = found_lengths[i] == ukv_val_len_missing_k ? Py_True : Py_False;
+    for (std::size_t i = 0; i != reqs.size(); ++i) {
+        PyObject* obj_ptr = found_lengths[i] != ukv_val_len_missing_k ? Py_True : Py_False;
         PyTuple_SetItem(tuple_ptr, i, obj_ptr);
     }
-    return py::reinterpret_borrow<py::object>(tuple_ptr);
+    return py::reinterpret_steal<py::object>(tuple_ptr);
 }
 
 py::object py_has_one(py_col_t& py_col, py::handle key_py) {
 
     status_t status;
-    ukv_key_t key = static_cast<ukv_key_t>(PyLong_AsUnsignedLong(key_py));
+    ukv_key_t key = static_cast<ukv_key_t>(PyLong_AsUnsignedLong(key_py.ptr()));
     ukv_options_t options = ukv_option_read_lengths_k;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
@@ -440,13 +442,12 @@ py::object py_has_one(py_col_t& py_col, py::handle key_py) {
         status.throw_unhandled();
     }
 
-    PyObject* obj_ptr = *found_lengths == ukv_val_len_missing_k ? Py_True : Py_False;
+    PyObject* obj_ptr = *found_lengths != ukv_val_len_missing_k ? Py_True : Py_False;
     return py::reinterpret_borrow<py::object>(obj_ptr);
 }
 
-py::object py_has(py_col_t& py_col, py::handle key_py) {
-
-    auto is_single = PyLong_Check(key_py);
+py::object py_has(py_col_t& py_col, py::object key_py) {
+    auto is_single = PyLong_Check(key_py.ptr());
     auto func = is_single ? &py_has_one : &py_has_many;
     return func(py_col, key_py);
 }
@@ -515,7 +516,8 @@ void ukv::wrap_database(py::module& m) {
 
     // Define `Collection`s member method, without defining any external constructors
     py_col.def("set", &py_write);
-    py_col.def("pop", &py_write);   // Unlike Python, won't return the result
+    py_col.def("update", &py_update);
+    py_col.def("pop", &py_remove);  // Unlike Python, won't return the result
     py_col.def("has_key", &py_has); // Similar to Python 2
     py_col.def("get", &py_read);
 
