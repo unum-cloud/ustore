@@ -168,34 +168,38 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     graph_ref_t ref() { return index.as_graph(); }
 };
 
-/**
- * @brief Provides a typed view of 1D potentially-strided tensor.
- * @param obj Must implement the "Buffer protocol".
- */
-template <typename scalar_at>
-std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(PyObject* obj) {
+inline py_received_buffer_t py_strided_buffer(PyObject* obj, bool const_ = true) {
     auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
-    if constexpr (std::is_const_v<scalar_at>)
+    if (!const_)
         flags |= PyBUF_WRITABLE;
 
     py_received_buffer_t raii;
     raii.initialized = PyObject_GetBuffer(obj, &raii.py, flags) == 0;
     if (!raii.initialized)
         throw std::invalid_argument("Couldn't obtain buffer overviews");
-    if (raii.py.ndim != 1)
-        throw std::invalid_argument("Expecting tensor rank 1");
     if (!raii.py.shape)
         throw std::invalid_argument("Shape wasn't inferred");
-    if constexpr (!std::is_same_v<scalar_at, void> && !std::is_same_v<scalar_at, void const>)
-        if (raii.py.itemsize != sizeof(scalar_at))
-            throw std::invalid_argument("Scalar type mismatch");
+    return raii;
+}
+
+/**
+ * @brief Provides a typed view of 1D potentially-strided tensor.
+ * @param obj Must implement the "Buffer protocol".
+ */
+template <typename scalar_at>
+strided_range_gt<scalar_at> py_strided_range(py_received_buffer_t const& raii) {
+
+    if (raii.py.ndim != 1)
+        throw std::invalid_argument("Expecting tensor rank 1");
+    if (raii.py.itemsize != sizeof(scalar_at))
+        throw std::invalid_argument("Scalar type mismatch");
 
     strided_range_gt<scalar_at> result {
         reinterpret_cast<scalar_at*>(raii.py.buf),
         static_cast<ukv_size_t>(raii.py.strides[0]),
         static_cast<ukv_size_t>(raii.py.shape[0]),
     };
-    return std::make_pair<py_received_buffer_t, strided_range_gt<scalar_at>>(std::move(raii), std::move(result));
+    return result;
 }
 
 /**
@@ -203,21 +207,16 @@ std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(PyObj
  * @param obj Must implement the "Buffer protocol".
  */
 template <typename scalar_at>
-std::pair<py_received_buffer_t, strided_matrix_gt<scalar_at>> strided_matrix(PyObject* obj) {
-    auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
-    if constexpr (std::is_const_v<scalar_at>)
-        flags |= PyBUF_WRITABLE;
+strided_matrix_gt<scalar_at> py_strided_matrix(py_received_buffer_t const& raii) {
 
-    py_received_buffer_t raii;
-    raii.initialized = PyObject_GetBuffer(obj, &raii.py, flags) == 0;
-    if (!raii.initialized)
-        throw std::invalid_argument("Couldn't obtain buffer overviews");
     if (raii.py.ndim != 2)
         throw std::invalid_argument("Expecting tensor rank 2");
-    if (!raii.py.shape)
-        throw std::invalid_argument("Shape wasn't inferred");
-    if (raii.py.itemsize != sizeof(scalar_at))
-        throw std::invalid_argument("Scalar type mismatch");
+    if constexpr (!std::is_void_v<scalar_at>)
+        if (raii.py.itemsize != sizeof(scalar_at))
+            throw std::invalid_argument("Scalar type mismatch");
+    if constexpr (!std::is_void_v<scalar_at>)
+        if (raii.py.itemsize != raii.py.strides[1])
+            throw std::invalid_argument("Rows are not continuous");
 
     strided_matrix_gt<scalar_at> result {
         reinterpret_cast<scalar_at*>(raii.py.buf),
@@ -225,7 +224,7 @@ std::pair<py_received_buffer_t, strided_matrix_gt<scalar_at>> strided_matrix(PyO
         static_cast<ukv_size_t>(raii.py.shape[1]),
         static_cast<ukv_size_t>(raii.py.strides[0]),
     };
-    return std::make_pair<py_received_buffer_t, strided_matrix_gt<scalar_at>>(std::move(raii), std::move(result));
+    return result;
 }
 
 inline void throw_not_implemented() {
