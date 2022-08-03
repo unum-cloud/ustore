@@ -609,22 +609,6 @@ void ukv::wrap_database(py::module& m) {
         py::arg("config") = "",
         py::arg("open") = true);
 
-    // Define `Collection`s member method, without defining any external constructors
-    py_col.def("set", &py_write<py_col_t>);
-    py_col.def("pop", &py_remove<py_col_t>);  // Unlike Python, won't return the result
-    py_col.def("has_key", &py_has<py_col_t>); // Similar to Python 2
-    py_col.def("get", &py_read<py_col_t>);
-    py_col.def("update", &py_update<py_col_t>);
-    py_col.def("scan", &py_scan<py_col_t>);
-
-    py_col.def("clear", [](py_col_t& py_col) {
-        db_t& db = py_col.db_ptr->native;
-        db.remove(py_col.name.c_str()).throw_unhandled();
-        auto maybe_col = db.collection(py_col.name.c_str());
-        maybe_col.throw_unhandled();
-        py_col.native = *std::move(maybe_col);
-    });
-
     // `Transaction`:
     py_txn.def( //
         py::init([](py_db_t& py_db, bool begin, bool track_reads, bool flush_writes, bool snapshot) {
@@ -730,6 +714,14 @@ void ukv::wrap_database(py::module& m) {
     py_db.def("update", &py_update<py_db_t>);
     py_db.def("scan", &py_scan<py_db_t>);
 
+    // Define `Collection`s member method, without defining any external constructors
+    py_col.def("set", &py_write<py_col_t>);
+    py_col.def("pop", &py_remove<py_col_t>);  // Unlike Python, won't return the result
+    py_col.def("has_key", &py_has<py_col_t>); // Similar to Python 2
+    py_col.def("get", &py_read<py_col_t>);
+    py_col.def("update", &py_update<py_col_t>);
+    py_col.def("scan", &py_scan<py_col_t>);
+
     py_txn.def("set", &py_write<py_txn_t>);
     py_txn.def("pop", &py_remove<py_txn_t>);  // Unlike Python, won't return the result
     py_txn.def("has_key", &py_has<py_txn_t>); // Similar to Python 2
@@ -752,4 +744,15 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def("__delitem__", &py_remove<py_txn_t>);
     py_txn.def("__contains__", &py_has<py_txn_t>);
     py_txn.def("__getitem__", &py_read<py_txn_t>);
+
+    // Clear
+    py_db.def("clear", [](py_db_t& py_db) { py_db.native.clear().throw_unhandled(); });
+
+    py_col.def("clear", [](py_col_t& py_col) {
+        db_t& db = py_col.db_ptr->native;
+        db.remove(py_col.name.c_str()).throw_unhandled();
+        auto maybe_col = db.collection(py_col.name.c_str());
+        maybe_col.throw_unhandled();
+        py_col.native = *std::move(maybe_col);
+    });
 }
