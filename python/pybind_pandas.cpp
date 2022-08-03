@@ -9,35 +9,6 @@
 using namespace unum::ukv;
 using namespace unum;
 
-struct col_name_t {
-    std::string owned;
-    ukv_str_view_t view;
-};
-
-struct col_keys_range_t {
-    ukv_collection_t col = ukv_default_collection_k;
-    ukv_key_t min = std::numeric_limits<ukv_key_t>::min();
-    ukv_key_t max = std::numeric_limits<ukv_key_t>::max();
-    std::size_t limit = std::numeric_limits<std::size_t>::max();
-};
-
-/**
- * @brief Materialized view over a specific subset of documents
- * UIDs (potentially, in different collections) and column (field) names.
- *
- */
-struct py_frame_t : public std::enable_shared_from_this<py_frame_t> {
-
-    ukv_t db = NULL;
-
-    std::variant<std::monostate, col_name_t, std::vector<col_name_t>> fields;
-    std::variant<std::monostate, col_keys_range_t, std::vector<col_key_t>> docs;
-
-    py_frame_t() = default;
-    py_frame_t(py_frame_t&&) = delete;
-    py_frame_t(py_frame_t const&) = delete;
-};
-
 void ukv::wrap_pandas(py::module& m) {
 
     // Once packed, our DataFrames output Apache Arrow Tables / RecordBatches:

@@ -45,6 +45,8 @@ extern "C" {
 typedef enum {
     ukv_format_binary_k = 0,
     ukv_format_graph_k = 1,
+    ukv_format_doc_k = 2,
+    ukv_format_table_k = 3,
 
     // Flexible dynamically-typed document formats
     // https://github.com/msgpack/msgpack/blob/master/spec.md#type-system
