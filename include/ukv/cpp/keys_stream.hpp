@@ -72,7 +72,7 @@ class keys_stream_t {
         fetched_offset_ = 0;
 
         auto count = static_cast<ukv_size_t>(fetched_keys_.size());
-        next_min_key_ = count < read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
+        next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
 
@@ -215,7 +215,8 @@ class keys_range_t {
     }
 
     expected_gt<keys_stream_t> find_end() noexcept {
-        keys_stream_t stream {db_, col_, 0, txn_};
+        auto read_ahead = max_key_ == ukv_key_unknown_k ? 0u : 1u;
+        keys_stream_t stream {db_, col_, read_ahead, txn_};
         status_t status = stream.seek(max_key_);
         return {std::move(status), std::move(stream)};
     }

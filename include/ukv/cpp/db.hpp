@@ -353,10 +353,10 @@ class db_t : public std::enable_shared_from_this<db_t> {
         return status;
     }
 
-    expected_gt<txn_t> transact() {
+    expected_gt<txn_t> transact(bool snapshot = false) {
         status_t status;
         ukv_txn_t raw = nullptr;
-        ukv_txn_begin(db_, 0, ukv_options_default_k, &raw, status.member_ptr());
+        ukv_txn_begin(db_, 0, snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k, &raw, status.member_ptr());
         if (!status)
             return {std::move(status), txn_t {db_, nullptr}};
         else
