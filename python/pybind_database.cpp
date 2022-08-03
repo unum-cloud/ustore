@@ -748,6 +748,8 @@ void ukv::wrap_database(py::module& m) {
     // Clear
     py_db.def("clear", [](py_db_t& py_db) { py_db.native.clear().throw_unhandled(); });
 
+    py_txn.def("clear", [](py_txn_t& py_txn) { py_txn.db_ptr->native.clear().throw_unhandled(); });
+
     py_col.def("clear", [](py_col_t& py_col) {
         db_t& db = py_col.db_ptr->native;
         db.remove(py_col.name.c_str()).throw_unhandled();
