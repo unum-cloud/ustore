@@ -717,6 +717,11 @@ void ukv::wrap_database(py::module& m) {
         return py::cast(std::make_shared<py_keys_range_t>(std::move(range)));
     });
 
+    py_txn.def_property_readonly("keys", [](py_txn_t& py_txn) {
+        keys_range_t range(py_txn.db_ptr->native, py_txn.native, nullptr);
+        return py::cast(std::make_shared<py_keys_range_t>(std::move(range)));
+    });
+
     // Shortcuts for main collection
     py_db.def("set", &py_write<py_db_t>);
     py_db.def("pop", &py_remove<py_db_t>);  // Unlike Python, won't return the result
