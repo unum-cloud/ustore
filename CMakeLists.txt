@@ -108,6 +108,7 @@ target_link_libraries(ukv_stl
   nlohmann_json::nlohmann_json
   ${jemalloc_LIBRARIES}
 )
+set_target_properties(ukv_stl PROPERTIES LINK_FLAGS_RELEASE -s)
 
 add_library(ukv_rocksdb
   src/backend_rocksdb.cpp
@@ -128,6 +129,9 @@ target_link_libraries(ukv_leveldb
   nlohmann_json::nlohmann_json
   ${jemalloc_LIBRARIES}
 )
+
+set_target_properties(ukv_rocksdb PROPERTIES LINK_FLAGS_RELEASE -s)
+set_target_properties(ukv_rocksdb PROPERTIES LINK_FLAGS_RELEASE -s)
 
 add_library(ukv_rpc_client src/rpc_client.cpp)
 
