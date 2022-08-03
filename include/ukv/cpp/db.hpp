@@ -353,6 +353,33 @@ class db_t : public std::enable_shared_from_this<db_t> {
         return status;
     }
 
+    status_t clear() noexcept {
+
+        // Remove main collection
+        status_t status = remove("");
+        if (!status)
+            return status;
+
+        // Remove named collections
+        ukv_size_t count = 0;
+        ukv_str_view_t names = nullptr;
+        arena_t arena(db_);
+        ukv_collection_list(db_, &count, &names, arena.member_ptr(), status.member_ptr());
+        if (!status)
+            return status;
+
+        while (count) {
+            auto len = std::strlen(names);
+            status = remove(names);
+            if (!status)
+                return status;
+
+            names += len + 1;
+            --count;
+        }
+        return status;
+    }
+
     expected_gt<txn_t> transact(bool snapshot = false) {
         status_t status;
         ukv_txn_t raw = nullptr;
