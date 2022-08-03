@@ -34,6 +34,32 @@ struct py_task_ctx_t {
  * prohibitively expensive.
  * We need to preserve the `config`, to allow re-opening.
  */
+
+struct py_keys_stream_t : public std::enable_shared_from_this<py_keys_stream_t> {
+    keys_stream_t native;
+    ukv_key_t stop_point;
+    bool last = false;
+
+    py_keys_stream_t(keys_stream_t&& stream, ukv_key_t max) : native(std::move(stream)), stop_point(max) {}
+    py_keys_stream_t(py_keys_stream_t const&) = delete;
+    py_keys_stream_t(py_keys_stream_t&& other) noexcept
+        : native(std::move(other.native)), stop_point(std::move(other.stop_point)) {}
+};
+
+struct py_keys_range_t : public std::enable_shared_from_this<py_keys_range_t> {
+    keys_range_t native;
+    ukv_key_t min_key;
+    ukv_key_t max_key;
+
+    py_keys_range_t(keys_range_t&& range,
+                    ukv_key_t min = std::numeric_limits<ukv_key_t>::min(),
+                    ukv_key_t max = ukv_key_unknown_k)
+        : native(std::move(range)), min_key(min), max_key(max) {}
+    py_keys_range_t(py_keys_range_t const&) = delete;
+    py_keys_range_t(py_keys_range_t&& other) noexcept
+        : native(std::move(other.native)), min_key(std::move(other.min_key)), max_key(std::move(other.max_key)) {}
+};
+
 struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     db_t native;
     arena_t arena;

@@ -1,5 +1,7 @@
-import ukv.stl as ukv
+import pytest
 import numpy as np
+
+import ukv.stl as ukv
 
 
 def only_explicit(col):
@@ -123,6 +125,32 @@ def scan(col):
     assert np.array_equal(lengths, [6])
 
 
+def iterate(col):
+    col.clear()
+    col[1] = b'a'
+    col[2] = b'aa'
+    col[3] = b'aaa'
+    col[4] = b'aaaa'
+    col[5] = b'aaaaa'
+    col[6] = b'aaaaaa'
+    iterated_keys = []
+    for key in col.keys:
+        iterated_keys.append(key)
+
+    assert iterated_keys == [1, 2, 3, 4, 5, 6]
+    assert np.array_equal(col.keys[2:4], [3, 4])
+    with pytest.raises(Exception):
+        col.keys[4:2]
+    iterated_keys.clear()
+    for key in col.keys.since(3):
+        iterated_keys.append(key)
+    assert iterated_keys == [3, 4, 5, 6]
+    iterated_keys.clear()
+    for key in col.keys.to(4):
+        iterated_keys.append(key)
+    assert iterated_keys == [1, 2, 3, 4]
+
+
 def test_main_collection():
     db = ukv.DataBase().main()
     only_explicit(db)
@@ -130,7 +158,8 @@ def test_main_collection():
     only_overwrite(db)
     only_operators(db)
     # batch_insert(db)
-    scan(db)
+    # scan(db)
+    iterate(db)
 
 
 def test_database_to_main_redirect():
@@ -139,15 +168,17 @@ def test_database_to_main_redirect():
     only_overwrite(db)
     only_operators(db)
     # batch_insert(db)
-    scan(db)
+    # scan(db)
 
 
 def test_named_collections():
     db = ukv.DataBase()
     col_sub = db['sub']
     col_dub = db['dub']
-    scan(col_sub)
-    scan(col_dub)
+    # scan(col_sub)
+    # scan(col_dub)
+    iterate(col_sub)
+    iterate(col_dub)
     only_explicit(col_sub)
     only_explicit(col_dub)
     only_overwrite(col_sub)
