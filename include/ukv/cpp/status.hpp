@@ -83,7 +83,11 @@ class [[nodiscard]] expected_gt {
     }
 
     void throw_unhandled() { return status_.throw_unhandled(); }
-    inline status_t release_status() { return std::exchange(status_, status_t {}); }
+    status_t release_status() { return std::exchange(status_, status_t {}); }
+    object_at& throw_or_ref() {
+        status_.throw_unhandled();
+        return object_;
+    }
 
     template <typename hetero_at>
     bool operator==(expected_gt<hetero_at> const& other) const noexcept {

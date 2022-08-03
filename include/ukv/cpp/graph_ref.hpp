@@ -81,15 +81,17 @@ class graph_ref_t {
     status_t upsert(edge_t const& edge) noexcept { return upsert(edges_view_t {&edge, &edge + 1}); }
     status_t remove(edge_t const& edge) noexcept { return remove(edges_view_t {&edge, &edge + 1}); }
 
-    status_t remove(ukv_key_t const vertex,
-                    ukv_vertex_role_t const role = ukv_vertex_role_any_k,
-                    bool flush = false) noexcept {
+    status_t remove( //
+        ukv_key_t const vertex,
+        ukv_vertex_role_t const role = ukv_vertex_role_any_k,
+        bool flush = false) noexcept {
         return remove({&vertex}, {&role}, flush);
     }
 
-    status_t remove(strided_range_gt<ukv_key_t const> vertices,
-                    strided_range_gt<ukv_vertex_role_t const> roles = {},
-                    bool flush = false) noexcept {
+    status_t remove( //
+        strided_range_gt<ukv_key_t const> vertices,
+        strided_range_gt<ukv_vertex_role_t const> roles = {},
+        bool flush = false) noexcept {
 
         status_t status;
         ukv_options_t options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
@@ -109,9 +111,10 @@ class graph_ref_t {
         return status;
     }
 
-    expected_gt<ukv_vertex_degree_t> degree(ukv_key_t vertex,
-                                            ukv_vertex_role_t role = ukv_vertex_role_any_k,
-                                            bool track = false) noexcept {
+    expected_gt<ukv_vertex_degree_t> degree( //
+        ukv_key_t vertex,
+        ukv_vertex_role_t role = ukv_vertex_role_any_k,
+        bool track = false) noexcept {
 
         auto maybe_degrees = degrees({&vertex}, {&role}, track);
         if (!maybe_degrees)
@@ -120,9 +123,10 @@ class graph_ref_t {
         return ukv_vertex_degree_t(degrees[0]);
     }
 
-    expected_gt<indexed_range_gt<ukv_vertex_degree_t*>> degrees(strided_range_gt<ukv_key_t const> vertices,
-                                                                strided_range_gt<ukv_vertex_role_t const> roles = {},
-                                                                bool track = false) noexcept {
+    expected_gt<indexed_range_gt<ukv_vertex_degree_t*>> degrees( //
+        strided_range_gt<ukv_key_t const> vertices,
+        strided_range_gt<ukv_vertex_role_t const> roles = {},
+        bool track = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
@@ -158,8 +162,9 @@ class graph_ref_t {
      * @brief Checks if certain vertices are present in the graph.
      * They maybe disconnected from everything else.
      */
-    expected_gt<strided_range_gt<bool>> contains(strided_range_gt<ukv_key_t const> const& vertices,
-                                                 bool track = false) noexcept {
+    expected_gt<strided_range_gt<bool>> contains( //
+        strided_range_gt<ukv_key_t const> const& vertices,
+        bool track = false) noexcept {
         keys_arg_t arg;
         arg.collections_begin = {&col_, 0};
         arg.keys_begin = vertices.begin();
@@ -185,9 +190,11 @@ class graph_ref_t {
         return result;
     }
 
-    expected_gt<edges_span_t> edges(ukv_key_t vertex,
-                                    ukv_vertex_role_t role = ukv_vertex_role_any_k,
-                                    bool track = false) noexcept {
+    expected_gt<edges_span_t> edges( //
+        ukv_key_t vertex,
+        ukv_vertex_role_t role = ukv_vertex_role_any_k,
+        bool track = false) noexcept {
+
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
         ukv_key_t* neighborships_per_vertex = nullptr;
@@ -236,9 +243,10 @@ class graph_ref_t {
      * @brief Finds all the edges, that have any of the supplied nodes in allowed roles.
      * In undirected graphs, some edges may come with inverse duplicates.
      */
-    expected_gt<edges_span_t> edges_containing(strided_range_gt<ukv_key_t const> vertices,
-                                               strided_range_gt<ukv_vertex_role_t const> roles = {},
-                                               bool track = false) noexcept {
+    expected_gt<edges_span_t> edges_containing( //
+        strided_range_gt<ukv_key_t const> vertices,
+        strided_range_gt<ukv_vertex_role_t const> roles = {},
+        bool track = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
@@ -267,6 +275,42 @@ class graph_ref_t {
         });
 
         return edges_span_t {edges_begin, edges_begin + edges_count};
+    }
+
+    expected_gt<strided_range_gt<ukv_key_t>> successors(ukv_key_t vertex) noexcept {
+        auto maybe = edges(vertex, ukv_vertex_source_k);
+        if (!maybe)
+            maybe.release_status();
+        return maybe->target_ids;
+    }
+
+    expected_gt<strided_range_gt<ukv_key_t>> predecessors(ukv_key_t vertex) noexcept {
+        auto maybe = edges(vertex, ukv_vertex_target_k);
+        if (!maybe)
+            maybe.release_status();
+        return maybe->source_ids;
+    }
+
+    expected_gt<strided_range_gt<ukv_key_t>> neighbors(ukv_key_t vertex) noexcept {
+        // Retrieving neighbors in directed graphs is trickier than just `successors` or `predecessors`.
+        // We are receiving an adjacency list, where both incoming an edges exist.
+        // So the stride/offset is not uniform across the entire list.
+        auto maybe = edges(vertex, ukv_vertex_role_any_k);
+        if (!maybe)
+            maybe.release_status();
+
+        // We can gobble the contents a little bit by swapping the members of some
+        // edges to make it uniform.
+        auto es = *maybe;
+        auto count = es.size();
+        for (std::size_t i = 0; i != count; ++i) {
+            ukv_key_t& u = es.source_ids[i];
+            ukv_key_t& v = es.target_ids[i];
+            if (u == vertex)
+                std::swap(u, v);
+        }
+
+        return es.target_ids;
     }
 
     status_t export_adjacency_list(std::string const& path,
