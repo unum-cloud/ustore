@@ -5,8 +5,6 @@ import ukv.stl as ukv
 
 
 def only_explicit(col):
-    col.clear()
-
     col.set(3, b'x')
     col.set(4, b'y')
     assert col.has_key(3)
@@ -23,8 +21,6 @@ def only_explicit(col):
 
 
 def only_explicit_batch(col):
-    col.clear()
-
     col.set((3, 4), (b'xx', b'yy'))
     col.set([3, 4], (b'x', b'y'))
     col.get((3, 4))
@@ -38,8 +34,6 @@ def only_explicit_batch(col):
 
 
 def only_operators(col):
-    col.clear()
-
     col[1] = b'a'
     col[2] = b'bb'
     assert 1 in col
@@ -54,8 +48,6 @@ def only_operators(col):
 
 
 def only_overwrite(col):
-    col.clear()
-
     col.set(7, b'y')
     assert col.get(7) == b'y'
     assert col.get(7) != b'yy'
