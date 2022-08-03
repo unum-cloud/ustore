@@ -634,12 +634,16 @@ void ukv_collection_remove( //
     ukv_str_view_t c_col_name,
     ukv_error_t* c_error) {
 
+    if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
+
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    for (auto handle : db.columns) {
-        if (c_col_name == handle->GetName()) {
-            rocks_status_t status = db.native->DestroyColumnFamilyHandle(handle);
+    for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
+        if (c_col_name == (*it)->GetName()) {
+            rocks_status_t status = db.native->DropColumnFamily((*it));
             if (export_error(status, c_error))
                 return;
+            db.columns.erase(it--);
         }
     }
 }
