@@ -149,14 +149,14 @@ void populate_keys(PyObject* obj, std::vector<py_bin_req_t>& reqs) {
         };
 
         switch (buf.py.format[0]) {
-        case format_code_gt<short>::value: export_as((short)(0)); break;
-        case format_code_gt<unsigned short>::value: export_as((unsigned short)(0)); break;
-        case format_code_gt<int>::value: export_as((int)(0)); break;
-        case format_code_gt<unsigned int>::value: export_as((unsigned int)(0)); break;
-        case format_code_gt<long>::value: export_as((long)(0)); break;
-        case format_code_gt<unsigned long>::value: export_as((unsigned long)(0)); break;
-        case format_code_gt<long long>::value: export_as((long long)(0)); break;
-        case format_code_gt<unsigned long long>::value: export_as((unsigned long long)(0)); break;
+        case format_code_gt<short>::value[0]: export_as((short)(0)); break;
+        case format_code_gt<unsigned short>::value[0]: export_as((unsigned short)(0)); break;
+        case format_code_gt<int>::value[0]: export_as((int)(0)); break;
+        case format_code_gt<unsigned int>::value[0]: export_as((unsigned int)(0)); break;
+        case format_code_gt<long>::value[0]: export_as((long)(0)); break;
+        case format_code_gt<unsigned long>::value[0]: export_as((unsigned long)(0)); break;
+        case format_code_gt<long long>::value[0]: export_as((long long)(0)); break;
+        case format_code_gt<unsigned long long>::value[0]: export_as((unsigned long long)(0)); break;
         default: throw std::invalid_argument("Unsupported keys scalar type"); break;
         }
     }
@@ -194,18 +194,18 @@ void populate_vals(PyObject* obj, std::vector<py_bin_req_t>& reqs) {
         };
 
         switch (buf.py.format[0]) {
-        case format_code_gt<char>::value: export_as((char)(0)); break;
-        case format_code_gt<signed char>::value: export_as((signed char)(0)); break;
-        case format_code_gt<unsigned char>::value: export_as((unsigned char)(0)); break;
+        case format_code_gt<char>::value[0]: export_as((char)(0)); break;
+        case format_code_gt<signed char>::value[0]: export_as((signed char)(0)); break;
+        case format_code_gt<unsigned char>::value[0]: export_as((unsigned char)(0)); break;
 
-        case format_code_gt<short>::value: export_as((short)(0)); break;
-        case format_code_gt<unsigned short>::value: export_as((unsigned short)(0)); break;
-        case format_code_gt<int>::value: export_as((int)(0)); break;
-        case format_code_gt<unsigned int>::value: export_as((unsigned int)(0)); break;
-        case format_code_gt<long>::value: export_as((long)(0)); break;
-        case format_code_gt<unsigned long>::value: export_as((unsigned long)(0)); break;
-        case format_code_gt<long long>::value: export_as((long long)(0)); break;
-        case format_code_gt<unsigned long long>::value: export_as((unsigned long long)(0)); break;
+        case format_code_gt<short>::value[0]: export_as((short)(0)); break;
+        case format_code_gt<unsigned short>::value[0]: export_as((unsigned short)(0)); break;
+        case format_code_gt<int>::value[0]: export_as((int)(0)); break;
+        case format_code_gt<unsigned int>::value[0]: export_as((unsigned int)(0)); break;
+        case format_code_gt<long>::value[0]: export_as((long)(0)); break;
+        case format_code_gt<unsigned long>::value[0]: export_as((unsigned long)(0)); break;
+        case format_code_gt<long long>::value[0]: export_as((long long)(0)); break;
+        case format_code_gt<unsigned long long>::value[0]: export_as((unsigned long long)(0)); break;
         default: throw std::invalid_argument("Unsupported keys scalar type"); break;
         }
     }
@@ -223,7 +223,6 @@ void py_write_one(py_task_ctx_t ctx, py::handle key_py, py::handle val_py) {
     py_bin_req_t req;
     populate_key(key_py.ptr(), req);
     populate_val(val_py.ptr(), req);
-    ukv_options_t options = ukv_options_default_k;
 
     [[maybe_unused]] py::gil_scoped_release release;
     ukv_write(ctx.db,
@@ -239,7 +238,7 @@ void py_write_one(py_task_ctx_t ctx, py::handle key_py, py::handle val_py) {
               0,
               &req.len,
               0,
-              options,
+              ctx.options,
               ctx.arena,
               status.member_ptr());
     status.throw_unhandled();
@@ -254,7 +253,6 @@ void py_write_many(py_task_ctx_t ctx, py::handle keys_py, py::handle vals_py) {
 
     status_t status;
     ukv_size_t step = sizeof(py_bin_req_t);
-    ukv_options_t options = ukv_options_default_k;
 
     [[maybe_unused]] py::gil_scoped_release release;
     ukv_write(ctx.db,
@@ -270,7 +268,7 @@ void py_write_many(py_task_ctx_t ctx, py::handle keys_py, py::handle vals_py) {
               step,
               &reqs[0].len,
               step,
-              options,
+              ctx.options,
               ctx.arena,
               status.member_ptr());
     status.throw_unhandled();
@@ -282,7 +280,6 @@ py::object py_read_one(py_task_ctx_t ctx, py::handle key_py) {
 
     status_t status;
     ukv_key_t key = static_cast<ukv_key_t>(PyLong_AsUnsignedLong(key_py.ptr()));
-    ukv_options_t options = ukv_options_default_k;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
 
@@ -295,7 +292,7 @@ py::object py_read_one(py_task_ctx_t ctx, py::handle key_py) {
                  0,
                  &key,
                  0,
-                 options,
+                 ctx.options,
                  &found_lengths,
                  &found_values,
                  ctx.arena,
@@ -319,7 +316,6 @@ py::object py_read_one(py_task_ctx_t ctx, py::handle key_py) {
 py::object py_read_many(py_task_ctx_t ctx, py::handle keys_py) {
 
     status_t status;
-    ukv_options_t options = ukv_options_default_k;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
     std::vector<py_bin_req_t> reqs;
@@ -335,7 +331,7 @@ py::object py_read_many(py_task_ctx_t ctx, py::handle keys_py) {
                  0,
                  &reqs[0].key,
                  step,
-                 options,
+                 ctx.options,
                  &found_lengths,
                  &found_values,
                  ctx.arena,
@@ -356,13 +352,13 @@ py::object py_read_many(py_task_ctx_t ctx, py::handle keys_py) {
 py::object py_has_many(py_task_ctx_t ctx, py::handle keys_py) {
 
     status_t status;
-    ukv_options_t options = ukv_option_read_lengths_k;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
 
     std::vector<py_bin_req_t> reqs;
     populate_keys(keys_py.ptr(), reqs);
     ukv_size_t step = sizeof(py_bin_req_t);
+    ctx.options = static_cast<ukv_options_t>(ctx.options | ukv_option_read_lengths_k);
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
@@ -373,7 +369,7 @@ py::object py_has_many(py_task_ctx_t ctx, py::handle keys_py) {
                  0,
                  &reqs[0].key,
                  step,
-                 options,
+                 ctx.options,
                  &found_lengths,
                  &found_values,
                  ctx.arena,
@@ -393,9 +389,9 @@ py::object py_has_one(py_task_ctx_t ctx, py::handle key_py) {
 
     status_t status;
     ukv_key_t key = static_cast<ukv_key_t>(PyLong_AsUnsignedLong(key_py.ptr()));
-    ukv_options_t options = ukv_option_read_lengths_k;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
+    ctx.options = static_cast<ukv_options_t>(ctx.options | ukv_option_read_lengths_k);
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
@@ -406,7 +402,7 @@ py::object py_has_one(py_task_ctx_t ctx, py::handle key_py) {
                  0,
                  &key,
                  0,
-                 options,
+                 ctx.options,
                  &found_lengths,
                  &found_values,
                  ctx.arena,
@@ -453,7 +449,6 @@ void py_update(py_wrap_at& wrap, py::object dict_py) {
     py_task_ctx_t ctx = wrap;
     status_t status;
     ukv_size_t step = sizeof(py_bin_req_t);
-    ukv_options_t options = ukv_options_default_k;
 
     std::vector<py_bin_req_t> reqs;
     reqs.reserve(PyDict_Size(dict_py.ptr()));
@@ -480,7 +475,7 @@ void py_update(py_wrap_at& wrap, py::object dict_py) {
               step,
               &reqs[0].len,
               step,
-              options,
+              ctx.options,
               ctx.arena,
               status.member_ptr());
     status.throw_unhandled();

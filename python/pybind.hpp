@@ -16,6 +16,12 @@ struct py_db_t;
 struct py_txn_t;
 struct py_col_t;
 
+struct py_graph_t;
+struct py_frame_t;
+
+struct py_task_ctx_t;
+struct py_received_buffer_t;
+
 /**
  * @brief Python tasks are generally called for a single collection.
  * That greatly simplifies the implementation.
@@ -160,6 +166,37 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     graph_ref_t ref() { return index.as_graph(); }
 };
 
+struct py_col_name_t {
+    std::string owned;
+    ukv_str_view_t view;
+};
+
+struct py_col_keys_range_t {
+    ukv_collection_t col = ukv_default_collection_k;
+    ukv_key_t min = std::numeric_limits<ukv_key_t>::min();
+    ukv_key_t max = std::numeric_limits<ukv_key_t>::max();
+    std::size_t limit = std::numeric_limits<std::size_t>::max();
+};
+
+/**
+ * @brief Materialized view over a specific subset of documents
+ * UIDs (potentially, in different collections) and column (field) names.
+ *
+ */
+struct py_frame_t : public std::enable_shared_from_this<py_frame_t> {
+
+    ukv_t db = NULL;
+
+    std::variant<std::monostate, py_col_name_t, std::vector<py_col_name_t>> fields;
+    std::variant<std::monostate, py_col_keys_range_t, std::vector<col_key_t>> docs;
+
+    py_frame_t() = default;
+    py_frame_t(py_frame_t&&) = delete;
+    py_frame_t(py_frame_t const&) = delete;
+};
+
+#pragma region Helper Functions
+
 inline py_received_buffer_t py_strided_buffer(PyObject* obj, bool const_ = true) {
     auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
     if (!const_)
@@ -270,29 +307,32 @@ void scan_pydict(PyObject* obj, member_callback_at&& call) {
         call(key, value);
 }
 
+#pragma region Type Conversions Guides
+
 /**
- * @brief Defines the naming conversion for C types to be exposed to Python.
+ * @brief Defines Pythons type marker for primitive types.
+ * @b All of them are only a single character long.
  */
 template <typename element_at>
 struct format_code_gt {};
 
 // clang-format off
-template <> struct format_code_gt<bool> { inline static const char value = '?'; };
-template <> struct format_code_gt<char> { inline static const char value = 'c'; };
-template <> struct format_code_gt<signed char> { inline static const char value = 'b'; };
-template <> struct format_code_gt<unsigned char> { inline static const char value = 'B'; };
+template <> struct format_code_gt<bool> { inline static constexpr char value[2] = "?"; };
+template <> struct format_code_gt<char> { inline static constexpr char value[2] = "c"; };
+template <> struct format_code_gt<signed char> { inline static constexpr char value[2] = "b"; };
+template <> struct format_code_gt<unsigned char> { inline static constexpr char value[2] = "B"; };
 
-template <> struct format_code_gt<short> { inline static const char value = 'h'; };
-template <> struct format_code_gt<unsigned short> { inline static const char value = 'H'; };
-template <> struct format_code_gt<int> { inline static const char value = 'i'; };
-template <> struct format_code_gt<unsigned int> { inline static const char value = 'I'; };
-template <> struct format_code_gt<long> { inline static const char value = 'l'; };
-template <> struct format_code_gt<unsigned long> { inline static const char value = 'L'; };
-template <> struct format_code_gt<long long> { inline static const char value = 'q'; };
-template <> struct format_code_gt<unsigned long long> { inline static const char value = 'Q'; };
+template <> struct format_code_gt<short> { inline static constexpr char value[2] = "h"; };
+template <> struct format_code_gt<unsigned short> { inline static constexpr char value[2] = "H"; };
+template <> struct format_code_gt<int> { inline static constexpr char value[2] = "i"; };
+template <> struct format_code_gt<unsigned int> { inline static constexpr char value[2] = "I"; };
+template <> struct format_code_gt<long> { inline static constexpr char value[2] = "l"; };
+template <> struct format_code_gt<unsigned long> { inline static constexpr char value[2] = "L"; };
+template <> struct format_code_gt<long long> { inline static constexpr char value[2] = "q"; };
+template <> struct format_code_gt<unsigned long long> { inline static constexpr char value[2] = "Q"; };
 
-template <> struct format_code_gt<float> { inline static const char value = 'f'; };
-template <> struct format_code_gt<double> { inline static const char value = 'd'; };
+template <> struct format_code_gt<float> { inline static constexpr char value[2] = "f"; };
+template <> struct format_code_gt<double> { inline static constexpr char value[2] = "d"; };
 // clang-format on
 
 void wrap_database(py::module&);
