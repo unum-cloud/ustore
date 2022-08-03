@@ -481,6 +481,37 @@ void py_update(py_wrap_at& wrap, py::object dict_py) {
     status.throw_unhandled();
 }
 
+template <typename py_wrap_at>
+py::array_t<ukv_key_t> py_scan( //
+    py_wrap_at& wrap,
+    ukv_key_t min_key,
+    ukv_size_t scan_length) {
+
+    py_task_ctx_t ctx = wrap;
+    ukv_key_t* found_keys = nullptr;
+    ukv_val_len_t* found_lengths = nullptr;
+    status_t status;
+
+    ukv_scan( //
+        ctx.db,
+        ctx.txn,
+        1,
+        ctx.col,
+        0,
+        &min_key,
+        0,
+        &scan_length,
+        0,
+        ctx.options,
+        &found_keys,
+        &found_lengths,
+        ctx.arena,
+        status.member_ptr());
+
+    status.throw_unhandled();
+    return py::array_t<ukv_key_t>(scan_length, found_keys);
+}
+
 #pragma region Helper API
 
 py::object punned_collection( //
@@ -584,6 +615,7 @@ void ukv::wrap_database(py::module& m) {
     py_col.def("has_key", &py_has<py_col_t>); // Similar to Python 2
     py_col.def("get", &py_read<py_col_t>);
     py_col.def("update", &py_update<py_col_t>);
+    py_col.def("scan", &py_scan<py_col_t>);
 
     py_col.def("clear", [](py_col_t& py_col) {
         db_t& db = py_col.db_ptr->native;
@@ -691,12 +723,14 @@ void ukv::wrap_database(py::module& m) {
     py_db.def("has_key", &py_has<py_db_t>); // Similar to Python 2
     py_db.def("get", &py_read<py_db_t>);
     py_db.def("update", &py_update<py_db_t>);
+    py_db.def("scan", &py_scan<py_db_t>);
 
     py_txn.def("set", &py_write<py_txn_t>);
     py_txn.def("pop", &py_remove<py_txn_t>);  // Unlike Python, won't return the result
     py_txn.def("has_key", &py_has<py_txn_t>); // Similar to Python 2
     py_txn.def("get", &py_read<py_txn_t>);
     py_txn.def("update", &py_update<py_txn_t>);
+    py_txn.def("scan", &py_scan<py_txn_t>);
 
     // Additional operator overloads
     py_col.def("__setitem__", &py_write<py_col_t>);
