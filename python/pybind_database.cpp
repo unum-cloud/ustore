@@ -136,28 +136,27 @@ void populate_keys(PyObject* obj, std::vector<py_bin_req_t>& reqs) {
         return scan_pyseq(obj, [&](PyObject* obj) { populate_key(obj, at_growing(reqs, i)), ++i; });
 
     if (is_buffer) {
-        auto [buf, range] = strided_array<void const>(obj);
+        auto buf = py_strided_buffer(obj);
         auto fmt_len = std::strlen(buf.py.format);
         if (fmt_len != 1)
             throw std::invalid_argument("Unsupported keys scalar type");
 
         auto export_as = [&](auto type_example) {
             using scalar_t = decltype(type_example);
-            auto begin = reinterpret_cast<scalar_t const*>(range.data());
-            auto typed = strided_range_gt<scalar_t const>(begin, range.stride(), range.size());
+            auto typed = py_strided_range<scalar_t const>(buf);
             for (; i != typed.size(); ++i)
                 at_growing(reqs, i).key = static_cast<ukv_key_t>(typed[i]);
         };
 
         switch (buf.py.format[0]) {
-        case format_code_gt<short>::value: export_as((short)(0)); break;
-        case format_code_gt<unsigned short>::value: export_as((unsigned short)(0)); break;
-        case format_code_gt<int>::value: export_as((int)(0)); break;
-        case format_code_gt<unsigned int>::value: export_as((unsigned int)(0)); break;
-        case format_code_gt<long>::value: export_as((long)(0)); break;
-        case format_code_gt<unsigned long>::value: export_as((unsigned long)(0)); break;
-        case format_code_gt<long long>::value: export_as((long long)(0)); break;
-        case format_code_gt<unsigned long long>::value: export_as((unsigned long long)(0)); break;
+        case format_code_gt<short>::value[0]: export_as((short)(0)); break;
+        case format_code_gt<unsigned short>::value[0]: export_as((unsigned short)(0)); break;
+        case format_code_gt<int>::value[0]: export_as((int)(0)); break;
+        case format_code_gt<unsigned int>::value[0]: export_as((unsigned int)(0)); break;
+        case format_code_gt<long>::value[0]: export_as((long)(0)); break;
+        case format_code_gt<unsigned long>::value[0]: export_as((unsigned long)(0)); break;
+        case format_code_gt<long long>::value[0]: export_as((long long)(0)); break;
+        case format_code_gt<unsigned long long>::value[0]: export_as((unsigned long long)(0)); break;
         default: throw std::invalid_argument("Unsupported keys scalar type"); break;
         }
     }
@@ -179,8 +178,36 @@ void populate_vals(PyObject* obj, std::vector<py_bin_req_t>& reqs) {
         scan_pyseq(obj, [&](PyObject* obj) { populate_val(obj, at_growing(reqs, i)), ++i; });
 
     if (is_buffer) {
-        // auto [buf, range] = strided_matrix<void const>(obj);
-        throw_not_implemented();
+        auto buf = py_strided_buffer(obj);
+        auto fmt_len = std::strlen(buf.py.format);
+        if (fmt_len != 1)
+            throw std::invalid_argument("Unsupported keys scalar type");
+
+        auto export_as = [&](auto type_example) {
+            using scalar_t = decltype(type_example);
+            auto typed = py_strided_matrix<scalar_t const>(buf);
+            for (; i != typed.rows(); ++i) {
+                auto row = typed.row(i);
+                at_growing(reqs, i).key = value_view_t(reinterpret_cast<byte_t const*>(row.begin()),
+                                                       reinterpret_cast<byte_t const*>(row.end()));
+            }
+        };
+
+        switch (buf.py.format[0]) {
+        case format_code_gt<char>::value[0]: export_as((char)(0)); break;
+        case format_code_gt<signed char>::value[0]: export_as((signed char)(0)); break;
+        case format_code_gt<unsigned char>::value[0]: export_as((unsigned char)(0)); break;
+
+        case format_code_gt<short>::value[0]: export_as((short)(0)); break;
+        case format_code_gt<unsigned short>::value[0]: export_as((unsigned short)(0)); break;
+        case format_code_gt<int>::value[0]: export_as((int)(0)); break;
+        case format_code_gt<unsigned int>::value[0]: export_as((unsigned int)(0)); break;
+        case format_code_gt<long>::value[0]: export_as((long)(0)); break;
+        case format_code_gt<unsigned long>::value[0]: export_as((unsigned long)(0)); break;
+        case format_code_gt<long long>::value[0]: export_as((long long)(0)); break;
+        case format_code_gt<unsigned long long>::value[0]: export_as((unsigned long long)(0)); break;
+        default: throw std::invalid_argument("Unsupported keys scalar type"); break;
+        }
     }
 }
 
@@ -196,7 +223,6 @@ void py_write_one(py_task_ctx_t ctx, py::handle key_py, py::handle val_py) {
     py_bin_req_t req;
     populate_key(key_py.ptr(), req);
     populate_val(val_py.ptr(), req);
-    ukv_options_t options = ukv_options_default_k;
 
     [[maybe_unused]] py::gil_scoped_release release;
     ukv_write(ctx.db,
@@ -212,7 +238,7 @@ void py_write_one(py_task_ctx_t ctx, py::handle key_py, py::handle val_py) {
               0,
               &req.len,
               0,
-              options,
+              ctx.options,
               ctx.arena,
               status.member_ptr());
     status.throw_unhandled();
@@ -227,7 +253,6 @@ void py_write_many(py_task_ctx_t ctx, py::handle keys_py, py::handle vals_py) {
 
     status_t status;
     ukv_size_t step = sizeof(py_bin_req_t);
-    ukv_options_t options = ukv_options_default_k;
 
     [[maybe_unused]] py::gil_scoped_release release;
     ukv_write(ctx.db,
@@ -243,7 +268,7 @@ void py_write_many(py_task_ctx_t ctx, py::handle keys_py, py::handle vals_py) {
               step,
               &reqs[0].len,
               step,
-              options,
+              ctx.options,
               ctx.arena,
               status.member_ptr());
     status.throw_unhandled();
@@ -255,7 +280,6 @@ py::object py_read_one(py_task_ctx_t ctx, py::handle key_py) {
 
     status_t status;
     ukv_key_t key = static_cast<ukv_key_t>(PyLong_AsUnsignedLong(key_py.ptr()));
-    ukv_options_t options = ukv_options_default_k;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
 
@@ -268,7 +292,7 @@ py::object py_read_one(py_task_ctx_t ctx, py::handle key_py) {
                  0,
                  &key,
                  0,
-                 options,
+                 ctx.options,
                  &found_lengths,
                  &found_values,
                  ctx.arena,
@@ -292,7 +316,6 @@ py::object py_read_one(py_task_ctx_t ctx, py::handle key_py) {
 py::object py_read_many(py_task_ctx_t ctx, py::handle keys_py) {
 
     status_t status;
-    ukv_options_t options = ukv_options_default_k;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
     std::vector<py_bin_req_t> reqs;
@@ -308,7 +331,7 @@ py::object py_read_many(py_task_ctx_t ctx, py::handle keys_py) {
                  0,
                  &reqs[0].key,
                  step,
-                 options,
+                 ctx.options,
                  &found_lengths,
                  &found_values,
                  ctx.arena,
@@ -329,13 +352,13 @@ py::object py_read_many(py_task_ctx_t ctx, py::handle keys_py) {
 py::object py_has_many(py_task_ctx_t ctx, py::handle keys_py) {
 
     status_t status;
-    ukv_options_t options = ukv_option_read_lengths_k;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
 
     std::vector<py_bin_req_t> reqs;
     populate_keys(keys_py.ptr(), reqs);
     ukv_size_t step = sizeof(py_bin_req_t);
+    ctx.options = static_cast<ukv_options_t>(ctx.options | ukv_option_read_lengths_k);
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
@@ -346,7 +369,7 @@ py::object py_has_many(py_task_ctx_t ctx, py::handle keys_py) {
                  0,
                  &reqs[0].key,
                  step,
-                 options,
+                 ctx.options,
                  &found_lengths,
                  &found_values,
                  ctx.arena,
@@ -366,9 +389,9 @@ py::object py_has_one(py_task_ctx_t ctx, py::handle key_py) {
 
     status_t status;
     ukv_key_t key = static_cast<ukv_key_t>(PyLong_AsUnsignedLong(key_py.ptr()));
-    ukv_options_t options = ukv_option_read_lengths_k;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
+    ctx.options = static_cast<ukv_options_t>(ctx.options | ukv_option_read_lengths_k);
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
@@ -379,7 +402,7 @@ py::object py_has_one(py_task_ctx_t ctx, py::handle key_py) {
                  0,
                  &key,
                  0,
-                 options,
+                 ctx.options,
                  &found_lengths,
                  &found_values,
                  ctx.arena,
@@ -426,7 +449,6 @@ void py_update(py_wrap_at& wrap, py::object dict_py) {
     py_task_ctx_t ctx = wrap;
     status_t status;
     ukv_size_t step = sizeof(py_bin_req_t);
-    ukv_options_t options = ukv_options_default_k;
 
     std::vector<py_bin_req_t> reqs;
     reqs.reserve(PyDict_Size(dict_py.ptr()));
@@ -453,7 +475,7 @@ void py_update(py_wrap_at& wrap, py::object dict_py) {
               step,
               &reqs[0].len,
               step,
-              options,
+              ctx.options,
               ctx.arena,
               status.member_ptr());
     status.throw_unhandled();
@@ -563,18 +585,6 @@ void ukv::wrap_database(py::module& m) {
     py_col.def("get", &py_read<py_col_t>);
     py_col.def("update", &py_update<py_col_t>);
 
-    py_db.def("set", &py_write<py_db_t>);
-    py_db.def("pop", &py_remove<py_db_t>);  // Unlike Python, won't return the result
-    py_db.def("has_key", &py_has<py_db_t>); // Similar to Python 2
-    py_db.def("get", &py_read<py_db_t>);
-    py_db.def("update", &py_update<py_db_t>);
-
-    py_txn.def("set", &py_write<py_txn_t>);
-    py_txn.def("pop", &py_remove<py_txn_t>);  // Unlike Python, won't return the result
-    py_txn.def("has_key", &py_has<py_txn_t>); // Similar to Python 2
-    py_txn.def("get", &py_read<py_txn_t>);
-    py_txn.def("update", &py_update<py_txn_t>);
-
     py_col.def("clear", [](py_col_t& py_col) {
         db_t& db = py_col.db_ptr->native;
         db.remove(py_col.name.c_str()).throw_unhandled();
@@ -585,14 +595,20 @@ void ukv::wrap_database(py::module& m) {
 
     // `Transaction`:
     py_txn.def( //
-        py::init([](py_db_t& py_db, bool begin) {
+        py::init([](py_db_t& py_db, bool begin, bool track_reads, bool flush_writes, bool snapshot) {
             auto db_ptr = py_db.shared_from_this();
-            auto maybe_txn = py_db.native.transact();
+            auto maybe_txn = py_db.native.transact(snapshot);
             maybe_txn.throw_unhandled();
-            return std::make_shared<py_txn_t>(std::move(db_ptr), *std::move(maybe_txn));
+            auto py_txn_ptr = std::make_shared<py_txn_t>(std::move(db_ptr), *std::move(maybe_txn));
+            py_txn_ptr->track_reads = track_reads;
+            py_txn_ptr->flush_writes = flush_writes;
+            return py_txn_ptr;
         }),
         py::arg("db"),
-        py::arg("begin") = true);
+        py::arg("begin") = true,
+        py::arg("track_reads") = false,
+        py::arg("flush_writes") = false,
+        py::arg("snapshot") = false);
 
     // Resource management
     py_txn.def("__enter__", &begin_if_needed);
@@ -668,6 +684,19 @@ void ukv::wrap_database(py::module& m) {
         keys_range_t range(py_col.db_ptr->native, nullptr, py_col.native);
         return py::cast(std::make_shared<py_keys_range_t>(std::move(range)));
     });
+
+    // Shortcuts for main collection
+    py_db.def("set", &py_write<py_db_t>);
+    py_db.def("pop", &py_remove<py_db_t>);  // Unlike Python, won't return the result
+    py_db.def("has_key", &py_has<py_db_t>); // Similar to Python 2
+    py_db.def("get", &py_read<py_db_t>);
+    py_db.def("update", &py_update<py_db_t>);
+
+    py_txn.def("set", &py_write<py_txn_t>);
+    py_txn.def("pop", &py_remove<py_txn_t>);  // Unlike Python, won't return the result
+    py_txn.def("has_key", &py_has<py_txn_t>); // Similar to Python 2
+    py_txn.def("get", &py_read<py_txn_t>);
+    py_txn.def("update", &py_update<py_txn_t>);
 
     // Additional operator overloads
     py_col.def("__setitem__", &py_write<py_col_t>);

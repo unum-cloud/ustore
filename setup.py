@@ -4,18 +4,16 @@ from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 from qibuild import cmake
 
-__version__ = open("VERSION", "r").read()
+__version__ = open('VERSION', 'r').read()
 __libname__ = 'ukv'
 
 cmake_cache = cmake.read_cmake_cache('CMakeCache.txt')
 
-include_dirs = [
-    # f"{cmake_cache['FMT_SOURCE_DIR']}/include",
-    'include/',
-    'python/'
-]
+include_dirs = ['include/', 'python/']
+if 'fmt_INCLUDE_DIR' in cmake_cache:
+    include_dirs.append(cmake_cache['fmt_INCLUDE_DIR'])
 
-compile_args = ['-std=c++17', '-O3']
+compile_args = cmake_cache.pop('CMAKE_CXX_FLAGS', ['-std=c++17', '-O3'])
 
 ext_modules = [
     Pybind11Extension(

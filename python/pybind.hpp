@@ -16,6 +16,12 @@ struct py_db_t;
 struct py_txn_t;
 struct py_col_t;
 
+struct py_graph_t;
+struct py_frame_t;
+
+struct py_task_ctx_t;
+struct py_received_buffer_t;
+
 /**
  * @brief Python tasks are generally called for a single collection.
  * That greatly simplifies the implementation.
@@ -25,6 +31,7 @@ struct py_task_ctx_t {
     ukv_txn_t txn = nullptr;
     ukv_collection_t* col = nullptr;
     ukv_arena_t* arena = nullptr;
+    ukv_options_t options = ukv_options_default_k;
 };
 
 /**
@@ -70,13 +77,8 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     py_db_t(py_db_t&& other) noexcept
         : native(std::move(other.native)), arena(std::move(other.arena)), config(std::move(config)) {}
 
-    operator py_task_ctx_t() noexcept {
-        return {
-            native,
-            nullptr,
-            nullptr,
-            arena.member_ptr(),
-        };
+    operator py_task_ctx_t() & noexcept {
+        return {native, nullptr, nullptr, arena.member_ptr(), ukv_options_default_k};
     }
 };
 
@@ -96,13 +98,12 @@ struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
     py_txn_t(py_txn_t&& other) noexcept
         : db_ptr(std::move(other.db_ptr)), native(std::move(other.native)), arena(std::move(other.arena)) {}
 
-    operator py_task_ctx_t() noexcept {
-        return {
-            db_ptr->native,
-            native,
-            nullptr,
-            arena.member_ptr(),
-        };
+    operator py_task_ctx_t() & noexcept {
+        auto options = static_cast<ukv_options_t>( //
+            ukv_options_default_k |                //
+            (track_reads ? ukv_option_read_track_k : ukv_options_default_k) |
+            (flush_writes ? ukv_option_write_flush_k : ukv_options_default_k));
+        return {db_ptr->native, native, nullptr, arena.member_ptr(), options};
     }
 };
 
@@ -124,12 +125,9 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
           name(std::move(other.name)) {}
 
     operator py_task_ctx_t() & noexcept {
-        return {
-            db_ptr->native,
-            txn_ptr ? txn_ptr->native : ukv_txn_t(nullptr),
-            native.member_ptr(),
-            txn_ptr ? txn_ptr->arena.member_ptr() : db_ptr->arena.member_ptr(),
-        };
+        py_task_ctx_t result = txn_ptr ? py_task_ctx_t(*txn_ptr) : py_task_ctx_t(*db_ptr);
+        result.col = native.member_ptr();
+        return result;
     }
 };
 
@@ -194,34 +192,69 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     graph_ref_t ref() { return index.as_graph(); }
 };
 
+struct py_col_name_t {
+    std::string owned;
+    ukv_str_view_t view;
+};
+
+struct py_col_keys_range_t {
+    ukv_collection_t col = ukv_default_collection_k;
+    ukv_key_t min = std::numeric_limits<ukv_key_t>::min();
+    ukv_key_t max = std::numeric_limits<ukv_key_t>::max();
+    std::size_t limit = std::numeric_limits<std::size_t>::max();
+};
+
 /**
- * @brief Provides a typed view of 1D potentially-strided tensor.
- * @param obj Must implement the "Buffer protocol".
+ * @brief Materialized view over a specific subset of documents
+ * UIDs (potentially, in different collections) and column (field) names.
+ *
  */
-template <typename scalar_at>
-std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(PyObject* obj) {
+struct py_frame_t : public std::enable_shared_from_this<py_frame_t> {
+
+    ukv_t db = NULL;
+
+    std::variant<std::monostate, py_col_name_t, std::vector<py_col_name_t>> fields;
+    std::variant<std::monostate, py_col_keys_range_t, std::vector<col_key_t>> docs;
+
+    py_frame_t() = default;
+    py_frame_t(py_frame_t&&) = delete;
+    py_frame_t(py_frame_t const&) = delete;
+};
+
+#pragma region Helper Functions
+
+inline py_received_buffer_t py_strided_buffer(PyObject* obj, bool const_ = true) {
     auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
-    if constexpr (std::is_const_v<scalar_at>)
+    if (!const_)
         flags |= PyBUF_WRITABLE;
 
     py_received_buffer_t raii;
     raii.initialized = PyObject_GetBuffer(obj, &raii.py, flags) == 0;
     if (!raii.initialized)
         throw std::invalid_argument("Couldn't obtain buffer overviews");
-    if (raii.py.ndim != 1)
-        throw std::invalid_argument("Expecting tensor rank 1");
     if (!raii.py.shape)
         throw std::invalid_argument("Shape wasn't inferred");
-    if constexpr (!std::is_same_v<scalar_at, void> && !std::is_same_v<scalar_at, void const>)
-        if (raii.py.itemsize != sizeof(scalar_at))
-            throw std::invalid_argument("Scalar type mismatch");
+    return raii;
+}
+
+/**
+ * @brief Provides a typed view of 1D potentially-strided tensor.
+ * @param obj Must implement the "Buffer protocol".
+ */
+template <typename scalar_at>
+strided_range_gt<scalar_at> py_strided_range(py_received_buffer_t const& raii) {
+
+    if (raii.py.ndim != 1)
+        throw std::invalid_argument("Expecting tensor rank 1");
+    if (raii.py.itemsize != sizeof(scalar_at))
+        throw std::invalid_argument("Scalar type mismatch");
 
     strided_range_gt<scalar_at> result {
         reinterpret_cast<scalar_at*>(raii.py.buf),
         static_cast<ukv_size_t>(raii.py.strides[0]),
         static_cast<ukv_size_t>(raii.py.shape[0]),
     };
-    return std::make_pair<py_received_buffer_t, strided_range_gt<scalar_at>>(std::move(raii), std::move(result));
+    return result;
 }
 
 /**
@@ -229,21 +262,16 @@ std::pair<py_received_buffer_t, strided_range_gt<scalar_at>> strided_array(PyObj
  * @param obj Must implement the "Buffer protocol".
  */
 template <typename scalar_at>
-std::pair<py_received_buffer_t, strided_matrix_gt<scalar_at>> strided_matrix(PyObject* obj) {
-    auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
-    if constexpr (std::is_const_v<scalar_at>)
-        flags |= PyBUF_WRITABLE;
+strided_matrix_gt<scalar_at> py_strided_matrix(py_received_buffer_t const& raii) {
 
-    py_received_buffer_t raii;
-    raii.initialized = PyObject_GetBuffer(obj, &raii.py, flags) == 0;
-    if (!raii.initialized)
-        throw std::invalid_argument("Couldn't obtain buffer overviews");
     if (raii.py.ndim != 2)
         throw std::invalid_argument("Expecting tensor rank 2");
-    if (!raii.py.shape)
-        throw std::invalid_argument("Shape wasn't inferred");
-    if (raii.py.itemsize != sizeof(scalar_at))
-        throw std::invalid_argument("Scalar type mismatch");
+    if constexpr (!std::is_void_v<scalar_at>)
+        if (raii.py.itemsize != sizeof(scalar_at))
+            throw std::invalid_argument("Scalar type mismatch");
+    if constexpr (!std::is_void_v<scalar_at>)
+        if (raii.py.itemsize != raii.py.strides[1])
+            throw std::invalid_argument("Rows are not continuous");
 
     strided_matrix_gt<scalar_at> result {
         reinterpret_cast<scalar_at*>(raii.py.buf),
@@ -251,7 +279,7 @@ std::pair<py_received_buffer_t, strided_matrix_gt<scalar_at>> strided_matrix(PyO
         static_cast<ukv_size_t>(raii.py.shape[1]),
         static_cast<ukv_size_t>(raii.py.strides[0]),
     };
-    return std::make_pair<py_received_buffer_t, strided_matrix_gt<scalar_at>>(std::move(raii), std::move(result));
+    return result;
 }
 
 inline void throw_not_implemented() {
@@ -305,29 +333,32 @@ void scan_pydict(PyObject* obj, member_callback_at&& call) {
         call(key, value);
 }
 
+#pragma region Type Conversions Guides
+
 /**
- * @brief Defines the naming conversion for C types to be exposed to Python.
+ * @brief Defines Pythons type marker for primitive types.
+ * @b All of them are only a single character long.
  */
 template <typename element_at>
 struct format_code_gt {};
 
 // clang-format off
-template <> struct format_code_gt<bool> { inline static const char value = '?'; };
-template <> struct format_code_gt<char> { inline static const char value = 'c'; };
-template <> struct format_code_gt<signed char> { inline static const char value = 'b'; };
-template <> struct format_code_gt<unsigned char> { inline static const char value = 'B'; };
+template <> struct format_code_gt<bool> { inline static constexpr char value[2] = "?"; };
+template <> struct format_code_gt<char> { inline static constexpr char value[2] = "c"; };
+template <> struct format_code_gt<signed char> { inline static constexpr char value[2] = "b"; };
+template <> struct format_code_gt<unsigned char> { inline static constexpr char value[2] = "B"; };
 
-template <> struct format_code_gt<short> { inline static const char value = 'h'; };
-template <> struct format_code_gt<unsigned short> { inline static const char value = 'H'; };
-template <> struct format_code_gt<int> { inline static const char value = 'i'; };
-template <> struct format_code_gt<unsigned int> { inline static const char value = 'I'; };
-template <> struct format_code_gt<long> { inline static const char value = 'l'; };
-template <> struct format_code_gt<unsigned long> { inline static const char value = 'L'; };
-template <> struct format_code_gt<long long> { inline static const char value = 'q'; };
-template <> struct format_code_gt<unsigned long long> { inline static const char value = 'Q'; };
+template <> struct format_code_gt<short> { inline static constexpr char value[2] = "h"; };
+template <> struct format_code_gt<unsigned short> { inline static constexpr char value[2] = "H"; };
+template <> struct format_code_gt<int> { inline static constexpr char value[2] = "i"; };
+template <> struct format_code_gt<unsigned int> { inline static constexpr char value[2] = "I"; };
+template <> struct format_code_gt<long> { inline static constexpr char value[2] = "l"; };
+template <> struct format_code_gt<unsigned long> { inline static constexpr char value[2] = "L"; };
+template <> struct format_code_gt<long long> { inline static constexpr char value[2] = "q"; };
+template <> struct format_code_gt<unsigned long long> { inline static constexpr char value[2] = "Q"; };
 
-template <> struct format_code_gt<float> { inline static const char value = 'f'; };
-template <> struct format_code_gt<double> { inline static const char value = 'd'; };
+template <> struct format_code_gt<float> { inline static constexpr char value[2] = "f"; };
+template <> struct format_code_gt<double> { inline static constexpr char value[2] = "d"; };
 // clang-format on
 
 void wrap_database(py::module&);

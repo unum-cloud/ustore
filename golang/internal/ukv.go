@@ -54,14 +54,23 @@ void u_read(void* fn, ukv_t const c_db, ukv_txn_t const c_txn, ukv_size_t const 
 
 void u_write(void* fn, ukv_t const c_db, ukv_txn_t const c_txn, ukv_size_t const c_tasks_count,
 		ukv_collection_t const* c_cols, ukv_size_t const c_cols_stride, ukv_key_t const* c_keys,
-		ukv_size_t const c_keys_stride, ukv_val_ptr_t const* c_vals, ukv_size_t const c_vals_stride,
+		ukv_size_t const c_keys_stride, ukv_val_ptr_t const c_vals, ukv_size_t const c_vals_stride,
 		ukv_val_len_t const* c_offs, ukv_size_t const c_offs_stride, ukv_val_len_t const* c_lens,
 		ukv_size_t const c_lens_stride, ukv_options_t const c_options, ukv_arena_t* c_arena, ukv_error_t* c_error) {
 
 	write_fn func = (write_fn)(fn);
-	(*func)(c_db, c_txn, c_tasks_count, c_cols, c_cols_stride, c_keys, c_keys_stride, c_vals,
+	ukv_val_ptr_t * val_ptr = (ukv_val_ptr_t*)c_vals;
+
+	(*func)(c_db, c_txn, c_tasks_count, c_cols, c_cols_stride, c_keys, c_keys_stride, val_ptr,
 			c_vals_stride, c_offs, c_offs_stride, c_lens, c_lens_stride, c_options, c_arena, c_error);
 }
+
+bool is_null(ukv_val_ptr_t ptr, int len) {
+	return *(*(char**)ptr + len) == 0;
+}
+
+ const ukv_size_t size_of_key = sizeof(ukv_key_t);
+ const ukv_size_t size_of_len = sizeof(ukv_val_len_t);
 */
 import "C"
 import (
@@ -103,7 +112,7 @@ func forwardError(db *DataBase, error_c C.ukv_error_t) error {
 	return nil
 }
 
-func cleanTape(db *DataBase, arena_c C.ukv_arena_t) {
+func freeArena(db *DataBase, arena_c C.ukv_arena_t) {
 	C.u_arena_free(db.Backend.UKV_arena_free, db.raw, arena_c)
 }
 
@@ -124,7 +133,7 @@ func (db *DataBase) Close() {
 	}
 }
 
-func (db *DataBase) Set(key uint64, value *[]byte) error {
+func (db *DataBase) Set(key uint64, value []byte) error {
 
 	// Passing values without copies seems essentially impossible
 	// and causes: "cgo argument has Go pointer to Go pointer"
@@ -134,21 +143,57 @@ func (db *DataBase) Set(key uint64, value *[]byte) error {
 	key_c := C.ukv_key_t(key)
 	collection_c := (*C.ukv_collection_t)(nil)
 	options_c := C.ukv_options_t(C.ukv_options_default_k)
-	value_go := C.CBytes(*value)
-	value_ptr_c := C.ukv_val_ptr_t(value_go)
-	value_length_c := C.ukv_val_len_t(len(*value))
+	val_ptr := C.ukv_val_ptr_t(unsafe.Pointer(&value[0]))
+	value_ptr_c := C.ukv_val_ptr_t(unsafe.Pointer(&val_ptr))
+	value_length_c := C.ukv_val_len_t(len(value))
 	value_offset_c := C.ukv_val_len_t(0)
 	arena_c := (C.ukv_arena_t)(nil)
-	defer C.free(value_go)
-	defer cleanTape(db, arena_c)
+	defer freeArena(db, arena_c)
 
 	C.u_write(db.Backend.UKV_write,
 		db.raw, nil, 1,
 		collection_c, 0,
 		&key_c, 0,
-		&value_ptr_c, 0,
+		value_ptr_c, 0,
 		&value_offset_c, 0,
 		&value_length_c, 0,
+		options_c, &arena_c, &error_c)
+	return forwardError(db, error_c)
+}
+
+func (db *DataBase) SetBatch(keys []uint64, values [][]byte) error {
+
+	error_c := C.ukv_error_t(nil)
+	keys_c := (*C.ukv_key_t)(unsafe.Pointer(&keys[0]))
+	collection_c := (*C.ukv_collection_t)(nil)
+	options_c := C.ukv_options_t(C.ukv_options_default_k)
+	value_ptr_c := C.ukv_val_ptr_t(unsafe.Pointer(&values[0]))
+	task_count_c := C.size_t(len(values))
+
+	offsets := make([]C.ukv_val_len_t, task_count_c)
+	lens := make([]C.ukv_val_len_t, task_count_c)
+
+	lens[0] = C.ukv_val_len_t(len(values[0]))
+	offsets[0] = 0
+	for i := C.size_t(1); i < task_count_c; i++ {
+		lens[i] = C.ukv_val_len_t(len(values[i]))
+		new_offs := offsets[i-1] + lens[i-1]
+		for C.is_null(value_ptr_c, C.int(new_offs)) {
+			new_offs++
+		}
+		offsets[i] = new_offs
+	}
+
+	arena_c := (C.ukv_arena_t)(nil)
+	defer freeArena(db, arena_c)
+
+	C.u_write(db.Backend.UKV_write,
+		db.raw, nil, task_count_c,
+		collection_c, 0,
+		keys_c, C.size_of_key,
+		value_ptr_c, 0,
+		&offsets[0], C.size_of_len,
+		&lens[0], C.size_of_len,
 		options_c, &arena_c, &error_c)
 	return forwardError(db, error_c)
 }
@@ -167,13 +212,13 @@ func (db *DataBase) Delete(key uint64) error {
 	value_length_c := C.ukv_val_len_t(0)
 	value_offset_c := C.ukv_val_len_t(0)
 	arena_c := (C.ukv_arena_t)(nil)
-	defer cleanTape(db, arena_c)
+	defer freeArena(db, arena_c)
 
 	C.u_write(db.Backend.UKV_write,
 		db.raw, nil, 1,
 		collection_c, 0,
 		&key_c, 0,
-		&value_ptr_c, 0,
+		value_ptr_c, 0,
 		&value_offset_c, 0,
 		&value_length_c, 0,
 		options_c, &arena_c, &error_c)
@@ -191,7 +236,7 @@ func (db *DataBase) Get(key uint64) ([]byte, error) {
 	pulled_values_lengths_c := (*C.ukv_val_len_t)(nil)
 	pulled_values_c := (C.ukv_val_ptr_t)(nil)
 	arena_c := (C.ukv_arena_t)(nil)
-	defer cleanTape(db, arena_c)
+	defer freeArena(db, arena_c)
 
 	C.u_read(db.Backend.UKV_read,
 		db.raw, nil, 1,
@@ -230,7 +275,7 @@ func (db *DataBase) Contains(key uint64) (bool, error) {
 	pulled_values_lengths_c := (*C.ukv_val_len_t)(nil)
 	pulled_values_c := (C.ukv_val_ptr_t)(nil)
 	arena_c := (C.ukv_arena_t)(nil)
-	defer cleanTape(db, arena_c)
+	defer freeArena(db, arena_c)
 
 	C.u_read(db.Backend.UKV_read,
 		db.raw, nil, 1,

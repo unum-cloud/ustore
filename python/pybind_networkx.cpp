@@ -40,8 +40,7 @@ struct degree_view_t : public std::enable_shared_from_this<degree_view_t> {
 };
 
 template <typename element_at>
-PyObject* wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
-    printf("received %i strided objects\n", (int)range.size());
+py::object wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
 
     g.last_buffer_strides[0] = range.stride();
     g.last_buffer_strides[1] = g.last_buffer_strides[2] = 1;
@@ -54,14 +53,15 @@ PyObject* wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
     g.last_buffer.len = range.size() * sizeof(element_at);
     g.last_buffer.itemsize = sizeof(element_at);
     // https://docs.python.org/3/library/struct.html#format-characters
-    g.last_buffer.format = (char*)&format_code_gt<std::remove_const_t<element_at>>::value;
+    g.last_buffer.format = (char*)&format_code_gt<std::remove_const_t<element_at>>::value[0];
     g.last_buffer.ndim = 1;
     g.last_buffer.shape = &g.last_buffer_shape[0];
     g.last_buffer.strides = &g.last_buffer_strides[0];
     g.last_buffer.suboffsets = nullptr;
     g.last_buffer.readonly = true;
     g.last_buffer.internal = nullptr;
-    return PyMemoryView_FromBuffer(&g.last_buffer);
+    PyObject* obj = PyMemoryView_FromBuffer(&g.last_buffer);
+    return py::reinterpret_steal<py::object>(obj);
 }
 
 void ukv::wrap_networkx(py::module& m) {
@@ -76,8 +76,9 @@ void ukv::wrap_networkx(py::module& m) {
     });
     degs.def("__getitem__", [](degree_view_t& degs, PyObject* vs) {
         py_graph_t& g = *degs.net_ptr;
-        auto handle_and_ids = strided_array<ukv_key_t const>(vs);
-        auto maybe = g.ref().degrees(handle_and_ids.second, {&degs.roles});
+        auto ids_handle = py_strided_buffer(vs);
+        auto ids = py_strided_range<ukv_key_t const>(ids_handle);
+        auto maybe = g.ref().degrees(ids, {&degs.roles});
         maybe.throw_unhandled();
         return wrap_into_buffer<ukv_vertex_degree_t const>(g, {maybe->begin(), maybe->end()});
     });
@@ -294,8 +295,9 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "nbunch_iter",
         [](py_graph_t& g, PyObject* vs) {
-            auto handle_and_ids = strided_array<ukv_key_t const>(vs);
-            auto maybe = g.ref().contains(handle_and_ids.second);
+            auto ids_handle = py_strided_buffer(vs);
+            auto ids = py_strided_range<ukv_key_t const>(ids_handle);
+            auto maybe = g.ref().contains(ids);
             maybe.throw_unhandled();
             return wrap_into_buffer(g, *maybe);
         },
@@ -354,15 +356,15 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "add_edges_from",
         [](py_graph_t& g, PyObject* adjacency_list) {
-            auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
-            if (handle_and_list.second.cols() != 2 && handle_and_list.second.cols() != 3)
+            auto list_handle = py_strided_buffer(adjacency_list);
+            auto list = py_strided_matrix<ukv_key_t const>(list_handle);
+            if (list.cols() != 2 && list.cols() != 3)
                 throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
 
             edges_view_t edges {
-                handle_and_list.second.col(0),
-                handle_and_list.second.col(1),
-                handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
-                                                   : strided_range_gt<ukv_key_t const>(&ukv_default_edge_id_k),
+                list.col(0),
+                list.col(1),
+                list.cols() == 3 ? list.col(2) : strided_range_gt<ukv_key_t const>(&ukv_default_edge_id_k),
             };
             g.ref().upsert(edges).throw_unhandled();
         },
@@ -371,15 +373,15 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "remove_edges_from",
         [](py_graph_t& g, PyObject* adjacency_list) {
-            auto handle_and_list = strided_matrix<ukv_key_t const>(adjacency_list);
-            if (handle_and_list.second.cols() != 2 && handle_and_list.second.cols() != 3)
+            auto list_handle = py_strided_buffer(adjacency_list);
+            auto list = py_strided_matrix<ukv_key_t const>(list_handle);
+            if (list.cols() != 2 && list.cols() != 3)
                 throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
 
             edges_view_t edges {
-                handle_and_list.second.col(0),
-                handle_and_list.second.col(1),
-                handle_and_list.second.cols() == 3 ? handle_and_list.second.col(2)
-                                                   : strided_range_gt<ukv_key_t const>(&ukv_default_edge_id_k),
+                list.col(0),
+                list.col(1),
+                list.cols() == 3 ? list.col(2) : strided_range_gt<ukv_key_t const>(&ukv_default_edge_id_k),
             };
             g.ref().remove(edges).throw_unhandled();
         },
@@ -389,12 +391,11 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "add_edges_from",
         [](py_graph_t& g, PyObject* v1s, PyObject* v2s) {
-            auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
-            auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
-            edges_view_t edges {
-                handle_and_sources.second,
-                handle_and_targets.second,
-            };
+            auto sources_handle = py_strided_buffer(v1s);
+            auto sources = py_strided_range<ukv_key_t const>(sources_handle);
+            auto targets_handle = py_strided_buffer(v2s);
+            auto targets = py_strided_range<ukv_key_t const>(targets_handle);
+            edges_view_t edges {sources, targets};
             g.ref().upsert(edges).throw_unhandled();
         },
         py::arg("us"),
@@ -403,11 +404,13 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "remove_edges_from",
         [](py_graph_t& g, PyObject* v1s, PyObject* v2s) {
-            auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
-            auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
+            auto sources_handle = py_strided_buffer(v1s);
+            auto sources = py_strided_range<ukv_key_t const>(sources_handle);
+            auto targets_handle = py_strided_buffer(v2s);
+            auto targets = py_strided_range<ukv_key_t const>(targets_handle);
             edges_view_t edges {
-                handle_and_sources.second,
-                handle_and_targets.second,
+                sources,
+                targets,
             };
             g.ref().remove(edges).throw_unhandled();
         },
@@ -418,13 +421,16 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "add_edges_from",
         [](py_graph_t& g, PyObject* v1s, PyObject* v2s, PyObject* es) {
-            auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
-            auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
-            auto handle_and_edge_ids = strided_array<ukv_key_t const>(es);
+            auto sources_handle = py_strided_buffer(v1s);
+            auto sources = py_strided_range<ukv_key_t const>(sources_handle);
+            auto targets_handle = py_strided_buffer(v2s);
+            auto targets = py_strided_range<ukv_key_t const>(targets_handle);
+            auto edge_ids_handle = py_strided_buffer(es);
+            auto edge_ids = py_strided_range<ukv_key_t const>(edge_ids_handle);
             edges_view_t edges {
-                handle_and_sources.second,
-                handle_and_targets.second,
-                handle_and_edge_ids.second,
+                sources,
+                targets,
+                edge_ids,
             };
             g.ref().upsert(edges).throw_unhandled();
         },
@@ -435,13 +441,16 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "remove_edges_from",
         [](py_graph_t& g, PyObject* v1s, PyObject* v2s, PyObject* es) {
-            auto handle_and_sources = strided_array<ukv_key_t const>(v1s);
-            auto handle_and_targets = strided_array<ukv_key_t const>(v2s);
-            auto handle_and_edge_ids = strided_array<ukv_key_t const>(es);
+            auto sources_handle = py_strided_buffer(v1s);
+            auto sources = py_strided_range<ukv_key_t const>(sources_handle);
+            auto targets_handle = py_strided_buffer(v2s);
+            auto targets = py_strided_range<ukv_key_t const>(targets_handle);
+            auto edge_ids_handle = py_strided_buffer(es);
+            auto edge_ids = py_strided_range<ukv_key_t const>(edge_ids_handle);
             edges_view_t edges {
-                handle_and_sources.second,
-                handle_and_targets.second,
-                handle_and_edge_ids.second,
+                sources,
+                targets,
+                edge_ids,
             };
             g.ref().remove(edges).throw_unhandled();
         },

@@ -90,6 +90,7 @@ class strided_iterator_gt {
 
 template <typename object_at>
 class strided_range_gt {
+    static_assert(!std::is_void_v<object_at>);
 
     object_at* begin_ = nullptr;
     ukv_size_t stride_ = 0;
@@ -111,22 +112,10 @@ class strided_range_gt {
     strided_range_gt& operator=(strided_range_gt const&) = default;
 
     inline object_at* data() const noexcept { return begin_; }
-    inline decltype(auto) begin() const noexcept {
-        if constexpr (!std::is_void_v<object_at>)
-            return strided_iterator_gt<object_at> {begin_, stride_};
-    }
-    inline decltype(auto) end() const noexcept {
-        if constexpr (!std::is_void_v<object_at>)
-            return begin() + static_cast<std::ptrdiff_t>(count_);
-    }
-    inline decltype(auto) at(std::size_t i) const noexcept {
-        if constexpr (!std::is_void_v<object_at>)
-            return *(begin() + static_cast<std::ptrdiff_t>(i));
-    }
-    inline decltype(auto) operator[](std::size_t i) const noexcept {
-        if constexpr (!std::is_void_v<object_at>)
-            return at(i);
-    }
+    inline decltype(auto) begin() const noexcept { return strided_iterator_gt<object_at> {begin_, stride_}; }
+    inline decltype(auto) end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
+    inline decltype(auto) at(std::size_t i) const noexcept { return *(begin() + static_cast<std::ptrdiff_t>(i)); }
+    inline decltype(auto) operator[](std::size_t i) const noexcept { return at(i); }
 
     inline auto immutable() const noexcept { return strided_range_gt<object_at const>(begin_, stride_, count_); }
     inline strided_range_gt subspan(std::size_t offset, std::size_t count) const noexcept {
@@ -270,6 +259,7 @@ class taped_values_view_t {
 
 template <typename object_at>
 class strided_matrix_gt {
+    static_assert(!std::is_void_v<object_at>);
 
     object_at* begin_ = nullptr;
     ukv_size_t stride_ = 0;
@@ -288,14 +278,17 @@ class strided_matrix_gt {
     strided_matrix_gt& operator=(strided_matrix_gt const&) = default;
 
     inline std::size_t size() const noexcept { return rows_ * cols_; }
-    inline object_at& operator()(std::size_t i, std::size_t j) noexcept { return row(i)[j]; }
-    inline object_at const& operator()(std::size_t i, std::size_t j) const noexcept { return row(i)[j]; }
-    inline strided_range_gt<object_at> col(std::size_t j) const noexcept { return {begin_ + j, stride_, rows_}; }
-    inline indexed_range_gt<object_at> row(std::size_t i) const noexcept {
-        return {begin_ + i * stride_ / sizeof(object_at), cols_};
+    inline decltype(auto) operator()(std::size_t i, std::size_t j) noexcept { return row(i)[j]; }
+    inline decltype(auto) operator()(std::size_t i, std::size_t j) const noexcept { return row(i)[j]; }
+    inline strided_range_gt<object_at const> col(std::size_t j) const noexcept { return {begin_ + j, stride_, rows_}; }
+    inline indexed_range_gt<object_at const*> row(std::size_t i) const noexcept {
+        auto begin = begin_ + i * stride_ / sizeof(object_at);
+        return {begin, begin + cols_};
     }
     inline std::size_t rows() const noexcept { return rows_; }
     inline std::size_t cols() const noexcept { return cols_; }
+    inline std::size_t stride() const noexcept { return stride_; }
+    inline object_at const* data() const noexcept { return begin_; }
 };
 
 #pragma region - Algorithms
