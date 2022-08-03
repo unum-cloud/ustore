@@ -640,10 +640,11 @@ void ukv_collection_remove( //
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
         if (c_col_name == (*it)->GetName()) {
-            rocks_status_t status = db.native->DropColumnFamily((*it));
+            rocks_status_t status = db.native->DropColumnFamily(*it);
             if (export_error(status, c_error))
                 return;
             db.columns.erase(it--);
+            break;
         }
     }
 }
