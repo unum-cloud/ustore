@@ -193,9 +193,8 @@ TEST(db, basic) {
     keys_range_t present_keys = col.keys();
     keys_stream_t present_it = present_keys.begin();
     auto expected_it = keys.begin();
-    for (; expected_it != keys.end(); ++present_it, ++expected_it) {
+    for (; expected_it != keys.end(); ++present_it, ++expected_it)
         EXPECT_EQ(*expected_it, *present_it);
-    }
     EXPECT_TRUE(present_it.is_end());
 
     // Remove all of the values and check that they are missing
@@ -244,6 +243,23 @@ TEST(db, named) {
     }
     EXPECT_TRUE(present_it1.is_end());
     EXPECT_TRUE(present_it2.is_end());
+
+    keys_vals_range_t present_item = col1.items();
+    keys_vals_stream_t present_item_it = present_item.begin();
+    auto expected_key_it = keys.begin();
+    auto expected_value_it = vals.begin();
+    for (size_t i = 0; expected_key_it != keys.end(); ++i, ++present_item_it, ++expected_key_it, ++expected_value_it) {
+        EXPECT_EQ(*expected_key_it, present_item_it.key());
+
+        auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
+        auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
+
+        value_view_t val_view = present_item_it.value();
+        value_view_t expected_view(expected_begin, expected_begin + expected_len);
+        EXPECT_EQ(val_view.size(), expected_len);
+        EXPECT_EQ(val_view, expected_view);
+    }
+    EXPECT_TRUE(present_item_it.is_end());
 
     _ = db.remove("col1");
     _ = db.remove("col2");
