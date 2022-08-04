@@ -60,6 +60,7 @@
 #include <Python.h>
 
 #include "pybind.hpp"
+#include "nlohmann.hpp"
 
 using namespace unum::ukv;
 using namespace unum;
