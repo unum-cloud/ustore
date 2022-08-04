@@ -247,8 +247,7 @@ TEST(db, named) {
     keys_vals_range_t present_item = col1.items();
     keys_vals_stream_t present_item_it = present_item.begin();
     auto expected_key_it = keys.begin();
-    auto expected_value_it = vals.begin();
-    for (size_t i = 0; expected_key_it != keys.end(); ++i, ++present_item_it, ++expected_key_it, ++expected_value_it) {
+    for (size_t i = 0; expected_key_it != keys.end(); ++i, ++present_item_it, ++expected_key_it) {
         EXPECT_EQ(*expected_key_it, present_item_it.key());
 
         auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
