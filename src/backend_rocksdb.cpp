@@ -638,17 +638,14 @@ void ukv_collection_remove( //
         return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    if (!c_col_name || (c_col_name && !std::strlen(c_col_name))) {
+    if (!c_col_name || !std::strlen(c_col_name)) {
+        rocksdb::WriteBatch batch;
         auto col = db.native->DefaultColumnFamily();
-        rocksdb::ReadOptions read_options;
-        auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(read_options, col));
-        rocksdb::WriteOptions write_options;
-        rocks_status_t status;
-        for (it->SeekToFirst(); it->Valid(); it->Next()) {
-            status = db.native->SingleDelete(write_options, col, it->key());
-            if (export_error(status, c_error))
-                return;
-        }
+        auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), col));
+        for (it->SeekToFirst(); it->Valid(); it->Next())
+            batch.Delete(col, it->key());
+        rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
+        export_error(status, c_error);
         return;
     }
 
