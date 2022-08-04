@@ -983,11 +983,16 @@ void ukv_collection_remove(
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
     auto name_len = std::strlen(c_col_name);
-    auto col_name = std::string_view(c_col_name, name_len);
-
-    auto col_it = db.named.find(col_name);
-    if (col_it != db.named.end()) {
-        db.named.erase(col_it);
+    if (!name_len) {
+        db.nameless.pairs.clear();
+        db.nameless.unique_elements = 0;
+    }
+    else {
+        auto col_name = std::string_view(c_col_name, name_len);
+        auto col_it = db.named.find(col_name);
+        if (col_it != db.named.end()) {
+            db.named.erase(col_it);
+        }
     }
 }
 

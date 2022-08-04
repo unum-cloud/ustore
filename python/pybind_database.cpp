@@ -482,6 +482,37 @@ void py_update(py_wrap_at& wrap, py::object dict_py) {
     status.throw_unhandled();
 }
 
+template <typename py_wrap_at>
+py::array_t<ukv_key_t> py_scan( //
+    py_wrap_at& wrap,
+    ukv_key_t min_key,
+    ukv_size_t scan_length) {
+
+    py_task_ctx_t ctx = wrap;
+    ukv_key_t* found_keys = nullptr;
+    ukv_val_len_t* found_lengths = nullptr;
+    status_t status;
+
+    ukv_scan( //
+        ctx.db,
+        ctx.txn,
+        1,
+        ctx.col,
+        0,
+        &min_key,
+        0,
+        &scan_length,
+        0,
+        ctx.options,
+        &found_keys,
+        &found_lengths,
+        ctx.arena,
+        status.member_ptr());
+
+    status.throw_unhandled();
+    return py::array_t<ukv_key_t>(scan_length, found_keys);
+}
+
 #pragma region Helper API
 
 py::object punned_collection( //
@@ -579,21 +610,6 @@ void ukv::wrap_database(py::module& m) {
         py::arg("config") = "",
         py::arg("open") = true);
 
-    // Define `Collection`s member method, without defining any external constructors
-    py_col.def("set", &py_write<py_col_t>);
-    py_col.def("pop", &py_remove<py_col_t>);  // Unlike Python, won't return the result
-    py_col.def("has_key", &py_has<py_col_t>); // Similar to Python 2
-    py_col.def("get", &py_read<py_col_t>);
-    py_col.def("update", &py_update<py_col_t>);
-
-    py_col.def("clear", [](py_col_t& py_col) {
-        db_t& db = py_col.db_ptr->native;
-        db.remove(py_col.name.c_str()).throw_unhandled();
-        auto maybe_col = db.collection(py_col.name.c_str());
-        maybe_col.throw_unhandled();
-        py_col.native = *std::move(maybe_col);
-    });
-
     // `Transaction`:
     py_txn.def( //
         py::init([](py_db_t& py_db, bool begin, bool track_reads, bool flush_writes, bool snapshot) {
@@ -686,18 +702,33 @@ void ukv::wrap_database(py::module& m) {
         return py::cast(std::make_shared<py_keys_range_t>(std::move(range)));
     });
 
+    py_txn.def_property_readonly("keys", [](py_txn_t& py_txn) {
+        keys_range_t range(py_txn.db_ptr->native, py_txn.native, nullptr);
+        return py::cast(std::make_shared<py_keys_range_t>(std::move(range)));
+    });
+
     // Shortcuts for main collection
     py_db.def("set", &py_write<py_db_t>);
     py_db.def("pop", &py_remove<py_db_t>);  // Unlike Python, won't return the result
     py_db.def("has_key", &py_has<py_db_t>); // Similar to Python 2
     py_db.def("get", &py_read<py_db_t>);
     py_db.def("update", &py_update<py_db_t>);
+    py_db.def("scan", &py_scan<py_db_t>);
+
+    // Define `Collection`s member method, without defining any external constructors
+    py_col.def("set", &py_write<py_col_t>);
+    py_col.def("pop", &py_remove<py_col_t>);  // Unlike Python, won't return the result
+    py_col.def("has_key", &py_has<py_col_t>); // Similar to Python 2
+    py_col.def("get", &py_read<py_col_t>);
+    py_col.def("update", &py_update<py_col_t>);
+    py_col.def("scan", &py_scan<py_col_t>);
 
     py_txn.def("set", &py_write<py_txn_t>);
     py_txn.def("pop", &py_remove<py_txn_t>);  // Unlike Python, won't return the result
     py_txn.def("has_key", &py_has<py_txn_t>); // Similar to Python 2
     py_txn.def("get", &py_read<py_txn_t>);
     py_txn.def("update", &py_update<py_txn_t>);
+    py_txn.def("scan", &py_scan<py_txn_t>);
 
     // Additional operator overloads
     py_col.def("__setitem__", &py_write<py_col_t>);
@@ -714,4 +745,17 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def("__delitem__", &py_remove<py_txn_t>);
     py_txn.def("__contains__", &py_has<py_txn_t>);
     py_txn.def("__getitem__", &py_read<py_txn_t>);
+
+    // Clear
+    py_db.def("clear", [](py_db_t& py_db) { py_db.native.clear().throw_unhandled(); });
+
+    py_txn.def("clear", [](py_txn_t& py_txn) { throw_not_implemented(); });
+
+    py_col.def("clear", [](py_col_t& py_col) {
+        db_t& db = py_col.db_ptr->native;
+        db.remove(py_col.name.c_str()).throw_unhandled();
+        auto maybe_col = db.collection(py_col.name.c_str());
+        maybe_col.throw_unhandled();
+        py_col.native = *std::move(maybe_col);
+    });
 }
