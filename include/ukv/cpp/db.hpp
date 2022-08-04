@@ -89,6 +89,11 @@ class collection_t {
         return {db_, txn_, col_, min_key, max_key};
     }
 
+    inline keys_vals_range_t items(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+                                   ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+        return {db_, txn_, col_, min_key, max_key};
+    }
+
     inline expected_gt<size_range_t> size_range() const noexcept {
         auto maybe = keys().find_size();
         return {maybe.release_status(), std::move(maybe->cardinality)};
