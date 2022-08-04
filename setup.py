@@ -12,6 +12,8 @@ cmake_cache = cmake.read_cmake_cache('CMakeCache.txt')
 include_dirs = ['include/', 'python/']
 if 'fmt_INCLUDE_DIR' in cmake_cache:
     include_dirs.append(cmake_cache['fmt_INCLUDE_DIR'])
+if 'nlohmann_json_SOURCE_DIR' in cmake_cache:
+    include_dirs.append(f'{cmake_cache["nlohmann_json_SOURCE_DIR"]}/include')
 
 compile_args = cmake_cache.pop('CMAKE_CXX_FLAGS', ['-std=c++17', '-O3'])
 
