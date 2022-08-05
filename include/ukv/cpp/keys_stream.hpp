@@ -38,8 +38,8 @@ class keys_vals_stream_t {
     ukv_collection_t col_ = ukv_default_collection_k;
     ukv_txn_t txn_ = nullptr;
 
-    arena_t arena_scan;
-    arena_t arena_read;
+    arena_t arena_scan_;
+    arena_t arena_read_;
     ukv_size_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
@@ -68,7 +68,7 @@ class keys_vals_stream_t {
                  ukv_options_default_k,
                  &found_keys,
                  &found_lens,
-                 arena_scan.member_ptr(),
+                 arena_scan_.member_ptr(),
                  status.member_ptr());
         if (!status)
             return status;
@@ -88,7 +88,7 @@ class keys_vals_stream_t {
                  ukv_options_default_k,
                  &found_lens,
                  &found_vals,
-                 arena_read.member_ptr(),
+                 arena_read_.member_ptr(),
                  status.member_ptr());
         if (!status)
             return status;
@@ -109,7 +109,7 @@ class keys_vals_stream_t {
                        ukv_collection_t col = ukv_default_collection_k,
                        std::size_t read_ahead = keys_vals_stream_t::default_read_ahead_k,
                        ukv_txn_t txn = nullptr)
-        : db_(db), col_(col), txn_(txn), arena_scan(db), arena_read(col),
+        : db_(db), col_(col), txn_(txn), arena_scan_(db_), arena_read_(db_),
           read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
 
     keys_vals_stream_t(keys_vals_stream_t&&) = default;
@@ -186,7 +186,7 @@ class keys_vals_stream_t {
             return false;
         if (is_end() || other.is_end())
             return is_end() == other.is_end();
-        return item() == other.item();
+        return key() == other.key();
     }
 
     bool operator!=(keys_vals_stream_t const& other) const noexcept {
@@ -194,7 +194,7 @@ class keys_vals_stream_t {
             return true;
         if (is_end() || other.is_end())
             return is_end() != other.is_end();
-        return item() != other.item();
+        return key() != other.key();
     }
 };
 
