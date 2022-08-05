@@ -285,4 +285,35 @@ void update_binary(py_wrap_at& wrap, py::object dict_py) {
     status.throw_unhandled();
 }
 
+template <typename py_wrap_at>
+py::array_t<ukv_key_t> scan_binary( //
+    py_wrap_at& wrap,
+    ukv_key_t min_key,
+    ukv_size_t scan_length) {
+
+    py_task_ctx_t ctx = wrap;
+    ukv_key_t* found_keys = nullptr;
+    ukv_val_len_t* found_lengths = nullptr;
+    status_t status;
+
+    ukv_scan( //
+        ctx.db,
+        ctx.txn,
+        1,
+        ctx.col,
+        0,
+        &min_key,
+        0,
+        &scan_length,
+        0,
+        ctx.options,
+        &found_keys,
+        &found_lengths,
+        ctx.arena,
+        status.member_ptr());
+
+    status.throw_unhandled();
+    return py::array_t<ukv_key_t>(scan_length, found_keys);
+}
+
 } // namespace unum::ukv::pyb

@@ -84,9 +84,13 @@ class [[nodiscard]] expected_gt {
 
     void throw_unhandled() { return status_.throw_unhandled(); }
     status_t release_status() { return std::exchange(status_, status_t {}); }
-    object_at& throw_or_ref() {
+    object_at& throw_or_ref() & {
         status_.throw_unhandled();
         return object_;
+    }
+    object_at throw_or_release() && {
+        status_.throw_unhandled();
+        return std::move(object_);
     }
 
     template <typename hetero_at>

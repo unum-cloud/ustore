@@ -79,7 +79,7 @@ TEST(db, intro) {
     for (ukv_key_t key : main.keys(100, 200))
         (void)key;
 
-    _ = main.keys(100, 200).find_size()->cardinality;
+    _ = main.members(100, 200).size_estimates()->cardinality;
 
     // Supporting options
     _ = main[{43, 44}].on(arena).clear(/*flush:*/ false);
@@ -245,8 +245,8 @@ TEST(db, named) {
     EXPECT_TRUE(present_it1.is_end());
     EXPECT_TRUE(present_it2.is_end());
 
-    keys_vals_range_t present_item = col1.items();
-    keys_vals_stream_t present_item_it = present_item.begin();
+    pairs_range_t present_item = col1.items();
+    pairs_stream_t present_item_it = present_item.begin();
     auto expected_key_it = keys.begin();
     for (size_t i = 0; expected_key_it != keys.end(); ++i, ++present_item_it, ++expected_key_it) {
         EXPECT_EQ(*expected_key_it, present_item_it.key());
