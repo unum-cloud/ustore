@@ -89,6 +89,11 @@ class collection_t {
         return {db_, txn_, col_, min_key, max_key};
     }
 
+    inline keys_vals_range_t items(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+                                   ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+        return {db_, txn_, col_, min_key, max_key};
+    }
+
     inline expected_gt<size_range_t> size_range() const noexcept {
         auto maybe = keys().find_size();
         return {maybe.release_status(), std::move(maybe->cardinality)};
@@ -350,6 +355,33 @@ class db_t : public std::enable_shared_from_this<db_t> {
     status_t remove(ukv_str_view_t name) noexcept {
         status_t status;
         ukv_collection_remove(db_, name, status.member_ptr());
+        return status;
+    }
+
+    status_t clear() noexcept {
+
+        // Remove main collection
+        status_t status = remove("");
+        if (!status)
+            return status;
+
+        // Remove named collections
+        ukv_size_t count = 0;
+        ukv_str_view_t names = nullptr;
+        arena_t arena(db_);
+        ukv_collection_list(db_, &count, &names, arena.member_ptr(), status.member_ptr());
+        if (!status)
+            return status;
+
+        while (count) {
+            auto len = std::strlen(names);
+            status = remove(names);
+            if (!status)
+                return status;
+
+            names += len + 1;
+            --count;
+        }
         return status;
     }
 

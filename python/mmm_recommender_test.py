@@ -79,7 +79,7 @@ def test():
     all_posters = db['movies.poster'].media
     all_people = db['people'].docs
     all_movies = db['movies'].docs
-    fill_db(all_follows, all_views, all_people, all_movies)
+    fill_db(all_follows, all_views, all_posters, all_people, all_movies)
 
     # Let's recommend this user some movies.
     # For that:

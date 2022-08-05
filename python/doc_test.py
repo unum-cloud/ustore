@@ -38,5 +38,5 @@ def only_json(col):
 
 
 def testing():
-    main = ukv.DataBase().main()
+    main = ukv.DataBase().main
     only_json(main)
