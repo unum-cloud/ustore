@@ -257,19 +257,28 @@ class taped_values_view_t {
 
 #pragma region - Multiple Dimensions
 
-template <typename object_at>
+template <typename scalar_at>
 class strided_matrix_gt {
-    static_assert(!std::is_void_v<object_at>);
+  public:
+    using scalar_t = scalar_at;
+    static_assert(!std::is_void_v<scalar_t>);
 
-    object_at* begin_ = nullptr;
-    ukv_size_t stride_ = 0;
+  private:
+    scalar_t* begin_ = nullptr;
+    ukv_size_t bytes_between_rows_ = 0;
+    ukv_size_t bytes_between_cols_ = 0;
     ukv_size_t rows_ = 0;
     ukv_size_t cols_ = 0;
 
   public:
     strided_matrix_gt() = default;
-    strided_matrix_gt(object_at* begin, std::size_t rows, std::size_t cols, std::size_t stride) noexcept
-        : begin_(begin), stride_(static_cast<ukv_size_t>(stride)), rows_(static_cast<ukv_size_t>(rows)),
+    strided_matrix_gt(scalar_t* begin,
+                      std::size_t rows,
+                      std::size_t cols,
+                      std::size_t bytes_between_rows,
+                      std::size_t col_stride = sizeof(scalar_t)) noexcept
+        : begin_(begin), bytes_between_rows_(static_cast<ukv_size_t>(bytes_between_rows)),
+          bytes_between_cols_(static_cast<ukv_size_t>(col_stride)), rows_(static_cast<ukv_size_t>(rows)),
           cols_(static_cast<ukv_size_t>(cols)) {}
 
     strided_matrix_gt(strided_matrix_gt&&) = default;
@@ -280,15 +289,17 @@ class strided_matrix_gt {
     inline std::size_t size() const noexcept { return rows_ * cols_; }
     inline decltype(auto) operator()(std::size_t i, std::size_t j) noexcept { return row(i)[j]; }
     inline decltype(auto) operator()(std::size_t i, std::size_t j) const noexcept { return row(i)[j]; }
-    inline strided_range_gt<object_at const> col(std::size_t j) const noexcept { return {begin_ + j, stride_, rows_}; }
-    inline indexed_range_gt<object_at const*> row(std::size_t i) const noexcept {
-        auto begin = begin_ + i * stride_ / sizeof(object_at);
-        return {begin, begin + cols_};
+    inline strided_range_gt<scalar_t const> col(std::size_t j) const noexcept {
+        auto begin = begin_ + j * bytes_between_cols_ / sizeof(scalar_t);
+        return {begin, bytes_between_rows_, rows_};
+    }
+    inline strided_range_gt<scalar_t const*> row(std::size_t i) const noexcept {
+        auto begin = begin_ + i * bytes_between_rows_ / sizeof(scalar_t);
+        return {begin, bytes_between_cols_, cols_};
     }
     inline std::size_t rows() const noexcept { return rows_; }
     inline std::size_t cols() const noexcept { return cols_; }
-    inline std::size_t stride() const noexcept { return stride_; }
-    inline object_at const* data() const noexcept { return begin_; }
+    inline scalar_t const* data() const noexcept { return begin_; }
 };
 
 #pragma region - Algorithms
@@ -387,15 +398,23 @@ struct edges_range_gt {
         result.id = edge_ids[i];
         return result;
     }
+
+    inline operator edges_range_gt<id_at const>() const noexcept { return immutable(); }
+    inline edges_range_gt<id_at const> immutable() const noexcept {
+        return {source_ids.immutable(), target_ids.immutable(), edge_ids.immutable()};
+    }
 };
 
 using edges_span_t = edges_range_gt<ukv_key_t>;
 using edges_view_t = edges_range_gt<ukv_key_t const>;
 
 template <typename tuples_at>
-edges_view_t edges(tuples_at&& tuples) noexcept {
+auto edges(tuples_at&& tuples) noexcept {
+    using value_type = typename std::remove_reference_t<tuples_at>::value_type;
+    using result_t = std::conditional_t<std::is_const_v<value_type>, edges_view_t, edges_span_t>;
     auto ptr = std::data(tuples);
-    return edges_view_t(ptr, ptr + std::size(tuples));
+    auto count = std::size(tuples);
+    return result_t(ptr, ptr + count);
 }
 
 } // namespace unum::ukv

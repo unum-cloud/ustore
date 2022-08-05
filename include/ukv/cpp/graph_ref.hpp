@@ -280,15 +280,15 @@ class graph_ref_t {
     expected_gt<strided_range_gt<ukv_key_t>> successors(ukv_key_t vertex) noexcept {
         auto maybe = edges(vertex, ukv_vertex_source_k);
         if (!maybe)
-            maybe.release_status();
-        return maybe->target_ids;
+            return maybe.release_status();
+        return strided_range_gt<ukv_key_t> {maybe->target_ids};
     }
 
     expected_gt<strided_range_gt<ukv_key_t>> predecessors(ukv_key_t vertex) noexcept {
         auto maybe = edges(vertex, ukv_vertex_target_k);
         if (!maybe)
-            maybe.release_status();
-        return maybe->source_ids;
+            return maybe.release_status();
+        return strided_range_gt<ukv_key_t> {maybe->source_ids};
     }
 
     expected_gt<strided_range_gt<ukv_key_t>> neighbors(ukv_key_t vertex) noexcept {
@@ -297,11 +297,11 @@ class graph_ref_t {
         // So the stride/offset is not uniform across the entire list.
         auto maybe = edges(vertex, ukv_vertex_role_any_k);
         if (!maybe)
-            maybe.release_status();
+            return maybe.release_status();
 
         // We can gobble the contents a little bit by swapping the members of some
         // edges to make it uniform.
-        auto es = *maybe;
+        edges_span_t es = *maybe;
         auto count = es.size();
         for (std::size_t i = 0; i != count; ++i) {
             ukv_key_t& u = es.source_ids[i];
@@ -310,7 +310,7 @@ class graph_ref_t {
                 std::swap(u, v);
         }
 
-        return es.target_ids;
+        return strided_range_gt<ukv_key_t> {es.target_ids};
     }
 
     status_t export_adjacency_list(std::string const& path,

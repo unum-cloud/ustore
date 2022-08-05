@@ -1,11 +1,8 @@
-/**
- * @brief Python bindings for a Document Store, that mimics Pandas.
- * Mostly intended for usage with NumPy and Arrow buffers.
- */
-
 #include "pybind.hpp"
-#include "ukv/docs.h"
+#include "crud.hpp"
+#include "cast.hpp"
 
+using namespace unum::ukv::pyb;
 using namespace unum::ukv;
 using namespace unum;
 

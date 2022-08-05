@@ -74,7 +74,7 @@ class [[nodiscard]] expected_gt {
     }
 
     operator bool() const noexcept { return status_; }
-    object_at&& operator*() && noexcept { return std::move(object_); }
+    object_at operator*() && noexcept { return std::move(object_); }
     object_at const& operator*() const& noexcept { return object_; }
     object_at* operator->() noexcept { return &object_; }
     object_at const* operator->() const noexcept { return &object_; }
