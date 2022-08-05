@@ -30,19 +30,11 @@ def lower_triangular(col):
 
 def test_main_collection():
     db = ukv.DataBase()
-    lower_triangular(db)
-
-
-def test_named_collections():
-    db = ukv.DataBase()
-    col_sub = db['sub']
-    col_dub = db['dub']
-    lower_triangular(col_sub)
-    lower_triangular(col_dub)
+    lower_triangular(db.main)
 
 
 def test_main_collection_txn():
 
     with ukv.DataBase() as db:
         with ukv.Transaction(db) as txn:
-            lower_triangular(txn)
+            lower_triangular(txn.main)

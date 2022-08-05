@@ -84,7 +84,7 @@ strided_matrix_gt<scalar_at> py_strided_matrix(py_buffer_t const& buf) {
         static_cast<ukv_size_t>(buf.raw.strides[0]),
         static_cast<ukv_size_t>(buf.raw.strides[1]),
     };
-    printf("found strides: %i %i \n", buf.raw.strides[0], buf.raw.strides[1]);
+    printf("found strides: %i %i \n", (int)buf.raw.strides[0], (int)buf.raw.strides[1]);
     return result;
 }
 

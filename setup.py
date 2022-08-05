@@ -12,6 +12,8 @@ cmake_cache = cmake.read_cmake_cache('CMakeCache.txt')
 include_dirs = ['include/', 'python/', 'python/pybind/']
 if 'fmt_INCLUDE_DIR' in cmake_cache:
     include_dirs.append(cmake_cache['fmt_INCLUDE_DIR'])
+if 'nlohmann_json_SOURCE_DIR' in cmake_cache:
+    include_dirs.append(f'{cmake_cache["nlohmann_json_SOURCE_DIR"]}/include')
 
 compile_args = cmake_cache.pop('CMAKE_CXX_FLAGS', ['-std=c++17', '-O3'])
 
@@ -37,9 +39,9 @@ ext_modules = [
         'ukv/rocks',
         [
             'python/pybind.cpp',
-            'python/pybind_database.cpp',
-            'python/pybind_networkx.cpp',
-            'python/pybind_pandas.cpp',
+            'python/pybind/database.cpp',
+            'python/pybind/networkx.cpp',
+            'python/pybind/pandas.cpp',
         ],
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
@@ -54,9 +56,9 @@ ext_modules = [
         'ukv/level',
         [
             'python/pybind.cpp',
-            'python/pybind_database.cpp',
-            'python/pybind_networkx.cpp',
-            'python/pybind_pandas.cpp',
+            'python/pybind/database.cpp',
+            'python/pybind/networkx.cpp',
+            'python/pybind/pandas.cpp',
         ],
         include_dirs=include_dirs,
         library_dirs=['build/lib/'],
