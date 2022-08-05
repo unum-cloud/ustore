@@ -28,7 +28,7 @@ struct py_task_ctx_t;
 struct py_task_ctx_t {
     ukv_t db = nullptr;
     ukv_txn_t txn = nullptr;
-    ukv_collection_t* col = nullptr;
+    ukv_col_t* col = nullptr;
     ukv_arena_t* arena = nullptr;
     ukv_options_t options = ukv_options_default_k;
 };
@@ -81,14 +81,14 @@ struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
 };
 
 /**
- * @brief Wrapper for `ukv::collection_t`.
+ * @brief Wrapper for `ukv::col_t`.
  * We need to preserve the `name`, to upsert again, after removing it in `clear`.
  * We also keep the transaction pointer, to persist the context of operation.
  */
 struct py_col_t : public std::enable_shared_from_this<py_col_t> {
     std::shared_ptr<py_db_t> db_ptr;
     std::shared_ptr<py_txn_t> txn_ptr;
-    collection_t native;
+    col_t native;
     std::string name;
 
     py_col_t() {}
@@ -103,7 +103,7 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
         return result;
     }
 
-    inline collection_t replicate() { return *db_ptr->native.collection(name.c_str()); }
+    inline col_t replicate() { return *db_ptr->native.collection(name.c_str()); }
 };
 
 /**
@@ -127,10 +127,10 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
 struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
 
     std::shared_ptr<py_db_t> db_ptr;
-    collection_t index;
-    collection_t sources_attrs;
-    collection_t targets_attrs;
-    collection_t relations_attrs;
+    col_t index;
+    col_t sources_attrs;
+    col_t targets_attrs;
+    col_t relations_attrs;
 
     bool is_directed_ = false;
     bool is_multi_ = false;
@@ -154,7 +154,7 @@ struct py_col_name_t {
 };
 
 struct py_col_keys_range_t {
-    ukv_collection_t col = ukv_default_collection_k;
+    ukv_col_t col = ukv_col_default_k;
     ukv_key_t min = std::numeric_limits<ukv_key_t>::min();
     ukv_key_t max = std::numeric_limits<ukv_key_t>::max();
     std::size_t limit = std::numeric_limits<std::size_t>::max();

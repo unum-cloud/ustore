@@ -60,7 +60,6 @@ Currently, at Proof-of-Concept stage, we support only the essential functionalit
 * ¹: Support tensor lookups and media data.
 * ²: Missing, to be implemented.
 * ³: Supports tabular Arrow exports.
-⁴
 
 ## Assumptions and Limitations
 

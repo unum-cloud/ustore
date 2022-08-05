@@ -24,16 +24,16 @@ enum class byte_t : std::uint8_t {};
  */
 struct col_key_t {
 
-    ukv_collection_t collection = ukv_default_collection_k;
+    ukv_col_t collection = ukv_col_default_k;
     ukv_key_t key = 0;
 
     col_key_t() = default;
     col_key_t(col_key_t const&) = default;
     col_key_t& operator=(col_key_t const&) = default;
 
-    inline col_key_t(ukv_collection_t c, ukv_key_t k) noexcept : collection(c), key(k) {}
+    inline col_key_t(ukv_col_t c, ukv_key_t k) noexcept : collection(c), key(k) {}
     inline col_key_t(ukv_key_t k) noexcept : key(k) {}
-    inline col_key_t in(ukv_collection_t col) noexcept { return {col, key}; }
+    inline col_key_t in(ukv_col_t col) noexcept { return {col, key}; }
 
     inline bool operator==(col_key_t const& other) const noexcept {
         return (collection == other.collection) & (key == other.key);
@@ -48,19 +48,19 @@ struct col_key_t {
 };
 
 struct col_key_field_t {
-    ukv_collection_t collection = 0;
+    ukv_col_t collection = 0;
     ukv_key_t key = ukv_key_unknown_k;
     ukv_str_view_t field = nullptr;
 
     col_key_field_t() = default;
 
-    col_key_field_t(ukv_key_t key) noexcept : collection(ukv_default_collection_k), key(key), field(nullptr) {}
+    col_key_field_t(ukv_key_t key) noexcept : collection(ukv_col_default_k), key(key), field(nullptr) {}
 
-    col_key_field_t(ukv_collection_t col, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
+    col_key_field_t(ukv_col_t col, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
         : collection(col), key(key), field(field) {}
 
     col_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept
-        : collection(ukv_default_collection_k), key(key), field(field) {}
+        : collection(ukv_col_default_k), key(key), field(field) {}
 };
 
 template <typename... args_at>

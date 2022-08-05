@@ -230,7 +230,7 @@ inline bool entry_was_overwritten(generation_t entry_generation,
 }
 
 struct read_task_t {
-    ukv_collection_t col;
+    ukv_col_t col;
     ukv_key_t const& key;
 
     inline col_key_t location() const noexcept { return col_key_t {col, key}; }
@@ -241,21 +241,21 @@ struct read_task_t {
  * Is used to validate various combinations of arguments, strides, NULLs, etc.
  */
 struct read_tasks_soa_t {
-    strided_iterator_gt<ukv_collection_t const> cols;
+    strided_iterator_gt<ukv_col_t const> cols;
     strided_iterator_gt<ukv_key_t const> keys;
     ukv_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
 
     inline read_task_t operator[](ukv_size_t i) const noexcept {
-        ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
+        ukv_col_t col = cols && cols[i] ? cols[i] : ukv_col_default_k;
         ukv_key_t const& key = keys[i];
         return {col, key};
     }
 };
 
 struct scan_task_t {
-    ukv_collection_t col;
+    ukv_col_t col;
     ukv_key_t const& min_key;
     ukv_size_t length;
 
@@ -267,7 +267,7 @@ struct scan_task_t {
  * Is used to validate various combinations of arguments, strides, NULLs, etc.
  */
 struct scan_tasks_soa_t {
-    strided_iterator_gt<ukv_collection_t const> cols;
+    strided_iterator_gt<ukv_col_t const> cols;
     strided_iterator_gt<ukv_key_t const> min_keys;
     strided_iterator_gt<ukv_size_t const> lengths;
     ukv_size_t count = 0;
@@ -275,7 +275,7 @@ struct scan_tasks_soa_t {
     inline std::size_t size() const noexcept { return count; }
 
     inline scan_task_t operator[](ukv_size_t i) const noexcept {
-        ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
+        ukv_col_t col = cols && cols[i] ? cols[i] : ukv_col_default_k;
         ukv_key_t const& key = min_keys[i];
         ukv_size_t len = lengths[i];
         return {col, key, len};
@@ -283,7 +283,7 @@ struct scan_tasks_soa_t {
 };
 
 struct write_task_t {
-    ukv_collection_t col;
+    ukv_col_t col;
     ukv_key_t const& key;
     byte_t const* begin;
     ukv_val_len_t offset;
@@ -300,7 +300,7 @@ struct write_task_t {
  * Is used to validate various combinations of arguments, strides, NULLs, etc.
  */
 struct write_tasks_soa_t {
-    strided_iterator_gt<ukv_collection_t const> cols;
+    strided_iterator_gt<ukv_col_t const> cols;
     strided_iterator_gt<ukv_key_t const> keys;
     strided_iterator_gt<ukv_val_ptr_t const> vals;
     strided_iterator_gt<ukv_val_len_t const> offs;
@@ -310,7 +310,7 @@ struct write_tasks_soa_t {
     inline std::size_t size() const noexcept { return count; }
 
     inline write_task_t operator[](ukv_size_t i) const noexcept {
-        ukv_collection_t col = cols && cols[i] ? cols[i] : ukv_default_collection_k;
+        ukv_col_t col = cols && cols[i] ? cols[i] : ukv_col_default_k;
         ukv_key_t const& key = keys[i];
         byte_t const* begin;
         ukv_val_len_t off;

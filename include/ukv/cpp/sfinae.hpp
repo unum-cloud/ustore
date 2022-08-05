@@ -84,7 +84,7 @@ struct location_store_gt<at&> {
 template <typename locations_without_collections_at>
 struct locations_in_collection_gt {
     location_store_gt<locations_without_collections_at> without;
-    ukv_collection_t collection;
+    ukv_col_t collection;
 };
 
 template <>
@@ -129,7 +129,7 @@ struct keys_arg_extractor_gt {
             return strided.members(&element_t::key);
     }
 
-    strided_iterator_gt<ukv_collection_t const> cols(location_t const& arg) noexcept {
+    strided_iterator_gt<ukv_col_t const> cols(location_t const& arg) noexcept {
         if constexpr (element_stores_collection_k) {
             element_t const* begin = nullptr;
             if constexpr (is_one_k)
@@ -180,9 +180,7 @@ struct keys_arg_extractor_gt<keys_arg_t> {
 
     ukv_size_t count(keys_arg_t const& native) noexcept { return native.count; }
     strided_iterator_gt<ukv_key_t const> keys(keys_arg_t const& native) noexcept { return native.keys_begin; }
-    strided_iterator_gt<ukv_collection_t const> cols(keys_arg_t const& native) noexcept {
-        return native.collections_begin;
-    }
+    strided_iterator_gt<ukv_col_t const> cols(keys_arg_t const& native) noexcept { return native.collections_begin; }
     strided_iterator_gt<ukv_str_view_t const> fields(keys_arg_t const& native) noexcept { return native.fields_begin; }
 };
 
@@ -197,7 +195,7 @@ struct keys_arg_extractor_gt<locations_in_collection_gt<at>> {
     strided_iterator_gt<ukv_key_t const> keys(location_t const& arg) noexcept {
         return base_t {}.keys(arg.without.ref());
     }
-    strided_iterator_gt<ukv_collection_t const> cols(location_t const& arg) noexcept { return {&arg.collection}; }
+    strided_iterator_gt<ukv_col_t const> cols(location_t const& arg) noexcept { return {&arg.collection}; }
     strided_iterator_gt<ukv_str_view_t const> fields(location_t const& arg) noexcept {
         return base_t {}.fields(arg.without.ref());
     }

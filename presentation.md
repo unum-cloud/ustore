@@ -202,9 +202,9 @@ with ukv.Transaction(db) as txn:
 ```c
 typedef void* ukv_t;
 typedef void* ukv_txn_t;
-typedef void* ukv_collection_t;
 
-typedef uint64_t ukv_key_t;
+typedef uint64_t ukv_col_t;
+typedef int64_t ukv_key_t;
 typedef uint32_t ukv_val_len_t;
 typedef uint8_t* ukv_val_ptr_t;
 typedef uint64_t ukv_size_t;
@@ -264,7 +264,7 @@ void ukv_write( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,

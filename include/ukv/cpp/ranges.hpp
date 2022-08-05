@@ -342,7 +342,7 @@ using fields_view_t = strided_range_gt<ukv_str_view_t const>;
  */
 struct keys_arg_t {
     using value_type = col_key_field_t;
-    strided_iterator_gt<ukv_collection_t const> collections_begin;
+    strided_iterator_gt<ukv_col_t const> collections_begin;
     strided_iterator_gt<ukv_key_t const> keys_begin;
     strided_iterator_gt<ukv_str_view_t const> fields_begin;
     ukv_size_t count = 0;

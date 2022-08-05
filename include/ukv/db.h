@@ -49,12 +49,23 @@ extern "C" {
 
 typedef void* ukv_t;
 typedef void* ukv_txn_t;
-typedef void* ukv_collection_t;
+
+/**
+ * @brief Some unique integer identifier of a collection.
+ * A `ukv_t` database can have many of those, but never with
+ * repeating names or identifiers.
+ */
+typedef uint64_t ukv_col_t;
 
 typedef int64_t ukv_key_t;
 typedef uint32_t ukv_val_len_t;
 typedef uint8_t* ukv_val_ptr_t;
 typedef uint64_t ukv_size_t;
+
+/**
+ * @brief Owning error message string.
+ * If not null, must be deallocated via `ukv_error_free`.
+ */
 typedef char const* ukv_error_t;
 
 /**
@@ -102,7 +113,7 @@ typedef enum {
 
 } ukv_options_t;
 
-extern ukv_collection_t ukv_default_collection_k;
+extern ukv_col_t ukv_col_default_k;
 extern ukv_val_len_t ukv_val_len_missing_k;
 extern ukv_key_t ukv_key_unknown_k;
 
@@ -214,7 +225,7 @@ void ukv_write( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -280,7 +291,7 @@ void ukv_read( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -329,7 +340,7 @@ void ukv_scan( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* min_keys,
@@ -375,7 +386,7 @@ void ukv_size( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* min_keys,
@@ -398,7 +409,7 @@ void ukv_size( //
 /**
  * @brief Inserts a new named collection into DB or opens existing one.
  * This function may never be called, as the default nameless collection
- * always exists and can be addressed via `ukv_default_collection_k`.
+ * always exists and can be addressed via `ukv_col_default_k`.
  *
  * @param[in] db           Already open database instance, @see `ukv_open`.
  * @param[in] name         A NULL-terminated collection name.
@@ -410,7 +421,7 @@ void ukv_collection_open( //
     ukv_t const db,
     ukv_str_view_t name,
     ukv_str_view_t config,
-    ukv_collection_t* collection,
+    ukv_col_t* collection,
     ukv_error_t* error);
 
 /**
@@ -516,14 +527,6 @@ void ukv_arena_free(ukv_t const db, ukv_arena_t const arena);
  * Passing NULLs is safe.
  */
 void ukv_txn_free(ukv_t const db, ukv_txn_t const txn);
-
-/**
- * @brief Deallocates memory used by collection handle.
- * Collection would still persist on disk. To remove a
- * collection @see `ukv_collection_remove`.
- * Passing NULLs is safe.
- */
-void ukv_collection_free(ukv_t const db, ukv_collection_t const collection);
 
 /**
  * @brief Closes the DB and deallocates the state.

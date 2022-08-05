@@ -31,7 +31,7 @@
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-ukv_collection_t ukv_default_collection_k = NULL;
+ukv_col_t ukv_col_default_k = 0;
 ukv_val_len_t ukv_val_len_missing_k = std::numeric_limits<ukv_val_len_t>::max();
 ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 
@@ -44,7 +44,7 @@ using namespace unum;
 namespace fs = std::filesystem;
 
 struct stl_db_t;
-struct stl_collection_t;
+struct stl_col_t;
 struct stl_txn_t;
 
 struct stl_generationd_value_t {
@@ -53,7 +53,7 @@ struct stl_generationd_value_t {
     bool is_deleted {false};
 };
 
-struct stl_collection_t {
+struct stl_col_t {
     std::string name;
     /**
      * @brief Primary data-store.
@@ -73,7 +73,7 @@ struct stl_collection_t {
     }
 };
 
-using stl_collection_ptr_t = std::unique_ptr<stl_collection_t>;
+using stl_collection_ptr_t = std::unique_ptr<stl_col_t>;
 
 struct stl_txn_t {
     std::map<col_key_t, buffer_t> upserted;
@@ -86,7 +86,7 @@ struct stl_txn_t {
 
 struct stl_db_t {
     std::shared_mutex mutex;
-    stl_collection_t nameless;
+    stl_col_t nameless;
 
     /**
      * @brief A variable-size set of named cols.
@@ -106,11 +106,11 @@ struct stl_db_t {
     std::string persisted_path;
 };
 
-stl_collection_t& stl_collection(stl_db_t& db, ukv_collection_t col) {
-    return col == ukv_default_collection_k ? db.nameless : *reinterpret_cast<stl_collection_t*>(col);
+stl_col_t& stl_col(stl_db_t& db, ukv_col_t col) {
+    return col == ukv_col_default_k ? db.nameless : *reinterpret_cast<stl_col_t*>(col);
 }
 
-void save_to_disk(stl_collection_t const& col, std::string const& path, ukv_error_t* c_error) {
+void save_to_disk(stl_col_t const& col, std::string const& path, ukv_error_t* c_error) {
     // Using the classical C++ IO mechanisms is a bad tone in the modern world.
     // They are ugly and, more importantly, painly slow.
     // https://www.reddit.com/r/cpp_questions/comments/e2xia9/performance_comparison_of_various_ways_of_reading/
@@ -162,7 +162,7 @@ void save_to_disk(stl_collection_t const& col, std::string const& path, ukv_erro
     *c_error = handle.close().release_error();
 }
 
-void read_from_disk(stl_collection_t& col, std::string const& path, ukv_error_t* c_error) {
+void read_from_disk(stl_col_t& col, std::string const& path, ukv_error_t* c_error) {
     // Similar to serialization, we don't use STL here
     file_handle_t handle;
     if ((*c_error = handle.open(path.c_str(), "rb+").release_error()))
@@ -255,7 +255,7 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
 
         auto filename_w_ext = path.filename().native();
         auto filename = filename_w_ext.substr(0, filename_w_ext.size() - 8);
-        auto col = std::make_unique<stl_collection_t>();
+        auto col = std::make_unique<stl_col_t>();
         col->name = filename;
         read_from_disk(*col, path_str, c_error);
         db.named.emplace(std::string_view(col->name), std::move(col));
@@ -273,7 +273,7 @@ void write_head( //
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
 
         write_task_t task = tasks[i];
-        stl_collection_t& col = stl_collection(db, task.col);
+        stl_col_t& col = stl_col(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
 
         // We want to insert a new entry, but let's check if we
@@ -326,7 +326,7 @@ void measure_head( //
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.col);
+        stl_col_t const& col = stl_col(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
         lens[i] = key_iterator != col.pairs.end() && !key_iterator->second.is_deleted
                       ? static_cast<ukv_val_len_t>(key_iterator->second.buffer.size())
@@ -349,7 +349,7 @@ void read_head( //
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.col);
+        stl_col_t const& col = stl_col(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
         if (key_iterator != col.pairs.end())
             total_bytes += key_iterator->second.buffer.size();
@@ -368,7 +368,7 @@ void read_head( //
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.col);
+        stl_col_t const& col = stl_col(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
         if (key_iterator != col.pairs.end() && !key_iterator->second.is_deleted) {
             auto len = key_iterator->second.buffer.size();
@@ -413,7 +413,7 @@ void scan_head( //
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         scan_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.col);
+        stl_col_t const& col = stl_col(db, task.col);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
         ukv_size_t j = 0;
 
@@ -501,7 +501,7 @@ void measure_txn( //
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.col);
+        stl_col_t const& col = stl_col(db, task.col);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
@@ -552,7 +552,7 @@ void read_txn( //
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.col);
+        stl_col_t const& col = stl_col(db, task.col);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
@@ -586,7 +586,7 @@ void read_txn( //
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.col);
+        stl_col_t const& col = stl_col(db, task.col);
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
@@ -657,7 +657,7 @@ void scan_txn( //
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         scan_task_t task = tasks[i];
-        stl_collection_t const& col = stl_collection(db, task.col);
+        stl_col_t const& col = stl_col(db, task.col);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
         auto txn_iterator = txn.upserted.lower_bound(task.min_key);
         ukv_size_t j = 0;
@@ -670,7 +670,7 @@ void scan_txn( //
             }
 
             // Compare against the incoming inserted keys:
-            bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.collection == &col;
+            bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.collection == task.col;
             if (check_in_txn && txn_iterator->first.key <= key_iterator->first) {
                 found_keys[j] = txn_iterator->first.key;
                 if (export_lengths)
@@ -689,7 +689,7 @@ void scan_txn( //
         }
 
         // As in any `set_union`, don't forget the tail :)
-        while (j != task.length && txn_iterator != txn.upserted.end() && txn_iterator->first.collection == &col) {
+        while (j != task.length && txn_iterator != txn.upserted.end() && txn_iterator->first.collection == task.col) {
             found_keys[j] = txn_iterator->first.key;
             if (export_lengths)
                 found_lens[j] = static_cast<ukv_val_len_t>(txn_iterator->second.size());
@@ -738,7 +738,7 @@ void ukv_read( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -761,7 +761,7 @@ void ukv_read( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {cols, keys, c_tasks_count};
 
@@ -780,7 +780,7 @@ void ukv_write( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -804,7 +804,7 @@ void ukv_write( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
@@ -819,7 +819,7 @@ void ukv_scan( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_min_tasks_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_min_keys,
@@ -845,7 +845,7 @@ void ukv_scan( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
     scan_tasks_soa_t tasks {cols, keys, lens, c_min_tasks_count};
@@ -859,7 +859,7 @@ void ukv_size( //
     ukv_txn_t const c_txn,
     ukv_size_t const n,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_min_keys,
@@ -879,14 +879,14 @@ void ukv_size( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> min_keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
 
     std::shared_lock _ {db.mutex};
 
     for (ukv_size_t i = 0; i != n; ++i) {
-        stl_collection_t const& col = stl_collection(db, cols[i]);
+        stl_col_t const& col = stl_col(db, cols[i]);
         ukv_key_t const min_key = min_keys[i];
         ukv_key_t const max_key = max_keys[i];
         std::size_t deleted_count = 0;
@@ -937,7 +937,7 @@ void ukv_collection_open(
     ukv_str_view_t c_col_name,
     ukv_str_view_t,
     // Outputs:
-    ukv_collection_t* c_col,
+    ukv_col_t* c_col,
     ukv_error_t* c_error) {
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
@@ -945,7 +945,7 @@ void ukv_collection_open(
 
     auto name_len = std::strlen(c_col_name);
     if (!name_len) {
-        *c_col = ukv_default_collection_k;
+        *c_col = ukv_col_default_k;
         return;
     }
 
@@ -956,9 +956,9 @@ void ukv_collection_open(
     auto col_it = db.named.find(col_name);
     if (col_it == db.named.end()) {
         try {
-            auto new_col = std::make_unique<stl_collection_t>();
+            auto new_col = std::make_unique<stl_col_t>();
             new_col->name = col_name;
-            *c_col = new_col.get();
+            *c_col = reinterpret_cast<ukv_col_t>(new_col.get());
             db.named.emplace(new_col->name, std::move(new_col));
         }
         catch (...) {
@@ -966,7 +966,7 @@ void ukv_collection_open(
         }
     }
     else {
-        *c_col = col_it->second.get();
+        *c_col = reinterpret_cast<ukv_col_t>(col_it->second.get());
     }
 }
 
@@ -1101,7 +1101,7 @@ void ukv_txn_commit( //
 
     // 1. Check for refreshes among fetched keys
     for (auto const& [sub_key, sub_generation] : txn.requested) {
-        stl_collection_t& col = stl_collection(db, sub_key.collection);
+        stl_col_t& col = stl_col(db, sub_key.collection);
         auto key_iterator = col.pairs.find(sub_key.key);
         if (key_iterator == col.pairs.end())
             continue;
@@ -1112,7 +1112,7 @@ void ukv_txn_commit( //
 
     // 2. Check for collisions among incoming values
     for (auto const& [sub_key, value] : txn.upserted) {
-        stl_collection_t& col = stl_collection(db, sub_key.collection);
+        stl_col_t& col = stl_col(db, sub_key.collection);
         auto key_iterator = col.pairs.find(sub_key.key);
         if (key_iterator == col.pairs.end())
             continue;
@@ -1127,7 +1127,7 @@ void ukv_txn_commit( //
 
     // 3. Check for collisions among deleted values
     for (auto const& sub_key : txn.removed) {
-        stl_collection_t& col = stl_collection(db, sub_key.collection);
+        stl_col_t& col = stl_col(db, sub_key.collection);
         auto key_iterator = col.pairs.find(sub_key.key);
         if (key_iterator == col.pairs.end())
             continue;
@@ -1153,7 +1153,7 @@ void ukv_txn_commit( //
 
     // 5. Import the data, as no collisions were detected
     for (auto& sub_key_and_value : txn.upserted) {
-        stl_collection_t& col = stl_collection(db, sub_key_and_value.first.collection);
+        stl_col_t& col = stl_col(db, sub_key_and_value.first.collection);
         auto key_iterator = col.pairs.find(sub_key_and_value.first.key);
         // A key was deleted:
         // if (sub_key_and_value.second.empty()) {
@@ -1176,7 +1176,7 @@ void ukv_txn_commit( //
 
     // 6. Remove the requested entries
     for (auto const& sub_key : txn.removed) {
-        stl_collection_t& col = stl_collection(db, sub_key.collection);
+        stl_col_t& col = stl_col(db, sub_key.collection);
         auto key_iterator = col.pairs.find(sub_key.key);
         if (key_iterator == col.pairs.end())
             continue;
@@ -1216,7 +1216,7 @@ void ukv_free(ukv_t c_db) {
     delete &db;
 }
 
-void ukv_collection_free(ukv_t const, ukv_collection_t const) {
+void ukv_collection_free(ukv_t const, ukv_col_t const) {
     // In this in-memory freeing the col handle does nothing.
     // The DB destructor will automatically cleanup the memory.
 }
