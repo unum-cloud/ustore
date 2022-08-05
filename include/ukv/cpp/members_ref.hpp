@@ -27,9 +27,9 @@ class members_ref_gt;
  * The only impossible combination is assigning many values to one key.
  *
  * @tparam locations_at Type describing the address of a value in DBMS.
- * > (ukv_collection_t?, ukv_key_t, ukv_field_t?): Single KV-pair location.
- * > (ukv_collection_t*, ukv_key_t*, ukv_field_t*): Externally owned range of keys.
- * > (ukv_collection_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
+ * > (ukv_col_t?, ukv_key_t, ukv_field_t?): Single KV-pair location.
+ * > (ukv_col_t*, ukv_key_t*, ukv_field_t*): Externally owned range of keys.
+ * > (ukv_col_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
  *
  * @section Memory Management
  * Every "container" that overloads the @b [] operator has an internal "arena",

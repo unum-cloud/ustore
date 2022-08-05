@@ -23,11 +23,11 @@ namespace unum::ukv {
 class graph_ref_t {
     ukv_t db_ = nullptr;
     ukv_txn_t txn_ = nullptr;
-    ukv_collection_t col_ = nullptr;
+    ukv_col_t col_ = ukv_col_default_k;
     ukv_arena_t* arena_ = nullptr;
 
   public:
-    graph_ref_t(ukv_t db, ukv_txn_t txn, ukv_collection_t col, ukv_arena_t* arena) noexcept
+    graph_ref_t(ukv_t db, ukv_txn_t txn, ukv_col_t col, ukv_arena_t* arena) noexcept
         : db_(db), txn_(txn), col_(col), arena_(arena) {}
 
     graph_ref_t(graph_ref_t&&) = default;

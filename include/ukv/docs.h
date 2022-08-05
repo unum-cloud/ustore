@@ -134,7 +134,7 @@ void ukv_docs_write( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -186,7 +186,7 @@ void ukv_docs_read( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -220,7 +220,7 @@ void ukv_docs_gist( //
     ukv_txn_t const txn,
     ukv_size_t const docs_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -287,7 +287,7 @@ void ukv_docs_gather_scalars( //
     ukv_size_t const docs_count,
     ukv_size_t const fields_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -323,7 +323,7 @@ void ukv_docs_gather_strings( //
     ukv_size_t const docs_count,
     ukv_size_t const fields_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,

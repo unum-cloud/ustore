@@ -279,7 +279,7 @@ void respond_to_one(db_session_t& session,
     beast::string_view received_path = req.target();
 
     txn_t txn(session.db());
-    collection_t collection;
+    col_t collection;
     ukv_key_t key = 0;
     ukv_options_t options = ukv_options_default_k;
 
@@ -505,7 +505,7 @@ void respond_to_aos(db_session_t& session,
     beast::string_view received_path = req.target();
 
     txn_t txn(session.db());
-    std::vector<collection_t> collections(session.db());
+    std::vector<col_t> collections(session.db());
     ukv_options_t options = ukv_options_default_k;
     std::vector<ukv_key_t> keys;
 
@@ -525,7 +525,7 @@ void respond_to_aos(db_session_t& session,
         std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
 
         status_t status;
-        collection_t collection(session.db());
+        col_t collection(session.db());
         ukv_collection_open(session.db(), col_name_buffer, NULL, &collection.raw, error.member_ptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));

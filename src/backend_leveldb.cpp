@@ -20,7 +20,7 @@ using namespace unum;
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-ukv_collection_t ukv_default_collection_k = NULL;
+ukv_col_t ukv_col_default_k = 0;
 ukv_val_len_t ukv_val_len_missing_k = std::numeric_limits<ukv_val_len_t>::max();
 ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 
@@ -144,7 +144,7 @@ void ukv_write( //
     ukv_txn_t const,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -169,7 +169,7 @@ void ukv_write( //
     }
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
@@ -318,7 +318,7 @@ void ukv_read( //
     ukv_txn_t const,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const*,
+    ukv_col_t const*,
     ukv_size_t const,
 
     ukv_key_t const* c_keys,
@@ -362,7 +362,7 @@ void ukv_scan( //
     ukv_txn_t const,
     ukv_size_t const c_min_tasks_count,
 
-    ukv_collection_t const*,
+    ukv_col_t const*,
     ukv_size_t const,
 
     ukv_key_t const* c_min_keys,
@@ -443,7 +443,7 @@ void ukv_size( //
     ukv_txn_t const,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const*,
+    ukv_col_t const*,
     ukv_size_t const,
 
     ukv_key_t const* c_min_keys,
@@ -494,7 +494,7 @@ void ukv_collection_open( //
     ukv_t const,
     ukv_str_view_t c_col_name,
     ukv_str_view_t,
-    ukv_collection_t*,
+    ukv_col_t*,
     ukv_error_t* c_error) {
     if (c_col_name && std::strlen(c_col_name))
         *c_error = "Collections not supported by LevelDB!";
@@ -558,7 +558,7 @@ void ukv_arena_free(ukv_t const, ukv_arena_t c_arena) {
 void ukv_txn_free(ukv_t const, ukv_txn_t) {
 }
 
-void ukv_collection_free(ukv_t const, ukv_collection_t const) {
+void ukv_collection_free(ukv_t const, ukv_col_t const) {
 }
 
 void ukv_free(ukv_t c_db) {

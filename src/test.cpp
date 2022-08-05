@@ -31,7 +31,7 @@ TEST(db, intro) {
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
-    collection_t main = *db.collection();
+    col_t main = *db.collection();
 
     // Single-element access
     main[42] = "purpose of life";
@@ -54,7 +54,7 @@ TEST(db, intro) {
     //     (void)value;
 
     // Accessing named collections
-    collection_t prefixes = *db.collection("prefixes");
+    col_t prefixes = *db.collection("prefixes");
     prefixes.at(42) = "purpose";
     db["articles"]->at(42) = "of";
     db["suffixes"]->at(42) = "life";
@@ -164,7 +164,7 @@ TEST(db, basic) {
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
-    collection_t col = *db.collection();
+    col_t col = *db.collection();
 
     std::vector<ukv_key_t> keys {34, 35, 36};
     ukv_val_len_t val_len = sizeof(std::uint64_t);
@@ -207,8 +207,8 @@ TEST(db, named) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    collection_t col1 = *(db["col1"]);
-    collection_t col2 = *(db["col2"]);
+    col_t col1 = *(db["col1"]);
+    col_t col2 = *(db["col2"]);
 
     ukv_val_len_t val_len = sizeof(std::uint64_t);
     std::vector<ukv_key_t> keys {44, 45, 46};
@@ -273,7 +273,7 @@ TEST(db, docs) {
     EXPECT_TRUE(db.open(""));
 
     // JSON
-    collection_t col = *db.collection("docs", ukv_format_json_k);
+    col_t col = *db.collection("docs", ukv_format_json_k);
     auto json = R"( {"person": "Davit", "age": 24} )"_json.dump();
     col[1] = json.c_str();
     M_EXPECT_EQ_JSON(col[1].value()->c_str(), json.c_str());
@@ -340,7 +340,7 @@ TEST(db, txn) {
     round_trip(txn_ref, values);
 
     EXPECT_TRUE(db.collection());
-    collection_t col = *db.collection();
+    col_t col = *db.collection();
     auto col_ref = col[keys];
 
     // Check for missing values before commit
@@ -356,7 +356,7 @@ TEST(db, txn) {
 
     // Transaction with named collection
     EXPECT_TRUE(db.collection("named_col"));
-    collection_t named_col = *db.collection("named_col");
+    col_t named_col = *db.collection("named_col");
     std::vector<col_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
     auto txn_named_col_ref = txn[sub_keys];
     round_trip(txn_named_col_ref, values);
@@ -377,7 +377,7 @@ TEST(db, txn) {
 TEST(db, nested_docs) {
     db_t db;
     _ = db.open();
-    collection_t col = *db.collection();
+    col_t col = *db.collection();
 }
 
 TEST(db, net) {
@@ -385,7 +385,7 @@ TEST(db, net) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    collection_t main = *db.collection();
+    col_t main = *db.collection();
     graph_ref_t net = main.as_graph();
 
     // triangle
@@ -482,7 +482,7 @@ TEST(db, net_batch) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    collection_t main = *db.collection();
+    col_t main = *db.collection();
     graph_ref_t net = main.as_graph();
 
     std::vector<edge_t> triangle {

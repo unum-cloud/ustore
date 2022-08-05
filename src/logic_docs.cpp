@@ -325,7 +325,7 @@ read_tasks_soa_t read_docs(ukv_t const c_db,
 
     auto cnt = static_cast<ukv_size_t>(arena.updated_keys.size());
     auto sub_keys_range = strided_range(arena.updated_keys).immutable();
-    strided_range_gt<ukv_collection_t const> cols = sub_keys_range.members(&col_key_t::collection);
+    strided_range_gt<ukv_col_t const> cols = sub_keys_range.members(&col_key_t::collection);
     strided_range_gt<ukv_key_t const> keys = sub_keys_range.members(&col_key_t::key);
     return {cols.begin(), keys.begin(), cnt};
 }
@@ -511,7 +511,7 @@ void ukv_docs_write( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -564,7 +564,7 @@ void ukv_docs_write( //
     if (*c_error)
         return;
 
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
@@ -583,7 +583,7 @@ void ukv_docs_read( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -626,7 +626,7 @@ void ukv_docs_read( //
     if (*c_error)
         return;
 
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
 
     // Now, we need to parse all the entries to later export them into a target format.
@@ -657,7 +657,7 @@ void ukv_docs_gist( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_docs_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -692,7 +692,7 @@ void ukv_docs_gist( //
     if (*c_error)
         return;
 
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
 
     taped_values_view_t binary_docs {binary_docs_lens, binary_docs_begin, c_docs_count};
@@ -742,7 +742,7 @@ void ukv_docs_gather_scalars( //
     ukv_size_t const c_docs_count,
     ukv_size_t const c_fields_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -795,7 +795,7 @@ void ukv_docs_gather_scalars( //
     if (*c_error)
         return;
 
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
 
@@ -1056,7 +1056,7 @@ void ukv_docs_gather_strings( //
     ukv_size_t const c_docs_count,
     ukv_size_t const c_fields_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -1095,7 +1095,7 @@ void ukv_docs_gather_strings( //
     if (*c_error)
         return;
 
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
 

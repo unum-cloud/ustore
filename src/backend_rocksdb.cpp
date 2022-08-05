@@ -37,7 +37,7 @@ using rocks_col_t = rocksdb::ColumnFamilyHandle;
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-ukv_collection_t ukv_default_collection_k = NULL;
+ukv_col_t ukv_col_default_k = 0;
 ukv_val_len_t ukv_val_len_missing_k = std::numeric_limits<ukv_val_len_t>::max();
 ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 
@@ -98,8 +98,8 @@ bool export_error(rocks_status_t const& status, ukv_error_t* c_error) {
     return true;
 }
 
-rocks_col_t* rocks_collection(rocks_db_t& db, ukv_collection_t col) {
-    return col == ukv_default_collection_k ? db.native->DefaultColumnFamily() : reinterpret_cast<rocks_col_t*>(col);
+rocks_col_t* rocks_collection(rocks_db_t& db, ukv_col_t col) {
+    return col == ukv_col_default_k ? db.native->DefaultColumnFamily() : reinterpret_cast<rocks_col_t*>(col);
 }
 
 /*********************************************************/
@@ -203,7 +203,7 @@ void ukv_write( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -227,7 +227,7 @@ void ukv_write( //
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
@@ -405,7 +405,7 @@ void ukv_read( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -429,7 +429,7 @@ void ukv_read( //
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols_stride {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols_stride {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys_stride {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {cols_stride, keys_stride, c_tasks_count};
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
@@ -458,7 +458,7 @@ void ukv_scan( //
     ukv_txn_t const c_txn,
     ukv_size_t const c_min_tasks_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_min_keys,
@@ -486,7 +486,7 @@ void ukv_scan( //
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_size_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
     scan_tasks_soa_t tasks {cols, keys, lengths, c_min_tasks_count};
@@ -548,7 +548,7 @@ void ukv_size( //
     ukv_txn_t const,
     ukv_size_t const n,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_min_keys,
@@ -568,7 +568,7 @@ void ukv_size( //
         return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> min_keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
     rocksdb::SizeApproximationOptions options;
@@ -605,7 +605,7 @@ void ukv_collection_open( //
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
     ukv_str_view_t,
-    ukv_collection_t* c_col,
+    ukv_col_t* c_col,
     ukv_error_t* c_error) {
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -758,7 +758,7 @@ void ukv_txn_free(ukv_t const c_db, ukv_txn_t c_txn) {
     delete txn;
 }
 
-void ukv_collection_free(ukv_t const, ukv_collection_t const) {
+void ukv_collection_free(ukv_t const, ukv_col_t const) {
 }
 
 void ukv_free(ukv_t c_db) {
