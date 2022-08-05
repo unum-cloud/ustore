@@ -13,7 +13,7 @@
 #include "ukv/ukv.h"
 #include "ukv/cpp/members_ref.hpp"
 #include "ukv/cpp/graph_ref.hpp"
-#include "ukv/cpp/keys_stream.hpp"
+#include "ukv/cpp/members_range.hpp"
 
 namespace unum::ukv {
 
@@ -84,18 +84,22 @@ class collection_t {
         return *this;
     }
 
-    inline keys_range_t keys(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-                             ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
-        return {db_, txn_, col_, min_key, max_key};
-    }
-
-    inline keys_vals_range_t items(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+    inline members_range_t members(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
                                    ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
         return {db_, txn_, col_, min_key, max_key};
     }
+    inline keys_range_t keys(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+                             ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+        return {members(min_key, max_key)};
+    }
+
+    inline pairs_range_t items(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+                               ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+        return {members_range_t {db_, txn_, col_, min_key, max_key}};
+    }
 
     inline expected_gt<size_range_t> size_range() const noexcept {
-        auto maybe = keys().find_size();
+        auto maybe = members().size_estimates();
         return {maybe.release_status(), std::move(maybe->cardinality)};
     }
 

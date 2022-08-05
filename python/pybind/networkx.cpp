@@ -255,7 +255,7 @@ void ukv::wrap_networkx(py::module& m) {
         "Returns the number of attributed edges.");
     g.def(
         "number_of_edges",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { return g.ref().edges(v1, v2).throw_or_ref().size(); },
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { return g.ref().edges(v1, v2).throw_or_release().size(); },
         "Returns the number of edges between two nodes.");
 
     // Reporting nodes edges and neighbors
@@ -282,7 +282,7 @@ void ukv::wrap_networkx(py::module& m) {
         "Returns True if the graph contains the node n.");
     g.def(
         "__contains__",
-        [](py_graph_t& g, ukv_key_t v) { return g.ref().contains(v).throw_or_ref(); },
+        [](py_graph_t& g, ukv_key_t v) { return g.ref().contains(v).throw_or_release(); },
         py::arg("n"),
         "Returns True if the graph contains the node n.");
 
@@ -292,13 +292,13 @@ void ukv::wrap_networkx(py::module& m) {
 
     g.def(
         "has_edge",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { return g.ref().edges(v1, v2).throw_or_ref().size() != 0; },
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { return g.ref().edges(v1, v2).throw_or_release().size() != 0; },
         py::arg("u"),
         py::arg("v"));
     g.def(
         "has_edge",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t e) {
-            auto ids = g.ref().edges(v1, v2).throw_or_ref().edge_ids;
+            auto ids = g.ref().edges(v1, v2).throw_or_release().edge_ids;
             return std::find(ids.begin(), ids.end(), e) != ids.end();
         },
         py::arg("u"),
@@ -312,17 +312,17 @@ void ukv::wrap_networkx(py::module& m) {
 
     g.def(
         "neighbors",
-        [](py_graph_t& g, ukv_key_t n) { return wrap_into_buffer(g, g.ref().neighbors(n).throw_or_ref()); },
+        [](py_graph_t& g, ukv_key_t n) { return wrap_into_buffer(g, g.ref().neighbors(n).throw_or_release()); },
         py::arg("n"),
         "Returns an iterable of incoming and outgoing nodes of n. Potentially with duplicates.");
     g.def(
         "successors",
-        [](py_graph_t& g, ukv_key_t n) { return wrap_into_buffer(g, g.ref().successors(n).throw_or_ref()); },
+        [](py_graph_t& g, ukv_key_t n) { return wrap_into_buffer(g, g.ref().successors(n).throw_or_release()); },
         py::arg("n"),
         "Returns an iterable of successor nodes of n.");
     g.def(
         "predecessors",
-        [](py_graph_t& g, ukv_key_t n) { return wrap_into_buffer(g, g.ref().predecessors(n).throw_or_ref()); },
+        [](py_graph_t& g, ukv_key_t n) { return wrap_into_buffer(g, g.ref().predecessors(n).throw_or_release()); },
         py::arg("n"),
         "Returns an iterable of follower nodes of n.");
     g.def(
