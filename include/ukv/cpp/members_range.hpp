@@ -13,8 +13,8 @@ namespace unum::ukv {
 
 class keys_stream_t;
 class pairs_stream_t;
-class members_range_t;
-class pairs_range_t;
+struct members_range_t;
+struct pairs_range_t;
 struct size_range_t;
 struct size_estimates_t;
 

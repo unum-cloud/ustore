@@ -13,12 +13,10 @@
 
 namespace unum::ukv {
 
-using key_t = ukv_key_t;
 using val_len_t = ukv_val_len_t;
 using tape_ptr_t = ukv_val_ptr_t;
-using size_t = ukv_size_t;
 
-enum class byte_t : uint8_t {};
+enum class byte_t : std::uint8_t {};
 
 /**
  * @brief An OOP-friendly location representation for objects in the DB.

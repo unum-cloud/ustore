@@ -48,7 +48,7 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     py_db_t(db_t&& n, std::string const& c) : native(std::move(n)), arena(native), config(c) {}
     py_db_t(py_db_t const&) = delete;
     py_db_t(py_db_t&& other) noexcept
-        : native(std::move(other.native)), arena(std::move(other.arena)), config(std::move(config)) {}
+        : native(std::move(other.native)), arena(std::move(other.arena)), config(std::move(other.config)) {}
 
     operator py_task_ctx_t() & noexcept {
         return {native, nullptr, nullptr, arena.member_ptr(), ukv_options_default_k};
