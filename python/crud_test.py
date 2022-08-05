@@ -118,6 +118,8 @@ def iterate(col):
     col[4] = b'aaaa'
     col[5] = b'aaaaa'
     col[6] = b'aaaaaa'
+
+    # Iterate keys
     iterated_keys = []
     for key in col.keys:
         iterated_keys.append(key)
@@ -131,9 +133,27 @@ def iterate(col):
         iterated_keys.append(key)
     assert iterated_keys == [3, 4, 5, 6]
     iterated_keys.clear()
-    for key in col.keys.to(4):
+    for key in col.keys.until(4):
         iterated_keys.append(key)
     assert iterated_keys == [1, 2, 3, 4]
+
+    # Iterate items
+    iterated_items = []
+    for item in col.items:
+        iterated_items.append(item)
+
+    assert iterated_items == [
+        (1, b'a'), (2, b'aa'), (3, b'aaa'), (4, b'aaaa'), (5, b'aaaaa'), (6, b'aaaaaa')]
+    iterated_items.clear()
+    for item in col.items.since(3):
+        iterated_items.append(item)
+    assert iterated_items == [
+        (3, b'aaa'), (4, b'aaaa'), (5, b'aaaaa'), (6, b'aaaaaa')]
+    iterated_items.clear()
+    for item in col.items.until(4):
+        iterated_items.append(item)
+    assert iterated_items == [
+        (1, b'a'), (2, b'aa'), (3, b'aaa'), (4, b'aaaa')]
 
 
 def test_main_collection():
