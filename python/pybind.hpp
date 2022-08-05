@@ -42,42 +42,24 @@ struct py_task_ctx_t {
  */
 struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     db_t native;
-    arena_t arena;
     std::string config;
 
-    py_db_t(db_t&& n, std::string const& c) : native(std::move(n)), arena(native), config(c) {}
+    py_db_t(db_t&& n, std::string const& c) : native(std::move(n)), config(c) {}
+    py_db_t(py_db_t&& other) noexcept : native(std::move(other.native)), config(std::move(other.config)) {}
     py_db_t(py_db_t const&) = delete;
-    py_db_t(py_db_t&& other) noexcept
-        : native(std::move(other.native)), arena(std::move(other.arena)), config(std::move(other.config)) {}
-
-    operator py_task_ctx_t() & noexcept {
-        return {native, nullptr, nullptr, arena.member_ptr(), ukv_options_default_k};
-    }
 };
 
 /**
  * @brief Only adds reference counting to the native C++ interface.
  */
 struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
-    std::shared_ptr<py_db_t> db_ptr;
     txn_t native;
-    arena_t arena;
     bool track_reads = false;
     bool flush_writes = false;
 
-    py_txn_t(std::shared_ptr<py_db_t>&& d, txn_t&& t) noexcept
-        : db_ptr(std::move(d)), native(std::move(t)), arena(db_ptr->native) {}
+    py_txn_t(std::shared_ptr<py_db_t>&& d, txn_t&& t) noexcept : db_ptr(std::move(d)), native(std::move(t)) {}
+    py_txn_t(py_txn_t&& other) noexcept : db_ptr(std::move(other.db_ptr)), native(std::move(other.native)) {}
     py_txn_t(py_txn_t const&) = delete;
-    py_txn_t(py_txn_t&& other) noexcept
-        : db_ptr(std::move(other.db_ptr)), native(std::move(other.native)), arena(std::move(other.arena)) {}
-
-    operator py_task_ctx_t() & noexcept {
-        auto options = static_cast<ukv_options_t>( //
-            ukv_options_default_k |                //
-            (track_reads ? ukv_option_read_track_k : ukv_options_default_k) |
-            (flush_writes ? ukv_option_write_flush_k : ukv_options_default_k));
-        return {db_ptr->native, native, nullptr, arena.member_ptr(), options};
-    }
 };
 
 /**
@@ -85,10 +67,11 @@ struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
  * We need to preserve the `name`, to upsert again, after removing it in `clear`.
  * We also keep the transaction pointer, to persist the context of operation.
  */
-struct py_col_t : public std::enable_shared_from_this<py_col_t> {
+struct py_col_t {
+    col_t native;
+
     std::shared_ptr<py_db_t> db_ptr;
     std::shared_ptr<py_txn_t> txn_ptr;
-    col_t native;
     std::string name;
 
     py_col_t() {}
@@ -98,16 +81,25 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
           name(std::move(other.name)) {}
 
     operator py_task_ctx_t() & noexcept {
-        py_task_ctx_t result = txn_ptr ? py_task_ctx_t(*txn_ptr) : py_task_ctx_t(*db_ptr);
+        py_task_ctx_t result;
+        if (txn_ptr) {
+            result.txn = txn_ptr->native;
+            result.options = static_cast<ukv_options_t>( //
+                ukv_options_default_k |                  //
+                (txn_ptr->track_reads ? ukv_option_read_track_k : ukv_options_default_k) |
+                (txn_ptr->flush_writes ? ukv_option_write_flush_k : ukv_options_default_k));
+        }
+        result.db = native.db();
         result.col = native.member_ptr();
+        result.arena = native.member_arena();
         return result;
     }
-
-    inline col_t replicate() { return *db_ptr->native.collection(name.c_str()); }
 };
 
 /**
  * @brief A generalization of the graph supported by NetworkX.
+ * Unlike C++ `graph_ref_t` this may include as many as 4 collections
+ * seen as one heavily attributed relational index.
  *
  * Sources and targets can match.
  * Relations attrs can be banned all together.
@@ -124,7 +116,7 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
  * > sources_name: "people.docs"
  * > targets_name: "movies.docs"
  */
-struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
+struct py_graph_t {
 
     std::shared_ptr<py_db_t> db_ptr;
     col_t index;
@@ -154,7 +146,7 @@ struct py_col_name_t {
 };
 
 struct py_col_keys_range_t {
-    ukv_col_t col = ukv_col_default_k;
+    ukv_col_t col = ukv_col_main_k;
     ukv_key_t min = std::numeric_limits<ukv_key_t>::min();
     ukv_key_t max = std::numeric_limits<ukv_key_t>::max();
     std::size_t limit = std::numeric_limits<std::size_t>::max();

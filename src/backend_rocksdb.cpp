@@ -37,7 +37,7 @@ using rocks_col_t = rocksdb::ColumnFamilyHandle;
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-ukv_col_t ukv_col_default_k = 0;
+ukv_col_t ukv_col_main_k = 0;
 ukv_val_len_t ukv_val_len_missing_k = std::numeric_limits<ukv_val_len_t>::max();
 ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 
@@ -99,7 +99,7 @@ bool export_error(rocks_status_t const& status, ukv_error_t* c_error) {
 }
 
 rocks_col_t* rocks_collection(rocks_db_t& db, ukv_col_t col) {
-    return col == ukv_col_default_k ? db.native->DefaultColumnFamily() : reinterpret_cast<rocks_col_t*>(col);
+    return col == ukv_col_main_k ? db.native->DefaultColumnFamily() : reinterpret_cast<rocks_col_t*>(col);
 }
 
 /*********************************************************/

@@ -6,7 +6,7 @@ using namespace unum::ukv::pyb;
 using namespace unum::ukv;
 using namespace unum;
 
-struct degree_view_t : public std::enable_shared_from_this<degree_view_t> {
+struct degree_view_t {
     std::shared_ptr<py_graph_t> net_ptr;
     ukv_vertex_role_t roles = ukv_vertex_role_any_k;
 };
@@ -136,7 +136,7 @@ void adjacency_list_to_edges(PyObject* source_ids,
 
 void ukv::wrap_networkx(py::module& m) {
 
-    auto degs = py::class_<degree_view_t, std::shared_ptr<degree_view_t>>(m, "DegreeView", py::module_local());
+    auto degs = py::class_<degree_view_t>(m, "DegreeView", py::module_local());
     degs.def("__getitem__", [](degree_view_t& degs, ukv_key_t v) {
         py_graph_t& g = *degs.net_ptr;
         auto maybe = g.ref().degree(v, degs.roles);
@@ -153,7 +153,7 @@ void ukv::wrap_networkx(py::module& m) {
         return wrap_into_buffer<ukv_vertex_degree_t const>(g, {maybe->begin(), maybe->end()});
     });
 
-    auto g = py::class_<py_graph_t, std::shared_ptr<py_graph_t>>(m, "Network", py::module_local());
+    auto g = py::class_<py_graph_t>(m, "Network", py::module_local());
     g.def( //
         py::init([](std::shared_ptr<py_db_t> py_db,
                     std::optional<std::string> index,

@@ -113,7 +113,7 @@ typedef enum {
 
 } ukv_options_t;
 
-extern ukv_col_t ukv_col_default_k;
+extern ukv_col_t ukv_col_main_k;
 extern ukv_val_len_t ukv_val_len_missing_k;
 extern ukv_key_t ukv_key_unknown_k;
 
@@ -409,7 +409,7 @@ void ukv_size( //
 /**
  * @brief Inserts a new named collection into DB or opens existing one.
  * This function may never be called, as the default nameless collection
- * always exists and can be addressed via `ukv_col_default_k`.
+ * always exists and can be addressed via `ukv_col_main_k`.
  *
  * @param[in] db           Already open database instance, @see `ukv_open`.
  * @param[in] name         A NULL-terminated collection name.

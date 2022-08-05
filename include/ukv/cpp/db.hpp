@@ -44,7 +44,7 @@ namespace unum::ukv {
  */
 class col_t {
     ukv_t db_ = nullptr;
-    ukv_col_t col_ = ukv_col_default_k;
+    ukv_col_t col_ = ukv_col_main_k;
     ukv_txn_t txn_ = nullptr;
     arena_t arena_;
     ukv_format_t format_ = ukv_format_binary_k;
@@ -52,13 +52,13 @@ class col_t {
   public:
     inline col_t() noexcept : arena_(nullptr) {}
     inline col_t(ukv_t db_ptr,
-                 ukv_col_t col_ptr = ukv_col_default_k,
+                 ukv_col_t col_ptr = ukv_col_main_k,
                  ukv_txn_t txn = nullptr,
                  ukv_format_t format = ukv_format_binary_k) noexcept
         : db_(db_ptr), col_(col_ptr), txn_(txn), arena_(db_), format_(format) {}
 
     inline col_t(col_t&& other) noexcept
-        : db_(other.db_), col_(std::exchange(other.col_, ukv_col_default_k)), txn_(std::exchange(other.txn_, nullptr)),
+        : db_(other.db_), col_(std::exchange(other.col_, ukv_col_main_k)), txn_(std::exchange(other.txn_, nullptr)),
           arena_(std::exchange(other.arena_, {nullptr})), format_(std::exchange(other.format_, ukv_format_binary_k)) {}
 
     inline col_t(col_t const& other) noexcept
@@ -272,7 +272,7 @@ class txn_t : public std::enable_shared_from_this<txn_t> {
      */
     expected_gt<col_t> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
-        ukv_col_t col = ukv_col_default_k;
+        ukv_col_t col = ukv_col_main_k;
         ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
@@ -359,7 +359,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
     expected_gt<col_t> collection(ukv_str_view_t name = "", ukv_format_t format = ukv_format_binary_k) noexcept {
         status_t status;
-        ukv_col_t col = ukv_col_default_k;
+        ukv_col_t col = ukv_col_main_k;
         ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
