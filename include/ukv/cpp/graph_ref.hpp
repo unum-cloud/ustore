@@ -23,7 +23,7 @@ namespace unum::ukv {
 class graph_ref_t {
     ukv_t db_ = nullptr;
     ukv_txn_t txn_ = nullptr;
-    ukv_col_t col_ = ukv_col_default_k;
+    ukv_col_t col_ = ukv_col_main_k;
     ukv_arena_t* arena_ = nullptr;
 
   public:

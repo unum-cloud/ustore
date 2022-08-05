@@ -20,7 +20,7 @@ using namespace unum;
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-ukv_col_t ukv_col_default_k = 0;
+ukv_col_t ukv_col_main_k = 0;
 ukv_val_len_t ukv_val_len_missing_k = std::numeric_limits<ukv_val_len_t>::max();
 ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 

@@ -248,7 +248,7 @@ struct read_tasks_soa_t {
     inline std::size_t size() const noexcept { return count; }
 
     inline read_task_t operator[](ukv_size_t i) const noexcept {
-        ukv_col_t col = cols && cols[i] ? cols[i] : ukv_col_default_k;
+        ukv_col_t col = cols ? cols[i] : ukv_col_main_k;
         ukv_key_t const& key = keys[i];
         return {col, key};
     }
@@ -275,7 +275,7 @@ struct scan_tasks_soa_t {
     inline std::size_t size() const noexcept { return count; }
 
     inline scan_task_t operator[](ukv_size_t i) const noexcept {
-        ukv_col_t col = cols && cols[i] ? cols[i] : ukv_col_default_k;
+        ukv_col_t col = cols ? cols[i] : ukv_col_main_k;
         ukv_key_t const& key = min_keys[i];
         ukv_size_t len = lengths[i];
         return {col, key, len};
@@ -310,7 +310,7 @@ struct write_tasks_soa_t {
     inline std::size_t size() const noexcept { return count; }
 
     inline write_task_t operator[](ukv_size_t i) const noexcept {
-        ukv_col_t col = cols && cols[i] ? cols[i] : ukv_col_default_k;
+        ukv_col_t col = cols ? cols[i] : ukv_col_main_k;
         ukv_key_t const& key = keys[i];
         byte_t const* begin;
         ukv_val_len_t off;

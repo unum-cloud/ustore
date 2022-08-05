@@ -24,7 +24,7 @@ enum class byte_t : std::uint8_t {};
  */
 struct col_key_t {
 
-    ukv_col_t collection = ukv_col_default_k;
+    ukv_col_t collection = ukv_col_main_k;
     ukv_key_t key = 0;
 
     col_key_t() = default;
@@ -54,13 +54,13 @@ struct col_key_field_t {
 
     col_key_field_t() = default;
 
-    col_key_field_t(ukv_key_t key) noexcept : collection(ukv_col_default_k), key(key), field(nullptr) {}
+    col_key_field_t(ukv_key_t key) noexcept : collection(ukv_col_main_k), key(key), field(nullptr) {}
 
     col_key_field_t(ukv_col_t col, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
         : collection(col), key(key), field(field) {}
 
     col_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept
-        : collection(ukv_col_default_k), key(key), field(field) {}
+        : collection(ukv_col_main_k), key(key), field(field) {}
 };
 
 template <typename... args_at>

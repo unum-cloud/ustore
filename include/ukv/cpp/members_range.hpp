@@ -35,7 +35,7 @@ struct size_estimates_t;
 class keys_stream_t {
 
     ukv_t db_ = nullptr;
-    ukv_col_t col_ = ukv_col_default_k;
+    ukv_col_t col_ = ukv_col_main_k;
     ukv_txn_t txn_ = nullptr;
 
     arena_t arena_;
@@ -90,7 +90,7 @@ class keys_stream_t {
     static constexpr std::size_t default_read_ahead_k = 256;
 
     keys_stream_t(ukv_t db,
-                  ukv_col_t col = ukv_col_default_k,
+                  ukv_col_t col = ukv_col_main_k,
                   std::size_t read_ahead = keys_stream_t::default_read_ahead_k,
                   ukv_txn_t txn = nullptr)
         : db_(db), col_(col), txn_(txn), arena_(db), read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
@@ -171,7 +171,7 @@ class keys_stream_t {
 class pairs_stream_t {
 
     ukv_t db_ = nullptr;
-    ukv_col_t col_ = ukv_col_default_k;
+    ukv_col_t col_ = ukv_col_main_k;
     ukv_txn_t txn_ = nullptr;
 
     arena_t arena_scan_;
@@ -244,7 +244,7 @@ class pairs_stream_t {
     static constexpr std::size_t default_read_ahead_k = 256;
 
     pairs_stream_t(ukv_t db,
-                   ukv_col_t col = ukv_col_default_k,
+                   ukv_col_t col = ukv_col_main_k,
                    std::size_t read_ahead = pairs_stream_t::default_read_ahead_k,
                    ukv_txn_t txn = nullptr)
         : db_(db), col_(col), txn_(txn), arena_scan_(db_), arena_read_(db_),
@@ -381,7 +381,7 @@ class members_range_t {
   public:
     members_range_t(ukv_t db,
                     ukv_txn_t txn = nullptr,
-                    ukv_col_t col = ukv_col_default_k,
+                    ukv_col_t col = ukv_col_main_k,
                     ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
                     ukv_key_t max_key = ukv_key_unknown_k) noexcept
         : db_(db), txn_(txn), col_(col), min_key_(min_key), max_key_(max_key) {}

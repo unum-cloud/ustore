@@ -31,7 +31,7 @@
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-ukv_col_t ukv_col_default_k = 0;
+ukv_col_t ukv_col_main_k = 0;
 ukv_val_len_t ukv_val_len_missing_k = std::numeric_limits<ukv_val_len_t>::max();
 ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 
@@ -86,7 +86,7 @@ struct stl_txn_t {
 
 struct stl_db_t {
     std::shared_mutex mutex;
-    stl_col_t nameless;
+    stl_col_t main;
 
     /**
      * @brief A variable-size set of named cols.
@@ -107,7 +107,7 @@ struct stl_db_t {
 };
 
 stl_col_t& stl_col(stl_db_t& db, ukv_col_t col) {
-    return col == ukv_col_default_k ? db.nameless : *reinterpret_cast<stl_col_t*>(col);
+    return col == ukv_col_main_k ? db.main : *reinterpret_cast<stl_col_t*>(col);
 }
 
 void save_to_disk(stl_col_t const& col, std::string const& path, ukv_error_t* c_error) {
@@ -219,7 +219,7 @@ void save_to_disk(stl_db_t const& db, ukv_error_t* c_error) {
         return;
     }
 
-    save_to_disk(db.nameless, dir_path / ".stl.ukv", c_error);
+    save_to_disk(db.main, dir_path / ".stl.ukv", c_error);
     if (*c_error)
         return;
 
@@ -238,10 +238,10 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
         return;
     }
 
-    // Parse the main nameless col
+    // Parse the main main col
     if (fs::path path = dir_path / ".stl.ukv"; fs::is_regular_file(path)) {
         auto path_str = path.native();
-        read_from_disk(db.nameless, path_str, c_error);
+        read_from_disk(db.main, path_str, c_error);
     }
 
     // Parse all the named cols we can find
@@ -945,7 +945,7 @@ void ukv_collection_open(
 
     auto name_len = std::strlen(c_col_name);
     if (!name_len) {
-        *c_col = ukv_col_default_k;
+        *c_col = ukv_col_main_k;
         return;
     }
 
@@ -984,8 +984,8 @@ void ukv_collection_remove(
     std::unique_lock _ {db.mutex};
     auto name_len = std::strlen(c_col_name);
     if (!name_len) {
-        db.nameless.pairs.clear();
-        db.nameless.unique_elements = 0;
+        db.main.pairs.clear();
+        db.main.unique_elements = 0;
     }
     else {
         auto col_name = std::string_view(c_col_name, name_len);
@@ -1142,7 +1142,7 @@ void ukv_txn_commit( //
 
     // 4. Allocate space for more vertices across different cols
     try {
-        db.nameless.reserve_more(txn.upserted.size());
+        db.main.reserve_more(txn.upserted.size());
         for (auto& name_and_col : db.named)
             name_and_col.second->reserve_more(txn.upserted.size());
     }
