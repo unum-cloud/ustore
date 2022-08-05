@@ -44,6 +44,15 @@ void to_json(nlohmann::json& js, PyObject* obj) {
         for (Py_ssize_t i = 0; i < PySequence_Length(obj); i++)
             js.emplace_back(PySequence_GetItem(obj, i));
     }
+    else if (PyDict_Check(obj)) {
+        js = nlohmann::json::object();
+        PyObject *key, *value;
+        Py_ssize_t pos = 0;
+        while (PyDict_Next(obj, &pos, &key, &value)) {
+            nlohmann::json key(key);
+            js[key.get<nlohmann::json::string_t>()] = nlohmann::json(value);
+        }
+    }
     else if (PyMapping_Check(obj)) {
         js = nlohmann::json::object();
         PyObject* keyvals = PyMapping_Items(obj);
