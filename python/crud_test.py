@@ -126,18 +126,9 @@ def scan(col):
 
 
 def test_main_collection():
-    db = ukv.DataBase().main()
+    db = ukv.DataBase().main
     only_explicit(db)
     only_explicit_batch(db)
-    only_overwrite(db)
-    only_operators(db)
-    batch_insert(db)
-    scan(db)
-
-
-def test_database_to_main_redirect():
-    db = ukv.DataBase()
-    only_explicit(db)
     only_overwrite(db)
     only_operators(db)
     batch_insert(db)
@@ -165,19 +156,19 @@ def test_main_collection_txn():
     db = ukv.DataBase()
 
     txn = ukv.Transaction(db)
-    only_explicit(txn)
+    only_explicit(txn.main)
     txn.commit()
 
     txn = ukv.Transaction(db)
-    only_explicit_batch(txn)
+    only_explicit_batch(txn.main)
     txn.commit()
 
     txn = ukv.Transaction(db)
-    only_overwrite(txn)
+    only_overwrite(txn.main)
     txn.commit()
 
     txn = ukv.Transaction(db)
-    only_operators(txn)
+    only_operators(txn.main)
     txn.commit()
 
 
@@ -185,12 +176,12 @@ def test_main_collection_txn_ctx():
 
     with ukv.DataBase() as db:
         with ukv.Transaction(db) as txn:
-            only_explicit(txn)
+            only_explicit(txn.main)
 
     with ukv.DataBase() as db:
         with ukv.Transaction(db) as txn:
-            only_operators(txn)
+            only_operators(txn.main)
 
     with ukv.DataBase() as db:
         with ukv.Transaction(db) as txn:
-            only_explicit_batch(txn)
+            only_explicit_batch(txn.main)

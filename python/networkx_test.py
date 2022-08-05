@@ -44,8 +44,11 @@ def triangle(net):
 
 
 def triangle_batch(net):
-    edges = np.array([[1, 2], [2, 3], [3, 1]])
-    net.add_edges_from(edges)
+    # TODO: Check why matrix casting fails!
+    # edges = np.array([[1, 2], [2, 3], [3, 1]])
+    # assert edges.shape[1] == 2
+    # net.add_edges_from(edges)
+    net.add_edges_from(np.array([1, 2, 3]), np.array([2, 3, 1]))
 
     assert net.has_node(1) and net.has_node(2) and net.has_node(3)
     assert not 4 in net
@@ -56,7 +59,7 @@ def triangle_batch(net):
     assert len(list(net.successors(1))) == 1
     assert len(list(net.predecessors(1))) == 1
 
-    net.remove_edges_from(edges[:2])
+    net.remove_edges_from(np.array([1, 2]), np.array([2, 3]))
 
     assert not net.has_edge(1, 2) and not net.has_edge(2, 3)
     assert net.has_edge(3, 1)

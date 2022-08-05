@@ -20,7 +20,6 @@ struct py_graph_t;
 struct py_frame_t;
 
 struct py_task_ctx_t;
-struct py_received_buffer_t;
 
 /**
  * @brief Python tasks are generally called for a single collection.
@@ -103,25 +102,8 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
         result.col = native.member_ptr();
         return result;
     }
-};
 
-/**
- * @brief RAII object for `py::handle` parsing purposes,
- * which releases the buffer in the destructor.
- */
-struct py_received_buffer_t {
-    ~py_received_buffer_t() {
-        if (initialized)
-            PyBuffer_Release(&py);
-        initialized = false;
-    }
-    py_received_buffer_t() = default;
-    py_received_buffer_t(py_received_buffer_t const&) = delete;
-    py_received_buffer_t(py_received_buffer_t&& other) noexcept
-        : py(other.py), initialized(std::exchange(other.initialized, false)) {}
-
-    Py_buffer py;
-    bool initialized = false;
+    inline collection_t replicate() { return *db_ptr->native.collection(name.c_str()); }
 };
 
 /**
@@ -181,7 +163,6 @@ struct py_col_keys_range_t {
 /**
  * @brief Materialized view over a specific subset of documents
  * UIDs (potentially, in different collections) and column (field) names.
- *
  */
 struct py_frame_t : public std::enable_shared_from_this<py_frame_t> {
 
@@ -195,148 +176,78 @@ struct py_frame_t : public std::enable_shared_from_this<py_frame_t> {
     py_frame_t(py_frame_t const&) = delete;
 };
 
-#pragma region Helper Functions
-
-inline py_received_buffer_t py_strided_buffer(PyObject* obj, bool const_ = true) {
-    auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
-    if (!const_)
-        flags |= PyBUF_WRITABLE;
-
-    py_received_buffer_t raii;
-    raii.initialized = PyObject_GetBuffer(obj, &raii.py, flags) == 0;
-    if (!raii.initialized)
-        throw std::invalid_argument("Couldn't obtain buffer overviews");
-    if (!raii.py.shape)
-        throw std::invalid_argument("Shape wasn't inferred");
-    return raii;
-}
-
 /**
- * @brief Provides a typed view of 1D potentially-strided tensor.
- * @param obj Must implement the "Buffer protocol".
+ * @brief Binds DBMS to Python, as if it was `dict[str, dict[int, bytes]]`.
+ *
+ * @section Interface
+ *
+ * DataBase Methods:
+ *      * main ~ Accesses the default collection
+ *      * __getitem__(collection: str) ~ Accesses a named collection
+ *      * clear() ~ Clears all the data from DB
+ *      * transact() - Starts a new transaction (supports context managers)
+ *
+ * Collection Methods:
+ *      * __in__(key), has_key(...) ~ Single & Batch Contains
+ *      * __getitem__(key: int), get(...) ~ Value Lookup
+ *      * __setitem__(key: int, value), set(...) ~ Value Upserts
+ *      * __delitem__(key), pop(...) ~ Removes a key
+ * All those CRUD operations can be submitted in batches in forms of
+ * Python `tuple`s, `list`s, NumPy arrays, or anything that supports buffer
+ * protocol. Remaining collection methods include:
+ *      * update(mapping: dict) ~ Batch Insert/Put
+ *      * clear() ~ Removes all items in collection
+ *      * tensor(collection?, keys, max_length: int, padding: byte)
+ * All in all, collections mimic Python @c `dict` API, but some funcs were skipped:
+ *      * __len__() ~ It's hard to consistently estimate the collection.
+ *      * popitem() ~ We can't guarantee Last-In First-Out semantics.
+ *      * setdefault(key[, default]) ~ As default values are useless in DBs.
+ * To access typed collections following computable properties are provided:
+ *      * docs  ~ Unpack objects into `dict`/`list`s and supports field-level ops
+ *      * table ~ Accesses Docs in a Pandas-like fashion
+ *      * graph ~ Accesses relations/links in NetworkX fashion
+ *      * media ~ Unpacks and converts to Tensors on lookups
+ *
+ * https://python-reference.readthedocs.io/en/latest/docs/dict/
+ * https://docs.python.org/3/library/stdtypes.html#mapping-types-dict
  */
-template <typename scalar_at>
-strided_range_gt<scalar_at> py_strided_range(py_received_buffer_t const& raii) {
-
-    if (raii.py.ndim != 1)
-        throw std::invalid_argument("Expecting tensor rank 1");
-    if (raii.py.itemsize != sizeof(scalar_at))
-        throw std::invalid_argument("Scalar type mismatch");
-
-    strided_range_gt<scalar_at> result {
-        reinterpret_cast<scalar_at*>(raii.py.buf),
-        static_cast<ukv_size_t>(raii.py.strides[0]),
-        static_cast<ukv_size_t>(raii.py.shape[0]),
-    };
-    return result;
-}
-
-/**
- * @brief Provides a typed view of 2D potentially-strided tensor.
- * @param obj Must implement the "Buffer protocol".
- */
-template <typename scalar_at>
-strided_matrix_gt<scalar_at> py_strided_matrix(py_received_buffer_t const& raii) {
-
-    if (raii.py.ndim != 2)
-        throw std::invalid_argument("Expecting tensor rank 2");
-    if constexpr (!std::is_void_v<scalar_at>)
-        if (raii.py.itemsize != sizeof(scalar_at))
-            throw std::invalid_argument("Scalar type mismatch");
-    if constexpr (!std::is_void_v<scalar_at>)
-        if (raii.py.itemsize != raii.py.strides[1])
-            throw std::invalid_argument("Rows are not continuous");
-
-    strided_matrix_gt<scalar_at> result {
-        reinterpret_cast<scalar_at*>(raii.py.buf),
-        static_cast<ukv_size_t>(raii.py.shape[0]),
-        static_cast<ukv_size_t>(raii.py.shape[1]),
-        static_cast<ukv_size_t>(raii.py.strides[0]),
-    };
-    return result;
-}
-
-inline void throw_not_implemented() {
-    // https://github.com/pybind/pybind11/issues/1125#issuecomment-691552571
-    throw std::runtime_error("Not Implemented!");
-}
-
-inline bool is_pyseq(PyObject* obj) {
-    return PyTuple_Check(obj) || PyList_Check(obj) || PyIter_Check(obj);
-}
-
-/**
- * @brief Iterates over Python `tuple`, `list`, or any `iter`.
- * @param call Callback for member `PyObject`s.
- */
-template <typename member_callback_at>
-void scan_pyseq(PyObject* obj, member_callback_at&& call) {
-
-    if (PyTuple_Check(obj)) {
-        size_t n = PyTuple_Size(obj);
-        for (size_t i = 0; i != n; ++i)
-            call(PyTuple_GetItem(obj, i));
-    }
-    else if (PyList_Check(obj)) {
-        size_t n = PyList_Size(obj);
-        for (size_t i = 0; i != n; ++i)
-            call(PyList_GetItem(obj, i));
-    }
-    else if (PyIter_Check(obj)) {
-        PyObject* item = nullptr;
-        while ((item = PyIter_Next(obj))) {
-            call(item);
-            Py_DECREF(item);
-        }
-    }
-}
-
-/**
- * @brief Iterates over Python `dict`-like object.
- * @param call Callback for the key and value `PyObject`s.
- * @return true If a supported iterable type was detected.
- */
-template <typename member_callback_at>
-void scan_pydict(PyObject* obj, member_callback_at&& call) {
-
-    PyObject* key = nullptr;
-    PyObject* value = nullptr;
-    Py_ssize_t pos = 0;
-
-    while (PyDict_Next(obj, &pos, &key, &value))
-        call(key, value);
-}
-
-#pragma region Type Conversions Guides
-
-/**
- * @brief Defines Pythons type marker for primitive types.
- * @b All of them are only a single character long.
- */
-template <typename element_at>
-struct format_code_gt {};
-
-// clang-format off
-template <> struct format_code_gt<bool> { inline static constexpr char value[2] = "?"; };
-template <> struct format_code_gt<char> { inline static constexpr char value[2] = "c"; };
-template <> struct format_code_gt<signed char> { inline static constexpr char value[2] = "b"; };
-template <> struct format_code_gt<unsigned char> { inline static constexpr char value[2] = "B"; };
-
-template <> struct format_code_gt<short> { inline static constexpr char value[2] = "h"; };
-template <> struct format_code_gt<unsigned short> { inline static constexpr char value[2] = "H"; };
-template <> struct format_code_gt<int> { inline static constexpr char value[2] = "i"; };
-template <> struct format_code_gt<unsigned int> { inline static constexpr char value[2] = "I"; };
-template <> struct format_code_gt<long> { inline static constexpr char value[2] = "l"; };
-template <> struct format_code_gt<unsigned long> { inline static constexpr char value[2] = "L"; };
-template <> struct format_code_gt<long long> { inline static constexpr char value[2] = "q"; };
-template <> struct format_code_gt<unsigned long long> { inline static constexpr char value[2] = "Q"; };
-
-template <> struct format_code_gt<float> { inline static constexpr char value[2] = "f"; };
-template <> struct format_code_gt<double> { inline static constexpr char value[2] = "d"; };
-// clang-format on
-
 void wrap_database(py::module&);
-void wrap_pandas(py::module&);
+
+/**
+ * @brief Python bindings for a Graph index, that mimics NetworkX.
+ * Is similar in it's purpose to a pure-Python NetworkXum:
+ * https://github.com/unum-cloud/NetworkXum
+ *
+ * @section Supported Graph Types
+ * We support all the NetworkX graph kinds and more:
+ * https://networkx.org/documentation/stable/reference/classes/index.html#which-graph-class-should-i-use
+ *
+ *      | Class          | Type         | Self-loops | Parallel edges |
+ *      | Graph          | undirected   | Yes        | No             |
+ *      | DiGraph        | directed     | Yes        | No             |
+ *      | MultiGraph     | undirected   | Yes        | Yes            |
+ *      | MultiDiGraph   | directed     | Yes        | Yes            |
+ *
+ * Aside from those, you can instantiate the most generic `ukv.Network`,
+ * controlling whether graph should be directed, allow loops, or have
+ * attrs in source/target vertices or edges.
+ *
+ * @section Interface
+ * Primary single element methods:
+ *      * add_edge(first, second, key?, attrs?)
+ *      * remove_edge(first, second, key?, attrs?)
+ * Additional batch methods:
+ *      * add_edges_from(firsts, seconds, keys?, attrs?)
+ *      * remove_edges_from(firsts, seconds, keys?, attrs?)
+ * Intentionally not implemented:
+ *      * __len__() ~ It's hard to consistently estimate the collection size.
+ */
 void wrap_networkx(py::module&);
+
+/**
+ * @brief Python bindings for a Document Store, that mimics Pandas.
+ * Mostly intended for usage with NumPy and Arrow buffers.
+ */
+void wrap_pandas(py::module&);
 
 } // namespace unum::ukv
