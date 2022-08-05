@@ -543,14 +543,47 @@ py::object punned_collection( //
     }
 }
 
+template <typename range_gt>
+auto since(range_gt& range, ukv_key_t key) {
+    range.min_key = key;
+    return std::move(range);
+};
+
+template <typename range_gt>
+auto until(range_gt& range, ukv_key_t key) {
+    range.max_key = key;
+    return std::move(range);
+};
+
+template <typename range_gt, typename stream_t>
+auto iterate(range_gt& range) {
+    stream_t stream = range.native.begin();
+    stream.seek(range.min_key);
+    return std::make_shared<py_stream_gt<stream_t>>(std::move(stream), range.max_key);
+};
+
 void ukv::wrap_database(py::module& m) {
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
     auto py_db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
     auto py_col = py::class_<py_col_t, std::shared_ptr<py_col_t>>(m, "Collection", py::module_local());
     auto py_txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction", py::module_local());
-    auto py_keys_range = py::class_<py_keys_range_t, std::shared_ptr<py_keys_range_t>>(m, "Range", py::module_local());
+    auto py_keys_range =
+        py::class_<py_range_gt<keys_range_t>, std::shared_ptr<py_range_gt<keys_range_t>>>(m,
+                                                                                          "Keys_Range",
+                                                                                          py::module_local());
+    auto py_keys_vals_range =
+        py::class_<py_range_gt<keys_vals_range_t>, std::shared_ptr<py_range_gt<keys_vals_range_t>>>(m,
+                                                                                                    "Items_Range",
+                                                                                                    py::module_local());
     auto py_keys_stream =
-        py::class_<py_keys_stream_t, std::shared_ptr<py_keys_stream_t>>(m, "Stream", py::module_local());
+        py::class_<py_stream_gt<keys_stream_t>, std::shared_ptr<py_stream_gt<keys_stream_t>>>(m,
+                                                                                              "Keys_Stream",
+                                                                                              py::module_local());
+    auto py_keys_vals_stream =
+        py::class_<py_stream_gt<keys_vals_stream_t>, std::shared_ptr<py_stream_gt<keys_vals_stream_t>>>(
+            m,
+            "Items_Stream",
+            py::module_local());
 
     py::enum_<ukv_format_t>(m, "Format", py::module_local())
         .value("Binary", ukv_format_binary_k)
@@ -562,13 +595,11 @@ void ukv::wrap_database(py::module& m) {
         .value("UBJSON", ukv_format_ubjson_k);
 
     // Define keys_range
-    py_keys_range.def("__iter__", [](py_keys_range_t& keys_range) {
-        keys_stream_t stream = keys_range.native.begin();
-        stream.seek(keys_range.min_key);
-        return std::make_shared<py_keys_stream_t>(std::move(stream), keys_range.max_key);
-    });
+    py_keys_range.def("__iter__", &iterate<py_range_gt<keys_range_t>, keys_stream_t>);
+    py_keys_range.def("since", &since<py_range_gt<keys_range_t>>);
+    py_keys_range.def("until", &until<py_range_gt<keys_range_t>>);
 
-    py_keys_range.def("__getitem__", [](py_keys_range_t& keys_range, py::slice slice) {
+    py_keys_range.def("__getitem__", [](py_range_gt<keys_range_t>& keys_range, py::slice slice) {
         Py_ssize_t start, stop, step;
         if (PySlice_Unpack(slice.ptr(), &start, &stop, &step) || step != 1 || start >= stop)
             throw std::invalid_argument("Invalid Slice");
@@ -577,18 +608,13 @@ void ukv::wrap_database(py::module& m) {
         return py::array(std::min(stop - start, Py_ssize_t(keys.size()) - start), keys.begin() + start);
     });
 
-    py_keys_range.def("since", [](py_keys_range_t& keys_range, ukv_key_t key) {
-        keys_range.min_key = key;
-        return std::move(keys_range);
-    });
-
-    py_keys_range.def("to", [](py_keys_range_t& keys_range, ukv_key_t key) {
-        keys_range.max_key = key;
-        return std::move(keys_range);
-    });
+    // Define keys_vals_range
+    py_keys_vals_range.def("__iter__", &iterate<py_range_gt<keys_vals_range_t>, keys_vals_stream_t>);
+    py_keys_vals_range.def("since", &since<py_range_gt<keys_vals_range_t>>);
+    py_keys_vals_range.def("until", &until<py_range_gt<keys_vals_range_t>>);
 
     // Define keys_stream
-    py_keys_stream.def("__next__", [](py_keys_stream_t& keys_stream) {
+    py_keys_stream.def("__next__", [](py_stream_gt<keys_stream_t>& keys_stream) {
         ukv_key_t key = keys_stream.native.key();
         if (keys_stream.native.is_end() || keys_stream.last)
             throw py::stop_iteration();
@@ -596,6 +622,19 @@ void ukv::wrap_database(py::module& m) {
             keys_stream.last = true;
         ++keys_stream.native;
         return key;
+    });
+
+    // Define keys_vals_stream
+    py_keys_vals_stream.def("__next__", [](py_stream_gt<keys_vals_stream_t>& keys_vals_stream) {
+        ukv_key_t key = keys_vals_stream.native.key();
+        if (keys_vals_stream.native.is_end() || keys_vals_stream.last)
+            throw py::stop_iteration();
+        if (key == keys_vals_stream.stop_point)
+            keys_vals_stream.last = true;
+        value_view_t value_view = keys_vals_stream.native.value();
+        PyObject* value_ptr = PyBytes_FromStringAndSize(value_view.c_str(), value_view.size());
+        ++keys_vals_stream.native;
+        return py::make_tuple(key, py::reinterpret_borrow<py::object>(value_ptr));
     });
 
     // Define `DataBase`
@@ -694,17 +733,29 @@ void ukv::wrap_database(py::module& m) {
 
     py_db.def_property_readonly("keys", [](py_db_t& py_db) {
         keys_range_t range(py_db.native);
-        return py::cast(std::make_shared<py_keys_range_t>(std::move(range)));
+        return py::cast(std::make_shared<py_range_gt<keys_range_t>>(std::move(range)));
+    });
+    py_db.def_property_readonly("items", [](py_db_t& py_db) {
+        keys_vals_range_t range(py_db.native);
+        return py::cast(std::make_shared<py_range_gt<keys_vals_range_t>>(std::move(range)));
     });
 
     py_col.def_property_readonly("keys", [](py_col_t& py_col) {
         keys_range_t range(py_col.db_ptr->native, nullptr, py_col.native);
-        return py::cast(std::make_shared<py_keys_range_t>(std::move(range)));
+        return py::cast(std::make_shared<py_range_gt<keys_range_t>>(std::move(range)));
+    });
+    py_col.def_property_readonly("items", [](py_col_t& py_col) {
+        keys_vals_range_t range(py_col.db_ptr->native, nullptr, py_col.native);
+        return py::cast(std::make_shared<py_range_gt<keys_vals_range_t>>(std::move(range)));
     });
 
     py_txn.def_property_readonly("keys", [](py_txn_t& py_txn) {
         keys_range_t range(py_txn.db_ptr->native, py_txn.native, nullptr);
-        return py::cast(std::make_shared<py_keys_range_t>(std::move(range)));
+        return py::cast(std::make_shared<py_range_gt<keys_range_t>>(std::move(range)));
+    });
+    py_txn.def_property_readonly("items", [](py_txn_t& py_txn) {
+        keys_vals_range_t range(py_txn.db_ptr->native, py_txn.native, nullptr);
+        return py::cast(std::make_shared<py_range_gt<keys_vals_range_t>>(std::move(range)));
     });
 
     // Shortcuts for main collection
