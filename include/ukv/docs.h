@@ -88,10 +88,24 @@ typedef enum {
 typedef enum {
     ukv_type_null_k = 0,
     ukv_type_bool_k = 1,
-    ukv_type_i64_k = 2,
-    ukv_type_f64_k = 3,
-    ukv_type_uuid_k = 4,
-    ukv_type_str_k = 5,
+    ukv_type_uuid_k = 2,
+
+    ukv_type_i8_k = 10,
+    ukv_type_i16_k = 11,
+    ukv_type_i32_k = 12,
+    ukv_type_i64_k = 13,
+
+    ukv_type_u8_k = 20,
+    ukv_type_u16_k = 21,
+    ukv_type_u32_k = 22,
+    ukv_type_u64_k = 23,
+
+    ukv_type_f16_k = 30,
+    ukv_type_f32_k = 31,
+    ukv_type_f64_k = 32,
+
+    ukv_type_bin_k = 40,
+    ukv_type_str_k = 41,
 
     ukv_type_any_k = 0xFFFFFFFF,
 } ukv_type_t;
