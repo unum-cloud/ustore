@@ -110,6 +110,14 @@ typedef enum {
      * transaction. Will not affect the writes in any way.
      */
     ukv_option_txn_snapshot_k = 1 << 4,
+    /**
+     * @brief Will output data into shared memory, not the one privately
+     * viewed by current process. That will allow any higher-level package
+     * to do further transformations without any copies.
+     * Is relevant for standalone distributions used with drivers supporting
+     * Apache Arrow buffers or standardized Tensor representations.
+     */
+    ukv_option_read_shared_k = 1 << 1,
 
 } ukv_options_t;
 
