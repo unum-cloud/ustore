@@ -96,26 +96,6 @@ struct py_col_t {
     }
 };
 
-/**
- * @brief A generalization of the graph supported by NetworkX.
- * Unlike C++ `graph_ref_t` this may include as many as 4 collections
- * seen as one heavily attributed relational index.
- *
- * Sources and targets can match.
- * Relations attrs can be banned all together.
- *
- * Example for simple non-attributed undirected graphs:
- * > relations_name: ".graph"
- * > attrs_name: ""
- * > sources_name: ""
- * > targets_name: ""
- *
- * Example for recommender systems
- * > relations_name: "views.graph"
- * > attrs_name: "views.docs"
- * > sources_name: "people.docs"
- * > targets_name: "movies.docs"
- */
 struct py_graph_t {
 
     std::shared_ptr<py_db_t> db_ptr;
@@ -153,8 +133,8 @@ struct py_col_keys_range_t {
 };
 
 /**
- * @brief Materialized view over a specific subset of documents
- * UIDs (potentially, in different collections) and column (field) names.
+ * @brief DataFrame represntation, capable of viewing joined contents
+ * of multiple collections. When materialized, exports Apache Arrow objects.
  */
 struct py_frame_t : public std::enable_shared_from_this<py_frame_t> {
 
@@ -166,6 +146,17 @@ struct py_frame_t : public std::enable_shared_from_this<py_frame_t> {
     py_frame_t() = default;
     py_frame_t(py_frame_t&&) = delete;
     py_frame_t(py_frame_t const&) = delete;
+};
+
+/**
+ * @brief Proxy-object for binary `py_col_t` collections that adds:
+ * > serialization & deserialization of Python objects.
+ * > field-level lookups.
+ * > patching & merging: `.patch(...)` & `.merge(...)`.
+ * > DataFrame exports (out of this single collection).
+ */
+struct py_docs_col_t {
+    py_col_t binary;
 };
 
 /**
@@ -207,7 +198,9 @@ void wrap_database(py::module&);
 
 /**
  * @brief Python bindings for a Graph index, that mimics NetworkX.
- * Is similar in it's purpose to a pure-Python NetworkXum:
+ * Unlike C++ `graph_ref_t` this may include as many as 4 collections
+ * seen as one heavily attributed relational index.
+ * Is similar in it's purpose to a pure-Python project - NetworkXum:
  * https://github.com/unum-cloud/NetworkXum
  *
  * @section Supported Graph Types
@@ -223,6 +216,23 @@ void wrap_database(py::module&);
  * Aside from those, you can instantiate the most generic `ukv.Network`,
  * controlling whether graph should be directed, allow loops, or have
  * attrs in source/target vertices or edges.
+ * Beyond that, source and target vertices can belong to different collections.
+ * To sum up, we differntiate following graph types:
+ * > U: Undirected
+ * > D: Directed
+ * > J: Joining
+ *
+ * Example for simple non-attributed undirected graphs:
+ * > relations_name: ".graph"
+ * > attrs_name: ""
+ * > sources_name: ""
+ * > targets_name: ""
+ *
+ * Example for recommender systems
+ * > relations_name: "views.graph"
+ * > attrs_name: "views.docs"
+ * > sources_name: "people.docs"
+ * > targets_name: "movies.docs"
  *
  * @section Interface
  * Primary single element methods:
@@ -233,6 +243,10 @@ void wrap_database(py::module&);
  *      * remove_edges_from(firsts, seconds, keys?, attrs?)
  * Intentionally not implemented:
  *      * __len__() ~ It's hard to consistently estimate the collection size.
+ *
+ * TODO:
+ * > Implement basic algorithms: PageRank, Louvain, WCC and Force-based Layout
+ * > Implement subgraph selection
  */
 void wrap_networkx(py::module&);
 
