@@ -29,12 +29,10 @@
 #include <vector>
 #include <iostream>
 
+#include "ukv/cpp/arrow.hpp"
+
 using namespace arrow::flight;
 using namespace arrow;
-
-// To later implement a C-ABI stable binding:
-// https://arrow.apache.org/docs/format/CDataInterface.html#example-use-case
-// void ukv_export_arrow(struct ArrowSchema*, struct ArrowArray*);
 
 class UKVService : public arrow::flight::FlightServerBase {
   public:
