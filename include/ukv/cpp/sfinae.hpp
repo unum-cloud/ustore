@@ -21,7 +21,7 @@ template <typename at> struct sfinae_is_range_gt<strided_range_gt<at>> : std::tr
 static_assert(!sfinae_is_range_gt<int>::value);
 
 template <typename at, typename = int> struct sfinae_has_collection_gt : std::false_type {};
-template <typename at> struct sfinae_has_collection_gt<at, decltype((void)at::collection, 0)> : std::true_type {};
+template <typename at> struct sfinae_has_collection_gt<at, decltype((void)at::col, 0)> : std::true_type {};
 
 template <typename at, typename = int> struct sfinae_has_field_gt : std::false_type {};
 template <typename at> struct sfinae_has_field_gt<at, decltype((void)at::field, 0)> : std::true_type {};
@@ -144,7 +144,7 @@ struct keys_arg_extractor_gt {
                 stride = sizeof(element_t);
 
             auto strided = strided_iterator_gt<element_t const>(begin, stride);
-            return strided.members(&element_t::collection);
+            return strided.members(&element_t::col);
         }
         else
             return {};
@@ -180,7 +180,7 @@ struct keys_arg_extractor_gt<keys_arg_t> {
 
     ukv_size_t count(keys_arg_t const& native) noexcept { return native.count; }
     strided_iterator_gt<ukv_key_t const> keys(keys_arg_t const& native) noexcept { return native.keys_begin; }
-    strided_iterator_gt<ukv_col_t const> cols(keys_arg_t const& native) noexcept { return native.collections_begin; }
+    strided_iterator_gt<ukv_col_t const> cols(keys_arg_t const& native) noexcept { return native.cols_begin; }
     strided_iterator_gt<ukv_str_view_t const> fields(keys_arg_t const& native) noexcept { return native.fields_begin; }
 };
 

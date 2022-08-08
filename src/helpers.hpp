@@ -169,7 +169,9 @@ class growing_tape_t {
     strided_range_gt<ukv_val_len_t> lengths() noexcept { return strided_range(lengths_); }
     strided_range_gt<byte_t> contents() noexcept { return strided_range(contents_); }
 
-    operator tape_view_t() noexcept { return {lengths_.data(), ukv_val_ptr_t(contents_.data()), lengths_.size()}; }
+    operator tape_view_t() noexcept {
+        return {ukv_val_ptr_t(contents_.data()), offsets_.data(), lengths_.data(), lengths_.size()};
+    }
 };
 
 struct stl_arena_t {

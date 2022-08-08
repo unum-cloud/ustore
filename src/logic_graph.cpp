@@ -290,8 +290,9 @@ void export_edge_tuples( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    ukv_val_len_t* c_found_lengths = nullptr;
     ukv_val_ptr_t c_found_values = nullptr;
+    ukv_val_len_t* c_found_offsets = nullptr;
+    ukv_val_len_t* c_found_lengths = nullptr;
 
     // Even if we need just the node degrees, we can't limit ourselves to just entry lengths.
     // Those may be compressed. We need to read the first bytes to parse the degree of the node.
@@ -303,8 +304,9 @@ void export_edge_tuples( //
              c_vertices_ids,
              c_vertices_stride,
              static_cast<ukv_options_t>(c_options & ~ukv_option_read_lengths_k),
-             &c_found_lengths,
              &c_found_values,
+             &c_found_offsets,
+             &c_found_lengths,
              c_arena,
              c_error);
     if (*c_error)
@@ -314,7 +316,7 @@ void export_edge_tuples( //
     if (*c_error)
         return;
 
-    tape_view_t values {c_found_lengths, c_found_values, c_vertices_count};
+    tape_view_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
 
@@ -329,10 +331,10 @@ void export_edge_tuples( //
         }
     }
     constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
-    prepare_memory(arena.unpacked_tape,
-                   total_neighborships * sizeof(ukv_key_t) * tuple_size_k +
-                       c_vertices_count * sizeof(ukv_vertex_degree_t),
-                   c_error);
+    prepare_memory( //
+        arena.unpacked_tape,
+        total_neighborships * sizeof(ukv_key_t) * tuple_size_k + c_vertices_count * sizeof(ukv_vertex_degree_t),
+        c_error);
     if (*c_error)
         return;
 
@@ -404,8 +406,9 @@ void export_disjoint_edge_buffers( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    ukv_val_len_t* c_found_lengths = nullptr;
     ukv_val_ptr_t c_found_values = nullptr;
+    ukv_val_len_t* c_found_offsets = nullptr;
+    ukv_val_len_t* c_found_lengths = nullptr;
 
     ukv_read(c_db,
              c_txn,
@@ -415,8 +418,9 @@ void export_disjoint_edge_buffers( //
              c_vertices_ids,
              c_vertices_stride,
              c_options,
-             &c_found_lengths,
              &c_found_values,
+             &c_found_offsets,
+             &c_found_lengths,
              c_arena,
              c_error);
     if (*c_error)
@@ -426,7 +430,7 @@ void export_disjoint_edge_buffers( //
     if (*c_error)
         return;
 
-    tape_view_t values {c_found_lengths, c_found_values, c_vertices_count};
+    tape_view_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
     std::size_t value_idx = 0;
     for (value_view_t value : values)
         arena.updated_vals[value_idx++] = value;
@@ -482,7 +486,7 @@ void update_neighborhoods( //
     export_disjoint_edge_buffers(c_db,
                                  c_txn,
                                  static_cast<ukv_size_t>(arena.updated_keys.size()),
-                                 &arena.updated_keys[0].collection,
+                                 &arena.updated_keys[0].col,
                                  sizeof(col_key_t),
                                  &arena.updated_keys[0].key,
                                  sizeof(col_key_t),
@@ -523,7 +527,7 @@ void update_neighborhoods( //
     ukv_write(c_db,
               c_txn,
               static_cast<ukv_size_t>(arena.updated_keys.size()),
-              &arena.updated_keys[0].collection,
+              &arena.updated_keys[0].col,
               sizeof(col_key_t),
               &arena.updated_keys[0].key,
               sizeof(col_key_t),
@@ -725,7 +729,7 @@ void ukv_graph_remove_vertices( //
     export_disjoint_edge_buffers(c_db,
                                  c_txn,
                                  static_cast<ukv_size_t>(arena.updated_keys.size()),
-                                 &arena.updated_keys[0].collection,
+                                 &arena.updated_keys[0].col,
                                  sizeof(col_key_t),
                                  &arena.updated_keys[0].key,
                                  sizeof(col_key_t),
@@ -763,7 +767,7 @@ void ukv_graph_remove_vertices( //
     ukv_write(c_db,
               c_txn,
               static_cast<ukv_size_t>(arena.updated_keys.size()),
-              &arena.updated_keys[0].collection,
+              &arena.updated_keys[0].col,
               sizeof(col_key_t),
               &arena.updated_keys[0].key,
               sizeof(col_key_t),

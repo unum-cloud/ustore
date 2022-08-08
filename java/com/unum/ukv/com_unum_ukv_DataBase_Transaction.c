@@ -79,6 +79,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
 
     ukv_key_t key_c = (ukv_key_t)key_java;
     ukv_options_t options_c = ukv_option_read_lengths_k;
+    ukv_val_len_t* found_offsets_c = NULL;
     ukv_val_len_t* found_lengths_c = NULL;
     ukv_val_ptr_t found_values_c = NULL;
     ukv_arena_t arena_c = NULL;
@@ -93,8 +94,9 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
         &key_c,
         0,
         options_c,
-        &found_lengths_c,
         &found_values_c,
+        &found_offsets_c,
+        &found_lengths_c,
         &arena_c,
         &error_c);
 
@@ -127,6 +129,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
 
     ukv_key_t key_c = (ukv_key_t)key_java;
     ukv_options_t options_c = ukv_options_default_k;
+    ukv_val_len_t* found_offsets_c = NULL;
     ukv_val_len_t* found_lengths_c = NULL;
     ukv_val_ptr_t found_values_c = NULL;
     ukv_arena_t arena_c = NULL;
@@ -141,8 +144,9 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
         &key_c,
         0,
         options_c,
-        &found_lengths_c,
         &found_values_c,
+        &found_offsets_c,
+        &found_lengths_c,
         &arena_c,
         &error_c);
 
@@ -160,7 +164,11 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     if (found_lengths_c[0] != ukv_val_len_missing_k) {
         result_java = (*env_java)->NewByteArray(env_java, found_lengths_c[0]);
         if (result_java)
-            (*env_java)->SetByteArrayRegion(env_java, result_java, 0, found_lengths_c[0], (jbyte const*)found_values_c);
+            (*env_java)->SetByteArrayRegion(env_java,
+                                            result_java,
+                                            0,
+                                            found_lengths_c[0],
+                                            (jbyte const*)(found_values_c + *found_offsets_c));
     }
 
     ukv_arena_free(db_ptr_c, arena_c);

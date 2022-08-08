@@ -86,6 +86,7 @@ static py::object has_one_binary(py_task_ctx_t ctx, PyObject* key_py) {
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
     ukv_val_ptr_t found_values = nullptr;
+    ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
     ctx.options = static_cast<ukv_options_t>(ctx.options | ukv_option_read_lengths_k);
 
@@ -99,8 +100,9 @@ static py::object has_one_binary(py_task_ctx_t ctx, PyObject* key_py) {
                  &key,
                  0,
                  ctx.options,
-                 &found_lengths,
                  &found_values,
+                 &found_offsets,
+                 &found_lengths,
                  ctx.arena,
                  status.member_ptr());
         status.throw_unhandled();
@@ -115,6 +117,7 @@ static py::object read_one_binary(py_task_ctx_t ctx, PyObject* key_py) {
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
     ukv_val_ptr_t found_values = nullptr;
+    ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
 
     {
@@ -127,8 +130,9 @@ static py::object read_one_binary(py_task_ctx_t ctx, PyObject* key_py) {
                  &key,
                  0,
                  ctx.options,
-                 &found_lengths,
                  &found_values,
+                 &found_offsets,
+                 &found_lengths,
                  ctx.arena,
                  status.member_ptr());
         status.throw_unhandled();
@@ -141,7 +145,7 @@ static py::object read_one_binary(py_task_ctx_t ctx, PyObject* key_py) {
     // https://github.com/pybind/pybind11/blob/a05bc3d2359d12840ef2329d68f613f1a7df9c5d/include/pybind11/pytypes.h#L1474
     // https://docs.python.org/3/c-api/bytes.html
     // https://github.com/python/cpython/blob/main/Objects/bytesobject.c
-    tape_iterator_t tape_it {found_lengths, found_values};
+    tape_iterator_t tape_it {found_values, found_offsets, found_lengths};
     value_view_t val = *tape_it;
     PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
     return py::reinterpret_borrow<py::object>(obj_ptr);
@@ -151,6 +155,7 @@ static py::object has_many_binaries(py_task_ctx_t ctx, PyObject* keys_py) {
 
     status_t status;
     ukv_val_ptr_t found_values = nullptr;
+    ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
     ctx.options = static_cast<ukv_options_t>(ctx.options | ukv_option_read_lengths_k);
 
@@ -167,8 +172,9 @@ static py::object has_many_binaries(py_task_ctx_t ctx, PyObject* keys_py) {
                  keys.data(),
                  sizeof(ukv_key_t),
                  ctx.options,
-                 &found_lengths,
                  &found_values,
+                 &found_offsets,
+                 &found_lengths,
                  ctx.arena,
                  status.member_ptr());
         status.throw_unhandled();
@@ -186,6 +192,7 @@ static py::object read_many_binaries(py_task_ctx_t ctx, PyObject* keys_py) {
 
     status_t status;
     ukv_val_ptr_t found_values = nullptr;
+    ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
 
     std::vector<ukv_key_t> keys;
@@ -201,14 +208,15 @@ static py::object read_many_binaries(py_task_ctx_t ctx, PyObject* keys_py) {
                  keys.data(),
                  sizeof(ukv_key_t),
                  ctx.options,
-                 &found_lengths,
                  &found_values,
+                 &found_offsets,
+                 &found_lengths,
                  ctx.arena,
                  status.member_ptr());
         status.throw_unhandled();
     }
 
-    tape_iterator_t tape_it {found_lengths, found_values};
+    tape_iterator_t tape_it {found_values, found_offsets, found_lengths};
     PyObject* tuple_ptr = PyTuple_New(keys.size());
     for (std::size_t i = 0; i != keys.size(); ++i, ++tape_it) {
         value_view_t val = *tape_it;

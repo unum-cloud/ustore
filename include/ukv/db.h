@@ -285,14 +285,15 @@ void ukv_write( //
  *                           > track: Adds collision-detection on keys read through txn.
  *                           > lengths: Only fetches lengths of values, not content.
  *
- * @param[out] found_offsets Will contain a pointer to an array with @param tasks_count integers.
- *                           Each marks response offset in bytes starting from @param `found_values`.
- * @param[out] found_lengths Will contain a pointer to an array with @param tasks_count integers.
- *                           Each defines response length in bytes.
- * @param[out] found_values  Will contain @param tasks_count values concatenated one after another.
+ * @param[out] found_values  Will contain the "base pointer" for @param tasks_count concatenated values.
  *                           Instead of allocating every "string" separately, we join them into
  *                           a single "tape" structure, which later be exported into (often disjoint)
- *                           runtime- or library-specific implementations.
+ *                           runtime- or library-specific implementations. To determine the range of each
+ *                           chunk use @param found_offsets and @param found_lengths.
+ * @param[out] found_offsets Will contain a pointer to an array with @param tasks_count integers.
+ *                           Each marks response offset in bytes starting from @param found_values.
+ * @param[out] found_lengths Will contain a pointer to an array with @param tasks_count integers.
+ *                           Each defines response length in bytes.
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
@@ -310,9 +311,9 @@ void ukv_read( //
 
     ukv_options_t const options,
 
+    ukv_val_ptr_t* found_values,
     ukv_val_len_t** found_offsets,
     ukv_val_len_t** found_lengths,
-    ukv_val_ptr_t* found_values,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
