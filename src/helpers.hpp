@@ -178,6 +178,7 @@ struct stl_arena_t {
 
     std::vector<byte_t> output_tape;
     std::vector<byte_t> unpacked_tape;
+    std::vector<byte_t> another_tape;
     growing_tape_t growing_tape;
     /**
      * In complex multi-step operations we need arrays

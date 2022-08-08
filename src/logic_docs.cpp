@@ -795,8 +795,10 @@ namespace std {
 from_chars_result from_chars(char const* begin, char const* end, bool& result) {
     bool is_true = end - begin == 4 && std::equal(begin, end, true_k);
     bool is_false = end - begin == 5 && std::equal(begin, end, false_k);
-    if (is_true | is_false)
+    if (is_true | is_false) {
+        result = is_true;
         return {end, std::errc()};
+    }
     else
         return {end, std::errc::invalid_argument};
 }
@@ -927,12 +929,12 @@ template <typename scalar_at>
 ukv_val_len_t print_scalar(scalar_at scalar, std::vector<byte_t>& output) {
 
     /// The length of buffer to be used to convert/format/print numerical values into strings.
-    constexpr std::size_t print_buf_len_k = 64;
+    constexpr std::size_t print_buf_len_k = 32;
     /// The on-stack buffer to be used to convert/format/print numerical values into strings.
-    alignas(print_buf_len_k) char print_buf[print_buf_len_k];
+    char print_buf[print_buf_len_k];
 
     std::to_chars_result result = std::to_chars(print_buf, print_buf + print_buf_len_k, scalar);
-    bool fits_null_terminated = result.ec != std::errc() && result.ptr < print_buf + print_buf_len_k;
+    bool fits_null_terminated = result.ec == std::errc() && result.ptr + 1 < print_buf + print_buf_len_k;
     if (fits_null_terminated) {
         *result.ptr = '\0';
         auto view = to_view(print_buf, result.ptr + 1 - print_buf);
@@ -1064,7 +1066,6 @@ void ukv_docs_gather( //
     ukv_error_t* c_error) {
 
     // Validate the input arguments
-    strided_iterator_gt<ukv_type_t const> types {c_types, c_types_stride};
 
     // Retrieve the entire documents before we can sample internal fields
     ukv_val_ptr_t binary_docs_begin = nullptr;
@@ -1089,12 +1090,13 @@ void ukv_docs_gather( //
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
+    strided_iterator_gt<ukv_type_t const> types {c_types, c_types_stride};
 
     tape_view_t binary_docs {binary_docs_begin, binary_docs_offs, binary_docs_lens, c_docs_count};
     tape_iterator_t binary_docs_it = binary_docs.begin();
 
     // Parse all the field names
-    heapy_fields_t heapy_fields;
+    heapy_fields_t heapy_fields(std::nullopt);
     parse_fields(fields, c_fields_count, heapy_fields, c_error);
     if (*c_error)
         return;
@@ -1108,7 +1110,8 @@ void ukv_docs_gather( //
     std::size_t bytes_per_addresses_row = sizeof(void*) * c_fields_count;
     std::size_t bytes_for_addresses = bytes_per_addresses_row * 6;
     std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps;
-    std::size_t bytes_for_scalars = transform_reduce_n(types, c_fields_count, 0ul, &min_memory_usage);
+    std::size_t bytes_per_scalars_row = transform_reduce_n(types, c_fields_count, 0ul, &min_memory_usage);
+    std::size_t bytes_for_scalars = bytes_per_scalars_row * c_docs_count;
 
     // Preallocate at least a minimum amount of memory.
     // It will be organized in the following way:
@@ -1121,8 +1124,8 @@ void ukv_docs_gather( //
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
         return;
-    byte_t* tape = prepare_memory( //
-        arena.output_tape,
+    byte_t* const tape = prepare_memory( //
+        arena.unpacked_tape,
         bytes_for_addresses + bytes_for_bitmaps + bytes_for_scalars,
         c_error);
     if (*c_error)
@@ -1156,7 +1159,7 @@ void ukv_docs_gather( //
         tape_progress += bytes_per_addresses_row;
     }
     if (wants_collisions) {
-        auto addresses = *c_result_bitmap_converted = reinterpret_cast<ukv_1x8_t**>(tape + tape_progress);
+        auto addresses = *c_result_bitmap_collision = reinterpret_cast<ukv_1x8_t**>(tape + tape_progress);
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx)
             addresses[field_idx] = first_col_collisions + field_idx * slots_per_bitmap;
         tape_progress += bytes_per_addresses_row;
@@ -1208,7 +1211,7 @@ void ukv_docs_gather( //
             heapy_field_t const& name_or_path = (*heapy_fields)[field_idx];
             json_t::iterator found_value_it = parsed.end();
             json_t const& found_value =
-                name_or_path.index() //
+                name_or_path.index() == 2 //
                     ?
                     // This libraries doesn't implement `find` for JSON-Pointers:
                     (parsed.contains(std::get<2>(name_or_path)) //
@@ -1246,13 +1249,13 @@ void ukv_docs_gather( //
             case ukv_type_f32_k: export_scalar_column<float>(found_value, doc_idx, column); break;
             case ukv_type_f64_k: export_scalar_column<double>(found_value, doc_idx, column); break;
 
-            case ukv_type_str_k: export_string_column(found_value, doc_idx, column, arena.unpacked_tape); break;
-            case ukv_type_bin_k: export_string_column(found_value, doc_idx, column, arena.unpacked_tape); break;
+            case ukv_type_str_k: export_string_column(found_value, doc_idx, column, arena.another_tape); break;
+            case ukv_type_bin_k: export_string_column(found_value, doc_idx, column, arena.another_tape); break;
 
             default: break;
             }
         }
     }
 
-    *c_result_strs_contents = reinterpret_cast<ukv_val_ptr_t>(arena.unpacked_tape.data());
+    *c_result_strs_contents = reinterpret_cast<ukv_val_ptr_t>(arena.another_tape.data());
 }

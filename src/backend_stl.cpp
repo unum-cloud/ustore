@@ -366,8 +366,7 @@ void read_head( //
     // 3. Fetch the data
     ukv_val_len_t* lens = *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
     ukv_val_len_t* offs = *c_found_offsets = lens + tasks.count;
-    ukv_val_ptr_t contents = *c_found_values =
-        reinterpret_cast<ukv_val_ptr_t>(tape + sizeof(ukv_val_len_t) * tasks.count * 2);
+    ukv_val_ptr_t contents = *c_found_values = reinterpret_cast<ukv_val_ptr_t>(offs + tasks.count);
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
