@@ -42,39 +42,41 @@ class graph_ref_t {
 
     status_t upsert(edges_view_t const& edges) noexcept {
         status_t status;
-        ukv_graph_upsert_edges(db_,
-                               txn_,
-                               edges.size(),
-                               &col_,
-                               0,
-                               edges.edge_ids.begin().get(),
-                               edges.edge_ids.stride(),
-                               edges.source_ids.begin().get(),
-                               edges.source_ids.stride(),
-                               edges.target_ids.begin().get(),
-                               edges.target_ids.stride(),
-                               ukv_options_default_k,
-                               arena_,
-                               status.member_ptr());
+        ukv_graph_upsert_edges( //
+            db_,
+            txn_,
+            edges.size(),
+            &col_,
+            0,
+            edges.edge_ids.begin().get(),
+            edges.edge_ids.stride(),
+            edges.source_ids.begin().get(),
+            edges.source_ids.stride(),
+            edges.target_ids.begin().get(),
+            edges.target_ids.stride(),
+            ukv_options_default_k,
+            arena_,
+            status.member_ptr());
         return status;
     }
 
     status_t remove(edges_view_t const& edges) noexcept {
         status_t status;
-        ukv_graph_remove_edges(db_,
-                               txn_,
-                               edges.size(),
-                               &col_,
-                               0,
-                               edges.edge_ids.begin().get(),
-                               edges.edge_ids.stride(),
-                               edges.source_ids.begin().get(),
-                               edges.source_ids.stride(),
-                               edges.target_ids.begin().get(),
-                               edges.target_ids.stride(),
-                               ukv_options_default_k,
-                               arena_,
-                               status.member_ptr());
+        ukv_graph_remove_edges( //
+            db_,
+            txn_,
+            edges.size(),
+            &col_,
+            0,
+            edges.edge_ids.begin().get(),
+            edges.edge_ids.stride(),
+            edges.source_ids.begin().get(),
+            edges.source_ids.stride(),
+            edges.target_ids.begin().get(),
+            edges.target_ids.stride(),
+            ukv_options_default_k,
+            arena_,
+            status.member_ptr());
         return status;
     }
 
@@ -96,18 +98,19 @@ class graph_ref_t {
         status_t status;
         ukv_options_t options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
 
-        ukv_graph_remove_vertices(db_,
-                                  txn_,
-                                  vertices.count(),
-                                  &col_,
-                                  0,
-                                  vertices.begin().get(),
-                                  vertices.stride(),
-                                  roles.begin().get(),
-                                  roles.stride(),
-                                  options,
-                                  arena_,
-                                  status.member_ptr());
+        ukv_graph_remove_vertices( //
+            db_,
+            txn_,
+            vertices.count(),
+            &col_,
+            0,
+            vertices.begin().get(),
+            vertices.stride(),
+            roles.begin().get(),
+            roles.stride(),
+            options,
+            arena_,
+            status.member_ptr());
         return status;
     }
 
@@ -134,20 +137,21 @@ class graph_ref_t {
         ukv_options_t options = static_cast<ukv_options_t>((track ? ukv_option_read_track_k : ukv_options_default_k) |
                                                            ukv_option_read_lengths_k);
 
-        ukv_graph_find_edges(db_,
-                             txn_,
-                             vertices.count(),
-                             &col_,
-                             0,
-                             vertices.begin().get(),
-                             vertices.stride(),
-                             roles.begin().get(),
-                             roles.stride(),
-                             options,
-                             &degrees_per_vertex,
-                             &neighborships_per_vertex,
-                             arena_,
-                             status.member_ptr());
+        ukv_graph_find_edges( //
+            db_,
+            txn_,
+            vertices.count(),
+            &col_,
+            0,
+            vertices.begin().get(),
+            vertices.stride(),
+            roles.begin().get(),
+            roles.stride(),
+            options,
+            &degrees_per_vertex,
+            &neighborships_per_vertex,
+            arena_,
+            status.member_ptr());
         if (!status)
             return status;
 
@@ -199,20 +203,21 @@ class graph_ref_t {
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
         ukv_key_t* neighborships_per_vertex = nullptr;
 
-        ukv_graph_find_edges(db_,
-                             txn_,
-                             1,
-                             &col_,
-                             0,
-                             &vertex,
-                             0,
-                             &role,
-                             0,
-                             track ? ukv_option_read_track_k : ukv_options_default_k,
-                             &degrees_per_vertex,
-                             &neighborships_per_vertex,
-                             arena_,
-                             status.member_ptr());
+        ukv_graph_find_edges( //
+            db_,
+            txn_,
+            1,
+            &col_,
+            0,
+            &vertex,
+            0,
+            &role,
+            0,
+            track ? ukv_option_read_track_k : ukv_options_default_k,
+            &degrees_per_vertex,
+            &neighborships_per_vertex,
+            arena_,
+            status.member_ptr());
         if (!status)
             return status;
 
@@ -252,20 +257,21 @@ class graph_ref_t {
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
         ukv_key_t* neighborships_per_vertex = nullptr;
 
-        ukv_graph_find_edges(db_,
-                             txn_,
-                             vertices.count(),
-                             &col_,
-                             0,
-                             vertices.begin().get(),
-                             vertices.stride(),
-                             roles.begin().get(),
-                             roles.stride(),
-                             track ? ukv_option_read_track_k : ukv_options_default_k,
-                             &degrees_per_vertex,
-                             &neighborships_per_vertex,
-                             arena_,
-                             status.member_ptr());
+        ukv_graph_find_edges( //
+            db_,
+            txn_,
+            vertices.count(),
+            &col_,
+            0,
+            vertices.begin().get(),
+            vertices.stride(),
+            roles.begin().get(),
+            roles.stride(),
+            track ? ukv_option_read_track_k : ukv_options_default_k,
+            &degrees_per_vertex,
+            &neighborships_per_vertex,
+            arena_,
+            status.member_ptr());
         if (!status)
             return status;
 

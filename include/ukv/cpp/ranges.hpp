@@ -34,6 +34,11 @@ class strided_iterator_gt {
     using reference = value_type&;
 
     inline strided_iterator_gt(object_at* raw = nullptr, ukv_size_t stride = 0) noexcept : raw_(raw), stride_(stride) {}
+    inline strided_iterator_gt(strided_iterator_gt&&) noexcept = default;
+    inline strided_iterator_gt(strided_iterator_gt const&) noexcept = default;
+    inline strided_iterator_gt& operator=(strided_iterator_gt&&) noexcept = default;
+    inline strided_iterator_gt& operator=(strided_iterator_gt const&) noexcept = default;
+
     inline object_at& operator[](ukv_size_t idx) const noexcept { return *upshift(stride_ * idx); }
 
     inline strided_iterator_gt& operator++() noexcept {
@@ -105,6 +110,8 @@ class strided_range_gt {
         : begin_(begin), stride_(sizeof(object_at)), count_(end - begin) {}
     strided_range_gt(object_at* begin, std::size_t stride, std::size_t count) noexcept
         : begin_(begin), stride_(static_cast<ukv_size_t>(stride)), count_(static_cast<ukv_size_t>(count)) {}
+    strided_range_gt(strided_iterator_gt<object_at> begin, std::size_t count) noexcept
+        : strided_range_gt(begin.get(), begin.stride(), count) {}
 
     strided_range_gt(strided_range_gt&&) = default;
     strided_range_gt(strided_range_gt const&) = default;
@@ -142,7 +149,7 @@ strided_range_gt<at> strided_range(std::vector<at>& vec) noexcept {
 }
 
 template <typename at>
-strided_range_gt<at> strided_range(std::vector<at> const& vec) noexcept {
+strided_range_gt<at const> strided_range(std::vector<at> const& vec) noexcept {
     return {vec.data(), sizeof(at), vec.size()};
 }
 
