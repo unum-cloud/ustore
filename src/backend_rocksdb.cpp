@@ -106,7 +106,7 @@ rocks_col_t* rocks_collection(rocks_db_t& db, ukv_col_t col) {
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_open(ukv_str_view_t, ukv_t* c_db, ukv_error_t* c_error) {
+void ukv_db_open(ukv_str_view_t, ukv_t* c_db, ukv_error_t* c_error) {
     try {
         rocks_db_t* db_ptr = new rocks_db_t;
         std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
@@ -601,7 +601,7 @@ void ukv_size( //
     }
 }
 
-void ukv_collection_open( //
+void ukv_col_open( //
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
     ukv_str_view_t,
@@ -629,7 +629,7 @@ void ukv_collection_open( //
     }
 }
 
-void ukv_collection_remove( //
+void ukv_col_remove( //
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
     ukv_error_t* c_error) {
@@ -660,7 +660,7 @@ void ukv_collection_remove( //
     }
 }
 
-void ukv_collection_list( //
+void ukv_col_list( //
     ukv_t const c_db,
     ukv_size_t* c_count,
     ukv_str_view_t* c_names,
@@ -697,7 +697,7 @@ void ukv_collection_list( //
     }
 }
 
-void ukv_control( //
+void ukv_db_control( //
     ukv_t const,
     ukv_str_view_t,
     ukv_str_view_t* c_response,
@@ -758,10 +758,10 @@ void ukv_txn_free(ukv_t const c_db, ukv_txn_t c_txn) {
     delete txn;
 }
 
-void ukv_collection_free(ukv_t const, ukv_col_t const) {
+void ukv_col_free(ukv_t const, ukv_col_t const) {
 }
 
-void ukv_free(ukv_t c_db) {
+void ukv_db_free(ukv_t c_db) {
     if (!c_db)
         return;
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);

@@ -273,7 +273,7 @@ class txn_t : public std::enable_shared_from_this<txn_t> {
     expected_gt<col_t> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
         ukv_col_t col = ukv_col_main_k;
-        ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
+        ukv_col_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
@@ -302,12 +302,12 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
     status_t open(std::string const& config = "") {
         status_t status;
-        ukv_open(config.c_str(), &db_, status.member_ptr());
+        ukv_db_open(config.c_str(), &db_, status.member_ptr());
         return status;
     }
 
     void close() {
-        ukv_free(db_);
+        ukv_db_free(db_);
         db_ = nullptr;
     }
 
@@ -329,7 +329,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
         status_t status;
         ukv_size_t count = 0;
         ukv_str_view_t names = nullptr;
-        ukv_collection_list(db_, &count, &names, memory.member_ptr(), status.member_ptr());
+        ukv_col_list(db_, &count, &names, memory.member_ptr(), status.member_ptr());
         if (!status)
             return status;
 
@@ -360,7 +360,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
     expected_gt<col_t> collection(ukv_str_view_t name = "", ukv_format_t format = ukv_format_binary_k) noexcept {
         status_t status;
         ukv_col_t col = ukv_col_main_k;
-        ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
+        ukv_col_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
@@ -369,7 +369,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
     status_t remove(ukv_str_view_t name) noexcept {
         status_t status;
-        ukv_collection_remove(db_, name, status.member_ptr());
+        ukv_col_remove(db_, name, status.member_ptr());
         return status;
     }
 
@@ -384,7 +384,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
         ukv_size_t count = 0;
         ukv_str_view_t names = nullptr;
         arena_t arena(db_);
-        ukv_collection_list(db_, &count, &names, arena.member_ptr(), status.member_ptr());
+        ukv_col_list(db_, &count, &names, arena.member_ptr(), status.member_ptr());
         if (!status)
             return status;
 

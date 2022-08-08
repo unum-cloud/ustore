@@ -723,7 +723,7 @@ void scan_txn( //
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_open( //
+void ukv_db_open( //
     ukv_str_view_t c_config,
     ukv_t* c_db,
     ukv_error_t* c_error) {
@@ -950,7 +950,7 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_open(
+void ukv_col_open(
     // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
@@ -989,7 +989,7 @@ void ukv_collection_open(
     }
 }
 
-void ukv_collection_remove(
+void ukv_col_remove(
     // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
@@ -1015,7 +1015,7 @@ void ukv_collection_remove(
     }
 }
 
-void ukv_collection_list( //
+void ukv_col_list( //
     ukv_t const c_db,
     ukv_size_t* c_count,
     ukv_str_view_t* c_names,
@@ -1053,7 +1053,7 @@ void ukv_collection_list( //
     }
 }
 
-void ukv_control( //
+void ukv_db_control( //
     ukv_t const c_db,
     ukv_str_view_t c_request,
     ukv_str_view_t* c_response,
@@ -1228,14 +1228,14 @@ void ukv_txn_free(ukv_t const, ukv_txn_t const c_txn) {
     delete &txn;
 }
 
-void ukv_free(ukv_t c_db) {
+void ukv_db_free(ukv_t c_db) {
     if (!c_db)
         return;
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     delete &db;
 }
 
-void ukv_collection_free(ukv_t const, ukv_col_t const) {
+void ukv_col_free(ukv_t const, ukv_col_t const) {
     // In this in-memory freeing the col handle does nothing.
     // The DB destructor will automatically cleanup the memory.
 }

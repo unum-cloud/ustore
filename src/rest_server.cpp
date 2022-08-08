@@ -305,7 +305,7 @@ void respond_to_one(db_session_t& session,
         std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
 
         status_t status;
-        ukv_collection_open(session.db(), col_name_buffer, NULL, &collection.raw, error.member_ptr());
+        ukv_col_open(session.db(), col_name_buffer, NULL, &collection.raw, error.member_ptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
     }
@@ -526,7 +526,7 @@ void respond_to_aos(db_session_t& session,
 
         status_t status;
         col_t collection(session.db());
-        ukv_collection_open(session.db(), col_name_buffer, NULL, &collection.raw, error.member_ptr());
+        ukv_col_open(session.db(), col_name_buffer, NULL, &collection.raw, error.member_ptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -913,7 +913,7 @@ int main(int argc, char* argv[]) {
     // Check if we can initialize the DB
     auto session = std::make_shared<db_w_clients_t>();
     status_t status;
-    ukv_open(db_config.c_str(), &session->raw, error.member_ptr());
+    ukv_db_open(db_config.c_str(), &session->raw, error.member_ptr());
     if (!status) {
         std::cerr << "Couldn't initialize DB: " << error.raw << std::endl;
         return EXIT_FAILURE;

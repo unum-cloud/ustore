@@ -175,6 +175,7 @@ class growing_tape_t {
 };
 
 struct stl_arena_t {
+
     std::vector<byte_t> output_tape;
     std::vector<byte_t> unpacked_tape;
     growing_tape_t growing_tape;

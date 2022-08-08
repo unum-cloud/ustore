@@ -89,7 +89,7 @@ bool export_error(level_status_t const& status, ukv_error_t* c_error) {
     return true;
 }
 
-void ukv_open(ukv_str_view_t, ukv_t* c_db, ukv_error_t* c_error) {
+void ukv_db_open(ukv_str_view_t, ukv_t* c_db, ukv_error_t* c_error) {
     try {
         level_db_t* db_ptr = nullptr;
         level_options_t options;
@@ -490,7 +490,7 @@ void ukv_size( //
     }
 }
 
-void ukv_collection_open( //
+void ukv_col_open( //
     ukv_t const,
     ukv_str_view_t c_col_name,
     ukv_str_view_t,
@@ -500,14 +500,14 @@ void ukv_collection_open( //
         *c_error = "Collections not supported by LevelDB!";
 }
 
-void ukv_collection_remove( //
+void ukv_col_remove( //
     ukv_t const,
     ukv_str_view_t,
     ukv_error_t* c_error) {
     *c_error = "Collections not supported by LevelDB!";
 }
 
-void ukv_collection_list( //
+void ukv_col_list( //
     ukv_t const,
     ukv_size_t*,
     ukv_str_view_t*,
@@ -516,7 +516,7 @@ void ukv_collection_list( //
     *c_error = "Collections not supported by LevelDB!";
 }
 
-void ukv_control( //
+void ukv_db_control( //
     ukv_t const c_db,
     ukv_str_view_t c_request,
     ukv_str_view_t* c_response,
@@ -558,10 +558,10 @@ void ukv_arena_free(ukv_t const, ukv_arena_t c_arena) {
 void ukv_txn_free(ukv_t const, ukv_txn_t) {
 }
 
-void ukv_collection_free(ukv_t const, ukv_col_t const) {
+void ukv_col_free(ukv_t const, ukv_col_t const) {
 }
 
-void ukv_free(ukv_t c_db) {
+void ukv_db_free(ukv_t c_db) {
     if (!c_db)
         return;
     level_db_t* db = reinterpret_cast<level_db_t*>(c_db);
