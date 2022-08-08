@@ -56,7 +56,7 @@ class members_ref_gt {
     using keys_extractor_t = keys_arg_extractor_gt<locations_plain_t>;
     static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
-    using value_t = std::conditional_t<is_one_k, value_view_t, taped_values_view_t>;
+    using value_t = std::conditional_t<is_one_k, value_view_t, tape_view_t>;
     using present_t = std::conditional_t<is_one_k, bool, strided_range_gt<bool>>;
     using length_t = std::conditional_t<is_one_k, ukv_val_len_t, indexed_range_gt<ukv_val_len_t*>>;
 
@@ -251,7 +251,7 @@ members_ref_gt<locations_at>::any_get(ukv_options_t options) noexcept {
     if constexpr (is_one_k)
         return value_view_t {found_values, *found_lengths};
     else
-        return taped_values_view_t {found_lengths, found_values, count};
+        return tape_view_t {found_lengths, found_values, count};
 }
 
 template <typename locations_at>

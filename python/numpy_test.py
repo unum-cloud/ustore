@@ -19,7 +19,7 @@ def lower_triangular(col):
     values_lens = np.zeros(count_keys, dtype=np.uint32)
     keys = np.array(keys, dtype=np.uint64)
 
-    col.fill_tensor(keys, values, values_lens, pad)
+    values, values_lens = col.get_matrix(keys, max_length=100, padding=pad)
 
     for i, key in enumerate(keys):
         assert values_lens[i] == key

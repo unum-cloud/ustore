@@ -180,7 +180,7 @@ class pairs_stream_t {
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
     indexed_range_gt<ukv_key_t*> fetched_keys_;
-    taped_values_view_t values_view;
+    tape_view_t values_view;
     std::size_t fetched_offset_ = 0;
 
     status_t prefetch() noexcept {
@@ -231,7 +231,7 @@ class pairs_stream_t {
         if (!status)
             return status;
 
-        values_view = taped_values_view_t {found_lens, found_vals, count};
+        values_view = tape_view_t {found_lens, found_vals, count};
         next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }

@@ -314,7 +314,7 @@ void export_edge_tuples( //
     if (*c_error)
         return;
 
-    taped_values_view_t values {c_found_lengths, c_found_values, c_vertices_count};
+    tape_view_t values {c_found_lengths, c_found_values, c_vertices_count};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
 
@@ -426,7 +426,7 @@ void export_disjoint_edge_buffers( //
     if (*c_error)
         return;
 
-    taped_values_view_t values {c_found_lengths, c_found_values, c_vertices_count};
+    tape_view_t values {c_found_lengths, c_found_values, c_vertices_count};
     std::size_t value_idx = 0;
     for (value_view_t value : values)
         arena.updated_vals[value_idx++] = value;

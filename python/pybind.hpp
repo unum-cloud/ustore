@@ -54,6 +54,7 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
  */
 struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
     txn_t native;
+
     bool track_reads = false;
     bool flush_writes = false;
 
@@ -180,7 +181,9 @@ struct py_docs_col_t {
  * protocol. Remaining collection methods include:
  *      * update(mapping: dict) ~ Batch Insert/Put
  *      * clear() ~ Removes all items in collection
- *      * tensor(collection?, keys, max_length: int, padding: byte)
+ *      * get_column(keys) ~ Will extract/receive binary values as Apache Arrow collections
+ *      * get_matrix(keys, max_length: int, padding: byte)
+ *
  * All in all, collections mimic Python @c `dict` API, but some funcs were skipped:
  *      * __len__() ~ It's hard to consistently estimate the collection.
  *      * popitem() ~ We can't guarantee Last-In First-Out semantics.
