@@ -285,7 +285,10 @@ void ukv_write( //
  *                           > track: Adds collision-detection on keys read through txn.
  *                           > lengths: Only fetches lengths of values, not content.
  *
- * @param[out] found_lengths Will contain @param tasks_count lengths for the requested values.
+ * @param[out] found_offsets Will contain a pointer to an array with @param tasks_count integers.
+ *                           Each marks response offset in bytes starting from @param `found_values`.
+ * @param[out] found_lengths Will contain a pointer to an array with @param tasks_count integers.
+ *                           Each defines response length in bytes.
  * @param[out] found_values  Will contain @param tasks_count values concatenated one after another.
  *                           Instead of allocating every "string" separately, we join them into
  *                           a single "tape" structure, which later be exported into (often disjoint)
@@ -307,6 +310,7 @@ void ukv_read( //
 
     ukv_options_t const options,
 
+    ukv_val_len_t** found_offsets,
     ukv_val_len_t** found_lengths,
     ukv_val_ptr_t* found_values,
 
@@ -380,7 +384,7 @@ void ukv_scan( //
  * @param[in] min_keys       For every task contains the beginning of range-of-interest.
  * @param[in] max_keys       For every task contains the ending of range-of-interest.
  *
- * @param[inout] estimates   For every task (range) will export @b six integers:
+ * @param[out] estimates     For every task (range) will export @b six integers:
  *                           > min & max cardinality,
  *                           > min & max bytes in values,
  *                           > min & max (persistent) memory usage.
@@ -405,7 +409,7 @@ void ukv_size( //
 
     ukv_options_t const options,
 
-    ukv_size_t* estimates,
+    ukv_size_t** estimates,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

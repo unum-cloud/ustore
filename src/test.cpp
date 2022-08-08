@@ -61,7 +61,7 @@ TEST(db, intro) {
 
     // Reusable memory
     // This interface not just more performant, but also provides nicer interface:
-    //  expected_gt<taped_values_view_t> tapes = main[{100, 101}].on(arena);
+    //  expected_gt<tape_view_t> tapes = main[{100, 101}].on(arena);
     arena_t arena(db);
     _ = main[{43, 44}].on(arena).clear();
     _ = main[{43, 44}].on(arena).erase();
@@ -102,8 +102,8 @@ void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_leng
     using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<taped_values_view_t> retrieved_and_arena = ref.value();
-    taped_values_view_t const& retrieved = *retrieved_and_arena;
+    expected_gt<tape_view_t> retrieved_and_arena = ref.value();
+    tape_view_t const& retrieved = *retrieved_and_arena;
     ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
 
@@ -135,8 +135,8 @@ void check_equalities(members_ref_gt<locations_at>& ref, values_arg_t values) {
     using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<taped_values_view_t> retrieved_and_arena = ref.value();
-    taped_values_view_t const& retrieved = *retrieved_and_arena;
+    expected_gt<tape_view_t> retrieved_and_arena = ref.value();
+    tape_view_t const& retrieved = *retrieved_and_arena;
     EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
     tape_iterator_t it = retrieved.begin();

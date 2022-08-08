@@ -214,7 +214,8 @@ void ukv_docs_read( //
     ukv_options_t const options,
     ukv_format_t const format,
 
-    // ukv_type_t** found_types,
+    ukv_type_t** found_types,
+    ukv_val_len_t** found_offsets,
     ukv_val_len_t** found_lengths,
     ukv_val_ptr_t* found_values,
 

@@ -114,6 +114,11 @@ void ukv::wrap_database(py::module& m) {
         py_col.native = *std::move(maybe_col);
     });
 
+    // ML-oriented procedures for zero-copy variants exporting
+    // Apache Arrow shared memory handles:
+    py_col.def("get_column", [](py_col_t& py_col, py::object keys) { return 0; });
+    py_col.def("get_matrix", [](py_col_t& py_col, py::object keys) { return 0; });
+
 #pragma region Transactions and Lifetime
 
     py_txn.def( //

@@ -188,7 +188,7 @@ class serializing_tape_ref_t {
         arena_.growing_tape.push_back(single_doc_buffer_);
     }
 
-    taped_values_view_t view() const noexcept { return arena_.growing_tape; }
+    tape_view_t view() const noexcept { return arena_.growing_tape; }
 };
 
 template <typename callback_at>
@@ -217,7 +217,7 @@ read_tasks_soa_t const& read_unique_docs(ukv_t const c_db,
              &arena_ptr,
              c_error);
 
-    auto binary_docs = taped_values_view_t(binary_docs_lens, binary_docs_begin, tasks.count);
+    auto binary_docs = tape_view_t(binary_docs_lens, binary_docs_begin, tasks.count);
     auto binary_docs_it = binary_docs.begin();
 
     for (ukv_size_t task_idx = 0; task_idx != tasks.count; ++task_idx, ++binary_docs_it) {
@@ -302,7 +302,7 @@ read_tasks_soa_t read_docs(ukv_t const c_db,
     }
 
     // Parse all the unique documents
-    auto binary_docs = taped_values_view_t(binary_docs_lens, binary_docs_begin, tasks.count);
+    auto binary_docs = tape_view_t(binary_docs_lens, binary_docs_begin, tasks.count);
     auto binary_docs_it = binary_docs.begin();
     for (ukv_size_t doc_idx = 0; doc_idx != unique_docs_count; ++doc_idx, ++binary_docs_it) {
         value_view_t binary_doc = *binary_docs_it;
@@ -695,7 +695,7 @@ void ukv_docs_gist( //
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
 
-    taped_values_view_t binary_docs {binary_docs_lens, binary_docs_begin, c_docs_count};
+    tape_view_t binary_docs {binary_docs_lens, binary_docs_begin, c_docs_count};
     tape_iterator_t binary_docs_it = binary_docs.begin();
 
     // Export all the elements into a heap-allocated hash-set, keeping only unique entries
@@ -799,7 +799,7 @@ void ukv_docs_gather_scalars( //
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
 
-    taped_values_view_t binary_docs {binary_docs_lens, binary_docs_begin, c_docs_count};
+    tape_view_t binary_docs {binary_docs_lens, binary_docs_begin, c_docs_count};
     tape_iterator_t binary_docs_it = binary_docs.begin();
 
     // If those pointers were not provided, we can reuse the validity bitmap
@@ -1099,7 +1099,7 @@ void ukv_docs_gather_strings( //
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
 
-    taped_values_view_t binary_docs {binary_docs_lens, binary_docs_begin, c_docs_count};
+    tape_view_t binary_docs {binary_docs_lens, binary_docs_begin, c_docs_count};
     tape_iterator_t binary_docs_it = binary_docs.begin();
 
     // Parse all the field names
@@ -1204,6 +1204,6 @@ void ukv_docs_gather_strings( //
         }
     }
 
-    *c_binary_docs_lens = taped_values_view_t(arena.growing_tape).lengths();
-    *c_found_joined_strings = reinterpret_cast<ukv_str_view_t>(taped_values_view_t(arena.growing_tape).contents());
+    *c_binary_docs_lens = tape_view_t(arena.growing_tape).lengths();
+    *c_found_joined_strings = reinterpret_cast<ukv_str_view_t>(tape_view_t(arena.growing_tape).contents());
 }

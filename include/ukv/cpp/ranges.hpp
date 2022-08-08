@@ -197,7 +197,7 @@ struct range_gt {
     inline pointer_at&& end() && noexcept { return std::move(end_); }
 };
 
-#pragma region - Tapes
+#pragma region Tapes
 
 /**
  * @brief A read-only iterator for values packed into a
@@ -205,57 +205,59 @@ struct range_gt {
  */
 class tape_iterator_t {
 
-    ukv_val_len_t const* lengths_ = nullptr;
     ukv_val_ptr_t contents_ = nullptr;
+    ukv_val_len_t* offsets_ = nullptr;
+    ukv_val_len_t* lengths_ = nullptr;
 
   public:
-    using iterator_category = std::forward_iterator_tag;
+    using iterator_category = std::random_access_iterator_tag;
     using difference_type = std::ptrdiff_t;
     using value_type = value_view_t;
     using pointer = void;
     using reference = void;
 
-    inline tape_iterator_t(ukv_val_ptr_t ptr, ukv_size_t elements) noexcept
-        : lengths_(reinterpret_cast<ukv_val_len_t*>(ptr)), contents_(ptr + sizeof(ukv_val_len_t) * elements) {}
-
-    inline tape_iterator_t(ukv_val_len_t const* lens, ukv_val_ptr_t vals) noexcept : lengths_(lens), contents_(vals) {}
+    inline tape_iterator_t(ukv_val_ptr_t vals, ukv_val_len_t const* offs, ukv_val_len_t const* lens) noexcept
+        : contents_(vals), offsets_(offs), lengths_(lens) {}
 
     inline tape_iterator_t& operator++() noexcept {
-        if (*lengths_ != ukv_val_len_missing_k)
-            contents_ += *lengths_;
         ++lengths_;
+        ++offsets_;
         return *this;
     }
 
-    inline tape_iterator_t operator++(int) const noexcept {
-        return {lengths_ + 1, *lengths_ != ukv_val_len_missing_k ? contents_ + *lengths_ : contents_};
-    }
-
-    inline value_view_t operator*() const noexcept { return {contents_, *lengths_}; }
+    inline tape_iterator_t operator++(int) const noexcept { return {contents_, lengths_ + 1, offsets_ + 1}; }
+    inline tape_iterator_t operator--(int) const noexcept { return {contents_, lengths_ - 1, offsets_ - 1}; }
+    inline value_view_t operator*() const noexcept { return {contents_ + *offsets_, *lengths_}; }
 
     inline bool operator==(tape_iterator_t const& other) const noexcept { return lengths_ == other.lengths_; }
     inline bool operator!=(tape_iterator_t const& other) const noexcept { return lengths_ != other.lengths_; }
 };
 
-class taped_values_view_t {
-    ukv_val_len_t* lengths_ = nullptr;
+class tape_view_t {
     ukv_val_ptr_t contents_ = nullptr;
+    ukv_val_len_t* offsets_ = nullptr;
+    ukv_val_len_t* lengths_ = nullptr;
     ukv_size_t count_ = 0;
 
   public:
-    inline taped_values_view_t() = default;
-    inline taped_values_view_t(ukv_val_len_t* lens, ukv_val_ptr_t vals, ukv_size_t elements) noexcept
-        : lengths_(lens), contents_(vals), count_(elements) {}
+    inline tape_view_t() = default;
 
-    inline tape_iterator_t begin() const noexcept { return {lengths_, contents_}; }
-    inline tape_iterator_t end() const noexcept { return {lengths_ + count_, contents_}; }
+    inline tape_view_t(ukv_val_ptr_t vals,
+                       ukv_val_len_t const* offs,
+                       ukv_val_len_t const* lens,
+                       ukv_size_t elements) noexcept
+        : contents_(vals), offsets_(offs), lengths_(lens) count_(elements) {}
+
+    inline tape_iterator_t begin() const noexcept { return {contents_, offsets_, lengths_}; }
+    inline tape_iterator_t end() const noexcept { return {contents_, offsets_ + count_, lengths_ + count_}; }
     inline std::size_t size() const noexcept { return count_; }
 
-    ukv_val_len_t* lengths() const noexcept { return lengths_; }
-    ukv_val_ptr_t contents() const noexcept { return contents_; }
+    inline ukv_val_len_t* offsets() const noexcept { return offsets_; }
+    inline ukv_val_len_t* lengths() const noexcept { return lengths_; }
+    inline ukv_val_ptr_t contents() const noexcept { return contents_; }
 };
 
-#pragma region - Multiple Dimensions
+#pragma region Multiple Dimensions
 
 template <typename scalar_at>
 class strided_matrix_gt {
@@ -302,7 +304,7 @@ class strided_matrix_gt {
     inline scalar_t const* data() const noexcept { return begin_; }
 };
 
-#pragma region - Algorithms
+#pragma region Algorithms
 
 /**
  * @brief Unlike the `std::accumulate` and `std::transform_reduce` takes an integer `n`
@@ -330,7 +332,7 @@ bool all_ascending(iterator_at begin, std::size_t n) {
     return true;
 }
 
-#pragma region - Aliases and Packs
+#pragma region Aliases and Packs
 
 using keys_view_t = strided_range_gt<ukv_key_t const>;
 using fields_view_t = strided_range_gt<ukv_str_view_t const>;
