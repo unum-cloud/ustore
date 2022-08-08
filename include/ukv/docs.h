@@ -161,7 +161,7 @@ void ukv_docs_write( //
 
     ukv_options_t const options,
     ukv_format_t const format,
-    // ukv_type_t const type,
+    ukv_type_t const type,
 
     ukv_val_ptr_t const* values,
     ukv_size_t const values_stride,
@@ -186,6 +186,9 @@ void ukv_docs_write( //
  *                         different format can be requested. Like importing
  *                         JSONs & BSONs from Mongo, but later exporting
  *                         Apache Arrow Tables.
+ * @param[in] type         A binary type to which entries have to be converted to.
+ *                         Only applies if @param format is set to `ukv_format_binary_k`
+ *                         and @param field is not NULL.
  *
  * @section Supported Formats
  * > ukv_format_json_k
@@ -213,11 +216,11 @@ void ukv_docs_read( //
 
     ukv_options_t const options,
     ukv_format_t const format,
+    ukv_type_t const type,
 
-    ukv_type_t** found_types,
+    ukv_val_ptr_t* found_values,
     ukv_val_len_t** found_offsets,
     ukv_val_len_t** found_lengths,
-    ukv_val_ptr_t* found_values,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -260,7 +263,7 @@ void ukv_docs_gist( //
  *              If `fields_stride` is set to zero, we assume that all paths
  *              are concatenated with a NULL-character delimiter.
  *
- * @param[in] columns_validities
+ * @param[out] columns_validities
  *              Bitset, which will indicate validity of gather objects.
  *              It must contain enough bits to consecutively stores the validity
  *              indicators for every cell in the exported table of scalars.
@@ -273,7 +276,7 @@ void ukv_docs_gist( //
  *              The @param columns_conversions and @param columns_collisions have
  *              same sizes and layouts, but are not supported by Apache Arrow.
  *
- * @param[in] columns_conversions
+ * @param[out] columns_conversions
  *              An @b Optional bitset, which will indicate type conversions.
  *              Conversions mean, that the export/cast changes the semantics.
  *              We identify following type groups: booleans, integers, floats, strings.
@@ -281,12 +284,12 @@ void ukv_docs_gist( //
  *              but may not be lossless. Meaning that @c `bool` to @c `int` isn't
  *              considered a downcast, same as @c `bool` to @c `double`.
  *
- * @param[in] columns_collisions
+ * @param[out] columns_collisions
  *              An @b Optional bitset, which will indicate key collisions.
  *              Collisions imply, that a key was found, but it's internal
  *              contents can't be converted to the requested scalar type.
  *
- * @param[in] columns_scalars
+ * @param[out] columns_scalars
  *              Buffers for scalars to be exported to.
  *              The ordering of it's element is identical to @param columns_validities,
  *              but every column only needs: `docs_count * sizeof(scalar)`
@@ -326,10 +329,10 @@ void ukv_docs_gather( //
     ukv_1x8_t*** columns_validities,
     ukv_1x8_t*** columns_conversions,
     ukv_1x8_t*** columns_collisions,
-    ukv_1x8_t*** columns_scalars,
+    ukv_val_ptr_t** columns_scalars,
     ukv_val_len_t*** columns_offsets,
     ukv_val_len_t*** columns_lengths,
-    ukv_str_view_t* joined_strings,
+    ukv_val_ptr_t* joined_strings,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

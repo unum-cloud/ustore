@@ -189,6 +189,7 @@ class pairs_stream_t {
             return {};
 
         ukv_key_t* found_keys = nullptr;
+        ukv_val_len_t* found_offs = nullptr;
         ukv_val_len_t* found_lens = nullptr;
         ukv_val_ptr_t found_vals = nullptr;
         status_t status;
@@ -224,14 +225,15 @@ class pairs_stream_t {
             found_keys,
             sizeof(ukv_key_t),
             ukv_options_default_k,
-            &found_lens,
             &found_vals,
+            &found_offs,
+            &found_lens,
             arena_read_.member_ptr(),
             status.member_ptr());
         if (!status)
             return status;
 
-        values_view = tape_view_t {found_lens, found_vals, count};
+        values_view = tape_view_t {found_vals, found_offs, found_lens, count};
         next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
@@ -410,12 +412,14 @@ class members_range_t {
     expected_gt<size_estimates_t> size_estimates() noexcept {
         status_t status;
         arena_t arena(db_);
-        size_estimates_t result;
-        auto o = reinterpret_cast<ukv_size_t*>(&result.cardinality.min);
+        ukv_size_t* o = nullptr;
         auto a = arena.member_ptr();
         auto s = status.member_ptr();
-        ukv_size(db_, txn_, 1, &col_, 0, &min_key_, 0, &max_key_, 0, ukv_options_default_k, o, a, s);
-        return {std::move(status), std::move(result)};
+        ukv_size(db_, txn_, 1, &col_, 0, &min_key_, 0, &max_key_, 0, ukv_options_default_k, &o, a, s);
+        if (!status)
+            return status;
+        size_estimates_t result {{o[0], o[1]}, {o[2], o[3]}, {o[4], o[5]}};
+        return result;
     }
 
     members_range_t& since(ukv_key_t min_key) noexcept {

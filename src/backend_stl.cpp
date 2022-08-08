@@ -47,7 +47,7 @@ struct stl_db_t;
 struct stl_col_t;
 struct stl_txn_t;
 
-struct stl_generationd_value_t {
+struct stl_value_t {
     buffer_t buffer;
     generation_t generation {0};
     bool is_deleted {false};
@@ -59,7 +59,7 @@ struct stl_col_t {
      * @brief Primary data-store.
      * Associative container is used to allow scans.
      */
-    std::map<ukv_key_t, stl_generationd_value_t> pairs;
+    std::map<ukv_key_t, stl_value_t> pairs;
 
     /**
      * @brief Keeps the number of unique elements submitted to the store.
@@ -206,7 +206,7 @@ void read_from_disk(stl_col_t& col, std::string const& path, ukv_error_t* c_erro
             return;
         }
 
-        col.pairs.emplace(key, stl_generationd_value_t {std::move(buf), generation_t {0}, false});
+        col.pairs.emplace(key, stl_value_t {std::move(buf), generation_t {0}, false});
     }
 
     *c_error = handle.close().release_error();
@@ -286,8 +286,8 @@ void write_head( //
                 key_iterator->second.is_deleted = task.is_deleted();
             }
             else if (!task.is_deleted()) {
-                stl_generationd_value_t generationd_value {task.buffer(), ++db.youngest_generation};
-                col.pairs.emplace(task.key, std::move(generationd_value));
+                stl_value_t value_w_generation {task.buffer(), ++db.youngest_generation};
+                col.pairs.emplace(task.key, std::move(value_w_generation));
                 ++col.unique_elements;
             }
         }
@@ -306,8 +306,9 @@ void measure_head( //
     stl_db_t& db,
     read_tasks_soa_t tasks,
     ukv_options_t const,
-    ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -322,6 +323,7 @@ void measure_head( //
     // 2. Pull the data
     auto lens = reinterpret_cast<ukv_val_len_t*>(tape);
     *c_found_lengths = lens;
+    *c_found_offsets = nullptr;
     *c_found_values = nullptr;
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
@@ -338,15 +340,16 @@ void read_head( //
     stl_db_t& db,
     read_tasks_soa_t tasks,
     ukv_options_t const,
-    ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
     std::shared_lock _ {db.mutex};
 
     // 1. Estimate the total size
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count * 2;
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_col_t const& col = stl_col(db, task.col);
@@ -361,23 +364,24 @@ void read_head( //
         return;
 
     // 3. Fetch the data
-    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * tasks.count;
-    *c_found_lengths = lens;
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
+    ukv_val_len_t* lens = *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
+    ukv_val_len_t* offs = *c_found_offsets = lens + tasks.count;
+    ukv_val_ptr_t contents = *c_found_values =
+        reinterpret_cast<ukv_val_ptr_t>(tape + sizeof(ukv_val_len_t) * tasks.count * 2);
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_col_t const& col = stl_col(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
         if (key_iterator != col.pairs.end() && !key_iterator->second.is_deleted) {
-            auto len = key_iterator->second.buffer.size();
-            std::memcpy(tape + exported_bytes, key_iterator->second.buffer.data(), len);
-            lens[i] = static_cast<ukv_val_len_t>(len);
-            exported_bytes += len;
+            buffer_t const& buf = key_iterator->second.buffer;
+            std::memcpy(contents, buf.data(), buf.size());
+            offs[i] = static_cast<ukv_val_len_t>(contents - *c_found_values);
+            lens[i] = static_cast<ukv_val_len_t>(buf.size());
+            contents += buf.size();
         }
         else {
-            lens[i] = ukv_val_len_missing_k;
+            offs[i] = lens[i] = ukv_val_len_missing_k;
         }
     }
 }
@@ -478,8 +482,9 @@ void measure_txn( //
     stl_txn_t& txn,
     read_tasks_soa_t tasks,
     ukv_options_t const c_options,
-    ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -497,6 +502,7 @@ void measure_txn( //
     // 2. Pull the data
     auto lens = reinterpret_cast<ukv_val_len_t*>(tape);
     *c_found_lengths = lens;
+    *c_found_offsets = nullptr;
     *c_found_values = nullptr;
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
@@ -538,8 +544,9 @@ void read_txn( //
     stl_txn_t& txn,
     read_tasks_soa_t tasks,
     ukv_options_t const c_options,
-    ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -549,7 +556,7 @@ void read_txn( //
     bool should_track_requests = (c_options & ukv_option_read_track_k);
 
     // 1. Estimate the total size of keys
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count * 2;
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_col_t const& col = stl_col(db, task.col);
@@ -579,10 +586,10 @@ void read_txn( //
         return;
 
     // 3. Pull the data
-    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * tasks.count;
-    *c_found_lengths = lens;
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
+    ukv_val_len_t* lens = *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
+    ukv_val_len_t* offs = *c_found_offsets = lens + tasks.count;
+    ukv_val_ptr_t contents = *c_found_values =
+        reinterpret_cast<ukv_val_ptr_t>(tape + sizeof(ukv_val_len_t) * tasks.count * 2);
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
@@ -590,33 +597,35 @@ void read_txn( //
 
         // Some keys may already be overwritten inside of transaction
         if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end()) {
-            auto len = inner_iterator->second.size();
-            std::memcpy(tape + exported_bytes, inner_iterator->second.data(), len);
-            lens[i] = static_cast<ukv_val_len_t>(len);
-            exported_bytes += len;
+            buffer_t const& buf = inner_iterator->second;
+            std::memcpy(contents, buf.data(), buf.size());
+            offs[i] = static_cast<ukv_val_len_t>(contents - *c_found_values);
+            lens[i] = static_cast<ukv_val_len_t>(buf.size());
+            contents += buf.size();
         }
         // Some may have been deleted inside the transaction
         else if (auto inner_iterator = txn.removed.find(task.location()); inner_iterator != txn.removed.end()) {
-            lens[i] = ukv_val_len_missing_k;
+            offs[i] = lens[i] = ukv_val_len_missing_k;
         }
         // Others should be pulled from the main store
         else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
 
             if (!key_iterator->second.is_deleted) {
-                auto len = key_iterator->second.buffer.size();
-                std::memcpy(tape + exported_bytes, key_iterator->second.buffer.data(), len);
-                lens[i] = static_cast<ukv_val_len_t>(len);
-                exported_bytes += len;
+                buffer_t const& buf = key_iterator->second.buffer;
+                std::memcpy(contents, buf.data(), buf.size());
+                offs[i] = static_cast<ukv_val_len_t>(contents - *c_found_values);
+                lens[i] = static_cast<ukv_val_len_t>(buf.size());
+                contents += buf.size();
             }
             else
-                lens[i] = ukv_val_len_missing_k;
+                offs[i] = lens[i] = ukv_val_len_missing_k;
 
             if (should_track_requests)
                 txn.requested.emplace(task.location(), key_iterator->second.generation);
         }
         // But some will be missing
         else {
-            lens[i] = ukv_val_len_missing_k;
+            offs[i] = lens[i] = ukv_val_len_missing_k;
 
             if (should_track_requests)
                 txn.requested.emplace(task.location(), generation_t {});
@@ -670,7 +679,7 @@ void scan_txn( //
             }
 
             // Compare against the incoming inserted keys:
-            bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.collection == task.col;
+            bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.col == task.col;
             if (check_in_txn && txn_iterator->first.key <= key_iterator->first) {
                 found_keys[j] = txn_iterator->first.key;
                 if (export_lengths)
@@ -689,7 +698,7 @@ void scan_txn( //
         }
 
         // As in any `set_union`, don't forget the tail :)
-        while (j != task.length && txn_iterator != txn.upserted.end() && txn_iterator->first.collection == task.col) {
+        while (j != task.length && txn_iterator != txn.upserted.end() && txn_iterator->first.col == task.col) {
             found_keys[j] = txn_iterator->first.key;
             if (export_lengths)
                 found_lens[j] = static_cast<ukv_val_len_t>(txn_iterator->second.size());
@@ -746,8 +755,9 @@ void ukv_read( //
 
     ukv_options_t const c_options,
 
-    ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -767,11 +777,11 @@ void ukv_read( //
 
     if (c_txn) {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_txn : &read_txn;
-        return func(txn, tasks, c_options, c_found_lengths, c_found_values, arena, c_error);
+        return func(txn, tasks, c_options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
     }
     else {
         auto func = (c_options & ukv_option_read_lengths_k) ? &measure_head : &read_head;
-        return func(db, tasks, c_options, c_found_lengths, c_found_values, arena, c_error);
+        return func(db, tasks, c_options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
     }
 }
 
@@ -870,11 +880,20 @@ void ukv_size( //
 
     ukv_options_t const,
 
-    ukv_size_t* c_found_estimates,
-    ukv_arena_t*,
+    ukv_size_t** c_found_estimates,
+    ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    std::size_t bytes_needed = sizeof(ukv_size_t) * 6 * n;
+    *c_found_estimates = reinterpret_cast<ukv_size_t*>(prepare_memory(arena.output_tape, bytes_needed, c_error));
+    if (*c_error)
         return;
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
@@ -917,7 +936,7 @@ void ukv_size( //
         }
 
         //
-        ukv_size_t* estimates = c_found_estimates + i * 6;
+        ukv_size_t* estimates = *c_found_estimates + i * 6;
         estimates[0] = static_cast<ukv_size_t>(main_count);
         estimates[1] = static_cast<ukv_size_t>(main_count + txn_count);
         estimates[2] = static_cast<ukv_size_t>(main_bytes);
@@ -1100,9 +1119,9 @@ void ukv_txn_commit( //
     generation_t const youngest_generation = db.youngest_generation.load();
 
     // 1. Check for refreshes among fetched keys
-    for (auto const& [sub_key, sub_generation] : txn.requested) {
-        stl_col_t& col = stl_col(db, sub_key.collection);
-        auto key_iterator = col.pairs.find(sub_key.key);
+    for (auto const& [col_key, sub_generation] : txn.requested) {
+        stl_col_t& col = stl_col(db, col_key.col);
+        auto key_iterator = col.pairs.find(col_key.key);
         if (key_iterator == col.pairs.end())
             continue;
         if (key_iterator->second.generation != sub_generation &&
@@ -1111,9 +1130,9 @@ void ukv_txn_commit( //
     }
 
     // 2. Check for collisions among incoming values
-    for (auto const& [sub_key, value] : txn.upserted) {
-        stl_col_t& col = stl_col(db, sub_key.collection);
-        auto key_iterator = col.pairs.find(sub_key.key);
+    for (auto const& [col_key, value] : txn.upserted) {
+        stl_col_t& col = stl_col(db, col_key.col);
+        auto key_iterator = col.pairs.find(col_key.key);
         if (key_iterator == col.pairs.end())
             continue;
 
@@ -1126,9 +1145,9 @@ void ukv_txn_commit( //
     }
 
     // 3. Check for collisions among deleted values
-    for (auto const& sub_key : txn.removed) {
-        stl_col_t& col = stl_col(db, sub_key.collection);
-        auto key_iterator = col.pairs.find(sub_key.key);
+    for (auto const& col_key : txn.removed) {
+        stl_col_t& col = stl_col(db, col_key.col);
+        auto key_iterator = col.pairs.find(col_key.key);
         if (key_iterator == col.pairs.end())
             continue;
 
@@ -1153,7 +1172,7 @@ void ukv_txn_commit( //
 
     // 5. Import the data, as no collisions were detected
     for (auto& sub_key_and_value : txn.upserted) {
-        stl_col_t& col = stl_col(db, sub_key_and_value.first.collection);
+        stl_col_t& col = stl_col(db, sub_key_and_value.first.col);
         auto key_iterator = col.pairs.find(sub_key_and_value.first.key);
         // A key was deleted:
         // if (sub_key_and_value.second.empty()) {
@@ -1168,16 +1187,16 @@ void ukv_txn_commit( //
         }
         // A key was inserted:
         else {
-            stl_generationd_value_t generationd_value {std::move(sub_key_and_value.second), txn.generation};
-            col.pairs.emplace(sub_key_and_value.first.key, std::move(generationd_value));
+            stl_value_t value_w_generation {std::move(sub_key_and_value.second), txn.generation};
+            col.pairs.emplace(sub_key_and_value.first.key, std::move(value_w_generation));
             ++col.unique_elements;
         }
     }
 
     // 6. Remove the requested entries
-    for (auto const& sub_key : txn.removed) {
-        stl_col_t& col = stl_col(db, sub_key.collection);
-        auto key_iterator = col.pairs.find(sub_key.key);
+    for (auto const& col_key : txn.removed) {
+        stl_col_t& col = stl_col(db, col_key.col);
+        auto key_iterator = col.pairs.find(col_key.key);
         if (key_iterator == col.pairs.end())
             continue;
 

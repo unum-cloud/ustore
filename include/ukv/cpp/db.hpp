@@ -128,7 +128,7 @@ class col_t {
     inline members_ref_gt<keys_arg_t> operator[](keys_view_t keys) noexcept { return at(keys); }
     inline members_ref_gt<keys_arg_t> at(keys_view_t keys) noexcept {
         keys_arg_t arg;
-        arg.collections_begin = &col_;
+        arg.cols_begin = &col_;
         arg.keys_begin = keys.begin();
         arg.count = keys.size();
         return {db_, txn_, {std::move(arg)}, arena_, format_};
@@ -148,7 +148,7 @@ class col_t {
             // ? We may want to warn the users, that the collection property will be shadowed:
             // static_assert(!sfinae_has_collection_gt<plain_t>::value, "Overwriting existing collection!");
             col_key_field_t arg;
-            arg.collection = col_;
+            arg.col = col_;
             if constexpr (std::is_integral_v<plain_t>)
                 arg.key = keys;
             else
@@ -210,7 +210,7 @@ class txn_t : public std::enable_shared_from_this<txn_t> {
 
     members_ref_gt<keys_arg_t> operator[](strided_range_gt<col_key_t const> cols_and_keys) noexcept {
         keys_arg_t arg;
-        arg.collections_begin = cols_and_keys.members(&col_key_t::collection).begin();
+        arg.cols_begin = cols_and_keys.members(&col_key_t::col).begin();
         arg.keys_begin = cols_and_keys.members(&col_key_t::key).begin();
         arg.count = cols_and_keys.size();
         return {db_, txn_, std::move(arg), arena_};
@@ -218,7 +218,7 @@ class txn_t : public std::enable_shared_from_this<txn_t> {
 
     members_ref_gt<keys_arg_t> operator[](strided_range_gt<col_key_field_t const> cols_and_keys) noexcept {
         keys_arg_t arg;
-        arg.collections_begin = cols_and_keys.members(&col_key_field_t::collection).begin();
+        arg.cols_begin = cols_and_keys.members(&col_key_field_t::col).begin();
         arg.keys_begin = cols_and_keys.members(&col_key_field_t::key).begin();
         arg.fields_begin = cols_and_keys.members(&col_key_field_t::field).begin();
         arg.count = cols_and_keys.size();

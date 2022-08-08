@@ -216,7 +216,7 @@ class tape_iterator_t {
     using pointer = void;
     using reference = void;
 
-    inline tape_iterator_t(ukv_val_ptr_t vals, ukv_val_len_t const* offs, ukv_val_len_t const* lens) noexcept
+    inline tape_iterator_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens) noexcept
         : contents_(vals), offsets_(offs), lengths_(lens) {}
 
     inline tape_iterator_t& operator++() noexcept {
@@ -242,11 +242,8 @@ class tape_view_t {
   public:
     inline tape_view_t() = default;
 
-    inline tape_view_t(ukv_val_ptr_t vals,
-                       ukv_val_len_t const* offs,
-                       ukv_val_len_t const* lens,
-                       ukv_size_t elements) noexcept
-        : contents_(vals), offsets_(offs), lengths_(lens) count_(elements) {}
+    inline tape_view_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens, ukv_size_t elements) noexcept
+        : contents_(vals), offsets_(offs), lengths_(lens), count_(elements) {}
 
     inline tape_iterator_t begin() const noexcept { return {contents_, offsets_, lengths_}; }
     inline tape_iterator_t end() const noexcept { return {contents_, offsets_ + count_, lengths_ + count_}; }
@@ -344,7 +341,7 @@ using fields_view_t = strided_range_gt<ukv_str_view_t const>;
  */
 struct keys_arg_t {
     using value_type = col_key_field_t;
-    strided_iterator_gt<ukv_col_t const> collections_begin;
+    strided_iterator_gt<ukv_col_t const> cols_begin;
     strided_iterator_gt<ukv_key_t const> keys_begin;
     strided_iterator_gt<ukv_str_view_t const> fields_begin;
     ukv_size_t count = 0;
