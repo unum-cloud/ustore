@@ -140,7 +140,7 @@ extern ukv_key_t ukv_key_unknown_k;
  * @param[out] db     A pointer to the opened KVS, unless @param error is filled.
  * @param[out] error  The error message to be handled by callee.
  */
-void ukv_open( //
+void ukv_db_open( //
     ukv_str_view_t config,
     ukv_t* db,
     ukv_error_t* error);
@@ -158,7 +158,7 @@ void ukv_open( //
  * If lengths aren't provided, they are inferred from the passed values,
  * as the offset of the first NULL-termination (zero) symbol.
  *
- * @param[in] db             Already open database instance, @see `ukv_open`.
+ * @param[in] db             Already open database instance, @see `ukv_db_open`.
  * @param[in] txn            Transaction, through which the operation must go.
  *                           Can be NULL.
  * @param[in] tasks_count    Number of elements in @param keys.
@@ -267,7 +267,7 @@ void ukv_write( //
  * > Single and Batch
  * > Size Estimates and Exports
  *
- * @param[in] db             Already open database instance, @see `ukv_open`.
+ * @param[in] db             Already open database instance, @see `ukv_db_open`.
  * @param[in] txn            Transaction or the snapshot, through which the
  * @param[in] tasks_count    Number of elements in @param keys.
  *
@@ -324,7 +324,7 @@ void ukv_read( //
  * Values are not exported, for that - follow up with `ukv_read`.
  * Fetching lengths of values is @b optional.
  *
- * @param[in] db             Already open database instance, @see `ukv_open`.
+ * @param[in] db             Already open database instance, @see `ukv_db_open`.
  * @param[in] txn            Transaction or the snapshot, through which the
  * @param[in] tasks_count    Number of elements in @param keys.
  *
@@ -373,7 +373,7 @@ void ukv_scan( //
 /**
  * @brief Estimates the number of entries and memory usage for a range of keys.
  *
- * @param[in] db             Already open database instance, @see `ukv_open`.
+ * @param[in] db             Already open database instance, @see `ukv_db_open`.
  * @param[in] txn            Transaction or the snapshot, through which the
  * @param[in] tasks_count    Number ranges to be introspected.
  *
@@ -424,13 +424,13 @@ void ukv_size( //
  * This function may never be called, as the default nameless collection
  * always exists and can be addressed via `ukv_col_main_k`.
  *
- * @param[in] db           Already open database instance, @see `ukv_open`.
+ * @param[in] db           Already open database instance, @see `ukv_db_open`.
  * @param[in] name         A NULL-terminated collection name.
  * @param[in] config       A NULL-terminated configuration string.
  * @param[out] collection  Address to which the collection handle will be exported.
  * @param[out] error       The error message to be handled by callee.
  */
-void ukv_collection_open( //
+void ukv_col_open( //
     ukv_t const db,
     ukv_str_view_t name,
     ukv_str_view_t config,
@@ -441,12 +441,12 @@ void ukv_collection_open( //
  * @brief Retrieves a list of collection names in a NULL-delimited form.
  * The default nameless collection won't be described in any form.
  *
- * @param[in] db        Already open database instance, @see `ukv_open`.
+ * @param[in] db        Already open database instance, @see `ukv_db_open`.
  * @param[inout] count  Will contain the number of found unique collections.
  * @param[inout] names  A NULL-terminated output string with comma-delimited column names.
  * @param[out] error    The error message to be handled by callee.
  */
-void ukv_collection_list( //
+void ukv_col_list( //
     ukv_t const db,
     ukv_size_t* count,
     ukv_str_view_t* names,
@@ -458,11 +458,11 @@ void ukv_collection_list( //
  * The default nameless collection can't be removed, but it
  * will be @b cleared, if you pass a NULL as `name`.
  *
- * @param[in] db      Already open database instance, @see `ukv_open`.
+ * @param[in] db      Already open database instance, @see `ukv_db_open`.
  * @param[in] name    A NULL-terminated collection name.
  * @param[out] error  The error message to be handled by callee.
  */
-void ukv_collection_remove( //
+void ukv_col_remove( //
     ukv_t const db,
     ukv_str_view_t name,
     ukv_error_t* error);
@@ -473,7 +473,7 @@ void ukv_collection_remove( //
  * are very expensive and shouldn't be executed in most applications.
  * This is the "kitchen-sink" of UKV interface, similar to `fcntl` & `ioctl`.
  *
- * @param[in] db        Already open database instance, @see `ukv_open`.
+ * @param[in] db        Already open database instance, @see `ukv_db_open`.
  * @param[in] request   Textual representation of the command.
  * @param[out] response Output text of the request.
  * @param[out] error    The error message to be handled by callee.
@@ -485,7 +485,7 @@ void ukv_collection_remove( //
  * > "info":    Metadata about the current software version, used for debugging.
  * > "usage":   Metadata about approximate collection sizes, RAM and disk usage.
  */
-void ukv_control( //
+void ukv_db_control( //
     ukv_t const db,
     ukv_str_view_t request,
     ukv_str_view_t* response,
@@ -498,7 +498,7 @@ void ukv_control( //
 /**
  * @brief Begins a new ACID transaction or resets an existing one.
  *
- * @param db[in]            Already open database instance, @see `ukv_open`.
+ * @param db[in]            Already open database instance, @see `ukv_db_open`.
  * @param generation[in]    If equal to 0, a new number will be generated on the fly.
  * @param txn[inout]        May be pointing to an existing transaction.
  *                          In that case, it's reset to new @param generation.
@@ -546,11 +546,11 @@ void ukv_txn_free(ukv_t const db, ukv_txn_t const txn);
  * The database would still persist on disk.
  * Passing NULLs is safe.
  */
-void ukv_free(ukv_t const db);
+void ukv_db_free(ukv_t const db);
 
 /**
  * @brief A function to be called after any function failure,
- * that resulted in a non-NULL `ukv_error_t`, even `ukv_open`.
+ * that resulted in a non-NULL `ukv_error_t`, even `ukv_db_open`.
  * That's why, unlike other `...free` methods, doesn't need `db`.
  * Passing NULLs is safe.
  */

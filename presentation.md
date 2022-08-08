@@ -227,7 +227,7 @@ typedef char const* ukv_error_t;
  * @param[out] db     A pointer to the opened KVS, unless @p `error` is filled.
  * @param[out] error  The error message to be handled by callee.
  */
-void ukv_open( //
+void ukv_db_open( //
     ukv_str_view_t config,
     ukv_t* db,
     ukv_error_t* error);
@@ -393,7 +393,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_open(JNIEnv* env_
         return;
 
     ukv_error_t error_c = NULL;
-    ukv_open(config_c, &db_ptr_c, &error_c);
+    ukv_db_open(config_c, &db_ptr_c, &error_c);
     if (config_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseStringUTFChars(env_java, config_java, config_c);
     if (forward_error(env_java, error_c))
@@ -474,7 +474,7 @@ func (db *DataBase) ReConnect(config string) error {
 	config_c := C.CString(config)
 	defer C.free(unsafe.Pointer(config_c))
 
-	C.ukv_open(config_c, &db.raw, &error_c)
+	C.ukv_db_open(config_c, &db.raw, &error_c)
 	return forwardError(error_c)
 }
 ```

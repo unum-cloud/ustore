@@ -18,7 +18,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_open(JNIEnv* env_
         return;
 
     ukv_error_t error_c = NULL;
-    ukv_open(config_c, &db_ptr_c, &error_c);
+    ukv_db_open(config_c, &db_ptr_c, &error_c);
 
     if (config_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseStringUTFChars(env_java, config_java, config_c);
@@ -69,7 +69,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_close_1(JNIEnv* e
     (*env_java)->SetLongField(env_java, db_java, db_ptr_field, (long int)0);
 
     // Then actually dealloc
-    ukv_free(db_ptr_c);
+    ukv_db_free(db_ptr_c);
 }
 
 JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_clear__(JNIEnv* env_java, jobject db_java) {
@@ -81,6 +81,6 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_clear__(JNIEnv* e
         return;
     }
 
-    ukv_collection_remove(db_ptr_c, NULL, &error_c);
+    ukv_col_remove(db_ptr_c, NULL, &error_c);
     forward_ukv_error(env_java, error_c);
 }
