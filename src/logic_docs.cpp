@@ -877,7 +877,7 @@ void export_scalar_column(json_t const& value, size_t doc_idx, column_begin_t co
     case json_t::value_t::string: {
         json_t::string_t const& str = value.get_ref<json_t::string_t const&>();
         std::from_chars_result result = std::from_chars(str.data(), str.data() + str.size(), ref_scalar);
-        bool entire_string_is_number = result.ec != std::errc() && result.ptr == str.data() + str.size();
+        bool entire_string_is_number = result.ec == std::errc() && result.ptr == str.data() + str.size();
         if (entire_string_is_number) {
             ref_convert |= mask_bitmap;
             ref_collide &= ~mask_bitmap;
@@ -1114,7 +1114,7 @@ void ukv_docs_gather( //
     std::size_t bytes_per_bitmap = sizeof(ukv_1x8_t) * slots_per_bitmap;
     std::size_t bytes_per_addresses_row = sizeof(void*) * c_fields_count;
     std::size_t bytes_for_addresses = bytes_per_addresses_row * 6;
-    std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps;
+    std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps * c_fields_count;
     std::size_t bytes_per_scalars_row = transform_reduce_n(types, c_fields_count, 0ul, &min_memory_usage);
     std::size_t bytes_for_scalars = bytes_per_scalars_row * c_docs_count;
 

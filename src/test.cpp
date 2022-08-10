@@ -366,7 +366,7 @@ TEST(db, docs_table) {
         EXPECT_FALSE(col0[0].converted);
         EXPECT_EQ(col1[0].value, 27);
         EXPECT_TRUE(col1[0].converted);
-        EXPECT_EQ(col2[0].value.c_str(), "27");
+        EXPECT_STREQ(col2[0].value.c_str(), "27");
         EXPECT_TRUE(col2[0].converted);
     }
 
@@ -418,10 +418,10 @@ TEST(db, docs_table) {
         EXPECT_TRUE(col0[1].converted);
         EXPECT_EQ(col0[2].value, 24);
 
-        EXPECT_EQ(col1[0].value, "27");
+        EXPECT_STREQ(col1[0].value.c_str(), "27");
         EXPECT_TRUE(col1[0].converted);
-        EXPECT_EQ(col1[1].value, "27");
-        EXPECT_EQ(col1[2].value, "24");
+        EXPECT_STREQ(col1[1].value.c_str(), "27");
+        EXPECT_STREQ(col1[2].value.c_str(), "24");
     }
 }
 
