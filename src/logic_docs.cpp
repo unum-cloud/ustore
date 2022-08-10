@@ -92,11 +92,11 @@ json_t parse_any(value_view_t bytes, ukv_format_t const c_format, ukv_error_t* c
         switch (c_format) {
         case ukv_format_json_patch_k:
         case ukv_format_json_merge_patch_k:
-        case ukv_format_json_k: return json_t::parse(str, str + len, nullptr, true, false);
-        case ukv_format_msgpack_k: return json_t::from_msgpack(str, str + len, true, false);
-        case ukv_format_bson_k: return json_t::from_bson(str, str + len, true, false);
-        case ukv_format_cbor_k: return json_t::from_cbor(str, str + len, true, false);
-        case ukv_format_ubjson_k: return json_t::from_ubjson(str, str + len, true, false);
+        case ukv_format_json_k: return json_t::parse(str, str + len, nullptr, false, true);
+        case ukv_format_msgpack_k: return json_t::from_msgpack(str, str + len, false, false);
+        case ukv_format_bson_k: return json_t::from_bson(str, str + len, false, false);
+        case ukv_format_cbor_k: return json_t::from_cbor(str, str + len, false, false);
+        case ukv_format_ubjson_k: return json_t::from_ubjson(str, str + len, false, false);
         case ukv_format_binary_k:
             return json_t::binary({reinterpret_cast<std::int8_t const*>(bytes.begin()),
                                    reinterpret_cast<std::int8_t const*>(bytes.end())});
