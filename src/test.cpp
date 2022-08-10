@@ -332,38 +332,97 @@ TEST(db, docs_table) {
     col[2] = json_darvin.c_str();
     col[3] = json_davit.c_str();
     M_EXPECT_EQ_JSON(*col[1].value(), json_ashot.c_str());
+    M_EXPECT_EQ_JSON(*col[2].value(), json_darvin.c_str());
 
-    docs_layout_t layout {5, 6};
-    layout.index(0).key = 1;
-    layout.index(1).key = 2;
-    layout.index(2).key = 3;
-    layout.index(3).key = 123456;
-    layout.index(4).key = 654321;
-    layout.header(0) = field_type_t {"age", ukv_type_i32_k};
-    layout.header(1) = field_type_t {"age", ukv_type_str_k};
-    layout.header(2) = field_type_t {"person", ukv_type_str_k};
-    layout.header(3) = field_type_t {"person", ukv_type_f32_k};
-    layout.header(4) = field_type_t {"height", ukv_type_i32_k};
-    layout.header(5) = field_type_t {"weight", ukv_type_u64_k};
+    // Single cell
+    {
+        docs_layout_t layout {1, 1};
+        layout.index(0).key = 1;
+        layout.header(0) = field_type_t {"age", ukv_type_u32_k};
 
-    auto maybe_table = col.as_table().gather(layout);
-    auto table = *maybe_table;
-    auto col0 = table.column(0).as<std::int32_t>();
-    auto col1 = table.column(1).as<value_view_t>();
-    auto col2 = table.column(2).as<value_view_t>();
-    auto col3 = table.column(3).as<float>();
-    auto col4 = table.column(4).as<std::int32_t>();
-    auto col5 = table.column(5).as<std::uint64_t>();
+        auto maybe_table = col.as_table().gather(layout);
+        auto table = *maybe_table;
+        auto col0 = table.column(0).as<std::uint32_t>();
 
-    EXPECT_EQ(col0[0].value, 27);
-    EXPECT_EQ(col0[1].value, 27);
-    EXPECT_TRUE(col0[1].converted);
-    EXPECT_EQ(col0[2].value, 24);
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_FALSE(col0[0].converted);
+    }
 
-    EXPECT_EQ(col1[0].value, "27");
-    EXPECT_TRUE(col1[0].converted);
-    EXPECT_EQ(col1[1].value, "27");
-    EXPECT_EQ(col1[2].value, "24");
+    // Single row
+    {
+        docs_layout_t layout {1, 3};
+        layout.index(0).key = 1;
+        layout.header(0) = field_type_t {"age", ukv_type_u32_k};
+        layout.header(1) = field_type_t {"age", ukv_type_i32_k};
+        layout.header(2) = field_type_t {"age", ukv_type_str_k};
+
+        auto maybe_table = col.as_table().gather(layout);
+        auto table = *maybe_table;
+        auto col0 = table.column(0).as<std::uint32_t>();
+        auto col1 = table.column(1).as<std::int32_t>();
+        auto col2 = table.column(2).as<value_view_t>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_FALSE(col0[0].converted);
+        EXPECT_EQ(col1[0].value, 27);
+        EXPECT_TRUE(col1[0].converted);
+        EXPECT_EQ(col2[0].value.c_str(), "27");
+        EXPECT_TRUE(col2[0].converted);
+    }
+
+    // Single column
+    {
+        docs_layout_t layout {4, 1};
+        layout.index(0).key = 1;
+        layout.index(1).key = 2;
+        layout.index(2).key = 3;
+        layout.index(3).key = 123456;
+        layout.header(0) = field_type_t {"age", ukv_type_i32_k};
+
+        auto maybe_table = col.as_table().gather(layout);
+        auto table = *maybe_table;
+        auto col0 = table.column(0).as<std::int32_t>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_EQ(col0[1].value, 27);
+        EXPECT_TRUE(col0[1].converted);
+        EXPECT_EQ(col0[2].value, 24);
+    }
+
+    // Multi-column
+    {
+        docs_layout_t layout {5, 6};
+        layout.index(0).key = 1;
+        layout.index(1).key = 2;
+        layout.index(2).key = 3;
+        layout.index(3).key = 123456;
+        layout.index(4).key = 654321;
+        layout.header(0) = field_type_t {"age", ukv_type_i32_k};
+        layout.header(1) = field_type_t {"age", ukv_type_str_k};
+        layout.header(2) = field_type_t {"person", ukv_type_str_k};
+        layout.header(3) = field_type_t {"person", ukv_type_f32_k};
+        layout.header(4) = field_type_t {"height", ukv_type_i32_k};
+        layout.header(5) = field_type_t {"weight", ukv_type_u64_k};
+
+        auto maybe_table = col.as_table().gather(layout);
+        auto table = *maybe_table;
+        auto col0 = table.column(0).as<std::int32_t>();
+        auto col1 = table.column(1).as<value_view_t>();
+        auto col2 = table.column(2).as<value_view_t>();
+        auto col3 = table.column(3).as<float>();
+        auto col4 = table.column(4).as<std::int32_t>();
+        auto col5 = table.column(5).as<std::uint64_t>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_EQ(col0[1].value, 27);
+        EXPECT_TRUE(col0[1].converted);
+        EXPECT_EQ(col0[2].value, 24);
+
+        EXPECT_EQ(col1[0].value, "27");
+        EXPECT_TRUE(col1[0].converted);
+        EXPECT_EQ(col1[1].value, "27");
+        EXPECT_EQ(col1[2].value, "24");
+    }
 }
 
 TEST(db, txn) {
