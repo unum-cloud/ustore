@@ -206,19 +206,20 @@ read_tasks_soa_t const& read_unique_docs( //
     ukv_val_ptr_t binary_docs_begin = nullptr;
     ukv_val_len_t* binary_docs_offs = nullptr;
     ukv_val_len_t* binary_docs_lens = nullptr;
-    ukv_read(c_db,
-             c_txn,
-             tasks.count,
-             tasks.cols.get(),
-             tasks.cols.stride(),
-             tasks.keys.get(),
-             tasks.keys.stride(),
-             c_options,
-             &binary_docs_begin,
-             &binary_docs_offs,
-             &binary_docs_lens,
-             &arena_ptr,
-             c_error);
+    ukv_read( //
+        c_db,
+        c_txn,
+        tasks.count,
+        tasks.cols.get(),
+        tasks.cols.stride(),
+        tasks.keys.get(),
+        tasks.keys.stride(),
+        c_options,
+        &binary_docs_begin,
+        &binary_docs_offs,
+        &binary_docs_lens,
+        &arena_ptr,
+        c_error);
 
     auto binary_docs = tape_view_t(binary_docs_begin, binary_docs_offs, binary_docs_lens, tasks.count);
     auto binary_docs_it = binary_docs.begin();
@@ -279,19 +280,20 @@ read_tasks_soa_t read_docs( //
     ukv_val_len_t* binary_docs_offs = nullptr;
     ukv_val_len_t* binary_docs_lens = nullptr;
     ukv_size_t unique_docs_count = static_cast<ukv_size_t>(arena.updated_keys.size());
-    ukv_read(c_db,
-             c_txn,
-             unique_docs_count,
-             &arena.updated_keys[0].col,
-             sizeof(col_key_t),
-             &arena.updated_keys[0].key,
-             sizeof(col_key_t),
-             c_options,
-             &binary_docs_begin,
-             &binary_docs_offs,
-             &binary_docs_lens,
-             &arena_ptr,
-             c_error);
+    ukv_read( //
+        c_db,
+        c_txn,
+        unique_docs_count,
+        &arena.updated_keys[0].col,
+        sizeof(col_key_t),
+        &arena.updated_keys[0].key,
+        sizeof(col_key_t),
+        c_options,
+        &binary_docs_begin,
+        &binary_docs_offs,
+        &binary_docs_lens,
+        &arena_ptr,
+        c_error);
 
     // We will later need to locate the data for every separate request.
     // Doing it in O(N) tape iterations every time is too slow.
@@ -381,7 +383,6 @@ void replace_docs( //
             return;
     }
 
-    ukv_val_len_t offset = 0;
     ukv_arena_t arena_ptr = &arena;
     ukv_write( //
         c_db,
@@ -393,7 +394,7 @@ void replace_docs( //
         tasks.keys.stride(),
         arena.updated_vals.front().member_ptr(),
         sizeof(value_t),
-        &offset,
+        nullptr,
         0,
         arena.updated_vals.front().member_length(),
         sizeof(value_t),
@@ -413,9 +414,6 @@ void read_modify_write( //
     ukv_error_t* c_error) noexcept {
 
     prepare_memory(arena.updated_keys, tasks.count, c_error);
-    if (*c_error)
-        return;
-    prepare_memory(arena.updated_vals, tasks.count, c_error);
     if (*c_error)
         return;
 
@@ -452,35 +450,37 @@ void read_modify_write( //
             *c_error = "Out of memory!";
         }
     };
-    read_tasks_soa_t read_order = read_docs(c_db,
-                                            c_txn,
-                                            read_tasks_soa_t {tasks.cols, tasks.keys, tasks.count},
-                                            fields,
-                                            c_options,
-                                            arena,
-                                            c_error,
-                                            safe_callback);
+    read_tasks_soa_t read_order = read_docs( //
+        c_db,
+        c_txn,
+        read_tasks_soa_t {tasks.cols, tasks.keys, tasks.count},
+        fields,
+        c_options,
+        arena,
+        c_error,
+        safe_callback);
 
     // By now, the tape contains concatenated updates docs:
     ukv_size_t unique_docs_count = static_cast<ukv_size_t>(read_order.size());
     ukv_val_ptr_t binary_docs_begin = reinterpret_cast<ukv_val_ptr_t>(arena.growing_tape.contents().begin().get());
     ukv_arena_t arena_ptr = &arena;
-    ukv_write(c_db,
-              c_txn,
-              unique_docs_count,
-              read_order.cols.get(),
-              read_order.cols.stride(),
-              read_order.keys.get(),
-              read_order.keys.stride(),
-              &binary_docs_begin,
-              0,
-              arena.growing_tape.offsets().begin().get(),
-              arena.growing_tape.offsets().stride(),
-              arena.growing_tape.lengths().begin().get(),
-              arena.growing_tape.lengths().stride(),
-              c_options,
-              &arena_ptr,
-              c_error);
+    ukv_write( //
+        c_db,
+        c_txn,
+        unique_docs_count,
+        read_order.cols.get(),
+        read_order.cols.stride(),
+        read_order.keys.get(),
+        read_order.keys.stride(),
+        &binary_docs_begin,
+        0,
+        arena.growing_tape.offsets().begin().get(),
+        arena.growing_tape.offsets().stride(),
+        arena.growing_tape.lengths().begin().get(),
+        arena.growing_tape.lengths().stride(),
+        c_options,
+        &arena_ptr,
+        c_error);
 }
 
 void parse_fields( //
@@ -549,22 +549,23 @@ void ukv_docs_write( //
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     auto has_fields = fields && (!fields.repeats() || *fields);
     if (!has_fields && c_format == internal_format_k)
-        return ukv_write(c_db,
-                         c_txn,
-                         c_tasks_count,
-                         c_cols,
-                         c_cols_stride,
-                         c_keys,
-                         c_keys_stride,
-                         c_vals,
-                         c_vals_stride,
-                         c_offs,
-                         c_offs_stride,
-                         c_lens,
-                         c_lens_stride,
-                         c_options,
-                         c_arena,
-                         c_error);
+        return ukv_write( //
+            c_db,
+            c_txn,
+            c_tasks_count,
+            c_cols,
+            c_cols_stride,
+            c_keys,
+            c_keys_stride,
+            c_vals,
+            c_vals_stride,
+            c_offs,
+            c_offs_stride,
+            c_lens,
+            c_lens_stride,
+            c_options,
+            c_arena,
+            c_error);
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
@@ -617,19 +618,20 @@ void ukv_docs_read( //
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     auto has_fields = fields && (!fields.repeats() || *fields);
     if (!has_fields && c_format == internal_format_k)
-        return ukv_read(c_db,
-                        c_txn,
-                        c_tasks_count,
-                        c_cols,
-                        c_cols_stride,
-                        c_keys,
-                        c_keys_stride,
-                        c_options,
-                        c_found_values,
-                        c_found_offsets,
-                        c_found_lengths,
-                        c_arena,
-                        c_error);
+        return ukv_read( //
+            c_db,
+            c_txn,
+            c_tasks_count,
+            c_cols,
+            c_cols_stride,
+            c_keys,
+            c_keys_stride,
+            c_options,
+            c_found_values,
+            c_found_offsets,
+            c_found_lengths,
+            c_arena,
+            c_error);
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
@@ -691,19 +693,20 @@ void ukv_docs_gist( //
     ukv_val_ptr_t binary_docs_begin = nullptr;
     ukv_val_len_t* binary_docs_offs = nullptr;
     ukv_val_len_t* binary_docs_lens = nullptr;
-    ukv_read(c_db,
-             c_txn,
-             c_docs_count,
-             c_cols,
-             c_cols_stride,
-             c_keys,
-             c_keys_stride,
-             c_options,
-             &binary_docs_begin,
-             &binary_docs_offs,
-             &binary_docs_lens,
-             c_arena,
-             c_error);
+    ukv_read( //
+        c_db,
+        c_txn,
+        c_docs_count,
+        c_cols,
+        c_cols_stride,
+        c_keys,
+        c_keys_stride,
+        c_options,
+        &binary_docs_begin,
+        &binary_docs_offs,
+        &binary_docs_lens,
+        c_arena,
+        c_error);
     if (*c_error)
         return;
 
@@ -1072,19 +1075,20 @@ void ukv_docs_gather( //
     ukv_val_ptr_t binary_docs_begin = nullptr;
     ukv_val_len_t* binary_docs_offs = nullptr;
     ukv_val_len_t* binary_docs_lens = nullptr;
-    ukv_read(c_db,
-             c_txn,
-             c_docs_count,
-             c_cols,
-             c_cols_stride,
-             c_keys,
-             c_keys_stride,
-             c_options,
-             &binary_docs_begin,
-             &binary_docs_offs,
-             &binary_docs_lens,
-             c_arena,
-             c_error);
+    ukv_read( //
+        c_db,
+        c_txn,
+        c_docs_count,
+        c_cols,
+        c_cols_stride,
+        c_keys,
+        c_keys_stride,
+        c_options,
+        &binary_docs_begin,
+        &binary_docs_offs,
+        &binary_docs_lens,
+        c_arena,
+        c_error);
     if (*c_error)
         return;
 
