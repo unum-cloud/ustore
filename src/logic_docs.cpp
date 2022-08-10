@@ -374,6 +374,7 @@ void replace_docs( //
             return;
         }
 
+        serialized.clear();
         heapy_exporter->value_ptr = &serialized;
         dump_any(parsed, internal_format_k, heapy_exporter, c_error);
         if (*c_error)
