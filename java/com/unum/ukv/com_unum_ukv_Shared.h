@@ -17,7 +17,7 @@ ukv_t db_ptr(JNIEnv* env_java, jobject txn_java);
 
 ukv_txn_t txn_ptr(JNIEnv* env_java, jobject txn_java);
 
-ukv_collection_t collection_ptr(JNIEnv* env_java, ukv_t db_ptr, jstring name_java);
+ukv_col_t col_ptr(JNIEnv* env_java, ukv_t db_ptr, jstring name_java);
 
 /**
  * @return true  If error was detected.

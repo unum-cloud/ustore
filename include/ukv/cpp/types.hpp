@@ -24,23 +24,19 @@ enum class byte_t : std::uint8_t {};
  */
 struct col_key_t {
 
-    ukv_collection_t collection = ukv_default_collection_k;
+    ukv_col_t col = ukv_col_main_k;
     ukv_key_t key = 0;
 
     col_key_t() = default;
     col_key_t(col_key_t const&) = default;
     col_key_t& operator=(col_key_t const&) = default;
 
-    inline col_key_t(ukv_collection_t c, ukv_key_t k) noexcept : collection(c), key(k) {}
+    inline col_key_t(ukv_col_t c, ukv_key_t k) noexcept : col(c), key(k) {}
     inline col_key_t(ukv_key_t k) noexcept : key(k) {}
-    inline col_key_t in(ukv_collection_t col) noexcept { return {col, key}; }
+    inline col_key_t in(ukv_col_t col) noexcept { return {col, key}; }
 
-    inline bool operator==(col_key_t const& other) const noexcept {
-        return (collection == other.collection) & (key == other.key);
-    }
-    inline bool operator!=(col_key_t const& other) const noexcept {
-        return (collection != other.collection) | (key != other.key);
-    }
+    inline bool operator==(col_key_t const& other) const noexcept { return (col == other.col) & (key == other.key); }
+    inline bool operator!=(col_key_t const& other) const noexcept { return (col != other.col) | (key != other.key); }
     inline bool operator<(col_key_t const& other) const noexcept { return key < other.key; }
     inline bool operator>(col_key_t const& other) const noexcept { return key > other.key; }
     inline bool operator<=(col_key_t const& other) const noexcept { return key <= other.key; }
@@ -48,19 +44,15 @@ struct col_key_t {
 };
 
 struct col_key_field_t {
-    ukv_collection_t collection = 0;
+    ukv_col_t col = 0;
     ukv_key_t key = ukv_key_unknown_k;
     ukv_str_view_t field = nullptr;
 
     col_key_field_t() = default;
-
-    col_key_field_t(ukv_key_t key) noexcept : collection(ukv_default_collection_k), key(key), field(nullptr) {}
-
-    col_key_field_t(ukv_collection_t col, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
-        : collection(col), key(key), field(field) {}
-
-    col_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept
-        : collection(ukv_default_collection_k), key(key), field(field) {}
+    col_key_field_t(ukv_key_t key) noexcept : col(ukv_col_main_k), key(key), field(nullptr) {}
+    col_key_field_t(ukv_col_t col, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
+        : col(col), key(key), field(field) {}
+    col_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept : col(ukv_col_main_k), key(key), field(field) {}
 };
 
 template <typename... args_at>
@@ -117,7 +109,7 @@ struct neighborship_t {
     }
 };
 
-#pragma region - Variable Length Views
+#pragma region Variable Length Views
 
 /**
  * @brief Similar to `std::optional<std::string_view>`.
@@ -163,7 +155,7 @@ class value_view_t {
     }
 };
 
-#pragma region - Memory Management
+#pragma region Memory Management
 
 /**
  * @brief A view of a tape received from the DB.
@@ -218,7 +210,7 @@ class any_arena_t {
     inline arena_t release_owned() noexcept { return std::exchange(owned_, arena_t {owned_.db()}); }
 };
 
-#pragma region - Adapters
+#pragma region Adapters
 
 /**
  * @brief Trivial hash-mixing scheme from Boost.
@@ -234,7 +226,7 @@ struct sub_key_hash_t {
     inline std::size_t operator()(col_key_t const& sub) const noexcept {
         std::size_t result = SIZE_MAX;
         hash_combine(result, sub.key);
-        hash_combine(result, sub.collection);
+        hash_combine(result, sub.col);
         return result;
     }
 };

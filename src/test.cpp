@@ -31,7 +31,7 @@ TEST(db, intro) {
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
-    collection_t main = *db.collection();
+    col_t main = *db.collection();
 
     // Single-element access
     main[42] = "purpose of life";
@@ -54,14 +54,14 @@ TEST(db, intro) {
     //     (void)value;
 
     // Accessing named collections
-    collection_t prefixes = *db.collection("prefixes");
+    col_t prefixes = *db.collection("prefixes");
     prefixes.at(42) = "purpose";
     db["articles"]->at(42) = "of";
     db["suffixes"]->at(42) = "life";
 
     // Reusable memory
     // This interface not just more performant, but also provides nicer interface:
-    //  expected_gt<taped_values_view_t> tapes = main[{100, 101}].on(arena);
+    //  expected_gt<tape_view_t> tapes = main[{100, 101}].on(arena);
     arena_t arena(db);
     _ = main[{43, 44}].on(arena).clear();
     _ = main[{43, 44}].on(arena).erase();
@@ -102,8 +102,8 @@ void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_leng
     using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<taped_values_view_t> retrieved_and_arena = ref.value();
-    taped_values_view_t const& retrieved = *retrieved_and_arena;
+    expected_gt<tape_view_t> retrieved_and_arena = ref.value();
+    tape_view_t const& retrieved = *retrieved_and_arena;
     ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
 
@@ -135,8 +135,8 @@ void check_equalities(members_ref_gt<locations_at>& ref, values_arg_t values) {
     using extractor_t = keys_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<taped_values_view_t> retrieved_and_arena = ref.value();
-    taped_values_view_t const& retrieved = *retrieved_and_arena;
+    expected_gt<tape_view_t> retrieved_and_arena = ref.value();
+    tape_view_t const& retrieved = *retrieved_and_arena;
     EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
     tape_iterator_t it = retrieved.begin();
@@ -164,7 +164,7 @@ TEST(db, basic) {
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
-    collection_t col = *db.collection();
+    col_t col = *db.collection();
 
     std::vector<ukv_key_t> keys {34, 35, 36};
     ukv_val_len_t val_len = sizeof(std::uint64_t);
@@ -201,14 +201,15 @@ TEST(db, basic) {
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
     check_length(ref, ukv_val_len_missing_k);
+    db.clear();
 }
 
 TEST(db, named) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    collection_t col1 = *(db["col1"]);
-    collection_t col2 = *(db["col2"]);
+    col_t col1 = *(db["col1"]);
+    col_t col2 = *(db["col2"]);
 
     ukv_val_len_t val_len = sizeof(std::uint64_t);
     std::vector<ukv_key_t> keys {44, 45, 46};
@@ -265,6 +266,7 @@ TEST(db, named) {
     _ = db.remove("col2");
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
+    db.clear();
 }
 
 TEST(db, docs) {
@@ -273,7 +275,7 @@ TEST(db, docs) {
     EXPECT_TRUE(db.open(""));
 
     // JSON
-    collection_t col = *db.collection("docs", ukv_format_json_k);
+    col_t col = *db.collection("docs", ukv_format_json_k);
     auto json = R"( {"person": "Davit", "age": 24} )"_json.dump();
     col[1] = json.c_str();
     M_EXPECT_EQ_JSON(col[1].value()->c_str(), json.c_str());
@@ -309,13 +311,122 @@ TEST(db, docs) {
     // JSON-Patch Merging
     col.as(ukv_format_json_merge_patch_k);
     auto json_to_merge = R"( {"person": "Darvin", "age": 28} )"_json.dump();
-    expected_json = R"( {"person": "Darvin", "hello": ["world"],"age": 28} )"_json.dump();
+    expected_json = R"( {"person": "Darvin", "hello": ["world"], "age": 28} )"_json.dump();
     col[1] = json_to_merge.c_str();
     auto merge_result = col[1].value();
     M_EXPECT_EQ_JSON(merge_result->c_str(), expected_json.c_str());
     M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Darvin\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "28");
+    db.clear();
+}
+
+TEST(db, docs_table) {
+    using json_t = nlohmann::json;
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+
+    // Inject basic data
+    col_t col = *db.collection("", ukv_format_json_k);
+    auto json_ashot = R"( { "person": "Ashot", "age": 27, "height": 1 } )"_json.dump();
+    auto json_darvin = R"( { "person": "Darvin", "age": "27", "weight": 2 } )"_json.dump();
+    auto json_davit = R"( { "person": "Davit", "age": 24 } )"_json.dump();
+    col[1] = json_ashot.c_str();
+    col[2] = json_darvin.c_str();
+    col[3] = json_davit.c_str();
+    M_EXPECT_EQ_JSON(*col[1].value(), json_ashot.c_str());
+    M_EXPECT_EQ_JSON(*col[2].value(), json_darvin.c_str());
+
+    // Single cell
+    {
+        docs_layout_t layout {1, 1};
+        layout.index(0).key = 1;
+        layout.header(0) = field_type_t {"age", ukv_type_u32_k};
+
+        auto maybe_table = col.as_table().gather(layout);
+        auto table = *maybe_table;
+        auto col0 = table.column(0).as<std::uint32_t>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_FALSE(col0[0].converted);
+    }
+
+    // Single row
+    {
+        docs_layout_t layout {1, 3};
+        layout.index(0).key = 1;
+        layout.header(0) = field_type_t {"age", ukv_type_u32_k};
+        layout.header(1) = field_type_t {"age", ukv_type_i32_k};
+        layout.header(2) = field_type_t {"age", ukv_type_str_k};
+
+        auto maybe_table = col.as_table().gather(layout);
+        auto table = *maybe_table;
+        auto col0 = table.column(0).as<std::uint32_t>();
+        auto col1 = table.column(1).as<std::int32_t>();
+        auto col2 = table.column(2).as<value_view_t>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_FALSE(col0[0].converted);
+        EXPECT_EQ(col1[0].value, 27);
+        EXPECT_TRUE(col1[0].converted);
+        EXPECT_STREQ(col2[0].value.c_str(), "27");
+        EXPECT_TRUE(col2[0].converted);
+    }
+
+    // Single column
+    {
+        docs_layout_t layout {4, 1};
+        layout.index(0).key = 1;
+        layout.index(1).key = 2;
+        layout.index(2).key = 3;
+        layout.index(3).key = 123456;
+        layout.header(0) = field_type_t {"age", ukv_type_i32_k};
+
+        auto maybe_table = col.as_table().gather(layout);
+        auto table = *maybe_table;
+        auto col0 = table.column(0).as<std::int32_t>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_EQ(col0[1].value, 27);
+        EXPECT_TRUE(col0[1].converted);
+        EXPECT_EQ(col0[2].value, 24);
+    }
+
+    // Multi-column
+    {
+        docs_layout_t layout {5, 6};
+        layout.index(0).key = 1;
+        layout.index(1).key = 2;
+        layout.index(2).key = 3;
+        layout.index(3).key = 123456;
+        layout.index(4).key = 654321;
+        layout.header(0) = field_type_t {"age", ukv_type_i32_k};
+        layout.header(1) = field_type_t {"age", ukv_type_str_k};
+        layout.header(2) = field_type_t {"person", ukv_type_str_k};
+        layout.header(3) = field_type_t {"person", ukv_type_f32_k};
+        layout.header(4) = field_type_t {"height", ukv_type_i32_k};
+        layout.header(5) = field_type_t {"weight", ukv_type_u64_k};
+
+        auto maybe_table = col.as_table().gather(layout);
+        auto table = *maybe_table;
+        auto col0 = table.column(0).as<std::int32_t>();
+        auto col1 = table.column(1).as<value_view_t>();
+        auto col2 = table.column(2).as<value_view_t>();
+        auto col3 = table.column(3).as<float>();
+        auto col4 = table.column(4).as<std::int32_t>();
+        auto col5 = table.column(5).as<std::uint64_t>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_EQ(col0[1].value, 27);
+        EXPECT_TRUE(col0[1].converted);
+        EXPECT_EQ(col0[2].value, 24);
+
+        EXPECT_STREQ(col1[0].value.c_str(), "27");
+        EXPECT_TRUE(col1[0].converted);
+        EXPECT_STREQ(col1[1].value.c_str(), "27");
+        EXPECT_STREQ(col1[2].value.c_str(), "24");
+    }
+    db.clear();
 }
 
 TEST(db, txn) {
@@ -340,7 +451,7 @@ TEST(db, txn) {
     round_trip(txn_ref, values);
 
     EXPECT_TRUE(db.collection());
-    collection_t col = *db.collection();
+    col_t col = *db.collection();
     auto col_ref = col[keys];
 
     // Check for missing values before commit
@@ -356,7 +467,7 @@ TEST(db, txn) {
 
     // Transaction with named collection
     EXPECT_TRUE(db.collection("named_col"));
-    collection_t named_col = *db.collection("named_col");
+    col_t named_col = *db.collection("named_col");
     std::vector<col_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
     auto txn_named_col_ref = txn[sub_keys];
     round_trip(txn_named_col_ref, values);
@@ -372,12 +483,13 @@ TEST(db, txn) {
 
     // Validate that values match after commit
     check_equalities(named_col_ref, values);
+    db.clear();
 }
 
 TEST(db, nested_docs) {
     db_t db;
     _ = db.open();
-    collection_t col = *db.collection();
+    col_t col = *db.collection();
 }
 
 TEST(db, net) {
@@ -385,7 +497,7 @@ TEST(db, net) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    collection_t main = *db.collection();
+    col_t main = *db.collection();
     graph_ref_t net = main.as_graph();
 
     // triangle
@@ -475,6 +587,7 @@ TEST(db, net) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+    db.clear();
 }
 
 TEST(db, net_batch) {
@@ -482,7 +595,7 @@ TEST(db, net_batch) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
-    collection_t main = *db.collection();
+    col_t main = *db.collection();
     graph_ref_t net = main.as_graph();
 
     std::vector<edge_t> triangle {
@@ -568,6 +681,7 @@ TEST(db, net_batch) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+    db.clear();
 }
 
 int main(int argc, char** argv) {

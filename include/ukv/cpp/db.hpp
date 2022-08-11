@@ -12,8 +12,9 @@
 
 #include "ukv/ukv.h"
 #include "ukv/cpp/members_ref.hpp"
-#include "ukv/cpp/graph_ref.hpp"
 #include "ukv/cpp/members_range.hpp"
+#include "ukv/cpp/graph_ref.hpp"
+#include "ukv/cpp/docs.hpp"
 
 namespace unum::ukv {
 
@@ -29,8 +30,9 @@ namespace unum::ukv {
  * > Concurrency: Thread-safe, for @b unique arenas.
  *   For details, @see `members_ref_gt` @section "Memory Management"
  * > Lifetime: @b Must live shorter then the DB it belongs to.
- * > Copyable: No.
  * > Exceptions: Only the `size` method.
+ * > Copyable: Will create a new empty arena.
+ *   Will remain attached to same transaction context, if any was set.
  *
  * @section Formats
  * Formats @b loosely describe the data stored in the collection
@@ -41,31 +43,29 @@ namespace unum::ukv {
  * in "Document Collections", and can later be queried with
  * any "Document Format".
  */
-class collection_t {
+class col_t {
     ukv_t db_ = nullptr;
-    ukv_collection_t col_ = ukv_default_collection_k;
+    ukv_col_t col_ = ukv_col_main_k;
     ukv_txn_t txn_ = nullptr;
     arena_t arena_;
     ukv_format_t format_ = ukv_format_binary_k;
 
   public:
-    inline collection_t() noexcept : arena_(nullptr) {}
-    inline collection_t(ukv_t db_ptr,
-                        ukv_collection_t col_ptr = ukv_default_collection_k,
-                        ukv_txn_t txn = nullptr,
-                        ukv_format_t format = ukv_format_binary_k) noexcept
+    inline col_t() noexcept : arena_(nullptr) {}
+    inline col_t(ukv_t db_ptr,
+                 ukv_col_t col_ptr = ukv_col_main_k,
+                 ukv_txn_t txn = nullptr,
+                 ukv_format_t format = ukv_format_binary_k) noexcept
         : db_(db_ptr), col_(col_ptr), txn_(txn), arena_(db_), format_(format) {}
 
-    inline collection_t(collection_t&& other) noexcept
-        : db_(other.db_), col_(std::exchange(other.col_, ukv_default_collection_k)),
-          txn_(std::exchange(other.txn_, nullptr)), arena_(std::exchange(other.arena_, {nullptr})),
-          format_(std::exchange(other.format_, ukv_format_binary_k)) {}
+    inline col_t(col_t&& other) noexcept
+        : db_(other.db_), col_(std::exchange(other.col_, ukv_col_main_k)), txn_(std::exchange(other.txn_, nullptr)),
+          arena_(std::exchange(other.arena_, {nullptr})), format_(std::exchange(other.format_, ukv_format_binary_k)) {}
 
-    inline ~collection_t() noexcept {
-        ukv_collection_free(db_, col_);
-        col_ = nullptr;
-    }
-    inline collection_t& operator=(collection_t&& other) noexcept {
+    inline col_t(col_t const& other) noexcept
+        : db_(other.db_), col_(other.col_), txn_(other.txn_), arena_(other.db_), format_(other.format_) {}
+
+    inline col_t& operator=(col_t&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(col_, other.col_);
         std::swap(txn_, other.txn_);
@@ -74,27 +74,40 @@ class collection_t {
         return *this;
     }
 
-    inline operator ukv_collection_t() const noexcept { return col_; }
-    inline ukv_collection_t* member_ptr() noexcept { return &col_; }
+    inline col_t& operator=(col_t const& other) noexcept {
+        db_ = other.db_;
+        col_ = other.col_;
+        txn_ = other.txn_;
+        arena_ = arena_t(other.db_);
+        format_ = other.format_;
+        return *this;
+    }
+
+    inline operator ukv_col_t() const noexcept { return col_; }
+    inline ukv_col_t* member_ptr() noexcept { return &col_; }
     inline ukv_t db() const noexcept { return db_; }
     inline ukv_txn_t txn() const noexcept { return txn_; }
     inline graph_ref_t as_graph() noexcept { return {db_, txn_, col_, arena_}; }
-    inline collection_t& as(ukv_format_t format) noexcept {
+    inline table_ref_t as_table() noexcept { return {db_, txn_, col_, arena_}; }
+    inline col_t& as(ukv_format_t format) noexcept {
         format_ = format;
         return *this;
     }
 
-    inline members_range_t members(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-                                   ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+    inline members_range_t members( //
+        ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+        ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
         return {db_, txn_, col_, min_key, max_key};
     }
-    inline keys_range_t keys(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-                             ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+    inline keys_range_t keys( //
+        ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+        ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
         return {members(min_key, max_key)};
     }
 
-    inline pairs_range_t items(ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-                               ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+    inline pairs_range_t items( //
+        ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+        ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
         return {members_range_t {db_, txn_, col_, min_key, max_key}};
     }
 
@@ -117,7 +130,7 @@ class collection_t {
     inline members_ref_gt<keys_arg_t> operator[](keys_view_t keys) noexcept { return at(keys); }
     inline members_ref_gt<keys_arg_t> at(keys_view_t keys) noexcept {
         keys_arg_t arg;
-        arg.collections_begin = &col_;
+        arg.cols_begin = &col_;
         arg.keys_begin = keys.begin();
         arg.count = keys.size();
         return {db_, txn_, {std::move(arg)}, arena_, format_};
@@ -137,7 +150,7 @@ class collection_t {
             // ? We may want to warn the users, that the collection property will be shadowed:
             // static_assert(!sfinae_has_collection_gt<plain_t>::value, "Overwriting existing collection!");
             col_key_field_t arg;
-            arg.collection = col_;
+            arg.col = col_;
             if constexpr (std::is_integral_v<plain_t>)
                 arg.key = keys;
             else
@@ -170,7 +183,7 @@ class collection_t {
  * > Copyable: No.
  * > Exceptions: Never.
  */
-class txn_t {
+class txn_t : public std::enable_shared_from_this<txn_t> {
     ukv_t db_ = nullptr;
     ukv_txn_t txn_ = nullptr;
     arena_t arena_;
@@ -199,7 +212,7 @@ class txn_t {
 
     members_ref_gt<keys_arg_t> operator[](strided_range_gt<col_key_t const> cols_and_keys) noexcept {
         keys_arg_t arg;
-        arg.collections_begin = cols_and_keys.members(&col_key_t::collection).begin();
+        arg.cols_begin = cols_and_keys.members(&col_key_t::col).begin();
         arg.keys_begin = cols_and_keys.members(&col_key_t::key).begin();
         arg.count = cols_and_keys.size();
         return {db_, txn_, std::move(arg), arena_};
@@ -207,7 +220,7 @@ class txn_t {
 
     members_ref_gt<keys_arg_t> operator[](strided_range_gt<col_key_field_t const> cols_and_keys) noexcept {
         keys_arg_t arg;
-        arg.collections_begin = cols_and_keys.members(&col_key_field_t::collection).begin();
+        arg.cols_begin = cols_and_keys.members(&col_key_field_t::col).begin();
         arg.keys_begin = cols_and_keys.members(&col_key_field_t::key).begin();
         arg.fields_begin = cols_and_keys.members(&col_key_field_t::field).begin();
         arg.count = cols_and_keys.size();
@@ -253,20 +266,20 @@ class txn_t {
         return status;
     }
 
-    expected_gt<collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
-    operator expected_gt<collection_t>() noexcept { return collection(""); }
+    expected_gt<col_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
+    operator expected_gt<col_t>() noexcept { return collection(""); }
 
     /**
      * @brief Provides a view of a single collection synchronized with the transaction.
      */
-    expected_gt<collection_t> collection(ukv_str_view_t name = "") noexcept {
+    expected_gt<col_t> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
-        ukv_collection_t col = nullptr;
-        ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
+        ukv_col_t col = ukv_col_main_k;
+        ukv_col_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
-            return collection_t {db_, col, txn_};
+            return col_t {db_, col, txn_};
     }
 };
 
@@ -291,12 +304,12 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
     status_t open(std::string const& config = "") {
         status_t status;
-        ukv_open(config.c_str(), &db_, status.member_ptr());
+        ukv_db_open(config.c_str(), &db_, status.member_ptr());
         return status;
     }
 
     void close() {
-        ukv_free(db_);
+        ukv_db_free(db_);
         db_ = nullptr;
     }
 
@@ -318,7 +331,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
         status_t status;
         ukv_size_t count = 0;
         ukv_str_view_t names = nullptr;
-        ukv_collection_list(db_, &count, &names, memory.member_ptr(), status.member_ptr());
+        ukv_col_list(db_, &count, &names, memory.member_ptr(), status.member_ptr());
         if (!status)
             return status;
 
@@ -342,23 +355,23 @@ class db_t : public std::enable_shared_from_this<db_t> {
         return contains(name, arena);
     }
 
-    expected_gt<collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
-    operator expected_gt<collection_t>() noexcept { return collection(""); }
-    expected_gt<collection_t> operator*() noexcept { return collection(""); }
+    expected_gt<col_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
+    operator expected_gt<col_t>() noexcept { return collection(""); }
+    expected_gt<col_t> operator*() noexcept { return collection(""); }
 
-    expected_gt<collection_t> collection(ukv_str_view_t name = "", ukv_format_t format = ukv_format_binary_k) noexcept {
+    expected_gt<col_t> collection(ukv_str_view_t name = "", ukv_format_t format = ukv_format_binary_k) noexcept {
         status_t status;
-        ukv_collection_t col = nullptr;
-        ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
+        ukv_col_t col = ukv_col_main_k;
+        ukv_col_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
-            return collection_t {db_, col, nullptr, format};
+            return col_t {db_, col, nullptr, format};
     }
 
     status_t remove(ukv_str_view_t name) noexcept {
         status_t status;
-        ukv_collection_remove(db_, name, status.member_ptr());
+        ukv_col_remove(db_, name, status.member_ptr());
         return status;
     }
 
@@ -373,7 +386,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
         ukv_size_t count = 0;
         ukv_str_view_t names = nullptr;
         arena_t arena(db_);
-        ukv_collection_list(db_, &count, &names, arena.member_ptr(), status.member_ptr());
+        ukv_col_list(db_, &count, &names, arena.member_ptr(), status.member_ptr());
         if (!status)
             return status;
 

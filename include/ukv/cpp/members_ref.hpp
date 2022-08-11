@@ -27,9 +27,9 @@ class members_ref_gt;
  * The only impossible combination is assigning many values to one key.
  *
  * @tparam locations_at Type describing the address of a value in DBMS.
- * > (ukv_collection_t?, ukv_key_t, ukv_field_t?): Single KV-pair location.
- * > (ukv_collection_t*, ukv_key_t*, ukv_field_t*): Externally owned range of keys.
- * > (ukv_collection_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
+ * > (ukv_col_t?, ukv_key_t, ukv_field_t?): Single KV-pair location.
+ * > (ukv_col_t*, ukv_key_t*, ukv_field_t*): Externally owned range of keys.
+ * > (ukv_col_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
  *
  * @section Memory Management
  * Every "container" that overloads the @b [] operator has an internal "arena",
@@ -56,7 +56,7 @@ class members_ref_gt {
     using keys_extractor_t = keys_arg_extractor_gt<locations_plain_t>;
     static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
-    using value_t = std::conditional_t<is_one_k, value_view_t, taped_values_view_t>;
+    using value_t = std::conditional_t<is_one_k, value_view_t, tape_view_t>;
     using present_t = std::conditional_t<is_one_k, bool, strided_range_gt<bool>>;
     using length_t = std::conditional_t<is_one_k, ukv_val_len_t, indexed_range_gt<ukv_val_len_t*>>;
 
@@ -69,7 +69,9 @@ class members_ref_gt {
 
     template <typename values_arg_at>
     status_t any_assign(values_arg_at&&, ukv_options_t) noexcept;
-    expected_gt<value_t> any_get(ukv_options_t) noexcept;
+
+    template <typename expected_at = value_t>
+    expected_gt<expected_at> any_get(ukv_options_t) noexcept;
 
   public:
     members_ref_gt(ukv_t db,
@@ -95,24 +97,14 @@ class members_ref_gt {
     }
 
     expected_gt<value_t> value(bool track = false) noexcept {
-        return any_get(track ? ukv_option_read_track_k : ukv_options_default_k);
+        return any_get<value_t>(track ? ukv_option_read_track_k : ukv_options_default_k);
     }
 
     operator expected_gt<value_t>() noexcept { return value(); }
 
     expected_gt<length_t> length(bool track = false) noexcept {
         auto options = (track ? ukv_option_read_track_k : ukv_options_default_k) | ukv_option_read_lengths_k;
-        auto maybe = any_get(static_cast<ukv_options_t>(options));
-        if (!maybe)
-            return maybe.release_status();
-
-        if constexpr (is_one_k)
-            return length_t {*maybe ? static_cast<length_t>(maybe->size()) : ukv_val_len_missing_k};
-        else {
-            auto found_lengths = maybe->lengths();
-            auto count = keys_extractor_t {}.count(locations_.ref());
-            return length_t {found_lengths, found_lengths + count};
-        }
+        return any_get<length_t>(static_cast<ukv_options_t>(options));
     }
 
     /**
@@ -200,9 +192,11 @@ static_assert(members_ref_gt<ukv_key_t>::is_one_k);
 static_assert(!members_ref_gt<keys_arg_t>::is_one_k);
 
 template <typename locations_at>
-expected_gt<typename members_ref_gt<locations_at>::value_t> //
-members_ref_gt<locations_at>::any_get(ukv_options_t options) noexcept {
+template <typename expected_at>
+expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t options) noexcept {
+
     status_t status;
+    ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
 
@@ -226,8 +220,10 @@ members_ref_gt<locations_at>::any_get(ukv_options_t options) noexcept {
             fields.stride(),
             options,
             format_,
-            &found_lengths,
+            ukv_type_any_k,
             &found_values,
+            &found_offsets,
+            &found_lengths,
             arena_,
             status.member_ptr());
     else
@@ -240,18 +236,27 @@ members_ref_gt<locations_at>::any_get(ukv_options_t options) noexcept {
             keys.get(),
             keys.stride(),
             options,
-            &found_lengths,
             &found_values,
+            &found_offsets,
+            &found_lengths,
             arena_,
             status.member_ptr());
 
     if (!status)
         return status;
 
-    if constexpr (is_one_k)
-        return value_view_t {found_values, *found_lengths};
-    else
-        return taped_values_view_t {found_lengths, found_values, count};
+    if constexpr (std::is_same_v<length_t, expected_at>) {
+        if constexpr (is_one_k)
+            return length_t {found_lengths[0]};
+        else
+            return length_t {found_lengths, found_lengths + count};
+    }
+    else {
+        if constexpr (is_one_k)
+            return value_view_t {found_values + *found_offsets, *found_lengths};
+        else
+            return tape_view_t {found_values, found_offsets, found_lengths, count};
+    }
 }
 
 template <typename locations_at>
@@ -285,6 +290,7 @@ status_t members_ref_gt<locations_at>::any_assign(values_arg_at&& vals_ref, ukv_
             fields.stride(),
             options,
             format_,
+            ukv_type_any_k,
             contents.get(),
             contents.stride(),
             offsets.get(),

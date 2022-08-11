@@ -35,40 +35,40 @@ ext_modules = [
             ('UKV_PYTHON_MODULE_NAME', 'stl')
         ],
     ),
-    Pybind11Extension(
-        'ukv/rocks',
-        [
-            'python/pybind.cpp',
-            'python/pybind/database.cpp',
-            'python/pybind/networkx.cpp',
-            'python/pybind/pandas.cpp',
-        ],
-        include_dirs=include_dirs,
-        library_dirs=['build/lib/'],
-        libraries=['ukv_rocksdb', 'rocksdb'],
-        extra_compile_args=compile_args,
-        define_macros=[
-            ('UKV_VERSION', __version__),
-            ('UKV_PYTHON_MODULE_NAME', 'rocks')
-        ],
-    ),
-    Pybind11Extension(
-        'ukv/level',
-        [
-            'python/pybind.cpp',
-            'python/pybind/database.cpp',
-            'python/pybind/networkx.cpp',
-            'python/pybind/pandas.cpp',
-        ],
-        include_dirs=include_dirs,
-        library_dirs=['build/lib/'],
-        libraries=['ukv_leveldb', 'leveldb'],
-        extra_compile_args=compile_args,
-        define_macros=[
-            ('UKV_VERSION', __version__),
-            ('UKV_PYTHON_MODULE_NAME', 'level')
-        ],
-    ),
+    # Pybind11Extension(
+    #     'ukv/rocks',
+    #     [
+    #         'python/pybind.cpp',
+    #         'python/pybind/database.cpp',
+    #         'python/pybind/networkx.cpp',
+    #         'python/pybind/pandas.cpp',
+    #     ],
+    #     include_dirs=include_dirs,
+    #     library_dirs=['build/lib/'],
+    #     libraries=['ukv_rocksdb', 'rocksdb'],
+    #     extra_compile_args=compile_args,
+    #     define_macros=[
+    #         ('UKV_VERSION', __version__),
+    #         ('UKV_PYTHON_MODULE_NAME', 'rocks')
+    #     ],
+    # ),
+    # Pybind11Extension(
+    #     'ukv/level',
+    #     [
+    #         'python/pybind.cpp',
+    #         'python/pybind/database.cpp',
+    #         'python/pybind/networkx.cpp',
+    #         'python/pybind/pandas.cpp',
+    #     ],
+    #     include_dirs=include_dirs,
+    #     library_dirs=['build/lib/'],
+    #     libraries=['ukv_leveldb', 'leveldb'],
+    #     extra_compile_args=compile_args,
+    #     define_macros=[
+    #         ('UKV_VERSION', __version__),
+    #         ('UKV_PYTHON_MODULE_NAME', 'level')
+    #     ],
+    # ),
 ]
 
 # Lets use README.md as `long_description`

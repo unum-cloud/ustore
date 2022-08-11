@@ -12,11 +12,11 @@ typedef void (*error_free_fn)(ukv_error_t);
 typedef void (*arena_free_fn)(ukv_t const, ukv_arena_t);
 typedef void (*free_fn)(ukv_t);
 typedef void (*read_fn)(ukv_t const, ukv_txn_t const, ukv_size_t const,
-    ukv_collection_t const*, ukv_size_t const, ukv_key_t const*,
+    ukv_col_t const*, ukv_size_t const, ukv_key_t const*,
     ukv_size_t const, ukv_options_t const, ukv_val_len_t**,
     ukv_val_ptr_t*, ukv_arena_t*, ukv_error_t*);
 typedef void (*write_fn)(ukv_t const, ukv_txn_t const,ukv_size_t const,
-    ukv_collection_t const*, ukv_size_t const, ukv_key_t const*,
+    ukv_col_t const*, ukv_size_t const, ukv_key_t const*,
     ukv_size_t const, ukv_val_ptr_t const*, ukv_size_t const,
     ukv_val_len_t const*, ukv_size_t const, ukv_val_len_t const*,
     ukv_size_t const, ukv_options_t const, ukv_arena_t*, ukv_error_t*);
@@ -43,7 +43,7 @@ void u_free(void*fn, ukv_t c_db) {
 }
 
 void u_read(void* fn, ukv_t const c_db, ukv_txn_t const c_txn, ukv_size_t const c_tasks_count,
-		ukv_collection_t const* c_cols, ukv_size_t const c_cols_stride, ukv_key_t const* c_keys,
+		ukv_col_t const* c_cols, ukv_size_t const c_cols_stride, ukv_key_t const* c_keys,
 		ukv_size_t const c_keys_stride, ukv_options_t const c_options, ukv_val_len_t** c_found_lengths,
 		ukv_val_ptr_t* c_found_values, ukv_arena_t* c_arena, ukv_error_t* c_error) {
 
@@ -53,7 +53,7 @@ void u_read(void* fn, ukv_t const c_db, ukv_txn_t const c_txn, ukv_size_t const 
 }
 
 void u_write(void* fn, ukv_t const c_db, ukv_txn_t const c_txn, ukv_size_t const c_tasks_count,
-		ukv_collection_t const* c_cols, ukv_size_t const c_cols_stride, ukv_key_t const* c_keys,
+		ukv_col_t const* c_cols, ukv_size_t const c_cols_stride, ukv_key_t const* c_keys,
 		ukv_size_t const c_keys_stride, ukv_val_ptr_t const c_vals, ukv_size_t const c_vals_stride,
 		ukv_val_len_t const* c_offs, ukv_size_t const c_offs_stride, ukv_val_len_t const* c_lens,
 		ukv_size_t const c_lens_stride, ukv_options_t const c_options, ukv_arena_t* c_arena, ukv_error_t* c_error) {
@@ -141,7 +141,7 @@ func (db *DataBase) Set(key uint64, value []byte) error {
 	// https://stackoverflow.com/a/64867672
 	error_c := C.ukv_error_t(nil)
 	key_c := C.ukv_key_t(key)
-	collection_c := (*C.ukv_collection_t)(nil)
+	collection_c := (*C.ukv_col_t)(nil)
 	options_c := C.ukv_options_t(C.ukv_options_default_k)
 	val_ptr := C.ukv_val_ptr_t(unsafe.Pointer(&value[0]))
 	value_ptr_c := C.ukv_val_ptr_t(unsafe.Pointer(&val_ptr))
@@ -165,7 +165,7 @@ func (db *DataBase) SetBatch(keys []uint64, values [][]byte) error {
 
 	error_c := C.ukv_error_t(nil)
 	keys_c := (*C.ukv_key_t)(unsafe.Pointer(&keys[0]))
-	collection_c := (*C.ukv_collection_t)(nil)
+	collection_c := (*C.ukv_col_t)(nil)
 	options_c := C.ukv_options_t(C.ukv_options_default_k)
 	value_ptr_c := C.ukv_val_ptr_t(unsafe.Pointer(&values[0]))
 	task_count_c := C.size_t(len(values))
@@ -206,7 +206,7 @@ func (db *DataBase) Delete(key uint64) error {
 	// https://stackoverflow.com/a/64867672
 	error_c := C.ukv_error_t(nil)
 	key_c := C.ukv_key_t(key)
-	collection_c := (*C.ukv_collection_t)(nil)
+	collection_c := (*C.ukv_col_t)(nil)
 	options_c := C.ukv_options_t(C.ukv_options_default_k)
 	value_ptr_c := C.ukv_val_ptr_t(nil)
 	value_length_c := C.ukv_val_len_t(0)
@@ -231,7 +231,7 @@ func (db *DataBase) Get(key uint64) ([]byte, error) {
 	// from Go layer, but we can read entries from C-allocated buffers.
 	error_c := C.ukv_error_t(nil)
 	key_c := C.ukv_key_t(key)
-	collection_c := (*C.ukv_collection_t)(nil)
+	collection_c := (*C.ukv_col_t)(nil)
 	options_c := C.ukv_options_t(C.ukv_options_default_k)
 	pulled_values_lengths_c := (*C.ukv_val_len_t)(nil)
 	pulled_values_c := (C.ukv_val_ptr_t)(nil)
@@ -270,7 +270,7 @@ func (db *DataBase) Contains(key uint64) (bool, error) {
 	// from Go layer, but we can read entries from C-allocated buffers.
 	error_c := C.ukv_error_t(nil)
 	key_c := C.ukv_key_t(key)
-	collection_c := (*C.ukv_collection_t)(nil)
+	collection_c := (*C.ukv_col_t)(nil)
 	options_c := C.ukv_options_t(C.ukv_option_read_lengths_k)
 	pulled_values_lengths_c := (*C.ukv_val_len_t)(nil)
 	pulled_values_c := (C.ukv_val_ptr_t)(nil)

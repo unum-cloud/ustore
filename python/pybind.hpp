@@ -28,7 +28,7 @@ struct py_task_ctx_t;
 struct py_task_ctx_t {
     ukv_t db = nullptr;
     ukv_txn_t txn = nullptr;
-    ukv_collection_t* col = nullptr;
+    ukv_col_t* col = nullptr;
     ukv_arena_t* arena = nullptr;
     ukv_options_t options = ukv_options_default_k;
 };
@@ -42,53 +42,37 @@ struct py_task_ctx_t {
  */
 struct py_db_t : public std::enable_shared_from_this<py_db_t> {
     db_t native;
-    arena_t arena;
     std::string config;
 
-    py_db_t(db_t&& n, std::string const& c) : native(std::move(n)), arena(native), config(c) {}
+    py_db_t(db_t&& n, std::string const& c) : native(std::move(n)), config(c) {}
+    py_db_t(py_db_t&& other) noexcept : native(std::move(other.native)), config(std::move(other.config)) {}
     py_db_t(py_db_t const&) = delete;
-    py_db_t(py_db_t&& other) noexcept
-        : native(std::move(other.native)), arena(std::move(other.arena)), config(std::move(other.config)) {}
-
-    operator py_task_ctx_t() & noexcept {
-        return {native, nullptr, nullptr, arena.member_ptr(), ukv_options_default_k};
-    }
 };
 
 /**
  * @brief Only adds reference counting to the native C++ interface.
  */
 struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
-    std::shared_ptr<py_db_t> db_ptr;
     txn_t native;
-    arena_t arena;
+
     bool track_reads = false;
     bool flush_writes = false;
 
-    py_txn_t(std::shared_ptr<py_db_t>&& d, txn_t&& t) noexcept
-        : db_ptr(std::move(d)), native(std::move(t)), arena(db_ptr->native) {}
+    py_txn_t(std::shared_ptr<py_db_t>&& d, txn_t&& t) noexcept : db_ptr(std::move(d)), native(std::move(t)) {}
+    py_txn_t(py_txn_t&& other) noexcept : db_ptr(std::move(other.db_ptr)), native(std::move(other.native)) {}
     py_txn_t(py_txn_t const&) = delete;
-    py_txn_t(py_txn_t&& other) noexcept
-        : db_ptr(std::move(other.db_ptr)), native(std::move(other.native)), arena(std::move(other.arena)) {}
-
-    operator py_task_ctx_t() & noexcept {
-        auto options = static_cast<ukv_options_t>( //
-            ukv_options_default_k |                //
-            (track_reads ? ukv_option_read_track_k : ukv_options_default_k) |
-            (flush_writes ? ukv_option_write_flush_k : ukv_options_default_k));
-        return {db_ptr->native, native, nullptr, arena.member_ptr(), options};
-    }
 };
 
 /**
- * @brief Wrapper for `ukv::collection_t`.
+ * @brief Wrapper for `ukv::col_t`.
  * We need to preserve the `name`, to upsert again, after removing it in `clear`.
  * We also keep the transaction pointer, to persist the context of operation.
  */
-struct py_col_t : public std::enable_shared_from_this<py_col_t> {
+struct py_col_t {
+    col_t native;
+
     std::shared_ptr<py_db_t> db_ptr;
     std::shared_ptr<py_txn_t> txn_ptr;
-    collection_t native;
     std::string name;
 
     py_col_t() {}
@@ -98,39 +82,28 @@ struct py_col_t : public std::enable_shared_from_this<py_col_t> {
           name(std::move(other.name)) {}
 
     operator py_task_ctx_t() & noexcept {
-        py_task_ctx_t result = txn_ptr ? py_task_ctx_t(*txn_ptr) : py_task_ctx_t(*db_ptr);
+        py_task_ctx_t result;
+        if (txn_ptr) {
+            result.txn = txn_ptr->native;
+            result.options = static_cast<ukv_options_t>( //
+                ukv_options_default_k |                  //
+                (txn_ptr->track_reads ? ukv_option_read_track_k : ukv_options_default_k) |
+                (txn_ptr->flush_writes ? ukv_option_write_flush_k : ukv_options_default_k));
+        }
+        result.db = native.db();
         result.col = native.member_ptr();
+        result.arena = native.member_arena();
         return result;
     }
-
-    inline collection_t replicate() { return *db_ptr->native.collection(name.c_str()); }
 };
 
-/**
- * @brief A generalization of the graph supported by NetworkX.
- *
- * Sources and targets can match.
- * Relations attrs can be banned all together.
- *
- * Example for simple non-attributed undirected graphs:
- * > relations_name: ".graph"
- * > attrs_name: ""
- * > sources_name: ""
- * > targets_name: ""
- *
- * Example for recommender systems
- * > relations_name: "views.graph"
- * > attrs_name: "views.docs"
- * > sources_name: "people.docs"
- * > targets_name: "movies.docs"
- */
-struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
+struct py_graph_t {
 
     std::shared_ptr<py_db_t> db_ptr;
-    collection_t index;
-    collection_t sources_attrs;
-    collection_t targets_attrs;
-    collection_t relations_attrs;
+    col_t index;
+    col_t sources_attrs;
+    col_t targets_attrs;
+    col_t relations_attrs;
 
     bool is_directed_ = false;
     bool is_multi_ = false;
@@ -154,15 +127,15 @@ struct py_col_name_t {
 };
 
 struct py_col_keys_range_t {
-    ukv_collection_t col = ukv_default_collection_k;
+    ukv_col_t col = ukv_col_main_k;
     ukv_key_t min = std::numeric_limits<ukv_key_t>::min();
     ukv_key_t max = std::numeric_limits<ukv_key_t>::max();
     std::size_t limit = std::numeric_limits<std::size_t>::max();
 };
 
 /**
- * @brief Materialized view over a specific subset of documents
- * UIDs (potentially, in different collections) and column (field) names.
+ * @brief DataFrame represntation, capable of viewing joined contents
+ * of multiple collections. When materialized, exports Apache Arrow objects.
  */
 struct py_frame_t : public std::enable_shared_from_this<py_frame_t> {
 
@@ -174,6 +147,17 @@ struct py_frame_t : public std::enable_shared_from_this<py_frame_t> {
     py_frame_t() = default;
     py_frame_t(py_frame_t&&) = delete;
     py_frame_t(py_frame_t const&) = delete;
+};
+
+/**
+ * @brief Proxy-object for binary `py_col_t` collections that adds:
+ * > serialization & deserialization of Python objects.
+ * > field-level lookups.
+ * > patching & merging: `.patch(...)` & `.merge(...)`.
+ * > DataFrame exports (out of this single collection).
+ */
+struct py_docs_col_t {
+    py_col_t binary;
 };
 
 /**
@@ -197,7 +181,9 @@ struct py_frame_t : public std::enable_shared_from_this<py_frame_t> {
  * protocol. Remaining collection methods include:
  *      * update(mapping: dict) ~ Batch Insert/Put
  *      * clear() ~ Removes all items in collection
- *      * tensor(collection?, keys, max_length: int, padding: byte)
+ *      * get_column(keys) ~ Will extract/receive binary values as Apache Arrow collections
+ *      * get_matrix(keys, max_length: int, padding: byte)
+ *
  * All in all, collections mimic Python @c `dict` API, but some funcs were skipped:
  *      * __len__() ~ It's hard to consistently estimate the collection.
  *      * popitem() ~ We can't guarantee Last-In First-Out semantics.
@@ -215,7 +201,9 @@ void wrap_database(py::module&);
 
 /**
  * @brief Python bindings for a Graph index, that mimics NetworkX.
- * Is similar in it's purpose to a pure-Python NetworkXum:
+ * Unlike C++ `graph_ref_t` this may include as many as 4 collections
+ * seen as one heavily attributed relational index.
+ * Is similar in it's purpose to a pure-Python project - NetworkXum:
  * https://github.com/unum-cloud/NetworkXum
  *
  * @section Supported Graph Types
@@ -231,6 +219,23 @@ void wrap_database(py::module&);
  * Aside from those, you can instantiate the most generic `ukv.Network`,
  * controlling whether graph should be directed, allow loops, or have
  * attrs in source/target vertices or edges.
+ * Beyond that, source and target vertices can belong to different collections.
+ * To sum up, we differntiate following graph types:
+ * > U: Undirected
+ * > D: Directed
+ * > J: Joining
+ *
+ * Example for simple non-attributed undirected graphs:
+ * > relations_name: ".graph"
+ * > attrs_name: ""
+ * > sources_name: ""
+ * > targets_name: ""
+ *
+ * Example for recommender systems
+ * > relations_name: "views.graph"
+ * > attrs_name: "views.docs"
+ * > sources_name: "people.docs"
+ * > targets_name: "movies.docs"
  *
  * @section Interface
  * Primary single element methods:
@@ -241,6 +246,10 @@ void wrap_database(py::module&);
  *      * remove_edges_from(firsts, seconds, keys?, attrs?)
  * Intentionally not implemented:
  *      * __len__() ~ It's hard to consistently estimate the collection size.
+ *
+ * TODO:
+ * > Implement basic algorithms: PageRank, Louvain, WCC and Force-based Layout
+ * > Implement subgraph selection
  */
 void wrap_networkx(py::module&);
 

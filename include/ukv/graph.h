@@ -119,7 +119,7 @@ void ukv_graph_find_edges( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* vertices_ids,
@@ -148,7 +148,7 @@ void ukv_graph_upsert_edges( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* edges_ids,
@@ -178,7 +178,7 @@ void ukv_graph_remove_edges( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* edges_ids,
@@ -204,7 +204,7 @@ void ukv_graph_remove_vertices( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* vertices_ids,
