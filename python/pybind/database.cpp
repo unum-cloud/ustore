@@ -64,12 +64,13 @@ auto iterate(range_at& range) {
 void ukv::wrap_database(py::module& m) {
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
     auto py_db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
-    auto py_col = py::class_<py_col_t, std::shared_ptr<py_col_t>>(m, "Collection", py::module_local());
     auto py_txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction", py::module_local());
-    auto py_krange = py::class_<keys_range_t, std::shared_ptr<keys_range_t>>(m, "KeysRange", py::module_local());
-    auto py_kvrange = py::class_<pairs_range_t, std::shared_ptr<pairs_range_t>>(m, "ItemsRange", py::module_local());
-    auto py_kstream = py::class_<py_kstream_t, std::shared_ptr<py_kstream_t>>(m, "KeysStream", py::module_local());
-    auto py_kvstream = py::class_<py_kvstream_t, std::shared_ptr<py_kvstream_t>>(m, "ItemsStream", py::module_local());
+
+    auto py_col = py::class_<py_col_t>(m, "Collection", py::module_local());
+    auto py_krange = py::class_<keys_range_t>(m, "KeysRange", py::module_local());
+    auto py_kvrange = py::class_<pairs_range_t>(m, "ItemsRange", py::module_local());
+    auto py_kstream = py::class_<py_kstream_t>(m, "KeysStream", py::module_local());
+    auto py_kvstream = py::class_<py_kvstream_t>(m, "ItemsStream", py::module_local());
 
     py::enum_<ukv_format_t>(m, "Format", py::module_local())
         .value("Binary", ukv_format_binary_k)
@@ -112,6 +113,11 @@ void ukv::wrap_database(py::module& m) {
         maybe_col.throw_unhandled();
         py_col.native = *std::move(maybe_col);
     });
+
+    // ML-oriented procedures for zero-copy variants exporting
+    // Apache Arrow shared memory handles:
+    py_col.def("get_column", [](py_col_t& py_col, py::object keys) { return 0; });
+    py_col.def("get_matrix", [](py_col_t& py_col, py::object keys) { return 0; });
 
 #pragma region Transactions and Lifetime
 

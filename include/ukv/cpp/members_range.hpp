@@ -35,7 +35,7 @@ struct size_estimates_t;
 class keys_stream_t {
 
     ukv_t db_ = nullptr;
-    ukv_collection_t col_ = ukv_default_collection_k;
+    ukv_col_t col_ = ukv_col_main_k;
     ukv_txn_t txn_ = nullptr;
 
     arena_t arena_;
@@ -90,7 +90,7 @@ class keys_stream_t {
     static constexpr std::size_t default_read_ahead_k = 256;
 
     keys_stream_t(ukv_t db,
-                  ukv_collection_t col = ukv_default_collection_k,
+                  ukv_col_t col = ukv_col_main_k,
                   std::size_t read_ahead = keys_stream_t::default_read_ahead_k,
                   ukv_txn_t txn = nullptr)
         : db_(db), col_(col), txn_(txn), arena_(db), read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
@@ -171,7 +171,7 @@ class keys_stream_t {
 class pairs_stream_t {
 
     ukv_t db_ = nullptr;
-    ukv_collection_t col_ = ukv_default_collection_k;
+    ukv_col_t col_ = ukv_col_main_k;
     ukv_txn_t txn_ = nullptr;
 
     arena_t arena_scan_;
@@ -180,7 +180,7 @@ class pairs_stream_t {
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
     indexed_range_gt<ukv_key_t*> fetched_keys_;
-    taped_values_view_t values_view;
+    tape_view_t values_view;
     std::size_t fetched_offset_ = 0;
 
     status_t prefetch() noexcept {
@@ -189,6 +189,7 @@ class pairs_stream_t {
             return {};
 
         ukv_key_t* found_keys = nullptr;
+        ukv_val_len_t* found_offs = nullptr;
         ukv_val_len_t* found_lens = nullptr;
         ukv_val_ptr_t found_vals = nullptr;
         status_t status;
@@ -224,14 +225,15 @@ class pairs_stream_t {
             found_keys,
             sizeof(ukv_key_t),
             ukv_options_default_k,
-            &found_lens,
             &found_vals,
+            &found_offs,
+            &found_lens,
             arena_read_.member_ptr(),
             status.member_ptr());
         if (!status)
             return status;
 
-        values_view = taped_values_view_t {found_lens, found_vals, count};
+        values_view = tape_view_t {found_vals, found_offs, found_lens, count};
         next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
@@ -244,7 +246,7 @@ class pairs_stream_t {
     static constexpr std::size_t default_read_ahead_k = 256;
 
     pairs_stream_t(ukv_t db,
-                   ukv_collection_t col = ukv_default_collection_k,
+                   ukv_col_t col = ukv_col_main_k,
                    std::size_t read_ahead = pairs_stream_t::default_read_ahead_k,
                    ukv_txn_t txn = nullptr)
         : db_(db), col_(col), txn_(txn), arena_scan_(db_), arena_read_(db_),
@@ -365,7 +367,7 @@ class members_range_t {
 
     ukv_t db_;
     ukv_txn_t txn_;
-    ukv_collection_t col_;
+    ukv_col_t col_;
     ukv_key_t min_key_;
     ukv_key_t max_key_;
 
@@ -381,7 +383,7 @@ class members_range_t {
   public:
     members_range_t(ukv_t db,
                     ukv_txn_t txn = nullptr,
-                    ukv_collection_t col = ukv_default_collection_k,
+                    ukv_col_t col = ukv_col_main_k,
                     ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
                     ukv_key_t max_key = ukv_key_unknown_k) noexcept
         : db_(db), txn_(txn), col_(col), min_key_(min_key), max_key_(max_key) {}
@@ -410,12 +412,14 @@ class members_range_t {
     expected_gt<size_estimates_t> size_estimates() noexcept {
         status_t status;
         arena_t arena(db_);
-        size_estimates_t result;
-        auto o = reinterpret_cast<ukv_size_t*>(&result.cardinality.min);
+        ukv_size_t* o = nullptr;
         auto a = arena.member_ptr();
         auto s = status.member_ptr();
-        ukv_size(db_, txn_, 1, &col_, 0, &min_key_, 0, &max_key_, 0, ukv_options_default_k, o, a, s);
-        return {std::move(status), std::move(result)};
+        ukv_size(db_, txn_, 1, &col_, 0, &min_key_, 0, &max_key_, 0, ukv_options_default_k, &o, a, s);
+        if (!status)
+            return status;
+        size_estimates_t result {{o[0], o[1]}, {o[2], o[3]}, {o[4], o[5]}};
+        return result;
     }
 
     members_range_t& since(ukv_key_t min_key) noexcept {

@@ -4,7 +4,7 @@
 JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
     JNIEnv* env_java,
     jobject txn_java,
-    jstring collection_java,
+    jstring col_java,
     jlong key_java,
     jbyteArray value_java) {
 
@@ -15,7 +15,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
     }
 
     ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
-    ukv_collection_t collection_ptr_c = collection_ptr(env_java, db_ptr_c, collection_java);
+    ukv_col_t col_ptr_c = col_ptr(env_java, db_ptr_c, col_java);
     if ((*env_java)->ExceptionCheck(env_java))
         return;
 
@@ -36,22 +36,23 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
     ukv_arena_t arena_c = NULL;
     ukv_error_t error_c = NULL;
 
-    ukv_write(db_ptr_c,
-              txn_ptr_c,
-              1,
-              &collection_ptr_c,
-              0,
-              &key_c,
-              0,
-              &found_values_c,
-              0,
-              &value_off_c,
-              0,
-              &value_len_c,
-              0,
-              options_c,
-              &arena_c,
-              &error_c);
+    ukv_write( //
+        db_ptr_c,
+        txn_ptr_c,
+        1,
+        &col_ptr_c,
+        0,
+        &key_c,
+        0,
+        &found_values_c,
+        0,
+        &value_off_c,
+        0,
+        &value_len_c,
+        0,
+        options_c,
+        &arena_c,
+        &error_c);
     ukv_arena_free(db_ptr_c, arena_c);
 
     if (value_is_copy_java == JNI_TRUE)
@@ -62,7 +63,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
 JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsKey( //
     JNIEnv* env_java,
     jobject txn_java,
-    jstring collection_java,
+    jstring col_java,
     jlong key_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, txn_java);
@@ -72,29 +73,32 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
     }
 
     ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
-    ukv_collection_t collection_ptr_c = collection_ptr(env_java, db_ptr_c, collection_java);
+    ukv_col_t col_ptr_c = col_ptr(env_java, db_ptr_c, col_java);
     if ((*env_java)->ExceptionCheck(env_java))
         return JNI_FALSE;
 
     ukv_key_t key_c = (ukv_key_t)key_java;
     ukv_options_t options_c = ukv_option_read_lengths_k;
+    ukv_val_len_t* found_offsets_c = NULL;
     ukv_val_len_t* found_lengths_c = NULL;
     ukv_val_ptr_t found_values_c = NULL;
     ukv_arena_t arena_c = NULL;
     ukv_error_t error_c = NULL;
 
-    ukv_read(db_ptr_c,
-             txn_ptr_c,
-             1,
-             &collection_ptr_c,
-             0,
-             &key_c,
-             0,
-             options_c,
-             &found_lengths_c,
-             &found_values_c,
-             &arena_c,
-             &error_c);
+    ukv_read( //
+        db_ptr_c,
+        txn_ptr_c,
+        1,
+        &col_ptr_c,
+        0,
+        &key_c,
+        0,
+        options_c,
+        &found_values_c,
+        &found_offsets_c,
+        &found_lengths_c,
+        &arena_c,
+        &error_c);
 
     if (forward_error(env_java, error_c)) {
         ukv_arena_free(db_ptr_c, arena_c);
@@ -109,7 +113,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
 JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     JNIEnv* env_java,
     jobject txn_java,
-    jstring collection_java,
+    jstring col_java,
     jlong key_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, txn_java);
@@ -119,29 +123,32 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     }
 
     ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
-    ukv_collection_t collection_ptr_c = collection_ptr(env_java, db_ptr_c, collection_java);
+    ukv_col_t col_ptr_c = col_ptr(env_java, db_ptr_c, col_java);
     if ((*env_java)->ExceptionCheck(env_java))
         return NULL;
 
     ukv_key_t key_c = (ukv_key_t)key_java;
     ukv_options_t options_c = ukv_options_default_k;
+    ukv_val_len_t* found_offsets_c = NULL;
     ukv_val_len_t* found_lengths_c = NULL;
     ukv_val_ptr_t found_values_c = NULL;
     ukv_arena_t arena_c = NULL;
     ukv_error_t error_c = NULL;
 
-    ukv_read(db_ptr_c,
-             txn_ptr_c,
-             1,
-             &collection_ptr_c,
-             0,
-             &key_c,
-             0,
-             options_c,
-             &found_lengths_c,
-             &found_values_c,
-             &arena_c,
-             &error_c);
+    ukv_read( //
+        db_ptr_c,
+        txn_ptr_c,
+        1,
+        &col_ptr_c,
+        0,
+        &key_c,
+        0,
+        options_c,
+        &found_values_c,
+        &found_offsets_c,
+        &found_lengths_c,
+        &arena_c,
+        &error_c);
 
     if (forward_ukv_error(env_java, error_c)) {
         ukv_arena_free(db_ptr_c, arena_c);
@@ -157,7 +164,11 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     if (found_lengths_c[0] != ukv_val_len_missing_k) {
         result_java = (*env_java)->NewByteArray(env_java, found_lengths_c[0]);
         if (result_java)
-            (*env_java)->SetByteArrayRegion(env_java, result_java, 0, found_lengths_c[0], (jbyte const*)found_values_c);
+            (*env_java)->SetByteArrayRegion(env_java,
+                                            result_java,
+                                            0,
+                                            found_lengths_c[0],
+                                            (jbyte const*)(found_values_c + *found_offsets_c));
     }
 
     ukv_arena_free(db_ptr_c, arena_c);
@@ -167,7 +178,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
 JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
     JNIEnv* env_java,
     jobject txn_java,
-    jstring collection_java,
+    jstring col_java,
     jlong key_java) {
 
     ukv_t db_ptr_c = db_ptr(env_java, txn_java);
@@ -177,7 +188,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
     }
 
     ukv_txn_t txn_ptr_c = txn_ptr(env_java, txn_java);
-    ukv_collection_t collection_ptr_c = collection_ptr(env_java, db_ptr_c, collection_java);
+    ukv_col_t col_ptr_c = col_ptr(env_java, db_ptr_c, col_java);
     if ((*env_java)->ExceptionCheck(env_java))
         return;
 
@@ -189,22 +200,23 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
     ukv_arena_t arena_c = NULL;
     ukv_error_t error_c = NULL;
 
-    ukv_write(db_ptr_c,
-              txn_ptr_c,
-              1,
-              &collection_ptr_c,
-              0,
-              &key_c,
-              0,
-              &found_values_c,
-              0,
-              &value_off_c,
-              0,
-              &value_len_c,
-              0,
-              options_c,
-              &arena_c,
-              &error_c);
+    ukv_write( //
+        db_ptr_c,
+        txn_ptr_c,
+        1,
+        &col_ptr_c,
+        0,
+        &key_c,
+        0,
+        &found_values_c,
+        0,
+        &value_off_c,
+        0,
+        &value_len_c,
+        0,
+        options_c,
+        &arena_c,
+        &error_c);
     ukv_arena_free(db_ptr_c, arena_c);
     forward_ukv_error(env_java, error_c);
 }

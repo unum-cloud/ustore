@@ -20,7 +20,7 @@ using namespace unum;
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-ukv_collection_t ukv_default_collection_k = NULL;
+ukv_col_t ukv_col_main_k = 0;
 ukv_val_len_t ukv_val_len_missing_k = std::numeric_limits<ukv_val_len_t>::max();
 ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 
@@ -89,7 +89,7 @@ bool export_error(level_status_t const& status, ukv_error_t* c_error) {
     return true;
 }
 
-void ukv_open(ukv_str_view_t, ukv_t* c_db, ukv_error_t* c_error) {
+void ukv_db_open(ukv_str_view_t, ukv_t* c_db, ukv_error_t* c_error) {
     try {
         level_db_t* db_ptr = nullptr;
         level_options_t options;
@@ -144,7 +144,7 @@ void ukv_write( //
     ukv_txn_t const,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
+    ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -169,7 +169,7 @@ void ukv_write( //
     }
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
@@ -194,8 +194,9 @@ void measure_one( //
     read_tasks_soa_t const& tasks,
     leveldb::ReadOptions const& options,
     std::string& value,
+    ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
-    ukv_val_ptr_t*,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -206,12 +207,14 @@ void measure_one( //
             return;
 
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : static_cast<ukv_size_t>(value.size());
-    auto tape = prepare_memory(arena.output_tape, sizeof(ukv_size_t), c_error);
+    auto tape = prepare_memory(arena.output_tape, sizeof(ukv_val_len_t), c_error);
     if (*c_error)
         return;
 
     std::memcpy(tape, &exported_len, sizeof(ukv_size_t));
     *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
+    *c_found_offsets = nullptr;
+    *c_found_values = nullptr;
 }
 
 void read_one( //
@@ -219,8 +222,9 @@ void read_one( //
     read_tasks_soa_t const& tasks,
     leveldb::ReadOptions const& options,
     std::string& value,
-    ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -230,17 +234,20 @@ void read_one( //
         if (export_error(status, c_error))
             return;
 
-    auto bytes_in_value = static_cast<ukv_size_t>(value.size());
+    auto bytes_in_value = static_cast<ukv_val_len_t>(value.size());
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : bytes_in_value;
-    auto tape = prepare_memory(arena.output_tape, sizeof(ukv_size_t) + bytes_in_value, c_error);
+    ukv_val_len_t offset = 0;
+    auto tape = prepare_memory(arena.output_tape, sizeof(ukv_val_len_t) * 2 + bytes_in_value, c_error);
     if (*c_error)
         return;
 
-    std::memcpy(tape, &exported_len, sizeof(ukv_size_t));
-    std::memcpy(tape + sizeof(ukv_size_t), value.data(), bytes_in_value);
+    std::memcpy(tape, &exported_len, sizeof(ukv_val_len_t));
+    std::memcpy(tape + sizeof(ukv_val_len_t), &offset, sizeof(ukv_val_len_t));
+    std::memcpy(tape + sizeof(ukv_val_len_t) * 2, value.data(), bytes_in_value);
 
     *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + sizeof(ukv_size_t));
+    *c_found_offsets = *c_found_lengths + 1;
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + sizeof(ukv_val_len_t) * 2);
 }
 
 void measure_many( //
@@ -248,8 +255,9 @@ void measure_many( //
     read_tasks_soa_t const& tasks,
     leveldb::ReadOptions const& options,
     std::string& value,
+    ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
-    ukv_val_ptr_t*,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -258,8 +266,10 @@ void measure_many( //
         return;
 
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    std::fill_n(lens, tasks.count, 0);
+    std::fill_n(lens, tasks.count, ukv_val_len_missing_k);
     *c_found_lengths = lens;
+    *c_found_offsets = nullptr;
+    *c_found_values = nullptr;
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
@@ -277,18 +287,21 @@ void read_many( //
     read_tasks_soa_t const& tasks,
     leveldb::ReadOptions const& options,
     std::string& value,
-    ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
     ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * tasks.count;
-    byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
+    byte_t* tape = prepare_memory(arena.output_tape, lens_bytes * 2, c_error);
     if (*c_error)
         return;
 
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    std::fill_n(lens, tasks.count, 0);
+    ukv_val_len_t* offs = lens + tasks.count;
+    ukv_val_ptr_t contents = reinterpret_cast<ukv_val_ptr_t>(offs + tasks.count);
+    std::fill_n(lens, tasks.count * 2, ukv_val_len_missing_k);
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
@@ -303,14 +316,19 @@ void read_many( //
         tape = prepare_memory(arena.output_tape, old_tape_len + bytes_in_value, c_error);
         if (*c_error)
             return;
+
         lens = reinterpret_cast<ukv_val_len_t*>(tape);
+        offs = lens + tasks.count;
+        contents = reinterpret_cast<ukv_val_ptr_t>(offs + tasks.count);
 
         std::memcpy(tape + old_tape_len, value.data(), bytes_in_value);
         lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
+        offs[i] = reinterpret_cast<ukv_val_ptr_t>(tape + old_tape_len) - contents;
     }
 
     *c_found_lengths = lens;
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + lens_bytes);
+    *c_found_offsets = offs;
+    *c_found_values = contents;
 }
 
 void ukv_read( //
@@ -318,7 +336,7 @@ void ukv_read( //
     ukv_txn_t const,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const*,
+    ukv_col_t const*,
     ukv_size_t const,
 
     ukv_key_t const* c_keys,
@@ -326,16 +344,22 @@ void ukv_read( //
 
     ukv_options_t const c_options,
 
-    ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
 
-    leveldb::ReadOptions options;
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    leveldb::ReadOptions options;
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {{}, keys, c_tasks_count};
 
@@ -345,11 +369,11 @@ void ukv_read( //
     try {
         if (c_tasks_count == 1) {
             auto func = (c_options & ukv_option_read_lengths_k) ? &measure_one : &read_one;
-            func(db, tasks, options, value, c_found_lengths, c_found_values, arena, c_error);
+            func(db, tasks, options, value, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
         }
         else {
             auto func = (c_options & ukv_option_read_lengths_k) ? &measure_many : &read_many;
-            func(db, tasks, options, value, c_found_lengths, c_found_values, arena, c_error);
+            func(db, tasks, options, value, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
         }
     }
     catch (...) {
@@ -362,7 +386,7 @@ void ukv_scan( //
     ukv_txn_t const,
     ukv_size_t const c_min_tasks_count,
 
-    ukv_collection_t const*,
+    ukv_col_t const*,
     ukv_size_t const,
 
     ukv_key_t const* c_min_keys,
@@ -379,14 +403,17 @@ void ukv_scan( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
+
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
         return;
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
-    strided_iterator_gt<ukv_size_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
-    scan_tasks_soa_t tasks {{}, keys, lengths, c_min_tasks_count};
+    strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
+    scan_tasks_soa_t tasks {{}, keys, lens, c_min_tasks_count};
 
     bool export_lengths = (c_options & ukv_option_read_lengths_k);
     leveldb::ReadOptions options;
@@ -441,9 +468,9 @@ void ukv_scan( //
 void ukv_size( //
     ukv_t const c_db,
     ukv_txn_t const,
-    ukv_size_t const c_tasks_count,
+    ukv_size_t const n,
 
-    ukv_collection_t const*,
+    ukv_col_t const*,
     ukv_size_t const,
 
     ukv_key_t const* c_min_keys,
@@ -454,12 +481,21 @@ void ukv_size( //
 
     ukv_options_t const,
 
-    ukv_size_t* c_found_estimates,
+    ukv_size_t** c_found_estimates,
 
-    ukv_arena_t*,
+    ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    std::size_t bytes_needed = sizeof(ukv_size_t) * 6 * n;
+    *c_found_estimates = reinterpret_cast<ukv_size_t*>(prepare_memory(arena.output_tape, bytes_needed, c_error));
+    if (*c_error)
         return;
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
@@ -467,8 +503,8 @@ void ukv_size( //
     strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
     std::vector<uint64_t> sizes;
 
-    for (ukv_size_t i = 0; i != c_tasks_count; ++i) {
-        ukv_size_t* estimates = c_found_estimates + i * 6;
+    for (ukv_size_t i = 0; i != n; ++i) {
+        ukv_size_t* estimates = *c_found_estimates + i * 6;
         estimates[0] = static_cast<ukv_size_t>(0);
         estimates[1] = static_cast<ukv_size_t>(0);
         estimates[2] = static_cast<ukv_size_t>(0);
@@ -490,24 +526,24 @@ void ukv_size( //
     }
 }
 
-void ukv_collection_open( //
+void ukv_col_open( //
     ukv_t const,
     ukv_str_view_t c_col_name,
     ukv_str_view_t,
-    ukv_collection_t*,
+    ukv_col_t*,
     ukv_error_t* c_error) {
     if (c_col_name && std::strlen(c_col_name))
         *c_error = "Collections not supported by LevelDB!";
 }
 
-void ukv_collection_remove( //
+void ukv_col_remove( //
     ukv_t const,
     ukv_str_view_t,
     ukv_error_t* c_error) {
     *c_error = "Collections not supported by LevelDB!";
 }
 
-void ukv_collection_list( //
+void ukv_col_list( //
     ukv_t const,
     ukv_size_t*,
     ukv_str_view_t*,
@@ -516,7 +552,7 @@ void ukv_collection_list( //
     *c_error = "Collections not supported by LevelDB!";
 }
 
-void ukv_control( //
+void ukv_db_control( //
     ukv_t const c_db,
     ukv_str_view_t c_request,
     ukv_str_view_t* c_response,
@@ -558,10 +594,10 @@ void ukv_arena_free(ukv_t const, ukv_arena_t c_arena) {
 void ukv_txn_free(ukv_t const, ukv_txn_t) {
 }
 
-void ukv_collection_free(ukv_t const, ukv_collection_t const) {
+void ukv_col_free(ukv_t const, ukv_col_t const) {
 }
 
-void ukv_free(ukv_t c_db) {
+void ukv_db_free(ukv_t c_db) {
     if (!c_db)
         return;
     level_db_t* db = reinterpret_cast<level_db_t*>(c_db);

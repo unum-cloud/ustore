@@ -88,13 +88,29 @@ typedef enum {
 typedef enum {
     ukv_type_null_k = 0,
     ukv_type_bool_k = 1,
-    ukv_type_i64_k = 2,
-    ukv_type_f64_k = 3,
-    ukv_type_uuid_k = 4,
-    ukv_type_str_k = 5,
+    ukv_type_uuid_k = 2,
+
+    ukv_type_i8_k = 10,
+    ukv_type_i16_k = 11,
+    ukv_type_i32_k = 12,
+    ukv_type_i64_k = 13,
+
+    ukv_type_u8_k = 20,
+    ukv_type_u16_k = 21,
+    ukv_type_u32_k = 22,
+    ukv_type_u64_k = 23,
+
+    ukv_type_f16_k = 30,
+    ukv_type_f32_k = 31,
+    ukv_type_f64_k = 32,
+
+    ukv_type_bin_k = 40,
+    ukv_type_str_k = 41,
 
     ukv_type_any_k = 0xFFFFFFFF,
 } ukv_type_t;
+
+typedef uint8_t ukv_1x8_t;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -134,7 +150,7 @@ void ukv_docs_write( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -145,7 +161,7 @@ void ukv_docs_write( //
 
     ukv_options_t const options,
     ukv_format_t const format,
-    // ukv_type_t const type,
+    ukv_type_t const type,
 
     ukv_val_ptr_t const* values,
     ukv_size_t const values_stride,
@@ -170,6 +186,9 @@ void ukv_docs_write( //
  *                         different format can be requested. Like importing
  *                         JSONs & BSONs from Mongo, but later exporting
  *                         Apache Arrow Tables.
+ * @param[in] type         A binary type to which entries have to be converted to.
+ *                         Only applies if @param format is set to `ukv_format_binary_k`
+ *                         and @param field is not NULL.
  *
  * @section Supported Formats
  * > ukv_format_json_k
@@ -186,7 +205,7 @@ void ukv_docs_read( //
     ukv_txn_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -197,10 +216,11 @@ void ukv_docs_read( //
 
     ukv_options_t const options,
     ukv_format_t const format,
+    ukv_type_t const type,
 
-    // ukv_type_t** found_types,
-    ukv_val_len_t** found_lengths,
     ukv_val_ptr_t* found_values,
+    ukv_val_len_t** found_offsets,
+    ukv_val_len_t** found_lengths,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -220,7 +240,7 @@ void ukv_docs_gist( //
     ukv_txn_t const txn,
     ukv_size_t const docs_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -236,16 +256,14 @@ void ukv_docs_gist( //
 
 /**
  * @brief The vectorized "gather" interface, that collects, type-checks and
- * casts (N*M) @c `int`/`float`s from M fields in N docs into a @b columnar format.
- * Works with externally provided memory, as the volume of needed memory can be
- * easily calculated by the user.
+ * casts (N*M) from M fields in N docs into a @b columnar format.
  *
- * @param fields[in]
+ * @param[in] fields
  *              JSON-Pointer paths to scalars in desired documents.
  *              If `fields_stride` is set to zero, we assume that all paths
  *              are concatenated with a NULL-character delimiter.
  *
- * @param columns_validities[in]
+ * @param[out] columns_validities
  *              Bitset, which will indicate validity of gather objects.
  *              It must contain enough bits to consecutively stores the validity
  *              indicators for every cell in the exported table of scalars.
@@ -258,7 +276,7 @@ void ukv_docs_gist( //
  *              The @param columns_conversions and @param columns_collisions have
  *              same sizes and layouts, but are not supported by Apache Arrow.
  *
- * @param columns_conversions[in]
+ * @param[out] columns_conversions
  *              An @b Optional bitset, which will indicate type conversions.
  *              Conversions mean, that the export/cast changes the semantics.
  *              We identify following type groups: booleans, integers, floats, strings.
@@ -266,28 +284,35 @@ void ukv_docs_gist( //
  *              but may not be lossless. Meaning that @c `bool` to @c `int` isn't
  *              considered a downcast, same as @c `bool` to @c `double`.
  *
- * @param columns_collisions[in]
+ * @param[out] columns_collisions
  *              An @b Optional bitset, which will indicate key collisions.
  *              Collisions imply, that a key was found, but it's internal
  *              contents can't be converted to the requested scalar type.
  *
- * @param columns_scalars[in]
+ * @param[out] columns_scalars
  *              Buffers for scalars to be exported to.
  *              The ordering of it's element is identical to @param columns_validities,
  *              but every column only needs: `docs_count * sizeof(scalar)`
  *
+ * @section Strings Layout
+ * Texts will be appended with a null-termination character, binaries - will not.
+ * Offsets and lengths will be organized in a @b column-major layout with `docs_count`
+ * entries in every column, but the contents of the joined string will be organized
+ * in a @b row-major order. It will make the data easier to pass into bulk text-search
+ * systems or Language Models training pipelines.
  *
  * @section Apache Arrow
  * We may have used Apache Arrow @c `RecordBatch` directly with @c `ArrowSchema`
  * or @c `ArrowArray`. It, however, would be inconsistent with other UKV APIs.
+ * To go from the response of this function to Arrow: @see `ukv/arrow.h`.
  */
-void ukv_docs_gather_scalars( //
+void ukv_docs_gather( //
     ukv_t const db,
     ukv_txn_t const txn,
     ukv_size_t const docs_count,
     ukv_size_t const fields_count,
 
-    ukv_collection_t const* collections,
+    ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -301,41 +326,13 @@ void ukv_docs_gather_scalars( //
 
     ukv_options_t const options,
 
-    ukv_val_ptr_t const columns_validities,
-    ukv_val_ptr_t const columns_conversions,
-    ukv_val_ptr_t const columns_collisions,
-    ukv_val_ptr_t const columns_scalars,
-
-    ukv_arena_t* arena,
-    ukv_error_t* error);
-
-/**
- * @brief The vectorized "gather" interface, that collects, type-checks and
- * casts (N*M) @c `string`s from M fields in N docs into a @b row-wise format.
- *
- * Strings will be organized in the document-wise order.
- * All strings are delimited by a null-termination character.
- * That characters length is included into length.
- */
-void ukv_docs_gather_strings( //
-    ukv_t const db,
-    ukv_txn_t const txn,
-    ukv_size_t const docs_count,
-    ukv_size_t const fields_count,
-
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
-
-    ukv_key_t const* keys,
-    ukv_size_t const keys_stride,
-
-    ukv_str_view_t const* fields,
-    ukv_size_t const fields_stride,
-
-    ukv_options_t const options,
-
-    ukv_val_len_t** found_lengths,
-    ukv_str_view_t* found_joined_strings,
+    ukv_1x8_t*** columns_validities,
+    ukv_1x8_t*** columns_conversions,
+    ukv_1x8_t*** columns_collisions,
+    ukv_val_ptr_t** columns_scalars,
+    ukv_val_len_t*** columns_offsets,
+    ukv_val_len_t*** columns_lengths,
+    ukv_val_ptr_t* joined_strings,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
