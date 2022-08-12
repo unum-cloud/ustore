@@ -14,7 +14,7 @@
 #include "ukv/cpp/members_ref.hpp"
 #include "ukv/cpp/members_range.hpp"
 #include "ukv/cpp/graph_ref.hpp"
-#include "ukv/cpp/docs.hpp"
+#include "ukv/cpp/table_ref.hpp"
 
 namespace unum::ukv {
 

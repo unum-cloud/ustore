@@ -341,7 +341,7 @@ TEST(db, docs_table) {
 
     // Single cell
     {
-        docs_layout_t layout {1, 1};
+        table_layout_t layout {1, 1};
         layout.index(0).key = 1;
         layout.header(0) = field_type_t {"age", ukv_type_u32_k};
 
@@ -355,7 +355,7 @@ TEST(db, docs_table) {
 
     // Single row
     {
-        docs_layout_t layout {1, 3};
+        table_layout_t layout {1, 3};
         layout.index(0).key = 1;
         layout.header(0) = field_type_t {"age", ukv_type_u32_k};
         layout.header(1) = field_type_t {"age", ukv_type_i32_k};
@@ -377,7 +377,7 @@ TEST(db, docs_table) {
 
     // Single column
     {
-        docs_layout_t layout {4, 1};
+        table_layout_t layout {4, 1};
         layout.index(0).key = 1;
         layout.index(1).key = 2;
         layout.index(2).key = 3;
@@ -396,7 +396,7 @@ TEST(db, docs_table) {
 
     // Multi-column
     {
-        docs_layout_t layout {5, 6};
+        table_layout_t layout {5, 6};
         layout.index(0).key = 1;
         layout.index(1).key = 2;
         layout.index(2).key = 3;
