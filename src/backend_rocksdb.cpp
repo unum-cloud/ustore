@@ -600,17 +600,21 @@ void ukv_size( //
     strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
     rocksdb::SizeApproximationOptions options;
 
-    std::vector<uint64_t> sizes;
-    uint64_t keys_size;
-    uint64_t sst_files_size;
+    rocksdb::Range range;
+    uint64_t approximate_size = 0;
+    uint64_t keys_size = 0;
+    uint64_t sst_files_size = 0;
+    rocks_status_t status;
 
     for (ukv_size_t i = 0; i != n; ++i) {
         auto col = rocks_collection(db, cols[i]);
         ukv_key_t const min_key = min_keys[i];
         ukv_key_t const max_key = max_keys[i];
-        rocksdb::Range range(to_slice(min_key), to_slice(max_key));
+        range = rocksdb::Range(to_slice(min_key), to_slice(max_key));
         try {
-            db.native->GetApproximateSizes(options, col, &range, 1, sizes.data());
+            status = db.native->GetApproximateSizes(options, col, &range, 1, &approximate_size);
+            if (export_error(status, c_error))
+                return;
             db.native->GetIntProperty(col, "rocksdb.estimate-num-keys", &keys_size);
             db.native->GetIntProperty(col, "rocksdb.total-sst-files-size", &sst_files_size);
         }
@@ -623,7 +627,7 @@ void ukv_size( //
         estimates[1] = static_cast<ukv_size_t>(keys_size);
         estimates[2] = static_cast<ukv_size_t>(0);
         estimates[3] = static_cast<ukv_size_t>(0);
-        estimates[4] = sizes.size();
+        estimates[4] = approximate_size;
         estimates[5] = sst_files_size;
     }
 }
