@@ -203,7 +203,7 @@ TEST(db, basic) {
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
     check_length(ref, ukv_val_len_missing_k);
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, named) {
@@ -268,7 +268,7 @@ TEST(db, named) {
     _ = db.remove("col2");
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, docs) {
@@ -320,7 +320,7 @@ TEST(db, docs) {
     M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Darvin\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "28");
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, docs_table) {
@@ -428,7 +428,29 @@ TEST(db, docs_table) {
         EXPECT_STREQ(col1[1].value.c_str(), "27");
         EXPECT_STREQ(col1[2].value.c_str(), "24");
     }
-    db.clear();
+
+    // Nested docs
+    {
+        auto json_nested =
+            R"( {"person1": {"name": "Davit", "age": 24 } , "person2": {"name": "Ashot", "age": 27}} )"_json.dump();
+        col[4] = json_nested.c_str();
+        docs_layout_t layout {1, 2};
+
+        layout.index(0).key = 4;
+        layout.header(0) = field_type_t {"person1", ukv_type_str_k};
+        layout.header(1) = field_type_t {"person2", ukv_type_str_k};
+
+        auto maybe_table = col.as_table().gather(layout);
+        auto table = *maybe_table;
+        auto col0 = table.column(0).as<value_view_t>();
+        auto col1 = table.column(1).as<value_view_t>();
+        auto expected_json0 = R"( {"name": "Davit", "age": 24 } )"_json.dump();
+        auto expected_json1 = R"( {"name": "Ashot", "age": 27 } )"_json.dump();
+        M_EXPECT_EQ_JSON(col0[0].value.c_str(), expected_json0.c_str());
+        M_EXPECT_EQ_JSON(col1[0].value.c_str(), expected_json1.c_str());
+    }
+
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, txn) {
@@ -485,7 +507,7 @@ TEST(db, txn) {
 
     // Validate that values match after commit
     check_equalities(named_col_ref, values);
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, nested_docs) {
@@ -589,7 +611,7 @@ TEST(db, net) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, net_batch) {
@@ -683,7 +705,7 @@ TEST(db, net_batch) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 int main(int argc, char** argv) {
