@@ -434,7 +434,7 @@ TEST(db, docs_table) {
         auto json_nested =
             R"( {"person1": {"name": "Davit", "age": 24 } , "person2": {"name": "Ashot", "age": 27}} )"_json.dump();
         col[4] = json_nested.c_str();
-        docs_layout_t layout {1, 2};
+        table_layout_t layout {1, 2};
 
         layout.index(0).key = 4;
         layout.header(0) = field_type_t {"person1", ukv_type_str_k};
