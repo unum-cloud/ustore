@@ -55,6 +55,7 @@ build_version.cc
 CPackConfig.cmake
 CPackSourceConfig.cmake
 .cache
+tags
 
 # Allow
 !gradle/wrapper/gradle-wrapper.jar
