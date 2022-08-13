@@ -201,7 +201,7 @@ TEST(db, basic) {
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
     check_length(ref, ukv_val_len_missing_k);
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, named) {
@@ -266,7 +266,7 @@ TEST(db, named) {
     _ = db.remove("col2");
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, docs) {
@@ -318,7 +318,7 @@ TEST(db, docs) {
     M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Darvin\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "28");
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, docs_table) {
@@ -426,7 +426,7 @@ TEST(db, docs_table) {
         EXPECT_STREQ(col1[1].value.c_str(), "27");
         EXPECT_STREQ(col1[2].value.c_str(), "24");
     }
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, txn) {
@@ -483,7 +483,7 @@ TEST(db, txn) {
 
     // Validate that values match after commit
     check_equalities(named_col_ref, values);
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, nested_docs) {
@@ -587,7 +587,7 @@ TEST(db, net) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, net_batch) {
@@ -681,7 +681,7 @@ TEST(db, net_batch) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 int main(int argc, char** argv) {
