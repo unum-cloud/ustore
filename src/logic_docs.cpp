@@ -11,8 +11,8 @@
 #include <string_view>
 #include <unordered_set>
 #include <variant>
-#include <charconv> // `std::to_chars`
 #include <cstdio>   // `std::snprintf`
+#include <charconv> // `std::to_chars`
 
 #include <nlohmann/json.hpp>
 
@@ -796,6 +796,7 @@ struct column_begin_t {
 
 namespace std {
 
+
 from_chars_result from_chars(char const* begin, char const* end, bool& result) {
     bool is_true = end - begin == 4 && std::equal(begin, end, true_k);
     bool is_false = end - begin == 5 && std::equal(begin, end, false_k);
@@ -819,7 +820,7 @@ from_chars_result from_chars(char const* begin, char const*, float& result) {
     return {end, begin == end ? std::errc::invalid_argument : std::errc()};
 }
 
-to_chars_result to_chars(char* begin, char* end, json_t::number_float_t scalar) {
+to_chars_result to_chars(char* begin, char* end, json_t::number_float_t scalar) noexcept {
     // Parsing and dumping floating-point numbers is still not fully implemented in STL:
     //  std::to_chars_result result = std::to_chars(&print_buf[0], print_buf + print_buf_len_k,
     //  scalar); bool fits_null_terminated = result.ec != std::errc() && result.ptr < print_buf +

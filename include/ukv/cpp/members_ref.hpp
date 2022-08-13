@@ -176,7 +176,7 @@ class members_ref_gt {
         return *this;
     }
 
-    members_ref_gt& operator=(nullptr_t) noexcept(false) {
+    members_ref_gt& operator=(std::nullptr_t) noexcept(false) {
         auto status = erase();
         status.throw_unhandled();
         return *this;

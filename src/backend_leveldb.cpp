@@ -6,6 +6,8 @@
  * Has no support for collections, transactions or any non-CRUD jobs.
  */
 
+#include <limits>
+
 #include <leveldb/db.h>
 #include <leveldb/comparator.h>
 #include <leveldb/write_batch.h>

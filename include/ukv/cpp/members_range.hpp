@@ -6,6 +6,8 @@
  */
 
 #pragma once
+#include <limits>
+
 #include "ukv/ukv.h"
 #include "ukv/cpp/ranges.hpp" // `indexed_range_gt`
 
