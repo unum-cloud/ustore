@@ -253,10 +253,10 @@ struct values_arg_extractor_gt<values_arg_t> {
 };
 
 template <>
-struct values_arg_extractor_gt<nullptr_t> {
-    strided_iterator_gt<ukv_val_ptr_t const> contents(nullptr_t) noexcept { return {}; }
-    strided_iterator_gt<ukv_val_len_t const> offsets(nullptr_t) noexcept { return {}; }
-    strided_iterator_gt<ukv_val_len_t const> lengths(nullptr_t) noexcept { return {}; }
+struct values_arg_extractor_gt<std::nullptr_t> {
+    strided_iterator_gt<ukv_val_ptr_t const> contents(std::nullptr_t) noexcept { return {}; }
+    strided_iterator_gt<ukv_val_len_t const> offsets(std::nullptr_t) noexcept { return {}; }
+    strided_iterator_gt<ukv_val_len_t const> lengths(std::nullptr_t) noexcept { return {}; }
 };
 
 } // namespace unum::ukv
