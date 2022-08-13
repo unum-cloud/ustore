@@ -8,6 +8,7 @@
 
 #pragma once
 #include <functional> // `std::hash`
+#include <utility>    // `std::exchange`
 
 #include "ukv/ukv.h"
 
