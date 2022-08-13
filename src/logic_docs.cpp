@@ -880,7 +880,7 @@ void export_scalar_column(json_t const& value, size_t doc_idx, column_begin_t co
     }
     case json_t::value_t::string: {
         json_t::string_t const& str = value.get_ref<json_t::string_t const&>();
-        std::from_chars_result result = std::from_chars(str.data(), str.data() + str.size(), ref_scalar);
+        std::from_chars_result result = from_chars(str.data(), str.data() + str.size(), ref_scalar);
         bool entire_string_is_number = result.ec == std::errc() && result.ptr == str.data() + str.size();
         if (entire_string_is_number) {
             ref_convert |= mask_bitmap;
@@ -941,7 +941,7 @@ ukv_val_len_t print_scalar(scalar_at scalar, std::vector<byte_t>& output) {
     /// The on-stack buffer to be used to convert/format/print numerical values into strings.
     char print_buf[print_buf_len_k];
 
-    std::to_chars_result result = std::to_chars(print_buf, print_buf + print_buf_len_k, scalar);
+    std::to_chars_result result = to_chars(print_buf, print_buf + print_buf_len_k, scalar);
     bool fits_null_terminated = result.ec == std::errc() && result.ptr + 1 < print_buf + print_buf_len_k;
     if (fits_null_terminated) {
         *result.ptr = '\0';
