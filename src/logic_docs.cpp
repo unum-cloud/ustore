@@ -11,8 +11,8 @@
 #include <string_view>
 #include <unordered_set>
 #include <variant>
-#include <cstdio>   // `std::snprintf`
 #include <charconv> // `std::to_chars`
+#include <cstdio>   // `std::snprintf`
 
 #include <nlohmann/json.hpp>
 
@@ -795,30 +795,6 @@ struct column_begin_t {
 };
 
 namespace std {
-//  /// Result type of std::to_chars
-//  struct to_chars_result
-//  {
-//    char* ptr;
-//    errc ec;
-//
-//#if __cplusplus > 201703L && __cpp_impl_three_way_comparison >= 201907L
-//    friend bool
-//    operator==(const to_chars_result&, const to_chars_result&) = default;
-//#endif
-//  };
-//
-//  /// Result type of std::from_chars
-//  struct from_chars_result
-//  {
-//    const char* ptr;
-//    errc ec;
-//
-//#if __cplusplus > 201703L && __cpp_impl_three_way_comparison >= 201907L
-//    friend bool
-//    operator==(const from_chars_result&, const from_chars_result&) = default;
-//#endif
-//  };
-
 from_chars_result from_chars(char const* begin, char const* end, bool& result) {
     bool is_true = end - begin == 4 && std::equal(begin, end, true_k);
     bool is_false = end - begin == 5 && std::equal(begin, end, false_k);
@@ -830,17 +806,21 @@ from_chars_result from_chars(char const* begin, char const* end, bool& result) {
         return {end, std::errc::invalid_argument};
 }
 
-from_chars_result from_chars(char const* begin, char const*, double& result) {
-    char* end = nullptr;
-    result = std::strtod(begin, &end);
-    return {end, begin == end ? std::errc::invalid_argument : std::errc()};
-}
-
-from_chars_result from_chars(char const* begin, char const*, float& result) {
-    char* end = nullptr;
-    result = std::strtof(begin, &end);
-    return {end, begin == end ? std::errc::invalid_argument : std::errc()};
-}
+// These implementations of from_chars(...) causes the following 
+// error on gcc (GCC) 12.1.0:
+// logic_docs.cpp:880:41: error: call to 'from_chars' is ambiguous
+// The most *viable* solution I can think of right now is to use default implementations from STL.
+// from_chars_result from_chars(char const* begin, char const*, double& result) {
+//     char* end = nullptr;
+//     result = std::strtod(begin, &end);
+//     return {end, begin == end ? std::errc::invalid_argument : std::errc()};
+// }
+// 
+// from_chars_result from_chars(char const* begin, char const*, float& result) {
+//     char* end = nullptr;
+//     result = std::strtof(begin, &end);
+//     return {end, begin == end ? std::errc::invalid_argument : std::errc()};
+// }
 
 to_chars_result to_chars(char* begin, char* end, json_t::number_float_t scalar) noexcept {
     // Parsing and dumping floating-point numbers is still not fully implemented in STL:
