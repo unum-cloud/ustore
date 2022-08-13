@@ -795,7 +795,29 @@ struct column_begin_t {
 };
 
 namespace std {
-
+//  /// Result type of std::to_chars
+//  struct to_chars_result
+//  {
+//    char* ptr;
+//    errc ec;
+//
+//#if __cplusplus > 201703L && __cpp_impl_three_way_comparison >= 201907L
+//    friend bool
+//    operator==(const to_chars_result&, const to_chars_result&) = default;
+//#endif
+//  };
+//
+//  /// Result type of std::from_chars
+//  struct from_chars_result
+//  {
+//    const char* ptr;
+//    errc ec;
+//
+//#if __cplusplus > 201703L && __cpp_impl_three_way_comparison >= 201907L
+//    friend bool
+//    operator==(const from_chars_result&, const from_chars_result&) = default;
+//#endif
+//  };
 
 from_chars_result from_chars(char const* begin, char const* end, bool& result) {
     bool is_true = end - begin == 4 && std::equal(begin, end, true_k);
