@@ -339,13 +339,10 @@ TEST(db, docs_table) {
 
     // Single cell
     {
-        table_layout_t layout {1, 1};
-        layout.index(0).key = 1;
-        layout.header(0) = field_type_t {"age", ukv_type_u32_k};
-
-        auto maybe_table = col.as_table().gather(layout);
+        auto layout = table_layout().with<std::uint32_t>("age").for_(1);
+        auto maybe_table = col.as_table().gather(layout.view());
         auto table = *maybe_table;
-        auto col0 = table.column(0).as<std::uint32_t>();
+        auto col0 = table.column<0>();
 
         EXPECT_EQ(col0[0].value, 27);
         EXPECT_FALSE(col0[0].converted);
@@ -353,38 +350,35 @@ TEST(db, docs_table) {
 
     // Single row
     {
-        table_layout_t layout {1, 3};
-        layout.index(0).key = 1;
-        layout.header(0) = field_type_t {"age", ukv_type_u32_k};
-        layout.header(1) = field_type_t {"age", ukv_type_i32_k};
-        layout.header(2) = field_type_t {"age", ukv_type_str_k};
+        auto layout = table_layout() //
+                          .with<std::uint32_t>("age")
+                          .with<std::int32_t>("age")
+                          .with<std::string_view>("age")
+                          .for_(1);
 
-        auto maybe_table = col.as_table().gather(layout);
+        auto maybe_table = col.as_table().gather(layout.view());
         auto table = *maybe_table;
-        auto col0 = table.column(0).as<std::uint32_t>();
-        auto col1 = table.column(1).as<std::int32_t>();
-        auto col2 = table.column(2).as<value_view_t>();
+        auto col0 = table.column<0>();
+        auto col1 = table.column<1>();
+        auto col2 = table.column<2>();
 
         EXPECT_EQ(col0[0].value, 27);
         EXPECT_FALSE(col0[0].converted);
         EXPECT_EQ(col1[0].value, 27);
         EXPECT_TRUE(col1[0].converted);
-        EXPECT_STREQ(col2[0].value.c_str(), "27");
+        EXPECT_STREQ(col2[0].value.data(), "27");
         EXPECT_TRUE(col2[0].converted);
     }
 
     // Single column
     {
-        table_layout_t layout {4, 1};
-        layout.index(0).key = 1;
-        layout.index(1).key = 2;
-        layout.index(2).key = 3;
-        layout.index(3).key = 123456;
-        layout.header(0) = field_type_t {"age", ukv_type_i32_k};
+        auto layout = table_layout() //
+                          .with<std::int32_t>("age")
+                          .for_({1, 2, 3, 123456});
 
-        auto maybe_table = col.as_table().gather(layout);
+        auto maybe_table = col.as_table().gather(layout.view());
         auto table = *maybe_table;
-        auto col0 = table.column(0).as<std::int32_t>();
+        auto col0 = table.column<0>();
 
         EXPECT_EQ(col0[0].value, 27);
         EXPECT_EQ(col0[1].value, 27);
@@ -394,7 +388,38 @@ TEST(db, docs_table) {
 
     // Multi-column
     {
-        table_layout_t layout {5, 6};
+        auto layout = table_layout() //
+                          .with<std::int32_t>("age")
+                          .with<std::string_view>("age")
+                          .with<std::string_view>("person")
+                          .with<float>("person")
+                          .with<std::int32_t>("height")
+                          .with<std::uint64_t>("weight")
+                          .for_({1, 2, 3, 123456, 654321});
+
+        auto maybe_table = col.as_table().gather(layout.view());
+        auto table = *maybe_table;
+        auto col0 = table.column<0>();
+        auto col1 = table.column<1>();
+        auto col2 = table.column<2>();
+        auto col3 = table.column<3>();
+        auto col4 = table.column<4>();
+        auto col5 = table.column<5>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_EQ(col0[1].value, 27);
+        EXPECT_TRUE(col0[1].converted);
+        EXPECT_EQ(col0[2].value, 24);
+
+        EXPECT_STREQ(col1[0].value.data(), "27");
+        EXPECT_TRUE(col1[0].converted);
+        EXPECT_STREQ(col1[1].value.data(), "27");
+        EXPECT_STREQ(col1[2].value.data(), "24");
+    }
+
+    // Multi-column Type-punned exports
+    {
+        table_layout_punned_t layout {5, 6};
         layout.index(0).key = 1;
         layout.index(1).key = 2;
         layout.index(2).key = 3;
@@ -426,6 +451,7 @@ TEST(db, docs_table) {
         EXPECT_STREQ(col1[1].value.c_str(), "27");
         EXPECT_STREQ(col1[2].value.c_str(), "24");
     }
+
     EXPECT_TRUE(db.clear());
 }
 
