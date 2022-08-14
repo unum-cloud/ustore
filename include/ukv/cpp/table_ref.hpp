@@ -227,7 +227,8 @@ class column_view_gt<void> {
 template <typename... column_types_at>
 class table_view_gt {
 
-    using scalar_types_t = std::tuple<column_types_at...>;
+    using types_tuple_t = std::tuple<column_types_at...>;
+    using row_tuple_t = std::tuple<cell_gt<column_types_at>...>;
 
     ukv_size_t docs_count_;
     ukv_size_t fields_count_;
@@ -294,9 +295,14 @@ class table_view_gt {
     }
 
     template <std::size_t idx_ak>
-    column_view_gt<std::tuple_element_t<idx_ak, scalar_types_t>> column() const noexcept {
-        using scalar_t = std::tuple_element_t<idx_ak, scalar_types_t>;
+    column_view_gt<std::tuple_element_t<idx_ak, types_tuple_t>> column() const noexcept {
+        using scalar_t = std::tuple_element_t<idx_ak, types_tuple_t>;
         return this->template column<scalar_t>(idx_ak);
+    }
+
+    row_tuple_t row(std::size_t i) const noexcept {
+        // TODO:
+        return {};
     }
 
     std::size_t rows() const noexcept { return docs_count_; }
