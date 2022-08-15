@@ -264,6 +264,10 @@ class column_view_t {
         else
             return {validities_, conversions_, collisions_, reinterpret_cast<element_at*>(scalars_), count_, name_};
     }
+
+    ukv_1x8_t* validities() const noexcept { return validities_; }
+    ukv_val_len_t* offsets() const noexcept { return offsets_; }
+    ukv_val_ptr_t contents() const noexcept { return scalars_ ?: tape_; }
 };
 
 /**

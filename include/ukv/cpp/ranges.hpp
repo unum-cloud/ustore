@@ -321,6 +321,13 @@ element_at transform_reduce_n(iterator_at begin, std::size_t n, element_at init,
     return init;
 }
 
+template <typename transform_at, typename output_iterator_at, typename iterator_at>
+output_iterator_at transform_n(iterator_at begin, std::size_t n, output_iterator_at output, transform_at transform) {
+    for (std::size_t i = 0; i != n; ++i, ++begin, ++output)
+        *output = *begin;
+    return output;
+}
+
 template <typename element_at, typename iterator_at>
 element_at reduce_n(iterator_at begin, std::size_t n, element_at init) {
     return transform_reduce_n(begin, n, init, [](auto x) { return x; });
@@ -458,6 +465,7 @@ class strings_tape_iterator_t {
         return {remaining_count_ - 1, current_ + std::strlen(current_) + 1};
     }
 
+    ukv_str_view_t operator*() const noexcept { return current_; }
     bool is_end() const noexcept { return !remaining_count_; }
     ukv_size_t size() const noexcept { return remaining_count_; }
 };
