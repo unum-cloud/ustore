@@ -713,6 +713,7 @@ TEST(db, net_batch) {
 }
 
 int main(int argc, char** argv) {
+    mkdir("./tmp", 0777);
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
