@@ -97,6 +97,14 @@ struct py_col_t {
     }
 };
 
+struct py_buffer_memory_t {
+    Py_buffer raw;
+    /// The memory that `raw.shape` points to.
+    Py_ssize_t shape[4];
+    /// The memory that `raw.strides` points to.
+    Py_ssize_t strides[4];
+};
+
 struct py_graph_t {
 
     std::shared_ptr<py_db_t> db_ptr;
@@ -105,13 +113,11 @@ struct py_graph_t {
     col_t targets_attrs;
     col_t relations_attrs;
 
-    bool is_directed_ = false;
-    bool is_multi_ = false;
-    bool allow_self_loops_ = false;
+    bool is_directed = false;
+    bool is_multi = false;
+    bool allow_self_loops = false;
 
-    Py_buffer last_buffer;
-    Py_ssize_t last_buffer_shape[3];
-    Py_ssize_t last_buffer_strides[3];
+    py_buffer_memory_t last_buffer;
 
     py_graph_t() {}
     py_graph_t(py_graph_t&&) = delete;
