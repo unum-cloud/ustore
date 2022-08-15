@@ -52,10 +52,10 @@ class col_t {
   public:
     inline col_t() noexcept : arena_(nullptr) {}
     inline col_t(ukv_t db_ptr,
-                 ukv_col_t col_ptr = ukv_col_main_k,
+                 ukv_col_t col = ukv_col_main_k,
                  ukv_txn_t txn = nullptr,
                  ukv_format_t format = ukv_format_binary_k) noexcept
-        : db_(db_ptr), col_(col_ptr), txn_(txn), arena_(db_), format_(format) {}
+        : db_(db_ptr), col_(col), txn_(txn), arena_(db_), format_(format) {}
 
     inline col_t(col_t&& other) noexcept
         : db_(other.db_), col_(std::exchange(other.col_, ukv_col_main_k)), txn_(std::exchange(other.txn_, nullptr)),
@@ -84,6 +84,7 @@ class col_t {
 
     inline operator ukv_col_t() const noexcept { return col_; }
     inline ukv_col_t* member_ptr() noexcept { return &col_; }
+    inline ukv_arena_t* member_arena() noexcept { return arena_.member_ptr(); }
     inline ukv_t db() const noexcept { return db_; }
     inline ukv_txn_t txn() const noexcept { return txn_; }
     inline graph_ref_t as_graph() noexcept { return {db_, txn_, col_, arena_}; }
@@ -300,18 +301,18 @@ class db_t : public std::enable_shared_from_this<db_t> {
     db_t(db_t const&) = delete;
     db_t(db_t&& other) noexcept : db_(std::exchange(other.db_, nullptr)) {}
 
-    status_t open(std::string const& config = "") {
+    status_t open(std::string const& config = "") noexcept {
         status_t status;
         ukv_db_open(config.c_str(), &db_, status.member_ptr());
         return status;
     }
 
-    void close() {
+    void close() noexcept {
         ukv_db_free(db_);
         db_ = nullptr;
     }
 
-    ~db_t() {
+    ~db_t() noexcept {
         if (db_)
             close();
     }
@@ -400,7 +401,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
         return status;
     }
 
-    expected_gt<txn_t> transact(bool snapshot = false) {
+    expected_gt<txn_t> transact(bool snapshot = false) noexcept {
         status_t status;
         ukv_txn_t raw = nullptr;
         ukv_txn_begin(db_, 0, snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k, &raw, status.member_ptr());
