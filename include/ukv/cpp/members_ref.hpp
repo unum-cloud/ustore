@@ -230,6 +230,11 @@ class members_ref_gt {
         return any_gather<table_view_t, table_header_t const&>(header, options);
     }
 
+    expected_gt<table_view_t> gather(table_header_view_t const& header, bool track = false) noexcept {
+        auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
+        return any_gather<table_view_t, table_header_view_t const&>(header, options);
+    }
+
     template <typename... column_types_at>
     expected_gt<table_view_gt<column_types_at...>> gather( //
         table_header_gt<column_types_at...> const& header,

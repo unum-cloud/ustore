@@ -93,7 +93,23 @@ constexpr ukv_type_t ukv_type() {
 /**
  * @brief The first column of the table, describing its contents.
  */
-using table_index_t = std::pair<strided_range_gt<ukv_col_t const>, strided_range_gt<ukv_key_t const>>;
+struct table_index_view_t {
+    strided_iterator_gt<ukv_col_t const> cols_begin;
+    strided_iterator_gt<ukv_key_t const> keys_begin;
+    std::size_t count = 0;
+
+    strided_range_gt<ukv_col_t const> cols() const noexcept { return {cols_begin, count}; }
+    strided_range_gt<ukv_key_t const> keys() const noexcept { return {keys_begin, count}; }
+};
+
+struct table_header_view_t {
+    strided_iterator_gt<ukv_str_view_t const> fields_begin;
+    strided_iterator_gt<ukv_type_t const> types_begin;
+    std::size_t count = 0;
+
+    strided_range_gt<ukv_str_view_t const> fields() const noexcept { return {fields_begin, count}; }
+    strided_range_gt<ukv_type_t const> types() const noexcept { return {types_begin, count}; }
+};
 
 template <typename element_at>
 struct cell_gt {
@@ -308,7 +324,8 @@ class table_view_gt {
     table_view_gt& operator=(table_view_gt&&) = default;
     table_view_gt& operator=(table_view_gt const&) = default;
 
-    table_index_t index() const noexcept { return {{cols_, docs_count_}, {keys_, docs_count_}}; }
+    table_index_view_t index() const noexcept { return {cols_, keys_, docs_count_}; }
+    table_header_view_t header() const noexcept { return {fields_, types_, docs_count_}; }
 
     template <typename element_at = std::monostate>
     auto column(std::size_t i) const noexcept {
@@ -414,6 +431,8 @@ struct table_header_gt<std::monostate> {
     std::vector<field_type_t> columns;
 
     void clear() noexcept { columns.clear(); }
+    table_header_view_t view() const noexcept { return {fields().begin(), types().begin(), columns.size()}; }
+    operator table_header_view_t() const noexcept { return view(); }
 
     template <typename element_at>
     table_header_gt& with(ukv_str_view_t name) & {
