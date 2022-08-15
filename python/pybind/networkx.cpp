@@ -7,32 +7,34 @@ using namespace unum::ukv;
 using namespace unum;
 
 struct degree_view_t {
-    std::shared_ptr<py_graph_t> net_ptr;
+    std::weak_ptr<py_graph_t> net_ptr;
     ukv_vertex_role_t roles = ukv_vertex_role_any_k;
 };
 
 template <typename element_at>
 py::object wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
 
-    g.last_buffer_strides[0] = range.stride();
-    g.last_buffer_strides[1] = g.last_buffer_strides[2] = 1;
-    g.last_buffer_shape[0] = range.size();
-    g.last_buffer_shape[1] = g.last_buffer_shape[2] = 1;
+    py_buffer_memory_t& buf = g.last_buffer;
+
+    buf.strides[0] = range.stride();
+    buf.strides[1] = buf.strides[2] = 1;
+    buf.shape[0] = range.size();
+    buf.shape[1] = buf.shape[2] = 1;
 
     // https://docs.python.org/3/c-api/buffer.html
-    g.last_buffer.buf = (void*)range.begin().get();
-    g.last_buffer.obj = NULL;
-    g.last_buffer.len = range.size() * sizeof(element_at);
-    g.last_buffer.itemsize = sizeof(element_at);
+    buf.raw.buf = (void*)range.begin().get();
+    buf.raw.obj = NULL;
+    buf.raw.len = range.size() * sizeof(element_at);
+    buf.raw.itemsize = sizeof(element_at);
     // https://docs.python.org/3/library/struct.html#format-characters
-    g.last_buffer.format = (char*)&format_code_gt<std::remove_const_t<element_at>>::value[0];
-    g.last_buffer.ndim = 1;
-    g.last_buffer.shape = &g.last_buffer_shape[0];
-    g.last_buffer.strides = &g.last_buffer_strides[0];
-    g.last_buffer.suboffsets = nullptr;
-    g.last_buffer.readonly = true;
-    g.last_buffer.internal = nullptr;
-    PyObject* obj = PyMemoryView_FromBuffer(&g.last_buffer);
+    buf.raw.format = (char*)&format_code_gt<std::remove_const_t<element_at>>::value[0];
+    buf.raw.ndim = 1;
+    buf.raw.shape = &buf.shape[0];
+    buf.raw.strides = &buf.strides[0];
+    buf.raw.suboffsets = nullptr;
+    buf.raw.readonly = true;
+    buf.raw.internal = nullptr;
+    PyObject* obj = PyMemoryView_FromBuffer(&buf.raw);
     return py::reinterpret_steal<py::object>(obj);
 }
 
@@ -138,22 +140,19 @@ void ukv::wrap_networkx(py::module& m) {
 
     auto degs = py::class_<degree_view_t>(m, "DegreeView", py::module_local());
     degs.def("__getitem__", [](degree_view_t& degs, ukv_key_t v) {
-        py_graph_t& g = *degs.net_ptr;
-        auto maybe = g.ref().degree(v, degs.roles);
-        maybe.throw_unhandled();
-        ukv_vertex_degree_t result = *maybe;
+        py_graph_t& g = *degs.net_ptr.lock().get();
+        auto result = g.ref().degree(v, degs.roles).throw_or_release();
         return result;
     });
     degs.def("__getitem__", [](degree_view_t& degs, PyObject* vs) {
-        py_graph_t& g = *degs.net_ptr;
+        py_graph_t& g = *degs.net_ptr.lock().get();
         auto ids_handle = py_buffer(vs);
         auto ids = py_strided_range<ukv_key_t const>(ids_handle);
-        auto maybe = g.ref().degrees(ids, {&degs.roles});
-        maybe.throw_unhandled();
-        return wrap_into_buffer<ukv_vertex_degree_t const>(g, {maybe->begin(), maybe->end()});
+        auto result = g.ref().degrees(ids, {&degs.roles}).throw_or_release();
+        return wrap_into_buffer<ukv_vertex_degree_t const>(g, {result.begin(), result.end()});
     });
 
-    auto g = py::class_<py_graph_t>(m, "Network", py::module_local());
+    auto g = py::class_<py_graph_t, std::shared_ptr<py_graph_t>>(m, "Network", py::module_local());
     g.def( //
         py::init([](std::shared_ptr<py_db_t> py_db,
                     std::optional<std::string> index,
@@ -168,34 +167,23 @@ void ukv::wrap_networkx(py::module& m) {
                 return std::shared_ptr<py_graph_t> {};
 
             auto net_ptr = std::make_shared<py_graph_t>();
-            net_ptr->db_ptr = py_db;
-            net_ptr->is_directed_ = directed;
-            net_ptr->is_multi_ = multi;
-            net_ptr->allow_self_loops_ = loops;
+            net_ptr->py_db_ptr = py_db;
+            net_ptr->is_directed = directed;
+            net_ptr->is_multi = multi;
+            net_ptr->allow_self_loops = loops;
 
             // Attach the primary collection
             db_t& db = py_db->native;
-            {
-                auto col = db.collection(index ? index->c_str() : "");
-                col.throw_unhandled();
-                net_ptr->index = *std::move(col);
-            }
+            net_ptr->index = db.collection(index ? index->c_str() : "").throw_or_release();
+
             // Attach the additional collections
-            if (sources_attrs) {
-                auto col = db.collection(sources_attrs->c_str());
-                col.throw_unhandled();
-                net_ptr->sources_attrs = *std::move(col);
-            }
-            if (targets_attrs) {
-                auto col = db.collection(targets_attrs->c_str());
-                col.throw_unhandled();
-                net_ptr->targets_attrs = *std::move(col);
-            }
-            if (relations_attrs) {
-                auto col = db.collection(relations_attrs->c_str());
-                col.throw_unhandled();
-                net_ptr->relations_attrs = *std::move(col);
-            }
+            if (sources_attrs)
+                net_ptr->sources_attrs = db.collection(sources_attrs->c_str()).throw_or_release();
+            if (targets_attrs)
+                net_ptr->sources_attrs = db.collection(targets_attrs->c_str()).throw_or_release();
+            if (relations_attrs)
+                net_ptr->sources_attrs = db.collection(relations_attrs->c_str()).throw_or_release();
+
             return net_ptr;
         }),
         py::arg("db"),
@@ -225,7 +213,7 @@ void ukv::wrap_networkx(py::module& m) {
     g.def_property_readonly(
         "degree",
         [](py_graph_t& g) {
-            auto degs_ptr = std::make_shared<degree_view_t>();
+            auto degs_ptr = std::make_unique<degree_view_t>();
             degs_ptr->net_ptr = g.shared_from_this();
             degs_ptr->roles = ukv_vertex_role_any_k;
             return degs_ptr;
@@ -234,7 +222,7 @@ void ukv::wrap_networkx(py::module& m) {
     g.def_property_readonly(
         "in_degree",
         [](py_graph_t& g) {
-            auto degs_ptr = std::make_shared<degree_view_t>();
+            auto degs_ptr = std::make_unique<degree_view_t>();
             degs_ptr->net_ptr = g.shared_from_this();
             degs_ptr->roles = ukv_vertex_target_k;
             return degs_ptr;
@@ -243,7 +231,7 @@ void ukv::wrap_networkx(py::module& m) {
     g.def_property_readonly(
         "out_degree",
         [](py_graph_t& g) {
-            auto degs_ptr = std::make_shared<degree_view_t>();
+            auto degs_ptr = std::make_unique<degree_view_t>();
             degs_ptr->net_ptr = g.shared_from_this();
             degs_ptr->roles = ukv_vertex_source_k;
             return degs_ptr;
@@ -330,9 +318,8 @@ void ukv::wrap_networkx(py::module& m) {
         [](py_graph_t& g, PyObject* vs) {
             auto ids_handle = py_buffer(vs);
             auto ids = py_strided_range<ukv_key_t const>(ids_handle);
-            auto maybe = g.ref().contains(ids);
-            maybe.throw_unhandled();
-            return wrap_into_buffer(g, *maybe);
+            auto result = g.ref().contains(ids).throw_or_release();
+            return wrap_into_buffer(g, result);
         },
         "Checks given nodes against graph members and returns a filtered iterable object");
 
@@ -445,12 +432,12 @@ void ukv::wrap_networkx(py::module& m) {
     // https://networkx.org/documentation/stable/reference/functions.html#graph
     // https://networkx.org/documentation/stable/reference/generated/networkx.classes.function.density.html
     // https://networkx.org/documentation/stable/reference/generated/networkx.classes.function.is_directed.html?highlight=is_directed
-    g.def_property_readonly("is_directed", [](py_graph_t& g) { return g.is_directed_; });
-    g.def_property_readonly("is_multi", [](py_graph_t& g) { return g.is_multi_; });
-    g.def_property_readonly("allows_loops", [](py_graph_t& g) { return g.allow_self_loops_; });
-    m.def("is_directed", [](py_graph_t& g) { return g.is_directed_; });
-    m.def("is_multi", [](py_graph_t& g) { return g.is_multi_; });
-    m.def("allows_loops", [](py_graph_t& g) { return g.allow_self_loops_; });
+    g.def_property_readonly("is_directed", [](py_graph_t& g) { return g.is_directed; });
+    g.def_property_readonly("is_multi", [](py_graph_t& g) { return g.is_multi; });
+    g.def_property_readonly("allows_loops", [](py_graph_t& g) { return g.allow_self_loops; });
+    m.def("is_directed", [](py_graph_t& g) { return g.is_directed; });
+    m.def("is_multi", [](py_graph_t& g) { return g.is_multi; });
+    m.def("allows_loops", [](py_graph_t& g) { return g.allow_self_loops; });
     m.def("density", [](py_graph_t& g) {
         throw_not_implemented();
         return 0.0;

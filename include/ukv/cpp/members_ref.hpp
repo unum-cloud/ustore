@@ -384,10 +384,10 @@ template <typename locations_at>
 expected_gt<strings_tape_iterator_t> members_ref_gt<locations_at>::gist(bool track) noexcept {
 
     status_t status;
-    ukv_size_t found_count = nullptr;
+    ukv_size_t found_count = 0;
     ukv_str_view_t found_strings = nullptr;
 
-    auto options = (track ? ukv_option_read_track_k : ukv_options_default_k) | ukv_option_read_lengths_k;
+    auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
     auto keys = keys_extractor_t {}.keys(locs);

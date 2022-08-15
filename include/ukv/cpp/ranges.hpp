@@ -459,6 +459,7 @@ class strings_tape_iterator_t {
     }
 
     bool is_end() const noexcept { return !remaining_count_; }
+    ukv_size_t size() const noexcept { return remaining_count_; }
 };
 
 } // namespace unum::ukv
