@@ -339,8 +339,8 @@ TEST(db, docs_table) {
 
     // Single cell
     {
-        auto layout = table_layout().with<std::uint32_t>("age").for_(1);
-        auto maybe_table = col.as_table().gather(layout.view());
+        auto header = table_header().with<std::uint32_t>("age");
+        auto maybe_table = col[1].gather(header);
         auto table = *maybe_table;
         auto col0 = table.column<0>();
 
@@ -350,13 +350,12 @@ TEST(db, docs_table) {
 
     // Single row
     {
-        auto layout = table_layout() //
+        auto header = table_header() //
                           .with<std::uint32_t>("age")
                           .with<std::int32_t>("age")
-                          .with<std::string_view>("age")
-                          .for_(1);
+                          .with<std::string_view>("age");
 
-        auto maybe_table = col.as_table().gather(layout.view());
+        auto maybe_table = col[1].gather(header);
         auto table = *maybe_table;
         auto col0 = table.column<0>();
         auto col1 = table.column<1>();
@@ -372,11 +371,8 @@ TEST(db, docs_table) {
 
     // Single column
     {
-        auto layout = table_layout() //
-                          .with<std::int32_t>("age")
-                          .for_({1, 2, 3, 123456});
-
-        auto maybe_table = col.as_table().gather(layout.view());
+        auto header = table_header().with<std::int32_t>("age");
+        auto maybe_table = col[{1, 2, 3, 123456}].gather(header);
         auto table = *maybe_table;
         auto col0 = table.column<0>();
 
@@ -388,16 +384,15 @@ TEST(db, docs_table) {
 
     // Multi-column
     {
-        auto layout = table_layout() //
+        auto header = table_header() //
                           .with<std::int32_t>("age")
                           .with<std::string_view>("age")
                           .with<std::string_view>("person")
                           .with<float>("person")
                           .with<std::int32_t>("height")
-                          .with<std::uint64_t>("weight")
-                          .for_({1, 2, 3, 123456, 654321});
+                          .with<std::uint64_t>("weight");
 
-        auto maybe_table = col.as_table().gather(layout.view());
+        auto maybe_table = col[{1, 2, 3, 123456, 654321}].gather(header);
         auto table = *maybe_table;
         auto col0 = table.column<0>();
         auto col1 = table.column<1>();
@@ -419,20 +414,16 @@ TEST(db, docs_table) {
 
     // Multi-column Type-punned exports
     {
-        table_layout_punned_t layout {5, 6};
-        layout.index(0).key = 1;
-        layout.index(1).key = 2;
-        layout.index(2).key = 3;
-        layout.index(3).key = 123456;
-        layout.index(4).key = 654321;
-        layout.header(0) = field_type_t {"age", ukv_type_i32_k};
-        layout.header(1) = field_type_t {"age", ukv_type_str_k};
-        layout.header(2) = field_type_t {"person", ukv_type_str_k};
-        layout.header(3) = field_type_t {"person", ukv_type_f32_k};
-        layout.header(4) = field_type_t {"height", ukv_type_i32_k};
-        layout.header(5) = field_type_t {"weight", ukv_type_u64_k};
+        table_header_t header {{
+            field_type_t {"age", ukv_type_i32_k},
+            field_type_t {"age", ukv_type_str_k},
+            field_type_t {"person", ukv_type_str_k},
+            field_type_t {"person", ukv_type_f32_k},
+            field_type_t {"height", ukv_type_i32_k},
+            field_type_t {"weight", ukv_type_u64_k},
+        }};
 
-        auto maybe_table = col.as_table().gather(layout);
+        auto maybe_table = col[{1, 2, 3, 123456, 654321}].gather(header);
         auto table = *maybe_table;
         auto col0 = table.column(0).as<std::int32_t>();
         auto col1 = table.column(1).as<value_view_t>();

@@ -112,7 +112,7 @@ stl_col_t& stl_col(stl_db_t& db, ukv_col_t col) {
 
 void save_to_disk(stl_col_t const& col, std::string const& path, ukv_error_t* c_error) {
     // Using the classical C++ IO mechanisms is a bad tone in the modern world.
-    // They are ugly and, more importantly, painly slow.
+    // They are ugly and, more importantly, painfully slow.
     // https://www.reddit.com/r/cpp_questions/comments/e2xia9/performance_comparison_of_various_ways_of_reading/
     //
     // So instead we stick to the LibC way of doing things.
@@ -1158,7 +1158,7 @@ void ukv_txn_commit( //
             return;
     }
 
-    // 4. Allocate space for more vertices across different cols
+    // 4. Allocate space for more nodes across different cols
     try {
         db.main.reserve_more(txn.upserted.size());
         for (auto& name_and_col : db.named)
