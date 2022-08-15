@@ -794,46 +794,50 @@ struct column_begin_t {
     ukv_val_len_t* str_lengths;
 };
 
-namespace std {
-
-from_chars_result from_chars(char const* begin, char const* end, bool& result) {
-    bool is_true = end - begin == 4 && std::equal(begin, end, true_k);
-    bool is_false = end - begin == 5 && std::equal(begin, end, false_k);
-    if (is_true | is_false) {
-        result = is_true;
-        return {end, std::errc()};
+template <typename at>
+std::from_chars_result from_chars(char const* begin, char const* end, at& result) {
+    if constexpr (std::is_same_v<at, float>) {
+        char* end = nullptr;
+        result = std::strtof(begin, &end);
+        return {end, begin == end ? std::errc::invalid_argument : std::errc()};
+    }
+    else if constexpr (std::is_same_v<at, double>) {
+        char* end = nullptr;
+        result = std::strtod(begin, &end);
+        return {end, begin == end ? std::errc::invalid_argument : std::errc()};
+    }
+    else if constexpr (std::is_same_v<at, bool>) {
+        bool is_true = end - begin == 4 && std::equal(begin, end, true_k);
+        bool is_false = end - begin == 5 && std::equal(begin, end, false_k);
+        if (is_true | is_false) {
+            result = is_true;
+            return {end, std::errc()};
+        }
+        else
+            return {end, std::errc::invalid_argument};
     }
     else
-        return {end, std::errc::invalid_argument};
+        return std::from_chars(begin, end, result);
 }
 
-from_chars_result from_chars(char const* begin, char const*, double& result) {
-    char* end = nullptr;
-    result = std::strtod(begin, &end);
-    return {end, begin == end ? std::errc::invalid_argument : std::errc()};
+template <typename at>
+std::to_chars_result to_chars(char* begin, char* end, at scalar) {
+    if constexpr (std::is_floating_point_v<at>) {
+        // Parsing and dumping floating-point numbers is still not fully implemented in STL:
+        //  std::to_chars_result result = std::to_chars(&print_buf[0], print_buf + print_buf_len_k,
+        //  scalar); bool fits_null_terminated = result.ec != std::errc() && result.ptr < print_buf +
+        //  print_buf_len_k;
+        // Using FMT would cause an extra dependency:
+        //  auto end_ptr = fmt::format_to(print_buf, "{}", scalar);
+        //  bool fits_null_terminated = end_ptr < print_buf + print_buf_len_k;
+        // If we use `std::snprintf`, the result would be NULL-terminated:
+        auto result = std::snprintf(begin, end - begin, "%f", scalar);
+        return result >= 0 ? std::to_chars_result {begin + result - 1, std::errc()}
+                           : std::to_chars_result {begin, std::errc::invalid_argument};
+    }
+    else
+        return std::to_chars(begin, end, scalar);
 }
-
-from_chars_result from_chars(char const* begin, char const*, float& result) {
-    char* end = nullptr;
-    result = std::strtof(begin, &end);
-    return {end, begin == end ? std::errc::invalid_argument : std::errc()};
-}
-
-to_chars_result to_chars(char* begin, char* end, json_t::number_float_t scalar) {
-    // Parsing and dumping floating-point numbers is still not fully implemented in STL:
-    //  std::to_chars_result result = std::to_chars(&print_buf[0], print_buf + print_buf_len_k,
-    //  scalar); bool fits_null_terminated = result.ec != std::errc() && result.ptr < print_buf +
-    //  print_buf_len_k;
-    // Using FMT would cause an extra dependency:
-    //  auto end_ptr = fmt::format_to(print_buf, "{}", scalar);
-    //  bool fits_null_terminated = end_ptr < print_buf + print_buf_len_k;
-    // If we use `std::snprintf`, the result would be NULL-terminated:
-    auto result = std::snprintf(begin, end - begin, "%f", scalar);
-    return result >= 0 ? to_chars_result {begin + result - 1, std::errc()}
-                       : to_chars_result {begin, std::errc::invalid_argument};
-}
-
-} // namespace std
 
 template <typename scalar_at>
 void export_scalar_column(json_t const& value, size_t doc_idx, column_begin_t column) {
@@ -876,7 +880,7 @@ void export_scalar_column(json_t const& value, size_t doc_idx, column_begin_t co
     }
     case json_t::value_t::string: {
         json_t::string_t const& str = value.get_ref<json_t::string_t const&>();
-        std::from_chars_result result = std::from_chars(str.data(), str.data() + str.size(), ref_scalar);
+        std::from_chars_result result = from_chars(str.data(), str.data() + str.size(), ref_scalar);
         bool entire_string_is_number = result.ec == std::errc() && result.ptr == str.data() + str.size();
         if (entire_string_is_number) {
             ref_convert |= mask_bitmap;
@@ -937,7 +941,7 @@ ukv_val_len_t print_scalar(scalar_at scalar, std::vector<byte_t>& output) {
     /// The on-stack buffer to be used to convert/format/print numerical values into strings.
     char print_buf[print_buf_len_k];
 
-    std::to_chars_result result = std::to_chars(print_buf, print_buf + print_buf_len_k, scalar);
+    std::to_chars_result result = to_chars(print_buf, print_buf + print_buf_len_k, scalar);
     bool fits_null_terminated = result.ec == std::errc() && result.ptr + 1 < print_buf + print_buf_len_k;
     if (fits_null_terminated) {
         *result.ptr = '\0';

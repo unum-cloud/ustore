@@ -8,6 +8,7 @@
 
 #pragma once
 #include <functional> // `std::hash`
+#include <utility>    // `std::exchange`
 
 #include "ukv/ukv.h"
 
@@ -125,6 +126,8 @@ class value_view_t {
     ukv_val_len_t length_ = 0;
 
   public:
+    using value_type = byte_t;
+
     inline value_view_t() = default;
     inline value_view_t(ukv_val_ptr_t ptr, ukv_val_len_t length) noexcept {
         ptr_ = ptr;
@@ -133,6 +136,10 @@ class value_view_t {
 
     inline value_view_t(byte_t const* begin, byte_t const* end) noexcept
         : ptr_(ukv_val_ptr_t(begin)), length_(static_cast<ukv_val_len_t>(end - begin)) {}
+
+    /// Compatibility with `std::basic_string_view` in C++17.
+    inline value_view_t(byte_t const* begin, std::size_t n) noexcept
+        : ptr_(ukv_val_ptr_t(begin)), length_(static_cast<ukv_val_len_t>(n)) {}
 
     inline value_view_t(char const* c_str) noexcept
         : ptr_(ukv_val_ptr_t(c_str)), length_(static_cast<ukv_val_len_t>(std::strlen(c_str))) {}
