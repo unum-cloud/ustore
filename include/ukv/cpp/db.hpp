@@ -14,7 +14,6 @@
 #include "ukv/cpp/members_ref.hpp"
 #include "ukv/cpp/members_range.hpp"
 #include "ukv/cpp/graph_ref.hpp"
-#include "ukv/cpp/table_ref.hpp"
 
 namespace unum::ukv {
 
@@ -88,7 +87,6 @@ class col_t {
     inline ukv_t db() const noexcept { return db_; }
     inline ukv_txn_t txn() const noexcept { return txn_; }
     inline graph_ref_t as_graph() noexcept { return {db_, txn_, col_, arena_}; }
-    inline table_ref_t as_table() noexcept { return {db_, txn_, col_, arena_}; }
     inline col_t& as(ukv_format_t format) noexcept {
         format_ = format;
         return *this;
