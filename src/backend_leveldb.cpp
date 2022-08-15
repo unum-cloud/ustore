@@ -502,9 +502,8 @@ void ukv_size( //
     strided_iterator_gt<ukv_key_t const> min_keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
     uint64_t approximate_size = 0;
-    std::optional<std::string> memory_usage = "0";
-    if (!memory_usage && (*c_error = "Out of memory"))
-        return;
+    std::optional<std::string> memory_usage;
+    level_status_t status;
 
     for (ukv_size_t i = 0; i != n; ++i) {
         ukv_size_t* estimates = *c_found_estimates + i * 6;
@@ -518,7 +517,10 @@ void ukv_size( //
         leveldb::Range range(to_slice(min_key), to_slice(max_key));
         try {
             db.GetApproximateSizes(&range, 1, &approximate_size);
-            db.GetProperty("leveldb.approximate-memory-usage", &memory_usage.value());
+            memory_usage = "0";
+            status = db.GetProperty("leveldb.approximate-memory-usage", &memory_usage.value());
+            if (export_error(status, c_error))
+                return;
             estimates[4] = approximate_size;
             estimates[5] = std::stoi(memory_usage.value());
         }
@@ -565,7 +567,7 @@ void ukv_col_list( //
     ukv_arena_t*,
     ukv_error_t* c_error) {
     *c_count = 0;
-    c_names = nullptr;
+    *c_names = nullptr;
 }
 
 void ukv_db_control( //
