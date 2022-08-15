@@ -11,8 +11,19 @@
  * https://arrow.apache.org/docs/format/Columnar.html#encapsulated-message-format
  */
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <inttypes.h> // `int64_t`
 #include <stdlib.h>   // `malloc`
+
+#include "ukv/docs.h"
+
+// if __has_include ("arrow/c/abi.h")
+// #define ARROW_C_DATA_INTERFACE 1
+// #define ARROW_C_STREAM_INTERFACE 1
+// #endif
 
 #ifndef ARROW_C_DATA_INTERFACE
 #define ARROW_C_DATA_INTERFACE
@@ -62,6 +73,33 @@ struct ArrowArrayStream {
 
 #endif // ARROW_C_STREAM_INTERFACE
 
+static void release_malloced_schema(struct ArrowSchema* schema) {
+    for (int64_t i = 0; i < schema->n_children; ++i) {
+        struct ArrowSchema* child = schema->children[i];
+        if (child->release != NULL)
+            child->release(child);
+    }
+    free(schema->children);
+    schema->release = NULL;
+}
+
+static void release_malloced_array(struct ArrowArray* array) {
+    // Free children
+    for (int64_t i = 0; i < array->n_children; ++i) {
+        struct ArrowArray* child = array->children[i];
+        if (child->release != NULL)
+            child->release(child);
+    }
+    free(array->children);
+    // Freeing buffers can be avoided, UKV still owns those regions
+    // while the connection is alive and hasn't be reused for any other
+    // requests.
+    // for (int64_t i = 0; i < array->n_buffers; ++i)
+    //     free((void*)array->buffers[i]);
+    free(array->buffers);
+    array->release = NULL;
+}
+
 static void ukv_to_arrow_schema( //
     ukv_size_t const docs_count,
     ukv_size_t const fields_count,
@@ -92,7 +130,7 @@ static void ukv_to_arrow_schema( //
     array->buffers[0] = NULL; // no nulls, so bitmap can be omitted
     array->children = malloc(sizeof(struct ArrowArray*) * array->n_children);
 
-    // Allocate sub-schemas and sub-arays
+    // Allocate sub-schemas and sub-arrays
     // TODO: Don't malloc every child schema/array separately,
     // use `private_data` member for that.
     for (ukv_size_t field_idx = 0; field_idx != fields_count; ++field_idx)
@@ -106,7 +144,7 @@ static void ukv_to_arrow_column( //
     ukv_str_view_t const field_name,
     ukv_type_t const field_type,
 
-    ukv_val_ptr_t const column_validities,
+    ukv_1x8_t const* column_validities,
     ukv_val_len_t const column_offsets,
     ukv_val_ptr_t const column_contents,
 
@@ -187,33 +225,6 @@ static void ukv_to_arrow_column( //
     }
 }
 
-static void release_malloced_schema(struct ArrowSchema* schema) {
-    for (int64_t i = 0; i < schema->n_children; ++i) {
-        struct ArrowSchema* child = schema->children[i];
-        if (child->release != NULL)
-            child->release(child);
-    }
-    free(schema->children);
-    schema->release = NULL;
-}
-
-static void release_malloced_array(struct ArrowArray* array) {
-    // Free children
-    for (int64_t i = 0; i < array->n_children; ++i) {
-        struct ArrowArray* child = array->children[i];
-        if (child->release != NULL)
-            child->release(child);
-    }
-    free(array->children);
-    // Freeing buffers can be avoided, UKV still owns those regions
-    // while the connection is alive and hasn't be reused for any other
-    // requests.
-    // for (int64_t i = 0; i < array->n_buffers; ++i)
-    //     free((void*)array->buffers[i]);
-    free(array->buffers);
-    array->release = NULL;
-}
-
 /**
  *
  * @param[in] collections   Can have 0, 1 or `fields_count` elements.
@@ -241,3 +252,7 @@ static void ukv_to_arrow_stream( //
     struct ArrowArrayStream* stream,
     ukv_arena_t* arena) {
 }
+
+#ifdef __cplusplus
+} /* end extern "C" */
+#endif

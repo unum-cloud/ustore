@@ -73,10 +73,11 @@ struct py_col_t {
     ukv_arena_t* member_arena() noexcept { return native.member_arena(); }
     ukv_options_t options() noexcept {
         auto txn_ptr = py_txn_ptr.lock();
-        return static_cast<ukv_options_t>( //
-            ukv_options_default_k |        //
-            (txn_ptr->track_reads ? ukv_option_read_track_k : ukv_options_default_k) |
-            (txn_ptr->flush_writes ? ukv_option_write_flush_k : ukv_options_default_k));
+        return txn_ptr ? static_cast<ukv_options_t>( //
+                             ukv_options_default_k | //
+                             (txn_ptr->track_reads ? ukv_option_read_track_k : ukv_options_default_k) |
+                             (txn_ptr->flush_writes ? ukv_option_write_flush_k : ukv_options_default_k))
+                       : ukv_options_default_k;
     }
 };
 
