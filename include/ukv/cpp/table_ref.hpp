@@ -24,7 +24,7 @@ namespace unum::ukv {
 template <typename scalar_at>
 struct cell_gt;
 
-template <typename scalar_at>
+template <typename scalar_at, bool>
 class column_view_gt;
 
 template <typename... column_types_at>
@@ -35,39 +35,44 @@ class table_layout_gt;
 
 class table_layout_punned_t;
 
-template <typename scalar_at>
-ukv_type_t ukv_type() {
-    if constexpr (std::is_same_v<scalar_at, bool>)
+template <typename element_at>
+constexpr ukv_type_t ukv_type() {
+    if constexpr (std::is_same_v<element_at, bool>)
         return ukv_type_bool_k;
-    if constexpr (std::is_same_v<scalar_at, std::int8_t>)
+    if constexpr (std::is_same_v<element_at, std::int8_t>)
         return ukv_type_i8_k;
-    if constexpr (std::is_same_v<scalar_at, std::int16_t>)
+    if constexpr (std::is_same_v<element_at, std::int16_t>)
         return ukv_type_i16_k;
-    if constexpr (std::is_same_v<scalar_at, std::int32_t>)
+    if constexpr (std::is_same_v<element_at, std::int32_t>)
         return ukv_type_i32_k;
-    if constexpr (std::is_same_v<scalar_at, std::int64_t>)
+    if constexpr (std::is_same_v<element_at, std::int64_t>)
         return ukv_type_i64_k;
-    if constexpr (std::is_same_v<scalar_at, std::uint8_t>)
+    if constexpr (std::is_same_v<element_at, std::uint8_t>)
         return ukv_type_u8_k;
-    if constexpr (std::is_same_v<scalar_at, std::uint16_t>)
+    if constexpr (std::is_same_v<element_at, std::uint16_t>)
         return ukv_type_u16_k;
-    if constexpr (std::is_same_v<scalar_at, std::uint32_t>)
+    if constexpr (std::is_same_v<element_at, std::uint32_t>)
         return ukv_type_u32_k;
-    if constexpr (std::is_same_v<scalar_at, std::uint64_t>)
+    if constexpr (std::is_same_v<element_at, std::uint64_t>)
         return ukv_type_u64_k;
-    if constexpr (std::is_same_v<scalar_at, float>)
+    if constexpr (std::is_same_v<element_at, float>)
         return ukv_type_f32_k;
-    if constexpr (std::is_same_v<scalar_at, double>)
+    if constexpr (std::is_same_v<element_at, double>)
         return ukv_type_f64_k;
-    if constexpr (std::is_same_v<scalar_at, value_view_t>)
+    if constexpr (std::is_same_v<element_at, value_view_t>)
         return ukv_type_bin_k;
-    if constexpr (std::is_same_v<scalar_at, std::string_view>)
+    if constexpr (std::is_same_v<element_at, std::string_view>)
         return ukv_type_str_k;
     return ukv_type_any_k;
 }
 
+template <typename element_at>
+constexpr bool is_variable_length() {
+    return std::is_same_v<element_at, value_view_t> || std::is_same_v<element_at, std::string_view>;
+}
+
 /**
- * @bief The first column of the table, describing its contents.
+ * @brief The first column of the table, describing its contents.
  */
 using table_index_t = std::pair<strided_range_gt<ukv_col_t const>, strided_range_gt<ukv_key_t const>>;
 
@@ -87,7 +92,7 @@ struct cell_gt<value_view_t> {
     value_view_t value;
 };
 
-template <typename scalar_at>
+template <typename scalar_at, bool = is_variable_length<scalar_at>()>
 class column_view_gt {
     ukv_1x8_t* validities_ = nullptr;
     ukv_1x8_t* conversions_ = nullptr;
@@ -98,8 +103,8 @@ class column_view_gt {
 
   public:
     using scalar_t = scalar_at;
-    using element_t = cell_gt<scalar_t>;
-    using value_type = element_t;
+    using cell_t = cell_gt<scalar_t>;
+    using value_type = cell_t;
 
     column_view_gt( //
         ukv_1x8_t* validities,
@@ -118,11 +123,11 @@ class column_view_gt {
 
     ukv_str_view_t name() const noexcept { return name_; }
     std::size_t size() const noexcept { return count_; }
-    element_t operator[](std::size_t i) const noexcept {
+    cell_t operator[](std::size_t i) const noexcept {
         // Bitmaps are indexed from the last bit within every byte
         // https://arrow.apache.org/docs/format/Columnar.html#validity-bitmaps
         ukv_1x8_t mask_bitmap = static_cast<ukv_1x8_t>(1 << (i % CHAR_BIT));
-        element_t result;
+        cell_t result;
         result.valid = validities_[i / CHAR_BIT] & mask_bitmap;
         result.converted = conversions_[i / CHAR_BIT] & mask_bitmap;
         result.collides = collisions_[i / CHAR_BIT] & mask_bitmap;
@@ -131,8 +136,8 @@ class column_view_gt {
     }
 };
 
-template <>
-class column_view_gt<value_view_t> {
+template <typename element_at>
+class column_view_gt<element_at, true> {
     ukv_1x8_t* validities_ = nullptr;
     ukv_1x8_t* conversions_ = nullptr;
     ukv_1x8_t* collisions_ = nullptr;
@@ -143,8 +148,8 @@ class column_view_gt<value_view_t> {
     ukv_str_view_t name_ = nullptr;
 
   public:
-    using element_t = cell_gt<value_view_t>;
-    using value_type = element_t;
+    using cell_t = cell_gt<element_at>;
+    using value_type = cell_t;
 
     column_view_gt( //
         ukv_1x8_t* validities,
@@ -165,15 +170,18 @@ class column_view_gt<value_view_t> {
 
     ukv_str_view_t name() const noexcept { return name_; }
     std::size_t size() const noexcept { return count_; }
-    element_t operator[](std::size_t i) const noexcept {
+    cell_t operator[](std::size_t i) const noexcept {
         // Bitmaps are indexed from the last bit within every byte
         // https://arrow.apache.org/docs/format/Columnar.html#validity-bitmaps
+        using str_char_t = typename element_at::value_type;
+        auto str_begin = reinterpret_cast<str_char_t const*>(tape_ + offsets_[i]);
+
         ukv_1x8_t mask_bitmap = static_cast<ukv_1x8_t>(1 << (i % CHAR_BIT));
-        element_t result;
+        cell_t result;
         result.valid = validities_[i / CHAR_BIT] & mask_bitmap;
         result.converted = conversions_[i / CHAR_BIT] & mask_bitmap;
         result.collides = collisions_[i / CHAR_BIT] & mask_bitmap;
-        result.value = {tape_ + offsets_[i], lengths_[i]};
+        result.value = element_at {str_begin, lengths_[i]};
         return result;
     }
 };
@@ -217,7 +225,7 @@ class column_view_gt<void> {
 
     template <typename scalar_at>
     column_view_gt<scalar_at> as() const noexcept {
-        if constexpr (std::is_same_v<scalar_at, value_view_t>)
+        if constexpr (std::is_same_v<scalar_at, value_view_t> || std::is_same_v<scalar_at, std::string_view>)
             return {validities_, conversions_, collisions_, tape_, offsets_, lengths_, count_, name_};
         else
             return {validities_, conversions_, collisions_, reinterpret_cast<scalar_at*>(scalars_), count_, name_};
@@ -358,34 +366,33 @@ using table_layout_view_t = table_layout_view_gt<>;
  */
 template <typename... column_types_at>
 class table_layout_gt {
-    using columns_info_t = std::tuple<field_type_gt<column_types_at>...>;
-    using rows_info_t = std::vector<col_key_t>;
 
-    rows_info_t rows_info_;
-    columns_info_t columns_info_;
+    using types_tuple_t = std::tuple<column_types_at...>;
+    static constexpr std::size_t cols_count_k = std::tuple_size_v<types_tuple_t>;
+
+    using header_t = std::array<field_type_t, cols_count_k>;
+    using index_t = std::vector<col_key_t>;
+
+    index_t index_;
+    header_t header_;
 
   public:
     using table_layout_view_t = table_layout_view_gt<column_types_at...>;
 
-    table_layout_gt(std::size_t docs_count = 0) noexcept(false) : rows_info_(docs_count) {}
-    table_layout_gt(rows_info_t&& rows, columns_info_t&& columns) noexcept
-        : rows_info_(std::move(rows)), columns_info_(columns) {}
+    table_layout_gt(std::size_t docs_count = 0) noexcept(false) : index_(docs_count) {}
+    table_layout_gt(index_t&& rows, header_t&& columns) noexcept : index_(std::move(rows)), header_(columns) {}
 
     table_layout_gt(table_layout_gt&&) = default;
     table_layout_gt(table_layout_gt const&) = default;
     table_layout_gt& operator=(table_layout_gt&&) = default;
     table_layout_gt& operator=(table_layout_gt const&) = default;
 
-    void clear() noexcept { rows_info_.clear(); }
+    void clear() noexcept { index_.clear(); }
 
-    template <std::size_t idx_ak>
-    std::tuple_element_t<idx_ak, columns_info_t> const& header() const noexcept {
-        return std::get<idx_ak>(columns_info_);
-    }
-
-    col_key_t& index(std::size_t i) noexcept { return rows_info_[i]; }
+    field_type_t const& header(std::size_t i) const noexcept { return header_[i]; }
+    col_key_t& index(std::size_t i) noexcept { return index_[i]; }
     table_index_t index() const noexcept {
-        auto rows = strided_range(rows_info_).immutable();
+        auto rows = strided_range(index_).immutable();
         return {
             rows.members(&col_key_t::col),
             rows.members(&col_key_t::key),
@@ -394,19 +401,19 @@ class table_layout_gt {
 
     template <typename scalar_at>
     table_layout_gt<column_types_at..., scalar_at> with(ukv_str_view_t name) && {
-        using new_field_t = field_type_gt<scalar_at>;
-        using new_column_info_t = std::tuple<new_field_t>;
-        new_field_t new_field {name, ukv_type<scalar_at>()};
-        new_column_info_t new_column {new_field};
-        return {std::move(rows_info_), std::tuple_cat(std::move(columns_info_), std::move(new_column))};
+        using new_header_t = std::array<field_type_t, cols_count_k + 1>;
+        new_header_t new_header;
+        std::copy_n(header_.begin(), cols_count_k, new_header.begin());
+        new_header[cols_count_k] = field_type_t {name, ukv_type<scalar_at>()};
+        return {std::move(index_), std::move(new_header)};
     }
 
     template <typename row_keys_at>
     table_layout_gt& add_row(row_keys_at&& row_keys) {
         if constexpr (std::is_same_v<row_keys_at, col_key_t>)
-            rows_info_.push_back(row_keys);
+            index_.push_back(row_keys);
         else
-            rows_info_.push_back(static_cast<ukv_key_t>(row_keys));
+            index_.push_back(static_cast<ukv_key_t>(row_keys));
         return *this;
     }
 
@@ -433,15 +440,11 @@ class table_layout_gt {
 
     operator table_layout_view_t() const noexcept { return view(); }
     table_layout_view_t view() const noexcept {
-        auto& first = header<0>();
-        auto& punned = reinterpret_cast<field_type_t const&>(first);
-        constexpr auto cols_count = std::tuple_size_v<columns_info_t>;
-
-        auto rows = strided_range(rows_info_).immutable();
-        auto cols = strided_range_gt<field_type_t const>(&punned, &punned + cols_count);
+        auto rows = strided_range(index_).immutable();
+        auto cols = strided_range(header_).immutable();
         return {
-            static_cast<ukv_size_t>(rows_info_.size()),
-            static_cast<ukv_size_t>(cols_count),
+            static_cast<ukv_size_t>(index_.size()),
+            static_cast<ukv_size_t>(cols_count_k),
             rows.members(&col_key_t::col).begin(),
             rows.members(&col_key_t::key).begin(),
             cols.members(&field_type_t::field).begin(),
@@ -460,22 +463,22 @@ inline table_layout_gt<> table_layout() {
  */
 class table_layout_punned_t {
 
-    std::vector<col_key_t> rows_info_;
-    std::vector<field_type_t> columns_info_;
+    std::vector<col_key_t> index_;
+    std::vector<field_type_t> header_;
 
   public:
     table_layout_punned_t(std::size_t docs_count, std::size_t fields_count) noexcept(false)
-        : rows_info_(docs_count), columns_info_(fields_count) {}
+        : index_(docs_count), header_(fields_count) {}
 
     void clear() noexcept {
-        rows_info_.clear();
-        columns_info_.clear();
+        index_.clear();
+        header_.clear();
     }
 
-    field_type_t& header(std::size_t i) noexcept { return columns_info_[i]; }
-    col_key_t& index(std::size_t i) noexcept { return rows_info_[i]; }
+    field_type_t& header(std::size_t i) noexcept { return header_[i]; }
+    col_key_t& index(std::size_t i) noexcept { return index_[i]; }
     table_index_t index() const noexcept {
-        auto rows = strided_range(rows_info_).immutable();
+        auto rows = strided_range(index_).immutable();
         return {
             rows.members(&col_key_t::col),
             rows.members(&col_key_t::key),
@@ -484,11 +487,11 @@ class table_layout_punned_t {
 
     operator table_layout_view_t() const noexcept { return view(); }
     table_layout_view_t view() const noexcept {
-        auto rows = strided_range(rows_info_).immutable();
-        auto cols = strided_range(columns_info_).immutable();
+        auto rows = strided_range(index_).immutable();
+        auto cols = strided_range(header_).immutable();
         return {
-            static_cast<ukv_size_t>(rows_info_.size()),
-            static_cast<ukv_size_t>(columns_info_.size()),
+            static_cast<ukv_size_t>(index_.size()),
+            static_cast<ukv_size_t>(header_.size()),
             rows.members(&col_key_t::col).begin(),
             rows.members(&col_key_t::key).begin(),
             cols.members(&field_type_t::field).begin(),
