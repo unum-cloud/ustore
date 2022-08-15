@@ -429,27 +429,6 @@ TEST(db, docs_table) {
         EXPECT_STREQ(col1[2].value.c_str(), "24");
     }
 
-    // Nested docs
-    {
-        auto json_nested =
-            R"( {"person1": {"name": "Davit", "age": 24 } , "person2": {"name": "Ashot", "age": 27}} )"_json.dump();
-        col[4] = json_nested.c_str();
-        table_layout_t layout {1, 2};
-
-        layout.index(0).key = 4;
-        layout.header(0) = field_type_t {"person1", ukv_type_str_k};
-        layout.header(1) = field_type_t {"person2", ukv_type_str_k};
-
-        auto maybe_table = col.as_table().gather(layout);
-        auto table = *maybe_table;
-        auto col0 = table.column(0).as<value_view_t>();
-        auto col1 = table.column(1).as<value_view_t>();
-        auto expected_json0 = R"( {"name": "Davit", "age": 24 } )"_json.dump();
-        auto expected_json1 = R"( {"name": "Ashot", "age": 27 } )"_json.dump();
-        M_EXPECT_EQ_JSON(col0[0].value.c_str(), expected_json0.c_str());
-        M_EXPECT_EQ_JSON(col1[0].value.c_str(), expected_json1.c_str());
-    }
-
     EXPECT_TRUE(db.clear());
 }
 
