@@ -501,8 +501,10 @@ void ukv_size( //
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     strided_iterator_gt<ukv_key_t const> min_keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
-    uint64_t approximate_size;
-    std::string memory_usage;
+    uint64_t approximate_size = 0;
+    std::optional<std::string> memory_usage = "0";
+    if (!memory_usage && (*c_error = "Out of memory"))
+        return;
 
     for (ukv_size_t i = 0; i != n; ++i) {
         ukv_size_t* estimates = *c_found_estimates + i * 6;
@@ -516,9 +518,9 @@ void ukv_size( //
         leveldb::Range range(to_slice(min_key), to_slice(max_key));
         try {
             db.GetApproximateSizes(&range, 1, &approximate_size);
-            db.GetProperty("leveldb.approximate-memory-usage", &memory_usage);
+            db.GetProperty("leveldb.approximate-memory-usage", &memory_usage.value());
             estimates[4] = approximate_size;
-            estimates[5] = std::stoi(memory_usage);
+            estimates[5] = std::stoi(memory_usage.value());
         }
         catch (...) {
             *c_error = "Property Read Failure";
@@ -559,10 +561,11 @@ void ukv_col_remove( //
 void ukv_col_list( //
     ukv_t const,
     ukv_size_t* c_count,
-    ukv_str_view_t*,
+    ukv_str_view_t* c_names,
     ukv_arena_t*,
     ukv_error_t* c_error) {
     *c_count = 0;
+    c_names = nullptr;
 }
 
 void ukv_db_control( //
