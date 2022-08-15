@@ -518,9 +518,7 @@ void ukv_size( //
         try {
             db.GetApproximateSizes(&range, 1, &approximate_size);
             memory_usage = "0";
-            status = db.GetProperty("leveldb.approximate-memory-usage", &memory_usage.value());
-            if (export_error(status, c_error))
-                return;
+            db.GetProperty("leveldb.approximate-memory-usage", &memory_usage.value());
             estimates[4] = approximate_size;
             estimates[5] = std::stoi(memory_usage.value());
         }
