@@ -17,21 +17,9 @@ struct py_txn_t;
 struct py_col_t;
 
 struct py_graph_t;
-struct py_frame_t;
+struct py_table_col_t;
 
 struct py_task_ctx_t;
-
-/**
- * @brief Python tasks are generally called for a single collection.
- * That greatly simplifies the implementation.
- */
-struct py_task_ctx_t {
-    ukv_t db = nullptr;
-    ukv_txn_t txn = nullptr;
-    ukv_col_t* col = nullptr;
-    ukv_arena_t* arena = nullptr;
-    ukv_options_t options = ukv_options_default_k;
-};
 
 /**
  * @brief Wrapper for `ukv::db_t`.
@@ -55,11 +43,15 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
 struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
     txn_t native;
 
+    std::weak_ptr<py_db_t> py_db_ptr;
+
     bool track_reads = false;
     bool flush_writes = false;
 
-    py_txn_t(std::shared_ptr<py_db_t>&& d, txn_t&& t) noexcept : db_ptr(std::move(d)), native(std::move(t)) {}
-    py_txn_t(py_txn_t&& other) noexcept : db_ptr(std::move(other.db_ptr)), native(std::move(other.native)) {}
+    py_txn_t(txn_t&& t, std::shared_ptr<py_db_t> py_db_ptr) noexcept : native(std::move(t)), py_db_ptr(py_db_ptr) {}
+    py_txn_t(py_txn_t&& other) noexcept
+        : native(std::move(other.native)), py_db_ptr(other.py_db_ptr), track_reads(other.track_reads),
+          flush_writes(other.flush_writes) {}
     py_txn_t(py_txn_t const&) = delete;
 };
 
@@ -71,29 +63,20 @@ struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
 struct py_col_t {
     col_t native;
 
-    std::shared_ptr<py_db_t> db_ptr;
-    std::shared_ptr<py_txn_t> txn_ptr;
+    std::weak_ptr<py_db_t> py_db_ptr;
+    std::weak_ptr<py_txn_t> py_txn_ptr;
     std::string name;
 
-    py_col_t() {}
-    py_col_t(py_col_t const&) = delete;
-    py_col_t(py_col_t&& other) noexcept
-        : db_ptr(std::move(other.db_ptr)), txn_ptr(std::move(other.txn_ptr)), native(std::move(other.native)),
-          name(std::move(other.name)) {}
-
-    operator py_task_ctx_t() & noexcept {
-        py_task_ctx_t result;
-        if (txn_ptr) {
-            result.txn = txn_ptr->native;
-            result.options = static_cast<ukv_options_t>( //
-                ukv_options_default_k |                  //
-                (txn_ptr->track_reads ? ukv_option_read_track_k : ukv_options_default_k) |
-                (txn_ptr->flush_writes ? ukv_option_write_flush_k : ukv_options_default_k));
-        }
-        result.db = native.db();
-        result.col = native.member_ptr();
-        result.arena = native.member_arena();
-        return result;
+    ukv_t db() noexcept { return native.db(); }
+    ukv_txn_t txn() noexcept { return !py_txn_ptr.expired() ? py_txn_ptr.lock()->native : ukv_txn_t(nullptr); }
+    ukv_col_t* member_col() noexcept { return native.member_ptr(); }
+    ukv_arena_t* member_arena() noexcept { return native.member_arena(); }
+    ukv_options_t options() noexcept {
+        auto txn_ptr = py_txn_ptr.lock();
+        return static_cast<ukv_options_t>( //
+            ukv_options_default_k |        //
+            (txn_ptr->track_reads ? ukv_option_read_track_k : ukv_options_default_k) |
+            (txn_ptr->flush_writes ? ukv_option_write_flush_k : ukv_options_default_k));
     }
 };
 
@@ -105,9 +88,11 @@ struct py_buffer_memory_t {
     Py_ssize_t strides[4];
 };
 
-struct py_graph_t {
+struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
 
-    std::shared_ptr<py_db_t> db_ptr;
+    std::weak_ptr<py_db_t> py_db_ptr;
+    std::weak_ptr<py_txn_t> py_txn_ptr;
+
     col_t index;
     col_t sources_attrs;
     col_t targets_attrs;
@@ -127,32 +112,28 @@ struct py_graph_t {
     graph_ref_t ref() { return index.as_graph(); }
 };
 
-struct py_col_name_t {
-    std::string owned;
-    ukv_str_view_t view;
-};
-
-struct py_col_keys_range_t {
-    ukv_col_t col = ukv_col_main_k;
+struct py_table_keys_range_t {
     ukv_key_t min = std::numeric_limits<ukv_key_t>::min();
     ukv_key_t max = std::numeric_limits<ukv_key_t>::max();
-    std::size_t limit = std::numeric_limits<std::size_t>::max();
 };
 
 /**
- * @brief DataFrame represntation, capable of viewing joined contents
+ * @brief DataFrame representation, capable of viewing joined contents
  * of multiple collections. When materialized, exports Apache Arrow objects.
  */
-struct py_frame_t : public std::enable_shared_from_this<py_frame_t> {
+struct py_table_col_t : public std::enable_shared_from_this<py_table_col_t> {
 
-    ukv_t db = NULL;
+    py_col_t binary;
+    std::variant<std::monostate, std::vector<ukv_str_view_t>> columns_names;
+    std::variant<std::monostate, ukv_type_t, std::vector<ukv_type_t>> columns_types;
+    std::variant<std::monostate, py_table_keys_range_t, std::vector<ukv_key_t>> rows_keys;
+    std::size_t head = std::numeric_limits<std::size_t>::max();
+    std::size_t tail = std::numeric_limits<std::size_t>::max();
+    bool head_was_defined_last = true;
 
-    std::variant<std::monostate, py_col_name_t, std::vector<py_col_name_t>> fields;
-    std::variant<std::monostate, py_col_keys_range_t, std::vector<col_key_t>> docs;
-
-    py_frame_t() = default;
-    py_frame_t(py_frame_t&&) = delete;
-    py_frame_t(py_frame_t const&) = delete;
+    py_table_col_t() = default;
+    py_table_col_t(py_table_col_t&&) = delete;
+    py_table_col_t(py_table_col_t const&) = delete;
 };
 
 /**
@@ -226,7 +207,7 @@ void wrap_database(py::module&);
  * controlling whether graph should be directed, allow loops, or have
  * attrs in source/target vertices or edges.
  * Beyond that, source and target vertices can belong to different collections.
- * To sum up, we differntiate following graph types:
+ * To sum up, we differentiate following graph types:
  * > U: Undirected
  * > D: Directed
  * > J: Joining
@@ -256,12 +237,42 @@ void wrap_database(py::module&);
  * TODO:
  * > Implement basic algorithms: PageRank, Louvain, WCC and Force-based Layout
  * > Implement subgraph selection
+ * > Implement attributes
  */
 void wrap_networkx(py::module&);
 
 /**
  * @brief Python bindings for a Document Store, that mimics Pandas.
- * Mostly intended for usage with NumPy and Arrow buffers.
+ * Is designed to export results in the form of Apache Arrow Tables.
+ *
+ * @section Usage
+ *
+ * > Take first 5 rows starting with ID #100:
+ *   db.main.docs.astype('int32').loc[100:].head(5).df
+ *   Note that contrary to usual python slices, both the start and the stop are included
+ * > Take rows with IDs #100, #101:
+ *   db.main.docs.loc[[100, 101]].astype('float').df
+ * > Take specific columns from a rows range:
+ *   db.main.docs.loc[100:101].astype({'age':'float', 'name':'str'}).df
+ *
+ * @section Interface
+ * Choosing subsample of rows:
+ *      * tbl.loc[100:] ~ Starting from a certain ID
+ *      * tbl.loc[[...]] ~ Specific list of IDs
+ *      * tbl.head(5) ~ First rows of the table
+ *      * tbl.tail(5) ~ Last rows of the table
+ * Defining columns:
+ *      * tbl.astype('int32') ~ All columns
+ *      * tbl[names].astype('int32') ~ Specific columns
+ *      * tbl.astype({'age':'float', 'name':'str'})
+ *
+ * In worst-case scenario, the lookup will contain 3 steps:
+ *      1. iteration, to collect the IDs of documents forming a range.
+ *      2. gist, to detect the names of fields in present documents.
+ *      3. gather, to export into a table.
+ *
+ * https://stackoverflow.com/a/57907044/2766161
+ * https://arrow.apache.org/docs/python/integration/extending.html
  */
 void wrap_pandas(py::module&);
 

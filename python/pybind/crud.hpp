@@ -1,6 +1,7 @@
 
 #pragma once
-#include <vector>              // `std::vector`
+#include <vector> // `std::vector`
+
 #include <pybind11/pybind11.h> // `gil_scoped_release`
 #include <Python.h>            // `PyObject`
 
@@ -23,17 +24,17 @@ struct py_bin_req_t {
  * @param key_py Must be a `PyLong`.
  * @param val_py Can be anything.
  */
-static void write_one_binary(py_task_ctx_t ctx, PyObject* key_py, PyObject* val_py) {
+static void write_one_binary(py_col_t& col, PyObject* key_py, PyObject* val_py) {
 
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
     value_view_t val = py_to_bytes(val_py);
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_write(ctx.db,
-              ctx.txn,
+    ukv_write(col.db(),
+              col.txn(),
               1,
-              ctx.col,
+              col.member_col(),
               0,
               &key,
               0,
@@ -43,13 +44,13 @@ static void write_one_binary(py_task_ctx_t ctx, PyObject* key_py, PyObject* val_
               0,
               val.member_length(),
               0,
-              ctx.options,
-              ctx.arena,
+              col.options(),
+              col.member_arena(),
               status.member_ptr());
     status.throw_unhandled();
 }
 
-static void write_many_binaries(py_task_ctx_t ctx, PyObject* keys_py, PyObject* vals_py) {
+static void write_many_binaries(py_col_t& col, PyObject* keys_py, PyObject* vals_py) {
 
     status_t status;
     std::vector<ukv_key_t> keys;
@@ -60,10 +61,10 @@ static void write_many_binaries(py_task_ctx_t ctx, PyObject* keys_py, PyObject* 
         py_transform_n(vals_py, &py_to_bytes, vals.begin(), vals.size());
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_write(ctx.db,
-              ctx.txn,
+    ukv_write(col.db(),
+              col.txn(),
               static_cast<ukv_size_t>(keys.size()),
-              ctx.col,
+              col.member_col(),
               0,
               keys.data(),
               sizeof(ukv_key_t),
@@ -73,37 +74,37 @@ static void write_many_binaries(py_task_ctx_t ctx, PyObject* keys_py, PyObject* 
               0,
               vals[0].member_length(),
               sizeof(value_view_t),
-              ctx.options,
-              ctx.arena,
+              col.options(),
+              col.member_arena(),
               status.member_ptr());
     status.throw_unhandled();
 }
 
 #pragma region Reads
 
-static py::object has_one_binary(py_task_ctx_t ctx, PyObject* key_py) {
+static py::object has_one_binary(py_col_t& col, PyObject* key_py) {
 
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
-    ctx.options = static_cast<ukv_options_t>(ctx.options | ukv_option_read_lengths_k);
+    auto options = static_cast<ukv_options_t>(col.options() | ukv_option_read_lengths_k);
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
-        ukv_read(ctx.db,
-                 ctx.txn,
+        ukv_read(col.db(),
+                 col.txn(),
                  1,
-                 ctx.col,
+                 col.member_col(),
                  0,
                  &key,
                  0,
-                 ctx.options,
+                 options,
                  &found_values,
                  &found_offsets,
                  &found_lengths,
-                 ctx.arena,
+                 col.member_arena(),
                  status.member_ptr());
         status.throw_unhandled();
     }
@@ -112,7 +113,7 @@ static py::object has_one_binary(py_task_ctx_t ctx, PyObject* key_py) {
     return py::reinterpret_borrow<py::object>(obj_ptr);
 }
 
-static py::object read_one_binary(py_task_ctx_t ctx, PyObject* key_py) {
+static py::object read_one_binary(py_col_t& col, PyObject* key_py) {
 
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
@@ -122,18 +123,18 @@ static py::object read_one_binary(py_task_ctx_t ctx, PyObject* key_py) {
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
-        ukv_read(ctx.db,
-                 ctx.txn,
+        ukv_read(col.db(),
+                 col.txn(),
                  1,
-                 ctx.col,
+                 col.member_col(),
                  0,
                  &key,
                  0,
-                 ctx.options,
+                 col.options(),
                  &found_values,
                  &found_offsets,
                  &found_lengths,
-                 ctx.arena,
+                 col.member_arena(),
                  status.member_ptr());
         status.throw_unhandled();
     }
@@ -151,31 +152,31 @@ static py::object read_one_binary(py_task_ctx_t ctx, PyObject* key_py) {
     return py::reinterpret_borrow<py::object>(obj_ptr);
 }
 
-static py::object has_many_binaries(py_task_ctx_t ctx, PyObject* keys_py) {
+static py::object has_many_binaries(py_col_t& col, PyObject* keys_py) {
 
     status_t status;
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
-    ctx.options = static_cast<ukv_options_t>(ctx.options | ukv_option_read_lengths_k);
+    auto options = static_cast<ukv_options_t>(col.options() | ukv_option_read_lengths_k);
 
     std::vector<ukv_key_t> keys;
     py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
-        ukv_read(ctx.db,
-                 ctx.txn,
+        ukv_read(col.db(),
+                 col.txn(),
                  static_cast<ukv_size_t>(keys.size()),
-                 ctx.col,
+                 col.member_col(),
                  0,
                  keys.data(),
                  sizeof(ukv_key_t),
-                 ctx.options,
+                 options,
                  &found_values,
                  &found_offsets,
                  &found_lengths,
-                 ctx.arena,
+                 col.member_arena(),
                  status.member_ptr());
         status.throw_unhandled();
     }
@@ -188,7 +189,7 @@ static py::object has_many_binaries(py_task_ctx_t ctx, PyObject* keys_py) {
     return py::reinterpret_steal<py::object>(tuple_ptr);
 }
 
-static py::object read_many_binaries(py_task_ctx_t ctx, PyObject* keys_py) {
+static py::object read_many_binaries(py_col_t& col, PyObject* keys_py) {
 
     status_t status;
     ukv_val_ptr_t found_values = nullptr;
@@ -200,18 +201,18 @@ static py::object read_many_binaries(py_task_ctx_t ctx, PyObject* keys_py) {
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
-        ukv_read(ctx.db,
-                 ctx.txn,
+        ukv_read(col.db(),
+                 col.txn(),
                  static_cast<ukv_size_t>(keys.size()),
-                 ctx.col,
+                 col.member_col(),
                  0,
                  keys.data(),
                  sizeof(ukv_key_t),
-                 ctx.options,
+                 col.options(),
                  &found_values,
                  &found_offsets,
                  &found_lengths,
-                 ctx.arena,
+                 col.member_arena(),
                  status.member_ptr());
         status.throw_unhandled();
     }
@@ -226,37 +227,31 @@ static py::object read_many_binaries(py_task_ctx_t ctx, PyObject* keys_py) {
     return py::reinterpret_steal<py::object>(tuple_ptr);
 }
 
-template <typename py_wrap_at>
-py::object has_binary(py_wrap_at& wrap, py::object key_py) {
+static py::object has_binary(py_col_t& col, py::object key_py) {
     auto is_single = PyLong_Check(key_py.ptr());
     auto func = is_single ? &has_one_binary : &has_many_binaries;
-    return func(wrap, key_py.ptr());
+    return func(col, key_py.ptr());
 }
 
-template <typename py_wrap_at>
-py::object read_binary(py_wrap_at& wrap, py::object key_py) {
+static py::object read_binary(py_col_t& col, py::object key_py) {
     auto is_single = PyLong_Check(key_py.ptr());
     auto func = is_single ? &read_one_binary : &read_many_binaries;
-    return func(wrap, key_py.ptr());
+    return func(col, key_py.ptr());
 }
 
-template <typename py_wrap_at>
-void write_binary(py_wrap_at& wrap, py::object key_py, py::object val_py) {
+static void write_binary(py_col_t& col, py::object key_py, py::object val_py) {
     auto is_single = PyLong_Check(key_py.ptr());
     auto func = is_single ? &write_one_binary : &write_many_binaries;
-    return func(wrap, key_py.ptr(), val_py.ptr());
+    return func(col, key_py.ptr(), val_py.ptr());
 }
 
-template <typename py_wrap_at>
-void remove_binary(py_wrap_at& wrap, py::object key_py) {
+static void remove_binary(py_col_t& col, py::object key_py) {
     auto is_single = PyLong_Check(key_py.ptr());
     auto func = is_single ? &write_one_binary : &write_many_binaries;
-    return func(wrap, key_py.ptr(), Py_None);
+    return func(col, key_py.ptr(), Py_None);
 }
 
-template <typename py_wrap_at>
-void update_binary(py_wrap_at& wrap, py::object dict_py) {
-    py_task_ctx_t ctx = wrap;
+static void update_binary(py_col_t& col, py::object dict_py) {
     status_t status;
     ukv_size_t step = sizeof(py_bin_req_t);
 
@@ -274,10 +269,10 @@ void update_binary(py_wrap_at& wrap, py::object dict_py) {
     });
 
     [[maybe_unused]] py::gil_scoped_release release;
-    ukv_write(ctx.db,
-              ctx.txn,
+    ukv_write(col.db(),
+              col.txn(),
               static_cast<ukv_size_t>(keys.size()),
-              ctx.col,
+              col.member_col(),
               0,
               &keys[0].key,
               step,
@@ -287,37 +282,35 @@ void update_binary(py_wrap_at& wrap, py::object dict_py) {
               step,
               &keys[0].len,
               step,
-              ctx.options,
-              ctx.arena,
+              col.options(),
+              col.member_arena(),
               status.member_ptr());
     status.throw_unhandled();
 }
 
-template <typename py_wrap_at>
-py::array_t<ukv_key_t> scan_binary( //
-    py_wrap_at& wrap,
+static py::array_t<ukv_key_t> scan_binary( //
+    py_col_t& col,
     ukv_key_t min_key,
     ukv_size_t scan_length) {
 
-    py_task_ctx_t ctx = wrap;
     ukv_key_t* found_keys = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
     status_t status;
 
     ukv_scan( //
-        ctx.db,
-        ctx.txn,
+        col.db(),
+        col.txn(),
         1,
-        ctx.col,
+        col.member_col(),
         0,
         &min_key,
         0,
         &scan_length,
         0,
-        ctx.options,
+        col.options(),
         &found_keys,
         &found_lengths,
-        ctx.arena,
+        col.member_arena(),
         status.member_ptr());
 
     status.throw_unhandled();
