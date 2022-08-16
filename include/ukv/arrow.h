@@ -162,6 +162,8 @@ static void ukv_to_arrow_column( //
     switch (field_type) {
     case ukv_type_null_k: schema->format = "n"; break;
     case ukv_type_bool_k: schema->format = "b"; break;
+    // TODO: UUID logical type may be natively supported in Arrow vocabulary:
+    // https://arrow.apache.org/docs/format/Columnar.html#extension-types
     case ukv_type_uuid_k: schema->format = "w:16"; break;
     case ukv_type_i8_k: schema->format = "c"; break;
     case ukv_type_i16_k: schema->format = "s"; break;

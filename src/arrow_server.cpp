@@ -40,9 +40,11 @@ class UKVService : public arrow::flight::FlightServerBase {
 
     explicit UKVService(std::shared_ptr<arrow::fs::FileSystem> root) : root_(std::move(root)) {}
 
-    arrow::Status ListFlights(arrow::flight::ServerCallContext const&,
-                              arrow::flight::Criteria const*,
-                              std::unique_ptr<arrow::flight::FlightListing>* listings) override {
+    arrow::Status ListFlights( //
+        arrow::flight::ServerCallContext const&,
+        arrow::flight::Criteria const*,
+        std::unique_ptr<arrow::flight::FlightListing>* listings) override {
+
         arrow::fs::FileSelector selector;
         selector.base_dir = "/";
         ARROW_ASSIGN_OR_RAISE(auto listing, root_->GetFileInfo(selector));
@@ -60,24 +62,28 @@ class UKVService : public arrow::flight::FlightServerBase {
         return arrow::Status::OK();
     }
 
-    arrow::Status GetFlightInfo(arrow::flight::ServerCallContext const&,
-                                arrow::flight::FlightDescriptor const& descriptor,
-                                std::unique_ptr<arrow::flight::FlightInfo>* info) override {
+    arrow::Status GetFlightInfo( //
+        arrow::flight::ServerCallContext const&,
+        arrow::flight::FlightDescriptor const& descriptor,
+        std::unique_ptr<arrow::flight::FlightInfo>* info) override {
+
         ARROW_ASSIGN_OR_RAISE(auto file_info, FileInfoFromDescriptor(descriptor));
         ARROW_ASSIGN_OR_RAISE(auto flight_info, MakeFlightInfo(file_info));
         *info = std::unique_ptr<arrow::flight::FlightInfo>(new arrow::flight::FlightInfo(std::move(flight_info)));
         return arrow::Status::OK();
     }
 
-    arrow::Status GetSchema(arrow::flight::ServerCallContext const& context,
-                            arrow::flight::FlightDescriptor const& request,
-                            std::unique_ptr<arrow::flight::SchemaResult>* schema) override {
+    arrow::Status GetSchema( //
+        arrow::flight::ServerCallContext const& context,
+        arrow::flight::FlightDescriptor const& request,
+        std::unique_ptr<arrow::flight::SchemaResult>* schema) override {
         return arrow::Status::OK();
     }
 
-    arrow::Status DoPut(arrow::flight::ServerCallContext const&,
-                        std::unique_ptr<arrow::flight::FlightMessageReader> reader,
-                        std::unique_ptr<arrow::flight::FlightMetadataWriter>) override {
+    arrow::Status DoPut( //
+        arrow::flight::ServerCallContext const&,
+        std::unique_ptr<arrow::flight::FlightMessageReader> reader,
+        std::unique_ptr<arrow::flight::FlightMetadataWriter>) override {
 
         // ARROW_ASSIGN_OR_RAISE(arrow::Result<std::shared_ptr<arrow::Schema>> schema, reader->GetSchema());
         // ARROW_ASSIGN_OR_RAISE(arrow::Result<arrow::flight::FlightStreamChunk> chunk, reader->Next());
@@ -91,9 +97,11 @@ class UKVService : public arrow::flight::FlightServerBase {
         return arrow::Status::OK();
     }
 
-    arrow::Status DoGet(arrow::flight::ServerCallContext const&,
-                        arrow::flight::Ticket const& request,
-                        std::unique_ptr<arrow::flight::FlightDataStream>* stream) override {
+    arrow::Status DoGet( //
+        arrow::flight::ServerCallContext const&,
+        arrow::flight::Ticket const& request,
+        std::unique_ptr<arrow::flight::FlightDataStream>* stream) override {
+
         ARROW_ASSIGN_OR_RAISE(auto input, root_->OpenInputFile(request.ticket));
         std::unique_ptr<parquet::arrow::FileReader> reader;
         ARROW_RETURN_NOT_OK(parquet::arrow::OpenFile(std::move(input), arrow::default_memory_pool(), &reader));
@@ -114,15 +122,19 @@ class UKVService : public arrow::flight::FlightServerBase {
         return arrow::Status::OK();
     }
 
-    arrow::Status ListActions(arrow::flight::ServerCallContext const&,
-                              std::vector<arrow::flight::ActionType>* actions) override {
+    arrow::Status ListActions( //
+        arrow::flight::ServerCallContext const&,
+        std::vector<arrow::flight::ActionType>* actions) override {
+
         *actions = {kActionDropDataset};
         return arrow::Status::OK();
     }
 
-    arrow::Status DoAction(arrow::flight::ServerCallContext const&,
-                           arrow::flight::Action const& action,
-                           std::unique_ptr<arrow::flight::ResultStream>* result) override {
+    arrow::Status DoAction( //
+        arrow::flight::ServerCallContext const&,
+        arrow::flight::Action const& action,
+        std::unique_ptr<arrow::flight::ResultStream>* result) override {
+
         if (action.type == kActionDropDataset.type) {
             *result = std::unique_ptr<arrow::flight::ResultStream>(new arrow::flight::SimpleResultStream({}));
             return DoActionDropDataset(action.body->ToString());

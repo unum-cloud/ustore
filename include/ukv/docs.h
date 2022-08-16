@@ -83,7 +83,7 @@ typedef enum {
  * Type IDs needed to describe the values stored in the leafs of
  * hierarchical documents. Most types mimic what's present in
  * Apache Arrow. Most often the `ukv_type_i64_k` and `ukv_type_f64_k`
- * are used. Aside from those
+ * are used.
  */
 typedef enum {
     ukv_type_null_k = 0,
