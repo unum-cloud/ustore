@@ -7,9 +7,10 @@
 
 #pragma once
 #include "ukv/ukv.h"
-#include "ukv/cpp/types.hpp"  // `arena_t`
-#include "ukv/cpp/status.hpp" // `status_t`
-#include "ukv/cpp/sfinae.hpp" // `location_store_gt`
+#include "ukv/cpp/types.hpp"      // `arena_t`
+#include "ukv/cpp/status.hpp"     // `status_t`
+#include "ukv/cpp/sfinae.hpp"     // `location_store_gt`
+#include "ukv/cpp/table_view.hpp" // `table_view_t`
 
 namespace unum::ukv {
 
@@ -72,6 +73,9 @@ class members_ref_gt {
 
     template <typename expected_at = value_t>
     expected_gt<expected_at> any_get(ukv_options_t) noexcept;
+
+    template <typename expected_at, typename values_arg_at>
+    expected_gt<expected_at> any_gather(values_arg_at&&, ukv_options_t) noexcept;
 
   public:
     members_ref_gt(ukv_t db,
@@ -184,6 +188,62 @@ class members_ref_gt {
 
     locations_plain_t& locations() noexcept { return locations_.ref(); }
     locations_plain_t& locations() const noexcept { return locations_.ref(); }
+
+    /**
+     * @brief Patches hierarchical documents with RFC 6902 JSON Patches.
+     * ! Applies only to document collections!
+     */
+    template <typename values_arg_at>
+    status_t patch(values_arg_at&& vals, bool flush = false) noexcept {
+        auto prev_format = std::exchange(format_, ukv_format_json_patch_k);
+        auto result = assign(std::forward<values_arg_at>(vals), flush);
+        format_ = prev_format;
+        return result;
+    }
+
+    /**
+     * @brief Patches hierarchical documents with RFC 7386 JSON Merge Patches.
+     * ! Applies only to document collections!
+     */
+    template <typename values_arg_at>
+    status_t merge(values_arg_at&& vals, bool flush = false) noexcept {
+        auto prev_format = std::exchange(format_, ukv_format_json_merge_patch_k);
+        auto result = assign(std::forward<values_arg_at>(vals), flush);
+        format_ = prev_format;
+        return result;
+    }
+
+    /**
+     * @brief Find the names of all unique fields in requested documents.
+     * ! Applies only to document collections and when fields are not present in locations!
+     */
+    expected_gt<strings_tape_iterator_t> gist(bool track = false) noexcept;
+
+    /**
+     * @brief For N documents and M fields gather (N * M) responses.
+     * You put in a `table_layout_view_gt` and you receive a `table_view_gt`.
+     * Any column type annotation is optional.
+     * ! Applies only to document collections!
+     */
+    expected_gt<table_view_t> gather(table_header_t const& header, bool track = false) noexcept {
+        auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
+        return any_gather<table_view_t, table_header_t const&>(header, options);
+    }
+
+    expected_gt<table_view_t> gather(table_header_view_t const& header, bool track = false) noexcept {
+        auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
+        return any_gather<table_view_t, table_header_view_t const&>(header, options);
+    }
+
+    template <typename... column_types_at>
+    expected_gt<table_view_gt<column_types_at...>> gather( //
+        table_header_gt<column_types_at...> const& header,
+        bool track = false) noexcept {
+        auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
+        using input_t = table_header_gt<column_types_at...>;
+        using output_t = table_view_gt<column_types_at...>;
+        return any_gather<output_t, input_t const&>(header, options);
+    }
 };
 
 static_assert(members_ref_gt<ukv_key_t>::is_one_k);
@@ -318,6 +378,88 @@ status_t members_ref_gt<locations_at>::any_assign(values_arg_at&& vals_ref, ukv_
             arena_,
             status.member_ptr());
     return status;
+}
+
+template <typename locations_at>
+expected_gt<strings_tape_iterator_t> members_ref_gt<locations_at>::gist(bool track) noexcept {
+
+    status_t status;
+    ukv_size_t found_count = 0;
+    ukv_str_view_t found_strings = nullptr;
+
+    auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
+    decltype(auto) locs = locations_.ref();
+    auto count = keys_extractor_t {}.count(locs);
+    auto keys = keys_extractor_t {}.keys(locs);
+    auto cols = keys_extractor_t {}.cols(locs);
+
+    ukv_docs_gist( //
+        db_,
+        txn_,
+        count,
+        cols.get(),
+        cols.stride(),
+        keys.get(),
+        keys.stride(),
+        options,
+        &found_count,
+        &found_strings,
+        arena_,
+        status.member_ptr());
+
+    strings_tape_iterator_t view {found_count, found_strings};
+    return {std::move(status), std::move(view)};
+}
+
+template <typename locations_at>
+template <typename expected_at, typename values_arg_at>
+expected_gt<expected_at> members_ref_gt<locations_at>::any_gather(values_arg_at&& layout,
+                                                                  ukv_options_t options) noexcept {
+
+    decltype(auto) locs = locations_.ref();
+    auto count = keys_extractor_t {}.count(locs);
+    auto keys = keys_extractor_t {}.keys(locs);
+    auto cols = keys_extractor_t {}.cols(locs);
+
+    status_t status;
+    expected_at view {
+        count,
+        layout.fields().size(),
+        cols,
+        keys,
+        layout.fields().begin().get(),
+        layout.types().begin().get(),
+    };
+
+    ukv_docs_gather( // Inputs:
+        db_,
+        txn_,
+        count,
+        layout.fields().size(),
+        cols.get(),
+        cols.stride(),
+        keys.get(),
+        keys.stride(),
+        layout.fields().begin().get(),
+        layout.fields().stride(),
+        layout.types().begin().get(),
+        layout.types().stride(),
+        options,
+
+        // Outputs:
+        view.member_validities(),
+        view.member_conversions(),
+        view.member_collisions(),
+        view.member_scalars(),
+        view.member_offsets(),
+        view.member_lengths(),
+        view.member_tape(),
+
+        // Meta
+        arena_,
+        status.member_ptr());
+
+    return {std::move(status), std::move(view)};
 }
 
 } // namespace unum::ukv

@@ -12,23 +12,30 @@ static void commit_txn(py_txn_t& py_txn) {
     py_txn.native.commit().throw_unhandled();
 }
 
-static py::object punned_collection( //
-    py_db_t* py_db_ptr,
-    py_txn_t* py_txn_ptr,
-    std::string const& collection) {
+static std::unique_ptr<py_col_t> punned_collection( //
+    std::shared_ptr<py_db_t> py_db_ptr,
+    std::shared_ptr<py_txn_t> py_txn_ptr,
+    std::string const& name) {
 
-    db_t& db = py_db_ptr->native;
-    txn_t& txn = py_txn_ptr->native;
+    status_t status;
+    ukv_col_t col = ukv_col_main_k;
+    ukv_col_open(py_db_ptr->native, name.c_str(), nullptr, &col, status.member_ptr());
+    status.throw_unhandled();
 
-    auto maybe_col = !py_txn_ptr ? db.collection(collection.c_str()) : txn.collection(collection.c_str());
-    maybe_col.throw_unhandled();
+    auto py_col = std::make_unique<py_col_t>();
+    py_col->name = name;
+    py_col->py_db_ptr = py_db_ptr;
+    py_col->py_txn_ptr = py_txn_ptr ? py_txn_ptr->shared_from_this() : nullptr;
+    py_col->native = col_t {py_db_ptr->native, col, py_txn_ptr ? py_txn_ptr->native : ukv_txn_t(nullptr)};
+    return py_col;
+}
 
-    auto py_col = std::make_shared<py_col_t>();
-    py_col->name = collection;
-    py_col->db_ptr = py_db_ptr->shared_from_this();
-    py_col->txn_ptr = py_txn_ptr ? py_txn_ptr->shared_from_this() : nullptr;
-    py_col->native = *std::move(maybe_col);
-    return py::cast(py_col);
+static std::unique_ptr<py_col_t> punned_db_collection(py_db_t& db, std::string const& collection) {
+    return punned_collection(db.shared_from_this(), nullptr, collection);
+}
+
+static std::unique_ptr<py_col_t> punned_txn_collection(py_txn_t& txn, std::string const& collection) {
+    return punned_collection(txn.py_db_ptr.lock(), txn.shared_from_this(), collection);
 }
 
 template <typename native_at>
@@ -58,7 +65,7 @@ auto iterate(range_at& range) {
     using wrap_t = py_stream_with_ending_gt<native_t>;
     native_t stream = range.begin();
     wrap_t wrap {std::move(stream), range.members.max_key()};
-    return std::make_shared<wrap_t>(std::move(wrap));
+    return std::make_unique<wrap_t>(std::move(wrap));
 }
 
 void ukv::wrap_database(py::module& m) {
@@ -95,23 +102,24 @@ void ukv::wrap_database(py::module& m) {
 
 #pragma region CRUD Operations
 
-    py_col.def("set", &write_binary<py_col_t>);
-    py_col.def("pop", &remove_binary<py_col_t>);  // Unlike Python, won't return the result
-    py_col.def("has_key", &has_binary<py_col_t>); // Similar to Python 2
-    py_col.def("get", &read_binary<py_col_t>);
-    py_col.def("update", &update_binary<py_col_t>);
-    py_col.def("scan", &scan_binary<py_col_t>);
-    py_col.def("__setitem__", &write_binary<py_col_t>);
-    py_col.def("__delitem__", &remove_binary<py_col_t>);
-    py_col.def("__contains__", &has_binary<py_col_t>);
-    py_col.def("__getitem__", &read_binary<py_col_t>);
+    // Python tasks are generally called for a single collection.
+    // That greatly simplifies the implementation.
+    py_col.def("set", &write_binary);
+    py_col.def("pop", &remove_binary);  // Unlike Python, won't return the result
+    py_col.def("has_key", &has_binary); // Similar to Python 2
+    py_col.def("get", &read_binary);
+    py_col.def("update", &update_binary);
+    py_col.def("scan", &scan_binary);
+    py_col.def("__setitem__", &write_binary);
+    py_col.def("__delitem__", &remove_binary);
+    py_col.def("__contains__", &has_binary);
+    py_col.def("__getitem__", &read_binary);
 
     py_col.def("clear", [](py_col_t& py_col) {
-        db_t& db = py_col.db_ptr->native;
+        py_db_t& py_db = *py_col.py_db_ptr.lock().get();
+        db_t& db = py_db.native;
         db.remove(py_col.name.c_str()).throw_unhandled();
-        auto maybe_col = db.collection(py_col.name.c_str());
-        maybe_col.throw_unhandled();
-        py_col.native = *std::move(maybe_col);
+        py_col.native = db.collection(py_col.name.c_str()).throw_or_release();
     });
 
     // ML-oriented procedures for zero-copy variants exporting
@@ -126,7 +134,7 @@ void ukv::wrap_database(py::module& m) {
             auto db_ptr = py_db.shared_from_this();
             auto maybe_txn = py_db.native.transact(snapshot);
             maybe_txn.throw_unhandled();
-            auto py_txn_ptr = std::make_shared<py_txn_t>(std::move(db_ptr), *std::move(maybe_txn));
+            auto py_txn_ptr = std::make_shared<py_txn_t>(*std::move(maybe_txn), db_ptr);
             py_txn_ptr->track_reads = track_reads;
             py_txn_ptr->flush_writes = flush_writes;
             return py_txn_ptr;
@@ -177,22 +185,15 @@ void ukv::wrap_database(py::module& m) {
 
 #pragma region Managing Collections
 
+    py_db.def_property_readonly("main", [](py_db_t& py_db) { return punned_db_collection(py_db, ""); });
+    py_txn.def_property_readonly("main", [](py_txn_t& py_txn) { return punned_txn_collection(py_txn, ""); });
+    py_db.def("__getitem__", &punned_db_collection, py::arg("collection"));
+    py_txn.def("__getitem__", &punned_txn_collection, py::arg("collection"));
     py_db.def("clear", [](py_db_t& py_db) { py_db.native.clear().throw_unhandled(); });
-    py_db.def_property_readonly("main", [](py_db_t& py_db) { return punned_collection(&py_db, nullptr, ""); });
-    py_txn.def_property_readonly("main",
-                                 [](py_txn_t& py_txn) { return punned_collection(py_txn.db_ptr.get(), &py_txn, ""); });
 
     py_db.def(
         "__contains__",
         [](py_db_t& py_db, std::string const& name) { return py_db.native.contains(name.c_str()).throw_or_release(); },
-        py::arg("collection"));
-    py_db.def(
-        "__getitem__",
-        [](py_db_t& py_db, std::string const& name) { return punned_collection(&py_db, nullptr, name); },
-        py::arg("collection"));
-    py_txn.def(
-        "__getitem__",
-        [](py_txn_t& py_txn, std::string const& name) { return punned_collection(py_txn.db_ptr.get(), &py_txn, name); },
         py::arg("collection"));
     py_db.def(
         "__delitem__",
@@ -201,8 +202,9 @@ void ukv::wrap_database(py::module& m) {
 
     py_col.def_property_readonly("graph", [](py_col_t& py_col) {
         auto py_graph = std::make_shared<py_graph_t>();
-        py_graph->db_ptr = py_col.db_ptr;
-        py_graph->index = py_col.replicate();
+        py_graph->py_db_ptr = py_col.py_db_ptr;
+        py_graph->py_txn_ptr = py_col.py_txn_ptr;
+        py_graph->index = py_col.native;
         return py::cast(py_graph);
     });
     py_col.def_property_readonly("docs", [](py_col_t& py_col) { return 0; });
@@ -246,17 +248,13 @@ void ukv::wrap_database(py::module& m) {
     });
 
     py_col.def_property_readonly("keys", [](py_col_t& py_col) {
-        members_range_t members(py_col.db_ptr->native,
-                                py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
-                                py_col.native);
+        members_range_t members(py_col.db(), py_col.txn(), *py_col.member_col());
         keys_range_t range {members};
-        return py::cast(std::make_shared<keys_range_t>(range));
+        return py::cast(std::make_unique<keys_range_t>(range));
     });
     py_col.def_property_readonly("items", [](py_col_t& py_col) {
-        members_range_t members(py_col.db_ptr->native,
-                                py_col.txn_ptr ? py_col.txn_ptr->native : ukv_txn_t(nullptr),
-                                py_col.native);
+        members_range_t members(py_col.db(), py_col.txn(), *py_col.member_col());
         pairs_range_t range {members};
-        return py::cast(std::make_shared<pairs_range_t>(range));
+        return py::cast(std::make_unique<pairs_range_t>(range));
     });
 }
