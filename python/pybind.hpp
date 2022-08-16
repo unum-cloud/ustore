@@ -67,17 +67,26 @@ struct py_col_t {
     std::weak_ptr<py_txn_t> py_txn_ptr;
     std::string name;
 
-    ukv_t db() noexcept { return native.db(); }
-    ukv_txn_t txn() noexcept { return !py_txn_ptr.expired() ? py_txn_ptr.lock()->native : ukv_txn_t(nullptr); }
     ukv_col_t* member_col() noexcept { return native.member_ptr(); }
     ukv_arena_t* member_arena() noexcept { return native.member_arena(); }
     ukv_options_t options() noexcept {
         auto txn_ptr = py_txn_ptr.lock();
+        auto base = ukv_options_default_k;
         return txn_ptr ? static_cast<ukv_options_t>( //
-                             ukv_options_default_k | //
-                             (txn_ptr->track_reads ? ukv_option_read_track_k : ukv_options_default_k) |
-                             (txn_ptr->flush_writes ? ukv_option_write_flush_k : ukv_options_default_k))
-                       : ukv_options_default_k;
+                             base | //
+                             (txn_ptr->track_reads ? ukv_option_read_track_k : base) |
+                             (txn_ptr->flush_writes ? ukv_option_write_flush_k : base))
+                       : base;
+    }
+    ukv_t db() noexcept(false) {
+        if (py_db_ptr.expired())
+            throw std::domain_error("Collection references closed DB");
+        return native.db();
+    }
+    ukv_txn_t txn() noexcept(false) {
+        if (py_txn_ptr && py_txn_ptr.expired())
+            throw std::domain_error("Collection references closed transaction");
+        return py_txn_ptr ? py_txn_ptr.lock()->native : ukv_txn_t(nullptr);
     }
 };
 
