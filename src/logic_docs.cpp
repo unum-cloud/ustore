@@ -1111,6 +1111,8 @@ void ukv_docs_gather( //
         return;
 
     // Estimate the amount of memory needed to store at least scalars and columns addresses
+    // TODO: Align offsets of bitmaps to 64-byte boundaries for Arrow
+    // https://arrow.apache.org/docs/format/Columnar.html#buffer-alignment-and-padding
     bool wants_conversions = c_result_bitmap_converted;
     bool wants_collisions = c_result_bitmap_collision;
     std::size_t slots_per_bitmap = c_docs_count / 8 + (c_docs_count % 8 != 0);

@@ -25,7 +25,7 @@ static std::unique_ptr<py_col_t> punned_collection( //
     auto py_col = std::make_unique<py_col_t>();
     py_col->name = name;
     py_col->py_db_ptr = py_db_ptr;
-    py_col->py_txn_ptr = py_txn_ptr ? py_txn_ptr->shared_from_this() : nullptr;
+    py_col->py_txn_ptr = py_txn_ptr;
     py_col->native = col_t {py_db_ptr->native, col, py_txn_ptr ? py_txn_ptr->native : ukv_txn_t(nullptr)};
     return py_col;
 }
