@@ -51,7 +51,7 @@ struct ArrowArray {
     int64_t offset;
     int64_t n_buffers;
     int64_t n_children;
-    const void** buffers;
+    void const** buffers;
     struct ArrowArray** children;
     struct ArrowArray* dictionary;
     void (*release)(struct ArrowArray*);
@@ -66,12 +66,41 @@ struct ArrowArray {
 struct ArrowArrayStream {
     int (*get_schema)(struct ArrowArrayStream*, struct ArrowSchema* out);
     int (*get_next)(struct ArrowArrayStream*, struct ArrowArray* out);
-    const char* (*get_last_error)(struct ArrowArrayStream*);
+    char const* (*get_last_error)(struct ArrowArrayStream*);
     void (*release)(struct ArrowArrayStream*);
     void* private_data;
 };
 
 #endif // ARROW_C_STREAM_INTERFACE
+
+static char const* ukv_type_to_arrow_format(ukv_type_t const field_type) {
+    // Export the right format string and number of buffers to be managed by Arrow.
+    // For scalar arrays we need: bitmap and data.
+    // For variable length arrays we need: bitmap, @b offsets and data.
+    // Important note, both 32-bit and 64-bit offsets are supported.
+    // https://arrow.apache.org/docs/format/CDataInterface.html#data-type-description-format-strings
+    // https://arrow.apache.org/docs/format/Columnar.html#buffer-listing-for-each-layout
+    switch (field_type) {
+    case ukv_type_null_k: return "n";
+    case ukv_type_bool_k: return "b";
+    // TODO: UUID logical type may be natively supported in Arrow vocabulary:
+    // https://arrow.apache.org/docs/format/Columnar.html#extension-types
+    case ukv_type_uuid_k: return "w:16";
+    case ukv_type_i8_k: return "c";
+    case ukv_type_i16_k: return "s";
+    case ukv_type_i32_k: return "i";
+    case ukv_type_i64_k: return "l";
+    case ukv_type_u8_k: return "C";
+    case ukv_type_u16_k: return "S";
+    case ukv_type_u32_k: return "I";
+    case ukv_type_u64_k: return "L";
+    case ukv_type_f16_k: return "e";
+    case ukv_type_f32_k: return "f";
+    case ukv_type_f64_k: return "g";
+    case ukv_type_bin_k: return "z";
+    case ukv_type_str_k: return "u";
+    }
+}
 
 static void release_malloced_schema(struct ArrowSchema* schema) {
     for (int64_t i = 0; i < schema->n_children; ++i) {
@@ -116,7 +145,7 @@ static void ukv_to_arrow_schema( //
     schema->n_children = static_cast<int64_t>(fields_count);
     schema->dictionary = NULL;
     schema->release = &release_malloced_schema;
-    schema->children = malloc(sizeof(struct ArrowSchema*) * schema->n_children);
+    schema->children = (ArrowSchema**)malloc(sizeof(struct ArrowSchema*) * schema->n_children);
 
     // Data
     array->length = static_cast<int64_t>(docs_count);
@@ -126,17 +155,28 @@ static void ukv_to_arrow_schema( //
     array->n_children = 2;
     array->dictionary = NULL;
     array->release = &release_malloced_array;
-    array->buffers = malloc(sizeof(void*) * array->n_buffers);
+    array->buffers = (void const**)malloc(sizeof(void*) * array->n_buffers);
     array->buffers[0] = NULL; // no nulls, so bitmap can be omitted
-    array->children = malloc(sizeof(struct ArrowArray*) * array->n_children);
+    array->children = (ArrowArray**)malloc(sizeof(struct ArrowArray*) * array->n_children);
+
+    if (!schema->children || !array->buffers || !array->children) {
+        *error = "Failed to allocate memory";
+        return;
+    }
 
     // Allocate sub-schemas and sub-arrays
     // TODO: Don't malloc every child schema/array separately,
     // use `private_data` member for that.
     for (ukv_size_t field_idx = 0; field_idx != fields_count; ++field_idx)
-        schema->children[field_idx] = malloc(sizeof(struct ArrowSchema));
+        if (!(schema->children[field_idx] = (ArrowSchema*)malloc(sizeof(struct ArrowSchema)))) {
+            *error = "Failed to allocate memory";
+            return;
+        }
     for (ukv_size_t field_idx = 0; field_idx != fields_count; ++field_idx)
-        array->children[field_idx] = malloc(sizeof(struct ArrowArray));
+        if (!(array->children[field_idx] = (ArrowArray*)malloc(sizeof(struct ArrowArray)))) {
+            *error = "Failed to allocate memory";
+            return;
+        }
 }
 
 static void ukv_to_arrow_column( //
@@ -145,7 +185,7 @@ static void ukv_to_arrow_column( //
     ukv_type_t const field_type,
 
     ukv_1x8_t const* column_validities,
-    ukv_val_len_t const column_offsets,
+    ukv_val_len_t const* column_offsets,
     ukv_val_ptr_t const column_contents,
 
     struct ArrowSchema* schema,
@@ -153,33 +193,8 @@ static void ukv_to_arrow_column( //
 
     ukv_error_t* error) {
 
-    // Export the right format string and number of buffers to be managed by Arrow.
-    // For scalar arrays we need: bitmap and data.
-    // For variable length arrays we need: bitmap, @b offsets and data.
-    // Important note, both 32-bit and 64-bit offsets are supported.
-    // https://arrow.apache.org/docs/format/CDataInterface.html#data-type-description-format-strings
-    // https://arrow.apache.org/docs/format/Columnar.html#buffer-listing-for-each-layout
-    switch (field_type) {
-    case ukv_type_null_k: schema->format = "n"; break;
-    case ukv_type_bool_k: schema->format = "b"; break;
-    // TODO: UUID logical type may be natively supported in Arrow vocabulary:
-    // https://arrow.apache.org/docs/format/Columnar.html#extension-types
-    case ukv_type_uuid_k: schema->format = "w:16"; break;
-    case ukv_type_i8_k: schema->format = "c"; break;
-    case ukv_type_i16_k: schema->format = "s"; break;
-    case ukv_type_i32_k: schema->format = "i"; break;
-    case ukv_type_i64_k: schema->format = "l"; break;
-    case ukv_type_u8_k: schema->format = "C"; break;
-    case ukv_type_u16_k: schema->format = "S"; break;
-    case ukv_type_u32_k: schema->format = "I"; break;
-    case ukv_type_u64_k: schema->format = "U"; break;
-    case ukv_type_f16_k: schema->format = "e"; break;
-    case ukv_type_f32_k: schema->format = "f"; break;
-    case ukv_type_f64_k: schema->format = "g"; break;
-    case ukv_type_bin_k: schema->format = "z"; break;
-    case ukv_type_str_k: schema->format = "u"; break;
-    }
     schema->name = field_name;
+    schema->format = ukv_type_to_arrow_format(field_type);
     schema->metadata = NULL;
     schema->flags = ARROW_FLAG_NULLABLE;
     schema->n_children = 0;
@@ -215,7 +230,12 @@ static void ukv_to_arrow_column( //
     array->release = &release_malloced_array;
 
     // Link our buffers
-    array->buffers = malloc(sizeof(void*) * array->n_buffers);
+    array->buffers = (void const**)malloc(sizeof(void*) * array->n_buffers);
+    if (!array->buffers) {
+        *error = "Failed to allocate memory";
+        return;
+    }
+
     if (array->n_buffers == 2) {
         array->buffers[0] = (void*)column_validities;
         array->buffers[1] = (void*)column_contents;
