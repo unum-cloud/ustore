@@ -319,9 +319,28 @@ struct write_tasks_soa_t {
         ukv_val_len_t len;
         if (vals) {
             begin = reinterpret_cast<byte_t const*>(vals[i]);
-            off = offs ? offs[i] : 0u;
-            len = lens ? lens[i] : std::strlen(reinterpret_cast<char const*>(begin + off));
+            // We have separate entries at different start points.
+            if (!offs && lens) {
+                off = 0u;
+                len = lens[i];
+            }
+            // We are working with a densely packed tape with `count + 1` offsets.
+            else if (offs && !lens) {
+                off = offs[i];
+                len = offs[i + 1] - off;
+            }
+            // All the info is provided.
+            else if (offs && lens) {
+                off = offs[i];
+                len = lens[i];
+            }
+            // We are just given C-strings, we have to guess the length.
+            else {
+                off = 0u;
+                len = std::strlen(reinterpret_cast<char const*>(begin));
+            }
         }
+        // An entry just has to be deleted.
         else {
             begin = nullptr;
             off = 0u;
