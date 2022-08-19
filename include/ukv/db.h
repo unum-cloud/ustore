@@ -438,17 +438,19 @@ void ukv_col_open( //
     ukv_error_t* error);
 
 /**
- * @brief Retrieves a list of collection names in a NULL-delimited form.
+ * @brief Retrieves a list of collection IDs & names in a NULL-delimited form.
  * The default nameless collection won't be described in any form.
  *
  * @param[in] db        Already open database instance, @see `ukv_db_open`.
- * @param[inout] count  Will contain the number of found unique collections.
- * @param[inout] names  A NULL-terminated output string with comma-delimited column names.
+ * @param[out] count    Will contain the number of found unique collections.
+ * @param[out] names    A NULL-terminated output string with comma-delimited column names.
  * @param[out] error    The error message to be handled by callee.
  */
 void ukv_col_list( //
     ukv_t const db,
     ukv_size_t* count,
+    ukv_col_t** collections,
+    ukv_val_len_t** offsets,
     ukv_str_view_t* names,
     ukv_arena_t* arena,
     ukv_error_t* error);
