@@ -73,7 +73,7 @@ struct py_col_t {
         auto txn_ptr = py_txn_ptr.lock();
         auto base = ukv_options_default_k;
         return txn_ptr ? static_cast<ukv_options_t>( //
-                             base | //
+                             base |                  //
                              (txn_ptr->track_reads ? ukv_option_read_track_k : base) |
                              (txn_ptr->flush_writes ? ukv_option_write_flush_k : base))
                        : base;
