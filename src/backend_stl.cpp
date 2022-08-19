@@ -349,7 +349,9 @@ void read_head( //
     std::shared_lock _ {db.mutex};
 
     // 1. Estimate the total size
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count * 2;
+    ukv_size_t count_offs = c_found_offsets ? tasks.count + arrow_extra_offsets_k : 0;
+    ukv_size_t count_lens = c_found_lengths ? tasks.count : 0;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * (count_offs + count_lens);
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_col_t const& col = stl_col(db, task.col);
@@ -364,9 +366,20 @@ void read_head( //
         return;
 
     // 3. Fetch the data
-    ukv_val_len_t* lens = *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
-    ukv_val_len_t* offs = *c_found_offsets = lens + tasks.count;
-    ukv_val_ptr_t contents = *c_found_values = reinterpret_cast<ukv_val_ptr_t>(offs + tasks.count);
+    ukv_val_len_t* lens_raw = reinterpret_cast<ukv_val_len_t*>(tape);
+    ukv_val_len_t* offs_raw = lens_raw + count_lens;
+    ukv_val_ptr_t contents = reinterpret_cast<ukv_val_ptr_t>(offs_raw + count_offs);
+    if (c_found_lengths)
+        *c_found_lengths = lens_raw;
+    if (c_found_offsets)
+        *c_found_offsets = offs_raw;
+    *c_found_values = contents;
+
+    // Instead of computing `if`s on ever loop, lets do arithmetics
+    ukv_val_len_t dummy = 0;
+    using strided_t = strided_iterator_gt<ukv_val_len_t>;
+    auto offs = count_lens ? strided_t {offs_raw, sizeof(ukv_val_len_t)} : strided_t {&dummy, 0};
+    auto lens = count_lens ? strided_t {lens_raw, sizeof(ukv_val_len_t)} : strided_t {&dummy, 0};
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
@@ -383,6 +396,7 @@ void read_head( //
             offs[i] = lens[i] = ukv_val_len_missing_k;
         }
     }
+    offs[tasks.count] = static_cast<ukv_val_len_t>(contents - *c_found_values);
 }
 
 void scan_head( //
@@ -555,7 +569,9 @@ void read_txn( //
     bool should_track_requests = (c_options & ukv_option_read_track_k);
 
     // 1. Estimate the total size of keys
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count * 2;
+    ukv_size_t count_offs = c_found_offsets ? tasks.count + arrow_extra_offsets_k : 0;
+    ukv_size_t count_lens = c_found_lengths ? tasks.count : 0;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * (count_offs + count_lens);
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_col_t const& col = stl_col(db, task.col);
@@ -585,10 +601,20 @@ void read_txn( //
         return;
 
     // 3. Pull the data
-    ukv_val_len_t* lens = *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
-    ukv_val_len_t* offs = *c_found_offsets = lens + tasks.count;
-    ukv_val_ptr_t contents = *c_found_values =
-        reinterpret_cast<ukv_val_ptr_t>(tape + sizeof(ukv_val_len_t) * tasks.count * 2);
+    ukv_val_len_t* lens_raw = reinterpret_cast<ukv_val_len_t*>(tape);
+    ukv_val_len_t* offs_raw = lens_raw + count_lens;
+    ukv_val_ptr_t contents = reinterpret_cast<ukv_val_ptr_t>(offs_raw + count_offs);
+    if (c_found_lengths)
+        *c_found_lengths = lens_raw;
+    if (c_found_offsets)
+        *c_found_offsets = offs_raw;
+    *c_found_values = contents;
+
+    // Instead of computing `if`s on ever loop, lets do arithmetics
+    ukv_val_len_t dummy = 0;
+    using strided_t = strided_iterator_gt<ukv_val_len_t>;
+    auto offs = count_lens ? strided_t {offs_raw, sizeof(ukv_val_len_t)} : strided_t {&dummy, 0};
+    auto lens = count_lens ? strided_t {lens_raw, sizeof(ukv_val_len_t)} : strided_t {&dummy, 0};
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
@@ -630,6 +656,7 @@ void read_txn( //
                 txn.requested.emplace(task.location(), generation_t {});
         }
     }
+    offs[tasks.count] = static_cast<ukv_val_len_t>(contents - *c_found_values);
 }
 
 void scan_txn( //
@@ -1040,7 +1067,10 @@ void ukv_col_list( //
         strings_length += name_and_contents.first.size() + 1;
 
     // For every collection we also need to export IDs and offsets
-    std::size_t scalars_space = cols_count * (sizeof(ukv_col_t) + sizeof(ukv_val_len_t));
+    std::size_t scalars_space = 0;
+    scalars_space += cols_count * sizeof(ukv_col_t);
+    scalars_space += cols_count * sizeof(ukv_val_len_t);
+    scalars_space += arrow_extra_offsets_k * sizeof(ukv_val_len_t);
 
     auto tape = prepare_memory(arena.output_tape, scalars_space + strings_length, c_error);
     if (*c_error)
@@ -1048,7 +1078,7 @@ void ukv_col_list( //
 
     auto ids = reinterpret_cast<ukv_col_t*>(tape);
     auto offs = reinterpret_cast<ukv_val_len_t*>(ids + cols_count);
-    auto names = reinterpret_cast<char*>(offs + cols_count);
+    auto names = reinterpret_cast<char*>(offs + cols_count + 1);
     *c_count = static_cast<ukv_size_t>(cols_count);
     *c_ids = ids;
     *c_offsets = offs;
@@ -1064,6 +1094,7 @@ void ukv_col_list( //
         ++offs;
         names += len + 1;
     }
+    *offs = static_cast<ukv_val_len_t>(names - *c_names);
 }
 
 void ukv_db_control( //
