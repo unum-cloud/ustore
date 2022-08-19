@@ -205,7 +205,6 @@ static void ukv_to_arrow_column( //
 
     // Export the data
     switch (field_type) {
-    case ukv_type_null_k: array->n_buffers = 0; break;
     case ukv_type_bool_k:
     case ukv_type_uuid_k:
     case ukv_type_i8_k:
@@ -221,6 +220,8 @@ static void ukv_to_arrow_column( //
     case ukv_type_f64_k: array->n_buffers = 2; break;
     case ukv_type_bin_k:
     case ukv_type_str_k: array->n_buffers = 3; break;
+    case ukv_type_null_k: array->n_buffers = 0; break;
+    default: array->n_buffers = 0; break;
     }
     array->length = docs_count;
     array->offset = 0;
