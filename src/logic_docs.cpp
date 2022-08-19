@@ -68,7 +68,10 @@ struct export_to_value_t final : public nlohmann::detail::output_adapter_protoco
     }
 };
 
-json_t& lookup_field(json_t& json, ukv_str_view_t field, json_t& default_json) noexcept(false) {
+json_t& lookup_field( //
+    json_t& json,
+    ukv_str_view_t field,
+    json_t& default_json) noexcept(false) {
 
     if (!field)
         return json;
@@ -84,7 +87,10 @@ json_t& lookup_field(json_t& json, ukv_str_view_t field, json_t& default_json) n
     }
 }
 
-json_t parse_any(value_view_t bytes, ukv_format_t const c_format, ukv_error_t* c_error) noexcept {
+json_t parse_any( //
+    value_view_t bytes,
+    ukv_format_t const c_format,
+    ukv_error_t* c_error) noexcept {
 
     try {
         auto str = reinterpret_cast<char const*>(bytes.begin());
@@ -116,10 +122,11 @@ json_t parse_any(value_view_t bytes, ukv_format_t const c_format, ukv_error_t* c
  * They have more flexible alternatives in the form of `nlohmann::detail::serializer`s,
  * that will accept our custom adapter. Unfortunately, they require a bogus shared pointer. WHY?!
  */
-void dump_any(json_t const& json,
-              ukv_format_t const c_format,
-              std::shared_ptr<export_to_value_t> const& value,
-              ukv_error_t* c_error) noexcept {
+void dump_any( //
+    json_t const& json,
+    ukv_format_t const c_format,
+    std::shared_ptr<export_to_value_t> const& value,
+    ukv_error_t* c_error) noexcept {
 
     using text_serializer_t = nlohmann::detail::serializer<json_t>;
     using binary_serializer_t = nlohmann::detail::binary_writer<json_t, char>;
