@@ -556,8 +556,7 @@ void ukv_scan( //
         }
 
         found_keys += task.length;
-        if (export_lengths)
-            found_lens += task.length;
+        found_lens += task.length;
     }
 }
 
@@ -696,6 +695,8 @@ void ukv_col_remove( //
 void ukv_col_list( //
     ukv_t const c_db,
     ukv_size_t* c_count,
+    ukv_col_t** c_ids,
+    ukv_val_len_t** c_offsets,
     ukv_str_view_t* c_names,
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -708,26 +709,41 @@ void ukv_col_list( //
         return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    std::size_t total_length = 0;
-
-    for (auto const& column : db.columns)
-        total_length += column->GetName().size();
+    std::size_t cols_count = db.columns.size();
 
     // Every string will be null-terminated
-    total_length += db.columns.size();
-    *c_count = static_cast<ukv_size_t>(db.columns.size());
+    std::size_t string_length = 0;
+    for (auto const& column : db.columns)
+        string_length += column->GetName().size() + 1;
 
-    auto tape = prepare_memory(arena.output_tape, total_length, c_error);
+    std::size_t scalars_space = 0;
+    scalars_space += cols_count * sizeof(ukv_col_t);
+    scalars_space += cols_count * sizeof(ukv_val_len_t);
+    scalars_space += arrow_extra_offsets_k * sizeof(ukv_val_len_t);
+
+    auto tape = prepare_memory(arena.output_tape, scalars_space + string_length, c_error);
     if (*c_error)
         return;
 
-    *c_names = reinterpret_cast<ukv_str_view_t>(tape);
+    auto ids = reinterpret_cast<ukv_col_t*>(tape);
+    auto offs = reinterpret_cast<ukv_val_len_t*>(ids + cols_count);
+    auto names = reinterpret_cast<char*>(offs + cols_count + 1);
+    *c_count = static_cast<ukv_size_t>(cols_count);
+    *c_ids = ids;
+    *c_offsets = offs;
+    *c_names = names;
+
     for (auto const& column : db.columns) {
         auto len = column->GetName().size();
-        std::memcpy(tape, column->GetName().data(), len);
-        tape[len] = byte_t {0};
-        tape += len + 1;
+        std::memcpy(names, column->GetName().data(), len);
+        names[len] = '\0';
+        *ids = reinterpret_cast<ukv_col_t>(column);
+        *offs = static_cast<ukv_val_len_t>(names - *c_names);
+        ++ids;
+        ++offs;
+        names += len + 1;
     }
+    *offs = static_cast<ukv_val_len_t>(names - *c_names);
 }
 
 void ukv_db_control( //
