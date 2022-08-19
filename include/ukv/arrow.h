@@ -99,6 +99,7 @@ static char const* ukv_type_to_arrow_format(ukv_type_t const field_type) {
     case ukv_type_f64_k: return "g";
     case ukv_type_bin_k: return "z";
     case ukv_type_str_k: return "u";
+    default: return "";
     }
 }
 
