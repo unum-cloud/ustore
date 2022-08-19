@@ -220,6 +220,11 @@ void ukv::wrap_database(py::module& m) {
     py_kvrange.def("since", &since<pairs_range_t>);
     py_kvrange.def("until", &until<pairs_range_t>);
 
+    // Using slices on the keys view is too cumbersome!
+    // It's never clear if we want a range of IDs or offsets.
+    // Offsets seems to be the Python-ic way, yet Pandas matches against labels.
+    // Furthermore, skipping with offsets will be very inefficient in the underlying
+    // DBMS implementations, unlike seeking to key.
     // py_krange.def("__getitem__", [](keys_range_t& keys_range, py::slice slice) {
     //     Py_ssize_t start = 0, stop = 0, step = 0;
     //     if (PySlice_Unpack(slice.ptr(), &start, &stop, &step) || step != 1 || start >= stop)
@@ -234,8 +239,7 @@ void ukv::wrap_database(py::module& m) {
         ukv_key_t key = kstream.native.key();
         if (kstream.native.is_end() || kstream.stop)
             throw py::stop_iteration();
-        if (kstream.terminal == key)
-            kstream.stop = true;
+        kstream.stop = kstream.terminal == key;
         ++kstream.native;
         return key;
     });
@@ -243,8 +247,7 @@ void ukv::wrap_database(py::module& m) {
         ukv_key_t key = kvstream.native.key();
         if (kvstream.native.is_end() || kvstream.stop)
             throw py::stop_iteration();
-        if (kvstream.terminal == key)
-            kvstream.stop = true;
+        kvstream.stop = kvstream.terminal == key;
         value_view_t value_view = kvstream.native.value();
         PyObject* value_ptr = PyBytes_FromStringAndSize(value_view.c_str(), value_view.size());
         ++kvstream.native;
