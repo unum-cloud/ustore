@@ -290,10 +290,15 @@ void ukv_write( //
  *                           a single "tape" structure, which later be exported into (often disjoint)
  *                           runtime- or library-specific implementations. To determine the range of each
  *                           chunk use @param found_offsets and @param found_lengths.
+ *
  * @param[out] found_offsets Will contain a pointer to an array with @param tasks_count integers.
- *                           Each marks response offset in bytes starting from @param found_values.
+ *                           Each marks a response offset in bytes starting from @param found_values.
+ *                           To be fully compatible with Apache Arrow we append one more offset at
+ *                           at the end to allow inferring the length of the last entry without
+ *                           using @param found_lengths.
+ *
  * @param[out] found_lengths Will contain a pointer to an array with @param tasks_count integers.
- *                           Each defines response length in bytes.
+ *                           Each defines a response length in bytes. Is @b optional.
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.

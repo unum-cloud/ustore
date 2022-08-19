@@ -20,6 +20,8 @@ using allocator_t = std::allocator<byte_t>;
 using buffer_t = std::vector<byte_t, allocator_t>;
 using generation_t = std::int64_t;
 
+constexpr std::size_t arrow_extra_offsets_k = 1;
+
 inline std::size_t next_power_of_two(std::size_t x) {
     return 1ull << (sizeof(std::size_t) * CHAR_BIT - __builtin_clzll(x));
 }
