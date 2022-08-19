@@ -26,6 +26,7 @@ static std::unique_ptr<py_col_t> punned_collection( //
     py_col->name = name;
     py_col->py_db_ptr = py_db_ptr;
     py_col->py_txn_ptr = py_txn_ptr;
+    py_col->in_txn = py_txn_ptr != nullptr;
     py_col->native = col_t {py_db_ptr->native, col, py_txn_ptr ? py_txn_ptr->native : ukv_txn_t(nullptr)};
     return py_col;
 }
@@ -205,10 +206,15 @@ void ukv::wrap_database(py::module& m) {
         auto py_graph = std::make_shared<py_graph_t>();
         py_graph->py_db_ptr = py_col.py_db_ptr;
         py_graph->py_txn_ptr = py_col.py_txn_ptr;
+        py_graph->in_txn = py_col.in_txn;
         py_graph->index = py_col.native;
         return py::cast(py_graph);
     });
-    py_col.def_property_readonly("docs", [](py_col_t& py_col) { return 0; });
+    py_col.def_property_readonly("docs", [](py_col_t& py_col) {
+        auto py_docs = std::make_shared<py_docs_col_t>();
+        py_docs->binary = py_col;
+        return py::cast(py_docs);
+    });
     py_col.def_property_readonly("media", [](py_col_t& py_col) { return 0; });
 
 #pragma region Streams and Ranges
