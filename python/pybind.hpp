@@ -66,6 +66,7 @@ struct py_col_t {
     std::weak_ptr<py_db_t> py_db_ptr;
     std::weak_ptr<py_txn_t> py_txn_ptr;
     std::string name;
+    bool in_txn = false;
 
     ukv_col_t* member_col() noexcept { return native.member_ptr(); }
     ukv_arena_t* member_arena() noexcept { return native.member_arena(); }
@@ -84,9 +85,9 @@ struct py_col_t {
         return native.db();
     }
     ukv_txn_t txn() noexcept(false) {
-        if (py_txn_ptr && py_txn_ptr.expired())
+        if (in_txn && py_txn_ptr.expired())
             throw std::domain_error("Collection references closed transaction");
-        return py_txn_ptr ? py_txn_ptr.lock()->native : ukv_txn_t(nullptr);
+        return in_txn ? py_txn_ptr.lock()->native : ukv_txn_t(nullptr);
     }
 };
 
@@ -108,6 +109,7 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     col_t targets_attrs;
     col_t relations_attrs;
 
+    bool in_txn = false;
     bool is_directed = false;
     bool is_multi = false;
     bool allow_self_loops = false;
