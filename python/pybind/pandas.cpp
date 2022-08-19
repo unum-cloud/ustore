@@ -129,8 +129,8 @@ static py::object materialize(py_table_col_t& df) {
         column_view_t col = table.column(col_idx);
         ukv_to_arrow_column( //
             table.rows(),
-            table_header.fields[col_idx].get(),
-            table_header.types[col_idx].get(),
+            table_header.fields_begin[col_idx].get(),
+            table_header.types_begin[col_idx].get(),
             col.validities(),
             col.offsets(),
             col.contents(),
@@ -143,7 +143,7 @@ static py::object materialize(py_table_col_t& df) {
     // Pass C to C++ and then to Python:
     // https://github.com/apache/arrow/blob/master/cpp/src/arrow/c/bridge.h#L138
     arrow::Result<std::shared_ptr<arrow::RecordBatch>> table_arrow =
-        arrow::ImportRecordBatch(c_arrow_schema, c_arrow_array);
+        arrow::ImportRecordBatch(&c_arrow_array, &c_arrow_schema);
     // https://github.com/apache/arrow/blob/a270afc946398a0279b1971a315858d8b5f07e2d/cpp/src/arrow/python/pyarrow.h#L52
     PyObject* table_python = arrow::py::wrap_batch(table_arrow.ValueOrDie());
     return py::reinterpret_steal<py::object>(table_python);
