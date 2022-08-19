@@ -143,13 +143,13 @@ class strided_range_gt {
     }
 };
 
-template <typename at>
-strided_range_gt<at> strided_range(std::vector<at>& vec) noexcept {
+template <typename at, typename alloc_at = std::allocator<at>>
+strided_range_gt<at> strided_range(std::vector<at, alloc_at>& vec) noexcept {
     return {vec.data(), sizeof(at), vec.size()};
 }
 
-template <typename at>
-strided_range_gt<at const> strided_range(std::vector<at> const& vec) noexcept {
+template <typename at, typename alloc_at = std::allocator<at>>
+strided_range_gt<at const> strided_range(std::vector<at, alloc_at> const& vec) noexcept {
     return {vec.data(), sizeof(at), vec.size()};
 }
 

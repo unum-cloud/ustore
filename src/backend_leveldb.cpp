@@ -206,12 +206,12 @@ void measure_one( //
             return;
 
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : static_cast<ukv_size_t>(value.size());
-    auto tape = prepare_memory(arena.output_tape, sizeof(ukv_size_t), c_error);
+    auto tape = arena.alloc<byte_t>(sizeof(ukv_size_t), c_error);
     if (*c_error)
         return;
 
-    std::memcpy(tape, &exported_len, sizeof(ukv_size_t));
-    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
+    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_size_t));
+    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape.begin());
 }
 
 void read_one( //
@@ -232,15 +232,15 @@ void read_one( //
 
     auto bytes_in_value = static_cast<ukv_size_t>(value.size());
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : bytes_in_value;
-    auto tape = prepare_memory(arena.output_tape, sizeof(ukv_size_t) + bytes_in_value, c_error);
+    auto tape = arena.alloc<byte_t>(sizeof(ukv_size_t) + bytes_in_value, c_error);
     if (*c_error)
         return;
 
-    std::memcpy(tape, &exported_len, sizeof(ukv_size_t));
-    std::memcpy(tape + sizeof(ukv_size_t), value.data(), bytes_in_value);
+    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_size_t));
+    std::memcpy(tape.begin() + sizeof(ukv_size_t), value.data(), bytes_in_value);
 
-    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + sizeof(ukv_size_t));
+    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape.begin());
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin() + sizeof(ukv_size_t));
 }
 
 void measure_many( //
@@ -253,13 +253,12 @@ void measure_many( //
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    byte_t* tape = prepare_memory(arena.output_tape, sizeof(ukv_val_len_t) * tasks.count, c_error);
+    span_gt<ukv_val_len_t> lens = arena.alloc<ukv_val_len_t>(tasks.count, c_error);
     if (*c_error)
         return;
 
-    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    std::fill_n(lens, tasks.count, 0);
-    *c_found_lengths = lens;
+    std::fill_n(lens.begin(), tasks.count, 0);
+    *c_found_lengths = lens.begin();
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
@@ -283,11 +282,11 @@ void read_many( //
     ukv_error_t* c_error) {
 
     ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * tasks.count;
-    byte_t* tape = prepare_memory(arena.output_tape, lens_bytes, c_error);
+    span_gt<byte_t> tape = arena.alloc<byte_t>(lens_bytes, c_error);
     if (*c_error)
         return;
 
-    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
+    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape.begin());
     std::fill_n(lens, tasks.count, 0);
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
@@ -298,19 +297,19 @@ void read_many( //
         if (export_error(status, c_error))
             return;
 
-        auto old_tape_len = arena.output_tape.size();
+        auto old_tape_len = tape.size();
         auto bytes_in_value = value.size();
-        tape = prepare_memory(arena.output_tape, old_tape_len + bytes_in_value, c_error);
+        tape = arena.alloc<byte_t>(old_tape_len + bytes_in_value, c_error);
         if (*c_error)
             return;
-        lens = reinterpret_cast<ukv_val_len_t*>(tape);
+        lens = reinterpret_cast<ukv_val_len_t*>(tape.begin());
 
-        std::memcpy(tape + old_tape_len, value.data(), bytes_in_value);
+        std::memcpy(tape.begin() + old_tape_len, value.data(), bytes_in_value);
         lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
     }
 
     *c_found_lengths = lens;
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + lens_bytes);
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin() + lens_bytes);
 }
 
 void ukv_read( //
@@ -397,11 +396,11 @@ void ukv_scan( //
     if (export_lengths)
         total_bytes += total_lengths * sizeof(ukv_val_len_t);
 
-    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
+    span_gt<byte_t> tape = arena.alloc<byte_t>(total_bytes, c_error);
     if (*c_error)
         return;
 
-    ukv_key_t* found_keys = reinterpret_cast<ukv_key_t*>(tape);
+    ukv_key_t* found_keys = reinterpret_cast<ukv_key_t*>(tape.begin());
     ukv_val_len_t* found_lens = reinterpret_cast<ukv_val_len_t*>(found_keys + total_lengths);
     *c_found_keys = found_keys;
     *c_found_lengths = export_lengths ? found_lens : nullptr;
