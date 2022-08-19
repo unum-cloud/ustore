@@ -331,15 +331,16 @@ void export_edge_tuples( //
         }
     }
     constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
-    prepare_memory( //
-        arena.unpacked_tape,
-        total_neighborships * sizeof(ukv_key_t) * tuple_size_k + c_vertices_count * sizeof(ukv_vertex_degree_t),
-        c_error);
+
+    // Export into arena
+    span_gt<byte_t> vertex_data = arena.alloc<byte_t>(total_neighborships * sizeof(ukv_key_t) * tuple_size_k +
+                                                          c_vertices_count * sizeof(ukv_vertex_degree_t),
+                                                      c_error);
     if (*c_error)
         return;
 
     // Export into arena
-    auto const degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(arena.unpacked_tape.data());
+    auto const degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(vertex_data.begin());
     auto neighborships_per_vertex = reinterpret_cast<ukv_key_t*>(degrees_per_vertex + c_vertices_count);
 
     tape_iterator_t values_it = values.begin();
@@ -386,7 +387,7 @@ void export_edge_tuples( //
         }
     }
 
-    *c_degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(arena.unpacked_tape.data());
+    *c_degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(vertex_data.begin());
     *c_neighborships_per_vertex = reinterpret_cast<ukv_key_t*>(degrees_per_vertex + c_vertices_count);
 }
 
@@ -402,7 +403,7 @@ void export_disjoint_edge_buffers( //
     ukv_size_t const c_vertices_stride,
 
     ukv_options_t const c_options,
-
+    value_t* c_values,
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
@@ -433,7 +434,7 @@ void export_disjoint_edge_buffers( //
     tape_view_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
     std::size_t value_idx = 0;
     for (value_view_t value : values)
-        arena.updated_vals[value_idx++] = value;
+        c_values[value_idx++] = value;
 }
 
 template <bool erase_ak>
@@ -469,28 +470,33 @@ void update_neighborhoods( //
     strided_iterator_gt<ukv_key_t const> targets_ids {c_targets_ids, c_targets_stride};
 
     // Fetch all the data related to touched vertices
-    prepare_memory(arena.updated_keys, c_tasks_count + c_tasks_count, c_error);
-    if (*c_error)
+    std::pmr::vector<col_key_t> updated_keys(c_tasks_count + c_tasks_count, &arena.resource);
+    if (updated_keys.size() == 0) {
+        *c_error = "Failed to allocate memory";
         return;
+    }
+
     for (ukv_size_t i = 0; i != c_tasks_count; ++i)
-        arena.updated_keys[i] = {collections[i], sources_ids[i]};
+        updated_keys[i] = {collections[i], sources_ids[i]};
     for (ukv_size_t i = 0; i != c_tasks_count; ++i)
-        arena.updated_keys[c_tasks_count + i] = {collections[i], targets_ids[i]};
+        updated_keys[c_tasks_count + i] = {collections[i], targets_ids[i]};
 
     // Keep only the unique items
-    sort_and_deduplicate(arena.updated_keys);
-    prepare_memory(arena.updated_vals, arena.updated_keys.size(), c_error);
-    if (*c_error)
+    sort_and_deduplicate(updated_keys);
+    std::pmr::vector<value_t> updated_vals(updated_keys.size(), &arena.resource);
+    if (updated_vals.size() == 0) {
+        *c_error = "Failed to allocate memory";
         return;
-
+    }
     export_disjoint_edge_buffers(c_db,
                                  c_txn,
-                                 static_cast<ukv_size_t>(arena.updated_keys.size()),
-                                 &arena.updated_keys[0].col,
+                                 static_cast<ukv_size_t>(updated_keys.size()),
+                                 &updated_keys[0].col,
                                  sizeof(col_key_t),
-                                 &arena.updated_keys[0].key,
+                                 &updated_keys[0].key,
                                  sizeof(col_key_t),
                                  c_options,
+                                 updated_vals.data(),
                                  c_arena,
                                  c_error);
     if (*c_error)
@@ -502,10 +508,10 @@ void update_neighborhoods( //
         auto source_id = sources_ids[i];
         auto target_id = targets_ids[i];
 
-        auto source_idx = offset_in_sorted(arena.updated_keys, {collection, source_id});
-        auto target_idx = offset_in_sorted(arena.updated_keys, {collection, target_id});
-        auto& source_value = arena.updated_vals[source_idx];
-        auto& target_value = arena.updated_vals[target_idx];
+        auto source_idx = offset_in_sorted(updated_keys, {collection, source_id});
+        auto target_idx = offset_in_sorted(updated_keys, {collection, target_id});
+        auto& source_value = updated_vals[source_idx];
+        auto& target_value = updated_vals[target_idx];
 
         if constexpr (erase_ak) {
             std::optional<ukv_key_t> edge_id;
@@ -526,16 +532,16 @@ void update_neighborhoods( //
     ukv_val_len_t offset_in_val = 0;
     ukv_write(c_db,
               c_txn,
-              static_cast<ukv_size_t>(arena.updated_keys.size()),
-              &arena.updated_keys[0].col,
+              static_cast<ukv_size_t>(updated_keys.size()),
+              &updated_keys[0].col,
               sizeof(col_key_t),
-              &arena.updated_keys[0].key,
+              &updated_keys[0].key,
               sizeof(col_key_t),
-              arena.updated_vals[0].member_ptr(),
+              updated_vals[0].member_ptr(),
               sizeof(value_t),
               &offset_in_val,
               0,
-              arena.updated_vals[0].member_length(),
+              updated_vals[0].member_length(),
               sizeof(value_t),
               c_options,
               c_arena,
@@ -709,48 +715,52 @@ void ukv_graph_remove_vertices( //
     // Enumerate the opposite ends, from which that same reference must be removed.
     // Here all the keys will be in the sorted order.
     std::size_t count_edges = std::accumulate(degrees_per_vertex, degrees_per_vertex + c_vertices_count, 0ul);
-    arena.updated_keys.reserve(count_edges * 2);
+    std::pmr::vector<col_key_t> updated_keys(&arena.resource);
+    updated_keys.reserve(count_edges * 2);
     for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++degrees_per_vertex) {
         auto collection = collections[i];
-        arena.updated_keys.push_back({collection, vertices_ids[i]});
+        updated_keys.push_back({collection, vertices_ids[i]});
         for (ukv_size_t j = 0; j != *degrees_per_vertex; ++j, ++neighbors_per_vertex)
-            arena.updated_keys.push_back({collection, *neighbors_per_vertex});
+            updated_keys.push_back({collection, *neighbors_per_vertex});
     }
 
     // Sorting the tasks would help us faster locate them in the future.
     // We may also face repetitions when connected vertices are removed.
-    sort_and_deduplicate(arena.updated_keys);
-    prepare_memory(arena.updated_vals, arena.updated_keys.size(), c_error);
-    if (*c_error)
+    sort_and_deduplicate(updated_keys);
+    std::pmr::vector<value_t> updated_vals(updated_keys.size(), &arena.resource);
+    if (updated_vals.size() == 0) {
+        *c_error = "Failed to allocate memory";
         return;
+    }
 
     // Fetch the opposite ends, from which that same reference must be removed.
     // Here all the keys will be in the sorted order.
     export_disjoint_edge_buffers(c_db,
                                  c_txn,
-                                 static_cast<ukv_size_t>(arena.updated_keys.size()),
-                                 &arena.updated_keys[0].col,
+                                 static_cast<ukv_size_t>(updated_keys.size()),
+                                 &updated_keys[0].col,
                                  sizeof(col_key_t),
-                                 &arena.updated_keys[0].key,
+                                 &updated_keys[0].key,
                                  sizeof(col_key_t),
                                  c_options,
+                                 updated_vals.data(),
                                  c_arena,
                                  c_error);
     if (*c_error)
         return;
 
     // From every opposite end - remove a match, and only then - the content itself
-    for (ukv_size_t i = 0; i != arena.updated_keys.size(); ++i) {
+    for (ukv_size_t i = 0; i != updated_keys.size(); ++i) {
         auto collection = collections[i];
         auto vertex_id = vertices_ids[i];
         auto role = roles[i];
 
-        auto vertex_idx = offset_in_sorted(arena.updated_keys, {collection, vertex_id});
-        value_t& vertex_value = arena.updated_vals[vertex_idx];
+        auto vertex_idx = offset_in_sorted(updated_keys, {collection, vertex_id});
+        value_t& vertex_value = updated_vals[vertex_idx];
 
         for (neighborship_t n : neighbors(vertex_value, role)) {
-            auto neighbor_idx = offset_in_sorted(arena.updated_keys, {collection, n.neighbor_id});
-            value_t& neighbor_value = arena.updated_vals[neighbor_idx];
+            auto neighbor_idx = offset_in_sorted(updated_keys, {collection, n.neighbor_id});
+            value_t& neighbor_value = updated_vals[neighbor_idx];
             if (role == ukv_vertex_role_any_k) {
                 erase(neighbor_value, ukv_vertex_source_k, vertex_id);
                 erase(neighbor_value, ukv_vertex_target_k, vertex_id);
@@ -766,16 +776,16 @@ void ukv_graph_remove_vertices( //
     ukv_val_len_t offset_in_val = 0;
     ukv_write(c_db,
               c_txn,
-              static_cast<ukv_size_t>(arena.updated_keys.size()),
-              &arena.updated_keys[0].col,
+              static_cast<ukv_size_t>(updated_keys.size()),
+              &updated_keys[0].col,
               sizeof(col_key_t),
-              &arena.updated_keys[0].key,
+              &updated_keys[0].key,
               sizeof(col_key_t),
-              arena.updated_vals[0].member_ptr(),
+              updated_vals[0].member_ptr(),
               sizeof(value_t),
               &offset_in_val,
               0,
-              arena.updated_vals[0].member_length(),
+              updated_vals[0].member_length(),
               sizeof(value_t),
               c_options,
               c_arena,

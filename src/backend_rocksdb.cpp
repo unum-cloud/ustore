@@ -271,12 +271,12 @@ void measure_one( //
             return;
 
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : static_cast<ukv_size_t>(value.size());
-    auto tape = prepare_memory(arena.output_tape, sizeof(ukv_size_t), c_error);
+    auto tape = arena.alloc<byte_t>(sizeof(ukv_size_t), c_error);
     if (*c_error)
         return;
 
-    std::memcpy(tape, &exported_len, sizeof(ukv_size_t));
-    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
+    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_size_t));
+    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape.begin());
 }
 
 void read_one( //
@@ -304,14 +304,14 @@ void read_one( //
 
     auto bytes_in_value = static_cast<ukv_size_t>(value.size());
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : bytes_in_value;
-    auto tape = prepare_memory(arena.output_tape, sizeof(ukv_size_t) + bytes_in_value, c_error);
+    auto tape = arena.alloc<byte_t>(sizeof(ukv_size_t) + bytes_in_value, c_error);
     if (*c_error)
         return;
-    std::memcpy(tape, &exported_len, sizeof(ukv_size_t));
-    std::memcpy(tape + sizeof(ukv_size_t), value.data(), bytes_in_value);
+    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_size_t));
+    std::memcpy(tape.begin() + sizeof(ukv_size_t), value.data(), bytes_in_value);
 
-    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + sizeof(ukv_size_t));
+    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape.begin());
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin() + sizeof(ukv_size_t));
 }
 
 void measure_many( //
@@ -338,12 +338,11 @@ void measure_many( //
                                                : db.native->MultiGet(options, cols, keys, &vals);
 
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
-    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
+    span_gt<ukv_val_len_t> lens = arena.alloc<ukv_val_len_t>(tasks.count, c_error);
     if (*c_error)
         return;
 
-    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    *c_found_lengths = lens;
+    *c_found_lengths = lens.begin();
 
     for (ukv_size_t i = 0; i != tasks.count; ++i)
         lens[i] = statuses[i].IsNotFound() ? ukv_val_len_missing_k : vals[i].size();
@@ -378,20 +377,20 @@ void read_many( //
         total_bytes += vals[i].size();
 
     // 2. Allocate a tape for all the values to be fetched
-    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
+    span_gt<byte_t> tape = arena.alloc<byte_t>(total_bytes, c_error);
     if (*c_error)
         return;
 
     // 3. Fetch the data
-    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
+    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape.begin());
     ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * tasks.count;
     *c_found_lengths = lens;
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + exported_bytes);
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin() + exported_bytes);
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         auto bytes_in_value = vals[i].size();
         if (bytes_in_value) {
-            std::memcpy(tape + exported_bytes, vals[i].data(), bytes_in_value);
+            std::memcpy(tape.begin() + exported_bytes, vals[i].data(), bytes_in_value);
             lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
             exported_bytes += bytes_in_value;
         }
@@ -500,11 +499,11 @@ void ukv_scan( //
     if (export_lengths)
         total_bytes += total_lengths * sizeof(ukv_val_len_t);
 
-    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
+    span_gt<byte_t> tape = arena.alloc<byte_t>(total_bytes, c_error);
     if (*c_error)
         return;
 
-    ukv_key_t* found_keys = reinterpret_cast<ukv_key_t*>(tape);
+    ukv_key_t* found_keys = reinterpret_cast<ukv_key_t*>(tape.begin());
     ukv_val_len_t* found_lens = reinterpret_cast<ukv_val_len_t*>(found_keys + total_lengths);
     *c_found_keys = found_keys;
     *c_found_lengths = export_lengths ? found_lens : nullptr;
@@ -684,16 +683,17 @@ void ukv_col_list( //
     total_length += db.columns.size();
     *c_count = static_cast<ukv_size_t>(db.columns.size());
 
-    auto tape = prepare_memory(arena.output_tape, total_length, c_error);
+    span_gt<byte_t> tape = arena.alloc<byte_t>(total_length, c_error);
     if (*c_error)
         return;
 
-    *c_names = reinterpret_cast<ukv_str_view_t>(tape);
+    byte_t* tape_ptr = tape.begin();
+    *c_names = reinterpret_cast<ukv_str_view_t>(tape_ptr);
     for (auto const& column : db.columns) {
         auto len = column->GetName().size();
-        std::memcpy(tape, column->GetName().data(), len);
-        tape[len] = byte_t {0};
-        tape += len + 1;
+        std::memcpy(tape_ptr, column->GetName().data(), len);
+        tape_ptr[len] = byte_t {0};
+        tape_ptr += len + 1;
     }
 }
 
