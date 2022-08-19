@@ -1017,6 +1017,8 @@ void ukv_col_remove(
 void ukv_col_list( //
     ukv_t const c_db,
     ukv_size_t* c_count,
+    ukv_col_t** c_ids,
+    ukv_val_len_t** c_offsets,
     ukv_str_view_t* c_names,
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -1029,26 +1031,38 @@ void ukv_col_list( //
         return;
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
-    std::unique_lock _ {db.mutex};
-
-    std::size_t total_length = 0;
-    for (auto const& name_and_contents : db.named)
-        total_length += name_and_contents.first.size();
+    std::shared_lock _ {db.mutex};
+    std::size_t cols_count = db.named.size();
 
     // Every string will be null-terminated
-    total_length += db.named.size();
-    *c_count = static_cast<ukv_size_t>(db.named.size());
+    std::size_t strings_length = 0;
+    for (auto const& name_and_contents : db.named)
+        strings_length += name_and_contents.first.size() + 1;
 
-    auto tape = prepare_memory(arena.output_tape, total_length, c_error);
+    // For every collection we also need to export IDs and offsets
+    std::size_t scalars_space = cols_count * (sizeof(ukv_col_t) + sizeof(ukv_val_len_t));
+
+    auto tape = prepare_memory(arena.output_tape, scalars_space + strings_length, c_error);
     if (*c_error)
         return;
 
-    *c_names = reinterpret_cast<ukv_str_view_t>(tape);
+    auto ids = reinterpret_cast<ukv_col_t*>(tape);
+    auto offs = reinterpret_cast<ukv_val_len_t*>(ids + cols_count);
+    auto names = reinterpret_cast<char*>(offs + cols_count);
+    *c_count = static_cast<ukv_size_t>(cols_count);
+    *c_ids = ids;
+    *c_offsets = offs;
+    *c_names = names;
+
     for (auto const& name_and_contents : db.named) {
         auto len = name_and_contents.first.size();
-        std::memcpy(tape, name_and_contents.first.data(), len);
-        tape[len] = byte_t {0};
-        tape += len + 1;
+        std::memcpy(names, name_and_contents.first.data(), len);
+        names[len] = '\0';
+        *ids = reinterpret_cast<ukv_col_t>(name_and_contents.second.get());
+        *offs = static_cast<ukv_val_len_t>(names - *c_names);
+        ++ids;
+        ++offs;
+        names += len + 1;
     }
 }
 

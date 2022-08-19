@@ -329,8 +329,10 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
         status_t status;
         ukv_size_t count = 0;
+        ukv_col_t* collections = 0;
+        ukv_val_len_t* offsets = nullptr;
         ukv_str_view_t names = nullptr;
-        ukv_col_list(db_, &count, &names, memory.member_ptr(), status.member_ptr());
+        ukv_col_list(db_, &count, &collections, &offsets, &names, memory.member_ptr(), status.member_ptr());
         if (!status)
             return status;
 
@@ -382,10 +384,12 @@ class db_t : public std::enable_shared_from_this<db_t> {
             return status;
 
         // Remove named collections
+        arena_t memory(db_);
         ukv_size_t count = 0;
+        ukv_col_t* collections = 0;
+        ukv_val_len_t* offsets = nullptr;
         ukv_str_view_t names = nullptr;
-        arena_t arena(db_);
-        ukv_col_list(db_, &count, &names, arena.member_ptr(), status.member_ptr());
+        ukv_col_list(db_, &count, &collections, &offsets, &names, memory.member_ptr(), status.member_ptr());
         if (!status)
             return status;
 
