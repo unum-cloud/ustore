@@ -48,6 +48,7 @@ class [[nodiscard]] status_t {
 
     ukv_error_t* member_ptr() noexcept { return &raw_; }
     ukv_error_t release_error() noexcept { return std::exchange(raw_, nullptr); }
+    ukv_error_t message() const noexcept { return raw_; }
 };
 
 /**
