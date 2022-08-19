@@ -42,6 +42,7 @@ template <typename native_at>
 struct py_stream_with_ending_gt {
     native_at native;
     ukv_key_t terminal = ukv_key_unknown_k;
+    bool stop = false;
 };
 
 using py_kstream_t = py_stream_with_ending_gt<keys_stream_t>;
@@ -219,28 +220,31 @@ void ukv::wrap_database(py::module& m) {
     py_kvrange.def("since", &since<pairs_range_t>);
     py_kvrange.def("until", &until<pairs_range_t>);
 
-    py_krange.def("__getitem__", [](keys_range_t& keys_range, py::slice slice) {
-        Py_ssize_t start = 0, stop = 0, step = 0;
-        if (PySlice_Unpack(slice.ptr(), &start, &stop, &step) || step != 1 || start >= stop)
-            throw std::invalid_argument("Invalid Slice");
-        keys_stream_t stream = keys_range.members.keys_begin(stop).throw_or_release();
-        auto keys = stream.keys_batch();
-        auto remaining = std::min<Py_ssize_t>(stop - start, keys.size() - start);
-        return py::array(remaining, keys.begin() + start);
-    });
+    // py_krange.def("__getitem__", [](keys_range_t& keys_range, py::slice slice) {
+    //     Py_ssize_t start = 0, stop = 0, step = 0;
+    //     if (PySlice_Unpack(slice.ptr(), &start, &stop, &step) || step != 1 || start >= stop)
+    //         throw std::invalid_argument("Invalid Slice");
+    //     keys_stream_t stream = keys_range.members.keys_begin(stop).throw_or_release();
+    //     auto keys = stream.keys_batch();
+    //     auto remaining = std::min<Py_ssize_t>(stop - start, keys.size() - start);
+    //     return py::array(remaining, keys.begin() + start);
+    // });
 
     py_kstream.def("__next__", [](py_kstream_t& kstream) {
         ukv_key_t key = kstream.native.key();
-        if (kstream.native.is_end() || kstream.terminal == key)
+        if (kstream.native.is_end() || kstream.stop)
             throw py::stop_iteration();
+        if (kstream.terminal == key)
+            kstream.stop = true;
         ++kstream.native;
         return key;
     });
     py_kvstream.def("__next__", [](py_kvstream_t& kvstream) {
         ukv_key_t key = kvstream.native.key();
-        if (kvstream.native.is_end() || kvstream.terminal == key)
+        if (kvstream.native.is_end() || kvstream.stop)
             throw py::stop_iteration();
-
+        if (kvstream.terminal == key)
+            kvstream.stop = true;
         value_view_t value_view = kvstream.native.value();
         PyObject* value_ptr = PyBytes_FromStringAndSize(value_view.c_str(), value_view.size());
         ++kvstream.native;

@@ -501,7 +501,9 @@ void ukv_size( //
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     strided_iterator_gt<ukv_key_t const> min_keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
-    std::vector<uint64_t> sizes;
+    uint64_t approximate_size = 0;
+    std::optional<std::string> memory_usage;
+    level_status_t status;
 
     for (ukv_size_t i = 0; i != n; ++i) {
         ukv_size_t* estimates = *c_found_estimates + i * 6;
@@ -514,11 +516,11 @@ void ukv_size( //
         ukv_key_t const max_key = max_keys[i];
         leveldb::Range range(to_slice(min_key), to_slice(max_key));
         try {
-            db.GetApproximateSizes(&range, 1, sizes.data());
-            std::string memory_usage;
-            db.GetProperty("leveldb.approximate-memory-usage", &memory_usage);
-            estimates[4] = sizes.size();
-            estimates[5] = std::stoi(memory_usage);
+            db.GetApproximateSizes(&range, 1, &approximate_size);
+            memory_usage = "0";
+            db.GetProperty("leveldb.approximate-memory-usage", &memory_usage.value());
+            estimates[4] = approximate_size;
+            estimates[5] = std::stoi(memory_usage.value());
         }
         catch (...) {
             *c_error = "Property Read Failure";
@@ -537,19 +539,33 @@ void ukv_col_open( //
 }
 
 void ukv_col_remove( //
-    ukv_t const,
-    ukv_str_view_t,
+    ukv_t const c_db,
+    ukv_str_view_t c_col_name,
     ukv_error_t* c_error) {
-    *c_error = "Collections not supported by LevelDB!";
+
+    if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
+
+    if (c_col_name && std::strlen(c_col_name) && (*c_error = "Collections not supported by LevelDB!"))
+        return;
+
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    leveldb::WriteBatch batch;
+    auto it = std::unique_ptr<leveldb::Iterator>(db.NewIterator(leveldb::ReadOptions()));
+    for (it->SeekToFirst(); it->Valid(); it->Next())
+        batch.Delete(it->key());
+    level_status_t status = db.Write(leveldb::WriteOptions(), &batch);
+    export_error(status, c_error);
 }
 
 void ukv_col_list( //
     ukv_t const,
-    ukv_size_t*,
-    ukv_str_view_t*,
+    ukv_size_t* c_count,
+    ukv_str_view_t* c_names,
     ukv_arena_t*,
     ukv_error_t* c_error) {
-    *c_error = "Collections not supported by LevelDB!";
+    *c_count = 0;
+    *c_names = nullptr;
 }
 
 void ukv_db_control( //
