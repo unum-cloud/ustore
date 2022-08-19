@@ -8,6 +8,7 @@
 
 #include <unordered_set>
 #include <vector>
+#include <filesystem>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -91,6 +92,8 @@ TEST(db, intro) {
     // Working with sub documents
     main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
     _ = main[ckf(56, "hello")].value() == "world";
+
+    EXPECT_TRUE(db.clear());
 }
 
 template <typename locations_at>
@@ -702,6 +705,7 @@ TEST(db, net_batch) {
 }
 
 int main(int argc, char** argv) {
+    std::filesystem::create_directory("./tmp");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
