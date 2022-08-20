@@ -199,7 +199,7 @@ class monotonic_resource_t : public std::pmr::memory_resource {
           alignment_(alignment), total_memory_(buffer_size), available_memory_(buffer_size) {}
 
     ~monotonic_resource_t() noexcept override {
-        if (begin_) {
+        if (begin_ && !borrowed_) {
             release();
             upstream_->deallocate(begin_, total_memory_, alignment_);
         }
@@ -292,17 +292,17 @@ struct stl_arena_t {
     monotonic_resource_t resource;
 };
 
-inline stl_arena_t* cast_arena(ukv_arena_t* c_arena, ukv_error_t* c_error) noexcept {
+inline stl_arena_t clean_arena(ukv_arena_t* c_arena, ukv_error_t* c_error) noexcept {
     try {
         if (!*c_arena)
             *c_arena = new stl_arena_t;
         stl_arena_t* arena = *reinterpret_cast<stl_arena_t**>(c_arena);
-        // arena->resource.release();
-        return arena;
+        arena->resource.release();
+        return stl_arena_t(&arena->resource);
     }
     catch (...) {
         *c_error = "Failed to allocate memory!";
-        return nullptr;
+        return stl_arena_t(nullptr);
     }
 }
 
