@@ -405,6 +405,9 @@ void ukv_scan( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
+    if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
+
     stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
         return;
@@ -459,8 +462,7 @@ void ukv_scan( //
         }
 
         found_keys += task.length;
-        if (export_lengths)
-            found_lens += task.length;
+        found_lens += task.length;
     }
 }
 

@@ -26,6 +26,7 @@ static std::unique_ptr<py_col_t> punned_collection( //
     py_col->name = name;
     py_col->py_db_ptr = py_db_ptr;
     py_col->py_txn_ptr = py_txn_ptr;
+    py_col->in_txn = py_txn_ptr != nullptr;
     py_col->native = col_t {py_db_ptr->native, col, py_txn_ptr ? py_txn_ptr->native : ukv_txn_t(nullptr)};
     return py_col;
 }
@@ -205,10 +206,15 @@ void ukv::wrap_database(py::module& m) {
         auto py_graph = std::make_shared<py_graph_t>();
         py_graph->py_db_ptr = py_col.py_db_ptr;
         py_graph->py_txn_ptr = py_col.py_txn_ptr;
+        py_graph->in_txn = py_col.in_txn;
         py_graph->index = py_col.native;
         return py::cast(py_graph);
     });
-    py_col.def_property_readonly("docs", [](py_col_t& py_col) { return 0; });
+    py_col.def_property_readonly("docs", [](py_col_t& py_col) {
+        auto py_docs = std::make_shared<py_docs_col_t>();
+        py_docs->binary = py_col;
+        return py::cast(py_docs);
+    });
     py_col.def_property_readonly("media", [](py_col_t& py_col) { return 0; });
 
 #pragma region Streams and Ranges
@@ -220,6 +226,11 @@ void ukv::wrap_database(py::module& m) {
     py_kvrange.def("since", &since<pairs_range_t>);
     py_kvrange.def("until", &until<pairs_range_t>);
 
+    // Using slices on the keys view is too cumbersome!
+    // It's never clear if we want a range of IDs or offsets.
+    // Offsets seems to be the Python-ic way, yet Pandas matches against labels.
+    // Furthermore, skipping with offsets will be very inefficient in the underlying
+    // DBMS implementations, unlike seeking to key.
     // py_krange.def("__getitem__", [](keys_range_t& keys_range, py::slice slice) {
     //     Py_ssize_t start = 0, stop = 0, step = 0;
     //     if (PySlice_Unpack(slice.ptr(), &start, &stop, &step) || step != 1 || start >= stop)
@@ -234,8 +245,7 @@ void ukv::wrap_database(py::module& m) {
         ukv_key_t key = kstream.native.key();
         if (kstream.native.is_end() || kstream.stop)
             throw py::stop_iteration();
-        if (kstream.terminal == key)
-            kstream.stop = true;
+        kstream.stop = kstream.terminal == key;
         ++kstream.native;
         return key;
     });
@@ -243,8 +253,7 @@ void ukv::wrap_database(py::module& m) {
         ukv_key_t key = kvstream.native.key();
         if (kvstream.native.is_end() || kvstream.stop)
             throw py::stop_iteration();
-        if (kvstream.terminal == key)
-            kvstream.stop = true;
+        kvstream.stop = kvstream.terminal == key;
         value_view_t value_view = kvstream.native.value();
         PyObject* value_ptr = PyBytes_FromStringAndSize(value_view.c_str(), value_view.size());
         ++kvstream.native;

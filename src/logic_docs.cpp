@@ -1127,6 +1127,8 @@ void ukv_docs_gather( //
     // Estimate the amount of memory needed to store at least scalars and columns addresses
     // TODO: Align offsets of bitmaps to 64-byte boundaries for Arrow
     // https://arrow.apache.org/docs/format/Columnar.html#buffer-alignment-and-padding
+    // TODO: Align offsets of bitmaps to 64-byte boundaries for Arrow
+    // https://arrow.apache.org/docs/format/Columnar.html#buffer-alignment-and-padding
     bool wants_conversions = c_result_bitmap_converted;
     bool wants_collisions = c_result_bitmap_collision;
     std::size_t slots_per_bitmap = c_docs_count / 8 + (c_docs_count % 8 != 0);
@@ -1134,7 +1136,7 @@ void ukv_docs_gather( //
     std::size_t bytes_per_bitmap = sizeof(ukv_1x8_t) * slots_per_bitmap;
     std::size_t bytes_per_addresses_row = sizeof(void*) * c_fields_count;
     std::size_t bytes_for_addresses = bytes_per_addresses_row * 6;
-    std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps * c_fields_count;
+    std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps * c_fields_count * c_fields_count;
     std::size_t bytes_per_scalars_row = transform_reduce_n(types, c_fields_count, 0ul, &min_memory_usage);
     std::size_t bytes_for_scalars = bytes_per_scalars_row * c_docs_count;
 
