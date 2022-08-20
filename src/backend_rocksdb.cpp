@@ -449,7 +449,7 @@ void ukv_read( //
     strided_iterator_gt<ukv_col_t const> cols_stride {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys_stride {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {cols_stride, keys_stride, c_tasks_count};
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
 
     rocksdb::ReadOptions options;
     if (txn && (c_options & ukv_option_txn_snapshot_k))
@@ -497,7 +497,7 @@ void ukv_scan( //
         return;
     }
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -584,7 +584,7 @@ void ukv_size( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -701,7 +701,7 @@ void ukv_col_list( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 

@@ -353,7 +353,7 @@ void ukv_read( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -408,7 +408,7 @@ void ukv_scan( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -490,7 +490,7 @@ void ukv_size( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 

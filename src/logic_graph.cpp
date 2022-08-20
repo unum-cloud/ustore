@@ -294,6 +294,10 @@ void export_edge_tuples( //
     ukv_val_len_t* c_found_offsets = nullptr;
     ukv_val_len_t* c_found_lengths = nullptr;
 
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+    ukv_arena_t new_arena = &arena;
     // Even if we need just the node degrees, we can't limit ourselves to just entry lengths.
     // Those may be compressed. We need to read the first bytes to parse the degree of the node.
     ukv_read(c_db,
@@ -307,12 +311,8 @@ void export_edge_tuples( //
              &c_found_values,
              &c_found_offsets,
              &c_found_lengths,
-             c_arena,
+             &new_arena,
              c_error);
-    if (*c_error)
-        return;
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -411,6 +411,11 @@ void export_disjoint_edge_buffers( //
     ukv_val_len_t* c_found_offsets = nullptr;
     ukv_val_len_t* c_found_lengths = nullptr;
 
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+    ukv_arena_t new_arena = &arena;
+
     ukv_read(c_db,
              c_txn,
              c_vertices_count,
@@ -422,12 +427,8 @@ void export_disjoint_edge_buffers( //
              &c_found_values,
              &c_found_offsets,
              &c_found_lengths,
-             c_arena,
+             &new_arena,
              c_error);
-    if (*c_error)
-        return;
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -460,9 +461,10 @@ void update_neighborhoods( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
+    ukv_arena_t new_arena = &arena;
 
     strided_iterator_gt<ukv_col_t const> collections {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> edges_ids {c_edges_ids, c_edges_stride};
@@ -497,7 +499,7 @@ void update_neighborhoods( //
                                  sizeof(col_key_t),
                                  c_options,
                                  updated_vals.data(),
-                                 c_arena,
+                                 &new_arena,
                                  c_error);
     if (*c_error)
         return;
@@ -544,7 +546,7 @@ void update_neighborhoods( //
               updated_vals[0].member_length(),
               sizeof(value_t),
               c_options,
-              c_arena,
+              &new_arena,
               c_error);
 }
 
@@ -683,6 +685,11 @@ void ukv_graph_remove_vertices( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+    ukv_arena_t new_arena = &arena;
+
     strided_iterator_gt<ukv_col_t const> collections {c_cols, c_cols_stride};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
@@ -702,13 +709,9 @@ void ukv_graph_remove_vertices( //
                                            c_options,
                                            &degrees_per_vertex,
                                            &neighbors_per_vertex,
-                                           c_arena,
+                                           &new_arena,
                                            c_error);
 
-    if (*c_error)
-        return;
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -744,7 +747,7 @@ void ukv_graph_remove_vertices( //
                                  sizeof(col_key_t),
                                  c_options,
                                  updated_vals.data(),
-                                 c_arena,
+                                 &new_arena,
                                  c_error);
     if (*c_error)
         return;
@@ -788,6 +791,6 @@ void ukv_graph_remove_vertices( //
               updated_vals[0].member_length(),
               sizeof(value_t),
               c_options,
-              c_arena,
+              &new_arena,
               c_error);
 }

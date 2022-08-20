@@ -553,6 +553,11 @@ void ukv_docs_write( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+    ukv_arena_t new_arena = &arena;
+
     // If user wants the entire doc in the same format, as the one we use internally,
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
@@ -573,14 +578,10 @@ void ukv_docs_write( //
             c_lens,
             c_lens_stride,
             c_options,
-            c_arena,
+            &new_arena,
             c_error);
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
         return;
 
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
@@ -622,6 +623,11 @@ void ukv_docs_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+    ukv_arena_t new_arena = &arena;
+
     // If user wants the entire doc in the same format, as the one we use internally,
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
@@ -639,14 +645,10 @@ void ukv_docs_read( //
             c_found_values,
             c_found_offsets,
             c_found_lengths,
-            c_arena,
+            &new_arena,
             c_error);
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
         return;
 
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
@@ -699,6 +701,11 @@ void ukv_docs_gist( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+    ukv_arena_t new_arena = &arena;
+
     ukv_val_ptr_t binary_docs_begin = nullptr;
     ukv_val_len_t* binary_docs_offs = nullptr;
     ukv_val_len_t* binary_docs_lens = nullptr;
@@ -714,12 +721,8 @@ void ukv_docs_gist( //
         &binary_docs_begin,
         &binary_docs_offs,
         &binary_docs_lens,
-        c_arena,
+        &new_arena,
         c_error);
-    if (*c_error)
-        return;
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -1087,6 +1090,10 @@ void ukv_docs_gather( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+    ukv_arena_t new_arena = &arena;
     // Validate the input arguments
 
     // Retrieve the entire documents before we can sample internal fields
@@ -1105,7 +1112,7 @@ void ukv_docs_gather( //
         &binary_docs_begin,
         &binary_docs_offs,
         &binary_docs_lens,
-        c_arena,
+        &new_arena,
         c_error);
     if (*c_error)
         return;
@@ -1148,9 +1155,7 @@ void ukv_docs_gather( //
     // 4. offsets of all strings
     // 5. lengths of all strings
     // 6. scalars for all fields
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+
     span_gt<byte_t> tape = arena.alloc<byte_t>(bytes_for_addresses + bytes_for_bitmaps + bytes_for_scalars, c_error);
     byte_t* const tape_ptr = tape.begin();
 
