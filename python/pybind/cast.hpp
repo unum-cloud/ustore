@@ -84,7 +84,6 @@ strided_matrix_gt<scalar_at> py_strided_matrix(py_buffer_t const& buf) {
         static_cast<ukv_size_t>(buf.raw.strides[0]),
         static_cast<ukv_size_t>(buf.raw.strides[1]),
     };
-    printf("found strides: %i %i \n", (int)buf.raw.strides[0], (int)buf.raw.strides[1]);
     return result;
 }
 
@@ -118,6 +117,10 @@ inline value_view_t py_to_bytes(PyObject* obj) {
 
     throw std::invalid_argument("Value must be representable as a byte array");
     return {};
+}
+
+inline ukv_str_view_t py_to_str(PyObject* obj) {
+    return py_to_bytes(obj).c_str();
 }
 
 inline bool py_is_sequence(PyObject* obj) {

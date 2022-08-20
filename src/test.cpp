@@ -8,6 +8,7 @@
 
 #include <unordered_set>
 #include <vector>
+#include <filesystem>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -91,6 +92,8 @@ TEST(db, intro) {
     // Working with sub documents
     main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
     _ = main[ckf(56, "hello")].value() == "world";
+
+    EXPECT_TRUE(db.clear());
 }
 
 template <typename locations_at>
@@ -201,6 +204,7 @@ TEST(db, basic) {
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
     check_length(ref, ukv_val_len_missing_k);
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, named) {
@@ -265,6 +269,7 @@ TEST(db, named) {
     _ = db.remove("col2");
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, docs) {
@@ -319,6 +324,7 @@ TEST(db, docs) {
     M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Darvin\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "28");
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, docs_table) {
@@ -335,38 +341,115 @@ TEST(db, docs_table) {
     col[2] = json_darvin.c_str();
     col[3] = json_davit.c_str();
     M_EXPECT_EQ_JSON(*col[1].value(), json_ashot.c_str());
+    M_EXPECT_EQ_JSON(*col[2].value(), json_darvin.c_str());
 
-    docs_layout_t layout {5, 6};
-    layout.index(0).key = 1;
-    layout.index(1).key = 2;
-    layout.index(2).key = 3;
-    layout.index(3).key = 123456;
-    layout.index(4).key = 654321;
-    layout.header(0) = field_type_t {"age", ukv_type_i32_k};
-    layout.header(1) = field_type_t {"age", ukv_type_str_k};
-    layout.header(2) = field_type_t {"person", ukv_type_str_k};
-    layout.header(3) = field_type_t {"person", ukv_type_f32_k};
-    layout.header(4) = field_type_t {"height", ukv_type_i32_k};
-    layout.header(5) = field_type_t {"weight", ukv_type_u64_k};
+    // Single cell
+    {
+        auto header = table_header().with<std::uint32_t>("age");
+        auto maybe_table = col[1].gather(header);
+        auto table = *maybe_table;
+        auto col0 = table.column<0>();
 
-    auto maybe_table = col.as_table().gather(layout);
-    auto table = *maybe_table;
-    auto col0 = table.column(0).as<std::int32_t>();
-    auto col1 = table.column(1).as<value_view_t>();
-    auto col2 = table.column(2).as<value_view_t>();
-    auto col3 = table.column(3).as<float>();
-    auto col4 = table.column(4).as<std::int32_t>();
-    auto col5 = table.column(5).as<std::uint64_t>();
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_FALSE(col0[0].converted);
+    }
 
-    EXPECT_EQ(col0[0].value, 27);
-    EXPECT_EQ(col0[1].value, 27);
-    EXPECT_TRUE(col0[1].converted);
-    EXPECT_EQ(col0[2].value, 24);
+    // Single row
+    {
+        auto header = table_header() //
+                          .with<std::uint32_t>("age")
+                          .with<std::int32_t>("age")
+                          .with<std::string_view>("age");
 
-    EXPECT_EQ(col1[0].value, "27");
-    EXPECT_TRUE(col1[0].converted);
-    EXPECT_EQ(col1[1].value, "27");
-    EXPECT_EQ(col1[2].value, "24");
+        auto maybe_table = col[1].gather(header);
+        auto table = *maybe_table;
+        auto col0 = table.column<0>();
+        auto col1 = table.column<1>();
+        auto col2 = table.column<2>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_FALSE(col0[0].converted);
+        EXPECT_EQ(col1[0].value, 27);
+        EXPECT_TRUE(col1[0].converted);
+        EXPECT_STREQ(col2[0].value.data(), "27");
+        EXPECT_TRUE(col2[0].converted);
+    }
+
+    // Single column
+    {
+        auto header = table_header().with<std::int32_t>("age");
+        auto maybe_table = col[{1, 2, 3, 123456}].gather(header);
+        auto table = *maybe_table;
+        auto col0 = table.column<0>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_EQ(col0[1].value, 27);
+        EXPECT_TRUE(col0[1].converted);
+        EXPECT_EQ(col0[2].value, 24);
+    }
+
+    // Multi-column
+    {
+        auto header = table_header() //
+                          .with<std::int32_t>("age")
+                          .with<std::string_view>("age")
+                          .with<std::string_view>("person")
+                          .with<float>("person")
+                          .with<std::int32_t>("height")
+                          .with<std::uint64_t>("weight");
+
+        auto maybe_table = col[{1, 2, 3, 123456, 654321}].gather(header);
+        auto table = *maybe_table;
+        auto col0 = table.column<0>();
+        auto col1 = table.column<1>();
+        auto col2 = table.column<2>();
+        auto col3 = table.column<3>();
+        auto col4 = table.column<4>();
+        auto col5 = table.column<5>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_EQ(col0[1].value, 27);
+        EXPECT_TRUE(col0[1].converted);
+        EXPECT_EQ(col0[2].value, 24);
+
+        EXPECT_STREQ(col1[0].value.data(), "27");
+        EXPECT_TRUE(col1[0].converted);
+        EXPECT_STREQ(col1[1].value.data(), "27");
+        EXPECT_STREQ(col1[2].value.data(), "24");
+    }
+
+    // Multi-column Type-punned exports
+    {
+        table_header_t header {{
+            field_type_t {"age", ukv_type_i32_k},
+            field_type_t {"age", ukv_type_str_k},
+            field_type_t {"person", ukv_type_str_k},
+            field_type_t {"person", ukv_type_f32_k},
+            field_type_t {"height", ukv_type_i32_k},
+            field_type_t {"weight", ukv_type_u64_k},
+        }};
+
+        auto maybe_table = col[{1, 2, 3, 123456, 654321}].gather(header);
+        auto table = *maybe_table;
+        auto col0 = table.column(0).as<std::int32_t>();
+        auto col1 = table.column(1).as<value_view_t>();
+        auto col2 = table.column(2).as<value_view_t>();
+        auto col3 = table.column(3).as<float>();
+        auto col4 = table.column(4).as<std::int32_t>();
+        auto col5 = table.column(5).as<std::uint64_t>();
+
+        EXPECT_EQ(col0[0].value, 27);
+        EXPECT_EQ(col0[1].value, 27);
+        EXPECT_TRUE(col0[1].converted);
+        EXPECT_EQ(col0[2].value, 24);
+
+        EXPECT_STREQ(col1[0].value.c_str(), "27");
+        EXPECT_TRUE(col1[0].converted);
+        EXPECT_STREQ(col1[1].value.c_str(), "27");
+        EXPECT_STREQ(col1[2].value.c_str(), "24");
+    }
+
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, txn) {
@@ -423,6 +506,7 @@ TEST(db, txn) {
 
     // Validate that values match after commit
     check_equalities(named_col_ref, values);
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, nested_docs) {
@@ -526,6 +610,7 @@ TEST(db, net) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, net_batch) {
@@ -619,9 +704,11 @@ TEST(db, net_batch) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+    EXPECT_TRUE(db.clear());
 }
 
 int main(int argc, char** argv) {
+    std::filesystem::create_directory("./tmp");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

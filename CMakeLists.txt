@@ -28,9 +28,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas") # Allow "pragma region" source sections
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wnon-virtual-dtor -Woverloaded-virtual")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-field-initializers")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wreorder -Wunused-parameter")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
 endif()
 
@@ -145,16 +142,17 @@ add_library(ukv_rpc_client src/rpc_client.cpp)
 # Boost::headers
 # nlohmann_json::nlohmann_json
 # )
-# add_executable(ukv_arrow_server src/arrow_server.cpp)
-# target_link_libraries(ukv_arrow_server
-# ukv_stl
-# pthread
-# nlohmann_json::nlohmann_json
-# arrow
-# arrow_flight
-# arrow_dataset
-# parquet
-# )
+add_executable(ukv_arrow_server src/arrow_server.cpp)
+target_link_libraries(ukv_arrow_server
+  ukv_stl
+  pthread
+  nlohmann_json::nlohmann_json
+  arrow
+  arrow_flight
+  arrow_dataset
+  parquet
+)
+
 add_executable(ukv_test
   src/test.cpp
   src/backend_stl.cpp
