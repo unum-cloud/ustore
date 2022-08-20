@@ -83,7 +83,7 @@ typedef enum {
  * Type IDs needed to describe the values stored in the leafs of
  * hierarchical documents. Most types mimic what's present in
  * Apache Arrow. Most often the `ukv_type_i64_k` and `ukv_type_f64_k`
- * are used. Aside from those
+ * are used.
  */
 typedef enum {
     ukv_type_null_k = 0,
@@ -305,6 +305,10 @@ void ukv_docs_gist( //
  * We may have used Apache Arrow @c `RecordBatch` directly with @c `ArrowSchema`
  * or @c `ArrowArray`. It, however, would be inconsistent with other UKV APIs.
  * To go from the response of this function to Arrow: @see `ukv/arrow.h`.
+ *
+ * @section Joins
+ * A user may want to join fields stored under different same keys in different collections.
+ * That should be implemented as two (or multiple) separate requests for space-efficiency.
  */
 void ukv_docs_gather( //
     ukv_t const db,

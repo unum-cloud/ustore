@@ -321,6 +321,13 @@ element_at transform_reduce_n(iterator_at begin, std::size_t n, element_at init,
     return init;
 }
 
+template <typename transform_at, typename output_iterator_at, typename iterator_at>
+output_iterator_at transform_n(iterator_at begin, std::size_t n, output_iterator_at output, transform_at transform) {
+    for (std::size_t i = 0; i != n; ++i, ++begin, ++output)
+        *output = *begin;
+    return output;
+}
+
 template <typename element_at, typename iterator_at>
 element_at reduce_n(iterator_at begin, std::size_t n, element_at init) {
     return transform_reduce_n(begin, n, init, [](auto x) { return x; });
@@ -422,5 +429,45 @@ auto edges(tuples_at&& tuples) noexcept {
     auto count = std::size(tuples);
     return result_t(ptr, ptr + count);
 }
+
+/**
+ * @brief Iterates through a predetermined number of NULL-delimited
+ * strings joined one after another in continuous memory.
+ * Can be used for `ukv_docs_gist` or `ukv_col_list`.
+ */
+class strings_tape_iterator_t {
+    ukv_size_t remaining_count_ = 0;
+    ukv_str_view_t current_ = nullptr;
+
+  public:
+    using iterator_category = std::forward_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = std::string_view;
+    using pointer = ukv_str_view_t*;
+    using reference = std::string_view;
+
+    strings_tape_iterator_t(ukv_size_t remaining = 0, ukv_str_view_t current = nullptr)
+        : remaining_count_(remaining), current_(current) {}
+
+    strings_tape_iterator_t(strings_tape_iterator_t&&) = default;
+    strings_tape_iterator_t& operator=(strings_tape_iterator_t&&) = default;
+
+    strings_tape_iterator_t(strings_tape_iterator_t const&) = default;
+    strings_tape_iterator_t& operator=(strings_tape_iterator_t const&) = default;
+
+    strings_tape_iterator_t& operator++() noexcept {
+        current_ += std::strlen(current_) + 1;
+        --remaining_count_;
+        return *this;
+    }
+
+    strings_tape_iterator_t operator++(int) noexcept {
+        return {remaining_count_ - 1, current_ + std::strlen(current_) + 1};
+    }
+
+    ukv_str_view_t operator*() const noexcept { return current_; }
+    bool is_end() const noexcept { return !remaining_count_; }
+    ukv_size_t size() const noexcept { return remaining_count_; }
+};
 
 } // namespace unum::ukv

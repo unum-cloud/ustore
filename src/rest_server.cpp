@@ -72,7 +72,7 @@
  * This allows users to only sample the parts of data they are need, without
  * overloading the network with useless transfers.
  *
- * Furthermore, we support JSON Patches (RFC 6902), for inplace modificiations.
+ * Furthermore, we support JSON Patches (RFC 6902), for inplace modifications.
  * So instead of using a custom proprietary protocol and query language, like in
  * MongoDB, one can perform standardized queries.
  *
@@ -100,7 +100,7 @@
  * > HEAD /aos/:
  *      Receives: {cols?: [str]|str, keys?: [int], fields?: [str], txn?: int}
  *      Returns: {len?: int, error?: str}
- * The otional payload members define how to parse the payload:
+ * The optional payload members define how to parse the payload:
  * > col: Means we should put all into one collection, disregarding the `_col` fields.
  * > txn: Means we should do the operation from within a specified transaction context.
  *
@@ -554,7 +554,7 @@ void respond_to_aos(db_session_t& session,
     auto payload_len = static_cast<ukv_size_t>(*opt_payload_len);
 
 #if 0
-    // Once we know, which collection, key and transation user is
+    // Once we know, which collection, key and transaction user is
     // interested in - perform the actions depending on verbs.
     //
     // Just write: PUT, DELETE without `fields`.
@@ -666,7 +666,7 @@ void respond_to_aos(db_session_t& session,
 }
 
 /**
- * @brief Primary dispatch point, rounting incoming HTTP requests
+ * @brief Primary dispatch point, routing incoming HTTP requests
  *        into underlying UKV calls, preparing results and sending back.
  */
 template <typename body_at, typename allocator_at, typename send_response_at>

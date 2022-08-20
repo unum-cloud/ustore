@@ -252,8 +252,9 @@ void measure_one( //
     rocks_txn_t* txn,
     read_tasks_soa_t const& tasks,
     rocksdb::ReadOptions const& options,
+    ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
-    ukv_val_ptr_t*,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -277,6 +278,8 @@ void measure_one( //
 
     std::memcpy(tape.begin(), &exported_len, sizeof(ukv_size_t));
     *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape.begin());
+    *c_found_offsets = nullptr;
+    *c_found_values = nullptr;
 }
 
 void read_one( //
@@ -284,8 +287,9 @@ void read_one( //
     rocks_txn_t* txn,
     read_tasks_soa_t const& tasks,
     rocksdb::ReadOptions const& options,
-    ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -302,16 +306,20 @@ void read_one( //
         if (export_error(status, c_error))
             return;
 
-    auto bytes_in_value = static_cast<ukv_size_t>(value.size());
+    auto bytes_in_value = static_cast<ukv_val_len_t>(value.size());
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : bytes_in_value;
-    auto tape = arena.alloc<byte_t>(sizeof(ukv_size_t) + bytes_in_value, c_error);
+    ukv_val_len_t offset = 0;
+    auto tape = arena.alloc<byte_t>(sizeof(ukv_val_len_t) * 2 + bytes_in_value, c_error);
     if (*c_error)
         return;
-    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_size_t));
-    std::memcpy(tape.begin() + sizeof(ukv_size_t), value.data(), bytes_in_value);
+
+    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_val_len_t));
+    std::memcpy(tape.begin() + sizeof(ukv_val_len_t), &offset, sizeof(ukv_val_len_t));
+    std::memcpy(tape.begin() + sizeof(ukv_val_len_t) * 2, value.data(), bytes_in_value);
 
     *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape.begin());
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin() + sizeof(ukv_size_t));
+    *c_found_offsets = *c_found_lengths + 1;
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin() + sizeof(ukv_val_len_t) * 2);
 }
 
 void measure_many( //
@@ -319,8 +327,9 @@ void measure_many( //
     rocks_txn_t* txn,
     read_tasks_soa_t const& tasks,
     rocksdb::ReadOptions const& options,
+    ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
-    ukv_val_ptr_t*,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -343,9 +352,11 @@ void measure_many( //
         return;
 
     *c_found_lengths = lens.begin();
+    *c_found_offsets = nullptr;
+    *c_found_values = nullptr;
 
     for (ukv_size_t i = 0; i != tasks.count; ++i)
-        lens[i] = statuses[i].IsNotFound() ? ukv_val_len_missing_k : vals[i].size();
+        lens[i] = statuses[i].IsNotFound() ? ukv_val_len_missing_k : static_cast<ukv_val_len_t>(vals[i].size());
 }
 
 void read_many( //
@@ -353,8 +364,9 @@ void read_many( //
     rocks_txn_t* txn,
     read_tasks_soa_t const& tasks,
     rocksdb::ReadOptions const& options,
-    ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -372,7 +384,7 @@ void read_many( //
                                                : db.native->MultiGet(options, cols, keys, &vals);
 
     // 1. Estimate the total size
-    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
+    ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count * 2;
     for (ukv_size_t i = 0; i != tasks.count; ++i)
         total_bytes += vals[i].size();
 
@@ -383,8 +395,10 @@ void read_many( //
 
     // 3. Fetch the data
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape.begin());
-    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * tasks.count;
+    ukv_val_len_t* offs = lens + tasks.count;
+    ukv_size_t exported_bytes = sizeof(ukv_val_len_t) * tasks.count * 2;
     *c_found_lengths = lens;
+    *c_found_offsets = offs;
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin() + exported_bytes);
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
@@ -392,10 +406,13 @@ void read_many( //
         if (bytes_in_value) {
             std::memcpy(tape.begin() + exported_bytes, vals[i].data(), bytes_in_value);
             lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
+            offs[i] = reinterpret_cast<ukv_val_ptr_t>(tape.begin() + exported_bytes) - *c_found_values;
             exported_bytes += bytes_in_value;
         }
-        else
+        else {
             lens[i] = ukv_val_len_missing_k;
+            offs[i] = ukv_val_len_missing_k;
+        }
     }
 }
 
@@ -412,8 +429,9 @@ void ukv_read( //
 
     ukv_options_t const c_options,
 
-    ukv_val_len_t** c_found_lengths,
     ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -440,11 +458,11 @@ void ukv_read( //
     try {
         if (c_tasks_count == 1) {
             auto func = (c_options & ukv_option_read_lengths_k) ? &measure_one : &read_one;
-            func(db, txn, tasks, options, c_found_lengths, c_found_values, arena, c_error);
+            func(db, txn, tasks, options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
         }
         else {
             auto func = (c_options & ukv_option_read_lengths_k) ? &measure_many : &read_many;
-            func(db, txn, tasks, options, c_found_lengths, c_found_values, arena, c_error);
+            func(db, txn, tasks, options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
         }
     }
     catch (...) {
@@ -558,12 +576,20 @@ void ukv_size( //
 
     ukv_options_t const,
 
-    ukv_size_t* c_found_estimates,
+    ukv_size_t** c_found_estimates,
 
-    ukv_arena_t*,
+    ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
+
+    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+
+    *c_found_estimates = arena.alloc<ukv_size_t>(6 * n, c_error).begin();
+    if (*c_error)
         return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -572,17 +598,21 @@ void ukv_size( //
     strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
     rocksdb::SizeApproximationOptions options;
 
-    std::vector<uint64_t> sizes;
-    uint64_t keys_size;
-    uint64_t sst_files_size;
+    rocksdb::Range range;
+    uint64_t approximate_size = 0;
+    uint64_t keys_size = 0;
+    uint64_t sst_files_size = 0;
+    rocks_status_t status;
 
     for (ukv_size_t i = 0; i != n; ++i) {
         auto col = rocks_collection(db, cols[i]);
         ukv_key_t const min_key = min_keys[i];
         ukv_key_t const max_key = max_keys[i];
-        rocksdb::Range range(to_slice(min_key), to_slice(max_key));
+        range = rocksdb::Range(to_slice(min_key), to_slice(max_key));
         try {
-            db.native->GetApproximateSizes(options, col, &range, 1, sizes.data());
+            status = db.native->GetApproximateSizes(options, col, &range, 1, &approximate_size);
+            if (export_error(status, c_error))
+                return;
             db.native->GetIntProperty(col, "rocksdb.estimate-num-keys", &keys_size);
             db.native->GetIntProperty(col, "rocksdb.total-sst-files-size", &sst_files_size);
         }
@@ -590,32 +620,34 @@ void ukv_size( //
             *c_error = "Property Read Failure";
         }
 
-        ukv_size_t* estimates = c_found_estimates + i * 6;
+        ukv_size_t* estimates = *c_found_estimates + i * 6;
         estimates[0] = static_cast<ukv_size_t>(0);
         estimates[1] = static_cast<ukv_size_t>(keys_size);
         estimates[2] = static_cast<ukv_size_t>(0);
         estimates[3] = static_cast<ukv_size_t>(0);
-        estimates[4] = sizes.size();
+        estimates[4] = approximate_size;
         estimates[5] = sst_files_size;
     }
 }
 
-void ukv_col_open( //
+void ukv_col_open(
+    // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
     ukv_str_view_t,
+    // Outputs:
     ukv_col_t* c_col,
     ukv_error_t* c_error) {
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     if (!c_col_name || (c_col_name && !std::strlen(c_col_name))) {
-        *c_col = db.native->DefaultColumnFamily();
+        *c_col = reinterpret_cast<ukv_col_t>(db.native->DefaultColumnFamily());
         return;
     }
 
     for (auto handle : db.columns) {
         if (handle && handle->GetName() == c_col_name) {
-            *c_col = handle;
+            *c_col = reinterpret_cast<ukv_col_t>(handle);
             return;
         }
     }
@@ -624,7 +656,7 @@ void ukv_col_open( //
     rocks_status_t status = db.native->CreateColumnFamily(rocksdb::ColumnFamilyOptions(), c_col_name, &col);
     if (!export_error(status, c_error)) {
         db.columns.push_back(col);
-        *c_col = col;
+        *c_col = reinterpret_cast<ukv_col_t>(col);
     }
 }
 

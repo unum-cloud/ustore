@@ -107,5 +107,8 @@
     ],
     "java.project.referencedLibraries": [
         "build/lib/**/*.jar"
+    ],
+    "cSpell.words": [
+        "txns"
     ]
 }

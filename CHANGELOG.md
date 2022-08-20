@@ -11,9 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support for shared memory exports/reads.
 - Apache Arrow exports from Binary collections into columns of binary strings.
-- Apache Arrow exports for tabular exports from Document collections.
+- Apache Arrow tabular exports from Document collections.
 - Pandas-like interface for Document collections.
 - RPC server and client on top of UCX.
+- Media deserialization and exports.
 
 ### Changed
 

@@ -125,7 +125,6 @@ def iterate(col):
         iterated_keys.append(key)
 
     assert iterated_keys == [1, 2, 3, 4, 5, 6]
-    assert np.array_equal(col.keys[2:4], [3, 4])
     with pytest.raises(Exception):
         col.keys[4:2]
     iterated_keys.clear()
@@ -136,6 +135,7 @@ def iterate(col):
     for key in col.keys.until(4):
         iterated_keys.append(key)
     assert iterated_keys == [1, 2, 3, 4]
+    assert list(col.keys) == [1, 2, 3, 4, 5, 6]
 
     # Iterate items
     iterated_items = []
@@ -154,17 +154,20 @@ def iterate(col):
         iterated_items.append(item)
     assert iterated_items == [
         (1, b'a'), (2, b'aa'), (3, b'aaa'), (4, b'aaaa')]
+    assert list(col.items) == [
+        (1, b'a'), (2, b'aa'), (3, b'aaa'), (4, b'aaaa'), (5, b'aaaaa'), (6, b'aaaaaa')]
 
 
 def test_main_collection():
-    db = ukv.DataBase().main
-    only_explicit(db)
-    only_explicit_batch(db)
-    only_overwrite(db)
-    only_operators(db)
-    batch_insert(db)
-    scan(db)
-    iterate(db)
+    db = ukv.DataBase()
+    main = db.main
+    only_explicit(main)
+    only_explicit_batch(main)
+    only_overwrite(main)
+    only_operators(main)
+    batch_insert(main)
+    scan(main)
+    iterate(main)
 
 
 def test_named_collections():

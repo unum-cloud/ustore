@@ -8,14 +8,20 @@
             "type": "shell"
         },
         {
+            "label": "Build Native: Debug Arrow",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_arrow_server",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Build Native: Debug",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make -j 6",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Release",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Release . && make",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Release . && make -j 6",
             "args": [],
             "type": "shell"
         }
