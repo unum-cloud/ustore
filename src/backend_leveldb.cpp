@@ -207,12 +207,12 @@ void measure_one( //
             return;
 
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : static_cast<ukv_size_t>(value.size());
-    auto tape = prepare_memory(arena.output_tape, sizeof(ukv_val_len_t), c_error);
+    auto tape = arena.alloc<byte_t>(sizeof(ukv_size_t), c_error);
     if (*c_error)
         return;
 
-    std::memcpy(tape, &exported_len, sizeof(ukv_size_t));
-    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
+    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_size_t));
+    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape.begin());
     *c_found_offsets = nullptr;
     *c_found_values = nullptr;
 }
@@ -237,17 +237,17 @@ void read_one( //
     auto bytes_in_value = static_cast<ukv_val_len_t>(value.size());
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : bytes_in_value;
     ukv_val_len_t offset = 0;
-    auto tape = prepare_memory(arena.output_tape, sizeof(ukv_val_len_t) * 2 + bytes_in_value, c_error);
+    auto tape = arena.alloc<byte_t>(sizeof(ukv_val_len_t) * 2 + bytes_in_value, c_error);
     if (*c_error)
         return;
 
-    std::memcpy(tape, &exported_len, sizeof(ukv_val_len_t));
-    std::memcpy(tape + sizeof(ukv_val_len_t), &offset, sizeof(ukv_val_len_t));
-    std::memcpy(tape + sizeof(ukv_val_len_t) * 2, value.data(), bytes_in_value);
+    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_val_len_t));
+    std::memcpy(tape.begin() + sizeof(ukv_val_len_t), &offset, sizeof(ukv_val_len_t));
+    std::memcpy(tape.begin() + sizeof(ukv_val_len_t) * 2, value.data(), bytes_in_value);
 
-    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape);
+    *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape.begin());
     *c_found_offsets = *c_found_lengths + 1;
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape + sizeof(ukv_val_len_t) * 2);
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin() + sizeof(ukv_val_len_t) * 2);
 }
 
 void measure_many( //
@@ -261,13 +261,12 @@ void measure_many( //
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    byte_t* tape = prepare_memory(arena.output_tape, sizeof(ukv_val_len_t) * tasks.count, c_error);
+    span_gt<ukv_val_len_t> lens = arena.alloc<ukv_val_len_t>(tasks.count, c_error);
     if (*c_error)
         return;
 
-    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
-    std::fill_n(lens, tasks.count, ukv_val_len_missing_k);
-    *c_found_lengths = lens;
+    std::fill_n(lens.begin(), tasks.count, ukv_val_len_missing_k);
+    *c_found_lengths = lens.begin();
     *c_found_offsets = nullptr;
     *c_found_values = nullptr;
 
@@ -294,11 +293,11 @@ void read_many( //
     ukv_error_t* c_error) {
 
     ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * tasks.count;
-    byte_t* tape = prepare_memory(arena.output_tape, lens_bytes * 2, c_error);
+    span_gt<byte_t> tape = arena.alloc<byte_t>(lens_bytes * 2, c_error);
     if (*c_error)
         return;
 
-    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape);
+    ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape.begin());
     ukv_val_len_t* offs = lens + tasks.count;
     ukv_val_ptr_t contents = reinterpret_cast<ukv_val_ptr_t>(offs + tasks.count);
     std::fill_n(lens, tasks.count * 2, ukv_val_len_missing_k);
@@ -311,19 +310,19 @@ void read_many( //
         if (export_error(status, c_error))
             return;
 
-        auto old_tape_len = arena.output_tape.size();
+        auto old_tape_len = tape.size();
         auto bytes_in_value = value.size();
-        tape = prepare_memory(arena.output_tape, old_tape_len + bytes_in_value, c_error);
+        tape = arena.alloc<byte_t>(old_tape_len + bytes_in_value, c_error);
         if (*c_error)
             return;
 
-        lens = reinterpret_cast<ukv_val_len_t*>(tape);
+        lens = reinterpret_cast<ukv_val_len_t*>(tape.begin());
         offs = lens + tasks.count;
         contents = reinterpret_cast<ukv_val_ptr_t>(offs + tasks.count);
 
-        std::memcpy(tape + old_tape_len, value.data(), bytes_in_value);
+        std::memcpy(tape.begin() + old_tape_len, value.data(), bytes_in_value);
         lens[i] = static_cast<ukv_val_len_t>(bytes_in_value);
-        offs[i] = reinterpret_cast<ukv_val_ptr_t>(tape + old_tape_len) - contents;
+        offs[i] = reinterpret_cast<ukv_val_ptr_t>(tape.begin() + old_tape_len) - contents;
     }
 
     *c_found_lengths = lens;
@@ -354,7 +353,7 @@ void ukv_read( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -406,7 +405,10 @@ void ukv_scan( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
+
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -424,11 +426,11 @@ void ukv_scan( //
     if (export_lengths)
         total_bytes += total_lengths * sizeof(ukv_val_len_t);
 
-    byte_t* tape = prepare_memory(arena.output_tape, total_bytes, c_error);
+    span_gt<byte_t> tape = arena.alloc<byte_t>(total_bytes, c_error);
     if (*c_error)
         return;
 
-    ukv_key_t* found_keys = reinterpret_cast<ukv_key_t*>(tape);
+    ukv_key_t* found_keys = reinterpret_cast<ukv_key_t*>(tape.begin());
     ukv_val_len_t* found_lens = reinterpret_cast<ukv_val_len_t*>(found_keys + total_lengths);
     *c_found_keys = found_keys;
     *c_found_lengths = export_lengths ? found_lens : nullptr;
@@ -488,12 +490,11 @@ void ukv_size( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 
-    std::size_t bytes_needed = sizeof(ukv_size_t) * 6 * n;
-    *c_found_estimates = reinterpret_cast<ukv_size_t*>(prepare_memory(arena.output_tape, bytes_needed, c_error));
+    *c_found_estimates = arena.alloc<ukv_size_t>(6 * n, c_error).begin();
     if (*c_error)
         return;
 
@@ -558,16 +559,12 @@ void ukv_col_remove( //
 }
 
 void ukv_col_list( //
-    ukv_t const c_db,
+    ukv_t const,
     ukv_size_t* c_count,
-    ukv_col_t** c_ids,
-    ukv_val_len_t** c_offsets,
     ukv_str_view_t* c_names,
-    ukv_arena_t* c_arena,
+    ukv_arena_t*,
     ukv_error_t* c_error) {
     *c_count = 0;
-    *c_ids = nullptr;
-    *c_offsets = nullptr;
     *c_names = nullptr;
 }
 
