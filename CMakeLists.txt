@@ -64,6 +64,8 @@ set(FETCHCONTENT_QUIET OFF)
 set(UKV_PREINSTALLED_BOOST ON)
 set(UKV_PREINSTALLED_ARROW ON)
 set(UKV_PREINSTALLED_TURBOPFOR ON)
+set(UKV_BUILD_PYTHON ON)
+set(UKV_BUILD_TESTS ON)
 
 include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
@@ -102,18 +104,21 @@ target_link_libraries(ukv_rocksdb rocksdb nlohmann_json::nlohmann_json ${jemallo
 
 add_library(ukv_leveldb src/backend_leveldb.cpp src/logic_docs.cpp src/logic_graph.cpp)
 target_link_libraries(ukv_leveldb leveldb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+set_source_files_properties(src/backend_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 
 add_library(ukv_arrow_client src/arrow_client.cpp src/logic_docs.cpp src/logic_graph.cpp)
 target_link_libraries(ukv_arrow_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
 
 # Generate tests
-foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_arrow_client)
-  get_target_property(lib_SOURCES ${lib_name} SOURCES)
-  get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
-  string(CONCAT test_name ${lib_name} "_test")
-  add_executable(${test_name} src/test.cpp ${lib_SOURCES})
-  target_link_libraries(${test_name} gtest ${lib_LIBRARIES})
-endforeach()
+if(${UKV_BUILD_TESTS})
+  foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_arrow_client)
+    get_target_property(lib_SOURCES ${lib_name} SOURCES)
+    get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
+    string(CONCAT test_name ${lib_name} "_test")
+    add_executable(${test_name} src/test.cpp ${lib_SOURCES})
+    target_link_libraries(${test_name} gtest ${lib_LIBRARIES})
+  endforeach()
+endif()
 
 # add_executable(ukv_rest_server src/rest_server.cpp)
 # target_link_libraries(ukv_rest_server ukv_stl pthread fmt::fmt Boost::headers nlohmann_json::nlohmann_json)
@@ -130,3 +135,11 @@ foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_arrow_client)
     set_target_properties(${lib_name} PROPERTIES CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
   endif()
 endforeach()
+
+# Build
+if(${UKV_BUILD_PYTHON})
+  find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
+  find_package(pybind11 CONFIG REQUIRED)
+
+  # TODO: Migrate setup.py builds to here
+endif()
