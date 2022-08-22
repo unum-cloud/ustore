@@ -157,6 +157,10 @@ struct py_table_col_t : public std::enable_shared_from_this<py_table_col_t> {
  */
 struct py_docs_col_t {
     py_col_t binary;
+
+    py_docs_col_t() = default;
+    py_docs_col_t(py_docs_col_t&&) = delete;
+    py_docs_col_t(py_docs_col_t const&) = delete;
 };
 
 /**
@@ -287,5 +291,7 @@ void wrap_networkx(py::module&);
  * https://arrow.apache.org/docs/python/integration/extending.html
  */
 void wrap_pandas(py::module&);
+
+void wrap_document(py::module&);
 
 } // namespace unum::ukv
