@@ -24,6 +24,7 @@ ext_modules = [
             'python/pybind.cpp',
             'python/pybind/database.cpp',
             'python/pybind/networkx.cpp',
+            'python/pybind/documents.cpp',
             'python/pybind/pandas.cpp',
         ],
         include_dirs=include_dirs,
