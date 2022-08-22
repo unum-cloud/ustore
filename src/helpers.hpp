@@ -329,7 +329,14 @@ struct write_tasks_soa_t {
             // We are working with a densely packed tape with `count + 1` offsets.
             else if (offs && !lens) {
                 off = offs[i];
-                len = offs[i + 1] - off;
+                if (off == ukv_val_len_missing_k) {
+                    auto next_start_idx = i + 1;
+                    while (offs[next_start_idx] != ukv_val_len_missing_k)
+                        ++next_start_idx;
+                    len = offs[next_start_idx] - off;
+                }
+                else
+                    len = ukv_val_len_missing_k;
             }
             // All the info is provided.
             else if (offs && lens) {
@@ -405,6 +412,46 @@ void inplace_inclusive_prefix_sum(element_at* begin, element_at* const end) {
     element_at sum = 0;
     for (; begin != end; ++begin)
         sum += std::exchange(*begin, *begin + sum);
+}
+
+/**
+ * We have a different methodology of marking NULL entries, than Arrow.
+ * We can reuse the `column_lengths` to put-in some NULL markers.
+ * Bitmask would use 32x less memory.
+ */
+inline ukv_1x8_t* convert_lengths_into_bitmap(ukv_val_len_t* lengths, ukv_size_t n) {
+    size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;
+    ukv_1x8_t* slots = (ukv_1x8_t*)lengths;
+    for (size_t slot_idx = 0; slot_idx != count_slots; ++slot_idx) {
+        ukv_1x8_t slot_value = 0;
+        size_t first_idx = slot_idx * CHAR_BIT;
+        size_t remaining_count = count_slots - first_idx;
+        size_t remaining_in_slot = remaining_count > CHAR_BIT ? CHAR_BIT : remaining_count;
+        for (size_t bit_idx = 0; bit_idx != remaining_in_slot; ++bit_idx) {
+            slot_value |= 1 << bit_idx;
+        }
+        slots[slot_idx] = slot_value;
+    }
+    // Cleanup the following memory
+    std::memset(slots + count_slots + 1, 0, n * sizeof(ukv_val_len_t) - count_slots);
+    return slots;
+}
+
+/**
+ * @brief Replaces "lengths" with `ukv_val_len_missing_k` is matching NULL indicator is set.
+ */
+inline ukv_val_len_t* normalize_lengths_with_bitmap(ukv_1x8_t const* slots, ukv_val_len_t* lengths, ukv_size_t n) {
+    size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;
+    for (size_t slot_idx = 0; slot_idx != count_slots; ++slot_idx) {
+        size_t first_idx = slot_idx * CHAR_BIT;
+        size_t remaining_count = count_slots - first_idx;
+        size_t remaining_in_slot = remaining_count > CHAR_BIT ? CHAR_BIT : remaining_count;
+        for (size_t bit_idx = 0; bit_idx != remaining_in_slot; ++bit_idx) {
+            if (slots[slot_idx] & (1 << bit_idx))
+                lengths[first_idx + bit_idx] = ukv_val_len_missing_k;
+        }
+    }
+    return lengths;
 }
 
 } // namespace unum::ukv
