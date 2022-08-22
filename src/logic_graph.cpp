@@ -300,19 +300,21 @@ void export_edge_tuples( //
     ukv_arena_t new_arena = &arena;
     // Even if we need just the node degrees, we can't limit ourselves to just entry lengths.
     // Those may be compressed. We need to read the first bytes to parse the degree of the node.
-    ukv_read(c_db,
-             c_txn,
-             c_vertices_count,
-             c_cols,
-             c_cols_stride,
-             c_vertices_ids,
-             c_vertices_stride,
-             static_cast<ukv_options_t>(c_options & ~ukv_option_read_lengths_k),
-             &c_found_values,
-             &c_found_offsets,
-             &c_found_lengths,
-             &new_arena,
-             c_error);
+    ukv_read( //
+        c_db,
+        c_txn,
+        c_vertices_count,
+        c_cols,
+        c_cols_stride,
+        c_vertices_ids,
+        c_vertices_stride,
+        c_options,
+        &c_found_values,
+        &c_found_offsets,
+        &c_found_lengths,
+        nullptr,
+        &new_arena,
+        c_error);
     if (*c_error)
         return;
 
@@ -416,19 +418,21 @@ void export_disjoint_edge_buffers( //
         return;
     ukv_arena_t new_arena = &arena;
 
-    ukv_read(c_db,
-             c_txn,
-             c_vertices_count,
-             c_cols,
-             c_cols_stride,
-             c_vertices_ids,
-             c_vertices_stride,
-             c_options,
-             &c_found_values,
-             &c_found_offsets,
-             &c_found_lengths,
-             &new_arena,
-             c_error);
+    ukv_read( //
+        c_db,
+        c_txn,
+        c_vertices_count,
+        c_cols,
+        c_cols_stride,
+        c_vertices_ids,
+        c_vertices_stride,
+        c_options,
+        &c_found_values,
+        &c_found_offsets,
+        &c_found_lengths,
+        nullptr,
+        &new_arena,
+        c_error);
     if (*c_error)
         return;
 
@@ -473,7 +477,7 @@ void update_neighborhoods( //
 
     // Fetch all the data related to touched vertices
     std::pmr::vector<col_key_t> updated_keys(c_tasks_count + c_tasks_count, &arena.resource);
-    if (updated_keys.size() == 0) {
+    if (!updated_keys.size()) {
         *c_error = "Failed to allocate memory";
         return;
     }
@@ -490,17 +494,18 @@ void update_neighborhoods( //
         *c_error = "Failed to allocate memory";
         return;
     }
-    export_disjoint_edge_buffers(c_db,
-                                 c_txn,
-                                 static_cast<ukv_size_t>(updated_keys.size()),
-                                 &updated_keys[0].col,
-                                 sizeof(col_key_t),
-                                 &updated_keys[0].key,
-                                 sizeof(col_key_t),
-                                 c_options,
-                                 updated_vals.data(),
-                                 &new_arena,
-                                 c_error);
+    export_disjoint_edge_buffers( //
+        c_db,
+        c_txn,
+        static_cast<ukv_size_t>(updated_keys.size()),
+        &updated_keys[0].col,
+        sizeof(col_key_t),
+        &updated_keys[0].key,
+        sizeof(col_key_t),
+        c_options,
+        updated_vals.data(),
+        &new_arena,
+        c_error);
     if (*c_error)
         return;
 
@@ -532,22 +537,24 @@ void update_neighborhoods( //
 
     // Dump the data back to disk!
     ukv_val_len_t offset_in_val = 0;
-    ukv_write(c_db,
-              c_txn,
-              static_cast<ukv_size_t>(updated_keys.size()),
-              &updated_keys[0].col,
-              sizeof(col_key_t),
-              &updated_keys[0].key,
-              sizeof(col_key_t),
-              updated_vals[0].member_ptr(),
-              sizeof(value_t),
-              &offset_in_val,
-              0,
-              updated_vals[0].member_length(),
-              sizeof(value_t),
-              c_options,
-              &new_arena,
-              c_error);
+    ukv_write( //
+        c_db,
+        c_txn,
+        static_cast<ukv_size_t>(updated_keys.size()),
+        &updated_keys[0].col,
+        sizeof(col_key_t),
+        &updated_keys[0].key,
+        sizeof(col_key_t),
+        updated_vals[0].member_ptr(),
+        sizeof(value_t),
+        &offset_in_val,
+        0,
+        updated_vals[0].member_length(),
+        sizeof(value_t),
+        nullptr,
+        c_options,
+        &new_arena,
+        c_error);
 }
 
 void ukv_graph_find_edges( //
@@ -572,22 +579,23 @@ void ukv_graph_find_edges( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    auto func = (c_options & ukv_option_read_lengths_k) ? &export_edge_tuples<false, false, false>
-                                                        : &export_edge_tuples<true, true, true>;
-    return func(c_db,
-                c_txn,
-                c_vertices_count,
-                c_cols,
-                c_cols_stride,
-                c_vertices_ids,
-                c_vertices_stride,
-                c_roles,
-                c_roles_stride,
-                c_options,
-                c_degrees_per_vertex,
-                c_neighborships_per_vertex,
-                c_arena,
-                c_error);
+    bool only_degrees = !c_neighborships_per_vertex;
+    auto func = only_degrees ? &export_edge_tuples<false, false, false> : &export_edge_tuples<true, true, true>;
+    return func( //
+        c_db,
+        c_txn,
+        c_vertices_count,
+        c_cols,
+        c_cols_stride,
+        c_vertices_ids,
+        c_vertices_stride,
+        c_roles,
+        c_roles_stride,
+        c_options,
+        c_degrees_per_vertex,
+        c_neighborships_per_vertex,
+        c_arena,
+        c_error);
 }
 
 void ukv_graph_upsert_edges( //
@@ -612,20 +620,21 @@ void ukv_graph_upsert_edges( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    return update_neighborhoods<false>(c_db,
-                                       c_txn,
-                                       c_tasks_count,
-                                       c_cols,
-                                       c_cols_stride,
-                                       c_edges_ids,
-                                       c_edges_stride,
-                                       c_sources_ids,
-                                       c_sources_stride,
-                                       c_targets_ids,
-                                       c_targets_stride,
-                                       c_options,
-                                       c_arena,
-                                       c_error);
+    return update_neighborhoods<false>( //
+        c_db,
+        c_txn,
+        c_tasks_count,
+        c_cols,
+        c_cols_stride,
+        c_edges_ids,
+        c_edges_stride,
+        c_sources_ids,
+        c_sources_stride,
+        c_targets_ids,
+        c_targets_stride,
+        c_options,
+        c_arena,
+        c_error);
 }
 
 void ukv_graph_remove_edges( //
@@ -650,20 +659,21 @@ void ukv_graph_remove_edges( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    return update_neighborhoods<true>(c_db,
-                                      c_txn,
-                                      c_tasks_count,
-                                      c_cols,
-                                      c_cols_stride,
-                                      c_edges_ids,
-                                      c_edges_stride,
-                                      c_sources_ids,
-                                      c_sources_stride,
-                                      c_targets_ids,
-                                      c_targets_stride,
-                                      c_options,
-                                      c_arena,
-                                      c_error);
+    return update_neighborhoods<true>( //
+        c_db,
+        c_txn,
+        c_tasks_count,
+        c_cols,
+        c_cols_stride,
+        c_edges_ids,
+        c_edges_stride,
+        c_sources_ids,
+        c_sources_stride,
+        c_targets_ids,
+        c_targets_stride,
+        c_options,
+        c_arena,
+        c_error);
 }
 
 void ukv_graph_remove_vertices( //
@@ -697,21 +707,21 @@ void ukv_graph_remove_vertices( //
     // Initially, just retrieve the bare minimum information about the vertices
     ukv_vertex_degree_t* degrees_per_vertex = nullptr;
     ukv_key_t* neighbors_per_vertex = nullptr;
-    export_edge_tuples<false, true, false>(c_db,
-                                           c_txn,
-                                           c_vertices_count,
-                                           c_cols,
-                                           c_cols_stride,
-                                           c_vertices_ids,
-                                           c_vertices_stride,
-                                           c_roles,
-                                           c_roles_stride,
-                                           c_options,
-                                           &degrees_per_vertex,
-                                           &neighbors_per_vertex,
-                                           &new_arena,
-                                           c_error);
-
+    export_edge_tuples<false, true, false>( //
+        c_db,
+        c_txn,
+        c_vertices_count,
+        c_cols,
+        c_cols_stride,
+        c_vertices_ids,
+        c_vertices_stride,
+        c_roles,
+        c_roles_stride,
+        c_options,
+        &degrees_per_vertex,
+        &neighbors_per_vertex,
+        &new_arena,
+        c_error);
     if (*c_error)
         return;
 
@@ -738,17 +748,18 @@ void ukv_graph_remove_vertices( //
 
     // Fetch the opposite ends, from which that same reference must be removed.
     // Here all the keys will be in the sorted order.
-    export_disjoint_edge_buffers(c_db,
-                                 c_txn,
-                                 static_cast<ukv_size_t>(updated_keys.size()),
-                                 &updated_keys[0].col,
-                                 sizeof(col_key_t),
-                                 &updated_keys[0].key,
-                                 sizeof(col_key_t),
-                                 c_options,
-                                 updated_vals.data(),
-                                 &new_arena,
-                                 c_error);
+    export_disjoint_edge_buffers( //
+        c_db,
+        c_txn,
+        static_cast<ukv_size_t>(updated_keys.size()),
+        &updated_keys[0].col,
+        sizeof(col_key_t),
+        &updated_keys[0].key,
+        sizeof(col_key_t),
+        c_options,
+        updated_vals.data(),
+        &new_arena,
+        c_error);
     if (*c_error)
         return;
 
@@ -777,20 +788,22 @@ void ukv_graph_remove_vertices( //
 
     // Now we will go through all the explicitly deleted vertices
     ukv_val_len_t offset_in_val = 0;
-    ukv_write(c_db,
-              c_txn,
-              static_cast<ukv_size_t>(updated_keys.size()),
-              &updated_keys[0].col,
-              sizeof(col_key_t),
-              &updated_keys[0].key,
-              sizeof(col_key_t),
-              updated_vals[0].member_ptr(),
-              sizeof(value_t),
-              &offset_in_val,
-              0,
-              updated_vals[0].member_length(),
-              sizeof(value_t),
-              c_options,
-              &new_arena,
-              c_error);
+    ukv_write( //
+        c_db,
+        c_txn,
+        static_cast<ukv_size_t>(updated_keys.size()),
+        &updated_keys[0].col,
+        sizeof(col_key_t),
+        &updated_keys[0].key,
+        sizeof(col_key_t),
+        updated_vals[0].member_ptr(),
+        sizeof(value_t),
+        &offset_in_val,
+        0,
+        updated_vals[0].member_length(),
+        sizeof(value_t),
+        nullptr,
+        c_options,
+        &new_arena,
+        c_error);
 }
