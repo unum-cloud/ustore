@@ -55,16 +55,34 @@ struct rpc_client_t {
 };
 
 class UKVMemoryPool final : public ar::MemoryPool {
+    monotonic_resource_t resource_;
+
   public:
-    UKVMemoryPool(stl_arena_t&);
+    UKVMemoryPool(stl_arena_t& arena) : resource_(&arena.resource) {}
     ~UKVMemoryPool() {}
 
-    ar::Status Allocate(int64_t size, uint8_t** out) override;
-    ar::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr) override;
-    void Free(uint8_t* buffer, int64_t size) override;
+    ar::Status Allocate(int64_t size, uint8_t** ptr) override {
+        auto new_ptr = resource_.allocate(size);
+        if (!new_ptr)
+            return ar::Status::OutOfMemory("");
+
+        *ptr = reinterpret_cast<uint8_t*>(new_ptr);
+        return ar::Status::OK();
+    }
+    ar::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr) override {
+        auto new_ptr = resource_.allocate(new_size);
+        if (!new_ptr)
+            return ar::Status::OutOfMemory("");
+
+        std::memcpy(new_ptr, *ptr, old_size);
+        resource_.deallocate(*ptr, old_size);
+        *ptr = reinterpret_cast<uint8_t*>(new_ptr);
+        return ar::Status::OK();
+    }
+    void Free(uint8_t* buffer, int64_t size) override { resource_.deallocate(buffer, size); }
     void ReleaseUnused() override {}
-    int64_t bytes_allocated() const override;
-    int64_t max_memory() const override;
+    int64_t bytes_allocated() const override { return static_cast<int64_t>(resource_.used()); }
+    int64_t max_memory() const override { return static_cast<int64_t>(resource_.capacity()); }
     std::string backend_name() const { return "ukv"; }
 };
 
@@ -120,7 +138,7 @@ void ukv_read( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -271,7 +289,7 @@ void ukv_scan( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -305,7 +323,7 @@ void ukv_size( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 }
@@ -361,7 +379,7 @@ void ukv_col_list( //
     if (!c_db && (*c_error = "DataBase is NULL!"))
         return;
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
+    stl_arena_t arena = clean_arena(c_arena, c_error);
     if (*c_error)
         return;
 

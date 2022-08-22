@@ -1,5 +1,5 @@
 /**
- * @file helpers.htpp
+ * @file helpers.hpp
  * @author Ashot Vardanian
  *
  * @brief Helper functions for the C++ backend implementations.
@@ -179,24 +179,27 @@ class growing_tape_t {
     }
 };
 
-class monotonic_resource_t : public std::pmr::memory_resource {
-    bool borrowed_;
+class monotonic_resource_t final : public std::pmr::memory_resource {
     std::pmr::memory_resource* upstream_;
     void* begin_;
-    size_t alignment_;
-    size_t total_memory_;
-    size_t available_memory_;
+    std::size_t alignment_;
+    std::size_t total_memory_;
+    std::size_t available_memory_;
+    bool borrowed_;
 
   public:
     explicit monotonic_resource_t(monotonic_resource_t* upstream) noexcept
-        : borrowed_(true), upstream_(upstream), begin_(nullptr), alignment_(upstream->alignment_), total_memory_(0),
-          available_memory_(0) {};
+        : upstream_(upstream), begin_(nullptr), alignment_(upstream->alignment_), total_memory_(0),
+          available_memory_(0), borrowed_(true) {};
 
-    monotonic_resource_t(size_t buffer_size,
-                         size_t alignment,
+    monotonic_resource_t(std::size_t buffer_size,
+                         std::size_t alignment,
                          std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
-        : borrowed_(false), upstream_(upstream), begin_(upstream->allocate(buffer_size, alignment)),
-          alignment_(alignment), total_memory_(buffer_size), available_memory_(buffer_size) {}
+        : upstream_(upstream), begin_(upstream->allocate(buffer_size, alignment)), alignment_(alignment),
+          total_memory_(buffer_size), available_memory_(buffer_size), borrowed_(false) {}
+
+    monotonic_resource_t(monotonic_resource_t&&) = delete;
+    monotonic_resource_t(monotonic_resource_t const&) = delete;
 
     ~monotonic_resource_t() noexcept override {
         if (begin_ && !borrowed_) {
@@ -208,6 +211,18 @@ class monotonic_resource_t : public std::pmr::memory_resource {
     void release() noexcept {
         begin_ = (uint8_t*)(begin_) - (total_memory_ - available_memory_);
         available_memory_ = total_memory_;
+    }
+
+    std::size_t capacity() const noexcept {
+        return borrowed_ //
+                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->capacity()
+                   : total_memory_;
+    }
+
+    std::size_t used() const noexcept {
+        return borrowed_ //
+                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->used()
+                   : (total_memory_ - available_memory_);
     }
 
   private:
@@ -224,22 +239,21 @@ class monotonic_resource_t : public std::pmr::memory_resource {
     }
 
     void do_deallocate(void*, std::size_t, std::size_t) noexcept override {}
-
     bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override { return this == &other; }
 };
 
 template <typename at>
 struct span_gt {
-    span_gt() : ptr_(nullptr), size_(0) {}
-    span_gt(at* ptr, size_t sz) noexcept : ptr_(ptr), size_(sz) {}
+    span_gt() noexcept : ptr_(nullptr), size_(0) {}
+    span_gt(at* ptr, std::size_t sz) noexcept : ptr_(ptr), size_(sz) {}
 
     constexpr at* begin() const noexcept { return ptr_; }
     constexpr at* end() const noexcept { return ptr_ + size_; }
     at const* cbegin() const noexcept { return ptr_; }
     at const* cend() const noexcept { return ptr_ + size_; }
 
-    at& operator[](size_t i) { return ptr_[i]; }
-    at& operator[](size_t i) const { return ptr_[i]; }
+    at& operator[](std::size_t i) noexcept { return ptr_[i]; }
+    at& operator[](std::size_t i) const noexcept { return ptr_[i]; }
 
     template <typename another_at>
     span_gt<another_at> cast() const noexcept {
@@ -250,25 +264,24 @@ struct span_gt {
         return {reinterpret_cast<byte_t const*>(ptr_), size_ * sizeof(at)};
     }
 
-    size_t size_bytes() const noexcept { return size_ * sizeof(at); }
-    size_t size() const noexcept { return size_; }
+    std::size_t size_bytes() const noexcept { return size_ * sizeof(at); }
+    std::size_t size() const noexcept { return size_; }
 
   private:
     at* ptr_;
-    size_t size_;
+    std::size_t size_;
 };
 
 struct stl_arena_t {
-    explicit stl_arena_t(monotonic_resource_t* mem_resource) : resource(mem_resource) {}
-
-    explicit stl_arena_t(size_t buffer_size = 1024 * 1024,
-                         std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
-        : resource(buffer_size, 16ul, upstream) {}
+    explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept : resource(mem_resource) {}
+    explicit stl_arena_t(std::size_t buffer_size = 1024ul * 1024ul,
+                         std::pmr::memory_resource* upstream = std::pmr::get_default_resource()) noexcept
+        : resource(buffer_size, 64ul, upstream) {}
 
     template <typename at>
-    span_gt<at> alloc(size_t size, ukv_error_t* c_error, size_t alignment = sizeof(at)) {
+    span_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
         void* result = resource.allocate(sizeof(at) * size, alignment);
-        if (result == nullptr) {
+        if (!result) {
             *c_error = "Failed to allocate memory!";
             return {};
         }
@@ -276,9 +289,12 @@ struct stl_arena_t {
     }
 
     template <typename at>
-    span_gt<at> grow(span_gt<at> span, size_t additional_size, ukv_error_t* c_error, size_t alignment = sizeof(at)) {
+    span_gt<at> grow(span_gt<at> span,
+                     std::size_t additional_size,
+                     ukv_error_t* c_error,
+                     std::size_t alignment = sizeof(at)) noexcept {
         void* result = resource.allocate(sizeof(at) * additional_size, alignment);
-        if (result == nullptr) {
+        if (!result) {
             *c_error = "Failed to allocate memory!";
             return result;
         }
@@ -471,7 +487,7 @@ class file_handle_t {
             std::fclose(handle_);
     }
 
-    operator std::FILE *() const noexcept { return handle_; }
+    operator std::FILE*() const noexcept { return handle_; }
 };
 
 template <typename range_at, typename comparable_at>
