@@ -302,6 +302,19 @@ struct stl_arena_t {
         return {reinterpret_cast<at*>(result), span.size + additional_size};
     }
 
+    template <typename at>
+    strided_range_or_dummy_gt<at> alloc_or_dummy( //
+        std::size_t size,
+        ukv_error_t* c_error,
+        at** output,
+        std::size_t alignment = sizeof(at)) noexcept {
+
+        if (output)
+            return {*output = alloc(size, c_error, alignment), sizeof(at), size};
+        else
+            return strided_range_or_dummy_gt<at>::dummy(at(), size);
+    }
+
     monotonic_resource_t resource;
 };
 

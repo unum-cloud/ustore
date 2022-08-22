@@ -17,29 +17,31 @@ namespace unum::ukv {
  * Cool @b hint, you can use this to represent an infinite array of repeating
  * values with `stride` equal to zero.
  */
-template <typename object_at>
+template <typename element_at>
 class strided_iterator_gt {
-
-    object_at* raw_ = nullptr;
-    ukv_size_t stride_ = 0;
-
-    object_at* upshift(std::ptrdiff_t bytes) const noexcept { return (object_at*)((char*)raw_ + bytes); }
-    object_at* downshift(std::ptrdiff_t bytes) const noexcept { return (object_at*)((char*)raw_ - bytes); }
-
   public:
+    using element_t = element_at;
     using iterator_category = std::random_access_iterator_tag;
     using difference_type = std::ptrdiff_t;
-    using value_type = object_at;
+    using value_type = element_t;
     using pointer = value_type*;
     using reference = value_type&;
 
-    inline strided_iterator_gt(object_at* raw = nullptr, ukv_size_t stride = 0) noexcept : raw_(raw), stride_(stride) {}
+  private:
+    element_t* raw_ = nullptr;
+    ukv_size_t stride_ = 0;
+
+    element_t* upshift(std::ptrdiff_t bytes) const noexcept { return (element_t*)((char*)raw_ + bytes); }
+    element_t* downshift(std::ptrdiff_t bytes) const noexcept { return (element_t*)((char*)raw_ - bytes); }
+
+  public:
+    inline strided_iterator_gt(element_t* raw = nullptr, ukv_size_t stride = 0) noexcept : raw_(raw), stride_(stride) {}
     inline strided_iterator_gt(strided_iterator_gt&&) noexcept = default;
     inline strided_iterator_gt(strided_iterator_gt const&) noexcept = default;
     inline strided_iterator_gt& operator=(strided_iterator_gt&&) noexcept = default;
     inline strided_iterator_gt& operator=(strided_iterator_gt const&) noexcept = default;
 
-    inline object_at& operator[](ukv_size_t idx) const noexcept { return *upshift(stride_ * idx); }
+    inline element_t& operator[](ukv_size_t idx) const noexcept { return *upshift(stride_ * idx); }
 
     inline strided_iterator_gt& operator++() noexcept {
         raw_ = upshift(stride_);
@@ -66,51 +68,126 @@ class strided_iterator_gt {
 
     /**
      * ! Calling this function with "stride" different from zero or
-     * ! non-zero `sizeof(object_at)` multiple will cause Undefined
+     * ! non-zero `sizeof(element_t)` multiple will cause Undefined
      * ! Behaviour.
      */
     inline std::ptrdiff_t operator-(strided_iterator_gt other) const noexcept {
-        return stride_ ? (raw_ - other.raw_) * sizeof(object_at) / stride_ : 0;
+        return stride_ ? (raw_ - other.raw_) * sizeof(element_t) / stride_ : 0;
     }
 
     inline operator bool() const noexcept { return raw_ != nullptr; }
     inline bool repeats() const noexcept { return !stride_; }
     inline ukv_size_t stride() const noexcept { return stride_; }
-    inline object_at& operator*() const noexcept { return *raw_; }
-    inline object_at* operator->() const noexcept { return raw_; }
-    inline object_at* get() const noexcept { return raw_; }
+    inline element_t& operator*() const noexcept { return *raw_; }
+    inline element_t* operator->() const noexcept { return raw_; }
+    inline element_t* get() const noexcept { return raw_; }
 
     inline bool operator==(strided_iterator_gt const& other) const noexcept { return raw_ == other.raw_; }
     inline bool operator!=(strided_iterator_gt const& other) const noexcept { return raw_ != other.raw_; }
 
-    template <typename member_at, typename parent_at = object_at>
+    template <typename member_at, typename parent_at = element_t>
     inline auto members(member_at parent_at::*member_ptr) const noexcept {
-        using parent_t = std::conditional_t<std::is_const_v<object_at>, parent_at const, parent_at>;
-        using member_t = std::conditional_t<std::is_const_v<object_at>, member_at const, member_at>;
+        using parent_t = std::conditional_t<std::is_const_v<element_t>, parent_at const, parent_at>;
+        using member_t = std::conditional_t<std::is_const_v<element_t>, member_at const, member_at>;
         parent_t& first = *raw_;
         member_t& first_member = first.*member_ptr;
         return strided_iterator_gt<member_t> {&first_member, stride()};
     }
 };
 
-template <typename object_at>
-class strided_range_gt {
-    static_assert(!std::is_void_v<object_at>);
+template <>
+class strided_iterator_gt<ukv_1x8_t> {
+  public:
+    using element_t = ukv_1x8_t;
 
-    object_at* begin_ = nullptr;
+  private:
+    element_t* raw_ = nullptr;
+    ukv_size_t stride_ = 0;
+    element_t mask_ = 0;
+
+  public:
+    inline strided_iterator_gt(element_t* raw = nullptr, element_t mask, ukv_size_t stride = 0) noexcept
+        : raw_(raw), stride_(stride) {}
+    inline strided_iterator_gt(strided_iterator_gt&&) noexcept = default;
+    inline strided_iterator_gt(strided_iterator_gt const&) noexcept = default;
+    inline strided_iterator_gt& operator=(strided_iterator_gt&&) noexcept = default;
+    inline strided_iterator_gt& operator=(strided_iterator_gt const&) noexcept = default;
+
+    inline element_t& operator[](ukv_size_t idx) const noexcept { return *upshift(stride_ * idx); }
+
+    inline strided_iterator_gt& operator++() noexcept {
+        raw_ = upshift(stride_);
+        return *this;
+    }
+
+    inline strided_iterator_gt& operator--() noexcept {
+        raw_ = downshift(stride_);
+        return *this;
+    }
+
+    inline strided_iterator_gt operator++(int) const noexcept { return {upshift(stride_), stride_}; }
+    inline strided_iterator_gt operator--(int) const noexcept { return {downshift(stride_), stride_}; }
+    inline strided_iterator_gt operator+(std::ptrdiff_t n) const noexcept { return {upshift(n * stride_), stride_}; }
+    inline strided_iterator_gt operator-(std::ptrdiff_t n) const noexcept { return {downshift(n * stride_), stride_}; }
+    inline strided_iterator_gt& operator+=(std::ptrdiff_t n) noexcept {
+        raw_ = upshift(n * stride_);
+        return *this;
+    }
+    inline strided_iterator_gt& operator-=(std::ptrdiff_t n) noexcept {
+        raw_ = downshift(n * stride_);
+        return *this;
+    }
+
+    /**
+     * ! Calling this function with "stride" different from zero or
+     * ! non-zero `sizeof(element_t)` multiple will cause Undefined
+     * ! Behaviour.
+     */
+    inline std::ptrdiff_t operator-(strided_iterator_gt other) const noexcept {
+        return stride_ ? (raw_ - other.raw_) * sizeof(element_t) / stride_ : 0;
+    }
+
+    inline operator bool() const noexcept { return raw_ != nullptr; }
+    inline bool repeats() const noexcept { return !stride_; }
+    inline ukv_size_t stride() const noexcept { return stride_; }
+    inline element_t& operator*() const noexcept { return *raw_; }
+    inline element_t* operator->() const noexcept { return raw_; }
+    inline element_t* get() const noexcept { return raw_; }
+
+    inline bool operator==(strided_iterator_gt const& other) const noexcept { return raw_ == other.raw_; }
+    inline bool operator!=(strided_iterator_gt const& other) const noexcept { return raw_ != other.raw_; }
+
+    template <typename member_at, typename parent_at = element_t>
+    inline auto members(member_at parent_at::*member_ptr) const noexcept {
+        using parent_t = std::conditional_t<std::is_const_v<element_t>, parent_at const, parent_at>;
+        using member_t = std::conditional_t<std::is_const_v<element_t>, member_at const, member_at>;
+        parent_t& first = *raw_;
+        member_t& first_member = first.*member_ptr;
+        return strided_iterator_gt<member_t> {&first_member, stride()};
+    }
+};
+
+template <typename element_at>
+class strided_range_gt {
+  public:
+    using element_t = element_at;
+    using value_type = element_t;
+
+  private:
+    static_assert(!std::is_void_v<element_t>);
+
+    element_t* begin_ = nullptr;
     ukv_size_t stride_ = 0;
     ukv_size_t count_ = 0;
 
   public:
-    using value_type = object_at;
-
     strided_range_gt() = default;
-    strided_range_gt(object_at* single) noexcept : begin_(single), stride_(0), count_(1) {}
-    strided_range_gt(object_at* begin, object_at* end) noexcept
-        : begin_(begin), stride_(sizeof(object_at)), count_(end - begin) {}
-    strided_range_gt(object_at* begin, std::size_t stride, std::size_t count) noexcept
+    strided_range_gt(element_t* single) noexcept : begin_(single), stride_(0), count_(1) {}
+    strided_range_gt(element_t* begin, element_t* end) noexcept
+        : begin_(begin), stride_(sizeof(element_t)), count_(end - begin) {}
+    strided_range_gt(element_t* begin, std::size_t stride, std::size_t count) noexcept
         : begin_(begin), stride_(static_cast<ukv_size_t>(stride)), count_(static_cast<ukv_size_t>(count)) {}
-    strided_range_gt(strided_iterator_gt<object_at> begin, std::size_t count) noexcept
+    strided_range_gt(strided_iterator_gt<element_t> begin, std::size_t count) noexcept
         : strided_range_gt(begin.get(), begin.stride(), count) {}
 
     strided_range_gt(strided_range_gt&&) = default;
@@ -118,13 +195,13 @@ class strided_range_gt {
     strided_range_gt& operator=(strided_range_gt&&) = default;
     strided_range_gt& operator=(strided_range_gt const&) = default;
 
-    inline object_at* data() const noexcept { return begin_; }
-    inline decltype(auto) begin() const noexcept { return strided_iterator_gt<object_at> {begin_, stride_}; }
+    inline element_t* data() const noexcept { return begin_; }
+    inline decltype(auto) begin() const noexcept { return strided_iterator_gt<element_t> {begin_, stride_}; }
     inline decltype(auto) end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
     inline decltype(auto) at(std::size_t i) const noexcept { return *(begin() + static_cast<std::ptrdiff_t>(i)); }
     inline decltype(auto) operator[](std::size_t i) const noexcept { return at(i); }
 
-    inline auto immutable() const noexcept { return strided_range_gt<object_at const>(begin_, stride_, count_); }
+    inline auto immutable() const noexcept { return strided_range_gt<element_t const>(begin_, stride_, count_); }
     inline strided_range_gt subspan(std::size_t offset, std::size_t count) const noexcept {
         return {begin_ + offset * stride_, stride_, count};
     }
@@ -135,12 +212,29 @@ class strided_range_gt {
     inline ukv_size_t count() const noexcept { return count_; }
     inline operator bool() const noexcept { return begin_ != nullptr; }
 
-    template <typename member_at, typename parent_at = object_at>
+    template <typename member_at, typename parent_at = element_t>
     inline auto members(member_at parent_at::*member_ptr) const noexcept {
         auto begin_members = begin().members(member_ptr);
         using member_t = typename decltype(begin_members)::value_type;
         return strided_range_gt<member_t> {begin_members.get(), begin_members.stride(), count()};
     }
+};
+
+template <typename element_t>
+class strided_range_or_dummy_gt : public strided_range_gt<element_t> {
+    element_t dummy_;
+
+  public:
+    static strided_range_or_dummy_gt dummy(element_t v, std::size_t count) {
+        strided_range_or_dummy_gt result;
+        result.dummy_ = v;
+        result.begin_ = &result.dummy_;
+        result.stride_ = 0;
+        result.count_ = count;
+        return result;
+    }
+
+    inline operator bool() const noexcept { return begin_ != nullptr && begin_ != &dummy_; }
 };
 
 template <typename at, typename alloc_at = std::allocator<at>>
