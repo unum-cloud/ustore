@@ -694,7 +694,7 @@ void ukv_col_remove( //
 void ukv_col_list( //
     ukv_t const c_db,
     ukv_size_t* c_count,
-    ukv_col_t** c_collections,
+    ukv_col_t** c_ids,
     ukv_val_len_t** c_offsets,
     ukv_str_view_t* c_names,
     ukv_arena_t* c_arena,
@@ -708,27 +708,42 @@ void ukv_col_list( //
         return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    std::size_t total_length = 0;
-
-    for (auto const& column : db.columns)
-        total_length += column->GetName().size();
+    std::size_t cols_count = db.columns.size();
 
     // Every string will be null-terminated
-    total_length += db.columns.size();
-    *c_count = static_cast<ukv_size_t>(db.columns.size());
+    std::size_t strings_length = 0;
+    for (auto const& column : db.columns)
+        strings_length += column->GetName().size() + 1;
 
-    span_gt<byte_t> tape = arena.alloc<byte_t>(total_length, c_error);
+    // For every collection we also need to export IDs and offsets
+    std::size_t scalars_space = 0;
+    scalars_space += cols_count * sizeof(ukv_col_t);
+    scalars_space += cols_count * sizeof(ukv_val_len_t);
+    scalars_space += arrow_extra_offsets_k * sizeof(ukv_val_len_t);
+
+    span_gt<byte_t> tape = arena.alloc<byte_t>(scalars_space + strings_length, c_error);
     if (*c_error)
         return;
 
-    byte_t* tape_ptr = tape.begin();
-    *c_names = reinterpret_cast<ukv_str_view_t>(tape_ptr);
+    auto ids = reinterpret_cast<ukv_col_t*>(tape.begin());
+    auto offs = reinterpret_cast<ukv_val_len_t*>(ids + cols_count);
+    auto names = reinterpret_cast<char*>(offs + cols_count + 1);
+    *c_count = static_cast<ukv_size_t>(cols_count);
+    *c_ids = ids;
+    *c_offsets = offs;
+    *c_names = names;
+
     for (auto const& column : db.columns) {
         auto len = column->GetName().size();
-        std::memcpy(tape_ptr, column->GetName().data(), len);
-        tape_ptr[len] = byte_t {0};
-        tape_ptr += len + 1;
+        std::memcpy(names, column->GetName().data(), len);
+        names[len] = '\0';
+        *ids = reinterpret_cast<ukv_col_t>(column);
+        *offs = static_cast<ukv_val_len_t>(names - *c_names);
+        ++ids;
+        ++offs;
+        names += len + 1;
     }
+    *offs = static_cast<ukv_val_len_t>(names - *c_names);
 }
 
 void ukv_db_control( //

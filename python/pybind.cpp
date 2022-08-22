@@ -48,4 +48,5 @@ PYBIND11_MODULE(UKV_PYTHON_MODULE_NAME, m) {
     wrap_database(m);
     wrap_pandas(m);
     wrap_networkx(m);
+    wrap_document(m);
 }
