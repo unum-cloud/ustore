@@ -5,15 +5,31 @@
  * @brief Helper functions for the C++ backend implementations.
  */
 #pragma once
-#include <limits.h>        // `CHAR_BIT`
-#include <cstring>         // `std::memcpy`
-#include <stdexcept>       // `std::runtime_error`
-#include <memory>          // `std::allocator`
-#include <vector>          // `std::vector`
-#include <algorithm>       // `std::sort`
+#include <limits.h>  // `CHAR_BIT`
+#include <cstring>   // `std::memcpy`
+#include <stdexcept> // `std::runtime_error`
+#include <memory>    // `std::allocator`
+#include <vector>    // `std::vector`
+#include <algorithm> // `std::sort`
+
+#if __APPLE__
+#include <experimental/memory_resource> // `std::pmr::vector`
+#else
 #include <memory_resource> // `std::pmr::vector`
+#endif
 
 #include "ukv/ukv.hpp"
+
+#if __APPLE__
+namespace std::pmr {
+template <typename at>
+using vector = std::vector<at, std::experimental::pmr::polymorphic_allocator<at>>;
+using memory_resource = std::experimental::pmr::memory_resource;
+inline auto get_default_resource() {
+    return std::experimental::pmr::get_default_resource();
+}
+} // namespace std::pmr
+#endif
 
 namespace unum::ukv {
 
