@@ -287,9 +287,12 @@ TEST(db, docs) {
 
     // MsgPack
     col.as(ukv_format_msgpack_k);
-    M_EXPECT_EQ_MSG(*col[1].value(), json.c_str());
-    M_EXPECT_EQ_MSG(*col[ckf(1, "person")].value(), "\"Davit\"");
-    M_EXPECT_EQ_MSG(*col[ckf(1, "age")].value(), "24");
+    value_view_t val = *col[1].value();
+    M_EXPECT_EQ_MSG(val, json.c_str());
+    val = *col[ckf(1, "person")].value();
+    M_EXPECT_EQ_MSG(val, "\"Davit\"");
+    val = *col[ckf(1, "age")].value();
+    M_EXPECT_EQ_MSG(val, "24");
 
     // Binary
     col.as(ukv_format_binary_k);
@@ -659,7 +662,7 @@ TEST(db, net_batch) {
 
         auto present_edges = *net.edges();
         auto present_it = std::move(present_edges).begin();
-        auto count_results = 0;
+        size_t count_results = 0ul;
         while (!present_it.is_end()) {
             exported_edges.insert(*present_it);
             ++present_it;
