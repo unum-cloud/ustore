@@ -212,13 +212,10 @@ class monotonic_resource_t : public std::pmr::memory_resource {
 
   private:
     void* do_allocate(std::size_t bytes, std::size_t alignment) override {
-        void* result = nullptr;
-
         if (borrowed_)
-            result = upstream_->allocate(bytes, alignment);
-        else
-            result = std::align(alignment, bytes, begin_, available_memory_);
+            return upstream_->allocate(bytes, alignment);
 
+        void* result = std::align(alignment, bytes, begin_, available_memory_);
         if (result != nullptr) {
             begin_ = (uint8_t*)begin_ + bytes;
             available_memory_ -= bytes;
