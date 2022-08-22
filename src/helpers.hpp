@@ -192,9 +192,10 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
         : upstream_(upstream), begin_(nullptr), alignment_(upstream->alignment_), total_memory_(0),
           available_memory_(0), borrowed_(true) {};
 
-    monotonic_resource_t(std::size_t buffer_size,
-                         std::size_t alignment,
-                         std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
+    monotonic_resource_t( //
+        std::size_t buffer_size,
+        std::size_t alignment,
+        std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
         : upstream_(upstream), begin_(upstream->allocate(buffer_size, alignment)), alignment_(alignment),
           total_memory_(buffer_size), available_memory_(buffer_size), borrowed_(false) {}
 
@@ -223,6 +224,12 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
         return borrowed_ //
                    ? reinterpret_cast<monotonic_resource_t*>(upstream_)->used()
                    : (total_memory_ - available_memory_);
+    }
+
+    byte_t* begin() const noexcept {
+        return borrowed_ //
+                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->begin()
+                   : reinterpret_cast<byte_t*>(begin_);
     }
 
   private:
@@ -274,8 +281,9 @@ struct span_gt {
 
 struct stl_arena_t {
     explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept : resource(mem_resource) {}
-    explicit stl_arena_t(std::size_t buffer_size = 1024ul * 1024ul,
-                         std::pmr::memory_resource* upstream = std::pmr::get_default_resource()) noexcept
+    explicit stl_arena_t( //
+        std::size_t buffer_size = 1024ul * 1024ul,
+        std::pmr::memory_resource* upstream = std::pmr::get_default_resource()) noexcept
         : resource(buffer_size, 64ul, upstream) {}
 
     template <typename at>
@@ -289,10 +297,12 @@ struct stl_arena_t {
     }
 
     template <typename at>
-    span_gt<at> grow(span_gt<at> span,
-                     std::size_t additional_size,
-                     ukv_error_t* c_error,
-                     std::size_t alignment = sizeof(at)) noexcept {
+    span_gt<at> grow( //
+        span_gt<at> span,
+        std::size_t additional_size,
+        ukv_error_t* c_error,
+        std::size_t alignment = sizeof(at)) noexcept {
+
         void* result = resource.allocate(sizeof(at) * additional_size, alignment);
         if (!result) {
             *c_error = "Failed to allocate memory!";
@@ -309,10 +319,10 @@ struct stl_arena_t {
         at** output,
         std::size_t alignment = sizeof(at)) noexcept {
 
-        if (output)
-            return {*output = alloc(size, c_error, alignment), sizeof(at), size};
-        else
-            return strided_range_or_dummy_gt<at>::dummy(at(), size);
+        using strided_t = strided_range_gt<at>;
+        auto strided = output ? strided_t {* output = alloc<at>(size, c_error, alignment).begin(), sizeof(at), size}
+                              : strided_t {nullptr, 0, size};
+        return {strided, {}};
     }
 
     monotonic_resource_t resource;
@@ -422,6 +432,7 @@ struct write_tasks_soa_t {
     strided_iterator_gt<ukv_val_ptr_t const> vals;
     strided_iterator_gt<ukv_val_len_t const> offs;
     strided_iterator_gt<ukv_val_len_t const> lens;
+    strided_range_gt<ukv_1x8_t const> nulls;
     ukv_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
