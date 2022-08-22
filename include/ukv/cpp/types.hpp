@@ -162,6 +162,12 @@ class value_view_t {
     }
 };
 
+template <typename container_at>
+value_view_t value_view(container_at&& container) {
+    using element_t = typename std::remove_reference_t<container_at>::value_type;
+    return {reinterpret_cast<byte_t const*>(container.data()), container.size() * sizeof(element_t)};
+}
+
 #pragma region Memory Management
 
 /**
