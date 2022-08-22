@@ -247,3 +247,11 @@ def test_docs():
                 'Age': 24, 'Hello': "World"}
     doc_col.merge(1, json_to_merge)
     assert doc_col.get(1) == new_json
+
+    json = {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Age': 27}
+    doc_col[1] = json
+    assert doc_col[1] == json
+
+    assert doc_col.has_key(1)
+    del doc_col[1]
+    assert 1 not in doc_col
