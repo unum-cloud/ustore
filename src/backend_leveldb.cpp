@@ -559,15 +559,15 @@ void ukv_col_remove( //
 }
 
 void ukv_col_list( //
-    ukv_t const,
+    ukv_t const c_db,
     ukv_size_t* c_count,
-    ukv_col_t** c_collections,
+    ukv_col_t** c_ids,
     ukv_val_len_t** c_offsets,
     ukv_str_view_t* c_names,
-    ukv_arena_t*,
+    ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
     *c_count = 0;
-    *c_collections = nullptr;
+    *c_ids = nullptr;
     *c_offsets = nullptr;
     *c_names = nullptr;
 }
