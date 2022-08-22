@@ -61,6 +61,7 @@ typedef int64_t ukv_key_t;
 typedef uint32_t ukv_val_len_t;
 typedef uint8_t* ukv_val_ptr_t;
 typedef uint64_t ukv_size_t;
+typedef uint8_t ukv_1x8_t;
 
 /**
  * @brief Owning error message string.
@@ -345,8 +346,8 @@ void ukv_read( //
  *                           > track: Adds collision-detection on keys read through txn.
  *                           > lengths: Will fetches lengths of values, after the keys.
  *
- * @param[out] found_keys    Will contain @param tasks_count identifiers of following keys.
- * @param[out] found_lengths Will contain @param tasks_count lengths of following values.
+ * @param[out] found_keys    Will contain columns of following keys for each task.
+ * @param[out] found_counts  Will contain the height of each column (< scan_length).
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
@@ -367,8 +368,8 @@ void ukv_scan( //
 
     ukv_options_t const options,
 
-    ukv_key_t** found_keys,
-    ukv_val_len_t** found_lengths,
+    ukv_size_t** found_counts,
+    ukv_key_t*** found_keys,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
