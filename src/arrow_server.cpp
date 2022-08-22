@@ -560,7 +560,8 @@ class UKVService : public arf::FlightServerBase {
             //
             auto table = ar::ImportRecordBatch(&array_c, &schema_c).ValueOrDie();
             auto result = std::make_unique<arf::Result>();
-            result->body = std::dynamic_pointer_cast<ar::Buffer>(table);
+            // TODO: Change this to `DoGet`
+            // result->body = std::dynamic_pointer_cast<ar::Buffer>(table);
             auto results = std::make_unique<SingleResultStream>(std::move(result));
             *results_ptr = std::unique_ptr<arf::ResultStream>(results.release());
             sessions_.release_arena(arena);
