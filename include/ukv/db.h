@@ -117,7 +117,14 @@ typedef enum {
      * Is relevant for standalone distributions used with drivers supporting
      * Apache Arrow buffers or standardized Tensor representations.
      */
-    ukv_option_read_shared_k = 1 << 1,
+    ukv_option_read_shared_k = 0,
+    /**
+     * @brief Modifies the layout of input/outputs to match Apache Arrow.
+     * Meaning that on writes, we expect `N+1` @param offsets and a bitmask
+     * passed instead of @param lengths. On reads, we expect the output will
+     * be identical.
+     */
+    ukv_option_layout_arrow_k = 0,
 
 } ukv_options_t;
 

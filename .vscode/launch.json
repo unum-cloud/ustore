@@ -23,7 +23,7 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Arrow Test",
+            "name": "C++: Arrow Server Test",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/bin/ukv_arrow_server",

@@ -23,8 +23,6 @@
 #include <arrow/status.h>
 #include <arrow/buffer.h>
 #include <arrow/table.h>
-#include <arrow/pretty_print.h>
-#include <arrow/flight/client.h>
 #include <arrow/flight/server.h>
 #include <arrow/c/bridge.h> // `ExportSchema`
 #pragma GCC diagnostic pop

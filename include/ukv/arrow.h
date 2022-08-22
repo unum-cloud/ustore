@@ -205,7 +205,6 @@ static void ukv_to_arrow_column( //
 
     // Export the data
     switch (field_type) {
-    case ukv_type_null_k: array->n_buffers = 0; break;
     case ukv_type_bool_k:
     case ukv_type_uuid_k:
     case ukv_type_i8_k:
@@ -221,6 +220,8 @@ static void ukv_to_arrow_column( //
     case ukv_type_f64_k: array->n_buffers = 2; break;
     case ukv_type_bin_k:
     case ukv_type_str_k: array->n_buffers = 3; break;
+    case ukv_type_null_k: array->n_buffers = 0; break;
+    default: array->n_buffers = 0; break;
     }
     array->length = docs_count;
     array->offset = 0;
@@ -255,25 +256,25 @@ static void ukv_to_arrow_column( //
  *                          stored in documents under the same key.
  */
 static void ukv_to_arrow_stream( //
-    ukv_t const db,
-    ukv_txn_t const txn,
-    ukv_size_t const fields_count,
+    ukv_t const,
+    ukv_txn_t const,
+    ukv_size_t const,
 
-    ukv_size_t const docs_per_batch,
-    ukv_key_t const min_key,
-    ukv_key_t const max_key,
+    ukv_size_t const,
+    ukv_key_t const,
+    ukv_key_t const,
 
-    ukv_col_t const* collections,
-    ukv_size_t const collections_stride,
+    ukv_col_t const*,
+    ukv_size_t const,
 
-    ukv_str_view_t const* fields,
-    ukv_size_t const fields_stride,
+    ukv_str_view_t const*,
+    ukv_size_t const,
 
-    ukv_type_t const* types,
-    ukv_size_t const types_stride,
+    ukv_type_t const*,
+    ukv_size_t const,
 
-    struct ArrowArrayStream* stream,
-    ukv_arena_t* arena) {
+    struct ArrowArrayStream*,
+    ukv_arena_t*) {
 }
 
 #ifdef __cplusplus

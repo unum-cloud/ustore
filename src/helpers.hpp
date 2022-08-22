@@ -1,16 +1,17 @@
 /**
- * @file helpers.htpp
+ * @file helpers.hpp
  * @author Ashot Vardanian
  *
  * @brief Helper functions for the C++ backend implementations.
  */
 #pragma once
-#include <limits.h>  // `CHAR_BIT`
-#include <cstring>   // `std::memcpy`
-#include <stdexcept> // `std::runtime_error`
-#include <memory>    // `std::allocator`
-#include <vector>    // `std::vector`
-#include <algorithm> // `std::sort`
+#include <limits.h>        // `CHAR_BIT`
+#include <cstring>         // `std::memcpy`
+#include <stdexcept>       // `std::runtime_error`
+#include <memory>          // `std::allocator`
+#include <vector>          // `std::vector`
+#include <algorithm>       // `std::sort`
+#include <memory_resource> // `std::pmr::vector`
 
 #include "ukv/ukv.hpp"
 
@@ -150,11 +151,13 @@ class value_t {
  * Is suited for data preparation before passing to the C API.
  */
 class growing_tape_t {
-    std::vector<ukv_val_len_t> offsets_;
-    std::vector<ukv_val_len_t> lengths_;
-    std::vector<byte_t> contents_;
+    std::pmr::vector<ukv_val_len_t> offsets_;
+    std::pmr::vector<ukv_val_len_t> lengths_;
+    std::pmr::vector<byte_t> contents_;
 
   public:
+    growing_tape_t(std::pmr::memory_resource* resource) : offsets_(resource), lengths_(resource), contents_(resource) {}
+
     void push_back(value_view_t value) {
         offsets_.push_back(static_cast<ukv_val_len_t>(contents_.size()));
         lengths_.push_back(static_cast<ukv_val_len_t>(value.size()));
@@ -176,46 +179,143 @@ class growing_tape_t {
     }
 };
 
-struct stl_arena_t {
+class monotonic_resource_t final : public std::pmr::memory_resource {
+    std::pmr::memory_resource* upstream_;
+    void* begin_;
+    std::size_t alignment_;
+    std::size_t total_memory_;
+    std::size_t available_memory_;
+    bool borrowed_;
 
-    std::vector<byte_t> output_tape;
-    std::vector<byte_t> unpacked_tape;
-    std::vector<byte_t> another_tape;
-    growing_tape_t growing_tape;
-    /**
-     * In complex multi-step operations we need arrays
-     * of `col_key_t` to sort/navigate them more easily.
-     */
-    std::vector<col_key_t> updated_keys;
-    /**
-     * In complex multi-step operations we need disjoint arrays
-     * variable-length buffers to avoid expensive `memmove`s in
-     * big batch operations.
-     */
-    std::vector<value_t> updated_vals;
+  public:
+    explicit monotonic_resource_t(monotonic_resource_t* upstream) noexcept
+        : upstream_(upstream), begin_(nullptr), alignment_(upstream->alignment_), total_memory_(0),
+          available_memory_(0), borrowed_(true) {};
+
+    monotonic_resource_t(std::size_t buffer_size,
+                         std::size_t alignment,
+                         std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
+        : upstream_(upstream), begin_(upstream->allocate(buffer_size, alignment)), alignment_(alignment),
+          total_memory_(buffer_size), available_memory_(buffer_size), borrowed_(false) {}
+
+    monotonic_resource_t(monotonic_resource_t&&) = delete;
+    monotonic_resource_t(monotonic_resource_t const&) = delete;
+
+    ~monotonic_resource_t() noexcept override {
+        if (begin_ && !borrowed_) {
+            release();
+            upstream_->deallocate(begin_, total_memory_, alignment_);
+        }
+    }
+
+    void release() noexcept {
+        begin_ = (uint8_t*)(begin_) - (total_memory_ - available_memory_);
+        available_memory_ = total_memory_;
+    }
+
+    std::size_t capacity() const noexcept {
+        return borrowed_ //
+                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->capacity()
+                   : total_memory_;
+    }
+
+    std::size_t used() const noexcept {
+        return borrowed_ //
+                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->used()
+                   : (total_memory_ - available_memory_);
+    }
+
+  private:
+    void* do_allocate(std::size_t bytes, std::size_t alignment) override {
+        if (borrowed_)
+            return upstream_->allocate(bytes, alignment);
+
+        void* result = std::align(alignment, bytes, begin_, available_memory_);
+        if (result != nullptr) {
+            begin_ = (uint8_t*)begin_ + bytes;
+            available_memory_ -= bytes;
+        }
+        return result;
+    }
+
+    void do_deallocate(void*, std::size_t, std::size_t) noexcept override {}
+    bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override { return this == &other; }
 };
 
-inline stl_arena_t* cast_arena(ukv_arena_t* c_arena, ukv_error_t* c_error) noexcept {
+template <typename at>
+struct span_gt {
+    span_gt() noexcept : ptr_(nullptr), size_(0) {}
+    span_gt(at* ptr, std::size_t sz) noexcept : ptr_(ptr), size_(sz) {}
+
+    constexpr at* begin() const noexcept { return ptr_; }
+    constexpr at* end() const noexcept { return ptr_ + size_; }
+    at const* cbegin() const noexcept { return ptr_; }
+    at const* cend() const noexcept { return ptr_ + size_; }
+
+    at& operator[](std::size_t i) noexcept { return ptr_[i]; }
+    at& operator[](std::size_t i) const noexcept { return ptr_[i]; }
+
+    template <typename another_at>
+    span_gt<another_at> cast() const noexcept {
+        return {reinterpret_cast<another_at*>(ptr_), size_ * sizeof(at) / sizeof(another_at)};
+    }
+
+    span_gt<byte_t const> span_bytes() const noexcept {
+        return {reinterpret_cast<byte_t const*>(ptr_), size_ * sizeof(at)};
+    }
+
+    std::size_t size_bytes() const noexcept { return size_ * sizeof(at); }
+    std::size_t size() const noexcept { return size_; }
+
+  private:
+    at* ptr_;
+    std::size_t size_;
+};
+
+struct stl_arena_t {
+    explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept : resource(mem_resource) {}
+    explicit stl_arena_t(std::size_t buffer_size = 1024ul * 1024ul,
+                         std::pmr::memory_resource* upstream = std::pmr::get_default_resource()) noexcept
+        : resource(buffer_size, 64ul, upstream) {}
+
+    template <typename at>
+    span_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
+        void* result = resource.allocate(sizeof(at) * size, alignment);
+        if (!result) {
+            *c_error = "Failed to allocate memory!";
+            return {};
+        }
+        return {reinterpret_cast<at*>(result), size};
+    }
+
+    template <typename at>
+    span_gt<at> grow(span_gt<at> span,
+                     std::size_t additional_size,
+                     ukv_error_t* c_error,
+                     std::size_t alignment = sizeof(at)) noexcept {
+        void* result = resource.allocate(sizeof(at) * additional_size, alignment);
+        if (!result) {
+            *c_error = "Failed to allocate memory!";
+            return result;
+        }
+        std::memcpy(result, span.begin(), span.size_bytes());
+        return {reinterpret_cast<at*>(result), span.size + additional_size};
+    }
+
+    monotonic_resource_t resource;
+};
+
+inline stl_arena_t clean_arena(ukv_arena_t* c_arena, ukv_error_t* c_error) noexcept {
     try {
         if (!*c_arena)
             *c_arena = new stl_arena_t;
-        return *reinterpret_cast<stl_arena_t**>(c_arena);
+        stl_arena_t* arena = *reinterpret_cast<stl_arena_t**>(c_arena);
+        arena->resource.release();
+        return stl_arena_t(&arena->resource);
     }
     catch (...) {
         *c_error = "Failed to allocate memory!";
-        return nullptr;
-    }
-}
-
-template <typename element_at>
-inline element_at* prepare_memory(std::vector<element_at>& elems, std::size_t n, ukv_error_t* c_error) noexcept {
-    try {
-        elems.resize(n);
-        return elems.data();
-    }
-    catch (...) {
-        *c_error = "Failed to allocate memory!";
-        return nullptr;
+        return stl_arena_t(nullptr);
     }
 }
 
@@ -329,7 +429,14 @@ struct write_tasks_soa_t {
             // We are working with a densely packed tape with `count + 1` offsets.
             else if (offs && !lens) {
                 off = offs[i];
-                len = offs[i + 1] - off;
+                if (off == ukv_val_len_missing_k) {
+                    auto next_start_idx = i + 1;
+                    while (offs[next_start_idx] != ukv_val_len_missing_k)
+                        ++next_start_idx;
+                    len = offs[next_start_idx] - off;
+                }
+                else
+                    len = ukv_val_len_missing_k;
             }
             // All the info is provided.
             else if (offs && lens) {
@@ -389,14 +496,14 @@ inline range_at equal_subrange(range_at range, comparable_at&& comparable) {
     return range_at {p.first, p.second};
 }
 
-template <typename element_at>
-void sort_and_deduplicate(std::vector<element_at>& elems) {
+template <typename element_at, typename alloc_at = std::allocator<element_at>>
+void sort_and_deduplicate(std::vector<element_at, alloc_at>& elems) {
     std::sort(elems.begin(), elems.end());
     elems.erase(std::unique(elems.begin(), elems.end()), elems.end());
 }
 
-template <typename element_at>
-std::size_t offset_in_sorted(std::vector<element_at> const& elems, element_at const& wanted) {
+template <typename element_at, typename alloc_at = std::allocator<element_at>>
+std::size_t offset_in_sorted(std::vector<element_at, alloc_at> const& elems, element_at const& wanted) {
     return std::lower_bound(elems.begin(), elems.end(), wanted) - elems.begin();
 }
 
@@ -405,6 +512,46 @@ void inplace_inclusive_prefix_sum(element_at* begin, element_at* const end) {
     element_at sum = 0;
     for (; begin != end; ++begin)
         sum += std::exchange(*begin, *begin + sum);
+}
+
+/**
+ * We have a different methodology of marking NULL entries, than Arrow.
+ * We can reuse the `column_lengths` to put-in some NULL markers.
+ * Bitmask would use 32x less memory.
+ */
+inline ukv_1x8_t* convert_lengths_into_bitmap(ukv_val_len_t* lengths, ukv_size_t n) {
+    size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;
+    ukv_1x8_t* slots = (ukv_1x8_t*)lengths;
+    for (size_t slot_idx = 0; slot_idx != count_slots; ++slot_idx) {
+        ukv_1x8_t slot_value = 0;
+        size_t first_idx = slot_idx * CHAR_BIT;
+        size_t remaining_count = count_slots - first_idx;
+        size_t remaining_in_slot = remaining_count > CHAR_BIT ? CHAR_BIT : remaining_count;
+        for (size_t bit_idx = 0; bit_idx != remaining_in_slot; ++bit_idx) {
+            slot_value |= 1 << bit_idx;
+        }
+        slots[slot_idx] = slot_value;
+    }
+    // Cleanup the following memory
+    std::memset(slots + count_slots + 1, 0, n * sizeof(ukv_val_len_t) - count_slots);
+    return slots;
+}
+
+/**
+ * @brief Replaces "lengths" with `ukv_val_len_missing_k` is matching NULL indicator is set.
+ */
+inline ukv_val_len_t* normalize_lengths_with_bitmap(ukv_1x8_t const* slots, ukv_val_len_t* lengths, ukv_size_t n) {
+    size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;
+    for (size_t slot_idx = 0; slot_idx != count_slots; ++slot_idx) {
+        size_t first_idx = slot_idx * CHAR_BIT;
+        size_t remaining_count = count_slots - first_idx;
+        size_t remaining_in_slot = remaining_count > CHAR_BIT ? CHAR_BIT : remaining_count;
+        for (size_t bit_idx = 0; bit_idx != remaining_in_slot; ++bit_idx) {
+            if (slots[slot_idx] & (1 << bit_idx))
+                lengths[first_idx + bit_idx] = ukv_val_len_missing_k;
+        }
+    }
+    return lengths;
 }
 
 } // namespace unum::ukv
