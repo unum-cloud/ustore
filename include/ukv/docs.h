@@ -63,6 +63,7 @@ typedef enum {
 
     ukv_format_csv_k = 4180,
     ukv_format_arrow_k = 14,
+    ukv_format_parquet_k = 15,
 
     // Generic text-based formats, that  generally come in long chunks
     // would benefit from compression and may require full-text search.

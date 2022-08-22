@@ -178,7 +178,7 @@ class serializing_tape_ref_t {
     value_t single_doc_buffer_;
 
   public:
-    serializing_tape_ref_t(stl_arena_t& a) noexcept : arena_(a) { arena_.growing_tape.clear(); }
+    serializing_tape_ref_t(stl_arena_t& a) noexcept : arena_(a), growing_tape(&a.resource) {}
 
     void push_back(json_t const& doc, ukv_format_t c_format, ukv_error_t* c_error) noexcept(false) {
         if (!shared_exporter_)
@@ -192,10 +192,11 @@ class serializing_tape_ref_t {
             (c_format == ukv_format_json_merge_patch_k))
             single_doc_buffer_.push_back(byte_t {0});
 
-        arena_.growing_tape.push_back(single_doc_buffer_);
+        growing_tape.push_back(single_doc_buffer_);
     }
 
-    tape_view_t view() const noexcept { return arena_.growing_tape; }
+    tape_view_t view() noexcept { return growing_tape; }
+    growing_tape_t growing_tape;
 };
 
 template <typename callback_at>
@@ -266,17 +267,19 @@ read_tasks_soa_t read_docs( //
     // If it's not one of the trivial consecutive lookups, we want
     // to sort & deduplicate the entries to minimize the random reads
     // from disk.
-    prepare_memory(arena.updated_keys, tasks.count, c_error);
-    if (*c_error)
+    std::pmr::vector<col_key_t> updated_keys(tasks.count, &arena.resource);
+    if (updated_keys.size() == 0) {
+        *c_error = "Failed to allocate memory";
         return tasks;
+    }
     for (ukv_size_t doc_idx = 0; doc_idx != tasks.count; ++doc_idx)
-        arena.updated_keys[doc_idx] = tasks[doc_idx].location();
-    sort_and_deduplicate(arena.updated_keys);
+        updated_keys[doc_idx] = tasks[doc_idx].location();
+    sort_and_deduplicate(updated_keys);
 
     // There is a chance, all the entries are unique.
     // In such case, let's free-up the memory.
-    if (arena.updated_keys.size() == tasks.count) {
-        arena.updated_keys.clear();
+    if (updated_keys.size() == tasks.count) {
+        updated_keys.clear();
         return read_unique_docs(c_db, c_txn, tasks, fields, c_options, arena, c_error, callback);
     }
 
@@ -286,14 +289,14 @@ read_tasks_soa_t read_docs( //
     ukv_val_ptr_t binary_docs_begin = nullptr;
     ukv_val_len_t* binary_docs_offs = nullptr;
     ukv_val_len_t* binary_docs_lens = nullptr;
-    ukv_size_t unique_docs_count = static_cast<ukv_size_t>(arena.updated_keys.size());
+    ukv_size_t unique_docs_count = static_cast<ukv_size_t>(updated_keys.size());
     ukv_read( //
         c_db,
         c_txn,
         unique_docs_count,
-        &arena.updated_keys[0].col,
+        &updated_keys[0].col,
         sizeof(col_key_t),
-        &arena.updated_keys[0].key,
+        &updated_keys[0].key,
         sizeof(col_key_t),
         c_options,
         &binary_docs_begin,
@@ -332,14 +335,14 @@ read_tasks_soa_t read_docs( //
     // Join docs and fields with binary search
     for (ukv_size_t task_idx = 0; task_idx != tasks.count; ++task_idx) {
         auto task = tasks[task_idx];
-        auto parsed_idx = offset_in_sorted(arena.updated_keys, task.location());
+        auto parsed_idx = offset_in_sorted(updated_keys, task.location());
         json_t& parsed = (*parsed_docs)[parsed_idx];
         ukv_str_view_t field = fields[task_idx];
         callback(task_idx, field, parsed);
     }
 
-    auto cnt = static_cast<ukv_size_t>(arena.updated_keys.size());
-    auto sub_keys_range = strided_range(arena.updated_keys).immutable();
+    auto cnt = static_cast<ukv_size_t>(updated_keys.size());
+    auto sub_keys_range = strided_range(updated_keys).immutable();
     strided_range_gt<ukv_col_t const> cols = sub_keys_range.members(&col_key_t::col);
     strided_range_gt<ukv_key_t const> keys = sub_keys_range.members(&col_key_t::key);
     return {cols.begin(), keys.begin(), cnt};
@@ -355,9 +358,12 @@ void replace_docs( //
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 
-    prepare_memory(arena.updated_vals, tasks.count, c_error);
-    if (*c_error)
+    std::pmr::vector<value_t> updated_vals(tasks.count, &arena.resource);
+    if (updated_vals.size() == 0) {
+        *c_error = "Failed to allocate memory";
         return;
+    }
+    // TODO: Use PMR
 
     std::shared_ptr<export_to_value_t> heapy_exporter;
     try {
@@ -369,7 +375,7 @@ void replace_docs( //
 
     for (ukv_size_t doc_idx = 0; doc_idx != tasks.count; ++doc_idx) {
         auto task = tasks[doc_idx];
-        auto& serialized = arena.updated_vals[doc_idx];
+        auto& serialized = updated_vals[doc_idx];
         if (task.is_deleted()) {
             serialized.reset();
             continue;
@@ -399,11 +405,11 @@ void replace_docs( //
         tasks.cols.stride(),
         tasks.keys.get(),
         tasks.keys.stride(),
-        arena.updated_vals.front().member_ptr(),
+        updated_vals.front().member_ptr(),
         sizeof(value_t),
         nullptr,
         0,
-        arena.updated_vals.front().member_length(),
+        updated_vals.front().member_length(),
         sizeof(value_t),
         c_options,
         &arena_ptr,
@@ -419,11 +425,6 @@ void read_modify_write( //
     ukv_format_t const c_format,
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
-
-    prepare_memory(arena.updated_keys, tasks.count, c_error);
-    if (*c_error)
-        return;
-
     serializing_tape_ref_t serializing_tape {arena};
     auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, json_t& parsed) {
         try {
@@ -469,7 +470,8 @@ void read_modify_write( //
 
     // By now, the tape contains concatenated updates docs:
     ukv_size_t unique_docs_count = static_cast<ukv_size_t>(read_order.size());
-    ukv_val_ptr_t binary_docs_begin = reinterpret_cast<ukv_val_ptr_t>(arena.growing_tape.contents().begin().get());
+    ukv_val_ptr_t binary_docs_begin =
+        reinterpret_cast<ukv_val_ptr_t>(serializing_tape.growing_tape.contents().begin().get());
     ukv_arena_t arena_ptr = &arena;
     ukv_write( //
         c_db,
@@ -481,10 +483,10 @@ void read_modify_write( //
         read_order.keys.stride(),
         &binary_docs_begin,
         0,
-        arena.growing_tape.offsets().begin().get(),
-        arena.growing_tape.offsets().stride(),
-        arena.growing_tape.lengths().begin().get(),
-        arena.growing_tape.lengths().stride(),
+        serializing_tape.growing_tape.offsets().begin().get(),
+        serializing_tape.growing_tape.offsets().stride(),
+        serializing_tape.growing_tape.lengths().begin().get(),
+        serializing_tape.growing_tape.lengths().stride(),
         c_options,
         &arena_ptr,
         c_error);
@@ -551,6 +553,11 @@ void ukv_docs_write( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+    ukv_arena_t new_arena = &arena;
+
     // If user wants the entire doc in the same format, as the one we use internally,
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
@@ -571,14 +578,10 @@ void ukv_docs_write( //
             c_lens,
             c_lens_stride,
             c_options,
-            c_arena,
+            &new_arena,
             c_error);
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
         return;
 
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
@@ -620,6 +623,11 @@ void ukv_docs_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+    ukv_arena_t new_arena = &arena;
+
     // If user wants the entire doc in the same format, as the one we use internally,
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
@@ -637,14 +645,10 @@ void ukv_docs_read( //
             c_found_values,
             c_found_offsets,
             c_found_lengths,
-            c_arena,
+            &new_arena,
             c_error);
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
         return;
 
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
@@ -697,6 +701,11 @@ void ukv_docs_gist( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+    ukv_arena_t new_arena = &arena;
+
     ukv_val_ptr_t binary_docs_begin = nullptr;
     ukv_val_len_t* binary_docs_offs = nullptr;
     ukv_val_len_t* binary_docs_lens = nullptr;
@@ -712,12 +721,8 @@ void ukv_docs_gist( //
         &binary_docs_begin,
         &binary_docs_offs,
         &binary_docs_lens,
-        c_arena,
+        &new_arena,
         c_error);
-    if (*c_error)
-        return;
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
     if (*c_error)
         return;
 
@@ -754,15 +759,16 @@ void ukv_docs_gist( //
     total_length += paths->size();
 
     // Reserve memory
-    auto tape = prepare_memory(arena.unpacked_tape, total_length, c_error);
+    span_gt<byte_t> tape = arena.alloc<byte_t>(total_length, c_error);
     if (*c_error)
         return;
 
     // Export on to the tape
+    byte_t* tape_ptr = tape.begin();
     *c_found_fields_count = static_cast<ukv_size_t>(paths->size());
-    *c_found_fields = reinterpret_cast<ukv_str_view_t>(tape);
+    *c_found_fields = reinterpret_cast<ukv_str_view_t>(tape_ptr);
     for (auto const& path : *paths)
-        std::memcpy(std::exchange(tape, tape + path.size() + 1), path.c_str(), path.size() + 1);
+        std::memcpy(std::exchange(tape_ptr, tape_ptr + path.size() + 1), path.c_str(), path.size() + 1);
 }
 
 std::size_t min_memory_usage(ukv_type_t type) {
@@ -940,8 +946,8 @@ void export_scalar_column(json_t const& value, size_t doc_idx, column_begin_t co
     }
 }
 
-template <typename scalar_at>
-ukv_val_len_t print_scalar(scalar_at scalar, std::vector<byte_t>& output) {
+template <typename scalar_at, typename alloc_at = std::allocator<scalar_at>>
+ukv_val_len_t print_scalar(scalar_at scalar, std::vector<byte_t, alloc_at>& output) {
 
     /// The length of buffer to be used to convert/format/print numerical values into strings.
     constexpr std::size_t print_buf_len_k = 32;
@@ -960,7 +966,11 @@ ukv_val_len_t print_scalar(scalar_at scalar, std::vector<byte_t>& output) {
         return ukv_val_len_missing_k;
 }
 
-void export_string_column(json_t const& value, size_t doc_idx, column_begin_t column, std::vector<byte_t>& output) {
+template <typename alloc_at = std::allocator<byte_t>>
+void export_string_column(json_t const& value,
+                          size_t doc_idx,
+                          column_begin_t column,
+                          std::vector<byte_t, alloc_at>& output) {
 
     // Bitmaps are indexed from the last bit within every byte
     // https://arrow.apache.org/docs/format/Columnar.html#validity-bitmaps
@@ -1080,6 +1090,10 @@ void ukv_docs_gather( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
+        return;
+    ukv_arena_t new_arena = &arena;
     // Validate the input arguments
 
     // Retrieve the entire documents before we can sample internal fields
@@ -1098,7 +1112,7 @@ void ukv_docs_gather( //
         &binary_docs_begin,
         &binary_docs_offs,
         &binary_docs_lens,
-        c_arena,
+        &new_arena,
         c_error);
     if (*c_error)
         return;
@@ -1120,6 +1134,8 @@ void ukv_docs_gather( //
     // Estimate the amount of memory needed to store at least scalars and columns addresses
     // TODO: Align offsets of bitmaps to 64-byte boundaries for Arrow
     // https://arrow.apache.org/docs/format/Columnar.html#buffer-alignment-and-padding
+    // TODO: Align offsets of bitmaps to 64-byte boundaries for Arrow
+    // https://arrow.apache.org/docs/format/Columnar.html#buffer-alignment-and-padding
     bool wants_conversions = c_result_bitmap_converted;
     bool wants_collisions = c_result_bitmap_collision;
     std::size_t slots_per_bitmap = c_docs_count / 8 + (c_docs_count % 8 != 0);
@@ -1127,7 +1143,7 @@ void ukv_docs_gather( //
     std::size_t bytes_per_bitmap = sizeof(ukv_1x8_t) * slots_per_bitmap;
     std::size_t bytes_per_addresses_row = sizeof(void*) * c_fields_count;
     std::size_t bytes_for_addresses = bytes_per_addresses_row * 6;
-    std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps * c_fields_count;
+    std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps * c_fields_count * c_fields_count;
     std::size_t bytes_per_scalars_row = transform_reduce_n(types, c_fields_count, 0ul, &min_memory_usage);
     std::size_t bytes_for_scalars = bytes_per_scalars_row * c_docs_count;
 
@@ -1139,45 +1155,39 @@ void ukv_docs_gather( //
     // 4. offsets of all strings
     // 5. lengths of all strings
     // 6. scalars for all fields
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
-        return;
-    byte_t* const tape = prepare_memory( //
-        arena.unpacked_tape,
-        bytes_for_addresses + bytes_for_bitmaps + bytes_for_scalars,
-        c_error);
-    if (*c_error)
-        return;
+
+    span_gt<byte_t> tape = arena.alloc<byte_t>(bytes_for_addresses + bytes_for_bitmaps + bytes_for_scalars, c_error);
+    byte_t* const tape_ptr = tape.begin();
 
     // If those pointers were not provided, we can reuse the validity bitmap
     // It will allow us to avoid extra checks later.
     // ! Still, in every sequence of updates, validity is the last bit to be set,
     // ! to avoid overwriting.
-    auto first_col_validities = reinterpret_cast<ukv_1x8_t*>(tape + bytes_for_addresses);
+    auto first_col_validities = reinterpret_cast<ukv_1x8_t*>(tape_ptr + bytes_for_addresses);
     auto first_col_conversions = wants_conversions //
                                      ? first_col_validities + slots_per_bitmap * c_fields_count
                                      : first_col_validities;
     auto first_col_collisions = wants_collisions //
                                     ? first_col_conversions + slots_per_bitmap * c_fields_count
                                     : first_col_validities;
-    auto first_col_scalars = reinterpret_cast<ukv_val_ptr_t>(tape + bytes_for_addresses + bytes_for_bitmaps);
+    auto first_col_scalars = reinterpret_cast<ukv_val_ptr_t>(tape_ptr + bytes_for_addresses + bytes_for_bitmaps);
 
     // 1, 2, 3. Export validity maps addresses
     std::size_t tape_progress = 0;
     {
-        auto addresses = *c_result_bitmap_valid = reinterpret_cast<ukv_1x8_t**>(tape + tape_progress);
+        auto addresses = *c_result_bitmap_valid = reinterpret_cast<ukv_1x8_t**>(tape_ptr + tape_progress);
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx)
             addresses[field_idx] = first_col_validities + field_idx * slots_per_bitmap;
         tape_progress += bytes_per_addresses_row;
     }
     if (wants_conversions) {
-        auto addresses = *c_result_bitmap_converted = reinterpret_cast<ukv_1x8_t**>(tape + tape_progress);
+        auto addresses = *c_result_bitmap_converted = reinterpret_cast<ukv_1x8_t**>(tape_ptr + tape_progress);
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx)
             addresses[field_idx] = first_col_conversions + field_idx * slots_per_bitmap;
         tape_progress += bytes_per_addresses_row;
     }
     if (wants_collisions) {
-        auto addresses = *c_result_bitmap_collision = reinterpret_cast<ukv_1x8_t**>(tape + tape_progress);
+        auto addresses = *c_result_bitmap_collision = reinterpret_cast<ukv_1x8_t**>(tape_ptr + tape_progress);
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx)
             addresses[field_idx] = first_col_collisions + field_idx * slots_per_bitmap;
         tape_progress += bytes_per_addresses_row;
@@ -1186,11 +1196,11 @@ void ukv_docs_gather( //
     // 4, 5, 6. Export addresses for scalars, strings offsets and strings lengths
     {
         auto addresses_offs = *c_result_strs_offsets =
-            reinterpret_cast<ukv_val_len_t**>(tape + tape_progress + bytes_per_addresses_row * 0);
+            reinterpret_cast<ukv_val_len_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 0);
         auto addresses_lens = *c_result_strs_lengths =
-            reinterpret_cast<ukv_val_len_t**>(tape + tape_progress + bytes_per_addresses_row * 1);
+            reinterpret_cast<ukv_val_len_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 1);
         auto addresses_scalars = *c_result_scalars =
-            reinterpret_cast<ukv_val_ptr_t*>(tape + tape_progress + bytes_per_addresses_row * 2);
+            reinterpret_cast<ukv_val_ptr_t*>(tape_ptr + tape_progress + bytes_per_addresses_row * 2);
 
         auto scalars_tape = first_col_scalars;
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx) {
@@ -1215,6 +1225,7 @@ void ukv_docs_gather( //
     // Prepare constant values
     json_t const null_object;
 
+    std::pmr::vector<byte_t> string_tape(&arena.resource);
     // Go though all the documents extracting and type-checking the relevant parts
     for (ukv_size_t doc_idx = 0; doc_idx != c_docs_count; ++doc_idx, ++binary_docs_it) {
         value_view_t binary_doc = *binary_docs_it;
@@ -1267,13 +1278,13 @@ void ukv_docs_gather( //
             case ukv_type_f32_k: export_scalar_column<float>(found_value, doc_idx, column); break;
             case ukv_type_f64_k: export_scalar_column<double>(found_value, doc_idx, column); break;
 
-            case ukv_type_str_k: export_string_column(found_value, doc_idx, column, arena.another_tape); break;
-            case ukv_type_bin_k: export_string_column(found_value, doc_idx, column, arena.another_tape); break;
+            case ukv_type_str_k: export_string_column(found_value, doc_idx, column, string_tape); break;
+            case ukv_type_bin_k: export_string_column(found_value, doc_idx, column, string_tape); break;
 
             default: break;
             }
         }
     }
 
-    *c_result_strs_contents = reinterpret_cast<ukv_val_ptr_t>(arena.another_tape.data());
+    *c_result_strs_contents = reinterpret_cast<ukv_val_ptr_t>(string_tape.data());
 }

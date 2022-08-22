@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pandas-like interface for Document collections.
 - RPC server and client on top of UCX.
 - Media deserialization and exports.
+- Binary and document reads now also output validity bitsets for Arrow compatiability.
 
 ### Changed
 
