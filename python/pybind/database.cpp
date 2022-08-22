@@ -211,9 +211,10 @@ void ukv::wrap_database(py::module& m) {
         return py::cast(py_graph);
     });
     py_col.def_property_readonly("docs", [](py_col_t& py_col) {
-        auto py_docs = std::make_shared<py_docs_col_t>();
+        auto py_docs = std::make_unique<py_docs_col_t>();
         py_docs->binary = py_col;
-        return py::cast(py_docs);
+        py_docs->binary.native.as(ukv_format_json_k);
+        return py_docs;
     });
     py_col.def_property_readonly("media", [](py_col_t& py_col) { return 0; });
 
