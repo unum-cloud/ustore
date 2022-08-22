@@ -85,31 +85,26 @@ typedef enum {
 
     ukv_options_default_k = 0,
     /**
-     * @brief Limits the "read" operations to just metadata retrieval.
-     * Identical to the "HEAD" verb in the HTTP protocol.
-     */
-    ukv_option_read_lengths_k = 1 << 1,
-    /**
      * @brief Forces absolute consistency on the write operations
      * flushing all the data to disk after each write. It's usage
      * may cause severe performance degradation in some implementations.
      * Yet the users must be warned, that modern IO drivers still often
      * can't guarantee that everything will reach the disk.
      */
-    ukv_option_write_flush_k = 1 << 2,
+    ukv_option_write_flush_k = 1 << 1,
     /**
      * @brief When reading from a transaction, tracks requested keys.
      * If the requested key was updated since the read, the transaction
      * will fail on commit or prior to that.
      */
-    ukv_option_read_track_k = 1 << 3,
+    ukv_option_read_track_k = 1 << 2,
     /**
      * @brief When a transaction is started with this flag, a persistent
      * snapshot is created. It guarantees that the global state of all the
      * keys in the DB will be unchanged during the entire lifetime of the
      * transaction. Will not affect the writes in any way.
      */
-    ukv_option_txn_snapshot_k = 1 << 4,
+    ukv_option_txn_snapshot_k = 1 << 3,
     /**
      * @brief Will output data into shared memory, not the one privately
      * viewed by current process. That will allow any higher-level package
@@ -118,13 +113,6 @@ typedef enum {
      * Apache Arrow buffers or standardized Tensor representations.
      */
     ukv_option_read_shared_k = 0,
-    /**
-     * @brief Modifies the layout of input/outputs to match Apache Arrow.
-     * Meaning that on writes, we expect `N+1` @param offsets and a bitmask
-     * passed instead of @param lengths. On reads, we expect the output will
-     * be identical.
-     */
-    ukv_option_layout_arrow_k = 0,
 
 } ukv_options_t;
 
@@ -255,6 +243,8 @@ void ukv_write( //
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
 
+    ukv_1x8_t const* nulls,
+
     ukv_options_t const options,
 
     ukv_arena_t* arena,
@@ -326,6 +316,7 @@ void ukv_read( //
     ukv_val_ptr_t* found_values,
     ukv_val_len_t** found_offsets,
     ukv_val_len_t** found_lengths,
+    ukv_1x8_t** found_nulls,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

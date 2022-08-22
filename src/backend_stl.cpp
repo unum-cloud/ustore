@@ -309,27 +309,28 @@ void measure_head( //
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_nulls,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
     // 1. Allocate a tape for all the values to be pulled
-    span_gt<ukv_val_len_t> lens = arena.alloc<ukv_val_len_t>(tasks.count, c_error);
+    auto lens = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count, c_error, c_found_lengths);
     if (*c_error)
         return;
-    std::shared_lock _ {db.mutex};
+    auto bits = arena.alloc_or_dummy<ukv_1x8_t>(tasks.count, c_error, c_found_nulls);
+    if (*c_error)
+        return;
 
     // 2. Pull the data
-    *c_found_lengths = lens.begin();
-    *c_found_offsets = nullptr;
-    *c_found_values = nullptr;
-
+    std::shared_lock _ {db.mutex};
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
         read_task_t task = tasks[i];
         stl_col_t const& col = stl_col(db, task.col);
         auto key_iterator = col.pairs.find(task.key);
-        lens[i] = key_iterator != col.pairs.end() && !key_iterator->second.is_deleted
-                      ? static_cast<ukv_val_len_t>(key_iterator->second.buffer.size())
-                      : ukv_val_len_missing_k;
+        bool found = key_iterator != col.pairs.end() && !key_iterator->second.is_deleted;
+
+        bits[i] = found;
+        lens[i] = found ? static_cast<ukv_val_len_t>(key_iterator->second.buffer.size()) : ukv_val_len_missing_k;
     }
 }
 
@@ -340,6 +341,7 @@ void read_head( //
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_nulls,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -402,6 +404,7 @@ void scan_head( //
     ukv_options_t const options,
     ukv_key_t** c_found_keys,
     ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_nulls,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -495,6 +498,7 @@ void measure_txn( //
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_nulls,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -555,6 +559,7 @@ void read_txn( //
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_nulls,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -660,6 +665,7 @@ void scan_txn( //
     ukv_options_t const options,
     ukv_key_t** c_found_keys,
     ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_nulls,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -779,6 +785,7 @@ void ukv_read( //
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_nulls,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -863,6 +870,7 @@ void ukv_scan( //
 
     ukv_key_t** c_found_keys,
     ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_nulls,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
