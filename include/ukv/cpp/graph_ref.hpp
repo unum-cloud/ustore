@@ -133,9 +133,7 @@ class graph_ref_t {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
-        ukv_key_t* neighborships_per_vertex = nullptr;
-        ukv_options_t options = static_cast<ukv_options_t>((track ? ukv_option_read_track_k : ukv_options_default_k) |
-                                                           ukv_option_read_lengths_k);
+        ukv_options_t options = track ? ukv_option_read_track_k : ukv_options_default_k;
 
         ukv_graph_find_edges( //
             db_,
@@ -149,7 +147,7 @@ class graph_ref_t {
             roles.stride(),
             options,
             &degrees_per_vertex,
-            &neighborships_per_vertex,
+            nullptr,
             arena_,
             status.member_ptr());
         if (!status)

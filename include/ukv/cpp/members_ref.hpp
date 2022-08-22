@@ -107,8 +107,7 @@ class members_ref_gt {
     operator expected_gt<value_t>() noexcept { return value(); }
 
     expected_gt<length_t> length(bool track = false) noexcept {
-        auto options = (track ? ukv_option_read_track_k : ukv_options_default_k) | ukv_option_read_lengths_k;
-        return any_get<length_t>(static_cast<ukv_options_t>(options));
+        return any_get<length_t>(track ? ukv_option_read_track_k : ukv_options_default_k);
     }
 
     /**
@@ -259,6 +258,10 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
     ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
+    ukv_1x8_t* found_nulls = nullptr;
+    constexpr bool wants_value = std::is_same_v<value_t, expected_at>;
+    constexpr bool wants_length = std::is_same_v<length_t, expected_at>;
+    constexpr bool wants_present = std::is_same_v<present_t, expected_at>;
 
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
@@ -281,9 +284,10 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             options,
             format_,
             ukv_type_any_k,
-            &found_values,
-            &found_offsets,
-            &found_lengths,
+            wants_value ? &found_values : nullptr,
+            wants_value ? &found_offsets : nullptr,
+            wants_length ? &found_lengths : nullptr,
+            wants_present ? &found_nulls : nullptr,
             arena_,
             status.member_ptr());
     else
@@ -296,20 +300,27 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             keys.get(),
             keys.stride(),
             options,
-            &found_values,
-            &found_offsets,
-            &found_lengths,
+            wants_value ? &found_values : nullptr,
+            wants_value ? &found_offsets : nullptr,
+            wants_length ? &found_lengths : nullptr,
+            wants_present ? &found_nulls : nullptr,
             arena_,
             status.member_ptr());
 
     if (!status)
         return status;
 
-    if constexpr (std::is_same_v<length_t, expected_at>) {
+    if constexpr (wants_length) {
         if constexpr (is_one_k)
             return length_t {found_lengths[0]};
         else
             return length_t {found_lengths, found_lengths + count};
+    }
+    else if constexpr (wants_present) {
+        if constexpr (is_one_k)
+            return present_t {found_nulls[0]};
+        else
+            return present_t {found_nulls};
     }
     else {
         if constexpr (is_one_k)
@@ -357,6 +368,7 @@ status_t members_ref_gt<locations_at>::any_assign(values_arg_at&& vals_ref, ukv_
             offsets.stride(),
             lengths.get(),
             lengths.stride(),
+            nullptr,
             arena_,
             status.member_ptr());
     else
@@ -374,6 +386,7 @@ status_t members_ref_gt<locations_at>::any_assign(values_arg_at&& vals_ref, ukv_
             offsets.stride(),
             lengths.get(),
             lengths.stride(),
+            nullptr,
             options,
             arena_,
             status.member_ptr());

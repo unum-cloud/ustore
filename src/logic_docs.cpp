@@ -226,6 +226,7 @@ read_tasks_soa_t const& read_unique_docs( //
         &binary_docs_begin,
         &binary_docs_offs,
         &binary_docs_lens,
+        nullptr,
         &arena_ptr,
         c_error);
 
@@ -302,6 +303,7 @@ read_tasks_soa_t read_docs( //
         &binary_docs_begin,
         &binary_docs_offs,
         &binary_docs_lens,
+        nullptr,
         &arena_ptr,
         c_error);
 
@@ -411,6 +413,7 @@ void replace_docs( //
         0,
         updated_vals.front().member_length(),
         sizeof(value_t),
+        nullptr,
         c_options,
         &arena_ptr,
         c_error);
@@ -487,6 +490,7 @@ void read_modify_write( //
         serializing_tape.growing_tape.offsets().stride(),
         serializing_tape.growing_tape.lengths().begin().get(),
         serializing_tape.growing_tape.lengths().stride(),
+        nullptr,
         c_options,
         &arena_ptr,
         c_error);
@@ -550,6 +554,8 @@ void ukv_docs_write( //
     ukv_val_len_t const* c_lens,
     ukv_size_t const c_lens_stride,
 
+    ukv_1x8_t const* c_nulls,
+
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
@@ -577,6 +583,7 @@ void ukv_docs_write( //
             c_offs_stride,
             c_lens,
             c_lens_stride,
+            c_nulls,
             c_options,
             &new_arena,
             c_error);
@@ -589,7 +596,8 @@ void ukv_docs_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
+    strided_range_gt<ukv_1x8_t const> nulls {c_nulls};
+    write_tasks_soa_t tasks {cols, keys, vals, offs, lens, nulls, c_tasks_count};
 
     auto func = has_fields || c_format == ukv_format_json_patch_k || c_format == ukv_format_json_merge_patch_k
                     ? &read_modify_write
@@ -619,6 +627,7 @@ void ukv_docs_read( //
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_nulls,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -645,6 +654,7 @@ void ukv_docs_read( //
             c_found_values,
             c_found_offsets,
             c_found_lengths,
+            c_found_nulls,
             &new_arena,
             c_error);
 
@@ -697,6 +707,7 @@ void ukv_docs_gist( //
 
     ukv_size_t* c_found_fields_count,
     ukv_str_view_t* c_found_fields,
+    ukv_val_len_t** c_found_offsets,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -721,6 +732,7 @@ void ukv_docs_gist( //
         &binary_docs_begin,
         &binary_docs_offs,
         &binary_docs_lens,
+        nullptr,
         &new_arena,
         c_error);
     if (*c_error)
@@ -1112,6 +1124,7 @@ void ukv_docs_gather( //
         &binary_docs_begin,
         &binary_docs_offs,
         &binary_docs_lens,
+        nullptr,
         &new_arena,
         c_error);
     if (*c_error)
