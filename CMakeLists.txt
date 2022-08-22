@@ -75,6 +75,7 @@ include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
 
@@ -113,15 +114,15 @@ add_library(ukv_rocksdb
   src/backend_rocksdb.cpp
   src/logic_graph.cpp
 )
-add_library(ukv_leveldb
-  src/backend_leveldb.cpp
-  src/logic_graph.cpp
-)
-
 target_link_libraries(ukv_rocksdb
   rocksdb
   nlohmann_json::nlohmann_json
   ${jemalloc_LIBRARIES}
+)
+
+add_library(ukv_leveldb
+  src/backend_leveldb.cpp
+  src/logic_graph.cpp
 )
 target_link_libraries(ukv_leveldb
   leveldb
@@ -129,19 +130,30 @@ target_link_libraries(ukv_leveldb
   ${jemalloc_LIBRARIES}
 )
 
+add_library(ukv_arrow_client
+  src/arrow_client.cpp
+  src/logic_docs.cpp
+  src/logic_graph.cpp
+)
+target_link_libraries(ukv_arrow_client
+  nlohmann_json::nlohmann_json
+  fmt::fmt
+  arrow
+  arrow_flight
+)
+
 set_target_properties(ukv_rocksdb PROPERTIES LINK_FLAGS_RELEASE -s)
 set_target_properties(ukv_rocksdb PROPERTIES LINK_FLAGS_RELEASE -s)
 
-add_library(ukv_rpc_client src/rpc_client.cpp)
+add_executable(ukv_rest_server src/rest_server.cpp)
+target_link_libraries(ukv_rest_server
+  ukv_stl
+  pthread
+  fmt::fmt
+  Boost::headers
+  nlohmann_json::nlohmann_json
+)
 
-# add_executable(ukv_rest_server src/rest_server.cpp)
-# target_link_libraries(ukv_rest_server
-# ukv_stl
-# pthread
-# fmt::fmt
-# Boost::headers
-# nlohmann_json::nlohmann_json
-# )
 add_executable(ukv_arrow_server src/arrow_server.cpp)
 target_link_libraries(ukv_arrow_server
   ukv_stl
@@ -152,7 +164,6 @@ target_link_libraries(ukv_arrow_server
   arrow_dataset
   parquet
 )
-
 add_executable(ukv_test
   src/test.cpp
   src/backend_stl.cpp
