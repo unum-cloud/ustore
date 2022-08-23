@@ -72,7 +72,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug",
+            "preLaunchTask": "Build Native: Debug Arrow Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -126,8 +126,8 @@
         {
             "name": "C++: Test Arrow",
             "configurations": [
+                "C++: Test Arrow Server",
                 "C++: Test Arrow Client",
-                "C++: Test Arrow Server"
             ]
         }
     ]
