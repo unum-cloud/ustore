@@ -8,6 +8,12 @@
             "type": "shell"
         },
         {
+            "label": "Build Native: Debug Arrow Test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_arrow_client_test",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Build Native: Debug Arrow",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_arrow_server",
             "args": [],
