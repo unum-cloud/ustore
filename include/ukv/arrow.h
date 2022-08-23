@@ -187,7 +187,7 @@ static void ukv_to_arrow_column( //
 
     ukv_1x8_t const* column_validities,
     ukv_val_len_t const* column_offsets,
-    ukv_val_ptr_t const column_contents,
+    void const* column_contents,
 
     struct ArrowSchema* schema,
     struct ArrowArray* array,

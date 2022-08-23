@@ -134,6 +134,7 @@ void ukv_read( //
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_nulls,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -150,6 +151,9 @@ void ukv_read( //
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     read_tasks_soa_t tasks {cols, keys, c_tasks_count};
 
+    ArrowArray array_c;
+    ArrowSchema schema_c;
+
     UKVMemoryPool pool(arena);
     arf::FlightCallOptions options;
     options.read_options.memory_pool = &pool;
@@ -160,29 +164,102 @@ void ukv_read( //
     options.write_options.max_recursion_depth = 1;
     options.memory_manager;
 
-    // This will return
-    bool read_lengths = c_options & ukv_option_read_lengths_k;
+    bool same_collection = !cols || cols.repeats() ||
+                           !transform_reduce_n(cols, tasks.count, false, [=](ukv_col_t col) { return col != cols[0]; });
+    bool same_named_collection = same_collection && cols && cols[0] != ukv_col_main_k;
+    bool request_only_present = c_found_nulls && !c_found_lengths && !c_found_values;
+    bool request_length = c_found_lengths && !c_found_values;
+    char const* partial_mode = !request_length && !request_length //
+                                   ? nullptr
+                                   : request_length ? "length" : "present";
     bool read_shared = c_options & ukv_option_read_shared_k;
     bool read_track = c_options & ukv_option_read_track_k;
     arf::FlightDescriptor descriptor;
-    descriptor.cmd = fmt::format( //
-        "read?{}{:{}}&{}&{}&{}",
-        // transactions:
-        c_txn ? "txn=" : "",
-        std::uintptr_t(c_txn),
-        c_txn ? "x" : "",
-        // options:
-        read_lengths ? "lengths" : "",
-        read_shared ? "shared" : "",
-        read_track ? "track" : "");
+    descriptor.cmd = "read?";
+    if (c_txn)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "txn={:x}&", std::uintptr_t(c_txn));
+    if (same_named_collection)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "col={:x}&", cols[0]);
+    if (partial_mode)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "part={}&", partial_mode);
+    if (read_shared)
+        descriptor.cmd.append("shared&");
+    if (read_track)
+        descriptor.cmd.append("track&");
+
+    ukv_to_arrow_schema(tasks.count, 2, &schema_c, &array_c, c_error);
+    if (*c_error)
+        return;
+
+    // If all requests map to the same collection, we can avoid passing its ID
+    if (!same_collection) {
+        if (cols.stride() != sizeof(ukv_col_t)) {
+            auto continuous = arena.alloc<ukv_col_t>(tasks.count, c_error);
+            if (!*c_error)
+                return;
+            transform_n(keys, tasks.count, continuous.begin());
+            cols = {continuous.begin(), sizeof(ukv_col_t)};
+        }
+        ukv_to_arrow_column(tasks.count,
+                            "keys",
+                            ukv_type<ukv_col_t>(),
+                            nullptr,
+                            nullptr,
+                            cols.get(),
+                            schema_c.children[0],
+                            array_c.children[0],
+                            c_error);
+        if (*c_error)
+            return;
+    }
+
+    // When exporting keys, make sure they are properly strided
+    if (keys.stride() != sizeof(ukv_key_t)) {
+        auto continuous = arena.alloc<ukv_key_t>(tasks.count, c_error);
+        if (!*c_error)
+            return;
+        transform_n(keys, tasks.count, continuous.begin());
+        keys = {continuous.begin(), sizeof(ukv_key_t)};
+    }
+    ukv_to_arrow_column(tasks.count,
+                        "keys",
+                        ukv_type<ukv_key_t>(),
+                        nullptr,
+                        nullptr,
+                        keys.get(),
+                        schema_c.children[1],
+                        array_c.children[1],
+                        c_error);
+    if (*c_error)
+        return;
+
+    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&array_c, &schema_c);
+    if (!maybe_batch.ok()) {
+        *c_error = "Failed to pack the request";
+        return;
+    }
 
     // Submit the read operations
-    std::shared_ptr<ar::RecordBatch> batch_ptr;
+    std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
     ar::Status ar_status;
     ar::Result<arf::FlightClient::DoExchangeResult> result = db.flight->DoExchange(options, descriptor);
     ar_status = result.status();
+    if (!ar_status.ok()) {
+        *c_error = "Failed to exchange with Arrow server";
+        return;
+    }
+
     ar_status = result->writer->WriteRecordBatch(*batch_ptr);
+    if (!ar_status.ok()) {
+        *c_error = "Failed to serialize request for Arrow server";
+        return;
+    }
+
     ar_status = result->writer->Close();
+    if (!ar_status.ok()) {
+        *c_error = "Failed to submit a request to Arrow server";
+        return;
+    }
 
     // Fetch the responses
     // Requesting `ToTable` might be more efficient than concatenating and
@@ -195,15 +272,13 @@ void ukv_read( //
         return;
     }
 
+    // Convert the responses in Arrow C form
     batch_ptr = read_chunk->data;
     if (batch_ptr->columns().size() != 1) {
         *c_error = "Received an unexpected number of columns";
         return;
     }
 
-    //
-    ArrowArray array_c;
-    ArrowSchema schema_c;
     std::shared_ptr<ar::Array> array_ptr = batch_ptr->column(0);
     ar_status = ar::ExportArray(*array_ptr, &array_c, &schema_c);
     if (!ar_status.ok()) {
@@ -211,23 +286,42 @@ void ukv_read( //
         return;
     }
 
-    if (read_lengths) {
+    // Export the results into out expected form
+    auto bitmap_slots = divide_round_up<std::size_t>(array_c.length, CHAR_BIT);
+    if (request_only_present) {
+        auto nulls = *c_found_nulls = (ukv_1x8_t*)array_c.buffers[1];
+        std::transform(nulls, nulls + bitmap_slots, nulls, [](ukv_1x8_t x) { return ~x; });
+    }
+    else if (request_length) {
         auto nulls = (ukv_1x8_t*)array_c.buffers[0];
-        auto offs = (ukv_val_len_t*)array_c.buffers[1];
-        auto data = (ukv_val_ptr_t)array_c.buffers[2];
-
-        if (c_found_offsets)
-            *c_found_offsets = normalize_lengths_with_bitmap(nulls, offs, array_c.length);
-        if (c_found_values)
-            *c_found_values = data;
-        if (c_found_lengths) {
-            // TODO: We are forced to allocate and reconstruct the lengths if those were requested
+        auto lens = (ukv_val_len_t*)array_c.buffers[1];
+        if (!c_found_nulls)
+            *c_found_lengths = normalize_lengths_with_bitmap(nulls, lens, array_c.length);
+        else {
+            *c_found_nulls = nulls;
+            *c_found_lengths = lens;
         }
     }
     else {
         auto nulls = (ukv_1x8_t*)array_c.buffers[0];
-        auto lens = (ukv_val_len_t*)array_c.buffers[1];
-        *c_found_lengths = normalize_lengths_with_bitmap(nulls, lens, array_c.length);
+        auto offs = (ukv_val_len_t*)array_c.buffers[1];
+        auto data = (ukv_val_ptr_t)array_c.buffers[2];
+
+        if (c_found_nulls)
+            *c_found_nulls = nulls;
+        if (c_found_offsets)
+            *c_found_offsets = offs;
+        if (c_found_values)
+            *c_found_values = data;
+
+        if (c_found_lengths) {
+            auto nulls_range = strided_range_gt<ukv_1x8_t>(nulls, sizeof(ukv_1x8_t), array_c.length);
+            auto lens = *c_found_lengths = arena.alloc<ukv_val_len_t>(tasks.count, c_error).begin();
+            if (*c_error)
+                return;
+            for (std::size_t i = 0; i != tasks.count; ++i)
+                lens[i] = nulls_range[i] ? ukv_val_len_missing_k : (offs[i + 1] - offs[i]);
+        }
     }
 }
 
@@ -251,11 +345,17 @@ void ukv_write( //
     ukv_val_len_t const* c_lens,
     ukv_size_t const c_lens_stride,
 
+    ukv_1x8_t const* c_nulls,
+
     ukv_options_t const c_options,
-    ukv_arena_t*,
+    ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
     if (!c_db && (*c_error = "DataBase is NULL!"))
+        return;
+
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    if (*c_error)
         return;
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
@@ -264,7 +364,12 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
+    strided_range_gt<ukv_1x8_t const> nulls {c_nulls};
+    write_tasks_soa_t tasks {cols, keys, vals, offs, lens, nulls, c_tasks_count};
+
+    // Check if the input is continuous and is already in an Arrow-compatible form
+    if (is_continuous(vals, offs, lens, nulls)) {
+    }
 }
 
 void ukv_scan( //
@@ -283,8 +388,8 @@ void ukv_scan( //
 
     ukv_options_t const c_options,
 
-    ukv_key_t** c_found_keys,
-    ukv_val_len_t** c_found_lengths,
+    ukv_size_t** c_found_counts,
+    ukv_key_t*** c_found_keys,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
