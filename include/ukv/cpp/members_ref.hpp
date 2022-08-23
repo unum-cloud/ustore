@@ -286,7 +286,7 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             ukv_type_any_k,
             wants_value ? &found_values : nullptr,
             wants_value ? &found_offsets : nullptr,
-            wants_length ? &found_lengths : nullptr,
+            wants_value || wants_length ? &found_lengths : nullptr,
             wants_present ? &found_nulls : nullptr,
             arena_,
             status.member_ptr());
@@ -302,7 +302,7 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             options,
             wants_value ? &found_values : nullptr,
             wants_value ? &found_offsets : nullptr,
-            wants_length ? &found_lengths : nullptr,
+            wants_value || wants_length ? &found_lengths : nullptr,
             wants_present ? &found_nulls : nullptr,
             arena_,
             status.member_ptr());

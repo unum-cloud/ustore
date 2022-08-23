@@ -7,6 +7,8 @@
  */
 
 #pragma once
+#include <limits.h> // `CHAR_BIT`
+
 #include "ukv/cpp/types.hpp" // `value_view_t`
 
 namespace unum::ukv {
