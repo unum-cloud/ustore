@@ -332,12 +332,12 @@ void write_txn( //
     }
 }
 
-template <typename value_enumarator_at>
+template <typename value_enumerator_at>
 void read_head_under_lock( //
     stl_db_t& db,
     read_tasks_soa_t tasks,
     ukv_options_t const,
-    value_enumarator_at enumerator,
+    value_enumerator_at enumerator,
     ukv_error_t*) {
 
     for (ukv_size_t i = 0; i != tasks.count; ++i) {
@@ -350,12 +350,12 @@ void read_head_under_lock( //
     }
 }
 
-template <typename value_enumarator_at>
+template <typename value_enumerator_at>
 void read_txn_under_lock( //
     stl_txn_t& txn,
     read_tasks_soa_t tasks,
     ukv_options_t const c_options,
-    value_enumarator_at enumerator,
+    value_enumerator_at enumerator,
     ukv_error_t* c_error) {
 
     stl_db_t& db = *txn.db_ptr;
@@ -426,7 +426,7 @@ void scan_head( //
         scan_task_t task = tasks[i];
         stl_col_t const& col = stl_col(db, task.col);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
-        auto keys_column = keys.begin() + keys_fill_progress;
+        auto keys_column = keys_columns[i] = keys.begin() + keys_fill_progress;
 
         ukv_size_t j = 0;
         for (; j != task.length && key_iterator != col.pairs.end(); ++key_iterator) {
@@ -470,7 +470,7 @@ void scan_txn( //
         stl_col_t const& col = stl_col(db, task.col);
         auto key_iterator = col.pairs.lower_bound(task.min_key);
         auto txn_iterator = txn.upserted.lower_bound(task.min_key);
-        auto keys_column = keys.begin() + keys_fill_progress;
+        auto keys_column = keys_columns[i] = keys.begin() + keys_fill_progress;
 
         ukv_size_t j = 0;
         for (; j != task.length && key_iterator != col.pairs.end();) {
@@ -566,7 +566,7 @@ void ukv_read( //
     bool const needs_export = c_found_values != nullptr;
 
     // 1. Allocate a tape for all the values to be pulled
-    auto offs = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count + 1, c_error, c_found_lengths);
+    auto offs = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count + 1, c_error, c_found_offsets);
     if (*c_error)
         return;
     auto lens = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count, c_error, c_found_lengths);
@@ -602,6 +602,8 @@ void ukv_read( //
 
     c_txn ? read_txn_under_lock(txn, tasks, c_options, data_enumerator, c_error)
           : read_head_under_lock(db, tasks, c_options, data_enumerator, c_error);
+
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin());
     if (needs_export)
         offs[tasks.count] = progress_in_tape;
 }

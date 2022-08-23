@@ -123,7 +123,7 @@ struct neighborship_t {
 class value_view_t {
 
     ukv_val_ptr_t ptr_ = nullptr;
-    ukv_val_len_t length_ = 0;
+    ukv_val_len_t length_ = ukv_val_len_missing_k;
 
   public:
     using value_type = byte_t;
