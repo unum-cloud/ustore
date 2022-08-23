@@ -552,6 +552,46 @@ void inplace_inclusive_prefix_sum(element_at* begin, element_at* const end) {
     element_at sum = 0;
     for (; begin != end; ++begin)
         sum += std::exchange(*begin, *begin + sum);
+
+inline bool is_continuous( //
+    strided_iterator_gt<ukv_val_ptr_t const> vals,
+    strided_iterator_gt<ukv_val_len_t const> offs,
+    strided_iterator_gt<ukv_val_len_t const> lens,
+    strided_range_gt<ukv_1x8_t const> nulls) {
+
+    if (!vals)
+        // We are just removing all the entries in the batch
+        return true;
+    if (!vals.repeats())
+        // We are likely facing disjoint arrays
+        return false;
+    if (!offs)
+        // We need offsets to be present, at least two
+        return false;
+
+    if (nulls && lens) {
+        for (std::size_t i = 0; i != nulls.size(); ++i) {
+            auto expected_len = offs[i + 1] - offs[i];
+            auto received_len = lens[i];
+            if (nulls[i] && (received_len != 0))
+                return false;
+            if (!nulls[i] && (received_len != expected_len))
+                return false;
+        }
+    }
+    else if (lens) {
+        for (std::size_t i = 0; i != nulls.size(); ++i) {
+            auto expected_len = offs[i + 1] - offs[i];
+            auto received_len = lens[i];
+            if (received_len == ukv_val_len_missing_k)
+                // Missing values must be encoded as NULLs
+                return false;
+            if (expected_len != received_len)
+                return false;
+        }
+    }
+
+    return true;
 }
 
 /**
