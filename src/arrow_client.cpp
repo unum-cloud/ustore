@@ -96,6 +96,9 @@ void ukv_db_open( //
     ukv_error_t* c_error) {
 
     try {
+        if (!c_config || !std::strlen(c_config))
+            c_config = "grpc://0.0.0.0:38709";
+
         auto db_ptr = new rpc_client_t {};
         auto maybe_location = arf::Location::Parse(c_config);
         if (!maybe_location.ok()) {
