@@ -181,6 +181,8 @@ void ukv_db_open( //
  *
  * @param[in] lengths        Pointer to lengths of chunks in packed into @param values.
  * @param[in] offsets        Pointer to offsets of relevant content within @param values chunks.
+ * @param[in] nulls          Pointer to bitset with at least @param values bits in it.
+ *
  * @param[out] error         The error to be handled.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
  *
@@ -223,6 +225,13 @@ void ukv_db_open( //
  *      https://boakye.yiadom.org/go/strings/
  *      https://github.com/golang/go/blob/master/src/runtime/string.go (`stringStruct`)
  *      https://github.com/golang/go/blob/master/src/runtime/slice.go (`slice`)
+ *
+ * @section Argument Resolution Order
+ * As different combinations of "value" arguments are possible, we must define the resolution order.
+ * 1. If @param values is NULL or key at index `i` is NULL, we will remote the entry from DB.
+ * 2. If @param nulls is not NULL and bit at index `i` is set, we will remote the entry from DB.
+ * 3. If @param lengths is NULL, we expect `N+1` @param offsets (like Arrow) to determine entry length.
+ * 4. If @param lengths and @param offsets are NULL, we expect NULL-terminated entries and will `std::strlen`.
  */
 void ukv_write( //
     ukv_t const db,
@@ -281,22 +290,27 @@ void ukv_write( //
  *
  * @param[in] options        Read options:
  *                           > track: Adds collision-detection on keys read through txn.
- *                           > lengths: Only fetches lengths of values, not content.
+ *                           > shared: Exports to shared memory to accelerate inter-process communication.
  *
  * @param[out] found_values  Will contain the "base pointer" for @param tasks_count concatenated values.
  *                           Instead of allocating every "string" separately, we join them into
  *                           a single "tape" structure, which later be exported into (often disjoint)
  *                           runtime- or library-specific implementations. To determine the range of each
  *                           chunk use @param found_offsets and @param found_lengths.
+ *                           Is @b optional, as you may only want @param found_lengths or @param found_nulls.
  *
  * @param[out] found_offsets Will contain a pointer to an array with @param tasks_count integers.
  *                           Each marks a response offset in bytes starting from @param found_values.
  *                           To be fully compatible with Apache Arrow we append one more offset at
  *                           at the end to allow inferring the length of the last entry without
  *                           using @param found_lengths.
+ *                           Is @b optional, as you may only want @param found_lengths or @param found_nulls.
  *
  * @param[out] found_lengths Will contain a pointer to an array with @param tasks_count integers.
  *                           Each defines a response length in bytes. Is @b optional.
+ *
+ * @param[out] found_nulls   Will contain a bitset with at least @param tasks_count bits.
+ *                           Each set bit means that such key is missing in DB. Is @b optional.
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
