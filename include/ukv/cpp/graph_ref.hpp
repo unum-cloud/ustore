@@ -167,11 +167,11 @@ class graph_ref_t {
     expected_gt<strided_range_gt<bool>> contains( //
         strided_range_gt<ukv_key_t const> const& vertices,
         bool track = false) noexcept {
-        keys_arg_t arg;
+        places_arg_t arg;
         arg.cols_begin = {&col_, 0};
         arg.keys_begin = vertices.begin();
         arg.count = vertices.count();
-        return members_ref_gt<keys_arg_t>(db_, txn_, arg, arena_).present(track);
+        return members_ref_gt<places_arg_t>(db_, txn_, arg, arena_).present(track);
     }
 
     using adjacency_range_t = range_gt<edges_stream_t>;

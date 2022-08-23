@@ -62,7 +62,7 @@ TEST(db, intro) {
 
     // Reusable memory
     // This interface not just more performant, but also provides nicer interface:
-    //  expected_gt<tape_view_t> tapes = main[{100, 101}].on(arena);
+    //  expected_gt<flat_values_t> tapes = main[{100, 101}].on(arena);
     arena_t arena(db);
     _ = main[{43, 44}].on(arena).clear();
     _ = main[{43, 44}].on(arena).erase();
@@ -102,16 +102,16 @@ void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_leng
     EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
 
     auto const expects_missing = expected_length == ukv_val_len_missing_k;
-    using extractor_t = keys_arg_extractor_gt<locations_at>;
+    using extractor_t = places_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<tape_view_t> retrieved_and_arena = ref.value();
-    tape_view_t const& retrieved = *retrieved_and_arena;
+    expected_gt<flat_values_t> retrieved_and_arena = ref.value();
+    flat_values_t const& retrieved = *retrieved_and_arena;
     ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
 
     // Check views
-    tape_iterator_t it = retrieved.begin();
+    flat_values_iterator_t it = retrieved.begin();
     for (std::size_t i = 0; i != count; ++i, ++it) {
         EXPECT_EQ((*it).size(), expects_missing ? 0 : expected_length);
     }
@@ -132,17 +132,17 @@ void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_leng
 }
 
 template <typename locations_at>
-void check_equalities(members_ref_gt<locations_at>& ref, values_arg_t values) {
+void check_equalities(members_ref_gt<locations_at>& ref, contents_arg_t values) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
-    using extractor_t = keys_arg_extractor_gt<locations_at>;
+    using extractor_t = places_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<tape_view_t> retrieved_and_arena = ref.value();
-    tape_view_t const& retrieved = *retrieved_and_arena;
+    expected_gt<flat_values_t> retrieved_and_arena = ref.value();
+    flat_values_t const& retrieved = *retrieved_and_arena;
     EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
-    tape_iterator_t it = retrieved.begin();
+    flat_values_iterator_t it = retrieved.begin();
     for (std::size_t i = 0; i != extractor_t {}.count(ref.locations()); ++i, ++it) {
         auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
         auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
@@ -155,7 +155,7 @@ void check_equalities(members_ref_gt<locations_at>& ref, values_arg_t values) {
 }
 
 template <typename locations_at>
-void round_trip(members_ref_gt<locations_at>& ref, values_arg_t values) {
+void round_trip(members_ref_gt<locations_at>& ref, contents_arg_t values) {
     EXPECT_TRUE(ref.assign(values)) << "Failed to assign";
     check_equalities(ref, values);
 }
@@ -176,7 +176,7 @@ TEST(db, basic) {
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
     auto ref = col[keys];
-    values_arg_t values {
+    contents_arg_t values {
         .contents_begin = {&vals_begin, 0},
         .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
         .lengths_begin = {&val_len, 0},
@@ -220,7 +220,7 @@ TEST(db, named) {
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
-    values_arg_t values {
+    contents_arg_t values {
         .contents_begin = {&vals_begin, 0},
         .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
         .lengths_begin = {&val_len, 0},
@@ -464,7 +464,7 @@ TEST(db, txn) {
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
-    values_arg_t values {
+    contents_arg_t values {
         .contents_begin = {&vals_begin, 0},
         .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
         .lengths_begin = {&val_len, 0},

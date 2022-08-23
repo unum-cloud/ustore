@@ -127,10 +127,7 @@ void save_to_disk(stl_col_t const& col, std::string const& path, ukv_error_t* c_
     {
         auto n = static_cast<ukv_size_t>(col.unique_elements.load());
         auto saved_len = std::fwrite(&n, sizeof(ukv_size_t), 1, handle);
-        if (saved_len != sizeof(ukv_size_t)) {
-            *c_error = "Couldn't write anything to file.";
-            return;
-        }
+        return_if_error(saved_len == sizeof(ukv_size_t), c_error, 0, "Couldn't write anything to file.");
     }
 
     // Save the entries
@@ -139,27 +136,18 @@ void save_to_disk(stl_col_t const& col, std::string const& path, ukv_error_t* c_
             continue;
 
         auto saved_len = std::fwrite(&key, sizeof(ukv_key_t), 1, handle);
-        if (saved_len != sizeof(ukv_key_t)) {
-            *c_error = "Write partially failed on key.";
-            return;
-        }
+        return_if_error(saved_len != sizeof(ukv_key_t), c_error, 0, "Write partially failed on key.");
 
         auto const& buf = seq_val.buffer;
         auto buf_len = static_cast<ukv_val_len_t>(buf.size());
         saved_len = std::fwrite(&buf_len, sizeof(ukv_val_len_t), 1, handle);
-        if (saved_len != sizeof(ukv_val_len_t)) {
-            *c_error = "Write partially failed on value len.";
-            return;
-        }
+        return_if_error(saved_len != sizeof(ukv_val_len_t), c_error, 0, "Write partially failed on value len.");
 
         saved_len = std::fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
-        if (saved_len != buf.size()) {
-            *c_error = "Write partially failed on value.";
-            return;
-        }
+        return_if_error(saved_len != buf.size(), c_error, 0, "Write partially failed on value.");
     }
 
-    *c_error = handle.close().release_error();
+    log_error(c_error, 0, handle.close().release_error());
 }
 
 void read_from_disk(stl_col_t& col, std::string const& path, ukv_error_t* c_error) {
@@ -172,10 +160,7 @@ void read_from_disk(stl_col_t& col, std::string const& path, ukv_error_t* c_erro
     auto n = ukv_size_t(0);
     {
         auto read_len = std::fread(&n, sizeof(ukv_size_t), 1, handle);
-        if (read_len != sizeof(ukv_size_t)) {
-            *c_error = "Couldn't read anything from file.";
-            return;
-        }
+        return_if_error(read_len == sizeof(ukv_size_t), c_error, 0, "Couldn't read anything from file.");
     }
 
     // Load the entries
@@ -187,56 +172,39 @@ void read_from_disk(stl_col_t& col, std::string const& path, ukv_error_t* c_erro
 
         auto key = ukv_key_t {};
         auto read_len = std::fread(&key, sizeof(ukv_key_t), 1, handle);
-        if (read_len != sizeof(ukv_key_t)) {
-            *c_error = "Read partially failed on key.";
-            return;
-        }
+        return_if_error(read_len == sizeof(ukv_key_t), c_error, 0, "Read partially failed on key.");
 
         auto buf_len = ukv_val_len_t(0);
         read_len = std::fread(&buf_len, sizeof(ukv_val_len_t), 1, handle);
-        if (read_len != sizeof(ukv_val_len_t)) {
-            *c_error = "Read partially failed on value len.";
-            return;
-        }
+        return_if_error(read_len == sizeof(ukv_val_len_t), c_error, 0, "Read partially failed on value len.");
 
         auto buf = buffer_t(buf_len);
         read_len = std::fread(buf.data(), sizeof(byte_t), buf.size(), handle);
-        if (read_len != buf.size()) {
-            *c_error = "Read partially failed on value.";
-            return;
-        }
+        return_if_error(read_len == buf.size(), c_error, 0, "Read partially failed on value.");
 
         col.pairs.emplace(key, stl_value_t {std::move(buf), generation_t {0}, false});
     }
 
-    *c_error = handle.close().release_error();
+    log_error(c_error, 0, handle.close().release_error());
 }
 
 void save_to_disk(stl_db_t const& db, ukv_error_t* c_error) {
     auto dir_path = fs::path(db.persisted_path);
-    if (!fs::is_directory(dir_path)) {
-        *c_error = "Supplied path is not a directory!";
-        return;
-    }
+    return_if_error(fs::is_directory(dir_path), c_error, args_wrong_k, "Supplied path is not a directory!");
 
     save_to_disk(db.main, dir_path / ".stl.ukv", c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     for (auto const& name_and_col : db.named) {
         auto name_with_ext = std::string(name_and_col.first) + ".stl.ukv";
         save_to_disk(*name_and_col.second, dir_path / name_with_ext, c_error);
-        if (*c_error)
-            return;
+        return_on_error(c_error);
     }
 }
 
 void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
     auto dir_path = fs::path(db.persisted_path);
-    if (!fs::is_directory(dir_path)) {
-        *c_error = "Supplied path is not a directory!";
-        return;
-    }
+    return_if_error(fs::is_directory(dir_path), c_error, args_wrong_k, "Supplied path is not a directory!");
 
     // Parse the main main col
     if (fs::path path = dir_path / ".stl.ukv"; fs::is_regular_file(path)) {
@@ -264,37 +232,37 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
 
 void write_head( //
     stl_db_t& db,
-    write_tasks_soa_t tasks,
+    places_arg_t places,
+    contents_arg_t contents,
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
     std::unique_lock _ {db.mutex};
 
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
+    for (std::size_t i = 0; i != contents.size(); ++i) {
 
-        write_task_t task = tasks[i];
-        stl_col_t& col = stl_col(db, task.col);
-        auto key_iterator = col.pairs.find(task.key);
+        auto place = places[i];
+        auto content = contents[i];
+        stl_col_t& col = stl_col(db, place.col);
+        auto key_iterator = col.pairs.find(place.key);
 
         // We want to insert a new entry, but let's check if we
         // can overwrite the existing value without causing reallocations.
-        try {
+        safe_section("Copying new value", c_error, [&] {
             if (key_iterator != col.pairs.end()) {
-                auto value = task.view();
+                auto value = place.view();
                 key_iterator->second.generation = ++db.youngest_generation;
                 key_iterator->second.buffer.assign(value.begin(), value.end());
-                key_iterator->second.is_deleted = task.is_deleted();
+                key_iterator->second.is_deleted = place.is_deleted();
             }
-            else if (!task.is_deleted()) {
-                stl_value_t value_w_generation {task.buffer(), ++db.youngest_generation};
-                col.pairs.emplace(task.key, std::move(value_w_generation));
+            else if (!place.is_deleted()) {
+                buffer_t buffer {place.begin(), place.end()};
+                stl_value_t value_w_generation {std::move(buffer), ++db.youngest_generation};
+                col.pairs.emplace(place.key, std::move(value_w_generation));
                 ++col.unique_elements;
             }
-        }
-        catch (...) {
-            *c_error = "Failed to put!";
-            break;
-        }
+        });
+        return_on_error(c_error);
     }
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
@@ -304,7 +272,8 @@ void write_head( //
 
 void write_txn( //
     stl_txn_t& txn,
-    write_tasks_soa_t tasks,
+    places_arg_t places,
+    contents_arg_t contents,
     ukv_options_t const,
     ukv_error_t* c_error) {
 
@@ -313,37 +282,35 @@ void write_txn( //
     stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
 
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
-        write_task_t task = tasks[i];
+    for (std::size_t i = 0; i != contents.size(); ++i) {
 
-        try {
-            if (task.is_deleted()) {
-                txn.upserted.erase(task.location());
-                txn.removed.insert(task.location());
+        write_task_t place = contents[i];
+
+        safe_section("Copying new value", c_error, [&] {
+            if (place.is_deleted()) {
+                txn.upserted.erase(place.col_key());
+                txn.removed.insert(place.col_key());
             }
             else {
-                txn.upserted.insert_or_assign(task.location(), task.buffer());
+                txn.upserted.insert_or_assign(place.col_key(), place.buffer());
             }
-        }
-        catch (...) {
-            *c_error = "Failed to put into transaction!";
-            break;
-        }
+        });
+        return_on_error(c_error);
     }
 }
 
 template <typename value_enumerator_at>
 void read_head_under_lock( //
     stl_db_t& db,
-    read_tasks_soa_t tasks,
+    places_arg_t tasks,
     ukv_options_t const,
     value_enumerator_at enumerator,
     ukv_error_t*) {
 
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
-        read_task_t task = tasks[i];
-        stl_col_t const& col = stl_col(db, task.col);
-        auto key_iterator = col.pairs.find(task.key);
+    for (std::size_t i = 0; i != tasks.size(); ++i) {
+        place_t place = tasks[i];
+        stl_col_t const& col = stl_col(db, place.col);
+        auto key_iterator = col.pairs.find(place.key);
         bool found = key_iterator != col.pairs.end() && !key_iterator->second.is_deleted;
         auto value = found ? value_view(key_iterator->second.buffer) : value_view_t {};
         enumerator(i, value);
@@ -353,7 +320,7 @@ void read_head_under_lock( //
 template <typename value_enumerator_at>
 void read_txn_under_lock( //
     stl_txn_t& txn,
-    read_tasks_soa_t tasks,
+    places_arg_t tasks,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
     ukv_error_t* c_error) {
@@ -362,20 +329,20 @@ void read_txn_under_lock( //
     generation_t const youngest_generation = db.youngest_generation.load();
     bool const should_track_requests = c_options & ukv_option_read_track_k;
 
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
-        read_task_t task = tasks[i];
-        stl_col_t const& col = stl_col(db, task.col);
+    for (std::size_t i = 0; i != tasks.size(); ++i) {
+        place_t place = tasks[i];
+        stl_col_t const& col = stl_col(db, place.col);
 
         // Some keys may already be overwritten inside of transaction
-        if (auto inner_iterator = txn.upserted.find(task.location()); inner_iterator != txn.upserted.end())
+        if (auto inner_iterator = txn.upserted.find(place.col_key()); inner_iterator != txn.upserted.end())
             enumerator(i, value_view(inner_iterator->second));
 
         // Some may have been deleted inside the transaction
-        else if (auto inner_iterator = txn.removed.find(task.location()); inner_iterator != txn.removed.end())
+        else if (auto inner_iterator = txn.removed.find(place.col_key()); inner_iterator != txn.removed.end())
             enumerator(i, value_view_t {});
 
         // Others should be pulled from the main store
-        else if (auto key_iterator = col.pairs.find(task.key); key_iterator != col.pairs.end()) {
+        else if (auto key_iterator = col.pairs.find(place.key); key_iterator != col.pairs.end()) {
 
             if (entry_was_overwritten(key_iterator->second.generation, txn.generation, youngest_generation) &&
                 (*c_error = "Requested key was already overwritten since the start of the transaction!"))
@@ -386,7 +353,7 @@ void read_txn_under_lock( //
             enumerator(i, value);
 
             if (should_track_requests)
-                txn.requested.emplace(task.location(), key_iterator->second.generation);
+                txn.requested.emplace(place.col_key(), key_iterator->second.generation);
         }
 
         // But some will be missing
@@ -394,14 +361,14 @@ void read_txn_under_lock( //
             enumerator(i, value_view_t {});
 
             if (should_track_requests)
-                txn.requested.emplace(task.location(), generation_t {});
+                txn.requested.emplace(place.col_key(), generation_t {});
         }
     }
 }
 
 void scan_head( //
     stl_db_t& db,
-    scan_tasks_soa_t tasks,
+    scans_arg_t tasks,
     ukv_options_t const options,
     ukv_size_t** c_found_counts,
     ukv_key_t*** c_found_keys,
@@ -412,24 +379,23 @@ void scan_head( //
 
     // 1. Allocate a tape for all the values to be fetched
     auto counts = arena.alloc_or_dummy<ukv_size_t>(tasks.count, c_error, c_found_counts);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
     auto total_keys = reduce_n(tasks.lengths, tasks.count, 0ul);
     auto keys_columns = arena.alloc_or_dummy<ukv_key_t*>(tasks.count, c_error, c_found_keys);
+    return_on_error(c_error);
     auto keys = arena.alloc<ukv_key_t>(total_keys, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     // 2. Fetch the data
     ukv_size_t keys_fill_progress = 0;
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
-        scan_task_t task = tasks[i];
-        stl_col_t const& col = stl_col(db, task.col);
-        auto key_iterator = col.pairs.lower_bound(task.min_key);
+    for (std::size_t i = 0; i != tasks.size(); ++i) {
+        scan_t place = tasks[i];
+        stl_col_t const& col = stl_col(db, place.col);
+        auto key_iterator = col.pairs.lower_bound(place.min_key);
         auto keys_column = keys_columns[i] = keys.begin() + keys_fill_progress;
 
         ukv_size_t j = 0;
-        for (; j != task.length && key_iterator != col.pairs.end(); ++key_iterator) {
+        for (; j != place.length && key_iterator != col.pairs.end(); ++key_iterator) {
             if (key_iterator->second.is_deleted)
                 continue;
             keys_column[j] = key_iterator->first;
@@ -437,13 +403,13 @@ void scan_head( //
         }
 
         counts[i] = j;
-        keys_fill_progress += task.length;
+        keys_fill_progress += place.length;
     }
 }
 
 void scan_txn( //
     stl_txn_t& txn,
-    scan_tasks_soa_t tasks,
+    scans_arg_t tasks,
     ukv_options_t const options,
     ukv_size_t** c_found_counts,
     ukv_key_t*** c_found_keys,
@@ -455,25 +421,23 @@ void scan_txn( //
 
     // 1. Allocate a tape for all the values to be fetched
     auto counts = arena.alloc_or_dummy<ukv_size_t>(tasks.count, c_error, c_found_counts);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
     auto total_keys = reduce_n(tasks.lengths, tasks.count, 0ul);
     auto keys_columns = arena.alloc_or_dummy<ukv_key_t*>(tasks.count, c_error, c_found_keys);
     auto keys = arena.alloc<ukv_key_t>(total_keys, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     // 2. Fetch the data
     ukv_size_t keys_fill_progress = 0;
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
-        scan_task_t task = tasks[i];
-        stl_col_t const& col = stl_col(db, task.col);
-        auto key_iterator = col.pairs.lower_bound(task.min_key);
-        auto txn_iterator = txn.upserted.lower_bound(task.min_key);
+    for (std::size_t i = 0; i != tasks.size(); ++i) {
+        scan_t place = tasks[i];
+        stl_col_t const& col = stl_col(db, place.col);
+        auto key_iterator = col.pairs.lower_bound(place.min_key);
+        auto txn_iterator = txn.upserted.lower_bound(place.min_key);
         auto keys_column = keys_columns[i] = keys.begin() + keys_fill_progress;
 
         ukv_size_t j = 0;
-        for (; j != task.length && key_iterator != col.pairs.end();) {
+        for (; j != place.length && key_iterator != col.pairs.end();) {
             // Check if the key was already removed:
             if (key_iterator->second.is_deleted || txn.removed.find(key_iterator->first) != txn.removed.end()) {
                 ++key_iterator;
@@ -481,7 +445,7 @@ void scan_txn( //
             }
 
             // Compare against the incoming inserted keys:
-            bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.col == task.col;
+            bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.col == place.col;
             if (check_in_txn && txn_iterator->first.key <= key_iterator->first) {
                 keys_column[j] = txn_iterator->first.key;
                 ++txn_iterator;
@@ -496,14 +460,14 @@ void scan_txn( //
         }
 
         // As in any `set_union`, don't forget the tail :)
-        while (j != task.length && txn_iterator != txn.upserted.end() && txn_iterator->first.col == task.col) {
+        while (j != place.length && txn_iterator != txn.upserted.end() && txn_iterator->first.col == place.col) {
             keys_column[j] = txn_iterator->first.key;
             ++txn_iterator;
             ++j;
         }
 
         counts[i] = j;
-        keys_fill_progress += task.length;
+        keys_fill_progress += place.length;
     }
 }
 
@@ -516,7 +480,7 @@ void ukv_db_open( //
     ukv_t* c_db,
     ukv_error_t* c_error) {
 
-    try {
+    safe_section("Initializing DBMS", c_error, [&] {
         auto db_ptr = new stl_db_t {};
         auto len = std::strlen(c_config);
         if (len) {
@@ -524,10 +488,7 @@ void ukv_db_open( //
             read_from_disk(*db_ptr, c_error);
         }
         *c_db = db_ptr;
-    }
-    catch (...) {
-        *c_error = "Failed to initialize the database";
-    }
+    });
 }
 
 void ukv_read( //
@@ -551,30 +512,25 @@ void ukv_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    read_tasks_soa_t tasks {cols, keys, c_tasks_count};
+    places_arg_t tasks {cols, keys, c_tasks_count};
     bool const needs_export = c_found_values != nullptr;
 
     // 1. Allocate a tape for all the values to be pulled
     auto offs = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count + 1, c_error, c_found_offsets);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
     auto lens = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count, c_error, c_found_lengths);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
     auto nulls = arena.alloc_or_dummy<ukv_1x8_t>(tasks.count, c_error, c_found_nulls);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     // 2. Pull metadata
     std::size_t total_length = 0;
@@ -634,8 +590,7 @@ void ukv_write( //
     ukv_arena_t*,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
@@ -645,7 +600,7 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     strided_range_gt<ukv_1x8_t const> nulls {c_nulls};
-    write_tasks_soa_t tasks {cols, keys, vals, offs, lens, nulls, c_tasks_count};
+    contents_arg_t tasks {cols, keys, vals, offs, lens, nulls, c_tasks_count};
 
     return c_txn ? write_txn(txn, tasks, c_options, c_error) : write_head(db, tasks, c_options, c_error);
 }
@@ -672,19 +627,17 @@ void ukv_scan( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
-    scan_tasks_soa_t tasks {cols, keys, lens, c_min_tasks_count};
+    scans_arg_t tasks {cols, keys, lens, c_min_tasks_count};
 
     return c_txn ? scan_txn(txn, tasks, c_options, c_found_counts, c_found_keys, arena, c_error)
                  : scan_head(db, tasks, c_options, c_found_counts, c_found_keys, arena, c_error);
@@ -710,14 +663,11 @@ void ukv_size( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
     auto estimates = *c_found_estimates = arena.alloc<ukv_size_t>(6 * n, c_error).begin();
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
@@ -782,30 +732,25 @@ void ukv_col_open(
     ukv_col_t* c_col,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
-
     auto name_len = std::strlen(c_col_name);
     if (!name_len) {
         *c_col = ukv_col_main_k;
         return;
     }
 
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
 
     auto const col_name = std::string_view(c_col_name, name_len);
     auto col_it = db.named.find(col_name);
     if (col_it == db.named.end()) {
-        try {
+        safe_section("Inserting new collection", c_error, [&] {
             auto new_col = std::make_unique<stl_col_t>();
             new_col->name = col_name;
             *c_col = reinterpret_cast<ukv_col_t>(new_col.get());
             db.named.emplace(new_col->name, std::move(new_col));
-        }
-        catch (...) {
-            *c_error = "Failed to create a new col!";
-        }
+        });
     }
     else {
         *c_col = reinterpret_cast<ukv_col_t>(col_it->second.get());
@@ -819,8 +764,7 @@ void ukv_col_remove(
     // Outputs:
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
@@ -847,17 +791,11 @@ void ukv_col_list( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
-
-    if (!c_count || !c_names) {
-        *c_error = "Names and count outputs can't be NULL";
-        return;
-    }
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    return_if_error(c_count && c_names, c_error, args_combo_k, "Need names and outputs!");
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::shared_lock _ {db.mutex};
@@ -870,16 +808,13 @@ void ukv_col_list( //
         strings_length += name_and_contents.first.size() + 1;
     auto names = arena.alloc<char>(strings_length, c_error).begin();
     *c_names = names;
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     // For every collection we also need to export IDs and offsets
     auto ids = arena.alloc_or_dummy<ukv_col_t>(cols_count, c_error, c_ids);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
     auto offs = arena.alloc_or_dummy<ukv_val_len_t>(cols_count + 1, c_error, c_offs);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     std::size_t i = 0;
     for (auto const& name_and_contents : db.named) {
@@ -900,14 +835,11 @@ void ukv_db_control( //
     ukv_str_view_t* c_response,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
-
-    if (!c_request && (*c_error = "Request is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    return_if_error(c_request, c_error, uninitialized_state_k, "Request is uninitialized");
 
     *c_response = NULL;
-    *c_error = "Controls aren't supported in this implementation!";
+    log_error(c_error, missing_feature_k, "Controls aren't supported in this implementation!");
 }
 
 /*********************************************************/
@@ -923,18 +855,14 @@ void ukv_txn_begin(
     ukv_txn_t* c_txn,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
-
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
-    if (!*c_txn) {
-        try {
+
+    safe_section("Initializing transaction state", c_error, [&] {
+        if (!*c_txn)
             *c_txn = new stl_txn_t();
-        }
-        catch (...) {
-            *c_error = "Failed to initialize the transaction";
-        }
-    }
+    });
+    return_on_error(c_error);
 
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(*c_txn);
     txn.db_ptr = &db;
@@ -949,8 +877,7 @@ void ukv_txn_commit( //
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
-    if (!c_txn && (*c_error = "Transaction is NULL!"))
-        return;
+    return_if_error(c_txn, c_error, uninitialized_state_k, "Transaction is uninitialized");
 
     // This write may fail with out-of-memory errors, if Hash-Tables
     // bucket allocation fails, but no values will be copied, only moved.
@@ -1001,15 +928,12 @@ void ukv_txn_commit( //
     }
 
     // 4. Allocate space for more nodes across different cols
-    try {
+    safe_section("Inserting new collections", c_error, [&] {
         db.main.reserve_more(txn.upserted.size());
         for (auto& name_and_col : db.named)
             name_and_col.second->reserve_more(txn.upserted.size());
-    }
-    catch (...) {
-        *c_error = "Not enough memory!";
-        return;
-    }
+    });
+    return_on_error(c_error);
 
     // 5. Import the data, as no collisions were detected
     for (auto& sub_key_and_value : txn.upserted) {
