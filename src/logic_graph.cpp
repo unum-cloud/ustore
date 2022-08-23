@@ -10,7 +10,6 @@
 #include <optional> // `std::optional`
 #include <limits>   // `std::numeric_limits`
 
-// #include "ukv/graph.hpp"
 #include "helpers.hpp"
 
 /*********************************************************/
@@ -25,9 +24,10 @@ ukv_vertex_degree_t ukv_vertex_degree_missing_k = std::numeric_limits<ukv_vertex
 
 constexpr std::size_t bytes_in_degrees_header_k = 2 * sizeof(ukv_vertex_degree_t);
 
-indexed_range_gt<neighborship_t const*> neighbors(ukv_vertex_degree_t const* degrees,
-                                                  ukv_key_t const* neighborships,
-                                                  ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+indexed_range_gt<neighborship_t const*> neighbors( //
+    ukv_vertex_degree_t const* degrees,
+    ukv_key_t const* neighborships,
+    ukv_vertex_role_t role = ukv_vertex_role_any_k) {
     auto ships = reinterpret_cast<neighborship_t const*>(neighborships);
 
     switch (role) {
@@ -137,7 +137,7 @@ struct neighborhood_t {
 
     /**
      * @return true  If the node is present in the graph.
-     *               The neighborhood may be empy.
+     *               The neighborhood may be empty.
      */
     inline operator bool() const noexcept { return sources && targets; }
 };
@@ -321,55 +321,53 @@ void export_edge_tuples( //
     tape_view_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
+    constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
 
     // Estimate the amount of memory we will need for the arena
-    std::size_t total_neighborships = 0;
+    std::size_t count_ids = 0;
     {
         tape_iterator_t values_it = values.begin();
         for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
             value_view_t value = *values_it;
             ukv_vertex_role_t role = roles[i];
-            total_neighborships += neighbors(value, role).size();
+            count_ids += neighbors(value, role).size();
         }
+        count_ids *= tuple_size_k;
     }
-    constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
 
     // Export into arena
-    span_gt<byte_t> vertex_data = arena.alloc<byte_t>(total_neighborships * sizeof(ukv_key_t) * tuple_size_k +
-                                                          c_vertices_count * sizeof(ukv_vertex_degree_t),
-                                                      c_error);
+    auto ids = arena.alloc_or_dummy<ukv_key_t>(count_ids, c_error, c_neighborships_per_vertex);
+    if (*c_error)
+        return;
+    auto vertex_degrees = arena.alloc_or_dummy<ukv_vertex_degree_t>(c_vertices_count, c_error, c_degrees_per_vertex);
     if (*c_error)
         return;
 
-    // Export into arena
-    auto const degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(vertex_data.begin());
-    auto neighborships_per_vertex = reinterpret_cast<ukv_key_t*>(degrees_per_vertex + c_vertices_count);
-
+    std::size_t passed_ids = 0;
     tape_iterator_t values_it = values.begin();
     for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
         value_view_t value = *values_it;
         ukv_key_t vertex_id = vertices_ids[i];
         ukv_vertex_role_t role = roles[i];
-        ukv_vertex_degree_t& degree = degrees_per_vertex[i];
 
         // Some values may be missing
         if (value.empty()) {
-            degree = ukv_vertex_degree_missing_k;
+            vertex_degrees[i] = ukv_vertex_degree_missing_k;
             continue;
         }
 
-        degree = 0;
+        ukv_vertex_degree_t degree = 0;
         if (role & ukv_vertex_source_k) {
             auto ns = neighbors(value, ukv_vertex_source_k);
             if constexpr (tuple_size_k != 0)
                 for (neighborship_t n : ns) {
                     if constexpr (export_center_ak)
-                        neighborships_per_vertex[0] = vertex_id;
+                        ids[passed_ids + 0] = vertex_id;
                     if constexpr (export_neighbor_ak)
-                        neighborships_per_vertex[export_center_ak] = n.neighbor_id;
+                        ids[passed_ids + export_center_ak] = n.neighbor_id;
                     if constexpr (export_edge_ak)
-                        neighborships_per_vertex[export_center_ak + export_neighbor_ak] = n.edge_id;
-                    neighborships_per_vertex += tuple_size_k;
+                        ids[passed_ids + export_center_ak + export_neighbor_ak] = n.edge_id;
+                    passed_ids += tuple_size_k;
                 }
             degree += static_cast<ukv_vertex_degree_t>(ns.size());
         }
@@ -378,19 +376,18 @@ void export_edge_tuples( //
             if constexpr (tuple_size_k != 0)
                 for (neighborship_t n : ns) {
                     if constexpr (export_neighbor_ak)
-                        neighborships_per_vertex[0] = n.neighbor_id;
+                        ids[passed_ids + 0] = n.neighbor_id;
                     if constexpr (export_center_ak)
-                        neighborships_per_vertex[export_neighbor_ak] = vertex_id;
+                        ids[passed_ids + export_neighbor_ak] = vertex_id;
                     if constexpr (export_edge_ak)
-                        neighborships_per_vertex[export_center_ak + export_neighbor_ak] = n.edge_id;
-                    neighborships_per_vertex += tuple_size_k;
+                        ids[passed_ids + export_center_ak + export_neighbor_ak] = n.edge_id;
+                    passed_ids += tuple_size_k;
                 }
             degree += static_cast<ukv_vertex_degree_t>(ns.size());
         }
-    }
 
-    *c_degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(vertex_data.begin());
-    *c_neighborships_per_vertex = reinterpret_cast<ukv_key_t*>(degrees_per_vertex + c_vertices_count);
+        vertex_degrees[i] = degree;
+    }
 }
 
 void export_disjoint_edge_buffers( //
