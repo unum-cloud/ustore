@@ -121,14 +121,14 @@ class col_t {
         return (maybe->min + maybe->max) / 2;
     }
 
-    inline members_ref_gt<keys_arg_t> operator[](std::initializer_list<ukv_key_t> keys) noexcept { return at(keys); }
-    inline members_ref_gt<keys_arg_t> at(std::initializer_list<ukv_key_t> keys) noexcept { //
+    inline members_ref_gt<places_arg_t> operator[](std::initializer_list<ukv_key_t> keys) noexcept { return at(keys); }
+    inline members_ref_gt<places_arg_t> at(std::initializer_list<ukv_key_t> keys) noexcept { //
         return at(strided_range(keys));
     }
 
-    inline members_ref_gt<keys_arg_t> operator[](keys_view_t keys) noexcept { return at(keys); }
-    inline members_ref_gt<keys_arg_t> at(keys_view_t keys) noexcept {
-        keys_arg_t arg;
+    inline members_ref_gt<places_arg_t> operator[](keys_view_t keys) noexcept { return at(keys); }
+    inline members_ref_gt<places_arg_t> at(keys_view_t keys) noexcept {
+        places_arg_t arg;
         arg.cols_begin = &col_;
         arg.keys_begin = keys.begin();
         arg.count = keys.size();
@@ -209,16 +209,16 @@ class txn_t : public std::enable_shared_from_this<txn_t> {
         txn_ = nullptr;
     }
 
-    members_ref_gt<keys_arg_t> operator[](strided_range_gt<col_key_t const> cols_and_keys) noexcept {
-        keys_arg_t arg;
+    members_ref_gt<places_arg_t> operator[](strided_range_gt<col_key_t const> cols_and_keys) noexcept {
+        places_arg_t arg;
         arg.cols_begin = cols_and_keys.members(&col_key_t::col).begin();
         arg.keys_begin = cols_and_keys.members(&col_key_t::key).begin();
         arg.count = cols_and_keys.size();
         return {db_, txn_, std::move(arg), arena_};
     }
 
-    members_ref_gt<keys_arg_t> operator[](strided_range_gt<col_key_field_t const> cols_and_keys) noexcept {
-        keys_arg_t arg;
+    members_ref_gt<places_arg_t> operator[](strided_range_gt<col_key_field_t const> cols_and_keys) noexcept {
+        places_arg_t arg;
         arg.cols_begin = cols_and_keys.members(&col_key_field_t::col).begin();
         arg.keys_begin = cols_and_keys.members(&col_key_field_t::key).begin();
         arg.fields_begin = cols_and_keys.members(&col_key_field_t::field).begin();
@@ -226,8 +226,8 @@ class txn_t : public std::enable_shared_from_this<txn_t> {
         return {db_, txn_, std::move(arg), arena_};
     }
 
-    members_ref_gt<keys_arg_t> operator[](keys_view_t keys) noexcept { //
-        keys_arg_t arg;
+    members_ref_gt<places_arg_t> operator[](keys_view_t keys) noexcept { //
+        places_arg_t arg;
         arg.keys_begin = keys.begin();
         arg.count = keys.size();
         return {db_, txn_, std::move(arg), arena_};

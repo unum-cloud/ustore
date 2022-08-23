@@ -295,8 +295,7 @@ void export_edge_tuples( //
     ukv_val_len_t* c_found_lengths = nullptr;
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
     // Even if we need just the node degrees, we can't limit ourselves to just entry lengths.
     // Those may be compressed. We need to read the first bytes to parse the degree of the node.
@@ -315,10 +314,9 @@ void export_edge_tuples( //
         nullptr,
         &new_arena,
         c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
-    tape_view_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
+    flat_values_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
     constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
@@ -326,7 +324,7 @@ void export_edge_tuples( //
     // Estimate the amount of memory we will need for the arena
     std::size_t count_ids = 0;
     {
-        tape_iterator_t values_it = values.begin();
+        flat_values_iterator_t values_it = values.begin();
         for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
             value_view_t value = *values_it;
             ukv_vertex_role_t role = roles[i];
@@ -337,14 +335,12 @@ void export_edge_tuples( //
 
     // Export into arena
     auto ids = arena.alloc_or_dummy<ukv_key_t>(count_ids, c_error, c_neighborships_per_vertex);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
     auto vertex_degrees = arena.alloc_or_dummy<ukv_vertex_degree_t>(c_vertices_count, c_error, c_degrees_per_vertex);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     std::size_t passed_ids = 0;
-    tape_iterator_t values_it = values.begin();
+    flat_values_iterator_t values_it = values.begin();
     for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
         value_view_t value = *values_it;
         ukv_key_t vertex_id = vertices_ids[i];
@@ -411,8 +407,7 @@ void export_disjoint_edge_buffers( //
     ukv_val_len_t* c_found_lengths = nullptr;
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
     ukv_read( //
@@ -430,10 +425,9 @@ void export_disjoint_edge_buffers( //
         nullptr,
         &new_arena,
         c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
-    tape_view_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
+    flat_values_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
     std::size_t value_idx = 0;
     for (value_view_t value : values)
         c_values[value_idx++] = value;
@@ -463,8 +457,7 @@ void update_neighborhoods( //
     ukv_error_t* c_error) {
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
     strided_iterator_gt<ukv_col_t const> collections {c_cols, c_cols_stride};
@@ -503,8 +496,7 @@ void update_neighborhoods( //
         updated_vals.data(),
         &new_arena,
         c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     // Upsert into in-memory arrays
     for (ukv_size_t i = 0; i != c_tasks_count; ++i) {
@@ -693,8 +685,7 @@ void ukv_graph_remove_vertices( //
     ukv_error_t* c_error) {
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
     strided_iterator_gt<ukv_col_t const> collections {c_cols, c_cols_stride};
@@ -719,8 +710,7 @@ void ukv_graph_remove_vertices( //
         &neighbors_per_vertex,
         &new_arena,
         c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     // Enumerate the opposite ends, from which that same reference must be removed.
     // Here all the keys will be in the sorted order.
@@ -757,8 +747,7 @@ void ukv_graph_remove_vertices( //
         updated_vals.data(),
         &new_arena,
         c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     // From every opposite end - remove a match, and only then - the content itself
     for (ukv_size_t i = 0; i != updated_keys.size(); ++i) {
