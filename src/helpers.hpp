@@ -38,9 +38,20 @@ using buffer_t = std::vector<byte_t, allocator_t>;
 using generation_t = std::int64_t;
 
 constexpr std::size_t arrow_extra_offsets_k = 1;
+constexpr std::size_t arrow_bytes_alignment_k = 64;
 
 inline std::size_t next_power_of_two(std::size_t x) {
     return 1ull << (sizeof(std::size_t) * CHAR_BIT - __builtin_clzll(x));
+}
+
+template <typename at = std::size_t>
+inline at divide_round_up(at x, at divisor) {
+    return (x + (divisor - 1)) / divisor;
+}
+
+template <typename at = std::size_t>
+inline at next_multiple(at x, at divisor) {
+    return divide_round_up(x, divisor) * divisor;
 }
 
 /**
@@ -190,7 +201,7 @@ class growing_tape_t {
     strided_range_gt<ukv_val_len_t> lengths() noexcept { return strided_range(lengths_); }
     strided_range_gt<byte_t> contents() noexcept { return strided_range(contents_); }
 
-    operator tape_view_t() noexcept {
+    operator flat_values_t() noexcept {
         return {ukv_val_ptr_t(contents_.data()), offsets_.data(), lengths_.data(), lengths_.size()};
     }
 };
@@ -299,16 +310,13 @@ struct stl_arena_t {
     explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept : resource(mem_resource) {}
     explicit stl_arena_t( //
         std::size_t buffer_size = 1024ul * 1024ul,
-        std::pmr::memory_resource* upstream = std::pmr::get_default_resource()) noexcept
+        std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
         : resource(buffer_size, 64ul, upstream) {}
 
     template <typename at>
     span_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
         void* result = resource.allocate(sizeof(at) * size, alignment);
-        if (!result) {
-            *c_error = "Failed to allocate memory!";
-            return {};
-        }
+        log_if_error(result, c_error, out_of_memory_k, "");
         return {reinterpret_cast<at*>(result), size};
     }
 
@@ -320,11 +328,10 @@ struct stl_arena_t {
         std::size_t alignment = sizeof(at)) noexcept {
 
         void* result = resource.allocate(sizeof(at) * additional_size, alignment);
-        if (!result) {
-            *c_error = "Failed to allocate memory!";
-            return result;
-        }
-        std::memcpy(result, span.begin(), span.size_bytes());
+        if (result)
+            std::memcpy(result, span.begin(), span.size_bytes());
+        else
+            log_error(c_error, out_of_memory_k, "");
         return {reinterpret_cast<at*>(result), span.size + additional_size};
     }
 
@@ -344,6 +351,19 @@ struct stl_arena_t {
     monotonic_resource_t resource;
 };
 
+template <typename dangerous_at>
+void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dangerous) {
+    try {
+        dangerous();
+    }
+    catch (std::bad_alloc const&) {
+        log_error(c_error, out_of_memory_k, name);
+    }
+    catch (...) {
+        log_error(c_error, error_unknown_k, name);
+    }
+}
+
 inline stl_arena_t clean_arena(ukv_arena_t* c_arena, ukv_error_t* c_error) noexcept {
     try {
         if (!*c_arena)
@@ -353,7 +373,7 @@ inline stl_arena_t clean_arena(ukv_arena_t* c_arena, ukv_error_t* c_error) noexc
         return stl_arena_t(&arena->resource);
     }
     catch (...) {
-        *c_error = "Failed to allocate memory!";
+        log_error(c_error, out_of_memory_k, "");
         return stl_arena_t(nullptr);
     }
 }
@@ -371,133 +391,6 @@ inline bool entry_was_overwritten(generation_t entry_generation,
                ? ((entry_generation >= transaction_generation) & (entry_generation <= youngest_generation))
                : ((entry_generation >= transaction_generation) | (entry_generation <= youngest_generation));
 }
-
-struct read_task_t {
-    ukv_col_t col;
-    ukv_key_t const& key;
-
-    inline col_key_t location() const noexcept { return col_key_t {col, key}; }
-};
-
-/**
- * @brief Arguments of `ukv_read` aggregated into a Structure-of-Arrays.
- * Is used to validate various combinations of arguments, strides, NULLs, etc.
- */
-struct read_tasks_soa_t {
-    strided_iterator_gt<ukv_col_t const> cols;
-    strided_iterator_gt<ukv_key_t const> keys;
-    ukv_size_t count = 0;
-
-    inline std::size_t size() const noexcept { return count; }
-
-    inline read_task_t operator[](ukv_size_t i) const noexcept {
-        ukv_col_t col = cols ? cols[i] : ukv_col_main_k;
-        ukv_key_t const& key = keys[i];
-        return {col, key};
-    }
-};
-
-struct scan_task_t {
-    ukv_col_t col;
-    ukv_key_t const& min_key;
-    ukv_size_t length;
-
-    inline col_key_t location() const noexcept { return col_key_t {col, min_key}; }
-};
-
-/**
- * @brief Arguments of `ukv_scan` aggregated into a Structure-of-Arrays.
- * Is used to validate various combinations of arguments, strides, NULLs, etc.
- */
-struct scan_tasks_soa_t {
-    strided_iterator_gt<ukv_col_t const> cols;
-    strided_iterator_gt<ukv_key_t const> min_keys;
-    strided_iterator_gt<ukv_size_t const> lengths;
-    ukv_size_t count = 0;
-
-    inline std::size_t size() const noexcept { return count; }
-
-    inline scan_task_t operator[](ukv_size_t i) const noexcept {
-        ukv_col_t col = cols ? cols[i] : ukv_col_main_k;
-        ukv_key_t const& key = min_keys[i];
-        ukv_size_t len = lengths[i];
-        return {col, key, len};
-    }
-};
-
-struct write_task_t {
-    ukv_col_t col;
-    ukv_key_t const& key;
-    byte_t const* begin;
-    ukv_val_len_t offset;
-    ukv_val_len_t length;
-
-    inline col_key_t location() const noexcept { return col_key_t {col, key}; }
-    inline bool is_deleted() const noexcept { return begin == nullptr; }
-    value_view_t view() const noexcept { return {begin + offset, begin + offset + length}; }
-    buffer_t buffer() const { return {begin + offset, begin + offset + length}; }
-};
-
-/**
- * @brief Arguments of `ukv_write` aggregated into a Structure-of-Arrays.
- * Is used to validate various combinations of arguments, strides, NULLs, etc.
- */
-struct write_tasks_soa_t {
-    strided_iterator_gt<ukv_col_t const> cols;
-    strided_iterator_gt<ukv_key_t const> keys;
-    strided_iterator_gt<ukv_val_ptr_t const> vals;
-    strided_iterator_gt<ukv_val_len_t const> offs;
-    strided_iterator_gt<ukv_val_len_t const> lens;
-    strided_range_gt<ukv_1x8_t const> nulls;
-    ukv_size_t count = 0;
-
-    inline std::size_t size() const noexcept { return count; }
-
-    inline write_task_t operator[](ukv_size_t i) const noexcept {
-        ukv_col_t col = cols ? cols[i] : ukv_col_main_k;
-        ukv_key_t const& key = keys[i];
-        byte_t const* begin;
-        ukv_val_len_t off;
-        ukv_val_len_t len;
-        if (vals) {
-            begin = reinterpret_cast<byte_t const*>(vals[i]);
-            // We have separate entries at different start points.
-            if (!offs && lens) {
-                off = 0u;
-                len = lens[i];
-            }
-            // We are working with a densely packed tape with `count + 1` offsets.
-            else if (offs && !lens) {
-                off = offs[i];
-                if (off == ukv_val_len_missing_k) {
-                    auto next_start_idx = i + 1;
-                    while (offs[next_start_idx] != ukv_val_len_missing_k)
-                        ++next_start_idx;
-                    len = offs[next_start_idx] - off;
-                }
-                else
-                    len = ukv_val_len_missing_k;
-            }
-            // All the info is provided.
-            else if (offs && lens) {
-                off = offs[i];
-                len = lens[i];
-            }
-            // We are just given C-strings, we have to guess the length.
-            else {
-                off = 0u;
-                len = std::strlen(reinterpret_cast<char const*>(begin));
-            }
-        }
-        // An entry just has to be deleted.
-        else {
-            begin = nullptr;
-            off = 0u;
-            len = 0u;
-        }
-        return {col, key, begin, off, len};
-    }
-};
 
 class file_handle_t {
     std::FILE* handle_ = nullptr;
@@ -548,90 +441,11 @@ std::size_t offset_in_sorted(std::vector<element_at, alloc_at> const& elems, ele
 }
 
 template <typename element_at>
-void inplace_inclusive_prefix_sum(element_at* begin, element_at* const end) {
+element_at inplace_inclusive_prefix_sum(element_at* begin, element_at* const end) {
     element_at sum = 0;
     for (; begin != end; ++begin)
         sum += std::exchange(*begin, *begin + sum);
-
-inline bool is_continuous( //
-    strided_iterator_gt<ukv_val_ptr_t const> vals,
-    strided_iterator_gt<ukv_val_len_t const> offs,
-    strided_iterator_gt<ukv_val_len_t const> lens,
-    strided_range_gt<ukv_1x8_t const> nulls) {
-
-    if (!vals)
-        // We are just removing all the entries in the batch
-        return true;
-    if (!vals.repeats())
-        // We are likely facing disjoint arrays
-        return false;
-    if (!offs)
-        // We need offsets to be present, at least two
-        return false;
-
-    if (nulls && lens) {
-        for (std::size_t i = 0; i != nulls.size(); ++i) {
-            auto expected_len = offs[i + 1] - offs[i];
-            auto received_len = lens[i];
-            if (nulls[i] && (received_len != 0))
-                return false;
-            if (!nulls[i] && (received_len != expected_len))
-                return false;
-        }
-    }
-    else if (lens) {
-        for (std::size_t i = 0; i != nulls.size(); ++i) {
-            auto expected_len = offs[i + 1] - offs[i];
-            auto received_len = lens[i];
-            if (received_len == ukv_val_len_missing_k)
-                // Missing values must be encoded as NULLs
-                return false;
-            if (expected_len != received_len)
-                return false;
-        }
-    }
-
-    return true;
-}
-
-/**
- * We have a different methodology of marking NULL entries, than Arrow.
- * We can reuse the `column_lengths` to put-in some NULL markers.
- * Bitmask would use 32x less memory.
- */
-inline ukv_1x8_t* convert_lengths_into_bitmap(ukv_val_len_t* lengths, ukv_size_t n) {
-    size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;
-    ukv_1x8_t* slots = (ukv_1x8_t*)lengths;
-    for (size_t slot_idx = 0; slot_idx != count_slots; ++slot_idx) {
-        ukv_1x8_t slot_value = 0;
-        size_t first_idx = slot_idx * CHAR_BIT;
-        size_t remaining_count = count_slots - first_idx;
-        size_t remaining_in_slot = remaining_count > CHAR_BIT ? CHAR_BIT : remaining_count;
-        for (size_t bit_idx = 0; bit_idx != remaining_in_slot; ++bit_idx) {
-            slot_value |= 1 << bit_idx;
-        }
-        slots[slot_idx] = slot_value;
-    }
-    // Cleanup the following memory
-    std::memset(slots + count_slots + 1, 0, n * sizeof(ukv_val_len_t) - count_slots);
-    return slots;
-}
-
-/**
- * @brief Replaces "lengths" with `ukv_val_len_missing_k` is matching NULL indicator is set.
- */
-inline ukv_val_len_t* normalize_lengths_with_bitmap(ukv_1x8_t const* slots, ukv_val_len_t* lengths, ukv_size_t n) {
-    size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;
-    for (size_t slot_idx = 0; slot_idx != count_slots; ++slot_idx) {
-        size_t first_idx = slot_idx * CHAR_BIT;
-        size_t remaining_count = count_slots - first_idx;
-        size_t remaining_in_slot = remaining_count > CHAR_BIT ? CHAR_BIT : remaining_count;
-        for (size_t bit_idx = 0; bit_idx != remaining_in_slot; ++bit_idx) {
-            if (slots[slot_idx] & (1 << bit_idx))
-                lengths[first_idx + bit_idx] = ukv_val_len_missing_k;
-        }
-    }
-    return lengths;
+    return sum;
 }
 
 } // namespace unum::ukv

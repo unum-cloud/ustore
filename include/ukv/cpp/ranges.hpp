@@ -1,9 +1,9 @@
 /**
- * @file utility.hpp
+ * @file ranges.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
  *
- * @brief Smart Pointers, Monads and Range-like abstractions for C++ bindings.
+ * @brief Smart Pointers, Monads and Range-like templates for C++ bindings.
  */
 
 #pragma once
@@ -79,6 +79,7 @@ class strided_iterator_gt {
 
     operator bool() const noexcept { return raw_ != nullptr; }
     bool repeats() const noexcept { return !stride_; }
+    bool is_continuous() const noexcept { return stride_ == sizeof(ukv_size_t); }
     ukv_size_t stride() const noexcept { return stride_; }
     element_t& operator*() const noexcept { return *raw_; }
     element_t* operator->() const noexcept { return raw_; }
@@ -275,13 +276,13 @@ struct range_gt {
     inline pointer_at&& end() && noexcept { return std::move(end_); }
 };
 
-#pragma region Tapes
+#pragma region Tapes and Flat Arrays
 
 /**
  * @brief A read-only iterator for values packed into a
  * contiguous memory range. Doesn't own underlying memory.
  */
-class tape_iterator_t {
+class flat_values_iterator_t {
 
     ukv_val_ptr_t contents_ = nullptr;
     ukv_val_len_t* offsets_ = nullptr;
@@ -294,42 +295,82 @@ class tape_iterator_t {
     using pointer = void;
     using reference = void;
 
-    inline tape_iterator_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens) noexcept
+    inline flat_values_iterator_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens) noexcept
         : contents_(vals), offsets_(offs), lengths_(lens) {}
 
-    inline tape_iterator_t& operator++() noexcept {
+    inline flat_values_iterator_t& operator++() noexcept {
         ++lengths_;
         ++offsets_;
         return *this;
     }
 
-    inline tape_iterator_t operator++(int) const noexcept { return {contents_, lengths_ + 1, offsets_ + 1}; }
-    inline tape_iterator_t operator--(int) const noexcept { return {contents_, lengths_ - 1, offsets_ - 1}; }
+    inline flat_values_iterator_t operator++(int) const noexcept { return {contents_, lengths_ + 1, offsets_ + 1}; }
+    inline flat_values_iterator_t operator--(int) const noexcept { return {contents_, lengths_ - 1, offsets_ - 1}; }
     inline value_view_t operator*() const noexcept { return {contents_ + *offsets_, *lengths_}; }
 
-    inline bool operator==(tape_iterator_t const& other) const noexcept { return lengths_ == other.lengths_; }
-    inline bool operator!=(tape_iterator_t const& other) const noexcept { return lengths_ != other.lengths_; }
+    inline bool operator==(flat_values_iterator_t const& other) const noexcept { return lengths_ == other.lengths_; }
+    inline bool operator!=(flat_values_iterator_t const& other) const noexcept { return lengths_ != other.lengths_; }
 };
 
-class tape_view_t {
+class flat_values_t {
     ukv_val_ptr_t contents_ = nullptr;
     ukv_val_len_t* offsets_ = nullptr;
     ukv_val_len_t* lengths_ = nullptr;
     ukv_size_t count_ = 0;
 
   public:
-    inline tape_view_t() = default;
+    inline flat_values_t() = default;
 
-    inline tape_view_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens, ukv_size_t elements) noexcept
+    inline flat_values_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens, ukv_size_t elements) noexcept
         : contents_(vals), offsets_(offs), lengths_(lens), count_(elements) {}
 
-    inline tape_iterator_t begin() const noexcept { return {contents_, offsets_, lengths_}; }
-    inline tape_iterator_t end() const noexcept { return {contents_, offsets_ + count_, lengths_ + count_}; }
+    inline flat_values_iterator_t begin() const noexcept { return {contents_, offsets_, lengths_}; }
+    inline flat_values_iterator_t end() const noexcept { return {contents_, offsets_ + count_, lengths_ + count_}; }
     inline std::size_t size() const noexcept { return count_; }
 
     inline ukv_val_len_t* offsets() const noexcept { return offsets_; }
     inline ukv_val_len_t* lengths() const noexcept { return lengths_; }
     inline ukv_val_ptr_t contents() const noexcept { return contents_; }
+};
+
+/**
+ * @brief Iterates through a predetermined number of NULL-delimited
+ * strings joined one after another in continuous memory.
+ * Can be used for `ukv_docs_gist` or `ukv_col_list`.
+ */
+class strings_tape_iterator_t {
+    ukv_size_t remaining_count_ = 0;
+    ukv_str_view_t current_ = nullptr;
+
+  public:
+    using iterator_category = std::forward_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = std::string_view;
+    using pointer = ukv_str_view_t*;
+    using reference = std::string_view;
+
+    strings_tape_iterator_t(ukv_size_t remaining = 0, ukv_str_view_t current = nullptr)
+        : remaining_count_(remaining), current_(current) {}
+
+    strings_tape_iterator_t(strings_tape_iterator_t&&) = default;
+    strings_tape_iterator_t& operator=(strings_tape_iterator_t&&) = default;
+
+    strings_tape_iterator_t(strings_tape_iterator_t const&) = default;
+    strings_tape_iterator_t& operator=(strings_tape_iterator_t const&) = default;
+
+    strings_tape_iterator_t& operator++() noexcept {
+        current_ += std::strlen(current_) + 1;
+        --remaining_count_;
+        return *this;
+    }
+
+    strings_tape_iterator_t operator++(int) noexcept {
+        return {remaining_count_ - 1, current_ + std::strlen(current_) + 1};
+    }
+
+    ukv_str_view_t operator*() const noexcept { return current_; }
+    bool is_end() const noexcept { return !remaining_count_; }
+    ukv_size_t size() const noexcept { return remaining_count_; }
 };
 
 #pragma region Multiple Dimensions
@@ -379,14 +420,14 @@ class strided_matrix_gt {
     inline scalar_t const* data() const noexcept { return begin_; }
 };
 
+#pragma region Algorithms
+
 struct identity_t {
     template <typename at>
     at operator()(at x) const noexcept {
         return x;
     }
 };
-
-#pragma region Algorithms
 
 /**
  * @brief Unlike the `std::accumulate` and `std::transform_reduce` takes an integer `n`
@@ -423,132 +464,5 @@ bool all_ascending(iterator_at begin, std::size_t n) {
             return false;
     return true;
 }
-
-#pragma region Aliases and Packs
-
-using keys_view_t = strided_range_gt<ukv_key_t const>;
-using fields_view_t = strided_range_gt<ukv_str_view_t const>;
-
-/**
- * Working with batched data is ugly in C++.
- * This handle doesn't help in the general case,
- * but at least allow reusing the arguments.
- */
-struct keys_arg_t {
-    using value_type = col_key_field_t;
-    strided_iterator_gt<ukv_col_t const> cols_begin;
-    strided_iterator_gt<ukv_key_t const> keys_begin;
-    strided_iterator_gt<ukv_str_view_t const> fields_begin;
-    ukv_size_t count = 0;
-};
-
-/**
- * Working with batched data is ugly in C++.
- * This handle doesn't help in the general case,
- * but at least allow reusing the arguments.
- */
-struct values_arg_t {
-    using value_type = value_view_t;
-    strided_iterator_gt<ukv_val_ptr_t const> contents_begin;
-    strided_iterator_gt<ukv_val_len_t const> offsets_begin;
-    strided_iterator_gt<ukv_val_len_t const> lengths_begin;
-};
-
-template <typename id_at>
-struct edges_range_gt {
-
-    using id_t = id_at;
-    using tuple_t = std::conditional_t<std::is_const_v<id_t>, edge_t const, edge_t>;
-    static_assert(sizeof(tuple_t) == 3 * sizeof(id_t));
-
-    strided_range_gt<id_t> source_ids;
-    strided_range_gt<id_t> target_ids;
-    strided_range_gt<id_t> edge_ids;
-
-    inline edges_range_gt() = default;
-    inline edges_range_gt(edges_range_gt&&) = default;
-    inline edges_range_gt(edges_range_gt const&) = default;
-    inline edges_range_gt& operator=(edges_range_gt&&) = default;
-    inline edges_range_gt& operator=(edges_range_gt const&) = default;
-
-    inline edges_range_gt(strided_range_gt<id_t> sources,
-                          strided_range_gt<id_t> targets,
-                          strided_range_gt<id_t> edges = {&ukv_default_edge_id_k}) noexcept
-        : source_ids(sources), target_ids(targets), edge_ids(edges) {}
-
-    inline edges_range_gt(tuple_t* ptr, tuple_t* end) noexcept {
-        auto strided = strided_range_gt<tuple_t>(ptr, end);
-        source_ids = strided.members(&edge_t::source_id);
-        target_ids = strided.members(&edge_t::target_id);
-        edge_ids = strided.members(&edge_t::id);
-    }
-
-    inline std::size_t size() const noexcept { return std::min(source_ids.count(), target_ids.count()); }
-
-    inline edge_t operator[](std::size_t i) const noexcept {
-        edge_t result;
-        result.source_id = source_ids[i];
-        result.target_id = target_ids[i];
-        result.id = edge_ids[i];
-        return result;
-    }
-
-    inline operator edges_range_gt<id_at const>() const noexcept { return immutable(); }
-    inline edges_range_gt<id_at const> immutable() const noexcept {
-        return {source_ids.immutable(), target_ids.immutable(), edge_ids.immutable()};
-    }
-};
-
-using edges_span_t = edges_range_gt<ukv_key_t>;
-using edges_view_t = edges_range_gt<ukv_key_t const>;
-
-template <typename tuples_at>
-auto edges(tuples_at&& tuples) noexcept {
-    using value_type = typename std::remove_reference_t<tuples_at>::value_type;
-    using result_t = std::conditional_t<std::is_const_v<value_type>, edges_view_t, edges_span_t>;
-    auto ptr = std::data(tuples);
-    auto count = std::size(tuples);
-    return result_t(ptr, ptr + count);
-}
-
-/**
- * @brief Iterates through a predetermined number of NULL-delimited
- * strings joined one after another in continuous memory.
- * Can be used for `ukv_docs_gist` or `ukv_col_list`.
- */
-class strings_tape_iterator_t {
-    ukv_size_t remaining_count_ = 0;
-    ukv_str_view_t current_ = nullptr;
-
-  public:
-    using iterator_category = std::forward_iterator_tag;
-    using difference_type = std::ptrdiff_t;
-    using value_type = std::string_view;
-    using pointer = ukv_str_view_t*;
-    using reference = std::string_view;
-
-    strings_tape_iterator_t(ukv_size_t remaining = 0, ukv_str_view_t current = nullptr)
-        : remaining_count_(remaining), current_(current) {}
-
-    strings_tape_iterator_t(strings_tape_iterator_t&&) = default;
-    strings_tape_iterator_t& operator=(strings_tape_iterator_t&&) = default;
-
-    strings_tape_iterator_t(strings_tape_iterator_t const&) = default;
-    strings_tape_iterator_t& operator=(strings_tape_iterator_t const&) = default;
-
-    strings_tape_iterator_t& operator++() noexcept {
-        current_ += std::strlen(current_) + 1;
-        --remaining_count_;
-        return *this;
-    }
-
-    strings_tape_iterator_t operator++(int) noexcept {
-        return {remaining_count_ - 1, current_ + std::strlen(current_) + 1};
-    }
-
-    ukv_str_view_t operator*() const noexcept { return current_; }
-    bool is_end() const noexcept { return !remaining_count_; }
-    ukv_size_t size() const noexcept { return remaining_count_; }
-};
 
 } // namespace unum::ukv
