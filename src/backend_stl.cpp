@@ -889,6 +889,7 @@ void ukv_col_list( //
         ids[i] = reinterpret_cast<ukv_col_t>(name_and_contents.second.get());
         offs[i] = static_cast<ukv_val_len_t>(names - *c_names);
         names += len + 1;
+        ++i;
     }
     offs[i] = static_cast<ukv_val_len_t>(names - *c_names);
 }
