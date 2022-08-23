@@ -379,23 +379,33 @@ class strided_matrix_gt {
     inline scalar_t const* data() const noexcept { return begin_; }
 };
 
+struct identity_t {
+    template <typename at>
+    at operator()(at x) const noexcept {
+        return x;
+    }
+};
+
 #pragma region Algorithms
 
 /**
  * @brief Unlike the `std::accumulate` and `std::transform_reduce` takes an integer `n`
  * instead of the end iterator. This helps with zero-strided iterators.
  */
-template <typename element_at, typename transform_at, typename iterator_at>
-element_at transform_reduce_n(iterator_at begin, std::size_t n, element_at init, transform_at transform) {
+template <typename element_at, typename iterator_at, typename transform_at = identity_t>
+element_at transform_reduce_n(iterator_at begin, std::size_t n, element_at init, transform_at transform = {}) {
     for (std::size_t i = 0; i != n; ++i, ++begin)
         init += transform(*begin);
     return init;
 }
 
-template <typename transform_at, typename output_iterator_at, typename iterator_at>
-output_iterator_at transform_n(iterator_at begin, std::size_t n, output_iterator_at output, transform_at transform) {
+template <typename output_iterator_at, typename iterator_at, typename transform_at = identity_t>
+output_iterator_at transform_n(iterator_at begin,
+                               std::size_t n,
+                               output_iterator_at output,
+                               transform_at transform = {}) {
     for (std::size_t i = 0; i != n; ++i, ++begin, ++output)
-        *output = *begin;
+        *output = transform(*begin);
     return output;
 }
 
