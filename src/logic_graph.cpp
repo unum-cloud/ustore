@@ -290,15 +290,15 @@ void export_edge_tuples( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    ukv_val_ptr_t c_found_values = nullptr;
-    ukv_val_len_t* c_found_offsets = nullptr;
-    ukv_val_len_t* c_found_lengths = nullptr;
-
     stl_arena_t arena = clean_arena(c_arena, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
+
     // Even if we need just the node degrees, we can't limit ourselves to just entry lengths.
     // Those may be compressed. We need to read the first bytes to parse the degree of the node.
+    ukv_val_ptr_t c_found_values = nullptr;
+    ukv_val_len_t* c_found_offsets = nullptr;
+    ukv_val_len_t* c_found_lengths = nullptr;
     ukv_read( //
         c_db,
         c_txn,
@@ -386,53 +386,6 @@ void export_edge_tuples( //
     }
 }
 
-void export_disjoint_edge_buffers( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
-    ukv_size_t const c_vertices_count,
-
-    ukv_col_t const* c_cols,
-    ukv_size_t const c_cols_stride,
-
-    ukv_key_t const* c_vertices_ids,
-    ukv_size_t const c_vertices_stride,
-
-    ukv_options_t const c_options,
-    value_t* c_values,
-    ukv_arena_t* c_arena,
-    ukv_error_t* c_error) {
-
-    ukv_val_ptr_t c_found_values = nullptr;
-    ukv_val_len_t* c_found_offsets = nullptr;
-    ukv_val_len_t* c_found_lengths = nullptr;
-
-    stl_arena_t arena = clean_arena(c_arena, c_error);
-    return_on_error(c_error);
-    ukv_arena_t new_arena = &arena;
-
-    ukv_read( //
-        c_db,
-        c_txn,
-        c_vertices_count,
-        c_cols,
-        c_cols_stride,
-        c_vertices_ids,
-        c_vertices_stride,
-        c_options,
-        &c_found_values,
-        &c_found_offsets,
-        &c_found_lengths,
-        nullptr,
-        &new_arena,
-        c_error);
-    return_on_error(c_error);
-
-    joined_values_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
-    std::size_t value_idx = 0;
-    for (value_view_t value : values)
-        c_values[value_idx++] = value;
-}
-
 template <bool erase_ak>
 void update_neighborhoods( //
     ukv_t const c_db,
@@ -458,56 +411,63 @@ void update_neighborhoods( //
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
     return_on_error(c_error);
-    ukv_arena_t new_arena = &arena;
 
-    strided_iterator_gt<ukv_col_t const> collections {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> edges_ids {c_edges_ids, c_edges_stride};
     strided_iterator_gt<ukv_key_t const> sources_ids {c_sources_ids, c_sources_stride};
     strided_iterator_gt<ukv_key_t const> targets_ids {c_targets_ids, c_targets_stride};
 
-    // Fetch all the data related to touched vertices
-    std::pmr::vector<col_key_t> updated_keys(c_tasks_count + c_tasks_count, &arena.resource);
-    if (!updated_keys.size()) {
-        *c_error = "Failed to allocate memory";
-        return;
-    }
-
+    // Fetch all the data related to touched vertices, and deduplicate them
+    auto unique_places = arena.alloc<col_key_t>(c_tasks_count * 2, c_error);
+    return_on_error(c_error);
     for (ukv_size_t i = 0; i != c_tasks_count; ++i)
-        updated_keys[i] = {collections[i], sources_ids[i]};
+        unique_places[i] = {cols[i], sources_ids[i]};
     for (ukv_size_t i = 0; i != c_tasks_count; ++i)
-        updated_keys[c_tasks_count + i] = {collections[i], targets_ids[i]};
+        unique_places[c_tasks_count + i] = {cols[i], targets_ids[i]};
+    unique_places = {unique_places.begin(), sort_and_deduplicate(unique_places.begin(), unique_places.end())};
 
-    // Keep only the unique items
-    sort_and_deduplicate(updated_keys);
-    std::pmr::vector<value_t> updated_vals(updated_keys.size(), &arena.resource);
-    if (updated_vals.size() == 0) {
-        *c_error = "Failed to allocate memory";
-        return;
-    }
-    export_disjoint_edge_buffers( //
+    // Fetch the existing entries
+    ukv_arena_t arena_ptr = &arena;
+    ukv_val_ptr_t found_binary_begin = nullptr;
+    ukv_val_len_t* found_binary_offs = nullptr;
+    ukv_val_len_t* found_binary_lens = nullptr;
+    ukv_size_t unique_places_count = static_cast<ukv_size_t>(unique_places.size());
+    auto unique_places_strided = strided_range(unique_places.begin(), unique_places.end()).immutable();
+    auto cols = unique_places_strided.members(&col_key_t::col);
+    auto keys = unique_places_strided.members(&col_key_t::key);
+    ukv_read( //
         c_db,
         c_txn,
-        static_cast<ukv_size_t>(updated_keys.size()),
-        &updated_keys[0].col,
-        sizeof(col_key_t),
-        &updated_keys[0].key,
-        sizeof(col_key_t),
+        unique_places_count,
+        cols.begin().get(),
+        cols.begin().stride(),
+        keys.begin().get(),
+        keys.begin().stride(),
         c_options,
-        updated_vals.data(),
-        &new_arena,
+        &found_binary_begin,
+        &found_binary_offs,
+        &found_binary_lens,
+        nullptr,
+        &arena_ptr,
         c_error);
     return_on_error(c_error);
 
-    // Upsert into in-memory arrays
+    joined_values_t found_binaries {found_binary_begin, found_binary_offs, found_binary_lens, c_docs_count};
+
+    // First let's count the amount, by which our outputs will grow
+    if constexpr (erase_ak) {
+        }
+
+    // Upsert into or remove from in-memory arrays
     for (ukv_size_t i = 0; i != c_tasks_count; ++i) {
-        auto collection = collections[i];
+        auto col = cols[i];
         auto source_id = sources_ids[i];
         auto target_id = targets_ids[i];
 
-        auto source_idx = offset_in_sorted(updated_keys, col_key_t {collection, source_id});
-        auto target_idx = offset_in_sorted(updated_keys, col_key_t {collection, target_id});
-        auto& source_value = updated_vals[source_idx];
-        auto& target_value = updated_vals[target_idx];
+        auto source_idx = offset_in_sorted(unique_places, col_key_t {col, source_id});
+        auto target_idx = offset_in_sorted(unique_places, col_key_t {col, target_id});
+        auto& source_value = found_binaries[source_idx];
+        auto& target_value = found_binaries[target_idx];
 
         if constexpr (erase_ak) {
             std::optional<ukv_key_t> edge_id;
@@ -525,18 +485,17 @@ void update_neighborhoods( //
     }
 
     // Dump the data back to disk!
-    ukv_val_len_t offset_in_val = 0;
     ukv_write( //
         c_db,
         c_txn,
-        static_cast<ukv_size_t>(updated_keys.size()),
-        &updated_keys[0].col,
+        static_cast<ukv_size_t>(unique_places.size()),
+        &unique_places[0].col,
         sizeof(col_key_t),
-        &updated_keys[0].key,
+        &unique_places[0].key,
         sizeof(col_key_t),
         updated_vals[0].member_ptr(),
         sizeof(value_t),
-        &offset_in_val,
+        nullptr,
         0,
         updated_vals[0].member_length(),
         sizeof(value_t),
@@ -688,7 +647,7 @@ void ukv_graph_remove_vertices( //
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
-    strided_iterator_gt<ukv_col_t const> collections {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
 
@@ -715,19 +674,19 @@ void ukv_graph_remove_vertices( //
     // Enumerate the opposite ends, from which that same reference must be removed.
     // Here all the keys will be in the sorted order.
     std::size_t count_edges = std::accumulate(degrees_per_vertex, degrees_per_vertex + c_vertices_count, 0ul);
-    std::pmr::vector<col_key_t> updated_keys(&arena.resource);
-    updated_keys.reserve(count_edges * 2);
+    std::pmr::vector<col_key_t> unique_places(&arena.resource);
+    unique_places.reserve(count_edges * 2);
     for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++degrees_per_vertex) {
-        auto collection = collections[i];
-        updated_keys.push_back({collection, vertices_ids[i]});
+        auto collection = cols[i];
+        unique_places.push_back({collection, vertices_ids[i]});
         for (ukv_size_t j = 0; j != *degrees_per_vertex; ++j, ++neighbors_per_vertex)
-            updated_keys.push_back({collection, *neighbors_per_vertex});
+            unique_places.push_back({collection, *neighbors_per_vertex});
     }
 
     // Sorting the tasks would help us faster locate them in the future.
     // We may also face repetitions when connected vertices are removed.
-    sort_and_deduplicate(updated_keys);
-    std::pmr::vector<value_t> updated_vals(updated_keys.size(), &arena.resource);
+    sort_and_deduplicate(unique_places);
+    std::pmr::vector<value_t> updated_vals(unique_places.size(), &arena.resource);
     if (updated_vals.size() == 0) {
         *c_error = "Failed to allocate memory";
         return;
@@ -738,10 +697,10 @@ void ukv_graph_remove_vertices( //
     export_disjoint_edge_buffers( //
         c_db,
         c_txn,
-        static_cast<ukv_size_t>(updated_keys.size()),
-        &updated_keys[0].col,
+        static_cast<ukv_size_t>(unique_places.size()),
+        &unique_places[0].col,
         sizeof(col_key_t),
-        &updated_keys[0].key,
+        &unique_places[0].key,
         sizeof(col_key_t),
         c_options,
         updated_vals.data(),
@@ -750,16 +709,16 @@ void ukv_graph_remove_vertices( //
     return_on_error(c_error);
 
     // From every opposite end - remove a match, and only then - the content itself
-    for (ukv_size_t i = 0; i != updated_keys.size(); ++i) {
-        auto collection = collections[i];
+    for (ukv_size_t i = 0; i != unique_places.size(); ++i) {
+        auto collection = cols[i];
         auto vertex_id = vertices_ids[i];
         auto role = roles[i];
 
-        auto vertex_idx = offset_in_sorted(updated_keys, col_key_t {collection, vertex_id});
+        auto vertex_idx = offset_in_sorted(unique_places, col_key_t {collection, vertex_id});
         value_t& vertex_value = updated_vals[vertex_idx];
 
         for (neighborship_t n : neighbors(vertex_value, role)) {
-            auto neighbor_idx = offset_in_sorted(updated_keys, col_key_t {collection, n.neighbor_id});
+            auto neighbor_idx = offset_in_sorted(unique_places, col_key_t {collection, n.neighbor_id});
             value_t& neighbor_value = updated_vals[neighbor_idx];
             if (role == ukv_vertex_role_any_k) {
                 erase(neighbor_value, ukv_vertex_source_k, vertex_id);
@@ -773,14 +732,13 @@ void ukv_graph_remove_vertices( //
     }
 
     // Now we will go through all the explicitly deleted vertices
-    ukv_val_len_t offset_in_val = 0;
     ukv_write( //
         c_db,
         c_txn,
-        static_cast<ukv_size_t>(updated_keys.size()),
-        &updated_keys[0].col,
+        static_cast<ukv_size_t>(unique_places.size()),
+        &unique_places[0].col,
         sizeof(col_key_t),
-        &updated_keys[0].key,
+        &unique_places[0].key,
         sizeof(col_key_t),
         updated_vals[0].member_ptr(),
         sizeof(value_t),

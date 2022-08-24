@@ -210,9 +210,9 @@ places_arg_t const& read_unique_docs( //
     callback_at callback) noexcept {
 
     ukv_arena_t arena_ptr = &arena;
-    ukv_val_ptr_t binary_docs_begin = nullptr;
-    ukv_val_len_t* binary_docs_offs = nullptr;
-    ukv_val_len_t* binary_docs_lens = nullptr;
+    ukv_val_ptr_t found_binary_begin = nullptr;
+    ukv_val_len_t* found_binary_offs = nullptr;
+    ukv_val_len_t* found_binary_lens = nullptr;
     ukv_read( //
         c_db,
         c_txn,
@@ -222,18 +222,18 @@ places_arg_t const& read_unique_docs( //
         places.keys_begin.get(),
         places.keys_begin.stride(),
         c_options,
-        &binary_docs_begin,
-        &binary_docs_offs,
-        &binary_docs_lens,
+        &found_binary_begin,
+        &found_binary_offs,
+        &found_binary_lens,
         nullptr,
         &arena_ptr,
         c_error);
 
-    auto binary_docs = joined_values_t(binary_docs_begin, binary_docs_offs, binary_docs_lens, places.count);
-    auto binary_docs_it = binary_docs.begin();
+    auto found_binaries = joined_values_t(found_binary_begin, found_binary_offs, found_binary_lens, places.count);
+    auto found_binary_it = found_binaries.begin();
 
-    for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++binary_docs_it) {
-        value_view_t binary_doc = *binary_docs_it;
+    for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
+        value_view_t binary_doc = *found_binary_it;
         json_t parsed = parse_any(binary_doc, internal_format_k, c_error);
 
         // This error is extremely unlikely, as we have previously accepted the data into the store.
@@ -284,33 +284,34 @@ places_arg_t read_docs( //
     // Otherwise, let's retrieve the sublist of unique docs,
     // which may be in a very different order from original.
     ukv_arena_t arena_ptr = &arena;
-    ukv_val_ptr_t binary_docs_begin = nullptr;
-    ukv_val_len_t* binary_docs_offs = nullptr;
-    ukv_val_len_t* binary_docs_lens = nullptr;
-    ukv_size_t unique_docs_count = static_cast<ukv_size_t>(unique_places.size());
+    ukv_val_ptr_t found_binary_begin = nullptr;
+    ukv_val_len_t* found_binary_offs = nullptr;
+    ukv_val_len_t* found_binary_lens = nullptr;
+    ukv_size_t unique_places_count = static_cast<ukv_size_t>(unique_places.size());
     auto unique_places_strided = strided_range(unique_places.begin(), unique_places.end()).immutable();
     auto cols = unique_places_strided.members(&col_key_t::col);
     auto keys = unique_places_strided.members(&col_key_t::key);
     ukv_read( //
         c_db,
         c_txn,
-        unique_docs_count,
+        unique_places_count,
         cols.begin().get(),
         cols.begin().stride(),
         keys.begin().get(),
         keys.begin().stride(),
         c_options,
-        &binary_docs_begin,
-        &binary_docs_offs,
-        &binary_docs_lens,
+        &found_binary_begin,
+        &found_binary_offs,
+        &found_binary_lens,
         nullptr,
         &arena_ptr,
         c_error);
+    return_on_error(c_error);
 
     // We will later need to locate the data for every separate request.
     // Doing it in O(N) tape iterations every time is too slow.
     // Once we transform to inclusive sums, it will be O(1).
-    //      inplace_inclusive_prefix_sum(binary_docs_lens, binary_docs_lens + binary_docs_count);
+    //      inplace_inclusive_prefix_sum(found_binary_lens, found_binary_lens + found_binary_count);
     // Alternatively we can compensate it with additional memory:
     std::optional<std::vector<json_t>> parsed_docs;
     try {
@@ -322,10 +323,10 @@ places_arg_t read_docs( //
     }
 
     // Parse all the unique documents
-    auto binary_docs = joined_values_t(binary_docs_begin, binary_docs_offs, binary_docs_lens, places.count);
-    auto binary_docs_it = binary_docs.begin();
-    for (ukv_size_t doc_idx = 0; doc_idx != unique_docs_count; ++doc_idx, ++binary_docs_it) {
-        value_view_t binary_doc = *binary_docs_it;
+    auto found_binaries = joined_values_t(found_binary_begin, found_binary_offs, found_binary_lens, places.count);
+    auto found_binary_it = found_binaries.begin();
+    for (ukv_size_t doc_idx = 0; doc_idx != unique_places_count; ++doc_idx, ++found_binary_it) {
+        value_view_t binary_doc = *found_binary_it;
         json_t& parsed = (*parsed_docs)[doc_idx];
         parsed = parse_any(binary_doc, internal_format_k, c_error);
 
@@ -342,7 +343,7 @@ places_arg_t read_docs( //
         callback(task_idx, place.field, parsed);
     }
 
-    return {cols.begin(), keys.begin(), {}, unique_docs_count};
+    return {cols.begin(), keys.begin(), {}, unique_places_count};
 }
 
 void replace_docs( //
@@ -464,19 +465,19 @@ void read_modify_write( //
         safe_callback);
 
     // By now, the tape contains concatenated updates docs:
-    ukv_size_t unique_docs_count = static_cast<ukv_size_t>(read_order.size());
-    ukv_val_ptr_t binary_docs_begin =
+    ukv_size_t unique_places_count = static_cast<ukv_size_t>(read_order.size());
+    ukv_val_ptr_t found_binary_begin =
         reinterpret_cast<ukv_val_ptr_t>(serializing_tape.growing_tape.contents().begin().get());
     ukv_arena_t arena_ptr = &arena;
     ukv_write( //
         c_db,
         c_txn,
-        unique_docs_count,
+        unique_places_count,
         read_order.cols_begin.get(),
         read_order.cols_begin.stride(),
         read_order.keys_begin.get(),
         read_order.keys_begin.stride(),
-        &binary_docs_begin,
+        &found_binary_begin,
         0,
         serializing_tape.growing_tape.offsets().begin().get(),
         serializing_tape.growing_tape.offsets().stride(),
@@ -706,9 +707,9 @@ void ukv_docs_gist( //
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
-    ukv_val_ptr_t binary_docs_begin = nullptr;
-    ukv_val_len_t* binary_docs_offs = nullptr;
-    ukv_val_len_t* binary_docs_lens = nullptr;
+    ukv_val_ptr_t found_binary_begin = nullptr;
+    ukv_val_len_t* found_binary_offs = nullptr;
+    ukv_val_len_t* found_binary_lens = nullptr;
     ukv_read( //
         c_db,
         c_txn,
@@ -718,9 +719,9 @@ void ukv_docs_gist( //
         c_keys,
         c_keys_stride,
         c_options,
-        &binary_docs_begin,
-        &binary_docs_offs,
-        &binary_docs_lens,
+        &found_binary_begin,
+        &found_binary_offs,
+        &found_binary_lens,
         nullptr,
         &new_arena,
         c_error);
@@ -729,15 +730,15 @@ void ukv_docs_gist( //
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
 
-    joined_values_t binary_docs {binary_docs_begin, binary_docs_offs, binary_docs_lens, c_docs_count};
-    joined_values_iterator_t binary_docs_it = binary_docs.begin();
+    joined_values_t found_binaries {found_binary_begin, found_binary_offs, found_binary_lens, c_docs_count};
+    joined_values_iterator_t found_binary_it = found_binaries.begin();
 
     // Export all the elements into a heap-allocated hash-set, keeping only unique entries
     std::optional<std::unordered_set<std::string>> paths;
     try {
         paths = std::unordered_set<std::string> {};
-        for (ukv_size_t doc_idx = 0; doc_idx != c_docs_count; ++doc_idx, ++binary_docs_it) {
-            value_view_t binary_doc = *binary_docs_it;
+        for (ukv_size_t doc_idx = 0; doc_idx != c_docs_count; ++doc_idx, ++found_binary_it) {
+            value_view_t binary_doc = *found_binary_it;
             json_t parsed = parse_any(binary_doc, internal_format_k, c_error);
             return_on_error(c_error);
 
@@ -1095,9 +1096,9 @@ void ukv_docs_gather( //
     // Validate the input arguments
 
     // Retrieve the entire documents before we can sample internal fields
-    ukv_val_ptr_t binary_docs_begin = nullptr;
-    ukv_val_len_t* binary_docs_offs = nullptr;
-    ukv_val_len_t* binary_docs_lens = nullptr;
+    ukv_val_ptr_t found_binary_begin = nullptr;
+    ukv_val_len_t* found_binary_offs = nullptr;
+    ukv_val_len_t* found_binary_lens = nullptr;
     ukv_read( //
         c_db,
         c_txn,
@@ -1107,9 +1108,9 @@ void ukv_docs_gather( //
         c_keys,
         c_keys_stride,
         c_options,
-        &binary_docs_begin,
-        &binary_docs_offs,
-        &binary_docs_lens,
+        &found_binary_begin,
+        &found_binary_offs,
+        &found_binary_lens,
         nullptr,
         &new_arena,
         c_error);
@@ -1120,8 +1121,8 @@ void ukv_docs_gather( //
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     strided_iterator_gt<ukv_type_t const> types {c_types, c_types_stride};
 
-    joined_values_t binary_docs {binary_docs_begin, binary_docs_offs, binary_docs_lens, c_docs_count};
-    joined_values_iterator_t binary_docs_it = binary_docs.begin();
+    joined_values_t found_binaries {found_binary_begin, found_binary_offs, found_binary_lens, c_docs_count};
+    joined_values_iterator_t found_binary_it = found_binaries.begin();
 
     // Parse all the field names
     heapy_fields_t heapy_fields(std::nullopt);
@@ -1224,8 +1225,8 @@ void ukv_docs_gather( //
 
     std::pmr::vector<byte_t> string_tape(&arena.resource);
     // Go though all the documents extracting and type-checking the relevant parts
-    for (ukv_size_t doc_idx = 0; doc_idx != c_docs_count; ++doc_idx, ++binary_docs_it) {
-        value_view_t binary_doc = *binary_docs_it;
+    for (ukv_size_t doc_idx = 0; doc_idx != c_docs_count; ++doc_idx, ++found_binary_it) {
+        value_view_t binary_doc = *found_binary_it;
         json_t parsed = parse_any(binary_doc, internal_format_k, c_error);
         return_on_error(c_error);
 
