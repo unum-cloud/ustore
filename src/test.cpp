@@ -24,7 +24,7 @@ using namespace unum;
 #define M_EXPECT_EQ_JSON(str1, str2) EXPECT_EQ(json_t::parse((str1)), json_t::parse((str2)));
 #define M_EXPECT_EQ_MSG(str1, str2) \
     EXPECT_EQ(json_t::from_msgpack((str1).c_str(), (str1).c_str() + (str1).size()), json_t::parse((str2)));
-
+#if 0
 TEST(db, intro) {
 
     db_t db;
@@ -62,7 +62,7 @@ TEST(db, intro) {
 
     // Reusable memory
     // This interface not just more performant, but also provides nicer interface:
-    //  expected_gt<flat_values_t> tapes = main[{100, 101}].on(arena);
+    //  expected_gt<joined_values_t> tapes = main[{100, 101}].on(arena);
     arena_t arena(db);
     _ = main[{43, 44}].on(arena).clear();
     _ = main[{43, 44}].on(arena).erase();
@@ -95,6 +95,7 @@ TEST(db, intro) {
 
     EXPECT_TRUE(db.clear());
 }
+#endif
 
 template <typename locations_at>
 void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_length) {
