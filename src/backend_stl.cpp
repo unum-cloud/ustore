@@ -239,7 +239,7 @@ void write_head( //
 
     std::unique_lock _ {db.mutex};
 
-    for (std::size_t i = 0; i != contents.size(); ++i) {
+    for (std::size_t i = 0; i != places.size(); ++i) {
 
         auto place = places[i];
         auto content = contents[i];
@@ -250,13 +250,12 @@ void write_head( //
         // can overwrite the existing value without causing reallocations.
         safe_section("Copying new value", c_error, [&] {
             if (key_iterator != col.pairs.end()) {
-                auto value = place.view();
                 key_iterator->second.generation = ++db.youngest_generation;
-                key_iterator->second.buffer.assign(value.begin(), value.end());
-                key_iterator->second.is_deleted = place.is_deleted();
+                key_iterator->second.buffer.assign(content.begin(), content.end());
+                key_iterator->second.is_deleted = !content;
             }
-            else if (!place.is_deleted()) {
-                buffer_t buffer {place.begin(), place.end()};
+            else if (content) {
+                buffer_t buffer {content.begin(), content.end()};
                 stl_value_t value_w_generation {std::move(buffer), ++db.youngest_generation};
                 col.pairs.emplace(place.key, std::move(value_w_generation));
                 ++col.unique_elements;
@@ -282,17 +281,17 @@ void write_txn( //
     stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
 
-    for (std::size_t i = 0; i != contents.size(); ++i) {
+    for (std::size_t i = 0; i != places.size(); ++i) {
 
-        write_task_t place = contents[i];
-
+        auto place = places[i];
+        auto content = contents[i];
         safe_section("Copying new value", c_error, [&] {
-            if (place.is_deleted()) {
+            if (!content) {
                 txn.upserted.erase(place.col_key());
                 txn.removed.insert(place.col_key());
             }
             else {
-                txn.upserted.insert_or_assign(place.col_key(), place.buffer());
+                txn.upserted.insert_or_assign(place.col_key(), buffer_t {content.begin(), content.end()});
             }
         });
         return_on_error(c_error);
@@ -521,15 +520,15 @@ void ukv_read( //
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    places_arg_t tasks {cols, keys, c_tasks_count};
+    places_arg_t places {cols, keys, {}, c_tasks_count};
     bool const needs_export = c_found_values != nullptr;
 
     // 1. Allocate a tape for all the values to be pulled
-    auto offs = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count + 1, c_error, c_found_offsets);
+    auto offs = arena.alloc_or_dummy<ukv_val_len_t>(places.count + 1, c_error, c_found_offsets);
     return_on_error(c_error);
-    auto lens = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count, c_error, c_found_lengths);
+    auto lens = arena.alloc_or_dummy<ukv_val_len_t>(places.count, c_error, c_found_lengths);
     return_on_error(c_error);
-    auto nulls = arena.alloc_or_dummy<ukv_1x8_t>(tasks.count, c_error, c_found_nulls);
+    auto nulls = arena.alloc_or_dummy<ukv_1x8_t>(places.count, c_error, c_found_nulls);
     return_on_error(c_error);
 
     // 2. Pull metadata
@@ -541,8 +540,8 @@ void ukv_read( //
     };
 
     std::shared_lock _ {db.mutex};
-    c_txn ? read_txn_under_lock(txn, tasks, c_options, meta_enumerator, c_error)
-          : read_head_under_lock(db, tasks, c_options, meta_enumerator, c_error);
+    c_txn ? read_txn_under_lock(txn, places, c_options, meta_enumerator, c_error)
+          : read_head_under_lock(db, places, c_options, meta_enumerator, c_error);
     if (!needs_export)
         return;
 
@@ -556,12 +555,12 @@ void ukv_read( //
         progress_in_tape += value.size();
     };
 
-    c_txn ? read_txn_under_lock(txn, tasks, c_options, data_enumerator, c_error)
-          : read_head_under_lock(db, tasks, c_options, data_enumerator, c_error);
+    c_txn ? read_txn_under_lock(txn, places, c_options, data_enumerator, c_error)
+          : read_head_under_lock(db, places, c_options, data_enumerator, c_error);
 
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin());
     if (needs_export)
-        offs[tasks.count] = progress_in_tape;
+        offs[places.count] = progress_in_tape;
 }
 
 void ukv_write( //
@@ -600,9 +599,12 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
     strided_range_gt<ukv_1x8_t const> nulls {c_nulls};
-    contents_arg_t tasks {cols, keys, vals, offs, lens, nulls, c_tasks_count};
 
-    return c_txn ? write_txn(txn, tasks, c_options, c_error) : write_head(db, tasks, c_options, c_error);
+    places_arg_t places {cols, keys, {}, c_tasks_count};
+    contents_arg_t contents {vals, offs, lens, nulls};
+
+    return c_txn ? write_txn(txn, places, contents, c_options, c_error)
+                 : write_head(db, places, contents, c_options, c_error);
 }
 
 void ukv_scan( //
@@ -637,10 +639,10 @@ void ukv_scan( //
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
-    scans_arg_t tasks {cols, keys, lens, c_min_tasks_count};
+    scans_arg_t scans {cols, keys, lens, c_min_tasks_count};
 
-    return c_txn ? scan_txn(txn, tasks, c_options, c_found_counts, c_found_keys, arena, c_error)
-                 : scan_head(db, tasks, c_options, c_found_counts, c_found_keys, arena, c_error);
+    return c_txn ? scan_txn(txn, scans, c_options, c_found_counts, c_found_keys, arena, c_error)
+                 : scan_head(db, scans, c_options, c_found_counts, c_found_keys, arena, c_error);
 }
 
 void ukv_size( //

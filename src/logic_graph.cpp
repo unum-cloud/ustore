@@ -316,7 +316,7 @@ void export_edge_tuples( //
         c_error);
     return_on_error(c_error);
 
-    flat_values_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
+    joined_values_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
     constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
@@ -324,7 +324,7 @@ void export_edge_tuples( //
     // Estimate the amount of memory we will need for the arena
     std::size_t count_ids = 0;
     {
-        flat_values_iterator_t values_it = values.begin();
+        joined_values_iterator_t values_it = values.begin();
         for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
             value_view_t value = *values_it;
             ukv_vertex_role_t role = roles[i];
@@ -340,7 +340,7 @@ void export_edge_tuples( //
     return_on_error(c_error);
 
     std::size_t passed_ids = 0;
-    flat_values_iterator_t values_it = values.begin();
+    joined_values_iterator_t values_it = values.begin();
     for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
         value_view_t value = *values_it;
         ukv_key_t vertex_id = vertices_ids[i];
@@ -427,7 +427,7 @@ void export_disjoint_edge_buffers( //
         c_error);
     return_on_error(c_error);
 
-    flat_values_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
+    joined_values_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
     std::size_t value_idx = 0;
     for (value_view_t value : values)
         c_values[value_idx++] = value;
@@ -504,8 +504,8 @@ void update_neighborhoods( //
         auto source_id = sources_ids[i];
         auto target_id = targets_ids[i];
 
-        auto source_idx = offset_in_sorted(updated_keys, {collection, source_id});
-        auto target_idx = offset_in_sorted(updated_keys, {collection, target_id});
+        auto source_idx = offset_in_sorted(updated_keys, col_key_t {collection, source_id});
+        auto target_idx = offset_in_sorted(updated_keys, col_key_t {collection, target_id});
         auto& source_value = updated_vals[source_idx];
         auto& target_value = updated_vals[target_idx];
 
@@ -755,11 +755,11 @@ void ukv_graph_remove_vertices( //
         auto vertex_id = vertices_ids[i];
         auto role = roles[i];
 
-        auto vertex_idx = offset_in_sorted(updated_keys, {collection, vertex_id});
+        auto vertex_idx = offset_in_sorted(updated_keys, col_key_t {collection, vertex_id});
         value_t& vertex_value = updated_vals[vertex_idx];
 
         for (neighborship_t n : neighbors(vertex_value, role)) {
-            auto neighbor_idx = offset_in_sorted(updated_keys, {collection, n.neighbor_id});
+            auto neighbor_idx = offset_in_sorted(updated_keys, col_key_t {collection, n.neighbor_id});
             value_t& neighbor_value = updated_vals[neighbor_idx];
             if (role == ukv_vertex_role_any_k) {
                 erase(neighbor_value, ukv_vertex_source_k, vertex_id);
