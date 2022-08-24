@@ -201,7 +201,7 @@ class growing_tape_t {
     strided_range_gt<ukv_val_len_t> lengths() noexcept { return strided_range(lengths_); }
     strided_range_gt<byte_t> contents() noexcept { return strided_range(contents_); }
 
-    operator flat_values_t() noexcept {
+    operator joined_values_t() noexcept {
         return {ukv_val_ptr_t(contents_.data()), offsets_.data(), lengths_.data(), lengths_.size()};
     }
 };
@@ -429,14 +429,19 @@ inline range_at equal_subrange(range_at range, comparable_at&& comparable) {
     return range_at {p.first, p.second};
 }
 
-template <typename element_at, typename alloc_at = std::allocator<element_at>>
-void sort_and_deduplicate(std::vector<element_at, alloc_at>& elems) {
-    std::sort(elems.begin(), elems.end());
-    elems.erase(std::unique(elems.begin(), elems.end()), elems.end());
+template <typename iterator_at>
+std::size_t sort_and_deduplicate(iterator_at begin, iterator_at end) {
+    std::sort(begin, end);
+    return std::unique(begin, end) - begin;
 }
 
 template <typename element_at, typename alloc_at = std::allocator<element_at>>
-std::size_t offset_in_sorted(std::vector<element_at, alloc_at> const& elems, element_at const& wanted) {
+void sort_and_deduplicate(std::vector<element_at, alloc_at>& elems) {
+    elems.erase(elems.begin() + sort_and_deduplicate(elems.begin(), elems.end()), elems.end());
+}
+
+template <typename container_at, typename comparable_at>
+std::size_t offset_in_sorted(container_at const& elems, comparable_at const& wanted) {
     return std::lower_bound(elems.begin(), elems.end(), wanted) - elems.begin();
 }
 

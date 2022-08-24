@@ -60,13 +60,13 @@ struct contents_arg_t {
         if (!contents_begin || !contents_begin[i] || (nulls && nulls[i]))
             return {};
 
-        ukv_val_ptr_t begin = contents_begin[i];
-        ukv_val_len_t off = offsets_begin ? offsets_begin[i] : 0;
-        ukv_val_len_t len = lengths_begin //
-                                ? lengths_begin[i]
-                                : offsets_begin //
-                                      ? offsets_begin[i + 1] - off
-                                      : std::strlen((char const*)begin + off);
+        auto begin = reinterpret_cast<byte_t const*>(contents_begin[i]);
+        auto off = offsets_begin ? offsets_begin[i] : 0;
+        auto len = lengths_begin //
+                       ? lengths_begin[i]
+                       : offsets_begin //
+                             ? offsets_begin[i + 1] - off
+                             : std::strlen((char const*)begin + off);
 
         return {begin + off, len};
     }
