@@ -240,6 +240,11 @@ strided_range_gt<at const> strided_range(std::initializer_list<at> list) noexcep
     return {list.begin(), sizeof(at), list.size()};
 }
 
+template <typename at>
+strided_range_gt<at> strided_range(at* begin, at* end) noexcept {
+    return {begin, end};
+}
+
 /**
  * @brief Similar to `std::optional<std::span>`.
  * It's NULL state and "empty string" states are not identical.
@@ -282,7 +287,7 @@ struct range_gt {
  * @brief A read-only iterator for values packed into a
  * contiguous memory range. Doesn't own underlying memory.
  */
-class flat_values_iterator_t {
+class joined_values_iterator_t {
 
     ukv_val_ptr_t contents_ = nullptr;
     ukv_val_len_t* offsets_ = nullptr;
@@ -295,37 +300,37 @@ class flat_values_iterator_t {
     using pointer = void;
     using reference = void;
 
-    inline flat_values_iterator_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens) noexcept
+    inline joined_values_iterator_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens) noexcept
         : contents_(vals), offsets_(offs), lengths_(lens) {}
 
-    inline flat_values_iterator_t& operator++() noexcept {
+    inline joined_values_iterator_t& operator++() noexcept {
         ++lengths_;
         ++offsets_;
         return *this;
     }
 
-    inline flat_values_iterator_t operator++(int) const noexcept { return {contents_, lengths_ + 1, offsets_ + 1}; }
-    inline flat_values_iterator_t operator--(int) const noexcept { return {contents_, lengths_ - 1, offsets_ - 1}; }
+    inline joined_values_iterator_t operator++(int) const noexcept { return {contents_, lengths_ + 1, offsets_ + 1}; }
+    inline joined_values_iterator_t operator--(int) const noexcept { return {contents_, lengths_ - 1, offsets_ - 1}; }
     inline value_view_t operator*() const noexcept { return {contents_ + *offsets_, *lengths_}; }
 
-    inline bool operator==(flat_values_iterator_t const& other) const noexcept { return lengths_ == other.lengths_; }
-    inline bool operator!=(flat_values_iterator_t const& other) const noexcept { return lengths_ != other.lengths_; }
+    inline bool operator==(joined_values_iterator_t const& other) const noexcept { return lengths_ == other.lengths_; }
+    inline bool operator!=(joined_values_iterator_t const& other) const noexcept { return lengths_ != other.lengths_; }
 };
 
-class flat_values_t {
+class joined_values_t {
     ukv_val_ptr_t contents_ = nullptr;
     ukv_val_len_t* offsets_ = nullptr;
     ukv_val_len_t* lengths_ = nullptr;
     ukv_size_t count_ = 0;
 
   public:
-    inline flat_values_t() = default;
+    inline joined_values_t() = default;
 
-    inline flat_values_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens, ukv_size_t elements) noexcept
+    inline joined_values_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens, ukv_size_t elements) noexcept
         : contents_(vals), offsets_(offs), lengths_(lens), count_(elements) {}
 
-    inline flat_values_iterator_t begin() const noexcept { return {contents_, offsets_, lengths_}; }
-    inline flat_values_iterator_t end() const noexcept { return {contents_, offsets_ + count_, lengths_ + count_}; }
+    inline joined_values_iterator_t begin() const noexcept { return {contents_, offsets_, lengths_}; }
+    inline joined_values_iterator_t end() const noexcept { return {contents_, offsets_ + count_, lengths_ + count_}; }
     inline std::size_t size() const noexcept { return count_; }
 
     inline ukv_val_len_t* offsets() const noexcept { return offsets_; }
@@ -435,19 +440,15 @@ struct identity_t {
  */
 template <typename element_at, typename iterator_at, typename transform_at = identity_t>
 element_at transform_reduce_n(iterator_at begin, std::size_t n, element_at init, transform_at transform = {}) {
-    for (std::size_t i = 0; i != n; ++i, ++begin)
-        init += transform(*begin);
+    for (std::size_t i = 0; i != n; ++i)
+        init += transform(begin[i]);
     return init;
 }
 
 template <typename output_iterator_at, typename iterator_at, typename transform_at = identity_t>
-output_iterator_at transform_n(iterator_at begin,
-                               std::size_t n,
-                               output_iterator_at output,
-                               transform_at transform = {}) {
-    for (std::size_t i = 0; i != n; ++i, ++begin, ++output)
-        *output = transform(*begin);
-    return output;
+void transform_n(iterator_at begin, std::size_t n, output_iterator_at output, transform_at transform = {}) {
+    for (std::size_t i = 0; i != n; ++i)
+        output[i] = transform(begin[i]);
 }
 
 template <typename element_at, typename iterator_at>

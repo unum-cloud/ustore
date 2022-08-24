@@ -57,7 +57,7 @@ class members_ref_gt {
     using keys_extractor_t = places_arg_extractor_gt<locations_plain_t>;
     static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
-    using value_t = std::conditional_t<is_one_k, value_view_t, flat_values_t>;
+    using value_t = std::conditional_t<is_one_k, value_view_t, joined_values_t>;
     using present_t = std::conditional_t<is_one_k, bool, strided_range_gt<bool>>;
     using length_t = std::conditional_t<is_one_k, ukv_val_len_t, indexed_range_gt<ukv_val_len_t*>>;
 
@@ -327,7 +327,7 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
         if constexpr (is_one_k)
             return value_view_t {found_values + *found_offsets, *found_lengths};
         else
-            return flat_values_t {found_values, found_offsets, found_lengths, count};
+            return joined_values_t {found_values, found_offsets, found_lengths, count};
     }
 }
 

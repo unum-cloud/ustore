@@ -105,13 +105,13 @@ void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_leng
     using extractor_t = places_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<flat_values_t> retrieved_and_arena = ref.value();
-    flat_values_t const& retrieved = *retrieved_and_arena;
+    expected_gt<joined_values_t> retrieved_and_arena = ref.value();
+    joined_values_t const& retrieved = *retrieved_and_arena;
     ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
 
     // Check views
-    flat_values_iterator_t it = retrieved.begin();
+    joined_values_iterator_t it = retrieved.begin();
     for (std::size_t i = 0; i != count; ++i, ++it) {
         EXPECT_EQ((*it).size(), expects_missing ? 0 : expected_length);
     }
@@ -138,11 +138,11 @@ void check_equalities(members_ref_gt<locations_at>& ref, contents_arg_t values) 
     using extractor_t = places_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<flat_values_t> retrieved_and_arena = ref.value();
-    flat_values_t const& retrieved = *retrieved_and_arena;
+    expected_gt<joined_values_t> retrieved_and_arena = ref.value();
+    joined_values_t const& retrieved = *retrieved_and_arena;
     EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
-    flat_values_iterator_t it = retrieved.begin();
+    joined_values_iterator_t it = retrieved.begin();
     for (std::size_t i = 0; i != extractor_t {}.count(ref.locations()); ++i, ++it) {
         auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
         auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
