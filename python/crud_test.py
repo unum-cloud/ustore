@@ -224,50 +224,109 @@ def test_main_collection_txn_ctx():
             only_explicit_batch(txn.main)
 
 
-def test_docs():
-    db = ukv.DataBase()
-    doc_col = db['col'].docs
-    json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
-    doc_col.set(1, json)
-    assert doc_col.get(1) == json
+def doc_iterate(col):
+    keys = [1, 2, 3]
+    jsons = [{'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24},
+             {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Age': 27},
+             {'Name': 'Darvin', 'Surname': 'Harutyunyan', 'Age': 27}]
 
-    # JSON PATCHING
+    col.set(keys, jsons)
+
+    list_of_keys = list()
+    list_of_vals = list()
+
+    for key in col.keys:
+        list_of_keys.append(key)
+    assert list_of_keys == keys
+
+    list_of_keys.clear()
+    for key in col.keys.since(2):
+        list_of_keys.append(key)
+    assert list_of_keys == keys[1:]
+
+    list_of_keys.clear()
+    for key in col.keys.until(2):
+        list_of_keys.append(key)
+    assert list_of_keys == keys[:2]
+
+    list_of_keys.clear()
+    for key, value in col.items:
+        list_of_keys.append(key)
+        list_of_vals.append(value)
+    assert list_of_keys == keys
+    assert list_of_vals == jsons
+
+    list_of_keys.clear()
+    list_of_vals.clear()
+    for key, value in col.items.since(2):
+        list_of_keys.append(key)
+        list_of_vals.append(value)
+    assert list_of_keys == keys[1:]
+    assert list_of_vals == jsons[1:]
+
+    list_of_keys.clear()
+    list_of_vals.clear()
+    for key, value in col.items.until(2):
+        list_of_keys.append(key)
+        list_of_vals.append(value)
+    assert list_of_keys == keys[:2]
+    assert list_of_vals == jsons[:2]
+    col.clear()
+
+
+def doc_scan(col):
+    keys = [1, 2, 3]
+    jsons = [{'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24},
+             {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Age': 27},
+             {'Name': 'Darvin', 'Surname': 'Harutyunyan', 'Age': 27}]
+
+    col.set(keys, jsons)
+    assert np.array_equal(col.scan(1, 3), [1, 2, 3])
+    col.clear()
+
+
+def doc_patching(col):
+    json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
+    col.set(1, json)
     json_to_patch = [
         {"op": "replace", "path": "/Name", "value": "Ashot"},
         {"op": "add", "path": "/Hello", "value": "World"},
         {"op": "remove", "path": "/Age"}
     ]
     new_json = {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Hello': 'World'}
-    doc_col.patch(1, json_to_patch)
-    assert doc_col.get(1) == new_json
+    col.patch(1, json_to_patch)
+    assert col.get(1) == new_json
+    col.clear()
 
-    # JSON MERGING
-    json_to_merge = {"Name": "Davit", "Age": 24}
-    new_json = {'Name': 'Davit', 'Surname': 'Vardanyan',
-                'Age': 24, 'Hello': "World"}
-    doc_col.merge(1, json_to_merge)
-    assert doc_col.get(1) == new_json
 
-    json = {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Age': 27}
-    doc_col[2] = json
-    assert doc_col[2] == json
+def doc_merging(col):
+    json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
+    col.set(1, json)
 
-    # Iterating over keys
-    list_of_keys = list()
-    for key in doc_col.keys:
-        list_of_keys.append(key)
+    json_to_merge = {"Name": "Ashot", "Age": 27, 'Hello': "World"}
+    new_json = {'Name': 'Ashot', 'Surname': 'Vardanyan',
+                'Age': 27, 'Hello': "World"}
 
-    # Scan keys
-    assert list_of_keys == [1, 2]
-    keys = doc_col.scan(1, 2)
-    assert np.array_equal(keys, [1, 2])
+    col.merge(1, json_to_merge)
+    assert col.get(1) == new_json
+    col.clear()
 
-    assert 1 in doc_col
-    assert 2 in doc_col
-    del doc_col[1]
-    del doc_col[2]
-    assert 1 not in doc_col
-    assert 2 not in doc_col
+
+def test_docs():
+    db = ukv.DataBase()
+    col = db['doc_col'].docs
+    doc_scan(col)
+    doc_iterate(col)
+    doc_merging(col)
+    doc_patching(col)
+
+    json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
+    col.set(1, json)
+    assert col.get(1) == json
+
+    assert 1 in col
+    del col[1]
+    assert 1 not in col
 
 
 def test_docs_batch():
