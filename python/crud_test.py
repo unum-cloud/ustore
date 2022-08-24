@@ -249,9 +249,53 @@ def test_docs():
     assert doc_col.get(1) == new_json
 
     json = {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Age': 27}
-    doc_col[1] = json
-    assert doc_col[1] == json
+    doc_col[2] = json
+    assert doc_col[2] == json
 
-    assert doc_col.has_key(1)
+    # Iterating over keys
+    list_of_keys = list()
+    for key in doc_col.keys:
+        list_of_keys.append(key)
+
+    # Scan keys
+    assert list_of_keys == [1, 2]
+    keys = doc_col.scan(1, 2)
+    assert np.array_equal(keys, [1, 2])
+
+    assert 1 in doc_col
+    assert 2 in doc_col
     del doc_col[1]
+    del doc_col[2]
     assert 1 not in doc_col
+    assert 2 not in doc_col
+
+
+def test_docs_batch():
+    db = ukv.DataBase()
+    doc_col = db['batch_col'].docs
+
+    # Batch Set
+    keys = [1, 2]
+    jsons = [{'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24},
+             {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Age': 27}]
+    doc_col.set(keys, jsons)
+    assert doc_col.get(keys) == jsons
+
+    # Invalid Arguments
+    with pytest.raises(Exception):
+        doc_col.set([1, 2, 3], jsons)
+    with pytest.raises(Exception):
+        doc_col.set([1], jsons)
+
+    # Set same value to multiple keys
+    json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
+    doc_col.set(keys, json)
+    received_jsons = doc_col.get(keys)
+    assert len(received_jsons) == 2
+    assert received_jsons[0] == json
+    assert received_jsons[1] == json
+
+    # Batch Remove
+    doc_col.remove(keys)
+    assert 1 not in doc_col
+    assert 2 not in doc_col
