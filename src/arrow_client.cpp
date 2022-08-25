@@ -342,25 +342,141 @@ void ukv_write( //
     strided_iterator_gt<ukv_1x8_t const> presences {c_presences, sizeof(ukv_1x8_t)};
 
     places_arg_t places {cols, keys, {}, c_tasks_count};
-    contents_arg_t contents {vals, offs, lens, nulls};
+    contents_arg_t contents {vals, offs, lens, presences, c_tasks_count};
 
-    if (!cols.is_continuous()) {
+    bool const same_collection = places.same_collection();
+    bool const same_named_collection = same_collection && places.same_collections_are_named();
+    bool const write_flush = c_options & ukv_option_write_flush_k;
+
+    bool const has_cols_column = !same_collection;
+    constexpr bool has_keys_column = true;
+    bool const has_contents_column = vals != nullptr;
+
+    if (has_cols_column && !cols.is_continuous()) {
+        auto continuous = arena.alloc<ukv_col_t>(places.size(), c_error);
+        return_on_error(c_error);
+        transform_n(cols, places.size(), continuous.begin());
+        cols = {continuous.begin(), places.size()};
     }
-    if (!keys.is_continuous()) {
+
+    if (has_keys_column && !keys.is_continuous()) {
+        auto continuous = arena.alloc<ukv_key_t>(places.size(), c_error);
+        return_on_error(c_error);
+        transform_n(keys, places.size(), continuous.begin());
+        keys = {continuous.begin(), places.size()};
     }
 
     // Check if the input is continuous and is already in an Arrow-compatible form
-    if (contents.is_continuous()) {
-        // TODO: Instead of reallocating, just pass this version of the data
+    ukv_val_ptr_t joined_vals_begin = nullptr;
+    if (has_contents_column && !contents.is_continuous()) {
+        auto total = transform_reduce_n(contents, places.size(), 0ul, std::mem_fn(&value_view_t::size));
+        auto joined_vals = arena.alloc<byte_t>(total, c_error);
+        return_on_error(c_error);
+        auto joined_offs = arena.alloc<ukv_val_len_t>(places.size() + 1, c_error);
+        return_on_error(c_error);
+        auto joined_presences = arena.alloc<ukv_1x8_t>(divide_round_up<std::size_t>(places.size(), CHAR_BIT), c_error);
+        return_on_error(c_error);
+
+        // Exports into the Arrow-compatible form
+        ukv_val_len_t exported_bytes = 0;
+        for (std::size_t i = 0; i != c_tasks_count; ++i) {
+            auto value = contents[i];
+            joined_presences[i] = !value;
+            joined_offs[i] = exported_bytes;
+            std::memcpy(joined_vals.begin() + exported_bytes, value.begin(), value.size());
+            exported_bytes += value.size();
+        }
+        joined_offs[places.size()] = exported_bytes;
+
+        joined_vals_begin = (ukv_val_ptr_t)joined_vals.begin();
+        vals = {&joined_vals_begin, 0};
+        offs = {joined_offs.begin(), sizeof(ukv_key_t)};
+        presences = {joined_presences.begin(), sizeof(ukv_1x8_t)};
+    }
+    // It may be the case, that we only have `c_tasks_count` offsets instead of `c_tasks_count+1`,
+    // which won't be enough for Arrow.
+    else if (!contents.is_arrow()) {
     }
 
-    std::size_t total_length = 0;
-    if (lens)
-        total_length = transform_reduce_n(lens, tasks.count, 0ul, std::plus<std::size_t> {});
-    else if (offs)
-        total_length = offs[tasks.count + 1];
+    // Now build-up the Arrow representation
+    ArrowArray array_c;
+    ArrowSchema schema_c;
+    auto count_cols = has_cols_column + has_keys_column + has_contents_column;
+    ukv_to_arrow_schema(c_tasks_count, count_cols, &schema_c, &array_c, c_error);
+    return_on_error(c_error);
 
-    auto keys_joined = arena.alloc<ukv_key_t>(c_tasks_count, c_error);
+    if (has_cols_column)
+        ukv_to_arrow_column( //
+            c_tasks_count,
+            "cols",
+            ukv_type<ukv_col_t>(),
+            nullptr,
+            nullptr,
+            cols.get(),
+            schema_c.children[0],
+            array_c.children[0],
+            c_error);
+    return_on_error(c_error);
+
+    if (has_keys_column)
+        ukv_to_arrow_column( //
+            c_tasks_count,
+            "keys",
+            ukv_type<ukv_key_t>(),
+            nullptr,
+            nullptr,
+            keys.get(),
+            schema_c.children[has_cols_column],
+            array_c.children[has_cols_column],
+            c_error);
+    return_on_error(c_error);
+
+    if (has_contents_column)
+        ukv_to_arrow_column( //
+            c_tasks_count,
+            "vals",
+            ukv_type<value_view_t>(),
+            presences.get(),
+            offs.get(),
+            joined_vals_begin,
+            schema_c.children[has_cols_column + has_keys_column],
+            array_c.children[has_cols_column + has_keys_column],
+            c_error);
+    return_on_error(c_error);
+
+    // Send everything over the network and wait for the response
+    ar::Status ar_status;
+    arrow_mem_pool_t pool(arena);
+    arf::FlightCallOptions options = call_options(pool);
+
+    // Configure the `cmd` descriptor
+    arf::FlightDescriptor descriptor;
+    descriptor.cmd = "write?";
+    if (c_txn)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "txn={:x}&", std::uintptr_t(c_txn));
+    if (!has_cols_column && cols)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "col={:x}&", cols[0]);
+    if (write_flush)
+        descriptor.cmd.append("flush&");
+
+    // Send the request to server
+    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&array_c, &schema_c);
+    return_if_error(maybe_batch.ok(), c_error, error_unknown_k, "Can't pack RecordBatch");
+
+    std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
+    ar::Result<arf::FlightClient::DoPutResult> result = db.flight->DoPut(descriptor, batch_ptr->schema());
+    return_if_error(result.ok(), c_error, network_k, "Failed to exchange with Arrow server");
+
+    ar_status = result->writer->WriteRecordBatch(*batch_ptr);
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing request");
+
+    ar_status = result->writer->Close();
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Submitting request");
+
+    // Fetch the responses
+    // std::shared_ptr<ar::Buffer> response;
+    // ar_status = result->reader->ReadMetadata(&response);
+    // return_if_error(ar_status.ok(), c_error, network_k, "No response");
 }
 
 void ukv_scan( //
