@@ -108,6 +108,11 @@ void ukv_db_open( //
     ukv_t* c_db,
     ukv_error_t* c_error) {
 
+#ifdef DEBUG
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(5s);
+#endif
+
     safe_section("Starting client", c_error, [&] {
         if (!c_config || !std::strlen(c_config))
             c_config = "grpc://0.0.0.0:38709";
@@ -245,8 +250,11 @@ void ukv_read( //
     ar_status = result->writer->WriteRecordBatch(*batch_ptr);
     return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing request");
 
-    ar_status = result->writer->Close();
+    ar_status = result->writer->DoneWriting();
     return_if_error(ar_status.ok(), c_error, error_unknown_k, "Submitting request");
+
+    ar_status = result->writer->Close();
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Closing the channel");
 
     // Fetch the responses
     // Requesting `ToTable` might be more efficient than concatenating and
@@ -266,8 +274,7 @@ void ukv_read( //
     // Export the results into out expected form
     auto bitmap_slots = divide_round_up<std::size_t>(array_c.length, CHAR_BIT);
     if (request_only_present) {
-        auto presences = *c_found_presences = (ukv_1x8_t*)array_c.buffers[1];
-        std::transform(presences, presences + bitmap_slots, presences, [](ukv_1x8_t x) { return ~x; });
+        *c_found_presences = (ukv_1x8_t*)array_c.buffers[1];
     }
     else if (request_length) {
         auto presences = (ukv_1x8_t*)array_c.buffers[0];
