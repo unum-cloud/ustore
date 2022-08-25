@@ -125,6 +125,7 @@
     "compounds": [
         {
             "name": "C++: Test Arrow",
+            "stopAll": true,
             "configurations": [
                 "C++: Test Arrow Server",
                 "C++: Test Arrow Client",

@@ -647,20 +647,23 @@ class UKVService : public arf::FlightServerBase {
         session_params_t params = session_params(server_call, cmd);
         status_t status;
 
-        std::shared_ptr<ar::Schema> const& schema_ptr = request.GetSchema().ValueOrDie();
-        ArrowSchema schema_c;
-        if (ar_status = ar::ExportSchema(*schema_ptr, &schema_c); !ar_status.ok())
-            return ar_status;
-
-        if (desc.cmd == kOpRead) {
-            std::optional<std::size_t> idx_cols = column_idx(&schema_c, kArgCols);
-            std::optional<std::size_t> idx_keys = column_idx(&schema_c, kArgKeys);
+        if (is_query(desc.cmd, kOpRead)) {
 
             while (true) {
-                arf::FlightStreamChunk const& chunk = request.Next().ValueOrDie();
-                std::shared_ptr<ar::RecordBatch> const& batch_ptr = chunk.data;
-                if (!batch_ptr)
+
+                ar::Result<arf::FlightStreamChunk> maybe_chunk = request.Next();
+                if (!maybe_chunk.ok())
+                    return maybe_chunk.status();
+
+                arf::FlightStreamChunk const& chunk = maybe_chunk.ValueUnsafe();
+                if (!chunk.data && !chunk.app_metadata)
                     break;
+
+                std::shared_ptr<ar::RecordBatch> const& batch_ptr = chunk.data;
+                std::shared_ptr<ar::Schema> const& schema_ptr = batch_ptr->schema();
+                ArrowSchema schema_c;
+                if (ar_status = ar::ExportSchema(*schema_ptr, &schema_c); !ar_status.ok())
+                    return ar_status;
 
                 ArrowArray batch_c;
                 if (ar_status = ar::ExportRecordBatch(*batch_ptr, &batch_c, nullptr); !ar_status.ok())
@@ -669,6 +672,9 @@ class UKVService : public arf::FlightServerBase {
                 ukv_arena_t arena = sessions_.request_arena(status.member_ptr());
                 if (!status)
                     return ar::Status::ExecutionError(status.message());
+
+                std::optional<std::size_t> idx_cols = column_idx(&schema_c, kArgCols);
+                std::optional<std::size_t> idx_keys = column_idx(&schema_c, kArgKeys);
 
                 // As we are immediately exporting in the Arrow format,
                 // we don't need the lengths, just the NULL indicators
@@ -735,7 +741,7 @@ class UKVService : public arf::FlightServerBase {
         if (!ar_status.ok())
             return ar_status;
 
-        if (desc.cmd == kOpWrite) {
+        if (is_query(desc.cmd, kOpWrite)) {
             std::optional<std::size_t> idx_cols = column_idx(&schema_c, kArgCols);
             std::optional<std::size_t> idx_keys = column_idx(&schema_c, kArgKeys);
             std::optional<std::size_t> idx_vals = column_idx(&schema_c, kArgVals);
