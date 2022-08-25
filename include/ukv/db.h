@@ -181,7 +181,7 @@ void ukv_db_open( //
  *
  * @param[in] lengths        Pointer to lengths of chunks in packed into @param values.
  * @param[in] offsets        Pointer to offsets of relevant content within @param values chunks.
- * @param[in] nulls          Pointer to bitset with at least @param values bits in it.
+ * @param[in] presences          Pointer to bitset with at least @param values bits in it.
  *
  * @param[out] error         The error to be handled.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
@@ -229,7 +229,7 @@ void ukv_db_open( //
  * @section Argument Resolution Order
  * As different combinations of "value" arguments are possible, we must define the resolution order.
  * 1. If @param values is NULL or key at index `i` is NULL, we will remote the entry from DB.
- * 2. If @param nulls is not NULL and bit at index `i` is set, we will remote the entry from DB.
+ * 2. If @param presences is not NULL and bit at index `i` is set, we will remote the entry from DB.
  * 3. If @param lengths is NULL, we expect `N+1` @param offsets (like Arrow) to determine entry length.
  * 4. If @param lengths and @param offsets are NULL, we expect NULL-terminated entries and will `std::strlen`.
  */
@@ -253,7 +253,7 @@ void ukv_write( //
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
 
-    ukv_1x8_t const* nulls,
+    ukv_1x8_t const* presences,
 
     ukv_options_t const options,
 
@@ -297,19 +297,19 @@ void ukv_write( //
  *                           a single "tape" structure, which later be exported into (often disjoint)
  *                           runtime- or library-specific implementations. To determine the range of each
  *                           chunk use @param found_offsets and @param found_lengths.
- *                           Is @b optional, as you may only want @param found_lengths or @param found_nulls.
+ *                           Is @b optional, as you may only want @param found_lengths or @param found_presences.
  *
  * @param[out] found_offsets Will contain a pointer to an array with @param tasks_count integers.
  *                           Each marks a response offset in bytes starting from @param found_values.
  *                           To be fully compatible with Apache Arrow we append one more offset at
  *                           at the end to allow inferring the length of the last entry without
  *                           using @param found_lengths.
- *                           Is @b optional, as you may only want @param found_lengths or @param found_nulls.
+ *                           Is @b optional, as you may only want @param found_lengths or @param found_presences.
  *
  * @param[out] found_lengths Will contain a pointer to an array with @param tasks_count integers.
  *                           Each defines a response length in bytes. Is @b optional.
  *
- * @param[out] found_nulls   Will contain a bitset with at least @param tasks_count bits.
+ * @param[out] found_presences   Will contain a bitset with at least @param tasks_count bits.
  *                           Each set bit means that such key is missing in DB. Is @b optional.
  *
  * @param[out] error         The error message to be handled by callee.
@@ -331,7 +331,7 @@ void ukv_read( //
     ukv_val_ptr_t* found_values,
     ukv_val_len_t** found_offsets,
     ukv_val_len_t** found_lengths,
-    ukv_1x8_t** found_nulls,
+    ukv_1x8_t** found_presences,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

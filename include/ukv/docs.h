@@ -171,7 +171,7 @@ void ukv_docs_write( //
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
 
-    ukv_1x8_t const* nulls,
+    ukv_1x8_t const* presences,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -222,7 +222,7 @@ void ukv_docs_read( //
     ukv_val_ptr_t* found_values,
     ukv_val_len_t** found_offsets,
     ukv_val_len_t** found_lengths,
-    ukv_1x8_t** found_nulls,
+    ukv_1x8_t** found_presences,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

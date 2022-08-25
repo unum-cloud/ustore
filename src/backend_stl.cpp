@@ -506,7 +506,7 @@ void ukv_read( //
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
-    ukv_1x8_t** c_found_nulls,
+    ukv_1x8_t** c_found_presences,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -528,13 +528,13 @@ void ukv_read( //
     return_on_error(c_error);
     auto lens = arena.alloc_or_dummy<ukv_val_len_t>(places.count, c_error, c_found_lengths);
     return_on_error(c_error);
-    auto nulls = arena.alloc_or_dummy<ukv_1x8_t>(places.count, c_error, c_found_nulls);
+    auto presences = arena.alloc_or_dummy<ukv_1x8_t>(places.count, c_error, c_found_presences);
     return_on_error(c_error);
 
     // 2. Pull metadata
     std::size_t total_length = 0;
     auto meta_enumerator = [&](std::size_t i, value_view_t value) {
-        nulls[i] = value;
+        presences[i] = bool(value);
         lens[i] = value ? value.size() : ukv_val_len_missing_k;
         total_length += value.size();
     };
@@ -583,7 +583,7 @@ void ukv_write( //
     ukv_val_len_t const* c_lens,
     ukv_size_t const c_lens_stride,
 
-    ukv_1x8_t const* c_nulls,
+    ukv_1x8_t const* c_presences,
 
     ukv_options_t const c_options,
     ukv_arena_t*,
@@ -598,10 +598,10 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    strided_range_gt<ukv_1x8_t const> nulls {c_nulls};
+    strided_iterator_gt<ukv_1x8_t const> presences {c_presences, sizeof(ukv_1x8_t)};
 
     places_arg_t places {cols, keys, {}, c_tasks_count};
-    contents_arg_t contents {vals, offs, lens, nulls};
+    contents_arg_t contents {vals, offs, lens, presences, c_tasks_count};
 
     return c_txn ? write_txn(txn, places, contents, c_options, c_error)
                  : write_head(db, places, contents, c_options, c_error);

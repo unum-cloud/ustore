@@ -41,6 +41,13 @@ struct places_arg_t {
         ukv_str_view_t field = fields_begin ? fields_begin[i] : nullptr;
         return {col, key, field};
     }
+
+    bool same_collection() const noexcept {
+        return !cols_begin || cols_begin.repeats() ||
+               !transform_reduce_n(cols_begin, count, false, [=](ukv_col_t col) { return col != cols_begin[0]; });
+    }
+
+    bool same_collections_are_named() const noexcept { return cols_begin && cols_begin[0] != ukv_col_main_k; }
 };
 
 /**
@@ -53,11 +60,12 @@ struct contents_arg_t {
     strided_iterator_gt<ukv_val_ptr_t const> contents_begin;
     strided_iterator_gt<ukv_val_len_t const> offsets_begin;
     strided_iterator_gt<ukv_val_len_t const> lengths_begin;
-    strided_range_gt<ukv_1x8_t const> nulls;
+    strided_iterator_gt<ukv_1x8_t const> presences_begin;
+    ukv_size_t count = 0;
 
-    inline std::size_t size() const noexcept { return nulls.size(); }
+    inline std::size_t size() const noexcept { return count; }
     inline value_view_t operator[](std::size_t i) const noexcept {
-        if (!contents_begin || !contents_begin[i] || (nulls && nulls[i]))
+        if (!contents_begin || !contents_begin[i] || (presences_begin && !presences_begin[i]))
             return {};
 
         auto begin = reinterpret_cast<byte_t const*>(contents_begin[i]);
@@ -72,8 +80,10 @@ struct contents_arg_t {
     }
 
     inline bool is_arrow() const noexcept {
-        return contents_begin.repeats() && nulls && offsets_begin && !lengths_begin;
+        return contents_begin.repeats() && offsets_begin && !lengths_begin &&
+               (!presences_begin || presences_begin.is_continuous());
     }
+
     inline bool is_continuous() const noexcept {
         auto last = operator[](0);
         for (std::size_t i = 1; i != size(); ++i) {

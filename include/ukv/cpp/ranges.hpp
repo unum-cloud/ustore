@@ -79,7 +79,7 @@ class strided_iterator_gt {
 
     operator bool() const noexcept { return raw_ != nullptr; }
     bool repeats() const noexcept { return !stride_; }
-    bool is_continuous() const noexcept { return stride_ == sizeof(ukv_size_t); }
+    bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
     ukv_size_t stride() const noexcept { return stride_; }
     element_t& operator*() const noexcept { return *raw_; }
     element_t* operator->() const noexcept { return raw_; }
@@ -98,12 +98,87 @@ class strided_iterator_gt {
     }
 };
 
+template <>
+class strided_iterator_gt<ukv_1x8_t> {
+  public:
+    struct ref_t {
+        ukv_1x8_t* raw = nullptr;
+        ukv_1x8_t mask = 0;
+        ref_t(ukv_1x8_t& raw) noexcept : raw(&raw), mask(0) {}
+        ref_t(ukv_1x8_t* raw, ukv_1x8_t mask) noexcept : raw(raw), mask(mask) {}
+        operator bool() const noexcept { return *raw & mask; }
+        ref_t& operator=(bool value) noexcept {
+            *raw = value ? (*raw | mask) : (*raw & ~mask);
+            return *this;
+        }
+    };
+
+    using element_t = ukv_1x8_t;
+    using value_type = bool;
+    using reference = ref_t;
+
+  protected:
+    element_t* begin_ = nullptr;
+    ukv_size_t stride_ = 0;
+
+  public:
+    strided_iterator_gt(element_t* begin, std::size_t stride = 0) noexcept
+        : begin_(begin), stride_(static_cast<ukv_size_t>(stride)) {}
+    strided_iterator_gt(strided_iterator_gt&&) noexcept = default;
+    strided_iterator_gt(strided_iterator_gt const&) noexcept = default;
+    strided_iterator_gt& operator=(strided_iterator_gt&&) noexcept = default;
+    strided_iterator_gt& operator=(strided_iterator_gt const&) noexcept = default;
+
+    ref_t operator[](std::size_t idx) const noexcept {
+        return {begin_ + stride_ * idx / CHAR_BIT, static_cast<element_t>(1 << (idx % CHAR_BIT))};
+    }
+
+    operator bool() const noexcept { return begin_ != nullptr; }
+    bool repeats() const noexcept { return !stride_; }
+    bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
+    element_t* get() const noexcept { return begin_; }
+    bool operator==(strided_iterator_gt const& other) const noexcept { return begin_ == other.begin_; }
+    bool operator!=(strided_iterator_gt const& other) const noexcept { return begin_ != other.begin_; }
+};
+
+template <>
+class strided_iterator_gt<ukv_1x8_t const> {
+  public:
+    using element_t = ukv_1x8_t const;
+    using value_type = bool;
+    using reference = void;
+
+  protected:
+    element_t* begin_ = nullptr;
+    ukv_size_t stride_ = 0;
+
+  public:
+    strided_iterator_gt(element_t* begin = nullptr, std::size_t stride = 0) noexcept
+        : begin_(begin), stride_(static_cast<ukv_size_t>(stride)) {}
+    strided_iterator_gt(strided_iterator_gt&&) noexcept = default;
+    strided_iterator_gt(strided_iterator_gt const&) noexcept = default;
+    strided_iterator_gt& operator=(strided_iterator_gt&&) noexcept = default;
+    strided_iterator_gt& operator=(strided_iterator_gt const&) noexcept = default;
+
+    bool operator[](std::size_t idx) const noexcept {
+        return begin_[stride_ * idx / CHAR_BIT] & static_cast<element_t>(1 << (idx % CHAR_BIT));
+    }
+
+    operator bool() const noexcept { return begin_ != nullptr; }
+    bool repeats() const noexcept { return !stride_; }
+    bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
+    element_t* get() const noexcept { return begin_; }
+    bool operator==(strided_iterator_gt const& other) const noexcept { return begin_ == other.begin_; }
+    bool operator!=(strided_iterator_gt const& other) const noexcept { return begin_ != other.begin_; }
+};
+
 template <typename element_at>
 class strided_range_gt {
   public:
     using element_t = element_at;
-    using value_type = element_t;
-    using reference_type = element_t&;
+    using iterator_t = strided_iterator_gt<element_t>;
+    using value_type = typename iterator_t::value_type;
+    using reference = typename iterator_t::reference;
 
   protected:
     static_assert(!std::is_void_v<element_t>);
@@ -119,7 +194,7 @@ class strided_range_gt {
         : begin_(begin), stride_(sizeof(element_t)), count_(end - begin) {}
     strided_range_gt(element_t* begin, std::size_t stride, std::size_t count) noexcept
         : begin_(begin), stride_(static_cast<ukv_size_t>(stride)), count_(static_cast<ukv_size_t>(count)) {}
-    strided_range_gt(strided_iterator_gt<element_t> begin, std::size_t count) noexcept
+    strided_range_gt(iterator_t begin, std::size_t count) noexcept
         : strided_range_gt(begin.get(), begin.stride(), count) {}
 
     strided_range_gt(strided_range_gt&&) = default;
@@ -128,9 +203,9 @@ class strided_range_gt {
     strided_range_gt& operator=(strided_range_gt const&) = default;
 
     inline element_t* data() const noexcept { return begin_; }
-    inline decltype(auto) begin() const noexcept { return strided_iterator_gt<element_t> {begin_, stride_}; }
+    inline decltype(auto) begin() const noexcept { return iterator_t {begin_, stride_}; }
     inline decltype(auto) end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
-    inline decltype(auto) at(std::size_t i) const noexcept { return *(begin() + static_cast<std::ptrdiff_t>(i)); }
+    inline decltype(auto) at(std::size_t i) const noexcept { return begin()[static_cast<std::ptrdiff_t>(i)]; }
     inline decltype(auto) operator[](std::size_t i) const noexcept { return at(i); }
 
     inline auto immutable() const noexcept { return strided_range_gt<element_t const>(begin_, stride_, count_); }
@@ -152,64 +227,18 @@ class strided_range_gt {
     }
 };
 
-template <>
-class strided_range_gt<ukv_1x8_t> {
-  public:
-    struct ref_t {
-        ukv_1x8_t* raw = nullptr;
-        ukv_1x8_t mask = 0;
-        ref_t(ukv_1x8_t& raw) noexcept : raw(&raw), mask(0) {}
-        ref_t(ukv_1x8_t* raw, ukv_1x8_t mask) noexcept : raw(raw), mask(mask) {}
-        operator bool() const noexcept { return *raw & mask; }
-        ref_t& operator=(bool value) noexcept {
-            *raw = value ? (*raw | mask) : (*raw & ~mask);
-            return *this;
-        }
-    };
-
-    using element_t = ukv_1x8_t;
-    using value_type = bool;
-    using reference_type = ref_t;
-
-  protected:
-    element_t* begin_ = nullptr;
-    ukv_size_t stride_ = 0;
-    ukv_size_t count_ = 0;
-
-  public:
-    strided_range_gt(element_t* begin, std::size_t stride, std::size_t count) noexcept
-        : begin_(begin), stride_(static_cast<ukv_size_t>(stride)), count_(static_cast<ukv_size_t>(count)) {}
-    strided_range_gt(strided_range_gt&&) noexcept = default;
-    strided_range_gt(strided_range_gt const&) noexcept = default;
-    strided_range_gt& operator=(strided_range_gt&&) noexcept = default;
-    strided_range_gt& operator=(strided_range_gt const&) noexcept = default;
-
-    ref_t operator[](std::size_t idx) const noexcept {
-        return {begin_ + stride_ * idx / CHAR_BIT, static_cast<element_t>(idx % CHAR_BIT)};
-    }
-
-    operator bool() const noexcept { return begin_ != nullptr; }
-    bool repeats() const noexcept { return !stride_; }
-    std::size_t size() const noexcept { return count_; }
-    element_t* data() const noexcept { return begin_; }
-    bool operator==(strided_range_gt const& other) const noexcept { return begin_ == other.begin_; }
-    bool operator!=(strided_range_gt const& other) const noexcept { return begin_ != other.begin_; }
-};
-
 template <typename element_t>
 struct strided_range_or_dummy_gt {
     using strided_t = strided_range_gt<element_t>;
     using value_type = typename strided_t::value_type;
-    using reference_type = typename strided_t::reference_type;
+    using reference = typename strided_t::reference;
 
     strided_t strided_;
     element_t dummy_;
 
-    reference_type operator[](std::size_t i) & noexcept {
-        return strided_ ? reference_type(strided_[i]) : reference_type(dummy_);
-    }
-    reference_type operator[](std::size_t i) const& noexcept {
-        return strided_ ? reference_type(strided_[i]) : reference_type(dummy_);
+    reference operator[](std::size_t i) & noexcept { return strided_ ? reference(strided_[i]) : reference(dummy_); }
+    reference operator[](std::size_t i) const& noexcept {
+        return strided_ ? reference(strided_[i]) : reference(dummy_);
     }
     std::size_t size() const noexcept { return strided_.size(); }
     operator bool() const noexcept { return strided_; }
