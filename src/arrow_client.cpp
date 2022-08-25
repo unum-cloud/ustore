@@ -367,7 +367,7 @@ void ukv_write( //
     }
 
     // Check if the input is continuous and is already in an Arrow-compatible form
-    ukv_val_ptr_t joined_vals_begin = nullptr;
+    ukv_val_ptr_t joined_vals_begin = vals ? vals[0] : nullptr;
     if (has_contents_column && !contents.is_continuous()) {
         auto total = transform_reduce_n(contents, places.size(), 0ul, std::mem_fn(&value_view_t::size));
         auto joined_vals = arena.alloc<byte_t>(total, c_error);
@@ -396,6 +396,24 @@ void ukv_write( //
     // It may be the case, that we only have `c_tasks_count` offsets instead of `c_tasks_count+1`,
     // which won't be enough for Arrow.
     else if (!contents.is_arrow()) {
+        auto joined_offs = arena.alloc<ukv_val_len_t>(places.size() + 1, c_error);
+        return_on_error(c_error);
+        auto joined_presences = arena.alloc<ukv_1x8_t>(divide_round_up<std::size_t>(places.size(), CHAR_BIT), c_error);
+        return_on_error(c_error);
+
+        // Exports into the Arrow-compatible form
+        ukv_val_len_t exported_bytes = 0;
+        for (std::size_t i = 0; i != c_tasks_count; ++i) {
+            auto value = contents[i];
+            joined_presences[i] = !value;
+            joined_offs[i] = exported_bytes;
+            exported_bytes += value.size();
+        }
+        joined_offs[places.size()] = exported_bytes;
+
+        vals = {&joined_vals_begin, 0};
+        offs = {joined_offs.begin(), sizeof(ukv_key_t)};
+        presences = {joined_presences.begin(), sizeof(ukv_1x8_t)};
     }
 
     // Now build-up the Arrow representation
