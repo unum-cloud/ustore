@@ -69,8 +69,8 @@ std::optional<std::string_view> param_value(std::string_view query_params, std::
         return std::nullopt;
 
     char preceding_char = *(key_begin - 1);
-    bool isnt_part_of_bigger_key = (preceding_char != '?') & (preceding_char != '&') & (preceding_char != '/');
-    if (!isnt_part_of_bigger_key)
+    bool not_part_of_bigger_key = (preceding_char != '?') & (preceding_char != '&') & (preceding_char != '/');
+    if (!not_part_of_bigger_key)
         return std::nullopt;
 
     auto value_begin = key_begin + param_name.size();
@@ -675,7 +675,7 @@ class UKVService : public arf::FlightServerBase {
                 ArrowArray& keys_c = *batch_c.children[*idx_keys];
                 ukv_val_ptr_t found_values = nullptr;
                 ukv_val_len_t* found_offsets = nullptr;
-                ukv_1x8_t* found_nulls = nullptr;
+                ukv_1x8_t* found_presences = nullptr;
                 ukv_read( //
                     db_,
                     nullptr,
@@ -688,7 +688,7 @@ class UKVService : public arf::FlightServerBase {
                     &found_values,
                     &found_offsets,
                     nullptr,
-                    &found_nulls,
+                    &found_presences,
                     &arena,
                     status.member_ptr());
 
@@ -698,7 +698,7 @@ class UKVService : public arf::FlightServerBase {
                     keys_c.length,
                     "vals",
                     ukv_type_bin_k,
-                    found_nulls,
+                    found_presences,
                     found_offsets,
                     found_values,
                     &vals_schema_c,

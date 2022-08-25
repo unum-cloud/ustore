@@ -345,8 +345,9 @@ struct stl_arena_t {
         std::size_t alignment = sizeof(at)) noexcept {
 
         using strided_t = strided_range_gt<at>;
-        auto strided = output ? strided_t {((*output) = alloc<at>(size, c_error, alignment).begin()), sizeof(at), size}
-                              : strided_t {nullptr, 0, size};
+        auto strided = output //
+                           ? strided_t {((*output) = alloc<at>(size, c_error, alignment).begin()), sizeof(at), size}
+                           : strided_t {nullptr, 0, size};
         return {strided, {}};
     }
 

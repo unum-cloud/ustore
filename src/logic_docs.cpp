@@ -548,7 +548,7 @@ void ukv_docs_write( //
     ukv_val_len_t const* c_lens,
     ukv_size_t const c_lens_stride,
 
-    ukv_1x8_t const* c_nulls,
+    ukv_1x8_t const* c_presences,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -576,7 +576,7 @@ void ukv_docs_write( //
             c_offs_stride,
             c_lens,
             c_lens_stride,
-            c_nulls,
+            c_presences,
             c_options,
             &new_arena,
             c_error);
@@ -588,10 +588,10 @@ void ukv_docs_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    strided_range_gt<ukv_1x8_t const> nulls {c_nulls};
+    strided_iterator_gt<ukv_1x8_t const> presences {c_presences, sizeof(ukv_1x8_t)};
 
     places_arg_t places {cols, keys, fields, c_tasks_count};
-    contents_arg_t contents {vals, offs, lens, nulls};
+    contents_arg_t contents {vals, offs, lens, presences, c_tasks_count};
 
     auto func = has_fields || c_format == ukv_format_json_patch_k || c_format == ukv_format_json_merge_patch_k
                     ? &read_modify_write
@@ -621,7 +621,7 @@ void ukv_docs_read( //
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
-    ukv_1x8_t** c_found_nulls,
+    ukv_1x8_t** c_found_presences,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -647,7 +647,7 @@ void ukv_docs_read( //
             c_found_values,
             c_found_offsets,
             c_found_lengths,
-            c_found_nulls,
+            c_found_presences,
             &new_arena,
             c_error);
 

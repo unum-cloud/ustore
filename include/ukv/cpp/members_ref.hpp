@@ -169,6 +169,7 @@ class members_ref_gt {
             .contents_begin = {&any},
             .offsets_begin = {},
             .lengths_begin = {&len},
+            .count = 1,
         };
         return assign(arg, flush);
     }
@@ -259,7 +260,7 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
     ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
-    ukv_1x8_t* found_nulls = nullptr;
+    ukv_1x8_t* found_presences = nullptr;
     constexpr bool wants_value = std::is_same_v<value_t, expected_at>;
     constexpr bool wants_length = std::is_same_v<length_t, expected_at>;
     constexpr bool wants_present = std::is_same_v<present_t, expected_at>;
@@ -288,7 +289,7 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             wants_value ? &found_values : nullptr,
             wants_value ? &found_offsets : nullptr,
             wants_value || wants_length ? &found_lengths : nullptr,
-            wants_present ? &found_nulls : nullptr,
+            wants_present ? &found_presences : nullptr,
             arena_,
             status.member_ptr());
     else
@@ -304,7 +305,7 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             wants_value ? &found_values : nullptr,
             wants_value ? &found_offsets : nullptr,
             wants_value || wants_length ? &found_lengths : nullptr,
-            wants_present ? &found_nulls : nullptr,
+            wants_present ? &found_presences : nullptr,
             arena_,
             status.member_ptr());
 
@@ -319,9 +320,9 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
     }
     else if constexpr (wants_present) {
         if constexpr (is_one_k)
-            return present_t {found_nulls[0]};
+            return present_t {found_presences[0]};
         else
-            return present_t {found_nulls};
+            return present_t {found_presences};
     }
     else {
         if constexpr (is_one_k)

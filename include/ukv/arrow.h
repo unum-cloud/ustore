@@ -157,7 +157,7 @@ static void ukv_to_arrow_schema( //
     array->dictionary = NULL;
     array->release = &release_malloced_array;
     array->buffers = (void const**)malloc(sizeof(void*) * array->n_buffers);
-    array->buffers[0] = NULL; // no nulls, so bitmap can be omitted
+    array->buffers[0] = NULL; // no presences, so bitmap can be omitted
     array->children = (ArrowArray**)malloc(sizeof(struct ArrowArray*) * array->n_children);
 
     if (!schema->children || !array->buffers || !array->children) {

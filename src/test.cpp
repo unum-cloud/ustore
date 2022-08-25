@@ -181,6 +181,7 @@ TEST(db, basic) {
         .contents_begin = {&vals_begin, 0},
         .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
         .lengths_begin = {&val_len, 0},
+        .count = 3,
     };
     round_trip(ref, values);
 
@@ -225,6 +226,7 @@ TEST(db, named) {
         .contents_begin = {&vals_begin, 0},
         .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
         .lengths_begin = {&val_len, 0},
+        .count = 3,
     };
 
     auto ref1 = col1[keys];
@@ -469,6 +471,7 @@ TEST(db, txn) {
         .contents_begin = {&vals_begin, 0},
         .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
         .lengths_begin = {&val_len, 0},
+        .count = 3,
     };
 
     auto txn_ref = txn[keys];
