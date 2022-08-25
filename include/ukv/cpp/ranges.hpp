@@ -312,6 +312,7 @@ class joined_values_iterator_t {
     inline joined_values_iterator_t operator++(int) const noexcept { return {contents_, lengths_ + 1, offsets_ + 1}; }
     inline joined_values_iterator_t operator--(int) const noexcept { return {contents_, lengths_ - 1, offsets_ - 1}; }
     inline value_view_t operator*() const noexcept { return {contents_ + *offsets_, *lengths_}; }
+    inline value_view_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[0], lengths_[0]}; }
 
     inline bool operator==(joined_values_iterator_t const& other) const noexcept { return lengths_ == other.lengths_; }
     inline bool operator!=(joined_values_iterator_t const& other) const noexcept { return lengths_ != other.lengths_; }
@@ -324,14 +325,16 @@ class joined_values_t {
     ukv_size_t count_ = 0;
 
   public:
-    inline joined_values_t() = default;
+    using value_type = value_view_t;
 
+    inline joined_values_t() = default;
     inline joined_values_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens, ukv_size_t elements) noexcept
         : contents_(vals), offsets_(offs), lengths_(lens), count_(elements) {}
 
     inline joined_values_iterator_t begin() const noexcept { return {contents_, offsets_, lengths_}; }
     inline joined_values_iterator_t end() const noexcept { return {contents_, offsets_ + count_, lengths_ + count_}; }
     inline std::size_t size() const noexcept { return count_; }
+    inline value_view_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[0], lengths_[0]}; }
 
     inline ukv_val_len_t* offsets() const noexcept { return offsets_; }
     inline ukv_val_len_t* lengths() const noexcept { return lengths_; }
