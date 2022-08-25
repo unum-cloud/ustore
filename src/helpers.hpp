@@ -301,6 +301,8 @@ struct span_gt {
     std::size_t size_bytes() const noexcept { return size_ * sizeof(at); }
     std::size_t size() const noexcept { return size_; }
 
+    strided_range_gt<at> strided() const noexcept { return {ptr_, ptr_ + size_}; }
+
   private:
     at* ptr_;
     std::size_t size_;

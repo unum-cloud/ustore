@@ -144,12 +144,16 @@ class value_view_t {
     inline value_view_t(char const* c_str) noexcept
         : ptr_(ukv_val_ptr_t(c_str)), length_(static_cast<ukv_val_len_t>(std::strlen(c_str))) {}
 
-    inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
-    inline byte_t const* end() const noexcept { return begin() + size(); }
-    inline char const* c_str() const noexcept { return reinterpret_cast<char const*>(ptr_); }
-    inline std::size_t size() const noexcept { return length_ == ukv_val_len_missing_k ? 0 : length_; }
-    inline bool empty() const noexcept { return !size(); }
     inline operator bool() const noexcept { return length_ != ukv_val_len_missing_k; }
+    inline std::size_t size() const noexcept { return length_ == ukv_val_len_missing_k ? 0 : length_; }
+    inline byte_t const* data() const noexcept {
+        return length_ != ukv_val_len_missing_k ? reinterpret_cast<byte_t const*>(ptr_) : nullptr;
+    }
+
+    inline char const* c_str() const noexcept { return reinterpret_cast<char const*>(ptr_); }
+    inline byte_t const* begin() const noexcept { return data(); }
+    inline byte_t const* end() const noexcept { return data() + size(); }
+    inline bool empty() const noexcept { return !size(); }
 
     ukv_val_ptr_t const* member_ptr() const noexcept { return &ptr_; }
     ukv_val_len_t const* member_length() const noexcept { return &length_; }
@@ -309,7 +313,7 @@ inline ukv_vertex_role_t invert(ukv_vertex_role_t role) {
 
 namespace std {
 template <>
-void swap(unum::ukv::value_ref_t& a, unum::ukv::value_ref_t& b) {
+inline void swap(unum::ukv::value_ref_t& a, unum::ukv::value_ref_t& b) noexcept {
     a.swap(b);
 }
 } // namespace std
