@@ -1,69 +1,77 @@
+#pragma once
+#include <pybind11/pybind11.h>
 #include <nlohmann/json.hpp>
 
-PyObject* from_json(nlohmann::json const& js) {
-    if (js.is_null())
-        return Py_None;
-    else if (js.is_boolean())
-        return PyBool_FromLong(js.get<long>());
-    else if (js.is_number_integer())
-        return PyLong_FromLong(js.get<nlohmann::json::number_integer_t>());
-    else if (js.is_number_float())
-        return PyFloat_FromDouble(js.get<double>());
-    else if (js.is_string())
-        return PyBytes_FromString(js.get<nlohmann::json::string_t>().c_str());
-    else if (js.is_array()) {
-        PyObject* obj = PyTuple_New(js.size());
-        for (size_t i = 0; i < js.size(); i++)
-            PyTuple_SetItem(obj, i, from_json(js[i]));
-        return obj;
+namespace unum::ukv::pyb {
+
+namespace py = pybind11;
+using json_t = nlohmann::json;
+
+inline py::object from_json(const json_t& j) {
+    if (j.is_null())
+        return py::none();
+    else if (j.is_boolean())
+        return py::bool_(j.get<bool>());
+    else if (j.is_number_integer())
+        return py::int_(j.get<json_t::number_integer_t>());
+    else if (j.is_number_unsigned())
+        return py::int_(j.get<json_t::number_unsigned_t>());
+    else if (j.is_number_float())
+        return py::float_(j.get<double>());
+    else if (j.is_string())
+        return py::str(j.get<std::string>());
+    else if (j.is_array()) {
+        py::list obj(j.size());
+        for (std::size_t i = 0; i < j.size(); i++)
+            obj[i] = from_json(j[i]);
+        return std::move(obj);
     }
-    else // Object
-    {
-        PyObject* obj = PyDict_New();
-        for (nlohmann::json::const_iterator it = js.cbegin(); it != js.cend(); ++it)
-            PyDict_SetItem(obj, PyBytes_FromString(it.key().c_str()), from_json(it.value()));
-        return obj;
+    else { // Object
+        py::dict obj;
+        for (json_t::const_iterator it = j.cbegin(); it != j.cend(); ++it)
+            obj[py::str(it.key())] = from_json(it.value());
+        return std::move(obj);
     }
 }
 
-void to_json(nlohmann::json& js, PyObject* obj) {
-    if (obj == Py_None)
-        js = nullptr;
-    else if (PyBool_Check(obj))
-        js = static_cast<bool>(PyLong_AsLong(obj));
-    else if (PyLong_Check(obj))
-        js = PyLong_AsLong(obj);
-    else if (PyFloat_Check(obj))
-        js = PyFloat_AsDouble(obj);
-    else if (PyBytes_Check(obj))
-        js = nlohmann::json::string_t(PyBytes_AsString(obj));
-    else if (PyUnicode_Check(obj))
-        js = nlohmann::json::string_t(PyBytes_AsString(PyUnicode_AsASCIIString(obj)));
-    else if (PySequence_Check(obj)) {
-        js = nlohmann::json::array();
-        for (Py_ssize_t i = 0; i < PySequence_Length(obj); i++)
-            js.emplace_back(PySequence_GetItem(obj, i));
+inline json_t to_json(const py::handle& obj) {
+    if (obj.ptr() == nullptr || obj.is_none())
+        return nullptr;
+    if (py::isinstance<py::bool_>(obj))
+        return obj.cast<bool>();
+    if (py::isinstance<py::int_>(obj)) {
+        json_t::number_integer_t s = obj.cast<json_t::number_integer_t>();
+        if (py::int_(s).equal(obj))
+            return s;
+        json_t::number_unsigned_t u = obj.cast<json_t::number_unsigned_t>();
+        if (py::int_(u).equal(obj))
+            return u;
+        throw std::runtime_error(
+            "to_json received an integer out of range for both json_t::number_integer_t and "
+            "json_t::number_unsigned_t type: " +
+            py::repr(obj).cast<std::string>());
     }
-    else if (PyDict_Check(obj)) {
-        js = nlohmann::json::object();
-        PyObject *key, *value;
-        Py_ssize_t pos = 0;
-        while (PyDict_Next(obj, &pos, &key, &value)) {
-            nlohmann::json key(key);
-            js[key.get<nlohmann::json::string_t>()] = nlohmann::json(value);
-        }
+    if (py::isinstance<py::float_>(obj))
+        return obj.cast<double>();
+    if (py::isinstance<py::bytes>(obj)) {
+        py::module base64 = py::module::import("base64");
+        return base64.attr("b64encode")(obj).attr("decode")("utf-8").cast<std::string>();
     }
-    else if (PyMapping_Check(obj)) {
-        js = nlohmann::json::object();
-        PyObject* keyvals = PyMapping_Items(obj);
-        for (Py_ssize_t i = 0; i < PyMapping_Length(keyvals); i++) {
-            PyObject* kv = PyList_GetItem(keyvals, i);
-            PyObject* k = PyTuple_GetItem(kv, 0);
-            PyObject* v = PyTuple_GetItem(kv, 1);
-            nlohmann::json key(k);
-            js[key.get<nlohmann::json::string_t>()] = nlohmann::json(v);
-        }
+    if (py::isinstance<py::str>(obj))
+        return obj.cast<std::string>();
+    if (py::isinstance<py::tuple>(obj) || py::isinstance<py::list>(obj)) {
+        auto out = json_t::array();
+        for (const py::handle value : obj)
+            out.push_back(to_json(value));
+        return out;
     }
-    else
-        throw std::runtime_error("invalid type for conversion.");
+    if (py::isinstance<py::dict>(obj)) {
+        auto out = json_t::object();
+        for (const py::handle key : obj)
+            out[py::str(key).cast<std::string>()] = to_json(obj[key]);
+        return out;
+    }
+    throw std::runtime_error("Invalid type: " + py::repr(obj).cast<std::string>());
 }
+
+} // namespace unum::ukv::pyb

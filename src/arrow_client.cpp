@@ -1,0 +1,531 @@
+/**
+ * @file arrow_client.cpp
+ * @author Ashot Vardanian
+ *
+ * @brief Client library for Apache Arrow RPC server.
+ * Converts native UKV operations into Arrows classical `DoPut`, `DoExchange`...
+ * Understanding the costs of remote communication, might keep a cache.
+ * ? Intended for single-thread use?
+ */
+
+#include <unordered_map>
+
+#include <fmt/core.h>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wall"
+#pragma GCC diagnostic ignored "-Wextra"
+#include <arrow/type.h>
+#include <arrow/result.h>
+#include <arrow/status.h>
+#include <arrow/buffer.h>
+#include <arrow/table.h>
+#include <arrow/memory_pool.h>
+#include <arrow/flight/client.h>
+#include <arrow/c/bridge.h> // `ExportSchema`
+#pragma GCC diagnostic pop
+
+#define ARROW_C_DATA_INTERFACE 1
+#define ARROW_C_STREAM_INTERFACE 1
+#include "ukv/db.h"
+#include "ukv/arrow.h"
+
+#include "helpers.hpp"
+
+/*********************************************************/
+/*****************   Structures & Consts  ****************/
+/*********************************************************/
+
+ukv_col_t ukv_col_main_k = 0;
+ukv_val_len_t ukv_val_len_missing_k = std::numeric_limits<ukv_val_len_t>::max();
+ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
+
+/*********************************************************/
+/*****************	 C++ Implementation	  ****************/
+/*********************************************************/
+
+namespace arf = arrow::flight;
+namespace ar = arrow;
+
+using namespace unum::ukv;
+using namespace unum;
+
+struct rpc_client_t {
+    std::unique_ptr<arf::FlightClient> flight;
+};
+
+class UKVMemoryPool final : public ar::MemoryPool {
+    monotonic_resource_t resource_;
+
+  public:
+    UKVMemoryPool(stl_arena_t& arena) : resource_(&arena.resource) {}
+    ~UKVMemoryPool() {}
+
+    ar::Status Allocate(int64_t size, uint8_t** ptr) override {
+        auto new_ptr = resource_.allocate(size);
+        if (!new_ptr)
+            return ar::Status::OutOfMemory("");
+
+        *ptr = reinterpret_cast<uint8_t*>(new_ptr);
+        return ar::Status::OK();
+    }
+    ar::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr) override {
+        auto new_ptr = resource_.allocate(new_size);
+        if (!new_ptr)
+            return ar::Status::OutOfMemory("");
+
+        std::memcpy(new_ptr, *ptr, old_size);
+        resource_.deallocate(*ptr, old_size);
+        *ptr = reinterpret_cast<uint8_t*>(new_ptr);
+        return ar::Status::OK();
+    }
+    void Free(uint8_t* buffer, int64_t size) override { resource_.deallocate(buffer, size); }
+    void ReleaseUnused() override {}
+    int64_t bytes_allocated() const override { return static_cast<int64_t>(resource_.used()); }
+    int64_t max_memory() const override { return static_cast<int64_t>(resource_.capacity()); }
+    std::string backend_name() const { return "ukv"; }
+};
+
+/*********************************************************/
+/*****************	    C Interface 	  ****************/
+/*********************************************************/
+
+void ukv_db_open( //
+    ukv_str_view_t c_config,
+    ukv_t* c_db,
+    ukv_error_t* c_error) {
+
+    safe_section("Starting client", c_error, [&] {
+        if (!c_config || !std::strlen(c_config))
+            c_config = "grpc://0.0.0.0:38709";
+
+        auto db_ptr = new rpc_client_t {};
+        auto maybe_location = arf::Location::Parse(c_config);
+        return_if_error(maybe_location.ok(), c_error, args_wrong_k, "Server URI");
+
+        auto maybe_flight_ptr = arf::FlightClient::Connect(*maybe_location);
+        return_if_error(maybe_flight_ptr.ok(), c_error, network_k, "Flight Client Connection");
+
+        db_ptr->flight = maybe_flight_ptr.MoveValueUnsafe();
+        *c_db = db_ptr;
+    });
+}
+
+void ukv_read( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
+
+    ukv_col_t const* c_cols,
+    ukv_size_t const c_cols_stride,
+
+    ukv_key_t const* c_keys,
+    ukv_size_t const c_keys_stride,
+
+    ukv_options_t const c_options,
+
+    ukv_val_ptr_t* c_found_values,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_nulls,
+
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    return_on_error(c_error);
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    places_arg_t tasks {cols, keys, c_tasks_count};
+
+    ArrowArray array_c;
+    ArrowSchema schema_c;
+
+    ar::Status ar_status;
+    UKVMemoryPool pool(arena);
+    arf::FlightCallOptions options;
+    options.read_options.memory_pool = &pool;
+    options.read_options.use_threads = false;
+    options.read_options.max_recursion_depth = 1;
+    options.write_options.memory_pool = &pool;
+    options.write_options.use_threads = false;
+    options.write_options.max_recursion_depth = 1;
+    options.memory_manager;
+
+    bool same_collection = !cols || cols.repeats() ||
+                           !transform_reduce_n(cols, tasks.count, false, [=](ukv_col_t col) { return col != cols[0]; });
+    bool same_named_collection = same_collection && cols && cols[0] != ukv_col_main_k;
+    bool request_only_present = c_found_nulls && !c_found_lengths && !c_found_values;
+    bool request_length = c_found_lengths && !c_found_values;
+    char const* partial_mode = !request_length && !request_length //
+                                   ? nullptr
+                                   : request_length ? "length" : "present";
+    bool read_shared = c_options & ukv_option_read_shared_k;
+    bool read_track = c_options & ukv_option_read_track_k;
+    arf::FlightDescriptor descriptor;
+    descriptor.cmd = "read?";
+    if (c_txn)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "txn={:x}&", std::uintptr_t(c_txn));
+    if (same_named_collection)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "col={:x}&", cols[0]);
+    if (partial_mode)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "part={}&", partial_mode);
+    if (read_shared)
+        descriptor.cmd.append("shared&");
+    if (read_track)
+        descriptor.cmd.append("track&");
+
+    ukv_to_arrow_schema(tasks.count, 2, &schema_c, &array_c, c_error);
+    return_on_error(c_error);
+
+    // If all requests map to the same collection, we can avoid passing its ID
+    if (!same_collection) {
+        if (cols.stride() != sizeof(ukv_col_t)) {
+            auto continuous = arena.alloc<ukv_col_t>(tasks.count, c_error);
+            return_on_error(c_error);
+            transform_n(keys, tasks.count, continuous.begin());
+            cols = {continuous.begin(), sizeof(ukv_col_t)};
+        }
+        ukv_to_arrow_column(tasks.count,
+                            "keys",
+                            ukv_type<ukv_col_t>(),
+                            nullptr,
+                            nullptr,
+                            cols.get(),
+                            schema_c.children[0],
+                            array_c.children[0],
+                            c_error);
+        return_on_error(c_error);
+    }
+
+    // When exporting keys, make sure they are properly strided
+    if (keys.stride() != sizeof(ukv_key_t)) {
+        auto continuous = arena.alloc<ukv_key_t>(tasks.count, c_error);
+        return_on_error(c_error);
+        transform_n(keys, tasks.count, continuous.begin());
+        keys = {continuous.begin(), sizeof(ukv_key_t)};
+    }
+    ukv_to_arrow_column(tasks.count,
+                        "keys",
+                        ukv_type<ukv_key_t>(),
+                        nullptr,
+                        nullptr,
+                        keys.get(),
+                        schema_c.children[1],
+                        array_c.children[1],
+                        c_error);
+    return_on_error(c_error);
+
+    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&array_c, &schema_c);
+    return_if_error(maybe_batch.ok(), c_error, error_unknown_k, "Can't pack RecordBatch");
+
+    std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
+    ar::Result<arf::FlightClient::DoExchangeResult> result = db.flight->DoExchange(options, descriptor);
+    return_if_error(result.ok(), c_error, network_k, "Failed to exchange with Arrow server");
+
+    ar_status = result->writer->WriteRecordBatch(*batch_ptr);
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing request");
+
+    ar_status = result->writer->Close();
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Submitting request");
+
+    // Fetch the responses
+    // Requesting `ToTable` might be more efficient than concatenating and
+    // reallocating directly from our arena, as the underlying Arrow implementation
+    // may know the length of the entire dataset.
+    arrow::Result<arf::FlightStreamChunk> read_chunk = result->reader->Next();
+    return_if_error(read_chunk.ok(), c_error, network_k, "No response");
+
+    // Convert the responses in Arrow C form
+    batch_ptr = read_chunk->data;
+    return_if_error(batch_ptr->columns().size() == 1, c_error, error_unknown_k, "Expecting one column");
+
+    std::shared_ptr<ar::Array> array_ptr = batch_ptr->column(0);
+    ar_status = ar::ExportArray(*array_ptr, &array_c, &schema_c);
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Can't parse Arrow response");
+
+    // Export the results into out expected form
+    auto bitmap_slots = divide_round_up<std::size_t>(array_c.length, CHAR_BIT);
+    if (request_only_present) {
+        auto nulls = *c_found_nulls = (ukv_1x8_t*)array_c.buffers[1];
+        std::transform(nulls, nulls + bitmap_slots, nulls, [](ukv_1x8_t x) { return ~x; });
+    }
+    else if (request_length) {
+        auto nulls = (ukv_1x8_t*)array_c.buffers[0];
+        auto lens = (ukv_val_len_t*)array_c.buffers[1];
+        if (!c_found_nulls)
+            *c_found_lengths = normalize_lengths_with_bitmap(nulls, lens, array_c.length);
+        else {
+            *c_found_nulls = nulls;
+            *c_found_lengths = lens;
+        }
+    }
+    else {
+        auto nulls = (ukv_1x8_t*)array_c.buffers[0];
+        auto offs = (ukv_val_len_t*)array_c.buffers[1];
+        auto data = (ukv_val_ptr_t)array_c.buffers[2];
+
+        if (c_found_nulls)
+            *c_found_nulls = nulls;
+        if (c_found_offsets)
+            *c_found_offsets = offs;
+        if (c_found_values)
+            *c_found_values = data;
+
+        if (c_found_lengths) {
+            auto nulls_range = strided_range_gt<ukv_1x8_t>(nulls, sizeof(ukv_1x8_t), array_c.length);
+            auto lens = *c_found_lengths = arena.alloc<ukv_val_len_t>(tasks.count, c_error).begin();
+            return_on_error(c_error);
+
+            for (std::size_t i = 0; i != tasks.count; ++i)
+                lens[i] = nulls_range[i] ? ukv_val_len_missing_k : (offs[i + 1] - offs[i]);
+        }
+    }
+}
+
+void ukv_write( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+    ukv_size_t const c_tasks_count,
+
+    ukv_col_t const* c_cols,
+    ukv_size_t const c_cols_stride,
+
+    ukv_key_t const* c_keys,
+    ukv_size_t const c_keys_stride,
+
+    ukv_val_ptr_t const* c_vals,
+    ukv_size_t const c_vals_stride,
+
+    ukv_val_len_t const* c_offs,
+    ukv_size_t const c_offs_stride,
+
+    ukv_val_len_t const* c_lens,
+    ukv_size_t const c_lens_stride,
+
+    ukv_1x8_t const* c_nulls,
+
+    ukv_options_t const c_options,
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    return_on_error(c_error);
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
+    strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
+    strided_range_gt<ukv_1x8_t const> nulls {c_nulls, c_tasks_count};
+    places_arg_t places {cols, keys, {}, c_tasks_count};
+    contents_arg_t contents {vals, offs, lens, nulls};
+
+    if (!cols.is_continuous()) {
+    }
+    if (!keys.is_continuous()) {
+    }
+
+    // Check if the input is continuous and is already in an Arrow-compatible form
+    if (contents.is_continuous()) {
+        // TODO: Instead of reallocating, just pass this version of the data
+    }
+
+    std::size_t total_length = 0;
+    if (lens)
+        total_length = transform_reduce_n(lens, tasks.count, 0ul, std::plus<std::size_t> {});
+    else if (offs)
+        total_length = offs[tasks.count + 1];
+
+    auto keys_joined = arena.alloc<ukv_key_t>(c_tasks_count, c_error);
+}
+
+void ukv_scan( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+    ukv_size_t const c_min_tasks_count,
+
+    ukv_col_t const* c_cols,
+    ukv_size_t const c_cols_stride,
+
+    ukv_key_t const* c_min_keys,
+    ukv_size_t const c_min_keys_stride,
+
+    ukv_size_t const* c_scan_lengths,
+    ukv_size_t const c_scan_lengths_stride,
+
+    ukv_options_t const c_options,
+
+    ukv_size_t** c_found_counts,
+    ukv_key_t*** c_found_keys,
+
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    return_on_error(c_error);
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
+    strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
+    scans_arg_t tasks {cols, keys, lens, c_min_tasks_count};
+}
+
+void ukv_size( //
+    ukv_t const c_db,
+    ukv_txn_t const c_txn,
+    ukv_size_t const n,
+
+    ukv_col_t const* c_cols,
+    ukv_size_t const c_cols_stride,
+
+    ukv_key_t const* c_min_keys,
+    ukv_size_t const c_min_keys_stride,
+
+    ukv_key_t const* c_max_keys,
+    ukv_size_t const c_max_keys_stride,
+
+    ukv_options_t const,
+
+    ukv_size_t** c_found_estimates,
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    return_on_error(c_error);
+}
+
+/*********************************************************/
+/*****************	Collections Management	****************/
+/*********************************************************/
+
+void ukv_col_open(
+    // Inputs:
+    ukv_t const c_db,
+    ukv_str_view_t c_col_name,
+    ukv_str_view_t,
+    // Outputs:
+    ukv_col_t* c_col,
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+
+    auto name_len = std::strlen(c_col_name);
+    if (!name_len) {
+        *c_col = ukv_col_main_k;
+        return;
+    }
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+    auto const col_name = std::string_view(c_col_name, name_len);
+}
+
+void ukv_col_remove(
+    // Inputs:
+    ukv_t const c_db,
+    ukv_str_view_t c_col_name,
+    // Outputs:
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+}
+
+void ukv_col_list( //
+    ukv_t const c_db,
+    ukv_size_t* c_count,
+    ukv_col_t** c_ids,
+    ukv_val_len_t** c_offsets,
+    ukv_str_view_t* c_names,
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    return_on_error(c_error);
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+}
+
+void ukv_db_control( //
+    ukv_t const c_db,
+    ukv_str_view_t c_request,
+    ukv_str_view_t* c_response,
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    return_if_error(c_request, c_error, uninitialized_state_k, "Request is uninitialized");
+
+    *c_response = NULL;
+    log_error(c_error, missing_feature_k, "Controls aren't supported in this implementation!");
+}
+
+/*********************************************************/
+/*****************		Transactions	  ****************/
+/*********************************************************/
+
+void ukv_txn_begin(
+    // Inputs:
+    ukv_t const c_db,
+    ukv_size_t const c_generation,
+    ukv_options_t const,
+    // Outputs:
+    ukv_txn_t* c_txn,
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+}
+
+void ukv_txn_commit( //
+    ukv_txn_t const c_txn,
+    ukv_options_t const c_options,
+    ukv_error_t* c_error) {
+
+    return_if_error(c_txn, c_error, uninitialized_state_k, "Transaction is uninitialized");
+}
+
+/*********************************************************/
+/*****************	  Memory Management   ****************/
+/*********************************************************/
+
+void ukv_arena_free(ukv_t const, ukv_arena_t c_arena) {
+    if (!c_arena)
+        return;
+    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
+    delete &arena;
+}
+
+void ukv_txn_free(ukv_t const, ukv_txn_t const c_txn) {
+    if (!c_txn)
+        return;
+}
+
+void ukv_db_free(ukv_t c_db) {
+    if (!c_db)
+        return;
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+    delete &db;
+}
+
+void ukv_col_free(ukv_t const, ukv_col_t const) {
+    // In this in-memory freeing the col handle does nothing.
+    // The DB destructor will automatically cleanup the memory.
+}
+
+void ukv_error_free(ukv_error_t) {
+}

@@ -142,7 +142,7 @@ void ukv_db_open(ukv_str_view_t, ukv_t* c_db, ukv_error_t* c_error) {
 void write_one( //
     rocks_db_t& db,
     rocks_txn_t* txn,
-    write_tasks_soa_t const& tasks,
+    contents_arg_t const& tasks,
     rocksdb::WriteOptions const& options,
     ukv_error_t* c_error) {
 
@@ -166,12 +166,12 @@ void write_one( //
 void write_many( //
     rocks_db_t& db,
     rocks_txn_t* txn,
-    write_tasks_soa_t const& tasks,
+    contents_arg_t const& tasks,
     rocksdb::WriteOptions const& options,
     ukv_error_t* c_error) {
 
     if (txn) {
-        for (ukv_size_t i = 0; i != tasks.count; ++i) {
+        for (std::size_t i = 0; i != tasks.size(); ++i) {
             auto task = tasks[i];
             auto col = rocks_collection(db, task.col);
             auto key = to_slice(task.key);
@@ -183,7 +183,7 @@ void write_many( //
     }
     else {
         rocksdb::WriteBatch batch;
-        for (ukv_size_t i = 0; i != tasks.count; ++i) {
+        for (std::size_t i = 0; i != tasks.size(); ++i) {
             auto task = tasks[i];
             auto col = rocks_collection(db, task.col);
             auto key = to_slice(task.key);
@@ -222,8 +222,7 @@ void ukv_write( //
     ukv_arena_t*,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
@@ -232,7 +231,7 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
+    contents_arg_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
 
     rocksdb::WriteOptions options;
     if (c_options & ukv_option_write_flush_k)
@@ -250,7 +249,7 @@ void ukv_write( //
 void measure_one( //
     rocks_db_t& db,
     rocks_txn_t* txn,
-    read_tasks_soa_t const& tasks,
+    places_arg_t const& tasks,
     rocksdb::ReadOptions const& options,
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
@@ -258,7 +257,7 @@ void measure_one( //
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    read_task_t task = tasks[0];
+    place_t task = tasks[0];
     auto col = rocks_collection(db, task.col);
     auto key = to_slice(task.key);
     auto value_uptr = make_value(c_error);
@@ -273,8 +272,7 @@ void measure_one( //
 
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : static_cast<ukv_size_t>(value.size());
     auto tape = arena.alloc<byte_t>(sizeof(ukv_size_t), c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     std::memcpy(tape.begin(), &exported_len, sizeof(ukv_size_t));
     *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape.begin());
@@ -285,7 +283,7 @@ void measure_one( //
 void read_one( //
     rocks_db_t& db,
     rocks_txn_t* txn,
-    read_tasks_soa_t const& tasks,
+    places_arg_t const& tasks,
     rocksdb::ReadOptions const& options,
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
@@ -293,7 +291,7 @@ void read_one( //
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    read_task_t task = tasks[0];
+    place_t task = tasks[0];
     auto col = rocks_collection(db, task.col);
     auto key = to_slice(task.key);
     auto value_uptr = make_value(c_error);
@@ -310,8 +308,7 @@ void read_one( //
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : bytes_in_value;
     ukv_val_len_t offset = 0;
     auto tape = arena.alloc<byte_t>(sizeof(ukv_val_len_t) * 2 + bytes_in_value, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     std::memcpy(tape.begin(), &exported_len, sizeof(ukv_val_len_t));
     std::memcpy(tape.begin() + sizeof(ukv_val_len_t), &offset, sizeof(ukv_val_len_t));
@@ -325,7 +322,7 @@ void read_one( //
 void measure_many( //
     rocks_db_t& db,
     rocks_txn_t* txn,
-    read_tasks_soa_t const& tasks,
+    places_arg_t const& tasks,
     rocksdb::ReadOptions const& options,
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
@@ -336,8 +333,8 @@ void measure_many( //
     std::vector<rocks_col_t*> cols(tasks.count);
     std::vector<rocksdb::Slice> keys(tasks.count);
     std::vector<std::string> vals(tasks.count);
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
-        read_task_t task = tasks[i];
+    for (std::size_t i = 0; i != tasks.size(); ++i) {
+        place_t task = tasks[i];
         cols[i] = rocks_collection(db, task.col);
         keys[i] = to_slice(task.key);
     }
@@ -348,8 +345,7 @@ void measure_many( //
 
     ukv_size_t total_bytes = sizeof(ukv_val_len_t) * tasks.count;
     span_gt<ukv_val_len_t> lens = arena.alloc<ukv_val_len_t>(tasks.count, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     *c_found_lengths = lens.begin();
     *c_found_offsets = nullptr;
@@ -362,7 +358,7 @@ void measure_many( //
 void read_many( //
     rocks_db_t& db,
     rocks_txn_t* txn,
-    read_tasks_soa_t const& tasks,
+    places_arg_t const& tasks,
     rocksdb::ReadOptions const& options,
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
@@ -373,8 +369,8 @@ void read_many( //
     std::vector<rocks_col_t*> cols(tasks.count);
     std::vector<rocksdb::Slice> keys(tasks.count);
     std::vector<std::string> vals(tasks.count);
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
-        read_task_t task = tasks[i];
+    for (std::size_t i = 0; i != tasks.size(); ++i) {
+        place_t task = tasks[i];
         cols[i] = rocks_collection(db, task.col);
         keys[i] = to_slice(task.key);
     }
@@ -390,8 +386,7 @@ void read_many( //
 
     // 2. Allocate a tape for all the values to be fetched
     span_gt<byte_t> tape = arena.alloc<byte_t>(total_bytes, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     // 3. Fetch the data
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape.begin());
@@ -401,7 +396,7 @@ void read_many( //
     *c_found_offsets = offs;
     *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin() + exported_bytes);
 
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
+    for (std::size_t i = 0; i != tasks.size(); ++i) {
         auto bytes_in_value = vals[i].size();
         if (bytes_in_value) {
             std::memcpy(tape.begin() + exported_bytes, vals[i].data(), bytes_in_value);
@@ -436,8 +431,7 @@ void ukv_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     if (c_txn && (c_options & ukv_option_read_track_k)) {
         *c_error = "RocksDB only supports transparent reads!";
@@ -448,7 +442,7 @@ void ukv_read( //
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols_stride {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys_stride {c_keys, c_keys_stride};
-    read_tasks_soa_t tasks {cols_stride, keys_stride, c_tasks_count};
+    places_arg_t tasks {cols_stride, keys_stride, c_tasks_count};
     stl_arena_t arena = clean_arena(c_arena, c_error);
 
     rocksdb::ReadOptions options;
@@ -498,15 +492,14 @@ void ukv_scan( //
     }
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_size_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
-    scan_tasks_soa_t tasks {cols, keys, lengths, c_min_tasks_count};
+    scans_arg_t tasks {cols, keys, lengths, c_min_tasks_count};
 
     bool export_lengths = (c_options & ukv_option_read_lengths_k);
     rocksdb::ReadOptions options;
@@ -518,8 +511,7 @@ void ukv_scan( //
         total_bytes += total_lengths * sizeof(ukv_val_len_t);
 
     span_gt<byte_t> tape = arena.alloc<byte_t>(total_bytes, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     ukv_key_t* found_keys = reinterpret_cast<ukv_key_t*>(tape.begin());
     ukv_val_len_t* found_lens = reinterpret_cast<ukv_val_len_t*>(found_keys + total_lengths);
@@ -527,7 +519,7 @@ void ukv_scan( //
     *c_found_lengths = export_lengths ? found_lens : nullptr;
 
     for (ukv_size_t i = 0; i != c_min_tasks_count; ++i) {
-        scan_task_t task = tasks[i];
+        scan_t task = tasks[i];
         auto col = rocks_collection(db, task.col);
 
         std::unique_ptr<rocksdb::Iterator> it;
@@ -581,16 +573,13 @@ void ukv_size( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     *c_found_estimates = arena.alloc<ukv_size_t>(6 * n, c_error).begin();
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
@@ -665,8 +654,7 @@ void ukv_col_remove( //
     ukv_str_view_t c_col_name,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     if (!c_col_name || !std::strlen(c_col_name)) {
@@ -694,39 +682,53 @@ void ukv_col_remove( //
 void ukv_col_list( //
     ukv_t const c_db,
     ukv_size_t* c_count,
+    ukv_col_t** c_ids,
+    ukv_val_len_t** c_offsets,
     ukv_str_view_t* c_names,
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    std::size_t total_length = 0;
-
-    for (auto const& column : db.columns)
-        total_length += column->GetName().size();
+    std::size_t cols_count = db.columns.size();
 
     // Every string will be null-terminated
-    total_length += db.columns.size();
-    *c_count = static_cast<ukv_size_t>(db.columns.size());
+    std::size_t strings_length = 0;
+    for (auto const& column : db.columns)
+        strings_length += column->GetName().size() + 1;
 
-    span_gt<byte_t> tape = arena.alloc<byte_t>(total_length, c_error);
-    if (*c_error)
-        return;
+    // For every collection we also need to export IDs and offsets
+    std::size_t scalars_space = 0;
+    scalars_space += cols_count * sizeof(ukv_col_t);
+    scalars_space += cols_count * sizeof(ukv_val_len_t);
+    scalars_space += arrow_extra_offsets_k * sizeof(ukv_val_len_t);
 
-    byte_t* tape_ptr = tape.begin();
-    *c_names = reinterpret_cast<ukv_str_view_t>(tape_ptr);
+    span_gt<byte_t> tape = arena.alloc<byte_t>(scalars_space + strings_length, c_error);
+    return_on_error(c_error);
+
+    auto ids = reinterpret_cast<ukv_col_t*>(tape.begin());
+    auto offs = reinterpret_cast<ukv_val_len_t*>(ids + cols_count);
+    auto names = reinterpret_cast<char*>(offs + cols_count + 1);
+    *c_count = static_cast<ukv_size_t>(cols_count);
+    *c_ids = ids;
+    *c_offsets = offs;
+    *c_names = names;
+
     for (auto const& column : db.columns) {
         auto len = column->GetName().size();
-        std::memcpy(tape_ptr, column->GetName().data(), len);
-        tape_ptr[len] = byte_t {0};
-        tape_ptr += len + 1;
+        std::memcpy(names, column->GetName().data(), len);
+        names[len] = '\0';
+        *ids = reinterpret_cast<ukv_col_t>(column);
+        *offs = static_cast<ukv_val_len_t>(names - *c_names);
+        ++ids;
+        ++offs;
+        names += len + 1;
     }
+    *offs = static_cast<ukv_val_len_t>(names - *c_names);
 }
 
 void ukv_db_control( //

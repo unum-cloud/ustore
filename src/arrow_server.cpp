@@ -225,7 +225,7 @@ class sessions_t {
         auto it = client_to_txn_.find(session_id);
         auto age = std::chrono::duration_cast<std::chrono::milliseconds>(it->second.last_access - sys_clock_t::now());
         if (age.count() < milliseconds_timeout) {
-            *c_error = "Too many concurrent sessions";
+            log_error(c_error, error_unknown_k, "Too many concurrent sessions");
             return {};
         }
 
@@ -262,13 +262,13 @@ class sessions_t {
 
         auto it = client_to_txn_.find(session_id);
         if (it == client_to_txn_.end()) {
-            *c_error = "Transaction was terminated, start a new one.";
+            log_error(c_error, args_wrong_k, "Transaction was terminated, start a new one");
             return {};
         }
 
         running_txn_t& running = it->second;
         if (running.executing) {
-            *c_error = "Transaction can't be modified concurrently.";
+            log_error(c_error, args_wrong_k, "Transaction can't be modified concurrently.");
             return {};
         }
 
@@ -286,7 +286,7 @@ class sessions_t {
 
         auto it = client_to_txn_.find(session_id);
         if (it != client_to_txn_.end()) {
-            *c_error = "Such transaction is already running, just continue using it.";
+            log_error(c_error, args_wrong_k, "Such transaction is already running, just continue using it.");
             return {};
         }
 
@@ -348,7 +348,7 @@ struct session_params_t {
     session_id_t session_id;
     std::optional<std::string_view> txn;
     std::optional<std::string_view> col;
-    std::optional<std::string_view> opt_lengths;
+    std::optional<std::string_view> opt_part;
     std::optional<std::string_view> opt_snapshot;
     std::optional<std::string_view> opt_flush;
     std::optional<std::string_view> opt_track;
@@ -364,7 +364,7 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
         result.session_id.txn_id = parse_txn_id(*result.txn);
     result.col = param_value(params, "col=");
 
-    result.opt_lengths = param_value(params, "lengths=");
+    result.opt_part = param_value(params, "part=");
     result.opt_snapshot = param_value(params, "snapshot=");
     result.opt_flush = param_value(params, "flush=");
     result.opt_track = param_value(params, "track=");
@@ -560,7 +560,8 @@ class UKVService : public arf::FlightServerBase {
             //
             auto table = ar::ImportRecordBatch(&array_c, &schema_c).ValueOrDie();
             auto result = std::make_unique<arf::Result>();
-            result->body = std::dynamic_pointer_cast<ar::Buffer>(table);
+            // TODO: Change this to `DoGet`
+            // result->body = std::dynamic_pointer_cast<ar::Buffer>(table);
             auto results = std::make_unique<SingleResultStream>(std::move(result));
             *results_ptr = std::unique_ptr<arf::ResultStream>(results.release());
             sessions_.release_arena(arena);
@@ -669,9 +670,12 @@ class UKVService : public arf::FlightServerBase {
                 if (!status)
                     return ar::Status::ExecutionError(status.message());
 
+                // As we are immediately exporting in the Arrow format,
+                // we don't need the lengths, just the NULL indicators
                 ArrowArray& keys_c = *batch_c.children[*idx_keys];
                 ukv_val_ptr_t found_values = nullptr;
                 ukv_val_len_t* found_offsets = nullptr;
+                ukv_1x8_t* found_nulls = nullptr;
                 ukv_read( //
                     db_,
                     nullptr,
@@ -684,6 +688,7 @@ class UKVService : public arf::FlightServerBase {
                     &found_values,
                     &found_offsets,
                     nullptr,
+                    &found_nulls,
                     &arena,
                     status.member_ptr());
 
@@ -693,7 +698,7 @@ class UKVService : public arf::FlightServerBase {
                     keys_c.length,
                     "vals",
                     ukv_type_bin_k,
-                    nullptr,
+                    found_nulls,
                     found_offsets,
                     found_values,
                     &vals_schema_c,
@@ -766,6 +771,7 @@ class UKVService : public arf::FlightServerBase {
                     sizeof(ukv_val_len_t),
                     nullptr,
                     0,
+                    (ukv_1x8_t const*)vals_c.buffers[0],
                     ukv_options_default_k,
                     &arena,
                     status.member_ptr());

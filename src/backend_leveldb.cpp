@@ -109,7 +109,7 @@ void ukv_db_open(ukv_str_view_t, ukv_t* c_db, ukv_error_t* c_error) {
 
 void write_one( //
     level_db_t& db,
-    write_tasks_soa_t const& tasks,
+    contents_arg_t const& tasks,
     leveldb::WriteOptions const& options,
     ukv_error_t* c_error) {
 
@@ -121,12 +121,12 @@ void write_one( //
 
 void write_many( //
     level_db_t& db,
-    write_tasks_soa_t const& tasks,
+    contents_arg_t const& tasks,
     leveldb::WriteOptions const& options,
     ukv_error_t* c_error) {
 
     leveldb::WriteBatch batch;
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
+    for (std::size_t i = 0; i != tasks.size(); ++i) {
         auto task = tasks[i];
         auto key = to_slice(task.key);
         if (task.is_deleted())
@@ -174,7 +174,7 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    write_tasks_soa_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
+    contents_arg_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
 
     leveldb::WriteOptions options;
     if (c_options & ukv_option_write_flush_k)
@@ -191,7 +191,7 @@ void ukv_write( //
 
 void measure_one( //
     level_db_t& db,
-    read_tasks_soa_t const& tasks,
+    places_arg_t const& tasks,
     leveldb::ReadOptions const& options,
     std::string& value,
     ukv_val_ptr_t* c_found_values,
@@ -200,7 +200,7 @@ void measure_one( //
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    read_task_t task = tasks[0];
+    place_t task = tasks[0];
     level_status_t status = db.Get(options, to_slice(task.key), &value);
     if (!status.IsNotFound())
         if (export_error(status, c_error))
@@ -208,8 +208,7 @@ void measure_one( //
 
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : static_cast<ukv_size_t>(value.size());
     auto tape = arena.alloc<byte_t>(sizeof(ukv_size_t), c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     std::memcpy(tape.begin(), &exported_len, sizeof(ukv_size_t));
     *c_found_lengths = reinterpret_cast<ukv_val_len_t*>(tape.begin());
@@ -219,7 +218,7 @@ void measure_one( //
 
 void read_one( //
     level_db_t& db,
-    read_tasks_soa_t const& tasks,
+    places_arg_t const& tasks,
     leveldb::ReadOptions const& options,
     std::string& value,
     ukv_val_ptr_t* c_found_values,
@@ -228,7 +227,7 @@ void read_one( //
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
-    read_task_t task = tasks[0];
+    place_t task = tasks[0];
     level_status_t status = db.Get(options, to_slice(task.key), &value);
     if (!status.IsNotFound())
         if (export_error(status, c_error))
@@ -238,8 +237,7 @@ void read_one( //
     auto exported_len = status.IsNotFound() ? ukv_val_len_missing_k : bytes_in_value;
     ukv_val_len_t offset = 0;
     auto tape = arena.alloc<byte_t>(sizeof(ukv_val_len_t) * 2 + bytes_in_value, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     std::memcpy(tape.begin(), &exported_len, sizeof(ukv_val_len_t));
     std::memcpy(tape.begin() + sizeof(ukv_val_len_t), &offset, sizeof(ukv_val_len_t));
@@ -252,7 +250,7 @@ void read_one( //
 
 void measure_many( //
     level_db_t& db,
-    read_tasks_soa_t const& tasks,
+    places_arg_t const& tasks,
     leveldb::ReadOptions const& options,
     std::string& value,
     ukv_val_ptr_t* c_found_values,
@@ -262,16 +260,15 @@ void measure_many( //
     ukv_error_t* c_error) {
 
     span_gt<ukv_val_len_t> lens = arena.alloc<ukv_val_len_t>(tasks.count, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     std::fill_n(lens.begin(), tasks.count, ukv_val_len_missing_k);
     *c_found_lengths = lens.begin();
     *c_found_offsets = nullptr;
     *c_found_values = nullptr;
 
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
-        read_task_t task = tasks[i];
+    for (std::size_t i = 0; i != tasks.size(); ++i) {
+        place_t task = tasks[i];
         level_status_t status = db.Get(options, to_slice(task.key), &value);
         if (status.IsNotFound())
             continue;
@@ -283,7 +280,7 @@ void measure_many( //
 
 void read_many( //
     level_db_t& db,
-    read_tasks_soa_t const& tasks,
+    places_arg_t const& tasks,
     leveldb::ReadOptions const& options,
     std::string& value,
     ukv_val_ptr_t* c_found_values,
@@ -294,16 +291,15 @@ void read_many( //
 
     ukv_size_t lens_bytes = sizeof(ukv_val_len_t) * tasks.count;
     span_gt<byte_t> tape = arena.alloc<byte_t>(lens_bytes * 2, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     ukv_val_len_t* lens = reinterpret_cast<ukv_val_len_t*>(tape.begin());
     ukv_val_len_t* offs = lens + tasks.count;
     ukv_val_ptr_t contents = reinterpret_cast<ukv_val_ptr_t>(offs + tasks.count);
     std::fill_n(lens, tasks.count * 2, ukv_val_len_missing_k);
 
-    for (ukv_size_t i = 0; i != tasks.count; ++i) {
-        read_task_t task = tasks[i];
+    for (std::size_t i = 0; i != tasks.size(); ++i) {
+        place_t task = tasks[i];
         level_status_t status = db.Get(options, to_slice(task.key), &value);
         if (status.IsNotFound())
             continue;
@@ -313,8 +309,7 @@ void read_many( //
         auto old_tape_len = tape.size();
         auto bytes_in_value = value.size();
         tape = arena.alloc<byte_t>(old_tape_len + bytes_in_value, c_error);
-        if (*c_error)
-            return;
+        return_on_error(c_error);
 
         lens = reinterpret_cast<ukv_val_len_t*>(tape.begin());
         offs = lens + tasks.count;
@@ -350,17 +345,15 @@ void ukv_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     leveldb::ReadOptions options;
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    read_tasks_soa_t tasks {{}, keys, c_tasks_count};
+    places_arg_t tasks {{}, keys, c_tasks_count};
 
     auto value_uptr = make_value(c_error);
     std::string& value = *value_uptr.get();
@@ -402,20 +395,17 @@ void ukv_scan( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
-    scan_tasks_soa_t tasks {{}, keys, lens, c_min_tasks_count};
+    scans_arg_t tasks {{}, keys, lens, c_min_tasks_count};
 
     bool export_lengths = (c_options & ukv_option_read_lengths_k);
     leveldb::ReadOptions options;
@@ -427,8 +417,7 @@ void ukv_scan( //
         total_bytes += total_lengths * sizeof(ukv_val_len_t);
 
     span_gt<byte_t> tape = arena.alloc<byte_t>(total_bytes, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     ukv_key_t* found_keys = reinterpret_cast<ukv_key_t*>(tape.begin());
     ukv_val_len_t* found_lens = reinterpret_cast<ukv_val_len_t*>(found_keys + total_lengths);
@@ -444,7 +433,7 @@ void ukv_scan( //
         return;
     }
     for (ukv_size_t i = 0; i != c_min_tasks_count; ++i) {
-        scan_task_t task = tasks[i];
+        scan_t task = tasks[i];
         it->Seek(to_slice(task.min_key));
 
         ukv_size_t j = 0;
@@ -487,16 +476,13 @@ void ukv_size( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     stl_arena_t arena = clean_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     *c_found_estimates = arena.alloc<ukv_size_t>(6 * n, c_error).begin();
-    if (*c_error)
-        return;
+    return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     strided_iterator_gt<ukv_key_t const> min_keys {c_min_keys, c_min_keys_stride};
@@ -543,8 +529,7 @@ void ukv_col_remove( //
     ukv_str_view_t c_col_name,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     if (c_col_name && std::strlen(c_col_name) && (*c_error = "Collections not supported by LevelDB!"))
         return;
@@ -559,12 +544,16 @@ void ukv_col_remove( //
 }
 
 void ukv_col_list( //
-    ukv_t const,
+    ukv_t const c_db,
     ukv_size_t* c_count,
+    ukv_col_t** c_ids,
+    ukv_val_len_t** c_offsets,
     ukv_str_view_t* c_names,
-    ukv_arena_t*,
+    ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
     *c_count = 0;
+    *c_ids = nullptr;
+    *c_offsets = nullptr;
     *c_names = nullptr;
 }
 
@@ -574,8 +563,7 @@ void ukv_db_control( //
     ukv_str_view_t* c_response,
     ukv_error_t* c_error) {
 
-    if (!c_db && (*c_error = "DataBase is NULL!"))
-        return;
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     if (!c_request && (*c_error = "Request is NULL!"))
         return;

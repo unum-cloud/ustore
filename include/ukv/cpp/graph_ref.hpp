@@ -133,9 +133,7 @@ class graph_ref_t {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
-        ukv_key_t* neighborships_per_vertex = nullptr;
-        ukv_options_t options = static_cast<ukv_options_t>((track ? ukv_option_read_track_k : ukv_options_default_k) |
-                                                           ukv_option_read_lengths_k);
+        ukv_options_t options = track ? ukv_option_read_track_k : ukv_options_default_k;
 
         ukv_graph_find_edges( //
             db_,
@@ -149,7 +147,7 @@ class graph_ref_t {
             roles.stride(),
             options,
             &degrees_per_vertex,
-            &neighborships_per_vertex,
+            nullptr,
             arena_,
             status.member_ptr());
         if (!status)
@@ -169,11 +167,11 @@ class graph_ref_t {
     expected_gt<strided_range_gt<bool>> contains( //
         strided_range_gt<ukv_key_t const> const& vertices,
         bool track = false) noexcept {
-        keys_arg_t arg;
+        places_arg_t arg;
         arg.cols_begin = {&col_, 0};
         arg.keys_begin = vertices.begin();
         arg.count = vertices.count();
-        return members_ref_gt<keys_arg_t>(db_, txn_, arg, arena_).present(track);
+        return members_ref_gt<places_arg_t>(db_, txn_, arg, arena_).present(track);
     }
 
     using adjacency_range_t = range_gt<edges_stream_t>;

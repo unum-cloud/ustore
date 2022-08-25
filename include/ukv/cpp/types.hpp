@@ -123,7 +123,7 @@ struct neighborship_t {
 class value_view_t {
 
     ukv_val_ptr_t ptr_ = nullptr;
-    ukv_val_len_t length_ = 0;
+    ukv_val_len_t length_ = ukv_val_len_missing_k;
 
   public:
     using value_type = byte_t;
@@ -161,6 +161,53 @@ class value_view_t {
         return size() != other.size() || !std::equal(begin(), end(), other.begin());
     }
 };
+
+class value_ref_t {
+
+    ukv_val_ptr_t ptr_ = nullptr;
+    ukv_val_len_t* offset_ = nullptr;
+    ukv_val_len_t* length_ = nullptr;
+
+  public:
+    using value_type = byte_t;
+
+    inline value_ref_t() = default;
+    inline value_ref_t(ukv_val_ptr_t ptr, ukv_val_len_t& offset, ukv_val_len_t& length) noexcept {
+        ptr_ = ptr;
+        offset_ = &offset;
+        length_ = &length;
+    }
+
+    inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
+    inline byte_t const* end() const noexcept { return begin() + size(); }
+    inline char const* c_str() const noexcept { return reinterpret_cast<char const*>(ptr_); }
+    inline std::size_t size() const noexcept { return *length_ == ukv_val_len_missing_k ? 0 : *length_; }
+    inline bool empty() const noexcept { return !size(); }
+    inline operator bool() const noexcept { return *length_ != ukv_val_len_missing_k; }
+
+    ukv_val_ptr_t const* member_ptr() const noexcept { return &ptr_; }
+    ukv_val_len_t const* member_offset() const noexcept { return offset_; }
+    ukv_val_len_t const* member_length() const noexcept { return length_; }
+
+    bool operator==(value_ref_t other) const noexcept {
+        return size() == other.size() && std::equal(begin(), end(), other.begin());
+    }
+    bool operator!=(value_ref_t other) const noexcept {
+        return size() != other.size() || !std::equal(begin(), end(), other.begin());
+    }
+
+    void swap(value_ref_t& other) {
+        std::swap(*ptr_, *other.ptr_);
+        std::swap(*offset_, *other.offset_);
+        std::swap(*length_, *other.length_);
+    }
+};
+
+template <typename container_at>
+value_view_t value_view(container_at&& container) {
+    using element_t = typename std::remove_reference_t<container_at>::value_type;
+    return {reinterpret_cast<byte_t const*>(container.data()), container.size() * sizeof(element_t)};
+}
 
 #pragma region Memory Management
 
@@ -259,3 +306,10 @@ inline ukv_vertex_role_t invert(ukv_vertex_role_t role) {
 }
 
 } // namespace unum::ukv
+
+namespace std {
+template <>
+void swap(unum::ukv::value_ref_t& a, unum::ukv::value_ref_t& b) {
+    a.swap(b);
+}
+} // namespace std
