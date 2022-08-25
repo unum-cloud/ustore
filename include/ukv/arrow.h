@@ -106,7 +106,7 @@ static char const* ukv_type_to_arrow_format(ukv_type_t const field_type) {
 static void release_malloced_schema(struct ArrowSchema* schema) {
     for (int64_t i = 0; i < schema->n_children; ++i) {
         struct ArrowSchema* child = schema->children[i];
-        if (child->release != NULL)
+        if (child && child->release != NULL)
             child->release(child);
     }
     free(schema->children);
@@ -117,7 +117,7 @@ static void release_malloced_array(struct ArrowArray* array) {
     // Free children
     for (int64_t i = 0; i < array->n_children; ++i) {
         struct ArrowArray* child = array->children[i];
-        if (child->release != NULL)
+        if (child && child->release != NULL)
             child->release(child);
     }
     free(array->children);
@@ -153,7 +153,7 @@ static void ukv_to_arrow_schema( //
     array->offset = 0;
     array->null_count = 0;
     array->n_buffers = 1;
-    array->n_children = 2;
+    array->n_children = static_cast<int64_t>(fields_count);
     array->dictionary = NULL;
     array->release = &release_malloced_array;
     array->buffers = (void const**)malloc(sizeof(void*) * array->n_buffers);
