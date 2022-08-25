@@ -161,4 +161,34 @@ class [[nodiscard]] given_gt : public expected_gt<object_at> {
     inline base_t release_expected() noexcept { return {std::move(status_), std::move(object_)}; }
 };
 
+enum error_code_t {
+    out_of_memory_k,
+    args_combo_k,
+    args_wrong_k,
+    uninitialized_state_k,
+    network_k,
+    missing_feature_k,
+    error_unknown_k
+};
+
 } // namespace unum::ukv
+
+#define log_error(c_error, code, message) \
+    { *c_error = message; }
+
+#define log_if_error(must_be_true, c_error, code, message) \
+    if (!(must_be_true)) {                                 \
+        *c_error = message;                                \
+    }
+
+#define return_if_error(must_be_true, c_error, code, message) \
+    if (!(must_be_true)) {                                    \
+        *c_error = message;                                   \
+        return;                                               \
+    }
+
+#define return_on_error(c_error) \
+    {                            \
+        if (*c_error)            \
+            return;              \
+    }

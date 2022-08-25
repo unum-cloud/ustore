@@ -223,7 +223,7 @@ ukv_format_t mime_to_format(beast::string_view mime) {
     else if (mime == "application/vnd.apache.parquet")
         return ukv_format_parquet_k;
     else
-        return ukv_format_unknown_k;
+        return ukv_format_binary_k;
 }
 
 struct db_w_clients_t : public std::enable_shared_from_this<db_w_clients_t> {
@@ -310,7 +310,7 @@ void respond_to_one(db_session_t& session,
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
     }
 
-    // Once we know, which collection, key and transation user is
+    // Once we know, which collection, key and transaction user is
     // interested in - perform the actions depending on verbs.
     switch (received_verb) {
 

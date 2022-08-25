@@ -23,12 +23,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
-
-  # Warnings & errors:
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas") # Allow "pragma region" source sections
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
 endif()
 
 # Optimizations for common x86 CPUs.
@@ -69,12 +64,15 @@ set(FETCHCONTENT_QUIET OFF)
 set(UKV_PREINSTALLED_BOOST ON)
 set(UKV_PREINSTALLED_ARROW ON)
 set(UKV_PREINSTALLED_TURBOPFOR ON)
+set(UKV_BUILD_PYTHON ON)
+set(UKV_BUILD_TESTS ON)
 
 include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
 
@@ -87,7 +85,7 @@ if(!APPLE)
   add_dependencies(ukv_rocksdb jemalloc)
   add_dependencies(ukv_leveldb jemalloc)
   add_dependencies(ukv_rpc_client jemalloc)
-  add_dependencies(ukv_test jemalloc)
+  add_dependencies(ukv_stl_test jemalloc)
   add_dependencies(ukv_leveldb_test jemalloc)
   add_dependencies(ukv_rocksdb_test jemalloc)
 endif()
@@ -98,98 +96,50 @@ link_directories($ENV{CONDA_PREFIX}/lib)
 message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
-add_library(ukv_stl
-  src/backend_stl.cpp
-  src/logic_docs.cpp
-  src/logic_graph.cpp
-)
-target_link_libraries(ukv_stl
-  nlohmann_json::nlohmann_json
-  ${jemalloc_LIBRARIES}
-)
-set_target_properties(ukv_stl PROPERTIES LINK_FLAGS_RELEASE -s)
+add_library(ukv_stl src/backend_stl.cpp src/logic_docs.cpp src/logic_graph.cpp)
+target_link_libraries(ukv_stl nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
 
-add_library(ukv_rocksdb
-  src/backend_rocksdb.cpp
-  src/logic_graph.cpp
-)
-add_library(ukv_leveldb
-  src/backend_leveldb.cpp
-  src/logic_graph.cpp
-)
+add_library(ukv_rocksdb src/backend_rocksdb.cpp src/logic_docs.cpp src/logic_graph.cpp)
+target_link_libraries(ukv_rocksdb rocksdb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
 
-target_link_libraries(ukv_rocksdb
-  rocksdb
-  nlohmann_json::nlohmann_json
-  ${jemalloc_LIBRARIES}
-)
-target_link_libraries(ukv_leveldb
-  leveldb
-  nlohmann_json::nlohmann_json
-  ${jemalloc_LIBRARIES}
-)
+add_library(ukv_leveldb src/backend_leveldb.cpp src/logic_docs.cpp src/logic_graph.cpp)
+target_link_libraries(ukv_leveldb leveldb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+set_source_files_properties(src/backend_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 
-set_target_properties(ukv_rocksdb PROPERTIES LINK_FLAGS_RELEASE -s)
-set_target_properties(ukv_rocksdb PROPERTIES LINK_FLAGS_RELEASE -s)
+add_library(ukv_arrow_client src/arrow_client.cpp src/logic_docs.cpp src/logic_graph.cpp)
+target_link_libraries(ukv_arrow_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
 
-add_library(ukv_rpc_client src/rpc_client.cpp)
+# Generate tests
+if(${UKV_BUILD_TESTS})
+  foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_arrow_client)
+    get_target_property(lib_SOURCES ${lib_name} SOURCES)
+    get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
+    string(CONCAT test_name ${lib_name} "_test")
+    add_executable(${test_name} src/test.cpp ${lib_SOURCES})
+    target_link_libraries(${test_name} gtest ${lib_LIBRARIES})
+  endforeach()
+endif()
 
 # add_executable(ukv_rest_server src/rest_server.cpp)
-# target_link_libraries(ukv_rest_server
-# ukv_stl
-# pthread
-# fmt::fmt
-# Boost::headers
-# nlohmann_json::nlohmann_json
-# )
+# target_link_libraries(ukv_rest_server ukv_stl pthread fmt::fmt Boost::headers nlohmann_json::nlohmann_json)
 add_executable(ukv_arrow_server src/arrow_server.cpp)
-target_link_libraries(ukv_arrow_server
-  ukv_stl
-  pthread
-  nlohmann_json::nlohmann_json
-  arrow
-  arrow_flight
-  arrow_dataset
-  parquet
-)
+target_link_libraries(ukv_arrow_server ukv_stl pthread nlohmann_json::nlohmann_json arrow arrow_flight arrow_dataset parquet)
 
-add_executable(ukv_test
-  src/test.cpp
-  src/backend_stl.cpp
-  src/logic_docs.cpp
-  src/logic_graph.cpp
-)
+# Enable warning and sanitization for our primary targets
+foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_arrow_client)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set_target_properties(${lib_name} PROPERTIES CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
+    set_target_properties(${lib_name} PROPERTIES CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
+    set_target_properties(${lib_name} PROPERTIES CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+    set_target_properties(${lib_name} PROPERTIES CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas") # Allow "pragma region" source sections
+    set_target_properties(${lib_name} PROPERTIES CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=deprecated-copy -Wno-deprecated-copy -Wno-error=pessimizing-move -Wno-pessimizing-move")
+  endif()
+endforeach()
 
-target_link_libraries(ukv_test
-  gtest
-  nlohmann_json::nlohmann_json
-  ${jemalloc_LIBRARIES}
-)
+# Build
+if(${UKV_BUILD_PYTHON})
+  find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
+  find_package(pybind11 CONFIG REQUIRED)
 
-add_executable(ukv_leveldb_test
-  src/test.cpp
-  src/backend_leveldb.cpp
-  src/logic_docs.cpp
-  src/logic_graph.cpp
-)
-
-target_link_libraries(ukv_leveldb_test
-  gtest
-  leveldb
-  nlohmann_json::nlohmann_json
-  ${jemalloc_LIBRARIES}
-)
-
-add_executable(ukv_rocksdb_test
-  src/test.cpp
-  src/backend_rocksdb.cpp
-  src/logic_docs.cpp
-  src/logic_graph.cpp
-)
-
-target_link_libraries(ukv_rocksdb_test
-  gtest
-  rocksdb
-  nlohmann_json::nlohmann_json
-  ${jemalloc_LIBRARIES}
-)
+  # TODO: Migrate setup.py builds to here
+endif()

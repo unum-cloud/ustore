@@ -222,3 +222,36 @@ def test_main_collection_txn_ctx():
     with ukv.DataBase() as db:
         with ukv.Transaction(db) as txn:
             only_explicit_batch(txn.main)
+
+
+def test_docs():
+    db = ukv.DataBase()
+    doc_col = db['col'].docs
+    json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
+    doc_col.set(1, json)
+    assert doc_col.get(1) == json
+
+    # JSON PATCHING
+    json_to_patch = [
+        {"op": "replace", "path": "/Name", "value": "Ashot"},
+        {"op": "add", "path": "/Hello", "value": "World"},
+        {"op": "remove", "path": "/Age"}
+    ]
+    new_json = {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Hello': 'World'}
+    doc_col.patch(1, json_to_patch)
+    assert doc_col.get(1) == new_json
+
+    # JSON MERGING
+    json_to_merge = {"Name": "Davit", "Age": 24}
+    new_json = {'Name': 'Davit', 'Surname': 'Vardanyan',
+                'Age': 24, 'Hello': "World"}
+    doc_col.merge(1, json_to_merge)
+    assert doc_col.get(1) == new_json
+
+    json = {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Age': 27}
+    doc_col[1] = json
+    assert doc_col[1] == json
+
+    assert doc_col.has_key(1)
+    del doc_col[1]
+    assert 1 not in doc_col

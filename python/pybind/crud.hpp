@@ -146,7 +146,7 @@ static py::object read_one_binary(py_col_t& col, PyObject* key_py) {
     // https://github.com/pybind/pybind11/blob/a05bc3d2359d12840ef2329d68f613f1a7df9c5d/include/pybind11/pytypes.h#L1474
     // https://docs.python.org/3/c-api/bytes.html
     // https://github.com/python/cpython/blob/main/Objects/bytesobject.c
-    tape_iterator_t tape_it {found_values, found_offsets, found_lengths};
+    joined_values_iterator_t tape_it {found_values, found_offsets, found_lengths};
     value_view_t val = *tape_it;
     PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
     return py::reinterpret_borrow<py::object>(obj_ptr);
@@ -217,7 +217,7 @@ static py::object read_many_binaries(py_col_t& col, PyObject* keys_py) {
         status.throw_unhandled();
     }
 
-    tape_iterator_t tape_it {found_values, found_offsets, found_lengths};
+    joined_values_iterator_t tape_it {found_values, found_offsets, found_lengths};
     PyObject* tuple_ptr = PyTuple_New(keys.size());
     for (std::size_t i = 0; i != keys.size(); ++i, ++tape_it) {
         value_view_t val = *tape_it;

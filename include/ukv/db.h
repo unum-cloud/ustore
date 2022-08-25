@@ -61,6 +61,7 @@ typedef int64_t ukv_key_t;
 typedef uint32_t ukv_val_len_t;
 typedef uint8_t* ukv_val_ptr_t;
 typedef uint64_t ukv_size_t;
+typedef uint8_t ukv_1x8_t;
 
 /**
  * @brief Owning error message string.
@@ -85,31 +86,26 @@ typedef enum {
 
     ukv_options_default_k = 0,
     /**
-     * @brief Limits the "read" operations to just metadata retrieval.
-     * Identical to the "HEAD" verb in the HTTP protocol.
-     */
-    ukv_option_read_lengths_k = 1 << 1,
-    /**
      * @brief Forces absolute consistency on the write operations
      * flushing all the data to disk after each write. It's usage
      * may cause severe performance degradation in some implementations.
      * Yet the users must be warned, that modern IO drivers still often
      * can't guarantee that everything will reach the disk.
      */
-    ukv_option_write_flush_k = 1 << 2,
+    ukv_option_write_flush_k = 1 << 1,
     /**
      * @brief When reading from a transaction, tracks requested keys.
      * If the requested key was updated since the read, the transaction
      * will fail on commit or prior to that.
      */
-    ukv_option_read_track_k = 1 << 3,
+    ukv_option_read_track_k = 1 << 2,
     /**
      * @brief When a transaction is started with this flag, a persistent
      * snapshot is created. It guarantees that the global state of all the
      * keys in the DB will be unchanged during the entire lifetime of the
      * transaction. Will not affect the writes in any way.
      */
-    ukv_option_txn_snapshot_k = 1 << 4,
+    ukv_option_txn_snapshot_k = 1 << 3,
     /**
      * @brief Will output data into shared memory, not the one privately
      * viewed by current process. That will allow any higher-level package
@@ -117,7 +113,7 @@ typedef enum {
      * Is relevant for standalone distributions used with drivers supporting
      * Apache Arrow buffers or standardized Tensor representations.
      */
-    ukv_option_read_shared_k = 1 << 1,
+    ukv_option_read_shared_k = 0,
 
 } ukv_options_t;
 
@@ -185,6 +181,8 @@ void ukv_db_open( //
  *
  * @param[in] lengths        Pointer to lengths of chunks in packed into @param values.
  * @param[in] offsets        Pointer to offsets of relevant content within @param values chunks.
+ * @param[in] nulls          Pointer to bitset with at least @param values bits in it.
+ *
  * @param[out] error         The error to be handled.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
  *
@@ -227,6 +225,13 @@ void ukv_db_open( //
  *      https://boakye.yiadom.org/go/strings/
  *      https://github.com/golang/go/blob/master/src/runtime/string.go (`stringStruct`)
  *      https://github.com/golang/go/blob/master/src/runtime/slice.go (`slice`)
+ *
+ * @section Argument Resolution Order
+ * As different combinations of "value" arguments are possible, we must define the resolution order.
+ * 1. If @param values is NULL or key at index `i` is NULL, we will remote the entry from DB.
+ * 2. If @param nulls is not NULL and bit at index `i` is set, we will remote the entry from DB.
+ * 3. If @param lengths is NULL, we expect `N+1` @param offsets (like Arrow) to determine entry length.
+ * 4. If @param lengths and @param offsets are NULL, we expect NULL-terminated entries and will `std::strlen`.
  */
 void ukv_write( //
     ukv_t const db,
@@ -247,6 +252,8 @@ void ukv_write( //
 
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
+
+    ukv_1x8_t const* nulls,
 
     ukv_options_t const options,
 
@@ -283,22 +290,27 @@ void ukv_write( //
  *
  * @param[in] options        Read options:
  *                           > track: Adds collision-detection on keys read through txn.
- *                           > lengths: Only fetches lengths of values, not content.
+ *                           > shared: Exports to shared memory to accelerate inter-process communication.
  *
  * @param[out] found_values  Will contain the "base pointer" for @param tasks_count concatenated values.
  *                           Instead of allocating every "string" separately, we join them into
  *                           a single "tape" structure, which later be exported into (often disjoint)
  *                           runtime- or library-specific implementations. To determine the range of each
  *                           chunk use @param found_offsets and @param found_lengths.
+ *                           Is @b optional, as you may only want @param found_lengths or @param found_nulls.
  *
  * @param[out] found_offsets Will contain a pointer to an array with @param tasks_count integers.
  *                           Each marks a response offset in bytes starting from @param found_values.
  *                           To be fully compatible with Apache Arrow we append one more offset at
  *                           at the end to allow inferring the length of the last entry without
  *                           using @param found_lengths.
+ *                           Is @b optional, as you may only want @param found_lengths or @param found_nulls.
  *
  * @param[out] found_lengths Will contain a pointer to an array with @param tasks_count integers.
  *                           Each defines a response length in bytes. Is @b optional.
+ *
+ * @param[out] found_nulls   Will contain a bitset with at least @param tasks_count bits.
+ *                           Each set bit means that such key is missing in DB. Is @b optional.
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
@@ -319,6 +331,7 @@ void ukv_read( //
     ukv_val_ptr_t* found_values,
     ukv_val_len_t** found_offsets,
     ukv_val_len_t** found_lengths,
+    ukv_1x8_t** found_nulls,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -347,8 +360,8 @@ void ukv_read( //
  *                           > track: Adds collision-detection on keys read through txn.
  *                           > lengths: Will fetches lengths of values, after the keys.
  *
- * @param[out] found_keys    Will contain @param tasks_count identifiers of following keys.
- * @param[out] found_lengths Will contain @param tasks_count lengths of following values.
+ * @param[out] found_keys    Will contain columns of following keys for each task.
+ * @param[out] found_counts  Will contain the height of each column (< scan_length).
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
@@ -369,8 +382,8 @@ void ukv_scan( //
 
     ukv_options_t const options,
 
-    ukv_key_t** found_keys,
-    ukv_val_len_t** found_lengths,
+    ukv_size_t** found_counts,
+    ukv_key_t*** found_keys,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

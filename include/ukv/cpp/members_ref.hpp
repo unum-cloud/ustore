@@ -54,10 +54,10 @@ class members_ref_gt {
 
     using locations_store_t = location_store_gt<locations_at>;
     using locations_plain_t = typename locations_store_t::plain_t;
-    using keys_extractor_t = keys_arg_extractor_gt<locations_plain_t>;
+    using keys_extractor_t = places_arg_extractor_gt<locations_plain_t>;
     static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
-    using value_t = std::conditional_t<is_one_k, value_view_t, tape_view_t>;
+    using value_t = std::conditional_t<is_one_k, value_view_t, joined_values_t>;
     using present_t = std::conditional_t<is_one_k, bool, strided_range_gt<bool>>;
     using length_t = std::conditional_t<is_one_k, ukv_val_len_t, indexed_range_gt<ukv_val_len_t*>>;
 
@@ -68,14 +68,14 @@ class members_ref_gt {
     locations_store_t locations_;
     ukv_format_t format_ = ukv_format_binary_k;
 
-    template <typename values_arg_at>
-    status_t any_assign(values_arg_at&&, ukv_options_t) noexcept;
+    template <typename contents_arg_at>
+    status_t any_assign(contents_arg_at&&, ukv_options_t) noexcept;
 
     template <typename expected_at = value_t>
     expected_gt<expected_at> any_get(ukv_options_t) noexcept;
 
-    template <typename expected_at, typename values_arg_at>
-    expected_gt<expected_at> any_gather(values_arg_at&&, ukv_options_t) noexcept;
+    template <typename expected_at, typename contents_arg_at>
+    expected_gt<expected_at> any_gather(contents_arg_at&&, ukv_options_t) noexcept;
 
   public:
     members_ref_gt(ukv_t db,
@@ -107,8 +107,7 @@ class members_ref_gt {
     operator expected_gt<value_t>() noexcept { return value(); }
 
     expected_gt<length_t> length(bool track = false) noexcept {
-        auto options = (track ? ukv_option_read_track_k : ukv_options_default_k) | ukv_option_read_lengths_k;
-        return any_get<length_t>(static_cast<ukv_options_t>(options));
+        return any_get<length_t>(track ? ukv_option_read_track_k : ukv_options_default_k);
     }
 
     /**
@@ -143,9 +142,10 @@ class members_ref_gt {
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return status_t Non-NULL if only an error had occurred.
      */
-    template <typename values_arg_at>
-    status_t assign(values_arg_at&& vals, bool flush = false) noexcept {
-        return any_assign(std::forward<values_arg_at>(vals), flush ? ukv_option_write_flush_k : ukv_options_default_k);
+    template <typename contents_arg_at>
+    status_t assign(contents_arg_at&& vals, bool flush = false) noexcept {
+        return any_assign(std::forward<contents_arg_at>(vals),
+                          flush ? ukv_option_write_flush_k : ukv_options_default_k);
     }
 
     /**
@@ -165,7 +165,7 @@ class members_ref_gt {
     status_t clear(bool flush = false) noexcept {
         ukv_val_ptr_t any = reinterpret_cast<ukv_val_ptr_t>(this);
         ukv_val_len_t len = 0;
-        values_arg_t arg {
+        contents_arg_t arg {
             .contents_begin = {&any},
             .offsets_begin = {},
             .lengths_begin = {&len},
@@ -173,9 +173,9 @@ class members_ref_gt {
         return assign(arg, flush);
     }
 
-    template <typename values_arg_at>
-    members_ref_gt& operator=(values_arg_at&& vals) noexcept(false) {
-        auto status = assign(std::forward<values_arg_at>(vals));
+    template <typename contents_arg_at>
+    members_ref_gt& operator=(contents_arg_at&& vals) noexcept(false) {
+        auto status = assign(std::forward<contents_arg_at>(vals));
         status.throw_unhandled();
         return *this;
     }
@@ -193,10 +193,10 @@ class members_ref_gt {
      * @brief Patches hierarchical documents with RFC 6902 JSON Patches.
      * ! Applies only to document collections!
      */
-    template <typename values_arg_at>
-    status_t patch(values_arg_at&& vals, bool flush = false) noexcept {
+    template <typename contents_arg_at>
+    status_t patch(contents_arg_at&& vals, bool flush = false) noexcept {
         auto prev_format = std::exchange(format_, ukv_format_json_patch_k);
-        auto result = assign(std::forward<values_arg_at>(vals), flush);
+        auto result = assign(std::forward<contents_arg_at>(vals), flush);
         format_ = prev_format;
         return result;
     }
@@ -205,10 +205,10 @@ class members_ref_gt {
      * @brief Patches hierarchical documents with RFC 7386 JSON Merge Patches.
      * ! Applies only to document collections!
      */
-    template <typename values_arg_at>
-    status_t merge(values_arg_at&& vals, bool flush = false) noexcept {
+    template <typename contents_arg_at>
+    status_t merge(contents_arg_at&& vals, bool flush = false) noexcept {
         auto prev_format = std::exchange(format_, ukv_format_json_merge_patch_k);
-        auto result = assign(std::forward<values_arg_at>(vals), flush);
+        auto result = assign(std::forward<contents_arg_at>(vals), flush);
         format_ = prev_format;
         return result;
     }
@@ -249,7 +249,7 @@ class members_ref_gt {
 static_assert(members_ref_gt<ukv_key_t>::is_one_k);
 static_assert(std::is_same_v<members_ref_gt<ukv_key_t>::value_t, value_view_t>);
 static_assert(members_ref_gt<ukv_key_t>::is_one_k);
-static_assert(!members_ref_gt<keys_arg_t>::is_one_k);
+static_assert(!members_ref_gt<places_arg_t>::is_one_k);
 
 template <typename locations_at>
 template <typename expected_at>
@@ -259,6 +259,10 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
     ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
     ukv_val_ptr_t found_values = nullptr;
+    ukv_1x8_t* found_nulls = nullptr;
+    constexpr bool wants_value = std::is_same_v<value_t, expected_at>;
+    constexpr bool wants_length = std::is_same_v<length_t, expected_at>;
+    constexpr bool wants_present = std::is_same_v<present_t, expected_at>;
 
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
@@ -281,9 +285,10 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             options,
             format_,
             ukv_type_any_k,
-            &found_values,
-            &found_offsets,
-            &found_lengths,
+            wants_value ? &found_values : nullptr,
+            wants_value ? &found_offsets : nullptr,
+            wants_value || wants_length ? &found_lengths : nullptr,
+            wants_present ? &found_nulls : nullptr,
             arena_,
             status.member_ptr());
     else
@@ -296,34 +301,41 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             keys.get(),
             keys.stride(),
             options,
-            &found_values,
-            &found_offsets,
-            &found_lengths,
+            wants_value ? &found_values : nullptr,
+            wants_value ? &found_offsets : nullptr,
+            wants_value || wants_length ? &found_lengths : nullptr,
+            wants_present ? &found_nulls : nullptr,
             arena_,
             status.member_ptr());
 
     if (!status)
         return status;
 
-    if constexpr (std::is_same_v<length_t, expected_at>) {
+    if constexpr (wants_length) {
         if constexpr (is_one_k)
             return length_t {found_lengths[0]};
         else
             return length_t {found_lengths, found_lengths + count};
     }
+    else if constexpr (wants_present) {
+        if constexpr (is_one_k)
+            return present_t {found_nulls[0]};
+        else
+            return present_t {found_nulls};
+    }
     else {
         if constexpr (is_one_k)
             return value_view_t {found_values + *found_offsets, *found_lengths};
         else
-            return tape_view_t {found_values, found_offsets, found_lengths, count};
+            return joined_values_t {found_values, found_offsets, found_lengths, count};
     }
 }
 
 template <typename locations_at>
-template <typename values_arg_at>
-status_t members_ref_gt<locations_at>::any_assign(values_arg_at&& vals_ref, ukv_options_t options) noexcept {
+template <typename contents_arg_at>
+status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, ukv_options_t options) noexcept {
     status_t status;
-    using value_extractor_t = values_arg_extractor_gt<std::remove_reference_t<values_arg_at>>;
+    using value_extractor_t = contents_arg_extractor_gt<std::remove_reference_t<contents_arg_at>>;
 
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
@@ -357,6 +369,7 @@ status_t members_ref_gt<locations_at>::any_assign(values_arg_at&& vals_ref, ukv_
             offsets.stride(),
             lengths.get(),
             lengths.stride(),
+            nullptr,
             arena_,
             status.member_ptr());
     else
@@ -374,6 +387,7 @@ status_t members_ref_gt<locations_at>::any_assign(values_arg_at&& vals_ref, ukv_
             offsets.stride(),
             lengths.get(),
             lengths.stride(),
+            nullptr,
             options,
             arena_,
             status.member_ptr());
@@ -412,8 +426,8 @@ expected_gt<strings_tape_iterator_t> members_ref_gt<locations_at>::gist(bool tra
 }
 
 template <typename locations_at>
-template <typename expected_at, typename values_arg_at>
-expected_gt<expected_at> members_ref_gt<locations_at>::any_gather(values_arg_at&& layout,
+template <typename expected_at, typename contents_arg_at>
+expected_gt<expected_at> members_ref_gt<locations_at>::any_gather(contents_arg_at&& layout,
                                                                   ukv_options_t options) noexcept {
 
     decltype(auto) locs = locations_.ref();
