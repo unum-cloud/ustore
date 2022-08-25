@@ -229,6 +229,18 @@ class monotonic_resource_t : public std::pmr::memory_resource {
 };
 
 template <typename at>
+class polymorphic_allocator_t {
+  public:
+    using value_type = at;
+    using size_type = size_t;
+
+    void deallocate(at* ptr, size_t size) { std::pmr::get_default_resource()->deallocate(ptr, sizeof(at) * size); }
+    at* allocate(size_t size) {
+        return reinterpret_cast<at*>(std::pmr::get_default_resource()->allocate(sizeof(at) * size));
+    }
+};
+
+template <typename at>
 struct span_gt {
     span_gt() : ptr_(nullptr), size_(0) {}
     span_gt(at* ptr, size_t sz) noexcept : ptr_(ptr), size_(sz) {}
@@ -263,7 +275,10 @@ struct stl_arena_t {
 
     explicit stl_arena_t(size_t buffer_size = 1024 * 1024,
                          std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
-        : resource(buffer_size, 16ul, upstream) {}
+        : resource(buffer_size, 16ul, upstream) {
+        std::pmr::set_default_resource(&resource);
+    }
+    ~stl_arena_t() { std::pmr::set_default_resource(std::pmr::new_delete_resource()); }
 
     template <typename at>
     span_gt<at> alloc(size_t size, ukv_error_t* c_error, size_t alignment = sizeof(at)) {

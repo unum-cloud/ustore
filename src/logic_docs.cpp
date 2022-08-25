@@ -26,7 +26,8 @@
 using namespace unum::ukv;
 using namespace unum;
 
-using json_t = nlohmann::json;
+using json_t =
+    nlohmann::basic_json<std::map, std::vector, std::string, bool, int64_t, uint64_t, double, polymorphic_allocator_t>;
 using json_ptr_t = json_t::json_pointer;
 
 constexpr ukv_format_t internal_format_k = ukv_format_msgpack_k;
