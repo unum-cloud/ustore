@@ -312,7 +312,7 @@ class joined_values_iterator_t {
     inline joined_values_iterator_t operator++(int) const noexcept { return {contents_, lengths_ + 1, offsets_ + 1}; }
     inline joined_values_iterator_t operator--(int) const noexcept { return {contents_, lengths_ - 1, offsets_ - 1}; }
     inline value_view_t operator*() const noexcept { return {contents_ + *offsets_, *lengths_}; }
-    inline value_view_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[0], lengths_[0]}; }
+    inline value_view_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[i], lengths_[i]}; }
 
     inline bool operator==(joined_values_iterator_t const& other) const noexcept { return lengths_ == other.lengths_; }
     inline bool operator!=(joined_values_iterator_t const& other) const noexcept { return lengths_ != other.lengths_; }
@@ -334,7 +334,7 @@ class joined_values_t {
     inline joined_values_iterator_t begin() const noexcept { return {contents_, offsets_, lengths_}; }
     inline joined_values_iterator_t end() const noexcept { return {contents_, offsets_ + count_, lengths_ + count_}; }
     inline std::size_t size() const noexcept { return count_; }
-    inline value_view_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[0], lengths_[0]}; }
+    inline value_view_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[i], lengths_[i]}; }
 
     inline ukv_val_len_t* offsets() const noexcept { return offsets_; }
     inline ukv_val_len_t* lengths() const noexcept { return lengths_; }
@@ -467,6 +467,35 @@ bool all_ascending(iterator_at begin, std::size_t n) {
         if (*begin <= *std::exchange(previous, begin))
             return false;
     return true;
+}
+
+template <typename at>
+std::size_t trivial_insert( //
+    at* begin,
+    std::size_t old_length,
+    std::size_t offset,
+    at const* inserted_begin,
+    at const* inserted_end) {
+
+    auto inserted_len = static_cast<std::size_t>(inserted_end - inserted_begin);
+    auto following_len = static_cast<std::size_t>(old_length - offset);
+    auto new_size = old_length + inserted_len;
+
+    static_assert(std::is_trivially_copy_constructible<at>());
+    std::memmove(begin + offset + inserted_len, begin + offset, following_len * sizeof(at));
+    std::memcpy(begin + offset, inserted_begin, inserted_len * sizeof(at));
+    return new_size;
+}
+
+template <typename at>
+std::size_t trivial_erase(at* begin, std::size_t old_length, std::size_t removed_offset, std::size_t removed_length) {
+
+    auto following_len = static_cast<std::size_t>(old_length - (removed_offset + removed_length));
+    auto new_size = old_length - removed_length;
+
+    static_assert(std::is_trivially_copy_constructible<at>());
+    std::memmove(begin + removed_offset, begin + removed_offset + removed_length, following_len * sizeof(at));
+    return new_size;
 }
 
 } // namespace unum::ukv

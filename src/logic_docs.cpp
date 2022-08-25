@@ -306,7 +306,8 @@ places_arg_t read_docs( //
         nullptr,
         &arena_ptr,
         c_error);
-    return_on_error(c_error);
+    if (*c_error)
+        return {};
 
     // We will later need to locate the data for every separate request.
     // Doing it in O(N) tape iterations every time is too slow.
