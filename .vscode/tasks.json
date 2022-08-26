@@ -9,7 +9,8 @@
         },
         {
             "label": "Build Native: Debug Arrow Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_arrow_client_test",
+            // Both must pass builds
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_arrow_client_test ukv_arrow_server",
             "args": [],
             "type": "shell"
         },
