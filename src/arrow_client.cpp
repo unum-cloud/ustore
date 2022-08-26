@@ -5,33 +5,18 @@
  * @brief Client library for Apache Arrow RPC server.
  * Converts native UKV operations into Arrows classical `DoPut`, `DoExchange`...
  * Understanding the costs of remote communication, might keep a cache.
- * ? Intended for single-thread use?
  */
 
 #include <unordered_map>
 
 #include <fmt/core.h>
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wall"
-#pragma GCC diagnostic ignored "-Wextra"
-#include <arrow/type.h>
-#include <arrow/result.h>
-#include <arrow/status.h>
-#include <arrow/buffer.h>
-#include <arrow/table.h>
-#include <arrow/memory_pool.h>
 #include <arrow/flight/client.h>
-#include <arrow/c/bridge.h> // `ExportSchema`
-#pragma GCC diagnostic pop
 
-#define ARROW_C_DATA_INTERFACE 1
-#define ARROW_C_STREAM_INTERFACE 1
 #include "ukv/db.h"
-#include "ukv/arrow.h"
 
 #include "helpers.hpp"
-#include "arrow.hpp"
+#include "arrow_helpers.hpp"
+#include "ukv/arrow.h"
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -250,64 +235,62 @@ void ukv_read( //
     ar_status = result->writer->Begin(batch_ptr->schema());
     return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing schema");
 
-    ar_status = result->writer->WriteRecordBatch(*batch_ptr);
+    auto table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
+    ar_status = result->writer->WriteTable(*table);
     return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing request");
 
-    // ar_status = result->writer->DoneWriting();
-    // return_if_error(ar_status.ok(), c_error, error_unknown_k, "Submitting request");
-
-    ar_status = result->writer->Close();
-    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Closing the channel");
+    ar_status = result->writer->DoneWriting();
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Submitting request");
 
     // Fetch the responses
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    arrow::Result<arf::FlightStreamChunk> read_chunk = result->reader->Next();
-    return_if_error(read_chunk.ok(), c_error, network_k, "No response");
+    ar_status = unpack_table(result->reader->ToTable(), schema_c, array_c);
+    return_if_error(ar_status.ok(), c_error, network_k, "No response");
 
     // Convert the responses in Arrow C form
-    batch_ptr = read_chunk->data;
-    return_if_error(batch_ptr->columns().size() == 1, c_error, error_unknown_k, "Expecting one column");
-
-    std::shared_ptr<ar::Array> array_ptr = batch_ptr->column(0);
-    ar_status = ar::ExportArray(*array_ptr, &array_c, &schema_c);
-    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Can't parse Arrow response");
+    return_if_error(schema_c.n_children == 1, c_error, error_unknown_k, "Expecting one column");
 
     // Export the results into out expected form
     auto bitmap_slots = divide_round_up<std::size_t>(array_c.length, CHAR_BIT);
     if (request_only_present) {
-        *c_found_presences = (ukv_1x8_t*)array_c.buffers[1];
+        *c_found_presences = (ukv_1x8_t*)array_c.children[0]->buffers[1];
     }
     else if (request_length) {
-        auto presences = (ukv_1x8_t*)array_c.buffers[0];
-        auto lens = (ukv_val_len_t*)array_c.buffers[1];
-        if (!c_found_presences)
-            *c_found_lengths = normalize_lengths_with_bitmap(presences, lens, array_c.length);
-        else {
-            *c_found_presences = presences;
-            *c_found_lengths = lens;
-        }
+        auto presences_ptr = (ukv_1x8_t*)array_c.children[0]->buffers[0];
+        auto lens_ptr = (ukv_val_len_t*)array_c.children[0]->buffers[1];
+        if (c_found_lengths)
+            *c_found_lengths = presences_ptr //
+                                   ? normalize_lengths_with_bitmap(presences_ptr, lens_ptr, array_c.length)
+                                   : lens_ptr;
+        if (c_found_presences)
+            *c_found_presences = presences_ptr;
     }
     else {
-        auto presences = (ukv_1x8_t*)array_c.buffers[0];
-        auto offs = (ukv_val_len_t*)array_c.buffers[1];
-        auto data = (ukv_val_ptr_t)array_c.buffers[2];
+        auto presences_ptr = (ukv_1x8_t*)array_c.children[0]->buffers[0];
+        auto offs_ptr = (ukv_val_len_t*)array_c.children[0]->buffers[1];
+        auto data_ptr = (ukv_val_ptr_t)array_c.children[0]->buffers[2];
 
         if (c_found_presences)
-            *c_found_presences = presences;
+            *c_found_presences = presences_ptr;
         if (c_found_offsets)
-            *c_found_offsets = offs;
+            *c_found_offsets = offs_ptr;
         if (c_found_values)
-            *c_found_values = data;
+            *c_found_values = data_ptr;
 
         if (c_found_lengths) {
-            auto presences_range = strided_iterator_gt<ukv_1x8_t>(presences, sizeof(ukv_1x8_t));
             auto lens = *c_found_lengths = arena.alloc<ukv_val_len_t>(places.count, c_error).begin();
             return_on_error(c_error);
-
-            for (std::size_t i = 0; i != places.count; ++i)
-                lens[i] = presences_range[i] ? ukv_val_len_missing_k : (offs[i + 1] - offs[i]);
+            if (presences_ptr) {
+                auto presences = strided_iterator_gt<ukv_1x8_t const>(presences_ptr, sizeof(ukv_1x8_t));
+                for (std::size_t i = 0; i != places.count; ++i)
+                    lens[i] = presences[i] ? (offs_ptr[i + 1] - offs_ptr[i]) : ukv_val_len_missing_k;
+            }
+            else {
+                for (std::size_t i = 0; i != places.count; ++i)
+                    lens[i] = offs_ptr[i + 1] - offs_ptr[i];
+            }
         }
     }
 }
@@ -384,14 +367,17 @@ void ukv_write( //
         return_on_error(c_error);
         auto joined_offs = arena.alloc<ukv_val_len_t>(places.size() + 1, c_error);
         return_on_error(c_error);
-        auto joined_presences = arena.alloc<ukv_1x8_t>(divide_round_up<std::size_t>(places.size(), CHAR_BIT), c_error);
+        auto slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
+        auto slots_presenses = arena.alloc<ukv_1x8_t>(slots_count, c_error);
         return_on_error(c_error);
+        std::memset(slots_presenses.begin(), 0, slots_count);
+        auto joined_presences = strided_iterator_gt<ukv_1x8_t>(slots_presenses.begin(), sizeof(ukv_1x8_t));
 
         // Exports into the Arrow-compatible form
         ukv_val_len_t exported_bytes = 0;
         for (std::size_t i = 0; i != c_tasks_count; ++i) {
             auto value = contents[i];
-            joined_presences[i] = !value;
+            joined_presences[i] = value;
             joined_offs[i] = exported_bytes;
             std::memcpy(joined_vals.begin() + exported_bytes, value.begin(), value.size());
             exported_bytes += value.size();
@@ -401,21 +387,24 @@ void ukv_write( //
         joined_vals_begin = (ukv_val_ptr_t)joined_vals.begin();
         vals = {&joined_vals_begin, 0};
         offs = {joined_offs.begin(), sizeof(ukv_key_t)};
-        presences = {joined_presences.begin(), sizeof(ukv_1x8_t)};
+        presences = {slots_presenses.begin(), sizeof(ukv_1x8_t)};
     }
     // It may be the case, that we only have `c_tasks_count` offsets instead of `c_tasks_count+1`,
     // which won't be enough for Arrow.
     else if (!contents.is_arrow()) {
         auto joined_offs = arena.alloc<ukv_val_len_t>(places.size() + 1, c_error);
         return_on_error(c_error);
-        auto joined_presences = arena.alloc<ukv_1x8_t>(divide_round_up<std::size_t>(places.size(), CHAR_BIT), c_error);
+        auto slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
+        auto slots_presenses = arena.alloc<ukv_1x8_t>(slots_count, c_error);
         return_on_error(c_error);
+        std::memset(slots_presenses.begin(), 0, slots_count);
+        auto joined_presences = strided_iterator_gt<ukv_1x8_t>(slots_presenses.begin(), sizeof(ukv_1x8_t));
 
         // Exports into the Arrow-compatible form
         ukv_val_len_t exported_bytes = 0;
         for (std::size_t i = 0; i != c_tasks_count; ++i) {
             auto value = contents[i];
-            joined_presences[i] = !value;
+            joined_presences[i] = value;
             joined_offs[i] = exported_bytes;
             exported_bytes += value.size();
         }
@@ -423,7 +412,7 @@ void ukv_write( //
 
         vals = {&joined_vals_begin, 0};
         offs = {joined_offs.begin(), sizeof(ukv_key_t)};
-        presences = {joined_presences.begin(), sizeof(ukv_1x8_t)};
+        presences = {slots_presenses.begin(), sizeof(ukv_1x8_t)};
     }
 
     // Now build-up the Arrow representation
@@ -499,7 +488,8 @@ void ukv_write( //
     // ar_status = result->writer->Begin(batch_ptr->schema());
     // return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing schema");
 
-    ar_status = result->writer->WriteRecordBatch(*batch_ptr);
+    auto table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
+    ar_status = result->writer->WriteTable(*table);
     return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing request");
 
     ar_status = result->writer->DoneWriting();

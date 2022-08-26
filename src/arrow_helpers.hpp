@@ -1,13 +1,52 @@
 /**
- * @file arrow.hpp
+ * @file arrow_helpers.hpp
  * @author Ashot Vardanian
  *
  * @brief Helper functions for Apache Arrow interoperability.
  */
 #pragma once
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wall"
+#pragma GCC diagnostic ignored "-Wextra"
+#include <arrow/type.h>
+#include <arrow/result.h>
+#include <arrow/status.h>
+#include <arrow/buffer.h>
+#include <arrow/table.h>
+#include <arrow/memory_pool.h>
+#include <arrow/c/bridge.h>
+#pragma GCC diagnostic pop
+
 #include "helpers.hpp"
 
 namespace unum::ukv {
+
+namespace arf = arrow::flight;
+namespace ar = arrow;
+
+ar::Status unpack_table( //
+    ar::Result<std::shared_ptr<ar::Table>> const& maybe_table,
+    ArrowSchema& schema_c,
+    ArrowArray& batch_c) {
+
+    if (!maybe_table.ok())
+        return maybe_table.status();
+
+    std::shared_ptr<ar::Table> const& table = maybe_table.ValueUnsafe();
+    ar::Status ar_status = ar::ExportSchema(*table->schema(), &schema_c);
+    if (!ar_status.ok())
+        return ar_status;
+
+    // Join all the chunks to form a single table
+    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = table->CombineChunksToBatch();
+    if (!maybe_batch.ok())
+        return maybe_batch.status();
+
+    std::shared_ptr<ar::RecordBatch> const& batch_ptr = maybe_batch.ValueUnsafe();
+    ar_status = ar::ExportRecordBatch(*batch_ptr, &batch_c, nullptr);
+    return ar_status;
+}
 
 /**
  * We have a different methodology of marking NULL entries, than Arrow.
@@ -33,7 +72,7 @@ inline ukv_1x8_t* convert_lengths_into_bitmap(ukv_val_len_t* lengths, ukv_size_t
 }
 
 /**
- * @brief Replaces "lengths" with `ukv_val_len_missing_k` is matching NULL indicator is set.
+ * @brief Replaces "lengths" with `ukv_val_len_missing_k` if matching NULL indicator is set.
  */
 inline ukv_val_len_t* normalize_lengths_with_bitmap(ukv_1x8_t const* slots, ukv_val_len_t* lengths, ukv_size_t n) {
     size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;

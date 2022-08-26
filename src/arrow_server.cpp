@@ -15,30 +15,16 @@
 #include <mutex>
 #include <iostream>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wall"
-#pragma GCC diagnostic ignored "-Wextra"
-#include <arrow/type.h>
-#include <arrow/result.h>
-#include <arrow/status.h>
-#include <arrow/buffer.h>
-#include <arrow/table.h>
 #include <arrow/flight/server.h>
-#include <arrow/c/bridge.h> // `ExportSchema`
-#pragma GCC diagnostic pop
-
 #include <boost/lexical_cast.hpp> // HEX conversion
 #include <boost/heap/fibonacci_heap.hpp>
 #include <boost/compute/detail/lru_cache.hpp>
 
-#define ARROW_C_DATA_INTERFACE 1
-#define ARROW_C_STREAM_INTERFACE 1
-#include "ukv/arrow.h"
 #include "ukv/cpp/db.hpp"
 #include "ukv/cpp/types.hpp" // `hash_combine`
 
-namespace arf = arrow::flight;
-namespace ar = arrow;
+#include "arrow_helpers.hpp"
+#include "ukv/arrow.h"
 
 using namespace unum::ukv;
 using namespace unum;
@@ -646,95 +632,90 @@ class UKVService : public arf::FlightServerBase {
         arf::FlightMessageReader& request = *request_ptr;
         arf::FlightMessageWriter& response = *response_ptr;
         arf::FlightDescriptor const& desc = request.descriptor();
-        std::string const& cmd = desc.cmd;
-        session_params_t params = session_params(server_call, cmd);
+        session_params_t params = session_params(server_call, desc.cmd);
         status_t status;
 
+        ArrowSchema schema_c;
+        ArrowArray batch_c;
+        if (ar_status = unpack_table(request.ToTable(), schema_c, batch_c); !ar_status.ok())
+            return ar_status;
+
         if (is_query(desc.cmd, kOpRead)) {
+            std::optional<std::size_t> idx_cols = column_idx(&schema_c, kArgCols);
+            std::optional<std::size_t> idx_keys = column_idx(&schema_c, kArgKeys);
 
-            bool received_non_empty_chunk = false;
+            ukv_arena_t arena = sessions_.request_arena(status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
 
-            while (true) {
-
-                ar::Result<arf::FlightStreamChunk> maybe_chunk = request.Next();
-                if (!maybe_chunk.ok())
-                    return maybe_chunk.status();
-
-                arf::FlightStreamChunk const& chunk = maybe_chunk.ValueUnsafe();
-                if (!chunk.data && !chunk.app_metadata) {
-                    if (received_non_empty_chunk)
-                        break;
-                    else
-                        continue;
-                }
-
-                received_non_empty_chunk = true;
-                std::shared_ptr<ar::RecordBatch> const& batch_ptr = chunk.data;
-                std::shared_ptr<ar::Schema> const& schema_ptr = batch_ptr->schema();
-                ArrowSchema schema_c;
-                if (ar_status = ar::ExportSchema(*schema_ptr, &schema_c); !ar_status.ok())
-                    return ar_status;
-
-                ArrowArray batch_c;
-                if (ar_status = ar::ExportRecordBatch(*batch_ptr, &batch_c, nullptr); !ar_status.ok())
-                    return ar_status;
-
-                ukv_arena_t arena = sessions_.request_arena(status.member_ptr());
-                if (!status)
-                    return ar::Status::ExecutionError(status.message());
-
-                std::optional<std::size_t> idx_cols = column_idx(&schema_c, kArgCols);
-                std::optional<std::size_t> idx_keys = column_idx(&schema_c, kArgKeys);
-
-                // As we are immediately exporting in the Arrow format,
-                // we don't need the lengths, just the NULL indicators
-                ArrowArray& keys_c = *batch_c.children[*idx_keys];
-                ukv_val_ptr_t found_values = nullptr;
-                ukv_val_len_t* found_offsets = nullptr;
-                ukv_1x8_t* found_presences = nullptr;
-                ukv_read( //
-                    db_,
-                    nullptr,
-                    keys_c.length,
-                    nullptr,
-                    0,
-                    (ukv_key_t const*)keys_c.buffers[1],
-                    sizeof(ukv_key_t),
-                    ukv_options_default_k,
-                    &found_values,
-                    &found_offsets,
-                    nullptr,
-                    &found_presences,
-                    &arena,
-                    status.member_ptr());
-
-                ArrowSchema vals_schema_c;
-                ArrowArray vals_c;
-                ukv_to_arrow_column( //
-                    keys_c.length,
-                    "vals",
-                    ukv_type_bin_k,
-                    found_presences,
-                    found_offsets,
-                    found_values,
-                    &vals_schema_c,
-                    &vals_c,
-                    status.member_ptr());
-
-                auto maybe_table = ar::ImportRecordBatch(&vals_c, &vals_schema_c);
-                if (!maybe_table.ok())
-                    return maybe_table.status();
-
-                auto table = maybe_table.ValueUnsafe();
-                ar_status = response.WriteRecordBatch(*table);
+            // As we are immediately exporting in the Arrow format,
+            // we don't need the lengths, just the NULL indicators
+            ArrowArray& keys_c = *batch_c.children[*idx_keys];
+            ukv_val_ptr_t found_values = nullptr;
+            ukv_val_len_t* found_offsets = nullptr;
+            ukv_1x8_t* found_presences = nullptr;
+            ukv_read( //
+                db_,
+                nullptr,
+                keys_c.length,
+                nullptr,
+                0,
+                (ukv_key_t const*)keys_c.buffers[1],
+                sizeof(ukv_key_t),
+                ukv_options_default_k,
+                &found_values,
+                &found_offsets,
+                nullptr,
+                &found_presences,
+                &arena,
+                status.member_ptr());
+            if (!status) {
                 sessions_.release_arena(arena);
-                if (!ar_status.ok())
-                    return ar_status;
-
-                ar_status = response.Close();
-                if (!ar_status.ok())
-                    return ar_status;
+                return ar::Status::ExecutionError(status.message());
             }
+
+            ArrowSchema schema_c;
+            ArrowArray batch_c;
+            ukv_to_arrow_schema(keys_c.length, 1, &schema_c, &batch_c, status.member_ptr());
+            if (!status) {
+                sessions_.release_arena(arena);
+                return ar::Status::ExecutionError(status.message());
+            }
+
+            ukv_to_arrow_column( //
+                keys_c.length,
+                "vals",
+                ukv_type_bin_k,
+                found_presences,
+                found_offsets,
+                found_values,
+                schema_c.children[0],
+                batch_c.children[0],
+                status.member_ptr());
+            if (!status) {
+                sessions_.release_arena(arena);
+                return ar::Status::ExecutionError(status.message());
+            }
+
+            auto maybe_table = ar::ImportRecordBatch(&batch_c, &schema_c);
+            if (!maybe_table.ok())
+                return maybe_table.status();
+
+            auto table = maybe_table.ValueUnsafe();
+            ar_status = response.Begin(table->schema());
+            if (!ar_status.ok()) {
+                sessions_.release_arena(arena);
+                return ar_status;
+            }
+
+            ar_status = response.WriteRecordBatch(*table);
+            sessions_.release_arena(arena);
+            if (!ar_status.ok())
+                return ar_status;
+
+            ar_status = response.Close();
+            if (!ar_status.ok())
+                return ar_status;
         }
 
         return ar::Status::OK();
@@ -754,13 +735,8 @@ class UKVService : public arf::FlightServerBase {
         status_t status;
 
         ArrowSchema schema_c;
-        auto maybe_schema = request.GetSchema();
-        if (!maybe_schema.ok())
-            return maybe_schema.status();
-
-        std::shared_ptr<ar::Schema> const& schema_ptr = maybe_schema.ValueUnsafe();
-        ar_status = ar::ExportSchema(*schema_ptr, &schema_c);
-        if (!ar_status.ok())
+        ArrowArray batch_c;
+        if (ar_status = unpack_table(request.ToTable(), schema_c, batch_c); !ar_status.ok())
             return ar_status;
 
         if (is_query(desc.cmd, kOpWrite)) {
@@ -768,50 +744,34 @@ class UKVService : public arf::FlightServerBase {
             std::optional<std::size_t> idx_keys = column_idx(&schema_c, kArgKeys);
             std::optional<std::size_t> idx_vals = column_idx(&schema_c, kArgVals);
 
-            while (true) {
-                auto maybe_chunk = request.Next();
-                if (!maybe_chunk.ok())
-                    return maybe_chunk.status();
+            ukv_arena_t arena = sessions_.request_arena(status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
 
-                arf::FlightStreamChunk const& chunk = maybe_chunk.ValueUnsafe();
-                std::shared_ptr<ar::RecordBatch> const& batch_ptr = chunk.data;
-                if (!batch_ptr)
-                    break;
+            ArrowArray& keys_c = *batch_c.children[*idx_keys];
+            ArrowArray& vals_c = *batch_c.children[*idx_vals];
+            ukv_write( //
+                db_,
+                nullptr,
+                keys_c.length,
+                nullptr,
+                0,
+                (ukv_key_t const*)keys_c.buffers[1],
+                sizeof(ukv_key_t),
+                (ukv_val_ptr_t const*)&vals_c.buffers[2],
+                0,
+                (ukv_val_len_t const*)vals_c.buffers[1],
+                sizeof(ukv_val_len_t),
+                nullptr,
+                0,
+                (ukv_1x8_t const*)vals_c.buffers[0],
+                ukv_options_default_k,
+                &arena,
+                status.member_ptr());
 
-                ArrowArray batch_c;
-                ar_status = ar::ExportRecordBatch(*batch_ptr, &batch_c, nullptr);
-                if (!ar_status.ok())
-                    return ar_status;
-
-                ukv_arena_t arena = sessions_.request_arena(status.member_ptr());
-                if (!status)
-                    return ar::Status::ExecutionError(status.message());
-
-                ArrowArray& keys_c = *batch_c.children[*idx_keys];
-                ArrowArray& vals_c = *batch_c.children[*idx_vals];
-                ukv_write( //
-                    db_,
-                    nullptr,
-                    keys_c.length,
-                    nullptr,
-                    0,
-                    (ukv_key_t const*)keys_c.buffers[1],
-                    sizeof(ukv_key_t),
-                    (ukv_val_ptr_t const*)&vals_c.buffers[2],
-                    0,
-                    (ukv_val_len_t const*)vals_c.buffers[1],
-                    sizeof(ukv_val_len_t),
-                    nullptr,
-                    0,
-                    (ukv_1x8_t const*)vals_c.buffers[0],
-                    ukv_options_default_k,
-                    &arena,
-                    status.member_ptr());
-
-                sessions_.release_arena(arena);
-                if (!status)
-                    return ar::Status::ExecutionError(status.message());
-            }
+            sessions_.release_arena(arena);
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
         }
 
         return ar::Status::OK();
