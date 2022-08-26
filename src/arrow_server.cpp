@@ -557,8 +557,11 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             }
 
-            //
-            auto table = ar::ImportRecordBatch(&array_c, &schema_c).ValueOrDie();
+            auto maybe_table = ar::ImportRecordBatch(&array_c, &schema_c);
+            if (!maybe_table.ok())
+                return maybe_table.status();
+
+            auto table = maybe_table.ValueUnsafe();
             auto result = std::make_unique<arf::Result>();
             // TODO: Change this to `DoGet`
             // result->body = std::dynamic_pointer_cast<ar::Buffer>(table);
@@ -649,6 +652,8 @@ class UKVService : public arf::FlightServerBase {
 
         if (is_query(desc.cmd, kOpRead)) {
 
+            bool received_non_empty_chunk = false;
+
             while (true) {
 
                 ar::Result<arf::FlightStreamChunk> maybe_chunk = request.Next();
@@ -656,9 +661,14 @@ class UKVService : public arf::FlightServerBase {
                     return maybe_chunk.status();
 
                 arf::FlightStreamChunk const& chunk = maybe_chunk.ValueUnsafe();
-                if (!chunk.data && !chunk.app_metadata)
-                    break;
+                if (!chunk.data && !chunk.app_metadata) {
+                    if (received_non_empty_chunk)
+                        break;
+                    else
+                        continue;
+                }
 
+                received_non_empty_chunk = true;
                 std::shared_ptr<ar::RecordBatch> const& batch_ptr = chunk.data;
                 std::shared_ptr<ar::Schema> const& schema_ptr = batch_ptr->schema();
                 ArrowSchema schema_c;
@@ -711,9 +721,17 @@ class UKVService : public arf::FlightServerBase {
                     &vals_c,
                     status.member_ptr());
 
-                auto packed = ar::ImportRecordBatch(&vals_c, &vals_schema_c).ValueOrDie();
-                ar_status = response.WriteRecordBatch(*packed);
+                auto maybe_table = ar::ImportRecordBatch(&vals_c, &vals_schema_c);
+                if (!maybe_table.ok())
+                    return maybe_table.status();
+
+                auto table = maybe_table.ValueUnsafe();
+                ar_status = response.WriteRecordBatch(*table);
                 sessions_.release_arena(arena);
+                if (!ar_status.ok())
+                    return ar_status;
+
+                ar_status = response.Close();
                 if (!ar_status.ok())
                     return ar_status;
             }
@@ -736,7 +754,11 @@ class UKVService : public arf::FlightServerBase {
         status_t status;
 
         ArrowSchema schema_c;
-        std::shared_ptr<ar::Schema> const& schema_ptr = request.GetSchema().ValueOrDie();
+        auto maybe_schema = request.GetSchema();
+        if (!maybe_schema.ok())
+            return maybe_schema.status();
+
+        std::shared_ptr<ar::Schema> const& schema_ptr = maybe_schema.ValueUnsafe();
         ar_status = ar::ExportSchema(*schema_ptr, &schema_c);
         if (!ar_status.ok())
             return ar_status;
@@ -747,7 +769,11 @@ class UKVService : public arf::FlightServerBase {
             std::optional<std::size_t> idx_vals = column_idx(&schema_c, kArgVals);
 
             while (true) {
-                arf::FlightStreamChunk const& chunk = request.Next().ValueOrDie();
+                auto maybe_chunk = request.Next();
+                if (!maybe_chunk.ok())
+                    return maybe_chunk.status();
+
+                arf::FlightStreamChunk const& chunk = maybe_chunk.ValueUnsafe();
                 std::shared_ptr<ar::RecordBatch> const& batch_ptr = chunk.data;
                 if (!batch_ptr)
                     break;
@@ -803,7 +829,7 @@ ar::Status run_server() {
     db_t db;
     db.open().throw_unhandled();
 
-    arf::Location server_location = arf::Location::ForGrpcTcp("0.0.0.0", 38709).ValueOrDie();
+    arf::Location server_location = arf::Location::ForGrpcTcp("0.0.0.0", 38709).ValueUnsafe();
     arf::FlightServerOptions options(server_location);
     auto server = std::make_unique<UKVService>(std::move(db));
     ARROW_RETURN_NOT_OK(server->Init(options));

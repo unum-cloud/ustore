@@ -247,11 +247,14 @@ void ukv_read( //
     ar::Result<arf::FlightClient::DoExchangeResult> result = db.flight->DoExchange(options, descriptor);
     return_if_error(result.ok(), c_error, network_k, "Failed to exchange with Arrow server");
 
+    ar_status = result->writer->Begin(batch_ptr->schema());
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing schema");
+
     ar_status = result->writer->WriteRecordBatch(*batch_ptr);
     return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing request");
 
-    ar_status = result->writer->DoneWriting();
-    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Submitting request");
+    // ar_status = result->writer->DoneWriting();
+    // return_if_error(ar_status.ok(), c_error, error_unknown_k, "Submitting request");
 
     ar_status = result->writer->Close();
     return_if_error(ar_status.ok(), c_error, error_unknown_k, "Closing the channel");
@@ -489,13 +492,17 @@ void ukv_write( //
     return_if_error(maybe_batch.ok(), c_error, error_unknown_k, "Can't pack RecordBatch");
 
     std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
-    ar::Result<arf::FlightClient::DoPutResult> result = db.flight->DoPut(descriptor, batch_ptr->schema());
+    ar::Result<arf::FlightClient::DoPutResult> result = db.flight->DoPut(options, descriptor, batch_ptr->schema());
     return_if_error(result.ok(), c_error, network_k, "Failed to exchange with Arrow server");
+
+    // This writer has already been started!
+    // ar_status = result->writer->Begin(batch_ptr->schema());
+    // return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing schema");
 
     ar_status = result->writer->WriteRecordBatch(*batch_ptr);
     return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing request");
 
-    ar_status = result->writer->Close();
+    ar_status = result->writer->DoneWriting();
     return_if_error(ar_status.ok(), c_error, error_unknown_k, "Submitting request");
 
     // Fetch the responses
