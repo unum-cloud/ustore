@@ -18,12 +18,60 @@
 #include <arrow/c/bridge.h>
 #pragma GCC diagnostic pop
 
-#include "helpers.hpp"
+#include "helpers.hpp" // `stl_arena_t`
 
 namespace unum::ukv {
 
 namespace arf = arrow::flight;
 namespace ar = arrow;
+
+class arrow_mem_pool_t final : public ar::MemoryPool {
+    monotonic_resource_t resource_;
+
+  public:
+    arrow_mem_pool_t(stl_arena_t& arena) : resource_(&arena.resource) {}
+    ~arrow_mem_pool_t() {}
+
+    ar::Status Allocate(int64_t size, uint8_t** ptr) override {
+        auto new_ptr = resource_.allocate(size);
+        if (!new_ptr)
+            return ar::Status::OutOfMemory("");
+
+        *ptr = reinterpret_cast<uint8_t*>(new_ptr);
+        return ar::Status::OK();
+    }
+    ar::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr) override {
+        auto new_ptr = resource_.allocate(new_size);
+        if (!new_ptr)
+            return ar::Status::OutOfMemory("");
+
+        std::memcpy(new_ptr, *ptr, old_size);
+        resource_.deallocate(*ptr, old_size);
+        *ptr = reinterpret_cast<uint8_t*>(new_ptr);
+        return ar::Status::OK();
+    }
+    void Free(uint8_t* buffer, int64_t size) override { resource_.deallocate(buffer, size); }
+    void ReleaseUnused() override {}
+    int64_t bytes_allocated() const override { return static_cast<int64_t>(resource_.used()); }
+    int64_t max_memory() const override { return static_cast<int64_t>(resource_.capacity()); }
+    std::string backend_name() const { return "ukv"; }
+};
+
+ar::ipc::IpcReadOptions arrow_read_options(arrow_mem_pool_t& pool) {
+    ar::ipc::IpcReadOptions options;
+    options.memory_pool = &pool;
+    options.use_threads = false;
+    options.max_recursion_depth = 1;
+    return options;
+}
+
+ar::ipc::IpcWriteOptions arrow_write_options(arrow_mem_pool_t& pool) {
+    ar::ipc::IpcWriteOptions options;
+    options.memory_pool = &pool;
+    options.use_threads = false;
+    options.max_recursion_depth = 1;
+    return options;
+}
 
 ar::Status unpack_table( //
     ar::Result<std::shared_ptr<ar::Table>> const& maybe_table,

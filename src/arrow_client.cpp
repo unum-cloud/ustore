@@ -30,9 +30,6 @@ ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 /*****************	 C++ Implementation	  ****************/
 /*********************************************************/
 
-namespace arf = arrow::flight;
-namespace ar = arrow;
-
 using namespace unum::ukv;
 using namespace unum;
 
@@ -40,46 +37,10 @@ struct rpc_client_t {
     std::unique_ptr<arf::FlightClient> flight;
 };
 
-class arrow_mem_pool_t final : public ar::MemoryPool {
-    monotonic_resource_t resource_;
-
-  public:
-    arrow_mem_pool_t(stl_arena_t& arena) : resource_(&arena.resource) {}
-    ~arrow_mem_pool_t() {}
-
-    ar::Status Allocate(int64_t size, uint8_t** ptr) override {
-        auto new_ptr = resource_.allocate(size);
-        if (!new_ptr)
-            return ar::Status::OutOfMemory("");
-
-        *ptr = reinterpret_cast<uint8_t*>(new_ptr);
-        return ar::Status::OK();
-    }
-    ar::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr) override {
-        auto new_ptr = resource_.allocate(new_size);
-        if (!new_ptr)
-            return ar::Status::OutOfMemory("");
-
-        std::memcpy(new_ptr, *ptr, old_size);
-        resource_.deallocate(*ptr, old_size);
-        *ptr = reinterpret_cast<uint8_t*>(new_ptr);
-        return ar::Status::OK();
-    }
-    void Free(uint8_t* buffer, int64_t size) override { resource_.deallocate(buffer, size); }
-    void ReleaseUnused() override {}
-    int64_t bytes_allocated() const override { return static_cast<int64_t>(resource_.used()); }
-    int64_t max_memory() const override { return static_cast<int64_t>(resource_.capacity()); }
-    std::string backend_name() const { return "ukv"; }
-};
-
-arf::FlightCallOptions call_options(arrow_mem_pool_t& pool) {
+arf::FlightCallOptions arrow_call_options(arrow_mem_pool_t& pool) {
     arf::FlightCallOptions options;
-    options.read_options.memory_pool = &pool;
-    options.read_options.use_threads = false;
-    options.read_options.max_recursion_depth = 1;
-    options.write_options.memory_pool = &pool;
-    options.write_options.use_threads = false;
-    options.write_options.max_recursion_depth = 1;
+    options.read_options = arrow_read_options(pool);
+    options.write_options = arrow_write_options(pool);
     options.memory_manager;
     return options;
 }
@@ -147,7 +108,7 @@ void ukv_read( //
 
     ar::Status ar_status;
     arrow_mem_pool_t pool(arena);
-    arf::FlightCallOptions options = call_options(pool);
+    arf::FlightCallOptions options = arrow_call_options(pool);
 
     // Configure the `cmd` descriptor
     bool const same_collection = places.same_collection();
@@ -464,7 +425,7 @@ void ukv_write( //
     // Send everything over the network and wait for the response
     ar::Status ar_status;
     arrow_mem_pool_t pool(arena);
-    arf::FlightCallOptions options = call_options(pool);
+    arf::FlightCallOptions options = arrow_call_options(pool);
 
     // Configure the `cmd` descriptor
     arf::FlightDescriptor descriptor;
@@ -569,21 +530,38 @@ void ukv_col_open(
     // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
-    ukv_str_view_t,
+    ukv_str_view_t c_col_config,
     // Outputs:
     ukv_col_t* c_col,
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    auto name_len = std::strlen(c_col_name);
-    if (!name_len) {
+    if (!c_col_name || !std::strlen(c_col_name)) {
         *c_col = ukv_col_main_k;
         return;
     }
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
-    auto const col_name = std::string_view(c_col_name, name_len);
+    // Can we somehow reuse the IPC-needed memory?
+    // Do we need to add that arena argument to every call?
+    // ar::Status ar_status;
+    // arrow_mem_pool_t pool(arena);
+    // arf::FlightCallOptions options = arrow_call_options(pool);
+
+    arf::Action action;
+    fmt::format_to(std::back_inserter(action.type), "col_open&col={}", c_col_name);
+    action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c_col_config});
+
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
+    return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
+
+    auto& stream_ptr = maybe_stream.ValueUnsafe();
+    ar::Result<std::unique_ptr<arf::Result>> maybe_id = stream_ptr->Next();
+    return_if_error(maybe_id.ok(), c_error, network_k, "No response received");
+
+    auto& id_ptr = maybe_id.ValueUnsafe();
+    std::memcpy(c_col, id_ptr->body.data(), sizeof(ukv_col_t));
 }
 
 void ukv_col_remove(
@@ -611,7 +589,24 @@ void ukv_col_list( //
     stl_arena_t arena = clean_arena(c_arena, c_error);
     return_on_error(c_error);
 
+    ar::Status ar_status;
+    arrow_mem_pool_t pool(arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
+
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+
+    arf::Ticket ticket {"col_list"};
+    ar::Result<std::unique_ptr<arf::FlightStreamReader>> maybe_stream = db.flight->DoGet(ticket);
+    return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
+
+    auto& stream_ptr = maybe_stream.ValueUnsafe();
+    ar::Result<std::shared_ptr<ar::Table>> maybe_table = stream_ptr->ToTable();
+
+    ArrowSchema schema_c;
+    ArrowArray batch_c;
+    ar_status = unpack_table(maybe_table, schema_c, batch_c);
+    if (!ar_status.ok())
+        *c_error = "Failed to unpack list of columns";
 }
 
 void ukv_db_control( //
