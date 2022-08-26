@@ -145,6 +145,7 @@ struct session_id_t {
     client_id_t client_id {0};
     txn_id_t txn_id {0};
 
+    bool is_txn() const noexcept { return txn_id; }
     bool operator==(session_id_t const& other) const noexcept {
         return (client_id == other.client_id) & (txn_id == other.txn_id);
     }
@@ -184,6 +185,17 @@ struct aging_txn_order_t {
     bool operator()(session_id_t const& a, session_id_t const& b) const noexcept {
         return sessions.at(a).last_access > sessions.at(b).last_access;
     }
+};
+
+class sessions_t;
+struct session_lock_t {
+    sessions_t& sessions;
+    session_id_t session_id;
+    ukv_txn_t txn = nullptr;
+    ukv_arena_t arena = nullptr;
+
+    inline bool is_txn() const noexcept { return txn; }
+    ~session_lock_t();
 };
 
 /**
@@ -328,7 +340,30 @@ class sessions_t {
         std::unique_lock _ {mutex_};
         free_arenas_.push_back(arena);
     }
+
+    session_lock_t lock(session_id_t id, ukv_error_t* c_error) noexcept {
+        if (id.is_txn()) {
+            running_txn_t running = continue_txn(id, c_error);
+            return {*this, id, running.txn, running.arena};
+        }
+        else
+            return {*this, id, nullptr, request_arena(c_error)};
+    }
 };
+
+session_lock_t::~session_lock_t() {
+    if (is_txn())
+        sessions.hold_txn( //
+            session_id,
+            running_txn_t {
+                .txn = txn,
+                .arena = arena,
+                .last_access = sys_clock_t::now(),
+                .executing = true,
+            });
+    else
+        sessions.release_arena(arena);
+}
 
 struct session_params_t {
     session_id_t session_id;
@@ -393,29 +428,31 @@ class UKVService : public arf::FlightServerBase {
   public:
     inline static arf::ActionType const kActionColOpen {"col_open", "Find a collection descriptor by name."};
     inline static arf::ActionType const kActionColRemove {"col_remove", "Delete a named collection."};
-    inline static arf::ActionType const kActionColList {"col_list", "Lists all named collections."};
     inline static arf::ActionType const kActionTxnBegin {"txn_begin", "Starts an ACID transaction and returns its ID."};
     inline static arf::ActionType const kActionTxnCommit {"txn_commit", "Commit a previously started transaction."};
 
-    inline static std::string const kOpRead = "read";
-    inline static std::string const kOpWrite = "write";
-    inline static std::string const kOpScan = "scan";
-    inline static std::string const kOpSize = "size";
+    inline static std::string const kGetColList = "col_list";
+    inline static std::string const kPutWrite = "write";
+    inline static std::string const kExchangeRead = "read";
+    inline static std::string const kExchangeScan = "scan";
+    inline static std::string const kExchangeSize = "size";
 
     inline static std::string const kArgCols = "cols";
     inline static std::string const kArgKeys = "keys";
     inline static std::string const kArgVals = "vals";
     inline static std::string const kArgFields = "fields";
 
+  private:
     db_t db_;
     sessions_t sessions_;
 
+  public:
     UKVService(db_t&& db, std::size_t capacity = 4096) : db_(std::move(db)), sessions_(db_, capacity) {}
 
     ar::Status ListActions( //
         arf::ServerCallContext const&,
         std::vector<arf::ActionType>* actions) override {
-        *actions = {kActionColOpen, kActionColRemove, kActionColList, kActionTxnBegin, kActionTxnCommit};
+        *actions = {kActionColOpen, kActionColRemove, kActionTxnBegin, kActionTxnCommit};
         return ar::Status::OK();
     }
 
@@ -479,83 +516,6 @@ class UKVService : public arf::FlightServerBase {
         }
 
         // Listing all available collections
-        if (is_query(action.type, kActionColList.type)) {
-
-            // We will need some temporary memory for exports
-            ukv_arena_t arena = sessions_.request_arena(status.member_ptr());
-            if (!status)
-                return ar::Status::ExecutionError(status.message());
-
-            ukv_size_t count = 0;
-            ukv_col_t* collections = nullptr;
-            ukv_val_len_t* offsets = nullptr;
-            ukv_str_view_t names = nullptr;
-
-            ukv_col_list( //
-                db_,
-                &count,
-                &collections,
-                &offsets,
-                &names,
-                &arena,
-                status.member_ptr());
-            if (!status) {
-                sessions_.release_arena(arena);
-                return ar::Status::ExecutionError(status.message());
-            }
-
-            // Pack two columns into a Table
-            ArrowSchema schema_c;
-            ArrowArray array_c;
-            ukv_to_arrow_schema(count, 2, &schema_c, &array_c, status.member_ptr());
-            if (!status) {
-                sessions_.release_arena(arena);
-                return ar::Status::ExecutionError(status.message());
-            }
-
-            ukv_to_arrow_column( //
-                count,
-                "cols",
-                ukv_type<ukv_col_t>(),
-                nullptr,
-                nullptr,
-                ukv_val_ptr_t(collections),
-                schema_c.children[0],
-                array_c.children[0],
-                status.member_ptr());
-            if (!status) {
-                sessions_.release_arena(arena);
-                return ar::Status::ExecutionError(status.message());
-            }
-
-            ukv_to_arrow_column( //
-                count,
-                "names",
-                ukv_type_str_k,
-                nullptr,
-                offsets,
-                ukv_val_ptr_t(names),
-                schema_c.children[1],
-                array_c.children[1],
-                status.member_ptr());
-            if (!status) {
-                sessions_.release_arena(arena);
-                return ar::Status::ExecutionError(status.message());
-            }
-
-            auto maybe_table = ar::ImportRecordBatch(&array_c, &schema_c);
-            if (!maybe_table.ok())
-                return maybe_table.status();
-
-            auto table = maybe_table.ValueUnsafe();
-            auto result = std::make_unique<arf::Result>();
-            // TODO: Change this to `DoGet`
-            // result->body = std::dynamic_pointer_cast<ar::Buffer>(table);
-            auto results = std::make_unique<SingleResultStream>(std::move(result));
-            *results_ptr = std::unique_ptr<arf::ResultStream>(results.release());
-            sessions_.release_arena(arena);
-            return ar::Status::OK();
-        }
 
         // Starting a transaction
         if (is_query(action.type, kActionTxnBegin.type)) {
@@ -640,11 +600,12 @@ class UKVService : public arf::FlightServerBase {
         if (ar_status = unpack_table(request.ToTable(), schema_c, batch_c); !ar_status.ok())
             return ar_status;
 
-        if (is_query(desc.cmd, kOpRead)) {
-            std::optional<std::size_t> idx_cols = column_idx(&schema_c, kArgCols);
-            std::optional<std::size_t> idx_keys = column_idx(&schema_c, kArgKeys);
+        std::optional<std::size_t> idx_cols = column_idx(&schema_c, kArgCols);
+        std::optional<std::size_t> idx_keys = column_idx(&schema_c, kArgKeys);
 
-            ukv_arena_t arena = sessions_.request_arena(status.member_ptr());
+        if (is_query(desc.cmd, kExchangeRead)) {
+
+            auto session = sessions_.lock(params.session_id, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -656,7 +617,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_1x8_t* found_presences = nullptr;
             ukv_read( //
                 db_,
-                nullptr,
+                session.txn,
                 keys_c.length,
                 nullptr,
                 0,
@@ -667,20 +628,16 @@ class UKVService : public arf::FlightServerBase {
                 &found_offsets,
                 nullptr,
                 &found_presences,
-                &arena,
+                &session.arena,
                 status.member_ptr());
-            if (!status) {
-                sessions_.release_arena(arena);
+            if (!status)
                 return ar::Status::ExecutionError(status.message());
-            }
 
             ArrowSchema schema_c;
             ArrowArray batch_c;
             ukv_to_arrow_schema(keys_c.length, 1, &schema_c, &batch_c, status.member_ptr());
-            if (!status) {
-                sessions_.release_arena(arena);
+            if (!status)
                 return ar::Status::ExecutionError(status.message());
-            }
 
             ukv_to_arrow_column( //
                 keys_c.length,
@@ -692,10 +649,8 @@ class UKVService : public arf::FlightServerBase {
                 schema_c.children[0],
                 batch_c.children[0],
                 status.member_ptr());
-            if (!status) {
-                sessions_.release_arena(arena);
+            if (!status)
                 return ar::Status::ExecutionError(status.message());
-            }
 
             auto maybe_table = ar::ImportRecordBatch(&batch_c, &schema_c);
             if (!maybe_table.ok())
@@ -703,13 +658,10 @@ class UKVService : public arf::FlightServerBase {
 
             auto table = maybe_table.ValueUnsafe();
             ar_status = response.Begin(table->schema());
-            if (!ar_status.ok()) {
-                sessions_.release_arena(arena);
+            if (!ar_status.ok())
                 return ar_status;
-            }
 
             ar_status = response.WriteRecordBatch(*table);
-            sessions_.release_arena(arena);
             if (!ar_status.ok())
                 return ar_status;
 
@@ -730,8 +682,7 @@ class UKVService : public arf::FlightServerBase {
         arf::FlightMessageReader& request = *request_ptr;
         arf::FlightMetadataWriter& response = *response_ptr;
         arf::FlightDescriptor const& desc = request.descriptor();
-        std::string const& cmd = desc.cmd;
-        session_params_t params = session_params(server_call, cmd);
+        session_params_t params = session_params(server_call, desc.cmd);
         status_t status;
 
         ArrowSchema schema_c;
@@ -739,12 +690,12 @@ class UKVService : public arf::FlightServerBase {
         if (ar_status = unpack_table(request.ToTable(), schema_c, batch_c); !ar_status.ok())
             return ar_status;
 
-        if (is_query(desc.cmd, kOpWrite)) {
+        if (is_query(desc.cmd, kPutWrite)) {
             std::optional<std::size_t> idx_cols = column_idx(&schema_c, kArgCols);
             std::optional<std::size_t> idx_keys = column_idx(&schema_c, kArgKeys);
             std::optional<std::size_t> idx_vals = column_idx(&schema_c, kArgVals);
 
-            ukv_arena_t arena = sessions_.request_arena(status.member_ptr());
+            auto session = sessions_.lock(params.session_id, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -752,7 +703,7 @@ class UKVService : public arf::FlightServerBase {
             ArrowArray& vals_c = *batch_c.children[*idx_vals];
             ukv_write( //
                 db_,
-                nullptr,
+                session.txn,
                 keys_c.length,
                 nullptr,
                 0,
@@ -766,10 +717,9 @@ class UKVService : public arf::FlightServerBase {
                 0,
                 (ukv_1x8_t const*)vals_c.buffers[0],
                 ukv_options_default_k,
-                &arena,
+                &session.arena,
                 status.member_ptr());
 
-            sessions_.release_arena(arena);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
         }
@@ -778,9 +728,85 @@ class UKVService : public arf::FlightServerBase {
     }
 
     ar::Status DoGet( //
-        arf::ServerCallContext const&,
-        arf::Ticket const&,
-        std::unique_ptr<arf::FlightDataStream>*) override {
+        arf::ServerCallContext const& server_call,
+        arf::Ticket const& ticket,
+        std::unique_ptr<arf::FlightDataStream>* response_ptr) override {
+
+        ar::Status ar_status;
+        session_params_t params = session_params(server_call, ticket.ticket);
+        status_t status;
+
+        if (is_query(ticket.ticket, kGetColList)) {
+
+            // We will need some temporary memory for exports
+            auto session = sessions_.lock({.client_id = params.session_id.client_id}, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ukv_size_t count = 0;
+            ukv_col_t* collections = nullptr;
+            ukv_val_len_t* offsets = nullptr;
+            ukv_str_view_t names = nullptr;
+
+            ukv_col_list( //
+                db_,
+                &count,
+                &collections,
+                &offsets,
+                &names,
+                &session.arena,
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            // Pack two columns into a Table
+            ArrowSchema schema_c;
+            ArrowArray array_c;
+            ukv_to_arrow_schema(count, 2, &schema_c, &array_c, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ukv_to_arrow_column( //
+                count,
+                "cols",
+                ukv_type<ukv_col_t>(),
+                nullptr,
+                nullptr,
+                ukv_val_ptr_t(collections),
+                schema_c.children[0],
+                array_c.children[0],
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ukv_to_arrow_column( //
+                count,
+                "names",
+                ukv_type_str_k,
+                nullptr,
+                offsets,
+                ukv_val_ptr_t(names),
+                schema_c.children[1],
+                array_c.children[1],
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            auto maybe_batch = ar::ImportRecordBatch(&array_c, &schema_c);
+            if (!maybe_batch.ok())
+                return maybe_batch.status();
+
+            auto batch = maybe_batch.ValueUnsafe();
+            auto maybe_reader = ar::RecordBatchReader::Make({batch});
+            if (maybe_reader.ok())
+                return maybe_reader.status();
+
+            // TODO: Pass right IPC options
+            auto stream = std::make_unique<arf::RecordBatchStream>(maybe_reader.ValueUnsafe());
+            *response_ptr = std::move(stream);
+            return ar::Status::OK();
+        }
+
         return ar::Status::OK();
     }
 };
