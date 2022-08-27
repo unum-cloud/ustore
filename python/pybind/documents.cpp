@@ -177,6 +177,7 @@ static void write_many_docs(py_docs_col_t& col, PyObject* keys_py, PyObject* val
     py_transform_n(vals_py, &to_json, std::back_inserter(vals));
     if (keys.size() != vals.size())
         throw std::invalid_argument("Keys count must match values count");
+    // TODO: Fix: This must be a single batch read operation!
     for (size_t i = 0; i < keys.size(); ++i)
         col.binary.native[keys[i]] = vals[i].dump().c_str();
 }
@@ -185,15 +186,19 @@ static void write_same_doc(py_docs_col_t& col, PyObject* keys_py, PyObject* val_
     std::vector<ukv_key_t> keys;
     py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
     auto json = to_json(val_py).dump();
+    // TODO: Fix: This must be a single batch write operation!
     for (size_t i = 0; i < keys.size(); ++i)
         col.binary.native[keys[i]] = json.c_str();
 }
 
 static void write_doc(py_docs_col_t& col, py::object key_py, py::object val_py) {
     auto is_single_key = PyLong_Check(key_py.ptr());
-    auto is_single_val = PyDict_Check(val_py.ptr());
-    auto func = !is_single_val ? &write_many_docs : is_single_key ? &write_one_doc : &write_same_doc;
+    auto func = !is_single_val ? &write_many_docs : &write_one_doc;
     return func(col, key_py.ptr(), val_py.ptr());
+}
+
+static void broadcast_doc(py_docs_col_t& col, py::object key_py, py::object val_py) {
+    return write_same_doc(col, key_py.ptr(), val_py.ptr());
 }
 
 static py::object read_one_doc(py_docs_col_t& col, PyObject* key_py) {
@@ -206,6 +211,7 @@ static py::object read_many_docs(py_docs_col_t& col, PyObject* keys_py) {
     std::vector<ukv_key_t> keys;
     py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
     py::list values(keys.size());
+    // TODO: Fix: This must be a single batch read operation!
     for (size_t i = 0; i < keys.size(); ++i)
         values[i] = from_json(json_t::parse(col.binary.native[keys[i]].value()->c_str()));
     return values;
@@ -261,6 +267,7 @@ void ukv::wrap_document(py::module& m) {
     py_docs_col.def("remove", &remove_doc);
     py_docs_col.def("has_key", &has_doc);
     py_docs_col.def("scan", &scan_doc);
+    py_docs_col.def("broadcast", &broadcast_doc);
 
     py_docs_col.def("__setitem__", &write_doc);
     py_docs_col.def("__delitem__", &remove_doc);

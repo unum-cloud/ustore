@@ -146,6 +146,9 @@ void py_transform_n(PyObject* obj,
                     output_iterator_at output_iterator,
                     std::size_t max_count = std::numeric_limits<std::size_t>::max()) {
 
+    // TODO: Bring back the support of NumPy arrays
+    // TODO: Add support for Arrow inputs
+
     if (PyTuple_Check(obj)) {
         max_count = std::min<std::size_t>(PyTuple_Size(obj), max_count);
         for (std::size_t i = 0; i != max_count; ++i, ++output_iterator)
