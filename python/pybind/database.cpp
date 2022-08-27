@@ -103,6 +103,7 @@ void ukv::wrap_database(py::module& m) {
     py_col.def("has_key", &has_binary); // Similar to Python 2
     py_col.def("get", &read_binary);
     py_col.def("update", &update_binary);
+    py_col.def("broadcast", &broadcast_binary);
     py_col.def("scan", &scan_binary);
     py_col.def("__setitem__", &write_binary);
     py_col.def("__delitem__", &remove_binary);

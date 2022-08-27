@@ -56,11 +56,61 @@ static void write_many_binaries(py_col_t& col, PyObject* keys_py, PyObject* vals
     std::vector<ukv_key_t> keys;
     py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
 
-    std::vector<value_view_t> vals(keys.size());
-    if (vals_py != Py_None)
+    if (vals_py == Py_None) {
+        [[maybe_unused]] py::gil_scoped_release release;
+
+        ukv_write(col.db(),
+                  col.txn(),
+                  static_cast<ukv_size_t>(keys.size()),
+                  col.member_col(),
+                  0,
+                  keys.data(),
+                  sizeof(ukv_key_t),
+                  nullptr,
+                  0,
+                  nullptr,
+                  0,
+                  nullptr,
+                  0,
+                  col.options(),
+                  col.member_arena(),
+                  status.member_ptr());
+    }
+    else {
+        std::vector<value_view_t> vals(keys.size());
         py_transform_n(vals_py, &py_to_bytes, vals.begin(), vals.size());
 
+        [[maybe_unused]] py::gil_scoped_release release;
+        ukv_write(col.db(),
+                  col.txn(),
+                  static_cast<ukv_size_t>(keys.size()),
+                  col.member_col(),
+                  0,
+                  keys.data(),
+                  sizeof(ukv_key_t),
+                  vals[0].member_ptr(),
+                  sizeof(value_view_t),
+                  nullptr,
+                  0,
+                  vals[0].member_length(),
+                  sizeof(value_view_t),
+                  col.options(),
+                  col.member_arena(),
+                  status.member_ptr());
+    }
+
+    status.throw_unhandled();
+}
+
+static void broadcast_binary(py_col_t& col, PyObject* keys_py, PyObject* vals_py) {
+
+    status_t status;
+    std::vector<ukv_key_t> keys;
+    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
+    value_view_t val = py_to_bytes(vals_py);
+
     [[maybe_unused]] py::gil_scoped_release release;
+
     ukv_write(col.db(),
               col.txn(),
               static_cast<ukv_size_t>(keys.size()),
@@ -68,15 +118,16 @@ static void write_many_binaries(py_col_t& col, PyObject* keys_py, PyObject* vals
               0,
               keys.data(),
               sizeof(ukv_key_t),
-              vals[0].member_ptr(),
-              sizeof(value_view_t),
+              val.member_ptr(),
+              0,
               nullptr,
               0,
-              vals[0].member_length(),
-              sizeof(value_view_t),
+              val.member_length(),
+              0,
               col.options(),
               col.member_arena(),
               status.member_ptr());
+
     status.throw_unhandled();
 }
 
