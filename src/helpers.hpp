@@ -23,10 +23,12 @@
 #if __APPLE__
 namespace std::pmr {
 template <typename at>
-using vector = std::vector<at, std::experimental::pmr::polymorphic_allocator<at>>;
-using memory_resource = std::experimental::pmr::memory_resource;
+using polymorphic_allocator = ::std::experimental::pmr::polymorphic_allocator<at>;
+template <typename at>
+using vector = std::vector<at, ::std::experimental::pmr::polymorphic_allocator<at>>;
+using memory_resource = ::std::experimental::pmr::memory_resource;
 inline auto get_default_resource() {
-    return std::experimental::pmr::get_default_resource();
+    return ::std::experimental::pmr::get_default_resource();
 }
 } // namespace std::pmr
 #endif
@@ -40,7 +42,7 @@ using generation_t = std::int64_t;
 constexpr std::size_t arrow_extra_offsets_k = 1;
 constexpr std::size_t arrow_bytes_alignment_k = 64;
 
-thread_local std::pmr::memory_resource* thrlocal_memres = std::pmr::new_delete_resource();
+thread_local std::pmr::memory_resource* thrlocal_memres = std::pmr::get_default_resource();
 
 inline std::size_t next_power_of_two(std::size_t x) {
     return 1ull << (sizeof(std::size_t) * CHAR_BIT - __builtin_clzll(x));
@@ -328,7 +330,7 @@ struct stl_arena_t {
         : resource(buffer_size, 64ul, upstream) {
         thrlocal_memres = &resource;
     }
-    ~stl_arena_t() { thrlocal_memres = std::pmr::new_delete_resource(); }
+    ~stl_arena_t() { thrlocal_memres = std::pmr::get_default_resource(); }
 
     template <typename at>
     span_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
@@ -438,7 +440,7 @@ class file_handle_t {
             std::fclose(handle_);
     }
 
-    operator std::FILE *() const noexcept { return handle_; }
+    operator std::FILE*() const noexcept { return handle_; }
 };
 
 template <typename range_at, typename comparable_at>

@@ -351,7 +351,7 @@ void export_edge_tuples( //
 
     // Estimate the amount of memory we will need for the arena
     std::size_t count_ids = 0;
-    if constexpr (tuple_size_k) {
+    if constexpr (tuple_size_k != 0) {
         joined_values_iterator_t values_it = values.begin();
         for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
             value_view_t value = *values_it;

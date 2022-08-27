@@ -16,7 +16,6 @@
 
 #include <nlohmann/json.hpp>
 
-// #include "ukv/docs.hpp"
 #include "helpers.hpp"
 
 /*********************************************************/
@@ -182,10 +181,9 @@ class serializing_tape_ref_t {
     serializing_tape_ref_t(stl_arena_t& a) noexcept : arena_(a), growing_tape(&a.resource) {}
 
     void push_back(json_t const& doc, ukv_format_t c_format, ukv_error_t* c_error) noexcept(false) {
+        using allocator_t = std::pmr::polymorphic_allocator<export_to_value_t>;
         if (!shared_exporter_)
-            shared_exporter_ =
-                std::allocate_shared<export_to_value_t, std::pmr::polymorphic_allocator<export_to_value_t>>(
-                    &arena_.resource);
+            shared_exporter_ = std::allocate_shared<export_to_value_t, allocator_t>(&arena_.resource);
         shared_exporter_->value_ptr = &single_doc_buffer_;
 
         single_doc_buffer_.clear();
