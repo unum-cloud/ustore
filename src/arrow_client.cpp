@@ -561,7 +561,7 @@ void ukv_col_open(
     return_if_error(maybe_id.ok(), c_error, network_k, "No response received");
 
     auto& id_ptr = maybe_id.ValueUnsafe();
-    std::memcpy(c_col, id_ptr->body.data(), sizeof(ukv_col_t));
+    std::memcpy(c_col, id_ptr->body->data(), sizeof(ukv_col_t));
 }
 
 void ukv_col_remove(

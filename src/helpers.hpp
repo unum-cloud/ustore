@@ -42,7 +42,7 @@ using generation_t = std::int64_t;
 constexpr std::size_t arrow_extra_offsets_k = 1;
 constexpr std::size_t arrow_bytes_alignment_k = 64;
 
-thread_local std::pmr::memory_resource* thrlocal_memres = std::pmr::get_default_resource();
+inline thread_local std::pmr::memory_resource* thrlocal_memres = std::pmr::get_default_resource();
 
 inline std::size_t next_power_of_two(std::size_t x) {
     return 1ull << (sizeof(std::size_t) * CHAR_BIT - __builtin_clzll(x));
