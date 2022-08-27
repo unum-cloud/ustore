@@ -1,6 +1,8 @@
 #include <arrow/c/bridge.h>
 #include <arrow/python/pyarrow.h>
 
+#define ARROW_C_DATA_INTERFACE 1
+#define ARROW_C_STREAM_INTERFACE 1
 #include "ukv/arrow.h"
 
 #include "pybind.hpp"
@@ -107,8 +109,9 @@ static py::object materialize(py_table_col_t& df) {
     header.fields_begin = fields.begin();
     header.types_begin =
         std::holds_alternative<ukv_type_t>(df.columns_types)
-            ? strided_range_gt<ukv_key_t const>(&std::get<ukv_type_t>(df.columns_types), 0, fields.size())
-            : strided_range(std::get<std::vector<ukv_type_t>>(df.columns_types));
+            ? strided_iterator_gt<ukv_type_t const>(&std::get<ukv_type_t>(df.columns_types), 0)
+            : strided_iterator_gt<ukv_type_t const>(std::get<std::vector<ukv_type_t>>(df.columns_types).data(),
+                                                    sizeof(ukv_type_t));
     table_view_t table = members.gather(header).throw_or_release();
     table_header_view_t table_header = table.header();
 
@@ -129,13 +132,13 @@ static py::object materialize(py_table_col_t& df) {
         column_view_t col = table.column(col_idx);
         ukv_to_arrow_column( //
             table.rows(),
-            table_header.fields[col_idx].get(),
-            table_header.types[col_idx].get(),
+            table_header.fields_begin[col_idx],
+            table_header.types_begin[col_idx],
             col.validities(),
             col.offsets(),
             col.contents(),
-            &c_arrow_schema.children[col_idx],
-            &c_arrow_array.children[col_idx],
+            c_arrow_schema.children[col_idx],
+            c_arrow_array.children[col_idx],
             status.member_ptr());
         status.throw_unhandled();
     }
@@ -143,7 +146,7 @@ static py::object materialize(py_table_col_t& df) {
     // Pass C to C++ and then to Python:
     // https://github.com/apache/arrow/blob/master/cpp/src/arrow/c/bridge.h#L138
     arrow::Result<std::shared_ptr<arrow::RecordBatch>> table_arrow =
-        arrow::ImportRecordBatch(c_arrow_schema, c_arrow_array);
+        arrow::ImportRecordBatch(&c_arrow_array, &c_arrow_schema);
     // https://github.com/apache/arrow/blob/a270afc946398a0279b1971a315858d8b5f07e2d/cpp/src/arrow/python/pyarrow.h#L52
     PyObject* table_python = arrow::py::wrap_batch(table_arrow.ValueOrDie());
     return py::reinterpret_steal<py::object>(table_python);

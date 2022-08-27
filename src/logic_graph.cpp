@@ -10,7 +10,6 @@
 #include <optional> // `std::optional`
 #include <limits>   // `std::numeric_limits`
 
-// #include "ukv/graph.hpp"
 #include "helpers.hpp"
 
 /*********************************************************/
@@ -25,9 +24,17 @@ ukv_vertex_degree_t ukv_vertex_degree_missing_k = std::numeric_limits<ukv_vertex
 
 constexpr std::size_t bytes_in_degrees_header_k = 2 * sizeof(ukv_vertex_degree_t);
 
-indexed_range_gt<neighborship_t const*> neighbors(ukv_vertex_degree_t const* degrees,
-                                                  ukv_key_t const* neighborships,
-                                                  ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+struct updated_entry_t : public col_key_t {
+    ukv_val_ptr_t content = nullptr;
+    ukv_val_len_t length = ukv_val_len_missing_k;
+    ukv_vertex_degree_t degree_delta = 0;
+    inline operator value_view_t() const noexcept { return {content, length}; }
+};
+
+indexed_range_gt<neighborship_t const*> neighbors( //
+    ukv_vertex_degree_t const* degrees,
+    ukv_key_t const* neighborships,
+    ukv_vertex_role_t role = ukv_vertex_role_any_k) {
     auto ships = reinterpret_cast<neighborship_t const*>(neighborships);
 
     switch (role) {
@@ -41,7 +48,7 @@ indexed_range_gt<neighborship_t const*> neighbors(ukv_vertex_degree_t const* deg
 
 indexed_range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
     // Handle missing vertices
-    if (bytes.size() < 2 * sizeof(ukv_vertex_degree_t))
+    if (bytes.size() < bytes_in_degrees_header_k)
         return {};
 
     auto degrees = reinterpret_cast<ukv_vertex_degree_t const*>(bytes.begin());
@@ -137,7 +144,7 @@ struct neighborhood_t {
 
     /**
      * @return true  If the node is present in the graph.
-     *               The neighborhood may be empy.
+     *               The neighborhood may be empty.
      */
     inline operator bool() const noexcept { return sources && targets; }
 };
@@ -195,76 +202,97 @@ struct neighborhoods_t {
     inline std::size_t size() const noexcept { return centers_.size(); }
 };
 
+void count_inserts_into_entry( //
+    updated_entry_t& entry,
+    ukv_vertex_role_t role,
+    ukv_key_t neighbor_id,
+    ukv_key_t edge_id) {
+
+    auto ship = neighborship_t {neighbor_id, edge_id};
+    if (entry.length > bytes_in_degrees_header_k) {
+        auto neighbors_range = neighbors(entry, role);
+        auto it = std::lower_bound(neighbors_range.begin(), neighbors_range.end(), ship);
+        if (it != neighbors_range.end())
+            if (*it == ship)
+                return;
+    }
+
+    ++entry.degree_delta;
+}
+
 /**
  * @return true  If such an entry didn't exist and was added.
  * @return false In every other case.
  */
-bool upsert(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, ukv_key_t edge_id) {
+void insert_into_entry( //
+    updated_entry_t& entry,
+    ukv_vertex_role_t role,
+    ukv_key_t neighbor_id,
+    ukv_key_t edge_id) {
 
     auto ship = neighborship_t {neighbor_id, edge_id};
-    if (!value.size()) {
-        value = value_t(sizeof(ukv_vertex_degree_t) * 2 + sizeof(neighborship_t));
-        auto degrees = reinterpret_cast<ukv_vertex_degree_t*>(value.begin());
-        auto ships = reinterpret_cast<neighborship_t*>(degrees + 2);
+    auto degrees = reinterpret_cast<ukv_vertex_degree_t*>(entry.content);
+    auto ships = reinterpret_cast<neighborship_t*>(degrees + 2);
+    if (entry.length < bytes_in_degrees_header_k) {
         degrees[role != ukv_vertex_target_k] = 0;
         degrees[role == ukv_vertex_target_k] = 1;
         ships[0] = ship;
-        return true;
+        entry.length += bytes_in_degrees_header_k;
+        entry.length += sizeof(neighborship_t);
     }
+    else {
+        auto neighbors_range = neighbors(entry, role);
+        auto it = std::lower_bound(neighbors_range.begin(), neighbors_range.end(), ship);
+        if (it != neighbors_range.end())
+            if (*it == ship)
+                return;
 
-    auto neighbors_range = neighbors(value, role);
-    auto it = std::lower_bound(neighbors_range.begin(), neighbors_range.end(), ship);
-    if (it != neighbors_range.end())
-        if (*it == ship)
-            return false;
-
-    auto off = reinterpret_cast<byte_t const*>(it) - value.begin();
-    auto ship_bytes = reinterpret_cast<byte_t const*>(&ship);
-    value.insert(off, ship_bytes, ship_bytes + sizeof(neighborship_t));
-    auto degrees = reinterpret_cast<ukv_vertex_degree_t*>(value.begin());
-    degrees[role == ukv_vertex_target_k] += 1;
-    return true;
+        trivial_insert(ships, degrees[0] + degrees[1], it - ships, &ship, &ship + 1);
+        degrees[role == ukv_vertex_target_k] += 1;
+        entry.length += sizeof(neighborship_t);
+    }
 }
 
 /**
  * @return true  If a matching entry was found and deleted.
  * @return false In every other case.
  */
-bool erase(value_t& value, ukv_vertex_role_t role, ukv_key_t neighbor_id, std::optional<ukv_key_t> edge_id = {}) {
+void erase_from_entry(updated_entry_t& entry,
+                      ukv_vertex_role_t role,
+                      ukv_key_t neighbor_id,
+                      std::optional<ukv_key_t> edge_id = {}) {
 
-    if (!value.size())
-        return false;
+    if (entry.length < bytes_in_degrees_header_k)
+        return;
 
     std::size_t off = 0;
     std::size_t len = 0;
 
-    auto neighbors_range = neighbors(value, role);
+    auto degrees = reinterpret_cast<ukv_vertex_degree_t*>(entry.content);
+    auto ships = reinterpret_cast<neighborship_t*>(degrees + 2);
+    auto neighbors_range = neighbors(entry, role);
     if (edge_id) {
         auto ship = neighborship_t {neighbor_id, *edge_id};
         auto it = std::lower_bound(neighbors_range.begin(), neighbors_range.end(), ship);
-        if (it == neighbors_range.end())
-            return false;
-        else if (*it != ship)
-            return false;
+        if (it == neighbors_range.end() || *it != ship)
+            return;
 
-        off = reinterpret_cast<byte_t const*>(it) - value.begin();
-        len = sizeof(neighborship_t);
+        off = it - ships;
+        len = 1;
     }
     else {
         auto pair = std::equal_range(neighbors_range.begin(), neighbors_range.end(), neighbor_id);
-        if (pair.first == neighbors_range.end())
-            return false;
-        else if (pair.first == pair.second)
-            return false;
+        if (pair.first == neighbors_range.end() || pair.first == pair.second)
+            return;
 
-        off = reinterpret_cast<byte_t const*>(pair.first) - value.begin();
-        len = sizeof(neighborship_t) * (pair.second - pair.first);
+        off = pair.first - ships;
+        len = pair.second - pair.first;
     }
 
-    value.erase(off, len);
-    auto degrees = reinterpret_cast<ukv_vertex_degree_t*>(value.begin());
-    degrees[role == ukv_vertex_target_k] -= 1;
-    return true;
+    trivial_erase(ships, degrees[0] + degrees[1], off, len);
+    degrees[role == ukv_vertex_target_k] -= len;
+    entry.degree_delta += len;
+    entry.length -= sizeof(neighborship_t) * len;
 }
 
 template <bool export_center_ak = true, bool export_neighbor_ak = true, bool export_edge_ak = true>
@@ -290,83 +318,80 @@ void export_edge_tuples( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    ukv_val_ptr_t c_found_values = nullptr;
-    ukv_val_len_t* c_found_offsets = nullptr;
-    ukv_val_len_t* c_found_lengths = nullptr;
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    return_on_error(c_error);
 
     // Even if we need just the node degrees, we can't limit ourselves to just entry lengths.
     // Those may be compressed. We need to read the first bytes to parse the degree of the node.
-    ukv_read(c_db,
-             c_txn,
-             c_vertices_count,
-             c_cols,
-             c_cols_stride,
-             c_vertices_ids,
-             c_vertices_stride,
-             static_cast<ukv_options_t>(c_options & ~ukv_option_read_lengths_k),
-             &c_found_values,
-             &c_found_offsets,
-             &c_found_lengths,
-             c_arena,
-             c_error);
-    if (*c_error)
-        return;
+    ukv_arena_t arena_ptr = &arena;
+    ukv_val_ptr_t c_found_values = nullptr;
+    ukv_val_len_t* c_found_offsets = nullptr;
+    ukv_val_len_t* c_found_lengths = nullptr;
+    ukv_read( //
+        c_db,
+        c_txn,
+        c_vertices_count,
+        c_cols,
+        c_cols_stride,
+        c_vertices_ids,
+        c_vertices_stride,
+        c_options,
+        &c_found_values,
+        &c_found_offsets,
+        &c_found_lengths,
+        nullptr,
+        &arena_ptr,
+        c_error);
+    return_on_error(c_error);
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
-        return;
-
-    tape_view_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
+    joined_values_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
+    constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
 
     // Estimate the amount of memory we will need for the arena
-    std::size_t total_neighborships = 0;
-    {
-        tape_iterator_t values_it = values.begin();
+    std::size_t count_ids = 0;
+    if constexpr (tuple_size_k != 0) {
+        joined_values_iterator_t values_it = values.begin();
         for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
             value_view_t value = *values_it;
             ukv_vertex_role_t role = roles[i];
-            total_neighborships += neighbors(value, role).size();
+            count_ids += neighbors(value, role).size();
         }
+        count_ids *= tuple_size_k;
     }
-    constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
-    prepare_memory( //
-        arena.unpacked_tape,
-        total_neighborships * sizeof(ukv_key_t) * tuple_size_k + c_vertices_count * sizeof(ukv_vertex_degree_t),
-        c_error);
-    if (*c_error)
-        return;
 
     // Export into arena
-    auto const degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(arena.unpacked_tape.data());
-    auto neighborships_per_vertex = reinterpret_cast<ukv_key_t*>(degrees_per_vertex + c_vertices_count);
+    auto ids = arena.alloc_or_dummy<ukv_key_t>(count_ids, c_error, c_neighborships_per_vertex);
+    return_on_error(c_error);
+    auto degrees = arena.alloc_or_dummy<ukv_vertex_degree_t>(c_vertices_count, c_error, c_degrees_per_vertex);
+    return_on_error(c_error);
 
-    tape_iterator_t values_it = values.begin();
-    for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
+    std::size_t passed_ids = 0;
+    joined_values_iterator_t values_it = values.begin();
+    for (std::size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
         value_view_t value = *values_it;
         ukv_key_t vertex_id = vertices_ids[i];
         ukv_vertex_role_t role = roles[i];
-        ukv_vertex_degree_t& degree = degrees_per_vertex[i];
 
         // Some values may be missing
-        if (value.empty()) {
-            degree = ukv_vertex_degree_missing_k;
+        if (!value) {
+            degrees[i] = ukv_vertex_degree_missing_k;
             continue;
         }
 
-        degree = 0;
+        ukv_vertex_degree_t degree = 0;
         if (role & ukv_vertex_source_k) {
             auto ns = neighbors(value, ukv_vertex_source_k);
             if constexpr (tuple_size_k != 0)
                 for (neighborship_t n : ns) {
                     if constexpr (export_center_ak)
-                        neighborships_per_vertex[0] = vertex_id;
+                        ids[passed_ids + 0] = vertex_id;
                     if constexpr (export_neighbor_ak)
-                        neighborships_per_vertex[export_center_ak] = n.neighbor_id;
+                        ids[passed_ids + export_center_ak] = n.neighbor_id;
                     if constexpr (export_edge_ak)
-                        neighborships_per_vertex[export_center_ak + export_neighbor_ak] = n.edge_id;
-                    neighborships_per_vertex += tuple_size_k;
+                        ids[passed_ids + export_center_ak + export_neighbor_ak] = n.edge_id;
+                    passed_ids += tuple_size_k;
                 }
             degree += static_cast<ukv_vertex_degree_t>(ns.size());
         }
@@ -375,65 +400,64 @@ void export_edge_tuples( //
             if constexpr (tuple_size_k != 0)
                 for (neighborship_t n : ns) {
                     if constexpr (export_neighbor_ak)
-                        neighborships_per_vertex[0] = n.neighbor_id;
+                        ids[passed_ids + 0] = n.neighbor_id;
                     if constexpr (export_center_ak)
-                        neighborships_per_vertex[export_neighbor_ak] = vertex_id;
+                        ids[passed_ids + export_neighbor_ak] = vertex_id;
                     if constexpr (export_edge_ak)
-                        neighborships_per_vertex[export_center_ak + export_neighbor_ak] = n.edge_id;
-                    neighborships_per_vertex += tuple_size_k;
+                        ids[passed_ids + export_center_ak + export_neighbor_ak] = n.edge_id;
+                    passed_ids += tuple_size_k;
                 }
             degree += static_cast<ukv_vertex_degree_t>(ns.size());
         }
-    }
 
-    *c_degrees_per_vertex = reinterpret_cast<ukv_vertex_degree_t*>(arena.unpacked_tape.data());
-    *c_neighborships_per_vertex = reinterpret_cast<ukv_key_t*>(degrees_per_vertex + c_vertices_count);
+        degrees[i] = degree;
+    }
 }
 
-void export_disjoint_edge_buffers( //
+void pull_and_link_for_updates( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
-    ukv_size_t const c_vertices_count,
-
-    ukv_col_t const* c_cols,
-    ukv_size_t const c_cols_stride,
-
-    ukv_key_t const* c_vertices_ids,
-    ukv_size_t const c_vertices_stride,
-
+    strided_range_gt<updated_entry_t> unique_entries,
     ukv_options_t const c_options,
-
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    ukv_val_ptr_t c_found_values = nullptr;
-    ukv_val_len_t* c_found_offsets = nullptr;
-    ukv_val_len_t* c_found_lengths = nullptr;
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    return_on_error(c_error);
 
-    ukv_read(c_db,
-             c_txn,
-             c_vertices_count,
-             c_cols,
-             c_cols_stride,
-             c_vertices_ids,
-             c_vertices_stride,
-             c_options,
-             &c_found_values,
-             &c_found_offsets,
-             &c_found_lengths,
-             c_arena,
-             c_error);
-    if (*c_error)
-        return;
+    // Fetch the existing entries
+    ukv_arena_t arena_ptr = &arena;
+    ukv_val_ptr_t found_binary_begin = nullptr;
+    ukv_val_len_t* found_binary_offs = nullptr;
+    ukv_val_len_t* found_binary_lens = nullptr;
+    ukv_size_t unique_count = static_cast<ukv_size_t>(unique_entries.size());
+    auto cols = unique_entries.immutable().members(&updated_entry_t::col);
+    auto keys = unique_entries.immutable().members(&updated_entry_t::key);
+    ukv_read( //
+        c_db,
+        c_txn,
+        unique_count,
+        cols.begin().get(),
+        cols.begin().stride(),
+        keys.begin().get(),
+        keys.begin().stride(),
+        c_options,
+        &found_binary_begin,
+        &found_binary_offs,
+        &found_binary_lens,
+        nullptr,
+        &arena_ptr,
+        c_error);
+    return_on_error(c_error);
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
-        return;
-
-    tape_view_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
-    std::size_t value_idx = 0;
-    for (value_view_t value : values)
-        arena.updated_vals[value_idx++] = value;
+    // Link the response buffer to `unique_entries`
+    joined_values_t found_binaries {found_binary_begin, found_binary_offs, found_binary_lens, unique_count};
+    for (std::size_t i = 0; i != unique_count; ++i) {
+        auto found_binary = found_binaries[i];
+        unique_entries[i].content = ukv_val_ptr_t(found_binary.data());
+        unique_entries[i].length =
+            found_binary ? static_cast<ukv_val_len_t>(found_binary.size()) : ukv_val_len_missing_k;
+    }
 }
 
 template <bool erase_ak>
@@ -459,87 +483,102 @@ void update_neighborhoods( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    return_on_error(c_error);
 
-    strided_iterator_gt<ukv_col_t const> collections {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_col_t const> edge_cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> edges_ids {c_edges_ids, c_edges_stride};
     strided_iterator_gt<ukv_key_t const> sources_ids {c_sources_ids, c_sources_stride};
     strided_iterator_gt<ukv_key_t const> targets_ids {c_targets_ids, c_targets_stride};
 
-    // Fetch all the data related to touched vertices
-    prepare_memory(arena.updated_keys, c_tasks_count + c_tasks_count, c_error);
-    if (*c_error)
-        return;
+    // Fetch all the data related to touched vertices, and deduplicate them
+    auto unique_entries = arena.alloc<updated_entry_t>(c_tasks_count * 2, c_error);
+    return_on_error(c_error);
+    std::fill(unique_entries.begin(), unique_entries.end(), updated_entry_t {});
     for (ukv_size_t i = 0; i != c_tasks_count; ++i)
-        arena.updated_keys[i] = {collections[i], sources_ids[i]};
+        unique_entries[i].col = edge_cols[i], unique_entries[i].key = sources_ids[i];
     for (ukv_size_t i = 0; i != c_tasks_count; ++i)
-        arena.updated_keys[c_tasks_count + i] = {collections[i], targets_ids[i]};
+        unique_entries[c_tasks_count + i].col = edge_cols[i], unique_entries[c_tasks_count + i].key = targets_ids[i];
 
-    // Keep only the unique items
-    sort_and_deduplicate(arena.updated_keys);
-    prepare_memory(arena.updated_vals, arena.updated_keys.size(), c_error);
-    if (*c_error)
-        return;
+    // Lets put all the unique IDs in the beginning of the range,
+    // and then refill the tail with replicas
+    auto unique_count = sort_and_deduplicate(unique_entries.begin(), unique_entries.end());
+    unique_entries = {unique_entries.begin(), unique_count};
 
-    export_disjoint_edge_buffers(c_db,
-                                 c_txn,
-                                 static_cast<ukv_size_t>(arena.updated_keys.size()),
-                                 &arena.updated_keys[0].col,
-                                 sizeof(col_key_t),
-                                 &arena.updated_keys[0].key,
-                                 sizeof(col_key_t),
-                                 c_options,
-                                 c_arena,
-                                 c_error);
-    if (*c_error)
-        return;
+    // Fetch the existing entries
+    ukv_arena_t arena_ptr = &arena;
+    auto unique_strided = unique_entries.strided();
+    pull_and_link_for_updates(c_db, c_txn, unique_strided, c_options, &arena_ptr, c_error);
+    return_on_error(c_error);
 
-    // Upsert into in-memory arrays
-    for (ukv_size_t i = 0; i != c_tasks_count; ++i) {
-        auto collection = collections[i];
-        auto source_id = sources_ids[i];
-        auto target_id = targets_ids[i];
-
-        auto source_idx = offset_in_sorted(arena.updated_keys, {collection, source_id});
-        auto target_idx = offset_in_sorted(arena.updated_keys, {collection, target_id});
-        auto& source_value = arena.updated_vals[source_idx];
-        auto& target_value = arena.updated_vals[target_idx];
-
-        if constexpr (erase_ak) {
-            std::optional<ukv_key_t> edge_id;
-            if (edges_ids)
-                edge_id = edges_ids[i];
-
-            erase(source_value, ukv_vertex_source_k, target_id, edge_id);
-            erase(target_value, ukv_vertex_target_k, source_id, edge_id);
+    // Define our primary for-loop
+    auto for_each_task = [&](auto entry_role_target_edge_callback) {
+        for (std::size_t i = 0; i != c_tasks_count; ++i) {
+            auto col = edge_cols[i];
+            auto source_id = sources_ids[i];
+            auto target_id = targets_ids[i];
+            auto edge_id = edges_ids ? edges_ids[i] : ukv_key_unknown_k;
+            auto source_idx = offset_in_sorted(unique_entries, col_key_t {col, source_id});
+            auto target_idx = offset_in_sorted(unique_entries, col_key_t {col, target_id});
+            entry_role_target_edge_callback(unique_entries[source_idx], ukv_vertex_source_k, target_id, edge_id);
+            entry_role_target_edge_callback(unique_entries[target_idx], ukv_vertex_target_k, source_id, edge_id);
         }
-        else {
-            auto edge_id = edges_ids[i];
-            upsert(source_value, ukv_vertex_source_k, target_id, edge_id);
-            upsert(target_value, ukv_vertex_target_k, source_id, edge_id);
+    };
+
+    if constexpr (erase_ak)
+        for_each_task(&erase_from_entry);
+    else {
+        // Unlike erasing, which can reuse the memory, her we need three passes:
+        // 1. estimating final size
+        for_each_task(&count_inserts_into_entry);
+        // 2. reallocating into bigger buffers
+        for (std::size_t i = 0; i != unique_count; ++i) {
+            auto& unique_entry = unique_entries[i];
+            auto bytes_present = unique_entry.length != ukv_val_len_missing_k ? unique_entry.length : 0;
+            auto bytes_for_relations = unique_entry.degree_delta * sizeof(neighborship_t);
+            auto bytes_for_degrees = bytes_present > bytes_in_degrees_header_k ? 0 : bytes_in_degrees_header_k;
+            auto new_size = bytes_present + bytes_for_relations + bytes_for_degrees;
+            auto new_buffer = arena.alloc<byte_t>(new_size, c_error);
+            return_on_error(c_error);
+            std::memcpy(new_buffer.begin(), unique_entry.content, bytes_present);
+
+            unique_entry.content = (ukv_val_ptr_t)new_buffer.begin();
+            // No need to grow `length` here, we will update in `insert_into_entry` later
+            unique_entry.length = bytes_present;
         }
+        // 3. performing insertions
+        for_each_task(&insert_into_entry);
     }
 
+    // Some of the requested updates may have been completely useless, like:
+    // > upserting an existing relation.
+    // > removing a missing relation.
+    // So we can further optimize by cancelling those writes.
+    std::partition(unique_entries.begin(), unique_entries.end(), std::mem_fn(&updated_entry_t::degree_delta));
+
     // Dump the data back to disk!
-    ukv_val_len_t offset_in_val = 0;
-    ukv_write(c_db,
-              c_txn,
-              static_cast<ukv_size_t>(arena.updated_keys.size()),
-              &arena.updated_keys[0].col,
-              sizeof(col_key_t),
-              &arena.updated_keys[0].key,
-              sizeof(col_key_t),
-              arena.updated_vals[0].member_ptr(),
-              sizeof(value_t),
-              &offset_in_val,
-              0,
-              arena.updated_vals[0].member_length(),
-              sizeof(value_t),
-              c_options,
-              c_arena,
-              c_error);
+    auto cols = unique_strided.immutable().members(&updated_entry_t::col);
+    auto keys = unique_strided.immutable().members(&updated_entry_t::key);
+    auto contents = unique_strided.immutable().members(&updated_entry_t::content);
+    auto lengths = unique_strided.immutable().members(&updated_entry_t::length);
+    ukv_write( //
+        c_db,
+        c_txn,
+        unique_count,
+        cols.begin().get(),
+        cols.begin().stride(),
+        keys.begin().get(),
+        keys.begin().stride(),
+        contents.begin().get(),
+        contents.begin().stride(),
+        nullptr,
+        0,
+        lengths.begin().get(),
+        lengths.begin().stride(),
+        nullptr,
+        c_options,
+        &arena_ptr,
+        c_error);
 }
 
 void ukv_graph_find_edges( //
@@ -564,22 +603,25 @@ void ukv_graph_find_edges( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    auto func = (c_options & ukv_option_read_lengths_k) ? &export_edge_tuples<false, false, false>
-                                                        : &export_edge_tuples<true, true, true>;
-    return func(c_db,
-                c_txn,
-                c_vertices_count,
-                c_cols,
-                c_cols_stride,
-                c_vertices_ids,
-                c_vertices_stride,
-                c_roles,
-                c_roles_stride,
-                c_options,
-                c_degrees_per_vertex,
-                c_neighborships_per_vertex,
-                c_arena,
-                c_error);
+    bool only_degrees = !c_neighborships_per_vertex;
+    auto func = only_degrees //
+                    ? &export_edge_tuples<false, false, false>
+                    : &export_edge_tuples<true, true, true>;
+    return func( //
+        c_db,
+        c_txn,
+        c_vertices_count,
+        c_cols,
+        c_cols_stride,
+        c_vertices_ids,
+        c_vertices_stride,
+        c_roles,
+        c_roles_stride,
+        c_options,
+        c_degrees_per_vertex,
+        c_neighborships_per_vertex,
+        c_arena,
+        c_error);
 }
 
 void ukv_graph_upsert_edges( //
@@ -604,20 +646,21 @@ void ukv_graph_upsert_edges( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    return update_neighborhoods<false>(c_db,
-                                       c_txn,
-                                       c_tasks_count,
-                                       c_cols,
-                                       c_cols_stride,
-                                       c_edges_ids,
-                                       c_edges_stride,
-                                       c_sources_ids,
-                                       c_sources_stride,
-                                       c_targets_ids,
-                                       c_targets_stride,
-                                       c_options,
-                                       c_arena,
-                                       c_error);
+    return update_neighborhoods<false>( //
+        c_db,
+        c_txn,
+        c_tasks_count,
+        c_cols,
+        c_cols_stride,
+        c_edges_ids,
+        c_edges_stride,
+        c_sources_ids,
+        c_sources_stride,
+        c_targets_ids,
+        c_targets_stride,
+        c_options,
+        c_arena,
+        c_error);
 }
 
 void ukv_graph_remove_edges( //
@@ -642,20 +685,21 @@ void ukv_graph_remove_edges( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    return update_neighborhoods<true>(c_db,
-                                      c_txn,
-                                      c_tasks_count,
-                                      c_cols,
-                                      c_cols_stride,
-                                      c_edges_ids,
-                                      c_edges_stride,
-                                      c_sources_ids,
-                                      c_sources_stride,
-                                      c_targets_ids,
-                                      c_targets_stride,
-                                      c_options,
-                                      c_arena,
-                                      c_error);
+    return update_neighborhoods<true>( //
+        c_db,
+        c_txn,
+        c_tasks_count,
+        c_cols,
+        c_cols_stride,
+        c_edges_ids,
+        c_edges_stride,
+        c_sources_ids,
+        c_sources_stride,
+        c_targets_ids,
+        c_targets_stride,
+        c_options,
+        c_arena,
+        c_error);
 }
 
 void ukv_graph_remove_vertices( //
@@ -677,107 +721,107 @@ void ukv_graph_remove_vertices( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    strided_iterator_gt<ukv_col_t const> collections {c_cols, c_cols_stride};
+    stl_arena_t arena = clean_arena(c_arena, c_error);
+    return_on_error(c_error);
+
+    strided_iterator_gt<ukv_col_t const> vertex_cols {c_cols, c_cols_stride};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
-    strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
+    strided_iterator_gt<ukv_vertex_role_t const> vertex_roles {c_roles, c_roles_stride};
 
     // Initially, just retrieve the bare minimum information about the vertices
     ukv_vertex_degree_t* degrees_per_vertex = nullptr;
     ukv_key_t* neighbors_per_vertex = nullptr;
-    export_edge_tuples<false, true, false>(c_db,
-                                           c_txn,
-                                           c_vertices_count,
-                                           c_cols,
-                                           c_cols_stride,
-                                           c_vertices_ids,
-                                           c_vertices_stride,
-                                           c_roles,
-                                           c_roles_stride,
-                                           c_options,
-                                           &degrees_per_vertex,
-                                           &neighbors_per_vertex,
-                                           c_arena,
-                                           c_error);
-
-    if (*c_error)
-        return;
-
-    stl_arena_t& arena = *cast_arena(c_arena, c_error);
-    if (*c_error)
-        return;
+    ukv_arena_t arena_ptr = &arena;
+    export_edge_tuples<false, true, false>( //
+        c_db,
+        c_txn,
+        c_vertices_count,
+        c_cols,
+        c_cols_stride,
+        c_vertices_ids,
+        c_vertices_stride,
+        c_roles,
+        c_roles_stride,
+        c_options,
+        &degrees_per_vertex,
+        &neighbors_per_vertex,
+        &arena_ptr,
+        c_error);
+    return_on_error(c_error);
 
     // Enumerate the opposite ends, from which that same reference must be removed.
     // Here all the keys will be in the sorted order.
-    std::size_t count_edges = std::accumulate(degrees_per_vertex, degrees_per_vertex + c_vertices_count, 0ul);
-    arena.updated_keys.reserve(count_edges * 2);
-    for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++degrees_per_vertex) {
-        auto collection = collections[i];
-        arena.updated_keys.push_back({collection, vertices_ids[i]});
-        for (ukv_size_t j = 0; j != *degrees_per_vertex; ++j, ++neighbors_per_vertex)
-            arena.updated_keys.push_back({collection, *neighbors_per_vertex});
-    }
+    auto unique_count = std::accumulate(degrees_per_vertex, degrees_per_vertex + c_vertices_count, 0ul);
+    auto unique_entries = arena.alloc<updated_entry_t>(unique_count * 2, c_error);
+    return_on_error(c_error);
+    std::fill(unique_entries.begin(), unique_entries.end(), updated_entry_t {});
 
     // Sorting the tasks would help us faster locate them in the future.
     // We may also face repetitions when connected vertices are removed.
-    sort_and_deduplicate(arena.updated_keys);
-    prepare_memory(arena.updated_vals, arena.updated_keys.size(), c_error);
-    if (*c_error)
-        return;
+    {
+        auto planned_entries = unique_entries.begin();
+        for (std::size_t i = 0; i != c_vertices_count; ++i) {
+            auto col = planned_entries->col = vertex_cols[i];
+            planned_entries->key = vertices_ids[i];
+            ++planned_entries;
+            for (std::size_t j = 0; j != degrees_per_vertex[i]; ++j, ++neighbors_per_vertex, ++planned_entries)
+                planned_entries->col = col, planned_entries->key = *neighbors_per_vertex;
+        }
+        unique_count = sort_and_deduplicate(unique_entries.begin(), unique_entries.end());
+        unique_entries = {unique_entries.begin(), unique_count};
+    }
 
     // Fetch the opposite ends, from which that same reference must be removed.
     // Here all the keys will be in the sorted order.
-    export_disjoint_edge_buffers(c_db,
-                                 c_txn,
-                                 static_cast<ukv_size_t>(arena.updated_keys.size()),
-                                 &arena.updated_keys[0].col,
-                                 sizeof(col_key_t),
-                                 &arena.updated_keys[0].key,
-                                 sizeof(col_key_t),
-                                 c_options,
-                                 c_arena,
-                                 c_error);
-    if (*c_error)
-        return;
+    auto unique_strided = unique_entries.strided();
+    pull_and_link_for_updates(c_db, c_txn, unique_strided, c_options, &arena_ptr, c_error);
+    return_on_error(c_error);
 
     // From every opposite end - remove a match, and only then - the content itself
-    for (ukv_size_t i = 0; i != arena.updated_keys.size(); ++i) {
-        auto collection = collections[i];
+    for (std::size_t i = 0; i != unique_strided.size(); ++i) {
+        auto vertex_col = vertex_cols[i];
         auto vertex_id = vertices_ids[i];
-        auto role = roles[i];
+        auto vertex_role = vertex_roles[i];
 
-        auto vertex_idx = offset_in_sorted(arena.updated_keys, {collection, vertex_id});
-        value_t& vertex_value = arena.updated_vals[vertex_idx];
+        auto vertex_idx = offset_in_sorted(unique_entries, col_key_t {vertex_col, vertex_id});
+        updated_entry_t& vertex_value = unique_entries[vertex_idx];
 
-        for (neighborship_t n : neighbors(vertex_value, role)) {
-            auto neighbor_idx = offset_in_sorted(arena.updated_keys, {collection, n.neighbor_id});
-            value_t& neighbor_value = arena.updated_vals[neighbor_idx];
-            if (role == ukv_vertex_role_any_k) {
-                erase(neighbor_value, ukv_vertex_source_k, vertex_id);
-                erase(neighbor_value, ukv_vertex_target_k, vertex_id);
+        for (neighborship_t n : neighbors(vertex_value, vertex_role)) {
+            auto neighbor_idx = offset_in_sorted(unique_entries, col_key_t {vertex_col, n.neighbor_id});
+            updated_entry_t& neighbor_value = unique_entries[neighbor_idx];
+            if (vertex_role == ukv_vertex_role_any_k) {
+                erase_from_entry(neighbor_value, ukv_vertex_source_k, vertex_id);
+                erase_from_entry(neighbor_value, ukv_vertex_target_k, vertex_id);
             }
             else
-                erase(neighbor_value, invert(role), vertex_id);
+                erase_from_entry(neighbor_value, invert(vertex_role), vertex_id);
         }
 
-        vertex_value.reset();
+        vertex_value.content = nullptr;
+        vertex_value.length = 0;
     }
 
     // Now we will go through all the explicitly deleted vertices
-    ukv_val_len_t offset_in_val = 0;
-    ukv_write(c_db,
-              c_txn,
-              static_cast<ukv_size_t>(arena.updated_keys.size()),
-              &arena.updated_keys[0].col,
-              sizeof(col_key_t),
-              &arena.updated_keys[0].key,
-              sizeof(col_key_t),
-              arena.updated_vals[0].member_ptr(),
-              sizeof(value_t),
-              &offset_in_val,
-              0,
-              arena.updated_vals[0].member_length(),
-              sizeof(value_t),
-              c_options,
-              c_arena,
-              c_error);
+    auto cols = unique_strided.immutable().members(&updated_entry_t::col);
+    auto keys = unique_strided.immutable().members(&updated_entry_t::key);
+    auto contents = unique_strided.immutable().members(&updated_entry_t::content);
+    auto lengths = unique_strided.immutable().members(&updated_entry_t::length);
+    ukv_write( //
+        c_db,
+        c_txn,
+        unique_count,
+        cols.begin().get(),
+        cols.begin().stride(),
+        keys.begin().get(),
+        keys.begin().stride(),
+        contents.begin().get(),
+        contents.begin().stride(),
+        nullptr,
+        0,
+        lengths.begin().get(),
+        lengths.begin().stride(),
+        nullptr,
+        c_options,
+        &arena_ptr,
+        c_error);
 }

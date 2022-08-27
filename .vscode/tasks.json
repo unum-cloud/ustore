@@ -2,8 +2,15 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build Native: Debug Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_test",
+            "label": "Build Native: Debug STL Test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_stl_test",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Native: Debug Arrow Test",
+            // Both must pass builds
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_arrow_client_test ukv_arrow_server",
             "args": [],
             "type": "shell"
         },

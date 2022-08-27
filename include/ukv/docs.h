@@ -63,6 +63,7 @@ typedef enum {
 
     ukv_format_csv_k = 4180,
     ukv_format_arrow_k = 14,
+    ukv_format_parquet_k = 15,
 
     // Generic text-based formats, that  generally come in long chunks
     // would benefit from compression and may require full-text search.
@@ -109,8 +110,6 @@ typedef enum {
 
     ukv_type_any_k = 0xFFFFFFFF,
 } ukv_type_t;
-
-typedef uint8_t ukv_1x8_t;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -172,6 +171,8 @@ void ukv_docs_write( //
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
 
+    ukv_1x8_t const* presences,
+
     ukv_arena_t* arena,
     ukv_error_t* error);
 
@@ -221,6 +222,7 @@ void ukv_docs_read( //
     ukv_val_ptr_t* found_values,
     ukv_val_len_t** found_offsets,
     ukv_val_len_t** found_lengths,
+    ukv_1x8_t** found_presences,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -249,6 +251,7 @@ void ukv_docs_gist( //
     ukv_options_t const options,
 
     ukv_size_t* found_fields_count,
+    ukv_val_len_t** found_offsets,
     ukv_str_view_t* found_fields,
 
     ukv_arena_t* arena,
