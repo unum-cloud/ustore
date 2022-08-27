@@ -163,6 +163,13 @@ struct py_docs_col_t {
     py_docs_col_t(py_docs_col_t const&) = delete;
 };
 
+template <typename native_at>
+struct py_stream_with_ending_gt {
+    native_at native;
+    ukv_key_t terminal = ukv_key_unknown_k;
+    bool stop = false;
+};
+
 /**
  * @brief Binds DBMS to Python, as if it was `dict[str, dict[int, bytes]]`.
  *

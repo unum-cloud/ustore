@@ -224,34 +224,137 @@ def test_main_collection_txn_ctx():
             only_explicit_batch(txn.main)
 
 
-def test_docs():
-    db = ukv.DataBase()
-    doc_col = db['col'].docs
-    json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
-    doc_col.set(1, json)
-    assert doc_col.get(1) == json
+def doc_iterate(col):
+    keys = [1, 2, 3]
+    jsons = [{'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24},
+             {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Age': 27},
+             {'Name': 'Darvin', 'Surname': 'Harutyunyan', 'Age': 27}]
 
-    # JSON PATCHING
+    col.set(keys, jsons)
+
+    list_of_keys = list()
+    list_of_vals = list()
+
+    for key in col.keys:
+        list_of_keys.append(key)
+    assert list_of_keys == keys
+
+    list_of_keys.clear()
+    for key in col.keys.since(2):
+        list_of_keys.append(key)
+    assert list_of_keys == keys[1:]
+
+    list_of_keys.clear()
+    for key in col.keys.until(2):
+        list_of_keys.append(key)
+    assert list_of_keys == keys[:2]
+
+    list_of_keys.clear()
+    for key, value in col.items:
+        list_of_keys.append(key)
+        list_of_vals.append(value)
+    assert list_of_keys == keys
+    assert list_of_vals == jsons
+
+    list_of_keys.clear()
+    list_of_vals.clear()
+    for key, value in col.items.since(2):
+        list_of_keys.append(key)
+        list_of_vals.append(value)
+    assert list_of_keys == keys[1:]
+    assert list_of_vals == jsons[1:]
+
+    list_of_keys.clear()
+    list_of_vals.clear()
+    for key, value in col.items.until(2):
+        list_of_keys.append(key)
+        list_of_vals.append(value)
+    assert list_of_keys == keys[:2]
+    assert list_of_vals == jsons[:2]
+    col.clear()
+
+
+def doc_scan(col):
+    keys = [1, 2, 3]
+    jsons = [{'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24},
+             {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Age': 27},
+             {'Name': 'Darvin', 'Surname': 'Harutyunyan', 'Age': 27}]
+
+    col.set(keys, jsons)
+    assert np.array_equal(col.scan(1, 3), [1, 2, 3])
+    col.clear()
+
+
+def doc_patching(col):
+    json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
+    col.set(1, json)
     json_to_patch = [
         {"op": "replace", "path": "/Name", "value": "Ashot"},
         {"op": "add", "path": "/Hello", "value": "World"},
         {"op": "remove", "path": "/Age"}
     ]
     new_json = {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Hello': 'World'}
-    doc_col.patch(1, json_to_patch)
-    assert doc_col.get(1) == new_json
+    col.patch(1, json_to_patch)
+    assert col.get(1) == new_json
+    col.clear()
 
-    # JSON MERGING
-    json_to_merge = {"Name": "Davit", "Age": 24}
-    new_json = {'Name': 'Davit', 'Surname': 'Vardanyan',
-                'Age': 24, 'Hello': "World"}
-    doc_col.merge(1, json_to_merge)
-    assert doc_col.get(1) == new_json
 
-    json = {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Age': 27}
-    doc_col[1] = json
-    assert doc_col[1] == json
+def doc_merging(col):
+    json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
+    col.set(1, json)
 
-    assert doc_col.has_key(1)
-    del doc_col[1]
+    json_to_merge = {"Name": "Ashot", "Age": 27, 'Hello': "World"}
+    new_json = {'Name': 'Ashot', 'Surname': 'Vardanyan',
+                'Age': 27, 'Hello': "World"}
+
+    col.merge(1, json_to_merge)
+    assert col.get(1) == new_json
+    col.clear()
+
+
+def test_docs():
+    db = ukv.DataBase()
+    col = db['doc_col'].docs
+    doc_scan(col)
+    doc_iterate(col)
+    doc_merging(col)
+    doc_patching(col)
+
+    json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
+    col.set(1, json)
+    assert col.get(1) == json
+
+    assert 1 in col
+    del col[1]
+    assert 1 not in col
+
+
+def test_docs_batch():
+    db = ukv.DataBase()
+    doc_col = db['batch_col'].docs
+
+    # Batch Set
+    keys = [1, 2]
+    jsons = [{'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24},
+             {'Name': 'Ashot', 'Surname': 'Vardanyan', 'Age': 27}]
+    doc_col.set(keys, jsons)
+    assert doc_col.get(keys) == jsons
+
+    # Invalid Arguments
+    with pytest.raises(Exception):
+        doc_col.set([1, 2, 3], jsons)
+    with pytest.raises(Exception):
+        doc_col.set([1], jsons)
+
+    # Set same value to multiple keys
+    json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
+    doc_col.set(keys, json)
+    received_jsons = doc_col.get(keys)
+    assert len(received_jsons) == 2
+    assert received_jsons[0] == json
+    assert received_jsons[1] == json
+
+    # Batch Remove
+    doc_col.remove(keys)
     assert 1 not in doc_col
+    assert 2 not in doc_col
