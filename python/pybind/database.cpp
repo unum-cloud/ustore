@@ -39,16 +39,6 @@ static std::unique_ptr<py_col_t> punned_txn_collection(py_txn_t& txn, std::strin
     return punned_collection(txn.py_db_ptr.lock(), txn.shared_from_this(), collection);
 }
 
-template <typename native_at>
-struct py_stream_with_ending_gt {
-    native_at native;
-    ukv_key_t terminal = ukv_key_unknown_k;
-    bool stop = false;
-};
-
-using py_kstream_t = py_stream_with_ending_gt<keys_stream_t>;
-using py_kvstream_t = py_stream_with_ending_gt<pairs_stream_t>;
-
 template <typename range_at>
 range_at& since(range_at& range, ukv_key_t key) {
     range.members.since(key);
@@ -74,8 +64,10 @@ void ukv::wrap_database(py::module& m) {
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
     auto py_db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
     auto py_txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction", py::module_local());
-
     auto py_col = py::class_<py_col_t>(m, "Collection", py::module_local());
+
+    using py_kstream_t = py_stream_with_ending_gt<keys_stream_t>;
+    using py_kvstream_t = py_stream_with_ending_gt<pairs_stream_t>;
     auto py_krange = py::class_<keys_range_t>(m, "KeysRange", py::module_local());
     auto py_kvrange = py::class_<pairs_range_t>(m, "ItemsRange", py::module_local());
     auto py_kstream = py::class_<py_kstream_t>(m, "KeysStream", py::module_local());
