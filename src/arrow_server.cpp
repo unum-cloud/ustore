@@ -32,17 +32,6 @@ using namespace unum;
 using sys_clock_t = std::chrono::system_clock;
 using sys_time_t = std::chrono::time_point<sys_clock_t>;
 
-expected_gt<std::size_t> column_idx(ArrowSchema* schema_ptr, std::string_view name) {
-    auto begin = schema_ptr->children;
-    auto end = begin + schema_ptr->n_children;
-    auto it = std::find_if(begin, end, [=](ArrowSchema* column_schema) {
-        return std::string_view {column_schema->name} == name;
-    });
-    if (it == end)
-        return status_t {"Column not found!"};
-    return static_cast<std::size_t>(it - begin);
-}
-
 /**
  * @brief Searches for a "value" among key-value pairs passed in URI after path.
  * @param query_params  Must begin with "?" or "/".
@@ -55,8 +44,8 @@ std::optional<std::string_view> param_value(std::string_view query_params, std::
         return std::nullopt;
 
     char preceding_char = *(key_begin - 1);
-    bool not_part_of_bigger_key = (preceding_char != '?') & (preceding_char != '&') & (preceding_char != '/');
-    if (!not_part_of_bigger_key)
+    bool is_part_of_bigger_key = (preceding_char != '?') & (preceding_char != '&') & (preceding_char != '/');
+    if (is_part_of_bigger_key)
         return std::nullopt;
 
     auto value_begin = key_begin + param_name.size();
@@ -376,10 +365,15 @@ struct session_params_t {
 };
 
 session_params_t session_params(arf::ServerCallContext const& server_call, std::string_view uri) {
-    auto params = uri.substr(uri.find('?'));
 
     session_params_t result;
     result.session_id.client_id = parse_parse_client_id(server_call);
+
+    auto params_offs = uri.find('?');
+    if (params_offs == std::string_view::npos)
+        return result;
+
+    auto params = uri.substr(params_offs);
     result.txn = param_value(params, "txn=");
     if (result.txn)
         result.session_id.txn_id = parse_txn_id(*result.txn);
@@ -495,7 +489,11 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::Invalid("Missing collection name argument");
 
             // Upsert and fetch collection ID
-            ukv_col_t col_id = db_.collection(params.col->data()).throw_or_release();
+            auto maybe_col = db_.collection(params.col->data());
+            if (!maybe_col)
+                return ar::Status::ExecutionError(maybe_col.release_status().message());
+
+            ukv_col_t col_id = maybe_col.throw_or_ref();
             ukv_str_view_t col_config = get_null_terminated(action.body);
             ukv_col_open(db_, params.col->begin(), col_config, &col_id, status.member_ptr());
             if (!status)
@@ -798,7 +796,7 @@ class UKVService : public arf::FlightServerBase {
 
             auto batch = maybe_batch.ValueUnsafe();
             auto maybe_reader = ar::RecordBatchReader::Make({batch});
-            if (maybe_reader.ok())
+            if (!maybe_reader.ok())
                 return maybe_reader.status();
 
             // TODO: Pass right IPC options
