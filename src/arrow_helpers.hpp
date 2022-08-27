@@ -5,6 +5,7 @@
  * @brief Helper functions for Apache Arrow interoperability.
  */
 #pragma once
+#include <string_view>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wall"
@@ -94,6 +95,17 @@ ar::Status unpack_table( //
     std::shared_ptr<ar::RecordBatch> const& batch_ptr = maybe_batch.ValueUnsafe();
     ar_status = ar::ExportRecordBatch(*batch_ptr, &batch_c, nullptr);
     return ar_status;
+}
+
+inline expected_gt<std::size_t> column_idx(ArrowSchema* schema_c, std::string_view name) {
+    auto begin = schema_c->children;
+    auto end = begin + schema_c->n_children;
+    auto it = std::find_if(begin, end, [=](ArrowSchema* column_schema) {
+        return std::string_view {column_schema->name} == name;
+    });
+    if (it == end)
+        return status_t {"Column not found!"};
+    return static_cast<std::size_t>(it - begin);
 }
 
 /**

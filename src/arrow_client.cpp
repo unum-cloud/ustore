@@ -543,15 +543,16 @@ void ukv_col_open(
     }
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
-    // Can we somehow reuse the IPC-needed memory?
+    // TODO: Can we somehow reuse the IPC-needed memory?
     // Do we need to add that arena argument to every call?
     // ar::Status ar_status;
     // arrow_mem_pool_t pool(arena);
     // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "col_open&col={}", c_col_name);
-    action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c_col_config});
+    fmt::format_to(std::back_inserter(action.type), "col_open?col={}", c_col_name);
+    if (c_col_config)
+        action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c_col_config});
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
@@ -605,8 +606,18 @@ void ukv_col_list( //
     ArrowSchema schema_c;
     ArrowArray batch_c;
     ar_status = unpack_table(maybe_table, schema_c, batch_c);
-    if (!ar_status.ok())
-        *c_error = "Failed to unpack list of columns";
+    return_if_error(ar_status.ok(), c_error, args_combo_k, "Failed to unpack list of columns");
+
+    auto ids_column_idx = column_idx(&schema_c, "cols");
+    auto names_column_idx = column_idx(&schema_c, "names");
+    return_if_error(ids_column_idx && names_column_idx, c_error, args_combo_k, "Expecting two columns");
+
+    if (c_ids)
+        *c_ids = (ukv_col_t*)batch_c.children[*ids_column_idx]->buffers[1];
+    if (c_offsets)
+        *c_offsets = (ukv_val_len_t*)batch_c.children[*names_column_idx]->buffers[1];
+    if (c_names)
+        *c_names = (ukv_str_view_t)batch_c.children[*names_column_idx]->buffers[2];
 }
 
 void ukv_db_control( //

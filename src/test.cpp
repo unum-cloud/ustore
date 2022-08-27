@@ -187,17 +187,17 @@ void check_binary_collection(col_t& col) {
     check_length(ref, 0);
 
     // Check scans
-    // keys_range_t present_keys = col.keys();
-    // keys_stream_t present_it = present_keys.begin();
-    // auto expected_it = keys.begin();
-    // for (; expected_it != keys.end(); ++present_it, ++expected_it) {
-    //     EXPECT_EQ(*expected_it, *present_it);
-    // }
-    // EXPECT_TRUE(present_it.is_end());
+    keys_range_t present_keys = col.keys();
+    keys_stream_t present_it = present_keys.begin();
+    auto expected_it = keys.begin();
+    for (; expected_it != keys.end(); ++present_it, ++expected_it) {
+        EXPECT_EQ(*expected_it, *present_it);
+    }
+    EXPECT_TRUE(present_it.is_end());
 
     // Remove all of the values and check that they are missing
-    // EXPECT_TRUE(ref.erase());
-    // check_length(ref, ukv_val_len_missing_k);
+    EXPECT_TRUE(ref.erase());
+    check_length(ref, ukv_val_len_missing_k);
 }
 
 TEST(db, basic) {
@@ -216,6 +216,9 @@ TEST(db, named) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
+    EXPECT_TRUE(db["col1"]);
+    EXPECT_TRUE(db["col2"]);
+
     col_t col1 = *(db["col1"]);
     col_t col2 = *(db["col2"]);
 
@@ -226,8 +229,8 @@ TEST(db, named) {
     check_binary_collection(col1);
     check_binary_collection(col2);
 
-    _ = db.remove("col1");
-    _ = db.remove("col2");
+    EXPECT_TRUE(db.remove("col1"));
+    EXPECT_TRUE(db.remove("col2"));
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
     EXPECT_TRUE(db.clear());
