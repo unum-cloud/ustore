@@ -40,6 +40,8 @@ using generation_t = std::int64_t;
 constexpr std::size_t arrow_extra_offsets_k = 1;
 constexpr std::size_t arrow_bytes_alignment_k = 64;
 
+thread_local std::pmr::memory_resource* thrlocal_memres = std::pmr::new_delete_resource();
+
 inline std::size_t next_power_of_two(std::size_t x) {
     return 1ull << (sizeof(std::size_t) * CHAR_BIT - __builtin_clzll(x));
 }
@@ -277,6 +279,16 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
 };
 
 template <typename at>
+class polymorphic_allocator_t {
+  public:
+    using value_type = at;
+    using size_type = size_t;
+
+    void deallocate(at* ptr, size_t size) { thrlocal_memres->deallocate(ptr, sizeof(at) * size); }
+    at* allocate(size_t size) { return reinterpret_cast<at*>(thrlocal_memres->allocate(sizeof(at) * size)); }
+};
+
+template <typename at>
 struct span_gt {
     span_gt() noexcept : ptr_(nullptr), size_(0) {}
     span_gt(at* ptr, std::size_t sz) noexcept : ptr_(ptr), size_(sz) {}
@@ -313,7 +325,10 @@ struct stl_arena_t {
     explicit stl_arena_t( //
         std::size_t buffer_size = 1024ul * 1024ul,
         std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
-        : resource(buffer_size, 64ul, upstream) {}
+        : resource(buffer_size, 64ul, upstream) {
+        thrlocal_memres = &resource;
+    }
+    ~stl_arena_t() { thrlocal_memres = std::pmr::new_delete_resource(); }
 
     template <typename at>
     span_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
@@ -423,7 +438,7 @@ class file_handle_t {
             std::fclose(handle_);
     }
 
-    operator std::FILE*() const noexcept { return handle_; }
+    operator std::FILE *() const noexcept { return handle_; }
 };
 
 template <typename range_at, typename comparable_at>

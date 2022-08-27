@@ -26,7 +26,8 @@
 using namespace unum::ukv;
 using namespace unum;
 
-using json_t = nlohmann::json;
+using json_t =
+    nlohmann::basic_json<std::map, std::vector, std::string, bool, int64_t, uint64_t, double, polymorphic_allocator_t>;
 using json_ptr_t = json_t::json_pointer;
 
 constexpr ukv_format_t internal_format_k = ukv_format_msgpack_k;
@@ -182,7 +183,9 @@ class serializing_tape_ref_t {
 
     void push_back(json_t const& doc, ukv_format_t c_format, ukv_error_t* c_error) noexcept(false) {
         if (!shared_exporter_)
-            shared_exporter_ = std::make_shared<export_to_value_t>();
+            shared_exporter_ =
+                std::allocate_shared<export_to_value_t, std::pmr::polymorphic_allocator<export_to_value_t>>(
+                    &arena_.resource);
         shared_exporter_->value_ptr = &single_doc_buffer_;
 
         single_doc_buffer_.clear();
@@ -365,7 +368,8 @@ void replace_docs( //
 
     std::shared_ptr<export_to_value_t> heapy_exporter;
     try {
-        heapy_exporter = std::make_shared<export_to_value_t>();
+        heapy_exporter = std::allocate_shared<export_to_value_t, std::pmr::polymorphic_allocator<export_to_value_t>>(
+            &arena.resource);
     }
     catch (std::bad_alloc const&) {
         *c_error = "Out of memory!";
