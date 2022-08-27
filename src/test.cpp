@@ -8,6 +8,7 @@
 
 #include <unordered_set>
 #include <vector>
+#include <filesystem>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -23,7 +24,7 @@ using namespace unum;
 #define M_EXPECT_EQ_JSON(str1, str2) EXPECT_EQ(json_t::parse((str1)), json_t::parse((str2)));
 #define M_EXPECT_EQ_MSG(str1, str2) \
     EXPECT_EQ(json_t::from_msgpack((str1).c_str(), (str1).c_str() + (str1).size()), json_t::parse((str2)));
-
+#if 0
 TEST(db, intro) {
 
     db_t db;
@@ -61,7 +62,7 @@ TEST(db, intro) {
 
     // Reusable memory
     // This interface not just more performant, but also provides nicer interface:
-    //  expected_gt<tape_view_t> tapes = main[{100, 101}].on(arena);
+    //  expected_gt<joined_values_t> tapes = main[{100, 101}].on(arena);
     arena_t arena(db);
     _ = main[{43, 44}].on(arena).clear();
     _ = main[{43, 44}].on(arena).erase();
@@ -91,7 +92,10 @@ TEST(db, intro) {
     // Working with sub documents
     main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
     _ = main[ckf(56, "hello")].value() == "world";
+
+    EXPECT_TRUE(db.clear());
 }
+#endif
 
 template <typename locations_at>
 void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_length) {
@@ -99,16 +103,16 @@ void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_leng
     EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
 
     auto const expects_missing = expected_length == ukv_val_len_missing_k;
-    using extractor_t = keys_arg_extractor_gt<locations_at>;
+    using extractor_t = places_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<tape_view_t> retrieved_and_arena = ref.value();
-    tape_view_t const& retrieved = *retrieved_and_arena;
+    expected_gt<joined_values_t> retrieved_and_arena = ref.value();
+    joined_values_t const& retrieved = *retrieved_and_arena;
     ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
 
     // Check views
-    tape_iterator_t it = retrieved.begin();
+    joined_values_iterator_t it = retrieved.begin();
     for (std::size_t i = 0; i != count; ++i, ++it) {
         EXPECT_EQ((*it).size(), expects_missing ? 0 : expected_length);
     }
@@ -129,17 +133,17 @@ void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_leng
 }
 
 template <typename locations_at>
-void check_equalities(members_ref_gt<locations_at>& ref, values_arg_t values) {
+void check_equalities(members_ref_gt<locations_at>& ref, contents_arg_t values) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
-    using extractor_t = keys_arg_extractor_gt<locations_at>;
+    using extractor_t = places_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<tape_view_t> retrieved_and_arena = ref.value();
-    tape_view_t const& retrieved = *retrieved_and_arena;
+    expected_gt<joined_values_t> retrieved_and_arena = ref.value();
+    joined_values_t const& retrieved = *retrieved_and_arena;
     EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
-    tape_iterator_t it = retrieved.begin();
+    joined_values_iterator_t it = retrieved.begin();
     for (std::size_t i = 0; i != extractor_t {}.count(ref.locations()); ++i, ++it) {
         auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
         auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
@@ -152,20 +156,12 @@ void check_equalities(members_ref_gt<locations_at>& ref, values_arg_t values) {
 }
 
 template <typename locations_at>
-void round_trip(members_ref_gt<locations_at>& ref, values_arg_t values) {
+void round_trip(members_ref_gt<locations_at>& ref, contents_arg_t values) {
     EXPECT_TRUE(ref.assign(values)) << "Failed to assign";
     check_equalities(ref, values);
 }
 
-TEST(db, basic) {
-
-    db_t db;
-    EXPECT_TRUE(db.open(""));
-
-    // Try getting the main collection
-    EXPECT_TRUE(db.collection());
-    col_t col = *db.collection();
-
+void check_binary_collection(col_t& col) {
     std::vector<ukv_key_t> keys {34, 35, 36};
     ukv_val_len_t val_len = sizeof(std::uint64_t);
     std::vector<std::uint64_t> vals {34, 35, 36};
@@ -173,10 +169,11 @@ TEST(db, basic) {
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
     auto ref = col[keys];
-    values_arg_t values {
+    contents_arg_t values {
         .contents_begin = {&vals_begin, 0},
         .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
         .lengths_begin = {&val_len, 0},
+        .count = 3,
     };
     round_trip(ref, values);
 
@@ -201,6 +198,17 @@ TEST(db, basic) {
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
     check_length(ref, ukv_val_len_missing_k);
+}
+
+TEST(db, basic) {
+
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+
+    // Try getting the main collection
+    EXPECT_TRUE(db.collection());
+    col_t col = *db.collection();
+    check_binary_collection(col);
     EXPECT_TRUE(db.clear());
 }
 
@@ -208,62 +216,21 @@ TEST(db, named) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
+    EXPECT_TRUE(db["col1"]);
+    EXPECT_TRUE(db["col2"]);
+
     col_t col1 = *(db["col1"]);
     col_t col2 = *(db["col2"]);
 
-    ukv_val_len_t val_len = sizeof(std::uint64_t);
-    std::vector<ukv_key_t> keys {44, 45, 46};
-    std::vector<std::uint64_t> vals {44, 45, 46};
-    std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
-    auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
-
-    values_arg_t values {
-        .contents_begin = {&vals_begin, 0},
-        .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
-        .lengths_begin = {&val_len, 0},
-    };
-
-    auto ref1 = col1[keys];
-    auto ref2 = col2[keys];
     EXPECT_TRUE(*db.contains("col1"));
     EXPECT_TRUE(*db.contains("col2"));
     EXPECT_FALSE(*db.contains("unknown_col"));
-    round_trip(ref1, values);
-    round_trip(ref2, values);
 
-    // Check scans
-    keys_range_t present_keys1 = col1.keys();
-    keys_range_t present_keys2 = col2.keys();
-    keys_stream_t present_it1 = present_keys1.begin();
-    keys_stream_t present_it2 = present_keys2.begin();
-    auto expected_it1 = keys.begin();
-    auto expected_it2 = keys.begin();
-    for (; expected_it1 != keys.end() && expected_it2 != keys.end();
-         ++present_it1, ++expected_it1, ++present_it2, ++expected_it2) {
-        EXPECT_EQ(*expected_it1, *present_it1);
-        EXPECT_EQ(*expected_it2, *present_it2);
-    }
-    EXPECT_TRUE(present_it1.is_end());
-    EXPECT_TRUE(present_it2.is_end());
+    check_binary_collection(col1);
+    check_binary_collection(col2);
 
-    pairs_range_t present_item = col1.items();
-    pairs_stream_t present_item_it = present_item.begin();
-    auto expected_key_it = keys.begin();
-    for (size_t i = 0; expected_key_it != keys.end(); ++i, ++present_item_it, ++expected_key_it) {
-        EXPECT_EQ(*expected_key_it, present_item_it.key());
-
-        auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
-        auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
-
-        value_view_t val_view = present_item_it.value();
-        value_view_t expected_view(expected_begin, expected_begin + expected_len);
-        EXPECT_EQ(val_view.size(), expected_len);
-        EXPECT_EQ(val_view, expected_view);
-    }
-    EXPECT_TRUE(present_item_it.is_end());
-
-    _ = db.remove("col1");
-    _ = db.remove("col2");
+    EXPECT_TRUE(db.remove("col1"));
+    EXPECT_TRUE(db.remove("col2"));
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
     EXPECT_TRUE(db.clear());
@@ -284,9 +251,12 @@ TEST(db, docs) {
 
     // MsgPack
     col.as(ukv_format_msgpack_k);
-    M_EXPECT_EQ_MSG(*col[1].value(), json.c_str());
-    M_EXPECT_EQ_MSG(*col[ckf(1, "person")].value(), "\"Davit\"");
-    M_EXPECT_EQ_MSG(*col[ckf(1, "age")].value(), "24");
+    value_view_t val = *col[1].value();
+    M_EXPECT_EQ_MSG(val, json.c_str());
+    val = *col[ckf(1, "person")].value();
+    M_EXPECT_EQ_MSG(val, "\"Davit\"");
+    val = *col[ckf(1, "age")].value();
+    M_EXPECT_EQ_MSG(val, "24");
 
     // Binary
     col.as(ukv_format_binary_k);
@@ -458,10 +428,11 @@ TEST(db, txn) {
     std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
 
-    values_arg_t values {
+    contents_arg_t values {
         .contents_begin = {&vals_begin, 0},
         .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
         .lengths_begin = {&val_len, 0},
+        .count = 3,
     };
 
     auto txn_ref = txn[keys];
@@ -656,7 +627,7 @@ TEST(db, net_batch) {
 
         auto present_edges = *net.edges();
         auto present_it = std::move(present_edges).begin();
-        auto count_results = 0;
+        size_t count_results = 0ul;
         while (!present_it.is_end()) {
             exported_edges.insert(*present_it);
             ++present_it;
@@ -702,6 +673,7 @@ TEST(db, net_batch) {
 }
 
 int main(int argc, char** argv) {
+    std::filesystem::create_directory("./tmp");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

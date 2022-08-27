@@ -10,7 +10,7 @@
 #include <type_traits> // `std::void_t`
 
 #include "ukv/cpp/types.hpp"
-#include "ukv/cpp/ranges.hpp"
+#include "ukv/cpp/ranges_args.hpp"
 
 namespace unum::ukv {
 
@@ -93,7 +93,7 @@ template <>
 struct locations_in_collection_gt<ukv_key_t> : public col_key_field_t {};
 
 template <typename at, typename = void>
-struct keys_arg_extractor_gt {
+struct places_arg_extractor_gt {
     static_assert(!std::is_reference_v<at>);
 
     using location_t = at;
@@ -173,23 +173,25 @@ struct keys_arg_extractor_gt {
 };
 
 template <>
-struct keys_arg_extractor_gt<keys_arg_t> {
+struct places_arg_extractor_gt<places_arg_t> {
 
-    using location_t = keys_arg_t;
+    using location_t = places_arg_t;
     static constexpr bool is_one_k = false;
 
-    ukv_size_t count(keys_arg_t const& native) noexcept { return native.count; }
-    strided_iterator_gt<ukv_key_t const> keys(keys_arg_t const& native) noexcept { return native.keys_begin; }
-    strided_iterator_gt<ukv_col_t const> cols(keys_arg_t const& native) noexcept { return native.cols_begin; }
-    strided_iterator_gt<ukv_str_view_t const> fields(keys_arg_t const& native) noexcept { return native.fields_begin; }
+    ukv_size_t count(places_arg_t const& native) noexcept { return native.count; }
+    strided_iterator_gt<ukv_key_t const> keys(places_arg_t const& native) noexcept { return native.keys_begin; }
+    strided_iterator_gt<ukv_col_t const> cols(places_arg_t const& native) noexcept { return native.cols_begin; }
+    strided_iterator_gt<ukv_str_view_t const> fields(places_arg_t const& native) noexcept {
+        return native.fields_begin;
+    }
 };
 
 template <typename at>
-struct keys_arg_extractor_gt<locations_in_collection_gt<at>> {
+struct places_arg_extractor_gt<locations_in_collection_gt<at>> {
 
     using location_t = locations_in_collection_gt<at>;
-    using base_t = keys_arg_extractor_gt<at>;
-    static constexpr bool is_one_k = keys_arg_extractor_gt<at>::is_one_k;
+    using base_t = places_arg_extractor_gt<at>;
+    static constexpr bool is_one_k = places_arg_extractor_gt<at>::is_one_k;
 
     ukv_size_t count(location_t const& arg) noexcept { return base_t {}.count(arg.without.ref()); }
     strided_iterator_gt<ukv_key_t const> keys(location_t const& arg) noexcept {
@@ -202,13 +204,13 @@ struct keys_arg_extractor_gt<locations_in_collection_gt<at>> {
 };
 
 template <typename at>
-struct keys_arg_extractor_gt<at&> : public keys_arg_extractor_gt<at> {};
+struct places_arg_extractor_gt<at&> : public places_arg_extractor_gt<at> {};
 
 template <typename at, typename = void>
-struct values_arg_extractor_gt {};
+struct contents_arg_extractor_gt {};
 
 template <>
-struct values_arg_extractor_gt<char const**> {
+struct contents_arg_extractor_gt<char const**> {
     strided_iterator_gt<ukv_val_ptr_t const> contents(char const** strings) noexcept {
         return {(ukv_val_ptr_t const*)strings, sizeof(char const*)};
     }
@@ -217,7 +219,7 @@ struct values_arg_extractor_gt<char const**> {
 };
 
 template <>
-struct values_arg_extractor_gt<char const*> {
+struct contents_arg_extractor_gt<char const*> {
     strided_iterator_gt<ukv_val_ptr_t const> contents(char const*& one) noexcept {
         return {(ukv_val_ptr_t const*)&one, 0};
     }
@@ -226,7 +228,7 @@ struct values_arg_extractor_gt<char const*> {
 };
 
 template <size_t length_ak>
-struct values_arg_extractor_gt<char const [length_ak]> {
+struct contents_arg_extractor_gt<char const [length_ak]> {
     strided_iterator_gt<ukv_val_ptr_t const> contents(char const*& one) noexcept {
         return {(ukv_val_ptr_t const*)&one, 0};
     }
@@ -239,21 +241,21 @@ struct values_arg_extractor_gt<char const [length_ak]> {
 };
 
 template <>
-struct values_arg_extractor_gt<value_view_t> {
+struct contents_arg_extractor_gt<value_view_t> {
     strided_iterator_gt<ukv_val_ptr_t const> contents(value_view_t& one) noexcept { return {one.member_ptr(), 0}; }
     strided_iterator_gt<ukv_val_len_t const> offsets(value_view_t) noexcept { return {}; }
     strided_iterator_gt<ukv_val_len_t const> lengths(value_view_t& one) noexcept { return {one.member_length(), 0}; }
 };
 
 template <>
-struct values_arg_extractor_gt<values_arg_t> {
-    strided_iterator_gt<ukv_val_ptr_t const> contents(values_arg_t native) noexcept { return native.contents_begin; }
-    strided_iterator_gt<ukv_val_len_t const> offsets(values_arg_t native) noexcept { return native.offsets_begin; }
-    strided_iterator_gt<ukv_val_len_t const> lengths(values_arg_t native) noexcept { return native.lengths_begin; }
+struct contents_arg_extractor_gt<contents_arg_t> {
+    strided_iterator_gt<ukv_val_ptr_t const> contents(contents_arg_t native) noexcept { return native.contents_begin; }
+    strided_iterator_gt<ukv_val_len_t const> offsets(contents_arg_t native) noexcept { return native.offsets_begin; }
+    strided_iterator_gt<ukv_val_len_t const> lengths(contents_arg_t native) noexcept { return native.lengths_begin; }
 };
 
 template <>
-struct values_arg_extractor_gt<std::nullptr_t> {
+struct contents_arg_extractor_gt<std::nullptr_t> {
     strided_iterator_gt<ukv_val_ptr_t const> contents(std::nullptr_t) noexcept { return {}; }
     strided_iterator_gt<ukv_val_len_t const> offsets(std::nullptr_t) noexcept { return {}; }
     strided_iterator_gt<ukv_val_len_t const> lengths(std::nullptr_t) noexcept { return {}; }

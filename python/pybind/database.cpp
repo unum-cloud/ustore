@@ -26,6 +26,7 @@ static std::unique_ptr<py_col_t> punned_collection( //
     py_col->name = name;
     py_col->py_db_ptr = py_db_ptr;
     py_col->py_txn_ptr = py_txn_ptr;
+    py_col->in_txn = py_txn_ptr != nullptr;
     py_col->native = col_t {py_db_ptr->native, col, py_txn_ptr ? py_txn_ptr->native : ukv_txn_t(nullptr)};
     return py_col;
 }
@@ -37,15 +38,6 @@ static std::unique_ptr<py_col_t> punned_db_collection(py_db_t& db, std::string c
 static std::unique_ptr<py_col_t> punned_txn_collection(py_txn_t& txn, std::string const& collection) {
     return punned_collection(txn.py_db_ptr.lock(), txn.shared_from_this(), collection);
 }
-
-template <typename native_at>
-struct py_stream_with_ending_gt {
-    native_at native;
-    ukv_key_t terminal = ukv_key_unknown_k;
-};
-
-using py_kstream_t = py_stream_with_ending_gt<keys_stream_t>;
-using py_kvstream_t = py_stream_with_ending_gt<pairs_stream_t>;
 
 template <typename range_at>
 range_at& since(range_at& range, ukv_key_t key) {
@@ -72,8 +64,10 @@ void ukv::wrap_database(py::module& m) {
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
     auto py_db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
     auto py_txn = py::class_<py_txn_t, std::shared_ptr<py_txn_t>>(m, "Transaction", py::module_local());
-
     auto py_col = py::class_<py_col_t>(m, "Collection", py::module_local());
+
+    using py_kstream_t = py_stream_with_ending_gt<keys_stream_t>;
+    using py_kvstream_t = py_stream_with_ending_gt<pairs_stream_t>;
     auto py_krange = py::class_<keys_range_t>(m, "KeysRange", py::module_local());
     auto py_kvrange = py::class_<pairs_range_t>(m, "ItemsRange", py::module_local());
     auto py_kstream = py::class_<py_kstream_t>(m, "KeysStream", py::module_local());
@@ -109,6 +103,7 @@ void ukv::wrap_database(py::module& m) {
     py_col.def("has_key", &has_binary); // Similar to Python 2
     py_col.def("get", &read_binary);
     py_col.def("update", &update_binary);
+    py_col.def("broadcast", &broadcast_binary);
     py_col.def("scan", &scan_binary);
     py_col.def("__setitem__", &write_binary);
     py_col.def("__delitem__", &remove_binary);
@@ -204,10 +199,16 @@ void ukv::wrap_database(py::module& m) {
         auto py_graph = std::make_shared<py_graph_t>();
         py_graph->py_db_ptr = py_col.py_db_ptr;
         py_graph->py_txn_ptr = py_col.py_txn_ptr;
+        py_graph->in_txn = py_col.in_txn;
         py_graph->index = py_col.native;
         return py::cast(py_graph);
     });
-    py_col.def_property_readonly("docs", [](py_col_t& py_col) { return 0; });
+    py_col.def_property_readonly("docs", [](py_col_t& py_col) {
+        auto py_docs = std::make_unique<py_docs_col_t>();
+        py_docs->binary = py_col;
+        py_docs->binary.native.as(ukv_format_json_k);
+        return py_docs;
+    });
     py_col.def_property_readonly("media", [](py_col_t& py_col) { return 0; });
 
 #pragma region Streams and Ranges
@@ -219,28 +220,34 @@ void ukv::wrap_database(py::module& m) {
     py_kvrange.def("since", &since<pairs_range_t>);
     py_kvrange.def("until", &until<pairs_range_t>);
 
-    py_krange.def("__getitem__", [](keys_range_t& keys_range, py::slice slice) {
-        Py_ssize_t start = 0, stop = 0, step = 0;
-        if (PySlice_Unpack(slice.ptr(), &start, &stop, &step) || step != 1 || start >= stop)
-            throw std::invalid_argument("Invalid Slice");
-        keys_stream_t stream = keys_range.members.keys_begin(stop).throw_or_release();
-        auto keys = stream.keys_batch();
-        auto remaining = std::min<Py_ssize_t>(stop - start, keys.size() - start);
-        return py::array(remaining, keys.begin() + start);
-    });
+    // Using slices on the keys view is too cumbersome!
+    // It's never clear if we want a range of IDs or offsets.
+    // Offsets seems to be the Python-ic way, yet Pandas matches against labels.
+    // Furthermore, skipping with offsets will be very inefficient in the underlying
+    // DBMS implementations, unlike seeking to key.
+    // py_krange.def("__getitem__", [](keys_range_t& keys_range, py::slice slice) {
+    //     Py_ssize_t start = 0, stop = 0, step = 0;
+    //     if (PySlice_Unpack(slice.ptr(), &start, &stop, &step) || step != 1 || start >= stop)
+    //         throw std::invalid_argument("Invalid Slice");
+    //     keys_stream_t stream = keys_range.members.keys_begin(stop).throw_or_release();
+    //     auto keys = stream.keys_batch();
+    //     auto remaining = std::min<Py_ssize_t>(stop - start, keys.size() - start);
+    //     return py::array(remaining, keys.begin() + start);
+    // });
 
     py_kstream.def("__next__", [](py_kstream_t& kstream) {
         ukv_key_t key = kstream.native.key();
-        if (kstream.native.is_end() || kstream.terminal == key)
+        if (kstream.native.is_end() || kstream.stop)
             throw py::stop_iteration();
+        kstream.stop = kstream.terminal == key;
         ++kstream.native;
         return key;
     });
     py_kvstream.def("__next__", [](py_kvstream_t& kvstream) {
         ukv_key_t key = kvstream.native.key();
-        if (kvstream.native.is_end() || kvstream.terminal == key)
+        if (kvstream.native.is_end() || kvstream.stop)
             throw py::stop_iteration();
-
+        kvstream.stop = kvstream.terminal == key;
         value_view_t value_view = kvstream.native.value();
         PyObject* value_ptr = PyBytes_FromStringAndSize(value_view.c_str(), value_view.size());
         ++kvstream.native;

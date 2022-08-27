@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-rm -rf build && rm -rf CMakeCache.txt && cmake . && make -j 4 &&
+rm -rf build && rm -rf CMakeCache.txt && cmake . && make -j 4 ukv_stl &&
     pip install --upgrade --force-reinstall . && pytest --capture=no python/

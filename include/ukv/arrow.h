@@ -20,10 +20,10 @@ extern "C" {
 
 #include "ukv/docs.h"
 
-// if __has_include ("arrow/c/abi.h")
-// #define ARROW_C_DATA_INTERFACE 1
-// #define ARROW_C_STREAM_INTERFACE 1
-// #endif
+#if __has_include("arrow/c/abi.h") && !defined(ARROW_C_DATA_INTERFACE)
+#define ARROW_C_DATA_INTERFACE 1
+#define ARROW_C_STREAM_INTERFACE 1
+#endif
 
 #ifndef ARROW_C_DATA_INTERFACE
 #define ARROW_C_DATA_INTERFACE
@@ -106,7 +106,7 @@ static char const* ukv_type_to_arrow_format(ukv_type_t const field_type) {
 static void release_malloced_schema(struct ArrowSchema* schema) {
     for (int64_t i = 0; i < schema->n_children; ++i) {
         struct ArrowSchema* child = schema->children[i];
-        if (child->release != NULL)
+        if (child && child->release != NULL)
             child->release(child);
     }
     free(schema->children);
@@ -117,7 +117,7 @@ static void release_malloced_array(struct ArrowArray* array) {
     // Free children
     for (int64_t i = 0; i < array->n_children; ++i) {
         struct ArrowArray* child = array->children[i];
-        if (child->release != NULL)
+        if (child && child->release != NULL)
             child->release(child);
     }
     free(array->children);
@@ -153,11 +153,11 @@ static void ukv_to_arrow_schema( //
     array->offset = 0;
     array->null_count = 0;
     array->n_buffers = 1;
-    array->n_children = 2;
+    array->n_children = static_cast<int64_t>(fields_count);
     array->dictionary = NULL;
     array->release = &release_malloced_array;
     array->buffers = (void const**)malloc(sizeof(void*) * array->n_buffers);
-    array->buffers[0] = NULL; // no nulls, so bitmap can be omitted
+    array->buffers[0] = NULL; // no presences, so bitmap can be omitted
     array->children = (ArrowArray**)malloc(sizeof(struct ArrowArray*) * array->n_children);
 
     if (!schema->children || !array->buffers || !array->children) {
@@ -187,7 +187,7 @@ static void ukv_to_arrow_column( //
 
     ukv_1x8_t const* column_validities,
     ukv_val_len_t const* column_offsets,
-    ukv_val_ptr_t const column_contents,
+    void const* column_contents,
 
     struct ArrowSchema* schema,
     struct ArrowArray* array,
@@ -205,7 +205,6 @@ static void ukv_to_arrow_column( //
 
     // Export the data
     switch (field_type) {
-    case ukv_type_null_k: array->n_buffers = 0; break;
     case ukv_type_bool_k:
     case ukv_type_uuid_k:
     case ukv_type_i8_k:
@@ -221,6 +220,8 @@ static void ukv_to_arrow_column( //
     case ukv_type_f64_k: array->n_buffers = 2; break;
     case ukv_type_bin_k:
     case ukv_type_str_k: array->n_buffers = 3; break;
+    case ukv_type_null_k: array->n_buffers = 0; break;
+    default: array->n_buffers = 0; break;
     }
     array->length = docs_count;
     array->offset = 0;
@@ -255,25 +256,25 @@ static void ukv_to_arrow_column( //
  *                          stored in documents under the same key.
  */
 static void ukv_to_arrow_stream( //
-    ukv_t const db,
-    ukv_txn_t const txn,
-    ukv_size_t const fields_count,
+    ukv_t const,
+    ukv_txn_t const,
+    ukv_size_t const,
 
-    ukv_size_t const docs_per_batch,
-    ukv_key_t const min_key,
-    ukv_key_t const max_key,
+    ukv_size_t const,
+    ukv_key_t const,
+    ukv_key_t const,
 
-    ukv_col_t const* collections,
-    ukv_size_t const collections_stride,
+    ukv_col_t const*,
+    ukv_size_t const,
 
-    ukv_str_view_t const* fields,
-    ukv_size_t const fields_stride,
+    ukv_str_view_t const*,
+    ukv_size_t const,
 
-    ukv_type_t const* types,
-    ukv_size_t const types_stride,
+    ukv_type_t const*,
+    ukv_size_t const,
 
-    struct ArrowArrayStream* stream,
-    ukv_arena_t* arena) {
+    struct ArrowArrayStream*,
+    ukv_arena_t*) {
 }
 
 #ifdef __cplusplus
