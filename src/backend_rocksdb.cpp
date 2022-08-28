@@ -472,8 +472,8 @@ void ukv_scan( //
     ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
-    ukv_key_t const* c_min_keys,
-    ukv_size_t const c_min_keys_stride,
+    ukv_key_t const* c_start_keys,
+    ukv_size_t const c_start_keys_stride,
 
     ukv_size_t const* c_scan_lengths,
     ukv_size_t const c_scan_lengths_stride,
@@ -497,7 +497,7 @@ void ukv_scan( //
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
-    strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_size_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
     scans_arg_t tasks {cols, keys, lengths, c_min_tasks_count};
 
@@ -560,11 +560,11 @@ void ukv_size( //
     ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
-    ukv_key_t const* c_min_keys,
-    ukv_size_t const c_min_keys_stride,
+    ukv_key_t const* c_start_keys,
+    ukv_size_t const c_start_keys_stride,
 
-    ukv_key_t const* c_max_keys,
-    ukv_size_t const c_max_keys_stride,
+    ukv_key_t const* c_end_keys,
+    ukv_size_t const c_end_keys_stride,
 
     ukv_options_t const,
 
@@ -583,8 +583,8 @@ void ukv_size( //
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
-    strided_iterator_gt<ukv_key_t const> min_keys {c_min_keys, c_min_keys_stride};
-    strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
+    strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
+    strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
     rocksdb::SizeApproximationOptions options;
 
     rocksdb::Range range;
@@ -595,8 +595,8 @@ void ukv_size( //
 
     for (ukv_size_t i = 0; i != n; ++i) {
         auto col = rocks_collection(db, cols[i]);
-        ukv_key_t const min_key = min_keys[i];
-        ukv_key_t const max_key = max_keys[i];
+        ukv_key_t const min_key = start_keys[i];
+        ukv_key_t const max_key = end_keys[i];
         range = rocksdb::Range(to_slice(min_key), to_slice(max_key));
         try {
             status = db.native->GetApproximateSizes(options, col, &range, 1, &approximate_size);
@@ -619,7 +619,7 @@ void ukv_size( //
     }
 }
 
-void ukv_col_open(
+void ukv_col_upsert(
     // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,

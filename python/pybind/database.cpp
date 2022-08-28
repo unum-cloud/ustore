@@ -19,7 +19,7 @@ static std::unique_ptr<py_col_t> punned_collection( //
 
     status_t status;
     ukv_col_t col = ukv_col_main_k;
-    ukv_col_open(py_db_ptr->native, name.c_str(), nullptr, &col, status.member_ptr());
+    ukv_col_upsert(py_db_ptr->native, name.c_str(), nullptr, &col, status.member_ptr());
     status.throw_unhandled();
 
     auto py_col = std::make_unique<py_col_t>();
