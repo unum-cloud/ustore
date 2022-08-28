@@ -51,6 +51,12 @@ struct stl_value_t {
     buffer_t buffer;
     generation_t generation {0};
     bool is_deleted {false};
+
+    void reset(generation_t gen) {
+        is_deleted = true;
+        generation = gen;
+        buffer.clear();
+    }
 };
 
 struct stl_col_t {
@@ -615,8 +621,8 @@ void ukv_scan( //
     ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
-    ukv_key_t const* c_min_keys,
-    ukv_size_t const c_min_keys_stride,
+    ukv_key_t const* c_start_keys,
+    ukv_size_t const c_start_keys_stride,
 
     ukv_size_t const* c_scan_lengths,
     ukv_size_t const c_scan_lengths_stride,
@@ -637,7 +643,7 @@ void ukv_scan( //
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
-    strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
     scans_arg_t scans {cols, keys, lens, c_min_tasks_count};
 
@@ -653,11 +659,11 @@ void ukv_size( //
     ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
-    ukv_key_t const* c_min_keys,
-    ukv_size_t const c_min_keys_stride,
+    ukv_key_t const* c_start_keys,
+    ukv_size_t const c_start_keys_stride,
 
-    ukv_key_t const* c_max_keys,
-    ukv_size_t const c_max_keys_stride,
+    ukv_key_t const* c_end_keys,
+    ukv_size_t const c_end_keys_stride,
 
     ukv_options_t const,
 
@@ -674,15 +680,15 @@ void ukv_size( //
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
-    strided_iterator_gt<ukv_key_t const> min_keys {c_min_keys, c_min_keys_stride};
-    strided_iterator_gt<ukv_key_t const> max_keys {c_max_keys, c_max_keys_stride};
+    strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
+    strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
 
     std::shared_lock _ {db.mutex};
 
     for (ukv_size_t i = 0; i != n; ++i) {
         stl_col_t const& col = stl_col(db, cols[i]);
-        ukv_key_t const min_key = min_keys[i];
-        ukv_key_t const max_key = max_keys[i];
+        ukv_key_t const min_key = start_keys[i];
+        ukv_key_t const max_key = end_keys[i];
         std::size_t deleted_count = 0;
 
         // Estimate the presence in the main store
@@ -725,7 +731,7 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_col_open(
+void ukv_col_upsert(
     // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
@@ -759,28 +765,43 @@ void ukv_col_open(
     }
 }
 
-void ukv_col_remove(
+void ukv_col_drop(
     // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
+    ukv_col_t c_col_id,
+    ukv_col_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
+    auto col_name = c_col_name ? std::string_view(c_col_name) : std::string_view();
+    bool invalidate = c_mode == ukv_col_drop_keys_vals_handle_k;
+    return_if_error(!col_name.empty() || !invalidate,
+                    c_error,
+                    args_combo_k,
+                    "Default collection can't be invlaidated.");
+
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
-    auto name_len = std::strlen(c_col_name);
-    if (!name_len) {
-        db.main.pairs.clear();
-        db.main.unique_elements = 0;
-    }
-    else {
-        auto col_name = std::string_view(c_col_name, name_len);
-        auto col_it = db.named.find(col_name);
-        if (col_it != db.named.end()) {
-            db.named.erase(col_it);
-        }
+
+    // We can't drop what is not present
+    auto col_it = db.named.find(col_name);
+    if (!col_name.empty() && col_it == db.named.end())
+        return;
+
+    stl_col_t& col = col_name.empty() ? db.main : *col_it->second.get();
+    if (c_mode == ukv_col_drop_keys_vals_handle_k)
+        db.named.erase(col_it);
+
+    else if (c_mode == ukv_col_drop_keys_vals_k)
+        col.pairs.clear(), col.unique_elements = 0;
+
+    else if (c_mode == ukv_col_drop_vals_k) {
+        generation_t gen = ++db.youngest_generation;
+        for (auto& kv : col.pairs)
+            kv.second.reset(gen);
     }
 }
 
@@ -967,9 +988,7 @@ void ukv_txn_commit( //
         if (key_iterator == col.pairs.end())
             continue;
 
-        key_iterator->second.is_deleted = true;
-        key_iterator->second.generation = txn.generation;
-        key_iterator->second.buffer.clear();
+        key_iterator->second.reset(txn.generation);
     }
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO

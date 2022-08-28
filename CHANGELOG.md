@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.0.3] - August 2022
+## [Unreleased] - September 2022
+
+### Added
+
+- Media deserialization and exports via TenPack.
+- Extending RPC to Document and Graph modalities.
+- Integer compression in Graphs.
+- Zero-copy forwarding for Arrow/NumPy PyBind arguments with matching types.
+
+## [0.3.0] - August 2022
 
 ### Added
 
@@ -13,9 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apache Arrow exports from Binary collections into columns of binary strings.
 - Apache Arrow tabular exports from Document collections.
 - Pandas-like interface for Document collections.
-- RPC server and client on top of UCX.
-- Media deserialization and exports.
+- RPC server and client with Apache Arrow.
 - Binary and document reads now also output validity bitsets for Arrow compatiability.
+- Separate calls for removing and clearing collections.
 
 ### Changed
 
@@ -49,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoLang basic interface for single-entry operations.
 - JNI interface with support for single operations and transactions.
 
-[Unreleased]: https://github.com/unum-cloud/UKV/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/unum-cloud/UKV/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/unum-cloud/UKV/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/unum-cloud/UKV/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/unum-cloud/UKV/releases/tag/v0.1.0
