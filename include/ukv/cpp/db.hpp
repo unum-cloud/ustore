@@ -274,7 +274,7 @@ class txn_t : public std::enable_shared_from_this<txn_t> {
     expected_gt<col_t> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
         ukv_col_t col = ukv_col_main_k;
-        ukv_col_open(db_, name, nullptr, &col, status.member_ptr());
+        ukv_col_upsert(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
@@ -363,7 +363,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
     expected_gt<col_t> collection(ukv_str_view_t name = "", ukv_format_t format = ukv_format_binary_k) noexcept {
         status_t status;
         ukv_col_t col = ukv_col_main_k;
-        ukv_col_open(db_, name, nullptr, &col, status.member_ptr());
+        ukv_col_upsert(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
@@ -372,7 +372,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
     status_t remove(ukv_str_view_t name) noexcept {
         status_t status;
-        ukv_col_remove(db_, name, status.member_ptr());
+        ukv_col_drop(db_, name, 0, ukv_col_drop_keys_vals_handle_k, status.member_ptr());
         return status;
     }
 

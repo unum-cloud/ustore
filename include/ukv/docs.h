@@ -111,6 +111,8 @@ typedef enum {
     ukv_type_any_k = 0xFFFFFFFF,
 } ukv_type_t;
 
+extern ukv_format_t ukv_format_docs_internal_k;
+
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
 /*********************************************************/

@@ -407,7 +407,7 @@ ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) {
  *
  * > write?col=x&txn=y&lengths&track&shared (DoPut)
  * > read?col=x&txn=y&flush (DoExchange)
- * > col_open?col=x (DoAction): Returns collection ID
+ * > col_upsert?col=x (DoAction): Returns collection ID
  *   Payload buffer: Collection opening config.
  * > col_remove?col=x (DoAction): Drops a collection
  * > txn_begin?txn=y (DoAction): Starts a transaction with a potentially custom ID
@@ -420,7 +420,7 @@ ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) {
  */
 class UKVService : public arf::FlightServerBase {
   public:
-    inline static arf::ActionType const kActionColOpen {"col_open", "Find a collection descriptor by name."};
+    inline static arf::ActionType const kActionColOpen {"col_upsert", "Find a collection descriptor by name."};
     inline static arf::ActionType const kActionColRemove {"col_remove", "Delete a named collection."};
     inline static arf::ActionType const kActionTxnBegin {"txn_begin", "Starts an ACID transaction and returns its ID."};
     inline static arf::ActionType const kActionTxnCommit {"txn_commit", "Commit a previously started transaction."};
@@ -495,7 +495,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_col_t col_id = maybe_col.throw_or_ref();
             ukv_str_view_t col_config = get_null_terminated(action.body);
-            ukv_col_open(db_, params.col->begin(), col_config, &col_id, status.member_ptr());
+            ukv_col_upsert(db_, params.col->begin(), col_config, &col_id, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_scalar(col_id);
@@ -507,7 +507,7 @@ class UKVService : public arf::FlightServerBase {
             if (!params.col)
                 return ar::Status::Invalid("Missing collection name argument");
 
-            ukv_col_remove(db_, params.col->begin(), status.member_ptr());
+            ukv_col_drop(db_, params.col->begin(), 0, ukv_col_drop_keys_vals_handle_k, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             return ar::Status::OK();

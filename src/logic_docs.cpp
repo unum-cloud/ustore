@@ -30,6 +30,7 @@ using json_t =
 using json_ptr_t = json_t::json_pointer;
 
 constexpr ukv_format_t internal_format_k = ukv_format_msgpack_k;
+ukv_format_t ukv_format_docs_internal_k = internal_format_k;
 
 static constexpr char const* true_k = "true";
 static constexpr char const* false_k = "false";

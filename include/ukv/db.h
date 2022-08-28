@@ -114,8 +114,21 @@ typedef enum {
      * Apache Arrow buffers or standardized Tensor representations.
      */
     ukv_option_read_shared_k = 0,
+    /**
+     * @brief When allowed, the underlying engine may avoid strict keys ordering
+     * and may include irrelevant (deleted & duplicate) keys in order to maximize
+     * throughput. The purpose is not accelerating the `ukv_scan`, but the
+     * following `ukv_read`. Generally used for Machine Learning applications.
+     */
+    ukv_option_scan_bulk_k = 0,
 
 } ukv_options_t;
+
+typedef enum {
+    ukv_col_drop_vals_k = 0,
+    ukv_col_drop_keys_vals_k = 1,
+    ukv_col_drop_keys_vals_handle_k = 2,
+} ukv_col_drop_mode_t;
 
 extern ukv_col_t ukv_col_main_k;
 extern ukv_val_len_t ukv_val_len_missing_k;
@@ -291,25 +304,26 @@ void ukv_write( //
  * @param[in] options        Read options:
  *                           > track: Adds collision-detection on keys read through txn.
  *                           > shared: Exports to shared memory to accelerate inter-process communication.
+ *                           > bulk: Suggests that the list of keys was received from a bulk scan.
  *
- * @param[out] found_values  Will contain the "base pointer" for @param tasks_count concatenated values.
+ * @param[out] values        Will contain the "base pointer" for @param tasks_count concatenated values.
  *                           Instead of allocating every "string" separately, we join them into
  *                           a single "tape" structure, which later be exported into (often disjoint)
  *                           runtime- or library-specific implementations. To determine the range of each
- *                           chunk use @param found_offsets and @param found_lengths.
- *                           Is @b optional, as you may only want @param found_lengths or @param found_presences.
+ *                           chunk use @param offsets and @param lengths.
+ *                           Is @b optional, as you may only want @param lengths or @param presences.
  *
- * @param[out] found_offsets Will contain a pointer to an array with @param tasks_count integers.
- *                           Each marks a response offset in bytes starting from @param found_values.
+ * @param[out] offsets       Will contain a pointer to an array with @param tasks_count integers.
+ *                           Each marks a response offset in bytes starting from @param values.
  *                           To be fully compatible with Apache Arrow we append one more offset at
  *                           at the end to allow inferring the length of the last entry without
- *                           using @param found_lengths.
- *                           Is @b optional, as you may only want @param found_lengths or @param found_presences.
+ *                           using @param lengths.
+ *                           Is @b optional, as you may only want @param lengths or @param presences.
  *
- * @param[out] found_lengths Will contain a pointer to an array with @param tasks_count integers.
+ * @param[out] lengths       Will contain a pointer to an array with @param tasks_count integers.
  *                           Each defines a response length in bytes. Is @b optional.
  *
- * @param[out] found_presences   Will contain a bitset with at least @param tasks_count bits.
+ * @param[out] presences     Will contain a bitset with at least @param tasks_count bits.
  *                           Each set bit means that such key is missing in DB. Is @b optional.
  *
  * @param[out] error         The error message to be handled by callee.
@@ -328,10 +342,10 @@ void ukv_read( //
 
     ukv_options_t const options,
 
-    ukv_val_ptr_t* found_values,
-    ukv_val_len_t** found_offsets,
-    ukv_val_len_t** found_lengths,
-    ukv_1x8_t** found_presences,
+    ukv_val_ptr_t* values,
+    ukv_val_len_t** offsets,
+    ukv_val_len_t** lengths,
+    ukv_1x8_t** presences,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -344,24 +358,26 @@ void ukv_read( //
  *
  * @param[in] db             Already open database instance, @see `ukv_db_open`.
  * @param[in] txn            Transaction or the snapshot, through which the
- * @param[in] tasks_count    Number of elements in @param keys.
+ * @param[in] tasks_count    Number of elements in @param start_keys.
  *
- * @param[in] collections    Array of collections owning the @param keys.
+ * @param[in] collections    Array of collections owning the @param start_keys.
  *                           If NULL is passed, the default collection is assumed.
  *                           If multiple collections are passed, the step between
  *                           them is equal to @param collections_stride @b bytes!
  *                           Zero stride would redirect all the keys to the same collection.
- * @param[in] keys           Array of keys in one or more collections.
+ *
+ * @param[in] start_keys     Array of first keys of interest in one or more collections.
  *                           If multiple keys are passed, the step between
- *                           them is equal to @param keys_stride @b bytes!
+ *                           them is equal to @param start_keys_stride @b bytes!
  *                           Zero stride is not allowed!
  *
  * @param[in] options        Read options:
  *                           > track: Adds collision-detection on keys read through txn.
  *                           > lengths: Will fetches lengths of values, after the keys.
+ *                           > bulk: Skips keys ordering and relevance checks for speed.
  *
- * @param[out] found_keys    Will contain columns of following keys for each task.
- * @param[out] found_counts  Will contain the height of each column (< scan_length).
+ * @param[out] keys          Will contain columns of following keys for each task.
+ * @param[out] counts        Will contain the height of each column (< scan_length).
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
@@ -374,16 +390,16 @@ void ukv_scan( //
     ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
-    ukv_key_t const* min_keys,
-    ukv_size_t const min_keys_stride,
+    ukv_key_t const* start_keys,
+    ukv_size_t const start_keys_stride,
 
     ukv_size_t const* scan_lengths,
     ukv_size_t const scan_lengths_stride,
 
     ukv_options_t const options,
 
-    ukv_size_t** found_counts,
-    ukv_key_t*** found_keys,
+    ukv_size_t** counts,
+    ukv_key_t*** keys,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -400,8 +416,8 @@ void ukv_scan( //
  *                           If multiple collections are passed, the step between
  *                           them is equal to @param collections_stride @b bytes!
  *                           Zero stride would redirect all the keys to the same collection.
- * @param[in] min_keys       For every task contains the beginning of range-of-interest.
- * @param[in] max_keys       For every task contains the ending of range-of-interest.
+ * @param[in] start_keys       For every task contains the beginning of range-of-interest.
+ * @param[in] end_keys       For every task contains the ending of range-of-interest.
  *
  * @param[out] estimates     For every task (range) will export @b six integers:
  *                           > min & max cardinality,
@@ -420,11 +436,11 @@ void ukv_size( //
     ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
-    ukv_key_t const* min_keys,
-    ukv_size_t const min_keys_stride,
+    ukv_key_t const* start_keys,
+    ukv_size_t const start_keys_stride,
 
-    ukv_key_t const* max_keys,
-    ukv_size_t const max_keys_stride,
+    ukv_key_t const* end_keys,
+    ukv_size_t const end_keys_stride,
 
     ukv_options_t const options,
 
@@ -445,14 +461,14 @@ void ukv_size( //
  * @param[in] db           Already open database instance, @see `ukv_db_open`.
  * @param[in] name         A NULL-terminated collection name.
  * @param[in] config       A NULL-terminated configuration string.
- * @param[out] collection  Address to which the collection handle will be exported.
+ * @param[out] id          Address to which the collection ID will be exported.
  * @param[out] error       The error message to be handled by callee.
  */
-void ukv_col_open( //
+void ukv_col_upsert( //
     ukv_t const db,
     ukv_str_view_t name,
     ukv_str_view_t config,
-    ukv_col_t* collection,
+    ukv_col_t* id,
     ukv_error_t* error);
 
 /**
@@ -467,24 +483,26 @@ void ukv_col_open( //
 void ukv_col_list( //
     ukv_t const db,
     ukv_size_t* count,
-    ukv_col_t** collections,
+    ukv_col_t** ids,
     ukv_val_len_t** offsets,
     ukv_str_view_t* names,
     ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
- * @brief Removes collection and all of its contents from DB.
- * The default nameless collection can't be removed, but it
- * will be @b cleared, if you pass a NULL as `name`.
+ * @brief Removes a collection or its contents depending on @param mode.
+ * The default nameless collection can't be removed, only cleared.
  *
  * @param[in] db      Already open database instance, @see `ukv_db_open`.
- * @param[in] name    A NULL-terminated collection name.
+ * @param[in] name    An optional NULL-terminated collection name.
+ * @param[in] id      If the name wasn't provided, we will match a collection by ID.
  * @param[out] error  The error message to be handled by callee.
  */
-void ukv_col_remove( //
+void ukv_col_drop( //
     ukv_t const db,
     ukv_str_view_t name,
+    ukv_col_t id,
+    ukv_col_drop_mode_t mode,
     ukv_error_t* error);
 
 /**
