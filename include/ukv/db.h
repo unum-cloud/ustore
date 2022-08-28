@@ -114,6 +114,13 @@ typedef enum {
      * Apache Arrow buffers or standardized Tensor representations.
      */
     ukv_option_read_shared_k = 0,
+    /**
+     * @brief When allowed, the underlying engine may avoid strict keys ordering
+     * and may include irrelevant (deleted & duplicate) keys in order to maximize
+     * throughput. The purpose is not accelerating the `ukv_scan`, but the
+     * following `ukv_read`. Generally used for Machine Learning applications.
+     */
+    ukv_option_scan_bulk_k = 0,
 
 } ukv_options_t;
 
@@ -297,6 +304,7 @@ void ukv_write( //
  * @param[in] options        Read options:
  *                           > track: Adds collision-detection on keys read through txn.
  *                           > shared: Exports to shared memory to accelerate inter-process communication.
+ *                           > bulk: Suggests that the list of keys was received from a bulk scan.
  *
  * @param[out] values        Will contain the "base pointer" for @param tasks_count concatenated values.
  *                           Instead of allocating every "string" separately, we join them into
@@ -350,24 +358,26 @@ void ukv_read( //
  *
  * @param[in] db             Already open database instance, @see `ukv_db_open`.
  * @param[in] txn            Transaction or the snapshot, through which the
- * @param[in] tasks_count    Number of elements in @param keys.
+ * @param[in] tasks_count    Number of elements in @param start_keys.
  *
- * @param[in] collections    Array of collections owning the @param keys.
+ * @param[in] collections    Array of collections owning the @param start_keys.
  *                           If NULL is passed, the default collection is assumed.
  *                           If multiple collections are passed, the step between
  *                           them is equal to @param collections_stride @b bytes!
  *                           Zero stride would redirect all the keys to the same collection.
- * @param[in] keys           Array of keys in one or more collections.
+ *
+ * @param[in] start_keys     Array of first keys of interest in one or more collections.
  *                           If multiple keys are passed, the step between
- *                           them is equal to @param keys_stride @b bytes!
+ *                           them is equal to @param start_keys_stride @b bytes!
  *                           Zero stride is not allowed!
  *
  * @param[in] options        Read options:
  *                           > track: Adds collision-detection on keys read through txn.
  *                           > lengths: Will fetches lengths of values, after the keys.
+ *                           > bulk: Skips keys ordering and relevance checks for speed.
  *
- * @param[out] found_keys    Will contain columns of following keys for each task.
- * @param[out] found_counts  Will contain the height of each column (< scan_length).
+ * @param[out] keys          Will contain columns of following keys for each task.
+ * @param[out] counts        Will contain the height of each column (< scan_length).
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
@@ -380,16 +390,16 @@ void ukv_scan( //
     ukv_col_t const* collections,
     ukv_size_t const collections_stride,
 
-    ukv_key_t const* min_keys,
-    ukv_size_t const min_keys_stride,
+    ukv_key_t const* start_keys,
+    ukv_size_t const start_keys_stride,
 
     ukv_size_t const* scan_lengths,
     ukv_size_t const scan_lengths_stride,
 
     ukv_options_t const options,
 
-    ukv_size_t** found_counts,
-    ukv_key_t*** found_keys,
+    ukv_size_t** counts,
+    ukv_key_t*** keys,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
