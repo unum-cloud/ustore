@@ -470,8 +470,8 @@ void ukv_scan( //
     ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
-    ukv_key_t const* c_min_keys,
-    ukv_size_t const c_min_keys_stride,
+    ukv_key_t const* c_start_keys,
+    ukv_size_t const c_start_keys_stride,
 
     ukv_size_t const* c_scan_lengths,
     ukv_size_t const c_scan_lengths_stride,
@@ -491,7 +491,7 @@ void ukv_scan( //
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
-    strided_iterator_gt<ukv_key_t const> keys {c_min_keys, c_min_keys_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
     scans_arg_t places {cols, keys, lens, c_min_tasks_count};
 }
@@ -504,11 +504,11 @@ void ukv_size( //
     ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
-    ukv_key_t const* c_min_keys,
-    ukv_size_t const c_min_keys_stride,
+    ukv_key_t const* c_start_keys,
+    ukv_size_t const c_start_keys_stride,
 
-    ukv_key_t const* c_max_keys,
-    ukv_size_t const c_max_keys_stride,
+    ukv_key_t const* c_end_keys,
+    ukv_size_t const c_end_keys_stride,
 
     ukv_options_t const,
 
@@ -526,7 +526,7 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_col_open(
+void ukv_col_upsert(
     // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
@@ -550,7 +550,7 @@ void ukv_col_open(
     // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "col_open?col={}", c_col_name);
+    fmt::format_to(std::back_inserter(action.type), "col_upsert?col={}", c_col_name);
     if (c_col_config)
         action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c_col_config});
 
