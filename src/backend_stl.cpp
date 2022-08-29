@@ -795,8 +795,10 @@ void ukv_col_drop(
     if (c_mode == ukv_col_drop_keys_vals_handle_k)
         db.named.erase(col_it);
 
-    else if (c_mode == ukv_col_drop_keys_vals_k)
-        col.pairs.clear(), col.unique_elements = 0;
+    else if (c_mode == ukv_col_drop_keys_vals_k) {
+        col.pairs.clear();
+        col.unique_elements = 0;
+    }
 
     else if (c_mode == ukv_col_drop_vals_k) {
         generation_t gen = ++db.youngest_generation;
