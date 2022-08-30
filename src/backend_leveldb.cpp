@@ -524,6 +524,49 @@ void ukv_col_upsert( //
         *c_error = "Collections not supported by LevelDB!";
 }
 
+void ukv_col_drop(
+    // Inputs:
+    ukv_t const c_db,
+    ukv_str_view_t c_col_name,
+    ukv_col_t c_col_id,
+    ukv_col_drop_mode_t c_mode,
+    // Outputs:
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+
+    auto col_name = c_col_name ? std::string_view(c_col_name) : std::string_view();
+    bool invalidate = c_mode == ukv_col_drop_keys_vals_handle_k;
+    return_if_error(!col_name.empty() || !invalidate,
+                    c_error,
+                    args_combo_k,
+                    "Default collection can't be invlaidated.");
+
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+
+    if (c_mode == ukv_col_drop_keys_vals_handle_k) {
+        // TODO
+    }
+
+    else if (c_mode == ukv_col_drop_keys_vals_k) {
+        leveldb::WriteBatch batch;
+        auto it = std::unique_ptr<leveldb::Iterator>(db.NewIterator(leveldb::ReadOptions()));
+        for (it->SeekToFirst(); it->Valid(); it->Next())
+            batch.Delete(it->key());
+        level_status_t status = db.Write(leveldb::WriteOptions(), &batch);
+        export_error(status, c_error);
+    }
+
+    else if (c_mode == ukv_col_drop_vals_k) {
+        leveldb::WriteBatch batch;
+        auto it = std::unique_ptr<leveldb::Iterator>(db.NewIterator(leveldb::ReadOptions()));
+        for (it->SeekToFirst(); it->Valid(); it->Next())
+            batch.Put(it->key(), 0);
+        level_status_t status = db.Write(leveldb::WriteOptions(), &batch);
+        export_error(status, c_error);
+    }
+}
+
 void ukv_col_remove( //
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
