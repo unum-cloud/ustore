@@ -140,7 +140,7 @@ static py::object has_one_binary(py_col_t& col, PyObject* key_py) {
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
-    auto options = static_cast<ukv_options_t>(col.options() | ukv_option_read_lengths_k);
+    auto options = static_cast<ukv_options_t>(col.options() /* | ukv_option_read_lengths_k */);
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
@@ -209,7 +209,7 @@ static py::object has_many_binaries(py_col_t& col, PyObject* keys_py) {
     ukv_val_ptr_t found_values = nullptr;
     ukv_val_len_t* found_offsets = nullptr;
     ukv_val_len_t* found_lengths = nullptr;
-    auto options = static_cast<ukv_options_t>(col.options() | ukv_option_read_lengths_k);
+    auto options = static_cast<ukv_options_t>(col.options() /* | ukv_option_read_lengths_k */);
 
     std::vector<ukv_key_t> keys;
     py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
