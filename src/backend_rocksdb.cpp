@@ -148,17 +148,17 @@ void write_one( //
 
     auto task = tasks[0];
     auto col = rocks_collection(db, task.col);
-    auto key = to_slice(task.key);
+    auto key = to_slice(task);
     rocks_status_t status;
 
     if (txn)
-        status = task.is_deleted() //
+        status = task //
                      ? txn->SingleDelete(col, key)
-                     : txn->Put(col, key, to_slice(task.view()));
+                     : txn->Put(col, key, to_slice(task));
     else
-        status = task.is_deleted() //
+        status = task //
                      ? db.native->SingleDelete(options, col, key)
-                     : db.native->Put(options, col, key, to_slice(task.view()));
+                     : db.native->Put(options, col, key, to_slice(task));
 
     export_error(status, c_error);
 }
@@ -174,10 +174,10 @@ void write_many( //
         for (std::size_t i = 0; i != tasks.size(); ++i) {
             auto task = tasks[i];
             auto col = rocks_collection(db, task.col);
-            auto key = to_slice(task.key);
-            auto status = task.is_deleted() //
+            auto key = to_slice(task);
+            auto status = task //
                               ? txn->Delete(col, key)
-                              : txn->Put(col, key, to_slice(task.view()));
+                              : txn->Put(col, key, to_slice(task));
             export_error(status, c_error);
         }
     }
@@ -186,10 +186,10 @@ void write_many( //
         for (std::size_t i = 0; i != tasks.size(); ++i) {
             auto task = tasks[i];
             auto col = rocks_collection(db, task.col);
-            auto key = to_slice(task.key);
-            auto status = task.is_deleted() //
+            auto key = to_slice(task);
+            auto status = task //
                               ? batch.Delete(col, key)
-                              : batch.Put(col, key, to_slice(task.view()));
+                              : batch.Put(col, key, to_slice(task));
             export_error(status, c_error);
         }
 
