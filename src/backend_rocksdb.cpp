@@ -451,11 +451,11 @@ void ukv_read( //
 
     try {
         if (c_tasks_count == 1) {
-            auto func = (c_options & ukv_option_read_lengths_k) ? &measure_one : &read_one;
+            auto func = (c_options /*  & ukv_option_read_lengths_k) */) ? &measure_one : &read_one;
             func(db, txn, tasks, options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
         }
         else {
-            auto func = (c_options & ukv_option_read_lengths_k) ? &measure_many : &read_many;
+            auto func = (c_options /* & ukv_option_read_lengths_k */) ? &measure_many : &read_many;
             func(db, txn, tasks, options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
         }
     }
@@ -501,7 +501,7 @@ void ukv_scan( //
     strided_iterator_gt<ukv_size_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
     scans_arg_t tasks {cols, keys, lengths, c_min_tasks_count};
 
-    bool export_lengths = (c_options & ukv_option_read_lengths_k);
+    bool export_lengths = (c_options /* & ukv_option_read_lengths_k */);
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
