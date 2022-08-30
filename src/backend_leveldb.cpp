@@ -114,8 +114,8 @@ void write_one( //
     ukv_error_t* c_error) {
 
     auto task = tasks[0];
-    auto key = to_slice(task.key);
-    level_status_t status = task.is_deleted() ? db.Delete(options, key) : db.Put(options, key, to_slice(task.view()));
+    auto key = to_slice(task);
+    level_status_t status = task ? db.Delete(options, key) : db.Put(options, key, to_slice(task));
     export_error(status, c_error);
 }
 
@@ -128,11 +128,11 @@ void write_many( //
     leveldb::WriteBatch batch;
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         auto task = tasks[i];
-        auto key = to_slice(task.key);
-        if (task.is_deleted())
+        auto key = to_slice(task);
+        if (task)
             batch.Delete(key);
         else
-            batch.Put(key, to_slice(task.view()));
+            batch.Put(key, to_slice(task));
     }
 
     level_status_t status = db.Write(options, &batch);
@@ -174,7 +174,7 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    contents_arg_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
+    contents_arg_t tasks {vals, offs, lens, cols, c_tasks_count};
 
     leveldb::WriteOptions options;
     if (c_options & ukv_option_write_flush_k)
