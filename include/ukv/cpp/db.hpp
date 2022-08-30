@@ -121,6 +121,18 @@ class col_t {
         return (maybe->min + maybe->max) / 2;
     }
 
+    status_t clear() noexcept {
+        status_t status;
+        ukv_col_drop(db_, nullptr, col_, ukv_col_drop_keys_vals_k, status.member_ptr());
+        return status;
+    }
+
+    status_t clear_values() noexcept {
+        status_t status;
+        ukv_col_drop(db_, nullptr, col_, ukv_col_drop_vals_k, status.member_ptr());
+        return status;
+    }
+
     inline members_ref_gt<places_arg_t> operator[](std::initializer_list<ukv_key_t> keys) noexcept { return at(keys); }
     inline members_ref_gt<places_arg_t> at(std::initializer_list<ukv_key_t> keys) noexcept { //
         return at(strided_range(keys));
