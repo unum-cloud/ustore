@@ -649,6 +649,60 @@ void ukv_col_upsert(
     }
 }
 
+void ukv_col_drop(
+    // Inputs:
+    ukv_t const c_db,
+    ukv_str_view_t c_col_name,
+    ukv_col_t c_col_id,
+    ukv_col_drop_mode_t c_mode,
+    // Outputs:
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+
+    auto col_name = c_col_name ? std::string_view(c_col_name) : std::string_view();
+    bool invalidate = c_mode == ukv_col_drop_keys_vals_handle_k;
+    return_if_error(!col_name.empty() || !invalidate,
+                    c_error,
+                    args_combo_k,
+                    "Default collection can't be invlaidated.");
+
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
+    if (c_mode == ukv_col_drop_keys_vals_handle_k) {
+        for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
+            if (c_col_name == (*it)->GetName() && (*it)->GetName() != "default") {
+                rocks_status_t status = db.native->DropColumnFamily(*it);
+                if (export_error(status, c_error))
+                    return;
+                db.columns.erase(it--);
+                break;
+            }
+        }
+    }
+
+    else if (c_mode == ukv_col_drop_keys_vals_k) {
+        rocksdb::WriteBatch batch;
+        auto col = db.native->DefaultColumnFamily();
+        auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), col));
+        for (it->SeekToFirst(); it->Valid(); it->Next())
+            batch.Delete(col, it->key());
+        rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
+        export_error(status, c_error);
+        return;
+    }
+
+    else if (c_mode == ukv_col_drop_vals_k) {
+        rocksdb::WriteBatch batch;
+        auto col = db.native->DefaultColumnFamily();
+        auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), col));
+        for (it->SeekToFirst(); it->Valid(); it->Next())
+            batch.Put(col, it->key(), 0);
+        rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
+        export_error(status, c_error);
+        return;
+    }
+}
+
 void ukv_col_remove( //
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
