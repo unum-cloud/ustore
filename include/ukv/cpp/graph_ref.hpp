@@ -114,13 +114,13 @@ class graph_ref_t {
         return status;
     }
 
-    status_t graph_ref_t::clear_edges() noexcept {
+    status_t clear_edges() noexcept {
         status_t status;
         ukv_col_drop(db_, nullptr, col_, ukv_col_drop_vals_k, status.member_ptr());
         return status;
     }
 
-    status_t graph_ref_t::clear() noexcept {
+    status_t clear() noexcept {
         status_t status;
         ukv_col_drop(db_, nullptr, col_, ukv_col_drop_keys_vals_k, status.member_ptr());
         return status;
