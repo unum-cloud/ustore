@@ -174,7 +174,7 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    contents_arg_t tasks {vals, offs, lens, , c_tasks_count};
+    contents_arg_t tasks {vals, offs, lens, {}, c_tasks_count};
 
     leveldb::WriteOptions options;
     if (c_options & ukv_option_write_flush_k)
@@ -353,7 +353,7 @@ void ukv_read( //
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     leveldb::ReadOptions options;
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    places_arg_t tasks {{}, keys, c_tasks_count};
+    places_arg_t tasks {{}, keys, {}, c_tasks_count};
 
     auto value_uptr = make_value(c_error);
     std::string& value = *value_uptr.get();

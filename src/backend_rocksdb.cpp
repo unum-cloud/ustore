@@ -231,7 +231,7 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    contents_arg_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
+    contents_arg_t tasks {vals, offs, lens, {}, c_tasks_count};
 
     rocksdb::WriteOptions options;
     if (c_options & ukv_option_write_flush_k)
@@ -442,7 +442,7 @@ void ukv_read( //
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols_stride {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys_stride {c_keys, c_keys_stride};
-    places_arg_t tasks {cols_stride, keys_stride, c_tasks_count};
+    places_arg_t tasks {cols_stride, keys_stride, {}, c_tasks_count};
     stl_arena_t arena = clean_arena(c_arena, c_error);
 
     rocksdb::ReadOptions options;
