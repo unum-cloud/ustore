@@ -152,11 +152,11 @@ void write_one( //
     rocks_status_t status;
 
     if (txn)
-        status = task //
+        status = !task //
                      ? txn->SingleDelete(col, key)
                      : txn->Put(col, key, to_slice(task));
     else
-        status = task //
+        status = !task //
                      ? db.native->SingleDelete(options, col, key)
                      : db.native->Put(options, col, key, to_slice(task));
 
@@ -187,7 +187,7 @@ void write_many( //
             auto task = tasks[i];
             auto col = rocks_collection(db, task.col);
             auto key = to_slice(task);
-            auto status = task //
+            auto status = !task //
                               ? batch.Delete(col, key)
                               : batch.Put(col, key, to_slice(task));
             export_error(status, c_error);

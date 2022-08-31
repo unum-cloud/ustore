@@ -129,7 +129,7 @@ void write_many( //
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         auto task = tasks[i];
         auto key = to_slice(task);
-        if (task)
+        if (!task)
             batch.Delete(key);
         else
             batch.Put(key, to_slice(task));
