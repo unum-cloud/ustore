@@ -578,17 +578,6 @@ void ukv_col_drop(
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
 }
 
-void ukv_col_remove(
-    // Inputs:
-    ukv_t const c_db,
-    ukv_str_view_t c_col_name,
-    // Outputs:
-    ukv_error_t* c_error) {
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
-}
-
 void ukv_col_list( //
     ukv_t const c_db,
     ukv_size_t* c_count,

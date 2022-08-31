@@ -567,25 +567,6 @@ void ukv_col_drop(
     }
 }
 
-void ukv_col_remove( //
-    ukv_t const c_db,
-    ukv_str_view_t c_col_name,
-    ukv_error_t* c_error) {
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-
-    if (c_col_name && std::strlen(c_col_name) && (*c_error = "Collections not supported by LevelDB!"))
-        return;
-
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    leveldb::WriteBatch batch;
-    auto it = std::unique_ptr<leveldb::Iterator>(db.NewIterator(leveldb::ReadOptions()));
-    for (it->SeekToFirst(); it->Valid(); it->Next())
-        batch.Delete(it->key());
-    level_status_t status = db.Write(leveldb::WriteOptions(), &batch);
-    export_error(status, c_error);
-}
-
 void ukv_col_list( //
     ukv_t const c_db,
     ukv_size_t* c_count,
