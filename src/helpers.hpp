@@ -219,10 +219,11 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
     static constexpr size_t growth_factor_k = 2;
 
     struct buffer_t {
-        void* begin;
-        size_t total_memory;
-        size_t available_memory;
+        void* begin = nullptr;
+        size_t total_memory = 0;
+        size_t available_memory = 0;
 
+        buffer_t() = default;
         buffer_t(void* bg, size_t tm, size_t am) : begin(bg), total_memory(tm), available_memory(am) {};
     };
 
@@ -251,8 +252,29 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
     }
 
     void release() noexcept {
-        for (auto buffer : buffers_)
-            release_one(buffer);
+        buffer_t buf;
+        while (true) {
+            buf = buffers_.front();
+            buffers_.pop_front();
+            if (buffers_.empty())
+                break;
+            release_one(buf);
+            upstream_->deallocate(buf.begin, buf.total_memory, alignment_);
+        }
+
+        buffers_.push_front(buf);
+    }
+
+    std::size_t capacity() const noexcept {
+        return type_ == borrowed_k
+                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->capacity()
+                   : std::accumulate(buffers_.begin(), buffers_.end(), 0, [](auto& buf) { return buf.total_memory });
+    }
+
+    std::size_t used() const noexcept {
+        return type_ == borrowed_k //
+                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->used()
+                   : capacity() - buffers_.front().available_memory;
     }
 
   private:
