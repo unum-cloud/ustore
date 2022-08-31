@@ -266,9 +266,10 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
     }
 
     std::size_t capacity() const noexcept {
-        return type_ == borrowed_k
-                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->capacity()
-                   : std::accumulate(buffers_.begin(), buffers_.end(), 0, [](auto& buf) { return buf.total_memory });
+        return type_ == borrowed_k ? reinterpret_cast<monotonic_resource_t*>(upstream_)->capacity()
+                                   : std::accumulate(buffers_.begin(), buffers_.end(), 0, [](size_t sum, auto& buf) {
+                                         return sum + buf.total_memory;
+                                     });
     }
 
     std::size_t used() const noexcept {
@@ -294,8 +295,8 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
         }
         else if (type_ == type_t::growing_k) {
             size_t new_size = buffers_.front().total_memory * growth_factor_k;
-            while (new_size < (bytes))
-                new_size *= growth_factor_k;
+            if (new_size < (bytes + alignment))
+                new_size = next_power_of_two(bytes + alignment);
             buffers_.emplace_front(upstream_->allocate(new_size, alignment), new_size, new_size);
             result = do_allocate(bytes, alignment);
         }
