@@ -11,6 +11,7 @@
 #include <memory>    // `std::allocator`
 #include <vector>    // `std::vector`
 #include <algorithm> // `std::sort`
+#include <forward_list>
 
 #if __APPLE__
 #include <experimental/memory_resource> // `std::pmr::vector`
@@ -211,67 +212,70 @@ class growing_tape_t {
 };
 
 class monotonic_resource_t final : public std::pmr::memory_resource {
+  public:
+    enum type_t { capped_k, growing_k, borrowed_k };
+
+  private:
+    static constexpr size_t growth_factor_k = 2;
+
+    struct buffer_t {
+        void* begin;
+        size_t total_memory;
+        size_t available_memory;
+
+        buffer_t(void* bg, size_t tm, size_t am) : begin(bg), total_memory(tm), available_memory(am) {};
+    };
+
+    std::forward_list<buffer_t> buffers_;
     std::pmr::memory_resource* upstream_;
-    void* begin_;
-    std::size_t alignment_;
-    std::size_t total_memory_;
-    std::size_t available_memory_;
-    bool borrowed_;
+    size_t alignment_;
+    type_t type_;
 
   public:
     explicit monotonic_resource_t(monotonic_resource_t* upstream) noexcept
-        : upstream_(upstream), begin_(nullptr), alignment_(upstream->alignment_), total_memory_(0),
-          available_memory_(0), borrowed_(true) {};
+        : buffers_(), upstream_(upstream), alignment_(upstream->alignment_), type_(type_t::borrowed_k) {};
 
-    monotonic_resource_t( //
-        std::size_t buffer_size,
-        std::size_t alignment,
-        std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
-        : upstream_(upstream), begin_(upstream->allocate(buffer_size, alignment)), alignment_(alignment),
-          total_memory_(buffer_size), available_memory_(buffer_size), borrowed_(false) {}
-
-    monotonic_resource_t(monotonic_resource_t&&) = delete;
-    monotonic_resource_t(monotonic_resource_t const&) = delete;
+    monotonic_resource_t(size_t buffer_size,
+                         size_t alignment,
+                         type_t type = type_t::capped_k,
+                         std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
+        : buffers_(), upstream_(upstream), alignment_(alignment), type_(type) {
+        buffers_.emplace_front(upstream->allocate(buffer_size, alignment), buffer_size, buffer_size);
+    }
 
     ~monotonic_resource_t() noexcept override {
-        if (begin_ && !borrowed_) {
-            release();
-            upstream_->deallocate(begin_, total_memory_, alignment_);
+        for (auto buffer : buffers_) {
+            release_one(buffer);
+            upstream_->deallocate(buffer.begin, buffer.total_memory, alignment_);
         }
     }
 
     void release() noexcept {
-        begin_ = (uint8_t*)(begin_) - (total_memory_ - available_memory_);
-        available_memory_ = total_memory_;
-    }
-
-    std::size_t capacity() const noexcept {
-        return borrowed_ //
-                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->capacity()
-                   : total_memory_;
-    }
-
-    std::size_t used() const noexcept {
-        return borrowed_ //
-                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->used()
-                   : (total_memory_ - available_memory_);
-    }
-
-    byte_t* begin() const noexcept {
-        return borrowed_ //
-                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->begin()
-                   : reinterpret_cast<byte_t*>(begin_);
+        for (auto buffer : buffers_)
+            release_one(buffer);
     }
 
   private:
+    void release_one(buffer_t& buffer) noexcept {
+        buffer.begin = (uint8_t*)(buffer.begin) - (buffer.total_memory - buffer.available_memory);
+        buffer.available_memory = buffer.total_memory;
+    }
+
     void* do_allocate(std::size_t bytes, std::size_t alignment) override {
-        if (borrowed_)
+        if (type_ == type_t::borrowed_k)
             return upstream_->allocate(bytes, alignment);
 
-        void* result = std::align(alignment, bytes, begin_, available_memory_);
+        void* result = std::align(alignment, bytes, buffers_.front().begin, buffers_.front().available_memory);
         if (result != nullptr) {
-            begin_ = (uint8_t*)begin_ + bytes;
-            available_memory_ -= bytes;
+            buffers_.front().begin = (uint8_t*)buffers_.front().begin + bytes;
+            buffers_.front().available_memory -= bytes;
+        }
+        else if (type_ == type_t::growing_k) {
+            size_t new_size = buffers_.front().total_memory * growth_factor_k;
+            while (new_size < (bytes))
+                new_size *= growth_factor_k;
+            buffers_.emplace_front(upstream_->allocate(new_size, alignment), new_size, new_size);
+            result = do_allocate(bytes, alignment);
         }
         return result;
     }
@@ -325,9 +329,10 @@ struct span_gt {
 struct stl_arena_t {
     explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept : resource(mem_resource) {}
     explicit stl_arena_t( //
-        std::size_t buffer_size = 1024ul * 1024ul,
+        std::size_t initial_buffer_size = 1024ul * 1024ul,
+        monotonic_resource_t::type_t type = monotonic_resource_t::capped_k,
         std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
-        : resource(buffer_size, 64ul, upstream) {
+        : resource(initial_buffer_size, 64ul, type, upstream) {
         thrlocal_memres = &resource;
     }
     ~stl_arena_t() { thrlocal_memres = std::pmr::get_default_resource(); }
