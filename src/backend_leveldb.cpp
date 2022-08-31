@@ -117,7 +117,7 @@ void write_one( //
     auto place = places[0];
     auto content = contents[0];
     auto key = to_slice(place.key);
-    level_status_t status = content ? db.Delete(options, key) : db.Put(options, key, to_slice(content));
+    level_status_t status = !content ? db.Delete(options, key) : db.Put(options, key, to_slice(content));
     export_error(status, c_error);
 }
 
