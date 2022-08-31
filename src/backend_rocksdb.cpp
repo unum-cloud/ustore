@@ -703,36 +703,6 @@ void ukv_col_drop(
     }
 }
 
-void ukv_col_remove( //
-    ukv_t const c_db,
-    ukv_str_view_t c_col_name,
-    ukv_error_t* c_error) {
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    if (!c_col_name || !std::strlen(c_col_name)) {
-        rocksdb::WriteBatch batch;
-        auto col = db.native->DefaultColumnFamily();
-        auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), col));
-        for (it->SeekToFirst(); it->Valid(); it->Next())
-            batch.Delete(col, it->key());
-        rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
-        export_error(status, c_error);
-        return;
-    }
-
-    for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-        if (c_col_name == (*it)->GetName() && (*it)->GetName() != "default") {
-            rocks_status_t status = db.native->DropColumnFamily(*it);
-            if (export_error(status, c_error))
-                return;
-            db.columns.erase(it--);
-            break;
-        }
-    }
-}
-
 void ukv_col_list( //
     ukv_t const c_db,
     ukv_size_t* c_count,
