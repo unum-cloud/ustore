@@ -347,7 +347,7 @@ void ukv_read( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = clean_arena(c_arena, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
@@ -399,7 +399,7 @@ void ukv_scan( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = clean_arena(c_arena, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
@@ -478,7 +478,7 @@ void ukv_size( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = clean_arena(c_arena, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
 
     *c_found_estimates = arena.alloc<ukv_size_t>(6 * n, c_error).begin();
