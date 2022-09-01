@@ -553,7 +553,6 @@ void ukv_read( //
 
     // 3. Pull the data, once we know the total length
     ukv_val_len_t progress_in_tape = 0;
-    ukv_val_len_t last_value_length = 0;
     auto tape = arena.alloc<byte_t>(total_length, c_error);
     auto data_enumerator = [&](std::size_t i, value_view_t value) {
         offs[i] = progress_in_tape;
