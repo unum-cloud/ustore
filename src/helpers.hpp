@@ -255,14 +255,18 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
     void release() noexcept {
         if (buffers_.empty())
             return;
-        for (auto begin = buffers_.before_begin(); std::next(begin, 2) != buffers_.end();) {
-            auto el = *std::next(begin);
-            release_one(el);
-            upstream_->deallocate(el.begin, el.total_memory, alignment_);
-            buffers_.erase_after(begin);
+
+        buffer_t buf = buffers_.front();
+        buffers_.pop_front();
+        while (!buffers_.empty()) {
+            buffers_.pop_front();
+            release_one(buf);
+            upstream_->deallocate(buf.begin, buf.total_memory, alignment_);
+            buf = buffers_.front();
         }
 
-        release_one(buffers_.front());
+        buffers_.push_front(buf);
+        release_one(buf);
     }
 
     std::size_t capacity() const noexcept {
