@@ -370,39 +370,45 @@ class db_t : public std::enable_shared_from_this<db_t> {
             return col_t {db_, col, nullptr, format};
     }
 
-    status_t remove(ukv_str_view_t name) noexcept {
+    status_t remove(ukv_str_view_t name, ukv_col_drop_mode_t mode = ukv_col_drop_keys_vals_handle_k) noexcept {
         status_t status;
-        ukv_col_drop(db_, name, 0, ukv_col_drop_keys_vals_handle_k, status.member_ptr());
+        ukv_col_drop(db_, name, 0, mode, status.member_ptr());
+        return status;
+    }
+
+    expected_gt<strings_tape_iterator_t> collection_names(arena_t& memory) {
+        ukv_size_t count = 0;
+        ukv_str_view_t names = nullptr;
+        status_t status;
+        ukv_col_list(db_, &count, nullptr, nullptr, &names, memory.member_ptr(), status.member_ptr());
+        return {std::move(status), {count, names}};
+    }
+
+    status_t clear(arena_t& memory) noexcept {
+        status_t status;
+        // Remove named collections
+        auto iter = collection_names(memory);
+        if (!iter)
+            return iter.release_status();
+        while (!iter->is_end()) {
+            status = remove(**iter);
+            if (!status)
+                return status;
+            iter->operator++();
+        }
+
+        // Remove main collection
+        status = remove(nullptr, ukv_col_drop_vals_k);
+        if (!status)
+            return status;
+
         return status;
     }
 
     status_t clear() noexcept {
-
-        // Remove main collection
-        status_t status = remove("");
-        if (!status)
-            return status;
-
         // Remove named collections
         arena_t memory(db_);
-        ukv_size_t count = 0;
-        ukv_col_t* collections = 0;
-        ukv_val_len_t* offsets = nullptr;
-        ukv_str_view_t names = nullptr;
-        ukv_col_list(db_, &count, &collections, &offsets, &names, memory.member_ptr(), status.member_ptr());
-        if (!status)
-            return status;
-
-        while (count) {
-            auto len = std::strlen(names);
-            status = remove(names);
-            if (!status)
-                return status;
-
-            names += len + 1;
-            --count;
-        }
-        return status;
+        return clear(memory);
     }
 
     expected_gt<txn_t> transact(bool snapshot = false) noexcept {
