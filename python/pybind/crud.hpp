@@ -137,10 +137,7 @@ static py::object has_one_binary(py_col_t& col, PyObject* key_py) {
 
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
-    ukv_val_ptr_t found_values = nullptr;
-    ukv_val_len_t* found_offsets = nullptr;
-    ukv_val_len_t* found_lengths = nullptr;
-    auto options = static_cast<ukv_options_t>(col.options() /* | ukv_option_read_lengths_k */);
+    ukv_1x8_t* presenses = nullptr;
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
@@ -151,16 +148,18 @@ static py::object has_one_binary(py_col_t& col, PyObject* key_py) {
                  0,
                  &key,
                  0,
-                 options,
-                 &found_values,
-                 &found_offsets,
-                 &found_lengths,
+                 col.options(),
+                 nullptr,
+                 nullptr,
+                 nullptr,
+                 &presenses,
                  col.member_arena(),
                  status.member_ptr());
         status.throw_unhandled();
     }
 
-    PyObject* obj_ptr = *found_lengths != ukv_val_len_missing_k ? Py_True : Py_False;
+    strided_iterator_gt<ukv_1x8_t> presenses_it {presenses, sizeof(ukv_1x8_t)};
+    PyObject* obj_ptr = presenses_it[0] ? Py_True : Py_False;
     return py::reinterpret_borrow<py::object>(obj_ptr);
 }
 
