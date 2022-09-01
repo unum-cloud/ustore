@@ -442,9 +442,10 @@ void ukv_read( //
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols_stride {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys_stride {c_keys, c_keys_stride};
-    places_arg_t tasks {cols_stride, keys_stride, {}, c_tasks_count};
-    stl_arena_t arena = clean_arena(c_arena, c_error);
 
+    places_arg_t tasks {cols_stride, keys_stride, {}, c_tasks_count};
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    
     rocksdb::ReadOptions options;
     if (txn && (c_options & ukv_option_txn_snapshot_k))
         options.snapshot = txn->GetSnapshot();
@@ -491,7 +492,7 @@ void ukv_scan( //
         return;
     }
 
-    stl_arena_t arena = clean_arena(c_arena, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -575,7 +576,7 @@ void ukv_size( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = clean_arena(c_arena, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
 
     *c_found_estimates = arena.alloc<ukv_size_t>(6 * n, c_error).begin();
@@ -714,7 +715,7 @@ void ukv_col_list( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = clean_arena(c_arena, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
