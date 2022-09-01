@@ -5,12 +5,13 @@
  * @brief Helper functions for the C++ backend implementations.
  */
 #pragma once
-#include <limits.h>  // `CHAR_BIT`
-#include <cstring>   // `std::memcpy`
-#include <stdexcept> // `std::runtime_error`
-#include <memory>    // `std::allocator`
-#include <vector>    // `std::vector`
-#include <algorithm> // `std::sort`
+#include <sys/mman.h> // `mmap`
+#include <limits.h>   // `CHAR_BIT`
+#include <cstring>    // `std::memcpy`
+#include <stdexcept>  // `std::runtime_error`
+#include <memory>     // `std::allocator`
+#include <vector>     // `std::vector`
+#include <algorithm>  // `std::sort`
 #include <forward_list>
 
 #if __APPLE__
@@ -306,14 +307,29 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
     bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override { return this == &other; }
 };
 
+class shared_resource_t final : public std::pmr::memory_resource {
+    void* do_allocate(std::size_t bytes, std::size_t) override {
+        return mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
+    }
+
+    void do_deallocate(void* ptr, std::size_t, std::size_t bytes) noexcept override { munmap(ptr, bytes); }
+    bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override { return this == &other; }
+
+  public:
+    static shared_resource_t* get_default_resource() {
+        static shared_resource_t default_resource;
+        return &default_resource;
+    }
+};
+
 template <typename at>
 class polymorphic_allocator_t {
   public:
     using value_type = at;
-    using size_type = size_t;
+    using size_type = std::size_t;
 
-    void deallocate(at* ptr, size_t size) { thrlocal_memres->deallocate(ptr, sizeof(at) * size); }
-    at* allocate(size_t size) { return reinterpret_cast<at*>(thrlocal_memres->allocate(sizeof(at) * size)); }
+    void deallocate(at* ptr, std::size_t size) { thrlocal_memres->deallocate(ptr, sizeof(at) * size); }
+    at* allocate(std::size_t size) { return reinterpret_cast<at*>(thrlocal_memres->allocate(sizeof(at) * size)); }
 };
 
 template <typename at>
@@ -349,12 +365,17 @@ struct span_gt {
 };
 
 struct stl_arena_t {
-    explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept : resource(mem_resource) {}
+    explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept
+        : resource(mem_resource), using_shared_memory(false) {}
     explicit stl_arena_t( //
         std::size_t initial_buffer_size = 1024ul * 1024ul,
         monotonic_resource_t::type_t type = monotonic_resource_t::capped_k,
-        std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
-        : resource(initial_buffer_size, 64ul, type, upstream) {
+        bool use_shared_memory = false)
+        : resource(initial_buffer_size,
+                   64ul,
+                   type,
+                   use_shared_memory ? shared_resource_t::get_default_resource() : std::pmr::get_default_resource()),
+          using_shared_memory(use_shared_memory) {
         thrlocal_memres = &resource;
     }
     ~stl_arena_t() { thrlocal_memres = std::pmr::get_default_resource(); }
@@ -396,6 +417,7 @@ struct stl_arena_t {
     }
 
     monotonic_resource_t resource;
+    bool using_shared_memory;
 };
 
 template <typename dangerous_at>
@@ -411,13 +433,19 @@ void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dang
     }
 }
 
-inline stl_arena_t clean_arena(ukv_arena_t* c_arena, ukv_error_t* c_error) noexcept {
+inline stl_arena_t prepare_arena(ukv_arena_t* c_arena, ukv_options_t options, ukv_error_t* c_error) noexcept {
     try {
-        if (!*c_arena)
-            *c_arena = new stl_arena_t;
-        stl_arena_t* arena = *reinterpret_cast<stl_arena_t**>(c_arena);
-        arena->resource.release();
-        return stl_arena_t(&arena->resource);
+        stl_arena_t** arena = reinterpret_cast<stl_arena_t**>(c_arena);
+
+        if (!*arena || ((options & ukv_option_read_shared_k) && !(*arena)->using_shared_memory)) {
+            delete *arena;
+            *arena =
+                new stl_arena_t(1024ul * 1024ul, monotonic_resource_t::capped_k, options & ukv_option_read_shared_k);
+        }
+
+        if (!(options & ukv_option_nodiscard_k))
+            (*arena)->resource.release();
+        return stl_arena_t(&(*arena)->resource);
     }
     catch (...) {
         log_error(c_error, out_of_memory_k, "");
