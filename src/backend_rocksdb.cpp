@@ -148,17 +148,17 @@ void write_one( //
 
     auto task = tasks[0];
     auto col = rocks_collection(db, task.col);
-    auto key = to_slice(task.key);
+    auto key = to_slice(task);
     rocks_status_t status;
 
     if (txn)
-        status = task.is_deleted() //
+        status = !task //
                      ? txn->SingleDelete(col, key)
-                     : txn->Put(col, key, to_slice(task.view()));
+                     : txn->Put(col, key, to_slice(task));
     else
-        status = task.is_deleted() //
+        status = !task //
                      ? db.native->SingleDelete(options, col, key)
-                     : db.native->Put(options, col, key, to_slice(task.view()));
+                     : db.native->Put(options, col, key, to_slice(task));
 
     export_error(status, c_error);
 }
@@ -174,10 +174,10 @@ void write_many( //
         for (std::size_t i = 0; i != tasks.size(); ++i) {
             auto task = tasks[i];
             auto col = rocks_collection(db, task.col);
-            auto key = to_slice(task.key);
-            auto status = task.is_deleted() //
+            auto key = to_slice(task);
+            auto status = task //
                               ? txn->Delete(col, key)
-                              : txn->Put(col, key, to_slice(task.view()));
+                              : txn->Put(col, key, to_slice(task));
             export_error(status, c_error);
         }
     }
@@ -186,10 +186,10 @@ void write_many( //
         for (std::size_t i = 0; i != tasks.size(); ++i) {
             auto task = tasks[i];
             auto col = rocks_collection(db, task.col);
-            auto key = to_slice(task.key);
-            auto status = task.is_deleted() //
+            auto key = to_slice(task);
+            auto status = !task //
                               ? batch.Delete(col, key)
-                              : batch.Put(col, key, to_slice(task.view()));
+                              : batch.Put(col, key, to_slice(task));
             export_error(status, c_error);
         }
 
@@ -231,7 +231,7 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    contents_arg_t tasks {cols, keys, vals, offs, lens, c_tasks_count};
+    contents_arg_t tasks {vals, offs, lens, {}, c_tasks_count};
 
     rocksdb::WriteOptions options;
     if (c_options & ukv_option_write_flush_k)
@@ -442,20 +442,21 @@ void ukv_read( //
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols_stride {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys_stride {c_keys, c_keys_stride};
-    places_arg_t tasks {cols_stride, keys_stride, c_tasks_count};
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
 
+    places_arg_t tasks {cols_stride, keys_stride, {}, c_tasks_count};
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    
     rocksdb::ReadOptions options;
     if (txn && (c_options & ukv_option_txn_snapshot_k))
         options.snapshot = txn->GetSnapshot();
 
     try {
         if (c_tasks_count == 1) {
-            auto func = (c_options & ukv_option_read_lengths_k) ? &measure_one : &read_one;
+            auto func = (c_options /*  & ukv_option_read_lengths_k) */) ? &measure_one : &read_one;
             func(db, txn, tasks, options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
         }
         else {
-            auto func = (c_options & ukv_option_read_lengths_k) ? &measure_many : &read_many;
+            auto func = (c_options /* & ukv_option_read_lengths_k */) ? &measure_many : &read_many;
             func(db, txn, tasks, options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
         }
     }
@@ -501,7 +502,7 @@ void ukv_scan( //
     strided_iterator_gt<ukv_size_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
     scans_arg_t tasks {cols, keys, lengths, c_min_tasks_count};
 
-    bool export_lengths = (c_options & ukv_option_read_lengths_k);
+    bool export_lengths = (c_options /* & ukv_option_read_lengths_k */);
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
@@ -649,15 +650,38 @@ void ukv_col_upsert(
     }
 }
 
-void ukv_col_remove( //
+void ukv_col_drop(
+    // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
+    ukv_col_t c_col_id,
+    ukv_col_drop_mode_t c_mode,
+    // Outputs:
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
+    auto col_name = c_col_name ? std::string_view(c_col_name) : std::string_view();
+    bool invalidate = c_mode == ukv_col_drop_keys_vals_handle_k;
+    return_if_error(!col_name.empty() || !invalidate,
+                    c_error,
+                    args_combo_k,
+                    "Default collection can't be invlaidated.");
+
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    if (!c_col_name || !std::strlen(c_col_name)) {
+    if (c_mode == ukv_col_drop_keys_vals_handle_k) {
+        for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
+            if (c_col_name == (*it)->GetName() && (*it)->GetName() != "default") {
+                rocks_status_t status = db.native->DropColumnFamily(*it);
+                if (export_error(status, c_error))
+                    return;
+                db.columns.erase(it--);
+                break;
+            }
+        }
+    }
+
+    else if (c_mode == ukv_col_drop_keys_vals_k) {
         rocksdb::WriteBatch batch;
         auto col = db.native->DefaultColumnFamily();
         auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), col));
@@ -668,14 +692,15 @@ void ukv_col_remove( //
         return;
     }
 
-    for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-        if (c_col_name == (*it)->GetName() && (*it)->GetName() != "default") {
-            rocks_status_t status = db.native->DropColumnFamily(*it);
-            if (export_error(status, c_error))
-                return;
-            db.columns.erase(it--);
-            break;
-        }
+    else if (c_mode == ukv_col_drop_vals_k) {
+        rocksdb::WriteBatch batch;
+        auto col = db.native->DefaultColumnFamily();
+        auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), col));
+        for (it->SeekToFirst(); it->Valid(); it->Next())
+            batch.Put(col, it->key(), 0);
+        rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
+        export_error(status, c_error);
+        return;
     }
 }
 

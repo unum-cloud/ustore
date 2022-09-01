@@ -553,7 +553,6 @@ void ukv_read( //
 
     // 3. Pull the data, once we know the total length
     ukv_val_len_t progress_in_tape = 0;
-    ukv_val_len_t last_value_length = 0;
     auto tape = arena.alloc<byte_t>(total_length, c_error);
     auto data_enumerator = [&](std::size_t i, value_view_t value) {
         offs[i] = progress_in_tape;
@@ -795,8 +794,10 @@ void ukv_col_drop(
     if (c_mode == ukv_col_drop_keys_vals_handle_k)
         db.named.erase(col_it);
 
-    else if (c_mode == ukv_col_drop_keys_vals_k)
-        col.pairs.clear(), col.unique_elements = 0;
+    else if (c_mode == ukv_col_drop_keys_vals_k) {
+        col.pairs.clear();
+        col.unique_elements = 0;
+    }
 
     else if (c_mode == ukv_col_drop_vals_k) {
         generation_t gen = ++db.youngest_generation;
