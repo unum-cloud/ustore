@@ -252,17 +252,16 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
     }
 
     void release() noexcept {
-        buffer_t buf;
-        while (true) {
-            buf = buffers_.front();
-            buffers_.pop_front();
-            if (buffers_.empty())
-                break;
-            release_one(buf);
-            upstream_->deallocate(buf.begin, buf.total_memory, alignment_);
+        if (buffers_.empty())
+            return;
+        for (auto begin = buffers_.before_begin(); std::next(begin, 2) != buffers_.end();) {
+            auto el = *std::next(begin);
+            release_one(el);
+            upstream_->deallocate(el.begin, el.total_memory, alignment_);
+            buffers_.erase_after(begin);
         }
 
-        buffers_.push_front(buf);
+        release_one(buffers_.front());
     }
 
     std::size_t capacity() const noexcept {
@@ -297,7 +296,7 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
             size_t new_size = buffers_.front().total_memory * growth_factor_k;
             if (new_size < (bytes + alignment))
                 new_size = next_power_of_two(bytes + alignment);
-            buffers_.emplace_front(upstream_->allocate(new_size, alignment), new_size, new_size);
+            buffers_.emplace_front(upstream_->allocate(new_size, alignment_), new_size, new_size);
             result = do_allocate(bytes, alignment);
         }
         return result;
