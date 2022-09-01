@@ -556,7 +556,7 @@ void ukv_docs_write( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = clean_arena(c_arena, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -629,7 +629,7 @@ void ukv_docs_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = clean_arena(c_arena, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -707,7 +707,7 @@ void ukv_docs_gist( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = clean_arena(c_arena, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1094,7 +1094,7 @@ void ukv_docs_gather( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = clean_arena(c_arena, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
     // Validate the input arguments

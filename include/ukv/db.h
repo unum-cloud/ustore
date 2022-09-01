@@ -107,13 +107,20 @@ typedef enum {
      */
     ukv_option_txn_snapshot_k = 1 << 3,
     /**
+     * @brief This flag is intended for internal use.
+     * When passed to `prepare_arena`, old_arena is not released,
+     * and rather a new one is casted and returned,
+     * if it existed in the first place, otherwise behaviour is unaffected.
+     */
+    ukv_option_nodiscard_k = 1 << 4,
+    /**
      * @brief Will output data into shared memory, not the one privately
      * viewed by current process. That will allow any higher-level package
      * to do further transformations without any copies.
      * Is relevant for standalone distributions used with drivers supporting
      * Apache Arrow buffers or standardized Tensor representations.
      */
-    ukv_option_read_shared_k = 0,
+    ukv_option_read_shared_k = 1 << 5,
     /**
      * @brief When allowed, the underlying engine may avoid strict keys ordering
      * and may include irrelevant (deleted & duplicate) keys in order to maximize
