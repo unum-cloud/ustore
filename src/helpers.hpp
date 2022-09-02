@@ -259,10 +259,10 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
         buffer_t buf = buffers_.front();
         buffers_.pop_front();
         while (!buffers_.empty()) {
-            buffers_.pop_front();
             release_one(buf);
             upstream_->deallocate(buf.begin, buf.total_memory, alignment_);
             buf = buffers_.front();
+            buffers_.pop_front();
         }
 
         buffers_.push_front(buf);
@@ -373,7 +373,7 @@ struct stl_arena_t {
         : resource(mem_resource), using_shared_memory(false) {}
     explicit stl_arena_t( //
         std::size_t initial_buffer_size = 1024ul * 1024ul,
-        monotonic_resource_t::type_t type = monotonic_resource_t::capped_k,
+        monotonic_resource_t::type_t type = monotonic_resource_t::growing_k,
         bool use_shared_memory = false)
         : resource(initial_buffer_size,
                    64ul,
@@ -444,7 +444,7 @@ inline stl_arena_t prepare_arena(ukv_arena_t* c_arena, ukv_options_t options, uk
         if (!*arena || ((options & ukv_option_read_shared_k) && !(*arena)->using_shared_memory)) {
             delete *arena;
             *arena =
-                new stl_arena_t(1024ul * 1024ul, monotonic_resource_t::capped_k, options & ukv_option_read_shared_k);
+                new stl_arena_t(1024ul * 1024ul, monotonic_resource_t::growing_k, options & ukv_option_read_shared_k);
         }
 
         if (!(options & ukv_option_nodiscard_k))
@@ -499,7 +499,7 @@ class file_handle_t {
             std::fclose(handle_);
     }
 
-    operator std::FILE*() const noexcept { return handle_; }
+    operator std::FILE *() const noexcept { return handle_; }
 };
 
 template <typename range_at, typename comparable_at>
