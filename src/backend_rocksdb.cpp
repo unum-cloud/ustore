@@ -142,23 +142,25 @@ void ukv_db_open(ukv_str_view_t, ukv_t* c_db, ukv_error_t* c_error) {
 void write_one( //
     rocks_db_t& db,
     rocks_txn_t* txn,
-    contents_arg_t const& tasks,
+    places_arg_t const& places,
+    contents_arg_t const& contents,
     rocksdb::WriteOptions const& options,
     ukv_error_t* c_error) {
 
-    auto task = tasks[0];
-    auto col = rocks_collection(db, task.col);
-    auto key = to_slice(task);
+    auto place = places[0];
+    auto content = contents[0];
+    auto col = rocks_collection(db, place.col);
+    auto key = to_slice(place.key);
     rocks_status_t status;
 
     if (txn)
-        status = !task //
+        status = !content //
                      ? txn->SingleDelete(col, key)
-                     : txn->Put(col, key, to_slice(task));
+                     : txn->Put(col, key, to_slice(content));
     else
-        status = !task //
+        status = !content //
                      ? db.native->SingleDelete(options, col, key)
-                     : db.native->Put(options, col, key, to_slice(task));
+                     : db.native->Put(options, col, key, to_slice(content));
 
     export_error(status, c_error);
 }
@@ -166,30 +168,33 @@ void write_one( //
 void write_many( //
     rocks_db_t& db,
     rocks_txn_t* txn,
-    contents_arg_t const& tasks,
+    places_arg_t const& places,
+    contents_arg_t const& contents,
     rocksdb::WriteOptions const& options,
     ukv_error_t* c_error) {
 
     if (txn) {
-        for (std::size_t i = 0; i != tasks.size(); ++i) {
-            auto task = tasks[i];
-            auto col = rocks_collection(db, task.col);
-            auto key = to_slice(task);
-            auto status = task //
+        for (std::size_t i = 0; i != places.size(); ++i) {
+            auto place = places[i];
+            auto content = contents[i];
+            auto col = rocks_collection(db, place.col);
+            auto key = to_slice(place.col);
+            auto status = !content //
                               ? txn->Delete(col, key)
-                              : txn->Put(col, key, to_slice(task));
+                              : txn->Put(col, key, to_slice(content));
             export_error(status, c_error);
         }
     }
     else {
         rocksdb::WriteBatch batch;
-        for (std::size_t i = 0; i != tasks.size(); ++i) {
-            auto task = tasks[i];
-            auto col = rocks_collection(db, task.col);
-            auto key = to_slice(task);
-            auto status = !task //
+        for (std::size_t i = 0; i != places.size(); ++i) {
+            auto place = places[i];
+            auto content = contents[i];
+            auto col = rocks_collection(db, place.col);
+            auto key = to_slice(place.key);
+            auto status = !content //
                               ? batch.Delete(col, key)
-                              : batch.Put(col, key, to_slice(task));
+                              : batch.Put(col, key, to_slice(content));
             export_error(status, c_error);
         }
 
@@ -218,6 +223,8 @@ void ukv_write( //
     ukv_val_len_t const* c_lens,
     ukv_size_t const c_lens_stride,
 
+    ukv_1x8_t const* c_presences,
+
     ukv_options_t const c_options,
     ukv_arena_t*,
     ukv_error_t* c_error) {
@@ -231,7 +238,10 @@ void ukv_write( //
     strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    contents_arg_t tasks {vals, offs, lens, {}, c_tasks_count};
+    strided_iterator_gt<ukv_1x8_t const> presences {c_presences, sizeof(ukv_1x8_t)};
+
+    places_arg_t places {cols, keys, {}, c_tasks_count};
+    contents_arg_t contents {vals, offs, lens, presences, c_tasks_count};
 
     rocksdb::WriteOptions options;
     if (c_options & ukv_option_write_flush_k)
@@ -239,7 +249,7 @@ void ukv_write( //
 
     try {
         auto func = c_tasks_count == 1 ? &write_one : &write_many;
-        func(db, txn, tasks, options, c_error);
+        func(db, txn, places, contents, options, c_error);
     }
     catch (...) {
         *c_error = "Write Failure";
