@@ -234,6 +234,9 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
     type_t type_;
 
   public:
+    monotonic_resource_t(monotonic_resource_t const&) = delete;
+    monotonic_resource_t& operator=(monotonic_resource_t const&) = delete;
+
     explicit monotonic_resource_t(monotonic_resource_t* upstream) noexcept
         : buffers_(), upstream_(upstream), alignment_(upstream->alignment_), type_(type_t::borrowed_k) {};
 
