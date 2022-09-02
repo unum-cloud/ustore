@@ -445,18 +445,18 @@ void ukv_read( //
 
     places_arg_t tasks {cols_stride, keys_stride, {}, c_tasks_count};
     stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
-    
+
     rocksdb::ReadOptions options;
     if (txn && (c_options & ukv_option_txn_snapshot_k))
         options.snapshot = txn->GetSnapshot();
 
     try {
         if (c_tasks_count == 1) {
-            auto func = (c_options /*  & ukv_option_read_lengths_k) */) ? &measure_one : &read_one;
+            auto func = c_options ? &measure_one : &read_one;
             func(db, txn, tasks, options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
         }
         else {
-            auto func = (c_options /* & ukv_option_read_lengths_k */) ? &measure_many : &read_many;
+            auto func = c_options ? &measure_many : &read_many;
             func(db, txn, tasks, options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
         }
     }
@@ -502,13 +502,12 @@ void ukv_scan( //
     strided_iterator_gt<ukv_size_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
     scans_arg_t tasks {cols, keys, lengths, c_min_tasks_count};
 
-    bool export_lengths = (c_options /* & ukv_option_read_lengths_k */);
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
     ukv_size_t total_lengths = reduce_n(tasks.lengths, tasks.count, 0ul);
     ukv_size_t total_bytes = total_lengths * sizeof(ukv_key_t);
-    if (export_lengths)
+    if (c_options)
         total_bytes += total_lengths * sizeof(ukv_val_len_t);
 
     span_gt<byte_t> tape = arena.alloc<byte_t>(total_bytes, c_error);
@@ -517,7 +516,7 @@ void ukv_scan( //
     ukv_key_t* found_keys = reinterpret_cast<ukv_key_t*>(tape.begin());
     ukv_val_len_t* found_lens = reinterpret_cast<ukv_val_len_t*>(found_keys + total_lengths);
     *c_found_keys = found_keys;
-    *c_found_lengths = export_lengths ? found_lens : nullptr;
+    *c_found_lengths = c_options ? found_lens : nullptr;
 
     for (ukv_size_t i = 0; i != c_min_tasks_count; ++i) {
         scan_t task = tasks[i];
@@ -536,19 +535,19 @@ void ukv_scan( //
         it->Seek(to_slice(task.min_key));
         for (; it->Valid() && j != task.length; j++, it->Next()) {
             std::memcpy(&found_keys[j], it->key().data(), sizeof(ukv_key_t));
-            if (export_lengths)
+            if (c_options)
                 found_lens[j] = static_cast<ukv_val_len_t>(it->value().size());
         }
 
         while (j != task.length) {
             found_keys[j] = ukv_key_unknown_k;
-            if (export_lengths)
+            if (c_options)
                 found_lens[j] = ukv_val_len_missing_k;
             ++j;
         }
 
         found_keys += task.length;
-        if (export_lengths)
+        if (c_options)
             found_lens += task.length;
     }
 }
