@@ -437,6 +437,7 @@ void ukv_read( //
     ukv_val_ptr_t* c_found_values,
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
+    ukv_1x8_t** c_found_presences,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
