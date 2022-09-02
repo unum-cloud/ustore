@@ -746,7 +746,7 @@ TEST(db, remove_vertexes) {
     for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id) {
         EXPECT_TRUE(*graph.contains(vertex_id));
         EXPECT_TRUE(graph.remove(vertex_id));
-        EXPECT_FALSE(*graph.contains(vertex_id));
+        EXPECT_FALSE(graph.contains(vertex_id));
     }
 }
 
