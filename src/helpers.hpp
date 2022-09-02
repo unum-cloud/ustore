@@ -12,6 +12,7 @@
 #include <memory>     // `std::allocator`
 #include <vector>     // `std::vector`
 #include <algorithm>  // `std::sort`
+#include <numeric>    // `std::accumulate`
 #include <forward_list>
 
 #if __APPLE__
