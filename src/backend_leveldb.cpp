@@ -392,13 +392,14 @@ void ukv_scan( //
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
 
-    ukv_size_t const* c_scan_lengths,
-    ukv_size_t const c_scan_lengths_stride,
+    ukv_val_len_t const* c_scan_lengths,
+    ukv_val_len_t const c_scan_lengths_stride,
 
     ukv_options_t const c_options,
 
-    ukv_key_t*** c_found_keys,
-    ukv_val_len_t** c_found_lengths,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_counts,
+    ukv_key_t** c_found_keys,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -411,7 +412,7 @@ void ukv_scan( //
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
+    strided_iterator_gt<ukv_val_len_t const> lens {c_scan_lengths, c_scan_lengths_stride};
     scans_arg_t tasks {{}, keys, lens, c_min_tasks_count};
 
     leveldb::ReadOptions options;
@@ -428,7 +429,7 @@ void ukv_scan( //
     ukv_key_t* found_keys = reinterpret_cast<ukv_key_t*>(tape.begin());
     ukv_val_len_t* found_lens = reinterpret_cast<ukv_val_len_t*>(found_keys + total_lengths);
     *c_found_keys = found_keys;
-    *c_found_lengths = c_options ? found_lens : nullptr;
+    *c_found_counts = c_options ? found_lens : nullptr;
 
     level_iter_uptr_t it;
     try {
