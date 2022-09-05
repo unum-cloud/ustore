@@ -375,49 +375,52 @@ void scan_head( //
     stl_db_t& db,
     scans_arg_t tasks,
     ukv_options_t const options,
-    ukv_size_t** c_found_counts,
-    ukv_key_t*** c_found_keys,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_counts,
+    ukv_key_t** c_found_keys,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
     std::shared_lock _ {db.mutex};
 
     // 1. Allocate a tape for all the values to be fetched
-    auto counts = arena.alloc_or_dummy<ukv_size_t>(tasks.count, c_error, c_found_counts);
+    auto offsets = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count + 1, c_error, c_found_offsets);
     return_on_error(c_error);
+    auto counts = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count, c_error, c_found_counts);
+    return_on_error(c_error);
+
     auto total_keys = reduce_n(tasks.lengths, tasks.count, 0ul);
-    auto keys_columns = arena.alloc_or_dummy<ukv_key_t*>(tasks.count, c_error, c_found_keys);
-    return_on_error(c_error);
-    auto keys = arena.alloc<ukv_key_t>(total_keys, c_error);
+    auto keys_output = *c_found_keys = arena.alloc<ukv_key_t>(total_keys, c_error).begin();
     return_on_error(c_error);
 
     // 2. Fetch the data
-    ukv_size_t keys_fill_progress = 0;
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         scan_t place = tasks[i];
         stl_col_t const& col = stl_col(db, place.col);
-        auto key_iterator = col.pairs.lower_bound(place.min_key);
-        auto keys_column = keys_columns[i] = keys.begin() + keys_fill_progress;
+        offsets[i] = keys_output - *c_found_keys;
 
-        ukv_size_t j = 0;
+        ukv_val_len_t j = 0;
+        auto key_iterator = col.pairs.lower_bound(place.min_key);
         for (; j != place.length && key_iterator != col.pairs.end(); ++key_iterator) {
             if (key_iterator->second.is_deleted)
                 continue;
-            keys_column[j] = key_iterator->first;
+            *keys_output = key_iterator->first;
+            ++keys_output;
             ++j;
         }
 
         counts[i] = j;
-        keys_fill_progress += place.length;
     }
+    offsets[tasks.size()] = keys_output - *c_found_keys;
 }
 
 void scan_txn( //
     stl_txn_t& txn,
     scans_arg_t tasks,
     ukv_options_t const options,
-    ukv_size_t** c_found_counts,
-    ukv_key_t*** c_found_keys,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_counts,
+    ukv_key_t** c_found_keys,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 
@@ -425,23 +428,24 @@ void scan_txn( //
     std::shared_lock _ {db.mutex};
 
     // 1. Allocate a tape for all the values to be fetched
-    auto counts = arena.alloc_or_dummy<ukv_size_t>(tasks.count, c_error, c_found_counts);
+    auto offsets = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count + 1, c_error, c_found_offsets);
     return_on_error(c_error);
+    auto counts = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count, c_error, c_found_counts);
+    return_on_error(c_error);
+
     auto total_keys = reduce_n(tasks.lengths, tasks.count, 0ul);
-    auto keys_columns = arena.alloc_or_dummy<ukv_key_t*>(tasks.count, c_error, c_found_keys);
-    auto keys = arena.alloc<ukv_key_t>(total_keys, c_error);
+    auto keys_output = *c_found_keys = arena.alloc<ukv_key_t>(total_keys, c_error).begin();
     return_on_error(c_error);
 
     // 2. Fetch the data
-    ukv_size_t keys_fill_progress = 0;
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         scan_t place = tasks[i];
         stl_col_t const& col = stl_col(db, place.col);
+        offsets[i] = keys_output - *c_found_keys;
+
+        ukv_val_len_t j = 0;
         auto key_iterator = col.pairs.lower_bound(place.min_key);
         auto txn_iterator = txn.upserted.lower_bound(place.min_key);
-        auto keys_column = keys_columns[i] = keys.begin() + keys_fill_progress;
-
-        ukv_size_t j = 0;
         for (; j != place.length && key_iterator != col.pairs.end();) {
             // Check if the key was already removed:
             if (key_iterator->second.is_deleted || txn.removed.find(key_iterator->first) != txn.removed.end()) {
@@ -452,28 +456,31 @@ void scan_txn( //
             // Compare against the incoming inserted keys:
             bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.col == place.col;
             if (check_in_txn && txn_iterator->first.key <= key_iterator->first) {
-                keys_column[j] = txn_iterator->first.key;
+                *keys_output = txn_iterator->first.key;
+                ++keys_output;
                 ++txn_iterator;
                 ++j;
                 continue;
             }
 
             // Export from the main store:
-            keys_column[j] = key_iterator->first;
+            *keys_output = key_iterator->first;
+            ++keys_output;
             ++key_iterator;
             ++j;
         }
 
         // As in any `set_union`, don't forget the tail :)
         while (j != place.length && txn_iterator != txn.upserted.end() && txn_iterator->first.col == place.col) {
-            keys_column[j] = txn_iterator->first.key;
+            *keys_output = txn_iterator->first.key;
+            ++keys_output;
             ++txn_iterator;
             ++j;
         }
 
         counts[i] = j;
-        keys_fill_progress += place.length;
     }
+    offsets[tasks.size()] = keys_output - *c_found_keys;
 }
 
 /*********************************************************/
@@ -623,13 +630,14 @@ void ukv_scan( //
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
 
-    ukv_size_t const* c_scan_lengths,
+    ukv_val_len_t const* c_scan_lengths,
     ukv_size_t const c_scan_lengths_stride,
 
     ukv_options_t const c_options,
 
-    ukv_size_t** c_found_counts,
-    ukv_key_t*** c_found_keys,
+    ukv_val_len_t** c_found_offsets,
+    ukv_val_len_t** c_found_counts,
+    ukv_key_t** c_found_keys,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -643,11 +651,11 @@ void ukv_scan( //
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_size_t const> lens {c_scan_lengths, c_scan_lengths_stride};
+    strided_iterator_gt<ukv_val_len_t const> lens {c_scan_lengths, c_scan_lengths_stride};
     scans_arg_t scans {cols, keys, lens, c_min_tasks_count};
 
-    return c_txn ? scan_txn(txn, scans, c_options, c_found_counts, c_found_keys, arena, c_error)
-                 : scan_head(db, scans, c_options, c_found_counts, c_found_keys, arena, c_error);
+    return c_txn ? scan_txn(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
+                 : scan_head(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);
 }
 
 void ukv_size( //
