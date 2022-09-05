@@ -414,9 +414,6 @@ void ukv_scan( //
     strided_iterator_gt<ukv_val_len_t const> lens {c_scan_lengths, c_scan_lengths_stride};
     scans_arg_t tasks {{}, keys, lens, c_min_tasks_count};
 
-    leveldb::ReadOptions options;
-    options.fill_cache = false;
-
     // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count + 1, c_error, c_found_offsets);
     return_on_error(c_error);
@@ -428,6 +425,9 @@ void ukv_scan( //
     return_on_error(c_error);
 
     // 2. Fetch the data
+    leveldb::ReadOptions options;
+    options.fill_cache = false;
+
     level_iter_uptr_t it;
     try {
         it = level_iter_uptr_t(db.NewIterator(options));
@@ -443,7 +443,7 @@ void ukv_scan( //
 
         ukv_size_t j = 0;
         for (; it->Valid() && j != task.length; j++, it->Next()) {
-            std::memcpy(&keys_output[j], it->key().data(), sizeof(ukv_key_t));
+            std::memcpy(keys_output, it->key().data(), sizeof(ukv_key_t));
             *keys_output = static_cast<ukv_val_len_t>(it->value().size());
             ++keys_output;
             ++j;
