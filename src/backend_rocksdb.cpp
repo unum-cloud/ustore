@@ -488,7 +488,7 @@ void ukv_scan( //
     ukv_size_t const c_start_keys_stride,
 
     ukv_val_len_t const* c_scan_lengths,
-    ukv_val_len_t const c_scan_lengths_stride,
+    ukv_size_t const c_scan_lengths_stride,
 
     ukv_options_t const c_options,
 
