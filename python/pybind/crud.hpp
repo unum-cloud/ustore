@@ -358,13 +358,14 @@ static py::array_t<ukv_key_t> scan_binary( //
         &scan_length,
         0,
         col.options(),
-        &found_keys,
+        nullptr,
         &found_lengths,
+        &found_keys,
         col.member_arena(),
         status.member_ptr());
 
     status.throw_unhandled();
-    return py::array_t<ukv_key_t>(scan_length, found_keys);
+    return py::array_t<ukv_key_t>(*found_lengths, found_keys);
 }
 
 } // namespace unum::ukv::pyb

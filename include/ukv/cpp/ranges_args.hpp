@@ -99,7 +99,7 @@ struct contents_arg_t {
 struct scan_t {
     ukv_col_t col;
     ukv_key_t const& min_key;
-    ukv_size_t length;
+    ukv_val_len_t length;
 
     inline col_key_t col_key() const noexcept { return col_key_t {col, min_key}; }
 };
@@ -111,14 +111,14 @@ struct scan_t {
 struct scans_arg_t {
     strided_iterator_gt<ukv_col_t const> cols;
     strided_iterator_gt<ukv_key_t const> start_keys;
-    strided_iterator_gt<ukv_size_t const> lengths;
+    strided_iterator_gt<ukv_val_len_t const> lengths;
     ukv_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
     inline scan_t operator[](std::size_t i) const noexcept {
         ukv_col_t col = cols ? cols[i] : ukv_col_main_k;
         ukv_key_t const& key = start_keys[i];
-        ukv_size_t len = lengths[i];
+        ukv_val_len_t len = lengths[i];
         return {col, key, len};
     }
 };
