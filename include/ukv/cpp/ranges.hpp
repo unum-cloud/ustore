@@ -127,16 +127,17 @@ class strided_iterator_gt<ukv_1x8_t> {
     ukv_size_t stride_ = 0;
 
   public:
-    strided_iterator_gt(element_t* begin, std::size_t stride = 0) noexcept
+    strided_iterator_gt(element_t* begin = nullptr, std::size_t stride = 0) noexcept
         : begin_(begin), stride_(static_cast<ukv_size_t>(stride)) {}
     strided_iterator_gt(strided_iterator_gt&&) noexcept = default;
     strided_iterator_gt(strided_iterator_gt const&) noexcept = default;
     strided_iterator_gt& operator=(strided_iterator_gt&&) noexcept = default;
     strided_iterator_gt& operator=(strided_iterator_gt const&) noexcept = default;
 
-    ref_t operator[](std::size_t idx) const noexcept {
+    ref_t at(std::size_t idx) const noexcept {
         return {begin_ + stride_ * idx / CHAR_BIT, static_cast<element_t>(1 << (idx % CHAR_BIT))};
     }
+    ref_t operator[](std::size_t idx) const noexcept { return at(idx); }
 
     operator bool() const noexcept { return begin_ != nullptr; }
     bool repeats() const noexcept { return !stride_; }
@@ -165,9 +166,10 @@ class strided_iterator_gt<ukv_1x8_t const> {
     strided_iterator_gt& operator=(strided_iterator_gt&&) noexcept = default;
     strided_iterator_gt& operator=(strided_iterator_gt const&) noexcept = default;
 
-    bool operator[](std::size_t idx) const noexcept {
+    bool at(std::size_t idx) const noexcept {
         return begin_[stride_ * idx / CHAR_BIT] & static_cast<element_t>(1 << (idx % CHAR_BIT));
     }
+    bool operator[](std::size_t idx) const noexcept { return at(idx); }
 
     operator bool() const noexcept { return begin_ != nullptr; }
     bool repeats() const noexcept { return !stride_; }
