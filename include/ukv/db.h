@@ -393,13 +393,14 @@ void ukv_scan( //
     ukv_key_t const* start_keys,
     ukv_size_t const start_keys_stride,
 
-    ukv_size_t const* scan_lengths,
+    ukv_val_len_t const* scan_lengths,
     ukv_size_t const scan_lengths_stride,
 
     ukv_options_t const options,
 
-    ukv_size_t** counts,
-    ukv_key_t*** keys,
+    ukv_val_len_t** offsets,
+    ukv_val_len_t** counts,
+    ukv_key_t** keys,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
