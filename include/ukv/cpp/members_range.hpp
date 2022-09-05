@@ -216,7 +216,6 @@ class pairs_stream_t {
 
         ukv_val_ptr_t found_vals = nullptr;
         ukv_val_len_t* found_offs = nullptr;
-        ukv_val_len_t* found_lens = nullptr;
         ukv_read( //
             db_,
             txn_,
