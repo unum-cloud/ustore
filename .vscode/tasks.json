@@ -8,6 +8,18 @@
             "type": "shell"
         },
         {
+            "label": "Build Native: Debug RocksDB Test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_rocksdb_test",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Native: Debug LevelDB Test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_leveldb_test",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Build Native: Debug Arrow Test",
             // Both must pass builds
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_arrow_client_test ukv_arrow_server",
