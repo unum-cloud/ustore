@@ -39,7 +39,7 @@ class keys_stream_t {
     ukv_txn_t txn_ = nullptr;
 
     arena_t arena_;
-    ukv_size_t read_ahead_ = 0;
+    ukv_val_len_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
     indexed_range_gt<ukv_key_t*> fetched_keys_;
@@ -50,8 +50,8 @@ class keys_stream_t {
         if (next_min_key_ == ukv_key_unknown_k)
             return {};
 
-        ukv_size_t* found_counts = nullptr;
-        ukv_key_t** found_keys = nullptr;
+        ukv_val_len_t* found_counts = nullptr;
+        ukv_key_t* found_keys = nullptr;
         status_t status;
         ukv_scan( //
             db_,
@@ -64,6 +64,7 @@ class keys_stream_t {
             &read_ahead_,
             0,
             ukv_options_default_k,
+            nullptr,
             &found_counts,
             &found_keys,
             arena_.member_ptr(),
@@ -71,10 +72,10 @@ class keys_stream_t {
         if (!status)
             return status;
 
-        fetched_keys_ = indexed_range_gt<ukv_key_t*> {*found_keys, *found_keys + *found_counts};
+        fetched_keys_ = indexed_range_gt<ukv_key_t*> {found_keys, found_keys + *found_counts};
         fetched_offset_ = 0;
 
-        auto count = static_cast<ukv_size_t>(fetched_keys_.size());
+        auto count = static_cast<ukv_val_len_t>(fetched_keys_.size());
         next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
@@ -175,7 +176,7 @@ class pairs_stream_t {
 
     arena_t arena_scan_;
     arena_t arena_read_;
-    ukv_size_t read_ahead_ = 0;
+    ukv_val_len_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
     indexed_range_gt<ukv_key_t*> fetched_keys_;
@@ -187,8 +188,8 @@ class pairs_stream_t {
         if (next_min_key_ == ukv_key_unknown_k)
             return {};
 
-        ukv_size_t* found_counts = nullptr;
-        ukv_key_t** found_keys = nullptr;
+        ukv_val_len_t* found_counts = nullptr;
+        ukv_key_t* found_keys = nullptr;
         status_t status;
         ukv_scan( //
             db_,
@@ -201,6 +202,7 @@ class pairs_stream_t {
             &read_ahead_,
             0,
             ukv_options_default_k,
+            nullptr,
             &found_counts,
             &found_keys,
             arena_scan_.member_ptr(),
@@ -208,7 +210,7 @@ class pairs_stream_t {
         if (!status)
             return status;
 
-        fetched_keys_ = indexed_range_gt<ukv_key_t*> {*found_keys, *found_keys + *found_counts};
+        fetched_keys_ = indexed_range_gt<ukv_key_t*> {found_keys, found_keys + *found_counts};
         fetched_offset_ = 0;
         auto count = static_cast<ukv_size_t>(fetched_keys_.size());
 
@@ -221,7 +223,7 @@ class pairs_stream_t {
             count,
             &col_,
             0,
-            *found_keys,
+            found_keys,
             sizeof(ukv_key_t),
             ukv_options_default_k,
             &found_vals,
