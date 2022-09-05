@@ -180,7 +180,7 @@ class pairs_stream_t {
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
     indexed_range_gt<ukv_key_t*> fetched_keys_;
-    joined_values_t values_view;
+    joined_bins_t values_view;
     std::size_t fetched_offset_ = 0;
 
     status_t prefetch() noexcept {
@@ -216,7 +216,6 @@ class pairs_stream_t {
 
         ukv_val_ptr_t found_vals = nullptr;
         ukv_val_len_t* found_offs = nullptr;
-        ukv_val_len_t* found_lens = nullptr;
         ukv_read( //
             db_,
             txn_,
@@ -228,14 +227,14 @@ class pairs_stream_t {
             ukv_options_default_k,
             &found_vals,
             &found_offs,
-            &found_lens,
+            nullptr,
             nullptr,
             arena_read_.member_ptr(),
             status.member_ptr());
         if (!status)
             return status;
 
-        values_view = joined_values_t {found_vals, found_offs, found_lens, count};
+        values_view = joined_bins_t {found_vals, found_offs, count};
         next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }

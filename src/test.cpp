@@ -63,7 +63,7 @@ void upsert_edge(graph_ref_t& graph) {
 #define M_EXPECT_EQ_JSON(str1, str2) EXPECT_EQ(json_t::parse((str1)), json_t::parse((str2)));
 #define M_EXPECT_EQ_MSG(str1, str2) \
     EXPECT_EQ(json_t::from_msgpack((str1).c_str(), (str1).c_str() + (str1).size()), json_t::parse((str2)));
-#if 0
+
 TEST(db, intro) {
 
     db_t db;
@@ -101,7 +101,7 @@ TEST(db, intro) {
 
     // Reusable memory
     // This interface not just more performant, but also provides nicer interface:
-    //  expected_gt<joined_values_t> tapes = main[{100, 101}].on(arena);
+    //  expected_gt<joined_bins_t> tapes = main[{100, 101}].on(arena);
     arena_t arena(db);
     _ = main[{43, 44}].on(arena).clear();
     _ = main[{43, 44}].on(arena).erase();
@@ -134,7 +134,6 @@ TEST(db, intro) {
 
     EXPECT_TRUE(db.clear());
 }
-#endif
 
 template <typename locations_at>
 void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_length) {
@@ -145,29 +144,29 @@ void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_leng
     using extractor_t = places_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<joined_values_t> retrieved_and_arena = ref.value();
-    joined_values_t const& retrieved = *retrieved_and_arena;
+    auto maybe_retrieved = ref.value();
+    auto const& retrieved = *maybe_retrieved;
     ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
 
     // Check views
-    joined_values_iterator_t it = retrieved.begin();
+    auto it = retrieved.begin();
     for (std::size_t i = 0; i != count; ++i, ++it) {
         EXPECT_EQ((*it).size(), expects_missing ? 0 : expected_length);
     }
 
     // Check length estimates
-    auto maybe_lengths_and_arena = ref.length();
-    EXPECT_TRUE(maybe_lengths_and_arena);
+    auto maybe_lengths = ref.length();
+    EXPECT_TRUE(maybe_lengths);
     for (std::size_t i = 0; i != count; ++i) {
-        EXPECT_EQ(maybe_lengths_and_arena->at(i), expected_length);
+        EXPECT_EQ(maybe_lengths->at(i), expected_length);
     }
 
     // Check boolean indicators
-    auto maybe_indicators_and_arena = ref.present();
-    EXPECT_TRUE(maybe_indicators_and_arena);
+    auto maybe_indicators = ref.present();
+    EXPECT_TRUE(maybe_indicators);
     for (std::size_t i = 0; i != count; ++i) {
-        EXPECT_EQ(maybe_indicators_and_arena->at(i), !expects_missing);
+        EXPECT_EQ(maybe_indicators->at(i), !expects_missing);
     }
 }
 
@@ -178,11 +177,11 @@ void check_equalities(members_ref_gt<locations_at>& ref, contents_arg_t values) 
     using extractor_t = places_arg_extractor_gt<locations_at>;
 
     // Validate that values match
-    expected_gt<joined_values_t> retrieved_and_arena = ref.value();
-    joined_values_t const& retrieved = *retrieved_and_arena;
+    auto maybe_retrieved = ref.value();
+    auto const& retrieved = *maybe_retrieved;
     EXPECT_EQ(retrieved.size(), extractor_t {}.count(ref.locations()));
 
-    joined_values_iterator_t it = retrieved.begin();
+    auto it = retrieved.begin();
     for (std::size_t i = 0; i != extractor_t {}.count(ref.locations()); ++i, ++it) {
         auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
         auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
@@ -345,6 +344,21 @@ TEST(db, docs_table) {
     col[3] = json_davit.c_str();
     M_EXPECT_EQ_JSON(*col[1].value(), json_ashot.c_str());
     M_EXPECT_EQ_JSON(*col[2].value(), json_darvin.c_str());
+
+    // Just column names
+    {
+        auto maybe_fields = col[1].gist();
+        auto fields = *maybe_fields;
+
+        std::vector<std::string> parsed;
+        for (auto field : fields)
+            parsed.emplace_back(field.data());
+
+        EXPECT_NE(std::find(parsed.begin(), parsed.end(), "/person"), parsed.end());
+        EXPECT_NE(std::find(parsed.begin(), parsed.end(), "/height"), parsed.end());
+        EXPECT_NE(std::find(parsed.begin(), parsed.end(), "/age"), parsed.end());
+        EXPECT_EQ(std::find(parsed.begin(), parsed.end(), "/weight"), parsed.end());
+    }
 
     // Single cell
     {

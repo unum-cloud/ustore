@@ -72,9 +72,9 @@ struct parsed_adjacency_list_t {
     std::variant<std::monostate, viewed_t, owned_t> viewed_or_owned;
 
     operator edges_view_t() const noexcept {
-        if (std::hold_alternative<std::monostate>(viewed_or_owned))
+        if (std::holds_alternative<std::monostate>(viewed_or_owned))
             return {};
-        else if (std::hold_alternative<owned_t>(viewed_or_owned))
+        else if (std::holds_alternative<owned_t>(viewed_or_owned))
             return edges(std::get<owned_t>(viewed_or_owned));
         else
             return std::get<viewed_t>(viewed_or_owned);

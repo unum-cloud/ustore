@@ -94,7 +94,7 @@ static py::object materialize(py_table_col_t& df) {
     if (std::holds_alternative<std::monostate>(df.columns_names)) {
         auto fields = members.gist().throw_or_release();
         auto names = std::vector<ukv_str_view_t>(fields.size());
-        transform_n(fields, names.size(), names.begin(), &value_view_t::c_str);
+        transform_n(fields, names.size(), names.begin(), std::mem_fn(&std::string_view::data));
         df.columns_names = names;
     }
 

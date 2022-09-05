@@ -208,7 +208,9 @@ class growing_tape_t {
     strided_range_gt<ukv_val_len_t> lengths() noexcept { return strided_range(lengths_); }
     strided_range_gt<byte_t> contents() noexcept { return strided_range(contents_); }
 
-    operator joined_values_t() noexcept {
+    operator joined_bins_t() noexcept { return {ukv_val_ptr_t(contents_.data()), offsets_.data(), lengths_.size()}; }
+
+    operator embedded_bins_t() noexcept {
         return {ukv_val_ptr_t(contents_.data()), offsets_.data(), lengths_.data(), lengths_.size()};
     }
 };
