@@ -114,6 +114,18 @@ class graph_ref_t {
         return status;
     }
 
+    status_t clear_edges() noexcept {
+        status_t status;
+        ukv_col_drop(db_, nullptr, col_, ukv_col_drop_vals_k, status.member_ptr());
+        return status;
+    }
+
+    status_t clear() noexcept {
+        status_t status;
+        ukv_col_drop(db_, nullptr, col_, ukv_col_drop_keys_vals_k, status.member_ptr());
+        return status;
+    }
+
     expected_gt<ukv_vertex_degree_t> degree( //
         ukv_key_t vertex,
         ukv_vertex_role_t role = ukv_vertex_role_any_k,

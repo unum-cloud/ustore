@@ -36,7 +36,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug",
+            "preLaunchTask": "Build Native: Debug RocksDB Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -54,7 +54,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug",
+            "preLaunchTask": "Build Native: Debug LevelDB Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },

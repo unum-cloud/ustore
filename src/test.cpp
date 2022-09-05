@@ -18,6 +18,45 @@
 using namespace unum::ukv;
 using namespace unum;
 
+size_t vertexes_count = 1000;
+size_t next_connect = 100;
+std::vector<edge_t> es;
+
+edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
+    edge_t e;
+    e.id = edge_id;
+    e.source_id = v1;
+    e.target_id = v2;
+    return e;
+}
+
+void fill_edges() {
+    es.clear();
+    size_t edge_id = 0;
+    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id) {
+        size_t connect_with = vertex_id + next_connect;
+        while (connect_with < vertexes_count) {
+            edge_id++;
+            es.push_back(make_edge(edge_id, vertex_id, connect_with));
+            connect_with = connect_with + next_connect;
+        }
+    }
+}
+
+void upsert_edge(graph_ref_t& graph) {
+    size_t edge_id = 0;
+    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id) {
+        size_t connect_with = vertex_id + next_connect;
+        while (connect_with < vertexes_count) {
+            edge_id++;
+            graph.upsert(make_edge(edge_id, vertex_id, connect_with));
+            EXPECT_TRUE(*graph.contains(vertex_id));
+            EXPECT_EQ(*graph.degree(vertex_id), connect_with / 100u);
+            connect_with += next_connect;
+        }
+    }
+}
+
 #define macro_concat_(prefix, suffix) prefix##suffix
 #define macro_concat(prefix, suffix) macro_concat_(prefix, suffix)
 #define _ [[maybe_unused]] auto macro_concat(_, __LINE__)
@@ -684,6 +723,68 @@ TEST(db, net_batch) {
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
     EXPECT_TRUE(db.clear());
+}
+
+TEST(db, upsert_edge) {
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+
+    col_t main = *db.collection();
+    graph_ref_t graph = main.as_graph();
+    upsert_edge(graph);
+}
+
+TEST(db, upsert_edges) {
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+
+    col_t main = *db.collection();
+    graph_ref_t graph = main.as_graph();
+    fill_edges();
+    EXPECT_TRUE(graph.upsert(edges(es)));
+    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id) {
+        EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_EQ(*graph.degree(vertex_id), 9u);
+    }
+}
+
+TEST(db, remove_vertexes) {
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+
+    col_t main = *db.collection();
+    graph_ref_t graph = main.as_graph();
+    fill_edges();
+    EXPECT_TRUE(graph.upsert(edges(es)));
+
+    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id) {
+        EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_TRUE(graph.remove(vertex_id));
+        EXPECT_FALSE(graph.contains(vertex_id));
+    }
+}
+
+TEST(db, remove_edge) {
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+
+    col_t main = *db.collection();
+    graph_ref_t graph = main.as_graph();
+    fill_edges();
+    EXPECT_TRUE(graph.upsert(edges(es)));
+
+    size_t edge_id = 0;
+    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id) {
+        size_t connect_with = vertex_id + next_connect;
+        while (connect_with < vertexes_count) {
+            edge_id++;
+            graph.remove(make_edge(edge_id, vertex_id, connect_with));
+            connect_with = connect_with + next_connect;
+        }
+    }
+
+    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id)
+        EXPECT_TRUE(*graph.contains(vertex_id));
 }
 
 int main(int argc, char** argv) {

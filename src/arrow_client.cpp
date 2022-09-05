@@ -566,10 +566,12 @@ void ukv_col_upsert(
     std::memcpy(c_col, id_ptr->body->data(), sizeof(ukv_col_t));
 }
 
-void ukv_col_remove(
+void ukv_col_drop(
     // Inputs:
     ukv_t const c_db,
     ukv_str_view_t c_col_name,
+    ukv_col_t c_col_id,
+    ukv_col_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {
 
