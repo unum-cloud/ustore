@@ -15,11 +15,11 @@ class docs_pairs_stream_t {
 
     arena_t arena_scan_;
     arena_t arena_read_;
-    ukv_size_t read_ahead_ = 0;
+    ukv_val_len_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
     indexed_range_gt<ukv_key_t*> fetched_keys_;
-    tape_view_t values_view;
+    joined_bins_t values_view;
     std::size_t fetched_offset_ = 0;
 
     status_t prefetch() noexcept {
@@ -45,8 +45,9 @@ class docs_pairs_stream_t {
             &read_ahead_,
             0,
             ukv_options_default_k,
-            &found_keys,
+            nullptr,
             &found_lens,
+            &found_keys,
             arena_scan_.member_ptr(),
             status.member_ptr());
         if (!status)
@@ -73,12 +74,13 @@ class docs_pairs_stream_t {
             &found_vals,
             &found_offs,
             &found_lens,
+            nullptr,
             arena_read_.member_ptr(),
             status.member_ptr());
         if (!status)
             return status;
 
-        values_view = tape_view_t {found_vals, found_offs, found_lens, count};
+        values_view = joined_bins_t {found_vals, found_offs, found_lens, count};
         next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
@@ -193,7 +195,7 @@ static void write_same_doc(py_docs_col_t& col, PyObject* keys_py, PyObject* val_
 
 static void write_doc(py_docs_col_t& col, py::object key_py, py::object val_py) {
     auto is_single_key = PyLong_Check(key_py.ptr());
-    auto func = !is_single_val ? &write_many_docs : &write_one_doc;
+    auto func = !is_single_key ? &write_many_docs : &write_one_doc;
     return func(col, key_py.ptr(), val_py.ptr());
 }
 

@@ -57,7 +57,7 @@ class members_ref_gt {
     using keys_extractor_t = places_arg_extractor_gt<locations_plain_t>;
     static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
-    using value_t = std::conditional_t<is_one_k, value_view_t, joined_values_t>;
+    using value_t = std::conditional_t<is_one_k, value_view_t, embedded_bins_t>;
     using present_t = std::conditional_t<is_one_k, bool, strided_range_gt<bool>>;
     using length_t = std::conditional_t<is_one_k, ukv_val_len_t, indexed_range_gt<ukv_val_len_t*>>;
 
@@ -218,7 +218,7 @@ class members_ref_gt {
      * @brief Find the names of all unique fields in requested documents.
      * ! Applies only to document collections and when fields are not present in locations!
      */
-    expected_gt<strings_tape_iterator_t> gist(bool track = false) noexcept;
+    expected_gt<joined_strs_t> gist(bool track = false) noexcept;
 
     /**
      * @brief For N documents and M fields gather (N * M) responses.
@@ -328,7 +328,7 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
         if constexpr (is_one_k)
             return value_view_t {found_values + *found_offsets, *found_lengths};
         else
-            return joined_values_t {found_values, found_offsets, found_lengths, count};
+            return embedded_bins_t {found_values, found_offsets, found_lengths, count};
     }
 }
 
@@ -396,10 +396,11 @@ status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, uk
 }
 
 template <typename locations_at>
-expected_gt<strings_tape_iterator_t> members_ref_gt<locations_at>::gist(bool track) noexcept {
+expected_gt<joined_strs_t> members_ref_gt<locations_at>::gist(bool track) noexcept {
 
     status_t status;
     ukv_size_t found_count = 0;
+    ukv_val_len_t* found_offsets = nullptr;
     ukv_str_view_t found_strings = nullptr;
 
     auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
@@ -418,11 +419,12 @@ expected_gt<strings_tape_iterator_t> members_ref_gt<locations_at>::gist(bool tra
         keys.stride(),
         options,
         &found_count,
+        &found_offsets,
         &found_strings,
         arena_,
         status.member_ptr());
 
-    strings_tape_iterator_t view {found_count, found_strings};
+    joined_strs_t view {found_strings, found_offsets, found_count};
     return {std::move(status), std::move(view)};
 }
 

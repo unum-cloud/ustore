@@ -4,6 +4,11 @@
  * @date 4 Jul 2022
  *
  * @brief Smart Pointers, Monads and Range-like templates for C++ bindings.
+ * > "Strided": defines the number of bytes to jump until next entry, instead of `sizeof`.
+ * > "Joined": Indexes variable-length objects using just base pointer and N+1 offsets,
+ *      assuming the next entry starts right after the previous one without gaps.
+ * > "Embedded": Extends "Joined" ranges to objects with lengths.
+ *      In that case order of elements is irrelevant and we need just N offsets & lengths.
  */
 
 #pragma once
@@ -316,59 +321,156 @@ struct range_gt {
  * @brief A read-only iterator for values packed into a
  * contiguous memory range. Doesn't own underlying memory.
  */
-class joined_values_iterator_t {
+template <typename chunk_at>
+class joined_chunks_iterator_gt {
 
-    ukv_val_ptr_t contents_ = nullptr;
+    using chunk_t = chunk_at;
+    using element_t = typename chunk_t::value_type;
+
+    element_t* contents_ = nullptr;
+    ukv_val_len_t* offsets_ = nullptr;
+
+  public:
+    using iterator_category = std::random_access_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = chunk_t;
+    using pointer = void;
+    using reference = void;
+
+    joined_chunks_iterator_gt(element_t* vals, ukv_val_len_t* offs) noexcept : contents_(vals), offsets_(offs) {}
+
+    joined_chunks_iterator_gt& operator++() noexcept {
+        ++offsets_;
+        return *this;
+    }
+
+    joined_chunks_iterator_gt operator++(int) const noexcept { return {contents_, offsets_ + 1}; }
+    joined_chunks_iterator_gt operator--(int) const noexcept { return {contents_, offsets_ - 1}; }
+    chunk_t operator*() const noexcept { return {contents_ + offsets_[0], offsets_[1] - offsets_[0]}; }
+    chunk_t operator[](std::size_t i) const noexcept {
+        return {contents_ + offsets_[i], offsets_[i + 1] - offsets_[i]};
+    }
+
+    bool operator==(joined_chunks_iterator_gt const& other) const noexcept { return offsets_ == other.offsets_; }
+    bool operator!=(joined_chunks_iterator_gt const& other) const noexcept { return offsets_ != other.offsets_; }
+};
+
+using joined_strs_iterator_t = joined_chunks_iterator_gt<std::string_view>;
+using joined_bins_iterator_t = joined_chunks_iterator_gt<value_view_t>;
+
+template <typename chunk_at>
+class joined_chunks_gt {
+
+    using chunk_t = chunk_at;
+    using element_t = typename chunk_t::value_type;
+
+    element_t* contents_ = nullptr;
+    ukv_val_len_t* offsets_ = nullptr;
+    ukv_size_t count_ = 0;
+
+  public:
+    using value_type = chunk_t;
+
+    joined_chunks_gt() = default;
+
+    template <typename same_size_at>
+    joined_chunks_gt(same_size_at* vals, ukv_val_len_t* offs, ukv_size_t elements) noexcept
+        : contents_((element_t*)(vals)), offsets_(offs), count_(elements) {
+        static_assert(sizeof(same_size_at) == sizeof(element_t));
+    }
+
+    joined_chunks_iterator_gt<chunk_at> begin() const noexcept { return {contents_, offsets_}; }
+    joined_chunks_iterator_gt<chunk_at> end() const noexcept { return {contents_, offsets_ + count_}; }
+    std::size_t size() const noexcept { return count_; }
+    chunk_t operator[](std::size_t i) const noexcept {
+        return {contents_ + offsets_[i], offsets_[i + 1] - offsets_[i]};
+    }
+
+    ukv_val_len_t* offsets() const noexcept { return offsets_; }
+    element_t* contents() const noexcept { return contents_; }
+};
+
+using joined_strs_t = joined_chunks_gt<std::string_view>;
+using joined_bins_t = joined_chunks_gt<value_view_t>;
+
+/**
+ * @brief A read-only iterator for values packed into a
+ * contiguous memory range. Doesn't own underlying memory.
+ */
+template <typename chunk_at>
+class embedded_chunks_iterator_gt {
+
+    using chunk_t = chunk_at;
+    using element_t = typename chunk_t::value_type;
+
+    element_t* contents_ = nullptr;
     ukv_val_len_t* offsets_ = nullptr;
     ukv_val_len_t* lengths_ = nullptr;
 
   public:
     using iterator_category = std::random_access_iterator_tag;
     using difference_type = std::ptrdiff_t;
-    using value_type = value_view_t;
+    using value_type = chunk_t;
     using pointer = void;
     using reference = void;
 
-    inline joined_values_iterator_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens) noexcept
+    embedded_chunks_iterator_gt(element_t* vals, ukv_val_len_t* offs, ukv_val_len_t* lens) noexcept
         : contents_(vals), offsets_(offs), lengths_(lens) {}
 
-    inline joined_values_iterator_t& operator++() noexcept {
+    embedded_chunks_iterator_gt& operator++() noexcept {
         ++lengths_;
         ++offsets_;
         return *this;
     }
 
-    inline joined_values_iterator_t operator++(int) const noexcept { return {contents_, lengths_ + 1, offsets_ + 1}; }
-    inline joined_values_iterator_t operator--(int) const noexcept { return {contents_, lengths_ - 1, offsets_ - 1}; }
-    inline value_view_t operator*() const noexcept { return {contents_ + *offsets_, *lengths_}; }
-    inline value_view_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[i], lengths_[i]}; }
+    embedded_chunks_iterator_gt operator++(int) const noexcept { return {contents_, lengths_ + 1, offsets_ + 1}; }
+    embedded_chunks_iterator_gt operator--(int) const noexcept { return {contents_, lengths_ - 1, offsets_ - 1}; }
+    chunk_t operator*() const noexcept { return {contents_ + *offsets_, *lengths_}; }
+    chunk_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[i], lengths_[i]}; }
 
-    inline bool operator==(joined_values_iterator_t const& other) const noexcept { return lengths_ == other.lengths_; }
-    inline bool operator!=(joined_values_iterator_t const& other) const noexcept { return lengths_ != other.lengths_; }
+    bool operator==(embedded_chunks_iterator_gt const& other) const noexcept { return lengths_ == other.lengths_; }
+    bool operator!=(embedded_chunks_iterator_gt const& other) const noexcept { return lengths_ != other.lengths_; }
 };
 
-class joined_values_t {
-    ukv_val_ptr_t contents_ = nullptr;
+using embedded_strs_iterator_t = embedded_chunks_iterator_gt<std::string_view>;
+using embedded_bins_iterator_t = embedded_chunks_iterator_gt<value_view_t>;
+
+template <typename chunk_at>
+class embedded_chunks_gt {
+
+    using chunk_t = chunk_at;
+    using element_t = typename chunk_t::value_type;
+
+    element_t* contents_ = nullptr;
     ukv_val_len_t* offsets_ = nullptr;
     ukv_val_len_t* lengths_ = nullptr;
     ukv_size_t count_ = 0;
 
   public:
-    using value_type = value_view_t;
+    using value_type = chunk_t;
 
-    inline joined_values_t() = default;
-    inline joined_values_t(ukv_val_ptr_t vals, ukv_val_len_t* offs, ukv_val_len_t* lens, ukv_size_t elements) noexcept
-        : contents_(vals), offsets_(offs), lengths_(lens), count_(elements) {}
+    embedded_chunks_gt() = default;
 
-    inline joined_values_iterator_t begin() const noexcept { return {contents_, offsets_, lengths_}; }
-    inline joined_values_iterator_t end() const noexcept { return {contents_, offsets_ + count_, lengths_ + count_}; }
-    inline std::size_t size() const noexcept { return count_; }
-    inline value_view_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[i], lengths_[i]}; }
+    template <typename same_size_at>
+    embedded_chunks_gt(same_size_at* vals, ukv_val_len_t* offs, ukv_val_len_t* lens, ukv_size_t elements) noexcept
+        : contents_((element_t*)(vals)), offsets_(offs), lengths_(lens), count_(elements) {
+        static_assert(sizeof(same_size_at) == sizeof(element_t));
+    }
 
-    inline ukv_val_len_t* offsets() const noexcept { return offsets_; }
-    inline ukv_val_len_t* lengths() const noexcept { return lengths_; }
-    inline ukv_val_ptr_t contents() const noexcept { return contents_; }
+    embedded_chunks_iterator_gt<chunk_at> begin() const noexcept { return {contents_, offsets_, lengths_}; }
+    embedded_chunks_iterator_gt<chunk_at> end() const noexcept {
+        return {contents_, offsets_ + count_, lengths_ + count_};
+    }
+    std::size_t size() const noexcept { return count_; }
+    chunk_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[i], lengths_[i]}; }
+
+    ukv_val_len_t* offsets() const noexcept { return offsets_; }
+    ukv_val_len_t* lengths() const noexcept { return lengths_; }
+    element_t* contents() const noexcept { return contents_; }
 };
+
+using embedded_strs_t = embedded_chunks_gt<std::string_view>;
+using embedded_bins_t = embedded_chunks_gt<value_view_t>;
 
 /**
  * @brief Iterates through a predetermined number of NULL-delimited

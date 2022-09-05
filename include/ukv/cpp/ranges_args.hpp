@@ -173,8 +173,10 @@ using edges_view_t = edges_range_gt<ukv_key_t const>;
 
 template <typename tuples_at>
 auto edges(tuples_at&& tuples) noexcept {
-    using value_type = typename std::remove_reference_t<tuples_at>::value_type;
-    using result_t = std::conditional_t<std::is_const_v<value_type>, edges_view_t, edges_span_t>;
+    using tuples_t = std::remove_reference_t<tuples_at>;
+    using element_t = typename tuples_t::value_type;
+    constexpr bool immutable_k = std::is_const_v<element_t> || std::is_const_v<tuples_t>;
+    using result_t = std::conditional_t<immutable_k, edges_view_t, edges_span_t>;
     auto ptr = std::data(tuples);
     auto count = std::size(tuples);
     return result_t(ptr, ptr + count);

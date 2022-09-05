@@ -326,7 +326,6 @@ void export_edge_tuples( //
     ukv_arena_t arena_ptr = &arena;
     ukv_val_ptr_t c_found_values = nullptr;
     ukv_val_len_t* c_found_offsets = nullptr;
-    ukv_val_len_t* c_found_lengths = nullptr;
     ukv_read( //
         c_db,
         c_txn,
@@ -338,13 +337,13 @@ void export_edge_tuples( //
         c_options,
         &c_found_values,
         &c_found_offsets,
-        &c_found_lengths,
+        nullptr,
         nullptr,
         &arena_ptr,
         c_error);
     return_on_error(c_error);
 
-    joined_values_t values {c_found_values, c_found_offsets, c_found_lengths, c_vertices_count};
+    joined_bins_t values {c_found_values, c_found_offsets, c_vertices_count};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
     constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
@@ -352,7 +351,7 @@ void export_edge_tuples( //
     // Estimate the amount of memory we will need for the arena
     std::size_t count_ids = 0;
     if constexpr (tuple_size_k != 0) {
-        joined_values_iterator_t values_it = values.begin();
+        joined_bins_iterator_t values_it = values.begin();
         for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
             value_view_t value = *values_it;
             ukv_vertex_role_t role = roles[i];
@@ -368,7 +367,7 @@ void export_edge_tuples( //
     return_on_error(c_error);
 
     std::size_t passed_ids = 0;
-    joined_values_iterator_t values_it = values.begin();
+    joined_bins_iterator_t values_it = values.begin();
     for (std::size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
         value_view_t value = *values_it;
         ukv_key_t vertex_id = vertices_ids[i];
@@ -429,7 +428,6 @@ void pull_and_link_for_updates( //
     ukv_arena_t arena_ptr = &arena;
     ukv_val_ptr_t found_binary_begin = nullptr;
     ukv_val_len_t* found_binary_offs = nullptr;
-    ukv_val_len_t* found_binary_lens = nullptr;
     ukv_size_t unique_count = static_cast<ukv_size_t>(unique_entries.size());
     auto cols = unique_entries.immutable().members(&updated_entry_t::col);
     auto keys = unique_entries.immutable().members(&updated_entry_t::key);
@@ -444,14 +442,14 @@ void pull_and_link_for_updates( //
         c_options,
         &found_binary_begin,
         &found_binary_offs,
-        &found_binary_lens,
+        nullptr,
         nullptr,
         &arena_ptr,
         c_error);
     return_on_error(c_error);
 
     // Link the response buffer to `unique_entries`
-    joined_values_t found_binaries {found_binary_begin, found_binary_offs, found_binary_lens, unique_count};
+    joined_bins_t found_binaries {found_binary_begin, found_binary_offs, unique_count};
     for (std::size_t i = 0; i != unique_count; ++i) {
         auto found_binary = found_binaries[i];
         unique_entries[i].content = ukv_val_ptr_t(found_binary.data());
