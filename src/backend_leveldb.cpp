@@ -397,7 +397,7 @@ void ukv_scan( //
 
     ukv_options_t const c_options,
 
-    ukv_key_t** c_found_keys,
+    ukv_key_t*** c_found_keys,
     ukv_val_len_t** c_found_lengths,
 
     ukv_arena_t* c_arena,
