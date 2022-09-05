@@ -197,7 +197,7 @@ class serializing_tape_ref_t {
         growing_tape.push_back(single_doc_buffer_);
     }
 
-    joined_values_t view() noexcept { return growing_tape; }
+    embedded_bins_t view() noexcept { return growing_tape; }
     growing_tape_t growing_tape;
 };
 
@@ -214,7 +214,6 @@ places_arg_t const& read_unique_docs( //
     ukv_arena_t arena_ptr = &arena;
     ukv_val_ptr_t found_binary_begin = nullptr;
     ukv_val_len_t* found_binary_offs = nullptr;
-    ukv_val_len_t* found_binary_lens = nullptr;
     ukv_read( //
         c_db,
         c_txn,
@@ -226,12 +225,12 @@ places_arg_t const& read_unique_docs( //
         c_options,
         &found_binary_begin,
         &found_binary_offs,
-        &found_binary_lens,
+        nullptr,
         nullptr,
         &arena_ptr,
         c_error);
 
-    auto found_binaries = joined_values_t(found_binary_begin, found_binary_offs, found_binary_lens, places.count);
+    auto found_binaries = joined_bins_t(found_binary_begin, found_binary_offs, places.count);
     auto found_binary_it = found_binaries.begin();
 
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
@@ -288,7 +287,6 @@ places_arg_t read_docs( //
     ukv_arena_t arena_ptr = &arena;
     ukv_val_ptr_t found_binary_begin = nullptr;
     ukv_val_len_t* found_binary_offs = nullptr;
-    ukv_val_len_t* found_binary_lens = nullptr;
     ukv_size_t unique_places_count = static_cast<ukv_size_t>(unique_places.size());
     auto unique_places_strided = strided_range(unique_places.begin(), unique_places.end()).immutable();
     auto cols = unique_places_strided.members(&col_key_t::col);
@@ -304,7 +302,7 @@ places_arg_t read_docs( //
         c_options,
         &found_binary_begin,
         &found_binary_offs,
-        &found_binary_lens,
+        nullptr,
         nullptr,
         &arena_ptr,
         c_error);
@@ -326,7 +324,7 @@ places_arg_t read_docs( //
     }
 
     // Parse all the unique documents
-    auto found_binaries = joined_values_t(found_binary_begin, found_binary_offs, found_binary_lens, places.count);
+    auto found_binaries = joined_bins_t(found_binary_begin, found_binary_offs, places.count);
     auto found_binary_it = found_binaries.begin();
     for (ukv_size_t doc_idx = 0; doc_idx != unique_places_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
@@ -678,7 +676,7 @@ void ukv_docs_read( //
     read_docs(c_db, c_txn, places, c_options, arena, c_error, safe_callback);
 
     auto serialized_view = serializing_tape.view();
-    *c_found_values = serialized_view.contents();
+    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(serialized_view.contents());
     *c_found_offsets = serialized_view.offsets();
     *c_found_lengths = serialized_view.lengths();
 }
@@ -701,8 +699,8 @@ void ukv_docs_gist( //
     ukv_options_t const c_options,
 
     ukv_size_t* c_found_fields_count,
-    ukv_str_view_t* c_found_fields,
     ukv_val_len_t** c_found_offsets,
+    ukv_str_view_t* c_found_fields,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -713,7 +711,6 @@ void ukv_docs_gist( //
 
     ukv_val_ptr_t found_binary_begin = nullptr;
     ukv_val_len_t* found_binary_offs = nullptr;
-    ukv_val_len_t* found_binary_lens = nullptr;
     ukv_read( //
         c_db,
         c_txn,
@@ -725,7 +722,7 @@ void ukv_docs_gist( //
         c_options,
         &found_binary_begin,
         &found_binary_offs,
-        &found_binary_lens,
+        nullptr,
         nullptr,
         &new_arena,
         c_error);
@@ -734,8 +731,8 @@ void ukv_docs_gist( //
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
 
-    joined_values_t found_binaries {found_binary_begin, found_binary_offs, found_binary_lens, c_docs_count};
-    joined_values_iterator_t found_binary_it = found_binaries.begin();
+    joined_bins_t found_binaries {found_binary_begin, found_binary_offs, c_docs_count};
+    joined_bins_iterator_t found_binary_it = found_binaries.begin();
 
     // Export all the elements into a heap-allocated hash-set, keeping only unique entries
     std::optional<std::unordered_set<std::string>> paths;
@@ -757,11 +754,18 @@ void ukv_docs_gist( //
         return;
     }
 
-    // Estimate the final memory consumption on-tape
-    std::size_t total_length = 0;
-    for (auto const& path : *paths)
-        total_length += path.size();
-    total_length += paths->size();
+    // Estimate the final memory consumption on-tape and export offsets
+    span_gt<ukv_val_len_t> offs = arena.alloc<ukv_val_len_t>(paths->size() + 1, c_error);
+    return_on_error(c_error);
+
+    ukv_val_len_t total_length = 0;
+    ukv_val_len_t* prefix_length = offs.begin();
+    for (auto const& path : *paths) {
+        *prefix_length = total_length;
+        total_length += path.size() + 1;
+        ++prefix_length;
+    }
+    *prefix_length = total_length;
 
     // Reserve memory
     span_gt<byte_t> tape = arena.alloc<byte_t>(total_length, c_error);
@@ -770,6 +774,7 @@ void ukv_docs_gist( //
     // Export on to the tape
     byte_t* tape_ptr = tape.begin();
     *c_found_fields_count = static_cast<ukv_size_t>(paths->size());
+    *c_found_offsets = reinterpret_cast<ukv_val_len_t*>(offs.begin());
     *c_found_fields = reinterpret_cast<ukv_str_view_t>(tape_ptr);
     for (auto const& path : *paths)
         std::memcpy(std::exchange(tape_ptr, tape_ptr + path.size() + 1), path.c_str(), path.size() + 1);
@@ -1102,7 +1107,6 @@ void ukv_docs_gather( //
     // Retrieve the entire documents before we can sample internal fields
     ukv_val_ptr_t found_binary_begin = nullptr;
     ukv_val_len_t* found_binary_offs = nullptr;
-    ukv_val_len_t* found_binary_lens = nullptr;
     ukv_read( //
         c_db,
         c_txn,
@@ -1114,7 +1118,7 @@ void ukv_docs_gather( //
         c_options,
         &found_binary_begin,
         &found_binary_offs,
-        &found_binary_lens,
+        nullptr,
         nullptr,
         &new_arena,
         c_error);
@@ -1125,8 +1129,8 @@ void ukv_docs_gather( //
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     strided_iterator_gt<ukv_type_t const> types {c_types, c_types_stride};
 
-    joined_values_t found_binaries {found_binary_begin, found_binary_offs, found_binary_lens, c_docs_count};
-    joined_values_iterator_t found_binary_it = found_binaries.begin();
+    joined_bins_t found_binaries {found_binary_begin, found_binary_offs, c_docs_count};
+    joined_bins_iterator_t found_binary_it = found_binaries.begin();
 
     // Parse all the field names
     heapy_fields_t heapy_fields(std::nullopt);
