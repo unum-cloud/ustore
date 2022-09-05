@@ -18,8 +18,8 @@
 using namespace unum::ukv;
 using namespace unum;
 
-size_t vertexes_count = 1000;
-size_t next_connect = 100;
+std::size_t vertexes_count = 1000;
+std::size_t next_connect = 100;
 std::vector<edge_t> es;
 
 edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
@@ -32,9 +32,9 @@ edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
 
 void fill_edges() {
     es.clear();
-    size_t edge_id = 0;
-    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id) {
-        size_t connect_with = vertex_id + next_connect;
+    ukv_key_t edge_id = 0;
+    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id) {
+        ukv_key_t connect_with = vertex_id + next_connect;
         while (connect_with < vertexes_count) {
             edge_id++;
             es.push_back(make_edge(edge_id, vertex_id, connect_with));
@@ -44,12 +44,12 @@ void fill_edges() {
 }
 
 void upsert_edge(graph_ref_t& graph) {
-    size_t edge_id = 0;
-    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id) {
-        size_t connect_with = vertex_id + next_connect;
+    ukv_key_t edge_id = 0;
+    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id) {
+        ukv_key_t connect_with = vertex_id + next_connect;
         while (connect_with < vertexes_count) {
             edge_id++;
-            graph.upsert(make_edge(edge_id, vertex_id, connect_with));
+            EXPECT_TRUE(graph.upsert(make_edge(edge_id, vertex_id, connect_with)));
             EXPECT_TRUE(*graph.contains(vertex_id));
             EXPECT_EQ(*graph.degree(vertex_id), connect_with / 100u);
             connect_with += next_connect;
@@ -742,7 +742,7 @@ TEST(db, upsert_edges) {
     graph_ref_t graph = main.as_graph();
     fill_edges();
     EXPECT_TRUE(graph.upsert(edges(es)));
-    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id) {
+    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_EQ(*graph.degree(vertex_id), 9u);
     }
@@ -757,10 +757,12 @@ TEST(db, remove_vertexes) {
     fill_edges();
     EXPECT_TRUE(graph.upsert(edges(es)));
 
-    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id) {
+    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_TRUE(*graph.contains(vertex_id));
         EXPECT_TRUE(graph.remove(vertex_id));
-        EXPECT_FALSE(graph.contains(vertex_id));
+        EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_FALSE(*graph.contains(vertex_id));
     }
 }
 
@@ -773,17 +775,17 @@ TEST(db, remove_edge) {
     fill_edges();
     EXPECT_TRUE(graph.upsert(edges(es)));
 
-    size_t edge_id = 0;
-    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id) {
+    std::size_t edge_id = 0;
+    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id) {
         size_t connect_with = vertex_id + next_connect;
         while (connect_with < vertexes_count) {
             edge_id++;
-            graph.remove(make_edge(edge_id, vertex_id, connect_with));
+            EXPECT_TRUE(graph.remove(make_edge(edge_id, vertex_id, connect_with)));
             connect_with = connect_with + next_connect;
         }
     }
 
-    for (size_t vertex_id = 0; vertex_id < vertexes_count; ++vertex_id)
+    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id)
         EXPECT_TRUE(*graph.contains(vertex_id));
 }
 
