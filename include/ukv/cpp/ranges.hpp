@@ -337,7 +337,11 @@ class joined_chunks_iterator_gt {
     using pointer = void;
     using reference = void;
 
-    joined_chunks_iterator_gt(element_t* vals, ukv_val_len_t* offs) noexcept : contents_(vals), offsets_(offs) {}
+    template <typename same_size_at>
+    joined_chunks_iterator_gt(same_size_at* vals, ukv_val_len_t* offs) noexcept
+        : contents_((element_t*)(vals)), offsets_(offs) {
+        static_assert(sizeof(same_size_at) == sizeof(element_t));
+    }
 
     joined_chunks_iterator_gt& operator++() noexcept {
         ++offsets_;
@@ -414,8 +418,11 @@ class embedded_chunks_iterator_gt {
     using pointer = void;
     using reference = void;
 
-    embedded_chunks_iterator_gt(element_t* vals, ukv_val_len_t* offs, ukv_val_len_t* lens) noexcept
-        : contents_(vals), offsets_(offs), lengths_(lens) {}
+    template <typename same_size_at>
+    embedded_chunks_iterator_gt(same_size_at* vals, ukv_val_len_t* offs, ukv_val_len_t* lens) noexcept
+        : contents_((element_t*)(vals)), offsets_(offs), lengths_(lens) {
+        static_assert(sizeof(same_size_at) == sizeof(element_t));
+    }
 
     embedded_chunks_iterator_gt& operator++() noexcept {
         ++lengths_;
