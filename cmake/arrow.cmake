@@ -1,8 +1,7 @@
 # Installation scripts can be take from here:
 # https://arrow.apache.org/install/
 if(${UKV_PREINSTALLED_ARROW})
-    find_package(Arrow REQUIRED)
-
+    find_package(Arrow CONFIG REQUIRED)
 else()
     include(ExternalProject)
     set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -67,19 +66,19 @@ else()
     include_directories(${ARROW_INCLUDE_DIR} ${ARROW_INCLUDE_GEN_DIR})
     message("ARROW_INCLUDE_DIR: " ${ARROW_INCLUDE_DIR})
 
-    add_library(Arrow::arrow STATIC IMPORTED)
+    add_library(arrow::arrow STATIC IMPORTED)
     set_property(TARGET arrow::arrow PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow.a)
     add_dependencies(arrow::arrow Arrow-external)
 
-    add_library(Arrow::flight STATIC IMPORTED)
+    add_library(arrow::flight STATIC IMPORTED)
     set_property(TARGET arrow::flight PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_flight.a)
     add_dependencies(arrow::flight Arrow-external)
 
-    add_library(Arrow::bundled STATIC IMPORTED)
+    add_library(arrow::bundled STATIC IMPORTED)
     set_property(TARGET arrow::bundled PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_bundled_dependencies.a)
     add_dependencies(arrow::bundled Arrow-external)
 
-    add_library(Arrow::cuda STATIC IMPORTED)
+    add_library(arrow::cuda STATIC IMPORTED)
     set_property(TARGET arrow::cuda PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_cuda.a)
     add_dependencies(arrow::cuda Arrow-external)
 endif()
