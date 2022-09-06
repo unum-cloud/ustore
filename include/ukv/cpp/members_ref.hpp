@@ -58,7 +58,7 @@ class members_ref_gt {
     static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
     using value_t = std::conditional_t<is_one_k, value_view_t, embedded_bins_t>;
-    using present_t = std::conditional_t<is_one_k, bool, strided_range_gt<bool>>;
+    using present_t = std::conditional_t<is_one_k, bool, strided_iterator_gt<ukv_1x8_t>>;
     using length_t = std::conditional_t<is_one_k, ukv_val_len_t, indexed_range_gt<ukv_val_len_t*>>;
 
   protected:
@@ -115,26 +115,7 @@ class members_ref_gt {
      * ! Related values may be empty strings.
      */
     expected_gt<present_t> present(bool track = false) noexcept {
-
-        auto maybe = length(track);
-        if (!maybe)
-            return maybe.release_status();
-
-        if constexpr (is_one_k)
-            return present_t {*maybe != ukv_val_len_missing_k};
-        else {
-            // Transform the `found_lengths` into booleans.
-            auto found_lengths = maybe->begin();
-            auto count = keys_extractor_t {}.count(locations_.ref());
-            std::transform(found_lengths, found_lengths + count, found_lengths, [](ukv_val_len_t len) {
-                return len != ukv_val_len_missing_k;
-            });
-
-            // Cast assuming "Little-Endian" architecture
-            auto last_byte_offset = 0; // sizeof(ukv_val_len_t) - sizeof(bool);
-            auto booleans = reinterpret_cast<bool*>(found_lengths);
-            return present_t {booleans + last_byte_offset, sizeof(ukv_val_len_t), count};
-        }
+        return any_get<present_t>(track ? ukv_option_read_track_k : ukv_options_default_k);
     }
 
     /**
@@ -310,25 +291,28 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             status.member_ptr());
 
     if (!status)
-        return status;
+        return std::move(status);
 
     if constexpr (wants_length) {
+        indexed_range_gt<ukv_val_len_t*> many {found_lengths, found_lengths + count};
         if constexpr (is_one_k)
-            return length_t {found_lengths[0]};
+            return many[0];
         else
-            return length_t {found_lengths, found_lengths + count};
+            return many;
     }
     else if constexpr (wants_present) {
+        strided_iterator_gt<ukv_1x8_t> many {found_presences};
         if constexpr (is_one_k)
-            return present_t {found_presences[0]};
+            return bool(many[0]);
         else
-            return present_t {found_presences};
+            return many;
     }
     else {
+        embedded_bins_t many {found_values, found_offsets, found_lengths, count};
         if constexpr (is_one_k)
-            return value_view_t {found_values + *found_offsets, *found_lengths};
+            return many[0];
         else
-            return embedded_bins_t {found_values, found_offsets, found_lengths, count};
+            return many;
     }
 }
 
