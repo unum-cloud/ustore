@@ -138,8 +138,16 @@ endforeach()
 
 # Build
 if(${UKV_BUILD_PYTHON})
+  file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
+  include_directories(python/)
+  include_directories(python/pybind/)
+
   find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
   find_package(pybind11 CONFIG REQUIRED)
 
-  # TODO: Migrate setup.py builds to here
+  pybind11_add_module(py_stl MODULE python/pybind.cpp python/pybind/database.cpp python/pybind/networkx.cpp python/pybind/documents.cpp python/pybind/pandas.cpp)
+
+  target_link_libraries(py_stl PRIVATE ukv_stl)
+  target_compile_definitions(py_stl PRIVATE UKV_VERSION="0.0.1" UKV_PYTHON_MODULE_NAME=stl)
+  set_target_properties(py_stl PROPERTIES OUTPUT_NAME ukv/stl)
 endif()
