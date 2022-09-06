@@ -176,7 +176,7 @@ class graph_ref_t {
      * @brief Checks if certain vertices are present in the graph.
      * They maybe disconnected from everything else.
      */
-    expected_gt<strided_range_gt<bool>> contains( //
+    expected_gt<strided_iterator_gt<ukv_1x8_t>> contains( //
         strided_range_gt<ukv_key_t const> const& vertices,
         bool track = false) noexcept {
         places_arg_t arg;

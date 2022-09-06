@@ -233,7 +233,7 @@ void insert_into_entry( //
     auto ship = neighborship_t {neighbor_id, edge_id};
     auto degrees = reinterpret_cast<ukv_vertex_degree_t*>(entry.content);
     auto ships = reinterpret_cast<neighborship_t*>(degrees + 2);
-    if (entry.length < bytes_in_degrees_header_k) {
+    if (entry.length < bytes_in_degrees_header_k || entry.length == ukv_val_len_missing_k) {
         degrees[role != ukv_vertex_target_k] = 0;
         degrees[role == ukv_vertex_target_k] = 1;
         ships[0] = ship;
@@ -262,7 +262,7 @@ void erase_from_entry(updated_entry_t& entry,
                       ukv_key_t neighbor_id,
                       std::optional<ukv_key_t> edge_id = {}) {
 
-    if (entry.length < bytes_in_degrees_header_k)
+    if (entry.length < bytes_in_degrees_header_k || entry.length == ukv_val_len_missing_k)
         return;
 
     std::size_t off = 0;
@@ -796,7 +796,7 @@ void ukv_graph_remove_vertices( //
         }
 
         vertex_value.content = nullptr;
-        vertex_value.length = 0;
+        vertex_value.length = ukv_val_len_missing_k;
     }
 
     // Now we will go through all the explicitly deleted vertices
