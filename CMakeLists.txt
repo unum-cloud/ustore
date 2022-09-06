@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(UKV)
 
+file(READ "VERSION" _VERSION_)
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -145,9 +146,16 @@ if(${UKV_BUILD_PYTHON})
   find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
   find_package(pybind11 CONFIG REQUIRED)
 
-  pybind11_add_module(py_stl MODULE python/pybind.cpp python/pybind/database.cpp python/pybind/networkx.cpp python/pybind/documents.cpp python/pybind/pandas.cpp)
-
-  target_link_libraries(py_stl PRIVATE ukv_stl)
-  target_compile_definitions(py_stl PRIVATE UKV_VERSION="0.0.1" UKV_PYTHON_MODULE_NAME=stl)
-  set_target_properties(py_stl PROPERTIES OUTPUT_NAME ukv/stl)
+  foreach(lib_name IN ITEMS stl rocksdb leveldb)
+    string(CONCAT main_lib_name "ukv_" ${lib_name})
+    string(CONCAT py_lib_name "py_" ${lib_name})
+    
+    get_target_property(lib_SOURCES ${main_lib_name} SOURCES)
+    get_target_property(lib_LIBRARIES ${main_lib_name} LINK_LIBRARIES)
+    
+    pybind11_add_module(${py_lib_name} MODULE python/pybind.cpp python/pybind/database.cpp python/pybind/networkx.cpp python/pybind/documents.cpp python/pybind/pandas.cpp)
+    target_link_libraries(${py_lib_name} PRIVATE arrow arrow_dataset arrow_flight arrow_python arrow_substrait arrow_python_flight ${main_lib_name} ${lib_LIBRARIES})
+    target_compile_definitions(${py_lib_name} PRIVATE UKV_VERSION="${_VERSION_}" UKV_PYTHON_MODULE_NAME=${lib_name})
+    set_target_properties(${py_lib_name} PROPERTIES OUTPUT_NAME ukv/${lib_name})
+    endforeach()
 endif()
