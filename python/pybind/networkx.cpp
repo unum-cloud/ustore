@@ -221,9 +221,13 @@ void ukv::wrap_networkx(py::module& m) {
             auto ids_handle = py_buffer(vs);
             auto ids = py_strided_range<ukv_key_t const>(ids_handle);
             auto result = g.ref().contains(ids).throw_or_release();
-            return wrap_into_buffer(g, result);
+            std::vector<ukv_1x8_t> bunches;
+            while (result)
+                bunches.push_back(*result.get());
+            auto range_iter = strided_range_gt<ukv_1x8_t>(bunches.data(), bunches.size());
+            return wrap_into_buffer(g, range_iter);
         },
-        "Checks given nodes against graph members and returns a filtered iterable object");
+        "Filters given nodes which are also in the graph and returns an iterator over them.");
 
     // Adding and Removing Nodes and Edges
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#adding-and-removing-nodes-and-edges
