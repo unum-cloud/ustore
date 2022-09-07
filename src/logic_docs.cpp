@@ -52,15 +52,15 @@ value_view_t to_view(char const* str, std::size_t len) noexcept {
 
 struct export_to_value_t final : public nlohmann::detail::output_adapter_protocol<char>,
                                  public std::enable_shared_from_this<export_to_value_t> {
-    value_t* value_ptr = nullptr;
+    safe_vector_t<byte_t>* value_ptr = nullptr;
 
     export_to_value_t() = default;
-    export_to_value_t(value_t& value) noexcept : value_ptr(&value) {}
-
-    void write_character(char c) override { value_ptr->push_back(static_cast<byte_t>(c)); }
+    export_to_value_t(safe_vector_t<byte_t>& value) noexcept : value_ptr(&value) {}
+    // TODO c_error = nullptr
+    void write_character(char c) override { value_ptr->push_back(static_cast<byte_t>(c), nullptr); }
     void write_characters(char const* s, std::size_t length) override {
         auto ptr = reinterpret_cast<byte_t const*>(s);
-        value_ptr->insert(value_ptr->size(), ptr, ptr + length);
+        value_ptr->insert(value_ptr->size(), ptr, ptr + length, nullptr);
     }
 
     template <typename at>
@@ -176,7 +176,7 @@ void dump_any( //
 class serializing_tape_ref_t {
     stl_arena_t& arena_;
     std::shared_ptr<export_to_value_t> shared_exporter_;
-    value_t single_doc_buffer_;
+    safe_vector_t<byte_t> single_doc_buffer_;
 
   public:
     serializing_tape_ref_t(stl_arena_t& a) noexcept : arena_(a), growing_tape(&a.resource) {}
@@ -192,9 +192,9 @@ class serializing_tape_ref_t {
         if ((c_format == ukv_format_json_k) |       //
             (c_format == ukv_format_json_patch_k) | //
             (c_format == ukv_format_json_merge_patch_k))
-            single_doc_buffer_.push_back(byte_t {0});
+            single_doc_buffer_.push_back(byte_t {0}, c_error);
 
-        growing_tape.push_back(single_doc_buffer_);
+        growing_tape.push_back(single_doc_buffer_, c_error);
     }
 
     embedded_bins_t view() noexcept { return growing_tape; }
@@ -357,11 +357,9 @@ void replace_docs( //
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 
-    std::pmr::vector<value_t> updated_vals(places.count, &arena.resource);
-    if (updated_vals.size() == 0) {
-        *c_error = "Failed to allocate memory";
-        return;
-    }
+    growing_tape_t growing_tape(&arena.resource);
+    growing_tape.reserve(places.count, c_error);
+    return_on_error(c_error);
 
     std::shared_ptr<export_to_value_t> heapy_exporter;
     try {
@@ -404,12 +402,12 @@ void replace_docs( //
         places.cols_begin.stride(),
         places.keys_begin.get(),
         places.keys_begin.stride(),
-        updated_vals.front().member_ptr(),
-        sizeof(value_t),
-        nullptr,
-        0,
-        updated_vals.front().member_length(),
-        sizeof(value_t),
+        growing_tape.contents().begin().get(),
+        growing_tape.contents().stride(),
+        growing_tape.offsets().begin().get(),
+        growing_tape.offsets().stride(),
+        growing_tape.lengths().begin().get(),
+        growing_tape.lengths().stride(),
         nullptr,
         c_options,
         &arena_ptr,
