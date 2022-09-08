@@ -140,6 +140,7 @@ class strided_iterator_gt<ukv_1x8_t> {
     ref_t operator[](std::size_t idx) const noexcept { return at(idx); }
 
     operator bool() const noexcept { return begin_ != nullptr; }
+    ukv_size_t stride() const noexcept { return stride_; }
     bool repeats() const noexcept { return !stride_; }
     bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
     element_t* get() const noexcept { return begin_; }
