@@ -179,8 +179,7 @@ class serializing_tape_ref_t {
     safe_vector_gt<byte_t> single_doc_buffer_;
 
   public:
-    serializing_tape_ref_t(stl_arena_t& a) noexcept
-        : arena_(a), growing_tape(arena_), single_doc_buffer_(std::move(safe_vector_gt<byte_t>(&a))) {}
+    serializing_tape_ref_t(stl_arena_t& a) noexcept : arena_(a), growing_tape(arena_), single_doc_buffer_(&a) {}
 
     void push_back(json_t const& doc, ukv_format_t c_format, ukv_error_t* c_error) noexcept(false) {
         using allocator_t = std::pmr::polymorphic_allocator<export_to_value_t>;
