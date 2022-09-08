@@ -24,7 +24,7 @@ class [[nodiscard]] status_t {
     status_t(status_t const&) = delete;
     status_t& operator=(status_t const&) = delete;
 
-    status_t(status_t && other) noexcept { raw_ = std::exchange(other.raw_, nullptr); }
+    status_t(status_t&& other) noexcept { raw_ = std::exchange(other.raw_, nullptr); }
     status_t& operator=(status_t&& other) noexcept {
         std::swap(raw_, other.raw_);
         return *this;
@@ -62,11 +62,11 @@ class [[nodiscard]] expected_gt {
 
   public:
     expected_gt() = default;
-    expected_gt(object_at && object) : object_(std::move(object)) {}
-    expected_gt(status_t && status, object_at&& default_object = object_at {})
+    expected_gt(object_at&& object) : object_(std::move(object)) {}
+    expected_gt(status_t&& status, object_at&& default_object = object_at {})
         : status_(std::move(status)), object_(std::move(default_object)) {}
 
-    expected_gt(expected_gt && other) noexcept : status_(std::move(other.status_)), object_(std::move(other.object_)) {}
+    expected_gt(expected_gt&& other) noexcept : status_(std::move(other.status_)), object_(std::move(other.object_)) {}
 
     expected_gt& operator=(expected_gt&& other) noexcept {
         std::swap(status_, other.status_);
@@ -75,21 +75,21 @@ class [[nodiscard]] expected_gt {
     }
 
     operator bool() const noexcept { return status_; }
-    object_at operator*()&& noexcept { return std::move(object_); }
+    object_at operator*() && noexcept { return std::move(object_); }
     object_at const& operator*() const& noexcept { return object_; }
     object_at* operator->() noexcept { return &object_; }
     object_at const* operator->() const noexcept { return &object_; }
-    operator std::optional<object_at>()&& {
+    operator std::optional<object_at>() && {
         return !status_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
     }
 
     void throw_unhandled() { return status_.throw_unhandled(); }
     status_t release_status() { return std::exchange(status_, status_t {}); }
-    object_at& throw_or_ref()& {
+    object_at& throw_or_ref() & {
         status_.throw_unhandled();
         return object_;
     }
-    object_at throw_or_release()&& {
+    object_at throw_or_release() && {
         status_.throw_unhandled();
         return std::move(object_);
     }
@@ -129,12 +129,12 @@ class [[nodiscard]] given_gt : public expected_gt<object_at> {
 
   public:
     // given_gt() : an;
-    given_gt(object_at && object, arena_t && arena) : base_t(std::move(object)), arena_(std::move(arena)) {}
+    given_gt(object_at&& object, arena_t&& arena) : base_t(std::move(object)), arena_(std::move(arena)) {}
 
-    given_gt(status_t && status, object_at&& default_object = object_at {}, arena_t&& arena = {nullptr})
+    given_gt(status_t&& status, object_at&& default_object = object_at {}, arena_t&& arena = {nullptr})
         : base_t(std::move(status), std::move(default_object)), arena_(std::move(arena)) {}
 
-    given_gt(given_gt && other) noexcept
+    given_gt(given_gt&& other) noexcept
         : base_t(std::move(other.status_, other.object_)), arena_(std::move(other.arena_)) {}
 
     given_gt& operator=(given_gt&& other) noexcept {
