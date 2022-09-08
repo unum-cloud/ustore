@@ -52,15 +52,15 @@ value_view_t to_view(char const* str, std::size_t len) noexcept {
 
 struct export_to_value_t final : public nlohmann::detail::output_adapter_protocol<char>,
                                  public std::enable_shared_from_this<export_to_value_t> {
-    safe_vector_t<byte_t>* value_ptr = nullptr;
+    safe_vector_gt<byte_t>* value_ptr = nullptr;
+    ukv_error_t c_error = nullptr;
 
     export_to_value_t() = default;
-    export_to_value_t(safe_vector_t<byte_t>& value) noexcept : value_ptr(&value) {}
-    // TODO c_error = nullptr
-    void write_character(char c) override { value_ptr->push_back(static_cast<byte_t>(c), nullptr); }
+    export_to_value_t(safe_vector_gt<byte_t>& value) noexcept : value_ptr(&value) {}
+    void write_character(char c) override { value_ptr->push_back(static_cast<byte_t>(c), &c_error); }
     void write_characters(char const* s, std::size_t length) override {
         auto ptr = reinterpret_cast<byte_t const*>(s);
-        value_ptr->insert(value_ptr->size(), ptr, ptr + length, nullptr);
+        value_ptr->insert(value_ptr->size(), ptr, ptr + length, &c_error);
     }
 
     template <typename at>
@@ -176,10 +176,11 @@ void dump_any( //
 class serializing_tape_ref_t {
     stl_arena_t& arena_;
     std::shared_ptr<export_to_value_t> shared_exporter_;
-    safe_vector_t<byte_t> single_doc_buffer_;
+    safe_vector_gt<byte_t> single_doc_buffer_;
 
   public:
-    serializing_tape_ref_t(stl_arena_t& a) noexcept : arena_(a), growing_tape(&a.resource) {}
+    serializing_tape_ref_t(stl_arena_t& a) noexcept
+        : arena_(a), growing_tape(arena_), single_doc_buffer_(std::move(safe_vector_gt<byte_t>(&a))) {}
 
     void push_back(json_t const& doc, ukv_format_t c_format, ukv_error_t* c_error) noexcept(false) {
         using allocator_t = std::pmr::polymorphic_allocator<export_to_value_t>;
@@ -357,7 +358,7 @@ void replace_docs( //
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 
-    growing_tape_t growing_tape(&arena.resource);
+    growing_tape_t growing_tape(arena);
     growing_tape.reserve(places.count, c_error);
     return_on_error(c_error);
 
