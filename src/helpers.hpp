@@ -391,7 +391,7 @@ element_at inplace_inclusive_prefix_sum(element_at* begin, element_at* const end
  */
 
 template <typename element_at>
-class safe_vector_t {
+class safe_vector_gt {
     using element_t = element_at;
     using elementc_t = element_t const;
     using ptrc_t = elementc_t*;
@@ -405,15 +405,15 @@ class safe_vector_t {
     stl_arena_t* arena_ptr_ = nullptr;
 
   public:
-    safe_vector_t() noexcept = default;
-    safe_vector_t(safe_vector_t const&) = delete;
-    safe_vector_t& operator=(safe_vector_t const&) = delete;
+    safe_vector_gt() noexcept = default;
+    safe_vector_gt(safe_vector_gt const&) = delete;
+    safe_vector_gt& operator=(safe_vector_gt const&) = delete;
 
-    safe_vector_t(safe_vector_t&& v) noexcept
+    safe_vector_gt(safe_vector_gt&& v) noexcept
         : ptr_(std::exchange(v.ptr_, nullptr)), length_(std::exchange(v.length_, 0)), cap_(std::exchange(v.cap_, 0)),
           arena_ptr_(std::exchange(v.arena_ptr_, nullptr)) {}
 
-    safe_vector_t& operator=(safe_vector_t&& v) noexcept {
+    safe_vector_gt& operator=(safe_vector_gt&& v) noexcept {
         std::swap(v.ptr_, ptr_);
         std::swap(v.length_, length_);
         std::swap(v.cap_, cap_);
@@ -421,10 +421,8 @@ class safe_vector_t {
 
         return *this;
     }
-    safe_vector_t(std::pmr::memory_resource* resource) {
-        arena_ptr_ = new stl_arena_t((monotonic_resource_t*)resource);
-    }
-    safe_vector_t(std::size_t size, stl_arena_t* arena_ptr, ukv_error_t* c_error) : arena_ptr_(arena_ptr) {
+    safe_vector_gt(stl_arena_t* arena_ptr) : arena_ptr_(arena_ptr) {}
+    safe_vector_gt(std::size_t size, stl_arena_t* arena_ptr, ukv_error_t* c_error) : arena_ptr_(arena_ptr) {
         if (!size)
             return;
         auto tape = arena_ptr_->alloc<element_t>(size, c_error);
@@ -432,8 +430,8 @@ class safe_vector_t {
         cap_ = length_ = size;
     }
 
-    safe_vector_t(value_view_t view) : safe_vector_t(view.size()) { std::memcpy(ptr_, view.begin(), view.size()); }
-    ~safe_vector_t() { reset(); }
+    safe_vector_gt(value_view_t view) : safe_vector_gt(view.size()) { std::memcpy(ptr_, view.begin(), view.size()); }
+    ~safe_vector_gt() { reset(); }
 
     void reset() {
         ptr_ = nullptr;
@@ -519,12 +517,12 @@ class safe_vector_t {
  * Is suited for data preparation before passing to the C API.
  */
 class growing_tape_t {
-    safe_vector_t<ukv_val_len_t> offsets_;
-    safe_vector_t<ukv_val_len_t> lengths_;
-    safe_vector_t<byte_t> contents_;
+    safe_vector_gt<ukv_val_len_t> offsets_;
+    safe_vector_gt<ukv_val_len_t> lengths_;
+    safe_vector_gt<byte_t> contents_;
 
   public:
-    growing_tape_t(std::pmr::memory_resource* resource) : offsets_(resource), lengths_(resource), contents_(resource) {}
+    growing_tape_t(stl_arena_t& arena) : offsets_(&arena), lengths_(&arena), contents_(&arena) {}
 
     void push_back(value_view_t value, ukv_error_t* c_error) {
         offsets_.push_back(static_cast<ukv_val_len_t>(contents_.size()), c_error);
