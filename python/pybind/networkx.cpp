@@ -221,11 +221,15 @@ void ukv::wrap_networkx(py::module& m) {
             auto ids_handle = py_buffer(vs);
             auto ids = py_strided_range<ukv_key_t const>(ids_handle);
             auto result = g.ref().contains(ids).throw_or_release();
-            std::vector<ukv_1x8_t> bunches;
-            while (result)
-                bunches.push_back(*result.get());
-            auto range_iter = strided_range_gt<ukv_1x8_t>(bunches.data(), bunches.size());
-            return wrap_into_buffer(g, range_iter);
+
+            py::array_t<ukv_key_t> res_array(ids.size());
+            size_t j = 0;
+            for (size_t i = 0; i < ids.size(); i++)
+                if (result[i])
+                    res_array.mutable_at(j++) = ids[i];
+            res_array.resize(py::array::ShapeContainer({j - 1}));
+
+            return res_array;
         },
         "Filters given nodes which are also in the graph and returns an iterator over them.");
 
