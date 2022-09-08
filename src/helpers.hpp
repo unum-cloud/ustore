@@ -439,9 +439,8 @@ class safe_vector_gt {
         cap_ = 0;
     }
 
-    void resize(std::size_t size) {
-        if (size > cap_)
-            throw std::invalid_argument("Only shrinking is currently supported");
+    void resize(std::size_t size, ukv_error_t* c_error) {
+        return_if_error(cap_ < size, c_error, args_wrong_k, "Only shrinking is currently supported");
         length_ = size;
     }
 
@@ -470,8 +469,7 @@ class safe_vector_gt {
     }
 
     void insert(std::size_t offset, ptrc_t inserted_begin, ptrc_t inserted_end, ukv_error_t* c_error) {
-        if (offset > size())
-            throw std::out_of_range("Can't insert");
+        return_if_error(size() < offset, c_error, out_of_range_k, "Can't insert");
 
         auto inserted_len = static_cast<ukv_val_len_t>(inserted_end - inserted_begin);
         auto following_len = static_cast<ukv_val_len_t>(length_ - offset);
@@ -489,9 +487,8 @@ class safe_vector_gt {
         std::memcpy(ptr_ + offset, inserted_begin, inserted_len);
     }
 
-    void erase(std::size_t offset, std::size_t length) {
-        if (offset + length > size())
-            throw std::out_of_range("Can't erase");
+    void erase(std::size_t offset, std::size_t length, ukv_error_t* c_error) {
+        return_if_error(size() < offset + length, c_error, out_of_range_k, "Can't erase");
 
         std::memmove(ptr_ + offset, ptr_ + offset + length, length_ - (offset + length));
         length_ -= length;
