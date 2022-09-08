@@ -227,7 +227,7 @@ void ukv::wrap_networkx(py::module& m) {
             for (size_t i = 0; i < ids.size(); i++)
                 if (result[i])
                     res_array.mutable_at(j++) = ids[i];
-            res_array.resize(py::array::ShapeContainer({j - 1}));
+            res_array.resize(py::array::ShapeContainer({std::max<size_t>(j, 1) - 1}));
 
             return res_array;
         },
