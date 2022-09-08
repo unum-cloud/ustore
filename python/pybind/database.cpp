@@ -124,7 +124,9 @@ void ukv::wrap_database(py::module& m) {
     py_col.def("clear", [](py_col_t& py_col) {
         py_db_t& py_db = *py_col.py_db_ptr.lock().get();
         db_t& db = py_db.native;
-        db.remove(py_col.name.c_str()).throw_unhandled();
+        db.remove(py_col.name.c_str(),
+                  (ukv_col_main_k != py_col.native) ? ukv_col_drop_keys_vals_handle_k : ukv_col_drop_keys_vals_k)
+            .throw_unhandled();
         py_col.native = db.collection(py_col.name.c_str()).throw_or_release();
     });
 

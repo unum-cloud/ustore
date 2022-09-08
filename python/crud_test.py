@@ -348,7 +348,7 @@ def test_docs_batch():
 
     # Set same value to multiple keys
     json = {'Name': 'Davit', 'Surname': 'Vardanyan', 'Age': 24}
-    doc_col.set(keys, json)
+    doc_col.broadcast(keys, json)
     received_jsons = doc_col.get(keys)
     assert len(received_jsons) == 2
     assert received_jsons[0] == json

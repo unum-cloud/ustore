@@ -61,160 +61,6 @@ inline at next_multiple(at x, at divisor) {
     return divide_round_up(x, divisor) * divisor;
 }
 
-/**
- * @brief An `std::vector`-like class, with open layout,
- * friendly to our C API. Can't grow, but can shrink.
- * Just like humans after puberty :)
- */
-class value_t {
-    ukv_val_ptr_t ptr_ = nullptr;
-    ukv_val_len_t length_ = 0;
-    ukv_val_len_t cap_ = 0;
-
-  public:
-    value_t() noexcept = default;
-    value_t(value_t const&) = delete;
-    value_t& operator=(value_t const&) = delete;
-
-    value_t(value_t&& v) noexcept
-        : ptr_(std::exchange(v.ptr_, nullptr)), length_(std::exchange(v.length_, 0)), cap_(std::exchange(v.cap_, 0)) {}
-
-    value_t& operator=(value_t&& v) noexcept {
-        std::swap(v.ptr_, ptr_);
-        std::swap(v.length_, length_);
-        std::swap(v.cap_, cap_);
-        return *this;
-    }
-
-    value_t(std::size_t size) {
-        if (!size)
-            return;
-        auto new_ptr = allocator_t {}.allocate(size);
-        if (!new_ptr)
-            throw std::bad_alloc();
-        ptr_ = reinterpret_cast<ukv_val_ptr_t>(new_ptr);
-        cap_ = length_ = size;
-    }
-
-    value_t(value_view_t view) : value_t(view.size()) { std::memcpy(ptr_, view.begin(), view.size()); }
-    ~value_t() { reset(); }
-
-    void reset() {
-        if (ptr_)
-            allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
-        ptr_ = nullptr;
-        length_ = 0;
-        cap_ = 0;
-    }
-
-    void resize(std::size_t size) {
-        if (size > cap_)
-            throw std::invalid_argument("Only shrinking is currently supported");
-        length_ = size;
-    }
-
-    void push_back(byte_t byte) {
-        auto new_size = length_ + 1;
-        if (new_size > cap_) {
-            auto new_cap = next_power_of_two(new_size);
-            auto new_ptr = allocator_t {}.allocate(new_cap);
-            if (!new_ptr)
-                throw std::bad_alloc();
-            std::memcpy(new_ptr, ptr_, length_);
-            if (ptr_)
-                allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
-
-            ptr_ = reinterpret_cast<ukv_val_ptr_t>(new_ptr);
-            cap_ = new_cap;
-        }
-
-        reinterpret_cast<byte_t*>(ptr_)[length_] = byte;
-        length_ = new_size;
-    }
-
-    void insert(std::size_t offset, byte_t const* inserted_begin, byte_t const* inserted_end) {
-        if (offset > size())
-            throw std::out_of_range("Can't insert");
-
-        auto inserted_len = static_cast<ukv_val_len_t>(inserted_end - inserted_begin);
-        auto following_len = static_cast<ukv_val_len_t>(length_ - offset);
-        auto new_size = length_ + inserted_len;
-        if (new_size > cap_) {
-            auto new_ptr = allocator_t {}.allocate(new_size);
-            if (!new_ptr)
-                throw std::bad_alloc();
-            std::memcpy(new_ptr, ptr_, offset);
-            std::memcpy(new_ptr + offset, inserted_begin, inserted_len);
-            std::memcpy(new_ptr + offset + inserted_len, ptr_ + offset, following_len);
-            if (ptr_)
-                allocator_t {}.deallocate(reinterpret_cast<byte_t*>(ptr_), cap_);
-
-            ptr_ = reinterpret_cast<ukv_val_ptr_t>(new_ptr);
-            cap_ = length_ = new_size;
-        }
-        else {
-            std::memmove(ptr_ + offset + inserted_len, ptr_ + offset, following_len);
-            std::memcpy(ptr_ + offset, inserted_begin, inserted_len);
-            length_ = new_size;
-        }
-    }
-
-    void erase(std::size_t offset, std::size_t length) {
-        if (offset + length > size())
-            throw std::out_of_range("Can't erase");
-
-        std::memmove(ptr_ + offset, ptr_ + offset + length, length_ - (offset + length));
-        length_ -= length;
-    }
-
-    inline byte_t* begin() const noexcept { return reinterpret_cast<byte_t*>(ptr_); }
-    inline byte_t* end() const noexcept { return begin() + length_; }
-    inline std::size_t size() const noexcept { return length_; }
-    inline operator bool() const noexcept { return length_; }
-    inline operator value_view_t() const noexcept { return {ptr_, length_}; }
-    inline void clear() noexcept { length_ = 0; }
-
-    inline ukv_val_ptr_t* member_ptr() noexcept { return &ptr_; }
-    inline ukv_val_len_t* member_length() noexcept { return &length_; }
-    inline ukv_val_len_t* member_cap() noexcept { return &cap_; }
-};
-
-/**
- * @brief Append-only data-structure for variable length blobs.
- * Owns the underlying arena and is external to the underlying DB.
- * Is suited for data preparation before passing to the C API.
- */
-class growing_tape_t {
-    std::pmr::vector<ukv_val_len_t> offsets_;
-    std::pmr::vector<ukv_val_len_t> lengths_;
-    std::pmr::vector<byte_t> contents_;
-
-  public:
-    growing_tape_t(std::pmr::memory_resource* resource) : offsets_(resource), lengths_(resource), contents_(resource) {}
-
-    void push_back(value_view_t value) {
-        offsets_.push_back(static_cast<ukv_val_len_t>(contents_.size()));
-        lengths_.push_back(static_cast<ukv_val_len_t>(value.size()));
-        contents_.insert(contents_.end(), value.begin(), value.end());
-    }
-
-    void clear() {
-        offsets_.clear();
-        lengths_.clear();
-        contents_.clear();
-    }
-
-    strided_range_gt<ukv_val_len_t> offsets() noexcept { return strided_range(offsets_); }
-    strided_range_gt<ukv_val_len_t> lengths() noexcept { return strided_range(lengths_); }
-    strided_range_gt<byte_t> contents() noexcept { return strided_range(contents_); }
-
-    operator joined_bins_t() noexcept { return {ukv_val_ptr_t(contents_.data()), offsets_.data(), lengths_.size()}; }
-
-    operator embedded_bins_t() noexcept {
-        return {ukv_val_ptr_t(contents_.data()), offsets_.data(), lengths_.data(), lengths_.size()};
-    }
-};
-
 class monotonic_resource_t final : public std::pmr::memory_resource {
   public:
     enum type_t { capped_k, growing_k, borrowed_k };
@@ -240,8 +86,8 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
     monotonic_resource_t(monotonic_resource_t const&) = delete;
     monotonic_resource_t& operator=(monotonic_resource_t const&) = delete;
 
-    explicit monotonic_resource_t(monotonic_resource_t* upstream) noexcept
-        : buffers_(), upstream_(upstream), alignment_(upstream->alignment_), type_(type_t::borrowed_k) {};
+    explicit monotonic_resource_t(std::pmr::memory_resource* upstream) noexcept
+        : buffers_(), upstream_(upstream), alignment_(0), type_(type_t::borrowed_k) {};
 
     monotonic_resource_t(size_t buffer_size,
                          size_t alignment,
@@ -409,7 +255,7 @@ struct stl_arena_t {
             std::memcpy(result, span.begin(), span.size_bytes());
         else
             log_error(c_error, out_of_memory_k, "");
-        return {reinterpret_cast<at*>(result), span.size + additional_size};
+        return {reinterpret_cast<at*>(result), span.size() + additional_size};
     }
 
     template <typename at>
@@ -537,5 +383,174 @@ element_at inplace_inclusive_prefix_sum(element_at* begin, element_at* const end
         sum += std::exchange(*begin, *begin + sum);
     return sum;
 }
+
+/**
+ * @brief An `std::vector`-like class, with open layout,
+ * friendly to our C API. Can't grow, but can shrink.
+ * Just like humans after puberty :)
+ */
+
+template <typename element_at>
+class safe_vector_gt {
+    using element_t = element_at;
+    using elementc_t = element_t const;
+    using ptrc_t = elementc_t*;
+    using ptr_t = element_t*;
+
+  private:
+    ptr_t ptr_ = nullptr;
+    ukv_val_len_t length_ = 0;
+    ukv_val_len_t cap_ = 0;
+
+    stl_arena_t* arena_ptr_ = nullptr;
+
+  public:
+    safe_vector_gt() noexcept = default;
+    safe_vector_gt(safe_vector_gt const&) = delete;
+    safe_vector_gt& operator=(safe_vector_gt const&) = delete;
+
+    safe_vector_gt(safe_vector_gt&& v) noexcept
+        : ptr_(std::exchange(v.ptr_, nullptr)), length_(std::exchange(v.length_, 0)), cap_(std::exchange(v.cap_, 0)),
+          arena_ptr_(std::exchange(v.arena_ptr_, nullptr)) {}
+
+    safe_vector_gt& operator=(safe_vector_gt&& v) noexcept {
+        std::swap(v.ptr_, ptr_);
+        std::swap(v.length_, length_);
+        std::swap(v.cap_, cap_);
+        std::swap(v.arena_ptr_, arena_ptr_);
+
+        return *this;
+    }
+    safe_vector_gt(stl_arena_t* arena_ptr) : arena_ptr_(arena_ptr) {}
+    safe_vector_gt(std::size_t size, stl_arena_t* arena_ptr, ukv_error_t* c_error) : arena_ptr_(arena_ptr) {
+        if (!size)
+            return;
+        auto tape = arena_ptr_->alloc<element_t>(size, c_error);
+        ptr_ = tape.begin();
+        cap_ = length_ = size;
+    }
+
+    safe_vector_gt(value_view_t view) : safe_vector_gt(view.size()) { std::memcpy(ptr_, view.begin(), view.size()); }
+    ~safe_vector_gt() { reset(); }
+
+    void reset() {
+        ptr_ = nullptr;
+        length_ = 0;
+        cap_ = 0;
+    }
+
+    void resize(std::size_t size, ukv_error_t* c_error) {
+        return_if_error(cap_ < size, c_error, args_wrong_k, "Only shrinking is currently supported");
+        length_ = size;
+    }
+
+    void reserve(size_t new_cap, ukv_error_t* c_error) {
+        if (new_cap <= cap_)
+            return;
+        auto tape = ptr_ ? arena_ptr_->grow<element_t>({ptr_, length_}, new_cap - cap_, c_error)
+                         : arena_ptr_->alloc<element_t>(new_cap, c_error);
+        return_on_error(c_error);
+
+        ptr_ = tape.begin();
+    }
+
+    void push_back(element_t val, ukv_error_t* c_error) {
+        auto new_size = length_ + 1;
+        if (new_size > cap_) {
+            auto new_cap = next_power_of_two(new_size);
+            auto tape = arena_ptr_->grow<element_t>({ptr_, length_}, new_cap - cap_, c_error);
+            return_on_error(c_error);
+            ptr_ = tape.begin();
+            cap_ = new_cap;
+        }
+
+        ptr_[length_] = val;
+        length_ = new_size;
+    }
+
+    void insert(std::size_t offset, ptrc_t inserted_begin, ptrc_t inserted_end, ukv_error_t* c_error) {
+        return_if_error(size() < offset, c_error, out_of_range_k, "Can't insert");
+
+        auto inserted_len = static_cast<ukv_val_len_t>(inserted_end - inserted_begin);
+        auto following_len = static_cast<ukv_val_len_t>(length_ - offset);
+        auto new_size = length_ + inserted_len;
+        if (new_size > cap_) {
+            auto tape = arena_ptr_->grow<element_t>({ptr_, length_}, new_size - cap_, c_error);
+            return_on_error(c_error);
+            ptr_ = tape.begin();
+            cap_ = length_ = new_size;
+        }
+        else
+            length_ = new_size;
+
+        std::memmove(ptr_ + offset + inserted_len, ptr_ + offset, following_len);
+        std::memcpy(ptr_ + offset, inserted_begin, inserted_len);
+    }
+
+    void erase(std::size_t offset, std::size_t length, ukv_error_t* c_error) {
+        return_if_error(size() < offset + length, c_error, out_of_range_k, "Can't erase");
+
+        std::memmove(ptr_ + offset, ptr_ + offset + length, length_ - (offset + length));
+        length_ -= length;
+    }
+
+    inline ptrc_t data() const noexcept { return ptr_; }
+    inline ptr_t data() noexcept { return ptr_; }
+    inline ptr_t begin() const noexcept { return reinterpret_cast<ptr_t>(ptr_); }
+    inline ptr_t end() const noexcept { return begin() + length_; }
+    inline std::size_t size() const noexcept { return length_; }
+    inline operator bool() const noexcept { return length_; }
+    inline operator value_view_t() const noexcept { return {ptr_, length_}; }
+    inline void clear() noexcept { length_ = 0; }
+
+    inline ptr_t* member_ptr() noexcept { return &ptr_; }
+    inline ukv_val_len_t* member_length() noexcept { return &length_; }
+    inline ukv_val_len_t* member_cap() noexcept { return &cap_; }
+};
+
+/**
+ * @brief Append-only data-structure for variable length blobs.
+ * Owns the underlying arena and is external to the underlying DB.
+ * Is suited for data preparation before passing to the C API.
+ */
+class growing_tape_t {
+    safe_vector_gt<ukv_val_len_t> offsets_;
+    safe_vector_gt<ukv_val_len_t> lengths_;
+    safe_vector_gt<byte_t> contents_;
+
+  public:
+    growing_tape_t(stl_arena_t& arena) : offsets_(&arena), lengths_(&arena), contents_(&arena) {}
+
+    void push_back(value_view_t value, ukv_error_t* c_error) {
+        offsets_.push_back(static_cast<ukv_val_len_t>(contents_.size()), c_error);
+        lengths_.push_back(static_cast<ukv_val_len_t>(value.size()), c_error);
+        contents_.insert(contents_.size(), value.begin(), value.end(), c_error);
+    }
+
+    void reserve(size_t new_cap, ukv_error_t* c_error) {
+        offsets_.reserve(new_cap, c_error);
+        lengths_.reserve(new_cap, c_error);
+    }
+
+    void clear() {
+        offsets_.clear();
+        lengths_.clear();
+        contents_.clear();
+    }
+
+    strided_range_gt<ukv_val_len_t> offsets() noexcept {
+        return strided_range<ukv_val_len_t>(offsets_.begin(), offsets_.end());
+    }
+    strided_range_gt<ukv_val_len_t> lengths() noexcept {
+        return strided_range<ukv_val_len_t>(lengths_.begin(), lengths_.end());
+    }
+    strided_range_gt<byte_t> contents() noexcept { return strided_range<byte_t>(contents_.begin(), contents_.end()); }
+
+    operator joined_bins_t() noexcept { return {ukv_val_ptr_t(contents_.data()), offsets_.data(), lengths_.size()}; }
+
+    operator embedded_bins_t() noexcept {
+        return {ukv_val_ptr_t(contents_.data()), offsets_.data(), lengths_.data(), lengths_.size()};
+    }
+};
 
 } // namespace unum::ukv
