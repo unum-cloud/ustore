@@ -24,7 +24,7 @@ using namespace unum;
 #define M_EXPECT_EQ_JSON(str1, str2) EXPECT_EQ(json_t::parse((str1)), json_t::parse((str2)));
 #define M_EXPECT_EQ_MSG(str1, str2) \
     EXPECT_EQ(json_t::from_msgpack((str1).c_str(), (str1).c_str() + (str1).size()), json_t::parse((str2)));
-
+#if 0
 TEST(db, intro) {
 
     db_t db;
@@ -95,7 +95,7 @@ TEST(db, intro) {
 
     EXPECT_TRUE(db.clear());
 }
-
+#endif
 #pragma region Binary Collections
 
 template <typename locations_at>
