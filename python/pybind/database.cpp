@@ -6,6 +6,12 @@ using namespace unum::ukv::pyb;
 using namespace unum::ukv;
 using namespace unum;
 
+enum class read_format_t {
+    pythonic_k,
+    arrow_k,
+    tensor_k,
+};
+
 static void commit_txn(py_txn_t& py_txn) {
 
     [[maybe_unused]] py::gil_scoped_release release;
@@ -81,6 +87,11 @@ void ukv::wrap_database(py::module& m) {
         .value("BSON", ukv_format_bson_k)
         .value("CBOR", ukv_format_cbor_k)
         .value("UBJSON", ukv_format_ubjson_k);
+
+    py::enum_<read_format_t>(m, "ReadFormat", py::module_local())
+        .value("Pythonic", read_format_t::pythonic_k)
+        .value("Arrow", read_format_t::arrow_k)
+        .value("Tensor", read_format_t::tensor_k);
 
     // Define `DataBase`
     py_db.def( //

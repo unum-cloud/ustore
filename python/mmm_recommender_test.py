@@ -17,12 +17,12 @@ def fill_db(all_follows, all_views, all_posters, all_people, all_movies):
     jds = json.dumps
     def load(x): return requests.get(x).content
 
-    alice, bob, charlie, derek = 1, 2, 3, 4
-    all_people.set((alice, bob, charlie, derek), (
+    alice, bob, charlie, david = 1, 2, 3, 4
+    all_people.set((alice, bob, charlie, david), (
         jds({'name': 'Alice', 'lastname': 'Bobchinsky', 'stars': 1200}),
         jds({'name': 'Bob', 'lastname': 'Charleston', 'stars': 700}),
         jds({'name': 'Charlie', 'lastname': 'Allison', 'stars': 800}),
-        jds({'name': 'Derek', 'lastname': 'Derekson', 'stars': 500})
+        jds({'name': 'David', 'lastname': 'Davidson', 'stars': 500})
     ))
     all_movies.set(range(101, 110), (
         jds({'title': 'The Fast and the Furious', 'rating': 6.8}),
@@ -66,9 +66,9 @@ def fill_db(all_follows, all_views, all_posters, all_people, all_movies):
     all_views.add_edge(charlie, 105)
 
     all_follows.add_edge(alice, bob)
-    all_follows.add_edge(derek, alice)
-    all_follows.add_edge(derek, bob)
-    all_follows.add_edge(derek, charlie)
+    all_follows.add_edge(david, alice)
+    all_follows.add_edge(david, bob)
+    all_follows.add_edge(david, charlie)
 
 
 def test():
