@@ -118,6 +118,7 @@ if(${UKV_BUILD_TESTS})
     string(CONCAT test_name ${lib_name} "_test")
     add_executable(${test_name} src/test.cpp ${lib_SOURCES})
     target_link_libraries(${test_name} gtest ${lib_LIBRARIES})
+    add_test(NAME "${lib_name}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_name}")
   endforeach()
 endif()
 
