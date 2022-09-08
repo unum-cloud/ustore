@@ -17,19 +17,19 @@ def only_json(col):
     retrieved = docs[1]
     assert original == retrieved, 'Failed to recover document'
 
-    docs[1].patch([
+    docs.patch(1, [
         {'op': 'add', 'path': '/swag', 'value': 'maximum'},
         # {'op': 'replace', 'path': '/baz', 'value': 'boo'},
         # {'op': 'remove', 'path': '/foo'}
     ])
 
-    docs[1].merge({
+    docs.merge(1, {
         '/swag': 'ultimate'
     })
 
     # Batch field lookup
     # Supporting JSON-Pointers
-    docs['1/US']
+    # docs['1/US']
 
 
 def only_table(col):
