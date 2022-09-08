@@ -26,7 +26,7 @@ using namespace unum::ukv;
 using namespace unum;
 
 using json_t =
-    nlohmann::basic_json<std::map, std::vector, std::string, bool, int64_t, uint64_t, double, polymorphic_allocator_t>;
+    nlohmann::basic_json<std::map, std::vector, std::string, bool, int64_t, uint64_t, double, polymorphic_allocator_gt>;
 using json_ptr_t = json_t::json_pointer;
 
 constexpr ukv_format_t internal_format_k = ukv_format_msgpack_k;
@@ -53,14 +53,14 @@ value_view_t to_view(char const* str, std::size_t len) noexcept {
 struct export_to_value_t final : public nlohmann::detail::output_adapter_protocol<char>,
                                  public std::enable_shared_from_this<export_to_value_t> {
     safe_vector_gt<byte_t>* value_ptr = nullptr;
-    ukv_error_t c_error = nullptr;
+    ukv_error_t* c_error = nullptr;
 
     export_to_value_t() = default;
     export_to_value_t(safe_vector_gt<byte_t>& value) noexcept : value_ptr(&value) {}
-    void write_character(char c) override { value_ptr->push_back(static_cast<byte_t>(c), &c_error); }
+    void write_character(char c) override { value_ptr->push_back(static_cast<byte_t>(c), c_error); }
     void write_characters(char const* s, std::size_t length) override {
         auto ptr = reinterpret_cast<byte_t const*>(s);
-        value_ptr->insert(value_ptr->size(), ptr, ptr + length, &c_error);
+        value_ptr->insert(value_ptr->size(), ptr, ptr + length, c_error);
     }
 
     template <typename at>
@@ -173,32 +173,45 @@ void dump_any( //
     });
 }
 
-class serializing_tape_ref_t {
+struct serializing_tape_ref_t {
+
+    serializing_tape_ref_t(stl_arena_t& a, ukv_error_t* c_error) noexcept
+        : arena_(a), single_doc_buffer_(&a), growing_tape(arena_), c_error(c_error) {
+        safe_section("Allocating doc exporter", c_error, [&] {
+            using allocator_t = std::pmr::polymorphic_allocator<export_to_value_t>;
+            shared_exporter_ = std::allocate_shared<export_to_value_t, allocator_t>(&arena_.resource);
+            shared_exporter_->value_ptr = &single_doc_buffer_;
+            shared_exporter_->c_error = c_error;
+        });
+    }
+
+    void push_back(json_t const& doc, ukv_format_t c_format) noexcept {
+
+        single_doc_buffer_.clear();
+        dump_any(doc, c_format, shared_exporter_, c_error);
+        return_on_error(c_error);
+
+        if ((c_format == ukv_format_json_k) |       //
+            (c_format == ukv_format_json_patch_k) | //
+            (c_format == ukv_format_json_merge_patch_k)) {
+            single_doc_buffer_.push_back(byte_t {0}, c_error);
+            return_on_error(c_error);
+        }
+
+        growing_tape.push_back(single_doc_buffer_, c_error);
+        return_on_error(c_error);
+    }
+
+    embedded_bins_t view() noexcept { return growing_tape; }
+
+  private:
     stl_arena_t& arena_;
     std::shared_ptr<export_to_value_t> shared_exporter_;
     safe_vector_gt<byte_t> single_doc_buffer_;
 
   public:
-    serializing_tape_ref_t(stl_arena_t& a) noexcept : arena_(a), growing_tape(arena_), single_doc_buffer_(&a) {}
-
-    void push_back(json_t const& doc, ukv_format_t c_format, ukv_error_t* c_error) noexcept(false) {
-        using allocator_t = std::pmr::polymorphic_allocator<export_to_value_t>;
-        if (!shared_exporter_)
-            shared_exporter_ = std::allocate_shared<export_to_value_t, allocator_t>(&arena_.resource);
-        shared_exporter_->value_ptr = &single_doc_buffer_;
-
-        single_doc_buffer_.clear();
-        dump_any(doc, c_format, shared_exporter_, c_error);
-        if ((c_format == ukv_format_json_k) |       //
-            (c_format == ukv_format_json_patch_k) | //
-            (c_format == ukv_format_json_merge_patch_k))
-            single_doc_buffer_.push_back(byte_t {0}, c_error);
-
-        growing_tape.push_back(single_doc_buffer_, c_error);
-    }
-
-    embedded_bins_t view() noexcept { return growing_tape; }
     growing_tape_t growing_tape;
+    ukv_error_t* c_error = nullptr;
 };
 
 template <typename callback_at>
@@ -357,29 +370,15 @@ void replace_docs( //
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 
-    growing_tape_t growing_tape(arena);
+    serializing_tape_ref_t serializing_tape {arena, c_error};
+    return_on_error(c_error);
+    auto& growing_tape = serializing_tape.growing_tape;
     growing_tape.reserve(places.count, c_error);
     return_on_error(c_error);
-
-    std::shared_ptr<export_to_value_t> heapy_exporter;
-    try {
-        heapy_exporter = std::allocate_shared<export_to_value_t, std::pmr::polymorphic_allocator<export_to_value_t>>(
-            &arena.resource);
-    }
-    catch (std::bad_alloc const&) {
-        *c_error = "Out of memory!";
-    }
 
     for (std::size_t doc_idx = 0; doc_idx != places.size(); ++doc_idx) {
         auto place = places[doc_idx];
         auto content = contents[doc_idx];
-        safe_vector_gt<byte_t> serialized(&arena);
-        // auto& serialized = updated_vals[doc_idx];
-        if (!content) {
-            serialized.reset();
-            continue;
-        }
-
         auto parsed = parse_any(content, c_format, c_error);
         return_on_error(c_error);
 
@@ -388,13 +387,12 @@ void replace_docs( //
             return;
         }
 
-        serialized.clear();
-        heapy_exporter->value_ptr = &serialized;
-        dump_any(parsed, internal_format_k, heapy_exporter, c_error);
+        serializing_tape.push_back(parsed, internal_format_k);
         return_on_error(c_error);
     }
 
-    ukv_val_ptr_t found_binary_begin = reinterpret_cast<ukv_val_ptr_t>(growing_tape.contents().begin().get());
+    auto tape_begin = growing_tape.contents().begin().get();
+    ukv_val_ptr_t tape_begin_punned = reinterpret_cast<ukv_val_ptr_t>(tape_begin);
     ukv_arena_t arena_ptr = &arena;
     ukv_write( //
         c_db,
@@ -404,7 +402,7 @@ void replace_docs( //
         places.cols_begin.stride(),
         places.keys_begin.get(),
         places.keys_begin.stride(),
-        &found_binary_begin,
+        &tape_begin_punned,
         0,
         growing_tape.offsets().begin().get(),
         growing_tape.offsets().stride(),
@@ -426,7 +424,7 @@ void read_modify_write( //
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 
-    serializing_tape_ref_t serializing_tape {arena};
+    serializing_tape_ref_t serializing_tape {arena, c_error};
     auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, json_t& parsed) {
         try {
             json_t parsed_task = parse_any(contents[task_idx], c_format, c_error);
@@ -450,7 +448,7 @@ void read_modify_write( //
             }
 
             // Save onto output tape
-            serializing_tape.push_back(parsed_part, internal_format_k, c_error);
+            serializing_tape.push_back(parsed_part, internal_format_k);
             return_on_error(c_error);
         }
         catch (std::bad_alloc const&) {
@@ -660,13 +658,13 @@ void ukv_docs_read( //
 
     // Now, we need to parse all the entries to later export them into a target format.
     // Potentially sampling certain sub-fields again along the way.
-    serializing_tape_ref_t serializing_tape {arena};
+    serializing_tape_ref_t serializing_tape {arena, c_error};
     json_t null_object;
 
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, json_t& parsed) {
         try {
             json_t& parsed_part = lookup_field(parsed, field, null_object);
-            serializing_tape.push_back(parsed_part, c_format, c_error);
+            serializing_tape.push_back(parsed_part, c_format);
             return_on_error(c_error);
         }
         catch (std::bad_alloc const&) {

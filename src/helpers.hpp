@@ -179,7 +179,7 @@ class shared_resource_t final : public std::pmr::memory_resource {
 };
 
 template <typename at>
-class polymorphic_allocator_t {
+class polymorphic_allocator_gt {
   public:
     using value_type = at;
     using size_type = std::size_t;
@@ -250,12 +250,13 @@ struct stl_arena_t {
         ukv_error_t* c_error,
         std::size_t alignment = sizeof(at)) noexcept {
 
-        void* result = resource.allocate(sizeof(at) * additional_size, alignment);
+        auto new_size = span.size() + additional_size;
+        void* result = resource.allocate(sizeof(at) * new_size, alignment);
         if (result)
             std::memcpy(result, span.begin(), span.size_bytes());
         else
             log_error(c_error, out_of_memory_k, "");
-        return {reinterpret_cast<at*>(result), span.size() + additional_size};
+        return {reinterpret_cast<at*>(result), new_size};
     }
 
     template <typename at>
@@ -351,7 +352,7 @@ class file_handle_t {
             std::fclose(handle_);
     }
 
-    operator std::FILE *() const noexcept { return handle_; }
+    operator std::FILE*() const noexcept { return handle_; }
 };
 
 template <typename range_at, typename comparable_at>
@@ -447,22 +448,18 @@ class safe_vector_gt {
     void reserve(size_t new_cap, ukv_error_t* c_error) {
         if (new_cap <= cap_)
             return;
-        auto tape = ptr_ ? arena_ptr_->grow<element_t>({ptr_, length_}, new_cap - cap_, c_error)
+        auto tape = ptr_ ? arena_ptr_->grow<element_t>({ptr_, cap_}, new_cap - cap_, c_error)
                          : arena_ptr_->alloc<element_t>(new_cap, c_error);
         return_on_error(c_error);
 
         ptr_ = tape.begin();
+        cap_ = new_cap;
     }
 
     void push_back(element_t val, ukv_error_t* c_error) {
         auto new_size = length_ + 1;
-        if (new_size > cap_) {
-            auto new_cap = next_power_of_two(new_size);
-            auto tape = arena_ptr_->grow<element_t>({ptr_, length_}, new_cap - cap_, c_error);
-            return_on_error(c_error);
-            ptr_ = tape.begin();
-            cap_ = new_cap;
-        }
+        reserve(new_size, c_error);
+        return_on_error(c_error);
 
         ptr_[length_] = val;
         length_ = new_size;
@@ -474,8 +471,9 @@ class safe_vector_gt {
         auto inserted_len = static_cast<ukv_val_len_t>(inserted_end - inserted_begin);
         auto following_len = static_cast<ukv_val_len_t>(length_ - offset);
         auto new_size = length_ + inserted_len;
+
         if (new_size > cap_) {
-            auto tape = arena_ptr_->grow<element_t>({ptr_, length_}, new_size - cap_, c_error);
+            auto tape = arena_ptr_->grow<element_t>({ptr_, cap_}, new_size - cap_, c_error);
             return_on_error(c_error);
             ptr_ = tape.begin();
             cap_ = length_ = new_size;
