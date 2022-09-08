@@ -18,45 +18,6 @@
 using namespace unum::ukv;
 using namespace unum;
 
-std::size_t vertexes_count = 1000;
-std::size_t next_connect = 100;
-std::vector<edge_t> es;
-
-edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
-    edge_t e;
-    e.id = edge_id;
-    e.source_id = v1;
-    e.target_id = v2;
-    return e;
-}
-
-void fill_edges() {
-    es.clear();
-    ukv_key_t edge_id = 0;
-    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id) {
-        ukv_key_t connect_with = vertex_id + next_connect;
-        while (connect_with < vertexes_count) {
-            edge_id++;
-            es.push_back(make_edge(edge_id, vertex_id, connect_with));
-            connect_with = connect_with + next_connect;
-        }
-    }
-}
-
-void upsert_edge(graph_ref_t& graph) {
-    ukv_key_t edge_id = 0;
-    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id) {
-        ukv_key_t connect_with = vertex_id + next_connect;
-        while (connect_with < vertexes_count) {
-            edge_id++;
-            EXPECT_TRUE(graph.upsert(make_edge(edge_id, vertex_id, connect_with)));
-            EXPECT_TRUE(*graph.contains(vertex_id));
-            EXPECT_EQ(*graph.degree(vertex_id), connect_with / 100u);
-            connect_with += next_connect;
-        }
-    }
-}
-
 #define macro_concat_(prefix, suffix) prefix##suffix
 #define macro_concat(prefix, suffix) macro_concat_(prefix, suffix)
 #define _ [[maybe_unused]] auto macro_concat(_, __LINE__)
@@ -134,6 +95,8 @@ TEST(db, intro) {
 
     EXPECT_TRUE(db.clear());
 }
+
+#pragma region Binary Collections
 
 template <typename locations_at>
 void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_length) {
@@ -273,6 +236,66 @@ TEST(db, named) {
     EXPECT_FALSE(*db.contains("col2"));
     EXPECT_TRUE(db.clear());
 }
+
+TEST(db, txn) {
+    db_t db;
+    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.transact());
+    txn_t txn = *db.transact();
+
+    std::vector<ukv_key_t> keys {54, 55, 56};
+    ukv_val_len_t val_len = sizeof(std::uint64_t);
+    std::vector<std::uint64_t> vals {54, 55, 56};
+    std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
+
+    contents_arg_t values {
+        .contents_begin = {&vals_begin, 0},
+        .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
+        .lengths_begin = {&val_len, 0},
+        .count = 3,
+    };
+
+    auto txn_ref = txn[keys];
+    round_trip(txn_ref, values);
+
+    EXPECT_TRUE(db.collection());
+    col_t col = *db.collection();
+    auto col_ref = col[keys];
+
+    // Check for missing values before commit
+    check_length(col_ref, ukv_val_len_missing_k);
+
+    auto status = txn.commit();
+    status.throw_unhandled();
+    status = txn.reset();
+    status.throw_unhandled();
+
+    // Validate that values match after commit
+    check_equalities(col_ref, values);
+
+    // Transaction with named collection
+    EXPECT_TRUE(db.collection("named_col"));
+    col_t named_col = *db.collection("named_col");
+    std::vector<col_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
+    auto txn_named_col_ref = txn[sub_keys];
+    round_trip(txn_named_col_ref, values);
+
+    // Check for missing values before commit
+    auto named_col_ref = named_col[keys];
+    check_length(named_col_ref, ukv_val_len_missing_k);
+
+    status = txn.commit();
+    status.throw_unhandled();
+    status = txn.reset();
+    status.throw_unhandled();
+
+    // Validate that values match after commit
+    check_equalities(named_col_ref, values);
+    EXPECT_TRUE(db.clear());
+}
+
+#pragma region Document Collections
 
 TEST(db, docs) {
     using json_t = nlohmann::json;
@@ -469,71 +492,9 @@ TEST(db, docs_table) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, txn) {
-    db_t db;
-    EXPECT_TRUE(db.open(""));
-    EXPECT_TRUE(db.transact());
-    txn_t txn = *db.transact();
+#pragma region Graph Collections
 
-    std::vector<ukv_key_t> keys {54, 55, 56};
-    ukv_val_len_t val_len = sizeof(std::uint64_t);
-    std::vector<std::uint64_t> vals {54, 55, 56};
-    std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
-    auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
-
-    contents_arg_t values {
-        .contents_begin = {&vals_begin, 0},
-        .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
-        .lengths_begin = {&val_len, 0},
-        .count = 3,
-    };
-
-    auto txn_ref = txn[keys];
-    round_trip(txn_ref, values);
-
-    EXPECT_TRUE(db.collection());
-    col_t col = *db.collection();
-    auto col_ref = col[keys];
-
-    // Check for missing values before commit
-    check_length(col_ref, ukv_val_len_missing_k);
-
-    auto status = txn.commit();
-    status.throw_unhandled();
-    status = txn.reset();
-    status.throw_unhandled();
-
-    // Validate that values match after commit
-    check_equalities(col_ref, values);
-
-    // Transaction with named collection
-    EXPECT_TRUE(db.collection("named_col"));
-    col_t named_col = *db.collection("named_col");
-    std::vector<col_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
-    auto txn_named_col_ref = txn[sub_keys];
-    round_trip(txn_named_col_ref, values);
-
-    // Check for missing values before commit
-    auto named_col_ref = named_col[keys];
-    check_length(named_col_ref, ukv_val_len_missing_k);
-
-    status = txn.commit();
-    status.throw_unhandled();
-    status = txn.reset();
-    status.throw_unhandled();
-
-    // Validate that values match after commit
-    check_equalities(named_col_ref, values);
-    EXPECT_TRUE(db.clear());
-}
-
-TEST(db, nested_docs) {
-    db_t db;
-    _ = db.open();
-    col_t col = *db.collection();
-}
-
-TEST(db, net) {
+TEST(db, graph_triangle) {
 
     db_t db;
     EXPECT_TRUE(db.open(""));
@@ -631,7 +592,7 @@ TEST(db, net) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, net_batch) {
+TEST(db, graph_triangle_batch_api) {
 
     db_t db;
     EXPECT_TRUE(db.open(""));
@@ -725,39 +686,53 @@ TEST(db, net_batch) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, upsert_edge) {
-    db_t db;
-    EXPECT_TRUE(db.open(""));
-
-    col_t main = *db.collection();
-    graph_ref_t graph = main.as_graph();
-    upsert_edge(graph);
+edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
+    return {v1, v2, edge_id};
 }
 
-TEST(db, upsert_edges) {
+std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_connect = 1) {
+    std::vector<edge_t> es;
+    ukv_key_t edge_id = 0;
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        ukv_key_t connect_with = vertex_id + next_connect;
+        while (connect_with < vertices_count) {
+            edge_id++;
+            es.push_back(make_edge(edge_id, vertex_id, connect_with));
+            connect_with = connect_with + next_connect;
+        }
+    }
+    return es;
+}
+
+TEST(db, graph_random_fill) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
     col_t main = *db.collection();
     graph_ref_t graph = main.as_graph();
-    fill_edges();
-    EXPECT_TRUE(graph.upsert(edges(es)));
-    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id) {
+
+    constexpr std::size_t vertices_count = 1000;
+    auto edges_vec = make_edges(vertices_count, 100);
+    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_EQ(*graph.degree(vertex_id), 9u);
     }
 }
 
-TEST(db, remove_vertexes) {
+TEST(db, graph_remove_vertices) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
     col_t main = *db.collection();
     graph_ref_t graph = main.as_graph();
-    fill_edges();
-    EXPECT_TRUE(graph.upsert(edges(es)));
 
-    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id) {
+    constexpr std::size_t vertices_count = 2;
+    auto edges_vec = make_edges(vertices_count, 1);
+    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
         EXPECT_TRUE(graph.remove(vertex_id));
@@ -766,27 +741,22 @@ TEST(db, remove_vertexes) {
     }
 }
 
-TEST(db, remove_edge) {
+TEST(db, graph_remove_edges_keep_vertices) {
     db_t db;
     EXPECT_TRUE(db.open(""));
 
     col_t main = *db.collection();
     graph_ref_t graph = main.as_graph();
-    fill_edges();
-    EXPECT_TRUE(graph.upsert(edges(es)));
 
-    std::size_t edge_id = 0;
-    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id) {
-        size_t connect_with = vertex_id + next_connect;
-        while (connect_with < vertexes_count) {
-            edge_id++;
-            EXPECT_TRUE(graph.remove(make_edge(edge_id, vertex_id, connect_with)));
-            connect_with = connect_with + next_connect;
-        }
-    }
+    constexpr std::size_t vertices_count = 1000;
+    auto edges_vec = make_edges(vertices_count, 100);
+    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.remove(edges(edges_vec)));
 
-    for (ukv_key_t vertex_id = 0; vertex_id != vertexes_count; ++vertex_id)
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
+    }
 }
 
 int main(int argc, char** argv) {
