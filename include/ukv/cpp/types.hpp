@@ -38,10 +38,14 @@ struct col_key_t {
 
     inline bool operator==(col_key_t const& other) const noexcept { return (col == other.col) & (key == other.key); }
     inline bool operator!=(col_key_t const& other) const noexcept { return (col != other.col) | (key != other.key); }
-    inline bool operator<(col_key_t const& other) const noexcept { return key < other.key; }
-    inline bool operator>(col_key_t const& other) const noexcept { return key > other.key; }
-    inline bool operator<=(col_key_t const& other) const noexcept { return key <= other.key; }
-    inline bool operator>=(col_key_t const& other) const noexcept { return key >= other.key; }
+    inline bool operator<(col_key_t const& other) const noexcept {
+        return (col < other.col) | ((col == other.col) & (key < other.key));
+    }
+    inline bool operator>(col_key_t const& other) const noexcept {
+        return (col > other.col) | ((col == other.col) & (key > other.key));
+    }
+    inline bool operator<=(col_key_t const& other) const noexcept { return operator<(other) | operator==(other); }
+    inline bool operator>=(col_key_t const& other) const noexcept { return operator>(other) | operator==(other); }
 };
 
 struct col_key_field_t {
