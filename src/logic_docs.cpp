@@ -374,7 +374,8 @@ void replace_docs( //
     for (std::size_t doc_idx = 0; doc_idx != places.size(); ++doc_idx) {
         auto place = places[doc_idx];
         auto content = contents[doc_idx];
-        auto& serialized = updated_vals[doc_idx];
+        safe_vector_gt<byte_t> serialized(&arena);
+        // auto& serialized = updated_vals[doc_idx];
         if (!content) {
             serialized.reset();
             continue;
@@ -394,6 +395,7 @@ void replace_docs( //
         return_on_error(c_error);
     }
 
+    ukv_val_ptr_t found_binary_begin = reinterpret_cast<ukv_val_ptr_t>(growing_tape.contents().begin().get());
     ukv_arena_t arena_ptr = &arena;
     ukv_write( //
         c_db,
@@ -403,8 +405,8 @@ void replace_docs( //
         places.cols_begin.stride(),
         places.keys_begin.get(),
         places.keys_begin.stride(),
-        growing_tape.contents().begin().get(),
-        growing_tape.contents().stride(),
+        &found_binary_begin,
+        0,
         growing_tape.offsets().begin().get(),
         growing_tape.offsets().stride(),
         growing_tape.lengths().begin().get(),
