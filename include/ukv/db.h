@@ -264,8 +264,9 @@ void ukv_write( //
     ukv_key_t const* keys,
     ukv_size_t const keys_stride,
 
-    ukv_val_ptr_t const* values,
-    ukv_size_t const values_stride,
+    ukv_options_t const options,
+
+    ukv_1x8_t const* presences,
 
     ukv_val_len_t const* offsets,
     ukv_size_t const offsets_stride,
@@ -273,9 +274,8 @@ void ukv_write( //
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
 
-    ukv_1x8_t const* presences,
-
-    ukv_options_t const options,
+    ukv_val_ptr_t const* values,
+    ukv_size_t const values_stride,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -349,10 +349,11 @@ void ukv_read( //
 
     ukv_options_t const options,
 
-    ukv_val_ptr_t* values,
+    ukv_1x8_t** presences,
+
     ukv_val_len_t** offsets,
     ukv_val_len_t** lengths,
-    ukv_1x8_t** presences,
+    ukv_val_ptr_t* values,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -508,8 +509,8 @@ void ukv_col_list( //
  */
 void ukv_col_drop( //
     ukv_t const db,
-    ukv_str_view_t name,
     ukv_col_t id,
+    ukv_str_view_t name,
     ukv_col_drop_mode_t mode,
     ukv_error_t* error);
 

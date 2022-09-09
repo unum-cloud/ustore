@@ -164,8 +164,7 @@ void ukv_docs_write( //
     ukv_format_t const format,
     ukv_type_t const type,
 
-    ukv_val_ptr_t const* values,
-    ukv_size_t const values_stride,
+    ukv_1x8_t const* presences,
 
     ukv_val_len_t const* offsets,
     ukv_size_t const offsets_stride,
@@ -173,7 +172,8 @@ void ukv_docs_write( //
     ukv_val_len_t const* lengths,
     ukv_size_t const lengths_stride,
 
-    ukv_1x8_t const* presences,
+    ukv_val_ptr_t const* values,
+    ukv_size_t const values_stride,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -221,10 +221,11 @@ void ukv_docs_read( //
     ukv_format_t const format,
     ukv_type_t const type,
 
-    ukv_val_ptr_t* found_values,
+    ukv_1x8_t** found_presences,
+
     ukv_val_len_t** found_offsets,
     ukv_val_len_t** found_lengths,
-    ukv_1x8_t** found_presences,
+    ukv_val_ptr_t* found_values,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
