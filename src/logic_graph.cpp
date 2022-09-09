@@ -567,7 +567,6 @@ void update_neighborhoods( //
         cols.begin().stride(),
         keys.begin().get(),
         keys.begin().stride(),
-        c_options,
         nullptr,
         nullptr,
         0,
@@ -575,6 +574,7 @@ void update_neighborhoods( //
         lengths.begin().stride(),
         contents.begin().get(),
         contents.begin().stride(),
+        c_options,
         &arena_ptr,
         c_error);
 }
@@ -812,7 +812,6 @@ void ukv_graph_remove_vertices( //
         cols.begin().stride(),
         keys.begin().get(),
         keys.begin().stride(),
-        c_options,
         nullptr,
         nullptr,
         0,
@@ -820,6 +819,7 @@ void ukv_graph_remove_vertices( //
         lengths.begin().stride(),
         contents.begin().get(),
         contents.begin().stride(),
+        c_options,
         &arena_ptr,
         c_error);
 }

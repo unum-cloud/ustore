@@ -39,7 +39,6 @@ static void write_one_binary(py_col_t& col, PyObject* key_py, PyObject* val_py) 
         0,
         &key,
         0,
-        col.options(),
         nullptr,
         nullptr,
         0,
@@ -47,6 +46,7 @@ static void write_one_binary(py_col_t& col, PyObject* key_py, PyObject* val_py) 
         0,
         val.member_ptr(),
         0,
+        col.options(),
         col.member_arena(),
         status.member_ptr());
     status.throw_unhandled();
@@ -69,14 +69,14 @@ static void write_many_binaries(py_col_t& col, PyObject* keys_py, PyObject* vals
             0,
             keys.data(),
             sizeof(ukv_key_t),
+            nullptr,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
             col.options(),
-            nullptr,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            0,
             col.member_arena(),
             status.member_ptr());
     }
@@ -93,7 +93,6 @@ static void write_many_binaries(py_col_t& col, PyObject* keys_py, PyObject* vals
             0,
             keys.data(),
             sizeof(ukv_key_t),
-            col.options(),
             nullptr,
             nullptr,
             0,
@@ -101,6 +100,7 @@ static void write_many_binaries(py_col_t& col, PyObject* keys_py, PyObject* vals
             sizeof(value_view_t),
             vals[0].member_ptr(),
             sizeof(value_view_t),
+            col.options(),
             col.member_arena(),
             status.member_ptr());
     }
@@ -125,7 +125,6 @@ static void broadcast_binary(py_col_t& col, PyObject* keys_py, PyObject* vals_py
         0,
         keys.data(),
         sizeof(ukv_key_t),
-        col.options(),
         nullptr,
         nullptr,
         0,
@@ -133,6 +132,7 @@ static void broadcast_binary(py_col_t& col, PyObject* keys_py, PyObject* vals_py
         0,
         val.member_ptr(),
         0,
+        col.options(),
         col.member_arena(),
         status.member_ptr());
 
@@ -339,7 +339,6 @@ static void update_binary(py_col_t& col, py::object dict_py) {
               0,
               &keys[0].key,
               step,
-              col.options(),
               nullptr,
               &keys[0].off,
               step,
@@ -347,6 +346,7 @@ static void update_binary(py_col_t& col, py::object dict_py) {
               step,
               &keys[0].ptr,
               step,
+              col.options(),
               col.member_arena(),
               status.member_ptr());
     status.throw_unhandled();

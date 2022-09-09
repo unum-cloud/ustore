@@ -264,8 +264,6 @@ void ukv_write( //
     ukv_key_t const* keys,
     ukv_size_t const keys_stride,
 
-    ukv_options_t const options,
-
     ukv_1x8_t const* presences,
 
     ukv_val_len_t const* offsets,
@@ -276,6 +274,8 @@ void ukv_write( //
 
     ukv_val_ptr_t const* values,
     ukv_size_t const values_stride,
+
+    ukv_options_t const options,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

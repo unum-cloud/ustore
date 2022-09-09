@@ -366,7 +366,6 @@ status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, uk
             cols.stride(),
             keys.get(),
             keys.stride(),
-            options,
             nullptr,
             offsets.get(),
             offsets.stride(),
@@ -374,6 +373,7 @@ status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, uk
             lengths.stride(),
             contents.get(),
             contents.stride(),
+            options,
             arena_,
             status.member_ptr());
     return status;
