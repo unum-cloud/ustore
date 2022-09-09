@@ -160,10 +160,6 @@ void ukv_docs_write( //
     ukv_str_view_t const* fields,
     ukv_size_t const fields_stride,
 
-    ukv_options_t const options,
-    ukv_format_t const format,
-    ukv_type_t const type,
-
     ukv_1x8_t const* presences,
 
     ukv_val_len_t const* offsets,
@@ -174,6 +170,10 @@ void ukv_docs_write( //
 
     ukv_val_ptr_t const* values,
     ukv_size_t const values_stride,
+
+    ukv_options_t const options,
+    ukv_format_t const format,
+    ukv_type_t const type,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
