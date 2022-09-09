@@ -88,10 +88,11 @@ void ukv_read( //
 
     ukv_options_t const c_options,
 
-    ukv_val_ptr_t* c_found_values,
+    ukv_1x8_t** c_found_presences,
+
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
-    ukv_1x8_t** c_found_presences,
+    ukv_val_ptr_t* c_found_values,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -267,8 +268,9 @@ void ukv_write( //
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_stride,
 
-    ukv_val_ptr_t const* c_vals,
-    ukv_size_t const c_vals_stride,
+    ukv_options_t const c_options,
+
+    ukv_1x8_t const* c_presences,
 
     ukv_val_len_t const* c_offs,
     ukv_size_t const c_offs_stride,
@@ -276,9 +278,9 @@ void ukv_write( //
     ukv_val_len_t const* c_lens,
     ukv_size_t const c_lens_stride,
 
-    ukv_1x8_t const* c_presences,
+    ukv_val_ptr_t const* c_vals,
+    ukv_size_t const c_vals_stride,
 
-    ukv_options_t const c_options,
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
@@ -569,8 +571,8 @@ void ukv_col_upsert(
 void ukv_col_drop(
     // Inputs:
     ukv_t const c_db,
-    ukv_str_view_t c_col_name,
     ukv_col_t c_col_id,
+    ukv_str_view_t c_col_name,
     ukv_col_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {

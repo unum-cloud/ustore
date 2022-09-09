@@ -225,10 +225,10 @@ class pairs_stream_t {
             found_keys,
             sizeof(ukv_key_t),
             ukv_options_default_k,
-            &found_vals,
+            nullptr,
             &found_offs,
             nullptr,
-            nullptr,
+            &found_vals,
             arena_read_.member_ptr(),
             status.member_ptr());
         if (!status)

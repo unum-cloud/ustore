@@ -267,10 +267,10 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             options,
             format_,
             ukv_type_any_k,
-            wants_value ? &found_values : nullptr,
+            wants_present ? &found_presences : nullptr,
             wants_value ? &found_offsets : nullptr,
             wants_value || wants_length ? &found_lengths : nullptr,
-            wants_present ? &found_presences : nullptr,
+            wants_value ? &found_values : nullptr,
             arena_,
             status.member_ptr());
     else
@@ -283,10 +283,10 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             keys.get(),
             keys.stride(),
             options,
-            wants_value ? &found_values : nullptr,
+            wants_present ? &found_presences : nullptr,
             wants_value ? &found_offsets : nullptr,
             wants_value || wants_length ? &found_lengths : nullptr,
-            wants_present ? &found_presences : nullptr,
+            wants_value ? &found_values : nullptr,
             arena_,
             status.member_ptr());
 
@@ -348,13 +348,13 @@ status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, uk
             options,
             format_,
             ukv_type_any_k,
-            contents.get(),
-            contents.stride(),
+            nullptr,
             offsets.get(),
             offsets.stride(),
             lengths.get(),
             lengths.stride(),
-            nullptr,
+            contents.get(),
+            contents.stride(),
             arena_,
             status.member_ptr());
     else
@@ -366,14 +366,14 @@ status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, uk
             cols.stride(),
             keys.get(),
             keys.stride(),
-            contents.get(),
-            contents.stride(),
+            options,
+            nullptr,
             offsets.get(),
             offsets.stride(),
             lengths.get(),
             lengths.stride(),
-            nullptr,
-            options,
+            contents.get(),
+            contents.stride(),
             arena_,
             status.member_ptr());
     return status;

@@ -123,13 +123,13 @@ class col_t {
 
     status_t clear() noexcept {
         status_t status;
-        ukv_col_drop(db_, nullptr, col_, ukv_col_drop_keys_vals_k, status.member_ptr());
+        ukv_col_drop(db_, col_, nullptr, ukv_col_drop_keys_vals_k, status.member_ptr());
         return status;
     }
 
     status_t clear_values() noexcept {
         status_t status;
-        ukv_col_drop(db_, nullptr, col_, ukv_col_drop_vals_k, status.member_ptr());
+        ukv_col_drop(db_, col_, nullptr, ukv_col_drop_vals_k, status.member_ptr());
         return status;
     }
 
@@ -384,7 +384,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
     status_t remove(ukv_str_view_t name, ukv_col_drop_mode_t mode = ukv_col_drop_keys_vals_handle_k) noexcept {
         status_t status;
-        ukv_col_drop(db_, name, 0, mode, status.member_ptr());
+        ukv_col_drop(db_, 0, name, mode, status.member_ptr());
         return status;
     }
 
