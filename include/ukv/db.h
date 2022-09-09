@@ -313,12 +313,8 @@ void ukv_write( //
  *                           > shared: Exports to shared memory to accelerate inter-process communication.
  *                           > bulk: Suggests that the list of keys was received from a bulk scan.
  *
- * @param[out] values        Will contain the "base pointer" for @param tasks_count concatenated values.
- *                           Instead of allocating every "string" separately, we join them into
- *                           a single "tape" structure, which later be exported into (often disjoint)
- *                           runtime- or library-specific implementations. To determine the range of each
- *                           chunk use @param offsets and @param lengths.
- *                           Is @b optional, as you may only want @param lengths or @param presences.
+ * @param[out] presences     Will contain a bitset with at least @param tasks_count bits.
+ *                           Each set bit means that such key is missing in DB. Is @b optional.
  *
  * @param[out] offsets       Will contain a pointer to an array with @param tasks_count integers.
  *                           Each marks a response offset in bytes starting from @param values.
@@ -330,8 +326,13 @@ void ukv_write( //
  * @param[out] lengths       Will contain a pointer to an array with @param tasks_count integers.
  *                           Each defines a response length in bytes. Is @b optional.
  *
- * @param[out] presences     Will contain a bitset with at least @param tasks_count bits.
- *                           Each set bit means that such key is missing in DB. Is @b optional.
+ * @param[out] values        Will contain the "base pointer" for @param tasks_count concatenated values.
+ *                           Instead of allocating every "string" separately, we join them into
+ *                           a single "tape" structure, which later be exported into (often disjoint)
+ *                           runtime- or library-specific implementations. To determine the range of each
+ *                           chunk use @param offsets and @param lengths.
+ *                           Is @b optional, as you may only want @param lengths or @param presences.
+ *
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
@@ -503,8 +504,8 @@ void ukv_col_list( //
  * The default nameless collection can't be removed, only cleared.
  *
  * @param[in] db      Already open database instance, @see `ukv_db_open`.
- * @param[in] name    An optional NULL-terminated collection name.
  * @param[in] id      If the name wasn't provided, we will match a collection by ID.
+ * @param[in] name    An optional NULL-terminated collection name.
  * @param[out] error  The error message to be handled by callee.
  */
 void ukv_col_drop( //
