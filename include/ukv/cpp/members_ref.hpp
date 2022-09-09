@@ -345,9 +345,6 @@ status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, uk
             keys.stride(),
             fields.get(),
             fields.stride(),
-            options,
-            format_,
-            ukv_type_any_k,
             nullptr,
             offsets.get(),
             offsets.stride(),
@@ -355,6 +352,9 @@ status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, uk
             lengths.stride(),
             contents.get(),
             contents.stride(),
+            options,
+            format_,
+            ukv_type_any_k,
             arena_,
             status.member_ptr());
     else
