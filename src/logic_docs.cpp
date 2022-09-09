@@ -402,7 +402,6 @@ void replace_docs( //
         places.cols_begin.stride(),
         places.keys_begin.get(),
         places.keys_begin.stride(),
-        c_options,
         nullptr,
         growing_tape.offsets().begin().get(),
         growing_tape.offsets().stride(),
@@ -410,6 +409,7 @@ void replace_docs( //
         growing_tape.lengths().stride(),
         &tape_begin_punned,
         0,
+        c_options,
         &arena_ptr,
         c_error);
 }
@@ -477,7 +477,6 @@ void read_modify_write( //
         read_order.cols_begin.stride(),
         read_order.keys_begin.get(),
         read_order.keys_begin.stride(),
-        c_options,
         nullptr,
         serializing_tape.growing_tape.offsets().begin().get(),
         serializing_tape.growing_tape.offsets().stride(),
@@ -485,6 +484,7 @@ void read_modify_write( //
         serializing_tape.growing_tape.lengths().stride(),
         &found_binary_begin,
         0,
+        c_options,
         &arena_ptr,
         c_error);
 }
@@ -569,7 +569,6 @@ void ukv_docs_write( //
             c_cols_stride,
             c_keys,
             c_keys_stride,
-            c_options,
             c_presences,
             c_offs,
             c_offs_stride,
@@ -577,6 +576,7 @@ void ukv_docs_write( //
             c_lens_stride,
             c_vals,
             c_vals_stride,
+            c_options,
             &new_arena,
             c_error);
 

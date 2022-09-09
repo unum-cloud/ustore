@@ -438,7 +438,6 @@ void respond_to_one(db_session_t& session,
                   0,
                   &key,
                   1,
-                  options,
                   0,
                   &value_off,
                   0,
@@ -446,6 +445,7 @@ void respond_to_one(db_session_t& session,
                   0,
                   &value_ptr,
                   0,
+                  options,
                   error.member_ptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
@@ -470,7 +470,6 @@ void respond_to_one(db_session_t& session,
                   0,
                   &key,
                   1,
-                  options,
                   0,
                   &value_off,
                   0,
@@ -478,6 +477,7 @@ void respond_to_one(db_session_t& session,
                   0,
                   &value_ptr,
                   0,
+                  options,
                   error.member_ptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));

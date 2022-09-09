@@ -707,7 +707,6 @@ class UKVService : public arf::FlightServerBase {
                 0,
                 (ukv_key_t const*)keys_c.buffers[1],
                 sizeof(ukv_key_t),
-                ukv_options_default_k,
                 (ukv_1x8_t const*)vals_c.buffers[0],
                 (ukv_val_len_t const*)vals_c.buffers[1],
                 sizeof(ukv_val_len_t),
@@ -715,6 +714,7 @@ class UKVService : public arf::FlightServerBase {
                 0,
                 (ukv_val_ptr_t const*)&vals_c.buffers[2],
                 0,
+                ukv_options_default_k,
                 &session.arena,
                 status.member_ptr());
 
