@@ -44,13 +44,13 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
         0,
         &key_c,
         0,
-        &found_values_c,
-        0,
+        options_c,
         &value_off_c,
         0,
         &value_len_c,
         0,
-        options_c,
+        &found_values_c,
+        0,
         &arena_c,
         &error_c);
     ukv_arena_free(db_ptr_c, arena_c);
@@ -94,9 +94,9 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
         &key_c,
         0,
         options_c,
-        &found_values_c,
         &found_offsets_c,
         &found_lengths_c,
+        &found_values_c,
         &arena_c,
         &error_c);
 
@@ -144,9 +144,9 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
         &key_c,
         0,
         options_c,
-        &found_values_c,
         &found_offsets_c,
         &found_lengths_c,
+        &found_values_c,
         &arena_c,
         &error_c);
 
@@ -208,13 +208,13 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
         0,
         &key_c,
         0,
-        &found_values_c,
-        0,
+        options_c,
         &value_off_c,
         0,
         &value_len_c,
         0,
-        options_c,
+        &found_values_c,
+        0,
         &arena_c,
         &error_c);
     ukv_arena_free(db_ptr_c, arena_c);
