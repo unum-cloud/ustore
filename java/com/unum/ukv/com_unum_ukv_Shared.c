@@ -22,19 +22,19 @@ jfieldID find_txn_field(JNIEnv* env_java) {
     return txn_ptr_field;
 }
 
-ukv_t db_ptr(JNIEnv* env_java, jobject txn_java) {
+ukv_database_t db_ptr(JNIEnv* env_java, jobject txn_java) {
     jfieldID db_ptr_field = find_db_field(env_java);
     long int db_ptr_java = (*env_java)->GetLongField(env_java, txn_java, db_ptr_field);
-    return (ukv_t)db_ptr_java;
+    return (ukv_database_t)db_ptr_java;
 }
 
-ukv_txn_t txn_ptr(JNIEnv* env_java, jobject txn_java) {
+ukv_transaction_t txn_ptr(JNIEnv* env_java, jobject txn_java) {
     jfieldID txn_ptr_field = find_txn_field(env_java);
     long int txn_ptr_java = (*env_java)->GetLongField(env_java, txn_java, txn_ptr_field);
-    return (ukv_txn_t)txn_ptr_java;
+    return (ukv_transaction_t)txn_ptr_java;
 }
 
-ukv_col_t col_ptr(JNIEnv* env_java, ukv_t db_ptr, jstring name_java) {
+ukv_collection_t col_ptr(JNIEnv* env_java, ukv_database_t db_ptr, jstring name_java) {
 
     // We may be passing the empty name of the default collection
     if (!name_java)
@@ -47,8 +47,8 @@ ukv_col_t col_ptr(JNIEnv* env_java, ukv_t db_ptr, jstring name_java) {
         return NULL;
 
     ukv_error_t error_c = NULL;
-    ukv_col_t collection_c = NULL;
-    ukv_col_upsert(db_ptr, name_c, NULL, &collection_c, &error_c);
+    ukv_collection_t collection_c = NULL;
+    ukv_collection_upsert(db_ptr, name_c, NULL, &collection_c, &error_c);
 
     if (name_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseStringUTFChars(env_java, name_java, name_c);

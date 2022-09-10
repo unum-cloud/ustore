@@ -15,7 +15,7 @@ using keys_view_t = strided_range_gt<ukv_key_t const>;
 using fields_view_t = strided_range_gt<ukv_str_view_t const>;
 
 struct place_t {
-    ukv_col_t col;
+    ukv_collection_t col;
     ukv_key_t const& key;
     ukv_str_view_t field;
 
@@ -29,14 +29,14 @@ struct place_t {
  */
 struct places_arg_t {
     using value_type = place_t;
-    strided_iterator_gt<ukv_col_t const> cols_begin;
+    strided_iterator_gt<ukv_collection_t const> cols_begin;
     strided_iterator_gt<ukv_key_t const> keys_begin;
     strided_iterator_gt<ukv_str_view_t const> fields_begin;
     ukv_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
     inline place_t operator[](std::size_t i) const noexcept {
-        ukv_col_t col = cols_begin ? cols_begin[i] : ukv_col_main_k;
+        ukv_collection_t col = cols_begin ? cols_begin[i] : ukv_collection_main_k;
         ukv_key_t const& key = keys_begin[i];
         ukv_str_view_t field = fields_begin ? fields_begin[i] : nullptr;
         return {col, key, field};
@@ -44,10 +44,10 @@ struct places_arg_t {
 
     bool same_collection() const noexcept {
         return !cols_begin || cols_begin.repeats() ||
-               !transform_reduce_n(cols_begin, count, false, [=](ukv_col_t col) { return col != cols_begin[0]; });
+               !transform_reduce_n(cols_begin, count, false, [=](ukv_collection_t col) { return col != cols_begin[0]; });
     }
 
-    bool same_collections_are_named() const noexcept { return cols_begin && cols_begin[0] != ukv_col_main_k; }
+    bool same_collections_are_named() const noexcept { return cols_begin && cols_begin[0] != ukv_collection_main_k; }
 };
 
 /**
@@ -57,10 +57,10 @@ struct places_arg_t {
  */
 struct contents_arg_t {
     using value_type = value_view_t;
-    strided_iterator_gt<ukv_val_ptr_t const> contents_begin;
-    strided_iterator_gt<ukv_val_len_t const> offsets_begin;
-    strided_iterator_gt<ukv_val_len_t const> lengths_begin;
-    strided_iterator_gt<ukv_1x8_t const> presences_begin;
+    strided_iterator_gt<ukv_bytes_ptr_t const> contents_begin;
+    strided_iterator_gt<ukv_length_t const> offsets_begin;
+    strided_iterator_gt<ukv_length_t const> lengths_begin;
+    strided_iterator_gt<ukv_octet_t const> presences_begin;
     ukv_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
@@ -97,9 +97,9 @@ struct contents_arg_t {
 };
 
 struct scan_t {
-    ukv_col_t col;
+    ukv_collection_t col;
     ukv_key_t const& min_key;
-    ukv_val_len_t length;
+    ukv_length_t length;
 
     inline col_key_t col_key() const noexcept { return col_key_t {col, min_key}; }
 };
@@ -109,16 +109,16 @@ struct scan_t {
  * Is used to validate various combinations of arguments, strides, NULLs, etc.
  */
 struct scans_arg_t {
-    strided_iterator_gt<ukv_col_t const> cols;
+    strided_iterator_gt<ukv_collection_t const> cols;
     strided_iterator_gt<ukv_key_t const> start_keys;
-    strided_iterator_gt<ukv_val_len_t const> lengths;
+    strided_iterator_gt<ukv_length_t const> lengths;
     ukv_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
     inline scan_t operator[](std::size_t i) const noexcept {
-        ukv_col_t col = cols ? cols[i] : ukv_col_main_k;
+        ukv_collection_t col = cols ? cols[i] : ukv_collection_main_k;
         ukv_key_t const& key = start_keys[i];
-        ukv_val_len_t len = lengths[i];
+        ukv_length_t len = lengths[i];
         return {col, key, len};
     }
 };

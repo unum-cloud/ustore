@@ -27,12 +27,12 @@ using namespace unum;
 #if 0
 TEST(db, intro) {
 
-    db_t db;
+    database_t db;
     EXPECT_TRUE(db.open());
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
-    col_t main = *db.collection();
+    collection_t main = *db.collection();
 
     // Single-element access
     main[42] = "purpose of life";
@@ -55,7 +55,7 @@ TEST(db, intro) {
     //     (void)value;
 
     // Accessing named collections
-    col_t prefixes = *db.collection("prefixes");
+    collection_t prefixes = *db.collection("prefixes");
     prefixes.at(42) = "purpose";
     db["articles"]->at(42) = "of";
     db["suffixes"]->at(42) = "life";
@@ -99,11 +99,11 @@ TEST(db, intro) {
 #pragma region Binary Collections
 
 template <typename locations_at>
-void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_length) {
+void check_length(members_ref_gt<locations_at>& ref, ukv_length_t expected_length) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
 
-    auto const expects_missing = expected_length == ukv_val_len_missing_k;
+    auto const expects_missing = expected_length == ukv_length_missing_k;
     using extractor_t = places_arg_extractor_gt<locations_at>;
     ukv_size_t count = extractor_t {}.count(ref.locations());
 
@@ -162,17 +162,17 @@ void round_trip(members_ref_gt<locations_at>& ref, contents_arg_t values) {
     check_equalities(ref, values);
 }
 
-void check_binary_collection(col_t& col) {
+void check_binary_collection(collection_t& col) {
     std::vector<ukv_key_t> keys {34, 35, 36};
-    ukv_val_len_t val_len = sizeof(std::uint64_t);
+    ukv_length_t val_len = sizeof(std::uint64_t);
     std::vector<std::uint64_t> vals {34, 35, 36};
-    std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
-    auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
+    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
 
     auto ref = col[keys];
     contents_arg_t values {
         .contents_begin = {&vals_begin, 0},
-        .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
         .lengths_begin = {&val_len, 0},
         .count = 3,
     };
@@ -198,30 +198,30 @@ void check_binary_collection(col_t& col) {
 
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
-    check_length(ref, ukv_val_len_missing_k);
+    check_length(ref, ukv_length_missing_k);
 }
 
 TEST(db, basic) {
 
-    db_t db;
+    database_t db;
     EXPECT_TRUE(db.open(""));
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
-    col_t col = *db.collection();
+    collection_t col = *db.collection();
     check_binary_collection(col);
     EXPECT_TRUE(db.clear());
 }
 
 TEST(db, named) {
-    db_t db;
+    database_t db;
     EXPECT_TRUE(db.open(""));
 
     EXPECT_TRUE(db["col1"]);
     EXPECT_TRUE(db["col2"]);
 
-    col_t col1 = *(db["col1"]);
-    col_t col2 = *(db["col2"]);
+    collection_t col1 = *(db["col1"]);
+    collection_t col2 = *(db["col2"]);
 
     EXPECT_TRUE(*db.contains("col1"));
     EXPECT_TRUE(*db.contains("col2"));
@@ -238,20 +238,20 @@ TEST(db, named) {
 }
 
 TEST(db, txn) {
-    db_t db;
+    database_t db;
     EXPECT_TRUE(db.open(""));
     EXPECT_TRUE(db.transact());
-    txn_t txn = *db.transact();
+    transaction_t txn = *db.transact();
 
     std::vector<ukv_key_t> keys {54, 55, 56};
-    ukv_val_len_t val_len = sizeof(std::uint64_t);
+    ukv_length_t val_len = sizeof(std::uint64_t);
     std::vector<std::uint64_t> vals {54, 55, 56};
-    std::vector<ukv_val_len_t> offs {0, val_len, val_len * 2};
-    auto vals_begin = reinterpret_cast<ukv_val_ptr_t>(vals.data());
+    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
 
     contents_arg_t values {
         .contents_begin = {&vals_begin, 0},
-        .offsets_begin = {offs.data(), sizeof(ukv_val_len_t)},
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
         .lengths_begin = {&val_len, 0},
         .count = 3,
     };
@@ -260,11 +260,11 @@ TEST(db, txn) {
     round_trip(txn_ref, values);
 
     EXPECT_TRUE(db.collection());
-    col_t col = *db.collection();
+    collection_t col = *db.collection();
     auto col_ref = col[keys];
 
     // Check for missing values before commit
-    check_length(col_ref, ukv_val_len_missing_k);
+    check_length(col_ref, ukv_length_missing_k);
 
     auto status = txn.commit();
     status.throw_unhandled();
@@ -276,14 +276,14 @@ TEST(db, txn) {
 
     // Transaction with named collection
     EXPECT_TRUE(db.collection("named_col"));
-    col_t named_col = *db.collection("named_col");
+    collection_t named_col = *db.collection("named_col");
     std::vector<col_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
     auto txn_named_col_ref = txn[sub_keys];
     round_trip(txn_named_col_ref, values);
 
     // Check for missing values before commit
     auto named_col_ref = named_col[keys];
-    check_length(named_col_ref, ukv_val_len_missing_k);
+    check_length(named_col_ref, ukv_length_missing_k);
 
     status = txn.commit();
     status.throw_unhandled();
@@ -299,11 +299,11 @@ TEST(db, txn) {
 
 TEST(db, docs) {
     using json_t = nlohmann::json;
-    db_t db;
+    database_t db;
     EXPECT_TRUE(db.open(""));
 
     // JSON
-    col_t col = *db.collection("docs", ukv_format_json_k);
+    collection_t col = *db.collection("docs", ukv_format_json_k);
     auto json = R"( {"person": "Davit", "age": 24} )"_json.dump();
     col[1] = json.c_str();
     M_EXPECT_EQ_JSON(col[1].value()->c_str(), json.c_str());
@@ -354,11 +354,11 @@ TEST(db, docs) {
 
 TEST(db, docs_table) {
     using json_t = nlohmann::json;
-    db_t db;
+    database_t db;
     EXPECT_TRUE(db.open(""));
 
     // Inject basic data
-    col_t col = *db.collection("", ukv_format_json_k);
+    collection_t col = *db.collection("", ukv_format_json_k);
     auto json_ashot = R"( { "person": "Ashot", "age": 27, "height": 1 } )"_json.dump();
     auto json_darvin = R"( { "person": "Darvin", "age": "27", "weight": 2 } )"_json.dump();
     auto json_davit = R"( { "person": "Davit", "age": 24 } )"_json.dump();
@@ -496,10 +496,10 @@ TEST(db, docs_table) {
 
 TEST(db, graph_triangle) {
 
-    db_t db;
+    database_t db;
     EXPECT_TRUE(db.open(""));
 
-    col_t main = *db.collection();
+    collection_t main = *db.collection();
     graph_ref_t net = main.as_graph();
 
     // triangle
@@ -594,10 +594,10 @@ TEST(db, graph_triangle) {
 
 TEST(db, graph_triangle_batch_api) {
 
-    db_t db;
+    database_t db;
     EXPECT_TRUE(db.open(""));
 
-    col_t main = *db.collection();
+    collection_t main = *db.collection();
     graph_ref_t net = main.as_graph();
 
     std::vector<edge_t> triangle {
@@ -705,10 +705,10 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
 }
 
 TEST(db, graph_random_fill) {
-    db_t db;
+    database_t db;
     EXPECT_TRUE(db.open(""));
 
-    col_t main = *db.collection();
+    collection_t main = *db.collection();
     graph_ref_t graph = main.as_graph();
 
     constexpr std::size_t vertices_count = 1000;
@@ -722,10 +722,10 @@ TEST(db, graph_random_fill) {
 }
 #if 0
 TEST(db, graph_remove_vertices) {
-    db_t db;
+    database_t db;
     EXPECT_TRUE(db.open(""));
 
-    col_t main = *db.collection();
+    collection_t main = *db.collection();
     graph_ref_t graph = main.as_graph();
 
     constexpr std::size_t vertices_count = 2;
@@ -742,10 +742,10 @@ TEST(db, graph_remove_vertices) {
 }
 
 TEST(db, graph_remove_edges_keep_vertices) {
-    db_t db;
+    database_t db;
     EXPECT_TRUE(db.open(""));
 
-    col_t main = *db.collection();
+    collection_t main = *db.collection();
     graph_ref_t graph = main.as_graph();
 
     constexpr std::size_t vertices_count = 1000;
