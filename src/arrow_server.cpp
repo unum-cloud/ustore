@@ -607,49 +607,78 @@ class UKVService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            bool const request_only_presences = params.opt_part == "bitmasks";
+            bool const request_only_presences = params.opt_part == "presences";
             bool const request_only_lengths = params.opt_part == "lengths";
+            bool const request_content = !request_only_lengths && !request_only_presences;
 
             // As we are immediately exporting in the Arrow format,
             // we don't need the lengths, just the NULL indicators
             ArrowArray& keys_c = *batch_c.children[*idx_keys];
             ukv_val_ptr_t found_values = nullptr;
             ukv_val_len_t* found_offsets = nullptr;
+            ukv_val_len_t* found_lengths = nullptr;
             ukv_1x8_t* found_presences = nullptr;
+            ukv_size_t tasks_count = static_cast<ukv_size_t>(keys_c.length);
             ukv_read( //
                 db_,
                 session.txn,
-                keys_c.length,
+                tasks_count,
                 nullptr,
                 0,
                 (ukv_key_t const*)keys_c.buffers[1],
                 sizeof(ukv_key_t),
                 ukv_options_default_k,
                 &found_presences,
-                &found_offsets,
-                nullptr,
-                &found_values,
+                request_content ? &found_offsets : nullptr,
+                request_only_lengths ? &found_lengths : nullptr,
+                request_content ? &found_values : nullptr,
                 &session.arena,
                 status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
+            auto result_length =
+                request_only_presences ? divide_round_up<ukv_size_t>(tasks_count, CHAR_BIT) : tasks_count;
+
             ArrowSchema schema_c;
             ArrowArray batch_c;
-            ukv_to_arrow_schema(keys_c.length, 1, &schema_c, &batch_c, status.member_ptr());
+            ukv_to_arrow_schema(result_length, 1, &schema_c, &batch_c, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            ukv_to_arrow_column( //
-                keys_c.length,
-                "vals",
-                ukv_type_bin_k,
-                found_presences,
-                found_offsets,
-                found_values,
-                schema_c.children[0],
-                batch_c.children[0],
-                status.member_ptr());
+            if (request_content)
+                ukv_to_arrow_column( //
+                    result_length,
+                    "vals",
+                    ukv_type_bin_k,
+                    found_presences,
+                    found_offsets,
+                    found_values,
+                    schema_c.children[0],
+                    batch_c.children[0],
+                    status.member_ptr());
+            else if (request_only_lengths)
+                ukv_to_arrow_column( //
+                    result_length,
+                    "lengths",
+                    ukv_type<ukv_val_len_t>(),
+                    found_presences,
+                    nullptr,
+                    found_lengths,
+                    schema_c.children[0],
+                    batch_c.children[0],
+                    status.member_ptr());
+            else if (request_only_presences)
+                ukv_to_arrow_column( //
+                    result_length,
+                    "presences",
+                    ukv_type<ukv_1x8_t>(),
+                    nullptr,
+                    nullptr,
+                    found_presences,
+                    schema_c.children[0],
+                    batch_c.children[0],
+                    status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 

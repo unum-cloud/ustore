@@ -105,11 +105,11 @@ void check_length(members_ref_gt<locations_at>& ref, ukv_val_len_t expected_leng
 
     auto const expects_missing = expected_length == ukv_val_len_missing_k;
     using extractor_t = places_arg_extractor_gt<locations_at>;
+    ukv_size_t count = extractor_t {}.count(ref.locations());
 
     // Validate that values match
     auto maybe_retrieved = ref.value();
     auto const& retrieved = *maybe_retrieved;
-    ukv_size_t count = extractor_t {}.count(ref.locations());
     EXPECT_EQ(retrieved.size(), count);
 
     // Check views
