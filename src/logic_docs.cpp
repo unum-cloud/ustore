@@ -236,10 +236,10 @@ places_arg_t const& read_unique_docs( //
         places.keys_begin.get(),
         places.keys_begin.stride(),
         c_options,
-        &found_binary_begin,
+        nullptr,
         &found_binary_offs,
         nullptr,
-        nullptr,
+        &found_binary_begin,
         &arena_ptr,
         c_error);
 
@@ -313,10 +313,10 @@ places_arg_t read_docs( //
         keys.begin().get(),
         keys.begin().stride(),
         c_options,
-        &found_binary_begin,
+        nullptr,
         &found_binary_offs,
         nullptr,
-        nullptr,
+        &found_binary_begin,
         &arena_ptr,
         c_error);
     if (*c_error)
@@ -402,13 +402,13 @@ void replace_docs( //
         places.cols_begin.stride(),
         places.keys_begin.get(),
         places.keys_begin.stride(),
-        &tape_begin_punned,
-        0,
+        nullptr,
         growing_tape.offsets().begin().get(),
         growing_tape.offsets().stride(),
         growing_tape.lengths().begin().get(),
         growing_tape.lengths().stride(),
-        nullptr,
+        &tape_begin_punned,
+        0,
         c_options,
         &arena_ptr,
         c_error);
@@ -477,13 +477,13 @@ void read_modify_write( //
         read_order.cols_begin.stride(),
         read_order.keys_begin.get(),
         read_order.keys_begin.stride(),
-        &found_binary_begin,
-        0,
+        nullptr,
         serializing_tape.growing_tape.offsets().begin().get(),
         serializing_tape.growing_tape.offsets().stride(),
         serializing_tape.growing_tape.lengths().begin().get(),
         serializing_tape.growing_tape.lengths().stride(),
-        nullptr,
+        &found_binary_begin,
+        0,
         c_options,
         &arena_ptr,
         c_error);
@@ -534,12 +534,7 @@ void ukv_docs_write( //
     ukv_str_view_t const* c_fields,
     ukv_size_t const c_fields_stride,
 
-    ukv_options_t const c_options,
-    ukv_format_t const c_format,
-    ukv_type_t const,
-
-    ukv_val_ptr_t const* c_vals,
-    ukv_size_t const c_vals_stride,
+    ukv_1x8_t const* c_presences,
 
     ukv_val_len_t const* c_offs,
     ukv_size_t const c_offs_stride,
@@ -547,7 +542,12 @@ void ukv_docs_write( //
     ukv_val_len_t const* c_lens,
     ukv_size_t const c_lens_stride,
 
-    ukv_1x8_t const* c_presences,
+    ukv_val_ptr_t const* c_vals,
+    ukv_size_t const c_vals_stride,
+
+    ukv_options_t const c_options,
+    ukv_format_t const c_format,
+    ukv_type_t const,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -569,13 +569,13 @@ void ukv_docs_write( //
             c_cols_stride,
             c_keys,
             c_keys_stride,
-            c_vals,
-            c_vals_stride,
+            c_presences,
             c_offs,
             c_offs_stride,
             c_lens,
             c_lens_stride,
-            c_presences,
+            c_vals,
+            c_vals_stride,
             c_options,
             &new_arena,
             c_error);
@@ -617,10 +617,11 @@ void ukv_docs_read( //
     ukv_format_t const c_format,
     ukv_type_t const,
 
-    ukv_val_ptr_t* c_found_values,
+    ukv_1x8_t** c_found_presences,
+
     ukv_val_len_t** c_found_offsets,
     ukv_val_len_t** c_found_lengths,
-    ukv_1x8_t** c_found_presences,
+    ukv_val_ptr_t* c_found_values,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -643,10 +644,10 @@ void ukv_docs_read( //
             c_keys,
             c_keys_stride,
             c_options,
-            c_found_values,
+            c_found_presences,
             c_found_offsets,
             c_found_lengths,
-            c_found_presences,
+            c_found_values,
             &new_arena,
             c_error);
 
@@ -718,10 +719,10 @@ void ukv_docs_gist( //
         c_keys,
         c_keys_stride,
         c_options,
-        &found_binary_begin,
+        nullptr,
         &found_binary_offs,
         nullptr,
-        nullptr,
+        &found_binary_begin,
         &new_arena,
         c_error);
     return_on_error(c_error);
@@ -1114,10 +1115,10 @@ void ukv_docs_gather( //
         c_keys,
         c_keys_stride,
         c_options,
-        &found_binary_begin,
+        nullptr,
         &found_binary_offs,
         nullptr,
-        nullptr,
+        &found_binary_begin,
         &new_arena,
         c_error);
     return_on_error(c_error);
