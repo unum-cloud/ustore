@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apache Arrow tabular exports from Document collections.
 - Pandas-like interface for Document collections.
 - RPC server and client with Apache Arrow.
-- Binary and document reads now also output validity bitsets for Arrow compatiability.
+- Binary and document reads now also output validity bitsets for Arrow compatibility.
 - Separate calls for removing and clearing collections.
 
 ### Changed

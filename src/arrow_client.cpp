@@ -113,11 +113,11 @@ void ukv_read( //
     // Configure the `cmd` descriptor
     bool const same_collection = places.same_collection();
     bool const same_named_collection = same_collection && places.same_collections_are_named();
-    bool const request_only_present = c_found_presences && !c_found_lengths && !c_found_values;
-    bool const request_length = c_found_lengths && !c_found_values;
-    char const* partial_mode = !request_length && !request_length //
+    bool const request_only_presences = c_found_presences && !c_found_lengths && !c_found_values;
+    bool const request_only_lengths = c_found_lengths && !c_found_values;
+    char const* partial_mode = !request_only_presences && !request_only_lengths //
                                    ? nullptr
-                                   : request_length ? "length" : "present";
+                                   : request_only_lengths ? "lengths" : "bitmasks";
     bool const read_shared = c_options & ukv_option_read_shared_k;
     bool const read_track = c_options & ukv_option_read_track_k;
     arf::FlightDescriptor descriptor;
@@ -215,10 +215,10 @@ void ukv_read( //
 
     // Export the results into out expected form
     auto bitmap_slots = divide_round_up<std::size_t>(array_c.length, CHAR_BIT);
-    if (request_only_present) {
+    if (request_only_presences) {
         *c_found_presences = (ukv_1x8_t*)array_c.children[0]->buffers[1];
     }
-    else if (request_length) {
+    else if (request_only_lengths) {
         auto presences_ptr = (ukv_1x8_t*)array_c.children[0]->buffers[0];
         auto lens_ptr = (ukv_val_len_t*)array_c.children[0]->buffers[1];
         if (c_found_lengths)
@@ -329,10 +329,10 @@ void ukv_write( //
         auto joined_offs = arena.alloc<ukv_val_len_t>(places.size() + 1, c_error);
         return_on_error(c_error);
         auto slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
-        auto slots_presenses = arena.alloc<ukv_1x8_t>(slots_count, c_error);
+        auto slots_presences = arena.alloc<ukv_1x8_t>(slots_count, c_error);
         return_on_error(c_error);
-        std::memset(slots_presenses.begin(), 0, slots_count);
-        auto joined_presences = strided_iterator_gt<ukv_1x8_t>(slots_presenses.begin(), sizeof(ukv_1x8_t));
+        std::memset(slots_presences.begin(), 0, slots_count);
+        auto joined_presences = strided_iterator_gt<ukv_1x8_t>(slots_presences.begin(), sizeof(ukv_1x8_t));
 
         // Exports into the Arrow-compatible form
         ukv_val_len_t exported_bytes = 0;
@@ -348,7 +348,7 @@ void ukv_write( //
         joined_vals_begin = (ukv_val_ptr_t)joined_vals.begin();
         vals = {&joined_vals_begin, 0};
         offs = {joined_offs.begin(), sizeof(ukv_key_t)};
-        presences = {slots_presenses.begin(), sizeof(ukv_1x8_t)};
+        presences = {slots_presences.begin(), sizeof(ukv_1x8_t)};
     }
     // It may be the case, that we only have `c_tasks_count` offsets instead of `c_tasks_count+1`,
     // which won't be enough for Arrow.
@@ -356,10 +356,10 @@ void ukv_write( //
         auto joined_offs = arena.alloc<ukv_val_len_t>(places.size() + 1, c_error);
         return_on_error(c_error);
         auto slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
-        auto slots_presenses = arena.alloc<ukv_1x8_t>(slots_count, c_error);
+        auto slots_presences = arena.alloc<ukv_1x8_t>(slots_count, c_error);
         return_on_error(c_error);
-        std::memset(slots_presenses.begin(), 0, slots_count);
-        auto joined_presences = strided_iterator_gt<ukv_1x8_t>(slots_presenses.begin(), sizeof(ukv_1x8_t));
+        std::memset(slots_presences.begin(), 0, slots_count);
+        auto joined_presences = strided_iterator_gt<ukv_1x8_t>(slots_presences.begin(), sizeof(ukv_1x8_t));
 
         // Exports into the Arrow-compatible form
         ukv_val_len_t exported_bytes = 0;
@@ -373,7 +373,7 @@ void ukv_write( //
 
         vals = {&joined_vals_begin, 0};
         offs = {joined_offs.begin(), sizeof(ukv_key_t)};
-        presences = {slots_presenses.begin(), sizeof(ukv_1x8_t)};
+        presences = {slots_presences.begin(), sizeof(ukv_1x8_t)};
     }
 
     // Now build-up the Arrow representation
