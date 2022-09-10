@@ -154,22 +154,22 @@ void ukv_read( //
     }
 
     // Now build-up the Arrow representation
-    ArrowArray array_c;
-    ArrowSchema schema_c;
+    ArrowArray input_array_c, output_array_c;
+    ArrowSchema input_schema_c, output_schema_c;
     auto count_cols = has_cols_column + has_keys_column;
-    ukv_to_arrow_schema(places.count, count_cols, &schema_c, &array_c, c_error);
+    ukv_to_arrow_schema(places.count, count_cols, &input_schema_c, &input_array_c, c_error);
     return_on_error(c_error);
 
     if (has_cols_column)
         ukv_to_arrow_column( //
             c_tasks_count,
-            "cols",
+            kArgCols.c_str(),
             ukv_type<ukv_col_t>(),
             nullptr,
             nullptr,
             cols.get(),
-            schema_c.children[0],
-            array_c.children[0],
+            input_schema_c.children[0],
+            input_array_c.children[0],
             c_error);
     return_on_error(c_error);
 
@@ -181,13 +181,13 @@ void ukv_read( //
             nullptr,
             nullptr,
             keys.get(),
-            schema_c.children[has_cols_column],
-            array_c.children[has_cols_column],
+            input_schema_c.children[has_cols_column],
+            input_array_c.children[has_cols_column],
             c_error);
     return_on_error(c_error);
 
     // Send the request to server
-    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&array_c, &schema_c);
+    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
     return_if_error(maybe_batch.ok(), c_error, error_unknown_k, "Can't pack RecordBatch");
 
     std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
@@ -208,31 +208,33 @@ void ukv_read( //
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    ar_status = unpack_table(result->reader->ToTable(), schema_c, array_c);
+    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c);
     return_if_error(ar_status.ok(), c_error, network_k, "No response");
 
     // Convert the responses in Arrow C form
-    return_if_error(schema_c.n_children == 1, c_error, error_unknown_k, "Expecting one column");
+    return_if_error(output_schema_c.n_children == 1, c_error, error_unknown_k, "Expecting one column");
 
     // Export the results into out expected form
-    auto bitmap_slots = divide_round_up<std::size_t>(array_c.length, CHAR_BIT);
     if (request_only_presences) {
-        *c_found_presences = (ukv_1x8_t*)array_c.children[0]->buffers[1];
+        *c_found_presences = (ukv_1x8_t*)output_array_c.children[0]->buffers[1];
     }
     else if (request_only_lengths) {
-        auto presences_ptr = (ukv_1x8_t*)array_c.children[0]->buffers[0];
-        auto lens_ptr = (ukv_val_len_t*)array_c.children[0]->buffers[1];
+        auto presences_ptr = (ukv_1x8_t*)output_array_c.children[0]->buffers[0];
+        auto lens_ptr = (ukv_val_len_t*)output_array_c.children[0]->buffers[1];
         if (c_found_lengths)
             *c_found_lengths = presences_ptr //
-                                   ? normalize_lengths_with_bitmap(presences_ptr, lens_ptr, array_c.length)
+                                   ? arrow_replace_missing_scalars(presences_ptr,
+                                                                   lens_ptr,
+                                                                   output_array_c.length,
+                                                                   ukv_val_len_missing_k)
                                    : lens_ptr;
         if (c_found_presences)
             *c_found_presences = presences_ptr;
     }
     else {
-        auto presences_ptr = (ukv_1x8_t*)array_c.children[0]->buffers[0];
-        auto offs_ptr = (ukv_val_len_t*)array_c.children[0]->buffers[1];
-        auto data_ptr = (ukv_val_ptr_t)array_c.children[0]->buffers[2];
+        auto presences_ptr = (ukv_1x8_t*)output_array_c.children[0]->buffers[0];
+        auto offs_ptr = (ukv_val_len_t*)output_array_c.children[0]->buffers[1];
+        auto data_ptr = (ukv_val_ptr_t)output_array_c.children[0]->buffers[2];
 
         if (c_found_presences)
             *c_found_presences = presences_ptr;
@@ -379,22 +381,22 @@ void ukv_write( //
     }
 
     // Now build-up the Arrow representation
-    ArrowArray array_c;
-    ArrowSchema schema_c;
+    ArrowArray input_array_c;
+    ArrowSchema input_schema_c;
     auto count_cols = has_cols_column + has_keys_column + has_contents_column;
-    ukv_to_arrow_schema(c_tasks_count, count_cols, &schema_c, &array_c, c_error);
+    ukv_to_arrow_schema(c_tasks_count, count_cols, &input_schema_c, &input_array_c, c_error);
     return_on_error(c_error);
 
     if (has_cols_column)
         ukv_to_arrow_column( //
             c_tasks_count,
-            "cols",
+            kArgCols.c_str(),
             ukv_type<ukv_col_t>(),
             nullptr,
             nullptr,
             cols.get(),
-            schema_c.children[0],
-            array_c.children[0],
+            input_schema_c.children[0],
+            input_array_c.children[0],
             c_error);
     return_on_error(c_error);
 
@@ -406,21 +408,21 @@ void ukv_write( //
             nullptr,
             nullptr,
             keys.get(),
-            schema_c.children[has_cols_column],
-            array_c.children[has_cols_column],
+            input_schema_c.children[has_cols_column],
+            input_array_c.children[has_cols_column],
             c_error);
     return_on_error(c_error);
 
     if (has_contents_column)
         ukv_to_arrow_column( //
             c_tasks_count,
-            "vals",
+            kArgVals.c_str(),
             ukv_type<value_view_t>(),
             presences.get(),
             offs.get(),
             joined_vals_begin,
-            schema_c.children[has_cols_column + has_keys_column],
-            array_c.children[has_cols_column + has_keys_column],
+            input_schema_c.children[has_cols_column + has_keys_column],
+            input_array_c.children[has_cols_column + has_keys_column],
             c_error);
     return_on_error(c_error);
 
@@ -440,7 +442,7 @@ void ukv_write( //
         descriptor.cmd.append("flush&");
 
     // Send the request to server
-    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&array_c, &schema_c);
+    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
     return_if_error(maybe_batch.ok(), c_error, error_unknown_k, "Can't pack RecordBatch");
 
     std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
@@ -467,7 +469,7 @@ void ukv_write( //
 void ukv_scan( //
     ukv_t const c_db,
     ukv_txn_t const c_txn,
-    ukv_size_t const c_min_tasks_count,
+    ukv_size_t const c_tasks_count,
 
     ukv_col_t const* c_cols,
     ukv_size_t const c_cols_stride,
@@ -481,7 +483,7 @@ void ukv_scan( //
     ukv_options_t const c_options,
 
     ukv_val_len_t** c_found_offsets,
-    ukv_val_len_t** c_found_counts,
+    ukv_val_len_t** c_found_lengths,
     ukv_key_t** c_found_keys,
 
     ukv_arena_t* c_arena,
@@ -496,7 +498,144 @@ void ukv_scan( //
     strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_val_len_t const> lens {c_scan_lengths, c_scan_lengths_stride};
-    scans_arg_t places {cols, keys, lens, c_min_tasks_count};
+    scans_arg_t scans {cols, keys, lens, c_tasks_count};
+    places_arg_t places {cols, keys, {}, c_tasks_count};
+
+    bool const same_collection = places.same_collection();
+    bool const same_named_collection = same_collection && places.same_collections_are_named();
+    bool const write_flush = c_options & ukv_option_write_flush_k;
+
+    bool const has_cols_column = !same_collection;
+    constexpr bool has_keys_column = true;
+    constexpr bool has_lens_column = true;
+
+    if (has_cols_column && !cols.is_continuous()) {
+        auto continuous = arena.alloc<ukv_col_t>(places.size(), c_error);
+        return_on_error(c_error);
+        transform_n(cols, places.size(), continuous.begin());
+        cols = {continuous.begin(), places.size()};
+    }
+
+    if (has_keys_column && !keys.is_continuous()) {
+        auto continuous = arena.alloc<ukv_key_t>(places.size(), c_error);
+        return_on_error(c_error);
+        transform_n(keys, places.size(), continuous.begin());
+        keys = {continuous.begin(), places.size()};
+    }
+
+    if (has_lens_column && !lens.is_continuous()) {
+        auto continuous = arena.alloc<ukv_val_len_t>(places.size(), c_error);
+        return_on_error(c_error);
+        transform_n(lens, places.size(), continuous.begin());
+        lens = {continuous.begin(), places.size()};
+    }
+
+    // Now build-up the Arrow representation
+    ArrowArray input_array_c, output_array_c;
+    ArrowSchema input_schema_c, output_schema_c;
+    auto count_cols = has_cols_column + has_keys_column + has_lens_column;
+    ukv_to_arrow_schema(c_tasks_count, count_cols, &input_schema_c, &input_array_c, c_error);
+    return_on_error(c_error);
+
+    if (has_cols_column)
+        ukv_to_arrow_column( //
+            c_tasks_count,
+            kArgCols.c_str(),
+            ukv_type<ukv_col_t>(),
+            nullptr,
+            nullptr,
+            cols.get(),
+            input_schema_c.children[0],
+            input_array_c.children[0],
+            c_error);
+    return_on_error(c_error);
+
+    if (has_keys_column)
+        ukv_to_arrow_column( //
+            c_tasks_count,
+            kArgScanStarts.c_str(),
+            ukv_type<ukv_key_t>(),
+            nullptr,
+            nullptr,
+            keys.get(),
+            input_schema_c.children[has_cols_column],
+            input_array_c.children[has_cols_column],
+            c_error);
+    return_on_error(c_error);
+
+    if (has_lens_column)
+        ukv_to_arrow_column( //
+            c_tasks_count,
+            kArgScanLengths.c_str(),
+            ukv_type<ukv_val_len_t>(),
+            nullptr,
+            nullptr,
+            lens.get(),
+            input_schema_c.children[has_cols_column + has_keys_column],
+            input_array_c.children[has_cols_column + has_keys_column],
+            c_error);
+    return_on_error(c_error);
+
+    ar::Status ar_status;
+    arrow_mem_pool_t pool(arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
+
+    // Configure the `cmd` descriptor
+    bool const read_shared = c_options & ukv_option_read_shared_k;
+    bool const read_track = c_options & ukv_option_read_track_k;
+    arf::FlightDescriptor descriptor;
+    descriptor.cmd = "scan?";
+    if (c_txn)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "txn={:x}&", std::uintptr_t(c_txn));
+    if (same_named_collection)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "col={:x}&", cols[0]);
+    if (read_shared)
+        descriptor.cmd.append("shared&");
+    if (read_track)
+        descriptor.cmd.append("track&");
+
+    // Send the request to server
+    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
+    return_if_error(maybe_batch.ok(), c_error, error_unknown_k, "Can't pack RecordBatch");
+
+    std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
+    ar::Result<arf::FlightClient::DoExchangeResult> result = db.flight->DoExchange(options, descriptor);
+    return_if_error(result.ok(), c_error, network_k, "Failed to exchange with Arrow server");
+
+    ar_status = result->writer->Begin(batch_ptr->schema());
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing schema");
+
+    auto table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
+    ar_status = result->writer->WriteTable(*table);
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing request");
+
+    ar_status = result->writer->DoneWriting();
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Submitting request");
+
+    // Fetch the responses
+    // Requesting `ToTable` might be more efficient than concatenating and
+    // reallocating directly from our arena, as the underlying Arrow implementation
+    // may know the length of the entire dataset.
+    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c);
+    return_if_error(ar_status.ok(), c_error, network_k, "No response");
+
+    // Convert the responses in Arrow C form
+    return_if_error(output_schema_c.n_children == 1, c_error, error_unknown_k, "Expecting one column");
+    return_if_error(output_schema_c.children[0]->n_children == 1, c_error, error_unknown_k, "Expecting one sub-column");
+
+    auto offs_ptr = (ukv_val_len_t*)output_array_c.children[0]->buffers[1];
+    auto data_ptr = (ukv_key_t*)output_array_c.children[0]->children[0]->buffers[1];
+
+    if (c_found_offsets)
+        *c_found_offsets = offs_ptr;
+    if (c_found_keys)
+        *c_found_keys = data_ptr;
+    if (c_found_lengths) {
+        auto lens = *c_found_lengths = arena.alloc<ukv_val_len_t>(places.count, c_error).begin();
+        return_on_error(c_error);
+        for (std::size_t i = 0; i != places.count; ++i)
+            lens[i] = offs_ptr[i + 1] - offs_ptr[i];
+    }
 }
 
 void ukv_size( //
@@ -613,8 +752,8 @@ void ukv_col_list( //
     ar_status = unpack_table(maybe_table, schema_c, batch_c);
     return_if_error(ar_status.ok(), c_error, args_combo_k, "Failed to unpack list of columns");
 
-    auto ids_column_idx = column_idx(&schema_c, "cols");
-    auto names_column_idx = column_idx(&schema_c, "names");
+    auto ids_column_idx = column_idx(schema_c, "cols");
+    auto names_column_idx = column_idx(schema_c, "names");
     return_if_error(ids_column_idx && names_column_idx, c_error, args_combo_k, "Expecting two columns");
 
     if (c_ids)

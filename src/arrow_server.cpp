@@ -32,6 +32,11 @@ using namespace unum;
 using sys_clock_t = std::chrono::system_clock;
 using sys_time_t = std::chrono::time_point<sys_clock_t>;
 
+inline static arf::ActionType const kActionColOpen {kFlightColOpen, "Find a collection descriptor by name."};
+inline static arf::ActionType const kActionColRemove {kFlightColRemove, "Delete a named collection."};
+inline static arf::ActionType const kActionTxnBegin {kFlightTxnBegin, "Starts an ACID transaction and returns its ID."};
+inline static arf::ActionType const kActionTxnCommit {kFlightTxnCommit, "Commit a previously started transaction."};
+
 /**
  * @brief Searches for a "value" among key-value pairs passed in URI after path.
  * @param query_params  Must begin with "?" or "/".
@@ -419,24 +424,6 @@ ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) {
  * In our implementation things are trickier, as transactions are not thread-safe.
  */
 class UKVService : public arf::FlightServerBase {
-  public:
-    inline static arf::ActionType const kActionColOpen {"col_upsert", "Find a collection descriptor by name."};
-    inline static arf::ActionType const kActionColRemove {"col_remove", "Delete a named collection."};
-    inline static arf::ActionType const kActionTxnBegin {"txn_begin", "Starts an ACID transaction and returns its ID."};
-    inline static arf::ActionType const kActionTxnCommit {"txn_commit", "Commit a previously started transaction."};
-
-    inline static std::string const kGetColList = "col_list";
-    inline static std::string const kPutWrite = "write";
-    inline static std::string const kExchangeRead = "read";
-    inline static std::string const kExchangeScan = "scan";
-    inline static std::string const kExchangeSize = "size";
-
-    inline static std::string const kArgCols = "cols";
-    inline static std::string const kArgKeys = "keys";
-    inline static std::string const kArgVals = "vals";
-    inline static std::string const kArgFields = "fields";
-
-  private:
     db_t db_;
     sessions_t sessions_;
 
@@ -593,40 +580,44 @@ class UKVService : public arf::FlightServerBase {
         session_params_t params = session_params(server_call, desc.cmd);
         status_t status;
 
-        ArrowSchema schema_c;
-        ArrowArray batch_c;
-        if (ar_status = unpack_table(request.ToTable(), schema_c, batch_c); !ar_status.ok())
+        ArrowSchema input_schema_c, output_schema_c;
+        ArrowArray input_batch_c, output_batch_c;
+        if (ar_status = unpack_table(request.ToTable(), input_schema_c, input_batch_c); !ar_status.ok())
             return ar_status;
 
-        std::optional<std::size_t> idx_cols = column_idx(&schema_c, kArgCols);
-        std::optional<std::size_t> idx_keys = column_idx(&schema_c, kArgKeys);
+        if (is_query(desc.cmd, kFlightRead)) {
 
-        if (is_query(desc.cmd, kExchangeRead)) {
+            /// @param `keys`
+            auto input_keys = get_keys(input_schema_c, input_batch_c, kArgKeys);
+            if (!input_keys)
+                return ar::Status::Invalid("Keys must have been provided for reads");
 
-            auto session = sessions_.lock(params.session_id, status.member_ptr());
-            if (!status)
-                return ar::Status::ExecutionError(status.message());
-
+            /// @param `cols`
+            auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
             bool const request_only_presences = params.opt_part == "presences";
             bool const request_only_lengths = params.opt_part == "lengths";
             bool const request_content = !request_only_lengths && !request_only_presences;
 
+            // Reserve resources for the execution of this request
+            auto session = sessions_.lock(params.session_id, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
             // As we are immediately exporting in the Arrow format,
             // we don't need the lengths, just the NULL indicators
-            ArrowArray& keys_c = *batch_c.children[*idx_keys];
             ukv_val_ptr_t found_values = nullptr;
             ukv_val_len_t* found_offsets = nullptr;
             ukv_val_len_t* found_lengths = nullptr;
             ukv_1x8_t* found_presences = nullptr;
-            ukv_size_t tasks_count = static_cast<ukv_size_t>(keys_c.length);
+            ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
             ukv_read( //
                 db_,
                 session.txn,
                 tasks_count,
-                nullptr,
-                0,
-                (ukv_key_t const*)keys_c.buffers[1],
-                sizeof(ukv_key_t),
+                input_cols.get(),
+                input_cols.stride(),
+                input_keys.get(),
+                input_keys.stride(),
                 ukv_options_default_k,
                 &found_presences,
                 request_content ? &found_offsets : nullptr,
@@ -637,12 +628,9 @@ class UKVService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            auto result_length =
+            ukv_size_t result_length =
                 request_only_presences ? divide_round_up<ukv_size_t>(tasks_count, CHAR_BIT) : tasks_count;
-
-            ArrowSchema schema_c;
-            ArrowArray batch_c;
-            ukv_to_arrow_schema(result_length, 1, &schema_c, &batch_c, status.member_ptr());
+            ukv_to_arrow_schema(result_length, 1, &output_schema_c, &output_batch_c, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -654,8 +642,8 @@ class UKVService : public arf::FlightServerBase {
                     found_presences,
                     found_offsets,
                     found_values,
-                    schema_c.children[0],
-                    batch_c.children[0],
+                    output_schema_c.children[0],
+                    output_batch_c.children[0],
                     status.member_ptr());
             else if (request_only_lengths)
                 ukv_to_arrow_column( //
@@ -665,8 +653,8 @@ class UKVService : public arf::FlightServerBase {
                     found_presences,
                     nullptr,
                     found_lengths,
-                    schema_c.children[0],
-                    batch_c.children[0],
+                    output_schema_c.children[0],
+                    output_batch_c.children[0],
                     status.member_ptr());
             else if (request_only_presences)
                 ukv_to_arrow_column( //
@@ -676,31 +664,90 @@ class UKVService : public arf::FlightServerBase {
                     nullptr,
                     nullptr,
                     found_presences,
-                    schema_c.children[0],
-                    batch_c.children[0],
+                    output_schema_c.children[0],
+                    output_batch_c.children[0],
                     status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
+        }
+        else if (is_query(desc.cmd, kFlightScan)) {
 
-            auto maybe_table = ar::ImportRecordBatch(&batch_c, &schema_c);
-            if (!maybe_table.ok())
-                return maybe_table.status();
+            /// @param `keys`
+            auto input_keys = get_keys(input_schema_c, input_batch_c, kArgScanStarts);
+            /// @param `lengths`
+            auto input_lengths = get_lengths(input_schema_c, input_batch_c, kArgScanLengths);
+            /// @param `cols`
+            auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
 
-            auto table = maybe_table.ValueUnsafe();
-            ar_status = response.Begin(table->schema());
-            if (!ar_status.ok())
-                return ar_status;
+            if (!input_keys || !input_lengths)
+                return ar::Status::Invalid("Keys and lengths must have been provided for scans");
 
-            ar_status = response.WriteRecordBatch(*table);
-            if (!ar_status.ok())
-                return ar_status;
+            // Reserve resources for the execution of this request
+            auto session = sessions_.lock(params.session_id, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
 
-            ar_status = response.Close();
-            if (!ar_status.ok())
-                return ar_status;
+            // As we are immediately exporting in the Arrow format,
+            // we don't need the lengths, just the NULL indicators
+            ukv_val_len_t* found_offsets = nullptr;
+            ukv_val_len_t* found_lengths = nullptr;
+            ukv_key_t* found_keys = nullptr;
+            ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
+            ukv_scan( //
+                db_,
+                session.txn,
+                tasks_count,
+                input_cols.get(),
+                input_cols.stride(),
+                input_keys.get(),
+                input_keys.stride(),
+                input_lengths.get(),
+                input_lengths.stride(),
+                ukv_options_default_k,
+                &found_offsets,
+                nullptr,
+                &found_keys,
+                &session.arena,
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ukv_to_arrow_schema(tasks_count, 1, &output_schema_c, &output_batch_c, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ukv_to_arrow_list( //
+                tasks_count,
+                "keys",
+                ukv_type<ukv_key_t>(),
+                nullptr,
+                found_offsets,
+                found_keys,
+                output_schema_c.children[0],
+                output_batch_c.children[0],
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
         }
 
-        return ar::Status::OK();
+        auto maybe_table = ar::ImportRecordBatch(&output_batch_c, &output_schema_c);
+        if (!maybe_table.ok())
+            return maybe_table.status();
+
+        auto table = maybe_table.ValueUnsafe();
+        ar_status = table->ValidateFull();
+        if (!ar_status.ok())
+            return ar_status;
+
+        ar_status = response.Begin(table->schema());
+        if (!ar_status.ok())
+            return ar_status;
+
+        ar_status = response.WriteRecordBatch(*table);
+        if (!ar_status.ok())
+            return ar_status;
+
+        return response.Close();
     }
 
     ar::Status DoPut( //
@@ -715,37 +762,41 @@ class UKVService : public arf::FlightServerBase {
         session_params_t params = session_params(server_call, desc.cmd);
         status_t status;
 
-        ArrowSchema schema_c;
-        ArrowArray batch_c;
-        if (ar_status = unpack_table(request.ToTable(), schema_c, batch_c); !ar_status.ok())
+        ArrowSchema input_schema_c;
+        ArrowArray input_batch_c;
+        if (ar_status = unpack_table(request.ToTable(), input_schema_c, input_batch_c); !ar_status.ok())
             return ar_status;
 
-        if (is_query(desc.cmd, kPutWrite)) {
-            std::optional<std::size_t> idx_cols = column_idx(&schema_c, kArgCols);
-            std::optional<std::size_t> idx_keys = column_idx(&schema_c, kArgKeys);
-            std::optional<std::size_t> idx_vals = column_idx(&schema_c, kArgVals);
+        if (is_query(desc.cmd, kFlightWrite)) {
+
+            /// @param `keys`
+            auto input_keys = get_keys(input_schema_c, input_batch_c, kArgKeys);
+            if (!input_keys)
+                return ar::Status::Invalid("Keys must have been provided for reads");
+
+            /// @param `cols`
+            auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
+            auto input_vals = get_contents(input_schema_c, input_batch_c, kArgVals);
 
             auto session = sessions_.lock(params.session_id, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            ArrowArray& keys_c = *batch_c.children[*idx_keys];
-            ArrowArray& vals_c = *batch_c.children[*idx_vals];
             ukv_write( //
                 db_,
                 session.txn,
-                keys_c.length,
-                nullptr,
-                0,
-                (ukv_key_t const*)keys_c.buffers[1],
-                sizeof(ukv_key_t),
-                (ukv_1x8_t const*)vals_c.buffers[0],
-                (ukv_val_len_t const*)vals_c.buffers[1],
-                sizeof(ukv_val_len_t),
-                nullptr,
-                0,
-                (ukv_val_ptr_t const*)&vals_c.buffers[2],
-                0,
+                input_vals.count,
+                input_cols.get(),
+                input_cols.stride(),
+                input_keys.get(),
+                input_keys.stride(),
+                input_vals.presences_begin.get(),
+                input_vals.offsets_begin.get(),
+                input_vals.offsets_begin.stride(),
+                input_vals.lengths_begin.get(),
+                input_vals.lengths_begin.stride(),
+                input_vals.contents_begin.get(),
+                input_vals.contents_begin.stride(),
                 ukv_options_default_k,
                 &session.arena,
                 status.member_ptr());
@@ -766,7 +817,7 @@ class UKVService : public arf::FlightServerBase {
         session_params_t params = session_params(server_call, ticket.ticket);
         status_t status;
 
-        if (is_query(ticket.ticket, kGetColList)) {
+        if (is_query(ticket.ticket, kFlightListCols)) {
 
             // We will need some temporary memory for exports
             auto session = sessions_.lock({.client_id = params.session_id.client_id}, status.member_ptr());
