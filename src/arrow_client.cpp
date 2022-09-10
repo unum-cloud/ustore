@@ -356,7 +356,7 @@ void ukv_write( //
     }
     // It may be the case, that we only have `c_tasks_count` offsets instead of `c_tasks_count+1`,
     // which won't be enough for Arrow.
-    else if (!contents.is_arrow()) {
+    else if (has_contents_column && !contents.is_arrow()) {
         auto joined_offs = arena.alloc<ukv_val_len_t>(places.size() + 1, c_error);
         return_on_error(c_error);
         auto slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
