@@ -67,6 +67,7 @@ set(UKV_PREINSTALLED_ARROW ON)
 set(UKV_PREINSTALLED_TURBOPFOR ON)
 set(UKV_BUILD_PYTHON ON)
 set(UKV_BUILD_TESTS ON)
+set(UKV_BUILD_FLIGHT ON)
 
 include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
@@ -110,6 +111,17 @@ set_source_files_properties(src/backend_leveldb.cpp PROPERTIES COMPILE_FLAGS -fn
 add_library(ukv_arrow_client src/arrow_client.cpp src/logic_docs.cpp src/logic_graph.cpp)
 target_link_libraries(ukv_arrow_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
 
+# Generate Apache Arrow Flight RPC backends
+if (${UKV_BUILD_FLIGHT})
+  foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb)
+    get_target_property(lib_SOURCES ${lib_name} SOURCES)
+    get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
+    string(CONCAT server_name ${lib_name} "_arrow_server")
+    add_executable(${server_name} src/arrow_server.cpp ${lib_SOURCES})
+    target_link_libraries(${server_name} pthread nlohmann_json::nlohmann_json arrow arrow_flight arrow_dataset parquet ${lib_LIBRARIES})
+  endforeach()
+endif()
+
 # Generate tests
 if(${UKV_BUILD_TESTS})
   foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_arrow_client)
@@ -122,11 +134,6 @@ if(${UKV_BUILD_TESTS})
   endforeach()
 endif()
 
-# add_executable(ukv_rest_server src/rest_server.cpp)
-# target_link_libraries(ukv_rest_server ukv_stl pthread fmt::fmt Boost::headers nlohmann_json::nlohmann_json)
-add_executable(ukv_arrow_server src/arrow_server.cpp)
-target_link_libraries(ukv_arrow_server ukv_stl pthread nlohmann_json::nlohmann_json arrow arrow_flight arrow_dataset parquet)
-
 # Enable warning and sanitization for our primary targets
 foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_arrow_client)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -138,7 +145,7 @@ foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_arrow_client)
   endif()
 endforeach()
 
-# Build
+# Build Python bindings linking to precompiled client SDKs
 if(${UKV_BUILD_PYTHON})
   find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
   find_package(pybind11 CONFIG REQUIRED)
