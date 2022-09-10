@@ -110,7 +110,7 @@ class SingleResultStream : public arf::ResultStream {
  * Wrapping an `int` causes 2x `unique_ptr` and a `shared_ptr` allocation!
  */
 template <typename scalar_at>
-std::unique_ptr<arf::ResultStream> return_scalar(scalar_at scalar) {
+std::unique_ptr<arf::ResultStream> return_scalar(scalar_at const& scalar) {
     static_assert(!std::is_reference_v<scalar_at>);
     auto result = std::make_unique<arf::Result>();
     result->body = std::make_shared<ar::Buffer>( //
@@ -123,6 +123,7 @@ std::unique_ptr<arf::ResultStream> return_scalar(scalar_at scalar) {
 using base_id_t = std::uint64_t;
 enum client_id_t : base_id_t {};
 enum txn_id_t : base_id_t {};
+static_assert(sizeof(txn_id_t) == sizeof(ukv_txn_t));
 
 client_id_t parse_parse_client_id(arf::ServerCallContext const& ctx) {
     std::string const& peer_addr = ctx.peer();
@@ -485,7 +486,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_col_upsert(db_, params.col->begin(), col_config, &col_id, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
-            *results_ptr = return_scalar(col_id);
+            *results_ptr = return_scalar<ukv_col_t>(col_id);
             return ar::Status::OK();
         }
 
@@ -538,7 +539,7 @@ class UKVService : public arf::FlightServerBase {
 
             // Don't forget to add the transaction to active sessions
             sessions_.hold_txn(params.session_id, session);
-            *results_ptr = return_scalar(params.session_id.txn_id);
+            *results_ptr = return_scalar<txn_id_t>(params.session_id.txn_id);
             return ar::Status::OK();
         }
 
