@@ -97,7 +97,6 @@ Using it can be as easy as:
 import ukv.stl as ukv
 # import ukv.level as ukv
 # import ukv.rocks as ukv
-# import ukv.lerner as ukv
 
 db = ukv.DataBase()
 db[42] = 'purpose of life'.encode()
@@ -108,28 +107,6 @@ assert len(db['sub-collection'][0]) == 15
 
 All familiar Pythonic stuff!
 
-### Rust
-
-Rust implementation is designed to support:
-
-* Named Collections
-* ACID Transactions
-* Single & Batch Operations
-* [Apache DataFusion](https://arrow.apache.org/datafusion/) `TableProvider` for SQL
-
-Using it should be, again, familiar, as it mimics [`std::collections`](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html):
-
-```rust
-let mut db = DataBase::new();
-if db.contains_key(&42) {
-    db.remove(&42);
-    db.insert(43, "New Meaning".to_string());
-}
-for (key, value) in &db {
-    println!("{key}: \"{value}\"");
-}
-db.clear();
-```
 
 ### Java
 
@@ -170,15 +147,40 @@ Implementation-wise, GoLang variant performs `memcpy`s on essentially every call
 As GoLang has no exceptions in the classical OOP sense, most functions return multiple values, error being the last one in each pack.
 Batch lookup operations are implemented via channels sending slices, to avoid reallocations.
 
-### JavaScript
-
+<details>
+<summary>JavaScript</summary>
 * Node.js
 * V8
 * Deno
 * [`bun:ffi`](https://twitter.com/jarredsumner/status/1521527222514774017)
+<details>
 
-### RESTful API & Clients
+<details>
+<summary>Rust</summary>
+Rust implementation is designed to support:
 
+* Named Collections
+* ACID Transactions
+* Single & Batch Operations
+* [Apache DataFusion](https://arrow.apache.org/datafusion/) `TableProvider` for SQL
+
+Using it should be, again, familiar, as it mimics [`std::collections`](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html):
+
+```rust
+let mut db = DataBase::new();
+if db.contains_key(&42) {
+    db.remove(&42);
+    db.insert(43, "New Meaning".to_string());
+}
+for (key, value) in &db {
+    println!("{key}: \"{value}\"");
+}
+db.clear();
+```
+</details>
+
+<details>
+<summary>RESTful API & Clients</summary>
 We implement a REST server using `Boost.Beast` and the underlying `Boost.Asio`, as the go-to Web-Dev libraries in C++.
 To test the REST API, `./src/run_rest.sh` and then cURL into it:
 
@@ -195,6 +197,7 @@ curl -i \
 ```
 
 The [`OneAPI` specification](/openapi.yaml) documentation is in-development.
+</details>
 
 ## FAQ
 
