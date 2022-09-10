@@ -782,10 +782,11 @@ class UKVService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
+            ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
             ukv_write( //
                 db_,
                 session.txn,
-                input_vals.count,
+                tasks_count,
                 input_cols.get(),
                 input_cols.stride(),
                 input_keys.get(),
