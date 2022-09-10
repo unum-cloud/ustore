@@ -185,8 +185,8 @@ static void ukv_to_arrow_column( //
     ukv_str_view_t const field_name,
     ukv_type_t const field_type,
 
-    ukv_1x8_t const* column_validities,
-    ukv_val_len_t const* column_offsets,
+    ukv_octet_t const* column_validities,
+    ukv_length_t const* column_offsets,
     void const* column_contents,
 
     struct ArrowSchema* schema,
@@ -254,8 +254,8 @@ static void ukv_to_arrow_list( //
     ukv_str_view_t const field_name,
     ukv_type_t const field_type,
 
-    ukv_1x8_t const* column_validities,
-    ukv_val_len_t const* column_offsets,
+    ukv_octet_t const* column_validities,
+    ukv_length_t const* column_offsets,
     void const* column_contents,
 
     struct ArrowSchema* schema,
@@ -307,15 +307,15 @@ static void ukv_to_arrow_list( //
  *                          stored in documents under the same key.
  */
 static void ukv_to_arrow_stream( //
-    ukv_t const,
-    ukv_txn_t const,
+    ukv_database_t const,
+    ukv_transaction_t const,
     ukv_size_t const,
 
     ukv_size_t const,
     ukv_key_t const,
     ukv_key_t const,
 
-    ukv_col_t const*,
+    ukv_collection_t const*,
     ukv_size_t const,
 
     ukv_str_view_t const*,

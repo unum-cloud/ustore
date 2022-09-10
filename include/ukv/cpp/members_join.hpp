@@ -20,16 +20,16 @@ namespace unum::ukv {
  */
 struct keys_join_stream_t {
 
-    ukv_t db = nullptr;
-    ukv_txn_t txn = nullptr;
+    ukv_database_t db = nullptr;
+    ukv_transaction_t txn = nullptr;
     ukv_arena_t* arena = nullptr;
 
-    strided_range_gt<ukv_col_t const> cols;
+    strided_range_gt<ukv_collection_t const> cols;
     ukv_key_t next_min_key_ = 0;
     ukv_size_t window_size = 0;
 
     strided_range_gt<ukv_key_t*> fetched_keys_;
-    strided_range_gt<ukv_val_len_t> fetched_lengths;
+    strided_range_gt<ukv_length_t> fetched_lengths;
 };
 
 } // namespace unum::ukv

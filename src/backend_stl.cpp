@@ -31,8 +31,8 @@
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-ukv_col_t ukv_col_main_k = 0;
-ukv_val_len_t ukv_val_len_missing_k = std::numeric_limits<ukv_val_len_t>::max();
+ukv_collection_t ukv_collection_main_k = 0;
+ukv_length_t ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max();
 ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 
 /*********************************************************/
@@ -112,8 +112,8 @@ struct stl_db_t {
     std::string persisted_path;
 };
 
-stl_col_t& stl_col(stl_db_t& db, ukv_col_t col) {
-    return col == ukv_col_main_k ? db.main : *reinterpret_cast<stl_col_t*>(col);
+stl_col_t& stl_col(stl_db_t& db, ukv_collection_t col) {
+    return col == ukv_collection_main_k ? db.main : *reinterpret_cast<stl_col_t*>(col);
 }
 
 void save_to_disk(stl_col_t const& col, std::string const& path, ukv_error_t* c_error) {
@@ -145,9 +145,9 @@ void save_to_disk(stl_col_t const& col, std::string const& path, ukv_error_t* c_
         return_if_error(saved_len != sizeof(ukv_key_t), c_error, 0, "Write partially failed on key.");
 
         auto const& buf = seq_val.buffer;
-        auto buf_len = static_cast<ukv_val_len_t>(buf.size());
-        saved_len = std::fwrite(&buf_len, sizeof(ukv_val_len_t), 1, handle);
-        return_if_error(saved_len != sizeof(ukv_val_len_t), c_error, 0, "Write partially failed on value len.");
+        auto buf_len = static_cast<ukv_length_t>(buf.size());
+        saved_len = std::fwrite(&buf_len, sizeof(ukv_length_t), 1, handle);
+        return_if_error(saved_len != sizeof(ukv_length_t), c_error, 0, "Write partially failed on value len.");
 
         saved_len = std::fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
         return_if_error(saved_len != buf.size(), c_error, 0, "Write partially failed on value.");
@@ -180,9 +180,9 @@ void read_from_disk(stl_col_t& col, std::string const& path, ukv_error_t* c_erro
         auto read_len = std::fread(&key, sizeof(ukv_key_t), 1, handle);
         return_if_error(read_len == sizeof(ukv_key_t), c_error, 0, "Read partially failed on key.");
 
-        auto buf_len = ukv_val_len_t(0);
-        read_len = std::fread(&buf_len, sizeof(ukv_val_len_t), 1, handle);
-        return_if_error(read_len == sizeof(ukv_val_len_t), c_error, 0, "Read partially failed on value len.");
+        auto buf_len = ukv_length_t(0);
+        read_len = std::fread(&buf_len, sizeof(ukv_length_t), 1, handle);
+        return_if_error(read_len == sizeof(ukv_length_t), c_error, 0, "Read partially failed on value len.");
 
         auto buf = buffer_t(buf_len);
         read_len = std::fread(buf.data(), sizeof(byte_t), buf.size(), handle);
@@ -375,8 +375,8 @@ void scan_head( //
     stl_db_t& db,
     scans_arg_t tasks,
     ukv_options_t const options,
-    ukv_val_len_t** c_found_offsets,
-    ukv_val_len_t** c_found_counts,
+    ukv_length_t** c_found_offsets,
+    ukv_length_t** c_found_counts,
     ukv_key_t** c_found_keys,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
@@ -384,9 +384,9 @@ void scan_head( //
     std::shared_lock _ {db.mutex};
 
     // 1. Allocate a tape for all the values to be fetched
-    auto offsets = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count + 1, c_error, c_found_offsets);
+    auto offsets = arena.alloc_or_dummy<ukv_length_t>(tasks.count + 1, c_error, c_found_offsets);
     return_on_error(c_error);
-    auto counts = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count, c_error, c_found_counts);
+    auto counts = arena.alloc_or_dummy<ukv_length_t>(tasks.count, c_error, c_found_counts);
     return_on_error(c_error);
 
     auto total_keys = reduce_n(tasks.lengths, tasks.count, 0ul);
@@ -399,7 +399,7 @@ void scan_head( //
         stl_col_t const& col = stl_col(db, place.col);
         offsets[i] = keys_output - *c_found_keys;
 
-        ukv_val_len_t j = 0;
+        ukv_length_t j = 0;
         auto key_iterator = col.pairs.lower_bound(place.min_key);
         for (; j != place.length && key_iterator != col.pairs.end(); ++key_iterator) {
             if (key_iterator->second.is_deleted)
@@ -418,8 +418,8 @@ void scan_txn( //
     stl_txn_t& txn,
     scans_arg_t tasks,
     ukv_options_t const options,
-    ukv_val_len_t** c_found_offsets,
-    ukv_val_len_t** c_found_counts,
+    ukv_length_t** c_found_offsets,
+    ukv_length_t** c_found_counts,
     ukv_key_t** c_found_keys,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
@@ -428,9 +428,9 @@ void scan_txn( //
     std::shared_lock _ {db.mutex};
 
     // 1. Allocate a tape for all the values to be fetched
-    auto offsets = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count + 1, c_error, c_found_offsets);
+    auto offsets = arena.alloc_or_dummy<ukv_length_t>(tasks.count + 1, c_error, c_found_offsets);
     return_on_error(c_error);
-    auto counts = arena.alloc_or_dummy<ukv_val_len_t>(tasks.count, c_error, c_found_counts);
+    auto counts = arena.alloc_or_dummy<ukv_length_t>(tasks.count, c_error, c_found_counts);
     return_on_error(c_error);
 
     auto total_keys = reduce_n(tasks.lengths, tasks.count, 0ul);
@@ -443,7 +443,7 @@ void scan_txn( //
         stl_col_t const& col = stl_col(db, place.col);
         offsets[i] = keys_output - *c_found_keys;
 
-        ukv_val_len_t j = 0;
+        ukv_length_t j = 0;
         auto key_iterator = col.pairs.lower_bound(place.min_key);
         auto txn_iterator = txn.upserted.lower_bound(place.min_key);
         for (; j != place.length && key_iterator != col.pairs.end();) {
@@ -487,9 +487,9 @@ void scan_txn( //
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_db_open( //
+void ukv_database_open( //
     ukv_str_view_t c_config,
-    ukv_t* c_db,
+    ukv_database_t* c_db,
     ukv_error_t* c_error) {
 
     safe_section("Initializing DBMS", c_error, [&] {
@@ -504,11 +504,11 @@ void ukv_db_open( //
 }
 
 void ukv_read( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_col_t const* c_cols,
+    ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -516,11 +516,11 @@ void ukv_read( //
 
     ukv_options_t const c_options,
 
-    ukv_1x8_t** c_found_presences,
+    ukv_octet_t** c_found_presences,
 
-    ukv_val_len_t** c_found_offsets,
-    ukv_val_len_t** c_found_lengths,
-    ukv_val_ptr_t* c_found_values,
+    ukv_length_t** c_found_offsets,
+    ukv_length_t** c_found_lengths,
+    ukv_bytes_ptr_t* c_found_values,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -532,24 +532,24 @@ void ukv_read( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     places_arg_t places {cols, keys, {}, c_tasks_count};
     bool const needs_export = c_found_values != nullptr;
 
     // 1. Allocate a tape for all the values to be pulled
-    auto offs = arena.alloc_or_dummy<ukv_val_len_t>(places.count + 1, c_error, c_found_offsets);
+    auto offs = arena.alloc_or_dummy<ukv_length_t>(places.count + 1, c_error, c_found_offsets);
     return_on_error(c_error);
-    auto lens = arena.alloc_or_dummy<ukv_val_len_t>(places.count, c_error, c_found_lengths);
+    auto lens = arena.alloc_or_dummy<ukv_length_t>(places.count, c_error, c_found_lengths);
     return_on_error(c_error);
-    auto presences = arena.alloc_or_dummy<ukv_1x8_t>(places.count, c_error, c_found_presences);
+    auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
     return_on_error(c_error);
 
     // 2. Pull metadata
     std::size_t total_length = 0;
     auto meta_enumerator = [&](std::size_t i, value_view_t value) {
         presences[i] = bool(value);
-        lens[i] = value ? value.size() : ukv_val_len_missing_k;
+        lens[i] = value ? value.size() : ukv_length_missing_k;
         total_length += value.size();
     };
 
@@ -560,7 +560,7 @@ void ukv_read( //
         return;
 
     // 3. Pull the data, once we know the total length
-    ukv_val_len_t progress_in_tape = 0;
+    ukv_length_t progress_in_tape = 0;
     auto tape = arena.alloc<byte_t>(total_length, c_error);
     auto data_enumerator = [&](std::size_t i, value_view_t value) {
         offs[i] = progress_in_tape;
@@ -571,31 +571,31 @@ void ukv_read( //
     c_txn ? read_txn_under_lock(txn, places, c_options, data_enumerator, c_error)
           : read_head_under_lock(db, places, c_options, data_enumerator, c_error);
 
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(tape.begin());
+    *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(tape.begin());
     if (needs_export)
         offs[places.count] = progress_in_tape;
 }
 
 void ukv_write( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_col_t const* c_cols,
+    ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_stride,
 
-    ukv_1x8_t const* c_presences,
+    ukv_octet_t const* c_presences,
 
-    ukv_val_len_t const* c_offs,
+    ukv_length_t const* c_offs,
     ukv_size_t const c_offs_stride,
 
-    ukv_val_len_t const* c_lens,
+    ukv_length_t const* c_lens,
     ukv_size_t const c_lens_stride,
 
-    ukv_val_ptr_t const* c_vals,
+    ukv_bytes_cptr_t const* c_vals,
     ukv_size_t const c_vals_stride,
 
     ukv_options_t const c_options,
@@ -607,12 +607,12 @@ void ukv_write( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
-    strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
-    strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    strided_iterator_gt<ukv_1x8_t const> presences {c_presences, sizeof(ukv_1x8_t)};
+    strided_iterator_gt<ukv_bytes_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
+    strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
 
     places_arg_t places {cols, keys, {}, c_tasks_count};
     contents_arg_t contents {vals, offs, lens, presences, c_tasks_count};
@@ -622,23 +622,23 @@ void ukv_write( //
 }
 
 void ukv_scan( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     ukv_size_t const c_min_tasks_count,
 
-    ukv_col_t const* c_cols,
+    ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
 
-    ukv_val_len_t const* c_scan_lengths,
+    ukv_length_t const* c_scan_lengths,
     ukv_size_t const c_scan_lengths_stride,
 
     ukv_options_t const c_options,
 
-    ukv_val_len_t** c_found_offsets,
-    ukv_val_len_t** c_found_counts,
+    ukv_length_t** c_found_offsets,
+    ukv_length_t** c_found_counts,
     ukv_key_t** c_found_keys,
 
     ukv_arena_t* c_arena,
@@ -651,9 +651,9 @@ void ukv_scan( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_val_len_t const> lens {c_scan_lengths, c_scan_lengths_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c_scan_lengths, c_scan_lengths_stride};
     scans_arg_t scans {cols, keys, lens, c_min_tasks_count};
 
     return c_txn ? scan_txn(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
@@ -661,11 +661,11 @@ void ukv_scan( //
 }
 
 void ukv_size( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     ukv_size_t const n,
 
-    ukv_col_t const* c_cols,
+    ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_start_keys,
@@ -688,7 +688,7 @@ void ukv_size( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
 
@@ -731,8 +731,8 @@ void ukv_size( //
         estimate[1] = static_cast<ukv_size_t>(main_count + txn_count);
         estimate[2] = static_cast<ukv_size_t>(main_bytes);
         estimate[3] = static_cast<ukv_size_t>(main_bytes + txn_bytes);
-        estimate[4] = estimate[0] * (sizeof(ukv_key_t) + sizeof(ukv_val_len_t)) + estimate[2];
-        estimate[5] = (estimate[1] + deleted_count) * (sizeof(ukv_key_t) + sizeof(ukv_val_len_t)) + estimate[3];
+        estimate[4] = estimate[0] * (sizeof(ukv_key_t) + sizeof(ukv_length_t)) + estimate[2];
+        estimate[5] = (estimate[1] + deleted_count) * (sizeof(ukv_key_t) + sizeof(ukv_length_t)) + estimate[3];
     }
 }
 
@@ -740,18 +740,18 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_col_upsert(
+void ukv_collection_upsert(
     // Inputs:
-    ukv_t const c_db,
+    ukv_database_t const c_db,
     ukv_str_view_t c_col_name,
     ukv_str_view_t,
     // Outputs:
-    ukv_col_t* c_col,
+    ukv_collection_t* c_col,
     ukv_error_t* c_error) {
 
     auto name_len = std::strlen(c_col_name);
     if (!name_len) {
-        *c_col = ukv_col_main_k;
+        *c_col = ukv_collection_main_k;
         return;
     }
 
@@ -765,28 +765,28 @@ void ukv_col_upsert(
         safe_section("Inserting new collection", c_error, [&] {
             auto new_col = std::make_unique<stl_col_t>();
             new_col->name = col_name;
-            *c_col = reinterpret_cast<ukv_col_t>(new_col.get());
+            *c_col = reinterpret_cast<ukv_collection_t>(new_col.get());
             db.named.emplace(new_col->name, std::move(new_col));
         });
     }
     else {
-        *c_col = reinterpret_cast<ukv_col_t>(col_it->second.get());
+        *c_col = reinterpret_cast<ukv_collection_t>(col_it->second.get());
     }
 }
 
-void ukv_col_drop(
+void ukv_collection_drop(
     // Inputs:
-    ukv_t const c_db,
-    ukv_col_t c_col_id,
+    ukv_database_t const c_db,
+    ukv_collection_t c_col_id,
     ukv_str_view_t c_col_name,
-    ukv_col_drop_mode_t c_mode,
+    ukv_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     auto col_name = c_col_name ? std::string_view(c_col_name) : std::string_view();
-    bool invalidate = c_mode == ukv_col_drop_keys_vals_handle_k;
+    bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
     return_if_error(!col_name.empty() || !invalidate,
                     c_error,
                     args_combo_k,
@@ -801,27 +801,27 @@ void ukv_col_drop(
         return;
 
     stl_col_t& col = col_name.empty() ? db.main : *col_it->second.get();
-    if (c_mode == ukv_col_drop_keys_vals_handle_k)
+    if (c_mode == ukv_drop_keys_vals_handle_k)
         db.named.erase(col_it);
 
-    else if (c_mode == ukv_col_drop_keys_vals_k) {
+    else if (c_mode == ukv_drop_keys_vals_k) {
         col.pairs.clear();
         col.unique_elements = 0;
     }
 
-    else if (c_mode == ukv_col_drop_vals_k) {
+    else if (c_mode == ukv_drop_vals_k) {
         generation_t gen = ++db.youngest_generation;
         for (auto& kv : col.pairs)
             kv.second.reset(gen);
     }
 }
 
-void ukv_col_list( //
-    ukv_t const c_db,
+void ukv_collection_list( //
+    ukv_database_t const c_db,
     ukv_size_t* c_count,
-    ukv_col_t** c_ids,
-    ukv_val_len_t** c_offs,
-    ukv_str_view_t* c_names,
+    ukv_collection_t** c_ids,
+    ukv_length_t** c_offs,
+    ukv_char_t** c_names,
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
@@ -845,9 +845,9 @@ void ukv_col_list( //
     return_on_error(c_error);
 
     // For every collection we also need to export IDs and offsets
-    auto ids = arena.alloc_or_dummy<ukv_col_t>(cols_count, c_error, c_ids);
+    auto ids = arena.alloc_or_dummy<ukv_collection_t>(cols_count, c_error, c_ids);
     return_on_error(c_error);
-    auto offs = arena.alloc_or_dummy<ukv_val_len_t>(cols_count + 1, c_error, c_offs);
+    auto offs = arena.alloc_or_dummy<ukv_length_t>(cols_count + 1, c_error, c_offs);
     return_on_error(c_error);
 
     std::size_t i = 0;
@@ -855,18 +855,18 @@ void ukv_col_list( //
         auto len = name_and_contents.first.size();
         std::memcpy(names, name_and_contents.first.data(), len);
         names[len] = '\0';
-        ids[i] = reinterpret_cast<ukv_col_t>(name_and_contents.second.get());
-        offs[i] = static_cast<ukv_val_len_t>(names - *c_names);
+        ids[i] = reinterpret_cast<ukv_collection_t>(name_and_contents.second.get());
+        offs[i] = static_cast<ukv_length_t>(names - *c_names);
         names += len + 1;
         ++i;
     }
-    offs[i] = static_cast<ukv_val_len_t>(names - *c_names);
+    offs[i] = static_cast<ukv_length_t>(names - *c_names);
 }
 
-void ukv_db_control( //
-    ukv_t const c_db,
+void ukv_database_control( //
+    ukv_database_t const c_db,
     ukv_str_view_t c_request,
-    ukv_str_view_t* c_response,
+    ukv_char_t** c_response,
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
@@ -880,13 +880,13 @@ void ukv_db_control( //
 /*****************		Transactions	  ****************/
 /*********************************************************/
 
-void ukv_txn_begin(
+void ukv_transaction_begin(
     // Inputs:
-    ukv_t const c_db,
+    ukv_database_t const c_db,
     ukv_size_t const c_generation,
     ukv_options_t const,
     // Outputs:
-    ukv_txn_t* c_txn,
+    ukv_transaction_t* c_txn,
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
@@ -906,8 +906,8 @@ void ukv_txn_begin(
     txn.removed.clear();
 }
 
-void ukv_txn_commit( //
-    ukv_txn_t const c_txn,
+void ukv_transaction_commit( //
+    ukv_transaction_t const c_txn,
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
@@ -1011,28 +1011,28 @@ void ukv_txn_commit( //
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
-void ukv_arena_free(ukv_t const, ukv_arena_t c_arena) {
+void ukv_arena_free(ukv_database_t const, ukv_arena_t c_arena) {
     if (!c_arena)
         return;
     stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
     delete &arena;
 }
 
-void ukv_txn_free(ukv_t const, ukv_txn_t const c_txn) {
+void ukv_transaction_free(ukv_database_t const, ukv_transaction_t const c_txn) {
     if (!c_txn)
         return;
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     delete &txn;
 }
 
-void ukv_db_free(ukv_t c_db) {
+void ukv_database_free(ukv_database_t c_db) {
     if (!c_db)
         return;
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     delete &db;
 }
 
-void ukv_col_free(ukv_t const, ukv_col_t const) {
+void ukv_col_free(ukv_database_t const, ukv_collection_t const) {
     // In this in-memory freeing the col handle does nothing.
     // The DB destructor will automatically cleanup the memory.
 }

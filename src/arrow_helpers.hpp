@@ -132,11 +132,11 @@ inline expected_gt<std::size_t> column_idx(ArrowSchema const& schema_c, std::str
  * We can reuse the `column_lengths` to put-in some NULL markers.
  * Bitmask would use 32x less memory.
  */
-inline ukv_1x8_t* convert_lengths_into_bitmap(ukv_val_len_t* lengths, ukv_size_t n) {
+inline ukv_octet_t* convert_lengths_into_bitmap(ukv_length_t* lengths, ukv_size_t n) {
     size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;
-    ukv_1x8_t* slots = (ukv_1x8_t*)lengths;
+    ukv_octet_t* slots = (ukv_octet_t*)lengths;
     for (size_t slot_idx = 0; slot_idx != count_slots; ++slot_idx) {
-        ukv_1x8_t slot_value = 0;
+        ukv_octet_t slot_value = 0;
         size_t first_idx = slot_idx * CHAR_BIT;
         size_t remaining_count = count_slots - first_idx;
         size_t remaining_in_slot = remaining_count > CHAR_BIT ? CHAR_BIT : remaining_count;
@@ -146,15 +146,15 @@ inline ukv_1x8_t* convert_lengths_into_bitmap(ukv_val_len_t* lengths, ukv_size_t
         slots[slot_idx] = slot_value;
     }
     // Cleanup the following memory
-    std::memset(slots + count_slots + 1, 0, n * sizeof(ukv_val_len_t) - count_slots);
+    std::memset(slots + count_slots + 1, 0, n * sizeof(ukv_length_t) - count_slots);
     return slots;
 }
 
 /**
- * @brief Replaces "lengths" with `ukv_val_len_missing_k` if matching NULL indicator is set.
+ * @brief Replaces "lengths" with `ukv_length_missing_k` if matching NULL indicator is set.
  */
 template <typename scalar_at>
-inline scalar_at* arrow_replace_missing_scalars(ukv_1x8_t const* slots,
+inline scalar_at* arrow_replace_missing_scalars(ukv_octet_t const* slots,
                                                 scalar_at* scalars,
                                                 ukv_size_t n,
                                                 scalar_at missing) {
@@ -186,7 +186,7 @@ inline strided_iterator_gt<ukv_key_t> get_keys( //
     return {begin, sizeof(ukv_key_t)};
 }
 
-inline strided_iterator_gt<ukv_col_t> get_collections( //
+inline strided_iterator_gt<ukv_collection_t> get_collections( //
     ArrowSchema const& schema_c,
     ArrowArray const& batch_c,
     std::string_view arg_name) {
@@ -194,16 +194,16 @@ inline strided_iterator_gt<ukv_col_t> get_collections( //
     if (!maybe_idx)
         return {};
 
-    ukv_col_t* begin = nullptr;
+    ukv_collection_t* begin = nullptr;
     auto& array = *batch_c.children[*maybe_idx];
-    auto bitmasks = (ukv_1x8_t const*)array.buffers[0];
-    begin = (ukv_col_t*)array.buffers[1];
+    auto bitmasks = (ukv_octet_t const*)array.buffers[0];
+    begin = (ukv_collection_t*)array.buffers[1];
     if (bitmasks && array.null_count != 0)
-        arrow_replace_missing_scalars(bitmasks, begin, array.length, ukv_col_main_k);
-    return {begin, sizeof(ukv_col_t)};
+        arrow_replace_missing_scalars(bitmasks, begin, array.length, ukv_collection_main_k);
+    return {begin, sizeof(ukv_collection_t)};
 }
 
-inline strided_iterator_gt<ukv_val_len_t> get_lengths( //
+inline strided_iterator_gt<ukv_length_t> get_lengths( //
     ArrowSchema const& schema_c,
     ArrowArray const& batch_c,
     std::string_view arg_name) {
@@ -211,13 +211,13 @@ inline strided_iterator_gt<ukv_val_len_t> get_lengths( //
     if (!maybe_idx)
         return {};
 
-    ukv_val_len_t* begin = nullptr;
+    ukv_length_t* begin = nullptr;
     auto& array = *batch_c.children[*maybe_idx];
-    auto bitmasks = (ukv_1x8_t const*)array.buffers[0];
-    begin = (ukv_val_len_t*)array.buffers[1];
+    auto bitmasks = (ukv_octet_t const*)array.buffers[0];
+    begin = (ukv_length_t*)array.buffers[1];
     if (bitmasks && array.null_count != 0)
-        arrow_replace_missing_scalars(bitmasks, begin, array.length, ukv_val_len_missing_k);
-    return {begin, sizeof(ukv_val_len_t)};
+        arrow_replace_missing_scalars(bitmasks, begin, array.length, ukv_length_missing_k);
+    return {begin, sizeof(ukv_length_t)};
 }
 
 inline contents_arg_t get_contents( //
@@ -231,10 +231,10 @@ inline contents_arg_t get_contents( //
 
     auto& array = *batch_c.children[*maybe_idx];
     contents_arg_t result;
-    result.contents_begin = {(ukv_val_ptr_t const*)&array.buffers[2], 0};
-    result.offsets_begin = {(ukv_val_len_t const*)array.buffers[1], sizeof(ukv_val_len_t)};
+    result.contents_begin = {(ukv_bytes_cptr_t const*)&array.buffers[2], 0};
+    result.offsets_begin = {(ukv_length_t const*)array.buffers[1], sizeof(ukv_length_t)};
     if (array.buffers[0] && array.null_count != 0)
-        result.presences_begin = {(ukv_1x8_t const*)array.buffers[0], sizeof(ukv_1x8_t)};
+        result.presences_begin = {(ukv_octet_t const*)array.buffers[0], sizeof(ukv_octet_t)};
     result.count = static_cast<ukv_size_t>(batch_c.length);
     return result;
 }
