@@ -740,7 +740,7 @@ void ukv_col_list( //
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
 
-    arf::Ticket ticket {"col_list"};
+    arf::Ticket ticket {kFlightListCols};
     ar::Result<std::unique_ptr<arf::FlightStreamReader>> maybe_stream = db.flight->DoGet(ticket);
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
 
@@ -756,6 +756,8 @@ void ukv_col_list( //
     auto names_column_idx = column_idx(schema_c, "names");
     return_if_error(ids_column_idx && names_column_idx, c_error, args_combo_k, "Expecting two columns");
 
+    if (c_count)
+        *c_count = static_cast<ukv_size_t>(batch_c.length);
     if (c_ids)
         *c_ids = (ukv_col_t*)batch_c.children[*ids_column_idx]->buffers[1];
     if (c_offsets)
