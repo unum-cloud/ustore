@@ -195,13 +195,13 @@ static void ukv_to_arrow_column( //
     ukv_error_t* error) {
 
     schema->name = field_name;
-    schema->format = ukv_type_to_arrow_format(field_type);
     schema->metadata = NULL;
-    schema->flags = ARROW_FLAG_NULLABLE;
-    schema->n_children = 0;
+    schema->flags = column_validities ? ARROW_FLAG_NULLABLE : 0;
     schema->dictionary = NULL;
     schema->children = NULL;
     schema->release = &release_malloced_schema;
+    schema->format = ukv_type_to_arrow_format(field_type);
+    schema->n_children = 0;
 
     // Export the data
     switch (field_type) {
@@ -223,9 +223,9 @@ static void ukv_to_arrow_column( //
     case ukv_type_null_k: array->n_buffers = 0; break;
     default: array->n_buffers = 0; break;
     }
-    array->length = docs_count;
     array->offset = 0;
-    array->null_count = -1;
+    array->length = docs_count;
+    array->null_count = column_validities ? -1 : 0;
     array->n_children = 0;
     array->dictionary = NULL;
     array->children = NULL;
@@ -247,6 +247,57 @@ static void ukv_to_arrow_column( //
         array->buffers[1] = (void*)column_offsets;
         array->buffers[2] = (void*)column_contents;
     }
+}
+
+static void ukv_to_arrow_list( //
+    ukv_size_t const docs_count,
+    ukv_str_view_t const field_name,
+    ukv_type_t const field_type,
+
+    ukv_1x8_t const* column_validities,
+    ukv_val_len_t const* column_offsets,
+    void const* column_contents,
+
+    struct ArrowSchema* schema,
+    struct ArrowArray* array,
+
+    ukv_error_t* error) {
+
+    // Allocate a sub-array
+    // https://arrow.apache.org/docs/format/Columnar.html#variable-size-list-layout
+    ukv_to_arrow_schema(docs_count, 1, schema, array, error);
+    if (*error)
+        return;
+
+    schema->name = field_name;
+    schema->metadata = NULL;
+    schema->flags = column_validities ? ARROW_FLAG_NULLABLE : 0;
+    schema->dictionary = NULL;
+    schema->format = "+l";
+
+    array->null_count = column_validities ? -1 : 0;
+    array->n_buffers = 2;
+
+    // Link our buffers
+    if (array->buffers)
+        free(array->buffers);
+    array->buffers = (void const**)malloc(sizeof(void*) * array->n_buffers);
+    if (!array->buffers) {
+        *error = "Failed to allocate memory";
+        return;
+    }
+
+    array->buffers[0] = (void*)column_validities;
+    array->buffers[1] = (void*)column_offsets;
+    ukv_to_arrow_column(column_offsets[docs_count],
+                        "chunks",
+                        field_type,
+                        nullptr,
+                        nullptr,
+                        column_contents,
+                        schema->children[0],
+                        array->children[0],
+                        error);
 }
 
 /**
