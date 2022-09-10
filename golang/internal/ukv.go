@@ -154,9 +154,9 @@ func (db *DataBase) Set(key uint64, value []byte) error {
 		db.raw, nil, 1,
 		collection_c, 0,
 		&key_c, 0,
+		&value_length_c, 0,
 		value_ptr_c, 0,
 		&value_offset_c, 0,
-		&value_length_c, 0,
 		options_c, &arena_c, &error_c)
 	return forwardError(db, error_c)
 }
@@ -191,9 +191,9 @@ func (db *DataBase) SetBatch(keys []uint64, values [][]byte) error {
 		db.raw, nil, task_count_c,
 		collection_c, 0,
 		keys_c, C.size_of_key,
-		value_ptr_c, 0,
 		&offsets[0], C.size_of_len,
 		&lens[0], C.size_of_len,
+		value_ptr_c, 0,
 		options_c, &arena_c, &error_c)
 	return forwardError(db, error_c)
 }
@@ -218,9 +218,9 @@ func (db *DataBase) Delete(key uint64) error {
 		db.raw, nil, 1,
 		collection_c, 0,
 		&key_c, 0,
-		value_ptr_c, 0,
 		&value_offset_c, 0,
 		&value_length_c, 0,
+		value_ptr_c, 0,
 		options_c, &arena_c, &error_c)
 	return forwardError(db, error_c)
 }
