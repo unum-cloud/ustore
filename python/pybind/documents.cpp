@@ -71,10 +71,10 @@ class docs_pairs_stream_t {
             ukv_options_default_k,
             ukv_format_json_k,
             ukv_type_any_k,
-            &found_vals,
+            nullptr,
             &found_offs,
             &found_lens,
-            nullptr,
+            &found_vals,
             arena_read_.member_ptr(),
             status.member_ptr());
         if (!status)

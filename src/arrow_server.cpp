@@ -507,7 +507,7 @@ class UKVService : public arf::FlightServerBase {
             if (!params.col)
                 return ar::Status::Invalid("Missing collection name argument");
 
-            ukv_col_drop(db_, params.col->begin(), 0, ukv_col_drop_keys_vals_handle_k, status.member_ptr());
+            ukv_col_drop(db_, 0, params.col->begin(), ukv_col_drop_keys_vals_handle_k, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             return ar::Status::OK();
@@ -622,10 +622,10 @@ class UKVService : public arf::FlightServerBase {
                 (ukv_key_t const*)keys_c.buffers[1],
                 sizeof(ukv_key_t),
                 ukv_options_default_k,
-                &found_values,
+                &found_presences,
                 &found_offsets,
                 nullptr,
-                &found_presences,
+                &found_values,
                 &session.arena,
                 status.member_ptr());
             if (!status)
@@ -707,13 +707,13 @@ class UKVService : public arf::FlightServerBase {
                 0,
                 (ukv_key_t const*)keys_c.buffers[1],
                 sizeof(ukv_key_t),
-                (ukv_val_ptr_t const*)&vals_c.buffers[2],
-                0,
+                (ukv_1x8_t const*)vals_c.buffers[0],
                 (ukv_val_len_t const*)vals_c.buffers[1],
                 sizeof(ukv_val_len_t),
                 nullptr,
                 0,
-                (ukv_1x8_t const*)vals_c.buffers[0],
+                (ukv_val_ptr_t const*)&vals_c.buffers[2],
+                0,
                 ukv_options_default_k,
                 &session.arena,
                 status.member_ptr());
