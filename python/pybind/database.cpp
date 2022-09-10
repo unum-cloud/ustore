@@ -80,30 +80,25 @@ void ukv::wrap_database(py::module& m) {
     auto py_kvstream = py::class_<py_kvstream_t>(m, "ItemsStream", py::module_local());
 
     py::enum_<ukv_format_t>(m, "Format", py::module_local())
-        .value("Binary", ukv_format_binary_k)
-        .value("Graph", ukv_format_graph_k)
         .value("MsgPack", ukv_format_msgpack_k)
         .value("JSON", ukv_format_json_k)
         .value("BSON", ukv_format_bson_k)
         .value("CBOR", ukv_format_cbor_k)
         .value("UBJSON", ukv_format_ubjson_k);
 
-    py::enum_<read_format_t>(m, "ReadFormat", py::module_local())
-        .value("Pythonic", read_format_t::pythonic_k)
-        .value("Arrow", read_format_t::arrow_k)
-        .value("Tensor", read_format_t::tensor_k);
-
     // Define `DataBase`
     py_db.def( //
-        py::init([](std::string const& config, bool open) {
+        py::init([](std::string const& config, bool open, bool prefer_arrow) {
             db_t db;
             if (open)
                 db.open(config).throw_unhandled();
             auto py_db_ptr = std::make_shared<py_db_t>(std::move(db), config);
+            py_db_ptr->export_into_arrow = prefer_arrow;
             return py_db_ptr;
         }),
         py::arg("config") = "",
-        py::arg("open") = true);
+        py::arg("open") = true,
+        py::arg("prefer_arrow") = true);
 
 #pragma region CRUD Operations
 
@@ -138,8 +133,8 @@ void ukv::wrap_database(py::module& m) {
 
     // ML-oriented procedures for zero-copy variants exporting
     // Apache Arrow shared memory handles:
-    py_col.def("get_column", [](py_col_t& py_col, py::object keys) { return 0; });
-    py_col.def("get_matrix", [](py_col_t& py_col, py::object keys) { return 0; });
+    py_col.def("get_matrix", [](py_col_t& py_col, py::object keys, std::size_t truncation, char padding) { return 0; });
+    py_col.def("set_matrix", [](py_col_t& py_col, py::object keys, py::object vals) { return 0; });
 
 #pragma region Transactions and Lifetime
 

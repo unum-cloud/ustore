@@ -168,8 +168,15 @@ static py::object has_one_binary(py_col_t& col, PyObject* key_py) {
     }
 
     strided_iterator_gt<ukv_1x8_t> indicators {found_indicators, sizeof(ukv_1x8_t)};
-    PyObject* obj_ptr = indicators[0] ? Py_True : Py_False;
-    return py::reinterpret_borrow<py::object>(obj_ptr);
+    if (col.export_into_arrow()) {
+        auto shared = std::make_shared<arrow::BooleanScalar>(indicators[0]);
+        PyObject* obj_ptr = arrow::py::wrap_scalar(shared);
+        return py::reinterpret_steal<py::object>(obj_ptr);
+    }
+    else {
+        PyObject* obj_ptr = indicators[0] ? Py_True : Py_False;
+        return py::reinterpret_borrow<py::object>(obj_ptr);
+    }
 }
 
 static py::object read_one_binary(py_col_t& col, PyObject* key_py) {
@@ -209,8 +216,17 @@ static py::object read_one_binary(py_col_t& col, PyObject* key_py) {
     // https://github.com/python/cpython/blob/main/Objects/bytesobject.c
     embedded_bins_iterator_t tape_it {found_values, found_offsets, found_lengths};
     value_view_t val = *tape_it;
-    PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
-    return py::reinterpret_borrow<py::object>(obj_ptr);
+    if (col.export_into_arrow()) {
+        auto shared_buffer =
+            std::make_shared<arrow::Buffer>(reinterpret_cast<uint8_t*>(val.data()), static_cast<int64_t>(val.size()));
+        auto shared = std::make_shared<arrow::BinaryScalar>(shared_buffer);
+        PyObject* obj_ptr = arrow::py::wrap_scalar(shared);
+        return py::reinterpret_steal<py::object>(obj_ptr);
+    }
+    else {
+        PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
+        return py::reinterpret_borrow<py::object>(obj_ptr);
+    }
 }
 
 static py::object has_many_binaries(py_col_t& col, PyObject* keys_py) {
@@ -281,13 +297,17 @@ static py::object read_many_binaries(py_col_t& col, PyObject* keys_py) {
     }
 
     embedded_bins_iterator_t tape_it {found_values, found_offsets, found_lengths};
-    PyObject* tuple_ptr = PyTuple_New(keys.size());
-    for (std::size_t i = 0; i != keys.size(); ++i, ++tape_it) {
-        value_view_t val = *tape_it;
-        PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
-        PyTuple_SetItem(tuple_ptr, i, obj_ptr);
+    if (col.export_into_arrow()) {
+        }
+    else {
+        PyObject* tuple_ptr = PyTuple_New(keys.size());
+        for (std::size_t i = 0; i != keys.size(); ++i, ++tape_it) {
+            value_view_t val = *tape_it;
+            PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
+            PyTuple_SetItem(tuple_ptr, i, obj_ptr);
+        }
+        return py::reinterpret_steal<py::object>(tuple_ptr);
     }
-    return py::reinterpret_steal<py::object>(tuple_ptr);
 }
 
 static py::object has_binary(py_col_t& col, py::object key_py) {
@@ -380,6 +400,140 @@ static py::array_t<ukv_key_t> scan_binary( //
 
     status.throw_unhandled();
     return py::array_t<ukv_key_t>(*found_lengths, found_keys);
+}
+
+/**
+ * @brief Exports values into preallocated multi-dimensional NumPy-like buffers.
+ *        The most performant batch-reading method, ideal for ML.
+ *
+ * Contrary to most data types exposed by the Python interpreter,
+ * buffers are not @c `PyObject` pointers but rather simple C structures.
+ * This allows them to be created and copied very simply.
+ * When a generic wrapper around a buffer is needed, a @c `memoryview`
+ * object can be created.
+ * https://docs.python.org/3/c-api/buffer.html#buffer-structure
+ *
+ * @param keys       A NumPy array of keys.
+ * @param values_arr A buffer-protocol object, whose `shape` has 2 dims
+ *                   the `itemsize` is just one byte. The first dimensions
+ *                   must match with `len(keys)` and the second one must be
+ *                   at least 8 for us be able to efficiently reuse that memory.
+ *
+ * @param values_lengths May be nullptr.
+ *
+ * https://pybind11.readthedocs.io/en/stable/advanced/pycpp/numpy.html#buffer-protocol
+ * https://pybind11.readthedocs.io/en/stable/advanced/cast/overview.html#list-of-all-builtin-conversions
+ * https://docs.python.org/3/c-api/buffer.html
+ */
+void fill_tensor( //
+    ukv_t db_ptr,
+    ukv_txn_t txn_ptr,
+    ukv_collection_t collection_ptr,
+    managed_arena_t& arena,
+    py::handle keys_arr,
+    py::handle values_arr,
+    py::handle values_lengths_arr,
+    std::uint8_t padding_char = 0) {
+
+    // Check if we are receiving protocol buffers
+    PyObject* keys_obj = keys_arr.ptr();
+    PyObject* values_obj = values_arr.ptr();
+    PyObject* values_lengths_obj = values_lengths_arr.ptr();
+    if (!PyObject_CheckBuffer(keys_obj) | !PyObject_CheckBuffer(values_obj) | !PyObject_CheckBuffer(values_lengths_obj))
+        throw std::invalid_argument("All arguments must implement the buffer protocol");
+
+    // Take buffer protocol handles
+    // Flags can be: https://docs.python.org/3/c-api/buffer.html#readonly-format
+    auto output_flags = PyBUF_WRITABLE | PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
+    py_received_buffer_t keys, values, values_lengths;
+    keys.initialized = PyObject_GetBuffer(keys_obj, &keys.py, PyBUF_ANY_CONTIGUOUS) == 0;
+    values.initialized = PyObject_GetBuffer(values_obj, &values.py, output_flags) == 0;
+    values_lengths.initialized = PyObject_GetBuffer(values_lengths_obj, &values_lengths.py, output_flags) == 0;
+    if (!keys.initialized | !values.initialized | !values_lengths.initialized)
+        throw std::invalid_argument("Couldn't obtain buffer overviews");
+    if (!values.py.shape | !values_lengths.py.shape | !values.py.strides | !values_lengths.py.strides)
+        throw std::invalid_argument("Outputs shape wasn't inferred");
+
+    // Validate the format of `keys`
+    if (keys.py.itemsize != sizeof(ukv_key_t))
+        throw std::invalid_argument("Keys type mismatch");
+    if (keys.py.ndim != 1 || !PyBuffer_IsContiguous(&keys.py, 'A'))
+        throw std::invalid_argument("Keys must be placed in a continuous 1 dimensional array");
+    if (keys.py.strides[0] != sizeof(ukv_key_t))
+        throw std::invalid_argument("Keys can't be strided");
+    ukv_size_t const tasks_count = static_cast<ukv_size_t>(keys.py.len / keys.py.itemsize);
+    ukv_key_t const* keys_ptr = reinterpret_cast<ukv_key_t const*>(keys.py.buf);
+
+    // Validate the format of `values`
+    if (values.py.ndim != 2)
+        throw std::invalid_argument("Output tensor must have rank 2");
+    if (values.py.itemsize != sizeof(std::uint8_t))
+        throw std::invalid_argument("Output tensor must have single-byte entries");
+    if ((values.py.shape[0] <= 0) || values.py.shape[1] <= 0)
+        throw std::invalid_argument("Output tensor sides can't be zero");
+    if ((values.py.strides[0] <= 0) || values.py.strides[1] <= 0)
+        throw std::invalid_argument("Output tensor strides can't be negative");
+    if (tasks_count != static_cast<ukv_size_t>(values.py.shape[0]))
+        throw std::invalid_argument("Number of input keys and output slots doesn't match");
+    auto outputs_bytes = reinterpret_cast<std::uint8_t*>(values.py.buf);
+    auto outputs_bytes_stride = static_cast<std::size_t>(values.py.strides[0]);
+    auto output_bytes_cap = static_cast<ukv_val_len_t>(values.py.shape[1]);
+
+    // Validate the format of `values_lengths`
+    if (values_lengths.py.ndim != 1)
+        throw std::invalid_argument("Lengths tensor must have rank 1");
+    if (values_lengths.py.itemsize != sizeof(ukv_val_len_t))
+        throw std::invalid_argument("Lengths tensor must have 4-byte entries");
+    if (values_lengths.py.shape[0] <= 0)
+        throw std::invalid_argument("Lengths tensor sides can't be zero");
+    if (values_lengths.py.strides[0] <= 0)
+        throw std::invalid_argument("Lengths tensor strides can't be negative");
+    if (tasks_count != static_cast<ukv_size_t>(values_lengths.py.shape[0]))
+        throw std::invalid_argument("Number of input keys and output slots doesn't match");
+    auto outputs_lengths_bytes = reinterpret_cast<std::uint8_t*>(values_lengths.py.buf);
+    auto outputs_lengths_bytes_stride = static_cast<std::size_t>(values_lengths.py.strides[0]);
+
+    // Perform the read
+    [[maybe_unused]] py::gil_scoped_release release;
+    status_t status;
+    ukv_val_len_t* found_lengths = nullptr;
+    ukv_val_ptr_t found_values = nullptr;
+    ukv_options_t options = ukv_options_default_k;
+
+    ukv_read( //
+        db_ptr,
+        txn_ptr,
+        tasks_count,
+        &collection_ptr,
+        0,
+        keys_ptr,
+        sizeof(ukv_key_t),
+        options,
+        &found_lengths,
+        &found_values,
+        arena.internal_cptr(),
+        status.internal_cptr());
+
+    status.throw_unhandled();
+
+    // Export the data into the matrix
+    taped_values_view_t inputs {found_lengths, found_values, tasks_count};
+    tape_iterator_t input_it = inputs.begin();
+    for (ukv_size_t i = 0; i != tasks_count; ++i, ++input_it) {
+        value_view_t input = *input_it;
+        auto input_bytes = reinterpret_cast<std::uint8_t const*>(input.begin());
+        auto input_length = static_cast<ukv_val_len_t const>(input.size());
+        std::uint8_t* output_bytes = outputs_bytes + outputs_bytes_stride * i;
+        ukv_val_len_t& output_length =
+            *reinterpret_cast<ukv_val_len_t*>(outputs_lengths_bytes + outputs_lengths_bytes_stride * i);
+
+        std::size_t count_copy = std::min(output_bytes_cap, input_length);
+        std::size_t count_pads = output_bytes_cap - count_copy;
+        std::memcpy(output_bytes, input_bytes, count_copy);
+        std::memset(output_bytes + count_copy, padding_char, count_pads);
+
+        output_length = count_copy;
+    }
 }
 
 } // namespace unum::ukv::pyb

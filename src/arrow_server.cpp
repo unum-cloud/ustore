@@ -607,6 +607,9 @@ class UKVService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
+            bool const request_only_presences = params.opt_part == "bitmasks";
+            bool const request_only_lengths = params.opt_part == "lengths";
+
             // As we are immediately exporting in the Arrow format,
             // we don't need the lengths, just the NULL indicators
             ArrowArray& keys_c = *batch_c.children[*idx_keys];
