@@ -118,7 +118,7 @@ void ukv_read( //
     bool const request_only_lengths = c_found_lengths && !c_found_values;
     char const* partial_mode = !request_only_presences && !request_only_lengths //
                                    ? nullptr
-                                   : request_only_lengths ? "lengths" : "bitmasks";
+                                   : request_only_lengths ? "lengths" : "presences";
     bool const read_shared = c_options & ukv_option_read_shared_k;
     bool const read_track = c_options & ukv_option_read_track_k;
     arf::FlightDescriptor descriptor;
