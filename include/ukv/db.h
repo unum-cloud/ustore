@@ -148,12 +148,17 @@ typedef enum {
      */
     ukv_option_read_shared_k = 1 << 5,
     /**
-     * @brief When allowed, the underlying engine may avoid strict keys ordering
+     * @brief When set, the underlying engine may avoid strict keys ordering
      * and may include irrelevant (deleted & duplicate) keys in order to maximize
      * throughput. The purpose is not accelerating the `ukv_scan`, but the
      * following `ukv_read`. Generally used for Machine Learning applications.
      */
-    ukv_option_scan_bulk_k = 0,
+    ukv_option_scan_bulk_k = 0, // TODO
+    /**
+     * @brief When set, the matching scan range will be randomly sampled
+     * as close to the uniform distribution, as possible.
+     */
+    ukv_option_scan_sample_k = 0, // TODO
 
 } ukv_options_t;
 
