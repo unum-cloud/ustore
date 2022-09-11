@@ -490,8 +490,11 @@ void ukv_scan( //
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
 
-    ukv_length_t const* c_scan_lengths,
-    ukv_size_t const c_scan_lengths_stride,
+    ukv_key_t const* ,
+    ukv_size_t const ,
+
+    ukv_length_t const* c_scan_limits,
+    ukv_size_t const c_scan_limits_stride,
 
     ukv_options_t const c_options,
 
@@ -513,7 +516,7 @@ void ukv_scan( //
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_length_t const> lengths {c_scan_lengths, c_scan_lengths_stride};
+    strided_iterator_gt<ukv_length_t const> lengths {c_scan_limits, c_scan_limits_stride};
     scans_arg_t tasks {cols, keys, lengths, c_min_tasks_count};
 
     // 1. Allocate a tape for all the values to be fetched

@@ -289,8 +289,11 @@ void ukv_scan( //
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
 
-    ukv_length_t const* c_scan_lengths,
-    ukv_size_t const c_scan_lengths_stride,
+    ukv_key_t const* c_end_keys,
+    ukv_size_t const c_end_keys_stride,
+
+    ukv_length_t const* c_scan_limits,
+    ukv_size_t const c_scan_limits_stride,
 
     ukv_options_t const c_options,
 
@@ -307,9 +310,10 @@ void ukv_scan( //
     return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_length_t const> lens {c_scan_lengths, c_scan_lengths_stride};
-    scans_arg_t tasks {{}, keys, lens, c_min_tasks_count};
+    strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
+    strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c_scan_limits, c_scan_limits_stride};
+    scans_arg_t tasks {{}, start_keys, end_keys, lens, c_min_tasks_count};
 
     // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy<ukv_length_t>(tasks.count + 1, c_error, c_found_offsets);
@@ -339,7 +343,7 @@ void ukv_scan( //
         offsets[i] = keys_output - *c_found_keys;
 
         ukv_size_t j = 0;
-        for (; it->Valid() && j != task.length; j++, it->Next()) {
+        for (; it->Valid() && j != task.length && *reinterpret_cast<ukv_key_t *>(it->key().data()) < task.end_key; j++, it->Next()) {
             std::memcpy(keys_output, it->key().data(), sizeof(ukv_key_t));
             *keys_output = static_cast<ukv_length_t>(it->value().size());
             ++keys_output;

@@ -42,6 +42,7 @@ class docs_pairs_stream_t {
             0,
             &next_min_key_,
             0,
+            nullptr, 0,
             &read_ahead_,
             0,
             ukv_options_default_k,
@@ -247,8 +248,8 @@ static py::object has_doc(py_docs_col_t& col, py::object key_py) {
     return has_binary(col.binary, key_py);
 }
 
-static py::object scan_doc(py_docs_col_t& col, ukv_key_t min_key, ukv_size_t scan_length) {
-    return scan_binary(col.binary, min_key, scan_length);
+static py::object scan_doc(py_docs_col_t& col, ukv_key_t min_key, ukv_size_t scan_limit) {
+    return scan_binary(col.binary, min_key, scan_limit);
 }
 
 static void merge_patch(py_docs_col_t& col, py::object key_py, py::object val_py, ukv_format_t format) {
