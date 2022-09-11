@@ -211,7 +211,7 @@ struct contents_arg_extractor_gt {};
 
 template <>
 struct contents_arg_extractor_gt<char const**> {
-    strided_iterator_gt<ukv_bytes_ptr_t const> contents(char const** strings) noexcept {
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(char const** strings) noexcept {
         return {(ukv_bytes_cptr_t const*)strings, sizeof(char const*)};
     }
     strided_iterator_gt<ukv_length_t const> offsets(char const**) noexcept { return {}; }
@@ -220,7 +220,7 @@ struct contents_arg_extractor_gt<char const**> {
 
 template <>
 struct contents_arg_extractor_gt<char const*> {
-    strided_iterator_gt<ukv_bytes_ptr_t const> contents(char const*& one) noexcept {
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(char const*& one) noexcept {
         return {(ukv_bytes_cptr_t const*)&one, 0};
     }
     strided_iterator_gt<ukv_length_t const> offsets(char const*) noexcept { return {}; }
@@ -229,7 +229,7 @@ struct contents_arg_extractor_gt<char const*> {
 
 template <size_t length_ak>
 struct contents_arg_extractor_gt<char const [length_ak]> {
-    strided_iterator_gt<ukv_bytes_ptr_t const> contents(char const*& one) noexcept {
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(char const*& one) noexcept {
         return {(ukv_bytes_cptr_t const*)&one, 0};
     }
     strided_iterator_gt<ukv_length_t const> offsets(char const*) noexcept {
@@ -242,21 +242,23 @@ struct contents_arg_extractor_gt<char const [length_ak]> {
 
 template <>
 struct contents_arg_extractor_gt<value_view_t> {
-    strided_iterator_gt<ukv_bytes_ptr_t const> contents(value_view_t& one) noexcept { return {one.member_ptr(), 0}; }
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(value_view_t& one) noexcept { return {one.member_ptr(), 0}; }
     strided_iterator_gt<ukv_length_t const> offsets(value_view_t) noexcept { return {}; }
     strided_iterator_gt<ukv_length_t const> lengths(value_view_t& one) noexcept { return {one.member_length(), 0}; }
 };
 
 template <>
 struct contents_arg_extractor_gt<contents_arg_t> {
-    strided_iterator_gt<ukv_bytes_ptr_t const> contents(contents_arg_t native) noexcept { return native.contents_begin; }
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(contents_arg_t native) noexcept {
+        return native.contents_begin;
+    }
     strided_iterator_gt<ukv_length_t const> offsets(contents_arg_t native) noexcept { return native.offsets_begin; }
     strided_iterator_gt<ukv_length_t const> lengths(contents_arg_t native) noexcept { return native.lengths_begin; }
 };
 
 template <>
 struct contents_arg_extractor_gt<std::nullptr_t> {
-    strided_iterator_gt<ukv_bytes_ptr_t const> contents(std::nullptr_t) noexcept { return {}; }
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(std::nullptr_t) noexcept { return {}; }
     strided_iterator_gt<ukv_length_t const> offsets(std::nullptr_t) noexcept { return {}; }
     strided_iterator_gt<ukv_length_t const> lengths(std::nullptr_t) noexcept { return {}; }
 };

@@ -52,14 +52,15 @@ class collection_t {
   public:
     inline collection_t() noexcept : arena_(nullptr) {}
     inline collection_t(ukv_database_t db_ptr,
-                 ukv_collection_t col = ukv_collection_main_k,
-                 ukv_transaction_t txn = nullptr,
-                 ukv_format_t format = ukv_format_binary_k) noexcept
+                        ukv_collection_t col = ukv_collection_main_k,
+                        ukv_transaction_t txn = nullptr,
+                        ukv_format_t format = ukv_format_binary_k) noexcept
         : db_(db_ptr), col_(col), txn_(txn), arena_(db_), format_(format) {}
 
     inline collection_t(collection_t&& other) noexcept
-        : db_(other.db_), col_(std::exchange(other.col_, ukv_collection_main_k)), txn_(std::exchange(other.txn_, nullptr)),
-          arena_(std::exchange(other.arena_, {nullptr})), format_(std::exchange(other.format_, ukv_format_binary_k)) {}
+        : db_(other.db_), col_(std::exchange(other.col_, ukv_collection_main_k)),
+          txn_(std::exchange(other.txn_, nullptr)), arena_(std::exchange(other.arena_, {nullptr})),
+          format_(std::exchange(other.format_, ukv_format_binary_k)) {}
 
     inline collection_t(collection_t const& other) noexcept
         : db_(other.db_), col_(other.col_), txn_(other.txn_), arena_(other.db_), format_(other.format_) {}
@@ -343,7 +344,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
         ukv_size_t count = 0;
         ukv_collection_t* collections = 0;
         ukv_length_t* offsets = nullptr;
-        ukv_str_view_t names = nullptr;
+        ukv_str_span_t names = nullptr;
         ukv_collection_list(db_, &count, &collections, &offsets, &names, memory.member_ptr(), status.member_ptr());
         if (!status)
             return status;
@@ -390,7 +391,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
 
     expected_gt<strings_tape_iterator_t> collection_names(arena_t& memory) {
         ukv_size_t count = 0;
-        ukv_str_view_t names = nullptr;
+        ukv_str_span_t names = nullptr;
         status_t status;
         ukv_collection_list(db_, &count, nullptr, nullptr, &names, memory.member_ptr(), status.member_ptr());
         return {std::move(status), {count, names}};
@@ -426,7 +427,12 @@ class database_t : public std::enable_shared_from_this<database_t> {
     expected_gt<transaction_t> transact(bool snapshot = false) noexcept {
         status_t status;
         ukv_transaction_t raw = nullptr;
-        ukv_transaction_begin(db_, 0, snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k, &raw, status.member_ptr());
+        ukv_transaction_begin( //
+            db_,
+            0,
+            snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k,
+            &raw,
+            status.member_ptr());
         if (!status)
             return {std::move(status), transaction_t {db_, nullptr}};
         else

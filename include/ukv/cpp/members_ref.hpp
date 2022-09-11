@@ -385,7 +385,7 @@ expected_gt<joined_strs_t> members_ref_gt<locations_at>::gist(bool track) noexce
     status_t status;
     ukv_size_t found_count = 0;
     ukv_length_t* found_offsets = nullptr;
-    ukv_str_view_t found_strings = nullptr;
+    ukv_str_span_t found_strings = nullptr;
 
     auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
     decltype(auto) locs = locations_.ref();

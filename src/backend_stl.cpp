@@ -389,19 +389,20 @@ void scan_head( //
     auto counts = arena.alloc_or_dummy<ukv_length_t>(tasks.count, c_error, c_found_counts);
     return_on_error(c_error);
 
-    auto total_keys = reduce_n(tasks.lengths, tasks.count, 0ul);
+    auto total_keys = reduce_n(tasks.limits, tasks.count, 0ul);
     auto keys_output = *c_found_keys = arena.alloc<ukv_key_t>(total_keys, c_error).begin();
     return_on_error(c_error);
 
     // 2. Fetch the data
     for (std::size_t i = 0; i != tasks.size(); ++i) {
-        scan_t place = tasks[i];
-        stl_col_t const& col = stl_col(db, place.col);
+        scan_t scan = tasks[i];
+        stl_col_t const& col = stl_col(db, scan.col);
         offsets[i] = keys_output - *c_found_keys;
 
         ukv_length_t j = 0;
-        auto key_iterator = col.pairs.lower_bound(place.min_key);
-        for (; j != place.length && key_iterator != col.pairs.end() && key_iterator->first < place.end_key; ++key_iterator) {
+        auto key_iterator = col.pairs.lower_bound(scan.min_key);
+        for (; j != scan.limit && key_iterator != col.pairs.end() && key_iterator->first < scan.max_key;
+             ++key_iterator) {
             if (key_iterator->second.is_deleted)
                 continue;
             *keys_output = key_iterator->first;
@@ -433,20 +434,20 @@ void scan_txn( //
     auto counts = arena.alloc_or_dummy<ukv_length_t>(tasks.count, c_error, c_found_counts);
     return_on_error(c_error);
 
-    auto total_keys = reduce_n(tasks.lengths, tasks.count, 0ul);
+    auto total_keys = reduce_n(tasks.limits, tasks.count, 0ul);
     auto keys_output = *c_found_keys = arena.alloc<ukv_key_t>(total_keys, c_error).begin();
     return_on_error(c_error);
 
     // 2. Fetch the data
     for (std::size_t i = 0; i != tasks.size(); ++i) {
-        scan_t place = tasks[i];
-        stl_col_t const& col = stl_col(db, place.col);
+        scan_t scan = tasks[i];
+        stl_col_t const& col = stl_col(db, scan.col);
         offsets[i] = keys_output - *c_found_keys;
 
         ukv_length_t j = 0;
-        auto key_iterator = col.pairs.lower_bound(place.min_key);
-        auto txn_iterator = txn.upserted.lower_bound(place.min_key);
-        for (; j != place.length && key_iterator != col.pairs.end();) {
+        auto key_iterator = col.pairs.lower_bound(scan.min_key);
+        auto txn_iterator = txn.upserted.lower_bound(scan.min_key);
+        for (; j != scan.limit && key_iterator != col.pairs.end();) {
             // Check if the key was already removed:
             if (key_iterator->second.is_deleted || txn.removed.find(key_iterator->first) != txn.removed.end()) {
                 ++key_iterator;
@@ -454,7 +455,7 @@ void scan_txn( //
             }
 
             // Compare against the incoming inserted keys:
-            bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.col == place.col;
+            bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.col == scan.col;
             if (check_in_txn && txn_iterator->first.key <= key_iterator->first) {
                 *keys_output = txn_iterator->first.key;
                 ++keys_output;
@@ -464,7 +465,7 @@ void scan_txn( //
             }
 
             // Make sure we haven't reached the end keys
-            if (key_iterator->first >= place.end_key)            
+            if (key_iterator->first >= scan.max_key)
                 break;
 
             // Export from the main store:
@@ -475,7 +476,8 @@ void scan_txn( //
         }
 
         // As in any `set_union`, don't forget the tail :)
-        while (j != place.length && txn_iterator != txn.upserted.end() && txn_iterator->first.col == place.col && txn_iterator->first.key < place.end_key) {
+        while (j != scan.limit && txn_iterator != txn.upserted.end() && txn_iterator->first.col == scan.col &&
+               txn_iterator->first.key < scan.max_key) {
             *keys_output = txn_iterator->first.key;
             ++keys_output;
             ++txn_iterator;
@@ -613,13 +615,13 @@ void ukv_write( //
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_bytes_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
     strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
 
     places_arg_t places {cols, keys, {}, c_tasks_count};
-    contents_arg_t contents {vals, offs, lens, presences, c_tasks_count};
+    contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     return c_txn ? write_txn(txn, places, contents, c_options, c_error)
                  : write_head(db, places, contents, c_options, c_error);
@@ -690,14 +692,14 @@ void ukv_size( //
     ukv_size_t** c_max_value_bytes,
     ukv_size_t** c_min_space_usages,
     ukv_size_t** c_max_space_usages,
-    
+
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
-    
+
     auto min_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_cardinalities);
     auto max_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_cardinalities);
     auto min_value_bytes = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_value_bytes);
@@ -746,13 +748,14 @@ void ukv_size( //
         }
 
         //
-        ukv_size_t estimates[6];
+        ukv_size_t estimate[6];
         min_cardinalities[i] = estimate[0] = static_cast<ukv_size_t>(main_count);
         max_cardinalities[i] = estimate[1] = static_cast<ukv_size_t>(main_count + txn_count);
         min_value_bytes[i] = estimate[2] = static_cast<ukv_size_t>(main_bytes);
         max_value_bytes[i] = estimate[3] = static_cast<ukv_size_t>(main_bytes + txn_bytes);
         min_space_usages[i] = estimate[4] = estimate[0] * (sizeof(ukv_key_t) + sizeof(ukv_length_t)) + estimate[2];
-        max_space_usages[i] = estimate[5] = (estimate[1] + deleted_count) * (sizeof(ukv_key_t) + sizeof(ukv_length_t)) + estimate[3];
+        max_space_usages[i] = estimate[5] =
+            (estimate[1] + deleted_count) * (sizeof(ukv_key_t) + sizeof(ukv_length_t)) + estimate[3];
     }
 }
 

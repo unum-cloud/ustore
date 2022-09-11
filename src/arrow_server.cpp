@@ -385,7 +385,7 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.transaction_id = param_value(params, kParamTransactionID);
     if (result.txn)
         result.session_id.txn_id = parse_txn_id(*result.txn);
-    
+
     result.collection_name = param_value(params, kParamCollectionName);
     result.collection_id = param_value(params, kParamCollectionID);
 

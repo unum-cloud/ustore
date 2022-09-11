@@ -27,17 +27,17 @@ namespace unum::ukv {
 namespace arf = arrow::flight;
 namespace ar = arrow;
 
-inline static std::string const kFlightListCols = "list_collections"; /// `DoGet`
-inline static std::string const kFlightColOpen = "open_collection";   /// `DoAction`
+inline static std::string const kFlightListCols = "list_collections";   /// `DoGet`
+inline static std::string const kFlightColOpen = "open_collection";     /// `DoAction`
 inline static std::string const kFlightColRemove = "remove_collection"; /// `DoAction`
 
 inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
 inline static std::string const kFlightTxnCommit = "commit_transaction"; /// `DoAction`
 
-inline static std::string const kFlightWrite = "write";       /// `DoPut`
-inline static std::string const kFlightRead = "read";         /// `DoExchange`
-inline static std::string const kFlightScan = "scan";         /// `DoExchange`
-inline static std::string const kFlightSize = "size";         /// `DoExchange`
+inline static std::string const kFlightWrite = "write"; /// `DoPut`
+inline static std::string const kFlightRead = "read";   /// `DoExchange`
+inline static std::string const kFlightScan = "scan";   /// `DoExchange`
+inline static std::string const kFlightSize = "size";   /// `DoExchange`
 
 inline static std::string const kArgCols = "collections";
 inline static std::string const kArgKeys = "keys";

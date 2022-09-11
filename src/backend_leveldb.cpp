@@ -202,9 +202,9 @@ void read_enumerate( //
     level_db_t& db,
     places_arg_t tasks,
     leveldb::ReadOptions const& options,
-        std::string& value,
+    std::string& value,
     value_enumerator_at enumerator,
-    ukv_error_t*c_error) {
+    ukv_error_t* c_error) {
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
@@ -213,12 +213,11 @@ void read_enumerate( //
             if (export_error(status, c_error))
                 return;
             enumerator(i, value_view_t {value.data(), value.size()});
-
-        } else 
+        }
+        else
             enumerator(i, value_view_t {});
     }
 }
-
 
 void ukv_read( //
     ukv_database_t const c_db,
@@ -343,11 +342,14 @@ void ukv_scan( //
         offsets[i] = keys_output - *c_found_keys;
 
         ukv_size_t j = 0;
-        for (; it->Valid() && j != task.length && *reinterpret_cast<ukv_key_t *>(it->key().data()) < task.end_key; j++, it->Next()) {
-            std::memcpy(keys_output, it->key().data(), sizeof(ukv_key_t));
-            *keys_output = static_cast<ukv_length_t>(it->value().size());
+        while (it->Valid() && j != task.length) {
+            auto key = *reinterpret_cast<ukv_key_t*>(it->key().data());
+            if (key >= task.end_key)
+                break;
+            std::memcpy(keys_output, &key, sizeof(ukv_key_t));
             ++keys_output;
             ++j;
+            it->Next();
         }
 
         counts[i] = j;
@@ -409,7 +411,7 @@ void ukv_size( //
         try {
             db.GetApproximateSizes(&range, 1, &approximate_size);
             min_space_usages[i] = approximate_size;
-            
+
             memory_usage = "0";
             db.GetProperty("leveldb.approximate-memory-usage", &memory_usage.value());
             max_space_usages[i] = std::stoi(memory_usage.value());
