@@ -118,21 +118,21 @@ void ukv_read( //
     bool const request_only_lengths = c_found_lengths && !c_found_values;
     char const* partial_mode = !request_only_presences && !request_only_lengths //
                                    ? nullptr
-                                   : request_only_lengths ? "lengths" : "presences";
+                                   : request_only_lengths ? kParamReadPartLengths.c_str() : kParamReadPartPresences.c_str();
     bool const read_shared = c_options & ukv_option_read_shared_k;
     bool const read_track = c_options & ukv_option_read_track_k;
     arf::FlightDescriptor descriptor;
-    descriptor.cmd = "read?";
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightRead);    
     if (c_txn)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "txn={:x}&", std::uintptr_t(c_txn));
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamTransactionID, std::uintptr_t(c_txn));
     if (same_named_collection)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "col={:x}&", cols[0]);
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamCollectionID, cols[0]);
     if (partial_mode)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "part={}&", partial_mode);
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamReadPart, partial_mode);
     if (read_shared)
-        descriptor.cmd.append("shared&");
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);    
     if (read_track)
-        descriptor.cmd.append("track&");
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagTrackRead);    
 
     bool const has_cols_column = !same_collection;
     constexpr bool has_keys_column = true;
@@ -433,13 +433,13 @@ void ukv_write( //
 
     // Configure the `cmd` descriptor
     arf::FlightDescriptor descriptor;
-    descriptor.cmd = "write?";
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightWrite);    
     if (c_txn)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "txn={:x}&", std::uintptr_t(c_txn));
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamTransactionID, std::uintptr_t(c_txn));
     if (!has_cols_column && cols)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "col={:x}&", cols[0]);
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamCollectionID, cols[0]);
     if (write_flush)
-        descriptor.cmd.append("flush&");
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagFlushWrite);
 
     // Send the request to server
     ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
@@ -584,15 +584,15 @@ void ukv_scan( //
     bool const read_shared = c_options & ukv_option_read_shared_k;
     bool const read_track = c_options & ukv_option_read_track_k;
     arf::FlightDescriptor descriptor;
-    descriptor.cmd = "scan?";
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightScan);    
     if (c_txn)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "txn={:x}&", std::uintptr_t(c_txn));
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamTransactionID, std::uintptr_t(c_txn));
     if (same_named_collection)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "col={:x}&", cols[0]);
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamCollectionID, cols[0]);
     if (read_shared)
-        descriptor.cmd.append("shared&");
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
     if (read_track)
-        descriptor.cmd.append("track&");
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagTrackRead);
 
     // Send the request to server
     ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
@@ -668,7 +668,7 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_upsert(
+void ukv_collection_open(
     // Inputs:
     ukv_database_t const c_db,
     ukv_str_view_t c_col_name,
@@ -692,7 +692,7 @@ void ukv_collection_upsert(
     // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "col_upsert?col={}", c_col_name);
+    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightColOpen, kParamCollectionName, c_col_name);
     if (c_col_config)
         action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c_col_config});
 
@@ -717,7 +717,29 @@ void ukv_collection_drop(
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    
+    std::string_view mode;
+    switch (c_mode) {
+        case ukv_drop_vals_k: mode = "values"; break;
+        case ukv_drop_keys_vals_k: mode = "contents"; break;
+        case ukv_drop_keys_vals_handle_k: mode = "collection"; break;
+    }
+
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+    // TODO: Can we somehow reuse the IPC-needed memory?
+    // Do we need to add that arena argument to every call?
+    // ar::Status ar_status;
+    // arrow_mem_pool_t pool(arena);
+    // arf::FlightCallOptions options = arrow_call_options(pool);
+
+    arf::Action action;
+    if (c_col_name)
+    fmt::format_to(std::back_inserter(action.type), "{}?{:}={}&{}={}", kFlightColRemove, kParamCollectionName, c_col_name, kParamDropMode, mode);
+    else 
+    fmt::format_to(std::back_inserter(action.type), "{}?{:x}={}&{}={}", kFlightColRemove, kParamCollectionID, c_col_id, kParamDropMode, mode);
+
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
+    return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
 }
 
 void ukv_collection_list( //
@@ -787,7 +809,7 @@ void ukv_transaction_begin(
     // Inputs:
     ukv_database_t const c_db,
     ukv_size_t const c_generation,
-    ukv_options_t const,
+    ukv_options_t const c_options,
     // Outputs:
     ukv_transaction_t* c_txn,
     ukv_error_t* c_error) {
@@ -795,6 +817,26 @@ void ukv_transaction_begin(
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+    // TODO: Can we somehow reuse the IPC-needed memory?
+    // Do we need to add that arena argument to every call?
+    // ar::Status ar_status;
+    // arrow_mem_pool_t pool(arena);
+    // arf::FlightCallOptions options = arrow_call_options(pool);
+
+    arf::Action action;
+    fmt::format_to(std::back_inserter(action.type), "{}?{}={:x}&", kFlightTxnBegin, kParamTransactionID, c_generation);
+    if (c_options & ukv_option_txn_snapshot_k)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSnapshotTxn);
+
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
+    return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
+
+    auto& stream_ptr = maybe_stream.ValueUnsafe();
+    ar::Result<std::unique_ptr<arf::Result>> maybe_id = stream_ptr->Next();
+    return_if_error(maybe_id.ok(), c_error, network_k, "No response received");
+
+    auto& id_ptr = maybe_id.ValueUnsafe();
+    std::memcpy(c_txn, id_ptr->body->data(), sizeof(ukv_collection_t));
 }
 
 void ukv_transaction_commit( //
@@ -803,6 +845,21 @@ void ukv_transaction_commit( //
     ukv_error_t* c_error) {
 
     return_if_error(c_txn, c_error, uninitialized_state_k, "Transaction is uninitialized");
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+    // TODO: Can we somehow reuse the IPC-needed memory?
+    // Do we need to add that arena argument to every call?
+    // ar::Status ar_status;
+    // arrow_mem_pool_t pool(arena);
+    // arf::FlightCallOptions options = arrow_call_options(pool);
+
+    arf::Action action;
+    fmt::format_to(std::back_inserter(action.type), "{}?{}={:x}&", kFlightTxnCommit, kParamTransactionID, c_txn);
+    if (c_options & ukv_option_write_flush_k)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagFlushWrite);
+
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
+    return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
 }
 
 /*********************************************************/
