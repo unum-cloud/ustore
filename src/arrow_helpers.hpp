@@ -27,23 +27,41 @@ namespace unum::ukv {
 namespace arf = arrow::flight;
 namespace ar = arrow;
 
-inline static std::string const kFlightColOpen = "col_upsert";   /// `DoAction`
-inline static std::string const kFlightColRemove = "col_remove"; /// `DoAction`
-inline static std::string const kFlightTxnBegin = "txn_begin";   /// `DoAction`
-inline static std::string const kFlightTxnCommit = "txn_commit"; /// `DoAction`
+inline static std::string const kFlightListCols = "list_collections"; /// `DoGet`
+inline static std::string const kFlightColOpen = "open_collection";   /// `DoAction`
+inline static std::string const kFlightColRemove = "remove_collection"; /// `DoAction`
 
-inline static std::string const kFlightListCols = "col_list"; /// `DoGet`
+inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
+inline static std::string const kFlightTxnCommit = "commit_transaction"; /// `DoAction`
+
 inline static std::string const kFlightWrite = "write";       /// `DoPut`
 inline static std::string const kFlightRead = "read";         /// `DoExchange`
 inline static std::string const kFlightScan = "scan";         /// `DoExchange`
 inline static std::string const kFlightSize = "size";         /// `DoExchange`
 
-inline static std::string const kArgCols = "cols";
+inline static std::string const kArgCols = "collections";
 inline static std::string const kArgKeys = "keys";
-inline static std::string const kArgVals = "vals";
+inline static std::string const kArgVals = "values";
 inline static std::string const kArgFields = "fields";
 inline static std::string const kArgScanStarts = "start_keys";
 inline static std::string const kArgScanLengths = "scan_lengths";
+
+inline static std::string const kParamCollectionID = "collection_id";
+inline static std::string const kParamCollectionName = "collection_name";
+inline static std::string const kParamTransactionID = "transaction_id";
+inline static std::string const kParamReadPart = "part";
+inline static std::string const kParamDropMode = "mode";
+inline static std::string const kParamFlagSnapshotTxn = "snapshot";
+inline static std::string const kParamFlagFlushWrite = "flush";
+inline static std::string const kParamFlagTrackRead = "track";
+inline static std::string const kParamFlagSharedMemRead = "shared";
+
+inline static std::string const kParamReadPartLengths = "lengths";
+inline static std::string const kParamReadPartPresences = "presences";
+
+inline static std::string const kParamDropModeValues = "values";
+inline static std::string const kParamDropModeContents = "contents";
+inline static std::string const kParamDropModeCollection = "collection";
 
 class arrow_mem_pool_t final : public ar::MemoryPool {
     monotonic_resource_t resource_;

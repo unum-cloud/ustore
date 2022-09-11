@@ -520,7 +520,7 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_upsert( //
+void ukv_collection_open( //
     ukv_database_t const,
     ukv_str_view_t c_col_name,
     ukv_str_view_t,

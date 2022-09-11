@@ -286,7 +286,7 @@ class transaction_t : public std::enable_shared_from_this<transaction_t> {
     expected_gt<collection_t> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
         ukv_collection_t col = ukv_collection_main_k;
-        ukv_collection_upsert(db_, name, nullptr, &col, status.member_ptr());
+        ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
@@ -375,7 +375,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
     expected_gt<collection_t> collection(ukv_str_view_t name = "", ukv_format_t format = ukv_format_binary_k) noexcept {
         status_t status;
         ukv_collection_t col = ukv_collection_main_k;
-        ukv_collection_upsert(db_, name, nullptr, &col, status.member_ptr());
+        ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else

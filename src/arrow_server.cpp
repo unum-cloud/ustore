@@ -362,8 +362,10 @@ session_lock_t::~session_lock_t() {
 
 struct session_params_t {
     session_id_t session_id;
-    std::optional<std::string_view> txn;
-    std::optional<std::string_view> col;
+    std::optional<std::string_view> transaction_id;
+    std::optional<std::string_view> collection_name;
+    std::optional<std::string_view> collection_id;
+
     std::optional<std::string_view> opt_part;
     std::optional<std::string_view> opt_snapshot;
     std::optional<std::string_view> opt_flush;
@@ -380,15 +382,17 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
         return result;
 
     auto params = uri.substr(params_offs);
-    result.txn = param_value(params, "txn=");
+    result.transaction_id = param_value(params, kParamTransactionID);
     if (result.txn)
         result.session_id.txn_id = parse_txn_id(*result.txn);
-    result.col = param_value(params, "col=");
+    
+    result.collection_name = param_value(params, kParamCollectionName);
+    result.collection_id = param_value(params, kParamCollectionID);
 
-    result.opt_part = param_value(params, "part=");
-    result.opt_snapshot = param_value(params, "snapshot=");
-    result.opt_flush = param_value(params, "flush=");
-    result.opt_track = param_value(params, "track=");
+    result.opt_part = param_value(params, kParamReadPart);
+    result.opt_snapshot = param_value(params, kParamFlagSnapshotRead);
+    result.opt_flush = param_value(params, kParamFlagFlushWrite);
+    result.opt_track = param_value(params, kParamFlagTrackRead);
 
     return result;
 }
@@ -483,7 +487,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_collection_t col_id = maybe_col.throw_or_ref();
             ukv_str_view_t col_config = get_null_terminated(action.body);
-            ukv_collection_upsert(db_, params.col->begin(), col_config, &col_id, status.member_ptr());
+            ukv_collection_open(db_, params.col->begin(), col_config, &col_id, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_scalar<ukv_collection_t>(col_id);

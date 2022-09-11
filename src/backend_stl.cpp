@@ -740,7 +740,7 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_upsert(
+void ukv_collection_open(
     // Inputs:
     ukv_database_t const c_db,
     ukv_str_view_t c_col_name,
