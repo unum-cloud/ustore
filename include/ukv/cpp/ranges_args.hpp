@@ -57,10 +57,10 @@ struct places_arg_t {
  */
 struct contents_arg_t {
     using value_type = value_view_t;
-    strided_iterator_gt<ukv_bytes_ptr_t const> contents_begin;
+    strided_iterator_gt<ukv_octet_t const> presences_begin;
     strided_iterator_gt<ukv_length_t const> offsets_begin;
     strided_iterator_gt<ukv_length_t const> lengths_begin;
-    strided_iterator_gt<ukv_octet_t const> presences_begin;
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents_begin;
     ukv_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
@@ -98,10 +98,9 @@ struct contents_arg_t {
 
 struct scan_t {
     ukv_collection_t col;
-    ukv_key_t const& min_key;
-    ukv_length_t length;
-
-    inline col_key_t col_key() const noexcept { return col_key_t {col, min_key}; }
+    ukv_key_t min_key;
+    ukv_key_t max_key;
+    ukv_length_t limit;
 };
 
 /**
@@ -111,15 +110,17 @@ struct scan_t {
 struct scans_arg_t {
     strided_iterator_gt<ukv_collection_t const> cols;
     strided_iterator_gt<ukv_key_t const> start_keys;
-    strided_iterator_gt<ukv_length_t const> lengths;
+    strided_iterator_gt<ukv_key_t const> end_keys;
+    strided_iterator_gt<ukv_length_t const> limits;
     ukv_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
     inline scan_t operator[](std::size_t i) const noexcept {
         ukv_collection_t col = cols ? cols[i] : ukv_collection_main_k;
-        ukv_key_t const& key = start_keys[i];
-        ukv_length_t len = lengths[i];
-        return {col, key, len};
+        ukv_key_t start_key = start_keys ? start_keys[i] : std::numeric_limits<ukv_key_t>::min();
+        ukv_key_t end_key = end_keys ? end_keys[i] : std::numeric_limits<ukv_key_t>::max();
+        ukv_length_t limit = limits[i];
+        return {col, start_key, end_key, limit};
     }
 };
 

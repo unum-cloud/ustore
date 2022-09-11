@@ -677,14 +677,16 @@ class UKVService : public arf::FlightServerBase {
         }
         else if (is_query(desc.cmd, kFlightScan)) {
 
-            /// @param `keys`
-            auto input_keys = get_keys(input_schema_c, input_batch_c, kArgScanStarts);
+            /// @param `start_keys`
+            auto input_start_keys = get_keys(input_schema_c, input_batch_c, kArgScanStarts);
+            /// @param `start_keys`
+            auto input_end_keys = get_keys(input_schema_c, input_batch_c, kArgScanEnds);
             /// @param `lengths`
             auto input_lengths = get_lengths(input_schema_c, input_batch_c, kArgScanLengths);
             /// @param `cols`
             auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
 
-            if (!input_keys || !input_lengths)
+            if (!input_start_keys || !input_lengths)
                 return ar::Status::Invalid("Keys and lengths must have been provided for scans");
 
             // Reserve resources for the execution of this request
@@ -704,8 +706,10 @@ class UKVService : public arf::FlightServerBase {
                 tasks_count,
                 input_cols.get(),
                 input_cols.stride(),
-                input_keys.get(),
-                input_keys.stride(),
+                input_start_keys.get(),
+                input_start_keys.stride(),
+                input_end_keys.get(),
+                input_end_keys.stride(),
                 input_lengths.get(),
                 input_lengths.stride(),
                 ukv_options_default_k,

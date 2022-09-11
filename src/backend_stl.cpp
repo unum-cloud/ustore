@@ -401,7 +401,7 @@ void scan_head( //
 
         ukv_length_t j = 0;
         auto key_iterator = col.pairs.lower_bound(place.min_key);
-        for (; j != place.length && key_iterator != col.pairs.end(); ++key_iterator) {
+        for (; j != place.length && key_iterator != col.pairs.end() && key_iterator->first < place.end_key; ++key_iterator) {
             if (key_iterator->second.is_deleted)
                 continue;
             *keys_output = key_iterator->first;
@@ -463,6 +463,10 @@ void scan_txn( //
                 continue;
             }
 
+            // Make sure we haven't reached the end keys
+            if (key_iterator->first >= place.end_key)            
+                break;
+
             // Export from the main store:
             *keys_output = key_iterator->first;
             ++keys_output;
@@ -471,7 +475,7 @@ void scan_txn( //
         }
 
         // As in any `set_union`, don't forget the tail :)
-        while (j != place.length && txn_iterator != txn.upserted.end() && txn_iterator->first.col == place.col) {
+        while (j != place.length && txn_iterator != txn.upserted.end() && txn_iterator->first.col == place.col && txn_iterator->first.key < place.end_key) {
             *keys_output = txn_iterator->first.key;
             ++keys_output;
             ++txn_iterator;
@@ -632,8 +636,11 @@ void ukv_scan( //
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
 
-    ukv_length_t const* c_scan_lengths,
-    ukv_size_t const c_scan_lengths_stride,
+    ukv_key_t const* c_end_keys,
+    ukv_size_t const c_end_keys_stride,
+
+    ukv_length_t const* c_scan_limits,
+    ukv_size_t const c_scan_limits_stride,
 
     ukv_options_t const c_options,
 
@@ -652,9 +659,10 @@ void ukv_scan( //
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
-    strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_length_t const> lens {c_scan_lengths, c_scan_lengths_stride};
-    scans_arg_t scans {cols, keys, lens, c_min_tasks_count};
+    strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
+    strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c_scan_limits, c_scan_limits_stride};
+    scans_arg_t scans {cols, start_keys, end_keys, lens, c_min_tasks_count};
 
     return c_txn ? scan_txn(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
                  : scan_head(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);

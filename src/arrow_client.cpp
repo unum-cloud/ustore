@@ -477,8 +477,11 @@ void ukv_scan( //
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
 
-    ukv_length_t const* c_scan_lengths,
-    ukv_size_t const c_scan_lengths_stride,
+    ukv_key_t const* c_end_keys,
+    ukv_size_t const c_end_keys_stride,
+
+    ukv_length_t const* c_scan_limits,
+    ukv_size_t const c_scan_limits_stride,
 
     ukv_options_t const c_options,
 
@@ -496,17 +499,19 @@ void ukv_scan( //
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
-    strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_length_t const> lens {c_scan_lengths, c_scan_lengths_stride};
-    scans_arg_t scans {cols, keys, lens, c_tasks_count};
-    places_arg_t places {cols, keys, {}, c_tasks_count};
+    strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
+    strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
+    strided_iterator_gt<ukv_length_t const> limits {c_scan_limits, c_scan_limits_stride};
+    scans_arg_t scans {cols, start_keys, limits, c_tasks_count};
+    places_arg_t places {cols, start_keys, {}, c_tasks_count};
 
     bool const same_collection = places.same_collection();
     bool const same_named_collection = same_collection && places.same_collections_are_named();
     bool const write_flush = c_options & ukv_option_write_flush_k;
 
     bool const has_cols_column = !same_collection;
-    constexpr bool has_keys_column = true;
+    constexpr bool has_start_keys_column = true;
+    bool const has_end_keys_column = end_keys;
     constexpr bool has_lens_column = true;
 
     if (has_cols_column && !cols.is_continuous()) {
@@ -516,24 +521,31 @@ void ukv_scan( //
         cols = {continuous.begin(), places.size()};
     }
 
-    if (has_keys_column && !keys.is_continuous()) {
+    if (has_start_keys_column && !start_keys.is_continuous()) {
         auto continuous = arena.alloc<ukv_key_t>(places.size(), c_error);
         return_on_error(c_error);
-        transform_n(keys, places.size(), continuous.begin());
-        keys = {continuous.begin(), places.size()};
+        transform_n(start_keys, places.size(), continuous.begin());
+        start_keys = {continuous.begin(), places.size()};
     }
 
-    if (has_lens_column && !lens.is_continuous()) {
+    if (has_end_keys_column && !end_keys.is_continuous()) {
+        auto continuous = arena.alloc<ukv_key_t>(places.size(), c_error);
+        return_on_error(c_error);
+        transform_n(end_keys, places.size(), continuous.begin());
+        end_keys = {continuous.begin(), places.size()};
+    }
+
+    if (has_lens_column && !limits.is_continuous()) {
         auto continuous = arena.alloc<ukv_length_t>(places.size(), c_error);
         return_on_error(c_error);
-        transform_n(lens, places.size(), continuous.begin());
-        lens = {continuous.begin(), places.size()};
+        transform_n(limits, places.size(), continuous.begin());
+        limits = {continuous.begin(), places.size()};
     }
 
     // Now build-up the Arrow representation
     ArrowArray input_array_c, output_array_c;
     ArrowSchema input_schema_c, output_schema_c;
-    auto count_cols = has_cols_column + has_keys_column + has_lens_column;
+    auto count_cols = has_cols_column + has_start_keys_column + has_lens_column;
     ukv_to_arrow_schema(c_tasks_count, count_cols, &input_schema_c, &input_array_c, c_error);
     return_on_error(c_error);
 
@@ -550,16 +562,29 @@ void ukv_scan( //
             c_error);
     return_on_error(c_error);
 
-    if (has_keys_column)
+    if (has_start_keys_column)
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgScanStarts.c_str(),
             ukv_type<ukv_key_t>(),
             nullptr,
             nullptr,
-            keys.get(),
+            start_keys.get(),
             input_schema_c.children[has_cols_column],
             input_array_c.children[has_cols_column],
+            c_error);
+    return_on_error(c_error);
+
+    if (has_end_keys_column)
+        ukv_to_arrow_column( //
+            c_tasks_count,
+            kArgScanEnds.c_str(),
+            ukv_type<ukv_key_t>(),
+            nullptr,
+            nullptr,
+            end_keys.get(),
+            input_schema_c.children[has_cols_column + has_start_keys_column],
+            input_array_c.children[has_cols_column + has_start_keys_column],
             c_error);
     return_on_error(c_error);
 
@@ -570,9 +595,9 @@ void ukv_scan( //
             ukv_type<ukv_length_t>(),
             nullptr,
             nullptr,
-            lens.get(),
-            input_schema_c.children[has_cols_column + has_keys_column],
-            input_array_c.children[has_cols_column + has_keys_column],
+            limits.get(),
+            input_schema_c.children[has_cols_column + has_start_keys_column + has_end_keys_column],
+            input_array_c.children[has_cols_column + has_start_keys_column + has_end_keys_column],
             c_error);
     return_on_error(c_error);
 

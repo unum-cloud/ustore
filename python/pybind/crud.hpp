@@ -375,7 +375,7 @@ static void update_binary(py_collection_t& col, py::object dict_py) {
 static py::array_t<ukv_key_t> scan_binary( //
     py_collection_t& col,
     ukv_key_t min_key,
-    ukv_length_t scan_length) {
+    ukv_length_t scan_limit) {
 
     ukv_key_t* found_keys = nullptr;
     ukv_length_t* found_lengths = nullptr;
@@ -389,7 +389,9 @@ static py::array_t<ukv_key_t> scan_binary( //
         0,
         &min_key,
         0,
-        &scan_length,
+        nullptr, 
+        0,
+        &scan_limit,
         0,
         col.options(),
         nullptr,

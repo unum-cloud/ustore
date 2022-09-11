@@ -384,16 +384,15 @@ void ukv_read( //
     ukv_octet_t** presences,
     ukv_length_t** offsets,
     ukv_length_t** lengths,
-    ukv_bytes_ptr_t* values,
+    ukv_byte_t** values,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
- * @brief Retrieves the following (upto) `scan_length` keys starting
- * from `min_key` or the smallest following key in each collection.
- * Values are not exported, for that - follow up with `ukv_read`.
- * Fetching lengths of values is @b optional.
+ * @brief Retrieves the following (upto) @param scan_limits[i] keys starting
+ * from @param start_key[i] or the smallest following key in each collection.
+ * Values are not exported, for that - follow up with @see ukv_read.
  *
  * @param[in] db             Already open database instance, @see `ukv_database_open`.
  * @param[in] txn            Transaction or the snapshot, through which the
@@ -410,13 +409,20 @@ void ukv_read( //
  *                           them is equal to @param start_keys_stride @b bytes!
  *                           Zero stride is not allowed!
  *
+ * @param[in] end_keys       Array of termination keys for every scan. @b Optional.
+ *                           If multiple keys are passed, the step between
+ *                           them is equal to @param start_keys_stride @b bytes!
+ *                           Zero stride is not allowed!
+ *
  * @param[in] options        Read options:
  *                           > track: Adds collision-detection on keys read through txn.
  *                           > lengths: Will fetches lengths of values, after the keys.
  *                           > bulk: Skips keys ordering and relevance checks for speed.
  *
+ * @param[out] offsets       Will contain the offset of each run in joined @param keys.
+ *                           Will have @param tasks_count +1 outputs, to match Arrow format.
+ * @param[out] counts        Will contain the height of each column (< scan_limit).
  * @param[out] keys          Will contain columns of following keys for each task.
- * @param[out] counts        Will contain the height of each column (< scan_length).
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
@@ -432,8 +438,11 @@ void ukv_scan( //
     ukv_key_t const* start_keys,
     ukv_size_t const start_keys_stride,
 
-    ukv_length_t const* scan_lengths,
-    ukv_size_t const scan_lengths_stride,
+    ukv_key_t const* end_keys,
+    ukv_size_t const end_keys_stride,
+
+    ukv_length_t const* scan_limits,
+    ukv_size_t const scan_limits_stride,
 
     ukv_options_t const options,
 
