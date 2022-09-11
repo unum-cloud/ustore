@@ -197,141 +197,28 @@ void ukv_write( //
     }
 }
 
-void measure_one( //
+template <typename value_enumerator_at>
+void read_enumerate( //
     level_db_t& db,
-    places_arg_t const& tasks,
+    places_arg_t tasks,
     leveldb::ReadOptions const& options,
-    std::string& value,
-    ukv_bytes_ptr_t* c_found_values,
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_lengths,
-    stl_arena_t& arena,
-    ukv_error_t* c_error) {
-
-    place_t task = tasks[0];
-    level_status_t status = db.Get(options, to_slice(task.key), &value);
-    if (!status.IsNotFound())
-        if (export_error(status, c_error))
-            return;
-
-    auto exported_len = status.IsNotFound() ? ukv_length_missing_k : static_cast<ukv_size_t>(value.size());
-    auto tape = arena.alloc<byte_t>(sizeof(ukv_size_t), c_error);
-    return_on_error(c_error);
-
-    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_size_t));
-    *c_found_lengths = reinterpret_cast<ukv_length_t*>(tape.begin());
-    *c_found_offsets = nullptr;
-    *c_found_values = nullptr;
-}
-
-void read_one( //
-    level_db_t& db,
-    places_arg_t const& tasks,
-    leveldb::ReadOptions const& options,
-    std::string& value,
-    ukv_bytes_ptr_t* c_found_values,
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_lengths,
-    stl_arena_t& arena,
-    ukv_error_t* c_error) {
-
-    place_t task = tasks[0];
-    level_status_t status = db.Get(options, to_slice(task.key), &value);
-    if (!status.IsNotFound())
-        if (export_error(status, c_error))
-            return;
-
-    auto bytes_in_value = static_cast<ukv_length_t>(value.size());
-    auto exported_len = status.IsNotFound() ? ukv_length_missing_k : bytes_in_value;
-    ukv_length_t offset = 0;
-    auto tape = arena.alloc<byte_t>(sizeof(ukv_length_t) * 2 + bytes_in_value, c_error);
-    return_on_error(c_error);
-
-    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_length_t));
-    std::memcpy(tape.begin() + sizeof(ukv_length_t), &offset, sizeof(ukv_length_t));
-    std::memcpy(tape.begin() + sizeof(ukv_length_t) * 2, value.data(), bytes_in_value);
-
-    *c_found_lengths = reinterpret_cast<ukv_length_t*>(tape.begin());
-    *c_found_offsets = *c_found_lengths + 1;
-    *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(tape.begin() + sizeof(ukv_length_t) * 2);
-}
-
-void measure_many( //
-    level_db_t& db,
-    places_arg_t const& tasks,
-    leveldb::ReadOptions const& options,
-    std::string& value,
-    ukv_bytes_ptr_t* c_found_values,
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_lengths,
-    stl_arena_t& arena,
-    ukv_error_t* c_error) {
-
-    span_gt<ukv_length_t> lens = arena.alloc<ukv_length_t>(tasks.count, c_error);
-    return_on_error(c_error);
-
-    std::fill_n(lens.begin(), tasks.count, ukv_length_missing_k);
-    *c_found_lengths = lens.begin();
-    *c_found_offsets = nullptr;
-    *c_found_values = nullptr;
+        std::string& value,
+    value_enumerator_at enumerator,
+    ukv_error_t*c_error) {
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
-        place_t task = tasks[i];
-        level_status_t status = db.Get(options, to_slice(task.key), &value);
-        if (status.IsNotFound())
-            continue;
-        if (export_error(status, c_error))
-            return;
-        lens[i] = static_cast<ukv_length_t>(value.size());
-    }
-}
-
-void read_many( //
-    level_db_t& db,
-    places_arg_t const& places,
-    leveldb::ReadOptions const& options,
-    std::string& value,
-    ukv_bytes_ptr_t* c_found_values,
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_lengths,
-    stl_arena_t& arena,
-    ukv_error_t* c_error) {
-
-    ukv_size_t lens_bytes = sizeof(ukv_length_t) * places.count;
-    span_gt<byte_t> tape = arena.alloc<byte_t>(lens_bytes * 2, c_error);
-    return_on_error(c_error);
-
-    ukv_length_t* lens = reinterpret_cast<ukv_length_t*>(tape.begin());
-    ukv_length_t* offs = lens + places.count;
-    ukv_bytes_ptr_t contents = reinterpret_cast<ukv_bytes_ptr_t>(offs + places.count);
-    std::fill_n(lens, places.count * 2, ukv_length_missing_k);
-
-    for (std::size_t i = 0; i != places.size(); ++i) {
-        place_t place = places[i];
+        place_t place = tasks[i];
         level_status_t status = db.Get(options, to_slice(place.key), &value);
-        if (status.IsNotFound())
-            continue;
-        if (export_error(status, c_error))
-            return;
+        if (!status.IsNotFound()) {
+            if (export_error(status, c_error))
+                return;
+            enumerator(i, value_view_t {value.data(), value.size()});
 
-        auto old_tape_len = tape.size();
-        auto bytes_in_value = value.size();
-        tape = arena.alloc<byte_t>(old_tape_len + bytes_in_value, c_error);
-        return_on_error(c_error);
-
-        lens = reinterpret_cast<ukv_length_t*>(tape.begin());
-        offs = lens + places.count;
-        contents = reinterpret_cast<ukv_bytes_ptr_t>(offs + places.count);
-
-        std::memcpy(tape.begin() + old_tape_len, value.data(), bytes_in_value);
-        lens[i] = static_cast<ukv_length_t>(bytes_in_value);
-        offs[i] = reinterpret_cast<ukv_bytes_ptr_t>(tape.begin() + old_tape_len) - contents;
+        } else 
+            enumerator(i, value_view_t {});
     }
-
-    *c_found_lengths = lens;
-    *c_found_offsets = offs;
-    *c_found_values = contents;
 }
+
 
 void ukv_read( //
     ukv_database_t const c_db,
@@ -347,7 +234,6 @@ void ukv_read( //
     ukv_options_t const c_options,
 
     ukv_octet_t** c_found_presences,
-
     ukv_length_t** c_found_offsets,
     ukv_length_t** c_found_lengths,
     ukv_bytes_ptr_t* c_found_values,
@@ -361,22 +247,31 @@ void ukv_read( //
     return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    leveldb::ReadOptions options;
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     places_arg_t places {{}, keys, {}, c_tasks_count};
 
-    auto value_uptr = make_value(c_error);
-    std::string& value = *value_uptr.get();
+    // 1. Allocate a tape for all the values to be pulled
+    auto offs = arena.alloc_or_dummy<ukv_length_t>(places.count + 1, c_error, c_found_offsets);
+    return_on_error(c_error);
+    auto lens = arena.alloc_or_dummy<ukv_length_t>(places.count, c_error, c_found_lengths);
+    return_on_error(c_error);
+    auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
+    return_on_error(c_error);
+    safe_vector_gt<byte_t> contents(&arena);
 
+    // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
-        if (c_tasks_count == 1) {
-            auto func = c_options ? &measure_one : &read_one;
-            func(db, places, options, value, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
-        }
-        else {
-            auto func = c_options ? &measure_many : &read_many;
-            func(db, places, options, value, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
-        }
+        leveldb::ReadOptions options;
+        std::string value_buffer;
+        ukv_length_t progress_in_tape = 0;
+        auto data_enumerator = [&](std::size_t i, value_view_t value) {
+            presences[i] = bool(value);
+            lens[i] = value ? value.size() : ukv_length_missing_k;
+            offs[i] = contents.size();
+            contents.insert(contents.size(), value.begin(), value.end(), c_error);
+        };
+        read_enumerate(db, places, options, value_buffer, safe_callback, c_error);
+        offs[places.count] = contents.size();
     }
     catch (...) {
         *c_error = "Read Failure";
