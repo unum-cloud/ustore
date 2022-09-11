@@ -676,14 +676,26 @@ void ukv_size( //
 
     ukv_options_t const,
 
-    ukv_size_t** c_found_estimates,
+    ukv_size_t** c_min_cardinalities,
+    ukv_size_t** c_max_cardinalities,
+    ukv_size_t** c_min_value_bytes,
+    ukv_size_t** c_max_value_bytes,
+    ukv_size_t** c_min_space_usages,
+    ukv_size_t** c_max_space_usages,
+    
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
-    auto estimates = *c_found_estimates = arena.alloc<ukv_size_t>(6 * n, c_error).begin();
+    
+    auto min_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_cardinalities);
+    auto max_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_cardinalities);
+    auto min_value_bytes = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_value_bytes);
+    auto max_value_bytes = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_value_bytes);
+    auto min_space_usages = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_space_usages);
+    auto max_space_usages = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_space_usages);
     return_on_error(c_error);
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
@@ -726,13 +738,13 @@ void ukv_size( //
         }
 
         //
-        auto estimate = estimates + i * 6;
-        estimate[0] = static_cast<ukv_size_t>(main_count);
-        estimate[1] = static_cast<ukv_size_t>(main_count + txn_count);
-        estimate[2] = static_cast<ukv_size_t>(main_bytes);
-        estimate[3] = static_cast<ukv_size_t>(main_bytes + txn_bytes);
-        estimate[4] = estimate[0] * (sizeof(ukv_key_t) + sizeof(ukv_length_t)) + estimate[2];
-        estimate[5] = (estimate[1] + deleted_count) * (sizeof(ukv_key_t) + sizeof(ukv_length_t)) + estimate[3];
+        ukv_size_t estimates[6];
+        min_cardinalities[i] = estimate[0] = static_cast<ukv_size_t>(main_count);
+        max_cardinalities[i] = estimate[1] = static_cast<ukv_size_t>(main_count + txn_count);
+        min_value_bytes[i] = estimate[2] = static_cast<ukv_size_t>(main_bytes);
+        max_value_bytes[i] = estimate[3] = static_cast<ukv_size_t>(main_bytes + txn_bytes);
+        min_space_usages[i] = estimate[4] = estimate[0] * (sizeof(ukv_key_t) + sizeof(ukv_length_t)) + estimate[2];
+        max_space_usages[i] = estimate[5] = (estimate[1] + deleted_count) * (sizeof(ukv_key_t) + sizeof(ukv_length_t)) + estimate[3];
     }
 }
 

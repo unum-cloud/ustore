@@ -414,13 +414,25 @@ class members_range_t {
     expected_gt<size_estimates_t> size_estimates() noexcept {
         status_t status;
         arena_t arena(db_);
-        ukv_size_t* o = nullptr;
         auto a = arena.member_ptr();
         auto s = status.member_ptr();
-        ukv_size(db_, txn_, 1, &col_, 0, &min_key_, 0, &max_key_, 0, ukv_options_default_k, &o, a, s);
+        ukv_size_t* min_cardinalities = nullptr;
+        ukv_size_t* max_cardinalities = nullptr;
+        ukv_size_t* min_value_bytes = nullptr;
+        ukv_size_t* max_value_bytes = nullptr;
+        ukv_size_t* min_space_usages = nullptr;
+        ukv_size_t* max_space_usages = nullptr;
+        ukv_size(db_, txn_, 1, &col_, 0, &min_key_, 0, &max_key_, 0, ukv_options_default_k, 
+            &min_cardinalities,
+            &max_cardinalities,
+            &min_value_bytes,
+            &max_value_bytes,
+            &min_space_usages,
+            &max_space_usages
+        , a, s);
         if (!status)
             return status;
-        size_estimates_t result {{o[0], o[1]}, {o[2], o[3]}, {o[4], o[5]}};
+        size_estimates_t result {{min_cardinalities[0], max_cardinalities[0]}, {min_value_bytes[0], max_value_bytes[0]}, {min_space_usages[0], max_space_usages[0]}};
         return result;
     }
 

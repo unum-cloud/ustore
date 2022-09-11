@@ -121,12 +121,13 @@ void ukv_database_open(ukv_str_view_t, ukv_database_t* c_db, ukv_error_t* c_erro
         rocks_native_t* native_db = nullptr;
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
-        status = rocks_native_t::Open(options,
-                                      rocksdb::TransactionDBOptions(),
-                                      "./tmp/rocksdb/",
-                                      column_descriptors,
-                                      &db_ptr->columns,
-                                      &native_db);
+        status = rocks_native_t::Open(//
+            options,
+            rocksdb::TransactionDBOptions(),
+            "./tmp/rocksdb/",
+            column_descriptors,
+            &db_ptr->columns,
+            &native_db);
 
         db_ptr->native = std::unique_ptr<rocks_native_t>(native_db);
 
@@ -572,7 +573,12 @@ void ukv_size( //
 
     ukv_options_t const,
 
-    ukv_size_t** c_found_estimates,
+    ukv_size_t** c_min_cardinalities,
+    ukv_size_t** c_max_cardinalities,
+    ukv_size_t** c_min_value_bytes,
+    ukv_size_t** c_max_value_bytes,
+    ukv_size_t** c_min_space_usages,
+    ukv_size_t** c_max_space_usages,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -582,7 +588,12 @@ void ukv_size( //
     stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
 
-    *c_found_estimates = arena.alloc<ukv_size_t>(6 * n, c_error).begin();
+    auto min_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_cardinalities);
+    auto max_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_cardinalities);
+    auto min_value_bytes = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_value_bytes);
+    auto max_value_bytes = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_value_bytes);
+    auto min_space_usages = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_space_usages);
+    auto max_space_usages = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_space_usages);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -613,13 +624,13 @@ void ukv_size( //
             *c_error = "Property Read Failure";
         }
 
-        ukv_size_t* estimates = *c_found_estimates + i * 6;
-        estimates[0] = static_cast<ukv_size_t>(0);
-        estimates[1] = static_cast<ukv_size_t>(keys_size);
-        estimates[2] = static_cast<ukv_size_t>(0);
-        estimates[3] = static_cast<ukv_size_t>(0);
-        estimates[4] = approximate_size;
-        estimates[5] = sst_files_size;
+        ukv_size_t estimates[6];
+        min_cardinalities[i] = estimates[0] = static_cast<ukv_size_t>(0);
+        max_cardinalities[i] = estimates[1] = static_cast<ukv_size_t>(keys_size);
+        min_value_bytes[i] = estimates[2] = static_cast<ukv_size_t>(0);
+        max_value_bytes[i] = estimates[3] = static_cast<ukv_size_t>(0);
+        min_space_usages[i] = estimates[4] = approximate_size;
+        max_space_usages[i] = estimates[5] = sst_files_size;
     }
 }
 
