@@ -103,10 +103,8 @@ typedef char* ukv_str_span_t;
  */
 typedef void* ukv_arena_t;
 
-
 typedef uint8_t* ukv_bytes_ptr_t;
 typedef uint8_t const* ukv_bytes_cptr_t;
-
 
 typedef enum {
 

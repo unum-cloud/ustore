@@ -584,13 +584,13 @@ void ukv_docs_write( //
 
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_byte_t* const> vals {c_vals, c_vals_stride};
+    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
     strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
 
     places_arg_t places {cols, keys, fields, c_tasks_count};
-    contents_arg_t contents {vals, offs, lens, presences, c_tasks_count};
+    contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     auto func = has_fields || c_format == ukv_format_json_patch_k || c_format == ukv_format_json_merge_patch_k
                     ? &read_modify_write
@@ -753,29 +753,30 @@ void ukv_docs_gist( //
     }
 
     // Estimate the final memory consumption on-tape and export offsets
-    span_gt<ukv_length_t> offs = arena.alloc<ukv_length_t>(paths->size() + 1, c_error);
+    auto offs = arena.alloc<ukv_length_t>(paths->size() + 1, c_error);
     return_on_error(c_error);
 
+    std::size_t path_idx = 0;
     ukv_length_t total_length = 0;
-    ukv_length_t* prefix_length = offs.begin();
     for (auto const& path : *paths) {
-        *prefix_length = total_length;
+        offs[path_idx] = total_length;
         total_length += path.size() + 1;
-        ++prefix_length;
+        ++path_idx;
     }
-    *prefix_length = total_length;
+    offs[path_idx] = total_length;
 
     // Reserve memory
-    span_gt<byte_t> tape = arena.alloc<byte_t>(total_length, c_error);
+    auto tape = arena.alloc<byte_t>(total_length, c_error);
     return_on_error(c_error);
 
     // Export on to the tape
     byte_t* tape_ptr = tape.begin();
-    *c_found_fields_count = static_cast<ukv_size_t>(paths->size());
-    *c_found_offsets = reinterpret_cast<ukv_length_t*>(offs.begin());
-    *c_found_fields = reinterpret_cast<ukv_str_view_t>(tape_ptr);
     for (auto const& path : *paths)
         std::memcpy(std::exchange(tape_ptr, tape_ptr + path.size() + 1), path.c_str(), path.size() + 1);
+
+    *c_found_fields_count = static_cast<ukv_size_t>(paths->size());
+    *c_found_offsets = reinterpret_cast<ukv_length_t*>(offs.begin());
+    *c_found_fields = reinterpret_cast<ukv_char_t*>(tape.begin());
 }
 
 std::size_t min_memory_usage(ukv_type_t type) {

@@ -44,7 +44,9 @@ struct places_arg_t {
 
     bool same_collection() const noexcept {
         return !cols_begin || cols_begin.repeats() ||
-               !transform_reduce_n(cols_begin, count, false, [=](ukv_collection_t col) { return col != cols_begin[0]; });
+               !transform_reduce_n(cols_begin, count, false, [=](ukv_collection_t col) {
+                   return col != cols_begin[0];
+               });
     }
 
     bool same_collections_are_named() const noexcept { return cols_begin && cols_begin[0] != ukv_collection_main_k; }

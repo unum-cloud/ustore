@@ -113,18 +113,18 @@ void ukv_database_open(ukv_str_view_t, ukv_database_t* c_db, ukv_error_t* c_erro
         rocksdb::Options options;
         rocksdb::ConfigOptions config_options;
 
-        rocks_status_t status =
-            rocksdb::LoadLatestOptions(config_options, "./tmp/rocksdb/", &options, &column_descriptors);
+        std::string path = "./tmp/rocksdb/"; // TODO: take the apth from config!
+        rocks_status_t status = rocksdb::LoadLatestOptions(config_options, path, &options, &column_descriptors);
         if (column_descriptors.empty())
             column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
 
         rocks_native_t* native_db = nullptr;
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
-        status = rocks_native_t::Open(//
+        status = rocks_native_t::Open( //
             options,
             rocksdb::TransactionDBOptions(),
-            "./tmp/rocksdb/",
+            path,
             column_descriptors,
             &db_ptr->columns,
             &native_db);
@@ -490,8 +490,8 @@ void ukv_scan( //
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
 
-    ukv_key_t const* ,
-    ukv_size_t const ,
+    ukv_key_t const*,
+    ukv_size_t const,
 
     ukv_length_t const* c_scan_limits,
     ukv_size_t const c_scan_limits_stride,
@@ -627,13 +627,13 @@ void ukv_size( //
             *c_error = "Property Read Failure";
         }
 
-        ukv_size_t estimates[6];
-        min_cardinalities[i] = estimates[0] = static_cast<ukv_size_t>(0);
-        max_cardinalities[i] = estimates[1] = static_cast<ukv_size_t>(keys_size);
-        min_value_bytes[i] = estimates[2] = static_cast<ukv_size_t>(0);
-        max_value_bytes[i] = estimates[3] = static_cast<ukv_size_t>(0);
-        min_space_usages[i] = estimates[4] = approximate_size;
-        max_space_usages[i] = estimates[5] = sst_files_size;
+        ukv_size_t estimate[6];
+        min_cardinalities[i] = estimate[0] = static_cast<ukv_size_t>(0);
+        max_cardinalities[i] = estimate[1] = static_cast<ukv_size_t>(keys_size);
+        min_value_bytes[i] = estimate[2] = static_cast<ukv_size_t>(0);
+        max_value_bytes[i] = estimate[3] = static_cast<ukv_size_t>(0);
+        min_space_usages[i] = estimate[4] = approximate_size;
+        max_space_usages[i] = estimate[5] = sst_files_size;
     }
 }
 

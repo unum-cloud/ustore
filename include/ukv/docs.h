@@ -341,7 +341,7 @@ void ukv_docs_gather( //
     ukv_byte_t*** columns_scalars,
     ukv_length_t*** columns_offsets,
     ukv_length_t*** columns_lengths,
-    ukv_char_t** joined_strings,
+    ukv_byte_t** joined_strings,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

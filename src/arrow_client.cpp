@@ -116,13 +116,14 @@ void ukv_read( //
     bool const same_named_collection = same_collection && places.same_collections_are_named();
     bool const request_only_presences = c_found_presences && !c_found_lengths && !c_found_values;
     bool const request_only_lengths = c_found_lengths && !c_found_values;
-    char const* partial_mode = !request_only_presences && !request_only_lengths //
-                                   ? nullptr
-                                   : request_only_lengths ? kParamReadPartLengths.c_str() : kParamReadPartPresences.c_str();
+    char const* partial_mode =
+        !request_only_presences && !request_only_lengths //
+            ? nullptr
+            : request_only_lengths ? kParamReadPartLengths.c_str() : kParamReadPartPresences.c_str();
     bool const read_shared = c_options & ukv_option_read_shared_k;
     bool const read_track = c_options & ukv_option_read_track_k;
     arf::FlightDescriptor descriptor;
-    fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightRead);    
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightRead);
     if (c_txn)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamTransactionID, std::uintptr_t(c_txn));
     if (same_named_collection)
@@ -130,9 +131,9 @@ void ukv_read( //
     if (partial_mode)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamReadPart, partial_mode);
     if (read_shared)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);    
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
     if (read_track)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagTrackRead);    
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagTrackRead);
 
     bool const has_cols_column = !same_collection;
     constexpr bool has_keys_column = true;
@@ -433,7 +434,7 @@ void ukv_write( //
 
     // Configure the `cmd` descriptor
     arf::FlightDescriptor descriptor;
-    fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightWrite);    
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightWrite);
     if (c_txn)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamTransactionID, std::uintptr_t(c_txn));
     if (!has_cols_column && cols)
@@ -609,7 +610,7 @@ void ukv_scan( //
     bool const read_shared = c_options & ukv_option_read_shared_k;
     bool const read_track = c_options & ukv_option_read_track_k;
     arf::FlightDescriptor descriptor;
-    fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightScan);    
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightScan);
     if (c_txn)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamTransactionID, std::uintptr_t(c_txn));
     if (same_named_collection)
@@ -685,7 +686,7 @@ void ukv_size( //
     ukv_size_t** c_max_value_bytes,
     ukv_size_t** c_min_space_usages,
     ukv_size_t** c_max_space_usages,
-    
+
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
@@ -748,12 +749,12 @@ void ukv_collection_drop(
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    
+
     std::string_view mode;
     switch (c_mode) {
-        case ukv_drop_vals_k: mode = "values"; break;
-        case ukv_drop_keys_vals_k: mode = "contents"; break;
-        case ukv_drop_keys_vals_handle_k: mode = "collection"; break;
+    case ukv_drop_vals_k: mode = "values"; break;
+    case ukv_drop_keys_vals_k: mode = "contents"; break;
+    case ukv_drop_keys_vals_handle_k: mode = "collection"; break;
     }
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
@@ -765,9 +766,21 @@ void ukv_collection_drop(
 
     arf::Action action;
     if (c_col_name)
-    fmt::format_to(std::back_inserter(action.type), "{}?{:}={}&{}={}", kFlightColRemove, kParamCollectionName, c_col_name, kParamDropMode, mode);
-    else 
-    fmt::format_to(std::back_inserter(action.type), "{}?{:x}={}&{}={}", kFlightColRemove, kParamCollectionID, c_col_id, kParamDropMode, mode);
+        fmt::format_to(std::back_inserter(action.type),
+                       "{}?{:}={}&{}={}",
+                       kFlightColRemove,
+                       kParamCollectionName,
+                       c_col_name,
+                       kParamDropMode,
+                       mode);
+    else
+        fmt::format_to(std::back_inserter(action.type),
+                       "{}?{:x}={}&{}={}",
+                       kFlightColRemove,
+                       kParamCollectionID,
+                       c_col_id,
+                       kParamDropMode,
+                       mode);
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
