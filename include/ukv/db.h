@@ -451,7 +451,7 @@ void ukv_scan( //
  *                           If multiple collections are passed, the step between
  *                           them is equal to @param collections_stride @b bytes!
  *                           Zero stride would redirect all the keys to the same collection.
- * @param[in] start_keys       For every task contains the beginning of range-of-interest.
+ * @param[in] start_keys     For every task contains the beginning of range-of-interest.
  * @param[in] end_keys       For every task contains the ending of range-of-interest.
  *
  * @param[out] estimates     For every task (range) will export @b six integers:
@@ -479,7 +479,12 @@ void ukv_size( //
 
     ukv_options_t const options,
 
-    ukv_size_t** estimates,
+    ukv_size_t** min_cardinalities,
+    ukv_size_t** max_cardinalities,
+    ukv_size_t** min_value_bytes,
+    ukv_size_t** max_value_bytes,
+    ukv_size_t** min_space_usages,
+    ukv_size_t** max_space_usages,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

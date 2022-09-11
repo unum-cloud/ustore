@@ -599,8 +599,8 @@ class UKVService : public arf::FlightServerBase {
 
             /// @param `cols`
             auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
-            bool const request_only_presences = params.opt_part == "presences";
-            bool const request_only_lengths = params.opt_part == "lengths";
+            bool const request_only_presences = params.opt_part == kParamReadPartPresences;
+            bool const request_only_lengths = params.opt_part == kParamReadPartLengths;
             bool const request_content = !request_only_lengths && !request_only_presences;
 
             // Reserve resources for the execution of this request
@@ -642,7 +642,7 @@ class UKVService : public arf::FlightServerBase {
             if (request_content)
                 ukv_to_arrow_column( //
                     result_length,
-                    "vals",
+                    kArgVals,
                     ukv_type_bin_k,
                     found_presences,
                     found_offsets,
@@ -653,7 +653,7 @@ class UKVService : public arf::FlightServerBase {
             else if (request_only_lengths)
                 ukv_to_arrow_column( //
                     result_length,
-                    "lengths",
+                    kArgLengths,
                     ukv_type<ukv_length_t>(),
                     found_presences,
                     nullptr,
@@ -664,7 +664,7 @@ class UKVService : public arf::FlightServerBase {
             else if (request_only_presences)
                 ukv_to_arrow_column( //
                     result_length,
-                    "presences",
+                    kArgPresences,
                     ukv_type<ukv_octet_t>(),
                     nullptr,
                     nullptr,
@@ -723,7 +723,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_to_arrow_list( //
                 tasks_count,
-                "keys",
+                kArgKeys,
                 ukv_type<ukv_key_t>(),
                 nullptr,
                 found_offsets,
@@ -855,7 +855,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_to_arrow_column( //
                 count,
-                "cols",
+                kArgCols,
                 ukv_type<ukv_collection_t>(),
                 nullptr,
                 nullptr,
@@ -868,7 +868,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_to_arrow_column( //
                 count,
-                "names",
+                kArgNames,
                 ukv_type_str_k,
                 nullptr,
                 offsets,

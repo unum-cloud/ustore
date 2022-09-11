@@ -44,7 +44,11 @@ inline static std::string const kArgKeys = "keys";
 inline static std::string const kArgVals = "values";
 inline static std::string const kArgFields = "fields";
 inline static std::string const kArgScanStarts = "start_keys";
+inline static std::string const kArgScanEnds = "end_keys";
 inline static std::string const kArgScanLengths = "scan_lengths";
+inline static std::string const kArgPresences = "fields";
+inline static std::string const kArgLengths = "lengths";
+inline static std::string const kArgNames = "names";
 
 inline static std::string const kParamCollectionID = "collection_id";
 inline static std::string const kParamCollectionName = "collection_name";

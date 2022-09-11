@@ -654,7 +654,13 @@ void ukv_size( //
 
     ukv_options_t const,
 
-    ukv_size_t** c_found_estimates,
+    ukv_size_t** c_min_cardinalities,
+    ukv_size_t** c_max_cardinalities,
+    ukv_size_t** c_min_value_bytes,
+    ukv_size_t** c_max_value_bytes,
+    ukv_size_t** c_min_space_usages,
+    ukv_size_t** c_max_space_usages,
+    
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 

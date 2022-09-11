@@ -473,7 +473,12 @@ void ukv_size( //
 
     ukv_options_t const,
 
-    ukv_size_t** c_found_estimates,
+    ukv_size_t** c_min_cardinalities,
+    ukv_size_t** c_max_cardinalities,
+    ukv_size_t** c_min_value_bytes,
+    ukv_size_t** c_max_value_bytes,
+    ukv_size_t** c_min_space_usages,
+    ukv_size_t** c_max_space_usages,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -494,21 +499,21 @@ void ukv_size( //
     level_status_t status;
 
     for (ukv_size_t i = 0; i != n; ++i) {
-        ukv_size_t* estimates = *c_found_estimates + i * 6;
-        estimates[0] = static_cast<ukv_size_t>(0);
-        estimates[1] = static_cast<ukv_size_t>(0);
-        estimates[2] = static_cast<ukv_size_t>(0);
-        estimates[3] = static_cast<ukv_size_t>(0);
+        min_cardinalities[i] = static_cast<ukv_size_t>(0);
+        max_cardinalities[i] = static_cast<ukv_size_t>(0);
+        min_value_bytes[i] = static_cast<ukv_size_t>(0);
+        max_value_bytes[i] = static_cast<ukv_size_t>(0);
 
         ukv_key_t const min_key = start_keys[i];
         ukv_key_t const max_key = end_keys[i];
         leveldb::Range range(to_slice(min_key), to_slice(max_key));
         try {
             db.GetApproximateSizes(&range, 1, &approximate_size);
+            min_space_usages[i] = approximate_size;
+            
             memory_usage = "0";
             db.GetProperty("leveldb.approximate-memory-usage", &memory_usage.value());
-            estimates[4] = approximate_size;
-            estimates[5] = std::stoi(memory_usage.value());
+            max_space_usages[i] = std::stoi(memory_usage.value());
         }
         catch (...) {
             *c_error = "Property Read Failure";
