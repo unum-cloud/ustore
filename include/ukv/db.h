@@ -499,7 +499,7 @@ void ukv_size( //
  * @param[out] id          Address to which the collection ID will be exported.
  * @param[out] error       The error message to be handled by callee.
  */
-void ukv_collection_upsert( //
+void ukv_collection_open( //
     ukv_database_t const db,
     ukv_str_view_t name,
     ukv_str_view_t config,
