@@ -490,8 +490,8 @@ void ukv_scan( //
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
 
-    ukv_key_t const*,
-    ukv_size_t const,
+    ukv_key_t const* c_end_keys,
+    ukv_size_t const c_end_keys_stride,
 
     ukv_length_t const* c_scan_limits,
     ukv_size_t const c_scan_limits_stride,
@@ -515,9 +515,10 @@ void ukv_scan( //
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
-    strided_iterator_gt<ukv_key_t const> keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_length_t const> lengths {c_scan_limits, c_scan_limits_stride};
-    scans_arg_t tasks {cols, keys, lengths, c_min_tasks_count};
+    strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
+    strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
+    strided_iterator_gt<ukv_length_t const> limits {c_scan_limits, c_scan_limits_stride};
+    scans_arg_t tasks {cols, start_keys, end_keys, limits, c_min_tasks_count};
 
     // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy<ukv_length_t>(tasks.count + 1, c_error, c_found_offsets);
@@ -525,7 +526,7 @@ void ukv_scan( //
     auto counts = arena.alloc_or_dummy<ukv_length_t>(tasks.count, c_error, c_found_counts);
     return_on_error(c_error);
 
-    auto total_keys = reduce_n(tasks.lengths, tasks.count, 0ul);
+    auto total_keys = reduce_n(tasks.limits, tasks.count, 0ul);
     auto keys_output = *c_found_keys = arena.alloc<ukv_key_t>(total_keys, c_error).begin();
     return_on_error(c_error);
 
@@ -547,11 +548,14 @@ void ukv_scan( //
         }
 
         ukv_size_t j = 0;
-        for (; it->Valid() && j != task.length; j++, it->Next()) {
-            std::memcpy(keys_output, it->key().data(), sizeof(ukv_key_t));
-            *keys_output = static_cast<ukv_length_t>(it->value().size());
+        while (it->Valid() && j != task.limit) {
+            auto key = *reinterpret_cast<ukv_key_t const*>(it->key().data());
+            if (key >= task.max_key)
+                break;
+            std::memcpy(keys_output, &key, sizeof(ukv_key_t));
             ++keys_output;
             ++j;
+            it->Next();
         }
 
         counts[i] = j;
