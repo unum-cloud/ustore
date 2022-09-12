@@ -176,13 +176,13 @@ void ukv_write( //
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_bytes_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
     strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
 
     places_arg_t places {cols, keys, {}, c_tasks_count};
-    contents_arg_t contents {vals, offs, lens, presences, c_tasks_count};
+    contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     leveldb::WriteOptions options;
     if (c_options & ukv_option_write_flush_k)
@@ -212,7 +212,9 @@ void read_enumerate( //
         if (!status.IsNotFound()) {
             if (export_error(status, c_error))
                 return;
-            enumerator(i, value_view_t {value.data(), value.size()});
+            enumerator(
+                i,
+                value_view_t {reinterpret_cast<ukv_bytes_cptr_t>(value.data()), static_cast<ukv_size_t>(value.size())});
         }
         else
             enumerator(i, value_view_t {});
@@ -269,7 +271,7 @@ void ukv_read( //
             offs[i] = contents.size();
             contents.insert(contents.size(), value.begin(), value.end(), c_error);
         };
-        read_enumerate(db, places, options, value_buffer, safe_callback, c_error);
+        read_enumerate(db, places, options, value_buffer, data_enumerator, c_error);
         offs[places.count] = contents.size();
     }
     catch (...) {
@@ -311,8 +313,8 @@ void ukv_scan( //
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
-    strided_iterator_gt<ukv_length_t const> lens {c_scan_limits, c_scan_limits_stride};
-    scans_arg_t tasks {{}, start_keys, end_keys, lens, c_min_tasks_count};
+    strided_iterator_gt<ukv_length_t const> limits {c_scan_limits, c_scan_limits_stride};
+    scans_arg_t tasks {{}, start_keys, end_keys, limits, c_min_tasks_count};
 
     // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy<ukv_length_t>(tasks.count + 1, c_error, c_found_offsets);
@@ -320,7 +322,7 @@ void ukv_scan( //
     auto counts = arena.alloc_or_dummy<ukv_length_t>(tasks.count, c_error, c_found_counts);
     return_on_error(c_error);
 
-    auto total_keys = reduce_n(tasks.lengths, tasks.count, 0ul);
+    auto total_keys = reduce_n(tasks.limits, tasks.count, 0ul);
     auto keys_output = *c_found_keys = arena.alloc<ukv_key_t>(total_keys, c_error).begin();
     return_on_error(c_error);
 
@@ -342,9 +344,9 @@ void ukv_scan( //
         offsets[i] = keys_output - *c_found_keys;
 
         ukv_size_t j = 0;
-        while (it->Valid() && j != task.length) {
-            auto key = *reinterpret_cast<ukv_key_t*>(it->key().data());
-            if (key >= task.end_key)
+        while (it->Valid() && j != task.limit) {
+            auto key = *reinterpret_cast<ukv_key_t const*>(it->key().data());
+            if (key >= task.max_key)
                 break;
             std::memcpy(keys_output, &key, sizeof(ukv_key_t));
             ++keys_output;
@@ -389,7 +391,12 @@ void ukv_size( //
     stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
 
-    *c_found_estimates = arena.alloc<ukv_size_t>(6 * n, c_error).begin();
+    auto min_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_cardinalities);
+    auto max_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_cardinalities);
+    auto min_value_bytes = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_value_bytes);
+    auto max_value_bytes = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_value_bytes);
+    auto min_space_usages = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_space_usages);
+    auto max_space_usages = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_space_usages);
     return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
