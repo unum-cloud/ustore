@@ -131,10 +131,8 @@ inline bool py_is_sequence(PyObject* obj) {
 }
 
 inline std::optional<std::size_t> py_sequence_length(PyObject* obj) {
-    if (PyTuple_Check(obj))
-        return PyTuple_Size(obj);
-    else if (PyList_Check(obj))
-        return PyList_Size(obj);
+    if (PySequence_Check(obj))
+        return PySequence_Length(obj);
 
     return std::nullopt;
 }

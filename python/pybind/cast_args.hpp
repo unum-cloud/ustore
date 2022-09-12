@@ -50,7 +50,31 @@ struct parsed_contents_t {
     using owned_t = std::vector<value_view_t>;
     std::variant<std::monostate, viewed_t, owned_t> viewed_or_owned;
     operator contents_arg_t() const noexcept {}
-    parsed_contents_t(PyObject* contents) {}
+
+    parsed_contents_t(PyObject* contents) {
+        // Check if we can do zero-copy
+        if (PyObject_CheckBuffer(contents)) { // Is there a case for which this is used ?
+        }
+        else {
+            std::vector<value_view_t> values_vec;
+            auto cont_len = py_sequence_length(contents);
+            if (cont_len)
+                values_vec.reserve(*cont_len);
+
+            auto to_value_view = [](PyObject* obj) -> value_view_t {
+                if (PyUnicode_Check(obj))
+                    return value_view_t {reinterpret_cast<byte_t*>(PyBytes_AsString(PyUnicode_AsASCIIString(obj))),
+                                         static_cast<size_t>(PyUnicode_GetLength(obj))};
+
+                if (PyBytes_Check(obj))
+                    return {reinterpret_cast<byte_t*>(PyBytes_AsString(obj)), static_cast<size_t>(PyBytes_Size(obj))};
+
+                throw std::invalid_argument("Expecting bytes like objects");
+            };
+            py_transform_n(contents, to_value_view, std::back_inserter(values_vec));
+            viewed_or_owned = std::move(values_vec);
+        }
+    }
 };
 
 /**
