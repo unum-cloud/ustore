@@ -29,7 +29,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
 
     // Cast everything to our types
     ukv_key_t key_c = (ukv_key_t)key_java;
-    ukv_bytes_ptr_t found_values_c = (ukv_bytes_ptr_t)value_ptr_java;
+    ukv_bytes_cptr_t found_values_c = (ukv_bytes_cptr_t)value_ptr_java;
     ukv_length_t value_off_c = 0;
     ukv_length_t value_len_c = (ukv_length_t)value_len_java;
     ukv_options_t options_c = ukv_options_default_k;
@@ -44,6 +44,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
         0,
         &key_c,
         0,
+        NULL,
         &value_off_c,
         0,
         &value_len_c,
@@ -78,10 +79,8 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
         return JNI_FALSE;
 
     ukv_key_t key_c = (ukv_key_t)key_java;
-    ukv_options_t options_c = ukv_option_read_lengths_k;
-    ukv_length_t* found_offsets_c = NULL;
-    ukv_length_t* found_lengths_c = NULL;
-    ukv_bytes_ptr_t found_values_c = NULL;
+    ukv_options_t options_c = ukv_options_default_k;
+    ukv_octet_t* found_presences_c = NULL;
     ukv_arena_t arena_c = NULL;
     ukv_error_t error_c = NULL;
 
@@ -94,9 +93,10 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
         &key_c,
         0,
         options_c,
-        &found_offsets_c,
-        &found_lengths_c,
-        &found_values_c,
+        &found_presences_c,
+        NULL,
+        NULL,
+        NULL,
         &arena_c,
         &error_c);
 
@@ -105,7 +105,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
         return JNI_FALSE;
     }
 
-    jboolean result = found_lengths_c[0] != ukv_length_missing_k ? JNI_TRUE : JNI_FALSE;
+    jboolean result = found_presences_c[0] != 0 ? JNI_TRUE : JNI_FALSE;
     ukv_arena_free(db_ptr_c, arena_c);
     return result;
 }
@@ -144,6 +144,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
         &key_c,
         0,
         options_c,
+        NULL,
         &found_offsets_c,
         &found_lengths_c,
         &found_values_c,
@@ -155,7 +156,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
         return NULL;
     }
 
-    // For small lookups its jenerally cheaper to allocate new Java buffers
+    // For small lookups its generally cheaper to allocate new Java buffers
     // and copy the data there:
     // https://stackoverflow.com/a/28799276
     // https://stackoverflow.com/a/4694102
@@ -168,7 +169,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
                                             result_java,
                                             0,
                                             found_lengths_c[0],
-                                            (jbyte const*)(found_values_c + *found_offsets_c));
+                                            (jbyte const*)(found_values_c + found_offsets_c[0]));
     }
 
     ukv_arena_free(db_ptr_c, arena_c);
@@ -193,9 +194,6 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
         return;
 
     ukv_key_t key_c = (ukv_key_t)key_java;
-    ukv_bytes_ptr_t found_values_c = NULL;
-    ukv_length_t value_off_c = 0;
-    ukv_length_t value_len_c = 0;
     ukv_options_t options_c = ukv_options_default_k;
     ukv_arena_t arena_c = NULL;
     ukv_error_t error_c = NULL;
@@ -208,11 +206,12 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
         0,
         &key_c,
         0,
-        &value_off_c,
+        NULL,
+        NULL,
         0,
-        &value_len_c,
+        NULL,
         0,
-        &found_values_c,
+        NULL,
         0,
         options_c,
         &arena_c,
@@ -249,7 +248,7 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_commit( /
     ukv_database_t db_ptr_c = db_ptr(env_java, txn_java);
     if (!db_ptr_c) {
         forward_error(env_java, "Database is closed!");
-        return;
+        return JNI_FALSE;
     }
 
     ukv_transaction_t txn_ptr_c = txn_ptr(env_java, txn_java);
