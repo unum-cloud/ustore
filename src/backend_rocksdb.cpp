@@ -343,10 +343,10 @@ void ukv_read( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    if (c_txn && (c_options & ukv_option_read_track_k)) {
-        *c_error = "RocksDB only supports transparent reads!";
-        return;
-    }
+    return_if_error(!(c_txn && (c_options & ukv_option_read_track_k)),
+                    c_error,
+                    args_wrong_k,
+                    "RocksDB only supports transparent reads!");
 
     stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
@@ -421,7 +421,10 @@ void ukv_scan( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    return_if_error(c_txn, c_error, (c_options & ukv_option_read_track_k), "RocksDB only supports transparent reads!");
+    return_if_error(!(c_txn && (c_options & ukv_option_read_track_k)),
+                    c_error,
+                    args_wrong_k,
+                    "RocksDB only supports transparent reads!");
 
     stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
