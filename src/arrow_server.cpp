@@ -413,7 +413,7 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.collection_id = param_value(params, kParamCollectionID);
 
     result.opt_read_part = param_value(params, kParamReadPart);
-    result.opt_read_part = param_value(params, kParamDropMode);
+    result.opt_drop_mode = param_value(params, kParamDropMode);
     result.opt_snapshot = param_value(params, kParamFlagSnapshotTxn);
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
     result.opt_track = param_value(params, kParamFlagTrackRead);
