@@ -23,12 +23,12 @@ namespace unum::ukv {
 class graph_ref_t {
     ukv_database_t db_ = nullptr;
     ukv_transaction_t txn_ = nullptr;
-    ukv_collection_t col_ = ukv_collection_main_k;
+    ukv_collection_t collection_ = ukv_collection_main_k;
     ukv_arena_t* arena_ = nullptr;
 
   public:
-    graph_ref_t(ukv_database_t db, ukv_transaction_t txn, ukv_collection_t col, ukv_arena_t* arena) noexcept
-        : db_(db), txn_(txn), col_(col), arena_(arena) {}
+    graph_ref_t(ukv_database_t db, ukv_transaction_t txn, ukv_collection_t collection, ukv_arena_t* arena) noexcept
+        : db_(db), txn_(txn), collection_(collection), arena_(arena) {}
 
     graph_ref_t(graph_ref_t&&) = default;
     graph_ref_t& operator=(graph_ref_t&&) = default;
@@ -46,7 +46,7 @@ class graph_ref_t {
             db_,
             txn_,
             edges.size(),
-            &col_,
+            &collection_,
             0,
             edges.edge_ids.begin().get(),
             edges.edge_ids.stride(),
@@ -66,7 +66,7 @@ class graph_ref_t {
             db_,
             txn_,
             edges.size(),
-            &col_,
+            &collection_,
             0,
             edges.edge_ids.begin().get(),
             edges.edge_ids.stride(),
@@ -102,7 +102,7 @@ class graph_ref_t {
             db_,
             txn_,
             vertices.count(),
-            &col_,
+            &collection_,
             0,
             vertices.begin().get(),
             vertices.stride(),
@@ -116,13 +116,13 @@ class graph_ref_t {
 
     status_t clear_edges() noexcept {
         status_t status;
-        ukv_collection_drop(db_, col_, nullptr, ukv_drop_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, collection_, nullptr, ukv_drop_vals_k, status.member_ptr());
         return status;
     }
 
     status_t clear() noexcept {
         status_t status;
-        ukv_collection_drop(db_, col_, nullptr, ukv_drop_keys_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, collection_, nullptr, ukv_drop_keys_vals_k, status.member_ptr());
         return status;
     }
 
@@ -151,7 +151,7 @@ class graph_ref_t {
             db_,
             txn_,
             vertices.count(),
-            &col_,
+            &collection_,
             0,
             vertices.begin().get(),
             vertices.stride(),
@@ -169,7 +169,7 @@ class graph_ref_t {
     }
 
     expected_gt<bool> contains(ukv_key_t vertex, bool track = false) noexcept {
-        return members_ref_gt<col_key_field_t>(db_, txn_, ckf(col_, vertex), arena_).present(track);
+        return members_ref_gt<collection_key_field_t>(db_, txn_, ckf(collection_, vertex), arena_).present(track);
     }
 
     /**
@@ -180,7 +180,7 @@ class graph_ref_t {
         strided_range_gt<ukv_key_t const> const& vertices,
         bool track = false) noexcept {
         places_arg_t arg;
-        arg.cols_begin = {&col_, 0};
+        arg.collections_begin = {&collection_, 0};
         arg.keys_begin = vertices.begin();
         arg.count = vertices.count();
         return members_ref_gt<places_arg_t>(db_, txn_, arg, arena_).present(track);
@@ -191,8 +191,8 @@ class graph_ref_t {
     expected_gt<adjacency_range_t> edges(
         std::size_t vertices_read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
 
-        edges_stream_t b {db_, col_, vertices_read_ahead, txn_};
-        edges_stream_t e {db_, col_, vertices_read_ahead, txn_};
+        edges_stream_t b {db_, collection_, vertices_read_ahead, txn_};
+        edges_stream_t e {db_, collection_, vertices_read_ahead, txn_};
         status_t status = b.seek_to_first();
         if (!status)
             return status;
@@ -217,7 +217,7 @@ class graph_ref_t {
             db_,
             txn_,
             1,
-            &col_,
+            &collection_,
             0,
             &vertex,
             0,
@@ -271,7 +271,7 @@ class graph_ref_t {
             db_,
             txn_,
             vertices.count(),
-            &col_,
+            &collection_,
             0,
             vertices.begin().get(),
             vertices.stride(),

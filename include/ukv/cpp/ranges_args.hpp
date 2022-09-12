@@ -15,12 +15,12 @@ using keys_view_t = strided_range_gt<ukv_key_t const>;
 using fields_view_t = strided_range_gt<ukv_str_view_t const>;
 
 struct place_t {
-    ukv_collection_t col;
+    ukv_collection_t collection;
     ukv_key_t const& key;
     ukv_str_view_t field;
 
-    inline col_key_t col_key() const noexcept { return {col, key}; }
-    inline col_key_field_t col_key_field() const noexcept { return {col, key, field}; }
+    inline collection_key_t collection_key() const noexcept { return {collection, key}; }
+    inline collection_key_field_t collection_key_field() const noexcept { return {collection, key, field}; }
 };
 /**
  * Working with batched data is ugly in C++.
@@ -29,27 +29,29 @@ struct place_t {
  */
 struct places_arg_t {
     using value_type = place_t;
-    strided_iterator_gt<ukv_collection_t const> cols_begin;
+    strided_iterator_gt<ukv_collection_t const> collections_begin;
     strided_iterator_gt<ukv_key_t const> keys_begin;
     strided_iterator_gt<ukv_str_view_t const> fields_begin;
     ukv_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
     inline place_t operator[](std::size_t i) const noexcept {
-        ukv_collection_t col = cols_begin ? cols_begin[i] : ukv_collection_main_k;
+        ukv_collection_t collection = collections_begin ? collections_begin[i] : ukv_collection_main_k;
         ukv_key_t const& key = keys_begin[i];
         ukv_str_view_t field = fields_begin ? fields_begin[i] : nullptr;
-        return {col, key, field};
+        return {collection, key, field};
     }
 
     bool same_collection() const noexcept {
-        return !cols_begin || cols_begin.repeats() ||
-               !transform_reduce_n(cols_begin, count, false, [=](ukv_collection_t col) {
-                   return col != cols_begin[0];
+        return !collections_begin || collections_begin.repeats() ||
+               !transform_reduce_n(collections_begin, count, false, [=](ukv_collection_t collection) {
+                   return collection != collections_begin[0];
                });
     }
 
-    bool same_collections_are_named() const noexcept { return cols_begin && cols_begin[0] != ukv_collection_main_k; }
+    bool same_collections_are_named() const noexcept {
+        return collections_begin && collections_begin[0] != ukv_collection_main_k;
+    }
 };
 
 /**
@@ -99,7 +101,7 @@ struct contents_arg_t {
 };
 
 struct scan_t {
-    ukv_collection_t col;
+    ukv_collection_t collection;
     ukv_key_t min_key;
     ukv_key_t max_key;
     ukv_length_t limit;
@@ -110,7 +112,7 @@ struct scan_t {
  * Is used to validate various combinations of arguments, strides, NULLs, etc.
  */
 struct scans_arg_t {
-    strided_iterator_gt<ukv_collection_t const> cols;
+    strided_iterator_gt<ukv_collection_t const> collections;
     strided_iterator_gt<ukv_key_t const> start_keys;
     strided_iterator_gt<ukv_key_t const> end_keys;
     strided_iterator_gt<ukv_length_t const> limits;
@@ -118,11 +120,11 @@ struct scans_arg_t {
 
     inline std::size_t size() const noexcept { return count; }
     inline scan_t operator[](std::size_t i) const noexcept {
-        ukv_collection_t col = cols ? cols[i] : ukv_collection_main_k;
+        ukv_collection_t collection = collections ? collections[i] : ukv_collection_main_k;
         ukv_key_t start_key = start_keys ? start_keys[i] : std::numeric_limits<ukv_key_t>::min();
         ukv_key_t end_key = end_keys ? end_keys[i] : std::numeric_limits<ukv_key_t>::max();
         ukv_length_t limit = limits[i];
-        return {col, start_key, end_key, limit};
+        return {collection, start_key, end_key, limit};
     }
 };
 

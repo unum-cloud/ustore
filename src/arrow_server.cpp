@@ -80,7 +80,7 @@ bool is_query(std::string_view uri, std::string_view name) {
     return uri == name;
 }
 
-bool validate_column_cols(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
+bool validate_column_collections(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
     if (schema_ptr->format != ukv_type_to_arrow_format(ukv_type<ukv_collection_t>()))
         return false;
     if (column_ptr->null_count != 0)
@@ -447,9 +447,9 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
 }
 
 ukv_str_view_t get_null_terminated(ar::Buffer const& buf) {
-    ukv_str_view_t col_config = reinterpret_cast<ukv_str_view_t>(buf.data());
-    auto end_config = col_config + buf.capacity();
-    return std::find(col_config, end_config, '\0') == end_config ? nullptr : col_config;
+    ukv_str_view_t collection_config = reinterpret_cast<ukv_str_view_t>(buf.data());
+    auto end_config = collection_config + buf.capacity();
+    return std::find(collection_config, end_config, '\0') == end_config ? nullptr : collection_config;
 }
 
 ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) {
@@ -466,9 +466,9 @@ ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) {
  *
  * > write?col=x&txn=y&lengths&track&shared (DoPut)
  * > read?col=x&txn=y&flush (DoExchange)
- * > col_upsert?col=x (DoAction): Returns collection ID
+ * > collection_upsert?col=x (DoAction): Returns collection ID
  *   Payload buffer: Collection opening config.
- * > col_remove?col=x (DoAction): Drops a collection
+ * > collection_remove?col=x (DoAction): Drops a collection
  * > txn_begin?txn=y (DoAction): Starts a transaction with a potentially custom ID
  * > txn_commit?txn=y (DoAction): Commits a transaction with a given ID
  *
@@ -531,21 +531,25 @@ class UKVService : public arf::FlightServerBase {
 
             // The name must be null-terminated.
             // This is not safe:
-            ukv_str_span_t c_col_name = nullptr;
-            c_col_name = (ukv_str_span_t)params.collection_name->begin();
-            c_col_name[params.collection_name->size()] = 0;
+            ukv_str_span_t c_collection_name = nullptr;
+            c_collection_name = (ukv_str_span_t)params.collection_name->begin();
+            c_collection_name[params.collection_name->size()] = 0;
 
             // Upsert and fetch collection ID
-            auto maybe_col = db_.collection(c_col_name);
-            if (!maybe_col)
-                return ar::Status::ExecutionError(maybe_col.release_status().message());
+            auto maybe_collection = db_.collection(c_collection_name);
+            if (!maybe_collection)
+                return ar::Status::ExecutionError(maybe_collection.release_status().message());
 
-            ukv_collection_t col_id = maybe_col.throw_or_ref();
-            ukv_str_view_t col_config = get_null_terminated(action.body);
-            ukv_collection_open(db_, params.collection_name->begin(), col_config, &col_id, status.member_ptr());
+            ukv_collection_t collection_id = maybe_collection.throw_or_ref();
+            ukv_str_view_t collection_config = get_null_terminated(action.body);
+            ukv_collection_open(db_,
+                                params.collection_name->begin(),
+                                collection_config,
+                                &collection_id,
+                                status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
-            *results_ptr = return_scalar<ukv_collection_t>(col_id);
+            *results_ptr = return_scalar<ukv_collection_t>(collection_id);
             return ar::Status::OK();
         }
 
@@ -559,18 +563,18 @@ class UKVService : public arf::FlightServerBase {
                 : params.opt_drop_mode == kParamDropModeContents ? ukv_drop_keys_vals_k
                                                                  : ukv_drop_keys_vals_handle_k;
 
-            ukv_collection_t c_col_id = ukv_collection_main_k;
-            ukv_str_span_t c_col_name = nullptr;
+            ukv_collection_t c_collection_id = ukv_collection_main_k;
+            ukv_str_span_t c_collection_name = nullptr;
             if (params.collection_id)
-                c_col_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
+                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
             else {
                 // The name must be null-terminated.
                 // This is not safe:
-                c_col_name = (ukv_str_span_t)params.collection_name->begin();
-                c_col_name[params.collection_name->size()] = 0;
+                c_collection_name = (ukv_str_span_t)params.collection_name->begin();
+                c_collection_name[params.collection_name->size()] = 0;
             }
 
-            ukv_collection_drop(db_, c_col_id, c_col_name, mode, status.member_ptr());
+            ukv_collection_drop(db_, c_collection_id, c_collection_name, mode, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_empty();
@@ -659,8 +663,8 @@ class UKVService : public arf::FlightServerBase {
             if (!input_keys)
                 return ar::Status::Invalid("Keys must have been provided for reads");
 
-            /// @param `cols`
-            auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
+            /// @param `collections`
+            auto input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
             bool const request_only_presences = params.opt_read_part == kParamReadPartPresences;
             bool const request_only_lengths = params.opt_read_part == kParamReadPartLengths;
             bool const request_content = !request_only_lengths && !request_only_presences;
@@ -681,8 +685,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                input_cols.get(),
-                input_cols.stride(),
+                input_collections.get(),
+                input_collections.stride(),
                 input_keys.get(),
                 input_keys.stride(),
                 ukv_options_default_k,
@@ -745,8 +749,8 @@ class UKVService : public arf::FlightServerBase {
             auto input_end_keys = get_keys(input_schema_c, input_batch_c, kArgScanEnds);
             /// @param `lengths`
             auto input_lengths = get_lengths(input_schema_c, input_batch_c, kArgScanLengths);
-            /// @param `cols`
-            auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
+            /// @param `collections`
+            auto input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
 
             if (!input_start_keys || !input_lengths)
                 return ar::Status::Invalid("Keys and lengths must have been provided for scans");
@@ -766,8 +770,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                input_cols.get(),
-                input_cols.stride(),
+                input_collections.get(),
+                input_collections.stride(),
                 input_start_keys.get(),
                 input_start_keys.stride(),
                 input_end_keys.get(),
@@ -845,8 +849,8 @@ class UKVService : public arf::FlightServerBase {
             if (!input_keys)
                 return ar::Status::Invalid("Keys must have been provided for reads");
 
-            /// @param `cols`
-            auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
+            /// @param `collections`
+            auto input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
             auto input_vals = get_contents(input_schema_c, input_batch_c, kArgVals);
 
             auto session = sessions_.lock(params.session_id, status.member_ptr());
@@ -858,8 +862,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                input_cols.get(),
-                input_cols.stride(),
+                input_collections.get(),
+                input_collections.stride(),
                 input_keys.get(),
                 input_keys.stride(),
                 input_vals.presences_begin.get(),

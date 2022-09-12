@@ -44,7 +44,7 @@ using namespace unum;
 namespace fs = std::filesystem;
 
 struct stl_db_t;
-struct stl_col_t;
+struct stl_collection_t;
 struct stl_txn_t;
 
 struct stl_value_t {
@@ -59,7 +59,7 @@ struct stl_value_t {
     }
 };
 
-struct stl_col_t {
+struct stl_collection_t {
     std::string name;
     /**
      * @brief Primary data-store.
@@ -79,12 +79,12 @@ struct stl_col_t {
     }
 };
 
-using stl_collection_ptr_t = std::unique_ptr<stl_col_t>;
+using stl_collection_ptr_t = std::unique_ptr<stl_collection_t>;
 
 struct stl_txn_t {
-    std::map<col_key_t, buffer_t> upserted;
-    std::unordered_map<col_key_t, generation_t, sub_key_hash_t> requested;
-    std::unordered_set<col_key_t, sub_key_hash_t> removed;
+    std::map<collection_key_t, buffer_t> upserted;
+    std::unordered_map<collection_key_t, generation_t, sub_key_hash_t> requested;
+    std::unordered_set<collection_key_t, sub_key_hash_t> removed;
 
     stl_db_t* db_ptr {nullptr};
     generation_t generation {0};
@@ -92,10 +92,10 @@ struct stl_txn_t {
 
 struct stl_db_t {
     std::shared_mutex mutex;
-    stl_col_t main;
+    stl_collection_t main;
 
     /**
-     * @brief A variable-size set of named cols.
+     * @brief A variable-size set of named collections.
      * It's cleaner to implement it with heterogenous lookups as
      * an @c `std::unordered_set`, but it requires GCC11.
      */
@@ -112,11 +112,11 @@ struct stl_db_t {
     std::string persisted_path;
 };
 
-stl_col_t& stl_col(stl_db_t& db, ukv_collection_t col) {
-    return col == ukv_collection_main_k ? db.main : *reinterpret_cast<stl_col_t*>(col);
+stl_collection_t& stl_collection(stl_db_t& db, ukv_collection_t collection) {
+    return collection == ukv_collection_main_k ? db.main : *reinterpret_cast<stl_collection_t*>(collection);
 }
 
-void save_to_disk(stl_col_t const& col, std::string const& path, ukv_error_t* c_error) {
+void save_to_disk(stl_collection_t const& collection, std::string const& path, ukv_error_t* c_error) {
     // Using the classical C++ IO mechanisms is a bad tone in the modern world.
     // They are ugly and, more importantly, painfully slow.
     // https://www.reddit.com/r/cpp_questions/comments/e2xia9/performance_comparison_of_various_ways_of_reading/
@@ -131,13 +131,13 @@ void save_to_disk(stl_col_t const& col, std::string const& path, ukv_error_t* c_
 
     // Save the collection size
     {
-        auto n = static_cast<ukv_size_t>(col.unique_elements.load());
+        auto n = static_cast<ukv_size_t>(collection.unique_elements.load());
         auto saved_len = std::fwrite(&n, sizeof(ukv_size_t), 1, handle);
         return_if_error(saved_len == sizeof(ukv_size_t), c_error, 0, "Couldn't write anything to file.");
     }
 
     // Save the entries
-    for (auto const& [key, seq_val] : col.pairs) {
+    for (auto const& [key, seq_val] : collection.pairs) {
         if (seq_val.is_deleted)
             continue;
 
@@ -156,13 +156,13 @@ void save_to_disk(stl_col_t const& col, std::string const& path, ukv_error_t* c_
     log_error(c_error, 0, handle.close().release_error());
 }
 
-void read_from_disk(stl_col_t& col, std::string const& path, ukv_error_t* c_error) {
+void read_from_disk(stl_collection_t& collection, std::string const& path, ukv_error_t* c_error) {
     // Similar to serialization, we don't use STL here
     file_handle_t handle;
     if ((*c_error = handle.open(path.c_str(), "rb+").release_error()))
         return;
 
-    // Get the col size, to preallocate entries
+    // Get the collection size, to preallocate entries
     auto n = ukv_size_t(0);
     {
         auto read_len = std::fread(&n, sizeof(ukv_size_t), 1, handle);
@@ -170,9 +170,9 @@ void read_from_disk(stl_col_t& col, std::string const& path, ukv_error_t* c_erro
     }
 
     // Load the entries
-    col.pairs.clear();
-    col.reserve_more(n);
-    col.unique_elements = n;
+    collection.pairs.clear();
+    collection.reserve_more(n);
+    collection.unique_elements = n;
 
     for (ukv_size_t i = 0; i != n; ++i) {
 
@@ -188,7 +188,7 @@ void read_from_disk(stl_col_t& col, std::string const& path, ukv_error_t* c_erro
         read_len = std::fread(buf.data(), sizeof(byte_t), buf.size(), handle);
         return_if_error(read_len == buf.size(), c_error, 0, "Read partially failed on value.");
 
-        col.pairs.emplace(key, stl_value_t {std::move(buf), generation_t {0}, false});
+        collection.pairs.emplace(key, stl_value_t {std::move(buf), generation_t {0}, false});
     }
 
     log_error(c_error, 0, handle.close().release_error());
@@ -201,9 +201,9 @@ void save_to_disk(stl_db_t const& db, ukv_error_t* c_error) {
     save_to_disk(db.main, dir_path / ".stl.ukv", c_error);
     return_on_error(c_error);
 
-    for (auto const& name_and_col : db.named) {
-        auto name_with_ext = std::string(name_and_col.first) + ".stl.ukv";
-        save_to_disk(*name_and_col.second, dir_path / name_with_ext, c_error);
+    for (auto const& name_and_collection : db.named) {
+        auto name_with_ext = std::string(name_and_collection.first) + ".stl.ukv";
+        save_to_disk(*name_and_collection.second, dir_path / name_with_ext, c_error);
         return_on_error(c_error);
     }
 }
@@ -218,7 +218,7 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
         read_from_disk(db.main, path_str, c_error);
     }
 
-    // Parse all the named cols we can find
+    // Parse all the named collections we can find
     for (auto const& dir_entry : fs::directory_iterator {dir_path}) {
         if (!dir_entry.is_regular_file())
             continue;
@@ -229,10 +229,10 @@ void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
 
         auto filename_w_ext = path.filename().native();
         auto filename = filename_w_ext.substr(0, filename_w_ext.size() - 8);
-        auto col = std::make_unique<stl_col_t>();
-        col->name = filename;
-        read_from_disk(*col, path_str, c_error);
-        db.named.emplace(std::string_view(col->name), std::move(col));
+        auto collection = std::make_unique<stl_collection_t>();
+        collection->name = filename;
+        read_from_disk(*collection, path_str, c_error);
+        db.named.emplace(std::string_view(collection->name), std::move(collection));
     }
 }
 
@@ -249,13 +249,13 @@ void write_head( //
 
         auto place = places[i];
         auto content = contents[i];
-        stl_col_t& col = stl_col(db, place.col);
-        auto key_iterator = col.pairs.find(place.key);
+        stl_collection_t& collection = stl_collection(db, place.collection);
+        auto key_iterator = collection.pairs.find(place.key);
 
         // We want to insert a new entry, but let's check if we
         // can overwrite the existing value without causing reallocations.
         safe_section("Copying new value", c_error, [&] {
-            if (key_iterator != col.pairs.end()) {
+            if (key_iterator != collection.pairs.end()) {
                 key_iterator->second.generation = ++db.youngest_generation;
                 key_iterator->second.buffer.assign(content.begin(), content.end());
                 key_iterator->second.is_deleted = !content;
@@ -263,8 +263,8 @@ void write_head( //
             else if (content) {
                 buffer_t buffer {content.begin(), content.end()};
                 stl_value_t value_w_generation {std::move(buffer), ++db.youngest_generation};
-                col.pairs.emplace(place.key, std::move(value_w_generation));
-                ++col.unique_elements;
+                collection.pairs.emplace(place.key, std::move(value_w_generation));
+                ++collection.unique_elements;
             }
         });
         return_on_error(c_error);
@@ -283,7 +283,7 @@ void write_txn( //
     ukv_error_t* c_error) {
 
     // No need for locking here, until we commit, unless, of course,
-    // a col is being deleted.
+    // a collection is being deleted.
     stl_db_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
 
@@ -293,11 +293,11 @@ void write_txn( //
         auto content = contents[i];
         safe_section("Copying new value", c_error, [&] {
             if (!content) {
-                txn.upserted.erase(place.col_key());
-                txn.removed.insert(place.col_key());
+                txn.upserted.erase(place.collection_key());
+                txn.removed.insert(place.collection_key());
             }
             else {
-                txn.upserted.insert_or_assign(place.col_key(), buffer_t {content.begin(), content.end()});
+                txn.upserted.insert_or_assign(place.collection_key(), buffer_t {content.begin(), content.end()});
             }
         });
         return_on_error(c_error);
@@ -314,9 +314,9 @@ void read_head_under_lock( //
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
-        stl_col_t const& col = stl_col(db, place.col);
-        auto key_iterator = col.pairs.find(place.key);
-        bool found = key_iterator != col.pairs.end() && !key_iterator->second.is_deleted;
+        stl_collection_t const& collection = stl_collection(db, place.collection);
+        auto key_iterator = collection.pairs.find(place.key);
+        bool found = key_iterator != collection.pairs.end() && !key_iterator->second.is_deleted;
         auto value = found ? value_view(key_iterator->second.buffer) : value_view_t {};
         enumerator(i, value);
     }
@@ -336,18 +336,18 @@ void read_txn_under_lock( //
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
-        stl_col_t const& col = stl_col(db, place.col);
+        stl_collection_t const& collection = stl_collection(db, place.collection);
 
         // Some keys may already be overwritten inside of transaction
-        if (auto inner_iterator = txn.upserted.find(place.col_key()); inner_iterator != txn.upserted.end())
+        if (auto inner_iterator = txn.upserted.find(place.collection_key()); inner_iterator != txn.upserted.end())
             enumerator(i, value_view(inner_iterator->second));
 
         // Some may have been deleted inside the transaction
-        else if (auto inner_iterator = txn.removed.find(place.col_key()); inner_iterator != txn.removed.end())
+        else if (auto inner_iterator = txn.removed.find(place.collection_key()); inner_iterator != txn.removed.end())
             enumerator(i, value_view_t {});
 
         // Others should be pulled from the main store
-        else if (auto key_iterator = col.pairs.find(place.key); key_iterator != col.pairs.end()) {
+        else if (auto key_iterator = collection.pairs.find(place.key); key_iterator != collection.pairs.end()) {
 
             if (entry_was_overwritten(key_iterator->second.generation, txn.generation, youngest_generation) &&
                 (*c_error = "Requested key was already overwritten since the start of the transaction!"))
@@ -358,7 +358,7 @@ void read_txn_under_lock( //
             enumerator(i, value);
 
             if (should_track_requests)
-                txn.requested.emplace(place.col_key(), key_iterator->second.generation);
+                txn.requested.emplace(place.collection_key(), key_iterator->second.generation);
         }
 
         // But some will be missing
@@ -366,7 +366,7 @@ void read_txn_under_lock( //
             enumerator(i, value_view_t {});
 
             if (should_track_requests)
-                txn.requested.emplace(place.col_key(), generation_t {});
+                txn.requested.emplace(place.collection_key(), generation_t {});
         }
     }
 }
@@ -396,12 +396,12 @@ void scan_head( //
     // 2. Fetch the data
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         scan_t scan = tasks[i];
-        stl_col_t const& col = stl_col(db, scan.col);
+        stl_collection_t const& collection = stl_collection(db, scan.collection);
         offsets[i] = keys_output - *c_found_keys;
 
         ukv_length_t j = 0;
-        auto key_iterator = col.pairs.lower_bound(scan.min_key);
-        for (; j != scan.limit && key_iterator != col.pairs.end() && key_iterator->first < scan.max_key;
+        auto key_iterator = collection.pairs.lower_bound(scan.min_key);
+        for (; j != scan.limit && key_iterator != collection.pairs.end() && key_iterator->first < scan.max_key;
              ++key_iterator) {
             if (key_iterator->second.is_deleted)
                 continue;
@@ -441,13 +441,13 @@ void scan_txn( //
     // 2. Fetch the data
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         scan_t scan = tasks[i];
-        stl_col_t const& col = stl_col(db, scan.col);
+        stl_collection_t const& collection = stl_collection(db, scan.collection);
         offsets[i] = keys_output - *c_found_keys;
 
         ukv_length_t j = 0;
-        auto key_iterator = col.pairs.lower_bound(scan.min_key);
+        auto key_iterator = collection.pairs.lower_bound(scan.min_key);
         auto txn_iterator = txn.upserted.lower_bound(scan.min_key);
-        for (; j != scan.limit && key_iterator != col.pairs.end();) {
+        for (; j != scan.limit && key_iterator != collection.pairs.end();) {
             // Check if the key was already removed:
             if (key_iterator->second.is_deleted || txn.removed.find(key_iterator->first) != txn.removed.end()) {
                 ++key_iterator;
@@ -455,7 +455,7 @@ void scan_txn( //
             }
 
             // Compare against the incoming inserted keys:
-            bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.col == scan.col;
+            bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.collection == scan.collection;
             if (check_in_txn && txn_iterator->first.key <= key_iterator->first) {
                 *keys_output = txn_iterator->first.key;
                 ++keys_output;
@@ -476,8 +476,8 @@ void scan_txn( //
         }
 
         // As in any `set_union`, don't forget the tail :)
-        while (j != scan.limit && txn_iterator != txn.upserted.end() && txn_iterator->first.col == scan.col &&
-               txn_iterator->first.key < scan.max_key) {
+        while (j != scan.limit && txn_iterator != txn.upserted.end() &&
+               txn_iterator->first.collection == scan.collection && txn_iterator->first.key < scan.max_key) {
             *keys_output = txn_iterator->first.key;
             ++keys_output;
             ++txn_iterator;
@@ -514,8 +514,8 @@ void ukv_read( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_stride,
@@ -538,9 +538,9 @@ void ukv_read( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    places_arg_t places {cols, keys, {}, c_tasks_count};
+    places_arg_t places {collections, keys, {}, c_tasks_count};
     bool const needs_export = c_found_values != nullptr;
 
     // 1. Allocate a tape for all the values to be pulled
@@ -583,8 +583,8 @@ void ukv_write( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_stride,
@@ -609,14 +609,14 @@ void ukv_write( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
     strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
 
-    places_arg_t places {cols, keys, {}, c_tasks_count};
+    places_arg_t places {collections, keys, {}, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     return c_txn ? write_txn(txn, places, contents, c_options, c_error)
@@ -628,8 +628,8 @@ void ukv_scan( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_min_tasks_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
@@ -656,11 +656,11 @@ void ukv_scan( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_scan_limits, c_scan_limits_stride};
-    scans_arg_t scans {cols, start_keys, end_keys, lens, c_min_tasks_count};
+    scans_arg_t scans {collections, start_keys, end_keys, lens, c_min_tasks_count};
 
     return c_txn ? scan_txn(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
                  : scan_head(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);
@@ -671,8 +671,8 @@ void ukv_size( //
     ukv_transaction_t const c_txn,
     ukv_size_t const n,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
@@ -706,14 +706,14 @@ void ukv_size( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
 
     std::shared_lock _ {db.mutex};
 
     for (ukv_size_t i = 0; i != n; ++i) {
-        stl_col_t const& col = stl_col(db, cols[i]);
+        stl_collection_t const& collection = stl_collection(db, collections[i]);
         ukv_key_t const min_key = start_keys[i];
         ukv_key_t const max_key = end_keys[i];
         std::size_t deleted_count = 0;
@@ -721,8 +721,8 @@ void ukv_size( //
         // Estimate the presence in the main store
         std::size_t main_count = 0;
         std::size_t main_bytes = 0;
-        auto min_iterator = col.pairs.lower_bound(min_key);
-        auto max_iterator = col.pairs.lower_bound(max_key);
+        auto min_iterator = collection.pairs.lower_bound(min_key);
+        auto max_iterator = collection.pairs.lower_bound(max_key);
         for (; min_iterator != max_iterator; ++min_iterator) {
             if (min_iterator->second.is_deleted) {
                 ++deleted_count;
@@ -762,15 +762,15 @@ void ukv_size( //
 void ukv_collection_open(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_str_view_t c_col_name,
+    ukv_str_view_t c_collection_name,
     ukv_str_view_t,
     // Outputs:
-    ukv_collection_t* c_col,
+    ukv_collection_t* c_collection,
     ukv_error_t* c_error) {
 
-    auto name_len = std::strlen(c_col_name);
+    auto name_len = std::strlen(c_collection_name);
     if (!name_len) {
-        *c_col = ukv_collection_main_k;
+        *c_collection = ukv_collection_main_k;
         return;
     }
 
@@ -778,84 +778,84 @@ void ukv_collection_open(
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
 
-    auto const col_name = std::string_view(c_col_name, name_len);
-    auto col_it = db.named.find(col_name);
-    if (col_it == db.named.end()) {
+    auto const collection_name = std::string_view(c_collection_name, name_len);
+    auto collection_it = db.named.find(collection_name);
+    if (collection_it == db.named.end()) {
         safe_section("Inserting new collection", c_error, [&] {
-            auto new_col = std::make_unique<stl_col_t>();
-            new_col->name = col_name;
-            *c_col = reinterpret_cast<ukv_collection_t>(new_col.get());
-            db.named.emplace(new_col->name, std::move(new_col));
+            auto new_collection = std::make_unique<stl_collection_t>();
+            new_collection->name = collection_name;
+            *c_collection = reinterpret_cast<ukv_collection_t>(new_collection.get());
+            db.named.emplace(new_collection->name, std::move(new_collection));
         });
     }
     else {
-        *c_col = reinterpret_cast<ukv_collection_t>(col_it->second.get());
+        *c_collection = reinterpret_cast<ukv_collection_t>(collection_it->second.get());
     }
 }
 
 void ukv_collection_drop(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_collection_t c_col_id,
-    ukv_str_view_t c_col_name,
+    ukv_collection_t c_collection_id,
+    ukv_str_view_t c_collection_name,
     ukv_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    auto col_name = c_col_name ? std::string_view(c_col_name) : std::string_view();
+    auto collection_name = c_collection_name ? std::string_view(c_collection_name) : std::string_view();
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(!col_name.empty() || !invalidate,
+    return_if_error(!collection_name.empty() || !invalidate,
                     c_error,
                     args_combo_k,
                     "Default collection can't be invalidated.");
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
-    stl_col_t const& col = stl_col(db, c_col_id);
-    stl_col_t* col_ptr_to_clear = nullptr;
-    auto col_it_to_remove = db.named.end();
+    stl_collection_t const& collection = stl_collection(db, c_collection_id);
+    stl_collection_t* collection_ptr_to_clear = nullptr;
+    auto collection_it_to_remove = db.named.end();
 
-    if (c_col_name) {
-        if (!std::strlen(c_col_name))
-            col_ptr_to_clear = &db.main;
+    if (c_collection_name) {
+        if (!std::strlen(c_collection_name))
+            collection_ptr_to_clear = &db.main;
         else {
-            col_it_to_remove = db.named.find(col_name);
-            if (col_it_to_remove != db.named.end())
-                col_ptr_to_clear = col_it_to_remove->second.get();
+            collection_it_to_remove = db.named.find(collection_name);
+            if (collection_it_to_remove != db.named.end())
+                collection_ptr_to_clear = collection_it_to_remove->second.get();
         }
     }
     else {
-        if (c_col_id == ukv_collection_main_k)
-            col_ptr_to_clear = &db.main;
+        if (c_collection_id == ukv_collection_main_k)
+            collection_ptr_to_clear = &db.main;
         else {
-            for (auto it = db.named.begin(); it != db.named.end() && col_it_to_remove == db.named.end(); ++it) {
-                if (it->second.get() == &col) {
-                    col_it_to_remove = it;
-                    col_ptr_to_clear = col_it_to_remove->second.get();
+            for (auto it = db.named.begin(); it != db.named.end() && collection_it_to_remove == db.named.end(); ++it) {
+                if (it->second.get() == &collection) {
+                    collection_it_to_remove = it;
+                    collection_ptr_to_clear = collection_it_to_remove->second.get();
                 }
             }
         }
     }
 
     if (c_mode == ukv_drop_keys_vals_handle_k) {
-        if (col_it_to_remove == db.named.end())
+        if (collection_it_to_remove == db.named.end())
             return;
-        db.named.erase(col_it_to_remove);
+        db.named.erase(collection_it_to_remove);
     }
     else if (c_mode == ukv_drop_keys_vals_k) {
-        if (!col_ptr_to_clear)
+        if (!collection_ptr_to_clear)
             return;
-        col_ptr_to_clear->pairs.clear();
-        col_ptr_to_clear->unique_elements = 0;
+        collection_ptr_to_clear->pairs.clear();
+        collection_ptr_to_clear->unique_elements = 0;
     }
 
     else if (c_mode == ukv_drop_vals_k) {
-        if (!col_ptr_to_clear)
+        if (!collection_ptr_to_clear)
             return;
         generation_t gen = ++db.youngest_generation;
-        for (auto& kv : col_ptr_to_clear->pairs)
+        for (auto& kv : collection_ptr_to_clear->pairs)
             kv.second.reset(gen);
     }
 }
@@ -877,8 +877,8 @@ void ukv_collection_list( //
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::shared_lock _ {db.mutex};
-    std::size_t cols_count = db.named.size();
-    *c_count = static_cast<ukv_size_t>(cols_count);
+    std::size_t collections_count = db.named.size();
+    *c_count = static_cast<ukv_size_t>(collections_count);
 
     // Every string will be null-terminated
     std::size_t strings_length = 0;
@@ -889,9 +889,9 @@ void ukv_collection_list( //
     return_on_error(c_error);
 
     // For every collection we also need to export IDs and offsets
-    auto ids = arena.alloc_or_dummy<ukv_collection_t>(cols_count, c_error, c_ids);
+    auto ids = arena.alloc_or_dummy<ukv_collection_t>(collections_count, c_error, c_ids);
     return_on_error(c_error);
-    auto offs = arena.alloc_or_dummy<ukv_length_t>(cols_count + 1, c_error, c_offs);
+    auto offs = arena.alloc_or_dummy<ukv_length_t>(collections_count + 1, c_error, c_offs);
     return_on_error(c_error);
 
     std::size_t i = 0;
@@ -968,10 +968,10 @@ void ukv_transaction_commit( //
     generation_t const youngest_generation = db.youngest_generation.load();
 
     // 1. Check for refreshes among fetched keys
-    for (auto const& [col_key, sub_generation] : txn.requested) {
-        stl_col_t& col = stl_col(db, col_key.col);
-        auto key_iterator = col.pairs.find(col_key.key);
-        if (key_iterator == col.pairs.end())
+    for (auto const& [collection_key, sub_generation] : txn.requested) {
+        stl_collection_t& collection = stl_collection(db, collection_key.collection);
+        auto key_iterator = collection.pairs.find(collection_key.key);
+        if (key_iterator == collection.pairs.end())
             continue;
         if (key_iterator->second.generation != sub_generation &&
             (*c_error = "Requested key was already overwritten since the start of the transaction!"))
@@ -979,10 +979,10 @@ void ukv_transaction_commit( //
     }
 
     // 2. Check for collisions among incoming values
-    for (auto const& [col_key, value] : txn.upserted) {
-        stl_col_t& col = stl_col(db, col_key.col);
-        auto key_iterator = col.pairs.find(col_key.key);
-        if (key_iterator == col.pairs.end())
+    for (auto const& [collection_key, value] : txn.upserted) {
+        stl_collection_t& collection = stl_collection(db, collection_key.collection);
+        auto key_iterator = collection.pairs.find(collection_key.key);
+        if (key_iterator == collection.pairs.end())
             continue;
 
         if (key_iterator->second.generation == txn.generation && (*c_error = "Can't commit same entry more than once!"))
@@ -994,10 +994,10 @@ void ukv_transaction_commit( //
     }
 
     // 3. Check for collisions among deleted values
-    for (auto const& col_key : txn.removed) {
-        stl_col_t& col = stl_col(db, col_key.col);
-        auto key_iterator = col.pairs.find(col_key.key);
-        if (key_iterator == col.pairs.end())
+    for (auto const& collection_key : txn.removed) {
+        stl_collection_t& collection = stl_collection(db, collection_key.collection);
+        auto key_iterator = collection.pairs.find(collection_key.key);
+        if (key_iterator == collection.pairs.end())
             continue;
 
         if (key_iterator->second.generation == txn.generation && (*c_error = "Can't commit same entry more than once!"))
@@ -1008,42 +1008,42 @@ void ukv_transaction_commit( //
             return;
     }
 
-    // 4. Allocate space for more nodes across different cols
+    // 4. Allocate space for more nodes across different collections
     safe_section("Inserting new collections", c_error, [&] {
         db.main.reserve_more(txn.upserted.size());
-        for (auto& name_and_col : db.named)
-            name_and_col.second->reserve_more(txn.upserted.size());
+        for (auto& name_and_collection : db.named)
+            name_and_collection.second->reserve_more(txn.upserted.size());
     });
     return_on_error(c_error);
 
     // 5. Import the data, as no collisions were detected
     for (auto& sub_key_and_value : txn.upserted) {
-        stl_col_t& col = stl_col(db, sub_key_and_value.first.col);
-        auto key_iterator = col.pairs.find(sub_key_and_value.first.key);
+        stl_collection_t& collection = stl_collection(db, sub_key_and_value.first.collection);
+        auto key_iterator = collection.pairs.find(sub_key_and_value.first.key);
         // A key was deleted:
         // if (sub_key_and_value.second.empty()) {
-        //     if (key_iterator != col.pairs.end())
-        //         col.pairs.erase(key_iterator);
+        //     if (key_iterator != collection.pairs.end())
+        //         collection.pairs.erase(key_iterator);
         // }
         // A keys was updated:
         // else
-        if (key_iterator != col.pairs.end()) {
+        if (key_iterator != collection.pairs.end()) {
             key_iterator->second.generation = txn.generation;
             std::swap(key_iterator->second.buffer, sub_key_and_value.second);
         }
         // A key was inserted:
         else {
             stl_value_t value_w_generation {std::move(sub_key_and_value.second), txn.generation};
-            col.pairs.emplace(sub_key_and_value.first.key, std::move(value_w_generation));
-            ++col.unique_elements;
+            collection.pairs.emplace(sub_key_and_value.first.key, std::move(value_w_generation));
+            ++collection.unique_elements;
         }
     }
 
     // 6. Remove the requested entries
-    for (auto const& col_key : txn.removed) {
-        stl_col_t& col = stl_col(db, col_key.col);
-        auto key_iterator = col.pairs.find(col_key.key);
-        if (key_iterator == col.pairs.end())
+    for (auto const& collection_key : txn.removed) {
+        stl_collection_t& collection = stl_collection(db, collection_key.collection);
+        auto key_iterator = collection.pairs.find(collection_key.key);
+        if (key_iterator == collection.pairs.end())
             continue;
 
         key_iterator->second.reset(txn.generation);
@@ -1079,8 +1079,8 @@ void ukv_database_free(ukv_database_t c_db) {
     delete &db;
 }
 
-void ukv_col_free(ukv_database_t const, ukv_collection_t const) {
-    // In this in-memory freeing the col handle does nothing.
+void ukv_collection_free(ukv_database_t const, ukv_collection_t const) {
+    // In this in-memory freeing the collection handle does nothing.
     // The DB destructor will automatically cleanup the memory.
 }
 

@@ -533,39 +533,39 @@ class strided_matrix_gt {
   private:
     scalar_t* begin_ = nullptr;
     ukv_size_t bytes_between_rows_ = 0;
-    ukv_size_t bytes_between_cols_ = 0;
+    ukv_size_t bytes_between_columns_ = 0;
     ukv_size_t rows_ = 0;
-    ukv_size_t cols_ = 0;
+    ukv_size_t columns_ = 0;
 
   public:
     strided_matrix_gt() = default;
     strided_matrix_gt(scalar_t* begin,
                       std::size_t rows,
-                      std::size_t cols,
+                      std::size_t columns,
                       std::size_t bytes_between_rows,
-                      std::size_t col_stride = sizeof(scalar_t)) noexcept
+                      std::size_t column_stride = sizeof(scalar_t)) noexcept
         : begin_(begin), bytes_between_rows_(static_cast<ukv_size_t>(bytes_between_rows)),
-          bytes_between_cols_(static_cast<ukv_size_t>(col_stride)), rows_(static_cast<ukv_size_t>(rows)),
-          cols_(static_cast<ukv_size_t>(cols)) {}
+          bytes_between_columns_(static_cast<ukv_size_t>(column_stride)), rows_(static_cast<ukv_size_t>(rows)),
+          columns_(static_cast<ukv_size_t>(columns)) {}
 
     strided_matrix_gt(strided_matrix_gt&&) = default;
     strided_matrix_gt(strided_matrix_gt const&) = default;
     strided_matrix_gt& operator=(strided_matrix_gt&&) = default;
     strided_matrix_gt& operator=(strided_matrix_gt const&) = default;
 
-    inline std::size_t size() const noexcept { return rows_ * cols_; }
+    inline std::size_t size() const noexcept { return rows_ * columns_; }
     inline decltype(auto) operator()(std::size_t i, std::size_t j) noexcept { return row(i)[j]; }
     inline decltype(auto) operator()(std::size_t i, std::size_t j) const noexcept { return row(i)[j]; }
-    inline strided_range_gt<scalar_t const> col(std::size_t j) const noexcept {
-        auto begin = begin_ + j * bytes_between_cols_ / sizeof(scalar_t);
+    inline strided_range_gt<scalar_t const> column(std::size_t j) const noexcept {
+        auto begin = begin_ + j * bytes_between_columns_ / sizeof(scalar_t);
         return {begin, bytes_between_rows_, rows_};
     }
     inline strided_range_gt<scalar_t const*> row(std::size_t i) const noexcept {
         auto begin = begin_ + i * bytes_between_rows_ / sizeof(scalar_t);
-        return {begin, bytes_between_cols_, cols_};
+        return {begin, bytes_between_columns_, columns_};
     }
     inline std::size_t rows() const noexcept { return rows_; }
-    inline std::size_t cols() const noexcept { return cols_; }
+    inline std::size_t columns() const noexcept { return columns_; }
     inline scalar_t const* data() const noexcept { return begin_; }
 };
 
