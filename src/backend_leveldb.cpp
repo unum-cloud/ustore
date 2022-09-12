@@ -258,6 +258,7 @@ void ukv_read( //
     return_on_error(c_error);
     auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
     return_on_error(c_error);
+    bool const needs_export = c_found_values != nullptr;
     safe_vector_gt<byte_t> contents(&arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
@@ -269,10 +270,13 @@ void ukv_read( //
             presences[i] = bool(value);
             lens[i] = value ? value.size() : ukv_length_missing_k;
             offs[i] = contents.size();
-            contents.insert(contents.size(), value.begin(), value.end(), c_error);
+            if (needs_export)
+                contents.insert(contents.size(), value.begin(), value.end(), c_error);
         };
         read_enumerate(db, places, options, value_buffer, data_enumerator, c_error);
         offs[places.count] = contents.size();
+        if (needs_export)
+            *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(contents.begin());
     }
     catch (...) {
         *c_error = "Read Failure";
@@ -495,9 +499,12 @@ void ukv_collection_list( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
     *c_count = 0;
-    *c_ids = nullptr;
-    *c_offsets = nullptr;
-    *c_names = nullptr;
+    if (c_ids)
+        *c_ids = nullptr;
+    if (c_offsets)
+        *c_offsets = nullptr;
+    if (c_names)
+        *c_names = nullptr;
 }
 
 void ukv_database_control( //
