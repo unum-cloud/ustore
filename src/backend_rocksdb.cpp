@@ -300,8 +300,8 @@ void read_many( //
     std::vector<std::string> vals(places.count);
     for (std::size_t i = 0; i != places.size(); ++i) {
         place_t place = places[i];
-        cols[i] = rocks_collection(db, task.col);
-        keys[i] = to_slice(task.key);
+        cols[i] = rocks_collection(db, place.col);
+        keys[i] = to_slice(place.key);
     }
 
     std::vector<rocks_status_t> statuses = txn //
@@ -373,20 +373,24 @@ void ukv_read( //
         options.snapshot = txn->GetSnapshot();
 
     try {
-        std::string value_buffer;
-        ukv_length_t progress_in_tape = 0;
+        bool const needs_export = c_found_values != nullptr;
 
         auto data_enumerator = [&](std::size_t i, value_view_t value) {
             presences[i] = bool(value);
             lens[i] = value ? value.size() : ukv_length_missing_k;
-            offs[i] = contents.size();
-            contents.insert(contents.size(), value.begin(), value.end(), c_error);
+            if (needs_export) {
+                offs[i] = contents.size();
+                contents.insert(contents.size(), value.begin(), value.end(), c_error);
+            }
         };
 
         if (c_tasks_count == 1)
             read_one(db, txn, places, options, data_enumerator, c_error);
         else
             read_many(db, txn, places, options, data_enumerator, c_error);
+
+        if (needs_export)
+            *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(contents.begin());
     }
     catch (...) {
         *c_error = "Read Failure";
