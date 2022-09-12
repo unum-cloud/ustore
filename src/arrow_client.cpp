@@ -81,8 +81,8 @@ void ukv_read( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_stride,
@@ -104,9 +104,9 @@ void ukv_read( //
     return_on_error(c_error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    places_arg_t places {cols, keys, {}, c_tasks_count};
+    places_arg_t places {collections, keys, {}, c_tasks_count};
 
     ar::Status ar_status;
     arrow_mem_pool_t pool(arena);
@@ -133,7 +133,7 @@ void ukv_read( //
                        kParamTransactionID,
                        std::uintptr_t(c_txn));
     if (same_named_collection)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, cols[0]);
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (partial_mode)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamReadPart, partial_mode);
     if (read_shared)
@@ -141,15 +141,15 @@ void ukv_read( //
     if (read_track)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagTrackRead);
 
-    bool const has_cols_column = !same_collection;
+    bool const has_collections_column = !same_collection;
     constexpr bool has_keys_column = true;
 
     // If all requests map to the same collection, we can avoid passing its ID
-    if (has_cols_column && !cols.is_continuous()) {
+    if (has_collections_column && !collections.is_continuous()) {
         auto continuous = arena.alloc<ukv_collection_t>(places.count, c_error);
         return_on_error(c_error);
         transform_n(keys, places.count, continuous.begin());
-        cols = {continuous.begin(), sizeof(ukv_collection_t)};
+        collections = {continuous.begin(), sizeof(ukv_collection_t)};
     }
 
     // When exporting keys, make sure they are properly strided
@@ -163,18 +163,18 @@ void ukv_read( //
     // Now build-up the Arrow representation
     ArrowArray input_array_c, output_array_c;
     ArrowSchema input_schema_c, output_schema_c;
-    auto count_cols = has_cols_column + has_keys_column;
-    ukv_to_arrow_schema(places.count, count_cols, &input_schema_c, &input_array_c, c_error);
+    auto count_collections = has_collections_column + has_keys_column;
+    ukv_to_arrow_schema(places.count, count_collections, &input_schema_c, &input_array_c, c_error);
     return_on_error(c_error);
 
-    if (has_cols_column)
+    if (has_collections_column)
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgCols.c_str(),
             ukv_type<ukv_collection_t>(),
             nullptr,
             nullptr,
-            cols.get(),
+            collections.get(),
             input_schema_c.children[0],
             input_array_c.children[0],
             c_error);
@@ -188,8 +188,8 @@ void ukv_read( //
             nullptr,
             nullptr,
             keys.get(),
-            input_schema_c.children[has_cols_column],
-            input_array_c.children[has_cols_column],
+            input_schema_c.children[has_collections_column],
+            input_array_c.children[has_collections_column],
             c_error);
     return_on_error(c_error);
 
@@ -271,8 +271,8 @@ void ukv_write( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_stride,
@@ -299,29 +299,29 @@ void ukv_write( //
     return_on_error(c_error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
     strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
 
-    places_arg_t places {cols, keys, {}, c_tasks_count};
+    places_arg_t places {collections, keys, {}, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     bool const same_collection = places.same_collection();
     bool const same_named_collection = same_collection && places.same_collections_are_named();
     bool const write_flush = c_options & ukv_option_write_flush_k;
 
-    bool const has_cols_column = !same_collection;
+    bool const has_collections_column = !same_collection;
     constexpr bool has_keys_column = true;
     bool const has_contents_column = vals != nullptr;
 
-    if (has_cols_column && !cols.is_continuous()) {
+    if (has_collections_column && !collections.is_continuous()) {
         auto continuous = arena.alloc<ukv_collection_t>(places.size(), c_error);
         return_on_error(c_error);
-        transform_n(cols, places.size(), continuous.begin());
-        cols = {continuous.begin(), places.size()};
+        transform_n(collections, places.size(), continuous.begin());
+        collections = {continuous.begin(), places.size()};
     }
 
     if (has_keys_column && !keys.is_continuous()) {
@@ -390,18 +390,18 @@ void ukv_write( //
     // Now build-up the Arrow representation
     ArrowArray input_array_c;
     ArrowSchema input_schema_c;
-    auto count_cols = has_cols_column + has_keys_column + has_contents_column;
-    ukv_to_arrow_schema(c_tasks_count, count_cols, &input_schema_c, &input_array_c, c_error);
+    auto count_collections = has_collections_column + has_keys_column + has_contents_column;
+    ukv_to_arrow_schema(c_tasks_count, count_collections, &input_schema_c, &input_array_c, c_error);
     return_on_error(c_error);
 
-    if (has_cols_column)
+    if (has_collections_column)
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgCols.c_str(),
             ukv_type<ukv_collection_t>(),
             nullptr,
             nullptr,
-            cols.get(),
+            collections.get(),
             input_schema_c.children[0],
             input_array_c.children[0],
             c_error);
@@ -415,8 +415,8 @@ void ukv_write( //
             nullptr,
             nullptr,
             keys.get(),
-            input_schema_c.children[has_cols_column],
-            input_array_c.children[has_cols_column],
+            input_schema_c.children[has_collections_column],
+            input_array_c.children[has_collections_column],
             c_error);
     return_on_error(c_error);
 
@@ -428,8 +428,8 @@ void ukv_write( //
             presences.get(),
             offs.get(),
             joined_vals_begin,
-            input_schema_c.children[has_cols_column + has_keys_column],
-            input_array_c.children[has_cols_column + has_keys_column],
+            input_schema_c.children[has_collections_column + has_keys_column],
+            input_array_c.children[has_collections_column + has_keys_column],
             c_error);
     return_on_error(c_error);
 
@@ -446,8 +446,8 @@ void ukv_write( //
                        "{}=0x{:0>16x}&",
                        kParamTransactionID,
                        std::uintptr_t(c_txn));
-    if (!has_cols_column && cols)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, cols[0]);
+    if (!has_collections_column && collections)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (write_flush)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagFlushWrite);
 
@@ -481,8 +481,8 @@ void ukv_scan( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
@@ -508,27 +508,27 @@ void ukv_scan( //
     return_on_error(c_error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c_scan_limits, c_scan_limits_stride};
-    scans_arg_t scans {cols, start_keys, end_keys, limits, c_tasks_count};
-    places_arg_t places {cols, start_keys, {}, c_tasks_count};
+    scans_arg_t scans {collections, start_keys, end_keys, limits, c_tasks_count};
+    places_arg_t places {collections, start_keys, {}, c_tasks_count};
 
     bool const same_collection = places.same_collection();
     bool const same_named_collection = same_collection && places.same_collections_are_named();
     bool const write_flush = c_options & ukv_option_write_flush_k;
 
-    bool const has_cols_column = !same_collection;
+    bool const has_collections_column = !same_collection;
     constexpr bool has_start_keys_column = true;
     bool const has_end_keys_column = end_keys;
     constexpr bool has_lens_column = true;
 
-    if (has_cols_column && !cols.is_continuous()) {
+    if (has_collections_column && !collections.is_continuous()) {
         auto continuous = arena.alloc<ukv_collection_t>(places.size(), c_error);
         return_on_error(c_error);
-        transform_n(cols, places.size(), continuous.begin());
-        cols = {continuous.begin(), places.size()};
+        transform_n(collections, places.size(), continuous.begin());
+        collections = {continuous.begin(), places.size()};
     }
 
     if (has_start_keys_column && !start_keys.is_continuous()) {
@@ -555,18 +555,18 @@ void ukv_scan( //
     // Now build-up the Arrow representation
     ArrowArray input_array_c, output_array_c;
     ArrowSchema input_schema_c, output_schema_c;
-    auto count_cols = has_cols_column + has_start_keys_column + has_lens_column;
-    ukv_to_arrow_schema(c_tasks_count, count_cols, &input_schema_c, &input_array_c, c_error);
+    auto count_collections = has_collections_column + has_start_keys_column + has_lens_column;
+    ukv_to_arrow_schema(c_tasks_count, count_collections, &input_schema_c, &input_array_c, c_error);
     return_on_error(c_error);
 
-    if (has_cols_column)
+    if (has_collections_column)
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgCols.c_str(),
             ukv_type<ukv_collection_t>(),
             nullptr,
             nullptr,
-            cols.get(),
+            collections.get(),
             input_schema_c.children[0],
             input_array_c.children[0],
             c_error);
@@ -580,8 +580,8 @@ void ukv_scan( //
             nullptr,
             nullptr,
             start_keys.get(),
-            input_schema_c.children[has_cols_column],
-            input_array_c.children[has_cols_column],
+            input_schema_c.children[has_collections_column],
+            input_array_c.children[has_collections_column],
             c_error);
     return_on_error(c_error);
 
@@ -593,8 +593,8 @@ void ukv_scan( //
             nullptr,
             nullptr,
             end_keys.get(),
-            input_schema_c.children[has_cols_column + has_start_keys_column],
-            input_array_c.children[has_cols_column + has_start_keys_column],
+            input_schema_c.children[has_collections_column + has_start_keys_column],
+            input_array_c.children[has_collections_column + has_start_keys_column],
             c_error);
     return_on_error(c_error);
 
@@ -606,8 +606,8 @@ void ukv_scan( //
             nullptr,
             nullptr,
             limits.get(),
-            input_schema_c.children[has_cols_column + has_start_keys_column + has_end_keys_column],
-            input_array_c.children[has_cols_column + has_start_keys_column + has_end_keys_column],
+            input_schema_c.children[has_collections_column + has_start_keys_column + has_end_keys_column],
+            input_array_c.children[has_collections_column + has_start_keys_column + has_end_keys_column],
             c_error);
     return_on_error(c_error);
 
@@ -626,7 +626,7 @@ void ukv_scan( //
                        kParamTransactionID,
                        std::uintptr_t(c_txn));
     if (same_named_collection)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, cols[0]);
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (read_shared)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
     if (read_track)
@@ -681,8 +681,8 @@ void ukv_size( //
     ukv_transaction_t const c_txn,
     ukv_size_t const n,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_start_keys,
     ukv_size_t const c_start_keys_stride,
@@ -715,16 +715,16 @@ void ukv_size( //
 void ukv_collection_open(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_str_view_t c_col_name,
-    ukv_str_view_t c_col_config,
+    ukv_str_view_t c_collection_name,
+    ukv_str_view_t c_collection_config,
     // Outputs:
-    ukv_collection_t* c_col,
+    ukv_collection_t* c_collection,
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    if (!c_col_name || !std::strlen(c_col_name)) {
-        *c_col = ukv_collection_main_k;
+    if (!c_collection_name || !std::strlen(c_collection_name)) {
+        *c_collection = ukv_collection_main_k;
         return;
     }
 
@@ -736,9 +736,13 @@ void ukv_collection_open(
     // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightColOpen, kParamCollectionName, c_col_name);
-    if (c_col_config)
-        action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c_col_config});
+    fmt::format_to(std::back_inserter(action.type),
+                   "{}?{}={}",
+                   kFlightColOpen,
+                   kParamCollectionName,
+                   c_collection_name);
+    if (c_collection_config)
+        action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c_collection_config});
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
@@ -749,14 +753,14 @@ void ukv_collection_open(
 
     auto& id_ptr = maybe_id.ValueUnsafe();
     return_if_error(id_ptr->body->size() == sizeof(ukv_collection_t), c_error, error_unknown_k, "Inadequate response");
-    std::memcpy(c_col, id_ptr->body->data(), sizeof(ukv_collection_t));
+    std::memcpy(c_collection, id_ptr->body->data(), sizeof(ukv_collection_t));
 }
 
 void ukv_collection_drop(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_collection_t c_col_id,
-    ukv_str_view_t c_col_name,
+    ukv_collection_t c_collection_id,
+    ukv_str_view_t c_collection_name,
     ukv_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {
@@ -778,12 +782,12 @@ void ukv_collection_drop(
     // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
-    if (c_col_name)
+    if (c_collection_name)
         fmt::format_to(std::back_inserter(action.type),
                        "{}?{:}={}&{}={}",
                        kFlightColDrop,
                        kParamCollectionName,
-                       c_col_name,
+                       c_collection_name,
                        kParamDropMode,
                        mode);
     else
@@ -791,7 +795,7 @@ void ukv_collection_drop(
                        "{}?{}=0x{:0>16x}&{}={}",
                        kFlightColDrop,
                        kParamCollectionID,
-                       c_col_id,
+                       c_collection_id,
                        kParamDropMode,
                        mode);
 
@@ -950,8 +954,8 @@ void ukv_database_free(ukv_database_t c_db) {
     delete &db;
 }
 
-void ukv_col_free(ukv_database_t const, ukv_collection_t const) {
-    // In this in-memory freeing the col handle does nothing.
+void ukv_collection_free(ukv_database_t const, ukv_collection_t const) {
+    // In this in-memory freeing the collection handle does nothing.
     // The DB destructor will automatically cleanup the memory.
 }
 

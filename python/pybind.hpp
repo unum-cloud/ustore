@@ -17,7 +17,7 @@ struct py_transaction_t;
 struct py_collection_t;
 
 struct py_graph_t;
-struct py_table_col_t;
+struct py_table_collection_t;
 
 struct py_task_ctx_t;
 
@@ -55,7 +55,8 @@ struct py_transaction_t : public std::enable_shared_from_this<py_transaction_t> 
     bool track_reads = false;
     bool flush_writes = false;
 
-    py_transaction_t(transaction_t&& t, std::shared_ptr<py_db_t> py_db_ptr) noexcept : native(std::move(t)), py_db_ptr(py_db_ptr) {}
+    py_transaction_t(transaction_t&& t, std::shared_ptr<py_db_t> py_db_ptr) noexcept
+        : native(std::move(t)), py_db_ptr(py_db_ptr) {}
     py_transaction_t(py_transaction_t&& other) noexcept
         : native(std::move(other.native)), py_db_ptr(other.py_db_ptr), track_reads(other.track_reads),
           flush_writes(other.flush_writes) {}
@@ -75,7 +76,7 @@ struct py_collection_t {
     std::string name;
     bool in_txn = false;
 
-    ukv_collection_t* member_col() noexcept { return native.member_ptr(); }
+    ukv_collection_t* member_collection() noexcept { return native.member_ptr(); }
     ukv_arena_t* member_arena() noexcept { return native.member_arena(); }
     ukv_options_t options() noexcept {
         auto txn_ptr = py_txn_ptr.lock();
@@ -150,7 +151,7 @@ struct py_table_keys_range_t {
  * @brief DataFrame representation, capable of viewing joined contents
  * of multiple collections. When materialized, exports Apache Arrow objects.
  */
-struct py_table_col_t : public std::enable_shared_from_this<py_table_col_t> {
+struct py_table_collection_t : public std::enable_shared_from_this<py_table_collection_t> {
 
     py_collection_t binary;
     std::variant<std::monostate, std::vector<ukv_str_view_t>> columns_names;
@@ -160,9 +161,9 @@ struct py_table_col_t : public std::enable_shared_from_this<py_table_col_t> {
     std::size_t tail = std::numeric_limits<std::size_t>::max();
     bool head_was_defined_last = true;
 
-    py_table_col_t() = default;
-    py_table_col_t(py_table_col_t&&) = delete;
-    py_table_col_t(py_table_col_t const&) = delete;
+    py_table_collection_t() = default;
+    py_table_collection_t(py_table_collection_t&&) = delete;
+    py_table_collection_t(py_table_collection_t const&) = delete;
 
     // Compatiability with Arrow Tables.
     // std::shared_ptr<ar::ChunkedArray> column(int i) const override;
@@ -189,12 +190,12 @@ struct py_table_col_t : public std::enable_shared_from_this<py_table_col_t> {
  * > patching & merging: `.patch(...)` & `.merge(...)`.
  * > DataFrame exports (out of this single collection).
  */
-struct py_docs_col_t {
+struct py_docs_collection_t {
     py_collection_t binary;
 
-    py_docs_col_t() = default;
-    py_docs_col_t(py_docs_col_t&&) = delete;
-    py_docs_col_t(py_docs_col_t const&) = delete;
+    py_docs_collection_t() = default;
+    py_docs_collection_t(py_docs_collection_t&&) = delete;
+    py_docs_collection_t(py_docs_collection_t const&) = delete;
 };
 
 template <typename native_at>
