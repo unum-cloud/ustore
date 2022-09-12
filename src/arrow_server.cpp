@@ -73,6 +73,8 @@ std::optional<std::string_view> param_value(std::string_view query_params, std::
 
         key_begin += 1;
     } while (true);
+
+    return std::nullopt;
 }
 
 bool is_query(std::string_view uri, std::string_view name) {
@@ -120,6 +122,15 @@ class SingleResultStream : public arf::ResultStream {
     }
 };
 
+class EmptyResultStream : public arf::ResultStream {
+
+  public:
+    EmptyResultStream() {}
+    ~EmptyResultStream() {}
+
+    ar::Result<std::unique_ptr<arf::Result>> Next() override { return {nullptr}; }
+};
+
 /**
  * @brief Wraps a single scalar into a Arrow-compatible `ResultStream`.
  * @section Critique
@@ -134,6 +145,11 @@ std::unique_ptr<arf::ResultStream> return_scalar(scalar_at const& scalar) {
         reinterpret_cast<uint8_t const*>(&scalar),
         sizeof(scalar));
     auto results = std::make_unique<SingleResultStream>(std::move(result));
+    return std::unique_ptr<arf::ResultStream>(results.release());
+}
+
+std::unique_ptr<arf::ResultStream> return_empty() {
+    auto results = std::make_unique<EmptyResultStream>();
     return std::unique_ptr<arf::ResultStream>(results.release());
 }
 
@@ -537,10 +553,9 @@ class UKVService : public arf::FlightServerBase {
                                 status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
+            *results_ptr = return_empty();
             return ar::Status::OK();
         }
-
-        // Listing all available collections
 
         // Starting a transaction
         if (is_query(action.type, kActionTxnBegin.type)) {
@@ -602,6 +617,7 @@ class UKVService : public arf::FlightServerBase {
             }
 
             sessions_.release_txn(session);
+            *results_ptr = return_empty();
             return ar::Status::OK();
         }
 
