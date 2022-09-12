@@ -147,9 +147,9 @@ class members_ref_gt {
         ukv_bytes_ptr_t any = reinterpret_cast<ukv_bytes_ptr_t>(this);
         ukv_length_t len = 0;
         contents_arg_t arg {
-            .contents_begin = {&any},
             .offsets_begin = {},
             .lengths_begin = {&len},
+            .contents_begin = {&any},
             .count = 1,
         };
         return assign(arg, flush);

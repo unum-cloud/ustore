@@ -54,7 +54,8 @@ struct col_key_field_t {
     col_key_field_t(ukv_key_t key) noexcept : col(ukv_collection_main_k), key(key), field(nullptr) {}
     col_key_field_t(ukv_collection_t col, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
         : col(col), key(key), field(field) {}
-    col_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept : col(ukv_collection_main_k), key(key), field(field) {}
+    col_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept
+        : col(ukv_collection_main_k), key(key), field(field) {}
 };
 
 template <typename... args_at>
@@ -123,27 +124,27 @@ struct neighborship_t {
  */
 class value_view_t {
 
-    ukv_bytes_ptr_t ptr_ = nullptr;
+    ukv_bytes_cptr_t ptr_ = nullptr;
     ukv_length_t length_ = ukv_length_missing_k;
 
   public:
     using value_type = byte_t;
 
     inline value_view_t() = default;
-    inline value_view_t(ukv_bytes_ptr_t ptr, ukv_length_t length) noexcept {
+    inline value_view_t(ukv_bytes_cptr_t ptr, ukv_length_t length) noexcept {
         ptr_ = ptr;
         length_ = length;
     }
 
     inline value_view_t(byte_t const* begin, byte_t const* end) noexcept
-        : ptr_(ukv_bytes_ptr_t(begin)), length_(static_cast<ukv_length_t>(end - begin)) {}
+        : ptr_(ukv_bytes_cptr_t(begin)), length_(static_cast<ukv_length_t>(end - begin)) {}
 
     /// Compatibility with `std::basic_string_view` in C++17.
     inline value_view_t(byte_t const* begin, std::size_t n) noexcept
-        : ptr_(ukv_bytes_ptr_t(begin)), length_(static_cast<ukv_length_t>(n)) {}
+        : ptr_(ukv_bytes_cptr_t(begin)), length_(static_cast<ukv_length_t>(n)) {}
 
     inline value_view_t(char const* c_str) noexcept
-        : ptr_(ukv_bytes_ptr_t(c_str)), length_(static_cast<ukv_length_t>(std::strlen(c_str))) {}
+        : ptr_(ukv_bytes_cptr_t(c_str)), length_(static_cast<ukv_length_t>(std::strlen(c_str))) {}
 
     inline operator bool() const noexcept { return length_ != ukv_length_missing_k; }
     inline std::size_t size() const noexcept { return length_ == ukv_length_missing_k ? 0 : length_; }
@@ -169,7 +170,7 @@ class value_view_t {
 
 class value_ref_t {
 
-    ukv_bytes_ptr_t ptr_ = nullptr;
+    ukv_byte_t* ptr_ = nullptr;
     ukv_length_t* offset_ = nullptr;
     ukv_length_t* length_ = nullptr;
 
@@ -177,7 +178,7 @@ class value_ref_t {
     using value_type = byte_t;
 
     inline value_ref_t() = default;
-    inline value_ref_t(ukv_bytes_ptr_t ptr, ukv_length_t& offset, ukv_length_t& length) noexcept {
+    inline value_ref_t(ukv_byte_t* ptr, ukv_length_t& offset, ukv_length_t& length) noexcept {
         ptr_ = ptr;
         offset_ = &offset;
         length_ = &length;
@@ -190,7 +191,7 @@ class value_ref_t {
     inline bool empty() const noexcept { return !size(); }
     inline operator bool() const noexcept { return *length_ != ukv_length_missing_k; }
 
-    ukv_bytes_cptr_t const* member_ptr() const noexcept { return &ptr_; }
+    ukv_byte_t* const* member_ptr() const noexcept { return &ptr_; }
     ukv_length_t const* member_offset() const noexcept { return offset_; }
     ukv_length_t const* member_length() const noexcept { return length_; }
 

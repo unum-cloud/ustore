@@ -171,9 +171,9 @@ void check_binary_collection(collection_t& col) {
 
     auto ref = col[keys];
     contents_arg_t values {
-        .contents_begin = {&vals_begin, 0},
         .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
         .lengths_begin = {&val_len, 0},
+        .contents_begin = {&vals_begin, 0},
         .count = 3,
     };
     round_trip(ref, values);
@@ -250,9 +250,9 @@ TEST(db, txn) {
     auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
 
     contents_arg_t values {
-        .contents_begin = {&vals_begin, 0},
         .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
         .lengths_begin = {&val_len, 0},
+        .contents_begin = {&vals_begin, 0},
         .count = 3,
     };
 
