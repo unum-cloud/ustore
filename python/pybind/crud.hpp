@@ -168,15 +168,14 @@ static py::object has_one_binary(py_collection_t& col, PyObject* key_py) {
     }
 
     strided_iterator_gt<ukv_octet_t> indicators {found_indicators, sizeof(ukv_octet_t)};
-    if (col.export_into_arrow()) {
-        auto shared = std::make_shared<arrow::BooleanScalar>(indicators[0]);
-        PyObject* obj_ptr = arrow::py::wrap_scalar(shared);
-        return py::reinterpret_steal<py::object>(obj_ptr);
-    }
-    else {
-        PyObject* obj_ptr = indicators[0] ? Py_True : Py_False;
-        return py::reinterpret_borrow<py::object>(obj_ptr);
-    }
+    // if (col.export_into_arrow()) {
+    //     auto shared = std::make_shared<arrow::BooleanScalar>(indicators[0]);
+    //     PyObject* obj_ptr = arrow::py::wrap_scalar(shared);
+    //     return py::reinterpret_steal<py::object>(obj_ptr);
+    // }
+
+    PyObject* obj_ptr = indicators[0] ? Py_True : Py_False;
+    return py::reinterpret_borrow<py::object>(obj_ptr);
 }
 
 static py::object read_one_binary(py_collection_t& col, PyObject* key_py) {
@@ -216,17 +215,17 @@ static py::object read_one_binary(py_collection_t& col, PyObject* key_py) {
     // https://github.com/python/cpython/blob/main/Objects/bytesobject.c
     embedded_bins_iterator_t tape_it {found_values, found_offsets, found_lengths};
     value_view_t val = *tape_it;
-    if (col.export_into_arrow()) {
-        auto shared_buffer =
-            std::make_shared<arrow::Buffer>(reinterpret_cast<uint8_t*>(val.data()), static_cast<int64_t>(val.size()));
-        auto shared = std::make_shared<arrow::BinaryScalar>(shared_buffer);
-        PyObject* obj_ptr = arrow::py::wrap_scalar(shared);
-        return py::reinterpret_steal<py::object>(obj_ptr);
-    }
-    else {
-        PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
-        return py::reinterpret_borrow<py::object>(obj_ptr);
-    }
+    // if (col.export_into_arrow()) {
+    //     auto shared_buffer =
+    //         std::make_shared<arrow::Buffer>(reinterpret_cast<uint8_t*>(val.data()),
+    //         static_cast<int64_t>(val.size()));
+    //     auto shared = std::make_shared<arrow::BinaryScalar>(shared_buffer);
+    //     PyObject* obj_ptr = arrow::py::wrap_scalar(shared);
+    //     return py::reinterpret_steal<py::object>(obj_ptr);
+    // }
+
+    PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
+    return py::reinterpret_borrow<py::object>(obj_ptr);
 }
 
 static py::object has_many_binaries(py_collection_t& col, PyObject* keys_py) {
@@ -299,15 +298,14 @@ static py::object read_many_binaries(py_collection_t& col, PyObject* keys_py) {
     embedded_bins_iterator_t tape_it {found_values, found_offsets, found_lengths};
     if (col.export_into_arrow()) {
     }
-    else {
-        PyObject* tuple_ptr = PyTuple_New(keys.size());
-        for (std::size_t i = 0; i != keys.size(); ++i, ++tape_it) {
-            value_view_t val = *tape_it;
-            PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
-            PyTuple_SetItem(tuple_ptr, i, obj_ptr);
-        }
-        return py::reinterpret_steal<py::object>(tuple_ptr);
+
+    PyObject* tuple_ptr = PyTuple_New(keys.size());
+    for (std::size_t i = 0; i != keys.size(); ++i, ++tape_it) {
+        value_view_t val = *tape_it;
+        PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
+        PyTuple_SetItem(tuple_ptr, i, obj_ptr);
     }
+    return py::reinterpret_steal<py::object>(tuple_ptr);
 }
 
 static py::object has_binary(py_collection_t& col, py::object key_py) {
@@ -389,7 +387,7 @@ static py::array_t<ukv_key_t> scan_binary( //
         0,
         &min_key,
         0,
-        nullptr, 
+        nullptr,
         0,
         &scan_limit,
         0,
@@ -403,7 +401,7 @@ static py::array_t<ukv_key_t> scan_binary( //
     status.throw_unhandled();
     return py::array_t<ukv_key_t>(*found_lengths, found_keys);
 }
-
+#if 0
 /**
  * @brief Exports values into preallocated multi-dimensional NumPy-like buffers.
  *        The most performant batch-reading method, ideal for ML.
@@ -537,5 +535,6 @@ void fill_tensor( //
         output_length = count_copy;
     }
 }
+#endif
 
 } // namespace unum::ukv::pyb
