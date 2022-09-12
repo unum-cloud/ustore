@@ -383,7 +383,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
             return collection_t {db_, col, nullptr, format};
     }
 
-    status_t remove(ukv_str_view_t name, ukv_drop_mode_t mode = ukv_drop_keys_vals_handle_k) noexcept {
+    status_t drop(ukv_str_view_t name, ukv_drop_mode_t mode = ukv_drop_keys_vals_handle_k) noexcept {
         status_t status;
         ukv_collection_drop(db_, 0, name, mode, status.member_ptr());
         return status;
@@ -404,14 +404,14 @@ class database_t : public std::enable_shared_from_this<database_t> {
         if (!iter)
             return iter.release_status();
         while (!iter->is_end()) {
-            status = remove(**iter);
+            status = drop(**iter);
             if (!status)
                 return status;
             iter->operator++();
         }
 
         // Remove main collection
-        status = remove(nullptr, ukv_drop_vals_k);
+        status = drop(nullptr, ukv_drop_keys_vals_k);
         if (!status)
             return status;
 

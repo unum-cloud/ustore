@@ -27,9 +27,9 @@ namespace unum::ukv {
 namespace arf = arrow::flight;
 namespace ar = arrow;
 
-inline static std::string const kFlightListCols = "list_collections";   /// `DoGet`
-inline static std::string const kFlightColOpen = "open_collection";     /// `DoAction`
-inline static std::string const kFlightColRemove = "remove_collection"; /// `DoAction`
+inline static std::string const kFlightListCols = "list_collections"; /// `DoGet`
+inline static std::string const kFlightColOpen = "open_collection";   /// `DoAction`
+inline static std::string const kFlightColDrop = "remove_collection"; /// `DoAction`
 
 inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
 inline static std::string const kFlightTxnCommit = "commit_transaction"; /// `DoAction`

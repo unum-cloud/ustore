@@ -230,8 +230,8 @@ TEST(db, named) {
     check_binary_collection(col1);
     check_binary_collection(col2);
 
-    EXPECT_TRUE(db.remove("col1"));
-    EXPECT_TRUE(db.remove("col2"));
+    EXPECT_TRUE(db.drop("col1"));
+    EXPECT_TRUE(db.drop("col2"));
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
     EXPECT_TRUE(db.clear());
@@ -304,10 +304,10 @@ TEST(db, docs) {
 
     // JSON
     collection_t col = *db.collection("docs", ukv_format_json_k);
-    auto json = R"( {"person": "Davit", "age": 24} )"_json.dump();
+    auto json = R"( {"person": "Carl", "age": 24} )"_json.dump();
     col[1] = json.c_str();
     M_EXPECT_EQ_JSON(col[1].value()->c_str(), json.c_str());
-    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Davit\"");
+    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Carl\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "24");
 
     // MsgPack
@@ -315,38 +315,38 @@ TEST(db, docs) {
     value_view_t val = *col[1].value();
     M_EXPECT_EQ_MSG(val, json.c_str());
     val = *col[ckf(1, "person")].value();
-    M_EXPECT_EQ_MSG(val, "\"Davit\"");
+    M_EXPECT_EQ_MSG(val, "\"Carl\"");
     val = *col[ckf(1, "age")].value();
     M_EXPECT_EQ_MSG(val, "24");
 
     // Binary
     col.as(ukv_format_binary_k);
     auto maybe_person = col[ckf(1, "person")].value();
-    EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Davit"));
+    EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
 
     // JSON-Patching
     col.as(ukv_format_json_patch_k);
     auto json_patch =
         R"( [
-            { "op": "replace", "path": "/person", "value": "Ashot" },
+            { "op": "replace", "path": "/person", "value": "Alice" },
             { "op": "add", "path": "/hello", "value": ["world"] },
             { "op": "remove", "path": "/age" }
             ] )"_json.dump();
-    auto expected_json = R"( {"person": "Ashot", "hello": ["world"]} )"_json.dump();
+    auto expected_json = R"( {"person": "Alice", "hello": ["world"]} )"_json.dump();
     col[1] = json_patch.c_str();
     auto patch_result = col[1].value();
     M_EXPECT_EQ_JSON(patch_result->c_str(), expected_json.c_str());
-    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Ashot\"");
+    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Alice\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
 
     // JSON-Patch Merging
     col.as(ukv_format_json_merge_patch_k);
-    auto json_to_merge = R"( {"person": "Darvin", "age": 28} )"_json.dump();
-    expected_json = R"( {"person": "Darvin", "hello": ["world"], "age": 28} )"_json.dump();
+    auto json_to_merge = R"( {"person": "Bob", "age": 28} )"_json.dump();
+    expected_json = R"( {"person": "Bob", "hello": ["world"], "age": 28} )"_json.dump();
     col[1] = json_to_merge.c_str();
     auto merge_result = col[1].value();
     M_EXPECT_EQ_JSON(merge_result->c_str(), expected_json.c_str());
-    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Darvin\"");
+    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Bob\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
     M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "28");
     EXPECT_TRUE(db.clear());
@@ -359,14 +359,14 @@ TEST(db, docs_table) {
 
     // Inject basic data
     collection_t col = *db.collection("", ukv_format_json_k);
-    auto json_ashot = R"( { "person": "Ashot", "age": 27, "height": 1 } )"_json.dump();
-    auto json_darvin = R"( { "person": "Darvin", "age": "27", "weight": 2 } )"_json.dump();
-    auto json_davit = R"( { "person": "Davit", "age": 24 } )"_json.dump();
-    col[1] = json_ashot.c_str();
-    col[2] = json_darvin.c_str();
-    col[3] = json_davit.c_str();
-    M_EXPECT_EQ_JSON(*col[1].value(), json_ashot.c_str());
-    M_EXPECT_EQ_JSON(*col[2].value(), json_darvin.c_str());
+    auto json_alice = R"( { "person": "Alice", "age": 27, "height": 1 } )"_json.dump();
+    auto json_bob = R"( { "person": "Bob", "age": "27", "weight": 2 } )"_json.dump();
+    auto json_carl = R"( { "person": "Carl", "age": 24 } )"_json.dump();
+    col[1] = json_alice.c_str();
+    col[2] = json_bob.c_str();
+    col[3] = json_carl.c_str();
+    M_EXPECT_EQ_JSON(*col[1].value(), json_alice.c_str());
+    M_EXPECT_EQ_JSON(*col[2].value(), json_bob.c_str());
 
     // Just column names
     {
