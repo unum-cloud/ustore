@@ -813,28 +813,53 @@ void ukv_collection_drop(
     return_if_error(!col_name.empty() || !invalidate,
                     c_error,
                     args_combo_k,
-                    "Default collection can't be invlaidated.");
+                    "Default collection can't be invalidated.");
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
+    stl_col_t const& col = stl_col(db, c_col_id);
+    stl_col_t* col_ptr_to_clear = nullptr;
+    auto col_it_to_remove = db.named.end();
 
-    // We can't drop what is not present
-    auto col_it = db.named.find(col_name);
-    if (!col_name.empty() && col_it == db.named.end())
-        return;
+    if (c_col_name) {
+        if (!std::strlen(c_col_name))
+            col_ptr_to_clear = &db.main;
+        else {
+            col_it_to_remove = db.named.find(col_name);
+            if (col_it_to_remove != db.named.end())
+                col_ptr_to_clear = col_it_to_remove->second.get();
+        }
+    }
+    else {
+        if (c_col_id == ukv_collection_main_k)
+            col_ptr_to_clear = &db.main;
+        else {
+            for (auto it = db.named.begin(); it != db.named.end() && col_it_to_remove == db.named.end(); ++it) {
+                if (it->second.get() == &col) {
+                    col_it_to_remove = it;
+                    col_ptr_to_clear = col_it_to_remove->second.get();
+                }
+            }
+        }
+    }
 
-    stl_col_t& col = col_name.empty() ? db.main : *col_it->second.get();
-    if (c_mode == ukv_drop_keys_vals_handle_k)
-        db.named.erase(col_it);
-
+    if (c_mode == ukv_drop_keys_vals_handle_k) {
+        if (col_it_to_remove == db.named.end())
+            return;
+        db.named.erase(col_it_to_remove);
+    }
     else if (c_mode == ukv_drop_keys_vals_k) {
-        col.pairs.clear();
-        col.unique_elements = 0;
+        if (!col_ptr_to_clear)
+            return;
+        col_ptr_to_clear->pairs.clear();
+        col_ptr_to_clear->unique_elements = 0;
     }
 
     else if (c_mode == ukv_drop_vals_k) {
+        if (!col_ptr_to_clear)
+            return;
         generation_t gen = ++db.youngest_generation;
-        for (auto& kv : col.pairs)
+        for (auto& kv : col_ptr_to_clear->pairs)
             kv.second.reset(gen);
     }
 }
