@@ -138,10 +138,13 @@ template <typename scalar_at>
 std::unique_ptr<arf::ResultStream> return_scalar(scalar_at const& scalar) {
     static_assert(!std::is_reference_v<scalar_at>);
     auto result = std::make_unique<arf::Result>();
+    thread_local scalar_at scalar_copy;
+    scalar_copy = scalar;
     result->body = std::make_shared<ar::Buffer>( //
-        reinterpret_cast<uint8_t const*>(&scalar),
-        sizeof(scalar));
+        reinterpret_cast<uint8_t const*>(&scalar_copy),
+        sizeof(scalar_copy));
     auto results = std::make_unique<SingleResultStream>(std::move(result));
+
     return std::unique_ptr<arf::ResultStream>(results.release());
 }
 
@@ -266,11 +269,13 @@ class sessions_t {
         txns_aging_heap_.pop_back(); // Resize by removing one last slot
         running_txn_t released = it->second;
         client_to_txn_.erase(it);
+        released.executing = false;
         return released;
     }
 
     void submit(session_id_t session_id, running_txn_t running_txn) noexcept {
-        client_to_txn_.emplace(session_id, running_txn);
+        running_txn.executing = false;
+        client_to_txn_.insert_or_assign(session_id, running_txn);
         txns_aging_heap_.push_back(session_id);
         std::push_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
     }
