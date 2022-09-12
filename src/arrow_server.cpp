@@ -40,22 +40,39 @@ inline static arf::ActionType const kActionTxnCommit {kFlightTxnCommit, "Commit 
 /**
  * @brief Searches for a "value" among key-value pairs passed in URI after path.
  * @param query_params  Must begin with "?" or "/".
- * @param param_name    Must end with "=".
+ * @param param_name    The name of the URI parameter to match.
  */
 std::optional<std::string_view> param_value(std::string_view query_params, std::string_view param_name) {
 
-    auto key_begin = std::search(query_params.begin(), query_params.end(), param_name.begin(), param_name.end());
-    if (key_begin == query_params.end())
-        return std::nullopt;
+    char const* key_begin = query_params.begin();
+    do {
+        key_begin = std::search(key_begin, query_params.end(), param_name.begin(), param_name.end());
+        if (key_begin == query_params.end())
+            return std::nullopt;
+        bool is_suffix = key_begin + param_name.size() == query_params.end();
+        if (is_suffix)
+            return std::string_view {};
 
-    char preceding_char = *(key_begin - 1);
-    bool is_part_of_bigger_key = (preceding_char != '?') & (preceding_char != '&') & (preceding_char != '/');
-    if (is_part_of_bigger_key)
-        return std::nullopt;
+        // Check if we have matched a part of bigger key.
+        // In that case skip to next starting point.
+        auto prev_character = *(key_begin - 1);
+        if (prev_character != '?' && prev_character != '&' && prev_character != '/') {
+            key_begin += 1;
+            continue;
+        }
 
-    auto value_begin = key_begin + param_name.size();
-    auto value_end = std::find(value_begin, query_params.end(), '&');
-    return std::string_view {value_begin, static_cast<size_t>(value_end - value_begin)};
+        auto next_character = key_begin[param_name.size()];
+        if (next_character == '&')
+            return std::string_view {};
+
+        if (next_character == '=') {
+            auto value_begin = key_begin + param_name.size() + 1;
+            auto value_end = std::find(value_begin, query_params.end(), '&');
+            return std::string_view {value_begin, static_cast<size_t>(value_end - value_begin)};
+        }
+
+        key_begin += 1;
+    } while (true);
 }
 
 bool is_query(std::string_view uri, std::string_view name) {
