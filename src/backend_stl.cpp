@@ -930,16 +930,19 @@ void ukv_transaction_begin(
 }
 
 void ukv_transaction_commit( //
+    ukv_database_t const c_db,
     ukv_transaction_t const c_txn,
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+
     return_if_error(c_txn, c_error, uninitialized_state_k, "Transaction is uninitialized");
+    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
 
     // This write may fail with out-of-memory errors, if Hash-Tables
     // bucket allocation fails, but no values will be copied, only moved.
-    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
-    stl_db_t& db = *txn.db_ptr;
     std::unique_lock _ {db.mutex};
     generation_t const youngest_generation = db.youngest_generation.load();
 

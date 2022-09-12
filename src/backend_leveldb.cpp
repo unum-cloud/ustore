@@ -212,9 +212,9 @@ void read_enumerate( //
         if (!status.IsNotFound()) {
             if (export_error(status, c_error))
                 return;
-            enumerator(
-                i,
-                value_view_t {reinterpret_cast<ukv_bytes_cptr_t>(value.data()), static_cast<ukv_size_t>(value.size())});
+            auto begin = reinterpret_cast<ukv_bytes_cptr_t>(value.data());
+            auto length = static_cast<ukv_length_t>(value.size());
+            enumerator(i, value_view_t {begin, length});
         }
         else
             enumerator(i, value_view_t {});
@@ -529,6 +529,7 @@ void ukv_transaction_begin( //
 }
 
 void ukv_transaction_commit( //
+    ukv_database_t const,
     ukv_transaction_t const,
     ukv_options_t const,
     ukv_error_t* c_error) {

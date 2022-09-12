@@ -274,7 +274,7 @@ class transaction_t : public std::enable_shared_from_this<transaction_t> {
     status_t commit(bool flush = false) noexcept {
         status_t status;
         auto options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
-        ukv_transaction_commit(txn_, options, status.member_ptr());
+        ukv_transaction_commit(db_, txn_, options, status.member_ptr());
         return status;
     }
 

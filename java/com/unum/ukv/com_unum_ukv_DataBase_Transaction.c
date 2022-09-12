@@ -246,6 +246,12 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_commit( /
     JNIEnv* env_java,
     jobject txn_java) {
 
+    ukv_database_t db_ptr_c = db_ptr(env_java, txn_java);
+    if (!db_ptr_c) {
+        forward_error(env_java, "Database is closed!");
+        return;
+    }
+
     ukv_transaction_t txn_ptr_c = txn_ptr(env_java, txn_java);
     if (!txn_ptr_c) {
         forward_error(env_java, "Transaction wasn't initialized!");
@@ -254,6 +260,6 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_commit( /
 
     ukv_options_t options_c = ukv_options_default_k;
     ukv_error_t error_c = NULL;
-    ukv_transaction_commit(txn_ptr_c, options_c, &error_c);
+    ukv_transaction_commit(db_ptr_c, txn_ptr_c, options_c, &error_c);
     return error_c ? JNI_FALSE : JNI_TRUE;
 }
