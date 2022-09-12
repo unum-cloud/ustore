@@ -552,26 +552,25 @@ void ukv_read( //
     return_on_error(c_error);
 
     // 2. Pull metadata
-    std::size_t total_length = 0;
+    ukv_length_t total_length = 0;
     auto meta_enumerator = [&](std::size_t i, value_view_t value) {
         presences[i] = bool(value);
-        offs[i] = static_cast<ukv_length_t>(total_length);
-        lens[i] = value ? value.size() : ukv_length_missing_k;
-        total_length += value.size();
+        offs[i] = total_length;
+        lens[i] = value ? static_cast<ukv_length_t>(value.size()) : ukv_length_missing_k;
+        total_length += static_cast<ukv_length_t>(value.size());
     };
 
     std::shared_lock _ {db.mutex};
     c_txn ? read_txn_under_lock(txn, places, c_options, meta_enumerator, c_error)
           : read_head_under_lock(db, places, c_options, meta_enumerator, c_error);
-    offs[places.count] = static_cast<ukv_length_t>(total_length);
+    offs[places.count] = total_length;
     if (!needs_export)
         return;
 
     // 3. Pull the data, once we know the total length
-    ukv_length_t progress_in_tape = 0;
     auto tape = arena.alloc<byte_t>(total_length, c_error).begin();
     auto data_enumerator = [&](std::size_t i, value_view_t value) {
-        std::memcpy(std::exchange(tape, tape + progress_in_tape), value.begin(), value.size());
+        std::memcpy(std::exchange(tape, tape + value.size()), value.begin(), value.size());
     };
 
     *c_found_values = reinterpret_cast<ukv_byte_t*>(tape);
