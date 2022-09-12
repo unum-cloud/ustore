@@ -35,7 +35,7 @@ struct py_buffer_t {
 };
 
 inline py_buffer_t py_buffer(PyObject* obj, bool const_ = true) {
-    auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
+    auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED | PyBUF_FORMAT;
     if (!const_)
         flags |= PyBUF_WRITABLE;
 
