@@ -127,9 +127,12 @@ void ukv_read( //
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightRead);
     if (c_txn)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamTransactionID, std::uintptr_t(c_txn));
+        fmt::format_to(std::back_inserter(descriptor.cmd),
+                       "{}=0x{:0>16x}&",
+                       kParamTransactionID,
+                       std::uintptr_t(c_txn));
     if (same_named_collection)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamCollectionID, cols[0]);
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, cols[0]);
     if (partial_mode)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamReadPart, partial_mode);
     if (read_shared)
@@ -438,9 +441,12 @@ void ukv_write( //
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightWrite);
     if (c_txn)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamTransactionID, std::uintptr_t(c_txn));
+        fmt::format_to(std::back_inserter(descriptor.cmd),
+                       "{}=0x{:0>16x}&",
+                       kParamTransactionID,
+                       std::uintptr_t(c_txn));
     if (!has_cols_column && cols)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamCollectionID, cols[0]);
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, cols[0]);
     if (write_flush)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagFlushWrite);
 
@@ -614,9 +620,12 @@ void ukv_scan( //
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightScan);
     if (c_txn)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamTransactionID, std::uintptr_t(c_txn));
+        fmt::format_to(std::back_inserter(descriptor.cmd),
+                       "{}=0x{:0>16x}&",
+                       kParamTransactionID,
+                       std::uintptr_t(c_txn));
     if (same_named_collection)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}={:x}&", kParamCollectionID, cols[0]);
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, cols[0]);
     if (read_shared)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
     if (read_track)
@@ -777,7 +786,7 @@ void ukv_collection_drop(
                        mode);
     else
         fmt::format_to(std::back_inserter(action.type),
-                       "{}?{}={:x}&{}={}",
+                       "{}?{}=0x{:0>16x}&{}={}",
                        kFlightColDrop,
                        kParamCollectionID,
                        c_col_id,
@@ -872,7 +881,7 @@ void ukv_transaction_begin(
     arf::Action action;
     fmt::format_to(std::back_inserter(action.type), "{}?", kFlightTxnBegin);
     if (c_generation)
-        fmt::format_to(std::back_inserter(action.type), "{}={:x}&", kParamTransactionID, c_generation);
+        fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, c_generation);
     if (c_options & ukv_option_txn_snapshot_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
 
@@ -903,7 +912,7 @@ void ukv_transaction_commit( //
     // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "{}?{}={:x}&", kFlightTxnCommit, kParamTransactionID, c_txn);
+    fmt::format_to(std::back_inserter(action.type), "{}?{}=0x{:0>16x}&", kFlightTxnCommit, kParamTransactionID, c_txn);
     if (c_options & ukv_option_write_flush_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagFlushWrite);
 
