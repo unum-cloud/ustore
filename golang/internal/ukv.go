@@ -43,17 +43,17 @@ void u_free(void*fn, ukv_database_t c_db) {
 }
 
 void u_read(void* fn, ukv_database_t const c_db, ukv_transaction_t const c_txn, ukv_size_t const c_tasks_count,
-		ukv_collection_t const* c_cols, ukv_size_t const c_cols_stride, ukv_key_t const* c_keys,
+		ukv_collection_t const* c_collections, ukv_size_t const c_collections_stride, ukv_key_t const* c_keys,
 		ukv_size_t const c_keys_stride, ukv_options_t const c_options, ukv_length_t** c_found_lengths,
 		ukv_bytes_ptr_t* c_found_values, ukv_arena_t* c_arena, ukv_error_t* c_error) {
 
 	read_fn func = (read_fn)(fn);
-	(*func)(c_db, c_txn, c_tasks_count, c_cols, c_cols_stride, c_keys, c_keys_stride,
+	(*func)(c_db, c_txn, c_tasks_count, c_collections, c_collections_stride, c_keys, c_keys_stride,
 			c_options, c_found_lengths, c_found_values, c_arena, c_error);
 }
 
 void u_write(void* fn, ukv_database_t const c_db, ukv_transaction_t const c_txn, ukv_size_t const c_tasks_count,
-		ukv_collection_t const* c_cols, ukv_size_t const c_cols_stride, ukv_key_t const* c_keys,
+		ukv_collection_t const* c_collections, ukv_size_t const c_collections_stride, ukv_key_t const* c_keys,
 		ukv_size_t const c_keys_stride, ukv_bytes_ptr_t const c_vals, ukv_size_t const c_vals_stride,
 		ukv_length_t const* c_offs, ukv_size_t const c_offs_stride, ukv_length_t const* c_lens,
 		ukv_size_t const c_lens_stride, ukv_options_t const c_options, ukv_arena_t* c_arena, ukv_error_t* c_error) {
@@ -61,7 +61,7 @@ void u_write(void* fn, ukv_database_t const c_db, ukv_transaction_t const c_txn,
 	write_fn func = (write_fn)(fn);
 	ukv_bytes_ptr_t * val_ptr = (ukv_bytes_ptr_t*)c_vals;
 
-	(*func)(c_db, c_txn, c_tasks_count, c_cols, c_cols_stride, c_keys, c_keys_stride, val_ptr,
+	(*func)(c_db, c_txn, c_tasks_count, c_collections, c_collections_stride, c_keys, c_keys_stride, val_ptr,
 			c_vals_stride, c_offs, c_offs_stride, c_lens, c_lens_stride, c_options, c_arena, c_error);
 }
 

@@ -162,14 +162,14 @@ void round_trip(members_ref_gt<locations_at>& ref, contents_arg_t values) {
     check_equalities(ref, values);
 }
 
-void check_binary_collection(collection_t& col) {
+void check_binary_collection(collection_t& collection) {
     std::vector<ukv_key_t> keys {34, 35, 36};
     ukv_length_t val_len = sizeof(std::uint64_t);
     std::vector<std::uint64_t> vals {34, 35, 36};
     std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
 
-    auto ref = col[keys];
+    auto ref = collection[keys];
     contents_arg_t values {
         .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
         .lengths_begin = {&val_len, 0},
@@ -188,7 +188,7 @@ void check_binary_collection(collection_t& col) {
     check_length(ref, 0);
 
     // Check scans
-    keys_range_t present_keys = col.keys();
+    keys_range_t present_keys = collection.keys();
     keys_stream_t present_it = present_keys.begin();
     auto expected_it = keys.begin();
     for (; expected_it != keys.end(); ++present_it, ++expected_it) {
@@ -208,8 +208,8 @@ TEST(db, basic) {
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
-    collection_t col = *db.collection();
-    check_binary_collection(col);
+    collection_t collection = *db.collection();
+    check_binary_collection(collection);
     EXPECT_TRUE(db.clear());
 }
 
@@ -230,8 +230,8 @@ TEST(db, named) {
     check_binary_collection(col1);
     check_binary_collection(col2);
 
-    EXPECT_TRUE(db.remove("col1"));
-    EXPECT_TRUE(db.remove("col2"));
+    EXPECT_TRUE(db.drop("col1"));
+    EXPECT_TRUE(db.drop("col2"));
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
     EXPECT_TRUE(db.clear());
@@ -260,11 +260,11 @@ TEST(db, txn) {
     round_trip(txn_ref, values);
 
     EXPECT_TRUE(db.collection());
-    collection_t col = *db.collection();
-    auto col_ref = col[keys];
+    collection_t collection = *db.collection();
+    auto collection_ref = collection[keys];
 
     // Check for missing values before commit
-    check_length(col_ref, ukv_length_missing_k);
+    check_length(collection_ref, ukv_length_missing_k);
 
     auto status = txn.commit();
     status.throw_unhandled();
@@ -272,18 +272,18 @@ TEST(db, txn) {
     status.throw_unhandled();
 
     // Validate that values match after commit
-    check_equalities(col_ref, values);
+    check_equalities(collection_ref, values);
 
     // Transaction with named collection
     EXPECT_TRUE(db.collection("named_col"));
-    collection_t named_col = *db.collection("named_col");
-    std::vector<col_key_t> sub_keys {{named_col, 54}, {named_col, 55}, {named_col, 56}};
-    auto txn_named_col_ref = txn[sub_keys];
-    round_trip(txn_named_col_ref, values);
+    collection_t named_collection = *db.collection("named_col");
+    std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
+    auto txn_named_collection_ref = txn[sub_keys];
+    round_trip(txn_named_collection_ref, values);
 
     // Check for missing values before commit
-    auto named_col_ref = named_col[keys];
-    check_length(named_col_ref, ukv_length_missing_k);
+    auto named_collection_ref = named_collection[keys];
+    check_length(named_collection_ref, ukv_length_missing_k);
 
     status = txn.commit();
     status.throw_unhandled();
@@ -291,7 +291,7 @@ TEST(db, txn) {
     status.throw_unhandled();
 
     // Validate that values match after commit
-    check_equalities(named_col_ref, values);
+    check_equalities(named_collection_ref, values);
     EXPECT_TRUE(db.clear());
 }
 
@@ -303,52 +303,52 @@ TEST(db, docs) {
     EXPECT_TRUE(db.open(""));
 
     // JSON
-    collection_t col = *db.collection("docs", ukv_format_json_k);
-    auto json = R"( {"person": "Davit", "age": 24} )"_json.dump();
-    col[1] = json.c_str();
-    M_EXPECT_EQ_JSON(col[1].value()->c_str(), json.c_str());
-    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Davit\"");
-    M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "24");
+    collection_t collection = *db.collection("docs", ukv_format_json_k);
+    auto json = R"( {"person": "Carl", "age": 24} )"_json.dump();
+    collection[1] = json.c_str();
+    M_EXPECT_EQ_JSON(collection[1].value()->c_str(), json.c_str());
+    M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Carl\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "24");
 
     // MsgPack
-    col.as(ukv_format_msgpack_k);
-    value_view_t val = *col[1].value();
+    collection.as(ukv_format_msgpack_k);
+    value_view_t val = *collection[1].value();
     M_EXPECT_EQ_MSG(val, json.c_str());
-    val = *col[ckf(1, "person")].value();
-    M_EXPECT_EQ_MSG(val, "\"Davit\"");
-    val = *col[ckf(1, "age")].value();
+    val = *collection[ckf(1, "person")].value();
+    M_EXPECT_EQ_MSG(val, "\"Carl\"");
+    val = *collection[ckf(1, "age")].value();
     M_EXPECT_EQ_MSG(val, "24");
 
     // Binary
-    col.as(ukv_format_binary_k);
-    auto maybe_person = col[ckf(1, "person")].value();
-    EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Davit"));
+    collection.as(ukv_format_binary_k);
+    auto maybe_person = collection[ckf(1, "person")].value();
+    EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
 
     // JSON-Patching
-    col.as(ukv_format_json_patch_k);
+    collection.as(ukv_format_json_patch_k);
     auto json_patch =
         R"( [
-            { "op": "replace", "path": "/person", "value": "Ashot" },
+            { "op": "replace", "path": "/person", "value": "Alice" },
             { "op": "add", "path": "/hello", "value": ["world"] },
             { "op": "remove", "path": "/age" }
             ] )"_json.dump();
-    auto expected_json = R"( {"person": "Ashot", "hello": ["world"]} )"_json.dump();
-    col[1] = json_patch.c_str();
-    auto patch_result = col[1].value();
+    auto expected_json = R"( {"person": "Alice", "hello": ["world"]} )"_json.dump();
+    collection[1] = json_patch.c_str();
+    auto patch_result = collection[1].value();
     M_EXPECT_EQ_JSON(patch_result->c_str(), expected_json.c_str());
-    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Ashot\"");
-    M_EXPECT_EQ_JSON(col[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Alice\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
 
     // JSON-Patch Merging
-    col.as(ukv_format_json_merge_patch_k);
-    auto json_to_merge = R"( {"person": "Darvin", "age": 28} )"_json.dump();
-    expected_json = R"( {"person": "Darvin", "hello": ["world"], "age": 28} )"_json.dump();
-    col[1] = json_to_merge.c_str();
-    auto merge_result = col[1].value();
+    collection.as(ukv_format_json_merge_patch_k);
+    auto json_to_merge = R"( {"person": "Bob", "age": 28} )"_json.dump();
+    expected_json = R"( {"person": "Bob", "hello": ["world"], "age": 28} )"_json.dump();
+    collection[1] = json_to_merge.c_str();
+    auto merge_result = collection[1].value();
     M_EXPECT_EQ_JSON(merge_result->c_str(), expected_json.c_str());
-    M_EXPECT_EQ_JSON(col[ckf(1, "person")].value()->c_str(), "\"Darvin\"");
-    M_EXPECT_EQ_JSON(col[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
-    M_EXPECT_EQ_JSON(col[ckf(1, "age")].value()->c_str(), "28");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Bob\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "28");
     EXPECT_TRUE(db.clear());
 }
 
@@ -358,19 +358,19 @@ TEST(db, docs_table) {
     EXPECT_TRUE(db.open(""));
 
     // Inject basic data
-    collection_t col = *db.collection("", ukv_format_json_k);
-    auto json_ashot = R"( { "person": "Ashot", "age": 27, "height": 1 } )"_json.dump();
-    auto json_darvin = R"( { "person": "Darvin", "age": "27", "weight": 2 } )"_json.dump();
-    auto json_davit = R"( { "person": "Davit", "age": 24 } )"_json.dump();
-    col[1] = json_ashot.c_str();
-    col[2] = json_darvin.c_str();
-    col[3] = json_davit.c_str();
-    M_EXPECT_EQ_JSON(*col[1].value(), json_ashot.c_str());
-    M_EXPECT_EQ_JSON(*col[2].value(), json_darvin.c_str());
+    collection_t collection = *db.collection("", ukv_format_json_k);
+    auto json_alice = R"( { "person": "Alice", "age": 27, "height": 1 } )"_json.dump();
+    auto json_bob = R"( { "person": "Bob", "age": "27", "weight": 2 } )"_json.dump();
+    auto json_carl = R"( { "person": "Carl", "age": 24 } )"_json.dump();
+    collection[1] = json_alice.c_str();
+    collection[2] = json_bob.c_str();
+    collection[3] = json_carl.c_str();
+    M_EXPECT_EQ_JSON(*collection[1].value(), json_alice.c_str());
+    M_EXPECT_EQ_JSON(*collection[2].value(), json_bob.c_str());
 
     // Just column names
     {
-        auto maybe_fields = col[1].gist();
+        auto maybe_fields = collection[1].gist();
         auto fields = *maybe_fields;
 
         std::vector<std::string> parsed;
@@ -386,7 +386,7 @@ TEST(db, docs_table) {
     // Single cell
     {
         auto header = table_header().with<std::uint32_t>("age");
-        auto maybe_table = col[1].gather(header);
+        auto maybe_table = collection[1].gather(header);
         auto table = *maybe_table;
         auto col0 = table.column<0>();
 
@@ -401,7 +401,7 @@ TEST(db, docs_table) {
                           .with<std::int32_t>("age")
                           .with<std::string_view>("age");
 
-        auto maybe_table = col[1].gather(header);
+        auto maybe_table = collection[1].gather(header);
         auto table = *maybe_table;
         auto col0 = table.column<0>();
         auto col1 = table.column<1>();
@@ -418,7 +418,7 @@ TEST(db, docs_table) {
     // Single column
     {
         auto header = table_header().with<std::int32_t>("age");
-        auto maybe_table = col[{1, 2, 3, 123456}].gather(header);
+        auto maybe_table = collection[{1, 2, 3, 123456}].gather(header);
         auto table = *maybe_table;
         auto col0 = table.column<0>();
 
@@ -438,7 +438,7 @@ TEST(db, docs_table) {
                           .with<std::int32_t>("height")
                           .with<std::uint64_t>("weight");
 
-        auto maybe_table = col[{1, 2, 3, 123456, 654321}].gather(header);
+        auto maybe_table = collection[{1, 2, 3, 123456, 654321}].gather(header);
         auto table = *maybe_table;
         auto col0 = table.column<0>();
         auto col1 = table.column<1>();
@@ -469,7 +469,7 @@ TEST(db, docs_table) {
             field_type_t {"weight", ukv_type_u64_k},
         }};
 
-        auto maybe_table = col[{1, 2, 3, 123456, 654321}].gather(header);
+        auto maybe_table = collection[{1, 2, 3, 123456, 654321}].gather(header);
         auto table = *maybe_table;
         auto col0 = table.column(0).as<std::int32_t>();
         auto col1 = table.column(1).as<value_view_t>();

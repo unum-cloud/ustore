@@ -49,7 +49,7 @@ static ukv_type_t ukv_type_from_str(ukv_str_view_t type_name) {
     return ukv_type_any_k;
 }
 
-static py::object materialize(py_table_col_t& df) {
+static py::object materialize(py_table_collection_t& df) {
 
     // Extract the keys, if not explicitly defined
     if (std::holds_alternative<std::monostate>(df.rows_keys))
@@ -121,24 +121,24 @@ static py::object materialize(py_table_col_t& df) {
     ArrowArray c_arrow_array;
     ukv_to_arrow_schema( //
         table.rows(),
-        table.cols(),
+        table.collections(),
         &c_arrow_schema,
         &c_arrow_array,
         status.member_ptr());
     status.throw_unhandled();
 
     // Exports columns one-by-one
-    for (std::size_t col_idx = 0; col_idx != table.cols(); ++col_idx) {
-        column_view_t col = table.column(col_idx);
+    for (std::size_t collection_idx = 0; collection_idx != table.collections(); ++collection_idx) {
+        column_view_t collection = table.column(collection_idx);
         ukv_to_arrow_column( //
             table.rows(),
-            table_header.fields_begin[col_idx],
-            table_header.types_begin[col_idx],
-            col.validities(),
-            col.offsets(),
-            col.contents(),
-            c_arrow_schema.children[col_idx],
-            c_arrow_array.children[col_idx],
+            table_header.fields_begin[collection_idx],
+            table_header.types_begin[collection_idx],
+            collection.validities(),
+            collection.offsets(),
+            collection.contents(),
+            c_arrow_schema.children[collection_idx],
+            c_arrow_array.children[collection_idx],
             status.member_ptr());
         status.throw_unhandled();
     }
@@ -156,17 +156,18 @@ void ukv::wrap_pandas(py::module& m) {
 
     arrow::py::import_pyarrow();
 
-    auto df = py::class_<py_table_col_t, std::shared_ptr<py_table_col_t>>(m, "DataFrame", py::module_local());
+    auto df =
+        py::class_<py_table_collection_t, std::shared_ptr<py_table_collection_t>>(m, "DataFrame", py::module_local());
     df.def(py::init([](py::handle dtype) {
         // `dtype` can be a `dict` or a `list[tuple[str, str]]`, where every pair of
         // strings contains a column name and Python type descriptor
-        return std::make_shared<py_table_col_t>();
+        return std::make_shared<py_table_collection_t>();
     }));
 
 #pragma region Managing Columns
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.astype.html
-    df.def("astype", [](py_table_col_t& df, py::handle dtype_py) {
+    df.def("astype", [](py_table_collection_t& df, py::handle dtype_py) {
         // `dtype` can be one string, one enum, a `dict` or a `list[tuple[str, str]]`,
         // where every pair of strings contains a column name and Python type descriptor.
         if (PyDict_Check(dtype_py.ptr())) {
@@ -191,7 +192,7 @@ void ukv::wrap_pandas(py::module& m) {
         return df.shared_from_this();
     });
 
-    df.def("__getitem__", [](py_table_col_t& df, py::handle columns_py) {
+    df.def("__getitem__", [](py_table_collection_t& df, py::handle columns_py) {
         //
         if (df.columns_names.index())
             throw std::invalid_argument("Column names already set.");
@@ -208,7 +209,7 @@ void ukv::wrap_pandas(py::module& m) {
 
 #pragma region Managing Rows
 
-    df.def("loc", [](py_table_col_t& df, py::handle rows_py) {
+    df.def("loc", [](py_table_collection_t& df, py::handle rows_py) {
         //
         if (df.rows_keys.index())
             throw std::invalid_argument("Row indicies already set.");
@@ -230,12 +231,12 @@ void ukv::wrap_pandas(py::module& m) {
         }
         return df.shared_from_this();
     });
-    df.def("head", [](py_table_col_t& df, std::size_t count) {
+    df.def("head", [](py_table_collection_t& df, std::size_t count) {
         df.head = count;
         df.head_was_defined_last = true;
         return df.shared_from_this();
     });
-    df.def("tail", [](py_table_col_t& df, std::size_t count) {
+    df.def("tail", [](py_table_collection_t& df, std::size_t count) {
         df.tail = count;
         df.head_was_defined_last = false;
         return df.shared_from_this();
@@ -246,36 +247,36 @@ void ukv::wrap_pandas(py::module& m) {
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.loc.html#pandas.DataFrame.loc
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.iloc.html#pandas.DataFrame.iloc
     df.def_property_readonly("df", &materialize);
-    df.def("to_arrow", [](py_table_col_t& df, py::handle mat) {});
+    df.def("to_arrow", [](py_table_collection_t& df, py::handle mat) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_json.html
-    // df.def("to_json", [](py_table_col_t& df, py::object const& path_or_buf) {});
+    // df.def("to_json", [](py_table_collection_t& df, py::object const& path_or_buf) {});
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_parquet.html
-    // df.def("to_parquet", [](py_table_col_t& df, py::object const& path_or_buf) {});
+    // df.def("to_parquet", [](py_table_collection_t& df, py::object const& path_or_buf) {});
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_csv.html
-    // df.def("to_csv", [](py_table_col_t& df, py::object const& path_or_buf) {});
+    // df.def("to_csv", [](py_table_collection_t& df, py::object const& path_or_buf) {});
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_numpy.html
-    // df.def("to_numpy", [](py_table_col_t& df, py::handle mat) {});
+    // df.def("to_numpy", [](py_table_collection_t& df, py::handle mat) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.index.html#pandas.DataFrame.index
-    // df.def("index", [](py_table_col_t& df) {});
+    // df.def("index", [](py_table_collection_t& df) {});
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.columns.html#pandas.DataFrame.columns
-    // df.def("columns", [](py_table_col_t& df) {});
+    // df.def("columns", [](py_table_collection_t& df) {});
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.dtypes.html#pandas.DataFrame.dtypes
-    // df.def("dtypes", [](py_table_col_t& df) {});
+    // df.def("dtypes", [](py_table_collection_t& df) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.sample.html
-    // df.def("sample", [](py_table_col_t& df, std::size_t count, bool replace) {});
+    // df.def("sample", [](py_table_collection_t& df, std::size_t count, bool replace) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.concat.html
-    // df.def("concat", [](py_table_col_t const& df, py_table_col_t const& df_other) {});
+    // df.def("concat", [](py_table_collection_t const& df, py_table_collection_t const& df_other) {});
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.assign.html
-    // df.def("assign", [](py_table_col_t& df, py_table_col_t const& df_other) {});
+    // df.def("assign", [](py_table_collection_t& df, py_table_collection_t const& df_other) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.replace.html
-    // df.def("replace", [](py_table_col_t& df) {});
+    // df.def("replace", [](py_table_collection_t& df) {});
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.merge.html
-    // df.def("merge", [](py_table_col_t& df) {});
+    // df.def("merge", [](py_table_collection_t& df) {});
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.join.html
-    // df.def("join", [](py_table_col_t& df) {});
+    // df.def("join", [](py_table_collection_t& df) {});
 }
