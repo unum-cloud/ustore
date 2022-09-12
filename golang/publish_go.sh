@@ -2,7 +2,7 @@
 
 set -e
 
-if [ ! -f ukv_stl.go ]; then
+if [ ! -f internal/ukv.go ]; then
     echo "### Must run from root of go module."
     exit 1
 fi
