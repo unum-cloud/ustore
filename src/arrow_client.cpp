@@ -8,6 +8,7 @@
  */
 
 #include <unordered_map>
+#include <iostream>
 
 #include <fmt/core.h>
 #include <arrow/flight/client.h>
@@ -747,6 +748,7 @@ void ukv_collection_open(
     return_if_error(maybe_id.ok(), c_error, network_k, "No response received");
 
     auto& id_ptr = maybe_id.ValueUnsafe();
+    return_if_error(id_ptr->body->size() == sizeof(ukv_collection_t), c_error, error_unknown_k, "Inadequate response");
     std::memcpy(c_col, id_ptr->body->data(), sizeof(ukv_collection_t));
 }
 
@@ -893,7 +895,8 @@ void ukv_transaction_begin(
     return_if_error(maybe_id.ok(), c_error, network_k, "No response received");
 
     auto& id_ptr = maybe_id.ValueUnsafe();
-    std::memcpy(c_txn, id_ptr->body->data(), sizeof(ukv_collection_t));
+    return_if_error(id_ptr->body->size() == sizeof(ukv_transaction_t), c_error, error_unknown_k, "Inadequate response");
+    std::memcpy(c_txn, id_ptr->body->data(), sizeof(ukv_transaction_t));
 }
 
 void ukv_transaction_commit( //
@@ -912,7 +915,11 @@ void ukv_transaction_commit( //
     // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "{}?{}=0x{:0>16x}&", kFlightTxnCommit, kParamTransactionID, c_txn);
+    fmt::format_to(std::back_inserter(action.type),
+                   "{}?{}=0x{:0>16x}&",
+                   kFlightTxnCommit,
+                   kParamTransactionID,
+                   std::uintptr_t(c_txn));
     if (c_options & ukv_option_write_flush_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagFlushWrite);
 
