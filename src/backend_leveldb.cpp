@@ -269,15 +269,14 @@ void ukv_read( //
         auto data_enumerator = [&](std::size_t i, value_view_t value) {
             presences[i] = bool(value);
             lens[i] = value ? value.size() : ukv_length_missing_k;
-            if (needs_export) {
-                offs[i] = contents.size();
+            offs[i] = contents.size();
+            if (needs_export)
                 contents.insert(contents.size(), value.begin(), value.end(), c_error);
-            }
         };
         read_enumerate(db, places, options, value_buffer, data_enumerator, c_error);
+        offs[places.count] = contents.size();
         if (needs_export)
             *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(contents.begin());
-        offs[places.count] = contents.size();
     }
     catch (...) {
         *c_error = "Read Failure";
