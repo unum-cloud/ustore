@@ -258,131 +258,48 @@ void ukv_write( //
     }
 }
 
-void measure_one( //
-    rocks_db_t& db,
-    rocks_txn_t* txn,
-    places_arg_t const& tasks,
-    rocksdb::ReadOptions const& options,
-    ukv_bytes_ptr_t* c_found_values,
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_lengths,
-    stl_arena_t& arena,
-    ukv_error_t* c_error) {
-
-    place_t task = tasks[0];
-    auto col = rocks_collection(db, task.col);
-    auto key = to_slice(task.key);
-    auto value_uptr = make_value(c_error);
-    rocks_value_t& value = *value_uptr.get();
-    rocks_status_t status = txn //
-                                ? txn->Get(options, col, key, &value)
-                                : db.native->Get(options, col, key, &value);
-
-    if (!status.IsNotFound())
-        if (export_error(status, c_error))
-            return;
-
-    auto exported_len = status.IsNotFound() ? ukv_length_missing_k : static_cast<ukv_size_t>(value.size());
-    auto tape = arena.alloc<byte_t>(sizeof(ukv_size_t), c_error);
-    return_on_error(c_error);
-
-    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_size_t));
-    *c_found_lengths = reinterpret_cast<ukv_length_t*>(tape.begin());
-    *c_found_offsets = nullptr;
-    *c_found_values = nullptr;
-}
-
+template <typename value_enumerator_at>
 void read_one( //
     rocks_db_t& db,
     rocks_txn_t* txn,
-    places_arg_t const& tasks,
+    places_arg_t places,
     rocksdb::ReadOptions const& options,
-    ukv_bytes_ptr_t* c_found_values,
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_lengths,
-    stl_arena_t& arena,
+    value_enumerator_at enumerator,
     ukv_error_t* c_error) {
 
-    place_t task = tasks[0];
-    auto col = rocks_collection(db, task.col);
-    auto key = to_slice(task.key);
+    place_t place = places[0];
+    auto col = rocks_collection(db, place.col);
+    auto key = to_slice(place.key);
     auto value_uptr = make_value(c_error);
     rocks_value_t& value = *value_uptr.get();
     rocks_status_t status = txn //
                                 ? txn->Get(options, col, key, &value)
                                 : db.native->Get(options, col, key, &value);
-
-    if (!status.IsNotFound())
+    if (!status.IsNotFound()) {
         if (export_error(status, c_error))
             return;
-
-    auto bytes_in_value = static_cast<ukv_length_t>(value.size());
-    auto exported_len = status.IsNotFound() ? ukv_length_missing_k : bytes_in_value;
-    ukv_length_t offset = 0;
-    auto tape = arena.alloc<byte_t>(sizeof(ukv_length_t) * 2 + bytes_in_value, c_error);
-    return_on_error(c_error);
-
-    std::memcpy(tape.begin(), &exported_len, sizeof(ukv_length_t));
-    std::memcpy(tape.begin() + sizeof(ukv_length_t), &offset, sizeof(ukv_length_t));
-    std::memcpy(tape.begin() + sizeof(ukv_length_t) * 2, value.data(), bytes_in_value);
-
-    *c_found_lengths = reinterpret_cast<ukv_length_t*>(tape.begin());
-    *c_found_offsets = *c_found_lengths + 1;
-    *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(tape.begin() + sizeof(ukv_length_t) * 2);
-}
-
-void measure_many( //
-    rocks_db_t& db,
-    rocks_txn_t* txn,
-    places_arg_t const& tasks,
-    rocksdb::ReadOptions const& options,
-    ukv_bytes_ptr_t* c_found_values,
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_lengths,
-    stl_arena_t& arena,
-    ukv_error_t* c_error) {
-
-    std::vector<rocks_col_t*> cols(tasks.count);
-    std::vector<rocksdb::Slice> keys(tasks.count);
-    std::vector<std::string> vals(tasks.count);
-    for (std::size_t i = 0; i != tasks.size(); ++i) {
-        place_t task = tasks[i];
-        cols[i] = rocks_collection(db, task.col);
-        keys[i] = to_slice(task.key);
+        auto begin = reinterpret_cast<ukv_bytes_cptr_t>(value.data());
+        auto length = static_cast<ukv_length_t>(value.size());
+        enumerator(0, value_view_t {begin, length});
     }
-
-    std::vector<rocks_status_t> statuses = txn //
-                                               ? txn->MultiGet(options, cols, keys, &vals)
-                                               : db.native->MultiGet(options, cols, keys, &vals);
-
-    ukv_size_t total_bytes = sizeof(ukv_length_t) * tasks.count;
-    span_gt<ukv_length_t> lens = arena.alloc<ukv_length_t>(tasks.count, c_error);
-    return_on_error(c_error);
-
-    *c_found_lengths = lens.begin();
-    *c_found_offsets = nullptr;
-    *c_found_values = nullptr;
-
-    for (ukv_size_t i = 0; i != tasks.count; ++i)
-        lens[i] = statuses[i].IsNotFound() ? ukv_length_missing_k : static_cast<ukv_length_t>(vals[i].size());
+    else
+        enumerator(0, value_view_t {});
 }
 
+template <typename value_enumerator_at>
 void read_many( //
     rocks_db_t& db,
     rocks_txn_t* txn,
-    places_arg_t const& tasks,
+    places_arg_t places,
     rocksdb::ReadOptions const& options,
-    ukv_bytes_ptr_t* c_found_values,
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_lengths,
-    stl_arena_t& arena,
+    value_enumerator_at enumerator,
     ukv_error_t* c_error) {
 
-    std::vector<rocks_col_t*> cols(tasks.count);
-    std::vector<rocksdb::Slice> keys(tasks.count);
-    std::vector<std::string> vals(tasks.count);
-    for (std::size_t i = 0; i != tasks.size(); ++i) {
-        place_t task = tasks[i];
+    std::vector<rocks_col_t*> cols(places.count);
+    std::vector<rocksdb::Slice> keys(places.count);
+    std::vector<std::string> vals(places.count);
+    for (std::size_t i = 0; i != places.size(); ++i) {
+        place_t place = places[i];
         cols[i] = rocks_collection(db, task.col);
         keys[i] = to_slice(task.key);
     }
@@ -390,36 +307,16 @@ void read_many( //
     std::vector<rocks_status_t> statuses = txn //
                                                ? txn->MultiGet(options, cols, keys, &vals)
                                                : db.native->MultiGet(options, cols, keys, &vals);
-
-    // 1. Estimate the total size
-    ukv_size_t total_bytes = sizeof(ukv_length_t) * tasks.count * 2;
-    for (ukv_size_t i = 0; i != tasks.count; ++i)
-        total_bytes += vals[i].size();
-
-    // 2. Allocate a tape for all the values to be fetched
-    span_gt<byte_t> tape = arena.alloc<byte_t>(total_bytes, c_error);
-    return_on_error(c_error);
-
-    // 3. Fetch the data
-    ukv_length_t* lens = reinterpret_cast<ukv_length_t*>(tape.begin());
-    ukv_length_t* offs = lens + tasks.count;
-    ukv_size_t exported_bytes = sizeof(ukv_length_t) * tasks.count * 2;
-    *c_found_lengths = lens;
-    *c_found_offsets = offs;
-    *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(tape.begin() + exported_bytes);
-
-    for (std::size_t i = 0; i != tasks.size(); ++i) {
-        auto bytes_in_value = vals[i].size();
-        if (bytes_in_value) {
-            std::memcpy(tape.begin() + exported_bytes, vals[i].data(), bytes_in_value);
-            lens[i] = static_cast<ukv_length_t>(bytes_in_value);
-            offs[i] = reinterpret_cast<ukv_bytes_ptr_t>(tape.begin() + exported_bytes) - *c_found_values;
-            exported_bytes += bytes_in_value;
+    for (std::size_t i = 0; i != places.size(); ++i) {
+        if (!statuses[i].IsNotFound()) {
+            if (export_error(statuses[i], c_error))
+                return;
+            auto begin = reinterpret_cast<ukv_bytes_cptr_t>(vals[i].data());
+            auto length = static_cast<ukv_length_t>(vals[i].size());
+            enumerator(i, value_view_t {begin, length});
         }
-        else {
-            lens[i] = ukv_length_missing_k;
-            offs[i] = ukv_length_missing_k;
-        }
+        else
+            enumerator(i, value_view_t {});
     }
 }
 
@@ -437,7 +334,6 @@ void ukv_read( //
     ukv_options_t const c_options,
 
     ukv_octet_t** c_found_presences,
-
     ukv_length_t** c_found_offsets,
     ukv_length_t** c_found_lengths,
     ukv_bytes_ptr_t* c_found_values,
@@ -452,27 +348,45 @@ void ukv_read( //
         return;
     }
 
+    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    return_on_error(c_error);
+
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> cols_stride {c_cols, c_cols_stride};
-    strided_iterator_gt<ukv_key_t const> keys_stride {c_keys, c_keys_stride};
 
-    places_arg_t tasks {cols_stride, keys_stride, {}, c_tasks_count};
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
+    places_arg_t places {cols, keys, {}, c_tasks_count};
 
+    // 1. Allocate a tape for all the values to be pulled
+    auto offs = arena.alloc_or_dummy<ukv_length_t>(places.count + 1, c_error, c_found_offsets);
+    return_on_error(c_error);
+    auto lens = arena.alloc_or_dummy<ukv_length_t>(places.count, c_error, c_found_lengths);
+    return_on_error(c_error);
+    auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
+    return_on_error(c_error);
+    safe_vector_gt<byte_t> contents(&arena);
+
+    // 2. Pull metadata & data in one run, as reading from disk is expensive
     rocksdb::ReadOptions options;
     if (txn && (c_options & ukv_option_txn_snapshot_k))
         options.snapshot = txn->GetSnapshot();
 
     try {
-        if (c_tasks_count == 1) {
-            auto func = c_options ? &measure_one : &read_one;
-            func(db, txn, tasks, options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
-        }
-        else {
-            auto func = c_options ? &measure_many : &read_many;
-            func(db, txn, tasks, options, c_found_values, c_found_offsets, c_found_lengths, arena, c_error);
-        }
+        std::string value_buffer;
+        ukv_length_t progress_in_tape = 0;
+
+        auto data_enumerator = [&](std::size_t i, value_view_t value) {
+            presences[i] = bool(value);
+            lens[i] = value ? value.size() : ukv_length_missing_k;
+            offs[i] = contents.size();
+            contents.insert(contents.size(), value.begin(), value.end(), c_error);
+        };
+
+        if (c_tasks_count == 1)
+            read_one(db, txn, places, options, data_enumerator, c_error);
+        else
+            read_many(db, txn, places, options, data_enumerator, c_error);
     }
     catch (...) {
         *c_error = "Read Failure";
