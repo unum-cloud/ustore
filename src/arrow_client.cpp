@@ -116,10 +116,12 @@ void ukv_read( //
     bool const same_named_collection = same_collection && places.same_collections_are_named();
     bool const request_only_presences = c_found_presences && !c_found_lengths && !c_found_values;
     bool const request_only_lengths = c_found_lengths && !c_found_values;
-    char const* partial_mode =
-        !request_only_presences && !request_only_lengths //
-            ? nullptr
-            : request_only_lengths ? kParamReadPartLengths.c_str() : kParamReadPartPresences.c_str();
+    char const* partial_mode = request_only_presences //
+                                   ? kParamReadPartPresences.c_str()
+                                   : request_only_lengths //
+                                         ? kParamReadPartLengths.c_str()
+                                         : nullptr;
+
     bool const read_shared = c_options & ukv_option_read_shared_k;
     bool const read_track = c_options & ukv_option_read_track_k;
     arf::FlightDescriptor descriptor;
@@ -752,9 +754,9 @@ void ukv_collection_drop(
 
     std::string_view mode;
     switch (c_mode) {
-    case ukv_drop_vals_k: mode = "values"; break;
-    case ukv_drop_keys_vals_k: mode = "contents"; break;
-    case ukv_drop_keys_vals_handle_k: mode = "collection"; break;
+    case ukv_drop_vals_k: mode = kParamDropModeValues; break;
+    case ukv_drop_keys_vals_k: mode = kParamDropModeContents; break;
+    case ukv_drop_keys_vals_handle_k: mode = kParamDropModeCollection; break;
     }
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
@@ -768,15 +770,15 @@ void ukv_collection_drop(
     if (c_col_name)
         fmt::format_to(std::back_inserter(action.type),
                        "{}?{:}={}&{}={}",
-                       kFlightColRemove,
+                       kFlightColDrop,
                        kParamCollectionName,
                        c_col_name,
                        kParamDropMode,
                        mode);
     else
         fmt::format_to(std::back_inserter(action.type),
-                       "{}?{:x}={}&{}={}",
-                       kFlightColRemove,
+                       "{}?{}={:x}&{}={}",
+                       kFlightColDrop,
                        kParamCollectionID,
                        c_col_id,
                        kParamDropMode,
@@ -818,8 +820,8 @@ void ukv_collection_list( //
     ar_status = unpack_table(maybe_table, schema_c, batch_c);
     return_if_error(ar_status.ok(), c_error, args_combo_k, "Failed to unpack list of columns");
 
-    auto ids_column_idx = column_idx(schema_c, "cols");
-    auto names_column_idx = column_idx(schema_c, "names");
+    auto ids_column_idx = column_idx(schema_c, kArgCols);
+    auto names_column_idx = column_idx(schema_c, kArgNames);
     return_if_error(ids_column_idx && names_column_idx, c_error, args_combo_k, "Expecting two columns");
 
     if (c_count)

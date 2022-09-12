@@ -33,7 +33,7 @@ using sys_clock_t = std::chrono::system_clock;
 using sys_time_t = std::chrono::time_point<sys_clock_t>;
 
 inline static arf::ActionType const kActionColOpen {kFlightColOpen, "Find a collection descriptor by name."};
-inline static arf::ActionType const kActionColRemove {kFlightColRemove, "Delete a named collection."};
+inline static arf::ActionType const kActionColDrop {kFlightColDrop, "Delete a named collection."};
 inline static arf::ActionType const kActionTxnBegin {kFlightTxnBegin, "Starts an ACID transaction and returns its ID."};
 inline static arf::ActionType const kActionTxnCommit {kFlightTxnCommit, "Commit a previously started transaction."};
 
@@ -147,10 +147,14 @@ client_id_t parse_parse_client_id(arf::ServerCallContext const& ctx) {
     return static_cast<client_id_t>(std::hash<std::string> {}(peer_addr));
 }
 
-txn_id_t parse_txn_id(std::string_view str) {
+base_id_t parse_u64_hex(std::string_view str, base_id_t default_ = 0) {
     if (str.size() != 16)
-        return txn_id_t {0};
-    return txn_id_t {boost::lexical_cast<base_id_t>(str.data(), str.size())};
+        return default_;
+    return boost::lexical_cast<base_id_t>(str.data(), str.size());
+}
+
+txn_id_t parse_txn_id(std::string_view str) {
+    return txn_id_t {parse_u64_hex(str)};
 }
 
 struct session_id_t {
@@ -383,10 +387,12 @@ struct session_params_t {
     std::optional<std::string_view> collection_name;
     std::optional<std::string_view> collection_id;
 
-    std::optional<std::string_view> opt_part;
+    std::optional<std::string_view> opt_read_part;
+    std::optional<std::string_view> opt_drop_mode;
     std::optional<std::string_view> opt_snapshot;
     std::optional<std::string_view> opt_flush;
     std::optional<std::string_view> opt_track;
+    std::optional<std::string_view> opt_shared_mem;
 };
 
 session_params_t session_params(arf::ServerCallContext const& server_call, std::string_view uri) {
@@ -406,10 +412,12 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.collection_name = param_value(params, kParamCollectionName);
     result.collection_id = param_value(params, kParamCollectionID);
 
-    result.opt_part = param_value(params, kParamReadPart);
+    result.opt_read_part = param_value(params, kParamReadPart);
+    result.opt_read_part = param_value(params, kParamDropMode);
     result.opt_snapshot = param_value(params, kParamFlagSnapshotTxn);
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
     result.opt_track = param_value(params, kParamFlagTrackRead);
+    result.opt_shared_mem = param_value(params, kParamFlagSharedMemRead);
 
     return result;
 }
@@ -455,7 +463,7 @@ class UKVService : public arf::FlightServerBase {
     ar::Status ListActions( //
         arf::ServerCallContext const&,
         std::vector<arf::ActionType>* actions) override {
-        *actions = {kActionColOpen, kActionColRemove, kActionTxnBegin, kActionTxnCommit};
+        *actions = {kActionColOpen, kActionColDrop, kActionTxnBegin, kActionTxnCommit};
         return ar::Status::OK();
     }
 
@@ -512,14 +520,20 @@ class UKVService : public arf::FlightServerBase {
         }
 
         // Dropping a collection
-        if (is_query(action.type, kActionColRemove.type)) {
-            if (!params.collection_id)
+        if (is_query(action.type, kActionColDrop.type)) {
+            if (!params.collection_id && !params.collection_name)
                 return ar::Status::Invalid("Missing collection name argument");
 
+            ukv_drop_mode_t mode = //
+                params.opt_drop_mode == kParamDropModeValues     ? ukv_drop_vals_k
+                : params.opt_drop_mode == kParamDropModeContents ? ukv_drop_keys_vals_k
+                                                                 : ukv_drop_keys_vals_handle_k;
+
             ukv_collection_drop(db_,
-                                0,
-                                params.collection_id->begin(),
-                                ukv_drop_keys_vals_handle_k,
+                                params.collection_id ? parse_u64_hex(*params.collection_id, ukv_collection_main_k)
+                                                     : ukv_collection_main_k,
+                                params.collection_name ? params.collection_name->begin() : nullptr,
+                                mode,
                                 status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
@@ -620,8 +634,8 @@ class UKVService : public arf::FlightServerBase {
 
             /// @param `cols`
             auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
-            bool const request_only_presences = params.opt_part == kParamReadPartPresences;
-            bool const request_only_lengths = params.opt_part == kParamReadPartLengths;
+            bool const request_only_presences = params.opt_read_part == kParamReadPartPresences;
+            bool const request_only_lengths = params.opt_read_part == kParamReadPartLengths;
             bool const request_content = !request_only_lengths && !request_only_presences;
 
             // Reserve resources for the execution of this request
