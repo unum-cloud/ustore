@@ -94,11 +94,11 @@ constexpr ukv_type_t ukv_type() {
  * @brief The first column of the table, describing its contents.
  */
 struct table_index_view_t {
-    strided_iterator_gt<ukv_col_t const> cols_begin;
+    strided_iterator_gt<ukv_collection_t const> cols_begin;
     strided_iterator_gt<ukv_key_t const> keys_begin;
     std::size_t count = 0;
 
-    strided_range_gt<ukv_col_t const> cols() const noexcept { return {cols_begin, count}; }
+    strided_range_gt<ukv_collection_t const> cols() const noexcept { return {cols_begin, count}; }
     strided_range_gt<ukv_key_t const> keys() const noexcept { return {keys_begin, count}; }
 };
 
@@ -129,9 +129,9 @@ struct cell_gt<value_view_t> {
 
 template <typename element_at>
 class column_view_scalar_gt {
-    ukv_1x8_t* validities_ = nullptr;
-    ukv_1x8_t* conversions_ = nullptr;
-    ukv_1x8_t* collisions_ = nullptr;
+    ukv_octet_t* validities_ = nullptr;
+    ukv_octet_t* conversions_ = nullptr;
+    ukv_octet_t* collisions_ = nullptr;
     element_at* scalars_ = nullptr;
     ukv_size_t count_ = 0;
     ukv_str_view_t name_ = nullptr;
@@ -142,9 +142,9 @@ class column_view_scalar_gt {
     using value_type = cell_t;
 
     column_view_scalar_gt( //
-        ukv_1x8_t* validities,
-        ukv_1x8_t* conversions,
-        ukv_1x8_t* collisions,
+        ukv_octet_t* validities,
+        ukv_octet_t* conversions,
+        ukv_octet_t* collisions,
         scalar_t* scalars,
         ukv_size_t count,
         ukv_str_view_t name = nullptr) noexcept
@@ -161,7 +161,7 @@ class column_view_scalar_gt {
     cell_t operator[](std::size_t i) const noexcept {
         // Bitmaps are indexed from the last bit within every byte
         // https://arrow.apache.org/docs/format/Columnar.html#validity-bitmaps
-        ukv_1x8_t mask_bitmap = static_cast<ukv_1x8_t>(1 << (i % CHAR_BIT));
+        ukv_octet_t mask_bitmap = static_cast<ukv_octet_t>(1 << (i % CHAR_BIT));
         cell_t result;
         result.valid = validities_[i / CHAR_BIT] & mask_bitmap;
         result.converted = conversions_[i / CHAR_BIT] & mask_bitmap;
@@ -173,12 +173,12 @@ class column_view_scalar_gt {
 
 template <typename element_at>
 class column_view_varlen_gt {
-    ukv_1x8_t* validities_ = nullptr;
-    ukv_1x8_t* conversions_ = nullptr;
-    ukv_1x8_t* collisions_ = nullptr;
-    ukv_val_ptr_t tape_ = nullptr;
-    ukv_val_len_t* offsets_ = nullptr;
-    ukv_val_len_t* lengths_ = nullptr;
+    ukv_octet_t* validities_ = nullptr;
+    ukv_octet_t* conversions_ = nullptr;
+    ukv_octet_t* collisions_ = nullptr;
+    ukv_byte_t* tape_ = nullptr;
+    ukv_length_t* offsets_ = nullptr;
+    ukv_length_t* lengths_ = nullptr;
     ukv_size_t count_ = 0;
     ukv_str_view_t name_ = nullptr;
 
@@ -187,12 +187,12 @@ class column_view_varlen_gt {
     using value_type = cell_t;
 
     column_view_varlen_gt( //
-        ukv_1x8_t* validities,
-        ukv_1x8_t* conversions,
-        ukv_1x8_t* collisions,
-        ukv_val_ptr_t tape,
-        ukv_val_len_t* offsets,
-        ukv_val_len_t* lengths,
+        ukv_octet_t* validities,
+        ukv_octet_t* conversions,
+        ukv_octet_t* collisions,
+        ukv_byte_t* tape,
+        ukv_length_t* offsets,
+        ukv_length_t* lengths,
         ukv_size_t count,
         ukv_str_view_t name = nullptr) noexcept
         : validities_(validities), conversions_(conversions), collisions_(collisions), tape_(tape), offsets_(offsets),
@@ -211,7 +211,7 @@ class column_view_varlen_gt {
         using str_char_t = typename element_at::value_type;
         auto str_begin = reinterpret_cast<str_char_t const*>(tape_ + offsets_[i]);
 
-        ukv_1x8_t mask_bitmap = static_cast<ukv_1x8_t>(1 << (i % CHAR_BIT));
+        ukv_octet_t mask_bitmap = static_cast<ukv_octet_t>(1 << (i % CHAR_BIT));
         cell_t result;
         result.valid = validities_[i / CHAR_BIT] & mask_bitmap;
         result.converted = conversions_[i / CHAR_BIT] & mask_bitmap;
@@ -222,26 +222,26 @@ class column_view_varlen_gt {
 };
 
 class column_view_t {
-    ukv_1x8_t* validities_ = nullptr;
-    ukv_1x8_t* conversions_ = nullptr;
-    ukv_1x8_t* collisions_ = nullptr;
-    ukv_val_ptr_t scalars_ = nullptr;
-    ukv_val_ptr_t tape_ = nullptr;
-    ukv_val_len_t* offsets_ = nullptr;
-    ukv_val_len_t* lengths_ = nullptr;
+    ukv_octet_t* validities_ = nullptr;
+    ukv_octet_t* conversions_ = nullptr;
+    ukv_octet_t* collisions_ = nullptr;
+    ukv_byte_t* scalars_ = nullptr;
+    ukv_byte_t* tape_ = nullptr;
+    ukv_length_t* offsets_ = nullptr;
+    ukv_length_t* lengths_ = nullptr;
     ukv_size_t count_ = 0;
     ukv_str_view_t name_ = nullptr;
     ukv_type_t type_ = ukv_type_any_k;
 
   public:
     column_view_t( //
-        ukv_1x8_t* validities,
-        ukv_1x8_t* conversions,
-        ukv_1x8_t* collisions,
-        ukv_val_ptr_t scalars,
-        ukv_val_ptr_t tape,
-        ukv_val_len_t* offsets,
-        ukv_val_len_t* lengths,
+        ukv_octet_t* validities,
+        ukv_octet_t* conversions,
+        ukv_octet_t* collisions,
+        ukv_byte_t* scalars,
+        ukv_byte_t* tape,
+        ukv_length_t* offsets,
+        ukv_length_t* lengths,
         ukv_size_t count,
         ukv_str_view_t name = nullptr,
         ukv_type_t type = ukv_type_any_k) noexcept
@@ -265,9 +265,9 @@ class column_view_t {
             return {validities_, conversions_, collisions_, reinterpret_cast<element_at*>(scalars_), count_, name_};
     }
 
-    ukv_1x8_t* validities() const noexcept { return validities_; }
-    ukv_val_len_t* offsets() const noexcept { return offsets_; }
-    ukv_val_ptr_t contents() const noexcept { return scalars_ ?: tape_; }
+    ukv_octet_t* validities() const noexcept { return validities_; }
+    ukv_length_t* offsets() const noexcept { return offsets_; }
+    ukv_byte_t* contents() const noexcept { return scalars_ ?: tape_; }
 };
 
 /**
@@ -290,34 +290,34 @@ class table_view_gt {
     ukv_size_t docs_count_;
     ukv_size_t fields_count_;
 
-    strided_iterator_gt<ukv_col_t const> cols_;
+    strided_iterator_gt<ukv_collection_t const> cols_;
     strided_iterator_gt<ukv_key_t const> keys_;
     strided_iterator_gt<ukv_str_view_t const> fields_;
     strided_iterator_gt<ukv_type_t const> types_;
 
-    ukv_1x8_t** columns_validities_ = nullptr;
-    ukv_1x8_t** columns_conversions_ = nullptr;
-    ukv_1x8_t** columns_collisions_ = nullptr;
-    ukv_val_ptr_t* columns_scalars_ = nullptr;
-    ukv_val_len_t** columns_offsets_ = nullptr;
-    ukv_val_len_t** columns_lengths_ = nullptr;
-    ukv_val_ptr_t tape_ = nullptr;
+    ukv_octet_t** columns_validities_ = nullptr;
+    ukv_octet_t** columns_conversions_ = nullptr;
+    ukv_octet_t** columns_collisions_ = nullptr;
+    ukv_byte_t** columns_scalars_ = nullptr;
+    ukv_length_t** columns_offsets_ = nullptr;
+    ukv_length_t** columns_lengths_ = nullptr;
+    ukv_byte_t* tape_ = nullptr;
 
   public:
     table_view_gt( //
         ukv_size_t docs_count,
         ukv_size_t fields_count,
-        strided_iterator_gt<ukv_col_t const> cols,
+        strided_iterator_gt<ukv_collection_t const> cols,
         strided_iterator_gt<ukv_key_t const> keys,
         strided_iterator_gt<ukv_str_view_t const> fields,
         strided_iterator_gt<ukv_type_t const> types,
-        ukv_1x8_t** columns_validities = nullptr,
-        ukv_1x8_t** columns_conversions = nullptr,
-        ukv_1x8_t** columns_collisions = nullptr,
-        ukv_val_ptr_t* columns_scalars = nullptr,
-        ukv_val_len_t** columns_offsets = nullptr,
-        ukv_val_len_t** columns_lengths = nullptr,
-        ukv_val_ptr_t tape = nullptr) noexcept
+        ukv_octet_t** columns_validities = nullptr,
+        ukv_octet_t** columns_conversions = nullptr,
+        ukv_octet_t** columns_collisions = nullptr,
+        ukv_byte_t** columns_scalars = nullptr,
+        ukv_length_t** columns_offsets = nullptr,
+        ukv_length_t** columns_lengths = nullptr,
+        ukv_byte_t* tape = nullptr) noexcept
         : docs_count_(docs_count), fields_count_(fields_count), cols_(cols), keys_(keys), fields_(fields),
           types_(types), columns_validities_(columns_validities), columns_conversions_(columns_conversions),
           columns_collisions_(columns_collisions), columns_scalars_(columns_scalars), columns_offsets_(columns_offsets),
@@ -369,13 +369,13 @@ class table_view_gt {
     std::size_t rows() const noexcept { return docs_count_; }
     std::size_t cols() const noexcept { return fields_count_; }
 
-    ukv_1x8_t*** member_validities() noexcept { return &columns_validities_; }
-    ukv_1x8_t*** member_conversions() noexcept { return &columns_conversions_; }
-    ukv_1x8_t*** member_collisions() noexcept { return &columns_collisions_; }
-    ukv_val_ptr_t** member_scalars() noexcept { return &columns_scalars_; }
-    ukv_val_len_t*** member_offsets() noexcept { return &columns_offsets_; }
-    ukv_val_len_t*** member_lengths() noexcept { return &columns_lengths_; }
-    ukv_val_ptr_t* member_tape() noexcept { return &tape_; }
+    ukv_octet_t*** member_validities() noexcept { return &columns_validities_; }
+    ukv_octet_t*** member_conversions() noexcept { return &columns_conversions_; }
+    ukv_octet_t*** member_collisions() noexcept { return &columns_collisions_; }
+    ukv_byte_t*** member_scalars() noexcept { return &columns_scalars_; }
+    ukv_length_t*** member_offsets() noexcept { return &columns_offsets_; }
+    ukv_length_t*** member_lengths() noexcept { return &columns_lengths_; }
+    ukv_byte_t** member_tape() noexcept { return &tape_; }
 };
 
 template <typename element_at>

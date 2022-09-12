@@ -227,7 +227,7 @@ ukv_format_t mime_to_format(beast::string_view mime) {
 }
 
 struct db_w_clients_t : public std::enable_shared_from_this<db_w_clients_t> {
-    db_t session;
+    database_t session;
     int running_transactions;
 };
 
@@ -278,8 +278,8 @@ void respond_to_one(db_session_t& session,
     http::verb received_verb = req.method();
     beast::string_view received_path = req.target();
 
-    txn_t txn(session.db());
-    col_t collection;
+    transaction_t txn(session.db());
+    collection_t collection;
     ukv_key_t key = 0;
     ukv_options_t options = ukv_options_default_k;
 
@@ -305,7 +305,7 @@ void respond_to_one(db_session_t& session,
         std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
 
         status_t status;
-        ukv_col_upsert(session.db(), col_name_buffer, NULL, &collection.raw, error.member_ptr());
+        ukv_collection_open(session.db(), col_name_buffer, NULL, &collection.raw, error.member_ptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
     }
@@ -333,8 +333,8 @@ void respond_to_one(db_session_t& session,
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
-        ukv_val_ptr_t begin = tape.ptr + sizeof(ukv_val_len_t);
-        ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
+        ukv_bytes_ptr_t begin = tape.ptr + sizeof(ukv_length_t);
+        ukv_length_t len = reinterpret_cast<ukv_length_t*>(tape.ptr)[0];
         if (!len)
             return send_response(make_error(req, http::status::not_found, "Missing key"));
 
@@ -375,7 +375,7 @@ void respond_to_one(db_session_t& session,
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
-        ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
+        ukv_length_t len = reinterpret_cast<ukv_length_t*>(tape.ptr)[0];
         if (!len)
             return send_response(make_error(req, http::status::not_found, "Missing key"));
 
@@ -406,7 +406,7 @@ void respond_to_one(db_session_t& session,
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
-        ukv_val_len_t len = reinterpret_cast<ukv_val_len_t*>(tape.ptr)[0];
+        ukv_length_t len = reinterpret_cast<ukv_length_t*>(tape.ptr)[0];
         if (len)
             return send_response(make_error(req, http::status::conflict, "Duplicate key"));
 
@@ -429,9 +429,9 @@ void respond_to_one(db_session_t& session,
 
         status_t status;
         auto value = req.body();
-        auto value_ptr = reinterpret_cast<ukv_val_ptr_t>(value.data());
-        auto value_len = static_cast<ukv_val_len_t>(*opt_payload_len);
-        ukv_val_len_t value_off = 0;
+        auto value_ptr = reinterpret_cast<ukv_bytes_ptr_t>(value.data());
+        auto value_len = static_cast<ukv_length_t>(*opt_payload_len);
+        ukv_length_t value_off = 0;
         ukv_write(session.db(),
                   txn.raw,
                   &collection.raw,
@@ -461,9 +461,9 @@ void respond_to_one(db_session_t& session,
     case http::verb::delete_: {
 
         status_t status;
-        ukv_val_ptr_t value_ptr = nullptr;
-        ukv_val_len_t value_len = 0;
-        ukv_val_len_t value_off = 0;
+        ukv_bytes_ptr_t value_ptr = nullptr;
+        ukv_length_t value_len = 0;
+        ukv_length_t value_off = 0;
         ukv_write(session.db(),
                   txn.raw,
                   &collection.raw,
@@ -504,8 +504,8 @@ void respond_to_aos(db_session_t& session,
     http::verb received_verb = req.method();
     beast::string_view received_path = req.target();
 
-    txn_t txn(session.db());
-    std::vector<col_t> collections(session.db());
+    transaction_t txn(session.db());
+    std::vector<collection_t> collections(session.db());
     ukv_options_t options = ukv_options_default_k;
     std::vector<ukv_key_t> keys;
 
@@ -525,8 +525,8 @@ void respond_to_aos(db_session_t& session,
         std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
 
         status_t status;
-        col_t collection(session.db());
-        ukv_col_upsert(session.db(), col_name_buffer, NULL, &collection.raw, error.member_ptr());
+        collection_t collection(session.db());
+        ukv_collection_open(session.db(), col_name_buffer, NULL, &collection.raw, error.member_ptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -597,14 +597,14 @@ void respond_to_aos(db_session_t& session,
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
-        ukv_val_len_t const* values_lens = reinterpret_cast<ukv_val_len_t*>(tape.ptr);
-        ukv_val_ptr_t values_begin = tape.ptr + sizeof(ukv_val_len_t) * keys.size();
+        ukv_length_t const* values_lens = reinterpret_cast<ukv_length_t*>(tape.ptr);
+        ukv_bytes_ptr_t values_begin = tape.ptr + sizeof(ukv_length_t) * keys.size();
 
         std::size_t exported_bytes = 0;
         std::vector<json_t> parsed_vals(keys.size());
         for (std::size_t key_idx = 0; key_idx != keys.size(); ++key_idx) {
-            ukv_val_ptr_t begin = values_begin + exported_bytes;
-            ukv_val_len_t len = values_lens[key_idx];
+            ukv_bytes_ptr_t begin = values_begin + exported_bytes;
+            ukv_length_t len = values_lens[key_idx];
             json_t& val = parsed_vals[key_idx];
             if (!len)
                 continue;
@@ -913,7 +913,7 @@ int main(int argc, char* argv[]) {
     // Check if we can initialize the DB
     auto session = std::make_shared<db_w_clients_t>();
     status_t status;
-    ukv_db_open(db_config.c_str(), &session->raw, error.member_ptr());
+    ukv_database_open(db_config.c_str(), &session->raw, error.member_ptr());
     if (!status) {
         std::cerr << "Couldn't initialize DB: " << error.raw << std::endl;
         return EXIT_FAILURE;

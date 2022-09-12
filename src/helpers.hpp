@@ -400,8 +400,8 @@ class safe_vector_gt {
 
   private:
     ptr_t ptr_ = nullptr;
-    ukv_val_len_t length_ = 0;
-    ukv_val_len_t cap_ = 0;
+    ukv_length_t length_ = 0;
+    ukv_length_t cap_ = 0;
 
     stl_arena_t* arena_ptr_ = nullptr;
 
@@ -468,8 +468,8 @@ class safe_vector_gt {
     void insert(std::size_t offset, ptrc_t inserted_begin, ptrc_t inserted_end, ukv_error_t* c_error) {
         return_if_error(size() >= offset, c_error, out_of_range_k, "Can't insert");
 
-        auto inserted_len = static_cast<ukv_val_len_t>(inserted_end - inserted_begin);
-        auto following_len = static_cast<ukv_val_len_t>(length_ - offset);
+        auto inserted_len = static_cast<ukv_length_t>(inserted_end - inserted_begin);
+        auto following_len = static_cast<ukv_length_t>(length_ - offset);
         auto new_size = length_ + inserted_len;
 
         if (new_size > cap_) {
@@ -502,8 +502,8 @@ class safe_vector_gt {
     inline void clear() noexcept { length_ = 0; }
 
     inline ptr_t* member_ptr() noexcept { return &ptr_; }
-    inline ukv_val_len_t* member_length() noexcept { return &length_; }
-    inline ukv_val_len_t* member_cap() noexcept { return &cap_; }
+    inline ukv_length_t* member_length() noexcept { return &length_; }
+    inline ukv_length_t* member_cap() noexcept { return &cap_; }
 };
 
 /**
@@ -512,16 +512,16 @@ class safe_vector_gt {
  * Is suited for data preparation before passing to the C API.
  */
 class growing_tape_t {
-    safe_vector_gt<ukv_val_len_t> offsets_;
-    safe_vector_gt<ukv_val_len_t> lengths_;
+    safe_vector_gt<ukv_length_t> offsets_;
+    safe_vector_gt<ukv_length_t> lengths_;
     safe_vector_gt<byte_t> contents_;
 
   public:
     growing_tape_t(stl_arena_t& arena) : offsets_(&arena), lengths_(&arena), contents_(&arena) {}
 
     void push_back(value_view_t value, ukv_error_t* c_error) {
-        offsets_.push_back(static_cast<ukv_val_len_t>(contents_.size()), c_error);
-        lengths_.push_back(static_cast<ukv_val_len_t>(value.size()), c_error);
+        offsets_.push_back(static_cast<ukv_length_t>(contents_.size()), c_error);
+        lengths_.push_back(static_cast<ukv_length_t>(value.size()), c_error);
         contents_.insert(contents_.size(), value.begin(), value.end(), c_error);
     }
 
@@ -536,18 +536,18 @@ class growing_tape_t {
         contents_.clear();
     }
 
-    strided_range_gt<ukv_val_len_t> offsets() noexcept {
-        return strided_range<ukv_val_len_t>(offsets_.begin(), offsets_.end());
+    strided_range_gt<ukv_length_t> offsets() noexcept {
+        return strided_range<ukv_length_t>(offsets_.begin(), offsets_.end());
     }
-    strided_range_gt<ukv_val_len_t> lengths() noexcept {
-        return strided_range<ukv_val_len_t>(lengths_.begin(), lengths_.end());
+    strided_range_gt<ukv_length_t> lengths() noexcept {
+        return strided_range<ukv_length_t>(lengths_.begin(), lengths_.end());
     }
     strided_range_gt<byte_t> contents() noexcept { return strided_range<byte_t>(contents_.begin(), contents_.end()); }
 
-    operator joined_bins_t() noexcept { return {ukv_val_ptr_t(contents_.data()), offsets_.data(), lengths_.size()}; }
+    operator joined_bins_t() noexcept { return {ukv_bytes_ptr_t(contents_.data()), offsets_.data(), lengths_.size()}; }
 
     operator embedded_bins_t() noexcept {
-        return {ukv_val_ptr_t(contents_.data()), offsets_.data(), lengths_.data(), lengths_.size()};
+        return {ukv_bytes_ptr_t(contents_.data()), offsets_.data(), lengths_.data(), lengths_.size()};
     }
 };
 

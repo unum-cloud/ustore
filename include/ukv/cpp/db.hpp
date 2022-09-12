@@ -42,29 +42,30 @@ namespace unum::ukv {
  * in "Document Collections", and can later be queried with
  * any "Document Format".
  */
-class col_t {
-    ukv_t db_ = nullptr;
-    ukv_col_t col_ = ukv_col_main_k;
-    ukv_txn_t txn_ = nullptr;
+class collection_t {
+    ukv_database_t db_ = nullptr;
+    ukv_collection_t col_ = ukv_collection_main_k;
+    ukv_transaction_t txn_ = nullptr;
     arena_t arena_;
     ukv_format_t format_ = ukv_format_binary_k;
 
   public:
-    inline col_t() noexcept : arena_(nullptr) {}
-    inline col_t(ukv_t db_ptr,
-                 ukv_col_t col = ukv_col_main_k,
-                 ukv_txn_t txn = nullptr,
-                 ukv_format_t format = ukv_format_binary_k) noexcept
+    inline collection_t() noexcept : arena_(nullptr) {}
+    inline collection_t(ukv_database_t db_ptr,
+                        ukv_collection_t col = ukv_collection_main_k,
+                        ukv_transaction_t txn = nullptr,
+                        ukv_format_t format = ukv_format_binary_k) noexcept
         : db_(db_ptr), col_(col), txn_(txn), arena_(db_), format_(format) {}
 
-    inline col_t(col_t&& other) noexcept
-        : db_(other.db_), col_(std::exchange(other.col_, ukv_col_main_k)), txn_(std::exchange(other.txn_, nullptr)),
-          arena_(std::exchange(other.arena_, {nullptr})), format_(std::exchange(other.format_, ukv_format_binary_k)) {}
+    inline collection_t(collection_t&& other) noexcept
+        : db_(other.db_), col_(std::exchange(other.col_, ukv_collection_main_k)),
+          txn_(std::exchange(other.txn_, nullptr)), arena_(std::exchange(other.arena_, {nullptr})),
+          format_(std::exchange(other.format_, ukv_format_binary_k)) {}
 
-    inline col_t(col_t const& other) noexcept
+    inline collection_t(collection_t const& other) noexcept
         : db_(other.db_), col_(other.col_), txn_(other.txn_), arena_(other.db_), format_(other.format_) {}
 
-    inline col_t& operator=(col_t&& other) noexcept {
+    inline collection_t& operator=(collection_t&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(col_, other.col_);
         std::swap(txn_, other.txn_);
@@ -73,7 +74,7 @@ class col_t {
         return *this;
     }
 
-    inline col_t& operator=(col_t const& other) noexcept {
+    inline collection_t& operator=(collection_t const& other) noexcept {
         db_ = other.db_;
         col_ = other.col_;
         txn_ = other.txn_;
@@ -82,13 +83,13 @@ class col_t {
         return *this;
     }
 
-    inline operator ukv_col_t() const noexcept { return col_; }
-    inline ukv_col_t* member_ptr() noexcept { return &col_; }
+    inline operator ukv_collection_t() const noexcept { return col_; }
+    inline ukv_collection_t* member_ptr() noexcept { return &col_; }
     inline ukv_arena_t* member_arena() noexcept { return arena_.member_ptr(); }
-    inline ukv_t db() const noexcept { return db_; }
-    inline ukv_txn_t txn() const noexcept { return txn_; }
+    inline ukv_database_t db() const noexcept { return db_; }
+    inline ukv_transaction_t txn() const noexcept { return txn_; }
     inline graph_ref_t as_graph() noexcept { return {db_, txn_, col_, arena_}; }
-    inline col_t& as(ukv_format_t format) noexcept {
+    inline collection_t& as(ukv_format_t format) noexcept {
         format_ = format;
         return *this;
     }
@@ -123,13 +124,13 @@ class col_t {
 
     status_t clear() noexcept {
         status_t status;
-        ukv_col_drop(db_, col_, nullptr, ukv_col_drop_keys_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, col_, nullptr, ukv_drop_keys_vals_k, status.member_ptr());
         return status;
     }
 
     status_t clear_values() noexcept {
         status_t status;
-        ukv_col_drop(db_, col_, nullptr, ukv_col_drop_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, col_, nullptr, ukv_drop_vals_k, status.member_ptr());
         return status;
     }
 
@@ -194,30 +195,30 @@ class col_t {
  * > Copyable: No.
  * > Exceptions: Never.
  */
-class txn_t : public std::enable_shared_from_this<txn_t> {
-    ukv_t db_ = nullptr;
-    ukv_txn_t txn_ = nullptr;
+class transaction_t : public std::enable_shared_from_this<transaction_t> {
+    ukv_database_t db_ = nullptr;
+    ukv_transaction_t txn_ = nullptr;
     arena_t arena_;
 
   public:
-    inline txn_t() noexcept : arena_(nullptr) {}
-    inline txn_t(ukv_t db, ukv_txn_t txn) noexcept : db_(db), txn_(txn), arena_(db) {}
-    inline txn_t(txn_t const&) = delete;
-    inline txn_t(txn_t&& other) noexcept
+    inline transaction_t() noexcept : arena_(nullptr) {}
+    inline transaction_t(ukv_database_t db, ukv_transaction_t txn) noexcept : db_(db), txn_(txn), arena_(db) {}
+    inline transaction_t(transaction_t const&) = delete;
+    inline transaction_t(transaction_t&& other) noexcept
         : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), arena_(std::exchange(other.arena_, {nullptr})) {}
 
-    inline txn_t& operator=(txn_t&& other) noexcept {
+    inline transaction_t& operator=(transaction_t&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(txn_, other.txn_);
         std::swap(arena_, other.arena_);
         return *this;
     }
 
-    inline ukv_t db() const noexcept { return db_; }
-    inline operator ukv_txn_t() const noexcept { return txn_; }
+    inline ukv_database_t db() const noexcept { return db_; }
+    inline operator ukv_transaction_t() const noexcept { return txn_; }
 
-    inline ~txn_t() noexcept {
-        ukv_txn_free(db_, txn_);
+    inline ~transaction_t() noexcept {
+        ukv_transaction_free(db_, txn_);
         txn_ = nullptr;
     }
 
@@ -262,7 +263,7 @@ class txn_t : public std::enable_shared_from_this<txn_t> {
     status_t reset(bool snapshot = false) noexcept {
         status_t status;
         auto options = snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k;
-        ukv_txn_begin(db_, 0, options, &txn_, status.member_ptr());
+        ukv_transaction_begin(db_, 0, options, &txn_, status.member_ptr());
         return status;
     }
 
@@ -273,24 +274,24 @@ class txn_t : public std::enable_shared_from_this<txn_t> {
     status_t commit(bool flush = false) noexcept {
         status_t status;
         auto options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
-        ukv_txn_commit(txn_, options, status.member_ptr());
+        ukv_transaction_commit(db_, txn_, options, status.member_ptr());
         return status;
     }
 
-    expected_gt<col_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
-    operator expected_gt<col_t>() noexcept { return collection(""); }
+    expected_gt<collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
+    operator expected_gt<collection_t>() noexcept { return collection(""); }
 
     /**
      * @brief Provides a view of a single collection synchronized with the transaction.
      */
-    expected_gt<col_t> collection(ukv_str_view_t name = "") noexcept {
+    expected_gt<collection_t> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
-        ukv_col_t col = ukv_col_main_k;
-        ukv_col_upsert(db_, name, nullptr, &col, status.member_ptr());
+        ukv_collection_t col = ukv_collection_main_k;
+        ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
-            return col_t {db_, col, txn_};
+            return collection_t {db_, col, txn_};
     }
 };
 
@@ -305,31 +306,31 @@ class txn_t : public std::enable_shared_from_this<txn_t> {
  * > Copyable: No.
  * > Exceptions: Never.
  */
-class db_t : public std::enable_shared_from_this<db_t> {
-    ukv_t db_ = nullptr;
+class database_t : public std::enable_shared_from_this<database_t> {
+    ukv_database_t db_ = nullptr;
 
   public:
-    db_t() = default;
-    db_t(db_t const&) = delete;
-    db_t(db_t&& other) noexcept : db_(std::exchange(other.db_, nullptr)) {}
+    database_t() = default;
+    database_t(database_t const&) = delete;
+    database_t(database_t&& other) noexcept : db_(std::exchange(other.db_, nullptr)) {}
 
     status_t open(std::string const& config = "") noexcept {
         status_t status;
-        ukv_db_open(config.c_str(), &db_, status.member_ptr());
+        ukv_database_open(config.c_str(), &db_, status.member_ptr());
         return status;
     }
 
     void close() noexcept {
-        ukv_db_free(db_);
+        ukv_database_free(db_);
         db_ = nullptr;
     }
 
-    ~db_t() noexcept {
+    ~database_t() noexcept {
         if (db_)
             close();
     }
 
-    inline operator ukv_t() const noexcept { return db_; }
+    inline operator ukv_database_t() const noexcept { return db_; }
 
     /**
      * @brief Checks if a collection with requested `name` is present in the DB.
@@ -341,10 +342,10 @@ class db_t : public std::enable_shared_from_this<db_t> {
 
         status_t status;
         ukv_size_t count = 0;
-        ukv_col_t* collections = 0;
-        ukv_val_len_t* offsets = nullptr;
-        ukv_str_view_t names = nullptr;
-        ukv_col_list(db_, &count, &collections, &offsets, &names, memory.member_ptr(), status.member_ptr());
+        ukv_collection_t* collections = 0;
+        ukv_length_t* offsets = nullptr;
+        ukv_str_span_t names = nullptr;
+        ukv_collection_list(db_, &count, &collections, &offsets, &names, memory.member_ptr(), status.member_ptr());
         if (!status)
             return status;
 
@@ -368,31 +369,31 @@ class db_t : public std::enable_shared_from_this<db_t> {
         return contains(name, arena);
     }
 
-    expected_gt<col_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
-    operator expected_gt<col_t>() noexcept { return collection(""); }
-    expected_gt<col_t> operator*() noexcept { return collection(""); }
+    expected_gt<collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
+    operator expected_gt<collection_t>() noexcept { return collection(""); }
+    expected_gt<collection_t> operator*() noexcept { return collection(""); }
 
-    expected_gt<col_t> collection(ukv_str_view_t name = "", ukv_format_t format = ukv_format_binary_k) noexcept {
+    expected_gt<collection_t> collection(ukv_str_view_t name = "", ukv_format_t format = ukv_format_binary_k) noexcept {
         status_t status;
-        ukv_col_t col = ukv_col_main_k;
-        ukv_col_upsert(db_, name, nullptr, &col, status.member_ptr());
+        ukv_collection_t col = ukv_collection_main_k;
+        ukv_collection_open(db_, name, nullptr, &col, status.member_ptr());
         if (!status)
             return status;
         else
-            return col_t {db_, col, nullptr, format};
+            return collection_t {db_, col, nullptr, format};
     }
 
-    status_t remove(ukv_str_view_t name, ukv_col_drop_mode_t mode = ukv_col_drop_keys_vals_handle_k) noexcept {
+    status_t remove(ukv_str_view_t name, ukv_drop_mode_t mode = ukv_drop_keys_vals_handle_k) noexcept {
         status_t status;
-        ukv_col_drop(db_, 0, name, mode, status.member_ptr());
+        ukv_collection_drop(db_, 0, name, mode, status.member_ptr());
         return status;
     }
 
     expected_gt<strings_tape_iterator_t> collection_names(arena_t& memory) {
         ukv_size_t count = 0;
-        ukv_str_view_t names = nullptr;
+        ukv_str_span_t names = nullptr;
         status_t status;
-        ukv_col_list(db_, &count, nullptr, nullptr, &names, memory.member_ptr(), status.member_ptr());
+        ukv_collection_list(db_, &count, nullptr, nullptr, &names, memory.member_ptr(), status.member_ptr());
         return {std::move(status), {count, names}};
     }
 
@@ -410,7 +411,7 @@ class db_t : public std::enable_shared_from_this<db_t> {
         }
 
         // Remove main collection
-        status = remove(nullptr, ukv_col_drop_vals_k);
+        status = remove(nullptr, ukv_drop_vals_k);
         if (!status)
             return status;
 
@@ -423,14 +424,19 @@ class db_t : public std::enable_shared_from_this<db_t> {
         return clear(memory);
     }
 
-    expected_gt<txn_t> transact(bool snapshot = false) noexcept {
+    expected_gt<transaction_t> transact(bool snapshot = false) noexcept {
         status_t status;
-        ukv_txn_t raw = nullptr;
-        ukv_txn_begin(db_, 0, snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k, &raw, status.member_ptr());
+        ukv_transaction_t raw = nullptr;
+        ukv_transaction_begin( //
+            db_,
+            0,
+            snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k,
+            &raw,
+            status.member_ptr());
         if (!status)
-            return {std::move(status), txn_t {db_, nullptr}};
+            return {std::move(status), transaction_t {db_, nullptr}};
         else
-            return txn_t {db_, raw};
+            return transaction_t {db_, raw};
     }
 };
 

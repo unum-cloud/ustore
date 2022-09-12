@@ -34,12 +34,12 @@ struct size_estimates_t;
 
 class keys_stream_t {
 
-    ukv_t db_ = nullptr;
-    ukv_col_t col_ = ukv_col_main_k;
-    ukv_txn_t txn_ = nullptr;
+    ukv_database_t db_ = nullptr;
+    ukv_collection_t col_ = ukv_collection_main_k;
+    ukv_transaction_t txn_ = nullptr;
 
     arena_t arena_;
-    ukv_val_len_t read_ahead_ = 0;
+    ukv_length_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
     indexed_range_gt<ukv_key_t*> fetched_keys_;
@@ -50,7 +50,7 @@ class keys_stream_t {
         if (next_min_key_ == ukv_key_unknown_k)
             return {};
 
-        ukv_val_len_t* found_counts = nullptr;
+        ukv_length_t* found_counts = nullptr;
         ukv_key_t* found_keys = nullptr;
         status_t status;
         ukv_scan( //
@@ -61,6 +61,7 @@ class keys_stream_t {
             0,
             &next_min_key_,
             0,
+            nullptr, 0,
             &read_ahead_,
             0,
             ukv_options_default_k,
@@ -75,7 +76,7 @@ class keys_stream_t {
         fetched_keys_ = indexed_range_gt<ukv_key_t*> {found_keys, found_keys + *found_counts};
         fetched_offset_ = 0;
 
-        auto count = static_cast<ukv_val_len_t>(fetched_keys_.size());
+        auto count = static_cast<ukv_length_t>(fetched_keys_.size());
         next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
@@ -89,10 +90,10 @@ class keys_stream_t {
 
     static constexpr std::size_t default_read_ahead_k = 256;
 
-    keys_stream_t(ukv_t db,
-                  ukv_col_t col = ukv_col_main_k,
+    keys_stream_t(ukv_database_t db,
+                  ukv_collection_t col = ukv_collection_main_k,
                   std::size_t read_ahead = keys_stream_t::default_read_ahead_k,
-                  ukv_txn_t txn = nullptr)
+                  ukv_transaction_t txn = nullptr)
         : db_(db), col_(col), txn_(txn), arena_(db), read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
 
     keys_stream_t(keys_stream_t&&) = default;
@@ -170,13 +171,13 @@ class keys_stream_t {
 
 class pairs_stream_t {
 
-    ukv_t db_ = nullptr;
-    ukv_col_t col_ = ukv_col_main_k;
-    ukv_txn_t txn_ = nullptr;
+    ukv_database_t db_ = nullptr;
+    ukv_collection_t col_ = ukv_collection_main_k;
+    ukv_transaction_t txn_ = nullptr;
 
     arena_t arena_scan_;
     arena_t arena_read_;
-    ukv_val_len_t read_ahead_ = 0;
+    ukv_length_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
     indexed_range_gt<ukv_key_t*> fetched_keys_;
@@ -188,7 +189,7 @@ class pairs_stream_t {
         if (next_min_key_ == ukv_key_unknown_k)
             return {};
 
-        ukv_val_len_t* found_counts = nullptr;
+        ukv_length_t* found_counts = nullptr;
         ukv_key_t* found_keys = nullptr;
         status_t status;
         ukv_scan( //
@@ -199,6 +200,7 @@ class pairs_stream_t {
             0,
             &next_min_key_,
             0,
+            nullptr, 0,
             &read_ahead_,
             0,
             ukv_options_default_k,
@@ -214,8 +216,8 @@ class pairs_stream_t {
         fetched_offset_ = 0;
         auto count = static_cast<ukv_size_t>(fetched_keys_.size());
 
-        ukv_val_ptr_t found_vals = nullptr;
-        ukv_val_len_t* found_offs = nullptr;
+        ukv_bytes_ptr_t found_vals = nullptr;
+        ukv_length_t* found_offs = nullptr;
         ukv_read( //
             db_,
             txn_,
@@ -247,10 +249,10 @@ class pairs_stream_t {
     static constexpr std::size_t default_read_ahead_k = 256;
 
     pairs_stream_t( //
-        ukv_t db,
-        ukv_col_t col = ukv_col_main_k,
+        ukv_database_t db,
+        ukv_collection_t col = ukv_collection_main_k,
         std::size_t read_ahead = pairs_stream_t::default_read_ahead_k,
-        ukv_txn_t txn = nullptr)
+        ukv_transaction_t txn = nullptr)
         : db_(db), col_(col), txn_(txn), arena_scan_(db_), arena_read_(db_),
           read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
 
@@ -367,9 +369,9 @@ struct size_estimates_t {
  */
 class members_range_t {
 
-    ukv_t db_;
-    ukv_txn_t txn_;
-    ukv_col_t col_;
+    ukv_database_t db_;
+    ukv_transaction_t txn_;
+    ukv_collection_t col_;
     ukv_key_t min_key_;
     ukv_key_t max_key_;
 
@@ -383,9 +385,9 @@ class members_range_t {
     }
 
   public:
-    members_range_t(ukv_t db,
-                    ukv_txn_t txn = nullptr,
-                    ukv_col_t col = ukv_col_main_k,
+    members_range_t(ukv_database_t db,
+                    ukv_transaction_t txn = nullptr,
+                    ukv_collection_t col = ukv_collection_main_k,
                     ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
                     ukv_key_t max_key = ukv_key_unknown_k) noexcept
         : db_(db), txn_(txn), col_(col), min_key_(min_key), max_key_(max_key) {}
@@ -414,13 +416,25 @@ class members_range_t {
     expected_gt<size_estimates_t> size_estimates() noexcept {
         status_t status;
         arena_t arena(db_);
-        ukv_size_t* o = nullptr;
         auto a = arena.member_ptr();
         auto s = status.member_ptr();
-        ukv_size(db_, txn_, 1, &col_, 0, &min_key_, 0, &max_key_, 0, ukv_options_default_k, &o, a, s);
+        ukv_size_t* min_cardinalities = nullptr;
+        ukv_size_t* max_cardinalities = nullptr;
+        ukv_size_t* min_value_bytes = nullptr;
+        ukv_size_t* max_value_bytes = nullptr;
+        ukv_size_t* min_space_usages = nullptr;
+        ukv_size_t* max_space_usages = nullptr;
+        ukv_size(db_, txn_, 1, &col_, 0, &min_key_, 0, &max_key_, 0, ukv_options_default_k, 
+            &min_cardinalities,
+            &max_cardinalities,
+            &min_value_bytes,
+            &max_value_bytes,
+            &min_space_usages,
+            &max_space_usages
+        , a, s);
         if (!status)
             return status;
-        size_estimates_t result {{o[0], o[1]}, {o[2], o[3]}, {o[4], o[5]}};
+        size_estimates_t result {{min_cardinalities[0], max_cardinalities[0]}, {min_value_bytes[0], max_value_bytes[0]}, {min_space_usages[0], max_space_usages[0]}};
         return result;
     }
 

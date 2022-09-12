@@ -104,13 +104,13 @@ class strided_iterator_gt {
 };
 
 template <>
-class strided_iterator_gt<ukv_1x8_t> {
+class strided_iterator_gt<ukv_octet_t> {
   public:
     struct ref_t {
-        ukv_1x8_t* raw = nullptr;
-        ukv_1x8_t mask = 0;
-        ref_t(ukv_1x8_t& raw) noexcept : raw(&raw), mask(0) {}
-        ref_t(ukv_1x8_t* raw, ukv_1x8_t mask) noexcept : raw(raw), mask(mask) {}
+        ukv_octet_t* raw = nullptr;
+        ukv_octet_t mask = 0;
+        ref_t(ukv_octet_t& raw) noexcept : raw(&raw), mask(0) {}
+        ref_t(ukv_octet_t* raw, ukv_octet_t mask) noexcept : raw(raw), mask(mask) {}
         operator bool() const noexcept { return *raw & mask; }
         ref_t& operator=(bool value) noexcept {
             *raw = value ? (*raw | mask) : (*raw & ~mask);
@@ -118,7 +118,7 @@ class strided_iterator_gt<ukv_1x8_t> {
         }
     };
 
-    using element_t = ukv_1x8_t;
+    using element_t = ukv_octet_t;
     using value_type = bool;
     using reference = ref_t;
 
@@ -149,9 +149,9 @@ class strided_iterator_gt<ukv_1x8_t> {
 };
 
 template <>
-class strided_iterator_gt<ukv_1x8_t const> {
+class strided_iterator_gt<ukv_octet_t const> {
   public:
-    using element_t = ukv_1x8_t const;
+    using element_t = ukv_octet_t const;
     using value_type = bool;
     using reference = void;
 
@@ -331,7 +331,7 @@ class joined_chunks_iterator_gt {
     using element_t = typename chunk_t::value_type;
 
     element_t* contents_ = nullptr;
-    ukv_val_len_t* offsets_ = nullptr;
+    ukv_length_t* offsets_ = nullptr;
 
   public:
     using iterator_category = std::random_access_iterator_tag;
@@ -341,7 +341,7 @@ class joined_chunks_iterator_gt {
     using reference = void;
 
     template <typename same_size_at>
-    joined_chunks_iterator_gt(same_size_at* vals, ukv_val_len_t* offs) noexcept
+    joined_chunks_iterator_gt(same_size_at* vals, ukv_length_t* offs) noexcept
         : contents_((element_t*)(vals)), offsets_(offs) {
         static_assert(sizeof(same_size_at) == sizeof(element_t));
     }
@@ -372,7 +372,7 @@ class joined_chunks_gt {
     using element_t = typename chunk_t::value_type;
 
     element_t* contents_ = nullptr;
-    ukv_val_len_t* offsets_ = nullptr;
+    ukv_length_t* offsets_ = nullptr;
     ukv_size_t count_ = 0;
 
   public:
@@ -381,7 +381,7 @@ class joined_chunks_gt {
     joined_chunks_gt() = default;
 
     template <typename same_size_at>
-    joined_chunks_gt(same_size_at* vals, ukv_val_len_t* offs, ukv_size_t elements) noexcept
+    joined_chunks_gt(same_size_at* vals, ukv_length_t* offs, ukv_size_t elements) noexcept
         : contents_((element_t*)(vals)), offsets_(offs), count_(elements) {
         static_assert(sizeof(same_size_at) == sizeof(element_t));
     }
@@ -393,7 +393,7 @@ class joined_chunks_gt {
         return {contents_ + offsets_[i], offsets_[i + 1] - offsets_[i]};
     }
 
-    ukv_val_len_t* offsets() const noexcept { return offsets_; }
+    ukv_length_t* offsets() const noexcept { return offsets_; }
     element_t* contents() const noexcept { return contents_; }
 };
 
@@ -411,8 +411,8 @@ class embedded_chunks_iterator_gt {
     using element_t = typename chunk_t::value_type;
 
     element_t* contents_ = nullptr;
-    ukv_val_len_t* offsets_ = nullptr;
-    ukv_val_len_t* lengths_ = nullptr;
+    ukv_length_t* offsets_ = nullptr;
+    ukv_length_t* lengths_ = nullptr;
 
   public:
     using iterator_category = std::random_access_iterator_tag;
@@ -422,7 +422,7 @@ class embedded_chunks_iterator_gt {
     using reference = void;
 
     template <typename same_size_at>
-    embedded_chunks_iterator_gt(same_size_at* vals, ukv_val_len_t* offs, ukv_val_len_t* lens) noexcept
+    embedded_chunks_iterator_gt(same_size_at* vals, ukv_length_t* offs, ukv_length_t* lens) noexcept
         : contents_((element_t*)(vals)), offsets_(offs), lengths_(lens) {
         static_assert(sizeof(same_size_at) == sizeof(element_t));
     }
@@ -452,8 +452,8 @@ class embedded_chunks_gt {
     using element_t = typename chunk_t::value_type;
 
     element_t* contents_ = nullptr;
-    ukv_val_len_t* offsets_ = nullptr;
-    ukv_val_len_t* lengths_ = nullptr;
+    ukv_length_t* offsets_ = nullptr;
+    ukv_length_t* lengths_ = nullptr;
     ukv_size_t count_ = 0;
 
   public:
@@ -462,7 +462,7 @@ class embedded_chunks_gt {
     embedded_chunks_gt() = default;
 
     template <typename same_size_at>
-    embedded_chunks_gt(same_size_at* vals, ukv_val_len_t* offs, ukv_val_len_t* lens, ukv_size_t elements) noexcept
+    embedded_chunks_gt(same_size_at* vals, ukv_length_t* offs, ukv_length_t* lens, ukv_size_t elements) noexcept
         : contents_((element_t*)(vals)), offsets_(offs), lengths_(lens), count_(elements) {
         static_assert(sizeof(same_size_at) == sizeof(element_t));
     }
@@ -474,8 +474,8 @@ class embedded_chunks_gt {
     std::size_t size() const noexcept { return count_; }
     chunk_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[i], lengths_[i]}; }
 
-    ukv_val_len_t* offsets() const noexcept { return offsets_; }
-    ukv_val_len_t* lengths() const noexcept { return lengths_; }
+    ukv_length_t* offsets() const noexcept { return offsets_; }
+    ukv_length_t* lengths() const noexcept { return lengths_; }
     element_t* contents() const noexcept { return contents_; }
 };
 
@@ -485,7 +485,7 @@ using embedded_bins_t = embedded_chunks_gt<value_view_t>;
 /**
  * @brief Iterates through a predetermined number of NULL-delimited
  * strings joined one after another in continuous memory.
- * Can be used for `ukv_docs_gist` or `ukv_col_list`.
+ * Can be used for `ukv_docs_gist` or `ukv_collection_list`.
  */
 class strings_tape_iterator_t {
     ukv_size_t remaining_count_ = 0;
@@ -495,7 +495,7 @@ class strings_tape_iterator_t {
     using iterator_category = std::forward_iterator_tag;
     using difference_type = std::ptrdiff_t;
     using value_type = std::string_view;
-    using pointer = ukv_str_view_t*;
+    using pointer = ukv_char_t**;
     using reference = std::string_view;
 
     strings_tape_iterator_t(ukv_size_t remaining = 0, ukv_str_view_t current = nullptr)

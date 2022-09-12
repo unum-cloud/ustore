@@ -84,7 +84,7 @@ struct location_store_gt<at&> {
 template <typename locations_without_collections_at>
 struct locations_in_collection_gt {
     location_store_gt<locations_without_collections_at> without;
-    ukv_col_t collection;
+    ukv_collection_t collection;
 };
 
 template <>
@@ -129,7 +129,7 @@ struct places_arg_extractor_gt {
             return strided.members(&element_t::key);
     }
 
-    strided_iterator_gt<ukv_col_t const> cols(location_t const& arg) noexcept {
+    strided_iterator_gt<ukv_collection_t const> cols(location_t const& arg) noexcept {
         if constexpr (element_stores_collection_k) {
             element_t const* begin = nullptr;
             if constexpr (is_one_k)
@@ -180,7 +180,7 @@ struct places_arg_extractor_gt<places_arg_t> {
 
     ukv_size_t count(places_arg_t const& native) noexcept { return native.count; }
     strided_iterator_gt<ukv_key_t const> keys(places_arg_t const& native) noexcept { return native.keys_begin; }
-    strided_iterator_gt<ukv_col_t const> cols(places_arg_t const& native) noexcept { return native.cols_begin; }
+    strided_iterator_gt<ukv_collection_t const> cols(places_arg_t const& native) noexcept { return native.cols_begin; }
     strided_iterator_gt<ukv_str_view_t const> fields(places_arg_t const& native) noexcept {
         return native.fields_begin;
     }
@@ -197,7 +197,7 @@ struct places_arg_extractor_gt<locations_in_collection_gt<at>> {
     strided_iterator_gt<ukv_key_t const> keys(location_t const& arg) noexcept {
         return base_t {}.keys(arg.without.ref());
     }
-    strided_iterator_gt<ukv_col_t const> cols(location_t const& arg) noexcept { return {&arg.collection}; }
+    strided_iterator_gt<ukv_collection_t const> cols(location_t const& arg) noexcept { return {&arg.collection}; }
     strided_iterator_gt<ukv_str_view_t const> fields(location_t const& arg) noexcept {
         return base_t {}.fields(arg.without.ref());
     }
@@ -211,54 +211,56 @@ struct contents_arg_extractor_gt {};
 
 template <>
 struct contents_arg_extractor_gt<char const**> {
-    strided_iterator_gt<ukv_val_ptr_t const> contents(char const** strings) noexcept {
-        return {(ukv_val_ptr_t const*)strings, sizeof(char const*)};
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(char const** strings) noexcept {
+        return {(ukv_bytes_cptr_t const*)strings, sizeof(char const*)};
     }
-    strided_iterator_gt<ukv_val_len_t const> offsets(char const**) noexcept { return {}; }
-    strided_iterator_gt<ukv_val_len_t const> lengths(char const**) noexcept { return {}; }
+    strided_iterator_gt<ukv_length_t const> offsets(char const**) noexcept { return {}; }
+    strided_iterator_gt<ukv_length_t const> lengths(char const**) noexcept { return {}; }
 };
 
 template <>
 struct contents_arg_extractor_gt<char const*> {
-    strided_iterator_gt<ukv_val_ptr_t const> contents(char const*& one) noexcept {
-        return {(ukv_val_ptr_t const*)&one, 0};
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(char const*& one) noexcept {
+        return {(ukv_bytes_cptr_t const*)&one, 0};
     }
-    strided_iterator_gt<ukv_val_len_t const> offsets(char const*) noexcept { return {}; }
-    strided_iterator_gt<ukv_val_len_t const> lengths(char const*) noexcept { return {}; }
+    strided_iterator_gt<ukv_length_t const> offsets(char const*) noexcept { return {}; }
+    strided_iterator_gt<ukv_length_t const> lengths(char const*) noexcept { return {}; }
 };
 
 template <size_t length_ak>
 struct contents_arg_extractor_gt<char const [length_ak]> {
-    strided_iterator_gt<ukv_val_ptr_t const> contents(char const*& one) noexcept {
-        return {(ukv_val_ptr_t const*)&one, 0};
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(char const*& one) noexcept {
+        return {(ukv_bytes_cptr_t const*)&one, 0};
     }
-    strided_iterator_gt<ukv_val_len_t const> offsets(char const*) noexcept {
+    strided_iterator_gt<ukv_length_t const> offsets(char const*) noexcept {
         return {};
     }
-    strided_iterator_gt<ukv_val_len_t const> lengths(char const*) noexcept {
+    strided_iterator_gt<ukv_length_t const> lengths(char const*) noexcept {
         return {};
     }
 };
 
 template <>
 struct contents_arg_extractor_gt<value_view_t> {
-    strided_iterator_gt<ukv_val_ptr_t const> contents(value_view_t& one) noexcept { return {one.member_ptr(), 0}; }
-    strided_iterator_gt<ukv_val_len_t const> offsets(value_view_t) noexcept { return {}; }
-    strided_iterator_gt<ukv_val_len_t const> lengths(value_view_t& one) noexcept { return {one.member_length(), 0}; }
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(value_view_t& one) noexcept { return {one.member_ptr(), 0}; }
+    strided_iterator_gt<ukv_length_t const> offsets(value_view_t) noexcept { return {}; }
+    strided_iterator_gt<ukv_length_t const> lengths(value_view_t& one) noexcept { return {one.member_length(), 0}; }
 };
 
 template <>
 struct contents_arg_extractor_gt<contents_arg_t> {
-    strided_iterator_gt<ukv_val_ptr_t const> contents(contents_arg_t native) noexcept { return native.contents_begin; }
-    strided_iterator_gt<ukv_val_len_t const> offsets(contents_arg_t native) noexcept { return native.offsets_begin; }
-    strided_iterator_gt<ukv_val_len_t const> lengths(contents_arg_t native) noexcept { return native.lengths_begin; }
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(contents_arg_t native) noexcept {
+        return native.contents_begin;
+    }
+    strided_iterator_gt<ukv_length_t const> offsets(contents_arg_t native) noexcept { return native.offsets_begin; }
+    strided_iterator_gt<ukv_length_t const> lengths(contents_arg_t native) noexcept { return native.lengths_begin; }
 };
 
 template <>
 struct contents_arg_extractor_gt<std::nullptr_t> {
-    strided_iterator_gt<ukv_val_ptr_t const> contents(std::nullptr_t) noexcept { return {}; }
-    strided_iterator_gt<ukv_val_len_t const> offsets(std::nullptr_t) noexcept { return {}; }
-    strided_iterator_gt<ukv_val_len_t const> lengths(std::nullptr_t) noexcept { return {}; }
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(std::nullptr_t) noexcept { return {}; }
+    strided_iterator_gt<ukv_length_t const> offsets(std::nullptr_t) noexcept { return {}; }
+    strided_iterator_gt<ukv_length_t const> lengths(std::nullptr_t) noexcept { return {}; }
 };
 
 } // namespace unum::ukv
