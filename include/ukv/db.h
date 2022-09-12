@@ -608,6 +608,7 @@ void ukv_transaction_begin( //
  * cleaned and reused by consecutive `ukv_transaction_begin` call.
  */
 void ukv_transaction_commit( //
+    ukv_database_t const db,
     ukv_transaction_t const txn,
     ukv_options_t const options,
     ukv_error_t* error);

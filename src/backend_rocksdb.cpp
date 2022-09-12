@@ -808,6 +808,7 @@ void ukv_transaction_begin(
 }
 
 void ukv_transaction_commit( //
+    ukv_database_t const,
     ukv_transaction_t const c_txn,
     ukv_options_t const,
     ukv_error_t* c_error) {
@@ -818,7 +819,7 @@ void ukv_transaction_commit( //
     rocks_status_t status = txn->Commit();
     export_error(status, c_error);
 
-    // where do we flush?! in transactions and ouside
+    // TODO: where do we flush?! in transactions and outside
 }
 
 void ukv_arena_free(ukv_database_t const, ukv_arena_t c_arena) {

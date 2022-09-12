@@ -383,14 +383,14 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
 
     auto params = uri.substr(params_offs);
     result.transaction_id = param_value(params, kParamTransactionID);
-    if (result.txn)
-        result.session_id.txn_id = parse_txn_id(*result.txn);
+    if (result.transaction_id)
+        result.session_id.txn_id = parse_txn_id(*result.transaction_id);
 
     result.collection_name = param_value(params, kParamCollectionName);
     result.collection_id = param_value(params, kParamCollectionID);
 
     result.opt_part = param_value(params, kParamReadPart);
-    result.opt_snapshot = param_value(params, kParamFlagSnapshotRead);
+    result.opt_snapshot = param_value(params, kParamFlagSnapshotTxn);
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
     result.opt_track = param_value(params, kParamFlagTrackRead);
 
@@ -477,17 +477,17 @@ class UKVService : public arf::FlightServerBase {
 
         // Locating the collection ID
         if (is_query(action.type, kActionColOpen.type)) {
-            if (!params.col)
+            if (!params.collection_name)
                 return ar::Status::Invalid("Missing collection name argument");
 
             // Upsert and fetch collection ID
-            auto maybe_col = db_.collection(params.col->data());
+            auto maybe_col = db_.collection(params.collection_name->data());
             if (!maybe_col)
                 return ar::Status::ExecutionError(maybe_col.release_status().message());
 
             ukv_collection_t col_id = maybe_col.throw_or_ref();
             ukv_str_view_t col_config = get_null_terminated(action.body);
-            ukv_collection_open(db_, params.col->begin(), col_config, &col_id, status.member_ptr());
+            ukv_collection_open(db_, params.collection_name->begin(), col_config, &col_id, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_scalar<ukv_collection_t>(col_id);
@@ -496,10 +496,14 @@ class UKVService : public arf::FlightServerBase {
 
         // Dropping a collection
         if (is_query(action.type, kActionColRemove.type)) {
-            if (!params.col)
+            if (!params.collection_id)
                 return ar::Status::Invalid("Missing collection name argument");
 
-            ukv_collection_drop(db_, 0, params.col->begin(), ukv_drop_keys_vals_handle_k, status.member_ptr());
+            ukv_collection_drop(db_,
+                                0,
+                                params.collection_id->begin(),
+                                ukv_drop_keys_vals_handle_k,
+                                status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             return ar::Status::OK();
@@ -512,7 +516,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_options_t options = ukv_options_default_k;
             if (params.opt_snapshot)
                 options = ukv_option_txn_snapshot_k;
-            if (!params.txn)
+            if (!params.transaction_id)
                 params.session_id.txn_id = static_cast<txn_id_t>(std::rand());
 
             // Check if collection configuration string was also provided
@@ -548,7 +552,7 @@ class UKVService : public arf::FlightServerBase {
         }
 
         if (is_query(action.type, kActionTxnCommit.type)) {
-            if (!params.txn)
+            if (!params.transaction_id)
                 return ar::Status::Invalid("Missing transaction ID argument");
             ukv_options_t options = ukv_options_default_k;
             if (params.opt_flush)
@@ -560,7 +564,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             }
 
-            ukv_transaction_commit(session.txn, options, status.member_ptr());
+            ukv_transaction_commit(db_, session.txn, options, status.member_ptr());
             if (!status) {
                 sessions_.hold_txn(params.session_id, session);
                 return ar::Status::ExecutionError(status.message());
@@ -642,7 +646,7 @@ class UKVService : public arf::FlightServerBase {
             if (request_content)
                 ukv_to_arrow_column( //
                     result_length,
-                    kArgVals,
+                    kArgVals.c_str(),
                     ukv_type_bin_k,
                     found_presences,
                     found_offsets,
@@ -653,7 +657,7 @@ class UKVService : public arf::FlightServerBase {
             else if (request_only_lengths)
                 ukv_to_arrow_column( //
                     result_length,
-                    kArgLengths,
+                    kArgLengths.c_str(),
                     ukv_type<ukv_length_t>(),
                     found_presences,
                     nullptr,
@@ -664,7 +668,7 @@ class UKVService : public arf::FlightServerBase {
             else if (request_only_presences)
                 ukv_to_arrow_column( //
                     result_length,
-                    kArgPresences,
+                    kArgPresences.c_str(),
                     ukv_type<ukv_octet_t>(),
                     nullptr,
                     nullptr,
@@ -727,7 +731,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_to_arrow_list( //
                 tasks_count,
-                kArgKeys,
+                kArgKeys.c_str(),
                 ukv_type<ukv_key_t>(),
                 nullptr,
                 found_offsets,
@@ -837,7 +841,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_size_t count = 0;
             ukv_collection_t* collections = nullptr;
             ukv_length_t* offsets = nullptr;
-            ukv_str_view_t names = nullptr;
+            ukv_str_span_t names = nullptr;
 
             ukv_collection_list( //
                 db_,
@@ -859,7 +863,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_to_arrow_column( //
                 count,
-                kArgCols,
+                kArgCols.c_str(),
                 ukv_type<ukv_collection_t>(),
                 nullptr,
                 nullptr,
@@ -872,7 +876,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_to_arrow_column( //
                 count,
-                kArgNames,
+                kArgNames.c_str(),
                 ukv_type_str_k,
                 nullptr,
                 offsets,

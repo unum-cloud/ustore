@@ -295,13 +295,13 @@ void ukv_write( //
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
     strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_bytes_ptr_t const> vals {c_vals, c_vals_stride};
+    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
     strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
 
     places_arg_t places {cols, keys, {}, c_tasks_count};
-    contents_arg_t contents {vals, offs, lens, presences, c_tasks_count};
+    contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     bool const same_collection = places.same_collection();
     bool const same_named_collection = same_collection && places.same_collections_are_named();
@@ -326,7 +326,7 @@ void ukv_write( //
     }
 
     // Check if the input is continuous and is already in an Arrow-compatible form
-    ukv_bytes_ptr_t joined_vals_begin = vals ? vals[0] : nullptr;
+    ukv_bytes_cptr_t joined_vals_begin = vals ? vals[0] : nullptr;
     if (has_contents_column && !contents.is_continuous()) {
         auto total = transform_reduce_n(contents, places.size(), 0ul, std::mem_fn(&value_view_t::size));
         auto joined_vals = arena.alloc<byte_t>(total, c_error);
@@ -350,7 +350,7 @@ void ukv_write( //
         }
         joined_offs[places.size()] = exported_bytes;
 
-        joined_vals_begin = (ukv_bytes_ptr_t)joined_vals.begin();
+        joined_vals_begin = (ukv_bytes_cptr_t)joined_vals.begin();
         vals = {&joined_vals_begin, 0};
         offs = {joined_offs.begin(), sizeof(ukv_key_t)};
         presences = {slots_presences.begin(), sizeof(ukv_octet_t)};
@@ -503,7 +503,7 @@ void ukv_scan( //
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c_scan_limits, c_scan_limits_stride};
-    scans_arg_t scans {cols, start_keys, limits, c_tasks_count};
+    scans_arg_t scans {cols, start_keys, end_keys, limits, c_tasks_count};
     places_arg_t places {cols, start_keys, {}, c_tasks_count};
 
     bool const same_collection = places.same_collection();
@@ -829,7 +829,7 @@ void ukv_collection_list( //
     if (c_offsets)
         *c_offsets = (ukv_length_t*)batch_c.children[*names_column_idx]->buffers[1];
     if (c_names)
-        *c_names = (ukv_str_view_t)batch_c.children[*names_column_idx]->buffers[2];
+        *c_names = (ukv_str_span_t)batch_c.children[*names_column_idx]->buffers[2];
 }
 
 void ukv_database_control( //
@@ -870,7 +870,7 @@ void ukv_transaction_begin(
     arf::Action action;
     fmt::format_to(std::back_inserter(action.type), "{}?{}={:x}&", kFlightTxnBegin, kParamTransactionID, c_generation);
     if (c_options & ukv_option_txn_snapshot_k)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSnapshotTxn);
+        fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
@@ -884,6 +884,7 @@ void ukv_transaction_begin(
 }
 
 void ukv_transaction_commit( //
+    ukv_database_t const c_db,
     ukv_transaction_t const c_txn,
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
@@ -900,7 +901,7 @@ void ukv_transaction_commit( //
     arf::Action action;
     fmt::format_to(std::back_inserter(action.type), "{}?{}={:x}&", kFlightTxnCommit, kParamTransactionID, c_txn);
     if (c_options & ukv_option_write_flush_k)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagFlushWrite);
+        fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagFlushWrite);
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
