@@ -16,9 +16,6 @@
 #include <iostream>
 
 #include <arrow/flight/server.h>
-#include <boost/lexical_cast.hpp> // HEX conversion
-#include <boost/heap/fibonacci_heap.hpp>
-#include <boost/compute/detail/lru_cache.hpp>
 
 #include "ukv/cpp/db.hpp"
 #include "ukv/cpp/types.hpp" // `hash_combine`
@@ -164,9 +161,15 @@ client_id_t parse_parse_client_id(arf::ServerCallContext const& ctx) {
 }
 
 base_id_t parse_u64_hex(std::string_view str, base_id_t default_ = 0) {
-    if (str.size() != 16)
+    // if (str.size() != 16 + 2)
+    //     return default_;
+    // auto result = boost::lexical_cast<base_id_t>(str.data(), str.size());
+    // return result;
+    char* end = nullptr;
+    base_id_t result = std::strtoull(str.data(), &end, 16);
+    if (end != str.end())
         return default_;
-    return boost::lexical_cast<base_id_t>(str.data(), str.size());
+    return result;
 }
 
 txn_id_t parse_txn_id(std::string_view str) {
