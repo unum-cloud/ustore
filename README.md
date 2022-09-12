@@ -107,7 +107,6 @@ assert len(db['sub-collection'][0]) == 15
 
 All familiar Pythonic stuff!
 
-
 ### Java
 
 These bindings are implemented via [Java Native Interface](https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/jniTOC.html).
@@ -198,6 +197,17 @@ curl -i \
 
 The [`OneAPI` specification](/openapi.yaml) documentation is in-development.
 </details>
+
+## Serving UKV
+
+```sh
+docker build -t ukv .
+docker run \
+  --publish 38709 \
+  --name ukv_example \
+  --rm \
+  ukv
+```
 
 ## FAQ
 

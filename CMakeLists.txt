@@ -62,12 +62,12 @@ find_package(Threads REQUIRED)
 # Install 3rd Party Packages
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
-set(UKV_PREINSTALLED_BOOST ON)
-set(UKV_PREINSTALLED_ARROW ON)
-set(UKV_PREINSTALLED_TURBOPFOR ON)
-set(UKV_BUILD_PYTHON ON)
-set(UKV_BUILD_TESTS ON)
-set(UKV_BUILD_FLIGHT ON)
+set(UKV_PREINSTALLED_BOOST ON CACHE BOOL "True, if a pre-installed external version of Boost should be used")
+set(UKV_PREINSTALLED_ARROW ON CACHE BOOL "True, if a pre-installed external version of Apache Arrow should be used")
+set(UKV_PREINSTALLED_TURBOPFOR ON CACHE BOOL "True, if a pre-installed external version of TurboPFOR should be used")
+set(UKV_BUILD_PYTHON ON CACHE BOOL "Building Python bidings for all SDKs")
+set(UKV_BUILD_TESTS ON CACHE BOOL "Building C/C++ native tests")
+set(UKV_BUILD_FLIGHT ON CACHE BOOL "Building Apache Arrow Flight RPC server for all backends")
 
 include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
@@ -93,6 +93,8 @@ if(!APPLE)
 endif()
 
 include_directories(include/)
+
+# Apache Arrow might be coming from Anaconda
 include_directories($ENV{CONDA_PREFIX}/include)
 link_directories($ENV{CONDA_PREFIX}/lib)
 message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
@@ -108,8 +110,8 @@ add_library(ukv_leveldb src/backend_leveldb.cpp src/logic_docs.cpp src/logic_gra
 target_link_libraries(ukv_leveldb leveldb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
 set_source_files_properties(src/backend_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 
-add_library(ukv_arrow_client src/arrow_client.cpp src/logic_docs.cpp src/logic_graph.cpp)
-target_link_libraries(ukv_arrow_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
+add_library(ukv_flight_client src/arrow_client.cpp src/logic_docs.cpp src/logic_graph.cpp)
+target_link_libraries(ukv_flight_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
 
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT})
@@ -118,13 +120,13 @@ if(${UKV_BUILD_FLIGHT})
     get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
     string(CONCAT server_name ${lib_name} "_flight_server")
     add_executable(${server_name} src/arrow_server.cpp ${lib_SOURCES})
-    target_link_libraries(${server_name} pthread nlohmann_json::nlohmann_json arrow arrow_flight arrow_dataset parquet ${lib_LIBRARIES})
+    target_link_libraries(${server_name} pthread nlohmann_json::nlohmann_json arrow arrow_flight ${lib_LIBRARIES})
   endforeach()
 endif()
 
 # Generate tests
 if(${UKV_BUILD_TESTS})
-  foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_arrow_client)
+  foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_flight_client)
     get_target_property(lib_SOURCES ${lib_name} SOURCES)
     get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
     string(CONCAT test_name ${lib_name} "_test")
@@ -135,7 +137,7 @@ if(${UKV_BUILD_TESTS})
 endif()
 
 # Enable warning and sanitization for our primary targets
-foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_arrow_client)
+foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_flight_client)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set_target_properties(${lib_name} PROPERTIES CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
     set_target_properties(${lib_name} PROPERTIES CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
