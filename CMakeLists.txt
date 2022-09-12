@@ -112,11 +112,11 @@ add_library(ukv_arrow_client src/arrow_client.cpp src/logic_docs.cpp src/logic_g
 target_link_libraries(ukv_arrow_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
 
 # Generate Apache Arrow Flight RPC backends
-if (${UKV_BUILD_FLIGHT})
+if(${UKV_BUILD_FLIGHT})
   foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb)
     get_target_property(lib_SOURCES ${lib_name} SOURCES)
     get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
-    string(CONCAT server_name ${lib_name} "_arrow_server")
+    string(CONCAT server_name ${lib_name} "_flight_server")
     add_executable(${server_name} src/arrow_server.cpp ${lib_SOURCES})
     target_link_libraries(${server_name} pthread nlohmann_json::nlohmann_json arrow arrow_flight arrow_dataset parquet ${lib_LIBRARIES})
   endforeach()

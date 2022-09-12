@@ -22,5 +22,5 @@ RUN cmake . && make -j16
 ## TODO: Optimize: https://github.com/docker-slim/docker-slim
 FROM ubuntu:22.04
 WORKDIR /root/
-COPY --from=0 /usr/src/ukv/build/bin/ukv_arrow_server ./
-CMD ["./ukv_arrow_server"]
+COPY --from=0 /usr/src/ukv/build/bin/ukv_stl_flight_server ./
+CMD ["./ukv_stl_flight_server"]
