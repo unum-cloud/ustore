@@ -1,4 +1,4 @@
-FROM gcc:12
+FROM gcc:12 as builder
 
 # Few components have to be installed separately:
 # 1. CMake: build-essential, cmake
@@ -29,7 +29,8 @@ RUN cmake \
 ## TODO: Optimize: https://github.com/docker-slim/docker-slim
 FROM ubuntu:22.04
 WORKDIR /root/
-COPY --from=0 /usr/src/ukv/build/bin/ukv_stl_flight_server ./
-COPY --from=0 /usr/src/ukv/build/bin/ukv_leveldb_flight_server ./
-COPY --from=0 /usr/src/ukv/build/bin/ukv_rocksdb_flight_server ./
+COPY --from=builder /usr/src/ukv/build/bin/ukv_stl_flight_server ./
+COPY --from=builder /usr/src/ukv/build/bin/ukv_leveldb_flight_server ./
+COPY --from=builder /usr/src/ukv/build/bin/ukv_rocksdb_flight_server ./
+EXPOSE 38709
 CMD ["./ukv_stl_flight_server"]
