@@ -47,21 +47,41 @@ extern "C" {
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-typedef void* ukv_t;
-typedef void* ukv_txn_t;
+typedef void* ukv_database_t;
+typedef void* ukv_transaction_t;
 
 /**
  * @brief Some unique integer identifier of a collection.
- * A `ukv_t` database can have many of those, but never with
+ * A `ukv_database_t` database can have many of those, but never with
  * repeating names or identifiers.
  */
-typedef uint64_t ukv_col_t;
+typedef uint64_t ukv_collection_t;
 
+/**
+ * @brief The unique identifier of any value.
+ */
 typedef int64_t ukv_key_t;
-typedef uint32_t ukv_val_len_t;
-typedef uint8_t* ukv_val_ptr_t;
+
+/**
+ * @brief The elementary binary piece of any value.
+ */
+typedef uint8_t ukv_byte_t;
+
+/**
+ * @brief The elementary piece of any string, like collection name.
+ */
+typedef char ukv_char_t;
+
+/**
+ * @brief The length of any value in the DB.
+ */
+typedef uint32_t ukv_length_t;
 typedef uint64_t ukv_size_t;
-typedef uint8_t ukv_1x8_t;
+
+/**
+ * @brief The smallest possible "bitset" type, storing eight zeros or ones.
+ */
+typedef uint8_t ukv_octet_t;
 
 /**
  * @brief Owning error message string.
@@ -75,12 +95,16 @@ typedef char const* ukv_error_t;
  * in its lifetime management in any way.
  */
 typedef char const* ukv_str_view_t;
+typedef char* ukv_str_span_t;
 
 /**
  * @brief Temporary memory handle, used mostly for read requests.
  * It's allocated, resized and deallocated only by UKV itself.
  */
 typedef void* ukv_arena_t;
+
+typedef uint8_t* ukv_bytes_ptr_t;
+typedef uint8_t const* ukv_bytes_cptr_t;
 
 typedef enum {
 
@@ -122,23 +146,28 @@ typedef enum {
      */
     ukv_option_read_shared_k = 1 << 5,
     /**
-     * @brief When allowed, the underlying engine may avoid strict keys ordering
+     * @brief When set, the underlying engine may avoid strict keys ordering
      * and may include irrelevant (deleted & duplicate) keys in order to maximize
      * throughput. The purpose is not accelerating the `ukv_scan`, but the
      * following `ukv_read`. Generally used for Machine Learning applications.
      */
-    ukv_option_scan_bulk_k = 0,
+    ukv_option_scan_bulk_k = 0, // TODO
+    /**
+     * @brief When set, the matching scan range will be randomly sampled
+     * as close to the uniform distribution, as possible.
+     */
+    ukv_option_scan_sample_k = 0, // TODO
 
 } ukv_options_t;
 
 typedef enum {
-    ukv_col_drop_vals_k = 0,
-    ukv_col_drop_keys_vals_k = 1,
-    ukv_col_drop_keys_vals_handle_k = 2,
-} ukv_col_drop_mode_t;
+    ukv_drop_vals_k = 0,
+    ukv_drop_keys_vals_k = 1,
+    ukv_drop_keys_vals_handle_k = 2,
+} ukv_drop_mode_t;
 
-extern ukv_col_t ukv_col_main_k;
-extern ukv_val_len_t ukv_val_len_missing_k;
+extern ukv_collection_t ukv_collection_main_k;
+extern ukv_length_t ukv_length_missing_k;
 extern ukv_key_t ukv_key_unknown_k;
 
 /*********************************************************/
@@ -156,9 +185,9 @@ extern ukv_key_t ukv_key_unknown_k;
  * @param[out] db     A pointer to the opened KVS, unless @param error is filled.
  * @param[out] error  The error message to be handled by callee.
  */
-void ukv_db_open( //
+void ukv_database_open( //
     ukv_str_view_t config,
-    ukv_t* db,
+    ukv_database_t* db,
     ukv_error_t* error);
 
 /**
@@ -174,7 +203,7 @@ void ukv_db_open( //
  * If lengths aren't provided, they are inferred from the passed values,
  * as the offset of the first NULL-termination (zero) symbol.
  *
- * @param[in] db             Already open database instance, @see `ukv_db_open`.
+ * @param[in] db             Already open database instance, @see `ukv_database_open`.
  * @param[in] txn            Transaction, through which the operation must go.
  *                           Can be NULL.
  * @param[in] tasks_count    Number of elements in @param keys.
@@ -254,25 +283,25 @@ void ukv_db_open( //
  * 4. If @param lengths and @param offsets are NULL, we expect NULL-terminated entries and will `std::strlen`.
  */
 void ukv_write( //
-    ukv_t const db,
-    ukv_txn_t const txn,
+    ukv_database_t const db,
+    ukv_transaction_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_col_t const* collections,
+    ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
     ukv_size_t const keys_stride,
 
-    ukv_1x8_t const* presences,
+    ukv_octet_t const* presences,
 
-    ukv_val_len_t const* offsets,
+    ukv_length_t const* offsets,
     ukv_size_t const offsets_stride,
 
-    ukv_val_len_t const* lengths,
+    ukv_length_t const* lengths,
     ukv_size_t const lengths_stride,
 
-    ukv_val_ptr_t const* values,
+    ukv_bytes_cptr_t const* values,
     ukv_size_t const values_stride,
 
     ukv_options_t const options,
@@ -284,7 +313,7 @@ void ukv_write( //
  * @brief The primary "getter" interface.
  * If a fail had occurred, @param error will be set to non-NULL.
  * Otherwise, the tape will be populated with @param tasks_count objects
- * of type `ukv_val_len_t`, describing the lengths of objects packed
+ * of type `ukv_length_t`, describing the lengths of objects packed
  * right after the lengths themselves.
  * If a key wasn't found in target collection, the length will be zero.
  *
@@ -294,7 +323,7 @@ void ukv_write( //
  * > Single and Batch
  * > Size Estimates and Exports
  *
- * @param[in] db             Already open database instance, @see `ukv_db_open`.
+ * @param[in] db             Already open database instance, @see `ukv_database_open`.
  * @param[in] txn            Transaction or the snapshot, through which the
  * @param[in] tasks_count    Number of elements in @param keys.
  *
@@ -338,11 +367,11 @@ void ukv_write( //
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
  */
 void ukv_read( //
-    ukv_t const db,
-    ukv_txn_t const txn,
+    ukv_database_t const db,
+    ukv_transaction_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_col_t const* collections,
+    ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -350,22 +379,20 @@ void ukv_read( //
 
     ukv_options_t const options,
 
-    ukv_1x8_t** presences,
-
-    ukv_val_len_t** offsets,
-    ukv_val_len_t** lengths,
-    ukv_val_ptr_t* values,
+    ukv_octet_t** presences,
+    ukv_length_t** offsets,
+    ukv_length_t** lengths,
+    ukv_byte_t** values,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
 
 /**
- * @brief Retrieves the following (upto) `scan_length` keys starting
- * from `min_key` or the smallest following key in each collection.
- * Values are not exported, for that - follow up with `ukv_read`.
- * Fetching lengths of values is @b optional.
+ * @brief Retrieves the following (upto) @param scan_limits[i] keys starting
+ * from @param start_key[i] or the smallest following key in each collection.
+ * Values are not exported, for that - follow up with @see ukv_read.
  *
- * @param[in] db             Already open database instance, @see `ukv_db_open`.
+ * @param[in] db             Already open database instance, @see `ukv_database_open`.
  * @param[in] txn            Transaction or the snapshot, through which the
  * @param[in] tasks_count    Number of elements in @param start_keys.
  *
@@ -380,35 +407,45 @@ void ukv_read( //
  *                           them is equal to @param start_keys_stride @b bytes!
  *                           Zero stride is not allowed!
  *
+ * @param[in] end_keys       Array of termination keys for every scan. @b Optional.
+ *                           If multiple keys are passed, the step between
+ *                           them is equal to @param start_keys_stride @b bytes!
+ *                           Zero stride is not allowed!
+ *
  * @param[in] options        Read options:
  *                           > track: Adds collision-detection on keys read through txn.
  *                           > lengths: Will fetches lengths of values, after the keys.
  *                           > bulk: Skips keys ordering and relevance checks for speed.
  *
+ * @param[out] offsets       Will contain the offset of each run in joined @param keys.
+ *                           Will have @param tasks_count +1 outputs, to match Arrow format.
+ * @param[out] counts        Will contain the height of each column (< scan_limit).
  * @param[out] keys          Will contain columns of following keys for each task.
- * @param[out] counts        Will contain the height of each column (< scan_length).
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
  */
 void ukv_scan( //
-    ukv_t const db,
-    ukv_txn_t const txn,
+    ukv_database_t const db,
+    ukv_transaction_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_col_t const* collections,
+    ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* start_keys,
     ukv_size_t const start_keys_stride,
 
-    ukv_val_len_t const* scan_lengths,
-    ukv_size_t const scan_lengths_stride,
+    ukv_key_t const* end_keys,
+    ukv_size_t const end_keys_stride,
+
+    ukv_length_t const* scan_limits,
+    ukv_size_t const scan_limits_stride,
 
     ukv_options_t const options,
 
-    ukv_val_len_t** offsets,
-    ukv_val_len_t** counts,
+    ukv_length_t** offsets,
+    ukv_length_t** counts,
     ukv_key_t** keys,
 
     ukv_arena_t* arena,
@@ -417,7 +454,7 @@ void ukv_scan( //
 /**
  * @brief Estimates the number of entries and memory usage for a range of keys.
  *
- * @param[in] db             Already open database instance, @see `ukv_db_open`.
+ * @param[in] db             Already open database instance, @see `ukv_database_open`.
  * @param[in] txn            Transaction or the snapshot, through which the
  * @param[in] tasks_count    Number ranges to be introspected.
  *
@@ -426,7 +463,7 @@ void ukv_scan( //
  *                           If multiple collections are passed, the step between
  *                           them is equal to @param collections_stride @b bytes!
  *                           Zero stride would redirect all the keys to the same collection.
- * @param[in] start_keys       For every task contains the beginning of range-of-interest.
+ * @param[in] start_keys     For every task contains the beginning of range-of-interest.
  * @param[in] end_keys       For every task contains the ending of range-of-interest.
  *
  * @param[out] estimates     For every task (range) will export @b six integers:
@@ -439,11 +476,11 @@ void ukv_scan( //
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
  */
 void ukv_size( //
-    ukv_t const db,
-    ukv_txn_t const txn,
+    ukv_database_t const db,
+    ukv_transaction_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_col_t const* collections,
+    ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* start_keys,
@@ -454,7 +491,12 @@ void ukv_size( //
 
     ukv_options_t const options,
 
-    ukv_size_t** estimates,
+    ukv_size_t** min_cardinalities,
+    ukv_size_t** max_cardinalities,
+    ukv_size_t** min_value_bytes,
+    ukv_size_t** max_value_bytes,
+    ukv_size_t** min_space_usages,
+    ukv_size_t** max_space_usages,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -466,36 +508,36 @@ void ukv_size( //
 /**
  * @brief Inserts a new named collection into DB or opens existing one.
  * This function may never be called, as the default nameless collection
- * always exists and can be addressed via `ukv_col_main_k`.
+ * always exists and can be addressed via `ukv_collection_main_k`.
  *
- * @param[in] db           Already open database instance, @see `ukv_db_open`.
+ * @param[in] db           Already open database instance, @see `ukv_database_open`.
  * @param[in] name         A NULL-terminated collection name.
  * @param[in] config       A NULL-terminated configuration string.
  * @param[out] id          Address to which the collection ID will be exported.
  * @param[out] error       The error message to be handled by callee.
  */
-void ukv_col_upsert( //
-    ukv_t const db,
+void ukv_collection_open( //
+    ukv_database_t const db,
     ukv_str_view_t name,
     ukv_str_view_t config,
-    ukv_col_t* id,
+    ukv_collection_t* id,
     ukv_error_t* error);
 
 /**
  * @brief Retrieves a list of collection IDs & names in a NULL-delimited form.
  * The default nameless collection won't be described in any form.
  *
- * @param[in] db        Already open database instance, @see `ukv_db_open`.
+ * @param[in] db        Already open database instance, @see `ukv_database_open`.
  * @param[out] count    Will contain the number of found unique collections.
  * @param[out] names    A NULL-terminated output string with comma-delimited column names.
  * @param[out] error    The error message to be handled by callee.
  */
-void ukv_col_list( //
-    ukv_t const db,
+void ukv_collection_list( //
+    ukv_database_t const db,
     ukv_size_t* count,
-    ukv_col_t** ids,
-    ukv_val_len_t** offsets,
-    ukv_str_view_t* names,
+    ukv_collection_t** ids,
+    ukv_length_t** offsets,
+    ukv_char_t** names,
     ukv_arena_t* arena,
     ukv_error_t* error);
 
@@ -503,16 +545,16 @@ void ukv_col_list( //
  * @brief Removes a collection or its contents depending on @param mode.
  * The default nameless collection can't be removed, only cleared.
  *
- * @param[in] db      Already open database instance, @see `ukv_db_open`.
+ * @param[in] db      Already open database instance, @see `ukv_database_open`.
  * @param[in] id      If the name wasn't provided, we will match a collection by ID.
  * @param[in] name    An optional NULL-terminated collection name.
  * @param[out] error  The error message to be handled by callee.
  */
-void ukv_col_drop( //
-    ukv_t const db,
-    ukv_col_t id,
+void ukv_collection_drop( //
+    ukv_database_t const db,
+    ukv_collection_t id,
     ukv_str_view_t name,
-    ukv_col_drop_mode_t mode,
+    ukv_drop_mode_t mode,
     ukv_error_t* error);
 
 /**
@@ -521,7 +563,7 @@ void ukv_col_drop( //
  * are very expensive and shouldn't be executed in most applications.
  * This is the "kitchen-sink" of UKV interface, similar to `fcntl` & `ioctl`.
  *
- * @param[in] db        Already open database instance, @see `ukv_db_open`.
+ * @param[in] db        Already open database instance, @see `ukv_database_open`.
  * @param[in] request   Textual representation of the command.
  * @param[out] response Output text of the request.
  * @param[out] error    The error message to be handled by callee.
@@ -533,8 +575,8 @@ void ukv_col_drop( //
  * > "info":    Metadata about the current software version, used for debugging.
  * > "usage":   Metadata about approximate collection sizes, RAM and disk usage.
  */
-void ukv_db_control( //
-    ukv_t const db,
+void ukv_database_control( //
+    ukv_database_t const db,
     ukv_str_view_t request,
     ukv_str_view_t* response,
     ukv_error_t* error);
@@ -546,27 +588,28 @@ void ukv_db_control( //
 /**
  * @brief Begins a new ACID transaction or resets an existing one.
  *
- * @param db[in]            Already open database instance, @see `ukv_db_open`.
+ * @param db[in]            Already open database instance, @see `ukv_database_open`.
  * @param generation[in]    If equal to 0, a new number will be generated on the fly.
  * @param txn[inout]        May be pointing to an existing transaction.
  *                          In that case, it's reset to new @param generation.
  * @param error[out]        The error message to be handled by callee.
  */
-void ukv_txn_begin( //
-    ukv_t const db,
+void ukv_transaction_begin( //
+    ukv_database_t const db,
     ukv_size_t const generation,
     ukv_options_t const options,
-    ukv_txn_t* txn,
+    ukv_transaction_t* txn,
     ukv_error_t* error);
 
 /**
  * @brief Commits an ACID transaction.
  * Regardless of result, the content is preserved to allow further
  * logging, serialization or retries. The underlying memory can be
- * cleaned and reused by consecutive `ukv_txn_begin` call.
+ * cleaned and reused by consecutive `ukv_transaction_begin` call.
  */
-void ukv_txn_commit( //
-    ukv_txn_t const txn,
+void ukv_transaction_commit( //
+    ukv_database_t const db,
+    ukv_transaction_t const txn,
     ukv_options_t const options,
     ukv_error_t* error);
 
@@ -579,7 +622,7 @@ void ukv_txn_commit( //
  * deallocate and return memory to the OS.
  * Passing NULLs is safe.
  */
-void ukv_arena_free(ukv_t const db, ukv_arena_t const arena);
+void ukv_arena_free(ukv_database_t const db, ukv_arena_t const arena);
 
 /**
  * @brief Deallocates memory used by transaction.
@@ -587,18 +630,18 @@ void ukv_arena_free(ukv_t const db, ukv_arena_t const arena);
  * it will be released.
  * Passing NULLs is safe.
  */
-void ukv_txn_free(ukv_t const db, ukv_txn_t const txn);
+void ukv_transaction_free(ukv_database_t const db, ukv_transaction_t const txn);
 
 /**
  * @brief Closes the DB and deallocates the state.
  * The database would still persist on disk.
  * Passing NULLs is safe.
  */
-void ukv_db_free(ukv_t const db);
+void ukv_database_free(ukv_database_t const db);
 
 /**
  * @brief A function to be called after any function failure,
- * that resulted in a non-NULL `ukv_error_t`, even `ukv_db_open`.
+ * that resulted in a non-NULL `ukv_error_t`, even `ukv_database_open`.
  * That's why, unlike other `...free` methods, doesn't need `db`.
  * Passing NULLs is safe.
  */

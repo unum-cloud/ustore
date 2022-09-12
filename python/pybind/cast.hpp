@@ -111,7 +111,7 @@ inline value_view_t py_to_bytes(PyObject* obj) {
         char* buffer = nullptr;
         Py_ssize_t length = 0;
         PyBytes_AsStringAndSize(obj, &buffer, &length);
-        return {reinterpret_cast<ukv_val_ptr_t>(buffer), static_cast<ukv_val_len_t>(length)};
+        return {reinterpret_cast<ukv_bytes_ptr_t>(buffer), static_cast<ukv_length_t>(length)};
     }
     else if (obj == Py_None) {
         // Means the object must be deleted

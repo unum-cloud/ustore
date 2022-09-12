@@ -21,13 +21,13 @@ namespace unum::ukv {
  * same graph collection. Supports updates/reads from within a transaction.
  */
 class graph_ref_t {
-    ukv_t db_ = nullptr;
-    ukv_txn_t txn_ = nullptr;
-    ukv_col_t col_ = ukv_col_main_k;
+    ukv_database_t db_ = nullptr;
+    ukv_transaction_t txn_ = nullptr;
+    ukv_collection_t col_ = ukv_collection_main_k;
     ukv_arena_t* arena_ = nullptr;
 
   public:
-    graph_ref_t(ukv_t db, ukv_txn_t txn, ukv_col_t col, ukv_arena_t* arena) noexcept
+    graph_ref_t(ukv_database_t db, ukv_transaction_t txn, ukv_collection_t col, ukv_arena_t* arena) noexcept
         : db_(db), txn_(txn), col_(col), arena_(arena) {}
 
     graph_ref_t(graph_ref_t&&) = default;
@@ -116,13 +116,13 @@ class graph_ref_t {
 
     status_t clear_edges() noexcept {
         status_t status;
-        ukv_col_drop(db_, col_, nullptr, ukv_col_drop_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, col_, nullptr, ukv_drop_vals_k, status.member_ptr());
         return status;
     }
 
     status_t clear() noexcept {
         status_t status;
-        ukv_col_drop(db_, col_, nullptr, ukv_col_drop_keys_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, col_, nullptr, ukv_drop_keys_vals_k, status.member_ptr());
         return status;
     }
 
@@ -176,7 +176,7 @@ class graph_ref_t {
      * @brief Checks if certain vertices are present in the graph.
      * They maybe disconnected from everything else.
      */
-    expected_gt<strided_iterator_gt<ukv_1x8_t>> contains( //
+    expected_gt<strided_iterator_gt<ukv_octet_t>> contains( //
         strided_range_gt<ukv_key_t const> const& vertices,
         bool track = false) noexcept {
         places_arg_t arg;

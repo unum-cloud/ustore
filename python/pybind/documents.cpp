@@ -9,13 +9,13 @@ using namespace unum;
 
 class docs_pairs_stream_t {
 
-    ukv_t db_ = nullptr;
-    ukv_col_t col_ = ukv_col_main_k;
-    ukv_txn_t txn_ = nullptr;
+    ukv_database_t db_ = nullptr;
+    ukv_collection_t col_ = ukv_collection_main_k;
+    ukv_transaction_t txn_ = nullptr;
 
     arena_t arena_scan_;
     arena_t arena_read_;
-    ukv_val_len_t read_ahead_ = 0;
+    ukv_length_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
     indexed_range_gt<ukv_key_t*> fetched_keys_;
@@ -28,9 +28,9 @@ class docs_pairs_stream_t {
             return {};
 
         ukv_key_t* found_keys = nullptr;
-        ukv_val_len_t* found_offs = nullptr;
-        ukv_val_len_t* found_lens = nullptr;
-        ukv_val_ptr_t found_vals = nullptr;
+        ukv_length_t* found_offs = nullptr;
+        ukv_length_t* found_lens = nullptr;
+        ukv_bytes_ptr_t found_vals = nullptr;
         ukv_str_view_t fields = nullptr;
         status_t status;
 
@@ -42,6 +42,7 @@ class docs_pairs_stream_t {
             0,
             &next_min_key_,
             0,
+            nullptr, 0,
             &read_ahead_,
             0,
             ukv_options_default_k,
@@ -88,10 +89,10 @@ class docs_pairs_stream_t {
   public:
     static constexpr std::size_t default_read_ahead_k = 256;
 
-    docs_pairs_stream_t(ukv_t db,
-                        ukv_col_t col = ukv_col_main_k,
+    docs_pairs_stream_t(ukv_database_t db,
+                        ukv_collection_t col = ukv_collection_main_k,
                         std::size_t read_ahead = docs_pairs_stream_t::default_read_ahead_k,
-                        ukv_txn_t txn = nullptr)
+                        ukv_transaction_t txn = nullptr)
         : db_(db), col_(col), txn_(txn), arena_scan_(db_), arena_read_(db_),
           read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
 
@@ -135,16 +136,16 @@ class docs_pairs_stream_t {
 
 class py_docs_kvrange_t {
 
-    ukv_t db_;
-    ukv_txn_t txn_;
-    ukv_col_t col_;
+    ukv_database_t db_;
+    ukv_transaction_t txn_;
+    ukv_collection_t col_;
     ukv_key_t min_key_;
     ukv_key_t max_key_;
 
   public:
-    py_docs_kvrange_t(ukv_t db,
-                      ukv_txn_t txn = nullptr,
-                      ukv_col_t col = ukv_col_main_k,
+    py_docs_kvrange_t(ukv_database_t db,
+                      ukv_transaction_t txn = nullptr,
+                      ukv_collection_t col = ukv_collection_main_k,
                       ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
                       ukv_key_t max_key = ukv_key_unknown_k) noexcept
         : db_(db), txn_(txn), col_(col), min_key_(min_key), max_key_(max_key) {}
@@ -247,8 +248,8 @@ static py::object has_doc(py_docs_col_t& col, py::object key_py) {
     return has_binary(col.binary, key_py);
 }
 
-static py::object scan_doc(py_docs_col_t& col, ukv_key_t min_key, ukv_size_t scan_length) {
-    return scan_binary(col.binary, min_key, scan_length);
+static py::object scan_doc(py_docs_col_t& col, ukv_key_t min_key, ukv_size_t scan_limit) {
+    return scan_binary(col.binary, min_key, scan_limit);
 }
 
 static void merge_patch(py_docs_col_t& col, py::object key_py, py::object val_py, ukv_format_t format) {
@@ -278,7 +279,7 @@ void ukv::wrap_document(py::module& m) {
 
     py_docs_col.def("clear", [](py_docs_col_t& col) {
         py_db_t& py_db = *col.binary.py_db_ptr.lock().get();
-        db_t& db = py_db.native;
+        database_t& db = py_db.native;
         db.remove(col.binary.name.c_str()).throw_unhandled();
         col.binary.native = db.collection(col.binary.name.c_str()).throw_or_release();
         col.binary.native.as(ukv_format_json_k);

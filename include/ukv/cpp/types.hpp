@@ -14,9 +14,6 @@
 
 namespace unum::ukv {
 
-using val_len_t = ukv_val_len_t;
-using tape_ptr_t = ukv_val_ptr_t;
-
 enum class byte_t : std::uint8_t {};
 
 /**
@@ -25,16 +22,16 @@ enum class byte_t : std::uint8_t {};
  */
 struct col_key_t {
 
-    ukv_col_t col = ukv_col_main_k;
+    ukv_collection_t col = ukv_collection_main_k;
     ukv_key_t key = 0;
 
     col_key_t() = default;
     col_key_t(col_key_t const&) = default;
     col_key_t& operator=(col_key_t const&) = default;
 
-    inline col_key_t(ukv_col_t c, ukv_key_t k) noexcept : col(c), key(k) {}
+    inline col_key_t(ukv_collection_t c, ukv_key_t k) noexcept : col(c), key(k) {}
     inline col_key_t(ukv_key_t k) noexcept : key(k) {}
-    inline col_key_t in(ukv_col_t col) noexcept { return {col, key}; }
+    inline col_key_t in(ukv_collection_t col) noexcept { return {col, key}; }
 
     inline bool operator==(col_key_t const& other) const noexcept { return (col == other.col) & (key == other.key); }
     inline bool operator!=(col_key_t const& other) const noexcept { return (col != other.col) | (key != other.key); }
@@ -49,15 +46,16 @@ struct col_key_t {
 };
 
 struct col_key_field_t {
-    ukv_col_t col = 0;
+    ukv_collection_t col = 0;
     ukv_key_t key = ukv_key_unknown_k;
     ukv_str_view_t field = nullptr;
 
     col_key_field_t() = default;
-    col_key_field_t(ukv_key_t key) noexcept : col(ukv_col_main_k), key(key), field(nullptr) {}
-    col_key_field_t(ukv_col_t col, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
+    col_key_field_t(ukv_key_t key) noexcept : col(ukv_collection_main_k), key(key), field(nullptr) {}
+    col_key_field_t(ukv_collection_t col, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
         : col(col), key(key), field(field) {}
-    col_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept : col(ukv_col_main_k), key(key), field(field) {}
+    col_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept
+        : col(ukv_collection_main_k), key(key), field(field) {}
 };
 
 template <typename... args_at>
@@ -126,32 +124,32 @@ struct neighborship_t {
  */
 class value_view_t {
 
-    ukv_val_ptr_t ptr_ = nullptr;
-    ukv_val_len_t length_ = ukv_val_len_missing_k;
+    ukv_bytes_cptr_t ptr_ = nullptr;
+    ukv_length_t length_ = ukv_length_missing_k;
 
   public:
     using value_type = byte_t;
 
     inline value_view_t() = default;
-    inline value_view_t(ukv_val_ptr_t ptr, ukv_val_len_t length) noexcept {
+    inline value_view_t(ukv_bytes_cptr_t ptr, ukv_length_t length) noexcept {
         ptr_ = ptr;
         length_ = length;
     }
 
     inline value_view_t(byte_t const* begin, byte_t const* end) noexcept
-        : ptr_(ukv_val_ptr_t(begin)), length_(static_cast<ukv_val_len_t>(end - begin)) {}
+        : ptr_(ukv_bytes_cptr_t(begin)), length_(static_cast<ukv_length_t>(end - begin)) {}
 
     /// Compatibility with `std::basic_string_view` in C++17.
     inline value_view_t(byte_t const* begin, std::size_t n) noexcept
-        : ptr_(ukv_val_ptr_t(begin)), length_(static_cast<ukv_val_len_t>(n)) {}
+        : ptr_(ukv_bytes_cptr_t(begin)), length_(static_cast<ukv_length_t>(n)) {}
 
     inline value_view_t(char const* c_str) noexcept
-        : ptr_(ukv_val_ptr_t(c_str)), length_(static_cast<ukv_val_len_t>(std::strlen(c_str))) {}
+        : ptr_(ukv_bytes_cptr_t(c_str)), length_(static_cast<ukv_length_t>(std::strlen(c_str))) {}
 
-    inline operator bool() const noexcept { return length_ != ukv_val_len_missing_k; }
-    inline std::size_t size() const noexcept { return length_ == ukv_val_len_missing_k ? 0 : length_; }
+    inline operator bool() const noexcept { return length_ != ukv_length_missing_k; }
+    inline std::size_t size() const noexcept { return length_ == ukv_length_missing_k ? 0 : length_; }
     inline byte_t const* data() const noexcept {
-        return length_ != ukv_val_len_missing_k ? reinterpret_cast<byte_t const*>(ptr_) : nullptr;
+        return length_ != ukv_length_missing_k ? reinterpret_cast<byte_t const*>(ptr_) : nullptr;
     }
 
     inline char const* c_str() const noexcept { return reinterpret_cast<char const*>(ptr_); }
@@ -159,8 +157,8 @@ class value_view_t {
     inline byte_t const* end() const noexcept { return data() + size(); }
     inline bool empty() const noexcept { return !size(); }
 
-    ukv_val_ptr_t const* member_ptr() const noexcept { return &ptr_; }
-    ukv_val_len_t const* member_length() const noexcept { return &length_; }
+    ukv_bytes_cptr_t const* member_ptr() const noexcept { return &ptr_; }
+    ukv_length_t const* member_length() const noexcept { return &length_; }
 
     bool operator==(value_view_t other) const noexcept {
         return size() == other.size() && std::equal(begin(), end(), other.begin());
@@ -172,15 +170,15 @@ class value_view_t {
 
 class value_ref_t {
 
-    ukv_val_ptr_t ptr_ = nullptr;
-    ukv_val_len_t* offset_ = nullptr;
-    ukv_val_len_t* length_ = nullptr;
+    ukv_byte_t* ptr_ = nullptr;
+    ukv_length_t* offset_ = nullptr;
+    ukv_length_t* length_ = nullptr;
 
   public:
     using value_type = byte_t;
 
     inline value_ref_t() = default;
-    inline value_ref_t(ukv_val_ptr_t ptr, ukv_val_len_t& offset, ukv_val_len_t& length) noexcept {
+    inline value_ref_t(ukv_byte_t* ptr, ukv_length_t& offset, ukv_length_t& length) noexcept {
         ptr_ = ptr;
         offset_ = &offset;
         length_ = &length;
@@ -189,13 +187,13 @@ class value_ref_t {
     inline byte_t const* begin() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
     inline byte_t const* end() const noexcept { return begin() + size(); }
     inline char const* c_str() const noexcept { return reinterpret_cast<char const*>(ptr_); }
-    inline std::size_t size() const noexcept { return *length_ == ukv_val_len_missing_k ? 0 : *length_; }
+    inline std::size_t size() const noexcept { return *length_ == ukv_length_missing_k ? 0 : *length_; }
     inline bool empty() const noexcept { return !size(); }
-    inline operator bool() const noexcept { return *length_ != ukv_val_len_missing_k; }
+    inline operator bool() const noexcept { return *length_ != ukv_length_missing_k; }
 
-    ukv_val_ptr_t const* member_ptr() const noexcept { return &ptr_; }
-    ukv_val_len_t const* member_offset() const noexcept { return offset_; }
-    ukv_val_len_t const* member_length() const noexcept { return length_; }
+    ukv_byte_t* const* member_ptr() const noexcept { return &ptr_; }
+    ukv_length_t const* member_offset() const noexcept { return offset_; }
+    ukv_length_t const* member_length() const noexcept { return length_; }
 
     bool operator==(value_ref_t other) const noexcept {
         return size() == other.size() && std::equal(begin(), end(), other.begin());
@@ -225,11 +223,11 @@ value_view_t value_view(container_at&& container) {
  */
 class arena_t {
 
-    ukv_t db_ = nullptr;
+    ukv_database_t db_ = nullptr;
     ukv_arena_t memory_ = nullptr;
 
   public:
-    arena_t(ukv_t db) noexcept : db_(db) {}
+    arena_t(ukv_database_t db) noexcept : db_(db) {}
     arena_t(arena_t const&) = delete;
     arena_t& operator=(arena_t const&) = delete;
 
@@ -248,7 +246,7 @@ class arena_t {
 
     inline ukv_arena_t* member_ptr() noexcept { return &memory_; }
     inline operator ukv_arena_t*() & noexcept { return member_ptr(); }
-    inline ukv_t db() const noexcept { return db_; }
+    inline ukv_database_t db() const noexcept { return db_; }
 };
 
 class any_arena_t {
@@ -257,7 +255,7 @@ class any_arena_t {
     arena_t* accessible_ = nullptr;
 
   public:
-    any_arena_t(ukv_t db) noexcept : owned_(db), accessible_(nullptr) {}
+    any_arena_t(ukv_database_t db) noexcept : owned_(db), accessible_(nullptr) {}
     any_arena_t(arena_t& accessible) noexcept : owned_(nullptr), accessible_(&accessible) {}
 
     any_arena_t(any_arena_t&&) = default;

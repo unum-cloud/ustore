@@ -28,9 +28,9 @@ class members_ref_gt;
  * The only impossible combination is assigning many values to one key.
  *
  * @tparam locations_at Type describing the address of a value in DBMS.
- * > (ukv_col_t?, ukv_key_t, ukv_field_t?): Single KV-pair location.
- * > (ukv_col_t*, ukv_key_t*, ukv_field_t*): Externally owned range of keys.
- * > (ukv_col_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
+ * > (ukv_collection_t?, ukv_key_t, ukv_field_t?): Single KV-pair location.
+ * > (ukv_collection_t*, ukv_key_t*, ukv_field_t*): Externally owned range of keys.
+ * > (ukv_collection_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
  *
  * @section Memory Management
  * Every "container" that overloads the @b [] operator has an internal "arena",
@@ -58,12 +58,12 @@ class members_ref_gt {
     static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
     using value_t = std::conditional_t<is_one_k, value_view_t, embedded_bins_t>;
-    using present_t = std::conditional_t<is_one_k, bool, strided_iterator_gt<ukv_1x8_t>>;
-    using length_t = std::conditional_t<is_one_k, ukv_val_len_t, indexed_range_gt<ukv_val_len_t*>>;
+    using present_t = std::conditional_t<is_one_k, bool, strided_iterator_gt<ukv_octet_t>>;
+    using length_t = std::conditional_t<is_one_k, ukv_length_t, indexed_range_gt<ukv_length_t*>>;
 
   protected:
-    ukv_t db_ = nullptr;
-    ukv_txn_t txn_ = nullptr;
+    ukv_database_t db_ = nullptr;
+    ukv_transaction_t txn_ = nullptr;
     ukv_arena_t* arena_ = nullptr;
     locations_store_t locations_;
     ukv_format_t format_ = ukv_format_binary_k;
@@ -78,8 +78,8 @@ class members_ref_gt {
     expected_gt<expected_at> any_gather(contents_arg_at&&, ukv_options_t) noexcept;
 
   public:
-    members_ref_gt(ukv_t db,
-                   ukv_txn_t txn,
+    members_ref_gt(ukv_database_t db,
+                   ukv_transaction_t txn,
                    locations_store_t locations,
                    ukv_arena_t* arena,
                    ukv_format_t format = ukv_format_binary_k) noexcept
@@ -144,12 +144,12 @@ class members_ref_gt {
      * @return status_t Non-NULL if only an error had occurred.
      */
     status_t clear(bool flush = false) noexcept {
-        ukv_val_ptr_t any = reinterpret_cast<ukv_val_ptr_t>(this);
-        ukv_val_len_t len = 0;
+        ukv_bytes_ptr_t any = reinterpret_cast<ukv_bytes_ptr_t>(this);
+        ukv_length_t len = 0;
         contents_arg_t arg {
-            .contents_begin = {&any},
             .offsets_begin = {},
             .lengths_begin = {&len},
+            .contents_begin = {&any},
             .count = 1,
         };
         return assign(arg, flush);
@@ -238,10 +238,10 @@ template <typename expected_at>
 expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t options) noexcept {
 
     status_t status;
-    ukv_val_len_t* found_offsets = nullptr;
-    ukv_val_len_t* found_lengths = nullptr;
-    ukv_val_ptr_t found_values = nullptr;
-    ukv_1x8_t* found_presences = nullptr;
+    ukv_length_t* found_offsets = nullptr;
+    ukv_length_t* found_lengths = nullptr;
+    ukv_bytes_ptr_t found_values = nullptr;
+    ukv_octet_t* found_presences = nullptr;
     constexpr bool wants_value = std::is_same_v<value_t, expected_at>;
     constexpr bool wants_length = std::is_same_v<length_t, expected_at>;
     constexpr bool wants_present = std::is_same_v<present_t, expected_at>;
@@ -294,14 +294,14 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
         return std::move(status);
 
     if constexpr (wants_length) {
-        indexed_range_gt<ukv_val_len_t*> many {found_lengths, found_lengths + count};
+        indexed_range_gt<ukv_length_t*> many {found_lengths, found_lengths + count};
         if constexpr (is_one_k)
             return many[0];
         else
             return many;
     }
     else if constexpr (wants_present) {
-        strided_iterator_gt<ukv_1x8_t> many {found_presences};
+        strided_iterator_gt<ukv_octet_t> many {found_presences};
         if constexpr (is_one_k)
             return bool(many[0]);
         else
@@ -384,8 +384,8 @@ expected_gt<joined_strs_t> members_ref_gt<locations_at>::gist(bool track) noexce
 
     status_t status;
     ukv_size_t found_count = 0;
-    ukv_val_len_t* found_offsets = nullptr;
-    ukv_str_view_t found_strings = nullptr;
+    ukv_length_t* found_offsets = nullptr;
+    ukv_str_span_t found_strings = nullptr;
 
     auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
     decltype(auto) locs = locations_.ref();

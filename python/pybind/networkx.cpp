@@ -75,7 +75,7 @@ void ukv::wrap_networkx(py::module& m) {
             net_ptr->allow_self_loops = loops;
 
             // Attach the primary collection
-            db_t& db = py_db->native;
+            database_t& db = py_db->native;
             net_ptr->index = db.collection(index ? index->c_str() : "").throw_or_release();
 
             // Attach the additional collections
@@ -303,7 +303,7 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "clear",
         [](py_graph_t& g) {
-            // db_t& db = g.db_ptr->native;
+            // database_t& db = g.db_ptr->native;
             // db.clear(g.index);
             // db.clear(g.sources_attrs);
             // db.clear(g.targets_attrs);
