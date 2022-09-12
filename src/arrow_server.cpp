@@ -521,8 +521,14 @@ class UKVService : public arf::FlightServerBase {
             if (!params.collection_name)
                 return ar::Status::Invalid("Missing collection name argument");
 
+            // The name must be null-terminated.
+            // This is not safe:
+            ukv_str_span_t c_col_name = nullptr;
+            c_col_name = (ukv_str_span_t)params.collection_name->begin();
+            c_col_name[params.collection_name->size()] = 0;
+
             // Upsert and fetch collection ID
-            auto maybe_col = db_.collection(params.collection_name->data());
+            auto maybe_col = db_.collection(c_col_name);
             if (!maybe_col)
                 return ar::Status::ExecutionError(maybe_col.release_status().message());
 
@@ -545,12 +551,18 @@ class UKVService : public arf::FlightServerBase {
                 : params.opt_drop_mode == kParamDropModeContents ? ukv_drop_keys_vals_k
                                                                  : ukv_drop_keys_vals_handle_k;
 
-            ukv_collection_drop(db_,
-                                params.collection_id ? parse_u64_hex(*params.collection_id, ukv_collection_main_k)
-                                                     : ukv_collection_main_k,
-                                params.collection_name ? params.collection_name->begin() : nullptr,
-                                mode,
-                                status.member_ptr());
+            ukv_collection_t c_col_id = ukv_collection_main_k;
+            ukv_str_span_t c_col_name = nullptr;
+            if (params.collection_id)
+                c_col_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
+            else {
+                // The name must be null-terminated.
+                // This is not safe:
+                c_col_name = (ukv_str_span_t)params.collection_name->begin();
+                c_col_name[params.collection_name->size()] = 0;
+            }
+
+            ukv_collection_drop(db_, c_col_id, c_col_name, mode, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_empty();
