@@ -577,15 +577,6 @@ class UKVService : public arf::FlightServerBase {
             if (!params.transaction_id)
                 params.session_id.txn_id = static_cast<txn_id_t>(std::rand());
 
-            // Check if collection configuration string was also provided
-            ukv_str_view_t col_config = nullptr;
-            if (action.body) {
-                col_config = reinterpret_cast<ukv_str_view_t>(action.body->data());
-                auto end_config = col_config + action.body->capacity();
-                if (std::find(col_config, end_config, '\0') == end_config)
-                    return ar::Status::Invalid("Collection config must be Null-terminated");
-            }
-
             // Request handles for memory
             running_txn_t session = sessions_.request_txn(params.session_id, status.member_ptr());
             if (!status)
