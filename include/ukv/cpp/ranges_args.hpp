@@ -74,7 +74,7 @@ struct contents_arg_t {
 
         auto begin = reinterpret_cast<byte_t const*>(contents_begin[i]);
         auto off = offsets_begin ? offsets_begin[i] : 0;
-        ukv_val_len_t len = 0;
+        ukv_length_t len = 0;
         if (lengths_begin)
             len = lengths_begin[i];
         else if (offsets_begin)
