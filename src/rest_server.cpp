@@ -80,25 +80,25 @@
  *
  * Working with @b batched data in @b AOS:
  * > PUT /aos/:
- *      Receives: {objs:[obj], txn?: int, cols?: [str]|str, keys?: [int]}
+ *      Receives: {objs:[obj], txn?: int, collections?: [str]|str, keys?: [int]}
  *      Returns: {error?: str}
  *      If `keys` aren't given, they are being sampled as `[x['_id'] for x in objs]`.
- *      If `cols` aren't given, they are being sampled as `[x['_col'] for x in objs]`.
+ *      If `collections` aren't given, they are being sampled as `[x['_col'] for x in objs]`.
  * > PATCH /aos/:
- *      Receives: {cols?: [str]|str, keys?: [int], patch: obj, txn?: int}
+ *      Receives: {collections?: [str]|str, keys?: [int], patch: obj, txn?: int}
  *      Returns: {error?: str}
  *      If `keys` aren't given, the whole collection(s) is being patched.
- *      If `cols` are also skipped, the entire DB is patched.
+ *      If `collections` are also skipped, the entire DB is patched.
  * > GET /aos/:
- *      Receives: {cols?: [str]|str, keys?: [int], fields?: [str], txn?: int}
+ *      Receives: {collections?: [str]|str, keys?: [int], fields?: [str], txn?: int}
  *      Returns: {objs?: [obj], error?: str}
  *      If `keys` aren't given, the whole collection(s) is being retrieved.
- *      If `cols` are also skipped, the entire DB is retrieved.
+ *      If `collections` are also skipped, the entire DB is retrieved.
  * > DELETE /aos/:
- *      Receives: {cols?: [str]|str, keys?: [int], fields?: [str], txn?: int}
+ *      Receives: {collections?: [str]|str, keys?: [int], fields?: [str], txn?: int}
  *      Returns: {error?: str}
  * > HEAD /aos/:
- *      Receives: {cols?: [str]|str, keys?: [int], fields?: [str], txn?: int}
+ *      Receives: {collections?: [str]|str, keys?: [int], fields?: [str], txn?: int}
  *      Returns: {len?: int, error?: str}
  * The optional payload members define how to parse the payload:
  * > col: Means we should put all into one collection, disregarding the `_col` fields.
@@ -130,13 +130,13 @@
  *
  * Working with @b batched data in tape-like @b SOA:
  * > PUT /soa/:
- *      Receives: {cols?: [str], keys: [int], txn?: int, lens: [int], tape: str}
+ *      Receives: {collections?: [str], keys: [int], txn?: int, lens: [int], tape: str}
  *      Returns: {error?: str}
  * > GET /soa/:
- *      Receives: {cols?: [str], keys: [int], fields?: [str], txn?: int}
+ *      Receives: {collections?: [str], keys: [int], fields?: [str], txn?: int}
  *      Returns: {lens?: [int], tape?: str, error?: str}
  * > DELETE /soa/:
- *      Receives: {cols?: [str], keys: [int], fields?: [str], txn?: int}
+ *      Receives: {collections?: [str], keys: [int], fields?: [str], txn?: int}
  *      Returns: {error?: str}
  * > HEAD /soa/:
  *      Receives: {col?: str, key: int, fields?: [str], txn?: int}
@@ -144,7 +144,7 @@
  *
  * Working with @b batched data in @b Apache.Arrow format:
  * > GET /arrow/:
- *      Receives: {cols?: [str], keys: [int], fields: [str], txn?: int}
+ *      Receives: {collections?: [str], keys: [int], fields: [str], txn?: int}
  *      Returns: Apache Arrow buffers
  * The result object will have the "application/vnd.apache.arrow.stream" @b MIME.
  */
@@ -300,12 +300,12 @@ void respond_to_one(db_session_t& session,
     }
 
     // Parse the collection name string.
-    if (auto col_val = param_value(params_str, "col="); col_val) {
-        char col_name_buffer[65] = {0};
-        std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
+    if (auto collection_val = param_value(params_str, "col="); collection_val) {
+        char collection_name_buffer[65] = {0};
+        std::memcpy(collection_name_buffer, collection_val->data(), std::min(collection_val->size(), 64ul));
 
         status_t status;
-        ukv_collection_open(session.db(), col_name_buffer, NULL, &collection.raw, error.member_ptr());
+        ukv_collection_open(session.db(), collection_name_buffer, NULL, &collection.raw, error.member_ptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
     }
@@ -520,13 +520,13 @@ void respond_to_aos(db_session_t& session,
     }
 
     // Parse the collection name string.
-    if (auto col_val = param_value(params_str, "col="); col_val) {
-        char col_name_buffer[65] = {0};
-        std::memcpy(col_name_buffer, col_val->data(), std::min(col_val->size(), 64ul));
+    if (auto collection_val = param_value(params_str, "col="); collection_val) {
+        char collection_name_buffer[65] = {0};
+        std::memcpy(collection_name_buffer, collection_val->data(), std::min(collection_val->size(), 64ul));
 
         status_t status;
         collection_t collection(session.db());
-        ukv_collection_open(session.db(), col_name_buffer, NULL, &collection.raw, error.member_ptr());
+        ukv_collection_open(session.db(), collection_name_buffer, NULL, &collection.raw, error.member_ptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 

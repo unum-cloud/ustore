@@ -18,48 +18,56 @@ enum class byte_t : std::uint8_t {};
 
 /**
  * @brief An OOP-friendly location representation for objects in the DB.
- * Should be used with `stride` set to `sizeof(col_key_t)`.
+ * Should be used with `stride` set to `sizeof(collection_key_t)`.
  */
-struct col_key_t {
+struct collection_key_t {
 
-    ukv_collection_t col = ukv_collection_main_k;
+    ukv_collection_t collection = ukv_collection_main_k;
     ukv_key_t key = 0;
 
-    col_key_t() = default;
-    col_key_t(col_key_t const&) = default;
-    col_key_t& operator=(col_key_t const&) = default;
+    collection_key_t() = default;
+    collection_key_t(collection_key_t const&) = default;
+    collection_key_t& operator=(collection_key_t const&) = default;
 
-    inline col_key_t(ukv_collection_t c, ukv_key_t k) noexcept : col(c), key(k) {}
-    inline col_key_t(ukv_key_t k) noexcept : key(k) {}
-    inline col_key_t in(ukv_collection_t col) noexcept { return {col, key}; }
+    inline collection_key_t(ukv_collection_t c, ukv_key_t k) noexcept : collection(c), key(k) {}
+    inline collection_key_t(ukv_key_t k) noexcept : key(k) {}
+    inline collection_key_t in(ukv_collection_t collection) noexcept { return {collection, key}; }
 
-    inline bool operator==(col_key_t const& other) const noexcept { return (col == other.col) & (key == other.key); }
-    inline bool operator!=(col_key_t const& other) const noexcept { return (col != other.col) | (key != other.key); }
-    inline bool operator<(col_key_t const& other) const noexcept {
-        return (col < other.col) | ((col == other.col) & (key < other.key));
+    inline bool operator==(collection_key_t const& other) const noexcept {
+        return (collection == other.collection) & (key == other.key);
     }
-    inline bool operator>(col_key_t const& other) const noexcept {
-        return (col > other.col) | ((col == other.col) & (key > other.key));
+    inline bool operator!=(collection_key_t const& other) const noexcept {
+        return (collection != other.collection) | (key != other.key);
     }
-    inline bool operator<=(col_key_t const& other) const noexcept { return operator<(other) | operator==(other); }
-    inline bool operator>=(col_key_t const& other) const noexcept { return operator>(other) | operator==(other); }
+    inline bool operator<(collection_key_t const& other) const noexcept {
+        return (collection < other.collection) | ((collection == other.collection) & (key < other.key));
+    }
+    inline bool operator>(collection_key_t const& other) const noexcept {
+        return (collection > other.collection) | ((collection == other.collection) & (key > other.key));
+    }
+    inline bool operator<=(collection_key_t const& other) const noexcept {
+        return operator<(other) | operator==(other);
+    }
+    inline bool operator>=(collection_key_t const& other) const noexcept {
+        return operator>(other) | operator==(other);
+    }
 };
 
-struct col_key_field_t {
-    ukv_collection_t col = 0;
+struct collection_key_field_t {
+    ukv_collection_t collection = 0;
     ukv_key_t key = ukv_key_unknown_k;
     ukv_str_view_t field = nullptr;
 
-    col_key_field_t() = default;
-    col_key_field_t(ukv_key_t key) noexcept : col(ukv_collection_main_k), key(key), field(nullptr) {}
-    col_key_field_t(ukv_collection_t col, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
-        : col(col), key(key), field(field) {}
-    col_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept
-        : col(ukv_collection_main_k), key(key), field(field) {}
+    collection_key_field_t() = default;
+    collection_key_field_t(ukv_key_t key) noexcept : collection(ukv_collection_main_k), key(key), field(nullptr) {}
+    collection_key_field_t(ukv_collection_t collection, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
+        : collection(collection), key(key), field(field) {}
+    collection_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept
+        : collection(ukv_collection_main_k), key(key), field(field) {}
 };
 
 template <typename... args_at>
-inline col_key_field_t ckf(args_at&&... args) {
+inline collection_key_field_t ckf(args_at&&... args) {
     return {std::forward<args_at>(args)...};
 }
 
@@ -283,10 +291,10 @@ inline void hash_combine(std::size_t& seed, hashable_at const& v) {
 }
 
 struct sub_key_hash_t {
-    inline std::size_t operator()(col_key_t const& sub) const noexcept {
+    inline std::size_t operator()(collection_key_t const& sub) const noexcept {
         std::size_t result = SIZE_MAX;
         hash_combine(result, sub.key);
-        hash_combine(result, sub.col);
+        hash_combine(result, sub.collection);
         return result;
     }
 };

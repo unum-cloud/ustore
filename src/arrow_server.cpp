@@ -16,9 +16,6 @@
 #include <iostream>
 
 #include <arrow/flight/server.h>
-#include <boost/lexical_cast.hpp> // HEX conversion
-#include <boost/heap/fibonacci_heap.hpp>
-#include <boost/compute/detail/lru_cache.hpp>
 
 #include "ukv/cpp/db.hpp"
 #include "ukv/cpp/types.hpp" // `hash_combine`
@@ -33,29 +30,48 @@ using sys_clock_t = std::chrono::system_clock;
 using sys_time_t = std::chrono::time_point<sys_clock_t>;
 
 inline static arf::ActionType const kActionColOpen {kFlightColOpen, "Find a collection descriptor by name."};
-inline static arf::ActionType const kActionColRemove {kFlightColRemove, "Delete a named collection."};
+inline static arf::ActionType const kActionColDrop {kFlightColDrop, "Delete a named collection."};
 inline static arf::ActionType const kActionTxnBegin {kFlightTxnBegin, "Starts an ACID transaction and returns its ID."};
 inline static arf::ActionType const kActionTxnCommit {kFlightTxnCommit, "Commit a previously started transaction."};
 
 /**
  * @brief Searches for a "value" among key-value pairs passed in URI after path.
  * @param query_params  Must begin with "?" or "/".
- * @param param_name    Must end with "=".
+ * @param param_name    The name of the URI parameter to match.
  */
 std::optional<std::string_view> param_value(std::string_view query_params, std::string_view param_name) {
 
-    auto key_begin = std::search(query_params.begin(), query_params.end(), param_name.begin(), param_name.end());
-    if (key_begin == query_params.end())
-        return std::nullopt;
+    char const* key_begin = query_params.begin();
+    do {
+        key_begin = std::search(key_begin, query_params.end(), param_name.begin(), param_name.end());
+        if (key_begin == query_params.end())
+            return std::nullopt;
+        bool is_suffix = key_begin + param_name.size() == query_params.end();
+        if (is_suffix)
+            return std::string_view {};
 
-    char preceding_char = *(key_begin - 1);
-    bool is_part_of_bigger_key = (preceding_char != '?') & (preceding_char != '&') & (preceding_char != '/');
-    if (is_part_of_bigger_key)
-        return std::nullopt;
+        // Check if we have matched a part of bigger key.
+        // In that case skip to next starting point.
+        auto prev_character = *(key_begin - 1);
+        if (prev_character != '?' && prev_character != '&' && prev_character != '/') {
+            key_begin += 1;
+            continue;
+        }
 
-    auto value_begin = key_begin + param_name.size();
-    auto value_end = std::find(value_begin, query_params.end(), '&');
-    return std::string_view {value_begin, static_cast<size_t>(value_end - value_begin)};
+        auto next_character = key_begin[param_name.size()];
+        if (next_character == '&')
+            return std::string_view {};
+
+        if (next_character == '=') {
+            auto value_begin = key_begin + param_name.size() + 1;
+            auto value_end = std::find(value_begin, query_params.end(), '&');
+            return std::string_view {value_begin, static_cast<size_t>(value_end - value_begin)};
+        }
+
+        key_begin += 1;
+    } while (true);
+
+    return std::nullopt;
 }
 
 bool is_query(std::string_view uri, std::string_view name) {
@@ -64,7 +80,7 @@ bool is_query(std::string_view uri, std::string_view name) {
     return uri == name;
 }
 
-bool validate_column_cols(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
+bool validate_column_collections(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
     if (schema_ptr->format != ukv_type_to_arrow_format(ukv_type<ukv_collection_t>()))
         return false;
     if (column_ptr->null_count != 0)
@@ -103,6 +119,15 @@ class SingleResultStream : public arf::ResultStream {
     }
 };
 
+class EmptyResultStream : public arf::ResultStream {
+
+  public:
+    EmptyResultStream() {}
+    ~EmptyResultStream() {}
+
+    ar::Result<std::unique_ptr<arf::Result>> Next() override { return {nullptr}; }
+};
+
 /**
  * @brief Wraps a single scalar into a Arrow-compatible `ResultStream`.
  * @section Critique
@@ -113,10 +138,18 @@ template <typename scalar_at>
 std::unique_ptr<arf::ResultStream> return_scalar(scalar_at const& scalar) {
     static_assert(!std::is_reference_v<scalar_at>);
     auto result = std::make_unique<arf::Result>();
+    thread_local scalar_at scalar_copy;
+    scalar_copy = scalar;
     result->body = std::make_shared<ar::Buffer>( //
-        reinterpret_cast<uint8_t const*>(&scalar),
-        sizeof(scalar));
+        reinterpret_cast<uint8_t const*>(&scalar_copy),
+        sizeof(scalar_copy));
     auto results = std::make_unique<SingleResultStream>(std::move(result));
+
+    return std::unique_ptr<arf::ResultStream>(results.release());
+}
+
+std::unique_ptr<arf::ResultStream> return_empty() {
+    auto results = std::make_unique<EmptyResultStream>();
     return std::unique_ptr<arf::ResultStream>(results.release());
 }
 
@@ -130,10 +163,20 @@ client_id_t parse_parse_client_id(arf::ServerCallContext const& ctx) {
     return static_cast<client_id_t>(std::hash<std::string> {}(peer_addr));
 }
 
+base_id_t parse_u64_hex(std::string_view str, base_id_t default_ = 0) {
+    // if (str.size() != 16 + 2)
+    //     return default_;
+    // auto result = boost::lexical_cast<base_id_t>(str.data(), str.size());
+    // return result;
+    char* end = nullptr;
+    base_id_t result = std::strtoull(str.data(), &end, 16);
+    if (end != str.end())
+        return default_;
+    return result;
+}
+
 txn_id_t parse_txn_id(std::string_view str) {
-    if (str.size() != 16)
-        return txn_id_t {0};
-    return txn_id_t {boost::lexical_cast<base_id_t>(str.data(), str.size())};
+    return txn_id_t {parse_u64_hex(str)};
 }
 
 struct session_id_t {
@@ -226,11 +269,13 @@ class sessions_t {
         txns_aging_heap_.pop_back(); // Resize by removing one last slot
         running_txn_t released = it->second;
         client_to_txn_.erase(it);
+        released.executing = false;
         return released;
     }
 
     void submit(session_id_t session_id, running_txn_t running_txn) noexcept {
-        client_to_txn_.emplace(session_id, running_txn);
+        running_txn.executing = false;
+        client_to_txn_.insert_or_assign(session_id, running_txn);
         txns_aging_heap_.push_back(session_id);
         std::push_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
     }
@@ -366,10 +411,12 @@ struct session_params_t {
     std::optional<std::string_view> collection_name;
     std::optional<std::string_view> collection_id;
 
-    std::optional<std::string_view> opt_part;
+    std::optional<std::string_view> opt_read_part;
+    std::optional<std::string_view> opt_drop_mode;
     std::optional<std::string_view> opt_snapshot;
     std::optional<std::string_view> opt_flush;
     std::optional<std::string_view> opt_track;
+    std::optional<std::string_view> opt_shared_mem;
 };
 
 session_params_t session_params(arf::ServerCallContext const& server_call, std::string_view uri) {
@@ -389,18 +436,20 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.collection_name = param_value(params, kParamCollectionName);
     result.collection_id = param_value(params, kParamCollectionID);
 
-    result.opt_part = param_value(params, kParamReadPart);
+    result.opt_read_part = param_value(params, kParamReadPart);
+    result.opt_drop_mode = param_value(params, kParamDropMode);
     result.opt_snapshot = param_value(params, kParamFlagSnapshotTxn);
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
     result.opt_track = param_value(params, kParamFlagTrackRead);
+    result.opt_shared_mem = param_value(params, kParamFlagSharedMemRead);
 
     return result;
 }
 
 ukv_str_view_t get_null_terminated(ar::Buffer const& buf) {
-    ukv_str_view_t col_config = reinterpret_cast<ukv_str_view_t>(buf.data());
-    auto end_config = col_config + buf.capacity();
-    return std::find(col_config, end_config, '\0') == end_config ? nullptr : col_config;
+    ukv_str_view_t collection_config = reinterpret_cast<ukv_str_view_t>(buf.data());
+    auto end_config = collection_config + buf.capacity();
+    return std::find(collection_config, end_config, '\0') == end_config ? nullptr : collection_config;
 }
 
 ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) {
@@ -417,9 +466,9 @@ ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) {
  *
  * > write?col=x&txn=y&lengths&track&shared (DoPut)
  * > read?col=x&txn=y&flush (DoExchange)
- * > col_upsert?col=x (DoAction): Returns collection ID
+ * > collection_upsert?col=x (DoAction): Returns collection ID
  *   Payload buffer: Collection opening config.
- * > col_remove?col=x (DoAction): Drops a collection
+ * > collection_remove?col=x (DoAction): Drops a collection
  * > txn_begin?txn=y (DoAction): Starts a transaction with a potentially custom ID
  * > txn_commit?txn=y (DoAction): Commits a transaction with a given ID
  *
@@ -438,7 +487,7 @@ class UKVService : public arf::FlightServerBase {
     ar::Status ListActions( //
         arf::ServerCallContext const&,
         std::vector<arf::ActionType>* actions) override {
-        *actions = {kActionColOpen, kActionColRemove, kActionTxnBegin, kActionTxnCommit};
+        *actions = {kActionColOpen, kActionColDrop, kActionTxnBegin, kActionTxnCommit};
         return ar::Status::OK();
     }
 
@@ -480,36 +529,57 @@ class UKVService : public arf::FlightServerBase {
             if (!params.collection_name)
                 return ar::Status::Invalid("Missing collection name argument");
 
-            // Upsert and fetch collection ID
-            auto maybe_col = db_.collection(params.collection_name->data());
-            if (!maybe_col)
-                return ar::Status::ExecutionError(maybe_col.release_status().message());
+            // The name must be null-terminated.
+            // This is not safe:
+            ukv_str_span_t c_collection_name = nullptr;
+            c_collection_name = (ukv_str_span_t)params.collection_name->begin();
+            c_collection_name[params.collection_name->size()] = 0;
 
-            ukv_collection_t col_id = maybe_col.throw_or_ref();
-            ukv_str_view_t col_config = get_null_terminated(action.body);
-            ukv_collection_open(db_, params.collection_name->begin(), col_config, &col_id, status.member_ptr());
+            // Upsert and fetch collection ID
+            auto maybe_collection = db_.collection(c_collection_name);
+            if (!maybe_collection)
+                return ar::Status::ExecutionError(maybe_collection.release_status().message());
+
+            ukv_collection_t collection_id = maybe_collection.throw_or_ref();
+            ukv_str_view_t collection_config = get_null_terminated(action.body);
+            ukv_collection_open(db_,
+                                params.collection_name->begin(),
+                                collection_config,
+                                &collection_id,
+                                status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
-            *results_ptr = return_scalar<ukv_collection_t>(col_id);
+            *results_ptr = return_scalar<ukv_collection_t>(collection_id);
             return ar::Status::OK();
         }
 
         // Dropping a collection
-        if (is_query(action.type, kActionColRemove.type)) {
-            if (!params.collection_id)
+        if (is_query(action.type, kActionColDrop.type)) {
+            if (!params.collection_id && !params.collection_name)
                 return ar::Status::Invalid("Missing collection name argument");
 
-            ukv_collection_drop(db_,
-                                0,
-                                params.collection_id->begin(),
-                                ukv_drop_keys_vals_handle_k,
-                                status.member_ptr());
+            ukv_drop_mode_t mode = //
+                params.opt_drop_mode == kParamDropModeValues     ? ukv_drop_vals_k
+                : params.opt_drop_mode == kParamDropModeContents ? ukv_drop_keys_vals_k
+                                                                 : ukv_drop_keys_vals_handle_k;
+
+            ukv_collection_t c_collection_id = ukv_collection_main_k;
+            ukv_str_span_t c_collection_name = nullptr;
+            if (params.collection_id)
+                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
+            else {
+                // The name must be null-terminated.
+                // This is not safe:
+                c_collection_name = (ukv_str_span_t)params.collection_name->begin();
+                c_collection_name[params.collection_name->size()] = 0;
+            }
+
+            ukv_collection_drop(db_, c_collection_id, c_collection_name, mode, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
+            *results_ptr = return_empty();
             return ar::Status::OK();
         }
-
-        // Listing all available collections
 
         // Starting a transaction
         if (is_query(action.type, kActionTxnBegin.type)) {
@@ -518,15 +588,6 @@ class UKVService : public arf::FlightServerBase {
                 options = ukv_option_txn_snapshot_k;
             if (!params.transaction_id)
                 params.session_id.txn_id = static_cast<txn_id_t>(std::rand());
-
-            // Check if collection configuration string was also provided
-            ukv_str_view_t col_config = nullptr;
-            if (action.body) {
-                col_config = reinterpret_cast<ukv_str_view_t>(action.body->data());
-                auto end_config = col_config + action.body->capacity();
-                if (std::find(col_config, end_config, '\0') == end_config)
-                    return ar::Status::Invalid("Collection config must be Null-terminated");
-            }
 
             // Request handles for memory
             running_txn_t session = sessions_.request_txn(params.session_id, status.member_ptr());
@@ -571,6 +632,7 @@ class UKVService : public arf::FlightServerBase {
             }
 
             sessions_.release_txn(session);
+            *results_ptr = return_empty();
             return ar::Status::OK();
         }
 
@@ -601,10 +663,10 @@ class UKVService : public arf::FlightServerBase {
             if (!input_keys)
                 return ar::Status::Invalid("Keys must have been provided for reads");
 
-            /// @param `cols`
-            auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
-            bool const request_only_presences = params.opt_part == kParamReadPartPresences;
-            bool const request_only_lengths = params.opt_part == kParamReadPartLengths;
+            /// @param `collections`
+            auto input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
+            bool const request_only_presences = params.opt_read_part == kParamReadPartPresences;
+            bool const request_only_lengths = params.opt_read_part == kParamReadPartLengths;
             bool const request_content = !request_only_lengths && !request_only_presences;
 
             // Reserve resources for the execution of this request
@@ -623,8 +685,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                input_cols.get(),
-                input_cols.stride(),
+                input_collections.get(),
+                input_collections.stride(),
                 input_keys.get(),
                 input_keys.stride(),
                 ukv_options_default_k,
@@ -687,8 +749,8 @@ class UKVService : public arf::FlightServerBase {
             auto input_end_keys = get_keys(input_schema_c, input_batch_c, kArgScanEnds);
             /// @param `lengths`
             auto input_lengths = get_lengths(input_schema_c, input_batch_c, kArgScanLengths);
-            /// @param `cols`
-            auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
+            /// @param `collections`
+            auto input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
 
             if (!input_start_keys || !input_lengths)
                 return ar::Status::Invalid("Keys and lengths must have been provided for scans");
@@ -708,8 +770,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                input_cols.get(),
-                input_cols.stride(),
+                input_collections.get(),
+                input_collections.stride(),
                 input_start_keys.get(),
                 input_start_keys.stride(),
                 input_end_keys.get(),
@@ -787,8 +849,8 @@ class UKVService : public arf::FlightServerBase {
             if (!input_keys)
                 return ar::Status::Invalid("Keys must have been provided for reads");
 
-            /// @param `cols`
-            auto input_cols = get_collections(input_schema_c, input_batch_c, kArgCols);
+            /// @param `collections`
+            auto input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
             auto input_vals = get_contents(input_schema_c, input_batch_c, kArgVals);
 
             auto session = sessions_.lock(params.session_id, status.member_ptr());
@@ -800,8 +862,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                input_cols.get(),
-                input_cols.stride(),
+                input_collections.get(),
+                input_collections.stride(),
                 input_keys.get(),
                 input_keys.stride(),
                 input_vals.presences_begin.get(),
