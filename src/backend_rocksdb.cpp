@@ -661,12 +661,14 @@ void ukv_collection_list( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    return_if_error(c_count && c_names, c_error, args_combo_k, "Need names and outputs!");
 
     stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     std::size_t collections_count = db.columns.size();
+    *c_count = static_cast<ukv_size_t>(collections_count);
 
     // Every string will be null-terminated
     std::size_t strings_length = 0;
