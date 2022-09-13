@@ -673,34 +673,27 @@ void ukv_collection_list( //
     for (auto const& column : db.columns)
         strings_length += column->GetName().size() + 1;
 
-    // For every collection we also need to export IDs and offsets
-    std::size_t scalars_space = 0;
-    scalars_space += collections_count * sizeof(ukv_collection_t);
-    scalars_space += collections_count * sizeof(ukv_length_t);
-    scalars_space += arrow_extra_offsets_k * sizeof(ukv_length_t);
-
-    span_gt<byte_t> tape = arena.alloc<byte_t>(scalars_space + strings_length, c_error);
+    auto names = arena.alloc<char>(strings_length, c_error).begin();
+    *c_names = names;
     return_on_error(c_error);
 
-    auto ids = reinterpret_cast<ukv_collection_t*>(tape.begin());
-    auto offs = reinterpret_cast<ukv_length_t*>(ids + collections_count);
-    auto names = reinterpret_cast<char*>(offs + collections_count + 1);
-    *c_count = static_cast<ukv_size_t>(collections_count);
-    *c_ids = ids;
-    *c_offsets = offs;
-    *c_names = names;
+    // For every collection we also need to export IDs and offsets
+    auto ids = arena.alloc_or_dummy<ukv_collection_t>(collections_count, c_error, c_ids);
+    return_on_error(c_error);
+    auto offs = arena.alloc_or_dummy<ukv_length_t>(collections_count + 1, c_error, c_offsets);
+    return_on_error(c_error);
 
+    std::size_t i = 0;
     for (auto const& column : db.columns) {
         auto len = column->GetName().size();
         std::memcpy(names, column->GetName().data(), len);
         names[len] = '\0';
-        *ids = reinterpret_cast<ukv_collection_t>(column);
-        *offs = static_cast<ukv_length_t>(names - *c_names);
-        ++ids;
-        ++offs;
+        ids[i] = reinterpret_cast<ukv_collection_t>(column);
+        offs[i] = static_cast<ukv_length_t>(names - *c_names);
         names += len + 1;
+        ++i;
     }
-    *offs = static_cast<ukv_length_t>(names - *c_names);
+    offs[i] = static_cast<ukv_length_t>(names - *c_names);
 }
 
 void ukv_database_control( //
