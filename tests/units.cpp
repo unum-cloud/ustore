@@ -126,10 +126,7 @@ void check_binary_collection(collection_t& collection) {
     EXPECT_TRUE(ref.erase());
     check_length(ref, ukv_length_missing_k);
 
-    // Invalid cases
-    values.count = 4;
-    EXPECT_FALSE(ref.assign(values));
-
+    // Invalid values
     contents_arg_t invalid_values {
         .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
         .lengths_begin = {&val_len, 0},
@@ -151,25 +148,16 @@ TEST(db, basic) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, named) {
-    database_t db;
-    EXPECT_TRUE(db.open(""));
-
-    EXPECT_TRUE(db["col1"]);
-    EXPECT_TRUE(db["col2"]);
-
+void check_collection_list(database_t& db) {
     collection_t col1 = *(db["col1"]);
     collection_t col2 = *(db["col2"]);
+    collection_t col3 = *(db["col3"]);
+    collection_t col4 = *(db["col4"]);
 
     EXPECT_TRUE(*db.contains("col1"));
     EXPECT_TRUE(*db.contains("col2"));
     EXPECT_FALSE(*db.contains("unknown_col"));
 
-    check_binary_collection(col1);
-    check_binary_collection(col2);
-
-    collection_t col3 = *(db["col3"]);
-    collection_t col4 = *(db["col4"]);
     arena_t memory(db);
     auto iter = db.collection_names(memory);
     EXPECT_TRUE(iter);
@@ -186,6 +174,22 @@ TEST(db, named) {
     EXPECT_EQ(collections[1], "col2");
     EXPECT_EQ(collections[2], "col3");
     EXPECT_EQ(collections[3], "col4");
+}
+
+TEST(db, named) {
+    database_t db;
+    EXPECT_TRUE(db.open(""));
+
+    check_collection_list(db);
+
+    EXPECT_TRUE(db["col1"]);
+    EXPECT_TRUE(db["col2"]);
+
+    collection_t col1 = *(db["col1"]);
+    collection_t col2 = *(db["col2"]);
+
+    check_binary_collection(col1);
+    check_binary_collection(col2);
 
     EXPECT_FALSE(db.drop(""));
     EXPECT_TRUE(db.drop("col1"));
@@ -195,8 +199,6 @@ TEST(db, named) {
     EXPECT_FALSE(*db.contains("col2"));
     EXPECT_TRUE(db.clear());
     EXPECT_TRUE(*db.contains(""));
-    EXPECT_FALSE(*db.contains("col3"));
-    EXPECT_FALSE(*db.contains("col4"));
 }
 
 TEST(db, txn) {
@@ -682,47 +684,8 @@ TEST(db, graph_random_fill) {
         EXPECT_EQ(*graph.degree(vertex_id), 9u);
     }
 }
-#if 0
-TEST(db, graph_remove_vertices) {
-    database_t db;
-    EXPECT_TRUE(db.open(""));
 
-    collection_t main = *db.collection();
-    graph_ref_t graph = main.as_graph();
-
-    constexpr std::size_t vertices_count = 2;
-    auto edges_vec = make_edges(vertices_count, 1);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
-
-    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
-        EXPECT_TRUE(graph.contains(vertex_id));
-        EXPECT_TRUE(*graph.contains(vertex_id));
-        EXPECT_TRUE(graph.remove(vertex_id));
-        EXPECT_TRUE(graph.contains(vertex_id));
-        EXPECT_FALSE(*graph.contains(vertex_id));
-    }
-}
-
-TEST(db, graph_remove_edges_keep_vertices) {
-    database_t db;
-    EXPECT_TRUE(db.open(""));
-
-    collection_t main = *db.collection();
-    graph_ref_t graph = main.as_graph();
-
-    constexpr std::size_t vertices_count = 1000;
-    auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
-    EXPECT_TRUE(graph.remove(edges(edges_vec)));
-
-    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
-        EXPECT_TRUE(graph.contains(vertex_id));
-        EXPECT_TRUE(*graph.contains(vertex_id));
-    }
-}
-#endif
-
-TEST(graph, txn) {
+TEST(db, graph_txn) {
     database_t db;
     EXPECT_TRUE(db.open(""));
 
@@ -762,7 +725,7 @@ TEST(graph, txn) {
     graph_ref_t txn_net2 = txn_col.as_graph();
 
     edge_t edge4 {4, 5, 15};
-    edge_t edge5 {4, 5, 16};
+    edge_t edge5 {5, 6, 16};
 
     EXPECT_TRUE(txn_net.upsert(edge4));
     EXPECT_TRUE(txn_net2.upsert(edge5));
@@ -770,6 +733,46 @@ TEST(graph, txn) {
     EXPECT_TRUE(txn.commit());
     EXPECT_FALSE(txn2.commit());
 }
+
+#if 0
+TEST(db, graph_remove_vertices) {
+    database_t db;
+    EXPECT_TRUE(db.open(""));
+
+    collection_t main = *db.collection();
+    graph_ref_t graph = main.as_graph();
+
+    constexpr std::size_t vertices_count = 2;
+    auto edges_vec = make_edges(vertices_count, 1);
+    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_TRUE(*graph.contains(vertex_id));
+        EXPECT_TRUE(graph.remove(vertex_id));
+        EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_FALSE(*graph.contains(vertex_id));
+    }
+}
+
+TEST(db, graph_remove_edges_keep_vertices) {
+    database_t db;
+    EXPECT_TRUE(db.open(""));
+
+    collection_t main = *db.collection();
+    graph_ref_t graph = main.as_graph();
+
+    constexpr std::size_t vertices_count = 1000;
+    auto edges_vec = make_edges(vertices_count, 100);
+    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.remove(edges(edges_vec)));
+
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_TRUE(*graph.contains(vertex_id));
+    }
+}
+#endif
 
 int main(int argc, char** argv) {
     std::filesystem::create_directory("./tmp");
