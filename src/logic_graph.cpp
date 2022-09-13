@@ -24,7 +24,7 @@ ukv_vertex_degree_t ukv_vertex_degree_missing_k = std::numeric_limits<ukv_vertex
 
 constexpr std::size_t bytes_in_degrees_header_k = 2 * sizeof(ukv_vertex_degree_t);
 
-struct updated_entry_t : public col_key_t {
+struct updated_entry_t : public collection_key_t {
     ukv_bytes_ptr_t content = nullptr;
     ukv_length_t length = ukv_length_missing_k;
     ukv_vertex_degree_t degree_delta = 0;
@@ -301,8 +301,8 @@ void export_edge_tuples( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_vertices_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_vertices_ids,
     ukv_size_t const c_vertices_stride,
@@ -330,8 +330,8 @@ void export_edge_tuples( //
         c_db,
         c_txn,
         c_vertices_count,
-        c_cols,
-        c_cols_stride,
+        c_collections,
+        c_collections_stride,
         c_vertices_ids,
         c_vertices_stride,
         c_options,
@@ -429,14 +429,14 @@ void pull_and_link_for_updates( //
     ukv_bytes_ptr_t found_binary_begin = nullptr;
     ukv_length_t* found_binary_offs = nullptr;
     ukv_size_t unique_count = static_cast<ukv_size_t>(unique_entries.size());
-    auto cols = unique_entries.immutable().members(&updated_entry_t::col);
+    auto collections = unique_entries.immutable().members(&updated_entry_t::collection);
     auto keys = unique_entries.immutable().members(&updated_entry_t::key);
     ukv_read( //
         c_db,
         c_txn,
         unique_count,
-        cols.begin().get(),
-        cols.begin().stride(),
+        collections.begin().get(),
+        collections.begin().stride(),
         keys.begin().get(),
         keys.begin().stride(),
         c_options,
@@ -453,8 +453,7 @@ void pull_and_link_for_updates( //
     for (std::size_t i = 0; i != unique_count; ++i) {
         auto found_binary = found_binaries[i];
         unique_entries[i].content = ukv_bytes_ptr_t(found_binary.data());
-        unique_entries[i].length =
-            found_binary ? static_cast<ukv_length_t>(found_binary.size()) : ukv_length_missing_k;
+        unique_entries[i].length = found_binary ? static_cast<ukv_length_t>(found_binary.size()) : ukv_length_missing_k;
     }
 }
 
@@ -464,8 +463,8 @@ void update_neighborhoods( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_edges_ids,
     ukv_size_t const c_edges_stride,
@@ -484,7 +483,7 @@ void update_neighborhoods( //
     stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
 
-    strided_iterator_gt<ukv_collection_t const> edge_cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> edge_collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> edges_ids {c_edges_ids, c_edges_stride};
     strided_iterator_gt<ukv_key_t const> sources_ids {c_sources_ids, c_sources_stride};
     strided_iterator_gt<ukv_key_t const> targets_ids {c_targets_ids, c_targets_stride};
@@ -494,9 +493,10 @@ void update_neighborhoods( //
     return_on_error(c_error);
     std::fill(unique_entries.begin(), unique_entries.end(), updated_entry_t {});
     for (ukv_size_t i = 0; i != c_tasks_count; ++i)
-        unique_entries[i].col = edge_cols[i], unique_entries[i].key = sources_ids[i];
+        unique_entries[i].collection = edge_collections[i], unique_entries[i].key = sources_ids[i];
     for (ukv_size_t i = 0; i != c_tasks_count; ++i)
-        unique_entries[c_tasks_count + i].col = edge_cols[i], unique_entries[c_tasks_count + i].key = targets_ids[i];
+        unique_entries[c_tasks_count + i].collection = edge_collections[i],
+                                       unique_entries[c_tasks_count + i].key = targets_ids[i];
 
     // Lets put all the unique IDs in the beginning of the range,
     // and then refill the tail with replicas
@@ -512,12 +512,12 @@ void update_neighborhoods( //
     // Define our primary for-loop
     auto for_each_task = [&](auto entry_role_target_edge_callback) {
         for (std::size_t i = 0; i != c_tasks_count; ++i) {
-            auto col = edge_cols[i];
+            auto collection = edge_collections[i];
             auto source_id = sources_ids[i];
             auto target_id = targets_ids[i];
             auto edge_id = edges_ids ? edges_ids[i] : ukv_key_unknown_k;
-            auto source_idx = offset_in_sorted(unique_entries, col_key_t {col, source_id});
-            auto target_idx = offset_in_sorted(unique_entries, col_key_t {col, target_id});
+            auto source_idx = offset_in_sorted(unique_entries, collection_key_t {collection, source_id});
+            auto target_idx = offset_in_sorted(unique_entries, collection_key_t {collection, target_id});
             entry_role_target_edge_callback(unique_entries[source_idx], ukv_vertex_source_k, target_id, edge_id);
             entry_role_target_edge_callback(unique_entries[target_idx], ukv_vertex_target_k, source_id, edge_id);
         }
@@ -555,7 +555,7 @@ void update_neighborhoods( //
     std::partition(unique_entries.begin(), unique_entries.end(), std::mem_fn(&updated_entry_t::degree_delta));
 
     // Dump the data back to disk!
-    auto cols = unique_strided.immutable().members(&updated_entry_t::col);
+    auto collections = unique_strided.immutable().members(&updated_entry_t::collection);
     auto keys = unique_strided.immutable().members(&updated_entry_t::key);
     auto contents = unique_strided.immutable().members(&updated_entry_t::content);
     auto lengths = unique_strided.immutable().members(&updated_entry_t::length);
@@ -563,8 +563,8 @@ void update_neighborhoods( //
         c_db,
         c_txn,
         unique_count,
-        cols.begin().get(),
-        cols.begin().stride(),
+        collections.begin().get(),
+        collections.begin().stride(),
         keys.begin().get(),
         keys.begin().stride(),
         nullptr,
@@ -584,8 +584,8 @@ void ukv_graph_find_edges( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_vertices_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_vertices_ids,
     ukv_size_t const c_vertices_stride,
@@ -609,8 +609,8 @@ void ukv_graph_find_edges( //
         c_db,
         c_txn,
         c_vertices_count,
-        c_cols,
-        c_cols_stride,
+        c_collections,
+        c_collections_stride,
         c_vertices_ids,
         c_vertices_stride,
         c_roles,
@@ -627,8 +627,8 @@ void ukv_graph_upsert_edges( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_edges_ids,
     ukv_size_t const c_edges_stride,
@@ -648,8 +648,8 @@ void ukv_graph_upsert_edges( //
         c_db,
         c_txn,
         c_tasks_count,
-        c_cols,
-        c_cols_stride,
+        c_collections,
+        c_collections_stride,
         c_edges_ids,
         c_edges_stride,
         c_sources_ids,
@@ -666,8 +666,8 @@ void ukv_graph_remove_edges( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_edges_ids,
     ukv_size_t const c_edges_stride,
@@ -687,8 +687,8 @@ void ukv_graph_remove_edges( //
         c_db,
         c_txn,
         c_tasks_count,
-        c_cols,
-        c_cols_stride,
+        c_collections,
+        c_collections_stride,
         c_edges_ids,
         c_edges_stride,
         c_sources_ids,
@@ -705,8 +705,8 @@ void ukv_graph_remove_vertices( //
     ukv_transaction_t const c_txn,
     ukv_size_t const c_vertices_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_vertices_ids,
     ukv_size_t const c_vertices_stride,
@@ -722,7 +722,7 @@ void ukv_graph_remove_vertices( //
     stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
     return_on_error(c_error);
 
-    strided_iterator_gt<ukv_collection_t const> vertex_cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> vertex_collections {c_collections, c_collections_stride};
     strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> vertex_roles {c_roles, c_roles_stride};
 
@@ -734,8 +734,8 @@ void ukv_graph_remove_vertices( //
         c_db,
         c_txn,
         c_vertices_count,
-        c_cols,
-        c_cols_stride,
+        c_collections,
+        c_collections_stride,
         c_vertices_ids,
         c_vertices_stride,
         c_roles,
@@ -759,11 +759,11 @@ void ukv_graph_remove_vertices( //
     {
         auto planned_entries = unique_entries.begin();
         for (std::size_t i = 0; i != c_vertices_count; ++i) {
-            auto col = planned_entries->col = vertex_cols[i];
+            auto collection = planned_entries->collection = vertex_collections[i];
             planned_entries->key = vertices_ids[i];
             ++planned_entries;
             for (std::size_t j = 0; j != degrees_per_vertex[i]; ++j, ++neighbors_per_vertex, ++planned_entries)
-                planned_entries->col = col, planned_entries->key = *neighbors_per_vertex;
+                planned_entries->collection = collection, planned_entries->key = *neighbors_per_vertex;
         }
         unique_count = sort_and_deduplicate(unique_entries.begin(), unique_entries.end());
         unique_entries = {unique_entries.begin(), unique_count};
@@ -777,15 +777,15 @@ void ukv_graph_remove_vertices( //
 
     // From every opposite end - remove a match, and only then - the content itself
     for (std::size_t i = 0; i != unique_strided.size(); ++i) {
-        auto vertex_col = vertex_cols[i];
+        auto vertex_collection = vertex_collections[i];
         auto vertex_id = vertices_ids[i];
         auto vertex_role = vertex_roles[i];
 
-        auto vertex_idx = offset_in_sorted(unique_entries, col_key_t {vertex_col, vertex_id});
+        auto vertex_idx = offset_in_sorted(unique_entries, collection_key_t {vertex_collection, vertex_id});
         updated_entry_t& vertex_value = unique_entries[vertex_idx];
 
         for (neighborship_t n : neighbors(vertex_value, vertex_role)) {
-            auto neighbor_idx = offset_in_sorted(unique_entries, col_key_t {vertex_col, n.neighbor_id});
+            auto neighbor_idx = offset_in_sorted(unique_entries, collection_key_t {vertex_collection, n.neighbor_id});
             updated_entry_t& neighbor_value = unique_entries[neighbor_idx];
             if (vertex_role == ukv_vertex_role_any_k) {
                 erase_from_entry(neighbor_value, ukv_vertex_source_k, vertex_id);
@@ -800,7 +800,7 @@ void ukv_graph_remove_vertices( //
     }
 
     // Now we will go through all the explicitly deleted vertices
-    auto cols = unique_strided.immutable().members(&updated_entry_t::col);
+    auto collections = unique_strided.immutable().members(&updated_entry_t::collection);
     auto keys = unique_strided.immutable().members(&updated_entry_t::key);
     auto contents = unique_strided.immutable().members(&updated_entry_t::content);
     auto lengths = unique_strided.immutable().members(&updated_entry_t::length);
@@ -808,8 +808,8 @@ void ukv_graph_remove_vertices( //
         c_db,
         c_txn,
         unique_count,
-        cols.begin().get(),
-        cols.begin().stride(),
+        collections.begin().get(),
+        collections.begin().stride(),
         keys.begin().get(),
         keys.begin().stride(),
         nullptr,
