@@ -689,7 +689,7 @@ void ukv_collection_drop(
     return_if_error(!collection_name.empty() || !invalidate,
                     c_error,
                     args_combo_k,
-                    "Default collection can't be invlaidated.");
+                    "Default collection can't be invalidated.");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     if (c_mode == ukv_drop_keys_vals_handle_k) {
@@ -720,7 +720,7 @@ void ukv_collection_drop(
         auto collection = db.native->DefaultColumnFamily();
         auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection));
         for (it->SeekToFirst(); it->Valid(); it->Next())
-            batch.Put(collection, it->key(), 0);
+            batch.Put(collection, it->key(), rocksdb::Slice());
         rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
         export_error(status, c_error);
         return;
