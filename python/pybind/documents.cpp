@@ -233,6 +233,14 @@ static void remove_doc(py_docs_collection_t& collection, py::object key_py) {
     return func(collection.binary, key_py.ptr(), Py_None);
 }
 
+static py::object has_doc(py_docs_collection_t& collection, py::object key_py) {
+    return has_binary(collection.binary, key_py);
+}
+
+static py::object scan_doc(py_docs_collection_t& collection, ukv_key_t min_key, ukv_size_t scan_limit) {
+    return scan_binary(collection.binary, min_key, scan_limit);
+}
+
 static void merge_patch(py_docs_collection_t& collection, py::object key_py, py::object val_py, ukv_format_t format) {
     collection.binary.native.as(format);
     write_one_doc(collection, key_py.ptr(), val_py.ptr());
