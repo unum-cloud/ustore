@@ -78,7 +78,7 @@ import (
 	"unsafe"
 )
 
-type UKV_val_len_t = C.ukv_length_t
+type ukv_length_t = C.ukv_length_t
 
 type BackendInterface struct {
 	UKV_error_free      unsafe.Pointer
@@ -87,7 +87,7 @@ type BackendInterface struct {
 	UKV_free            unsafe.Pointer
 	UKV_read            unsafe.Pointer
 	UKV_write           unsafe.Pointer
-	UKV_val_len_missing UKV_val_len_t
+	UKV_val_len_missing ukv_length_t
 }
 
 /**
