@@ -11,7 +11,7 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 * [JSON-Pointers](https://datatracker.ietf.org/doc/html/rfc6901) & [Field-level Patches](https://datatracker.ietf.org/doc/html/rfc6902), no custom Query Languages
 * [ACID](https://en.wikipedia.org/wiki/ACID) transactions across tables, docs & graphs
 * Familiar high-level [drivers](#frontends) for tabular & graph analytics
-* [Apache Arrow](https://arrow.apache.org/) exports, [Flight RPC](https://arrow.apache.org/docs/format/Flight.html) and [DataFusion SQL](https://github.com/apache/arrow-datafusion) support
+* [Apache Arrow](https://arrow.apache.org/) interop and [Flight RPC](https://arrow.apache.org/docs/format/Flight.html)
 * Packing Tensors for [PyTorch](https://pytorch.org/) and [TensorFlow](tensorflow.org)
 
 UKV does just that, abstracting away the implementation from the user.
@@ -22,7 +22,7 @@ Common use-cases of UKV would be:
 * Python, GoLang, Java and other high-level bindnigs for [RocksDB](rocksdb.org) and [LevelDB](https://github.com/google/leveldb).
 * Performant embedded store in the foundation of your in-house storage solution.
 * Document store, that is simpler and faster than putting JSONs in MongoDB or Postgres.
-* Graph database, with the feel of [NetworkX](https://networkx.org), speed of [GunRock](http://gunrock.github.io) and scale of [Hadoop](https://hadoop.apache.org).
+* Graph database, with the feel of [NetworkX](https://networkx.org), ~~soon~~ speed of [GunRock](http://gunrock.github.io) and scale of [Hadoop](https://hadoop.apache.org).
 * Low-latency media storage for games, CDNs and ML/BI pipelines.
 
 ## Backends
@@ -89,7 +89,7 @@ It's feature-rich, but not very performant, supporting:
 * Single & Batch Operations
 * Tensors support via [Buffer Protocol](https://docs.python.org/3/c-api/buffer.html)
 * [NetworkX](https://networkx.org)-like interface for Graphs
-* [Pandas](https://pandas.pydata.org)-like interface for Document collections
+* [Pandas](https://pandas.pydata.org)-like interface for Document collections ~~in-progress~~
 
 Using it can be as easy as:
 
@@ -124,10 +124,7 @@ All `get` requests cause memory allocations in Java Runtime and export data into
 Most `set` requests will simply cast and forward values without additional copies.
 Aside from opening and closing this class is **thread-safe** for higher interop with other Java-based tools.
 
-Implementation follows the ["best practices" defined by IBM](https://developer.ibm.com/articles/j-jni/). It was tested with:
-
-* JVM
-* *[GraalVM](https://www.graalvm.org/22.1/reference-manual/native-image/JNI/)*
+Implementation follows the ["best practices" defined by IBM](https://developer.ibm.com/articles/j-jni/).
 
 ### GoLang
 
