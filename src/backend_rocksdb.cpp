@@ -470,6 +470,7 @@ void ukv_scan( //
         }
 
         ukv_size_t j = 0;
+        it->Seek(to_slice(task.min_key));
         while (it->Valid() && j != task.limit) {
             auto key = *reinterpret_cast<ukv_key_t const*>(it->key().data());
             if (key >= task.max_key)
