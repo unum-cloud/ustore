@@ -864,7 +864,7 @@ void ukv_collection_list( //
     ukv_database_t const c_db,
     ukv_size_t* c_count,
     ukv_collection_t** c_ids,
-    ukv_length_t** c_offs,
+    ukv_length_t** c_offsets,
     ukv_char_t** c_names,
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -891,7 +891,7 @@ void ukv_collection_list( //
     // For every collection we also need to export IDs and offsets
     auto ids = arena.alloc_or_dummy<ukv_collection_t>(collections_count, c_error, c_ids);
     return_on_error(c_error);
-    auto offs = arena.alloc_or_dummy<ukv_length_t>(collections_count + 1, c_error, c_offs);
+    auto offs = arena.alloc_or_dummy<ukv_length_t>(collections_count + 1, c_error, c_offsets);
     return_on_error(c_error);
 
     std::size_t i = 0;
