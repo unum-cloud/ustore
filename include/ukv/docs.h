@@ -147,11 +147,11 @@ extern ukv_format_t ukv_format_docs_internal_k;
  * similar to MongoDB and ElasticSearch.
  */
 void ukv_docs_write( //
-    ukv_t const db,
-    ukv_txn_t const txn,
+    ukv_database_t const db,
+    ukv_transaction_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_col_t const* collections,
+    ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -160,20 +160,20 @@ void ukv_docs_write( //
     ukv_str_view_t const* fields,
     ukv_size_t const fields_stride,
 
+    ukv_octet_t const* presences,
+
+    ukv_length_t const* offsets,
+    ukv_size_t const offsets_stride,
+
+    ukv_length_t const* lengths,
+    ukv_size_t const lengths_stride,
+
+    ukv_bytes_cptr_t const* values,
+    ukv_size_t const values_stride,
+
     ukv_options_t const options,
     ukv_format_t const format,
     ukv_type_t const type,
-
-    ukv_val_ptr_t const* values,
-    ukv_size_t const values_stride,
-
-    ukv_val_len_t const* offsets,
-    ukv_size_t const offsets_stride,
-
-    ukv_val_len_t const* lengths,
-    ukv_size_t const lengths_stride,
-
-    ukv_1x8_t const* presences,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -204,11 +204,11 @@ void ukv_docs_write( //
  *      level. Transforms themselves are standardized and packed in JSON.
  */
 void ukv_docs_read( //
-    ukv_t const db,
-    ukv_txn_t const txn,
+    ukv_database_t const db,
+    ukv_transaction_t const txn,
     ukv_size_t const tasks_count,
 
-    ukv_col_t const* collections,
+    ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -221,10 +221,10 @@ void ukv_docs_read( //
     ukv_format_t const format,
     ukv_type_t const type,
 
-    ukv_val_ptr_t* found_values,
-    ukv_val_len_t** found_offsets,
-    ukv_val_len_t** found_lengths,
-    ukv_1x8_t** found_presences,
+    ukv_octet_t** found_presences,
+    ukv_length_t** found_offsets,
+    ukv_length_t** found_lengths,
+    ukv_bytes_ptr_t* found_values,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -240,11 +240,11 @@ void ukv_docs_read( //
  *                      query for big collections of flexible schema documents.
  */
 void ukv_docs_gist( //
-    ukv_t const db,
-    ukv_txn_t const txn,
+    ukv_database_t const db,
+    ukv_transaction_t const txn,
     ukv_size_t const docs_count,
 
-    ukv_col_t const* collections,
+    ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -253,8 +253,8 @@ void ukv_docs_gist( //
     ukv_options_t const options,
 
     ukv_size_t* found_fields_count,
-    ukv_val_len_t** found_offsets,
-    ukv_str_view_t* found_fields,
+    ukv_length_t** found_offsets,
+    ukv_char_t** found_fields,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -316,12 +316,12 @@ void ukv_docs_gist( //
  * That should be implemented as two (or multiple) separate requests for space-efficiency.
  */
 void ukv_docs_gather( //
-    ukv_t const db,
-    ukv_txn_t const txn,
+    ukv_database_t const db,
+    ukv_transaction_t const txn,
     ukv_size_t const docs_count,
     ukv_size_t const fields_count,
 
-    ukv_col_t const* collections,
+    ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
     ukv_key_t const* keys,
@@ -335,13 +335,13 @@ void ukv_docs_gather( //
 
     ukv_options_t const options,
 
-    ukv_1x8_t*** columns_validities,
-    ukv_1x8_t*** columns_conversions,
-    ukv_1x8_t*** columns_collisions,
-    ukv_val_ptr_t** columns_scalars,
-    ukv_val_len_t*** columns_offsets,
-    ukv_val_len_t*** columns_lengths,
-    ukv_val_ptr_t* joined_strings,
+    ukv_octet_t*** columns_validities,
+    ukv_octet_t*** columns_conversions,
+    ukv_octet_t*** columns_collisions,
+    ukv_byte_t*** columns_scalars,
+    ukv_length_t*** columns_offsets,
+    ukv_length_t*** columns_lengths,
+    ukv_byte_t** joined_strings,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

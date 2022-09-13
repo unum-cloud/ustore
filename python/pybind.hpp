@@ -13,8 +13,8 @@ namespace unum::ukv {
 namespace py = pybind11;
 
 struct py_db_t;
-struct py_txn_t;
-struct py_col_t;
+struct py_transaction_t;
+struct py_collection_t;
 
 struct py_graph_t;
 struct py_table_col_t;
@@ -22,53 +22,60 @@ struct py_table_col_t;
 struct py_task_ctx_t;
 
 /**
- * @brief Wrapper for `ukv::db_t`.
+ * @brief Wrapper for `ukv::database_t`.
  * Assumes that the Python client won't use more than one
  * concurrent session, as multithreading in Python is
  * prohibitively expensive.
  * We need to preserve the `config`, to allow re-opening.
  */
 struct py_db_t : public std::enable_shared_from_this<py_db_t> {
-    db_t native;
+    database_t native;
     std::string config;
+    /**
+     * @brief Some clients may prefer to receive extracted values
+     * as native Python types when possible. By default, we export
+     * into Apache Arrow arrays.
+     */
+    bool export_into_arrow = true;
 
-    py_db_t(db_t&& n, std::string const& c) : native(std::move(n)), config(c) {}
+    py_db_t(database_t&& n, std::string const& c) : native(std::move(n)), config(c) {}
     py_db_t(py_db_t&& other) noexcept : native(std::move(other.native)), config(std::move(other.config)) {}
     py_db_t(py_db_t const&) = delete;
 };
 
 /**
- * @brief Only adds reference counting to the native C++ interface.
+ * @brief Wrapper for `ukv::transaction_t`.
+ * Only adds reference counting to the native C++ interface.
  */
-struct py_txn_t : public std::enable_shared_from_this<py_txn_t> {
-    txn_t native;
+struct py_transaction_t : public std::enable_shared_from_this<py_transaction_t> {
+    transaction_t native;
 
     std::weak_ptr<py_db_t> py_db_ptr;
 
     bool track_reads = false;
     bool flush_writes = false;
 
-    py_txn_t(txn_t&& t, std::shared_ptr<py_db_t> py_db_ptr) noexcept : native(std::move(t)), py_db_ptr(py_db_ptr) {}
-    py_txn_t(py_txn_t&& other) noexcept
+    py_transaction_t(transaction_t&& t, std::shared_ptr<py_db_t> py_db_ptr) noexcept : native(std::move(t)), py_db_ptr(py_db_ptr) {}
+    py_transaction_t(py_transaction_t&& other) noexcept
         : native(std::move(other.native)), py_db_ptr(other.py_db_ptr), track_reads(other.track_reads),
           flush_writes(other.flush_writes) {}
-    py_txn_t(py_txn_t const&) = delete;
+    py_transaction_t(py_transaction_t const&) = delete;
 };
 
 /**
- * @brief Wrapper for `ukv::col_t`.
+ * @brief Wrapper for `ukv::collection_t`.
  * We need to preserve the `name`, to upsert again, after removing it in `clear`.
  * We also keep the transaction pointer, to persist the context of operation.
  */
-struct py_col_t {
-    col_t native;
+struct py_collection_t {
+    collection_t native;
 
     std::weak_ptr<py_db_t> py_db_ptr;
-    std::weak_ptr<py_txn_t> py_txn_ptr;
+    std::weak_ptr<py_transaction_t> py_txn_ptr;
     std::string name;
     bool in_txn = false;
 
-    ukv_col_t* member_col() noexcept { return native.member_ptr(); }
+    ukv_collection_t* member_col() noexcept { return native.member_ptr(); }
     ukv_arena_t* member_arena() noexcept { return native.member_arena(); }
     ukv_options_t options() noexcept {
         auto txn_ptr = py_txn_ptr.lock();
@@ -79,15 +86,25 @@ struct py_col_t {
                              (txn_ptr->flush_writes ? ukv_option_write_flush_k : base))
                        : base;
     }
-    ukv_t db() noexcept(false) {
+    ukv_database_t db() noexcept(false) {
         if (py_db_ptr.expired())
             throw std::domain_error("Collection references closed DB");
         return native.db();
     }
-    ukv_txn_t txn() noexcept(false) {
+    ukv_transaction_t txn() noexcept(false) {
         if (in_txn && py_txn_ptr.expired())
             throw std::domain_error("Collection references closed transaction");
-        return in_txn ? py_txn_ptr.lock()->native : ukv_txn_t(nullptr);
+        return in_txn ? py_txn_ptr.lock()->native : ukv_transaction_t(nullptr);
+    }
+
+    /**
+     * @brief Some clients may prefer to receive extracted values
+     * as native Python types when possible. By default, we export
+     * into Apache Arrow arrays.
+     */
+    bool export_into_arrow() const noexcept {
+        auto db_ptr = py_db_ptr.lock();
+        return db_ptr->export_into_arrow;
     }
 };
 
@@ -102,12 +119,12 @@ struct py_buffer_memory_t {
 struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
 
     std::weak_ptr<py_db_t> py_db_ptr;
-    std::weak_ptr<py_txn_t> py_txn_ptr;
+    std::weak_ptr<py_transaction_t> py_txn_ptr;
 
-    col_t index;
-    col_t sources_attrs;
-    col_t targets_attrs;
-    col_t relations_attrs;
+    collection_t index;
+    collection_t sources_attrs;
+    collection_t targets_attrs;
+    collection_t relations_attrs;
 
     bool in_txn = false;
     bool is_directed = false;
@@ -135,7 +152,7 @@ struct py_table_keys_range_t {
  */
 struct py_table_col_t : public std::enable_shared_from_this<py_table_col_t> {
 
-    py_col_t binary;
+    py_collection_t binary;
     std::variant<std::monostate, std::vector<ukv_str_view_t>> columns_names;
     std::variant<std::monostate, ukv_type_t, std::vector<ukv_type_t>> columns_types;
     std::variant<std::monostate, py_table_keys_range_t, std::vector<ukv_key_t>> rows_keys;
@@ -146,17 +163,34 @@ struct py_table_col_t : public std::enable_shared_from_this<py_table_col_t> {
     py_table_col_t() = default;
     py_table_col_t(py_table_col_t&&) = delete;
     py_table_col_t(py_table_col_t const&) = delete;
+
+    // Compatiability with Arrow Tables.
+    // std::shared_ptr<ar::ChunkedArray> column(int i) const override;
+    // std::vector<std::shared_ptr<ar::ChunkedArray>> const& columns() const override;
+    // std::shared_ptr<ar::Table> Slice(int64_t offset, int64_t length) const override;
+    // ar::Result<std::shared_ptr<ar::Table>> RemoveColumn(int i) const override;
+    // ar::Result<std::shared_ptr<ar::Table>> AddColumn( //
+    //     int i,
+    //     std::shared_ptr<ar::Field> field_arg,
+    //     std::shared_ptr<ar::ChunkedArray> column) const override;
+    // ar::Result<std::shared_ptr<ar::Table>> SetColumn( //
+    //     int i,
+    //     std::shared_ptr<ar::Field> field_arg,
+    //     std::shared_ptr<ar::ChunkedArray> column) const override;
+    // std::shared_ptr<ar::Table> ReplaceSchemaMetadata(std::shared_ptr<ar::KeyValueMetadata const> const&) const
+    // override; ar::Result<std::shared_ptr<ar::Table>> Flatten(ar::MemoryPool* = ar::default_memory_pool()) const
+    // override; ar::Status Validate() const override; ar::Status ValidateFull() const override;
 };
 
 /**
- * @brief Proxy-object for binary `py_col_t` collections that adds:
+ * @brief Proxy-object for binary `py_collection_t` collections that adds:
  * > serialization & deserialization of Python objects.
  * > field-level lookups.
  * > patching & merging: `.patch(...)` & `.merge(...)`.
  * > DataFrame exports (out of this single collection).
  */
 struct py_docs_col_t {
-    py_col_t binary;
+    py_collection_t binary;
 
     py_docs_col_t() = default;
     py_docs_col_t(py_docs_col_t&&) = delete;
@@ -271,12 +305,12 @@ void wrap_networkx(py::module&);
  * @section Usage
  *
  * > Take first 5 rows starting with ID #100:
- *   db.main.docs.astype('int32').loc[100:].head(5).df
+ *   db.main.table.astype('int32').loc[100:].head(5).df
  *   Note that contrary to usual python slices, both the start and the stop are included
  * > Take rows with IDs #100, #101:
- *   db.main.docs.loc[[100, 101]].astype('float').df
+ *   db.main.table.loc[[100, 101]].astype('float').df
  * > Take specific columns from a rows range:
- *   db.main.docs.loc[100:101].astype({'age':'float', 'name':'str'}).df
+ *   db.main.table.loc[100:101].astype({'age':'float', 'name':'str'}).df
  *
  * @section Interface
  * Choosing subsample of rows:

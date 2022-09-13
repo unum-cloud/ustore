@@ -216,8 +216,8 @@ struct serializing_tape_ref_t {
 
 template <typename callback_at>
 places_arg_t const& read_unique_docs( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     places_arg_t const& places,
     ukv_options_t const c_options,
     stl_arena_t& arena,
@@ -225,8 +225,8 @@ places_arg_t const& read_unique_docs( //
     callback_at callback) noexcept {
 
     ukv_arena_t arena_ptr = &arena;
-    ukv_val_ptr_t found_binary_begin = nullptr;
-    ukv_val_len_t* found_binary_offs = nullptr;
+    ukv_byte_t* found_binary_begin = nullptr;
+    ukv_length_t* found_binary_offs = nullptr;
     ukv_read( //
         c_db,
         c_txn,
@@ -236,10 +236,10 @@ places_arg_t const& read_unique_docs( //
         places.keys_begin.get(),
         places.keys_begin.stride(),
         c_options,
-        &found_binary_begin,
+        nullptr,
         &found_binary_offs,
         nullptr,
-        nullptr,
+        &found_binary_begin,
         &arena_ptr,
         c_error);
 
@@ -266,8 +266,8 @@ places_arg_t const& read_unique_docs( //
  */
 template <typename callback_at>
 places_arg_t read_docs( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     places_arg_t const& places,
     ukv_options_t const c_options,
     stl_arena_t& arena,
@@ -298,8 +298,8 @@ places_arg_t read_docs( //
     // Otherwise, let's retrieve the sublist of unique docs,
     // which may be in a very different order from original.
     ukv_arena_t arena_ptr = &arena;
-    ukv_val_ptr_t found_binary_begin = nullptr;
-    ukv_val_len_t* found_binary_offs = nullptr;
+    ukv_byte_t* found_binary_begin = nullptr;
+    ukv_length_t* found_binary_offs = nullptr;
     ukv_size_t unique_places_count = static_cast<ukv_size_t>(unique_places.size());
     auto unique_places_strided = strided_range(unique_places.begin(), unique_places.end()).immutable();
     auto cols = unique_places_strided.members(&col_key_t::col);
@@ -313,10 +313,10 @@ places_arg_t read_docs( //
         keys.begin().get(),
         keys.begin().stride(),
         c_options,
-        &found_binary_begin,
+        nullptr,
         &found_binary_offs,
         nullptr,
-        nullptr,
+        &found_binary_begin,
         &arena_ptr,
         c_error);
     if (*c_error)
@@ -361,8 +361,8 @@ places_arg_t read_docs( //
 }
 
 void replace_docs( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
@@ -392,7 +392,7 @@ void replace_docs( //
     }
 
     auto tape_begin = growing_tape.contents().begin().get();
-    ukv_val_ptr_t tape_begin_punned = reinterpret_cast<ukv_val_ptr_t>(tape_begin);
+    ukv_byte_t* tape_begin_punned = reinterpret_cast<ukv_byte_t*>(tape_begin);
     ukv_arena_t arena_ptr = &arena;
     ukv_write( //
         c_db,
@@ -402,21 +402,21 @@ void replace_docs( //
         places.cols_begin.stride(),
         places.keys_begin.get(),
         places.keys_begin.stride(),
-        &tape_begin_punned,
-        0,
+        nullptr,
         growing_tape.offsets().begin().get(),
         growing_tape.offsets().stride(),
         growing_tape.lengths().begin().get(),
         growing_tape.lengths().stride(),
-        nullptr,
+        &tape_begin_punned,
+        0,
         c_options,
         &arena_ptr,
         c_error);
 }
 
 void read_modify_write( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
@@ -466,8 +466,8 @@ void read_modify_write( //
 
     // By now, the tape contains concatenated updates docs:
     ukv_size_t unique_places_count = static_cast<ukv_size_t>(read_order.size());
-    ukv_val_ptr_t found_binary_begin =
-        reinterpret_cast<ukv_val_ptr_t>(serializing_tape.growing_tape.contents().begin().get());
+    ukv_byte_t* found_binary_begin =
+        reinterpret_cast<ukv_byte_t*>(serializing_tape.growing_tape.contents().begin().get());
     ukv_arena_t arena_ptr = &arena;
     ukv_write( //
         c_db,
@@ -477,13 +477,13 @@ void read_modify_write( //
         read_order.cols_begin.stride(),
         read_order.keys_begin.get(),
         read_order.keys_begin.stride(),
-        &found_binary_begin,
-        0,
+        nullptr,
         serializing_tape.growing_tape.offsets().begin().get(),
         serializing_tape.growing_tape.offsets().stride(),
         serializing_tape.growing_tape.lengths().begin().get(),
         serializing_tape.growing_tape.lengths().stride(),
-        nullptr,
+        &found_binary_begin,
+        0,
         c_options,
         &arena_ptr,
         c_error);
@@ -521,11 +521,11 @@ void parse_fields( //
 }
 
 void ukv_docs_write( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_col_t const* c_cols,
+    ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -534,20 +534,20 @@ void ukv_docs_write( //
     ukv_str_view_t const* c_fields,
     ukv_size_t const c_fields_stride,
 
+    ukv_octet_t const* c_presences,
+
+    ukv_length_t const* c_offs,
+    ukv_size_t const c_offs_stride,
+
+    ukv_length_t const* c_lens,
+    ukv_size_t const c_lens_stride,
+
+    ukv_bytes_cptr_t const* c_vals,
+    ukv_size_t const c_vals_stride,
+
     ukv_options_t const c_options,
     ukv_format_t const c_format,
     ukv_type_t const,
-
-    ukv_val_ptr_t const* c_vals,
-    ukv_size_t const c_vals_stride,
-
-    ukv_val_len_t const* c_offs,
-    ukv_size_t const c_offs_stride,
-
-    ukv_val_len_t const* c_lens,
-    ukv_size_t const c_lens_stride,
-
-    ukv_1x8_t const* c_presences,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -569,28 +569,28 @@ void ukv_docs_write( //
             c_cols_stride,
             c_keys,
             c_keys_stride,
-            c_vals,
-            c_vals_stride,
+            c_presences,
             c_offs,
             c_offs_stride,
             c_lens,
             c_lens_stride,
-            c_presences,
+            c_vals,
+            c_vals_stride,
             c_options,
             &new_arena,
             c_error);
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_val_ptr_t const> vals {c_vals, c_vals_stride};
-    strided_iterator_gt<ukv_val_len_t const> offs {c_offs, c_offs_stride};
-    strided_iterator_gt<ukv_val_len_t const> lens {c_lens, c_lens_stride};
-    strided_iterator_gt<ukv_1x8_t const> presences {c_presences, sizeof(ukv_1x8_t)};
+    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
+    strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
+    strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
 
     places_arg_t places {cols, keys, fields, c_tasks_count};
-    contents_arg_t contents {vals, offs, lens, presences, c_tasks_count};
+    contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     auto func = has_fields || c_format == ukv_format_json_patch_k || c_format == ukv_format_json_merge_patch_k
                     ? &read_modify_write
@@ -600,11 +600,11 @@ void ukv_docs_write( //
 }
 
 void ukv_docs_read( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
-    ukv_col_t const* c_cols,
+    ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -617,10 +617,10 @@ void ukv_docs_read( //
     ukv_format_t const c_format,
     ukv_type_t const,
 
-    ukv_val_ptr_t* c_found_values,
-    ukv_val_len_t** c_found_offsets,
-    ukv_val_len_t** c_found_lengths,
-    ukv_1x8_t** c_found_presences,
+    ukv_octet_t** c_found_presences,
+    ukv_length_t** c_found_offsets,
+    ukv_length_t** c_found_lengths,
+    ukv_byte_t** c_found_values,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -643,16 +643,16 @@ void ukv_docs_read( //
             c_keys,
             c_keys_stride,
             c_options,
-            c_found_values,
+            c_found_presences,
             c_found_offsets,
             c_found_lengths,
-            c_found_presences,
+            c_found_values,
             &new_arena,
             c_error);
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     places_arg_t places {cols, keys, fields, c_tasks_count};
 
@@ -674,7 +674,7 @@ void ukv_docs_read( //
     read_docs(c_db, c_txn, places, c_options, arena, c_error, safe_callback);
 
     auto serialized_view = serializing_tape.view();
-    *c_found_values = reinterpret_cast<ukv_val_ptr_t>(serialized_view.contents());
+    *c_found_values = reinterpret_cast<ukv_byte_t*>(serialized_view.contents());
     *c_found_offsets = serialized_view.offsets();
     *c_found_lengths = serialized_view.lengths();
 }
@@ -684,11 +684,11 @@ void ukv_docs_read( //
 /*********************************************************/
 
 void ukv_docs_gist( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     ukv_size_t const c_docs_count,
 
-    ukv_col_t const* c_cols,
+    ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -697,8 +697,8 @@ void ukv_docs_gist( //
     ukv_options_t const c_options,
 
     ukv_size_t* c_found_fields_count,
-    ukv_val_len_t** c_found_offsets,
-    ukv_str_view_t* c_found_fields,
+    ukv_length_t** c_found_offsets,
+    ukv_char_t** c_found_fields,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -707,8 +707,8 @@ void ukv_docs_gist( //
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
-    ukv_val_ptr_t found_binary_begin = nullptr;
-    ukv_val_len_t* found_binary_offs = nullptr;
+    ukv_byte_t* found_binary_begin = nullptr;
+    ukv_length_t* found_binary_offs = nullptr;
     ukv_read( //
         c_db,
         c_txn,
@@ -718,15 +718,15 @@ void ukv_docs_gist( //
         c_keys,
         c_keys_stride,
         c_options,
-        &found_binary_begin,
+        nullptr,
         &found_binary_offs,
         nullptr,
-        nullptr,
+        &found_binary_begin,
         &new_arena,
         c_error);
     return_on_error(c_error);
 
-    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
 
     joined_bins_t found_binaries {found_binary_begin, found_binary_offs, c_docs_count};
@@ -753,29 +753,30 @@ void ukv_docs_gist( //
     }
 
     // Estimate the final memory consumption on-tape and export offsets
-    span_gt<ukv_val_len_t> offs = arena.alloc<ukv_val_len_t>(paths->size() + 1, c_error);
+    auto offs = arena.alloc<ukv_length_t>(paths->size() + 1, c_error);
     return_on_error(c_error);
 
-    ukv_val_len_t total_length = 0;
-    ukv_val_len_t* prefix_length = offs.begin();
+    std::size_t path_idx = 0;
+    ukv_length_t total_length = 0;
     for (auto const& path : *paths) {
-        *prefix_length = total_length;
+        offs[path_idx] = total_length;
         total_length += path.size() + 1;
-        ++prefix_length;
+        ++path_idx;
     }
-    *prefix_length = total_length;
+    offs[path_idx] = total_length;
 
     // Reserve memory
-    span_gt<byte_t> tape = arena.alloc<byte_t>(total_length, c_error);
+    auto tape = arena.alloc<byte_t>(total_length, c_error);
     return_on_error(c_error);
 
     // Export on to the tape
     byte_t* tape_ptr = tape.begin();
-    *c_found_fields_count = static_cast<ukv_size_t>(paths->size());
-    *c_found_offsets = reinterpret_cast<ukv_val_len_t*>(offs.begin());
-    *c_found_fields = reinterpret_cast<ukv_str_view_t>(tape_ptr);
     for (auto const& path : *paths)
         std::memcpy(std::exchange(tape_ptr, tape_ptr + path.size() + 1), path.c_str(), path.size() + 1);
+
+    *c_found_fields_count = static_cast<ukv_size_t>(paths->size());
+    *c_found_offsets = reinterpret_cast<ukv_length_t*>(offs.begin());
+    *c_found_fields = reinterpret_cast<ukv_char_t*>(tape.begin());
 }
 
 std::size_t min_memory_usage(ukv_type_t type) {
@@ -806,12 +807,12 @@ std::size_t min_memory_usage(ukv_type_t type) {
 }
 
 struct column_begin_t {
-    ukv_1x8_t* validities;
-    ukv_1x8_t* conversions;
-    ukv_1x8_t* collisions;
-    ukv_val_ptr_t scalars;
-    ukv_val_len_t* str_offsets;
-    ukv_val_len_t* str_lengths;
+    ukv_octet_t* validities;
+    ukv_octet_t* conversions;
+    ukv_octet_t* collisions;
+    ukv_byte_t* scalars;
+    ukv_length_t* str_offsets;
+    ukv_length_t* str_lengths;
 };
 
 template <typename at>
@@ -864,10 +865,10 @@ void export_scalar_column(json_t const& value, size_t doc_idx, column_begin_t co
 
     // Bitmaps are indexed from the last bit within every byte
     // https://arrow.apache.org/docs/format/Columnar.html#validity-bitmaps
-    ukv_1x8_t mask_bitmap = static_cast<ukv_1x8_t>(1 << (doc_idx % CHAR_BIT));
-    ukv_1x8_t& ref_valid = column.validities[doc_idx / CHAR_BIT];
-    ukv_1x8_t& ref_convert = column.conversions[doc_idx / CHAR_BIT];
-    ukv_1x8_t& ref_collide = column.collisions[doc_idx / CHAR_BIT];
+    ukv_octet_t mask_bitmap = static_cast<ukv_octet_t>(1 << (doc_idx % CHAR_BIT));
+    ukv_octet_t& ref_valid = column.validities[doc_idx / CHAR_BIT];
+    ukv_octet_t& ref_convert = column.conversions[doc_idx / CHAR_BIT];
+    ukv_octet_t& ref_collide = column.collisions[doc_idx / CHAR_BIT];
     scalar_at& ref_scalar = reinterpret_cast<scalar_at*>(column.scalars)[doc_idx];
 
     switch (value.type()) {
@@ -954,7 +955,7 @@ void export_scalar_column(json_t const& value, size_t doc_idx, column_begin_t co
 }
 
 template <typename scalar_at, typename alloc_at = std::allocator<scalar_at>>
-ukv_val_len_t print_scalar(scalar_at scalar, std::vector<byte_t, alloc_at>& output) {
+ukv_length_t print_scalar(scalar_at scalar, std::vector<byte_t, alloc_at>& output) {
 
     /// The length of buffer to be used to convert/format/print numerical values into strings.
     constexpr std::size_t print_buf_len_k = 32;
@@ -967,10 +968,10 @@ ukv_val_len_t print_scalar(scalar_at scalar, std::vector<byte_t, alloc_at>& outp
         *result.ptr = '\0';
         auto view = to_view(print_buf, result.ptr + 1 - print_buf);
         output.insert(output.end(), view.begin(), view.end());
-        return static_cast<ukv_val_len_t>(view.size());
+        return static_cast<ukv_length_t>(view.size());
     }
     else
-        return ukv_val_len_missing_k;
+        return ukv_length_missing_k;
 }
 
 template <typename alloc_at = std::allocator<byte_t>>
@@ -981,21 +982,21 @@ void export_string_column(json_t const& value,
 
     // Bitmaps are indexed from the last bit within every byte
     // https://arrow.apache.org/docs/format/Columnar.html#validity-bitmaps
-    ukv_1x8_t mask_bitmap = static_cast<ukv_1x8_t>(1 << (doc_idx % CHAR_BIT));
-    ukv_1x8_t& ref_valid = column.validities[doc_idx / CHAR_BIT];
-    ukv_1x8_t& ref_convert = column.conversions[doc_idx / CHAR_BIT];
-    ukv_1x8_t& ref_collide = column.collisions[doc_idx / CHAR_BIT];
-    ukv_val_len_t& ref_off = column.str_offsets[doc_idx];
-    ukv_val_len_t& ref_len = column.str_lengths[doc_idx];
+    ukv_octet_t mask_bitmap = static_cast<ukv_octet_t>(1 << (doc_idx % CHAR_BIT));
+    ukv_octet_t& ref_valid = column.validities[doc_idx / CHAR_BIT];
+    ukv_octet_t& ref_convert = column.conversions[doc_idx / CHAR_BIT];
+    ukv_octet_t& ref_collide = column.collisions[doc_idx / CHAR_BIT];
+    ukv_length_t& ref_off = column.str_offsets[doc_idx];
+    ukv_length_t& ref_len = column.str_lengths[doc_idx];
 
-    ref_off = static_cast<ukv_val_len_t>(output.size());
+    ref_off = static_cast<ukv_length_t>(output.size());
 
     switch (value.type()) {
     case json_t::value_t::null:
         ref_convert &= ~mask_bitmap;
         ref_collide &= ~mask_bitmap;
         ref_valid &= ~mask_bitmap;
-        ref_off = ref_len = ukv_val_len_missing_k;
+        ref_off = ref_len = ukv_length_missing_k;
         break;
     case json_t::value_t::discarded:
     case json_t::value_t::object:
@@ -1003,12 +1004,12 @@ void export_string_column(json_t const& value,
         ref_convert &= ~mask_bitmap;
         ref_collide |= mask_bitmap;
         ref_valid &= ~mask_bitmap;
-        ref_off = ref_len = ukv_val_len_missing_k;
+        ref_off = ref_len = ukv_length_missing_k;
         break;
 
     case json_t::value_t::binary: {
         json_t::binary_t const& str = value.get_ref<json_t::binary_t const&>();
-        ref_len = static_cast<ukv_val_len_t>(str.size());
+        ref_len = static_cast<ukv_length_t>(str.size());
         auto view = to_view((char*)str.data(), str.size());
         output.insert(output.end(), view.begin(), view.end());
         ref_convert &= ~mask_bitmap;
@@ -1018,7 +1019,7 @@ void export_string_column(json_t const& value,
     }
     case json_t::value_t::string: {
         json_t::string_t const& str = value.get_ref<json_t::string_t const&>();
-        ref_len = static_cast<ukv_val_len_t>(str.size());
+        ref_len = static_cast<ukv_length_t>(str.size());
         auto view = to_view((char*)str.data(), str.size() + 1);
         output.insert(output.end(), view.begin(), view.end());
         ref_convert &= ~mask_bitmap;
@@ -1047,32 +1048,32 @@ void export_string_column(json_t const& value,
     case json_t::value_t::number_integer:
         ref_len = print_scalar(value.get<json_t::number_integer_t>(), output);
         ref_convert |= mask_bitmap;
-        ref_collide = ref_len != ukv_val_len_missing_k ? (ref_collide & ~mask_bitmap) : (ref_collide | mask_bitmap);
-        ref_valid = ref_len == ukv_val_len_missing_k ? (ref_valid & ~mask_bitmap) : (ref_valid | mask_bitmap);
+        ref_collide = ref_len != ukv_length_missing_k ? (ref_collide & ~mask_bitmap) : (ref_collide | mask_bitmap);
+        ref_valid = ref_len == ukv_length_missing_k ? (ref_valid & ~mask_bitmap) : (ref_valid | mask_bitmap);
         break;
 
     case json_t::value_t::number_unsigned:
         ref_len = print_scalar(value.get<json_t::number_unsigned_t>(), output);
         ref_convert |= mask_bitmap;
-        ref_collide = ref_len != ukv_val_len_missing_k ? (ref_collide & ~mask_bitmap) : (ref_collide | mask_bitmap);
-        ref_valid = ref_len == ukv_val_len_missing_k ? (ref_valid & ~mask_bitmap) : (ref_valid | mask_bitmap);
+        ref_collide = ref_len != ukv_length_missing_k ? (ref_collide & ~mask_bitmap) : (ref_collide | mask_bitmap);
+        ref_valid = ref_len == ukv_length_missing_k ? (ref_valid & ~mask_bitmap) : (ref_valid | mask_bitmap);
         break;
     case json_t::value_t::number_float:
         ref_len = print_scalar(value.get<json_t::number_float_t>(), output);
         ref_convert |= mask_bitmap;
-        ref_collide = ref_len != ukv_val_len_missing_k ? (ref_collide & ~mask_bitmap) : (ref_collide | mask_bitmap);
-        ref_valid = ref_len == ukv_val_len_missing_k ? (ref_valid & ~mask_bitmap) : (ref_valid | mask_bitmap);
+        ref_collide = ref_len != ukv_length_missing_k ? (ref_collide & ~mask_bitmap) : (ref_collide | mask_bitmap);
+        ref_valid = ref_len == ukv_length_missing_k ? (ref_valid & ~mask_bitmap) : (ref_valid | mask_bitmap);
         break;
     }
 }
 
 void ukv_docs_gather( //
-    ukv_t const c_db,
-    ukv_txn_t const c_txn,
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
     ukv_size_t const c_docs_count,
     ukv_size_t const c_fields_count,
 
-    ukv_col_t const* c_cols,
+    ukv_collection_t const* c_cols,
     ukv_size_t const c_cols_stride,
 
     ukv_key_t const* c_keys,
@@ -1086,13 +1087,13 @@ void ukv_docs_gather( //
 
     ukv_options_t const c_options,
 
-    ukv_1x8_t*** c_result_bitmap_valid,
-    ukv_1x8_t*** c_result_bitmap_converted,
-    ukv_1x8_t*** c_result_bitmap_collision,
-    ukv_val_ptr_t** c_result_scalars,
-    ukv_val_len_t*** c_result_strs_offsets,
-    ukv_val_len_t*** c_result_strs_lengths,
-    ukv_val_ptr_t* c_result_strs_contents,
+    ukv_octet_t*** c_result_bitmap_valid,
+    ukv_octet_t*** c_result_bitmap_converted,
+    ukv_octet_t*** c_result_bitmap_collision,
+    ukv_byte_t*** c_result_scalars,
+    ukv_length_t*** c_result_strs_offsets,
+    ukv_length_t*** c_result_strs_lengths,
+    ukv_byte_t** c_result_strs_contents,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -1103,8 +1104,8 @@ void ukv_docs_gather( //
     // Validate the input arguments
 
     // Retrieve the entire documents before we can sample internal fields
-    ukv_val_ptr_t found_binary_begin = nullptr;
-    ukv_val_len_t* found_binary_offs = nullptr;
+    ukv_byte_t* found_binary_begin = nullptr;
+    ukv_length_t* found_binary_offs = nullptr;
     ukv_read( //
         c_db,
         c_txn,
@@ -1114,15 +1115,15 @@ void ukv_docs_gather( //
         c_keys,
         c_keys_stride,
         c_options,
-        &found_binary_begin,
+        nullptr,
         &found_binary_offs,
         nullptr,
-        nullptr,
+        &found_binary_begin,
         &new_arena,
         c_error);
     return_on_error(c_error);
 
-    strided_iterator_gt<ukv_col_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     strided_iterator_gt<ukv_type_t const> types {c_types, c_types_stride};
@@ -1144,7 +1145,7 @@ void ukv_docs_gather( //
     bool wants_collisions = c_result_bitmap_collision;
     std::size_t slots_per_bitmap = c_docs_count / 8 + (c_docs_count % 8 != 0);
     std::size_t count_bitmaps = 1ul + wants_conversions + wants_collisions;
-    std::size_t bytes_per_bitmap = sizeof(ukv_1x8_t) * slots_per_bitmap;
+    std::size_t bytes_per_bitmap = sizeof(ukv_octet_t) * slots_per_bitmap;
     std::size_t bytes_per_addresses_row = sizeof(void*) * c_fields_count;
     std::size_t bytes_for_addresses = bytes_per_addresses_row * 6;
     std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps * c_fields_count * c_fields_count;
@@ -1167,31 +1168,31 @@ void ukv_docs_gather( //
     // It will allow us to avoid extra checks later.
     // ! Still, in every sequence of updates, validity is the last bit to be set,
     // ! to avoid overwriting.
-    auto first_col_validities = reinterpret_cast<ukv_1x8_t*>(tape_ptr + bytes_for_addresses);
+    auto first_col_validities = reinterpret_cast<ukv_octet_t*>(tape_ptr + bytes_for_addresses);
     auto first_col_conversions = wants_conversions //
                                      ? first_col_validities + slots_per_bitmap * c_fields_count
                                      : first_col_validities;
     auto first_col_collisions = wants_collisions //
                                     ? first_col_conversions + slots_per_bitmap * c_fields_count
                                     : first_col_validities;
-    auto first_col_scalars = reinterpret_cast<ukv_val_ptr_t>(tape_ptr + bytes_for_addresses + bytes_for_bitmaps);
+    auto first_col_scalars = reinterpret_cast<ukv_byte_t*>(tape_ptr + bytes_for_addresses + bytes_for_bitmaps);
 
     // 1, 2, 3. Export validity maps addresses
     std::size_t tape_progress = 0;
     {
-        auto addresses = *c_result_bitmap_valid = reinterpret_cast<ukv_1x8_t**>(tape_ptr + tape_progress);
+        auto addresses = *c_result_bitmap_valid = reinterpret_cast<ukv_octet_t**>(tape_ptr + tape_progress);
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx)
             addresses[field_idx] = first_col_validities + field_idx * slots_per_bitmap;
         tape_progress += bytes_per_addresses_row;
     }
     if (wants_conversions) {
-        auto addresses = *c_result_bitmap_converted = reinterpret_cast<ukv_1x8_t**>(tape_ptr + tape_progress);
+        auto addresses = *c_result_bitmap_converted = reinterpret_cast<ukv_octet_t**>(tape_ptr + tape_progress);
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx)
             addresses[field_idx] = first_col_conversions + field_idx * slots_per_bitmap;
         tape_progress += bytes_per_addresses_row;
     }
     if (wants_collisions) {
-        auto addresses = *c_result_bitmap_collision = reinterpret_cast<ukv_1x8_t**>(tape_ptr + tape_progress);
+        auto addresses = *c_result_bitmap_collision = reinterpret_cast<ukv_octet_t**>(tape_ptr + tape_progress);
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx)
             addresses[field_idx] = first_col_collisions + field_idx * slots_per_bitmap;
         tape_progress += bytes_per_addresses_row;
@@ -1200,11 +1201,11 @@ void ukv_docs_gather( //
     // 4, 5, 6. Export addresses for scalars, strings offsets and strings lengths
     {
         auto addresses_offs = *c_result_strs_offsets =
-            reinterpret_cast<ukv_val_len_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 0);
+            reinterpret_cast<ukv_length_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 0);
         auto addresses_lens = *c_result_strs_lengths =
-            reinterpret_cast<ukv_val_len_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 1);
+            reinterpret_cast<ukv_length_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 1);
         auto addresses_scalars = *c_result_scalars =
-            reinterpret_cast<ukv_val_ptr_t*>(tape_ptr + tape_progress + bytes_per_addresses_row * 2);
+            reinterpret_cast<ukv_byte_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 2);
 
         auto scalars_tape = first_col_scalars;
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx) {
@@ -1212,14 +1213,14 @@ void ukv_docs_gather( //
             switch (type) {
             case ukv_type_str_k:
             case ukv_type_bin_k:
-                addresses_offs[field_idx] = reinterpret_cast<ukv_val_len_t*>(scalars_tape);
+                addresses_offs[field_idx] = reinterpret_cast<ukv_length_t*>(scalars_tape);
                 addresses_lens[field_idx] = addresses_offs[field_idx] + c_docs_count;
                 addresses_scalars[field_idx] = nullptr;
                 break;
             default:
                 addresses_offs[field_idx] = nullptr;
                 addresses_lens[field_idx] = nullptr;
-                addresses_scalars[field_idx] = reinterpret_cast<ukv_val_ptr_t>(scalars_tape);
+                addresses_scalars[field_idx] = reinterpret_cast<ukv_byte_t*>(scalars_tape);
                 break;
             }
             scalars_tape += min_memory_usage(type) * c_docs_count;
@@ -1289,5 +1290,5 @@ void ukv_docs_gather( //
         }
     }
 
-    *c_result_strs_contents = reinterpret_cast<ukv_val_ptr_t>(string_tape.data());
+    *c_result_strs_contents = reinterpret_cast<ukv_byte_t*>(string_tape.data());
 }
