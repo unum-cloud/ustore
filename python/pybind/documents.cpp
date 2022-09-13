@@ -28,9 +28,10 @@ class docs_pairs_stream_t {
             return {};
 
         ukv_key_t* found_keys = nullptr;
-        ukv_length_t* found_offs = nullptr;
-        ukv_length_t* found_lens = nullptr;
-        ukv_bytes_ptr_t found_vals = nullptr;
+        ukv_length_t* found_offsets = nullptr;
+        ukv_length_t* found_counts = nullptr;
+        ukv_length_t* found_lengths = nullptr;
+        ukv_bytes_ptr_t found_values = nullptr;
         ukv_str_view_t fields = nullptr;
         status_t status;
 
@@ -42,20 +43,20 @@ class docs_pairs_stream_t {
             0,
             &next_min_key_,
             0,
-            nullptr, 0,
+            nullptr,
+            0,
             &read_ahead_,
             0,
             ukv_options_default_k,
-            nullptr,
-            &found_lens,
+            &found_offsets,
+            &found_counts,
             &found_keys,
             arena_scan_.member_ptr(),
             status.member_ptr());
         if (!status)
             return status;
 
-        auto present_end = std::find(found_keys, found_keys + read_ahead_, ukv_key_unknown_k);
-        fetched_keys_ = indexed_range_gt<ukv_key_t*> {found_keys, present_end};
+        fetched_keys_ = indexed_range_gt<ukv_key_t*> {found_keys, found_keys + *found_counts};
         fetched_offset_ = 0;
         auto count = static_cast<ukv_size_t>(fetched_keys_.size());
 
@@ -73,15 +74,15 @@ class docs_pairs_stream_t {
             ukv_format_json_k,
             ukv_type_any_k,
             nullptr,
-            &found_offs,
-            &found_lens,
-            &found_vals,
+            &found_offsets,
+            &found_lengths,
+            &found_values,
             arena_read_.member_ptr(),
             status.member_ptr());
         if (!status)
             return status;
 
-        values_view = embedded_bins_t {found_vals, found_offs, found_lens, count};
+        values_view = embedded_bins_t {found_values, found_offsets, found_lengths, count};
         next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
@@ -226,22 +227,10 @@ static py::object read_doc(py_docs_col_t& col, py::object key_py) {
     return func(col, key_py.ptr());
 }
 
-static void remove_one_doc(py_docs_col_t& col, PyObject* key_py) {
-    ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
-    col.binary.native[key] = nullptr;
-}
-
-static void remove_many_docs(py_docs_col_t& col, PyObject* keys_py) {
-    std::vector<ukv_key_t> keys;
-    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
-    for (auto key : keys)
-        col.binary.native[key] = nullptr;
-}
-
 static void remove_doc(py_docs_col_t& col, py::object key_py) {
     auto is_single = PyLong_Check(key_py.ptr());
-    auto func = is_single ? &remove_one_doc : &remove_many_docs;
-    return func(col, key_py.ptr());
+    auto func = is_single ? &write_one_binary : &write_many_binaries;
+    return func(col.binary, key_py.ptr(), Py_None);
 }
 
 static py::object has_doc(py_docs_col_t& col, py::object key_py) {
