@@ -34,7 +34,7 @@ ukv_transaction_t txn_ptr(JNIEnv* env_java, jobject txn_java) {
     return (ukv_transaction_t)txn_ptr_java;
 }
 
-ukv_collection_t col_ptr(JNIEnv* env_java, ukv_database_t db_ptr, jstring name_java) {
+ukv_collection_t collection_ptr(JNIEnv* env_java, ukv_database_t db_ptr, jstring name_java) {
 
     // We may be passing the empty name of the default collection
     if (!name_java)
