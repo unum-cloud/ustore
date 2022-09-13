@@ -5,6 +5,7 @@
  * @brief Helper functions for Apache Arrow interoperability.
  */
 #pragma once
+#include <string>
 #include <string_view>
 
 #pragma GCC diagnostic push
@@ -25,6 +26,46 @@ namespace unum::ukv {
 
 namespace arf = arrow::flight;
 namespace ar = arrow;
+
+inline static std::string const kFlightListCols = "list_collections";   /// `DoGet`
+inline static std::string const kFlightColOpen = "open_collection";     /// `DoAction`
+inline static std::string const kFlightColRemove = "remove_collection"; /// `DoAction`
+
+inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
+inline static std::string const kFlightTxnCommit = "commit_transaction"; /// `DoAction`
+
+inline static std::string const kFlightWrite = "write"; /// `DoPut`
+inline static std::string const kFlightRead = "read";   /// `DoExchange`
+inline static std::string const kFlightScan = "scan";   /// `DoExchange`
+inline static std::string const kFlightSize = "size";   /// `DoExchange`
+
+inline static std::string const kArgCols = "collections";
+inline static std::string const kArgKeys = "keys";
+inline static std::string const kArgVals = "values";
+inline static std::string const kArgFields = "fields";
+inline static std::string const kArgScanStarts = "start_keys";
+inline static std::string const kArgScanEnds = "end_keys";
+inline static std::string const kArgScanLengths = "scan_limits";
+inline static std::string const kArgPresences = "fields";
+inline static std::string const kArgLengths = "lengths";
+inline static std::string const kArgNames = "names";
+
+inline static std::string const kParamCollectionID = "collection_id";
+inline static std::string const kParamCollectionName = "collection_name";
+inline static std::string const kParamTransactionID = "transaction_id";
+inline static std::string const kParamReadPart = "part";
+inline static std::string const kParamDropMode = "mode";
+inline static std::string const kParamFlagSnapshotTxn = "snapshot";
+inline static std::string const kParamFlagFlushWrite = "flush";
+inline static std::string const kParamFlagTrackRead = "track";
+inline static std::string const kParamFlagSharedMemRead = "shared";
+
+inline static std::string const kParamReadPartLengths = "lengths";
+inline static std::string const kParamReadPartPresences = "presences";
+
+inline static std::string const kParamDropModeValues = "values";
+inline static std::string const kParamDropModeContents = "contents";
+inline static std::string const kParamDropModeCollection = "collection";
 
 class arrow_mem_pool_t final : public ar::MemoryPool {
     monotonic_resource_t resource_;
@@ -62,7 +103,7 @@ ar::ipc::IpcReadOptions arrow_read_options(arrow_mem_pool_t& pool) {
     ar::ipc::IpcReadOptions options;
     options.memory_pool = &pool;
     options.use_threads = false;
-    options.max_recursion_depth = 1;
+    options.max_recursion_depth = 2;
     return options;
 }
 
@@ -70,7 +111,7 @@ ar::ipc::IpcWriteOptions arrow_write_options(arrow_mem_pool_t& pool) {
     ar::ipc::IpcWriteOptions options;
     options.memory_pool = &pool;
     options.use_threads = false;
-    options.max_recursion_depth = 1;
+    options.max_recursion_depth = 2;
     return options;
 }
 
@@ -97,9 +138,9 @@ ar::Status unpack_table( //
     return ar_status;
 }
 
-inline expected_gt<std::size_t> column_idx(ArrowSchema* schema_c, std::string_view name) {
-    auto begin = schema_c->children;
-    auto end = begin + schema_c->n_children;
+inline expected_gt<std::size_t> column_idx(ArrowSchema const& schema_c, std::string_view name) {
+    auto begin = schema_c.children;
+    auto end = begin + schema_c.n_children;
     auto it = std::find_if(begin, end, [=](ArrowSchema* column_schema) {
         return std::string_view {column_schema->name} == name;
     });
@@ -113,11 +154,11 @@ inline expected_gt<std::size_t> column_idx(ArrowSchema* schema_c, std::string_vi
  * We can reuse the `column_lengths` to put-in some NULL markers.
  * Bitmask would use 32x less memory.
  */
-inline ukv_1x8_t* convert_lengths_into_bitmap(ukv_val_len_t* lengths, ukv_size_t n) {
+inline ukv_octet_t* convert_lengths_into_bitmap(ukv_length_t* lengths, ukv_size_t n) {
     size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;
-    ukv_1x8_t* slots = (ukv_1x8_t*)lengths;
+    ukv_octet_t* slots = (ukv_octet_t*)lengths;
     for (size_t slot_idx = 0; slot_idx != count_slots; ++slot_idx) {
-        ukv_1x8_t slot_value = 0;
+        ukv_octet_t slot_value = 0;
         size_t first_idx = slot_idx * CHAR_BIT;
         size_t remaining_count = count_slots - first_idx;
         size_t remaining_in_slot = remaining_count > CHAR_BIT ? CHAR_BIT : remaining_count;
@@ -127,14 +168,18 @@ inline ukv_1x8_t* convert_lengths_into_bitmap(ukv_val_len_t* lengths, ukv_size_t
         slots[slot_idx] = slot_value;
     }
     // Cleanup the following memory
-    std::memset(slots + count_slots + 1, 0, n * sizeof(ukv_val_len_t) - count_slots);
+    std::memset(slots + count_slots + 1, 0, n * sizeof(ukv_length_t) - count_slots);
     return slots;
 }
 
 /**
- * @brief Replaces "lengths" with `ukv_val_len_missing_k` if matching NULL indicator is set.
+ * @brief Replaces "lengths" with `ukv_length_missing_k` if matching NULL indicator is set.
  */
-inline ukv_val_len_t* normalize_lengths_with_bitmap(ukv_1x8_t const* slots, ukv_val_len_t* lengths, ukv_size_t n) {
+template <typename scalar_at>
+inline scalar_at* arrow_replace_missing_scalars(ukv_octet_t const* slots,
+                                                scalar_at* scalars,
+                                                ukv_size_t n,
+                                                scalar_at missing) {
     size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;
     for (size_t slot_idx = 0; slot_idx != count_slots; ++slot_idx) {
         size_t first_idx = slot_idx * CHAR_BIT;
@@ -142,10 +187,78 @@ inline ukv_val_len_t* normalize_lengths_with_bitmap(ukv_1x8_t const* slots, ukv_
         size_t remaining_in_slot = remaining_count > CHAR_BIT ? CHAR_BIT : remaining_count;
         for (size_t bit_idx = 0; bit_idx != remaining_in_slot; ++bit_idx) {
             if (slots[slot_idx] & (1 << bit_idx))
-                lengths[first_idx + bit_idx] = ukv_val_len_missing_k;
+                scalars[first_idx + bit_idx] = missing;
         }
     }
-    return lengths;
+    return scalars;
+}
+
+inline strided_iterator_gt<ukv_key_t> get_keys( //
+    ArrowSchema const& schema_c,
+    ArrowArray const& batch_c,
+    std::string_view arg_name) {
+    auto maybe_idx = column_idx(schema_c, arg_name);
+    if (!maybe_idx)
+        return {};
+
+    ukv_key_t* begin = nullptr;
+    auto& array = *batch_c.children[*maybe_idx];
+    begin = (ukv_key_t*)array.buffers[1];
+    // Make sure there are no NULL entries.
+    return {begin, sizeof(ukv_key_t)};
+}
+
+inline strided_iterator_gt<ukv_collection_t> get_collections( //
+    ArrowSchema const& schema_c,
+    ArrowArray const& batch_c,
+    std::string_view arg_name) {
+    auto maybe_idx = column_idx(schema_c, arg_name);
+    if (!maybe_idx)
+        return {};
+
+    ukv_collection_t* begin = nullptr;
+    auto& array = *batch_c.children[*maybe_idx];
+    auto bitmasks = (ukv_octet_t const*)array.buffers[0];
+    begin = (ukv_collection_t*)array.buffers[1];
+    if (bitmasks && array.null_count != 0)
+        arrow_replace_missing_scalars(bitmasks, begin, array.length, ukv_collection_main_k);
+    return {begin, sizeof(ukv_collection_t)};
+}
+
+inline strided_iterator_gt<ukv_length_t> get_lengths( //
+    ArrowSchema const& schema_c,
+    ArrowArray const& batch_c,
+    std::string_view arg_name) {
+    auto maybe_idx = column_idx(schema_c, arg_name);
+    if (!maybe_idx)
+        return {};
+
+    ukv_length_t* begin = nullptr;
+    auto& array = *batch_c.children[*maybe_idx];
+    auto bitmasks = (ukv_octet_t const*)array.buffers[0];
+    begin = (ukv_length_t*)array.buffers[1];
+    if (bitmasks && array.null_count != 0)
+        arrow_replace_missing_scalars(bitmasks, begin, array.length, ukv_length_missing_k);
+    return {begin, sizeof(ukv_length_t)};
+}
+
+inline contents_arg_t get_contents( //
+    ArrowSchema const& schema_c,
+    ArrowArray const& batch_c,
+    std::string_view arg_name) {
+
+    auto maybe_idx = column_idx(schema_c, arg_name);
+    if (!maybe_idx)
+        return {};
+
+    auto& array = *batch_c.children[*maybe_idx];
+    contents_arg_t result;
+    result.contents_begin = {(ukv_bytes_cptr_t const*)&array.buffers[2], 0};
+    result.offsets_begin = {(ukv_length_t const*)array.buffers[1], sizeof(ukv_length_t)};
+    if (array.buffers[0] && array.null_count != 0)
+        result.presences_begin = {(ukv_octet_t const*)array.buffers[0], sizeof(ukv_octet_t)};
+    result.count = static_cast<ukv_size_t>(batch_c.length);
+    return result;
 }
 
 } // namespace unum::ukv
