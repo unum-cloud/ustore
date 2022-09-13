@@ -269,7 +269,7 @@ void read_one( //
     ukv_error_t* c_error) {
 
     place_t place = places[0];
-    auto col = rocks_collection(db, place.col);
+    auto col = rocks_collection(db, place.collection);
     auto key = to_slice(place.key);
     auto value_uptr = make_value(c_error);
     rocks_value_t& value = *value_uptr.get();
@@ -296,12 +296,12 @@ void read_many( //
     value_enumerator_at enumerator,
     ukv_error_t* c_error) {
 
-    std::vector<rocks_col_t*> cols(places.count);
+    std::vector<rocks_collection_t*> cols(places.count);
     std::vector<rocksdb::Slice> keys(places.count);
     std::vector<std::string> vals(places.count);
     for (std::size_t i = 0; i != places.size(); ++i) {
         place_t place = places[i];
-        cols[i] = rocks_collection(db, place.col);
+        cols[i] = rocks_collection(db, place.collection);
         keys[i] = to_slice(place.key);
     }
 
@@ -355,9 +355,9 @@ void ukv_read( //
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
 
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    places_arg_t places {cols, keys, {}, c_tasks_count};
+    places_arg_t places {collections, keys, {}, c_tasks_count};
 
     // 1. Allocate a tape for all the values to be pulled
     auto offs = arena.alloc_or_dummy<ukv_length_t>(places.count + 1, c_error, c_found_offsets);
