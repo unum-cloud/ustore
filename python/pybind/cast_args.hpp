@@ -18,7 +18,7 @@ namespace unum::ukv::pyb {
  * > NumPy (strided) column of `ukv_key_t` scalars.
  * > Apache Arrow array of `ukv_key_t` scalars.
  * > Apache Arrow table with "keys" column of `ukv_key_t` scalars
- *   and, optionally, "cols" column of IDs.
+ *   and, optionally, "collections" column of IDs.
  * > Buffer-protocol 1D implementation with `ukv_key_t` scalars.
  *
  * May be copied from:
@@ -32,7 +32,7 @@ namespace unum::ukv::pyb {
  */
 struct parsed_places_t {
     using viewed_t = places_arg_t;
-    using owned_t = std::vector<col_key_field_t>;
+    using owned_t = std::vector<collection_key_field_t>;
     std::variant<std::monostate, viewed_t, owned_t> viewed_or_owned;
     operator places_arg_t() const noexcept {}
     parsed_places_t(PyObject* keys) {}
@@ -145,14 +145,14 @@ struct parsed_adjacency_list_t {
             if (!can_cast_internal_scalars<ukv_key_t>(buf))
                 throw std::invalid_argument("Expecting `ukv_key_t` scalars in zero-copy interface");
             auto mat = py_strided_matrix<ukv_key_t const>(buf);
-            auto cols = mat.cols();
-            if (cols != 2 && cols != 3)
+            auto columns = mat.columns();
+            if (columns != 2 && columns != 3)
                 throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
 
             edges_view_t edges_view {
-                mat.col(0),
-                mat.col(1),
-                cols == 3 ? mat.col(2) : strided_range_gt<ukv_key_t const>(&ukv_default_edge_id_k, 0, mat.rows()),
+                mat.column(0),
+                mat.column(1),
+                columns == 3 ? mat.column(2) : strided_range_gt<ukv_key_t const>(&ukv_default_edge_id_k, 0, mat.rows()),
             };
             viewed_or_owned = edges_view;
         }
@@ -166,14 +166,14 @@ struct parsed_adjacency_list_t {
             auto to_edge = [](PyObject* obj) -> edge_t {
                 if (!PyTuple_Check(obj))
                     throw std::invalid_argument("Each edge must be represented by a tuple");
-                auto cols = PyTuple_Size(obj);
-                if (cols != 2 && cols != 3)
+                auto columns = PyTuple_Size(obj);
+                if (columns != 2 && columns != 3)
                     throw std::invalid_argument("Expecting 2 or 3 columns: sources, targets, edge IDs");
 
                 edge_t result;
                 result.source_id = py_to_scalar<ukv_key_t>(PyTuple_GetItem(obj, 0));
                 result.target_id = py_to_scalar<ukv_key_t>(PyTuple_GetItem(obj, 1));
-                result.id = cols == 3 ? py_to_scalar<ukv_key_t>(PyTuple_GetItem(obj, 2)) : ukv_default_edge_id_k;
+                result.id = columns == 3 ? py_to_scalar<ukv_key_t>(PyTuple_GetItem(obj, 2)) : ukv_default_edge_id_k;
                 return result;
             };
             py_transform_n(adjacency_list, to_edge, std::back_inserter(edges_vec));

@@ -149,8 +149,8 @@ void ukv_write( //
     ukv_transaction_t const,
     ukv_size_t const c_tasks_count,
 
-    ukv_collection_t const* c_cols,
-    ukv_size_t const c_cols_stride,
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
 
     ukv_key_t const* c_keys,
     ukv_size_t const c_keys_stride,
@@ -174,14 +174,14 @@ void ukv_write( //
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    strided_iterator_gt<ukv_collection_t const> cols {c_cols, c_cols_stride};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
     strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
 
-    places_arg_t places {cols, keys, {}, c_tasks_count};
+    places_arg_t places {collections, keys, {}, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     leveldb::WriteOptions options;
@@ -258,6 +258,7 @@ void ukv_read( //
     return_on_error(c_error);
     auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
     return_on_error(c_error);
+    bool const needs_export = c_found_values != nullptr;
     safe_vector_gt<byte_t> contents(&arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
@@ -269,10 +270,13 @@ void ukv_read( //
             presences[i] = bool(value);
             lens[i] = value ? value.size() : ukv_length_missing_k;
             offs[i] = contents.size();
-            contents.insert(contents.size(), value.begin(), value.end(), c_error);
+            if (needs_export)
+                contents.insert(contents.size(), value.begin(), value.end(), c_error);
         };
         read_enumerate(db, places, options, value_buffer, data_enumerator, c_error);
         offs[places.count] = contents.size();
+        if (needs_export)
+            *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(contents.begin());
     }
     catch (...) {
         *c_error = "Read Failure";
@@ -435,31 +439,31 @@ void ukv_size( //
 
 void ukv_collection_open( //
     ukv_database_t const,
-    ukv_str_view_t c_col_name,
+    ukv_str_view_t c_collection_name,
     ukv_str_view_t,
     ukv_collection_t*,
     ukv_error_t* c_error) {
-    if (c_col_name && std::strlen(c_col_name))
+    if (c_collection_name && std::strlen(c_collection_name))
         *c_error = "Collections not supported by LevelDB!";
 }
 
 void ukv_collection_drop(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_collection_t c_col_id,
-    ukv_str_view_t c_col_name,
+    ukv_collection_t c_collection_id,
+    ukv_str_view_t c_collection_name,
     ukv_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    auto col_name = c_col_name ? std::string_view(c_col_name) : std::string_view();
+    auto collection_name = c_collection_name ? std::string_view(c_collection_name) : std::string_view();
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(!col_name.empty() || !invalidate,
+    return_if_error(!collection_name.empty() || !invalidate,
                     c_error,
                     args_combo_k,
-                    "Default collection can't be invlaidated.");
+                    "Default collection can't be invalidated.");
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
 
@@ -480,7 +484,7 @@ void ukv_collection_drop(
         leveldb::WriteBatch batch;
         auto it = std::unique_ptr<leveldb::Iterator>(db.NewIterator(leveldb::ReadOptions()));
         for (it->SeekToFirst(); it->Valid(); it->Next())
-            batch.Put(it->key(), 0);
+            batch.Put(it->key(), leveldb::Slice());
         level_status_t status = db.Write(leveldb::WriteOptions(), &batch);
         export_error(status, c_error);
     }
@@ -495,9 +499,12 @@ void ukv_collection_list( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
     *c_count = 0;
-    *c_ids = nullptr;
-    *c_offsets = nullptr;
-    *c_names = nullptr;
+    if (c_ids)
+        *c_ids = nullptr;
+    if (c_offsets)
+        *c_offsets = nullptr;
+    if (c_names)
+        *c_names = nullptr;
 }
 
 void ukv_database_control( //
@@ -550,7 +557,7 @@ void ukv_arena_free(ukv_database_t const, ukv_arena_t c_arena) {
 void ukv_transaction_free(ukv_database_t const, ukv_transaction_t) {
 }
 
-void ukv_col_free(ukv_database_t const, ukv_collection_t const) {
+void ukv_collection_free(ukv_database_t const, ukv_collection_t const) {
 }
 
 void ukv_database_free(ukv_database_t c_db) {
