@@ -1,1 +1,1 @@
-conda install arrow-cpp=8.0.* -c conda-forge
+conda install pyarrow arrow-cpp=9.0.* -c conda-forge
