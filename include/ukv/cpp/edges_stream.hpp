@@ -19,7 +19,7 @@ namespace unum::ukv {
 class edges_stream_t {
 
     ukv_database_t db_ = nullptr;
-    ukv_collection_t col_ = ukv_collection_main_k;
+    ukv_collection_t collection_ = ukv_collection_main_k;
     ukv_transaction_t txn_ = nullptr;
 
     edges_span_t fetched_edges_ = {};
@@ -39,7 +39,7 @@ class edges_stream_t {
         ukv_graph_find_edges(db_,
                              txn_,
                              vertices.count(),
-                             &col_,
+                             &collection_,
                              0,
                              vertices.begin().get(),
                              vertices.stride(),
@@ -72,10 +72,11 @@ class edges_stream_t {
     static constexpr std::size_t default_read_ahead_k = 256;
 
     edges_stream_t(ukv_database_t db,
-                   ukv_collection_t col = ukv_collection_main_k,
+                   ukv_collection_t collection = ukv_collection_main_k,
                    std::size_t read_ahead_vertices = keys_stream_t::default_read_ahead_k,
                    ukv_transaction_t txn = nullptr)
-        : db_(db), col_(col), txn_(txn), arena_(db), vertex_stream_(db, col, read_ahead_vertices, txn) {}
+        : db_(db), collection_(collection), txn_(txn), arena_(db),
+          vertex_stream_(db, collection, read_ahead_vertices, txn) {}
 
     edges_stream_t(edges_stream_t&&) = default;
     edges_stream_t& operator=(edges_stream_t&&) = default;

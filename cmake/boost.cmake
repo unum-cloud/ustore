@@ -12,7 +12,7 @@ set(Boost_USE_MULTITHREADED ON)
 # We need to build some Boost libraries, just fetching headers won't be enough.
 # https://stackoverflow.com/a/13604163/2766161
 if(${UKV_PREINSTALLED_BOOST})
-    find_package(Boost 1.71.0 REQUIRED)
+    find_package(Boost 1.71.0)
 
 else()
     include(ExternalProject)
