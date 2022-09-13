@@ -6,6 +6,11 @@
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 #include "pybind/cast.hpp"
 
+#include <arrow/python/pyarrow.h>
+#include <arrow/api.h>
+#include <arrow/array.h>
+#include <arrow/table.h>
+
 namespace unum::ukv::pyb {
 
 /**
@@ -53,7 +58,36 @@ struct parsed_contents_t {
 
     parsed_contents_t(PyObject* contents) {
         // Check if we can do zero-copy
-        if (PyObject_CheckBuffer(contents)) { // Is there a case for which this is used ?
+        if (arrow::py::is_array(contents) || arrow::py::is_table(contents)) {
+            Py_Initialize();
+            if (arrow::py::import_pyarrow())
+                throw std::runtime_error("Failed to initialize pyarrow");
+
+            std::shared_ptr<arrow::BinaryArray> arrow_array(nullptr);
+            if (arrow::py::is_array(contents)) {
+                auto result = arrow::py::unwrap_array(contents);
+                if (!result.ok())
+                    throw std::runtime_error("Failed to unwrap array");
+
+                arrow_array = std::static_pointer_cast<arrow::BinaryArray>(result.ValueOrDie());
+            }
+            else {
+                arrow::Result<std::shared_ptr<arrow::Table>> result = arrow::py::unwrap_table(contents);
+                if (!result.ok())
+                    throw std::runtime_error("Failed to unwrap table");
+                auto column = result.ValueOrDie()->GetColumnByName("vals");
+                if (column->num_chunks() != 1)
+                    throw std::runtime_error("Invalid type in `vals` column");
+                arrow_array = std::static_pointer_cast<arrow::BinaryArray>(column->chunk(0));
+            }
+
+            ukv_val_ptr_t values = (arrow_array->value_data()->mutable_data());
+            ukv_val_len_t* offsets = reinterpret_cast<ukv_val_len_t*>(arrow_array->value_offsets()->mutable_data());
+            ukv_1x8_t* null_bitmap = arrow_array->null_count()
+                                         ? reinterpret_cast<ukv_1x8_t*>(arrow_array->null_bitmap()->mutable_data())
+                                         : nullptr;
+            contents_arg_t conts {.contents_begin = &values, .offsets_begin = offsets, .presences_begin = null_bitmap};
+            viewed_or_owned = std::move(conts);
         }
         else {
             std::vector<value_view_t> values_vec;
