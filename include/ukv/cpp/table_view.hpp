@@ -94,11 +94,11 @@ constexpr ukv_type_t ukv_type() {
  * @brief The first column of the table, describing its contents.
  */
 struct table_index_view_t {
-    strided_iterator_gt<ukv_collection_t const> cols_begin;
+    strided_iterator_gt<ukv_collection_t const> collections_begin;
     strided_iterator_gt<ukv_key_t const> keys_begin;
     std::size_t count = 0;
 
-    strided_range_gt<ukv_collection_t const> cols() const noexcept { return {cols_begin, count}; }
+    strided_range_gt<ukv_collection_t const> collections() const noexcept { return {collections_begin, count}; }
     strided_range_gt<ukv_key_t const> keys() const noexcept { return {keys_begin, count}; }
 };
 
@@ -290,7 +290,7 @@ class table_view_gt {
     ukv_size_t docs_count_;
     ukv_size_t fields_count_;
 
-    strided_iterator_gt<ukv_collection_t const> cols_;
+    strided_iterator_gt<ukv_collection_t const> collections_;
     strided_iterator_gt<ukv_key_t const> keys_;
     strided_iterator_gt<ukv_str_view_t const> fields_;
     strided_iterator_gt<ukv_type_t const> types_;
@@ -307,7 +307,7 @@ class table_view_gt {
     table_view_gt( //
         ukv_size_t docs_count,
         ukv_size_t fields_count,
-        strided_iterator_gt<ukv_collection_t const> cols,
+        strided_iterator_gt<ukv_collection_t const> collections,
         strided_iterator_gt<ukv_key_t const> keys,
         strided_iterator_gt<ukv_str_view_t const> fields,
         strided_iterator_gt<ukv_type_t const> types,
@@ -318,7 +318,7 @@ class table_view_gt {
         ukv_length_t** columns_offsets = nullptr,
         ukv_length_t** columns_lengths = nullptr,
         ukv_byte_t* tape = nullptr) noexcept
-        : docs_count_(docs_count), fields_count_(fields_count), cols_(cols), keys_(keys), fields_(fields),
+        : docs_count_(docs_count), fields_count_(fields_count), collections_(collections), keys_(keys), fields_(fields),
           types_(types), columns_validities_(columns_validities), columns_conversions_(columns_conversions),
           columns_collisions_(columns_collisions), columns_scalars_(columns_scalars), columns_offsets_(columns_offsets),
           columns_lengths_(columns_lengths), tape_(tape) {}
@@ -328,7 +328,7 @@ class table_view_gt {
     table_view_gt& operator=(table_view_gt&&) = default;
     table_view_gt& operator=(table_view_gt const&) = default;
 
-    table_index_view_t index() const noexcept { return {cols_, keys_, docs_count_}; }
+    table_index_view_t index() const noexcept { return {collections_, keys_, docs_count_}; }
     table_header_view_t header() const noexcept { return {fields_, types_, docs_count_}; }
 
     template <typename element_at = std::monostate>
@@ -367,7 +367,7 @@ class table_view_gt {
     }
 
     std::size_t rows() const noexcept { return docs_count_; }
-    std::size_t cols() const noexcept { return fields_count_; }
+    std::size_t collections() const noexcept { return fields_count_; }
 
     ukv_octet_t*** member_validities() noexcept { return &columns_validities_; }
     ukv_octet_t*** member_conversions() noexcept { return &columns_conversions_; }
@@ -398,17 +398,17 @@ template <typename... column_types_at>
 struct table_header_gt {
 
     using types_tuple_t = std::tuple<column_types_at...>;
-    static constexpr std::size_t cols_count_k = std::tuple_size_v<types_tuple_t>;
-    using columns_t = std::array<field_type_t, cols_count_k>;
+    static constexpr std::size_t collections_count_k = std::tuple_size_v<types_tuple_t>;
+    using columns_t = std::array<field_type_t, collections_count_k>;
 
     columns_t columns;
 
     template <typename element_at>
     table_header_gt<column_types_at..., element_at> with(ukv_str_view_t name) && {
-        using new_columns_t = std::array<field_type_t, cols_count_k + 1>;
+        using new_columns_t = std::array<field_type_t, collections_count_k + 1>;
         new_columns_t new_columns;
-        std::copy_n(columns.begin(), cols_count_k, new_columns.begin());
-        new_columns[cols_count_k] = field_type_t {name, ukv_type<element_at>()};
+        std::copy_n(columns.begin(), collections_count_k, new_columns.begin());
+        new_columns[collections_count_k] = field_type_t {name, ukv_type<element_at>()};
         return {new_columns};
     }
 

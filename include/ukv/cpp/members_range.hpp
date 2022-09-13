@@ -35,7 +35,7 @@ struct size_estimates_t;
 class keys_stream_t {
 
     ukv_database_t db_ = nullptr;
-    ukv_collection_t col_ = ukv_collection_main_k;
+    ukv_collection_t collection_ = ukv_collection_main_k;
     ukv_transaction_t txn_ = nullptr;
 
     arena_t arena_;
@@ -57,11 +57,12 @@ class keys_stream_t {
             db_,
             txn_,
             1,
-            &col_,
+            &collection_,
             0,
             &next_min_key_,
             0,
-            nullptr, 0,
+            nullptr,
+            0,
             &read_ahead_,
             0,
             ukv_options_default_k,
@@ -91,10 +92,10 @@ class keys_stream_t {
     static constexpr std::size_t default_read_ahead_k = 256;
 
     keys_stream_t(ukv_database_t db,
-                  ukv_collection_t col = ukv_collection_main_k,
+                  ukv_collection_t collection = ukv_collection_main_k,
                   std::size_t read_ahead = keys_stream_t::default_read_ahead_k,
                   ukv_transaction_t txn = nullptr)
-        : db_(db), col_(col), txn_(txn), arena_(db), read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
+        : db_(db), collection_(collection), txn_(txn), arena_(db), read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
 
     keys_stream_t(keys_stream_t&&) = default;
     keys_stream_t& operator=(keys_stream_t&&) = default;
@@ -153,7 +154,7 @@ class keys_stream_t {
     }
 
     bool operator==(keys_stream_t const& other) const noexcept {
-        if (col_ != other.col_)
+        if (collection_ != other.collection_)
             return false;
         if (is_end() || other.is_end())
             return is_end() == other.is_end();
@@ -161,7 +162,7 @@ class keys_stream_t {
     }
 
     bool operator!=(keys_stream_t const& other) const noexcept {
-        if (col_ != other.col_)
+        if (collection_ != other.collection_)
             return true;
         if (is_end() || other.is_end())
             return is_end() != other.is_end();
@@ -172,7 +173,7 @@ class keys_stream_t {
 class pairs_stream_t {
 
     ukv_database_t db_ = nullptr;
-    ukv_collection_t col_ = ukv_collection_main_k;
+    ukv_collection_t collection_ = ukv_collection_main_k;
     ukv_transaction_t txn_ = nullptr;
 
     arena_t arena_scan_;
@@ -196,11 +197,12 @@ class pairs_stream_t {
             db_,
             txn_,
             1,
-            &col_,
+            &collection_,
             0,
             &next_min_key_,
             0,
-            nullptr, 0,
+            nullptr,
+            0,
             &read_ahead_,
             0,
             ukv_options_default_k,
@@ -222,7 +224,7 @@ class pairs_stream_t {
             db_,
             txn_,
             count,
-            &col_,
+            &collection_,
             0,
             found_keys,
             sizeof(ukv_key_t),
@@ -250,10 +252,10 @@ class pairs_stream_t {
 
     pairs_stream_t( //
         ukv_database_t db,
-        ukv_collection_t col = ukv_collection_main_k,
+        ukv_collection_t collection = ukv_collection_main_k,
         std::size_t read_ahead = pairs_stream_t::default_read_ahead_k,
         ukv_transaction_t txn = nullptr)
-        : db_(db), col_(col), txn_(txn), arena_scan_(db_), arena_read_(db_),
+        : db_(db), collection_(collection), txn_(txn), arena_scan_(db_), arena_read_(db_),
           read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
 
     pairs_stream_t(pairs_stream_t&&) = default;
@@ -326,7 +328,7 @@ class pairs_stream_t {
     }
 
     bool operator==(pairs_stream_t const& other) const noexcept {
-        if (col_ != other.col_)
+        if (collection_ != other.collection_)
             return false;
         if (is_end() || other.is_end())
             return is_end() == other.is_end();
@@ -334,7 +336,7 @@ class pairs_stream_t {
     }
 
     bool operator!=(pairs_stream_t const& other) const noexcept {
-        if (col_ != other.col_)
+        if (collection_ != other.collection_)
             return true;
         if (is_end() || other.is_end())
             return is_end() != other.is_end();
@@ -371,7 +373,7 @@ class members_range_t {
 
     ukv_database_t db_;
     ukv_transaction_t txn_;
-    ukv_collection_t col_;
+    ukv_collection_t collection_;
     ukv_key_t min_key_;
     ukv_key_t max_key_;
 
@@ -379,7 +381,7 @@ class members_range_t {
     expected_gt<stream_at> make_stream( //
         ukv_key_t target,
         std::size_t read_ahead = keys_stream_t::default_read_ahead_k) noexcept {
-        stream_at stream {db_, col_, read_ahead, txn_};
+        stream_at stream {db_, collection_, read_ahead, txn_};
         status_t status = stream.seek(target);
         return {std::move(status), std::move(stream)};
     }
@@ -387,10 +389,10 @@ class members_range_t {
   public:
     members_range_t(ukv_database_t db,
                     ukv_transaction_t txn = nullptr,
-                    ukv_collection_t col = ukv_collection_main_k,
+                    ukv_collection_t collection = ukv_collection_main_k,
                     ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
                     ukv_key_t max_key = ukv_key_unknown_k) noexcept
-        : db_(db), txn_(txn), col_(col), min_key_(min_key), max_key_(max_key) {}
+        : db_(db), txn_(txn), collection_(collection), min_key_(min_key), max_key_(max_key) {}
 
     members_range_t(members_range_t&&) = default;
     members_range_t& operator=(members_range_t&&) = default;
@@ -424,17 +426,29 @@ class members_range_t {
         ukv_size_t* max_value_bytes = nullptr;
         ukv_size_t* min_space_usages = nullptr;
         ukv_size_t* max_space_usages = nullptr;
-        ukv_size(db_, txn_, 1, &col_, 0, &min_key_, 0, &max_key_, 0, ukv_options_default_k, 
-            &min_cardinalities,
-            &max_cardinalities,
-            &min_value_bytes,
-            &max_value_bytes,
-            &min_space_usages,
-            &max_space_usages
-        , a, s);
+        ukv_size(db_,
+                 txn_,
+                 1,
+                 &collection_,
+                 0,
+                 &min_key_,
+                 0,
+                 &max_key_,
+                 0,
+                 ukv_options_default_k,
+                 &min_cardinalities,
+                 &max_cardinalities,
+                 &min_value_bytes,
+                 &max_value_bytes,
+                 &min_space_usages,
+                 &max_space_usages,
+                 a,
+                 s);
         if (!status)
             return status;
-        size_estimates_t result {{min_cardinalities[0], max_cardinalities[0]}, {min_value_bytes[0], max_value_bytes[0]}, {min_space_usages[0], max_space_usages[0]}};
+        size_estimates_t result {{min_cardinalities[0], max_cardinalities[0]},
+                                 {min_value_bytes[0], max_value_bytes[0]},
+                                 {min_space_usages[0], max_space_usages[0]}};
         return result;
     }
 

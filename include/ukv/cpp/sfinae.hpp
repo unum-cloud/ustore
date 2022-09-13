@@ -21,7 +21,7 @@ template <typename at> struct sfinae_is_range_gt<strided_range_gt<at>> : std::tr
 static_assert(!sfinae_is_range_gt<int>::value);
 
 template <typename at, typename = int> struct sfinae_has_collection_gt : std::false_type {};
-template <typename at> struct sfinae_has_collection_gt<at, decltype((void)at::col, 0)> : std::true_type {};
+template <typename at> struct sfinae_has_collection_gt<at, decltype((void)at::collection, 0)> : std::true_type {};
 
 template <typename at, typename = int> struct sfinae_has_field_gt : std::false_type {};
 template <typename at> struct sfinae_has_field_gt<at, decltype((void)at::field, 0)> : std::true_type {};
@@ -54,18 +54,18 @@ struct location_store_gt {
 };
 
 template <>
-struct location_store_gt<int> : public location_store_gt<col_key_field_t> {};
+struct location_store_gt<int> : public location_store_gt<collection_key_field_t> {};
 template <>
-struct location_store_gt<ukv_key_t> : public location_store_gt<col_key_field_t> {};
+struct location_store_gt<ukv_key_t> : public location_store_gt<collection_key_field_t> {};
 template <>
-struct location_store_gt<col_key_t> : public location_store_gt<col_key_field_t> {};
+struct location_store_gt<collection_key_t> : public location_store_gt<collection_key_field_t> {};
 
 template <>
-struct location_store_gt<int&> : public location_store_gt<col_key_field_t> {};
+struct location_store_gt<int&> : public location_store_gt<collection_key_field_t> {};
 template <>
-struct location_store_gt<ukv_key_t&> : public location_store_gt<col_key_field_t> {};
+struct location_store_gt<ukv_key_t&> : public location_store_gt<collection_key_field_t> {};
 template <>
-struct location_store_gt<col_key_t&> : public location_store_gt<col_key_field_t> {};
+struct location_store_gt<collection_key_t&> : public location_store_gt<collection_key_field_t> {};
 
 template <typename at>
 struct location_store_gt<at&> {
@@ -88,9 +88,9 @@ struct locations_in_collection_gt {
 };
 
 template <>
-struct locations_in_collection_gt<int> : public col_key_field_t {};
+struct locations_in_collection_gt<int> : public collection_key_field_t {};
 template <>
-struct locations_in_collection_gt<ukv_key_t> : public col_key_field_t {};
+struct locations_in_collection_gt<ukv_key_t> : public collection_key_field_t {};
 
 template <typename at, typename = void>
 struct places_arg_extractor_gt {
@@ -129,7 +129,7 @@ struct places_arg_extractor_gt {
             return strided.members(&element_t::key);
     }
 
-    strided_iterator_gt<ukv_collection_t const> cols(location_t const& arg) noexcept {
+    strided_iterator_gt<ukv_collection_t const> collections(location_t const& arg) noexcept {
         if constexpr (element_stores_collection_k) {
             element_t const* begin = nullptr;
             if constexpr (is_one_k)
@@ -144,7 +144,7 @@ struct places_arg_extractor_gt {
                 stride = sizeof(element_t);
 
             auto strided = strided_iterator_gt<element_t const>(begin, stride);
-            return strided.members(&element_t::col);
+            return strided.members(&element_t::collection);
         }
         else
             return {};
@@ -180,7 +180,9 @@ struct places_arg_extractor_gt<places_arg_t> {
 
     ukv_size_t count(places_arg_t const& native) noexcept { return native.count; }
     strided_iterator_gt<ukv_key_t const> keys(places_arg_t const& native) noexcept { return native.keys_begin; }
-    strided_iterator_gt<ukv_collection_t const> cols(places_arg_t const& native) noexcept { return native.cols_begin; }
+    strided_iterator_gt<ukv_collection_t const> collections(places_arg_t const& native) noexcept {
+        return native.collections_begin;
+    }
     strided_iterator_gt<ukv_str_view_t const> fields(places_arg_t const& native) noexcept {
         return native.fields_begin;
     }
@@ -197,7 +199,9 @@ struct places_arg_extractor_gt<locations_in_collection_gt<at>> {
     strided_iterator_gt<ukv_key_t const> keys(location_t const& arg) noexcept {
         return base_t {}.keys(arg.without.ref());
     }
-    strided_iterator_gt<ukv_collection_t const> cols(location_t const& arg) noexcept { return {&arg.collection}; }
+    strided_iterator_gt<ukv_collection_t const> collections(location_t const& arg) noexcept {
+        return {&arg.collection};
+    }
     strided_iterator_gt<ukv_str_view_t const> fields(location_t const& arg) noexcept {
         return base_t {}.fields(arg.without.ref());
     }

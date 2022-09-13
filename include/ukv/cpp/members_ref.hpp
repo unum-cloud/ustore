@@ -249,7 +249,7 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
     auto keys = keys_extractor_t {}.keys(locs);
-    auto cols = keys_extractor_t {}.cols(locs);
+    auto collections = keys_extractor_t {}.collections(locs);
     auto fields = keys_extractor_t {}.fields(locs);
     auto has_fields = fields && (!fields.repeats() || *fields);
 
@@ -258,8 +258,8 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             db_,
             txn_,
             count,
-            cols.get(),
-            cols.stride(),
+            collections.get(),
+            collections.stride(),
             keys.get(),
             keys.stride(),
             fields.get(),
@@ -278,8 +278,8 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             db_,
             txn_,
             count,
-            cols.get(),
-            cols.stride(),
+            collections.get(),
+            collections.stride(),
             keys.get(),
             keys.stride(),
             options,
@@ -325,7 +325,7 @@ status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, uk
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
     auto keys = keys_extractor_t {}.keys(locs);
-    auto cols = keys_extractor_t {}.cols(locs);
+    auto collections = keys_extractor_t {}.collections(locs);
     auto fields = keys_extractor_t {}.fields(locs);
     auto has_fields = fields && (!fields.repeats() || *fields);
 
@@ -339,8 +339,8 @@ status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, uk
             db_,
             txn_,
             count,
-            cols.get(),
-            cols.stride(),
+            collections.get(),
+            collections.stride(),
             keys.get(),
             keys.stride(),
             fields.get(),
@@ -362,8 +362,8 @@ status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, uk
             db_,
             txn_,
             count,
-            cols.get(),
-            cols.stride(),
+            collections.get(),
+            collections.stride(),
             keys.get(),
             keys.stride(),
             nullptr,
@@ -391,14 +391,14 @@ expected_gt<joined_strs_t> members_ref_gt<locations_at>::gist(bool track) noexce
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
     auto keys = keys_extractor_t {}.keys(locs);
-    auto cols = keys_extractor_t {}.cols(locs);
+    auto collections = keys_extractor_t {}.collections(locs);
 
     ukv_docs_gist( //
         db_,
         txn_,
         count,
-        cols.get(),
-        cols.stride(),
+        collections.get(),
+        collections.stride(),
         keys.get(),
         keys.stride(),
         options,
@@ -420,13 +420,13 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_gather(contents_arg_a
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
     auto keys = keys_extractor_t {}.keys(locs);
-    auto cols = keys_extractor_t {}.cols(locs);
+    auto collections = keys_extractor_t {}.collections(locs);
 
     status_t status;
     expected_at view {
         count,
         layout.fields().size(),
-        cols,
+        collections,
         keys,
         layout.fields().begin().get(),
         layout.types().begin().get(),
@@ -437,8 +437,8 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_gather(contents_arg_a
         txn_,
         count,
         layout.fields().size(),
-        cols.get(),
-        cols.stride(),
+        collections.get(),
+        collections.stride(),
         keys.get(),
         keys.stride(),
         layout.fields().begin().get(),
