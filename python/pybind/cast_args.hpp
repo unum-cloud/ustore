@@ -81,12 +81,12 @@ struct parsed_contents_t {
                 arrow_array = std::static_pointer_cast<arrow::BinaryArray>(column->chunk(0));
             }
 
-            ukv_val_ptr_t values = (arrow_array->value_data()->mutable_data());
-            ukv_val_len_t* offsets = reinterpret_cast<ukv_val_len_t*>(arrow_array->value_offsets()->mutable_data());
-            ukv_1x8_t* null_bitmap = arrow_array->null_count()
-                                         ? reinterpret_cast<ukv_1x8_t*>(arrow_array->null_bitmap()->mutable_data())
-                                         : nullptr;
-            contents_arg_t conts {.contents_begin = &values, .offsets_begin = offsets, .presences_begin = null_bitmap};
+            ukv_bytes_cptr_t values = (arrow_array->value_data()->mutable_data());
+            ukv_length_t* offsets = reinterpret_cast<ukv_length_t*>(arrow_array->value_offsets()->mutable_data());
+            ukv_octet_t* null_bitmap = arrow_array->null_count()
+                                           ? reinterpret_cast<ukv_octet_t*>(arrow_array->null_bitmap()->mutable_data())
+                                           : nullptr;
+            contents_arg_t conts {.presences_begin = null_bitmap, .offsets_begin = offsets, .contents_begin = &values};
             viewed_or_owned = std::move(conts);
         }
         else {

@@ -24,7 +24,7 @@ func CreateDB() Rocks {
 		UKV_free:            C.ukv_database_free,
 		UKV_read:            C.ukv_read,
 		UKV_write:           C.ukv_write,
-		UKV_val_len_missing: u.UKV_val_len_t(C.ukv_length_missing_k)}
+		UKV_val_len_missing: u.ukv_length_t(C.ukv_length_missing_k)}
 
 	db := Rocks{DataBase: u.DataBase{Backend: backend}}
 	return db
