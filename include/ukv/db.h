@@ -166,9 +166,12 @@ typedef enum {
     ukv_drop_keys_vals_handle_k = 2,
 } ukv_drop_mode_t;
 
-extern ukv_collection_t ukv_collection_main_k;
-extern ukv_length_t ukv_length_missing_k;
-extern ukv_key_t ukv_key_unknown_k;
+extern ukv_collection_t const ukv_collection_main_k;
+extern ukv_length_t const ukv_length_missing_k;
+extern ukv_key_t const ukv_key_unknown_k;
+
+extern bool const ukv_supports_transactions_k;
+extern bool const ukv_supports_named_collections_k;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/

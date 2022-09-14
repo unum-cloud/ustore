@@ -31,9 +31,11 @@
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-ukv_collection_t ukv_collection_main_k = 0;
-ukv_length_t ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max();
-ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
+ukv_collection_t const ukv_collection_main_k = 0;
+ukv_length_t const ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max();
+ukv_key_t const ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
+bool const ukv_supports_transactions_k = true;
+bool const ukv_supports_named_collections_k = true;
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -768,7 +770,7 @@ void ukv_collection_open(
     ukv_collection_t* c_collection,
     ukv_error_t* c_error) {
 
-    auto name_len = std::strlen(c_collection_name);
+    auto name_len = c_collection_name ? std::strlen(c_collection_name) : 0;
     if (!name_len) {
         *c_collection = ukv_collection_main_k;
         return;
