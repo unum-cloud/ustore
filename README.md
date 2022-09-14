@@ -127,6 +127,7 @@ Batch lookup operations are implemented via channels sending slices, to avoid re
 
 <details>
 <summary>JavaScript</summary>
+
 * Node.js
 * V8
 * Deno
@@ -135,6 +136,7 @@ Batch lookup operations are implemented via channels sending slices, to avoid re
 
 <details>
 <summary>Rust</summary>
+
 Rust implementation is designed to support:
 
 * Named Collections
@@ -159,6 +161,7 @@ db.clear();
 
 <details>
 <summary>RESTful API & Clients</summary>
+
 We implement a REST server using `Boost.Beast` and the underlying `Boost.Asio`, as the go-to Web-Dev libraries in C++.
 To test the REST API, `./src/run_rest.sh` and then cURL into it:
 
@@ -243,6 +246,7 @@ conan create . ukv/testing --build=missing
 
 <details>
 <summary>Why not use LevelDB interface (which was also adopted by RocksDB)?</summary>
+
 1. Dynamic polymorphism
 2. Dependancy on STL
 3. No support for custom allocators
@@ -250,6 +254,7 @@ conan create . ukv/testing --build=missing
 
 <details>
 <summary>Why mix Docs and Graphs?</summary>
+
 Modern Relational databases try to handle flexible-schema documents, but do it poorly.
 Similarly, they hardly scale, when the number of "relations" is high.
 So users are left with no good multi-purpose solutions.
@@ -258,6 +263,7 @@ Having collections of both kinds would solve that.
 
 <details>
 <summary>Why not adapt MQL or Cypher?</summary>
+
 Mongo Query Language and Cypher by Neo4J are widely adopted, but are both vendor-specific.
 Furthermore, as for core functionality, using text-based protocols in 2022 is inefficient.
 CRUD operations are implemented in all binary interfaces and for document-level patches well standardized JSON-Pointer, JSON-Patch and JSON-MergePAth RFCs have been implemented.
