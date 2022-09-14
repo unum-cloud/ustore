@@ -13,7 +13,7 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 * [JSON-Pointers](https://datatracker.ietf.org/doc/html/rfc6901) & [Field-level Patches](https://datatracker.ietf.org/doc/html/rfc6902), no custom Query Languages
 * [ACID](https://en.wikipedia.org/wiki/ACID) transactions across tables, docs & graphs
 * Familiar high-level [drivers](#frontends) for tabular & graph analytics
-* [Apache Arrow](https://arrow.apache.org/) exports, [Flight RPC](https://arrow.apache.org/docs/format/Flight.html) and [DataFusion SQL](https://github.com/apache/arrow-datafusion) support
+* [Apache Arrow](https://arrow.apache.org/) interop and [Flight RPC](https://arrow.apache.org/docs/format/Flight.html)
 * Packing Tensors for [PyTorch](https://pytorch.org/) and [TensorFlow](tensorflow.org)
 
 UKV does just that, abstracting away the implementation from the user.
@@ -27,7 +27,7 @@ This would produce hundreds of binaries for all kinds of use cases, like:
 * Python, GoLang, Java and other high-level bindings for [RocksDB](rocksdb.org) and [LevelDB](https://github.com/google/leveldb).
 * Performant embedded store in the foundation of your in-house storage solution.
 * Document store, that is simpler and faster than putting JSONs in MongoDB or Postgres.
-* Graph database, with the feel of [NetworkX](https://networkx.org), speed of [GunRock](http://gunrock.github.io) and scale of [Hadoop](https://hadoop.apache.org).
+* Graph database, with the feel of [NetworkX](https://networkx.org), ~~soon~~ speed of [GunRock](http://gunrock.github.io) and scale of [Hadoop](https://hadoop.apache.org).
 * Low-latency media storage for games, CDNs and ML/BI pipelines.
 
 But more importantly, if you choose backends that support transactions and collections, you can get an all-in one solution:
@@ -84,24 +84,6 @@ Currently, at Proof-of-Concept stage, we support only the essential functionalit
 * ²: Missing, to be implemented.
 * ³: Supports tabular Arrow exports.
 
-## Assumptions and Limitations
-
-* Keys are constant length native integer types. High-performance solutions are impossible with variable size keys. 64-bit unsigned integers are currently chosen as the smallest native numeric type, that can address modern datasets.
-* Values are serialized into variable-length byte strings.
-* Iterators and enumerators often come with certain relevance, consistency or performance tradeoffs or aren't supported at all. Check the specs of exact backend.
-* Transactions are ACI(D) by-default, meaning that:
-  * Atomicity is guaranteed,
-  * Consistency is implemented in the strongest form - tracking all key and metadata lookups by default,
-  * Isolation is guaranteed, but may be implemented differently, depending on backend - in-memory systems generally prefer "locking" over "multi-versioning".
-  * Durability doesn't apply to in-memory systems, but even in persistent stores its often disabled to be implemented in higher layers of infrastructure.
-
-## Development
-
-To build and test any set of bindings:
-
-1. Build (`cmake . && make`) or download the prebuilt `libukv.a`,
-2. Call `./language/run.sh` in your terminal.
-
 ### Python
 
 Current implementation relies on [PyBind11](https://github.com/pybind/pybind11).
@@ -112,7 +94,7 @@ It's feature-rich, but not very performant, supporting:
 * Single & Batch Operations
 * Tensors support via [Buffer Protocol](https://docs.python.org/3/c-api/buffer.html)
 * [NetworkX](https://networkx.org)-like interface for Graphs
-* [Pandas](https://pandas.pydata.org)-like interface for Document collections
+* [Pandas](https://pandas.pydata.org)-like interface for Document collections ~~in-progress~~
 
 Using it can be as easy as:
 
@@ -147,10 +129,7 @@ All `get` requests cause memory allocations in Java Runtime and export data into
 Most `set` requests will simply cast and forward values without additional copies.
 Aside from opening and closing this class is **thread-safe** for higher interop with other Java-based tools.
 
-Implementation follows the ["best practices" defined by IBM](https://developer.ibm.com/articles/j-jni/). It was tested with:
-
-* JVM
-* *[GraalVM](https://www.graalvm.org/22.1/reference-manual/native-image/JNI/)*
+Implementation follows the ["best practices" defined by IBM](https://developer.ibm.com/articles/j-jni/).
 
 ### GoLang
 
@@ -171,14 +150,16 @@ Batch lookup operations are implemented via channels sending slices, to avoid re
 
 <details>
 <summary>JavaScript</summary>
+
 * Node.js
 * V8
 * Deno
 * [`bun:ffi`](https://twitter.com/jarredsumner/status/1521527222514774017)
-<details>
+</details>
 
 <details>
 <summary>Rust</summary>
+
 Rust implementation is designed to support:
 
 * Named Collections
@@ -203,6 +184,7 @@ db.clear();
 
 <details>
 <summary>RESTful API & Clients</summary>
+
 We implement a REST server using `Boost.Beast` and the underlying `Boost.Asio`, as the go-to Web-Dev libraries in C++.
 To test the REST API, `./src/run_rest.sh` and then cURL into it:
 
@@ -221,21 +203,62 @@ curl -i \
 The [`OneAPI` specification](/openapi.yaml) documentation is in-development.
 </details>
 
-## Serving UKV
+## Installation
+
+* For Python: `pip install ukv`
+* For Conan: `conan install ukv`
+* For Docker image: `docker run --rm --name test_ukv -p 38709:38709 unum/ukv`
+
+## Development
+
+To build the whole project:
+
+```sh
+cmake \
+    -DUKV_BUILD_PYTHON=1 \
+    -DUKV_BUILD_TESTS=1 \
+    -DUKV_BUILD_BENCHMARKS=1 \
+    -DUKV_BUILD_FLIGHT_RPC=1 . && \
+    make -j16
+```
+
+For Flight RPC, Apache Arrow must be preinstalled.
+To build language bindings:
+
+```sh
+./python/run.sh
+./java/run.sh
+./golang/run.sh
+```
+
+Building Flight RPC Docker Image:
 
 ```sh
 docker build -t ukv .
-docker run \
-  --publish 38709 \
-  --name ukv_example \
-  --rm \
-  ukv
 ```
+
+Building Conan package, without installing it:
+
+```sh
+conan create . ukv/testing --build=missing
+```
+
+## Limitations
+
+* Keys are constant length native integer types. High-performance solutions are impossible with variable size keys. 64-bit unsigned integers are currently chosen as the smallest native numeric type, that can address modern datasets.
+* Values are serialized into variable-length byte strings.
+* Iterators and enumerators often come with certain relevance, consistency or performance tradeoffs or aren't supported at all. Check the specs of exact backend.
+* Transactions are ACI(D) by-default, meaning that:
+  * Atomicity is guaranteed,
+  * Consistency is implemented in the strongest form - tracking all key and metadata lookups by default,
+  * Isolation is guaranteed, but may be implemented differently, depending on backend - in-memory systems generally prefer "locking" over "multi-versioning".
+  * Durability doesn't apply to in-memory systems, but even in persistent stores its often disabled to be implemented in higher layers of infrastructure.
 
 ## FAQ
 
 <details>
 <summary>Why not use LevelDB interface (which was also adopted by RocksDB)?</summary>
+
 1. Dynamic polymorphism
 2. Dependancy on STL
 3. No support for custom allocators
@@ -243,6 +266,7 @@ docker run \
 
 <details>
 <summary>Why mix Docs and Graphs?</summary>
+
 Modern Relational databases try to handle flexible-schema documents, but do it poorly.
 Similarly, they hardly scale, when the number of "relations" is high.
 So users are left with no good multi-purpose solutions.
@@ -251,7 +275,8 @@ Having collections of both kinds would solve that.
 
 <details>
 <summary>Why not adapt MQL or Cypher?</summary>
+
 Mongo Query Language and Cypher by Neo4J are widely adopted, but are both vendor-specific.
-Futhermore, as for core functionality, using text-based protocols in 2022 is inefficient.
+Furthermore, as for core functionality, using text-based protocols in 2022 is inefficient.
 CRUD operations are implemented in all binary interfaces and for document-level patches well standardized JSON-Pointer, JSON-Patch and JSON-MergePAth RFCs have been implemented.
 </details>

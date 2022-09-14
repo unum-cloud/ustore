@@ -74,12 +74,13 @@ struct contents_arg_t {
 
         auto begin = reinterpret_cast<byte_t const*>(contents_begin[i]);
         auto off = offsets_begin ? offsets_begin[i] : 0;
-        auto len = lengths_begin //
-                       ? lengths_begin[i]
-                       : offsets_begin //
-                             ? offsets_begin[i + 1] - off
-                             : std::strlen((char const*)begin + off);
-
+        ukv_length_t len = 0;
+        if (lengths_begin)
+            len = lengths_begin[i];
+        else if (offsets_begin)
+            len = offsets_begin[i + 1] - off;
+        else
+            len = std::strlen(reinterpret_cast<char const*>(begin) + off);
         return {begin + off, len};
     }
 

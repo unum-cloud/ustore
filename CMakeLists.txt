@@ -67,9 +67,9 @@ set(UKV_PREINSTALLED_ARROW ON CACHE BOOL "True, if a pre-installed external vers
 set(UKV_PREINSTALLED_TURBOPFOR ON CACHE BOOL "True, if a pre-installed external version of TurboPFOR should be used")
 set(UKV_BUILD_PYTHON ON CACHE BOOL "Building Python bidings for all SDKs")
 set(UKV_BUILD_TESTS ON CACHE BOOL "Building C/C++ native tests")
-set(UKV_BUILD_FLIGHT ON CACHE BOOL "Building Apache Arrow Flight RPC server for all backends")
+set(UKV_BUILD_BENCHMARKS ON CACHE BOOL "Building C/C++ native benchmarks")
+set(UKV_BUILD_FLIGHT_RPC ON CACHE BOOL "Building Apache Arrow Flight RPC server for all backends")
 
-include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
@@ -87,9 +87,9 @@ if(!APPLE)
   add_dependencies(ukv_rocksdb jemalloc)
   add_dependencies(ukv_leveldb jemalloc)
   add_dependencies(ukv_rpc_client jemalloc)
-  add_dependencies(ukv_stl_test jemalloc)
-  add_dependencies(ukv_leveldb_test jemalloc)
-  add_dependencies(ukv_rocksdb_test jemalloc)
+  add_dependencies(ukv_stl_unit_tests jemalloc)
+  add_dependencies(ukv_leveldb_unit_tests jemalloc)
+  add_dependencies(ukv_rocksdb_unit_tests jemalloc)
 endif()
 
 include_directories(include/)
@@ -114,7 +114,7 @@ add_library(ukv_flight_client src/arrow_client.cpp src/logic_docs.cpp src/logic_
 target_link_libraries(ukv_flight_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
 
 # Generate Apache Arrow Flight RPC backends
-if(${UKV_BUILD_FLIGHT})
+if(${UKV_BUILD_FLIGHT_RPC})
   foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb)
     get_target_property(lib_SOURCES ${lib_name} SOURCES)
     get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
@@ -125,14 +125,38 @@ if(${UKV_BUILD_FLIGHT})
 endif()
 
 # Generate tests
+# We build them with the original sources (instead of linking with already compiled libraries)
+# to maximize the number of exposed symbols and make debugging easier.
 if(${UKV_BUILD_TESTS})
+  include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
+
   foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_flight_client)
     get_target_property(lib_SOURCES ${lib_name} SOURCES)
     get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
-    string(CONCAT test_name ${lib_name} "_test")
-    add_executable(${test_name} src/test.cpp ${lib_SOURCES})
+    string(CONCAT test_name ${lib_name} "_unit_tests")
+    add_executable(${test_name} tests/units.cpp ${lib_SOURCES})
     target_link_libraries(${test_name} gtest ${lib_LIBRARIES})
     add_test(NAME "${lib_name}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_name}")
+
+    string(CONCAT test_name ${lib_name} "_api_test")
+    add_executable(${test_name} tests/api.cpp ${lib_SOURCES})
+    target_link_libraries(${test_name} ${lib_LIBRARIES})
+  endforeach()
+endif()
+
+# Generate benchmarks: Bitcoin Core & Twitter
+if(${UKV_BUILD_BENCHMARKS})
+  foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb ukv_flight_client)
+    get_target_property(lib_SOURCES ${lib_name} SOURCES)
+    get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
+
+    string(CONCAT bench_name ${lib_name} "_twitter_benchmark")
+    add_executable(${bench_name} benchmarks/twitter.cpp ${lib_SOURCES})
+    target_link_libraries(${bench_name} gtest ${lib_LIBRARIES})
+
+    string(CONCAT bench_name ${lib_name} "_bitcoin_test")
+    add_executable(${bench_name} benchmarks/bitcoin.cpp ${lib_SOURCES})
+    target_link_libraries(${bench_name} leveldb ${lib_LIBRARIES})
   endforeach()
 endif()
 
