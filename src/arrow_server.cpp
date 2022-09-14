@@ -665,15 +665,14 @@ class UKVService : public arf::FlightServerBase {
 
             /// @param `collections`
             ukv_collection_t c_collection_id = ukv_collection_main_k;
-            ukv_collection_t* c_collection_ptr = &c_collection_id;
-            ukv_size_t c_collection_stride = 0;
-            if (params.collection_id)
+            strided_iterator_gt<ukv_collection_t> input_collections;
+            if (params.collection_id) {
                 c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-            else {
-                auto cols = get_collections(input_schema_c, input_batch_c, kArgCols);
-                c_collection_ptr = cols.get();
-                c_collection_stride = cols.stride();
+                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
             }
+            else
+                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
+
             bool const request_only_presences = params.opt_read_part == kParamReadPartPresences;
             bool const request_only_lengths = params.opt_read_part == kParamReadPartLengths;
             bool const request_content = !request_only_lengths && !request_only_presences;
@@ -694,8 +693,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                c_collection_ptr,
-                c_collection_stride,
+                input_collections.get(),
+                input_collections.stride(),
                 input_keys.get(),
                 input_keys.stride(),
                 ukv_options_default_k,
@@ -760,15 +759,13 @@ class UKVService : public arf::FlightServerBase {
             auto input_lengths = get_lengths(input_schema_c, input_batch_c, kArgScanLengths);
             /// @param `collections`
             ukv_collection_t c_collection_id = ukv_collection_main_k;
-            ukv_collection_t* c_collection_ptr = &c_collection_id;
-            ukv_size_t c_collection_stride = 0;
-            if (params.collection_id)
+            strided_iterator_gt<ukv_collection_t> input_collections;
+            if (params.collection_id) {
                 c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-            else {
-                auto cols = get_collections(input_schema_c, input_batch_c, kArgCols);
-                c_collection_ptr = cols.get();
-                c_collection_stride = cols.stride();
+                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
             }
+            else
+                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
 
             if (!input_start_keys || !input_lengths)
                 return ar::Status::Invalid("Keys and lengths must have been provided for scans");
@@ -788,8 +785,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                c_collection_ptr,
-                c_collection_stride,
+                input_collections.get(),
+                input_collections.stride(),
                 input_start_keys.get(),
                 input_start_keys.stride(),
                 input_end_keys.get(),
@@ -869,15 +866,14 @@ class UKVService : public arf::FlightServerBase {
 
             /// @param `collections`
             ukv_collection_t c_collection_id = ukv_collection_main_k;
-            ukv_collection_t* c_collection_ptr = &c_collection_id;
-            ukv_size_t c_collection_stride = 0;
-            if (params.collection_id)
+            strided_iterator_gt<ukv_collection_t> input_collections;
+            if (params.collection_id) {
                 c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-            else {
-                auto cols = get_collections(input_schema_c, input_batch_c, kArgCols);
-                c_collection_ptr = cols.get();
-                c_collection_stride = cols.stride();
+                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
             }
+            else
+                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
+
             auto input_vals = get_contents(input_schema_c, input_batch_c, kArgVals);
 
             auto session = sessions_.lock(params.session_id, status.member_ptr());
@@ -889,8 +885,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                c_collection_ptr,
-                c_collection_stride,
+                input_collections.get(),
+                input_collections.stride(),
                 input_keys.get(),
                 input_keys.stride(),
                 input_vals.presences_begin.get(),
