@@ -154,7 +154,7 @@ if(${UKV_BUILD_BENCHMARKS})
     add_executable(${bench_name} benchmarks/twitter.cpp ${lib_SOURCES})
     target_link_libraries(${bench_name} gtest ${lib_LIBRARIES})
 
-    string(CONCAT bench_name ${lib_name} "_bitcoin_test")
+    string(CONCAT bench_name ${lib_name} "_bitcoin_benchmark")
     add_executable(${bench_name} benchmarks/bitcoin.cpp ${lib_SOURCES})
     target_link_libraries(${bench_name} leveldb ${lib_LIBRARIES})
   endforeach()
@@ -177,7 +177,7 @@ if(${UKV_BUILD_PYTHON})
   find_package(pybind11 CONFIG REQUIRED)
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 
-  foreach(lib_name IN ITEMS stl rocksdb leveldb)
+  foreach(lib_name IN ITEMS stl rocksdb leveldb flight_client)
     string(CONCAT native_lib_name "ukv_" ${lib_name})
     string(CONCAT wrap_lib_name "py_" ${lib_name})
 
