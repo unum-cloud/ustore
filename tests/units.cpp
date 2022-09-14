@@ -148,7 +148,33 @@ TEST(db, basic) {
     EXPECT_TRUE(db.clear());
 }
 
-void check_collection_list(database_t& db) {
+TEST(db, named) {
+    database_t db;
+    EXPECT_TRUE(db.open(""));
+
+    EXPECT_TRUE(db["col1"]);
+    EXPECT_TRUE(db["col2"]);
+
+    collection_t col1 = *(db["col1"]);
+    collection_t col2 = *(db["col2"]);
+
+    check_binary_collection(col1);
+    check_binary_collection(col2);
+
+    EXPECT_FALSE(db.drop(""));
+    EXPECT_TRUE(db.drop("col1"));
+    EXPECT_TRUE(db.drop("col2"));
+    EXPECT_TRUE(*db.contains(""));
+    EXPECT_FALSE(*db.contains("col1"));
+    EXPECT_FALSE(*db.contains("col2"));
+    EXPECT_TRUE(db.clear());
+    EXPECT_TRUE(*db.contains(""));
+}
+
+TEST(db, collection_list) {
+    database_t db;
+    EXPECT_TRUE(db.open(""));
+
     collection_t col1 = *(db["col1"]);
     collection_t col2 = *(db["col2"]);
     collection_t col3 = *(db["col3"]);
@@ -174,31 +200,6 @@ void check_collection_list(database_t& db) {
     EXPECT_EQ(collections[1], "col2");
     EXPECT_EQ(collections[2], "col3");
     EXPECT_EQ(collections[3], "col4");
-}
-
-TEST(db, named) {
-    database_t db;
-    EXPECT_TRUE(db.open(""));
-
-    check_collection_list(db);
-
-    EXPECT_TRUE(db["col1"]);
-    EXPECT_TRUE(db["col2"]);
-
-    collection_t col1 = *(db["col1"]);
-    collection_t col2 = *(db["col2"]);
-
-    check_binary_collection(col1);
-    check_binary_collection(col2);
-
-    EXPECT_FALSE(db.drop(""));
-    EXPECT_TRUE(db.drop("col1"));
-    EXPECT_TRUE(db.drop("col2"));
-    EXPECT_TRUE(*db.contains(""));
-    EXPECT_FALSE(*db.contains("col1"));
-    EXPECT_FALSE(*db.contains("col2"));
-    EXPECT_TRUE(db.clear());
-    EXPECT_TRUE(*db.contains(""));
 }
 
 TEST(db, txn) {
