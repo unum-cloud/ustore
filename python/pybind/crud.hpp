@@ -4,9 +4,11 @@
 
 #include <pybind11/pybind11.h> // `gil_scoped_release`
 #include <Python.h>            // `PyObject`
+#include <arrow/array.h>
+#include <arrow/python/pyarrow.h>
 
 #include "ukv/ukv.h"
-#include "cast.hpp"
+#include "cast_args.hpp"
 
 namespace unum::ukv::pyb {
 
@@ -55,55 +57,30 @@ static void write_one_binary(py_collection_t& collection, PyObject* key_py, PyOb
 static void write_many_binaries(py_collection_t& collection, PyObject* keys_py, PyObject* vals_py) {
 
     status_t status;
-    std::vector<ukv_key_t> keys;
-    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
+    parsed_places_t parsed_places {keys_py};
+    places_arg_t places = parsed_places;
+    parsed_contents_t parsed_contents {vals_py};
+    contents_arg_t contents = parsed_contents;
 
-    if (vals_py == Py_None) {
-        [[maybe_unused]] py::gil_scoped_release release;
-
-        ukv_write( //
-            collection.db(),
-            collection.txn(),
-            static_cast<ukv_size_t>(keys.size()),
-            collection.member_collection(),
-            0,
-            keys.data(),
-            sizeof(ukv_key_t),
-            nullptr,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            collection.options(),
-            collection.member_arena(),
-            status.member_ptr());
-    }
-    else {
-        std::vector<value_view_t> vals(keys.size());
-        py_transform_n(vals_py, &py_to_bytes, vals.begin(), vals.size());
-
-        [[maybe_unused]] py::gil_scoped_release release;
-        ukv_write( //
-            collection.db(),
-            collection.txn(),
-            static_cast<ukv_size_t>(keys.size()),
-            collection.member_collection(),
-            0,
-            keys.data(),
-            sizeof(ukv_key_t),
-            nullptr,
-            nullptr,
-            0,
-            vals[0].member_length(),
-            sizeof(value_view_t),
-            vals[0].member_ptr(),
-            sizeof(value_view_t),
-            collection.options(),
-            collection.member_arena(),
-            status.member_ptr());
-    }
+    [[maybe_unused]] py::gil_scoped_release release;
+    ukv_write( //
+        collection.db(),
+        collection.txn(),
+        places.count,
+        collection.member_collection(),
+        0,
+        places.keys_begin.get(),
+        places.keys_begin.stride(),
+        contents.presences_begin.get(),
+        contents.offsets_begin.get(),
+        contents.offsets_begin.stride(),
+        contents.lengths_begin.get(),
+        contents.lengths_begin.stride(),
+        contents.contents_begin.get(),
+        contents.contents_begin.stride(),
+        collection.options(),
+        collection.member_arena(),
+        status.member_ptr());
 
     status.throw_unhandled();
 }
@@ -111,8 +88,8 @@ static void write_many_binaries(py_collection_t& collection, PyObject* keys_py, 
 static void broadcast_binary(py_collection_t& collection, PyObject* keys_py, PyObject* vals_py) {
 
     status_t status;
-    std::vector<ukv_key_t> keys;
-    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
+    parsed_places_t parsed_places {keys_py};
+    places_arg_t places = parsed_places;
     value_view_t val = py_to_bytes(vals_py);
 
     [[maybe_unused]] py::gil_scoped_release release;
@@ -120,11 +97,11 @@ static void broadcast_binary(py_collection_t& collection, PyObject* keys_py, PyO
     ukv_write( //
         collection.db(),
         collection.txn(),
-        static_cast<ukv_size_t>(keys.size()),
+        places.count,
         collection.member_collection(),
         0,
-        keys.data(),
-        sizeof(ukv_key_t),
+        places.keys_begin.get(),
+        places.keys_begin.stride(),
         nullptr,
         nullptr,
         0,
@@ -145,7 +122,7 @@ static py::object has_one_binary(py_collection_t& collection, PyObject* key_py) 
 
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
-    ukv_octet_t* found_indicators = nullptr;
+    ukv_octet_t* found_presences = nullptr;
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
@@ -158,7 +135,7 @@ static py::object has_one_binary(py_collection_t& collection, PyObject* key_py) 
             &key,
             0,
             collection.options(),
-            &found_indicators,
+            &found_presences,
             nullptr,
             nullptr,
             nullptr,
@@ -167,14 +144,14 @@ static py::object has_one_binary(py_collection_t& collection, PyObject* key_py) 
         status.throw_unhandled();
     }
 
-    strided_iterator_gt<ukv_octet_t> indicators {found_indicators, sizeof(ukv_octet_t)};
+    // Exporting Arrow objects here would be over-engineering:
     // if (collection.export_into_arrow()) {
-    //     auto shared = std::make_shared<arrow::BooleanScalar>(indicators[0]);
-    //     PyObject* obj_ptr = arrow::py::wrap_scalar(shared);
+    //     auto shared = std::make_shared<arrow::BooleanScalar>(presences[0]);
+    //     PyObject* obj_ptr = arrow::py::wrap_scalar(std::static_pointer_cast<arrow::Scalar>(shared));
     //     return py::reinterpret_steal<py::object>(obj_ptr);
     // }
-
-    PyObject* obj_ptr = indicators[0] ? Py_True : Py_False;
+    strided_iterator_gt<ukv_octet_t> presences {found_presences, sizeof(ukv_octet_t)};
+    PyObject* obj_ptr = presences[0] ? Py_True : Py_False;
     return py::reinterpret_borrow<py::object>(obj_ptr);
 }
 
@@ -182,9 +159,8 @@ static py::object read_one_binary(py_collection_t& collection, PyObject* key_py)
 
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
-    ukv_bytes_ptr_t found_values = nullptr;
-    ukv_length_t* found_offsets = nullptr;
     ukv_length_t* found_lengths = nullptr;
+    ukv_bytes_ptr_t found_values = nullptr;
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
@@ -198,7 +174,7 @@ static py::object read_one_binary(py_collection_t& collection, PyObject* key_py)
             0,
             collection.options(),
             nullptr,
-            &found_offsets,
+            nullptr,
             &found_lengths,
             &found_values,
             collection.member_arena(),
@@ -213,17 +189,7 @@ static py::object read_one_binary(py_collection_t& collection, PyObject* key_py)
     // https://github.com/pybind/pybind11/blob/a05bc3d2359d12840ef2329d68f613f1a7df9c5d/include/pybind11/pytypes.h#L1474
     // https://docs.python.org/3/c-api/bytes.html
     // https://github.com/python/cpython/blob/main/Objects/bytesobject.c
-    embedded_bins_iterator_t tape_it {found_values, found_offsets, found_lengths};
-    value_view_t val = *tape_it;
-    // if (collection.export_into_arrow()) {
-    //     auto shared_buffer =
-    //         std::make_shared<arrow::Buffer>(reinterpret_cast<uint8_t*>(val.data()),
-    //         static_cast<int64_t>(val.size()));
-    //     auto shared = std::make_shared<arrow::BinaryScalar>(shared_buffer);
-    //     PyObject* obj_ptr = arrow::py::wrap_scalar(shared);
-    //     return py::reinterpret_steal<py::object>(obj_ptr);
-    // }
-
+    value_view_t val {found_values, found_lengths[0]};
     PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
     return py::reinterpret_borrow<py::object>(obj_ptr);
 }
@@ -231,23 +197,23 @@ static py::object read_one_binary(py_collection_t& collection, PyObject* key_py)
 static py::object has_many_binaries(py_collection_t& collection, PyObject* keys_py) {
 
     status_t status;
-    ukv_octet_t* found_indicators = nullptr;
+    ukv_octet_t* found_presences = nullptr;
 
-    std::vector<ukv_key_t> keys;
-    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
+    parsed_places_t parsed_places {keys_py};
+    places_arg_t places = parsed_places;
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
         ukv_read( //
             collection.db(),
             collection.txn(),
-            static_cast<ukv_size_t>(keys.size()),
+            places.count,
             collection.member_collection(),
             0,
-            keys.data(),
-            sizeof(ukv_key_t),
+            places.keys_begin.get(),
+            places.keys_begin.stride(),
             collection.options(),
-            &found_indicators,
+            &found_presences,
             nullptr,
             nullptr,
             nullptr,
@@ -256,10 +222,10 @@ static py::object has_many_binaries(py_collection_t& collection, PyObject* keys_
         status.throw_unhandled();
     }
 
-    strided_iterator_gt<ukv_octet_t> indicators {found_indicators, sizeof(ukv_octet_t)};
-    PyObject* tuple_ptr = PyTuple_New(keys.size());
-    for (std::size_t i = 0; i != keys.size(); ++i) {
-        PyObject* obj_ptr = indicators[i] ? Py_True : Py_False;
+    strided_iterator_gt<ukv_octet_t> presences {found_presences, sizeof(ukv_octet_t)};
+    PyObject* tuple_ptr = PyTuple_New(places.size());
+    for (std::size_t i = 0; i != places.size(); ++i) {
+        PyObject* obj_ptr = presences[i] ? Py_True : Py_False;
         PyTuple_SetItem(tuple_ptr, i, obj_ptr);
     }
     return py::reinterpret_steal<py::object>(tuple_ptr);
@@ -268,44 +234,60 @@ static py::object has_many_binaries(py_collection_t& collection, PyObject* keys_
 static py::object read_many_binaries(py_collection_t& collection, PyObject* keys_py) {
 
     status_t status;
-    ukv_bytes_ptr_t found_values = nullptr;
+    ukv_octet_t* found_presences = nullptr;
     ukv_length_t* found_offsets = nullptr;
     ukv_length_t* found_lengths = nullptr;
+    ukv_bytes_ptr_t found_values = nullptr;
+    bool const export_arrow = collection.export_into_arrow();
 
-    std::vector<ukv_key_t> keys;
-    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
+    parsed_places_t parsed_places {keys_py};
+    places_arg_t places = parsed_places;
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
         ukv_read( //
             collection.db(),
             collection.txn(),
-            static_cast<ukv_size_t>(keys.size()),
+            places.count,
             collection.member_collection(),
             0,
-            keys.data(),
-            sizeof(ukv_key_t),
+            places.keys_begin.get(),
+            places.keys_begin.stride(),
             collection.options(),
-            nullptr,
+            export_arrow ? &found_presences : nullptr,
             &found_offsets,
-            &found_lengths,
+            !export_arrow ? &found_lengths : nullptr,
             &found_values,
             collection.member_arena(),
             status.member_ptr());
         status.throw_unhandled();
     }
 
-    embedded_bins_iterator_t tape_it {found_values, found_offsets, found_lengths};
-    if (collection.export_into_arrow()) {
+    if (export_arrow) {
+        auto shared_length = static_cast<int64_t>(places.count);
+        auto shared_offsets = std::make_shared<arrow::Buffer>( //
+            reinterpret_cast<uint8_t*>(found_offsets),
+            (shared_length + 1) * sizeof(ukv_length_t));
+        auto shared_data = std::make_shared<arrow::Buffer>( //
+            reinterpret_cast<uint8_t*>(found_values),
+            static_cast<int64_t>(found_offsets[places.count]));
+        auto shared_bitmap = std::make_shared<arrow::Buffer>( //
+            reinterpret_cast<uint8_t*>(found_presences),
+            divide_round_up<int64_t>(shared_length, CHAR_BIT));
+        auto shared = std::make_shared<arrow::BinaryArray>(shared_length, shared_offsets, shared_data, shared_bitmap);
+        PyObject* obj_ptr = arrow::py::wrap_array(std::static_pointer_cast<arrow::Array>(shared));
+        return py::reinterpret_steal<py::object>(obj_ptr);
     }
-
-    PyObject* tuple_ptr = PyTuple_New(keys.size());
-    for (std::size_t i = 0; i != keys.size(); ++i, ++tape_it) {
-        value_view_t val = *tape_it;
-        PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
-        PyTuple_SetItem(tuple_ptr, i, obj_ptr);
+    else {
+        embedded_bins_t bins {found_values, found_offsets, found_lengths, places.size()};
+        PyObject* tuple_ptr = PyTuple_New(places.size());
+        for (std::size_t i = 0; i != places.size(); ++i) {
+            value_view_t val = bins[i];
+            PyObject* obj_ptr = val ? PyBytes_FromStringAndSize(val.c_str(), val.size()) : Py_None;
+            PyTuple_SetItem(tuple_ptr, i, obj_ptr);
+        }
+        return py::reinterpret_steal<py::object>(tuple_ptr);
     }
-    return py::reinterpret_steal<py::object>(tuple_ptr);
 }
 
 static py::object has_binary(py_collection_t& collection, py::object key_py) {
@@ -339,14 +321,14 @@ static void update_binary(py_collection_t& collection, py::object dict_py) {
     std::vector<py_bin_req_t> keys;
     keys.reserve(PyDict_Size(dict_py.ptr()));
 
-    std::size_t i = 0;
+    std::size_t key_idx = 0;
     py_scan_dict(dict_py.ptr(), [&](PyObject* key_obj, PyObject* val_obj) {
         auto val = py_to_bytes(val_obj);
-        py_bin_req_t& req = keys[i];
+        py_bin_req_t& req = keys[key_idx];
         req.key = py_to_scalar<ukv_key_t>(key_obj);
         req.ptr = ukv_bytes_ptr_t(val.begin());
         req.len = static_cast<ukv_length_t>(val.size());
-        ++i;
+        ++key_idx;
     });
 
     [[maybe_unused]] py::gil_scoped_release release;
@@ -375,9 +357,10 @@ static py::array_t<ukv_key_t> scan_binary( //
     ukv_key_t min_key,
     ukv_length_t scan_limit) {
 
-    ukv_key_t* found_keys = nullptr;
-    ukv_length_t* found_lengths = nullptr;
     status_t status;
+    ukv_length_t* found_lengths = nullptr;
+    ukv_key_t* found_keys = nullptr;
+    bool const export_arrow = collection.export_into_arrow();
 
     ukv_scan( //
         collection.db(),
@@ -399,8 +382,21 @@ static py::array_t<ukv_key_t> scan_binary( //
         status.member_ptr());
 
     status.throw_unhandled();
-    return py::array_t<ukv_key_t>(*found_lengths, found_keys);
+
+    if (export_arrow) {
+        auto shared_length = static_cast<int64_t>(found_lengths[0]);
+        auto shared_data = std::make_shared<arrow::Buffer>( //
+            reinterpret_cast<uint8_t*>(found_keys),
+            shared_length * sizeof(ukv_key_t));
+        static_assert(std::is_same_v<ukv_key_t, int64_t>, "Change the following line!");
+        auto shared = std::make_shared<arrow::NumericArray<arrow::Int64Type>>(shared_length, shared_data);
+        PyObject* obj_ptr = arrow::py::wrap_array(std::static_pointer_cast<arrow::Array>(shared));
+        return py::reinterpret_steal<py::object>(obj_ptr);
+    }
+    else
+        return py::array_t<ukv_key_t>(found_lengths[0], found_keys);
 }
+
 #if 0
 /**
  * @brief Exports values into preallocated multi-dimensional NumPy-like buffers.
