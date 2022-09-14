@@ -2,7 +2,7 @@
 
 ## The BLAS of CRUD
 
-![Universal Key Values by Unum](assets/UKV_Map.png)
+![Universal Key Values by Unum](assets/UKV.png)
 
 Imagine having a standardized cross-lingual interface for all your things "Data":
 
@@ -263,26 +263,33 @@ conan create . ukv/testing --build=missing
 ## FAQ
 
 <details>
-<summary>Why not use LevelDB interface (which was also adopted by RocksDB)?</summary>
+<summary>Why not use LevelDB interface?</summary>
 
-1. Dynamic polymorphism
-2. Dependancy on STL
-3. No support for custom allocators
+... Which was also adopted by RocksDB.
+
+1. Dynamic polymorphism.
+2. Dependancy on STL.
+3. No support for custom allocators.
+
+These and other problems mean that interface can't be portable, ABI-safe or performant.
 </details>
 
 <details>
-<summary>Why mix Docs and Graphs?</summary>
+<summary>Why mix Docs and Graphs in one DBMS?</summary>
 
-Modern Relational databases try to handle flexible-schema documents, but do it poorly.
-Similarly, they hardly scale, when the number of "relations" is high.
-So users are left with no good multi-purpose solutions.
-Having collections of both kinds would solve that.
+There are too extremes these days: consistency and scalability, especially when working with heavily linked flexible schema data.
+The consistent camp would take a tabular/relational DBMS and add a JSON column and additional columns for every relationship they want to maintain.
+The others would take 2 different DBMS solutions - one for large collections of entries and one for the links between them, often - MongoDB and Neo4J.
+In that case, every DBMS will have a custom modality-specific scaling, sharding, and replication strategy, but synchronizing them would be impossible in mutable conditions.
+This makes it hard for the developers to choose a future-proof solution for their projects.
+By putting different modality collections in one DBMS, we allow operation-level consistency controls giving the users all the flexibility one can get.
 </details>
 
 <details>
 <summary>Why not adapt MQL or Cypher?</summary>
 
-Mongo Query Language and Cypher by Neo4J are widely adopted, but are both vendor-specific.
-Furthermore, as for core functionality, using text-based protocols in 2022 is inefficient.
-CRUD operations are implemented in all binary interfaces and for document-level patches well standardized JSON-Pointer, JSON-Patch and JSON-MergePAth RFCs have been implemented.
+Mongo Query Language and Cypher by Neo4J are pretty popular but are vendor-specific.
+Furthermore, for core functionality, using text-based protocols in 2022 is inefficient.
+Instead, we adopt JSON-Pointer, JSON-Patch, and JSON-MergePatch RFCs for document and sub-document level updates.
+And even those operations, as well as graph operations, are transmitted in binary form.
 </details>
