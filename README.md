@@ -61,24 +61,6 @@ Currently, at Proof-of-Concept stage, we support only the essential functionalit
 * ²: Missing, to be implemented.
 * ³: Supports tabular Arrow exports.
 
-## Assumptions and Limitations
-
-* Keys are constant length native integer types. High-performance solutions are impossible with variable size keys. 64-bit unsigned integers are currently chosen as the smallest native numeric type, that can address modern datasets.
-* Values are serialized into variable-length byte strings.
-* Iterators and enumerators often come with certain relevance, consistency or performance tradeoffs or aren't supported at all. Check the specs of exact backend.
-* Transactions are ACI(D) by-default, meaning that:
-  * Atomicity is guaranteed,
-  * Consistency is implemented in the strongest form - tracking all key and metadata lookups by default,
-  * Isolation is guaranteed, but may be implemented differently, depending on backend - in-memory systems generally prefer "locking" over "multi-versioning".
-  * Durability doesn't apply to in-memory systems, but even in persistent stores its often disabled to be implemented in higher layers of infrastructure.
-
-## Development
-
-To build and test any set of bindings:
-
-1. Build (`cmake . && make`) or download the prebuilt `libukv.a`,
-2. Call `./language/run.sh` in your terminal.
-
 ### Python
 
 Current implementation relies on [PyBind11](https://github.com/pybind/pybind11).
@@ -204,6 +186,57 @@ docker run \
   --name ukv_example \
   --rm \
   ukv
+```
+
+## Assumptions and Limitations
+
+* Keys are constant length native integer types. High-performance solutions are impossible with variable size keys. 64-bit unsigned integers are currently chosen as the smallest native numeric type, that can address modern datasets.
+* Values are serialized into variable-length byte strings.
+* Iterators and enumerators often come with certain relevance, consistency or performance tradeoffs or aren't supported at all. Check the specs of exact backend.
+* Transactions are ACI(D) by-default, meaning that:
+  * Atomicity is guaranteed,
+  * Consistency is implemented in the strongest form - tracking all key and metadata lookups by default,
+  * Isolation is guaranteed, but may be implemented differently, depending on backend - in-memory systems generally prefer "locking" over "multi-versioning".
+  * Durability doesn't apply to in-memory systems, but even in persistent stores its often disabled to be implemented in higher layers of infrastructure.
+
+## Installation
+
+* For Python: `pip install ukv`
+* For Conan: `conan install ukv`
+* For Docker image: `docker run --rm --name test_ukv -p 38709:38709 unum/ukv`
+
+## Development
+
+To build the whole project:
+
+```sh
+cmake \
+    -DUKV_BUILD_PYTHON=1 \
+    -DUKV_BUILD_TESTS=1 \
+    -DUKV_BUILD_BENCHMARKS=1 \
+    -DUKV_BUILD_FLIGHT_RPC=1 . && \
+    make -j16
+```
+
+For Flight RPC, Apache Arrow must be preinstalled.
+To build language bindings:
+
+```sh
+./python/run.sh
+./java/run.sh
+./golang/run.sh
+```
+
+Building Flight RPC Docker Image:
+
+```sh
+docker build -t ukv .
+```
+
+Building Conan package, without installing it:
+
+```sh
+conan create . ukv/testing --build=missing
 ```
 
 ## FAQ
