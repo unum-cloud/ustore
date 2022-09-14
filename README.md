@@ -1,4 +1,4 @@
-# Universal Key-Values
+# Universal Keys & Values
 
 ## The BLAS of CRUD
 
@@ -22,7 +22,7 @@ You can mix any backend with any logic layer and frontend:
 
 ![UKV Layers](assets/UKV_layers.png)
 
-Some of the common combinations and use-cases would be:
+This would produce hundreds of binaries for all kinds of use cases, like:
 
 * Python, GoLang, Java and other high-level bindings for [RocksDB](rocksdb.org) and [LevelDB](https://github.com/google/leveldb).
 * Performant embedded store in the foundation of your in-house storage solution.
@@ -38,10 +38,10 @@ It is normal to have a separate Postgres for your transactional data, a MongoDB 
 
 > Example: a social network, storing passwords in Postgres, posts in MongoDB, user relations in Neo4J and post attachments in S3.
 
-So when the data is updated, you need to perform updates across all those instances, manually rolling them back if one of the parts failed.
-Needless to say, every system has a different API, different dependencies, and runtime constraints.
-UKV provides something far more uniform, simple, and performant with the right backend.
-When picking the UnumDB backend, we bring our entire IO stack, bypassing Linux kernel system calls on disk reads and networking calls.
+So when the data is updated, you have to apply changes across all those instances, manually rolling them back if one of the parts failed.
+Needless to say, every system has a different API, different guarantees, and runtime constraints.
+UKV provides something far more uniform, simple, and performant *with the right backend*.
+When picking the UnumDB backend, we bring our entire IO stack, bypassing the Linux kernel for storage and networking operations.
 This yields speedups not just for small-ish OLTP and mid-size OLAP, but even streaming-out Gigabyte-sized videos.
 One ~~ring~~ data-lake to rule them all.
 
@@ -50,16 +50,19 @@ One ~~ring~~ data-lake to rule them all.
 Backends differ in their functionality and purposes.
 The underlying embedded key value stores include:
 
-| Name    |      OSes       | ACID  | Collections | Persistent | Safe Reads |
-| :------ | :-------------: | :---: | :---------: | :--------: | :--------: |
-| STL     | POSIX + Windows |   ✅   |      ✅      |     ❌      |     ✅      |
-| LevelDB | POSIX + Windows |   ❌   |      ❌      |     ✅      |     ❌      |
-| RocksDB | POSIX + Windows |   ✅   |      ✅      |     ✅      |     ❌      |
-| UnumDB  |      Linux      |   ✅   |      ✅      |     ✅      |     ✅      |
+| Name    |      OSes       | ACID  | Collections | Persistent | Safe Reads | GPU Acceleration |
+| :------ | :-------------: | :---: | :---------: | :--------: | :--------: | :--------------: |
+| STL     | POSIX + Windows |   ✅   |      ✅      |     ❌      |     ✅      |        ❌         |
+| LevelDB | POSIX + Windows |   ❌   |      ❌      |     ✅      |     ❌      |        ❌         |
+| RocksDB | POSIX + Windows |   ✅   |      ✅      |     ✅      |     ❌      |        ❌         |
+| UnumDB  |      Linux      |   ✅   |      ✅      |     ✅      |     ✅      |        ✅         |
 
 The STL backend originally served educational purposes, yet, with a proper web-server implementation, is comparable to other in-memory stores like Redis, MemCached or ETCD.
-LevelDB is Key-Value stored designed at Google and extensively adopted across the industry.
-RocksDB originally forked LevelDB to extend its functionality with transactions, collections, and higher performance.
+LevelDB is Key-Value stored designed at Google and extensively adopted across the industry, thanks to its simplicity.
+RocksDB improves over LevelDB, extending its functionality with transactions, named collections, and higher performance.
+All of those backends were [benchmarked for weeks](https://unum.cloud/ucsb) using [UCSB](https://github.com/unum-cloud/ucsb), so you can choose the best stack for you specific use case.
+
+![UCSB 10 TB Results](https://unum.cloud/assets/post/2022-09-13-ucsb-10tb/ucsb-10tb-duration.png)
 
 ## Frontends
 
