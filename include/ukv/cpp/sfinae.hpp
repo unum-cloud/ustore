@@ -244,6 +244,17 @@ struct contents_arg_extractor_gt<char const [length_ak]> {
     }
 };
 
+template <size_t length_ak>
+struct contents_arg_extractor_gt<value_view_t[length_ak]> {
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(value_view_t* many) noexcept {
+        return {many->member_ptr(), sizeof(value_view_t)};
+    }
+    strided_iterator_gt<ukv_length_t const> offsets(value_view_t*) noexcept { return {}; }
+    strided_iterator_gt<ukv_length_t const> lengths(value_view_t* many) noexcept {
+        return {many->member_length(), sizeof(value_view_t)};
+    }
+};
+
 template <>
 struct contents_arg_extractor_gt<value_view_t> {
     strided_iterator_gt<ukv_bytes_cptr_t const> contents(value_view_t& one) noexcept { return {one.member_ptr(), 0}; }
@@ -265,6 +276,23 @@ struct contents_arg_extractor_gt<std::nullptr_t> {
     strided_iterator_gt<ukv_bytes_cptr_t const> contents(std::nullptr_t) noexcept { return {}; }
     strided_iterator_gt<ukv_length_t const> offsets(std::nullptr_t) noexcept { return {}; }
     strided_iterator_gt<ukv_length_t const> lengths(std::nullptr_t) noexcept { return {}; }
+};
+
+template <typename allocator_at>
+struct contents_arg_extractor_gt<std::vector<value_view_t, allocator_at>> {
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents(std::vector<value_view_t, allocator_at> const& many) noexcept {
+        return many.empty()
+                   ? strided_iterator_gt<ukv_bytes_cptr_t const> {}
+                   : strided_iterator_gt<ukv_bytes_cptr_t const> {many.front().member_ptr(), sizeof(value_view_t)};
+    }
+    strided_iterator_gt<ukv_length_t const> offsets(std::vector<value_view_t, allocator_at> const&) noexcept {
+        return {};
+    }
+    strided_iterator_gt<ukv_length_t const> lengths(std::vector<value_view_t, allocator_at> const& many) noexcept {
+        return many.empty()
+                   ? strided_iterator_gt<ukv_length_t const> {}
+                   : strided_iterator_gt<ukv_length_t const> {many.front().member_length(), sizeof(value_view_t)};
+    }
 };
 
 } // namespace unum::ukv
