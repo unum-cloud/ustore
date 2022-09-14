@@ -390,6 +390,8 @@ void ukv_read( //
         else
             read_many(db, txn, places, options, data_enumerator, c_error);
 
+        offs[places.count] = contents.size();
+
         if (needs_export)
             *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(contents.begin());
     }
