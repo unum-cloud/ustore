@@ -132,7 +132,7 @@ Batch lookup operations are implemented via channels sending slices, to avoid re
 * V8
 * Deno
 * [`bun:ffi`](https://twitter.com/jarredsumner/status/1521527222514774017)
-<details>
+</details>
 
 <details>
 <summary>Rust</summary>
