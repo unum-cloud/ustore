@@ -239,6 +239,12 @@ struct py_stream_with_ending_gt {
  *      * graph ~ Accesses relations/links in NetworkX fashion
  *      * media ~ Unpacks and converts to Tensors on lookups
  *
+ * @section Python classes vs Arrow Arrays
+ *
+ * Both kinds of arguments/results are supported with these bindings.
+ * By default, we export native Python objects in single-entry operations,
+ * but for batches - we use Arrow. Namely, in Batch-Reads and Range-Selects.
+ *
  * https://python-reference.readthedocs.io/en/latest/docs/dict/
  * https://docs.python.org/3/library/stdtypes.html#mapping-types-dict
  */
