@@ -47,20 +47,6 @@ constexpr std::size_t arrow_bytes_alignment_k = 64;
 
 inline thread_local std::pmr::memory_resource* thrlocal_memres = std::pmr::get_default_resource();
 
-inline std::size_t next_power_of_two(std::size_t x) {
-    return 1ull << (sizeof(std::size_t) * CHAR_BIT - __builtin_clzll(x));
-}
-
-template <typename at = std::size_t>
-inline at divide_round_up(at x, at divisor) {
-    return (x + (divisor - 1)) / divisor;
-}
-
-template <typename at = std::size_t>
-inline at next_multiple(at x, at divisor) {
-    return divide_round_up(x, divisor) * divisor;
-}
-
 class monotonic_resource_t final : public std::pmr::memory_resource {
   public:
     enum type_t { capped_k, growing_k, borrowed_k };

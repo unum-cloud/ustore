@@ -107,6 +107,11 @@ scalar_at py_to_scalar(PyObject* obj) {
 }
 
 inline value_view_t py_to_bytes(PyObject* obj) {
+
+    // if (PyUnicode_Check(obj))
+    // return value_view_t {reinterpret_cast<byte_t*>(PyBytes_AsString(PyUnicode_AsASCIIString(obj))),
+    //                      static_cast<size_t>(PyUnicode_GetLength(obj))};
+
     if (PyBytes_Check(obj)) {
         char* buffer = nullptr;
         Py_ssize_t length = 0;

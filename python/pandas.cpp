@@ -242,6 +242,10 @@ void ukv::wrap_pandas(py::module& m) {
         return df.shared_from_this();
     });
 
+    // Assigns or inserts elements from another DataFrame, passed in the Arrow form.
+    // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.update.html
+    df.def("update", [](py_table_collection_t& df, py::handle mat, std::string_view index_column_name) {});
+
     // Primary batch export functions, that output Arrow Tables.
     // Addresses may be: specific IDs or a slice.
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.loc.html#pandas.DataFrame.loc

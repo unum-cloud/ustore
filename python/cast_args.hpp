@@ -4,7 +4,7 @@
  */
 #pragma once
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
-#include "pybind/cast.hpp"
+#include "cast.hpp"
 
 #include <arrow/python/pyarrow.h>
 #include <arrow/api.h>
@@ -54,14 +54,31 @@ struct parsed_contents_t {
     using viewed_t = contents_arg_t;
     using owned_t = std::vector<value_view_t>;
     std::variant<std::monostate, viewed_t, owned_t> viewed_or_owned;
-    operator contents_arg_t() const noexcept {}
+    ukv_bytes_cptr_t values_tape_start = nullptr;
+
+    operator contents_arg_t() const noexcept {
+        if (std::holds_alternative<std::monostate>(viewed_or_owned))
+            return {};
+        else if (std::holds_alternative<owned_t>(viewed_or_owned)) {
+            auto const& owned = std::get<owned_t>(viewed_or_owned);
+            contents_arg_extractor_gt<owned_t> extractor;
+            viewed_t view;
+            view.presences_begin = {};
+            view.offsets_begin = extractor.offsets(owned);
+            view.lengths_begin = extractor.lengths(owned);
+            view.contents_begin = extractor.contents(owned);
+            view.count = owned.size();
+            return view;
+        }
+        else
+            return std::get<viewed_t>(viewed_or_owned);
+    }
 
     parsed_contents_t(PyObject* contents) {
         // Check if we can do zero-copy
         if (arrow::py::is_array(contents) || arrow::py::is_table(contents)) {
-            Py_Initialize();
             if (arrow::py::import_pyarrow())
-                throw std::runtime_error("Failed to initialize pyarrow");
+                throw std::runtime_error("Failed to initialize PyArrow");
 
             std::shared_ptr<arrow::BinaryArray> arrow_array(nullptr);
             if (arrow::py::is_array(contents)) {
@@ -81,13 +98,17 @@ struct parsed_contents_t {
                 arrow_array = std::static_pointer_cast<arrow::BinaryArray>(column->chunk(0));
             }
 
-            ukv_bytes_cptr_t values = (arrow_array->value_data()->mutable_data());
-            ukv_length_t* offsets = reinterpret_cast<ukv_length_t*>(arrow_array->value_offsets()->mutable_data());
-            ukv_octet_t* null_bitmap = arrow_array->null_count()
-                                           ? reinterpret_cast<ukv_octet_t*>(arrow_array->null_bitmap()->mutable_data())
+            values_tape_start = arrow_array->value_data()->data();
+            contents_arg_t contents;
+            contents.offsets_begin = {reinterpret_cast<ukv_length_t const*>(arrow_array->value_offsets()->data()),
+                                      sizeof(ukv_length_t)};
+            contents.contents_begin = {&values_tape_start, 0};
+            contents.count = static_cast<ukv_size_t>(arrow_array->length());
+            contents.presences_begin = arrow_array->null_count()
+                                           ? reinterpret_cast<ukv_octet_t const*>(arrow_array->null_bitmap()->data())
                                            : nullptr;
-            contents_arg_t conts {.presences_begin = null_bitmap, .offsets_begin = offsets, .contents_begin = &values};
-            viewed_or_owned = std::move(conts);
+
+            viewed_or_owned = std::move(contents);
         }
         else {
             std::vector<value_view_t> values_vec;
@@ -95,17 +116,7 @@ struct parsed_contents_t {
             if (cont_len)
                 values_vec.reserve(*cont_len);
 
-            auto to_value_view = [](PyObject* obj) -> value_view_t {
-                if (PyUnicode_Check(obj))
-                    return value_view_t {reinterpret_cast<byte_t*>(PyBytes_AsString(PyUnicode_AsASCIIString(obj))),
-                                         static_cast<size_t>(PyUnicode_GetLength(obj))};
-
-                if (PyBytes_Check(obj))
-                    return {reinterpret_cast<byte_t*>(PyBytes_AsString(obj)), static_cast<size_t>(PyBytes_Size(obj))};
-
-                throw std::invalid_argument("Expecting bytes like objects");
-            };
-            py_transform_n(contents, to_value_view, std::back_inserter(values_vec));
+            py_transform_n(contents, &py_to_bytes, std::back_inserter(values_vec));
             viewed_or_owned = std::move(values_vec);
         }
     }
