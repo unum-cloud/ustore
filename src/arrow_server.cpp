@@ -664,7 +664,16 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::Invalid("Keys must have been provided for reads");
 
             /// @param `collections`
-            auto input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
+            ukv_collection_t c_collection_id = ukv_collection_main_k;
+            ukv_collection_t* c_collection_ptr = &c_collection_id;
+            ukv_size_t c_collection_stride = 0;
+            if (params.collection_id)
+                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
+            else {
+                auto cols = get_collections(input_schema_c, input_batch_c, kArgCols);
+                c_collection_ptr = cols.get();
+                c_collection_stride = cols.stride();
+            }
             bool const request_only_presences = params.opt_read_part == kParamReadPartPresences;
             bool const request_only_lengths = params.opt_read_part == kParamReadPartLengths;
             bool const request_content = !request_only_lengths && !request_only_presences;
@@ -685,8 +694,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                input_collections.get(),
-                input_collections.stride(),
+                c_collection_ptr,
+                c_collection_stride,
                 input_keys.get(),
                 input_keys.stride(),
                 ukv_options_default_k,
@@ -750,7 +759,16 @@ class UKVService : public arf::FlightServerBase {
             /// @param `lengths`
             auto input_lengths = get_lengths(input_schema_c, input_batch_c, kArgScanLengths);
             /// @param `collections`
-            auto input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
+            ukv_collection_t c_collection_id = ukv_collection_main_k;
+            ukv_collection_t* c_collection_ptr = &c_collection_id;
+            ukv_size_t c_collection_stride = 0;
+            if (params.collection_id)
+                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
+            else {
+                auto cols = get_collections(input_schema_c, input_batch_c, kArgCols);
+                c_collection_ptr = cols.get();
+                c_collection_stride = cols.stride();
+            }
 
             if (!input_start_keys || !input_lengths)
                 return ar::Status::Invalid("Keys and lengths must have been provided for scans");
@@ -770,8 +788,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                input_collections.get(),
-                input_collections.stride(),
+                c_collection_ptr,
+                c_collection_stride,
                 input_start_keys.get(),
                 input_start_keys.stride(),
                 input_end_keys.get(),
@@ -850,7 +868,16 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::Invalid("Keys must have been provided for reads");
 
             /// @param `collections`
-            auto input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
+            ukv_collection_t c_collection_id = ukv_collection_main_k;
+            ukv_collection_t* c_collection_ptr = &c_collection_id;
+            ukv_size_t c_collection_stride = 0;
+            if (params.collection_id)
+                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
+            else {
+                auto cols = get_collections(input_schema_c, input_batch_c, kArgCols);
+                c_collection_ptr = cols.get();
+                c_collection_stride = cols.stride();
+            }
             auto input_vals = get_contents(input_schema_c, input_batch_c, kArgVals);
 
             auto session = sessions_.lock(params.session_id, status.member_ptr());
@@ -862,8 +889,8 @@ class UKVService : public arf::FlightServerBase {
                 db_,
                 session.txn,
                 tasks_count,
-                input_collections.get(),
-                input_collections.stride(),
+                c_collection_ptr,
+                c_collection_stride,
                 input_keys.get(),
                 input_keys.stride(),
                 input_vals.presences_begin.get(),

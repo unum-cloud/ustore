@@ -141,7 +141,7 @@ void ukv_read( //
     if (read_track)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagTrackRead);
 
-    bool const has_collections_column = !same_collection;
+    bool const has_collections_column = collections && !same_collection;
     constexpr bool has_keys_column = true;
 
     // If all requests map to the same collection, we can avoid passing its ID
@@ -313,7 +313,7 @@ void ukv_write( //
     bool const same_named_collection = same_collection && places.same_collections_are_named();
     bool const write_flush = c_options & ukv_option_write_flush_k;
 
-    bool const has_collections_column = !same_collection;
+    bool const has_collections_column = collections && !same_collection;
     constexpr bool has_keys_column = true;
     bool const has_contents_column = vals != nullptr;
 
