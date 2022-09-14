@@ -176,26 +176,30 @@ void ukv::wrap_database(py::module& m) {
 
     py_db.def( //
         "__exit__",
-        [](py_db_t& py_db, py::object const& exc_type, py::object const& exc_value, py::object const& traceback) {
+        [](py_db_t& py_db,
+           py::object const& exception_type,
+           py::object const& exception_value,
+           py::object const& trace) {
             py_db.native.close();
             return false;
         });
-    py_txn.def("__exit__",
-               [](py_transaction_t& py_txn,
-                  py::object const& exc_type,
-                  py::object const& exc_value,
-                  py::object const& traceback) {
-                   try {
-                       commit_txn(py_txn);
-                   }
-                   catch (...) {
-                       // We must now propagate this exception upwards:
-                       // https://stackoverflow.com/a/35483461
-                       // https://gist.github.com/YannickJadoul/f1fc8db711ed980cf02610277af058e4
-                       // https://github.com/pybind/pybind11/commit/5a7d17ff16a01436f7228a688c62511ab8c3efde
-                   }
-                   return false;
-               });
+    py_txn.def( //
+        "__exit__",
+        [](py_transaction_t& py_txn,
+           py::object const& exception_type,
+           py::object const& exception_value,
+           py::object const& trace) {
+            try {
+                commit_txn(py_txn);
+            }
+            catch (...) {
+                // We must now propagate this exception upwards:
+                // https://stackoverflow.com/a/35483461
+                // https://gist.github.com/YannickJadoul/f1fc8db711ed980cf02610277af058e4
+                // https://github.com/pybind/pybind11/commit/5a7d17ff16a01436f7228a688c62511ab8c3efde
+            }
+            return false;
+        });
 
 #pragma region Managing Collections
 
@@ -235,9 +239,11 @@ void ukv::wrap_database(py::module& m) {
     py_krange.def("__iter__", &iterate<keys_range_t>);
     py_krange.def("since", &since<keys_range_t>);
     py_krange.def("until", &until<keys_range_t>);
+    py_krange.def("sample", &until<keys_range_t>);
     py_kvrange.def("__iter__", &iterate<pairs_range_t>);
     py_kvrange.def("since", &since<pairs_range_t>);
     py_kvrange.def("until", &until<pairs_range_t>);
+    py_kvrange.def("sample", &until<pairs_range_t>);
 
     // Using slices on the keys view is too cumbersome!
     // It's never clear if we want a range of IDs or offsets.

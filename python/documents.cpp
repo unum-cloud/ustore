@@ -71,7 +71,7 @@ class docs_pairs_stream_t {
             &fields,
             0,
             ukv_options_default_k,
-            ukv_format_json_k,
+            ukv_format_docs_internal_k,
             ukv_type_any_k,
             nullptr,
             &found_offsets,
@@ -168,13 +168,18 @@ class py_docs_kvrange_t {
     }
 };
 
-static void write_one_doc(py_docs_collection_t& collection, PyObject* key_py, PyObject* val_py) {
+static void write_one_doc(py_docs_collection_t& collection,
+                          PyObject* key_py,
+                          PyObject* val_py /*, ukv_format_t format*/) {
     json_t json = to_json(val_py);
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
     collection.binary.native[key] = json.dump().c_str();
 }
 
-static void write_many_docs(py_docs_collection_t& collection, PyObject* keys_py, PyObject* vals_py) {
+static void write_many_docs(py_docs_collection_t& collection,
+                            PyObject* keys_py,
+                            PyObject* vals_py /*,
+                            ukv_format_t format */) {
     std::vector<ukv_key_t> keys;
     py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
     std::vector<json_t> vals;
@@ -186,7 +191,9 @@ static void write_many_docs(py_docs_collection_t& collection, PyObject* keys_py,
         collection.binary.native[keys[i]] = vals[i].dump().c_str();
 }
 
-static void write_same_doc(py_docs_collection_t& collection, PyObject* keys_py, PyObject* val_py) {
+static void write_same_doc(py_docs_collection_t& collection,
+                           PyObject* keys_py,
+                           PyObject* val_py /*, ukv_format_t format*/) {
     std::vector<ukv_key_t> keys;
     py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
     auto json = to_json(val_py).dump();
@@ -195,23 +202,27 @@ static void write_same_doc(py_docs_collection_t& collection, PyObject* keys_py, 
         collection.binary.native[keys[i]] = json.c_str();
 }
 
-static void write_doc(py_docs_collection_t& collection, py::object key_py, py::object val_py) {
+static void write_doc(py_docs_collection_t& collection,
+                      py::object key_py,
+                      py::object val_py /*, ukv_format_t format*/) {
     auto is_single_key = PyLong_Check(key_py.ptr());
     auto func = !is_single_key ? &write_many_docs : &write_one_doc;
     return func(collection, key_py.ptr(), val_py.ptr());
 }
 
-static void broadcast_doc(py_docs_collection_t& collection, py::object key_py, py::object val_py) {
+static void broadcast_doc(py_docs_collection_t& collection,
+                          py::object key_py,
+                          py::object val_py /*, ukv_format_t format*/) {
     return write_same_doc(collection, key_py.ptr(), val_py.ptr());
 }
 
-static py::object read_one_doc(py_docs_collection_t& collection, PyObject* key_py) {
+static py::object read_one_doc(py_docs_collection_t& collection, PyObject* key_py /*, ukv_format_t format*/) {
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
     auto json = json_t::parse(collection.binary.native[key].value()->c_str());
     return from_json(json);
 }
 
-static py::object read_many_docs(py_docs_collection_t& collection, PyObject* keys_py) {
+static py::object read_many_docs(py_docs_collection_t& collection, PyObject* keys_py /*, ukv_format_t format*/) {
     std::vector<ukv_key_t> keys;
     py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
     py::list values(keys.size());
@@ -221,7 +232,7 @@ static py::object read_many_docs(py_docs_collection_t& collection, PyObject* key
     return values;
 }
 
-static py::object read_doc(py_docs_collection_t& collection, py::object key_py) {
+static py::object read_doc(py_docs_collection_t& collection, py::object key_py /*, ukv_format_t format*/) {
     auto is_single = PyLong_Check(key_py.ptr());
     auto func = is_single ? &read_one_doc : &read_many_docs;
     return func(collection, key_py.ptr());
@@ -244,7 +255,7 @@ static py::object scan_doc(py_docs_collection_t& collection, ukv_key_t min_key, 
 static void merge_patch(py_docs_collection_t& collection, py::object key_py, py::object val_py, ukv_format_t format) {
     collection.binary.native.as(format);
     write_one_doc(collection, key_py.ptr(), val_py.ptr());
-    collection.binary.native.as(ukv_format_json_k);
+    collection.binary.native.as(ukv_format_docs_internal_k);
 }
 
 void ukv::wrap_document(py::module& m) {
@@ -271,7 +282,7 @@ void ukv::wrap_document(py::module& m) {
         database_t& db = py_db.native;
         db.drop(collection.binary.name.c_str()).throw_unhandled();
         collection.binary.native = db.collection(collection.binary.name.c_str()).throw_or_release();
-        collection.binary.native.as(ukv_format_json_k);
+        collection.binary.native.as(ukv_format_docs_internal_k);
     });
 
     py_docs_collection.def("patch", [](py_docs_collection_t& collection, py::object key_py, py::object val_py) {

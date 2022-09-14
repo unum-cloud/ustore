@@ -96,7 +96,7 @@
     "java.configuration.updateBuildConfiguration": "automatic",
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
-        "python/"
+        "python/tests/"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.autoTestDiscoverOnSaveEnabled": true,

@@ -319,6 +319,22 @@ inline ukv_vertex_role_t invert(ukv_vertex_role_t role) {
     __builtin_unreachable();
 }
 
+constexpr std::size_t bits_in_byte_k = 8;
+
+inline std::size_t next_power_of_two(std::size_t x) {
+    return 1ull << (sizeof(std::size_t) * bits_in_byte_k - __builtin_clzll(x));
+}
+
+template <typename at = std::size_t>
+inline at divide_round_up(at x, at divisor) {
+    return (x + (divisor - 1)) / divisor;
+}
+
+template <typename at = std::size_t>
+inline at next_multiple(at x, at divisor) {
+    return divide_round_up(x, divisor) * divisor;
+}
+
 } // namespace unum::ukv
 
 namespace std {
