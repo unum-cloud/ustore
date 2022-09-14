@@ -68,7 +68,7 @@ set(UKV_PREINSTALLED_TURBOPFOR ON CACHE BOOL "True, if a pre-installed external 
 set(UKV_BUILD_PYTHON ON CACHE BOOL "Building Python bidings for all SDKs")
 set(UKV_BUILD_TESTS ON CACHE BOOL "Building C/C++ native tests")
 set(UKV_BUILD_BENCHMARKS ON CACHE BOOL "Building C/C++ native benchmarks")
-set(UKV_BUILD_FLIGHT ON CACHE BOOL "Building Apache Arrow Flight RPC server for all backends")
+set(UKV_BUILD_FLIGHT_RPC ON CACHE BOOL "Building Apache Arrow Flight RPC server for all backends")
 
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
@@ -114,7 +114,7 @@ add_library(ukv_flight_client src/arrow_client.cpp src/logic_docs.cpp src/logic_
 target_link_libraries(ukv_flight_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
 
 # Generate Apache Arrow Flight RPC backends
-if(${UKV_BUILD_FLIGHT})
+if(${UKV_BUILD_FLIGHT_RPC})
   foreach(lib_name IN ITEMS ukv_stl ukv_rocksdb ukv_leveldb)
     get_target_property(lib_SOURCES ${lib_name} SOURCES)
     get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
