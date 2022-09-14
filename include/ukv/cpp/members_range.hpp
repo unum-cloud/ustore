@@ -397,6 +397,10 @@ class members_range_t {
     members_range_t(members_range_t const&) = default;
     members_range_t& operator=(members_range_t const&) = default;
 
+    ukv_database_t db() const noexcept { return db_; }
+    ukv_transaction_t txn() const noexcept { return txn_; }
+    ukv_collection_t collection() const noexcept { return collection_; }
+
     expected_gt<keys_stream_t> keys_begin(std::size_t read_ahead = keys_stream_t::default_read_ahead_k) noexcept {
         return make_stream<keys_stream_t>(min_key_, read_ahead);
     }
@@ -465,7 +469,7 @@ class members_range_t {
 
 struct keys_range_t {
     using iterator_type = keys_stream_t;
-    using sample_t = span_gt<ukv_key_t>;
+    using sample_t = indexed_range_gt<ukv_key_t*>;
 
     members_range_t members;
 
@@ -477,12 +481,13 @@ struct keys_range_t {
         ukv_length_t* found_counts = nullptr;
         ukv_key_t* found_keys = nullptr;
         status_t status;
-        ukv_size_t c_count = static_cast<ukv_size_t>(count);
+        ukv_length_t c_count = static_cast<ukv_length_t>(count);
+        ukv_collection_t c_collection = members.collection();
         ukv_scan( //
-            db_,
-            txn_,
+            members.db(),
+            members.txn(),
             1,
-            &collection_,
+            &c_collection,
             0,
             nullptr,
             0,
@@ -494,13 +499,13 @@ struct keys_range_t {
             nullptr,
             &found_counts,
             &found_keys,
-            arena_.member_ptr(),
+            arena.member_ptr(),
             status.member_ptr());
 
         if (!status)
-            return status;
+            return std::move(status);
 
-        return sample_t {found_keys, found_counts[0]};
+        return sample_t {found_keys, found_keys + found_counts[0]};
     }
 };
 
