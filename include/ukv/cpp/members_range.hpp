@@ -465,12 +465,43 @@ class members_range_t {
 
 struct keys_range_t {
     using iterator_type = keys_stream_t;
+    using sample_t = span_gt<ukv_key_t>;
 
     members_range_t members;
 
     keys_stream_t begin() noexcept(false) { return members.keys_begin().throw_or_release(); }
     keys_stream_t end() noexcept(false) { return members.keys_end().throw_or_release(); }
     std::size_t size() noexcept(false) { return members.size_estimates().throw_or_release().cardinality.max; }
+
+    expected_gt<sample_t> sample(std::size_t count, arena_t& arena) noexcept {
+        ukv_length_t* found_counts = nullptr;
+        ukv_key_t* found_keys = nullptr;
+        status_t status;
+        ukv_size_t c_count = static_cast<ukv_size_t>(count);
+        ukv_scan( //
+            db_,
+            txn_,
+            1,
+            &collection_,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &c_count,
+            0,
+            ukv_option_scan_sample_k,
+            nullptr,
+            &found_counts,
+            &found_keys,
+            arena_.member_ptr(),
+            status.member_ptr());
+
+        if (!status)
+            return status;
+
+        return sample_t {found_keys, found_counts[0]};
+    }
 };
 
 struct pairs_range_t {
