@@ -239,9 +239,11 @@ void ukv::wrap_database(py::module& m) {
     py_krange.def("__iter__", &iterate<keys_range_t>);
     py_krange.def("since", &since<keys_range_t>);
     py_krange.def("until", &until<keys_range_t>);
+    py_krange.def("sample", &until<keys_range_t>);
     py_kvrange.def("__iter__", &iterate<pairs_range_t>);
     py_kvrange.def("since", &since<pairs_range_t>);
     py_kvrange.def("until", &until<pairs_range_t>);
+    py_kvrange.def("sample", &until<pairs_range_t>);
 
     // Using slices on the keys view is too cumbersome!
     // It's never clear if we want a range of IDs or offsets.
