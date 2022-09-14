@@ -180,28 +180,6 @@ curl -i \
 The [`OneAPI` specification](/openapi.yaml) documentation is in-development.
 </details>
 
-## Serving UKV
-
-```sh
-docker build -t ukv .
-docker run \
-  --publish 38709 \
-  --name ukv_example \
-  --rm \
-  ukv
-```
-
-## Assumptions and Limitations
-
-* Keys are constant length native integer types. High-performance solutions are impossible with variable size keys. 64-bit unsigned integers are currently chosen as the smallest native numeric type, that can address modern datasets.
-* Values are serialized into variable-length byte strings.
-* Iterators and enumerators often come with certain relevance, consistency or performance tradeoffs or aren't supported at all. Check the specs of exact backend.
-* Transactions are ACI(D) by-default, meaning that:
-  * Atomicity is guaranteed,
-  * Consistency is implemented in the strongest form - tracking all key and metadata lookups by default,
-  * Isolation is guaranteed, but may be implemented differently, depending on backend - in-memory systems generally prefer "locking" over "multi-versioning".
-  * Durability doesn't apply to in-memory systems, but even in persistent stores its often disabled to be implemented in higher layers of infrastructure.
-
 ## Installation
 
 * For Python: `pip install ukv`
@@ -241,6 +219,17 @@ Building Conan package, without installing it:
 ```sh
 conan create . ukv/testing --build=missing
 ```
+
+## Limitations
+
+* Keys are constant length native integer types. High-performance solutions are impossible with variable size keys. 64-bit unsigned integers are currently chosen as the smallest native numeric type, that can address modern datasets.
+* Values are serialized into variable-length byte strings.
+* Iterators and enumerators often come with certain relevance, consistency or performance tradeoffs or aren't supported at all. Check the specs of exact backend.
+* Transactions are ACI(D) by-default, meaning that:
+  * Atomicity is guaranteed,
+  * Consistency is implemented in the strongest form - tracking all key and metadata lookups by default,
+  * Isolation is guaranteed, but may be implemented differently, depending on backend - in-memory systems generally prefer "locking" over "multi-versioning".
+  * Durability doesn't apply to in-memory systems, but even in persistent stores its often disabled to be implemented in higher layers of infrastructure.
 
 ## FAQ
 
