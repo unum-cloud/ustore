@@ -28,7 +28,11 @@ class ConanUKV(ConanFile):
         # https://docs.conan.io/en/latest/introduction.html#all-platforms-all-build-systems-and-compilers
         'os': ['Linux'],
         # https://docs.conan.io/en/latest/integrations/compilers.html
-        'compiler': ['gcc', 'clang', 'intel', 'intel-cc'],
+        'compiler': [
+            'gcc', 'clang', 'intel',
+            # Not fully supported yet:
+            # 'intel-cc'
+        ],
         # https://github.com/conan-io/conan/issues/2500
         'build_type': ['Release'],
         'arch': ['x86', 'x86_64', 'armv8', 'armv8_32', 'armv8.3'],
@@ -57,15 +61,18 @@ class ConanUKV(ConanFile):
         cmake = CMake(self)
         cmake.install()
 
+        self.copy('*.a', dst='lib', src=os.path.join(self.source_folder, 'build/lib'))
+
+
     def package_info(self):
         # Larger projects like UKV or Boost would have a lot of parts,
         # but it is recommended to ship one library per component
         # https://docs.conan.io/en/1.26/creating_packages/package_information.html#using-components
         self.cpp_info.name = 'UKV'
         self.cpp_info.includedirs = ['include/']
-        self.cpp_info.components['stl'].libs = ['ukv_stl']
-        self.cpp_info.components['leveldb'].libs = ['ukv_leveldb']
-        self.cpp_info.components['rocksdb'].libs = ['ukv_rocksdb']
+        self.cpp_info.components['stl'].libs = ['libukv_stl']
+        self.cpp_info.components['leveldb'].libs = ['libukv_leveldb']
+        self.cpp_info.components['rocksdb'].libs = ['libukv_rocksdb']
         if self.options['with_arrow']:
             self.cpp_info.components['flight_client'].libs = [
                 'ukv_flight_client']
