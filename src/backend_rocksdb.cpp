@@ -180,7 +180,7 @@ void write_many( //
             auto place = places[i];
             auto content = contents[i];
             auto collection = rocks_collection(db, place.collection);
-            auto key = to_slice(place.collection);
+            auto key = to_slice(place.key);
             auto status = !content //
                               ? txn->Delete(collection, key)
                               : txn->Put(collection, key, to_slice(content));
