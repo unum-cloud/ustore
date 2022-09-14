@@ -1,6 +1,8 @@
 # Universal Key-Values
 
-![Universal Key Values by Unum](UKV.png)
+## The BLAS of CRUD
+
+![Universal Key Values by Unum](assets/UKV.png)
 
 Imagine having a standardized cross-lingual interface for all your things "Data":
 
@@ -15,15 +17,33 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 * Packing Tensors for [PyTorch](https://pytorch.org/) and [TensorFlow](tensorflow.org)
 
 UKV does just that, abstracting away the implementation from the user.
-In under 10K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
+In under 20K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
+You can mix any backend with any logic layer and frontend:
 
-Common use-cases of UKV would be:
+![UKV Layers](assets/UKV_layers.png)
 
-* Python, GoLang, Java and other high-level bindnigs for [RocksDB](rocksdb.org) and [LevelDB](https://github.com/google/leveldb).
+Some of the common combinations and use-cases would be:
+
+* Python, GoLang, Java and other high-level bindings for [RocksDB](rocksdb.org) and [LevelDB](https://github.com/google/leveldb).
 * Performant embedded store in the foundation of your in-house storage solution.
 * Document store, that is simpler and faster than putting JSONs in MongoDB or Postgres.
 * Graph database, with the feel of [NetworkX](https://networkx.org), speed of [GunRock](http://gunrock.github.io) and scale of [Hadoop](https://hadoop.apache.org).
 * Low-latency media storage for games, CDNs and ML/BI pipelines.
+
+But more importantly, if you choose backends that support transactions and collections, you can get an all-in one solution:
+
+![UKV Monolithic Data-lake](assets/UKV_datalake.png)
+
+It is normal to have a separate Postgres for your transactional data, a MongoDB for your large flexible-schema document collections, a Neo4J instance for your graphs, and an S3 storage bucket for your media data, all serving the different data needs of a single business.
+
+> Example: a social network, storing passwords in Postgres, posts in MongoDB, user relations in Neo4J and post attachments in S3.
+
+So when the data is updated, you need to perform updates across all those instances, manually rolling them back if one of the parts failed.
+Needless to say, every system has a different API, different dependencies, and runtime constraints.
+UKV provides something far more uniform, simple, and performant with the right backend.
+When picking the UnumDB backend, we bring our entire IO stack, bypassing Linux kernel system calls on disk reads and networking calls.
+This yields speedups not just for small-ish OLTP and mid-size OLAP, but even streaming-out Gigabyte-sized videos.
+One ~~ring~~ data-lake to rule them all.
 
 ## Backends
 
