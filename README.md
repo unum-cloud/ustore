@@ -2,7 +2,7 @@
 
 ## The BLAS of CRUD
 
-![Universal Key Values by Unum](assets/UKV.png)
+![Universal Key Values by Unum](assets/UKV_Map.png)
 
 Imagine having a standardized cross-lingual interface for all your things "Data":
 
@@ -18,9 +18,15 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 
 UKV does just that, abstracting away the implementation from the user.
 In under 20K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
-You can mix any backend with any logic layer and frontend:
+You can mix any [engine](#engines) with any logic layer, [frontend](#frontends) and distribution form:
 
-![UKV Layers](assets/UKV_layers.png)
+| Engine  | Logic  | Distribution | Frontend  |
+| :------ | :----- | :----------- | :-------- |
+|         |        |              |           |
+| STL     | Blobs  | Embedded     | C and C++ |
+| LevelDB | Docs   | Standalone   | Python    |
+| RocksDB | Graphs |              | GoLang    |
+| UnumDB  |        |              | Java      |
 
 This would produce hundreds of binaries for all kinds of use cases, like:
 
@@ -32,7 +38,7 @@ This would produce hundreds of binaries for all kinds of use cases, like:
 
 But more importantly, if you choose backends that support transactions and collections, you can get an all-in one solution:
 
-![UKV Monolithic Data-lake](assets/UKV_datalake.png)
+![UKV Monolithic Data-lake](assets/UKV_combo.png)
 
 It is normal to have a separate Postgres for your transactional data, a MongoDB for your large flexible-schema document collections, a Neo4J instance for your graphs, and an S3 storage bucket for your media data, all serving the different data needs of a single business.
 
@@ -45,7 +51,7 @@ When picking the UnumDB backend, we bring our entire IO stack, bypassing the Lin
 This yields speedups not just for small-ish OLTP and mid-size OLAP, but even streaming-out Gigabyte-sized videos.
 One ~~ring~~ data-lake to rule them all.
 
-## Backends
+## Engines
 
 Backends differ in their functionality and purposes.
 The underlying embedded key value stores include:
