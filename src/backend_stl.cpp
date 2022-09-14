@@ -770,7 +770,7 @@ void ukv_collection_open(
     ukv_collection_t* c_collection,
     ukv_error_t* c_error) {
 
-    auto name_len = std::strlen(c_collection_name);
+    auto name_len = c_collection_name ? std::strlen(c_collection_name) : 0;
     if (!name_len) {
         *c_collection = ukv_collection_main_k;
         return;
