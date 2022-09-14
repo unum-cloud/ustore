@@ -140,6 +140,10 @@ TEST(db, basic) {
 }
 
 TEST(db, named) {
+
+    if (!ukv_supports_named_collections_k)
+        return;
+
     database_t db;
     EXPECT_TRUE(db.open(""));
 
@@ -164,6 +168,10 @@ TEST(db, named) {
 }
 
 TEST(db, unnamed_and_named) {
+
+    if (!ukv_supports_named_collections_k)
+        return;
+
     database_t db;
     EXPECT_TRUE(db.open(""));
 
@@ -194,6 +202,10 @@ TEST(db, unnamed_and_named) {
 }
 
 TEST(db, txn) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+
     database_t db;
     EXPECT_TRUE(db.open(""));
     EXPECT_TRUE(db.transact());
@@ -233,6 +245,12 @@ TEST(db, txn) {
 }
 
 TEST(db, txn_named) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+    if (!ukv_supports_named_collections_k)
+        return;
+
     database_t db;
     EXPECT_TRUE(db.open(""));
     EXPECT_TRUE(db.transact());
@@ -273,6 +291,12 @@ TEST(db, txn_named) {
 }
 
 TEST(db, txn_unnamed_then_named) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+    if (!ukv_supports_named_collections_k)
+        return;
+
     database_t db;
     EXPECT_TRUE(db.open(""));
 
@@ -334,12 +358,13 @@ TEST(db, txn_unnamed_then_named) {
 #pragma region Document Collections
 
 TEST(db, docs) {
+
     using json_t = nlohmann::json;
     database_t db;
     EXPECT_TRUE(db.open(""));
 
     // JSON
-    collection_t collection = *db.collection("docs", ukv_format_json_k);
+    collection_t collection = *db.collection(nullptr, ukv_format_json_k);
     auto json = R"( {"person": "Carl", "age": 24} )"_json.dump();
     collection[1] = json.c_str();
     M_EXPECT_EQ_JSON(collection[1].value()->c_str(), json.c_str());
@@ -389,12 +414,13 @@ TEST(db, docs) {
 }
 
 TEST(db, docs_table) {
+
     using json_t = nlohmann::json;
     database_t db;
     EXPECT_TRUE(db.open(""));
 
     // Inject basic data
-    collection_t collection = *db.collection("", ukv_format_json_k);
+    collection_t collection = *db.collection(nullptr, ukv_format_json_k);
     auto json_alice = R"( { "person": "Alice", "age": 27, "height": 1 } )"_json.dump();
     auto json_bob = R"( { "person": "Bob", "age": "27", "weight": 2 } )"_json.dump();
     auto json_carl = R"( { "person": "Carl", "age": 24 } )"_json.dump();

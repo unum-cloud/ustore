@@ -37,9 +37,11 @@ using rocks_collection_t = rocksdb::ColumnFamilyHandle;
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-ukv_collection_t ukv_collection_main_k = 0;
-ukv_length_t ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max();
-ukv_key_t ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
+ukv_collection_t const ukv_collection_main_k = 0;
+ukv_length_t const ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max();
+ukv_key_t const ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
+bool const ukv_supports_transactions_k = true;
+bool const ukv_supports_named_collections_k = true;
 
 struct key_comparator_t final : public rocksdb::Comparator {
     inline int Compare(rocksdb::Slice const& a, rocksdb::Slice const& b) const override {
