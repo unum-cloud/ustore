@@ -176,8 +176,7 @@ class pairs_stream_t {
     ukv_collection_t collection_ = ukv_collection_main_k;
     ukv_transaction_t txn_ = nullptr;
 
-    arena_t arena_scan_;
-    arena_t arena_read_;
+    arena_t arena_;
     ukv_length_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
@@ -209,7 +208,7 @@ class pairs_stream_t {
             nullptr,
             &found_counts,
             &found_keys,
-            arena_scan_.member_ptr(),
+            arena_.member_ptr(),
             status.member_ptr());
         if (!status)
             return status;
@@ -228,12 +227,12 @@ class pairs_stream_t {
             0,
             found_keys,
             sizeof(ukv_key_t),
-            ukv_options_default_k,
+            ukv_option_nodiscard_k,
             nullptr,
             &found_offs,
             nullptr,
             &found_vals,
-            arena_read_.member_ptr(),
+            arena_.member_ptr(),
             status.member_ptr());
         if (!status)
             return status;
@@ -255,8 +254,7 @@ class pairs_stream_t {
         ukv_collection_t collection = ukv_collection_main_k,
         std::size_t read_ahead = pairs_stream_t::default_read_ahead_k,
         ukv_transaction_t txn = nullptr)
-        : db_(db), collection_(collection), txn_(txn), arena_scan_(db_), arena_read_(db_),
-          read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
+        : db_(db), collection_(collection), txn_(txn), arena_(db_), read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
 
     pairs_stream_t(pairs_stream_t&&) = default;
     pairs_stream_t& operator=(pairs_stream_t&&) = default;
