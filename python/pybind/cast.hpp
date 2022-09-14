@@ -35,7 +35,7 @@ struct py_buffer_t {
 };
 
 inline py_buffer_t py_buffer(PyObject* obj, bool const_ = true) {
-    auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED;
+    auto flags = PyBUF_ANY_CONTIGUOUS | PyBUF_STRIDED | PyBUF_FORMAT;
     if (!const_)
         flags |= PyBUF_WRITABLE;
 
@@ -131,10 +131,8 @@ inline bool py_is_sequence(PyObject* obj) {
 }
 
 inline std::optional<std::size_t> py_sequence_length(PyObject* obj) {
-    if (PyTuple_Check(obj))
-        return PyTuple_Size(obj);
-    else if (PyList_Check(obj))
-        return PyList_Size(obj);
+    if (PySequence_Check(obj))
+        return PySequence_Length(obj);
 
     return std::nullopt;
 }

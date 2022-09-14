@@ -463,7 +463,7 @@ void ukv_collection_drop(
     return_if_error(!collection_name.empty() || !invalidate,
                     c_error,
                     args_combo_k,
-                    "Default collection can't be invlaidated.");
+                    "Default collection can't be invalidated.");
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
 
@@ -484,7 +484,7 @@ void ukv_collection_drop(
         leveldb::WriteBatch batch;
         auto it = std::unique_ptr<leveldb::Iterator>(db.NewIterator(leveldb::ReadOptions()));
         for (it->SeekToFirst(); it->Valid(); it->Next())
-            batch.Put(it->key(), 0);
+            batch.Put(it->key(), leveldb::Slice());
         level_status_t status = db.Write(leveldb::WriteOptions(), &batch);
         export_error(status, c_error);
     }

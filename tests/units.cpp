@@ -1,13 +1,13 @@
 /**
- * @file test.cpp
+ * @file units.cpp
  * @author Ashot Vardanian
  * @date 2022-07-06
  *
- * @brief A set of tests implemented using Google Test.
+ * @brief A set of unit tests implemented using Google Test.
  */
 
-#include <unordered_set>
 #include <vector>
+#include <unordered_set>
 #include <filesystem>
 
 #include <gtest/gtest.h>
@@ -18,84 +18,10 @@
 using namespace unum::ukv;
 using namespace unum;
 
-#define macro_concat_(prefix, suffix) prefix##suffix
-#define macro_concat(prefix, suffix) macro_concat_(prefix, suffix)
-#define _ [[maybe_unused]] auto macro_concat(_, __LINE__)
 #define M_EXPECT_EQ_JSON(str1, str2) EXPECT_EQ(json_t::parse((str1)), json_t::parse((str2)));
 #define M_EXPECT_EQ_MSG(str1, str2) \
     EXPECT_EQ(json_t::from_msgpack((str1).c_str(), (str1).c_str() + (str1).size()), json_t::parse((str2)));
-#if 0
-TEST(db, intro) {
 
-    database_t db;
-    EXPECT_TRUE(db.open());
-
-    // Try getting the main collection
-    EXPECT_TRUE(db.collection());
-    collection_t main = *db.collection();
-
-    // Single-element access
-    main[42] = "purpose of life";
-    main.at(42) = "purpose of life";
-    EXPECT_EQ(*main[42].value(), "purpose of life");
-    _ = main[42].clear();
-
-    // Mapping multiple keys to same values
-    main[{43, 44}] = "same value";
-
-    // Operations on smart-references
-    _ = main[{43, 44}].clear();
-    _ = main[{43, 44}].erase();
-    _ = main[{43, 44}].present();
-    _ = main[{43, 44}].length();
-    _ = main[{43, 44}].value();
-    _ = main[std::array<ukv_key_t, 3> {65, 66, 67}];
-    _ = main[std::vector<ukv_key_t> {65, 66, 67, 68}];
-    // for (value_view_t value : *main[{100, 101}].value())
-    //     (void)value;
-
-    // Accessing named collections
-    collection_t prefixes = *db.collection("prefixes");
-    prefixes.at(42) = "purpose";
-    db["articles"]->at(42) = "of";
-    db["suffixes"]->at(42) = "life";
-
-    // Reusable memory
-    // This interface not just more performant, but also provides nicer interface:
-    //  expected_gt<joined_bins_t> tapes = main[{100, 101}].on(arena);
-    arena_t arena(db);
-    _ = main[{43, 44}].on(arena).clear();
-    _ = main[{43, 44}].on(arena).erase();
-    _ = main[{43, 44}].on(arena).present();
-    _ = main[{43, 44}].on(arena).length();
-    _ = main[{43, 44}].on(arena).value();
-
-    // Batch-assignment: many keys to many values
-    // main[std::array<ukv_key_t, 3> {65, 66, 67}] = std::array {"A", "B", "C"};
-    // main[std::array {ckf(prefixes, 65), ckf(66), ckf(67)}] = std::array {"A", "B", "C"};
-
-    // Iterating over collections
-    for (ukv_key_t key : main.keys())
-        (void)key;
-    for (ukv_key_t key : main.keys(100, 200))
-        (void)key;
-
-    _ = main.members(100, 200).size_estimates()->cardinality;
-
-    // Supporting options
-    _ = main[{43, 44}].on(arena).clear(/*flush:*/ false);
-    _ = main[{43, 44}].on(arena).erase(/*flush:*/ false);
-    _ = main[{43, 44}].on(arena).present(/*track:*/ false);
-    _ = main[{43, 44}].on(arena).length(/*track:*/ false);
-    _ = main[{43, 44}].on(arena).value(/*track:*/ false);
-
-    // Working with sub documents
-    main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
-    _ = main[ckf(56, "hello")].value() == "world";
-
-    EXPECT_TRUE(db.clear());
-}
-#endif
 #pragma region Binary Collections
 
 template <typename locations_at>
@@ -237,9 +163,119 @@ TEST(db, named) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, unnamed_and_named) {
+    database_t db;
+    EXPECT_TRUE(db.open(""));
+
+    std::vector<ukv_key_t> keys {54, 55, 56};
+    ukv_length_t val_len = sizeof(std::uint64_t);
+    std::vector<std::uint64_t> vals {1, 2, 3};
+    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
+
+    contents_arg_t values {
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
+        .lengths_begin = {&val_len, 0},
+        .contents_begin = {&vals_begin, 0},
+        .count = 3,
+    };
+
+    for (auto&& i : {"one", "", "three"}) {
+        for (auto& j : vals)
+            j += 7;
+
+        collection_t collection = *db.collection(i);
+        auto collection_ref = collection[keys];
+        check_length(collection_ref, ukv_length_missing_k);
+        round_trip(collection_ref, values);
+        check_length(collection_ref, 8);
+    }
+    EXPECT_TRUE(db.clear());
+}
+
 TEST(db, txn) {
     database_t db;
     EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.transact());
+    transaction_t txn = *db.transact();
+
+    std::vector<ukv_key_t> keys {54, 55, 56};
+    ukv_length_t val_len = sizeof(std::uint64_t);
+    std::vector<std::uint64_t> vals {54, 55, 56};
+    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
+
+    contents_arg_t values {
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
+        .lengths_begin = {&val_len, 0},
+        .contents_begin = {&vals_begin, 0},
+        .count = 3,
+    };
+
+    auto txn_ref = txn[keys];
+    round_trip(txn_ref, values);
+
+    EXPECT_TRUE(db.collection());
+    collection_t collection = *db.collection();
+    auto collection_ref = collection[keys];
+
+    // Check for missing values before commit
+    check_length(collection_ref, ukv_length_missing_k);
+
+    auto status = txn.commit();
+    status.throw_unhandled();
+    status = txn.reset();
+    status.throw_unhandled();
+
+    // Validate that values match after commit
+    check_equalities(collection_ref, values);
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, txn_named) {
+    database_t db;
+    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.transact());
+    transaction_t txn = *db.transact();
+
+    std::vector<ukv_key_t> keys {54, 55, 56};
+    ukv_length_t val_len = sizeof(std::uint64_t);
+    std::vector<std::uint64_t> vals {54, 55, 56};
+    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
+
+    contents_arg_t values {
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
+        .lengths_begin = {&val_len, 0},
+        .contents_begin = {&vals_begin, 0},
+        .count = 3,
+    };
+
+    // Transaction with named collection
+    EXPECT_TRUE(db.collection("named_col"));
+    collection_t named_collection = *db.collection("named_col");
+    std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
+    auto txn_named_collection_ref = txn[sub_keys];
+    round_trip(txn_named_collection_ref, values);
+
+    // Check for missing values before commit
+    auto named_collection_ref = named_collection[keys];
+    check_length(named_collection_ref, ukv_length_missing_k);
+
+    auto status = txn.commit();
+    status.throw_unhandled();
+    status = txn.reset();
+    status.throw_unhandled();
+
+    // Validate that values match after commit
+    check_equalities(named_collection_ref, values);
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, txn_unnamed_then_named) {
+    database_t db;
+    EXPECT_TRUE(db.open(""));
+
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
 
