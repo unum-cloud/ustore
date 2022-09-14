@@ -176,6 +176,10 @@ TEST(db, named) {
 }
 
 TEST(db, collection_list) {
+
+    if (!ukv_supports_named_collections_k)
+        return;
+
     database_t db;
     EXPECT_TRUE(db.open(""));
 
