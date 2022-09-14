@@ -38,7 +38,7 @@ This would produce hundreds of binaries for all kinds of use cases, like:
 
 But more importantly, if you choose backends that support transactions and collections, you can get an all-in one solution:
 
-![UKV Monolithic Data-lake](assets/UKV_combo.png)
+![UKV Monolithic Data-lake](assets/UKV_Combo.png)
 
 It is normal to have a separate Postgres for your transactional data, a MongoDB for your large flexible-schema document collections, a Neo4J instance for your graphs, and an S3 storage bucket for your media data, all serving the different data needs of a single business.
 
