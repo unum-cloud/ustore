@@ -218,6 +218,25 @@ template <> struct format_code_gt<double> { inline static constexpr char value[2
 // clang-format on
 
 template <typename scalar_at>
+scalar_at get_casted_scalar(byte_t* data, char format) {
+    switch (format) {
+    case format_code_gt<short>::value[0]: return *reinterpret_cast<short*>(data);
+    case format_code_gt<int>::value[0]: return *reinterpret_cast<int*>(data);
+    case format_code_gt<long>::value[0]: return *reinterpret_cast<long*>(data);
+    case format_code_gt<long long>::value[0]:
+        return *reinterpret_cast<long long*>(data);
+
+        // Unsigned integral types
+    case format_code_gt<unsigned short>::value[0]: return *reinterpret_cast<unsigned short*>(data);
+    case format_code_gt<unsigned int>::value[0]: return *reinterpret_cast<unsigned int*>(data);
+    case format_code_gt<unsigned long>::value[0]: return *reinterpret_cast<unsigned long*>(data);
+    case format_code_gt<unsigned long long>::value[0]: return *reinterpret_cast<unsigned long long*>(data);
+
+    default: throw std::invalid_argument("Cant cast this type to `ukv_key_t`");
+    }
+}
+
+template <typename scalar_at>
 bool can_cast_internal_scalars(py_buffer_t const& buf) {
 
     auto fmt_len = std::strlen(buf.raw.format);
