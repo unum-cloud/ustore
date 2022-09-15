@@ -102,7 +102,7 @@ struct neighborhood_t {
 
     inline edges_view_t outgoing_edges() const& {
         edges_view_t edges;
-        edges.source_ids = {&center, 0, targets.size()};
+        edges.source_ids = {targets.size(), &center, 0};
         edges.target_ids = targets.strided().members(&neighborship_t::neighbor_id);
         edges.edge_ids = targets.strided().members(&neighborship_t::edge_id);
         return edges;
@@ -111,7 +111,7 @@ struct neighborhood_t {
     inline edges_view_t incoming_edges() const& {
         edges_view_t edges;
         edges.source_ids = sources.strided().members(&neighborship_t::neighbor_id);
-        edges.target_ids = {&center, 0, sources.size()};
+        edges.target_ids = {sources.size(), &center, 0};
         edges.edge_ids = sources.strided().members(&neighborship_t::edge_id);
         return edges;
     }
@@ -343,8 +343,8 @@ void export_edge_tuples( //
         c_error);
     return_on_error(c_error);
 
-    joined_bins_t values {c_found_values, c_found_offsets, c_vertices_count};
-    strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
+    joined_bins_t values {c_vertices_count, c_found_offsets, c_found_values};
+    strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_count, c_vertices_ids, c_vertices_stride};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
     constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
 
@@ -449,7 +449,7 @@ void pull_and_link_for_updates( //
     return_on_error(c_error);
 
     // Link the response buffer to `unique_entries`
-    joined_bins_t found_binaries {found_binary_begin, found_binary_offs, unique_count};
+    joined_bins_t found_binaries {unique_count, found_binary_offs, found_binary_begin};
     for (std::size_t i = 0; i != unique_count; ++i) {
         auto found_binary = found_binaries[i];
         unique_entries[i].content = ukv_bytes_ptr_t(found_binary.data());
@@ -723,7 +723,7 @@ void ukv_graph_remove_vertices( //
     return_on_error(c_error);
 
     strided_iterator_gt<ukv_collection_t const> vertex_collections {c_collections, c_collections_stride};
-    strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_ids, c_vertices_stride, c_vertices_count};
+    strided_range_gt<ukv_key_t const> vertices_ids {c_vertices_count, c_vertices_ids, c_vertices_stride};
     strided_iterator_gt<ukv_vertex_role_t const> vertex_roles {c_roles, c_roles_stride};
 
     // Initially, just retrieve the bare minimum information about the vertices

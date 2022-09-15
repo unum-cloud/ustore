@@ -98,8 +98,8 @@ struct table_index_view_t {
     strided_iterator_gt<ukv_key_t const> keys_begin;
     std::size_t count = 0;
 
-    strided_range_gt<ukv_collection_t const> collections() const noexcept { return {collections_begin, count}; }
-    strided_range_gt<ukv_key_t const> keys() const noexcept { return {keys_begin, count}; }
+    strided_range_gt<ukv_collection_t const> collections() const noexcept { return {count, collections_begin}; }
+    strided_range_gt<ukv_key_t const> keys() const noexcept { return {count, keys_begin}; }
 };
 
 struct table_header_view_t {
@@ -107,8 +107,8 @@ struct table_header_view_t {
     strided_iterator_gt<ukv_type_t const> types_begin;
     std::size_t count = 0;
 
-    strided_range_gt<ukv_str_view_t const> fields() const noexcept { return {fields_begin, count}; }
-    strided_range_gt<ukv_type_t const> types() const noexcept { return {types_begin, count}; }
+    strided_range_gt<ukv_str_view_t const> fields() const noexcept { return {count, fields_begin}; }
+    strided_range_gt<ukv_type_t const> types() const noexcept { return {count, types_begin}; }
 };
 
 template <typename element_at>

@@ -243,7 +243,7 @@ places_arg_t const& read_unique_docs( //
         &arena_ptr,
         c_error);
 
-    auto found_binaries = joined_bins_t(found_binary_begin, found_binary_offs, places.count);
+    auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
 
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
@@ -337,7 +337,7 @@ places_arg_t read_docs( //
     }
 
     // Parse all the unique documents
-    auto found_binaries = joined_bins_t(found_binary_begin, found_binary_offs, places.count);
+    auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
     for (ukv_size_t doc_idx = 0; doc_idx != unique_places_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
@@ -729,7 +729,7 @@ void ukv_docs_gist( //
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
 
-    joined_bins_t found_binaries {found_binary_begin, found_binary_offs, c_docs_count};
+    joined_bins_t found_binaries {c_docs_count, found_binary_offs, found_binary_begin};
     joined_bins_iterator_t found_binary_it = found_binaries.begin();
 
     // Export all the elements into a heap-allocated hash-set, keeping only unique entries
@@ -1128,7 +1128,7 @@ void ukv_docs_gather( //
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     strided_iterator_gt<ukv_type_t const> types {c_types, c_types_stride};
 
-    joined_bins_t found_binaries {found_binary_begin, found_binary_offs, c_docs_count};
+    joined_bins_t found_binaries {c_docs_count, found_binary_offs, found_binary_begin};
     joined_bins_iterator_t found_binary_it = found_binaries.begin();
 
     // Parse all the field names
