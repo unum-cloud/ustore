@@ -179,6 +179,7 @@ endif()
 
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
+  include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_SOURCES ${target_name} SOURCES)
@@ -186,11 +187,11 @@ if(${UKV_BUILD_BENCHMARKS})
 
     string(CONCAT bench_name "ukv_" ${client_name} "_twitter_benchmark")
     add_executable(${bench_name} benchmarks/twitter.cpp ${target_SOURCES})
-    target_link_libraries(${bench_name} gtest ${target_LIBRARIES})
+    target_link_libraries(${bench_name} benchmark ${target_LIBRARIES})
 
     string(CONCAT bench_name "ukv_" ${client_name} "_bitcoin_benchmark")
     add_executable(${bench_name} benchmarks/bitcoin.cpp ${target_SOURCES})
-    target_link_libraries(${bench_name} leveldb ${target_LIBRARIES})
+    target_link_libraries(${bench_name} leveldb benchmark ${target_LIBRARIES})
   endforeach()
 endif()
 
