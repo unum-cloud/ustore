@@ -482,6 +482,7 @@ class safe_vector_gt {
     inline ptr_t data() noexcept { return ptr_; }
     inline ptr_t begin() const noexcept { return reinterpret_cast<ptr_t>(ptr_); }
     inline ptr_t end() const noexcept { return begin() + length_; }
+    inline element_t& operator[](std::size_t i) noexcept { return ptr_[i]; }
     inline std::size_t size() const noexcept { return length_; }
     inline operator bool() const noexcept { return length_; }
     inline operator value_view_t() const noexcept { return {ptr_, length_}; }
@@ -512,7 +513,7 @@ class growing_tape_t {
     }
 
     void reserve(size_t new_cap, ukv_error_t* c_error) {
-        offsets_.reserve(new_cap, c_error);
+        offsets_.reserve(new_cap + 1, c_error);
         lengths_.reserve(new_cap, c_error);
     }
 
@@ -523,6 +524,8 @@ class growing_tape_t {
     }
 
     strided_range_gt<ukv_length_t> offsets() noexcept {
+        auto n = lengths_.size();
+        offsets_[n] = offsets_[n - 1] + lengths_[n - 1];
         return strided_range<ukv_length_t>(offsets_.begin(), offsets_.end());
     }
     strided_range_gt<ukv_length_t> lengths() noexcept {
