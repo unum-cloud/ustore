@@ -1260,8 +1260,8 @@ void ukv_docs_gather( //
 
             column_begin_t column {
                 .validities = (*c_result_bitmap_valid)[field_idx],
-                .conversions = (*c_result_bitmap_converted)[field_idx],
-                .collisions = (*c_result_bitmap_collision)[field_idx],
+                .conversions = (*(c_result_bitmap_converted ?: c_result_bitmap_valid))[field_idx],
+                .collisions = (*(c_result_bitmap_collision ?: c_result_bitmap_valid))[field_idx],
                 .scalars = (*c_result_scalars)[field_idx],
                 .str_offsets = (*c_result_strs_offsets)[field_idx],
                 .str_lengths = (*c_result_strs_lengths)[field_idx],
