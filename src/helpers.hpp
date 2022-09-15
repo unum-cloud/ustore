@@ -431,9 +431,10 @@ class safe_vector_gt {
         length_ = size;
     }
 
-    void reserve(size_t new_cap, ukv_error_t* c_error) {
+    void reserve(std::size_t new_cap, ukv_error_t* c_error) {
         if (new_cap <= cap_)
             return;
+        new_cap = next_power_of_two(new_cap);
         auto tape = ptr_ ? arena_ptr_->grow<element_t>({ptr_, cap_}, new_cap - cap_, c_error)
                          : arena_ptr_->alloc<element_t>(new_cap, c_error);
         return_on_error(c_error);
