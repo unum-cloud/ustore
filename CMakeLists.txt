@@ -13,6 +13,10 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/bin")
 
+message("CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
+message("CMAKE_CXX_COMPILER_VERSION: ${CMAKE_CXX_COMPILER_VERSION}")
+message("CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}")
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -76,7 +80,6 @@ include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
 
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
@@ -112,34 +115,35 @@ target_link_libraries(ukv_leveldb leveldb nlohmann_json::nlohmann_json ${jemallo
 set_source_files_properties(src/backend_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 
 # The rest of CMake will apply to all client libraries
-set(UKV_EMBEDDED_LIBRARIES "stl" "leveldb" "rocksdb")
-set(UKV_CLIENT_LIBRARIES "stl" "leveldb" "rocksdb")
+set(UKV_ENGINE_NAMES "stl" "leveldb" "rocksdb")
+set(UKV_CLIENT_NAMES "stl" "leveldb" "rocksdb")
 
 if(EXISTS ${UKV_BUILD_UNUMDB})
   find_library(ukv_rocksdb ${UKV_BUILD_UNUMDB})
-  list(APPEND UKV_EMBEDDED_LIBRARIES "unumdb")
-  list(APPEND UKV_CLIENT_LIBRARIES "unumdb")
+  list(APPEND UKV_ENGINE_NAMES "unumdb")
+  list(APPEND UKV_CLIENT_NAMES "unumdb")
 endif()
 
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT_RPC})
+  include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
   add_library(ukv_flight_client src/arrow_client.cpp src/logic_docs.cpp src/logic_graph.cpp)
   target_link_libraries(ukv_flight_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
-  list(APPEND UKV_CLIENT_LIBRARIES "flight_client")
+  list(APPEND UKV_CLIENT_NAMES "flight_client")
 
-  foreach(lib_name IN ITEMS ${UKV_EMBEDDED_LIBRARIES})
-    string(CONCAT target_name "ukv_" ${lib_name})
-    get_target_property(target_SOURCES ${target_name} SOURCES)
-    get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
+  foreach(engine_name IN ITEMS ${UKV_ENGINE_NAMES})
+    string(CONCAT lib_name "ukv_" ${engine_name})
+    get_target_property(lib_SOURCES ${lib_name} SOURCES)
+    get_target_property(lib_LIBRARIES ${lib_name} LINK_LIBRARIES)
 
-    string(CONCAT server_name ${lib_name} "_flight_server")
-    add_executable(${server_name} src/arrow_server.cpp ${target_SOURCES})
-    target_link_libraries(${server_name} pthread nlohmann_json::nlohmann_json arrow arrow_flight ${target_LIBRARIES})
+    string(CONCAT server_name "ukv_" ${engine_name} "_flight_server")
+    add_executable(${server_name} src/arrow_server.cpp ${lib_SOURCES})
+    target_link_libraries(${server_name} pthread nlohmann_json::nlohmann_json arrow arrow_flight ${lib_LIBRARIES})
   endforeach()
 endif()
 
 # Enable warning and sanitization for our primary targets
-foreach(client_name IN ITEMS ${UKV_CLIENT_LIBRARIES})
+foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
   string(CONCAT target_name "ukv_" ${client_name})
 
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -157,7 +161,7 @@ endforeach()
 if(${UKV_BUILD_TESTS})
   include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
 
-  foreach(client_name IN ITEMS ${UKV_CLIENT_LIBRARIES})
+  foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_SOURCES ${target_name} SOURCES)
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
@@ -175,7 +179,7 @@ endif()
 
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
-  foreach(client_name IN ITEMS ${UKV_CLIENT_LIBRARIES})
+  foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_SOURCES ${target_name} SOURCES)
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
@@ -192,11 +196,11 @@ endif()
 
 # Build Python bindings linking to precompiled client SDKs
 if(${UKV_BUILD_PYTHON})
+  include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
   find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
-  find_package(pybind11 CONFIG REQUIRED)
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 
-  foreach(client_name IN ITEMS ${UKV_CLIENT_LIBRARIES})
+  foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT native_lib_name "ukv_" ${client_name})
     string(CONCAT wrap_lib_name "py_" ${client_name})
 
