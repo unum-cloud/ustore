@@ -35,7 +35,24 @@ struct parsed_places_t {
     using owned_t = std::vector<collection_key_field_t>;
     std::variant<std::monostate, viewed_t, owned_t> viewed_or_owned;
     operator places_arg_t() const noexcept {}
-    parsed_places_t(PyObject* keys) {}
+    parsed_places_t(PyObject* keys, std::optional<ukv_collection_t> col) {
+        // Check if we can do zero-copy
+        if (PyObject_CheckBuffer(keys)) {
+        }
+        else {
+            owned_t keys_vec;
+            auto cont_len = py_sequence_length(keys);
+            if (cont_len)
+                keys_vec.reserve(*cont_len);
+
+            auto py_to_key = [&](PyObject* obj) {
+                return collection_key_field_t {col.value_or(ukv_collection_main_k), py_to_scalar<ukv_key_t>(obj)};
+            };
+
+            py_transform_n(keys, py_to_key, std::back_inserter(keys_vec));
+            viewed_or_owned = std::move(keys_vec);
+        }
+    }
 };
 
 /**
