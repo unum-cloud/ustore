@@ -484,7 +484,7 @@ class safe_vector_gt {
     inline ptr_t end() const noexcept { return begin() + length_; }
     inline element_t& operator[](std::size_t i) noexcept { return ptr_[i]; }
     inline std::size_t size() const noexcept { return length_; }
-    inline operator bool() const noexcept { return length_; }
+    inline explicit operator bool() const noexcept { return length_; }
     inline operator value_view_t() const noexcept { return {ptr_, length_}; }
     inline void clear() noexcept { length_ = 0; }
 
