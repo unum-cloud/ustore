@@ -191,20 +191,12 @@ class strided_range_gt {
   protected:
     static_assert(!std::is_void_v<element_t>);
 
+    iterator_t begin_ = nullptr;
     ukv_size_t count_ = 0;
-
-    element_t* begin_ = nullptr;
-    ukv_size_t stride_ = 0;
 
   public:
     strided_range_gt() = default;
-    strided_range_gt(element_t* single) noexcept : count_(1), begin_(single), stride_(0) {}
-    strided_range_gt(element_t* begin, element_t* end) noexcept
-        : count_(end - begin), begin_(begin), stride_(sizeof(element_t)) {}
-    strided_range_gt(std::size_t count, element_t* begin, std::size_t stride) noexcept
-        : count_(static_cast<ukv_size_t>(count)), begin_(begin), stride_(static_cast<ukv_size_t>(stride)) {}
-    strided_range_gt(std::size_t count, iterator_t begin) noexcept
-        : strided_range_gt(count, begin.get(), begin.stride()) {}
+    strided_range_gt(iterator_t begin, std::size_t count) noexcept : begin_(begin), count_(count) {}
 
     strided_range_gt(strided_range_gt&&) = default;
     strided_range_gt(strided_range_gt const&) = default;
@@ -212,19 +204,17 @@ class strided_range_gt {
     strided_range_gt& operator=(strided_range_gt const&) = default;
 
     inline element_t* data() const noexcept { return begin_; }
-    inline decltype(auto) begin() const noexcept { return iterator_t {begin_, stride_}; }
+    inline decltype(auto) begin() const noexcept { return begin_; }
     inline decltype(auto) end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
     inline decltype(auto) at(std::size_t i) const noexcept { return begin()[static_cast<std::ptrdiff_t>(i)]; }
     inline decltype(auto) operator[](std::size_t i) const noexcept { return at(i); }
 
-    inline auto immutable() const noexcept { return strided_range_gt<element_t const>(count_, begin_, stride_); }
-    inline strided_range_gt subspan(std::size_t count, std::size_t offset) const noexcept {
-        return {count, begin_ + offset * stride_, stride_};
-    }
+    inline auto immutable() const noexcept { return strided_range_gt<element_t const>(begin_, count_); }
+    inline strided_range_gt subspan(std::size_t count) const noexcept { return {begin_, count}; }
 
     inline bool empty() const noexcept { return !count_; }
     inline std::size_t size() const noexcept { return count_; }
-    inline ukv_size_t stride() const noexcept { return stride_; }
+    inline ukv_size_t stride() const noexcept { return begin_.stride(); }
     inline ukv_size_t count() const noexcept { return count_; }
     inline operator bool() const noexcept { return begin_ != nullptr; }
 
@@ -232,7 +222,7 @@ class strided_range_gt {
     inline auto members(member_at parent_at::*member_ptr) const noexcept {
         auto begin_members = begin().members(member_ptr);
         using member_t = typename decltype(begin_members)::value_type;
-        return strided_range_gt<member_t> {count(), begin_members.get(), begin_members.stride()};
+        return strided_range_gt<member_t> {{begin_members.get(), begin_members.stride()}, count()};
     }
 };
 
@@ -304,7 +294,7 @@ struct indexed_range_gt {
     inline auto strided() const noexcept {
         using element_t = std::remove_pointer_t<pointer_at>;
         using strided_t = strided_range_gt<element_t>;
-        return strided_t {static_cast<ukv_size_t>(size()), begin_, sizeof(element_t)};
+        return strided_t {{begin_, sizeof(element_t)}, static_cast<ukv_size_t>(size())};
     }
 };
 
