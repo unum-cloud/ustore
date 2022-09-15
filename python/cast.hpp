@@ -108,20 +108,20 @@ scalar_at py_to_scalar(PyObject* obj) {
 
 inline value_view_t py_to_bytes(PyObject* obj) {
 
-    // if (PyUnicode_Check(obj))
-    // return value_view_t {reinterpret_cast<byte_t*>(PyBytes_AsString(PyUnicode_AsASCIIString(obj))),
-    //                      static_cast<size_t>(PyUnicode_GetLength(obj))};
-
+    if (PyUnicode_Check(obj)) {
+        PyObject* utf_obj = PyUnicode_AsUTF8String(obj);
+        return value_view_t {reinterpret_cast<byte_t*>(PyBytes_AsString(utf_obj)),
+                             static_cast<size_t>(PyBytes_Size(utf_obj))};
+    }
     if (PyBytes_Check(obj)) {
         char* buffer = nullptr;
         Py_ssize_t length = 0;
         PyBytes_AsStringAndSize(obj, &buffer, &length);
         return {reinterpret_cast<ukv_bytes_ptr_t>(buffer), static_cast<ukv_length_t>(length)};
     }
-    else if (obj == Py_None) {
-        // Means the object must be deleted
+
+    if (obj == Py_None) // Means the object must be deleted
         return value_view_t {};
-    }
 
     throw std::invalid_argument("Value must be representable as a byte array");
     return {};
