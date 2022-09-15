@@ -34,10 +34,24 @@ struct parsed_places_t {
     using viewed_t = places_arg_t;
     using owned_t = std::vector<collection_key_field_t>;
     std::variant<std::monostate, viewed_t, owned_t> viewed_or_owned;
+    ukv_collection_t single_collection = ukv_collection_main_k;
+
     operator places_arg_t() const noexcept {}
     parsed_places_t(PyObject* keys, std::optional<ukv_collection_t> col) {
         // Check if we can do zero-copy
         if (PyObject_CheckBuffer(keys)) {
+            py_buffer_t buf = py_buffer(keys);
+
+            auto rng = py_strided_range<ukv_key_t const>(buf);
+
+            single_collection = col.value_or(ukv_collection_main_k);
+
+            places_arg_t places;
+            places.collections_begin = {&single_collection};
+            places.count = rng.size();
+            places.keys_begin = {rng.data(), rng.stride()};
+
+            viewed_or_owned = std::move(places);
         }
         else {
             owned_t keys_vec;
