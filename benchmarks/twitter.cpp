@@ -5,7 +5,6 @@
 
 #include <cstring>     // `std::memchr`
 #include <algorithm>   // `std::search`
-#include <iostream>    // `std::cout`, we are not proud of this :)
 #include <filesystem>  // Listing directories is too much pain in C
 #include <string_view> //
 #include <vector>      //
@@ -43,6 +42,7 @@ struct tweet_t {
 
 static std::string dataset_directory = "~/Datasets/Twitter/";
 static std::vector<std::string> paths;
+static std::vector<std::size_t> sizes;
 static std::vector<std::string_view> mapped_contents;
 static std::vector<std::vector<tweet_t>> tweets_per_path;
 static database_t db;
@@ -85,7 +85,7 @@ static void batch_insert(bm::State& state) {
     for (auto _ : state) {
 
         // Detect if we need to jump to another file.
-        if (internal_tweet_idx >= tweets_per_path.size()) {
+        while (internal_tweet_idx >= tweets_per_path[file_idx].size()) {
             file_idx++;
             internal_tweet_idx = 0;
         }
@@ -135,8 +135,8 @@ void sample_randomly(bm::State& state, callback_at callback) {
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    uniform_idx_t choose_file(0, tweets_per_path.size());
-    uniform_idx_t choose_hash(0, copies_per_tweet_k);
+    uniform_idx_t choose_file(0, tweets_per_path.size() - 1);
+    uniform_idx_t choose_hash(0, copies_per_tweet_k - 1);
 
     auto const batch_size = static_cast<ukv_size_t>(state.range(0));
     std::vector<ukv_key_t> batch_keys(batch_size);
@@ -146,7 +146,7 @@ void sample_randomly(bm::State& state, callback_at callback) {
         for (std::size_t key_idx = 0; key_idx != batch_size; ++key_idx) {
             std::size_t const file_idx = choose_file(gen);
             auto const& tweets = tweets_per_path[file_idx];
-            uniform_idx_t choose_tweet(0, tweets.size());
+            uniform_idx_t choose_tweet(0, tweets.size() - 1);
             std::size_t const hash_idx = choose_hash(gen);
             std::size_t const tweet_idx = choose_tweet(gen);
             auto const& tweet = tweets[tweet_idx];
@@ -310,8 +310,9 @@ static void sample_tables(bm::State& state) {
 static void index_file(std::string_view mapped_contents, std::vector<tweet_t>& tweets) {
     char const* id_key = "\"id\":";
     char const* line_begin = mapped_contents.begin();
-    while (line_begin < mapped_contents.end()) {
-        auto line_end = (char const*)std::memchr(line_begin, '\n', mapped_contents.end() - line_begin);
+    char const* const end = mapped_contents.end();
+    while (line_begin < end) {
+        auto line_end = (char const*)std::memchr(line_begin, '\n', end - line_begin) ?: end;
         auto id_key_begin = std::search(line_begin, line_end, id_key, id_key + 5);
         if (id_key_begin == line_end) {
             line_begin = line_end + 1;
@@ -325,42 +326,48 @@ static void index_file(std::string_view mapped_contents, std::vector<tweet_t>& t
         auto id_length = std::min<std::size_t>(id_str_max_length_k, line_end - id_begin);
         std::memcpy(tweet.id_str, id_begin, id_length);
         tweets.push_back(tweet);
+        line_begin = line_end + 1;
     }
 }
 
 int main(int argc, char** argv) {
     bm::Initialize(&argc, argv);
+    thread_count = 1; // std::thread::hardware_concurrency() / 4;
 
     // 1. Find the dataset parts
-    for (auto const& dir_entry : std::filesystem::directory_iterator {dataset_directory}) {
-        if (dir_entry.path().extension() != "ndjson")
+    std::printf("Will search for .ndjson files...\n");
+    auto dataset_path = dataset_directory; // std::filesystem::absolute(dataset_directory);
+    auto opts = std::filesystem::directory_options::follow_directory_symlink;
+    for (auto const& dir_entry : std::filesystem::directory_iterator(dataset_path, opts)) {
+        if (dir_entry.path().extension() != ".ndjson")
             continue;
 
         paths.push_back(dir_entry.path());
-        std::cout << "- Found file: " << dir_entry.path().filename() //
-                  << " ; size: " << dir_entry.file_size() << std::endl;
+        sizes.push_back(dir_entry.file_size());
     }
+    std::printf("- found %i files\n", static_cast<int>(paths.size()));
+    paths.resize(thread_count);
+    std::printf("- kept only %i files\n", static_cast<int>(paths.size()));
     tweets_per_path.resize(paths.size());
     mapped_contents.resize(paths.size());
 
     // 2. Memory-map the contents
     // As we are closing the process after the benchmarks, we can avoid unmap them.
+    std::printf("Will memory-map the files...\n");
     for (std::size_t path_idx = 0; path_idx != paths.size(); ++path_idx) {
         auto const& path = paths[path_idx];
         auto handle = open(path.c_str(), O_RDONLY);
         if (handle == -1)
             throw std::runtime_error("Can't open file");
 
-        struct stat metadata;
-        if (fstat(handle, &metadata) == -1)
-            throw std::runtime_error("Can't obtain size");
-
-        auto begin = mmap(NULL, metadata.st_size, PROT_READ, MAP_PRIVATE, handle, 0);
-        mapped_contents[path_idx] = std::string_view(reinterpret_cast<char const*>(begin), metadata.st_size);
-        madvise(begin, metadata.st_size, MADV_SEQUENTIAL);
+        auto size = sizes[path_idx];
+        auto begin = mmap(NULL, size, PROT_READ, MAP_PRIVATE, handle, 0);
+        mapped_contents[path_idx] = std::string_view(reinterpret_cast<char const*>(begin), size);
+        madvise(begin, size, MADV_SEQUENTIAL);
     }
 
     // 3. Index the dataset
+    std::printf("Will index the files...\n");
     std::vector<std::thread> parsing_threads;
     for (std::size_t path_idx = 0; path_idx != paths.size(); ++path_idx)
         parsing_threads.push_back(std::thread( //
@@ -369,12 +376,13 @@ int main(int argc, char** argv) {
             std::ref(tweets_per_path[path_idx])));
     for (auto& thread : parsing_threads)
         thread.join();
-    thread_count = std::thread::hardware_concurrency() / 2;
     tweet_count = 0;
     for (auto const& tweets : tweets_per_path)
         tweet_count += tweets.size();
 
     // 4. Run the actual benchmarks
+    db.open();
+    std::printf("Will benchmark...\n");
     bm::RegisterBenchmark("batch_insert", &batch_insert)->Iterations(tweet_count)->UseRealTime()->Threads(thread_count);
     bm::RegisterBenchmark("sample_blobs", &sample_blobs)
         ->MinTime(20)
