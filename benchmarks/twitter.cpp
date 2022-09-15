@@ -100,7 +100,7 @@ static void batch_insert(bm::State& state) {
         // Finally, import the data.
         ukv_bytes_cptr_t body = reinterpret_cast<ukv_bytes_cptr_t>(tweet.body.data());
         ukv_length_t length = static_cast<ukv_length_t>(tweet.body.size());
-        ukv_write( //
+        ukv_docs_write( //
             db,
             nullptr,
             copies_per_tweet_k,
@@ -109,6 +109,8 @@ static void batch_insert(bm::State& state) {
             keys.data(),
             sizeof(ukv_key_t),
             nullptr,
+            0,
+            nullptr,
             nullptr,
             0,
             &length,
@@ -116,6 +118,8 @@ static void batch_insert(bm::State& state) {
             &body,
             0,
             ukv_options_default_k,
+            ukv_format_json_k,
+            ukv_type_any_k,
             arena.member_ptr(),
             status.member_ptr());
         status.throw_unhandled();
@@ -275,6 +279,7 @@ static void sample_tables(bm::State& state) {
         ukv_octet_t** validities = nullptr;
         ukv_byte_t** scalars = nullptr;
         ukv_length_t** offsets = nullptr;
+        ukv_length_t** lengths = nullptr;
         ukv_byte_t* strings = nullptr;
         ukv_docs_gather( //
             db,
@@ -295,13 +300,13 @@ static void sample_tables(bm::State& state) {
             nullptr,
             &scalars,
             &offsets,
-            nullptr,
+            &lengths,
             &strings,
             arena.member_ptr(),
             status.member_ptr());
         status.throw_unhandled();
 
-        received_bytes += offsets[0][count];
+        received_bytes += std::accumulate(&lengths[0][0], &lengths[0][0] + count - 1, 0ul);
         received_bytes += 3 * sizeof(std::uint32_t) * count;
     });
     state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
@@ -381,7 +386,7 @@ int main(int argc, char** argv) {
         tweet_count += tweets.size();
 
     // 4. Run the actual benchmarks
-    db.open();
+    db.open().throw_unhandled();
     std::printf("Will benchmark...\n");
     bm::RegisterBenchmark("batch_insert", &batch_insert)->Iterations(tweet_count)->UseRealTime()->Threads(thread_count);
     bm::RegisterBenchmark("sample_blobs", &sample_blobs)
