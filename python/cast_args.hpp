@@ -42,16 +42,28 @@ struct parsed_places_t {
         if (PyObject_CheckBuffer(keys)) {
             py_buffer_t buf = py_buffer(keys);
 
-            auto rng = py_strided_range<ukv_key_t const>(buf);
+            if (*buf.raw.format == format_code_gt<long>::value[0] ||
+                *buf.raw.format == format_code_gt<unsigned long>::value[0]) {
+                auto rng = py_strided_range<ukv_key_t const>(buf);
+                single_collection = col.value_or(ukv_collection_main_k);
 
-            single_collection = col.value_or(ukv_collection_main_k);
+                places_arg_t places;
+                places.collections_begin = {&single_collection};
+                places.count = rng.size();
+                places.keys_begin = {rng.data(), rng.stride()};
 
-            places_arg_t places;
-            places.collections_begin = {&single_collection};
-            places.count = rng.size();
-            places.keys_begin = {rng.data(), rng.stride()};
-
-            viewed_or_owned = std::move(places);
+                viewed_or_owned = std::move(places);
+            }
+            else {
+                owned_t casted_keys(buf.raw.len / buf.raw.itemsize);
+                byte_t* buf_ptr = reinterpret_cast<byte_t*>(buf.raw.buf);
+                for (size_t i = 0; i < casted_keys.size(); i++) {
+                    casted_keys[i] = collection_key_field_t {
+                        col.value_or(ukv_collection_main_k),
+                        get_casted_scalar<ukv_key_t>(buf_ptr + i * buf.raw.itemsize, buf.raw.format[0])};
+                }
+                viewed_or_owned = std::move(casted_keys);
+            }
         }
         else if (arrow::py::is_array(keys)) {
             auto result = arrow::py::unwrap_array(keys);
