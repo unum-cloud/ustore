@@ -53,6 +53,21 @@ struct parsed_places_t {
 
             viewed_or_owned = std::move(places);
         }
+        else if (arrow::py::is_array(keys)) {
+            auto result = arrow::py::unwrap_array(keys);
+            if (!result.ok())
+                throw std::runtime_error("Failed to unwrap array");
+
+            auto arrow_array = std::static_pointer_cast<arrow::UInt64Array>(result.ValueOrDie());
+            single_collection = col.value_or(ukv_collection_main_k);
+
+            places_arg_t places;
+            places.collections_begin = {&single_collection};
+            places.count = arrow_array->length();
+            places.keys_begin = {reinterpret_cast<ukv_key_t const*>(arrow_array->raw_values()), sizeof(ukv_key_t)};
+
+            viewed_or_owned = std::move(places);
+        }
         else {
             owned_t keys_vec;
             auto cont_len = py_sequence_length(keys);
