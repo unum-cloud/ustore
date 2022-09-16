@@ -1,5 +1,5 @@
 /**
- * @file logic_graph.cpp
+ * @file modality_graph.cpp
  * @author Ashot Vardanian
  *
  * @brief Graph implementation using fast integer compression.

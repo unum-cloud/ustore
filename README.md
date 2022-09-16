@@ -18,15 +18,15 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 
 UKV does just that, abstracting away the implementation from the user.
 In under 20K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
-You can mix any [engine](#engines) with any logic layer, [frontend](#frontends) and distribution form:
+You can combine every [engine](#engines) with every modality, [frontend](#frontends) and distribution form:
 
-| Engine  | Logic  | Distribution | Frontend  |
-| :------ | :----- | :----------- | :-------- |
-|         |        |              |           |
-| STL     | Blobs  | Embedded     | C and C++ |
-| LevelDB | Docs   | Standalone   | Python    |
-| RocksDB | Graphs |              | GoLang    |
-| UnumDB  |        |              | Java      |
+| Engine  | Modality | Distribution | Frontend  |
+| :------ | :------- | :----------- | :-------- |
+|         |          |              |           |
+| STL     | Blobs    | Embedded     | C and C++ |
+| LevelDB | Docs     | Standalone   | Python    |
+| RocksDB | Graphs   |              | GoLang    |
+| UnumDB  |          |              | Java      |
 
 This would produce hundreds of binaries for all kinds of use cases, like:
 

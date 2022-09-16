@@ -172,6 +172,7 @@ extern ukv_key_t const ukv_key_unknown_k;
 
 extern bool const ukv_supports_transactions_k;
 extern bool const ukv_supports_named_collections_k;
+extern bool const ukv_supports_snapshots_k;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
