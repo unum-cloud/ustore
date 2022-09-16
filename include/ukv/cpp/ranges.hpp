@@ -210,7 +210,9 @@ class strided_range_gt {
     inline decltype(auto) operator[](std::size_t i) const noexcept { return at(i); }
 
     inline auto immutable() const noexcept { return strided_range_gt<element_t const>(begin_, count_); }
-    inline strided_range_gt subspan(std::size_t count) const noexcept { return {begin_, count}; }
+    inline strided_range_gt subspan(std::size_t offset, std::size_t count) const noexcept {
+        return {begin_ + offset, count};
+    }
 
     inline bool empty() const noexcept { return !count_; }
     inline std::size_t size() const noexcept { return count_; }
@@ -250,27 +252,27 @@ strided_range_gt<at> strided_range(std::vector<at, alloc_at>& vec) noexcept {
 
 template <typename at, typename alloc_at = std::allocator<at>>
 strided_range_gt<at const> strided_range(std::vector<at, alloc_at> const& vec) noexcept {
-    return {vec.size(), vec.data(), sizeof(at)};
+    return {{vec.data(), sizeof(at)}, vec.size()};
 }
 
 template <typename at, std::size_t count_ak>
 strided_range_gt<at> strided_range(at (&c_array)[count_ak]) noexcept {
-    return {count_ak, &c_array[0], sizeof(at)};
+    return {{&c_array[0], sizeof(at)}, count_ak};
 }
 
 template <typename at, std::size_t count_ak>
 strided_range_gt<at const> strided_range(std::array<at, count_ak> const& array) noexcept {
-    return {count_ak, array.data(), sizeof(at)};
+    return {{array.data(), sizeof(at)}, count_ak};
 }
 
 template <typename at>
 strided_range_gt<at const> strided_range(std::initializer_list<at> list) noexcept {
-    return {list.size(), list.begin(), sizeof(at)};
+    return {{list.begin(), sizeof(at)}, list.size()};
 }
 
 template <typename at>
 strided_range_gt<at> strided_range(at* begin, at* end) noexcept {
-    return {begin, end};
+    return {{begin, sizeof(at)}, end - begin};
 }
 
 /**
