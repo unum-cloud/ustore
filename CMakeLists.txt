@@ -198,8 +198,9 @@ endif()
 
 # Build Python bindings linking to precompiled client SDKs
 if(${UKV_BUILD_PYTHON})
+  find_package(Python 3.9 COMPONENTS Interpreter Development NumPy REQUIRED)
+  include_directories(${Python_NumPy_INCLUDE_DIRS})
   include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
-  find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})

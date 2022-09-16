@@ -203,7 +203,7 @@ class strided_range_gt {
     strided_range_gt& operator=(strided_range_gt&&) = default;
     strided_range_gt& operator=(strided_range_gt const&) = default;
 
-    inline element_t* data() const noexcept { return begin_; }
+    inline element_t* data() const noexcept { return begin_.get(); }
     inline decltype(auto) begin() const noexcept { return begin_; }
     inline decltype(auto) end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
     inline decltype(auto) at(std::size_t i) const noexcept { return begin()[static_cast<std::ptrdiff_t>(i)]; }
@@ -249,7 +249,7 @@ struct strided_range_or_dummy_gt {
 
 template <typename at, typename alloc_at = std::allocator<at>>
 strided_range_gt<at> strided_range(std::vector<at, alloc_at>& vec) noexcept {
-    return {vec.size(), vec.data(), sizeof(at)};
+    return {{vec.data(), sizeof(at)}, vec.size()};
 }
 
 template <typename at, typename alloc_at = std::allocator<at>>
@@ -448,7 +448,6 @@ class embedded_chunks_gt {
     using element_t = typename chunk_t::value_type;
 
     ukv_size_t count_ = 0;
-
     ukv_length_t* offsets_ = nullptr;
     ukv_length_t* lengths_ = nullptr;
     element_t* contents_ = nullptr;
@@ -555,11 +554,11 @@ class strided_matrix_gt {
     inline decltype(auto) operator()(std::size_t i, std::size_t j) const noexcept { return row(i)[j]; }
     inline strided_range_gt<scalar_t const> column(std::size_t j) const noexcept {
         auto begin = begin_ + j * bytes_between_columns_ / sizeof(scalar_t);
-        return {begin, bytes_between_rows_, rows_};
+        return {{begin, bytes_between_rows_}, rows_};
     }
     inline strided_range_gt<scalar_t const*> row(std::size_t i) const noexcept {
         auto begin = begin_ + i * bytes_between_rows_ / sizeof(scalar_t);
-        return {begin, bytes_between_columns_, columns_};
+        return {{begin, bytes_between_columns_}, columns_};
     }
     inline std::size_t rows() const noexcept { return rows_; }
     inline std::size_t columns() const noexcept { return columns_; }
