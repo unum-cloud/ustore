@@ -287,7 +287,8 @@ struct parsed_adjacency_list_t {
             edges_view_t edges_view {
                 mat.column(0),
                 mat.column(1),
-                columns == 3 ? mat.column(2) : strided_range_gt<ukv_key_t const>(&ukv_default_edge_id_k, 0, mat.rows()),
+                columns == 3 ? mat.column(2)
+                             : strided_range_gt<ukv_key_t const>({&ukv_default_edge_id_k, 0}, mat.rows()),
             };
             viewed_or_owned = edges_view;
         }
