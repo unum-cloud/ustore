@@ -108,20 +108,20 @@ scalar_at py_to_scalar(PyObject* obj) {
 
 inline value_view_t py_to_bytes(PyObject* obj) {
 
-    // if (PyUnicode_Check(obj))
-    // return value_view_t {reinterpret_cast<byte_t*>(PyBytes_AsString(PyUnicode_AsASCIIString(obj))),
-    //                      static_cast<size_t>(PyUnicode_GetLength(obj))};
-
+    if (PyUnicode_Check(obj)) {
+        PyObject* utf_obj = PyUnicode_AsUTF8String(obj);
+        return value_view_t {reinterpret_cast<byte_t*>(PyBytes_AsString(utf_obj)),
+                             static_cast<size_t>(PyBytes_Size(utf_obj))};
+    }
     if (PyBytes_Check(obj)) {
         char* buffer = nullptr;
         Py_ssize_t length = 0;
         PyBytes_AsStringAndSize(obj, &buffer, &length);
         return {reinterpret_cast<ukv_bytes_ptr_t>(buffer), static_cast<ukv_length_t>(length)};
     }
-    else if (obj == Py_None) {
-        // Means the object must be deleted
+
+    if (obj == Py_None) // Means the object must be deleted
         return value_view_t {};
-    }
 
     throw std::invalid_argument("Value must be representable as a byte array");
     return {};
@@ -201,21 +201,39 @@ inline void throw_not_implemented() {
 // clang-format off
 template <> struct format_code_gt<bool> { inline static constexpr char value[2] = "?"; };
 template <> struct format_code_gt<char> { inline static constexpr char value[2] = "c"; };
-template <> struct format_code_gt<signed char> { inline static constexpr char value[2] = "b"; };
-template <> struct format_code_gt<unsigned char> { inline static constexpr char value[2] = "B"; };
+template <> struct format_code_gt<int8_t> { inline static constexpr char value[2] = "b"; };
+template <> struct format_code_gt<uint8_t> { inline static constexpr char value[2] = "B"; };
 
-template <> struct format_code_gt<short> { inline static constexpr char value[2] = "h"; };
-template <> struct format_code_gt<unsigned short> { inline static constexpr char value[2] = "H"; };
-template <> struct format_code_gt<int> { inline static constexpr char value[2] = "i"; };
-template <> struct format_code_gt<unsigned int> { inline static constexpr char value[2] = "I"; };
-template <> struct format_code_gt<long> { inline static constexpr char value[2] = "l"; };
-template <> struct format_code_gt<unsigned long> { inline static constexpr char value[2] = "L"; };
+template <> struct format_code_gt<int16_t> { inline static constexpr char value[2] = "h"; };
+template <> struct format_code_gt<uint16_t> { inline static constexpr char value[2] = "H"; };
+template <> struct format_code_gt<int32_t> { inline static constexpr char value[2] = "i"; };
+template <> struct format_code_gt<uint32_t> { inline static constexpr char value[2] = "I"; };
+template <> struct format_code_gt<int64_t> { inline static constexpr char value[2] = "l"; };
+template <> struct format_code_gt<uint64_t> { inline static constexpr char value[2] = "L"; };
 template <> struct format_code_gt<long long> { inline static constexpr char value[2] = "q"; };
 template <> struct format_code_gt<unsigned long long> { inline static constexpr char value[2] = "Q"; };
 
 template <> struct format_code_gt<float> { inline static constexpr char value[2] = "f"; };
 template <> struct format_code_gt<double> { inline static constexpr char value[2] = "d"; };
 // clang-format on
+
+template <typename scalar_at>
+scalar_at py_cast_scalar(byte_t* data, char format) {
+    switch (format) {
+    case format_code_gt<int8_t>::value[0]: return *reinterpret_cast<int8_t*>(data);
+    case format_code_gt<uint8_t>::value[0]: return *reinterpret_cast<uint8_t*>(data);
+    case format_code_gt<int16_t>::value[0]: return *reinterpret_cast<int16_t*>(data);
+    case format_code_gt<uint16_t>::value[0]: return *reinterpret_cast<uint16_t*>(data);
+    case format_code_gt<int32_t>::value[0]: return *reinterpret_cast<int32_t*>(data);
+    case format_code_gt<uint32_t>::value[0]: return *reinterpret_cast<uint32_t*>(data);
+    case format_code_gt<int64_t>::value[0]: return *reinterpret_cast<int64_t*>(data);
+    case format_code_gt<uint64_t>::value[0]: return *reinterpret_cast<uint64_t*>(data);
+    case format_code_gt<long long>::value[0]: return *reinterpret_cast<long long*>(data);
+    case format_code_gt<unsigned long long>::value[0]: return *reinterpret_cast<unsigned long long*>(data);
+
+    default: throw std::invalid_argument("Cant cast this type to `ukv_key_t`");
+    }
+}
 
 template <typename scalar_at>
 bool can_cast_internal_scalars(py_buffer_t const& buf) {
