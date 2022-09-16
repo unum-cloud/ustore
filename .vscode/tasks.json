@@ -39,6 +39,12 @@
             "type": "shell"
         },
         {
+            "label": "Build Native: Debug Twitter STL Benchmark",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_stl_twitter_benchmark",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Build Native: Release",
             "command": "cmake -DCMAKE_BUILD_TYPE=Release . && make -j 6",
             "args": [],
