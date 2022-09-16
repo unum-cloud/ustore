@@ -199,7 +199,7 @@ struct span_gt {
     std::size_t size_bytes() const noexcept { return size_ * sizeof(at); }
     std::size_t size() const noexcept { return size_; }
 
-    strided_range_gt<at> strided() const noexcept { return {ptr_, ptr_ + size_}; }
+    strided_range_gt<at> strided() const noexcept { return {{ptr_, sizeof(at)}, size_}; }
 
   private:
     at* ptr_;
@@ -254,8 +254,8 @@ struct stl_arena_t {
 
         using strided_t = strided_range_gt<at>;
         auto strided = output //
-                           ? strided_t {size, ((*output) = alloc<at>(size, c_error, alignment).begin()), sizeof(at)}
-                           : strided_t {size, nullptr, 0};
+                           ? strided_t {{((*output) = alloc<at>(size, c_error, alignment).begin()), sizeof(at)}, size}
+                           : strided_t {{nullptr, 0}, size};
         return {strided, {}};
     }
 
