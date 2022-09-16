@@ -70,15 +70,32 @@ struct parsed_places_t {
             if (!result.ok())
                 throw std::runtime_error("Failed to unwrap array");
 
-            auto arrow_array = std::static_pointer_cast<arrow::UInt64Array>(result.ValueOrDie());
-            single_collection = col.value_or(ukv_collection_main_k);
+            auto generic_array = result.ValueOrDie();
+            if (generic_array->type_id() == arrow::Type::INT64 || generic_array->type_id() == arrow::Type::UINT64) {
+                auto arrow_array = std::static_pointer_cast<arrow::UInt64Array>(generic_array);
+                single_collection = col.value_or(ukv_collection_main_k);
 
-            places_arg_t places;
-            places.collections_begin = {&single_collection};
-            places.count = arrow_array->length();
-            places.keys_begin = {reinterpret_cast<ukv_key_t const*>(arrow_array->raw_values()), sizeof(ukv_key_t)};
+                places_arg_t places;
+                places.collections_begin = {&single_collection};
+                places.count = arrow_array->length();
+                places.keys_begin = {reinterpret_cast<ukv_key_t const*>(arrow_array->raw_values()), sizeof(ukv_key_t)};
 
-            viewed_or_owned = std::move(places);
+                viewed_or_owned = std::move(places);
+            }
+            else {
+                if (generic_array->type_id() > arrow::Type::INT64)
+                    throw std::runtime_error("Can't cast given type to `ukv_key_t`");
+
+                owned_t keys_vec(generic_array->length());
+                for (size_t i = 0; i < keys_vec.size(); i++) {
+                    auto scalar = generic_array->GetScalar(i).ValueOrDie()->CastTo(arrow::uint64());
+                    auto key = std::static_pointer_cast<arrow::UInt64Scalar>(scalar.ValueOrDie());
+
+                    keys_vec[i] = collection_key_field_t {col.value_or(ukv_collection_main_k), key->value};
+                }
+
+                viewed_or_owned = std::move(keys_vec);
+            }
         }
         else {
             owned_t keys_vec;
