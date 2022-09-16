@@ -71,8 +71,8 @@ struct parsed_places_t {
         else if (PyObject_CheckBuffer(keys)) {
             py_buffer_t buf = py_buffer(keys);
 
-            if (*buf.raw.format == format_code_gt<int64_t>::value[0] ||
-                *buf.raw.format == format_code_gt<uint64_t>::value[0])
+            if (buf.raw.format[0] == format_code_gt<std::int64_t>::value[0] ||
+                buf.raw.format[0] == format_code_gt<std::uint64_t>::value[0])
                 view_numpy(buf);
             else
                 copy_numpy(buf);
@@ -106,12 +106,12 @@ struct parsed_places_t {
 
     void copy_numpy(py_buffer_t const& keys_buffer) {
         Py_buffer const* buf = &keys_buffer.raw;
-        size_t size = buf->len / buf->itemsize;
+        std::size_t size = buf->len / buf->itemsize;
         owned_t casted_keys;
         casted_keys.reserve(size);
 
         byte_t* buf_ptr = reinterpret_cast<byte_t*>(buf->buf);
-        for (size_t i = 0; i < size; i++)
+        for (std::size_t i = 0; i < size; i++)
             casted_keys.emplace_back(single_col,
                                      py_cast_scalar<ukv_key_t>(buf_ptr + (i * buf->itemsize), buf->format[0]));
 

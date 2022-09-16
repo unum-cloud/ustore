@@ -82,7 +82,7 @@ class docs_pairs_stream_t {
         if (!status)
             return status;
 
-        values_view = embedded_bins_t {found_values, found_offsets, found_lengths, count};
+        values_view = embedded_bins_t {count, found_offsets, found_lengths, found_values};
         next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
