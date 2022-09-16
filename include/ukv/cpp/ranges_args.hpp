@@ -188,34 +188,46 @@ auto edges(tuples_at&& tuples) noexcept {
     return result_t(ptr, ptr + count);
 }
 
-inline void validate_write_head(places_arg_t const& places, ukv_options_t const c_options, ukv_error_t* c_error) {
-    return_if_error((c_options == ukv_options_default_k) | (c_options & ukv_option_write_flush_k),
+inline void validate_write(places_arg_t const& places,
+                           ukv_transaction_t const c_txn,
+                           ukv_options_t const c_options,
+                           ukv_error_t* c_error) {
+
+    return_if_error(bool(places.count) == bool(places.keys_begin), c_error, 0, "Invalid Arguments!");
+    return_if_error(!(c_options & (ukv_option_read_track_k | ukv_option_txn_snapshot_k)),
                     c_error,
-                    args_wrong_k,
-                    "Invalid options for write");
-    return_if_error(bool(places.count) == bool(places.keys_begin), c_error, args_wrong_k, "Invalid Arguments");
+                    0,
+                    "Invalid options!");
+
+    if (places.collections_begin)
+        return_if_error(ukv_supports_named_collections_k, c_error, 0, "Current engine does not support collections!");
+
+    if (c_txn) {
+        return_if_error(ukv_supports_transactions_k, c_error, 0, "Current engine does not support transactions!");
+        return_if_error(!(c_options & ukv_option_write_flush_k), c_error, 0, "Invalid options!");
+    }
 }
 
-inline void validate_write_txn(places_arg_t const& places, ukv_options_t const c_options, ukv_error_t* c_error) {
-    return_if_error(c_options == ukv_options_default_k, c_error, args_wrong_k, "Invalid options for write");
-    return_if_error(bool(places.count) == bool(places.keys_begin), c_error, args_wrong_k, "Invalid Arguments");
-}
+inline void validate_read(places_arg_t const& places,
+                          ukv_transaction_t const c_txn,
+                          ukv_options_t const c_options,
+                          ukv_error_t* c_error) {
 
-inline void validate_read_head(places_arg_t const& places, ukv_options_t const c_options, ukv_error_t* c_error) {
-    return_if_error((c_options == ukv_options_default_k) | (c_options & ukv_option_read_shared_k),
-                    c_error,
-                    args_wrong_k,
-                    "Invalid options for read");
-    return_if_error(bool(places.count) == bool(places.keys_begin), c_error, args_wrong_k, "Invalid Arguments");
-}
+    return_if_error(bool(places.count) == bool(places.keys_begin), c_error, 0, "Invalid Arguments!");
+    return_if_error(!(c_options & ukv_option_write_flush_k), c_error, 0, "Invalid options!");
 
-inline void validate_read_txn(places_arg_t const& places, ukv_options_t const c_options, ukv_error_t* c_error) {
-    return_if_error((c_options == ukv_options_default_k) |
-                        (c_options & (ukv_option_read_shared_k | ukv_option_read_track_k)),
-                    c_error,
-                    args_wrong_k,
-                    "Invalid options for read");
-    return_if_error(bool(places.count) == bool(places.keys_begin), c_error, args_wrong_k, "Invalid Arguments");
+    if (places.collections_begin)
+        return_if_error(ukv_supports_named_collections_k, c_error, 0, "Current engine does not support collections!");
+
+    if (c_txn) {
+        return_if_error(ukv_supports_transactions_k, c_error, 0, "Current engine does not support transactions!");
+    }
+    else {
+        return_if_error(!(c_options & (ukv_option_read_track_k | ukv_option_txn_snapshot_k)),
+                        c_error,
+                        0,
+                        "Invalid options!");
+    }
 }
 
 } // namespace unum::ukv
