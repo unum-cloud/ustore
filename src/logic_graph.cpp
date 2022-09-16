@@ -146,7 +146,7 @@ struct neighborhood_t {
      * @return true  If the node is present in the graph.
      *               The neighborhood may be empty.
      */
-    inline operator bool() const noexcept { return sources && targets; }
+    inline explicit operator bool() const noexcept { return sources && targets; }
 };
 
 struct neighborhoods_iterator_t {
