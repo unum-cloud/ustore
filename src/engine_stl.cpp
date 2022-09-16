@@ -544,6 +544,9 @@ void ukv_read( //
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     places_arg_t places {collections, keys, {}, c_tasks_count};
+    validate_read(places, c_txn, c_options, c_error);
+    return_on_error(c_error);
+
     bool const needs_export = c_found_values != nullptr;
 
     // 1. Allocate a tape for all the values to be pulled
@@ -620,6 +623,9 @@ void ukv_write( //
     strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
 
     places_arg_t places {collections, keys, {}, c_tasks_count};
+    validate_write(places, c_txn, c_options, c_error);
+    return_on_error(c_error);
+
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     return c_txn ? write_txn(txn, places, contents, c_options, c_error)
