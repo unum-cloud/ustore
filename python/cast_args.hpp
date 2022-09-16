@@ -36,7 +36,23 @@ struct parsed_places_t {
     std::variant<std::monostate, viewed_t, owned_t> viewed_or_owned;
     ukv_collection_t single_col = ukv_collection_main_k;
 
-    operator places_arg_t() const noexcept {}
+    operator places_arg_t() const noexcept {
+        if (std::holds_alternative<std::monostate>(viewed_or_owned))
+            return {};
+        else if (std::holds_alternative<owned_t>(viewed_or_owned)) {
+            auto const& owned = std::get<owned_t>(viewed_or_owned);
+            places_arg_extractor_gt<owned_t> extractor;
+            viewed_t view;
+            view.collections_begin = extractor.collections(owned);
+            view.keys_begin = extractor.keys(owned);
+            view.fields_begin = extractor.fields(owned);
+            view.count = owned.size();
+            return view;
+        }
+        else
+            return std::get<viewed_t>(viewed_or_owned);
+    }
+
     parsed_places_t(PyObject* keys, std::optional<ukv_collection_t> col) {
         single_col = col.value_or(ukv_collection_main_k);
 
