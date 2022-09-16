@@ -61,8 +61,7 @@ strided_range_gt<scalar_at> py_strided_range(py_buffer_t const& buf) {
         throw std::invalid_argument("Scalar type mismatch");
 
     strided_range_gt<scalar_at> result {
-        reinterpret_cast<scalar_at*>(buf.raw.buf),
-        static_cast<ukv_size_t>(buf.raw.strides[0]),
+        {reinterpret_cast<scalar_at*>(buf.raw.buf), static_cast<ukv_size_t>(buf.raw.strides[0])},
         static_cast<ukv_size_t>(buf.raw.shape[0]),
     };
     return result;
