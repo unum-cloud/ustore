@@ -34,8 +34,132 @@ struct parsed_places_t {
     using viewed_t = places_arg_t;
     using owned_t = std::vector<collection_key_field_t>;
     std::variant<std::monostate, viewed_t, owned_t> viewed_or_owned;
+    ukv_collection_t single_col = ukv_collection_main_k;
+
     operator places_arg_t() const noexcept {}
-    parsed_places_t(PyObject* keys) {}
+    parsed_places_t(PyObject* keys, std::optional<ukv_collection_t> col) {
+        single_col = col.value_or(ukv_collection_main_k);
+
+        if (arrow::py::is_array(keys)) {
+            auto result = arrow::py::unwrap_array(keys);
+            if (!result.ok())
+                throw std::runtime_error("Failed to unwrap array");
+
+            auto array = result.ValueOrDie();
+            if (array->type_id() == arrow::Type::INT64 || array->type_id() == arrow::Type::UINT64)
+                view_arrow(array, nullptr);
+            else
+                copy_arrow(array, nullptr);
+        }
+        else if (arrow::py::is_table(keys)) {
+            arrow::Result<std::shared_ptr<arrow::Table>> result = arrow::py::unwrap_table(keys);
+            if (!result.ok())
+                throw std::runtime_error("Failed to unwrap table");
+
+            auto table = result.ValueOrDie();
+            auto k_col = table->GetColumnByName("keys");
+            auto c_col = table->GetColumnByName("collections");
+
+            if (k_col->num_chunks() != 1)
+                throw std::runtime_error("Invalid type in `keys` column");
+
+            if (k_col->chunk(0)->type_id() == arrow::Type::INT64 || k_col->chunk(0)->type_id() == arrow::Type::UINT64)
+                view_arrow(k_col->chunk(0), c_col ? c_col->chunk(0) : nullptr);
+            else
+                copy_arrow(k_col->chunk(0), c_col ? c_col->chunk(0) : nullptr);
+        }
+        else if (PyObject_CheckBuffer(keys)) {
+            py_buffer_t buf = py_buffer(keys);
+
+            if (buf.raw.format[0] == format_code_gt<std::int64_t>::value[0] ||
+                buf.raw.format[0] == format_code_gt<std::uint64_t>::value[0])
+                view_numpy(buf);
+            else
+                copy_numpy(buf);
+        }
+        else {
+            owned_t keys_vec;
+            auto cont_len = py_sequence_length(keys);
+            if (cont_len)
+                keys_vec.reserve(*cont_len);
+
+            auto py_to_key = [&](PyObject* obj) {
+                return collection_key_field_t {col.value_or(ukv_collection_main_k), py_to_scalar<ukv_key_t>(obj)};
+            };
+
+            py_transform_n(keys, py_to_key, std::back_inserter(keys_vec));
+            viewed_or_owned = std::move(keys_vec);
+        }
+    }
+
+  private:
+    void view_numpy(py_buffer_t const& keys_buffer) {
+        auto rng = py_strided_range<ukv_key_t const>(keys_buffer);
+
+        places_arg_t places;
+        places.collections_begin = {&single_col};
+        places.count = rng.size();
+        places.keys_begin = {rng.data(), rng.stride()};
+
+        viewed_or_owned = std::move(places);
+    }
+
+    void copy_numpy(py_buffer_t const& keys_buffer) {
+        Py_buffer const* buf = &keys_buffer.raw;
+        std::size_t size = buf->len / buf->itemsize;
+        owned_t casted_keys;
+        casted_keys.reserve(size);
+
+        byte_t* buf_ptr = reinterpret_cast<byte_t*>(buf->buf);
+        for (std::size_t i = 0; i < size; i++)
+            casted_keys.emplace_back(single_col,
+                                     py_cast_scalar<ukv_key_t>(buf_ptr + (i * buf->itemsize), buf->format[0]));
+
+        viewed_or_owned = std::move(casted_keys);
+    }
+
+    void view_arrow(std::shared_ptr<arrow::Array> key_array, std::shared_ptr<arrow::Array> col_array) {
+        places_arg_t places;
+        auto arrow_array = std::static_pointer_cast<arrow::UInt64Array>(key_array);
+
+        if (col_array) {
+            if (col_array->type_id() != arrow::Type::INT64 || col_array->type_id() != arrow::Type::UINT64)
+                throw std::runtime_error("Can't cast given type to `ukv_collection_t`");
+            auto collections = std::static_pointer_cast<arrow::UInt64Array>(key_array);
+            places.collections_begin = {collections->raw_values(), sizeof(ukv_collection_t)};
+        }
+        else
+            places.collections_begin = {&single_col};
+        places.count = arrow_array->length();
+        places.keys_begin = {reinterpret_cast<ukv_key_t const*>(arrow_array->raw_values()), sizeof(ukv_key_t)};
+
+        viewed_or_owned = std::move(places);
+    }
+
+    void copy_arrow(std::shared_ptr<arrow::Array> key_array, std::shared_ptr<arrow::Array> col_array) {
+        if (key_array->type_id() > arrow::Type::INT64)
+            throw std::runtime_error("Can't cast given type to `ukv_key_t`");
+
+        strided_iterator_gt<ukv_collection_t const> collections;
+        if (col_array) {
+            if (col_array->type_id() != arrow::Type::INT64 || col_array->type_id() != arrow::Type::UINT64)
+                throw std::runtime_error("Can't cast given type to `ukv_collection_t`");
+            auto cols = std::static_pointer_cast<arrow::UInt64Array>(key_array);
+            collections = {cols->raw_values(), sizeof(ukv_collection_t)};
+        }
+        else
+            collections = {&single_col};
+
+        owned_t keys_vec;
+        keys_vec.reserve(key_array->length());
+        for (size_t i = 0; i < key_array->length(); i++) {
+            auto scalar = key_array->GetScalar(i).ValueOrDie()->CastTo(arrow::uint64());
+            auto key = std::static_pointer_cast<arrow::UInt64Scalar>(scalar.ValueOrDie());
+
+            keys_vec.emplace_back(collections[i], key->value);
+        }
+        viewed_or_owned = std::move(keys_vec);
+    }
 };
 
 /**
@@ -163,7 +287,8 @@ struct parsed_adjacency_list_t {
             edges_view_t edges_view {
                 mat.column(0),
                 mat.column(1),
-                columns == 3 ? mat.column(2) : strided_range_gt<ukv_key_t const>(&ukv_default_edge_id_k, 0, mat.rows()),
+                columns == 3 ? mat.column(2)
+                             : strided_range_gt<ukv_key_t const>({&ukv_default_edge_id_k, 0}, mat.rows()),
             };
             viewed_or_owned = edges_view;
         }

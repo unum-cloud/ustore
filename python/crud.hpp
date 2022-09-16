@@ -57,7 +57,7 @@ static void write_one_binary(py_collection_t& collection, PyObject* key_py, PyOb
 static void write_many_binaries(py_collection_t& collection, PyObject* keys_py, PyObject* vals_py) {
 
     status_t status;
-    parsed_places_t parsed_places {keys_py};
+    parsed_places_t parsed_places {keys_py, collection.native};
     places_arg_t places = parsed_places;
     parsed_contents_t parsed_contents {vals_py};
     contents_arg_t contents = parsed_contents;
@@ -88,7 +88,7 @@ static void write_many_binaries(py_collection_t& collection, PyObject* keys_py, 
 static void broadcast_binary(py_collection_t& collection, PyObject* keys_py, PyObject* vals_py) {
 
     status_t status;
-    parsed_places_t parsed_places {keys_py};
+    parsed_places_t parsed_places {keys_py, collection.native};
     places_arg_t places = parsed_places;
     value_view_t val = py_to_bytes(vals_py);
 
@@ -199,7 +199,7 @@ static py::object has_many_binaries(py_collection_t& collection, PyObject* keys_
     status_t status;
     ukv_octet_t* found_presences = nullptr;
 
-    parsed_places_t parsed_places {keys_py};
+    parsed_places_t parsed_places {keys_py, collection.native};
     places_arg_t places = parsed_places;
 
     {
@@ -240,7 +240,7 @@ static py::object read_many_binaries(py_collection_t& collection, PyObject* keys
     ukv_bytes_ptr_t found_values = nullptr;
     bool const export_arrow = collection.export_into_arrow();
 
-    parsed_places_t parsed_places {keys_py};
+    parsed_places_t parsed_places {keys_py, collection.native};
     places_arg_t places = parsed_places;
 
     {
@@ -279,7 +279,7 @@ static py::object read_many_binaries(py_collection_t& collection, PyObject* keys
         return py::reinterpret_steal<py::object>(obj_ptr);
     }
     else {
-        embedded_bins_t bins {found_values, found_offsets, found_lengths, places.size()};
+        embedded_bins_t bins {places.size(), found_offsets, found_lengths, found_values};
         PyObject* tuple_ptr = PyTuple_New(places.size());
         for (std::size_t i = 0; i != places.size(); ++i) {
             value_view_t val = bins[i];
