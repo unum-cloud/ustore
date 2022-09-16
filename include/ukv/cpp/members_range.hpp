@@ -237,7 +237,7 @@ class pairs_stream_t {
         if (!status)
             return status;
 
-        values_view = joined_bins_t {found_vals, found_offs, count};
+        values_view = joined_bins_t {count, found_offs, found_vals};
         next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }

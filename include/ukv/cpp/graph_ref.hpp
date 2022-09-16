@@ -87,7 +87,7 @@ class graph_ref_t {
         ukv_key_t const vertex,
         ukv_vertex_role_t const role = ukv_vertex_role_any_k,
         bool flush = false) noexcept {
-        return remove({&vertex}, {&role}, flush);
+        return remove({{&vertex}, 1}, {{&role}, 1}, flush);
     }
 
     status_t remove( //
@@ -131,7 +131,7 @@ class graph_ref_t {
         ukv_vertex_role_t role = ukv_vertex_role_any_k,
         bool track = false) noexcept {
 
-        auto maybe_degrees = degrees({&vertex}, {&role}, track);
+        auto maybe_degrees = degrees({{&vertex}, 1}, {{&role}, 1}, track);
         if (!maybe_degrees)
             return maybe_degrees.release_status();
         auto degrees = *maybe_degrees;

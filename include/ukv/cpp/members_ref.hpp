@@ -308,7 +308,7 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
             return many;
     }
     else {
-        embedded_bins_t many {found_values, found_offsets, found_lengths, count};
+        embedded_bins_t many {count, found_offsets, found_lengths, found_values};
         if constexpr (is_one_k)
             return many[0];
         else
@@ -408,7 +408,7 @@ expected_gt<joined_strs_t> members_ref_gt<locations_at>::gist(bool track) noexce
         arena_,
         status.member_ptr());
 
-    joined_strs_t view {found_strings, found_offsets, found_count};
+    joined_strs_t view {found_count, found_offsets, found_strings};
     return {std::move(status), std::move(view)};
 }
 
