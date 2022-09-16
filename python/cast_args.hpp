@@ -47,9 +47,26 @@ struct parsed_places_t {
 
             auto array = result.ValueOrDie();
             if (array->type_id() == arrow::Type::INT64 || array->type_id() == arrow::Type::UINT64)
-                view_arrow(array);
+                view_arrow(array, nullptr);
             else
-                copy_arrow(array);
+                copy_arrow(array, nullptr);
+        }
+        else if (arrow::py::is_table(keys)) {
+            arrow::Result<std::shared_ptr<arrow::Table>> result = arrow::py::unwrap_table(keys);
+            if (!result.ok())
+                throw std::runtime_error("Failed to unwrap table");
+
+            auto table = result.ValueOrDie();
+            auto k_col = table->GetColumnByName("keys");
+            auto c_col = table->GetColumnByName("collections");
+
+            if (k_col->num_chunks() != 1)
+                throw std::runtime_error("Invalid type in `keys` column");
+
+            if (k_col->chunk(0)->type_id() == arrow::Type::INT64 || k_col->chunk(0)->type_id() == arrow::Type::UINT64)
+                view_arrow(k_col->chunk(0), c_col ? c_col->chunk(0) : nullptr);
+            else
+                copy_arrow(k_col->chunk(0), c_col ? c_col->chunk(0) : nullptr);
         }
         else if (PyObject_CheckBuffer(keys)) {
             py_buffer_t buf = py_buffer(keys);
@@ -101,20 +118,37 @@ struct parsed_places_t {
         viewed_or_owned = std::move(casted_keys);
     }
 
-    void view_arrow(std::shared_ptr<arrow::Array> key_array) {
+    void view_arrow(std::shared_ptr<arrow::Array> key_array, std::shared_ptr<arrow::Array> col_array) {
+        places_arg_t places;
         auto arrow_array = std::static_pointer_cast<arrow::UInt64Array>(key_array);
 
-        places_arg_t places;
-        places.collections_begin = {&single_col};
+        if (col_array) {
+            if (col_array->type_id() != arrow::Type::INT64 || col_array->type_id() != arrow::Type::UINT64)
+                throw std::runtime_error("Can't cast given type to `ukv_collection_t`");
+            auto collections = std::static_pointer_cast<arrow::UInt64Array>(key_array);
+            places.collections_begin = {collections->raw_values(), sizeof(ukv_collection_t)};
+        }
+        else
+            places.collections_begin = {&single_col};
         places.count = arrow_array->length();
         places.keys_begin = {reinterpret_cast<ukv_key_t const*>(arrow_array->raw_values()), sizeof(ukv_key_t)};
 
         viewed_or_owned = std::move(places);
     }
 
-    void copy_arrow(std::shared_ptr<arrow::Array> key_array) {
+    void copy_arrow(std::shared_ptr<arrow::Array> key_array, std::shared_ptr<arrow::Array> col_array) {
         if (key_array->type_id() > arrow::Type::INT64)
             throw std::runtime_error("Can't cast given type to `ukv_key_t`");
+
+        strided_iterator_gt<ukv_collection_t const> collections;
+        if (col_array) {
+            if (col_array->type_id() != arrow::Type::INT64 || col_array->type_id() != arrow::Type::UINT64)
+                throw std::runtime_error("Can't cast given type to `ukv_collection_t`");
+            auto cols = std::static_pointer_cast<arrow::UInt64Array>(key_array);
+            collections = {cols->raw_values(), sizeof(ukv_collection_t)};
+        }
+        else
+            collections = {&single_col};
 
         owned_t keys_vec;
         keys_vec.reserve(key_array->length());
@@ -122,7 +156,7 @@ struct parsed_places_t {
             auto scalar = key_array->GetScalar(i).ValueOrDie()->CastTo(arrow::uint64());
             auto key = std::static_pointer_cast<arrow::UInt64Scalar>(scalar.ValueOrDie());
 
-            keys_vec.emplace_back(single_col, key->value);
+            keys_vec.emplace_back(collections[i], key->value);
         }
         viewed_or_owned = std::move(keys_vec);
     }
