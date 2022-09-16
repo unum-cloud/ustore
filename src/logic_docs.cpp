@@ -25,8 +25,23 @@
 using namespace unum::ukv;
 using namespace unum;
 
-using json_t =
-    nlohmann::basic_json<std::map, std::vector, std::string, bool, int64_t, uint64_t, double, polymorphic_allocator_gt>;
+using json_t = nlohmann::basic_json< //
+
+    // Using `unordered_map` would have been more efficient.
+    // template <typename key_at, typename value_at, typename, typename allocator_at>
+    // using compatible_map_gt = std::unordered_map<key_at, value_at, std::hash<key_at>, std::equal_to<>, allocator_at>;
+    std::map,
+    std::vector,
+    // Even though templated, `nlohmann/json` has horrible support for Custom strings
+    // or associative containers. All of the extended functionality, like JSON-Pointers
+    // is strictly fixed to STL strings, rather than inferring from the template.
+    // std::basic_string<char, std::char_traits<char>, polymorphic_allocator_gt<char>>,
+    std::string,
+    bool,
+    int64_t,
+    uint64_t,
+    double,
+    polymorphic_allocator_gt>;
 using json_ptr_t = json_t::json_pointer;
 
 constexpr ukv_format_t internal_format_k = ukv_format_msgpack_k;
@@ -435,8 +450,8 @@ void read_modify_write( //
             json_t& parsed_part = lookup_field(parsed, field, null_object);
             if (&parsed != &null_object) {
                 switch (c_format) {
-                case ukv_format_json_patch_k: parsed_part = parsed_part.patch(parsed_task); break;
-                case ukv_format_json_merge_patch_k: parsed_part.merge_patch(parsed_task); break;
+                // case ukv_format_json_patch_k: parsed_part = parsed_part.patch(parsed_task); break;
+                // case ukv_format_json_merge_patch_k: parsed_part.merge_patch(parsed_task); break;
                 default: parsed_part = parsed_task; break;
                 }
             }
@@ -507,7 +522,7 @@ void parse_fields( //
             if (field[0] == '/')
                 field_parsed = json_ptr_t {field};
             else
-                field_parsed = std::string {field};
+                field_parsed = json_t::string_t {field};
 
             joined_fields_ptr += std::strlen(field) + 1;
         }
