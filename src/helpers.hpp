@@ -199,7 +199,7 @@ struct span_gt {
     std::size_t size_bytes() const noexcept { return size_ * sizeof(at); }
     std::size_t size() const noexcept { return size_; }
 
-    strided_range_gt<at> strided() const noexcept { return {ptr_, ptr_ + size_}; }
+    strided_range_gt<at> strided() const noexcept { return {{ptr_, sizeof(at)}, size_}; }
 
   private:
     at* ptr_;
@@ -254,8 +254,8 @@ struct stl_arena_t {
 
         using strided_t = strided_range_gt<at>;
         auto strided = output //
-                           ? strided_t {((*output) = alloc<at>(size, c_error, alignment).begin()), sizeof(at), size}
-                           : strided_t {nullptr, 0, size};
+                           ? strided_t {{((*output) = alloc<at>(size, c_error, alignment).begin()), sizeof(at)}, size}
+                           : strided_t {{nullptr, 0}, size};
         return {strided, {}};
     }
 
@@ -534,10 +534,10 @@ class growing_tape_t {
     }
     strided_range_gt<byte_t> contents() noexcept { return strided_range<byte_t>(contents_.begin(), contents_.end()); }
 
-    operator joined_bins_t() noexcept { return {ukv_bytes_ptr_t(contents_.data()), offsets_.data(), lengths_.size()}; }
+    operator joined_bins_t() noexcept { return {lengths_.size(), offsets_.data(), ukv_bytes_ptr_t(contents_.data())}; }
 
     operator embedded_bins_t() noexcept {
-        return {ukv_bytes_ptr_t(contents_.data()), offsets_.data(), lengths_.data(), lengths_.size()};
+        return {lengths_.size(), offsets_.data(), lengths_.data(), ukv_bytes_ptr_t(contents_.data())};
     }
 };
 
