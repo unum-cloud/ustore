@@ -249,7 +249,7 @@ struct strided_range_or_dummy_gt {
 
 template <typename at, typename alloc_at = std::allocator<at>>
 strided_range_gt<at> strided_range(std::vector<at, alloc_at>& vec) noexcept {
-    return {vec.size(), vec.data(), sizeof(at)};
+    return {{vec.data(), sizeof(at)}, vec.size()};
 }
 
 template <typename at, typename alloc_at = std::allocator<at>>
@@ -448,7 +448,6 @@ class embedded_chunks_gt {
     using element_t = typename chunk_t::value_type;
 
     ukv_size_t count_ = 0;
-
     ukv_length_t* offsets_ = nullptr;
     ukv_length_t* lengths_ = nullptr;
     element_t* contents_ = nullptr;
