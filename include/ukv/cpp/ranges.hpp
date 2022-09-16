@@ -216,7 +216,7 @@ class strided_range_gt {
     inline std::size_t size() const noexcept { return count_; }
     inline ukv_size_t stride() const noexcept { return begin_.stride(); }
     inline ukv_size_t count() const noexcept { return count_; }
-    inline operator bool() const noexcept { return begin_ != nullptr; }
+    inline explicit operator bool() const noexcept { return begin_ != nullptr; }
 
     template <typename member_at, typename parent_at = element_t>
     inline auto members(member_at parent_at::*member_ptr) const noexcept {
@@ -290,7 +290,7 @@ struct indexed_range_gt {
 
     inline std::size_t size() const noexcept { return end_ - begin_; }
     inline bool empty() const noexcept { return end_ == begin_; }
-    inline operator bool() const noexcept { return end_ != begin_; }
+    inline explicit operator bool() const noexcept { return end_ != begin_; }
     inline auto strided() const noexcept {
         using element_t = std::remove_pointer_t<pointer_at>;
         using strided_t = strided_range_gt<element_t>;
