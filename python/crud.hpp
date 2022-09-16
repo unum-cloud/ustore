@@ -279,7 +279,7 @@ static py::object read_many_binaries(py_collection_t& collection, PyObject* keys
         return py::reinterpret_steal<py::object>(obj_ptr);
     }
     else {
-        embedded_bins_t bins {found_values, found_offsets, found_lengths, places.size()};
+        embedded_bins_t bins {places.size(), found_offsets, found_lengths, found_values};
         PyObject* tuple_ptr = PyTuple_New(places.size());
         for (std::size_t i = 0; i != places.size(); ++i) {
             value_view_t val = bins[i];
