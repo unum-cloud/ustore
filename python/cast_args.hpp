@@ -34,68 +34,31 @@ struct parsed_places_t {
     using viewed_t = places_arg_t;
     using owned_t = std::vector<collection_key_field_t>;
     std::variant<std::monostate, viewed_t, owned_t> viewed_or_owned;
-    ukv_collection_t single_collection = ukv_collection_main_k;
+    ukv_collection_t single_col = ukv_collection_main_k;
 
     operator places_arg_t() const noexcept {}
     parsed_places_t(PyObject* keys, std::optional<ukv_collection_t> col) {
-        // Check if we can do zero-copy
-        if (PyObject_CheckBuffer(keys)) {
-            py_buffer_t buf = py_buffer(keys);
+        single_col = col.value_or(ukv_collection_main_k);
 
-            if (*buf.raw.format == format_code_gt<long>::value[0] ||
-                *buf.raw.format == format_code_gt<unsigned long>::value[0]) {
-                auto rng = py_strided_range<ukv_key_t const>(buf);
-                single_collection = col.value_or(ukv_collection_main_k);
-
-                places_arg_t places;
-                places.collections_begin = {&single_collection};
-                places.count = rng.size();
-                places.keys_begin = {rng.data(), rng.stride()};
-
-                viewed_or_owned = std::move(places);
-            }
-            else {
-                owned_t casted_keys(buf.raw.len / buf.raw.itemsize);
-                byte_t* buf_ptr = reinterpret_cast<byte_t*>(buf.raw.buf);
-                for (size_t i = 0; i < casted_keys.size(); i++) {
-                    casted_keys[i] = collection_key_field_t {
-                        col.value_or(ukv_collection_main_k),
-                        get_casted_scalar<ukv_key_t>(buf_ptr + i * buf.raw.itemsize, buf.raw.format[0])};
-                }
-                viewed_or_owned = std::move(casted_keys);
-            }
-        }
-        else if (arrow::py::is_array(keys)) {
+        if (arrow::py::is_array(keys)) {
             auto result = arrow::py::unwrap_array(keys);
             if (!result.ok())
                 throw std::runtime_error("Failed to unwrap array");
 
-            auto generic_array = result.ValueOrDie();
-            if (generic_array->type_id() == arrow::Type::INT64 || generic_array->type_id() == arrow::Type::UINT64) {
-                auto arrow_array = std::static_pointer_cast<arrow::UInt64Array>(generic_array);
-                single_collection = col.value_or(ukv_collection_main_k);
+            auto array = result.ValueOrDie();
+            if (array->type_id() == arrow::Type::INT64 || array->type_id() == arrow::Type::UINT64)
+                view_arrow(array);
+            else
+                copy_arrow(array);
+        }
+        else if (PyObject_CheckBuffer(keys)) {
+            py_buffer_t buf = py_buffer(keys);
 
-                places_arg_t places;
-                places.collections_begin = {&single_collection};
-                places.count = arrow_array->length();
-                places.keys_begin = {reinterpret_cast<ukv_key_t const*>(arrow_array->raw_values()), sizeof(ukv_key_t)};
-
-                viewed_or_owned = std::move(places);
-            }
-            else {
-                if (generic_array->type_id() > arrow::Type::INT64)
-                    throw std::runtime_error("Can't cast given type to `ukv_key_t`");
-
-                owned_t keys_vec(generic_array->length());
-                for (size_t i = 0; i < keys_vec.size(); i++) {
-                    auto scalar = generic_array->GetScalar(i).ValueOrDie()->CastTo(arrow::uint64());
-                    auto key = std::static_pointer_cast<arrow::UInt64Scalar>(scalar.ValueOrDie());
-
-                    keys_vec[i] = collection_key_field_t {col.value_or(ukv_collection_main_k), key->value};
-                }
-
-                viewed_or_owned = std::move(keys_vec);
-            }
+            if (*buf.raw.format == format_code_gt<int64_t>::value[0] ||
+                *buf.raw.format == format_code_gt<uint64_t>::value[0])
+                view_numpy(buf);
+            else
+                copy_numpy(buf);
         }
         else {
             owned_t keys_vec;
@@ -110,6 +73,58 @@ struct parsed_places_t {
             py_transform_n(keys, py_to_key, std::back_inserter(keys_vec));
             viewed_or_owned = std::move(keys_vec);
         }
+    }
+
+  private:
+    void view_numpy(py_buffer_t const& keys_buffer) {
+        auto rng = py_strided_range<ukv_key_t const>(keys_buffer);
+
+        places_arg_t places;
+        places.collections_begin = {&single_col};
+        places.count = rng.size();
+        places.keys_begin = {rng.data(), rng.stride()};
+
+        viewed_or_owned = std::move(places);
+    }
+
+    void copy_numpy(py_buffer_t const& keys_buffer) {
+        Py_buffer const* buf = &keys_buffer.raw;
+        size_t size = buf->len / buf->itemsize;
+        owned_t casted_keys;
+        casted_keys.reserve(size);
+
+        byte_t* buf_ptr = reinterpret_cast<byte_t*>(buf->buf);
+        for (size_t i = 0; i < size; i++)
+            casted_keys.emplace_back(single_col,
+                                     py_cast_scalar<ukv_key_t>(buf_ptr + (i * buf->itemsize), buf->format[0]));
+
+        viewed_or_owned = std::move(casted_keys);
+    }
+
+    void view_arrow(std::shared_ptr<arrow::Array> key_array) {
+        auto arrow_array = std::static_pointer_cast<arrow::UInt64Array>(key_array);
+
+        places_arg_t places;
+        places.collections_begin = {&single_col};
+        places.count = arrow_array->length();
+        places.keys_begin = {reinterpret_cast<ukv_key_t const*>(arrow_array->raw_values()), sizeof(ukv_key_t)};
+
+        viewed_or_owned = std::move(places);
+    }
+
+    void copy_arrow(std::shared_ptr<arrow::Array> key_array) {
+        if (key_array->type_id() > arrow::Type::INT64)
+            throw std::runtime_error("Can't cast given type to `ukv_key_t`");
+
+        owned_t keys_vec;
+        keys_vec.reserve(key_array->length());
+        for (size_t i = 0; i < key_array->length(); i++) {
+            auto scalar = key_array->GetScalar(i).ValueOrDie()->CastTo(arrow::uint64());
+            auto key = std::static_pointer_cast<arrow::UInt64Scalar>(scalar.ValueOrDie());
+
+            keys_vec.emplace_back(single_col, key->value);
+        }
+        viewed_or_owned = std::move(keys_vec);
     }
 };
 

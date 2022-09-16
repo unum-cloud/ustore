@@ -201,15 +201,15 @@ inline void throw_not_implemented() {
 // clang-format off
 template <> struct format_code_gt<bool> { inline static constexpr char value[2] = "?"; };
 template <> struct format_code_gt<char> { inline static constexpr char value[2] = "c"; };
-template <> struct format_code_gt<signed char> { inline static constexpr char value[2] = "b"; };
-template <> struct format_code_gt<unsigned char> { inline static constexpr char value[2] = "B"; };
+template <> struct format_code_gt<int8_t> { inline static constexpr char value[2] = "b"; };
+template <> struct format_code_gt<uint8_t> { inline static constexpr char value[2] = "B"; };
 
-template <> struct format_code_gt<short> { inline static constexpr char value[2] = "h"; };
-template <> struct format_code_gt<unsigned short> { inline static constexpr char value[2] = "H"; };
-template <> struct format_code_gt<int> { inline static constexpr char value[2] = "i"; };
-template <> struct format_code_gt<unsigned int> { inline static constexpr char value[2] = "I"; };
-template <> struct format_code_gt<long> { inline static constexpr char value[2] = "l"; };
-template <> struct format_code_gt<unsigned long> { inline static constexpr char value[2] = "L"; };
+template <> struct format_code_gt<int16_t> { inline static constexpr char value[2] = "h"; };
+template <> struct format_code_gt<uint16_t> { inline static constexpr char value[2] = "H"; };
+template <> struct format_code_gt<int32_t> { inline static constexpr char value[2] = "i"; };
+template <> struct format_code_gt<uint32_t> { inline static constexpr char value[2] = "I"; };
+template <> struct format_code_gt<int64_t> { inline static constexpr char value[2] = "l"; };
+template <> struct format_code_gt<uint64_t> { inline static constexpr char value[2] = "L"; };
 template <> struct format_code_gt<long long> { inline static constexpr char value[2] = "q"; };
 template <> struct format_code_gt<unsigned long long> { inline static constexpr char value[2] = "Q"; };
 
@@ -218,18 +218,17 @@ template <> struct format_code_gt<double> { inline static constexpr char value[2
 // clang-format on
 
 template <typename scalar_at>
-scalar_at get_casted_scalar(byte_t* data, char format) {
+scalar_at py_cast_scalar(byte_t* data, char format) {
     switch (format) {
-    case format_code_gt<short>::value[0]: return *reinterpret_cast<short*>(data);
-    case format_code_gt<int>::value[0]: return *reinterpret_cast<int*>(data);
-    case format_code_gt<long>::value[0]: return *reinterpret_cast<long*>(data);
-    case format_code_gt<long long>::value[0]:
-        return *reinterpret_cast<long long*>(data);
-
-        // Unsigned integral types
-    case format_code_gt<unsigned short>::value[0]: return *reinterpret_cast<unsigned short*>(data);
-    case format_code_gt<unsigned int>::value[0]: return *reinterpret_cast<unsigned int*>(data);
-    case format_code_gt<unsigned long>::value[0]: return *reinterpret_cast<unsigned long*>(data);
+    case format_code_gt<int8_t>::value[0]: return *reinterpret_cast<int8_t*>(data);
+    case format_code_gt<uint8_t>::value[0]: return *reinterpret_cast<uint8_t*>(data);
+    case format_code_gt<int16_t>::value[0]: return *reinterpret_cast<int16_t*>(data);
+    case format_code_gt<uint16_t>::value[0]: return *reinterpret_cast<uint16_t*>(data);
+    case format_code_gt<int32_t>::value[0]: return *reinterpret_cast<int32_t*>(data);
+    case format_code_gt<uint32_t>::value[0]: return *reinterpret_cast<uint32_t*>(data);
+    case format_code_gt<int64_t>::value[0]: return *reinterpret_cast<int64_t*>(data);
+    case format_code_gt<uint64_t>::value[0]: return *reinterpret_cast<uint64_t*>(data);
+    case format_code_gt<long long>::value[0]: return *reinterpret_cast<long long*>(data);
     case format_code_gt<unsigned long long>::value[0]: return *reinterpret_cast<unsigned long long*>(data);
 
     default: throw std::invalid_argument("Cant cast this type to `ukv_key_t`");
