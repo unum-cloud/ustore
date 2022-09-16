@@ -9,6 +9,7 @@
 #pragma once
 #include <functional> // `std::hash`
 #include <utility>    // `std::exchange`
+#include <cstring>    // `std::strlen`
 
 #include "ukv/ukv.h"
 
