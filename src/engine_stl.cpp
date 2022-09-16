@@ -136,7 +136,7 @@ void save_to_disk(stl_collection_t const& collection, std::string const& path, u
     {
         auto n = static_cast<ukv_size_t>(collection.unique_elements.load());
         auto saved_len = std::fwrite(&n, sizeof(ukv_size_t), 1, handle);
-        return_if_error(saved_len == sizeof(ukv_size_t), c_error, 0, "Couldn't write anything to file.");
+        return_if_error(saved_len == 1, c_error, 0, "Couldn't write anything to file.");
     }
 
     // Save the entries
@@ -145,15 +145,15 @@ void save_to_disk(stl_collection_t const& collection, std::string const& path, u
             continue;
 
         auto saved_len = std::fwrite(&key, sizeof(ukv_key_t), 1, handle);
-        return_if_error(saved_len != sizeof(ukv_key_t), c_error, 0, "Write partially failed on key.");
+        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on key.");
 
         auto const& buf = seq_val.buffer;
         auto buf_len = static_cast<ukv_length_t>(buf.size());
         saved_len = std::fwrite(&buf_len, sizeof(ukv_length_t), 1, handle);
-        return_if_error(saved_len != sizeof(ukv_length_t), c_error, 0, "Write partially failed on value len.");
+        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on value len.");
 
         saved_len = std::fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
-        return_if_error(saved_len != buf.size(), c_error, 0, "Write partially failed on value.");
+        return_if_error(saved_len == buf.size(), c_error, 0, "Write partially failed on value.");
     }
 
     log_error(c_error, 0, handle.close().release_error());
@@ -169,7 +169,7 @@ void read_from_disk(stl_collection_t& collection, std::string const& path, ukv_e
     auto n = ukv_size_t(0);
     {
         auto read_len = std::fread(&n, sizeof(ukv_size_t), 1, handle);
-        return_if_error(read_len == sizeof(ukv_size_t), c_error, 0, "Couldn't read anything from file.");
+        return_if_error(read_len == 1, c_error, 0, "Couldn't read anything from file.");
     }
 
     // Load the entries
@@ -181,11 +181,11 @@ void read_from_disk(stl_collection_t& collection, std::string const& path, ukv_e
 
         auto key = ukv_key_t {};
         auto read_len = std::fread(&key, sizeof(ukv_key_t), 1, handle);
-        return_if_error(read_len == sizeof(ukv_key_t), c_error, 0, "Read partially failed on key.");
+        return_if_error(read_len == 1, c_error, 0, "Read partially failed on key.");
 
         auto buf_len = ukv_length_t(0);
         read_len = std::fread(&buf_len, sizeof(ukv_length_t), 1, handle);
-        return_if_error(read_len == sizeof(ukv_length_t), c_error, 0, "Read partially failed on value len.");
+        return_if_error(read_len == 1, c_error, 0, "Read partially failed on value len.");
 
         auto buf = buffer_t(buf_len);
         read_len = std::fread(buf.data(), sizeof(byte_t), buf.size(), handle);
