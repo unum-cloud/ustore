@@ -82,7 +82,7 @@ class strided_iterator_gt {
         return stride_ ? (raw_ - other.raw_) * sizeof(element_t) / stride_ : 0;
     }
 
-    operator bool() const noexcept { return raw_ != nullptr; }
+    explicit operator bool() const noexcept { return raw_ != nullptr; }
     bool repeats() const noexcept { return !stride_; }
     bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
     ukv_size_t stride() const noexcept { return stride_; }
@@ -139,7 +139,7 @@ class strided_iterator_gt<ukv_octet_t> {
     }
     ref_t operator[](std::size_t idx) const noexcept { return at(idx); }
 
-    operator bool() const noexcept { return begin_ != nullptr; }
+    explicit operator bool() const noexcept { return begin_ != nullptr; }
     ukv_size_t stride() const noexcept { return stride_; }
     bool repeats() const noexcept { return !stride_; }
     bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
@@ -172,7 +172,7 @@ class strided_iterator_gt<ukv_octet_t const> {
     }
     bool operator[](std::size_t idx) const noexcept { return at(idx); }
 
-    operator bool() const noexcept { return begin_ != nullptr; }
+    explicit operator bool() const noexcept { return begin_ != nullptr; }
     bool repeats() const noexcept { return !stride_; }
     bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
     element_t* get() const noexcept { return begin_; }
@@ -191,19 +191,12 @@ class strided_range_gt {
   protected:
     static_assert(!std::is_void_v<element_t>);
 
-    element_t* begin_ = nullptr;
-    ukv_size_t stride_ = 0;
+    iterator_t begin_ = nullptr;
     ukv_size_t count_ = 0;
 
   public:
     strided_range_gt() = default;
-    strided_range_gt(element_t* single) noexcept : begin_(single), stride_(0), count_(1) {}
-    strided_range_gt(element_t* begin, element_t* end) noexcept
-        : begin_(begin), stride_(sizeof(element_t)), count_(end - begin) {}
-    strided_range_gt(element_t* begin, std::size_t stride, std::size_t count) noexcept
-        : begin_(begin), stride_(static_cast<ukv_size_t>(stride)), count_(static_cast<ukv_size_t>(count)) {}
-    strided_range_gt(iterator_t begin, std::size_t count) noexcept
-        : strided_range_gt(begin.get(), begin.stride(), count) {}
+    strided_range_gt(iterator_t begin, std::size_t count) noexcept : begin_(begin), count_(count) {}
 
     strided_range_gt(strided_range_gt&&) = default;
     strided_range_gt(strided_range_gt const&) = default;
@@ -211,19 +204,21 @@ class strided_range_gt {
     strided_range_gt& operator=(strided_range_gt const&) = default;
 
     inline element_t* data() const noexcept { return begin_; }
-    inline decltype(auto) begin() const noexcept { return iterator_t {begin_, stride_}; }
+    inline decltype(auto) begin() const noexcept { return begin_; }
     inline decltype(auto) end() const noexcept { return begin() + static_cast<std::ptrdiff_t>(count_); }
     inline decltype(auto) at(std::size_t i) const noexcept { return begin()[static_cast<std::ptrdiff_t>(i)]; }
     inline decltype(auto) operator[](std::size_t i) const noexcept { return at(i); }
 
-    inline auto immutable() const noexcept { return strided_range_gt<element_t const>(begin_, stride_, count_); }
+    inline auto immutable() const noexcept {
+        return strided_range_gt<element_t const>({begin_.get(), begin_.stride()}, count_);
+    }
     inline strided_range_gt subspan(std::size_t offset, std::size_t count) const noexcept {
-        return {begin_ + offset * stride_, stride_, count};
+        return {begin_ + offset, count};
     }
 
     inline bool empty() const noexcept { return !count_; }
     inline std::size_t size() const noexcept { return count_; }
-    inline ukv_size_t stride() const noexcept { return stride_; }
+    inline ukv_size_t stride() const noexcept { return begin_.stride(); }
     inline ukv_size_t count() const noexcept { return count_; }
     inline explicit operator bool() const noexcept { return begin_ != nullptr; }
 
@@ -231,7 +226,7 @@ class strided_range_gt {
     inline auto members(member_at parent_at::*member_ptr) const noexcept {
         auto begin_members = begin().members(member_ptr);
         using member_t = typename decltype(begin_members)::value_type;
-        return strided_range_gt<member_t> {begin_members.get(), begin_members.stride(), count()};
+        return strided_range_gt<member_t> {{begin_members.get(), begin_members.stride()}, count()};
     }
 };
 
@@ -249,37 +244,37 @@ struct strided_range_or_dummy_gt {
         return strided_ ? reference(strided_[i]) : reference(dummy_);
     }
     std::size_t size() const noexcept { return strided_.size(); }
-    operator bool() const noexcept { return strided_; }
+    explicit operator bool() const noexcept { return strided_; }
 };
 
 template <typename at, typename alloc_at = std::allocator<at>>
 strided_range_gt<at> strided_range(std::vector<at, alloc_at>& vec) noexcept {
-    return {vec.data(), sizeof(at), vec.size()};
+    return {vec.size(), vec.data(), sizeof(at)};
 }
 
 template <typename at, typename alloc_at = std::allocator<at>>
 strided_range_gt<at const> strided_range(std::vector<at, alloc_at> const& vec) noexcept {
-    return {vec.data(), sizeof(at), vec.size()};
+    return {{vec.data(), sizeof(at)}, vec.size()};
 }
 
 template <typename at, std::size_t count_ak>
 strided_range_gt<at> strided_range(at (&c_array)[count_ak]) noexcept {
-    return {&c_array[0], sizeof(at), count_ak};
+    return {{&c_array[0], sizeof(at)}, count_ak};
 }
 
 template <typename at, std::size_t count_ak>
 strided_range_gt<at const> strided_range(std::array<at, count_ak> const& array) noexcept {
-    return {array.data(), sizeof(at), count_ak};
+    return {{array.data(), sizeof(at)}, count_ak};
 }
 
 template <typename at>
 strided_range_gt<at const> strided_range(std::initializer_list<at> list) noexcept {
-    return {list.begin(), sizeof(at), list.size()};
+    return {{list.begin(), sizeof(at)}, list.size()};
 }
 
 template <typename at>
 strided_range_gt<at> strided_range(at* begin, at* end) noexcept {
-    return {begin, end};
+    return {{begin, sizeof(at)}, static_cast<std::size_t>(end - begin)};
 }
 
 /**
@@ -303,7 +298,7 @@ struct indexed_range_gt {
     inline auto strided() const noexcept {
         using element_t = std::remove_pointer_t<pointer_at>;
         using strided_t = strided_range_gt<element_t>;
-        return strided_t {begin_, sizeof(element_t), static_cast<ukv_size_t>(size())};
+        return strided_t {{begin_, sizeof(element_t)}, static_cast<ukv_size_t>(size())};
     }
 };
 
@@ -330,8 +325,8 @@ class joined_chunks_iterator_gt {
     using chunk_t = chunk_at;
     using element_t = typename chunk_t::value_type;
 
-    element_t* contents_ = nullptr;
     ukv_length_t* offsets_ = nullptr;
+    element_t* contents_ = nullptr;
 
   public:
     using iterator_category = std::random_access_iterator_tag;
@@ -341,8 +336,8 @@ class joined_chunks_iterator_gt {
     using reference = void;
 
     template <typename same_size_at>
-    joined_chunks_iterator_gt(same_size_at* vals, ukv_length_t* offs) noexcept
-        : contents_((element_t*)(vals)), offsets_(offs) {
+    joined_chunks_iterator_gt(ukv_length_t* offs, same_size_at* vals) noexcept
+        : offsets_(offs), contents_((element_t*)(vals)) {
         static_assert(sizeof(same_size_at) == sizeof(element_t));
     }
 
@@ -351,11 +346,11 @@ class joined_chunks_iterator_gt {
         return *this;
     }
 
-    joined_chunks_iterator_gt operator++(int) const noexcept { return {contents_, offsets_ + 1}; }
-    joined_chunks_iterator_gt operator--(int) const noexcept { return {contents_, offsets_ - 1}; }
+    joined_chunks_iterator_gt operator++(int) const noexcept { return {offsets_ + 1, contents_}; }
+    joined_chunks_iterator_gt operator--(int) const noexcept { return {offsets_ - 1, contents_}; }
     chunk_t operator*() const noexcept { return {contents_ + offsets_[0], offsets_[1] - offsets_[0]}; }
     chunk_t operator[](std::size_t i) const noexcept {
-        return {contents_ + offsets_[i], offsets_[i + 1] - offsets_[i]};
+        return {offsets_[i + 1] - offsets_[i], contents_ + offsets_[i]};
     }
 
     bool operator==(joined_chunks_iterator_gt const& other) const noexcept { return offsets_ == other.offsets_; }
@@ -371,9 +366,10 @@ class joined_chunks_gt {
     using chunk_t = chunk_at;
     using element_t = typename chunk_t::value_type;
 
-    element_t* contents_ = nullptr;
-    ukv_length_t* offsets_ = nullptr;
     ukv_size_t count_ = 0;
+
+    ukv_length_t* offsets_ = nullptr;
+    element_t* contents_ = nullptr;
 
   public:
     using value_type = chunk_t;
@@ -381,13 +377,13 @@ class joined_chunks_gt {
     joined_chunks_gt() = default;
 
     template <typename same_size_at>
-    joined_chunks_gt(same_size_at* vals, ukv_length_t* offs, ukv_size_t elements) noexcept
-        : contents_((element_t*)(vals)), offsets_(offs), count_(elements) {
+    joined_chunks_gt(ukv_size_t elements, ukv_length_t* offs, same_size_at* vals) noexcept
+        : count_(elements), offsets_(offs), contents_((element_t*)(vals)) {
         static_assert(sizeof(same_size_at) == sizeof(element_t));
     }
 
-    joined_chunks_iterator_gt<chunk_at> begin() const noexcept { return {contents_, offsets_}; }
-    joined_chunks_iterator_gt<chunk_at> end() const noexcept { return {contents_, offsets_ + count_}; }
+    joined_chunks_iterator_gt<chunk_at> begin() const noexcept { return {offsets_, contents_}; }
+    joined_chunks_iterator_gt<chunk_at> end() const noexcept { return {offsets_ + count_, contents_}; }
     std::size_t size() const noexcept { return count_; }
     chunk_t operator[](std::size_t i) const noexcept {
         return {contents_ + offsets_[i], offsets_[i + 1] - offsets_[i]};
@@ -410,9 +406,9 @@ class embedded_chunks_iterator_gt {
     using chunk_t = chunk_at;
     using element_t = typename chunk_t::value_type;
 
-    element_t* contents_ = nullptr;
     ukv_length_t* offsets_ = nullptr;
     ukv_length_t* lengths_ = nullptr;
+    element_t* contents_ = nullptr;
 
   public:
     using iterator_category = std::random_access_iterator_tag;
@@ -422,8 +418,8 @@ class embedded_chunks_iterator_gt {
     using reference = void;
 
     template <typename same_size_at>
-    embedded_chunks_iterator_gt(same_size_at* vals, ukv_length_t* offs, ukv_length_t* lens) noexcept
-        : contents_((element_t*)(vals)), offsets_(offs), lengths_(lens) {
+    embedded_chunks_iterator_gt(ukv_length_t* offs, ukv_length_t* lens, same_size_at* vals) noexcept
+        : offsets_(offs), lengths_(lens), contents_((element_t*)(vals)) {
         static_assert(sizeof(same_size_at) == sizeof(element_t));
     }
 
@@ -433,8 +429,8 @@ class embedded_chunks_iterator_gt {
         return *this;
     }
 
-    embedded_chunks_iterator_gt operator++(int) const noexcept { return {contents_, lengths_ + 1, offsets_ + 1}; }
-    embedded_chunks_iterator_gt operator--(int) const noexcept { return {contents_, lengths_ - 1, offsets_ - 1}; }
+    embedded_chunks_iterator_gt operator++(int) const noexcept { return {lengths_ + 1, offsets_ + 1, contents_}; }
+    embedded_chunks_iterator_gt operator--(int) const noexcept { return {lengths_ - 1, offsets_ - 1, contents_}; }
     chunk_t operator*() const noexcept { return {contents_ + *offsets_, *lengths_}; }
     chunk_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[i], lengths_[i]}; }
 
@@ -451,10 +447,11 @@ class embedded_chunks_gt {
     using chunk_t = chunk_at;
     using element_t = typename chunk_t::value_type;
 
-    element_t* contents_ = nullptr;
+    ukv_size_t count_ = 0;
+
     ukv_length_t* offsets_ = nullptr;
     ukv_length_t* lengths_ = nullptr;
-    ukv_size_t count_ = 0;
+    element_t* contents_ = nullptr;
 
   public:
     using value_type = chunk_t;
@@ -462,14 +459,14 @@ class embedded_chunks_gt {
     embedded_chunks_gt() = default;
 
     template <typename same_size_at>
-    embedded_chunks_gt(same_size_at* vals, ukv_length_t* offs, ukv_length_t* lens, ukv_size_t elements) noexcept
+    embedded_chunks_gt(ukv_size_t elements, ukv_length_t* offs, ukv_length_t* lens, same_size_at* vals) noexcept
         : contents_((element_t*)(vals)), offsets_(offs), lengths_(lens), count_(elements) {
         static_assert(sizeof(same_size_at) == sizeof(element_t));
     }
 
-    embedded_chunks_iterator_gt<chunk_at> begin() const noexcept { return {contents_, offsets_, lengths_}; }
+    embedded_chunks_iterator_gt<chunk_at> begin() const noexcept { return {offsets_, lengths_, contents_}; }
     embedded_chunks_iterator_gt<chunk_at> end() const noexcept {
-        return {contents_, offsets_ + count_, lengths_ + count_};
+        return {offsets_ + count_, lengths_ + count_, contents_};
     }
     std::size_t size() const noexcept { return count_; }
     chunk_t operator[](std::size_t i) const noexcept { return {contents_ + offsets_[i], lengths_[i]}; }

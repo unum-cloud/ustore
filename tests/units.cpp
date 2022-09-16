@@ -663,9 +663,9 @@ TEST(db, graph_triangle) {
 
     // Remove a single edge, making sure that the nodes info persists
     EXPECT_TRUE(net.remove({
-        {&edge1.source_id},
-        {&edge1.target_id},
-        {&edge1.id},
+        {{&edge1.source_id}, 1},
+        {{&edge1.target_id}, 1},
+        {{&edge1.id}, 1},
     }));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
@@ -673,9 +673,9 @@ TEST(db, graph_triangle) {
 
     // Bring that edge back
     EXPECT_TRUE(net.upsert({
-        {&edge1.source_id},
-        {&edge1.target_id},
-        {&edge1.id},
+        {{&edge1.source_id}, 1},
+        {{&edge1.target_id}, 1},
+        {{&edge1.id}, 1},
     }));
     EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
 
@@ -759,9 +759,9 @@ TEST(db, graph_triangle_batch_api) {
 
     // Remove a single edge, making sure that the nodes info persists
     EXPECT_TRUE(net.remove(edges_view_t {
-        {&triangle[0].source_id},
-        {&triangle[0].target_id},
-        {&triangle[0].id},
+        {{&triangle[0].source_id}, 1},
+        {{&triangle[0].target_id}, 1},
+        {{&triangle[0].id}, 1},
     }));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
@@ -769,9 +769,9 @@ TEST(db, graph_triangle_batch_api) {
 
     // Bring that edge back
     EXPECT_TRUE(net.upsert(edges_view_t {
-        {&triangle[0].source_id},
-        {&triangle[0].target_id},
-        {&triangle[0].id},
+        {{&triangle[0].source_id}, 1},
+        {{&triangle[0].target_id}, 1},
+        {{&triangle[0].id}, 1},
     }));
     EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
 

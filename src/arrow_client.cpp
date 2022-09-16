@@ -524,7 +524,7 @@ void ukv_scan( //
 
     bool const has_collections_column = !same_collection;
     constexpr bool has_start_keys_column = true;
-    bool const has_end_keys_column = end_keys;
+    bool const has_end_keys_column = static_cast<bool>(end_keys);
     constexpr bool has_lens_column = true;
 
     if (has_collections_column && !collections.is_continuous()) {
