@@ -152,7 +152,7 @@ struct edges_range_gt {
         : source_ids(sources), target_ids(targets), edge_ids(edges) {}
 
     inline edges_range_gt(tuple_t* ptr, tuple_t* end) noexcept {
-        auto strided = strided_range_gt<tuple_t>(ptr, end);
+        auto strided = strided_range_gt<tuple_t>({ptr, sizeof(tuple_t)}, end - ptr);
         source_ids = strided.members(&edge_t::source_id);
         target_ids = strided.members(&edge_t::target_id);
         edge_ids = strided.members(&edge_t::id);
