@@ -82,7 +82,7 @@ class strided_iterator_gt {
         return stride_ ? (raw_ - other.raw_) * sizeof(element_t) / stride_ : 0;
     }
 
-    operator bool() const noexcept { return raw_ != nullptr; }
+    explicit operator bool() const noexcept { return raw_ != nullptr; }
     bool repeats() const noexcept { return !stride_; }
     bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
     ukv_size_t stride() const noexcept { return stride_; }
@@ -139,7 +139,7 @@ class strided_iterator_gt<ukv_octet_t> {
     }
     ref_t operator[](std::size_t idx) const noexcept { return at(idx); }
 
-    operator bool() const noexcept { return begin_ != nullptr; }
+    explicit operator bool() const noexcept { return begin_ != nullptr; }
     ukv_size_t stride() const noexcept { return stride_; }
     bool repeats() const noexcept { return !stride_; }
     bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
@@ -172,7 +172,7 @@ class strided_iterator_gt<ukv_octet_t const> {
     }
     bool operator[](std::size_t idx) const noexcept { return at(idx); }
 
-    operator bool() const noexcept { return begin_ != nullptr; }
+    explicit operator bool() const noexcept { return begin_ != nullptr; }
     bool repeats() const noexcept { return !stride_; }
     bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
     element_t* get() const noexcept { return begin_; }
@@ -244,7 +244,7 @@ struct strided_range_or_dummy_gt {
         return strided_ ? reference(strided_[i]) : reference(dummy_);
     }
     std::size_t size() const noexcept { return strided_.size(); }
-    operator bool() const noexcept { return strided_; }
+    explicit operator bool() const noexcept { return strided_; }
 };
 
 template <typename at, typename alloc_at = std::allocator<at>>
@@ -274,7 +274,7 @@ strided_range_gt<at const> strided_range(std::initializer_list<at> list) noexcep
 
 template <typename at>
 strided_range_gt<at> strided_range(at* begin, at* end) noexcept {
-    return {{begin, sizeof(at)}, end - begin};
+    return {{begin, sizeof(at)}, static_cast<std::size_t>(end - begin)};
 }
 
 /**
