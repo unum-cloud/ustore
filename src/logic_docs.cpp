@@ -254,7 +254,7 @@ places_arg_t const& read_unique_docs( //
         if (*c_error)
             return places;
 
-        ukv_str_view_t field = places.fields_begin[task_idx];
+        ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
         callback(task_idx, field, parsed);
     }
 
@@ -674,9 +674,12 @@ void ukv_docs_read( //
     read_docs(c_db, c_txn, places, c_options, arena, c_error, safe_callback);
 
     auto serialized_view = serializing_tape.view();
-    *c_found_values = reinterpret_cast<ukv_byte_t*>(serialized_view.contents());
-    *c_found_offsets = serialized_view.offsets();
-    *c_found_lengths = serialized_view.lengths();
+    if (c_found_values)
+        *c_found_values = reinterpret_cast<ukv_byte_t*>(serialized_view.contents());
+    if (c_found_offsets)
+        *c_found_offsets = serialized_view.offsets();
+    if (c_found_lengths)
+        *c_found_lengths = serialized_view.lengths();
 }
 
 /*********************************************************/
@@ -1257,8 +1260,8 @@ void ukv_docs_gather( //
 
             column_begin_t column {
                 .validities = (*c_result_bitmap_valid)[field_idx],
-                .conversions = (*c_result_bitmap_converted)[field_idx],
-                .collisions = (*c_result_bitmap_collision)[field_idx],
+                .conversions = (*(c_result_bitmap_converted ?: c_result_bitmap_valid))[field_idx],
+                .collisions = (*(c_result_bitmap_collision ?: c_result_bitmap_valid))[field_idx],
                 .scalars = (*c_result_scalars)[field_idx],
                 .str_offsets = (*c_result_strs_offsets)[field_idx],
                 .str_lengths = (*c_result_strs_lengths)[field_idx],
