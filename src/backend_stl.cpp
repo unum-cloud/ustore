@@ -135,7 +135,7 @@ void save_to_disk(stl_collection_t const& collection, std::string const& path, u
     {
         auto n = static_cast<ukv_size_t>(collection.unique_elements.load());
         auto saved_len = std::fwrite(&n, sizeof(ukv_size_t), 1, handle);
-        return_if_error(saved_len == 1, c_error, 0, "Couldn't write anything to file.");
+        return_if_error(saved_len == sizeof(ukv_size_t), c_error, 0, "Couldn't write anything to file.");
     }
 
     // Save the entries
@@ -144,15 +144,15 @@ void save_to_disk(stl_collection_t const& collection, std::string const& path, u
             continue;
 
         auto saved_len = std::fwrite(&key, sizeof(ukv_key_t), 1, handle);
-        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on key.");
+        return_if_error(saved_len != sizeof(ukv_key_t), c_error, 0, "Write partially failed on key.");
 
         auto const& buf = seq_val.buffer;
         auto buf_len = static_cast<ukv_length_t>(buf.size());
         saved_len = std::fwrite(&buf_len, sizeof(ukv_length_t), 1, handle);
-        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on value len.");
+        return_if_error(saved_len != sizeof(ukv_length_t), c_error, 0, "Write partially failed on value len.");
 
         saved_len = std::fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
-        return_if_error(saved_len == buf.size(), c_error, 0, "Write partially failed on value.");
+        return_if_error(saved_len != buf.size(), c_error, 0, "Write partially failed on value.");
     }
 
     log_error(c_error, 0, handle.close().release_error());
@@ -168,7 +168,7 @@ void read_from_disk(stl_collection_t& collection, std::string const& path, ukv_e
     auto n = ukv_size_t(0);
     {
         auto read_len = std::fread(&n, sizeof(ukv_size_t), 1, handle);
-        return_if_error(read_len == 1, c_error, 0, "Couldn't read anything from file.");
+        return_if_error(read_len == sizeof(ukv_size_t), c_error, 0, "Couldn't read anything from file.");
     }
 
     // Load the entries
@@ -180,11 +180,11 @@ void read_from_disk(stl_collection_t& collection, std::string const& path, ukv_e
 
         auto key = ukv_key_t {};
         auto read_len = std::fread(&key, sizeof(ukv_key_t), 1, handle);
-        return_if_error(read_len == 1, c_error, 0, "Read partially failed on key.");
+        return_if_error(read_len == sizeof(ukv_key_t), c_error, 0, "Read partially failed on key.");
 
         auto buf_len = ukv_length_t(0);
         read_len = std::fread(&buf_len, sizeof(ukv_length_t), 1, handle);
-        return_if_error(read_len == 1, c_error, 0, "Read partially failed on value len.");
+        return_if_error(read_len == sizeof(ukv_length_t), c_error, 0, "Read partially failed on value len.");
 
         auto buf = buffer_t(buf_len);
         read_len = std::fread(buf.data(), sizeof(byte_t), buf.size(), handle);
@@ -245,9 +245,6 @@ void write_head( //
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
-    validate_write_head(places, c_options, c_error);
-    return_on_error(c_error);
-
     std::unique_lock _ {db.mutex};
 
     for (std::size_t i = 0; i != places.size(); ++i) {
@@ -284,11 +281,8 @@ void write_txn( //
     stl_txn_t& txn,
     places_arg_t places,
     contents_arg_t contents,
-    ukv_options_t const c_options,
+    ukv_options_t const,
     ukv_error_t* c_error) {
-
-    validate_write_txn(places, c_options, c_error);
-    return_on_error(c_error);
 
     // No need for locking here, until we commit, unless, of course,
     // a collection is being deleted.
@@ -316,12 +310,9 @@ template <typename value_enumerator_at>
 void read_head_under_lock( //
     stl_db_t& db,
     places_arg_t tasks,
-    ukv_options_t const c_options,
+    ukv_options_t const,
     value_enumerator_at enumerator,
-    ukv_error_t* c_error) {
-
-    validate_read_head(tasks, c_options, c_error);
-    return_on_error(c_error);
+    ukv_error_t*) {
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
@@ -340,9 +331,6 @@ void read_txn_under_lock( //
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
     ukv_error_t* c_error) {
-
-    validate_read_txn(tasks, c_options, c_error);
-    return_on_error(c_error);
 
     stl_db_t& db = *txn.db_ptr;
     generation_t const youngest_generation = db.youngest_generation.load();
