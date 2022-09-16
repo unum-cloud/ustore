@@ -209,7 +209,9 @@ class strided_range_gt {
     inline decltype(auto) at(std::size_t i) const noexcept { return begin()[static_cast<std::ptrdiff_t>(i)]; }
     inline decltype(auto) operator[](std::size_t i) const noexcept { return at(i); }
 
-    inline auto immutable() const noexcept { return strided_range_gt<element_t const>(begin_, count_); }
+    inline auto immutable() const noexcept {
+        return strided_range_gt<element_t const>({begin_.get(), begin_.stride()}, count_);
+    }
     inline strided_range_gt subspan(std::size_t offset, std::size_t count) const noexcept {
         return {begin_ + offset, count};
     }
