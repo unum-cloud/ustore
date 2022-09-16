@@ -3,26 +3,26 @@
     "tasks": [
         {
             "label": "Build Native: Debug STL Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_stl_unit_tests",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_stl_unit_test",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug RocksDB Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_rocksdb_unit_tests",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_rocksdb_unit_test",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug LevelDB Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_leveldb_unit_tests",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_leveldb_unit_test",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug Arrow Test",
             // Both must pass builds
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_flight_client_unit_tests ukv_stl_flight_server",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_flight_client_unit_test ukv_stl_flight_server",
             "args": [],
             "type": "shell"
         },
