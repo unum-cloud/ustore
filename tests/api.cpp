@@ -18,7 +18,7 @@ TEST(db, validation) {
     ukv_length_t val_len = sizeof(std::uint64_t);
     std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
-    std::size_t count = 3;
+    ukv_length_t count = 3;
 
     contents_arg_t values {
         .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
@@ -286,6 +286,96 @@ TEST(db, validation) {
         EXPECT_FALSE(status);
         status.release_error();
     }
+
+    // Scans
+    ukv_key_t* found_keys = nullptr;
+    ukv_length_t* found_counts = nullptr;
+
+    ukv_scan(db,
+             txn,
+             1,
+             collection.member_ptr(),
+             0,
+             keys.data(),
+             0,
+             keys.data() + count - 1,
+             0,
+             &count,
+             0,
+             ukv_options_default_k,
+             &found_offsets,
+             &found_counts,
+             &found_keys,
+             collection.member_arena(),
+             status.member_ptr());
+
+    EXPECT_TRUE(status);
+
+    // Count > 0, Keys = nullptr
+    ukv_scan(db,
+             txn,
+             1,
+             collection.member_ptr(),
+             0,
+             nullptr,
+             0,
+             nullptr,
+             0,
+             &count,
+             0,
+             ukv_options_default_k,
+             &found_offsets,
+             &found_counts,
+             &found_keys,
+             collection.member_arena(),
+             status.member_ptr());
+
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    // Keys_begins != nullptr, Keys_ends == nullptr
+    ukv_scan(db,
+             txn,
+             1,
+             collection.member_ptr(),
+             0,
+             keys.data(),
+             0,
+             nullptr,
+             0,
+             &count,
+             0,
+             ukv_options_default_k,
+             &found_offsets,
+             &found_counts,
+             &found_keys,
+             collection.member_arena(),
+             status.member_ptr());
+
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    // Limits == nullptr
+    ukv_scan(db,
+             txn,
+             1,
+             collection.member_ptr(),
+             0,
+             keys.data(),
+             0,
+             keys.data() + count - 1,
+             0,
+             nullptr,
+             0,
+             ukv_options_default_k,
+             &found_offsets,
+             &found_counts,
+             &found_keys,
+             collection.member_arena(),
+             status.member_ptr());
+
+    EXPECT_FALSE(status);
+    status.release_error();
 }
 
 int main(int argc, char** argv) {
