@@ -450,8 +450,8 @@ void read_modify_write( //
             json_t& parsed_part = lookup_field(parsed, field, null_object);
             if (&parsed != &null_object) {
                 switch (c_format) {
-                // case ukv_format_json_patch_k: parsed_part = parsed_part.patch(parsed_task); break;
-                // case ukv_format_json_merge_patch_k: parsed_part.merge_patch(parsed_task); break;
+                case ukv_format_json_patch_k: parsed_part = parsed_part.patch(parsed_task); break;
+                case ukv_format_json_merge_patch_k: parsed_part.merge_patch(parsed_task); break;
                 default: parsed_part = parsed_task; break;
                 }
             }
