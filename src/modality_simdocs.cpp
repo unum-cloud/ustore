@@ -25,24 +25,8 @@
 using namespace unum::ukv;
 using namespace unum;
 
-using json_t = nlohmann::basic_json< //
-
-    // Using `unordered_map` would have been more efficient.
-    // template <typename key_at, typename value_at, typename, typename allocator_at>
-    // using compatible_map_gt = std::unordered_map<key_at, value_at, std::hash<key_at>, std::equal_to<>, allocator_at>;
-    std::map,
-    std::vector,
-    // Even though templated, `nlohmann/json` has horrible support for Custom strings
-    // or associative containers. All of the extended functionality, like JSON-Pointers
-    // is strictly fixed to STL strings, rather than inferring from the template.
-    // std::basic_string<char, std::char_traits<char>, polymorphic_allocator_gt<char>>,
-    std::string,
-    bool,
-    int64_t,
-    uint64_t,
-    double,
-    polymorphic_allocator_gt>;
-using json_ptr_t = json_t::json_pointer;
+using parser_t = simdjson::dom::parser;
+using json_t = simdjson::dom::element;
 
 constexpr ukv_format_t internal_format_k = ukv_format_json_k;
 ukv_format_t ukv_format_docs_internal_k = internal_format_k;
@@ -50,33 +34,17 @@ ukv_format_t ukv_format_docs_internal_k = internal_format_k;
 static constexpr char const* true_k = "true";
 static constexpr char const* false_k = "false";
 
-// Both the variant and the vector wouldn't have `noexcept` default constructors
-// if we didn't ingest @c `std::monostate` into the first and wrapped the second
-// into an @c `std::optional`.
-using heapy_field_t = std::variant<std::monostate, json_t::string_t, json_ptr_t>;
-using heapy_fields_t = std::optional<std::vector<heapy_field_t>>;
-
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
 /*********************************************************/
 
-json_t& lookup_field( //
-    json_t& json,
-    ukv_str_view_t field,
-    json_t& default_json) noexcept(false) {
+json_t lookup_field(json_t json, ukv_str_view_t field, json_t default_json) {
 
     if (!field)
         return json;
 
-    if (field[0] == '/') {
-        // This libraries doesn't implement `find` for JSON-Pointers:
-        json_ptr_t field_ptr {field};
-        return json.contains(field_ptr) ? json.at(field_ptr) : default_json;
-    }
-    else {
-        auto it = json.find(field);
-        return it != json.end() ? it.value() : default_json;
-    }
+    auto result = field[0] == '/' ? json.at_pointer(field) : json.at_key(field);
+    return result ? *result : default_json;
 }
 
 json_t parse_any( //
@@ -85,24 +53,29 @@ json_t parse_any( //
     ukv_error_t* c_error) noexcept {
 
     json_t result;
-    safe_section("Parsing document", c_error, [&] {
-        auto str = reinterpret_cast<char const*>(bytes.begin());
-        auto len = bytes.size();
-        switch (c_format) {
-        case ukv_format_json_patch_k:
-        case ukv_format_json_merge_patch_k:
-        case ukv_format_json_k: result = json_t::parse(str, str + len, nullptr, false, true); break;
-        case ukv_format_msgpack_k: result = json_t::from_msgpack(str, str + len, false, false); break;
-        case ukv_format_bson_k: result = json_t::from_bson(str, str + len, false, false); break;
-        case ukv_format_cbor_k: result = json_t::from_cbor(str, str + len, false, false); break;
-        case ukv_format_ubjson_k: result = json_t::from_ubjson(str, str + len, false, false); break;
-        case ukv_format_binary_k:
-            result = json_t::binary({reinterpret_cast<std::int8_t const*>(bytes.begin()),
-                                     reinterpret_cast<std::int8_t const*>(bytes.end())});
-            break;
-        default: log_error(c_error, missing_feature_k, "Unsupported document format");
-        }
-    });
+    // safe_section("Parsing document", c_error, [&] {
+    //     auto str = reinterpret_cast<char const*>(bytes.begin());
+    //     auto len = bytes.size();
+    //     switch (c_format) {
+    //     case ukv_format_json_patch_k:
+    //     case ukv_format_json_merge_patch_k:
+    //     case ukv_format_json_k: result = json_t::parse(str, str + len, nullptr, false, true); break;
+    //     case ukv_format_msgpack_k: result = json_t::from_msgpack(str, str + len, false, false); break;
+    //     case ukv_format_bson_k: result = json_t::from_bson(str, str + len, false, false); break;
+    //     case ukv_format_cbor_k: result = json_t::from_cbor(str, str + len, false, false); break;
+    //     case ukv_format_ubjson_k: result = json_t::from_ubjson(str, str + len, false, false); break;
+    //     case ukv_format_binary_k:
+    //         result = json_t::binary({reinterpret_cast<std::int8_t const*>(bytes.begin()),
+    //                                  reinterpret_cast<std::int8_t const*>(bytes.end())});
+    //         break;
+    //     default: log_error(c_error, missing_feature_k, "Unsupported document format");
+    //     }
+    // });
+    parser_t parser;
+    auto result = parser.parse(bytes.data(), bytes.size(), false);
+    if (!result) {
+        c_error =
+    }
     return result;
 }
 

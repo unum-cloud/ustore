@@ -76,6 +76,7 @@ set(UKV_BUILD_FLIGHT_RPC ON CACHE BOOL "Building Apache Arrow Flight RPC server 
 set(UKV_BUILD_UNUMDB "" CACHE STRING "Pass a path to UnumDB copy to produce a full range of bindings")
 
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/simdjson.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
@@ -104,14 +105,14 @@ link_directories($ENV{CONDA_PREFIX}/lib)
 message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
-add_library(ukv_stl src/engine_stl.cpp src/modality_docs.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_stl nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+add_library(ukv_stl src/engine_stl.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+target_link_libraries(ukv_stl simdjson ${jemalloc_LIBRARIES})
 
-add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_rocksdb rocksdb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+target_link_libraries(ukv_rocksdb rocksdb simdjson ${jemalloc_LIBRARIES})
 
-add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_leveldb leveldb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+target_link_libraries(ukv_leveldb leveldb simdjson ${jemalloc_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 
 # The rest of CMake will apply to all client libraries
@@ -127,8 +128,8 @@ endif()
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT_RPC})
   include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
-  add_library(ukv_flight_client src/arrow_client.cpp src/modality_docs.cpp src/modality_graph.cpp)
-  target_link_libraries(ukv_flight_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
+  add_library(ukv_flight_client src/arrow_client.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+  target_link_libraries(ukv_flight_client simdjson fmt::fmt arrow arrow_flight)
   list(APPEND UKV_CLIENT_NAMES "flight_client")
 
   foreach(engine_name IN ITEMS ${UKV_ENGINE_NAMES})
@@ -138,7 +139,7 @@ if(${UKV_BUILD_FLIGHT_RPC})
 
     string(CONCAT server_name "ukv_" ${engine_name} "_flight_server")
     add_executable(${server_name} src/arrow_server.cpp ${lib_SOURCES})
-    target_link_libraries(${server_name} pthread nlohmann_json::nlohmann_json arrow arrow_flight ${lib_LIBRARIES})
+    target_link_libraries(${server_name} pthread simdjson arrow arrow_flight ${lib_LIBRARIES})
   endforeach()
 endif()
 
@@ -168,12 +169,12 @@ if(${UKV_BUILD_TESTS})
 
     string(CONCAT test_name "ukv_" ${client_name} "_unit_tests")
     add_executable(${test_name} tests/units.cpp ${target_SOURCES})
-    target_link_libraries(${test_name} gtest ${target_LIBRARIES})
+    target_link_libraries(${test_name} gtest nlohmann_json::nlohmann_json ${target_LIBRARIES})
     add_test(NAME "${client_name}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_name}")
 
     string(CONCAT test_name "ukv_" ${client_name} "_api_test")
     add_executable(${test_name} tests/api.cpp ${target_SOURCES})
-    target_link_libraries(${test_name} ${target_LIBRARIES})
+    target_link_libraries(${test_name} nlohmann_json::nlohmann_json ${target_LIBRARIES})
   endforeach()
 endif()
 
@@ -198,9 +199,8 @@ endif()
 
 # Build Python bindings linking to precompiled client SDKs
 if(${UKV_BUILD_PYTHON})
-  find_package(Python 3.9 COMPONENTS Interpreter Development NumPy REQUIRED)
-  include_directories(${Python_NumPy_INCLUDE_DIRS})
   include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
+  find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
