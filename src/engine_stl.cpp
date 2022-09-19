@@ -671,6 +671,9 @@ void ukv_scan( //
     strided_iterator_gt<ukv_length_t const> lens {c_scan_limits, c_scan_limits_stride};
     scans_arg_t scans {collections, start_keys, end_keys, lens, c_min_tasks_count};
 
+    validate_scan(scans, c_txn, c_options, c_error);
+    return_on_error(c_error);
+
     return c_txn ? scan_txn(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
                  : scan_head(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);
 }
