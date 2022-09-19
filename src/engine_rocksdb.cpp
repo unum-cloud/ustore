@@ -692,6 +692,10 @@ void ukv_collection_list( //
 
     std::size_t i = 0;
     for (auto const& column : db.columns) {
+        if (column->GetName() == "default") {
+            *c_count = --collections_count;
+            continue;
+        }
         auto len = column->GetName().size();
         std::memcpy(names, column->GetName().data(), len);
         names[len] = '\0';
