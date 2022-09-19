@@ -333,28 +333,6 @@ TEST(db, validation) {
     EXPECT_FALSE(status);
     status.release_error();
 
-    // Keys_begins != nullptr, Keys_ends == nullptr
-    ukv_scan(db,
-             txn,
-             1,
-             collection.member_ptr(),
-             0,
-             keys.data(),
-             0,
-             nullptr,
-             0,
-             &count,
-             0,
-             ukv_options_default_k,
-             &found_offsets,
-             &found_counts,
-             &found_keys,
-             collection.member_arena(),
-             status.member_ptr());
-
-    EXPECT_FALSE(status);
-    status.release_error();
-
     // Limits == nullptr
     ukv_scan(db,
              txn,
