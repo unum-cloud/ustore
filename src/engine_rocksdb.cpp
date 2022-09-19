@@ -623,7 +623,7 @@ void ukv_collection_drop(
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     if (c_mode == ukv_drop_keys_vals_handle_k) {
         for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-            if (c_collection_name == (*it)->GetName() && (*it)->GetName() != "default") {
+            if (c_collection_name == (*it)->GetName() && (*it)->GetName() != rocksdb::kDefaultColumnFamilyName) {
                 rocks_status_t status = db.native->DropColumnFamily(*it);
                 if (export_error(status, c_error))
                     return;
@@ -672,7 +672,7 @@ void ukv_collection_list( //
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    std::size_t collections_count = db.columns.size();
+    std::size_t collections_count = db.columns.size() - 1;
     *c_count = static_cast<ukv_size_t>(collections_count);
 
     // Every string will be null-terminated
@@ -692,10 +692,9 @@ void ukv_collection_list( //
 
     std::size_t i = 0;
     for (auto const& column : db.columns) {
-        if (column->GetName() == "default") {
-            *c_count = --collections_count;
+        if (column->GetName() == rocksdb::kDefaultColumnFamilyName)
             continue;
-        }
+
         auto len = column->GetName().size();
         std::memcpy(names, column->GetName().data(), len);
         names[len] = '\0';
