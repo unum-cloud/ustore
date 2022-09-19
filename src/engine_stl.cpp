@@ -937,12 +937,15 @@ void ukv_transaction_begin(
     // Inputs:
     ukv_database_t const c_db,
     ukv_size_t const c_generation,
-    ukv_options_t const,
+    ukv_options_t const c_options,
     // Outputs:
     ukv_transaction_t* c_txn,
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    validate_transaction_begin(c_txn, c_options, c_error);
+    return_on_error(c_error);
+
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
 
     safe_section("Initializing transaction state", c_error, [&] {
@@ -968,7 +971,8 @@ void ukv_transaction_commit( //
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
 
-    return_if_error(c_txn, c_error, uninitialized_state_k, "Transaction is uninitialized");
+    validate_transaction_commit(c_txn, c_options, c_error);
+    return_on_error(c_error);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
 
     // This write may fail with out-of-memory errors, if Hash-Tables

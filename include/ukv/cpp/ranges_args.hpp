@@ -230,4 +230,26 @@ inline void validate_read(places_arg_t const& places,
     }
 }
 
+inline void validate_transaction_commit(ukv_transaction_t const c_txn,
+                                        ukv_options_t const c_options,
+                                        ukv_error_t* c_error) {
+
+    return_if_error(c_txn, c_error, 0, "Transaction is uninitialized");
+    return_if_error(!(c_options & (ukv_option_txn_snapshot_k | ukv_option_nodiscard_k)),
+                    c_error,
+                    0,
+                    "Invalid options!");
+}
+
+inline void validate_transaction_begin(ukv_transaction_t const c_txn,
+                                       ukv_options_t const c_options,
+                                       ukv_error_t* c_error) {
+
+    return_if_error(c_txn, c_error, 0, "Transaction is uninitialized");
+    return_if_error(!(c_options & (ukv_option_write_flush_k | ukv_option_read_track_k | ukv_option_nodiscard_k)),
+                    c_error,
+                    0,
+                    "Invalid options!");
+}
+
 } // namespace unum::ukv

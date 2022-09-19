@@ -76,7 +76,7 @@ TEST(db, validation) {
 
     EXPECT_TRUE(status);
 
-    // Transaction with flush
+    // Transaction With Flush
     ukv_write(db,
               txn,
               count,
@@ -142,7 +142,7 @@ TEST(db, validation) {
     EXPECT_FALSE(status);
     status.release_error();
 
-    // Wrong Options
+    // Wrong Write Options
     std::vector<ukv_options_t> wrong_write_options {
         ukv_option_read_track_k,
         ukv_option_txn_snapshot_k,
@@ -226,7 +226,7 @@ TEST(db, validation) {
 
     EXPECT_TRUE(status);
 
-    // Wrong options
+    // Wrong Read Options
     std::vector<ukv_options_t> wrong_read_options {
         ukv_option_write_flush_k,
         ukv_option_read_track_k,
@@ -249,6 +249,40 @@ TEST(db, validation) {
                  collection.member_arena(),
                  status.member_ptr());
 
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
+
+    // Transaction
+
+    ukv_transaction_t ukv_txn = nullptr;
+    ukv_transaction_begin(db, 0, ukv_options_default_k, &ukv_txn, status.member_ptr());
+    EXPECT_TRUE(status);
+
+    ukv_transaction_begin(db, 0, ukv_options_default_k, nullptr, status.member_ptr());
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    // Wrong Transaction Begin Options
+    std::vector<ukv_options_t> wrong_txn_begin_options {
+        ukv_option_write_flush_k,
+        ukv_option_nodiscard_k,
+    };
+
+    for (auto& option : wrong_txn_begin_options) {
+        ukv_transaction_begin(db, 0, option, &ukv_txn, status.member_ptr());
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
+
+    // Wrong Transaction Commit Options
+    std::vector<ukv_options_t> wrong_txn_commit_options {
+        ukv_option_txn_snapshot_k,
+        ukv_option_nodiscard_k,
+    };
+
+    for (auto& option : wrong_txn_commit_options) {
+        ukv_transaction_commit(db, txn, option, status.member_ptr());
         EXPECT_FALSE(status);
         status.release_error();
     }
