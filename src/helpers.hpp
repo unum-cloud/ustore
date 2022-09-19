@@ -486,7 +486,8 @@ class safe_vector_gt {
     inline element_t& operator[](std::size_t i) noexcept { return ptr_[i]; }
     inline std::size_t size() const noexcept { return length_; }
     inline explicit operator bool() const noexcept { return length_; }
-    inline operator value_view_t() const noexcept { return {ptr_, length_}; }
+    // inline operator value_view_t() const noexcept { return view(); }
+    // inline value_view_t view() const noexcept { return {ptr_, length_}; }
     inline void clear() noexcept { length_ = 0; }
 
     inline ptr_t* member_ptr() noexcept { return &ptr_; }
@@ -507,10 +508,15 @@ class growing_tape_t {
   public:
     growing_tape_t(stl_arena_t& arena) : offsets_(&arena), lengths_(&arena), contents_(&arena) {}
 
-    void push_back(value_view_t value, ukv_error_t* c_error) {
+    /**
+     * @return Memory region occupied by the new copy.
+     */
+    value_view_t push_back(value_view_t value, ukv_error_t* c_error) {
         offsets_.push_back(static_cast<ukv_length_t>(contents_.size()), c_error);
         lengths_.push_back(static_cast<ukv_length_t>(value.size()), c_error);
         contents_.insert(contents_.size(), value.begin(), value.end(), c_error);
+        return *c_error ? value_view_t {contents_.data() + contents_.size() - value.size(), value.size()}
+                        : value_view_t {};
     }
 
     void reserve(size_t new_cap, ukv_error_t* c_error) {

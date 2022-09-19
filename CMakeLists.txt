@@ -76,7 +76,7 @@ set(UKV_BUILD_FLIGHT_RPC ON CACHE BOOL "Building Apache Arrow Flight RPC server 
 set(UKV_BUILD_UNUMDB "" CACHE STRING "Pass a path to UnumDB copy to produce a full range of bindings")
 
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/simdjson.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
@@ -106,13 +106,13 @@ message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
 add_library(ukv_stl src/engine_stl.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_stl simdjson ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_stl yyjson ${jemalloc_LIBRARIES})
 
 add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_rocksdb rocksdb simdjson ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_rocksdb rocksdb yyjson ${jemalloc_LIBRARIES})
 
 add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_leveldb leveldb simdjson ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_leveldb leveldb yyjson ${jemalloc_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 
 # The rest of CMake will apply to all client libraries
@@ -129,7 +129,7 @@ endif()
 if(${UKV_BUILD_FLIGHT_RPC})
   include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
-  target_link_libraries(ukv_flight_client simdjson fmt::fmt arrow arrow_flight)
+  target_link_libraries(ukv_flight_client yyjson fmt::fmt arrow arrow_flight)
   list(APPEND UKV_CLIENT_NAMES "flight_client")
 
   foreach(engine_name IN ITEMS ${UKV_ENGINE_NAMES})
@@ -139,7 +139,7 @@ if(${UKV_BUILD_FLIGHT_RPC})
 
     string(CONCAT server_name "ukv_" ${engine_name} "_flight_server")
     add_executable(${server_name} src/arrow_server.cpp ${lib_SOURCES})
-    target_link_libraries(${server_name} pthread simdjson arrow arrow_flight ${lib_LIBRARIES})
+    target_link_libraries(${server_name} pthread yyjson arrow arrow_flight ${lib_LIBRARIES})
   endforeach()
 endif()
 
