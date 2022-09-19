@@ -235,8 +235,8 @@ inline void validate_scan(scans_arg_t const& args,
                           ukv_options_t const c_options,
                           ukv_error_t* c_error) {
 
-    return_if_error((bool(args.count) | bool(args.start_keys) | bool(args.end_keys) | bool(args.limits)) ==
-                        (bool(args.count) & bool(args.start_keys) & bool(args.end_keys) & bool(args.limits)),
+    return_if_error((bool(args.count) | bool(args.start_keys) | bool(args.limits)) ==
+                        (bool(args.count) & bool(args.start_keys) & bool(args.limits)),
                     c_error,
                     0,
                     "Invalid Arguments!");
