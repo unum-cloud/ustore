@@ -6,7 +6,6 @@
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 #include "cast.hpp"
 
-#include <arrow/python/pyarrow.h>
 #include <arrow/api.h>
 #include <arrow/array.h>
 #include <arrow/table.h>
@@ -217,9 +216,6 @@ struct parsed_contents_t {
     parsed_contents_t(PyObject* contents) {
         // Check if we can do zero-copy
         if (arrow::py::is_array(contents) || arrow::py::is_table(contents)) {
-            if (arrow::py::import_pyarrow())
-                throw std::runtime_error("Failed to initialize PyArrow");
-
             std::shared_ptr<arrow::BinaryArray> arrow_array(nullptr);
             if (arrow::py::is_array(contents)) {
                 auto result = arrow::py::unwrap_array(contents);
@@ -239,16 +235,17 @@ struct parsed_contents_t {
             }
 
             values_tape_start = arrow_array->value_data()->data();
-            contents_arg_t contents;
-            contents.offsets_begin = {reinterpret_cast<ukv_length_t const*>(arrow_array->value_offsets()->data()),
-                                      sizeof(ukv_length_t)};
-            contents.contents_begin = {&values_tape_start, 0};
-            contents.count = static_cast<ukv_size_t>(arrow_array->length());
-            contents.presences_begin = arrow_array->null_count()
-                                           ? reinterpret_cast<ukv_octet_t const*>(arrow_array->null_bitmap()->data())
-                                           : nullptr;
+            contents_arg_t viewed_contents;
+            viewed_contents.offsets_begin = {
+                reinterpret_cast<ukv_length_t const*>(arrow_array->value_offsets()->data()),
+                sizeof(ukv_length_t)};
+            viewed_contents.contents_begin = {&values_tape_start, 0};
+            viewed_contents.count = static_cast<ukv_size_t>(arrow_array->length());
+            viewed_contents.presences_begin =
+                arrow_array->null_count() ? reinterpret_cast<ukv_octet_t const*>(arrow_array->null_bitmap()->data())
+                                          : nullptr;
 
-            viewed_or_owned = std::move(contents);
+            viewed_or_owned = std::move(viewed_contents);
         }
         else {
             std::vector<value_view_t> values_vec;
