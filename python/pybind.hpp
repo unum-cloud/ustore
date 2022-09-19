@@ -6,6 +6,8 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 
+#include <arrow/python/pyarrow.h>
+
 #include "ukv/ukv.hpp"
 
 namespace unum::ukv {
