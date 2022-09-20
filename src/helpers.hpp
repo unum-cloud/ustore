@@ -468,14 +468,17 @@ class safe_vector_gt {
         else
             length_ = new_size;
 
-        std::memmove(ptr_ + offset + inserted_len, ptr_ + offset, following_len);
-        std::memcpy(ptr_ + offset, inserted_begin, inserted_len);
+        static_assert(std::is_trivially_copy_constructible<element_t>());
+        std::memmove(ptr_ + offset + inserted_len, ptr_ + offset, following_len * sizeof(element_t));
+        std::memcpy(ptr_ + offset, inserted_begin, inserted_len * sizeof(element_t));
     }
 
     void erase(std::size_t offset, std::size_t length, ukv_error_t* c_error) {
         return_if_error(size() >= offset + length, c_error, out_of_range_k, "Can't erase");
 
-        std::memmove(ptr_ + offset, ptr_ + offset + length, length_ - (offset + length));
+        static_assert(std::is_trivially_copy_constructible<element_t>());
+        auto following_len = length_ - (offset + length);
+        std::memmove(ptr_ + offset, ptr_ + offset + length, following_len * sizeof(element_t));
         length_ -= length;
     }
 
@@ -515,9 +518,11 @@ class growing_tape_t {
         offsets_.push_back(static_cast<ukv_length_t>(contents_.size()), c_error);
         lengths_.push_back(static_cast<ukv_length_t>(value.size()), c_error);
         contents_.insert(contents_.size(), value.begin(), value.end(), c_error);
-        return *c_error ? value_view_t {contents_.data() + contents_.size() - value.size(), value.size()}
-                        : value_view_t {};
+        return !*c_error ? value_view_t {contents_.data() + contents_.size() - value.size(), value.size()}
+                         : value_view_t {};
     }
+
+    void add_terminator(byte_t terminator, ukv_error_t* c_error) { contents_.push_back(terminator, c_error); }
 
     void reserve(size_t new_cap, ukv_error_t* c_error) {
         offsets_.reserve(new_cap + 1, c_error);
