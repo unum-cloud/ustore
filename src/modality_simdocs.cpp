@@ -377,6 +377,9 @@ void read_modify_write( //
 
     // Export all those modified documents
     growing_tape_t growing_tape {arena};
+    growing_tape.reserve(unique_places.size(), c_error);
+    return_on_error(c_error);
+
     for (auto const& doc : unique_docs) {
         yyjson_mut_val* root = yyjson_mut_doc_get_root(doc.mut_handle);
         dump_any(root, internal_format_k, arena, growing_tape, c_error);
@@ -545,6 +548,9 @@ void ukv_docs_read( //
     // Now, we need to parse all the entries to later export them into a target format.
     // Potentially sampling certain sub-fields again along the way.
     growing_tape_t growing_tape {arena};
+    growing_tape.reserve(places.size(), c_error);
+    return_on_error(c_error);
+
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, json_t const& doc) {
         yyjson_val* root = yyjson_doc_get_root(doc.handle);
         auto branch = lookup_field(root, field);
@@ -552,7 +558,7 @@ void ukv_docs_read( //
         return_on_error(c_error);
     };
     places_arg_t unique_places;
-    safe_vector_gt<json_t> unique_docs;
+    safe_vector_gt<json_t> unique_docs(&arena);
     read_docs(c_db, c_txn, places, c_options, arena, unique_places, unique_docs, c_error, safe_callback);
 
     if (c_found_offsets)
