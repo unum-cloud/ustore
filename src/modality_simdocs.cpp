@@ -48,6 +48,8 @@ struct json_t {
         std::swap(mut_handle, other.mut_handle);
         return *this;
     }
+
+    explicit operator bool() const noexcept { return handle || mut_handle; }
 };
 
 constexpr ukv_format_t internal_format_k = ukv_format_json_k;
@@ -94,6 +96,9 @@ json_t parse_any( //
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 
+    if (bytes.empty())
+        return {};
+
     json_t result;
     yyjson_alc allocator = wrap_allocator(arena);
     yyjson_read_flag flg = YYJSON_READ_ALLOW_COMMENTS | YYJSON_READ_ALLOW_INF_AND_NAN;
@@ -114,6 +119,9 @@ void dump_any( //
     growing_tape_t& output,
     ukv_error_t* c_error) noexcept {
 
+    if (!json)
+        return;
+
     size_t result_length = 0;
     yyjson_write_flag flg = 0;
     yyjson_alc allocator = wrap_allocator(arena);
@@ -123,6 +131,7 @@ void dump_any( //
 
     auto result = value_view_t {reinterpret_cast<byte_t const*>(result_begin), result_length};
     output.push_back(result, c_error);
+    output.add_terminator(byte_t {0}, c_error);
 }
 
 void dump_any( //
@@ -688,6 +697,9 @@ void ukv_docs_gist( //
 
         json_t doc = parse_any(binary_doc, internal_format_k, arena, c_error);
         return_on_error(c_error);
+        if (!doc)
+            continue;
+
         yyjson_val* root = yyjson_doc_get_root(doc.handle);
         gist_recursively(root, field_name, sorted_paths, exported_paths, c_error);
         return_on_error(c_error);
@@ -738,7 +750,10 @@ struct column_begin_t {
 };
 
 template <typename scalar_at>
-void export_scalar_column(yyjson_val* value, std::size_t doc_idx, column_begin_t column) {
+void export_scalar_column( //
+    yyjson_val* value,
+    std::size_t doc_idx,
+    column_begin_t column) {
 
     yyjson_type const type = yyjson_get_type(value);
     yyjson_subtype const subtype = yyjson_get_subtype(value);
@@ -840,16 +855,20 @@ ukv_length_t print_scalar(scalar_at scalar, safe_vector_gt<char>& output, ukv_er
     bool fits_terminator = result.ec == std::errc() && result.ptr + 1 < print_buf + printed_number_length_limit_k;
     if (fits_terminator) {
         *result.ptr = '\0';
-        auto length = result.ptr + 1 - print_buf;
+        auto length = (result.ptr - print_buf) + 1;
         output.insert(output.size(), print_buf, print_buf + length, c_error);
-        return static_cast<ukv_length_t>(length);
+        return static_cast<ukv_length_t>(length - 1);
     }
     else
         return ukv_length_missing_k;
 }
 
-void export_string_column(
-    yyjson_val* value, std::size_t doc_idx, column_begin_t column, safe_vector_gt<char>& output, ukv_error_t* c_error) {
+void export_string_column( //
+    yyjson_val* value,
+    std::size_t doc_idx,
+    column_begin_t column,
+    safe_vector_gt<char>& output,
+    ukv_error_t* c_error) {
 
     yyjson_type const type = yyjson_get_type(value);
     yyjson_subtype const subtype = yyjson_get_subtype(value);
@@ -1097,6 +1116,8 @@ void ukv_docs_gather( //
         value_view_t binary_doc = *found_binary_it;
         json_t doc = parse_any(binary_doc, internal_format_k, arena, c_error);
         return_on_error(c_error);
+        if (!doc)
+            continue;
         yyjson_val* root = yyjson_doc_get_root(doc.handle);
 
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx) {
