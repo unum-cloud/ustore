@@ -198,7 +198,7 @@ static void sample_blobs(bm::State& state) {
 static void sample_docs(bm::State& state) {
 
     // We want to trigger parsing and serialization
-    ukv_format_t format = ukv_format_docs_internal_k == ukv_format_json_k ? ukv_format_msgpack_k : ukv_format_json_k;
+    ukv_format_t format = ukv_format_json_k;
     status_t status;
     arena_t arena(db);
 
@@ -337,7 +337,7 @@ static void index_file(std::string_view mapped_contents, std::vector<tweet_t>& t
 
 int main(int argc, char** argv) {
     bm::Initialize(&argc, argv);
-    thread_count = 1; // std::thread::hardware_concurrency() / 4;
+    thread_count = std::thread::hardware_concurrency() / 4;
 
     // 1. Find the dataset parts
     std::printf("Will search for .ndjson files...\n");
@@ -386,33 +386,38 @@ int main(int argc, char** argv) {
         tweet_count += tweets.size();
 
     // 4. Run the actual benchmarks
+    // db.open("/mnt/md0/rocksdb/Twitter").throw_unhandled();
+    // db.open("/mnt/md0/leveldb/Twitter").throw_unhandled();
     db.open().throw_unhandled();
     std::printf("Will benchmark...\n");
-    bm::RegisterBenchmark("batch_insert", &batch_insert)->Iterations(tweet_count)->UseRealTime()->Threads(thread_count);
-    bm::RegisterBenchmark("sample_blobs", &sample_blobs)
-        ->MinTime(20)
-        ->UseRealTime()
+    bm::RegisterBenchmark("batch_insert", &batch_insert) //
+        ->Iterations(tweet_count / thread_count)
         ->Threads(thread_count)
-        ->Arg(32)
-        ->Arg(256);
-    bm::RegisterBenchmark("sample_docs", &sample_docs)
-        ->MinTime(20)
-        ->UseRealTime()
+        ->UseRealTime();
+    bm::RegisterBenchmark("sample_blobs", &sample_blobs) //
+        ->MinTime(30)
         ->Threads(thread_count)
+        ->Arg(256)
         ->Arg(32)
-        ->Arg(256);
-    bm::RegisterBenchmark("sample_field", &sample_field)
-        ->MinTime(20)
-        ->UseRealTime()
+        ->UseRealTime();
+    bm::RegisterBenchmark("sample_docs", &sample_docs) //
+        ->MinTime(30)
         ->Threads(thread_count)
+        ->Arg(256)
         ->Arg(32)
-        ->Arg(256);
-    bm::RegisterBenchmark("sample_tables", &sample_tables)
-        ->MinTime(20)
-        ->UseRealTime()
+        ->UseRealTime();
+    bm::RegisterBenchmark("sample_field", &sample_field) //
+        ->MinTime(30)
         ->Threads(thread_count)
+        ->Arg(256)
         ->Arg(32)
-        ->Arg(256);
+        ->UseRealTime();
+    bm::RegisterBenchmark("sample_tables", &sample_tables) //
+        ->MinTime(30)
+        ->Threads(thread_count)
+        ->Arg(256)
+        ->Arg(32)
+        ->UseRealTime();
 
     bm::RunSpecifiedBenchmarks();
     bm::Shutdown();
