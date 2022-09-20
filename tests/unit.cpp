@@ -843,6 +843,8 @@ TEST(db, graph_random_fill) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_EQ(*graph.degree(vertex_id), 9u);
     }
+
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, graph_txn) {
@@ -894,6 +896,8 @@ TEST(db, graph_txn) {
     // ukv_option_read_track_k
     EXPECT_TRUE(txn.commit());
     EXPECT_TRUE(txn2.commit());
+
+    EXPECT_TRUE(db.clear());
 }
 
 #if 0
@@ -915,6 +919,8 @@ TEST(db, graph_remove_vertices) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_FALSE(*graph.contains(vertex_id));
     }
+
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, graph_remove_edges_keep_vertices) {
@@ -933,6 +939,8 @@ TEST(db, graph_remove_edges_keep_vertices) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
     }
+
+    EXPECT_TRUE(db.clear());
 }
 #endif
 
