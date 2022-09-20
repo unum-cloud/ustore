@@ -178,11 +178,18 @@ TEST(db, named) {
 
 TEST(db, collection_list) {
 
-    if (!ukv_supports_named_collections_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(""));
+
+    if (!ukv_supports_named_collections_k) {
+        EXPECT_FALSE(*db["name"]);
+        EXPECT_FALSE(*db.contains("name"));
+        EXPECT_FALSE(db.drop("name"));
+        EXPECT_FALSE(db.drop(""));
+        EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
+        EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
+        return;
+    }
 
     collection_t col1 = *(db["col1"]);
     collection_t col2 = *(db["col2"]);
@@ -209,6 +216,12 @@ TEST(db, collection_list) {
     EXPECT_EQ(collections[1], "col2");
     EXPECT_EQ(collections[2], "col3");
     EXPECT_EQ(collections[3], "col4");
+
+    EXPECT_TRUE(db.drop("col1"));
+    EXPECT_FALSE(*db.contains("col1"));
+    EXPECT_FALSE(db.drop(""));
+    EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
+    EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
 }
 
 TEST(db, unnamed_and_named) {
