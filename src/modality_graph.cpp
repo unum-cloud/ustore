@@ -749,8 +749,8 @@ void ukv_graph_remove_vertices( //
 
     // Enumerate the opposite ends, from which that same reference must be removed.
     // Here all the keys will be in the sorted order.
-    auto unique_count = std::accumulate(degrees_per_vertex, degrees_per_vertex + c_vertices_count, 0ul);
-    auto unique_entries = arena.alloc<updated_entry_t>(unique_count * 2, c_error);
+    auto unique_count = std::accumulate(degrees_per_vertex, degrees_per_vertex + c_vertices_count, c_vertices_count);
+    auto unique_entries = arena.alloc<updated_entry_t>(unique_count, c_error);
     return_on_error(c_error);
     std::fill(unique_entries.begin(), unique_entries.end(), updated_entry_t {});
 
@@ -765,7 +765,7 @@ void ukv_graph_remove_vertices( //
             for (std::size_t j = 0; j != degrees_per_vertex[i]; ++j, ++neighbors_per_vertex, ++planned_entries)
                 planned_entries->collection = collection, planned_entries->key = *neighbors_per_vertex;
         }
-        unique_count = sort_and_deduplicate(unique_entries.begin(), unique_entries.end());
+        unique_count = sort_and_deduplicate(unique_entries.begin(), planned_entries);
         unique_entries = {unique_entries.begin(), unique_count};
     }
 
@@ -802,8 +802,8 @@ void ukv_graph_remove_vertices( //
     // Now we will go through all the explicitly deleted vertices
     auto collections = unique_strided.immutable().members(&updated_entry_t::collection);
     auto keys = unique_strided.immutable().members(&updated_entry_t::key);
-    auto contents = unique_strided.immutable().members(&updated_entry_t::content);
     auto lengths = unique_strided.immutable().members(&updated_entry_t::length);
+    auto contents = unique_strided.immutable().members(&updated_entry_t::content);
     ukv_write( //
         c_db,
         c_txn,
