@@ -612,10 +612,9 @@ void ukv_collection_drop(
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-
     auto collection_name = c_collection_name ? std::string_view(c_collection_name) : std::string_view();
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(!collection_name.empty() || !invalidate,
+    return_if_error((!collection_name.empty() || collection_name != rocksdb::kDefaultColumnFamilyName) || !invalidate,
                     c_error,
                     args_combo_k,
                     "Default collection can't be invalidated.");
@@ -623,7 +622,7 @@ void ukv_collection_drop(
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     if (c_mode == ukv_drop_keys_vals_handle_k) {
         for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-            if (c_collection_name == (*it)->GetName() && (*it)->GetName() != rocksdb::kDefaultColumnFamilyName) {
+            if (collection_name == (*it)->GetName()) {
                 rocks_status_t status = db.native->DropColumnFamily(*it);
                 if (export_error(status, c_error))
                     return;
