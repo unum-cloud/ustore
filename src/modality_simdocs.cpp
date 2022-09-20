@@ -611,12 +611,20 @@ void gist_recursively(yyjson_val* node,
         path[path_len] = 0;
     }
     else {
+
+        std::string_view path_str = std::string_view(path, path_len);
+        std::size_t idx = std::lower_bound(sorted_paths.begin(), sorted_paths.end(), path_str) - sorted_paths.begin();
+        if (idx != sorted_paths.size() && sorted_paths[idx] == path_str)
+            // This same path is already exported
+            return;
+
         auto exported_path = exported_paths.push_back(path, c_error);
         return_on_error(c_error);
+        exported_paths.add_terminator(byte_t {0}, c_error);
+        return_on_error(c_error);
 
-        auto exported_str = std::string_view(exported_path.c_str());
-        auto idx = std::lower_bound(sorted_paths.begin(), sorted_paths.end(), exported_str) - sorted_paths.begin();
-        sorted_paths.insert(idx, &exported_str, &exported_str + 1, c_error);
+        path_str = std::string_view(exported_path.c_str(), exported_path.size());
+        sorted_paths.insert(idx, &path_str, &path_str + 1, c_error);
     }
 }
 
