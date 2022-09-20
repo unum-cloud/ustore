@@ -18,9 +18,41 @@
 using namespace unum::ukv;
 using namespace unum;
 
-#define M_EXPECT_EQ_JSON(str1, str2) EXPECT_EQ(json_t::parse((str1)), json_t::parse((str2)));
+template <typename container_at>
+char const* str_begin(container_at const& container) {
+    if constexpr (std::is_same_v<char const*, container_at>)
+        return container;
+    else if constexpr (std::is_same_v<value_view_t, container_at>)
+        return reinterpret_cast<char const*>(container.begin());
+    else
+        return reinterpret_cast<char const*>(std::data(container));
+}
+
+template <typename container_at>
+char const* str_end(container_at const& container) {
+    if constexpr (std::is_same_v<char const*, container_at>)
+        return container + std::strlen(container);
+    else if constexpr (std::is_same_v<value_view_t, container_at>)
+        return reinterpret_cast<char const*>(container.end());
+    else
+        return str_begin(container) + std::size(container);
+}
+
+using json_t = nlohmann::json;
+
+static json_t json_parse(char const* begin, char const* end) {
+    json_t result;
+    auto adapter = nlohmann::detail::input_adapter(begin, end);
+    auto parser = nlohmann::detail::parser<json_t, decltype(adapter)>(std::move(adapter), nullptr, true, true);
+    parser.parse(false, result);
+    return result;
+    // return json_t::parse(begin, end, nullptr, true, true);
+}
+
+#define M_EXPECT_EQ_JSON(str1, str2) \
+    EXPECT_EQ(json_parse(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 #define M_EXPECT_EQ_MSG(str1, str2) \
-    EXPECT_EQ(json_t::from_msgpack((str1).c_str(), (str1).c_str() + (str1).size()), json_t::parse((str2)));
+    EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 
 #pragma region Binary Collections
 
@@ -403,7 +435,6 @@ TEST(db, txn_unnamed_then_named) {
 
 TEST(db, docs) {
 
-    using json_t = nlohmann::json;
     database_t db;
     EXPECT_TRUE(db.open(""));
 
@@ -411,9 +442,9 @@ TEST(db, docs) {
     collection_t collection = *db.collection(nullptr, ukv_format_json_k);
     auto json = R"( {"person": "Carl", "age": 24} )"_json.dump();
     collection[1] = json.c_str();
-    M_EXPECT_EQ_JSON(collection[1].value()->c_str(), json.c_str());
-    M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Carl\"");
-    M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "24");
+    M_EXPECT_EQ_JSON(*collection[1].value(), json);
+    M_EXPECT_EQ_JSON(*collection[ckf(1, "person")].value(), "\"Carl\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(1, "age")].value(), "24");
 
     // MsgPack
     collection.as(ukv_format_msgpack_k);
@@ -546,6 +577,7 @@ TEST(db, docs_table) {
         EXPECT_STREQ(col0[1].value.data(), "27");
         EXPECT_STREQ(col0[2].value.data(), "24");
     }
+
     // Multi-column
     {
         auto header = table_header() //
