@@ -164,16 +164,21 @@ if(${UKV_BUILD_TESTS})
 
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
+    get_target_property(target_SOURCES ${target_name} SOURCES)
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
 
-    string(CONCAT test_name "ukv_" ${client_name} "_unit_tests")
-    add_executable(${test_name} tests/units.cpp)
-    target_link_libraries(${test_name} gtest ${target_name} ${target_LIBRARIES})
+    string(CONCAT test_name "ukv_" ${client_name} "_compilation_test")
+    add_executable(${test_name} tests/compilation.cpp ${target_SOURCES})
+    target_link_libraries(${test_name} ${target_LIBRARIES})
+
+    string(CONCAT test_name "ukv_" ${client_name} "_unit_test")
+    add_executable(${test_name} tests/unit.cpp ${target_SOURCES})
+    target_link_libraries(${test_name} gtest ${target_LIBRARIES})
     add_test(NAME "${client_name}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_name}")
 
     string(CONCAT test_name "ukv_" ${client_name} "_api_test")
-    add_executable(${test_name} tests/api.cpp)
-    target_link_libraries(${test_name} ${target_name} ${target_LIBRARIES})
+    add_executable(${test_name} tests/api.cpp ${target_SOURCES})
+    target_link_libraries(${test_name} gtest ${target_LIBRARIES})
   endforeach()
 endif()
 
