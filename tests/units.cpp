@@ -534,6 +534,18 @@ TEST(db, docs_table) {
         EXPECT_EQ(col0[2].value, 24);
     }
 
+    // Single strings column
+    {
+        auto header = table_header().with<std::string_view>("age");
+        auto maybe_table = collection[{1, 2, 3, 123456}].gather(header);
+        auto table = *maybe_table;
+        auto col0 = table.column<0>();
+
+        EXPECT_STREQ(col0[0].value.data(), "27");
+        EXPECT_TRUE(col0[0].converted);
+        EXPECT_STREQ(col0[1].value.data(), "27");
+        EXPECT_STREQ(col0[2].value.data(), "24");
+    }
     // Multi-column
     {
         auto header = table_header() //
