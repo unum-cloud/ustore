@@ -81,7 +81,7 @@ bool is_query(std::string_view uri, std::string_view name) {
 }
 
 bool validate_column_collections(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
-    if (schema_ptr->format != ukv_type_to_arrow_format(ukv_type<ukv_collection_t>()))
+    if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<ukv_collection_t>()))
         return false;
     if (column_ptr->null_count != 0)
         return false;
@@ -89,7 +89,7 @@ bool validate_column_collections(ArrowSchema* schema_ptr, ArrowArray* column_ptr
 }
 
 bool validate_column_keys(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
-    if (schema_ptr->format != ukv_type_to_arrow_format(ukv_type<ukv_key_t>()))
+    if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<ukv_key_t>()))
         return false;
     if (column_ptr->null_count != 0)
         return false;
@@ -97,7 +97,7 @@ bool validate_column_keys(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
 }
 
 bool validate_column_vals(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
-    if (schema_ptr->format != ukv_type_to_arrow_format(ukv_type<value_view_t>()))
+    if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<value_view_t>()))
         return false;
     if (column_ptr->null_count != 0)
         return false;
@@ -717,7 +717,7 @@ class UKVService : public arf::FlightServerBase {
                 ukv_to_arrow_column( //
                     result_length,
                     kArgVals.c_str(),
-                    ukv_type_bin_k,
+                    ukv_doc_field_bin_k,
                     found_presences,
                     found_offsets,
                     found_values,
@@ -728,7 +728,7 @@ class UKVService : public arf::FlightServerBase {
                 ukv_to_arrow_column( //
                     result_length,
                     kArgLengths.c_str(),
-                    ukv_type<ukv_length_t>(),
+                    ukv_doc_field<ukv_length_t>(),
                     found_presences,
                     nullptr,
                     found_lengths,
@@ -739,7 +739,7 @@ class UKVService : public arf::FlightServerBase {
                 ukv_to_arrow_column( //
                     result_length,
                     kArgPresences.c_str(),
-                    ukv_type<ukv_octet_t>(),
+                    ukv_doc_field<ukv_octet_t>(),
                     nullptr,
                     nullptr,
                     found_presences,
@@ -809,7 +809,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_to_arrow_list( //
                 tasks_count,
                 kArgKeys.c_str(),
-                ukv_type<ukv_key_t>(),
+                ukv_doc_field<ukv_key_t>(),
                 nullptr,
                 found_offsets,
                 found_keys,
@@ -949,7 +949,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_to_arrow_column( //
                 count,
                 kArgCols.c_str(),
-                ukv_type<ukv_collection_t>(),
+                ukv_doc_field<ukv_collection_t>(),
                 nullptr,
                 nullptr,
                 ukv_bytes_ptr_t(collections),
@@ -962,7 +962,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_to_arrow_column( //
                 count,
                 kArgNames.c_str(),
-                ukv_type_str_k,
+                ukv_doc_field_str_k,
                 nullptr,
                 offsets,
                 ukv_bytes_ptr_t(names),

@@ -272,9 +272,16 @@ class any_arena_t {
     any_arena_t(any_arena_t&&) = default;
     any_arena_t& operator=(any_arena_t&&) = default;
 
-    any_arena_t(any_arena_t const&) = delete;
-    any_arena_t& operator=(any_arena_t const&) = delete;
+    any_arena_t(any_arena_t const& other) noexcept
+        : owned_(other.is_remote() ? nullptr : other.owned_.db()), accessible_(other.accessible_) {}
 
+    any_arena_t& operator=(any_arena_t const& other) noexcept {
+        owned_ = other.is_remote() ? arena_t(nullptr) : other.owned_.db();
+        accessible_ = other.accessible_;
+        return *this;
+    }
+
+    inline bool is_remote() const noexcept { return accessible_; }
     inline ukv_arena_t* member_ptr() noexcept { return accessible_ ?: owned_.member_ptr(); }
     inline operator ukv_arena_t*() & noexcept { return member_ptr(); }
     inline arena_t release_owned() noexcept { return std::exchange(owned_, arena_t {owned_.db()}); }

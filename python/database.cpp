@@ -34,7 +34,7 @@ static std::unique_ptr<py_collection_t> punned_collection( //
     py_collection->py_txn_ptr = py_txn_ptr;
     py_collection->in_txn = py_txn_ptr != nullptr;
     py_collection->native =
-        collection_t {py_db_ptr->native, collection, py_txn_ptr ? py_txn_ptr->native : ukv_transaction_t(nullptr)};
+        bins_collection_t {py_db_ptr->native, collection, py_txn_ptr ? py_txn_ptr->native : ukv_transaction_t(nullptr)};
     return py_collection;
 }
 
@@ -79,13 +79,6 @@ void ukv::wrap_database(py::module& m) {
     auto py_kvrange = py::class_<pairs_range_t>(m, "ItemsRange", py::module_local());
     auto py_kstream = py::class_<py_kstream_t>(m, "KeysStream", py::module_local());
     auto py_kvstream = py::class_<py_kvstream_t>(m, "ItemsStream", py::module_local());
-
-    py::enum_<ukv_format_t>(m, "Format", py::module_local())
-        .value("MsgPack", ukv_format_msgpack_k)
-        .value("JSON", ukv_format_json_k)
-        .value("BSON", ukv_format_bson_k)
-        .value("CBOR", ukv_format_cbor_k)
-        .value("UBJSON", ukv_format_ubjson_k);
 
     // Define `DataBase`
     py_db.def( //
@@ -229,7 +222,6 @@ void ukv::wrap_database(py::module& m) {
     py_collection.def_property_readonly("docs", [](py_collection_t& py_collection) {
         auto py_docs = std::make_unique<py_docs_collection_t>();
         py_docs->binary = py_collection;
-        py_docs->binary.native.as(ukv_format_json_k);
         return py_docs;
     });
     py_collection.def_property_readonly("media", [](py_collection_t& py_collection) { return 0; });
@@ -280,12 +272,12 @@ void ukv::wrap_database(py::module& m) {
     });
 
     py_collection.def_property_readonly("keys", [](py_collection_t& py_collection) {
-        members_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
+        bins_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
         keys_range_t range {members};
         return py::cast(std::make_unique<keys_range_t>(range));
     });
     py_collection.def_property_readonly("items", [](py_collection_t& py_collection) {
-        members_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
+        bins_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
         pairs_range_t range {members};
         return py::cast(std::make_unique<pairs_range_t>(range));
     });

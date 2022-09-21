@@ -11,7 +11,7 @@ TEST(db, validation) {
 
     database_t db;
     EXPECT_TRUE(db.open("./tmp/stl"));
-    collection_t collection = *db.collection();
+    bins_collection_t collection = *db.collection();
     transaction_t txn = *db.transact();
     std::vector<ukv_key_t> keys {34, 35, 36};
     std::vector<std::uint64_t> vals {34, 35, 36};

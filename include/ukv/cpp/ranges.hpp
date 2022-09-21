@@ -249,7 +249,7 @@ struct strided_range_or_dummy_gt {
 
 template <typename at, typename alloc_at = std::allocator<at>>
 strided_range_gt<at> strided_range(std::vector<at, alloc_at>& vec) noexcept {
-    return {vec.size(), vec.data(), sizeof(at)};
+    return {{vec.data(), sizeof(at)}, vec.size()};
 }
 
 template <typename at, typename alloc_at = std::allocator<at>>

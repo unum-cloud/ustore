@@ -205,9 +205,9 @@ static constexpr char const* mime_cbor_k = "application/cbor";
 static constexpr char const* mime_bson_k = "application/bson";
 static constexpr char const* mime_ubjson_k = "application/ubjson";
 
-ukv_format_t mime_to_format(beast::string_view mime) {
+ukv_doc_field_type_t mime_to_format(beast::string_view mime) {
     if (mime == mime_json_k)
-        return ukv_format_json_k;
+        return ukv_field_json_k;
     else if (mime == "application/json-patch+json")
         return ukv_format_json_patch_k;
     else if (mime == mime_msgpack_k)
@@ -223,7 +223,7 @@ ukv_format_t mime_to_format(beast::string_view mime) {
     else if (mime == "application/vnd.apache.parquet")
         return ukv_format_parquet_k;
     else
-        return ukv_format_binary_k;
+        return ukv_doc_field_default_k;
 }
 
 struct db_w_clients_t : public std::enable_shared_from_this<db_w_clients_t> {
@@ -279,7 +279,7 @@ void respond_to_one(db_session_t& session,
     beast::string_view received_path = req.target();
 
     transaction_t txn(session.db());
-    collection_t collection;
+    bins_collection_t collection;
     ukv_key_t key = 0;
     ukv_options_t options = ukv_options_default_k;
 
@@ -505,7 +505,7 @@ void respond_to_aos(db_session_t& session,
     beast::string_view received_path = req.target();
 
     transaction_t txn(session.db());
-    std::vector<collection_t> collections(session.db());
+    std::vector<bins_collection_t> collections(session.db());
     ukv_options_t options = ukv_options_default_k;
     std::vector<ukv_key_t> keys;
 
@@ -525,7 +525,7 @@ void respond_to_aos(db_session_t& session,
         std::memcpy(collection_name_buffer, collection_val->data(), std::min(collection_val->size(), 64ul));
 
         status_t status;
-        collection_t collection(session.db());
+        bins_collection_t collection(session.db());
         ukv_collection_open(session.db(), collection_name_buffer, NULL, &collection.raw, error.member_ptr());
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));

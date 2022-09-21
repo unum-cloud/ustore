@@ -64,12 +64,12 @@ struct py_transaction_t : public std::enable_shared_from_this<py_transaction_t> 
 };
 
 /**
- * @brief Wrapper for `ukv::collection_t`.
+ * @brief Wrapper for `ukv::bins_collection_t`.
  * We need to preserve the `name`, to upsert again, after removing it in `clear`.
  * We also keep the transaction pointer, to persist the context of operation.
  */
 struct py_collection_t {
-    collection_t native;
+    bins_collection_t native;
 
     std::weak_ptr<py_db_t> py_db_ptr;
     std::weak_ptr<py_transaction_t> py_txn_ptr;
@@ -122,10 +122,10 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     std::weak_ptr<py_db_t> py_db_ptr;
     std::weak_ptr<py_transaction_t> py_txn_ptr;
 
-    collection_t index;
-    collection_t sources_attrs;
-    collection_t targets_attrs;
-    collection_t relations_attrs;
+    bins_collection_t index;
+    bins_collection_t sources_attrs;
+    bins_collection_t targets_attrs;
+    bins_collection_t relations_attrs;
 
     bool in_txn = false;
     bool is_directed = false;
@@ -139,7 +139,7 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     py_graph_t(py_graph_t const&) = delete;
     ~py_graph_t() {}
 
-    graph_ref_t ref() { return index.as_graph(); }
+    graph_collection_t ref() { return graph_collection_t(index.db(), index, index.txn(), index.member_arena()); }
 };
 
 struct py_table_keys_range_t {
@@ -155,7 +155,7 @@ struct py_table_collection_t : public std::enable_shared_from_this<py_table_coll
 
     py_collection_t binary;
     std::variant<std::monostate, std::vector<ukv_str_view_t>> columns_names;
-    std::variant<std::monostate, ukv_type_t, std::vector<ukv_type_t>> columns_types;
+    std::variant<std::monostate, ukv_doc_field_type_t, std::vector<ukv_doc_field_type_t>> columns_types;
     std::variant<std::monostate, py_table_keys_range_t, std::vector<ukv_key_t>> rows_keys;
     std::size_t head = std::numeric_limits<std::size_t>::max();
     std::size_t tail = std::numeric_limits<std::size_t>::max();
@@ -252,7 +252,7 @@ void wrap_database(py::module&);
 
 /**
  * @brief Python bindings for a Graph index, that mimics NetworkX.
- * Unlike C++ `graph_ref_t` this may include as many as 4 collections
+ * Unlike C++ `graph_collection_t` this may include as many as 4 collections
  * seen as one heavily attributed relational index.
  * Is similar in it's purpose to a pure-Python project - NetworkXum:
  * https://github.com/unum-cloud/NetworkXum
