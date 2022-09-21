@@ -1,6 +1,6 @@
 # LibBSON is not maintained any more.
 # Estead the MongoDB C driver has to be used.
-
+include(ExternalProject)
 ExternalProject_Add(
     mongo_c_driver
     GIT_REPOSITORY https://github.com/mongodb/mongo-c-driver.git
