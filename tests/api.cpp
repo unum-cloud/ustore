@@ -12,6 +12,7 @@ TEST(db, validation) {
     database_t db;
     EXPECT_TRUE(db.open("./tmp/stl"));
     collection_t collection = *db.collection();
+    collection_t named_collection = *db.collection("col");
     transaction_t txn = *db.transact();
     std::vector<ukv_key_t> keys {34, 35, 36};
     std::vector<std::uint64_t> vals {34, 35, 36};
@@ -56,6 +57,98 @@ TEST(db, validation) {
         EXPECT_TRUE(status);
     }
 
+    if (!ukv_supports_named_collections_k) {
+        ukv_collection_t collections[count] = {1, 2, 3};
+        ukv_write(db,
+                  nullptr,
+                  count,
+                  &collections[0],
+                  sizeof(ukv_collection_t),
+                  keys.data(),
+                  sizeof(ukv_key_t),
+                  nullptr,
+                  offsets.get(),
+                  offsets.stride(),
+                  lengths.get(),
+                  lengths.stride(),
+                  contents.get(),
+                  contents.stride(),
+                  ukv_options_default_k,
+                  collection.member_arena(),
+                  status.member_ptr());
+
+        EXPECT_FALSE(status);
+        status.release_error();
+
+        ukv_collection_t collections_only_default[count] = {0, 0, 0};
+        ukv_write(db,
+                  nullptr,
+                  count,
+                  &collections_only_default[0],
+                  sizeof(ukv_collection_t),
+                  keys.data(),
+                  sizeof(ukv_key_t),
+                  nullptr,
+                  offsets.get(),
+                  offsets.stride(),
+                  lengths.get(),
+                  lengths.stride(),
+                  contents.get(),
+                  contents.stride(),
+                  ukv_options_default_k,
+                  collection.member_arena(),
+                  status.member_ptr());
+
+        EXPECT_TRUE(status);
+    }
+
+    ukv_collection_t* null_collection = nullptr;
+    ukv_write(db,
+              nullptr,
+              count,
+              null_collection,
+              0,
+              keys.data(),
+              sizeof(ukv_key_t),
+              nullptr,
+              offsets.get(),
+              offsets.stride(),
+              lengths.get(),
+              lengths.stride(),
+              contents.get(),
+              contents.stride(),
+              ukv_options_default_k,
+              collection.member_arena(),
+              status.member_ptr());
+
+    EXPECT_TRUE(status);
+
+    // Named Collection
+    ukv_write(db,
+              nullptr,
+              count,
+              named_collection.member_ptr(),
+              0,
+              keys.data(),
+              sizeof(ukv_key_t),
+              nullptr,
+              offsets.get(),
+              offsets.stride(),
+              lengths.get(),
+              lengths.stride(),
+              contents.get(),
+              contents.stride(),
+              ukv_options_default_k,
+              collection.member_arena(),
+              status.member_ptr());
+
+    if (ukv_supports_named_collections_k)
+        EXPECT_TRUE(status);
+    else {
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
+
     ukv_write(db,
               txn,
               count,
@@ -74,7 +167,12 @@ TEST(db, validation) {
               collection.member_arena(),
               status.member_ptr());
 
-    EXPECT_TRUE(status);
+    if (ukv_supports_transactions_k)
+        EXPECT_TRUE(status);
+    else {
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
 
     // Transaction With Flush
     ukv_write(db,
