@@ -188,18 +188,20 @@ auto edges(tuples_at&& tuples) noexcept {
     return result_t(ptr, ptr + count);
 }
 
-inline void validate_write(places_arg_t const& places,
-                           ukv_transaction_t const c_txn,
+inline void validate_write(ukv_transaction_t const c_txn,
+                           places_arg_t const& places,
+                           contents_arg_t const& contents,
                            ukv_options_t const c_options,
                            ukv_error_t* c_error) {
 
     return_if_error(bool(places.count) == bool(places.keys_begin), c_error, 0, "Invalid Arguments!");
+    return_if_error(bool(contents.lengths_begin) == bool(contents.contents_begin), c_error, 0, "Invalid Arguments!");
     return_if_error(!(c_options & (ukv_option_read_track_k | ukv_option_txn_snapshot_k)),
                     c_error,
                     0,
                     "Invalid options!");
 
-    if (places.collections_begin)
+    if (!places.same_collection() || places.same_collections_are_named())
         return_if_error(ukv_supports_named_collections_k, c_error, 0, "Current engine does not support collections!");
 
     if (c_txn) {
@@ -208,8 +210,8 @@ inline void validate_write(places_arg_t const& places,
     }
 }
 
-inline void validate_read(places_arg_t const& places,
-                          ukv_transaction_t const c_txn,
+inline void validate_read(ukv_transaction_t const c_txn,
+                          places_arg_t const& places,
                           ukv_options_t const c_options,
                           ukv_error_t* c_error) {
 
@@ -230,8 +232,8 @@ inline void validate_read(places_arg_t const& places,
     }
 }
 
-inline void validate_scan(scans_arg_t const& args,
-                          ukv_transaction_t const c_txn,
+inline void validate_scan(ukv_transaction_t const c_txn,
+                          scans_arg_t const& args,
                           ukv_options_t const c_options,
                           ukv_error_t* c_error) {
 
