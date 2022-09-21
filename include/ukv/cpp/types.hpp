@@ -7,9 +7,10 @@
  */
 
 #pragma once
-#include <functional> // `std::hash`
-#include <utility>    // `std::exchange`
-#include <cstring>    // `std::strlen`
+#include <functional>  // `std::hash`
+#include <utility>     // `std::exchange`
+#include <cstring>     // `std::strlen`
+#include <string_view> // `std::string_view`
 
 #include "ukv/ukv.h"
 
@@ -154,6 +155,10 @@ class value_view_t {
 
     inline value_view_t(char const* c_str) noexcept
         : ptr_(ukv_bytes_cptr_t(c_str)), length_(static_cast<ukv_length_t>(std::strlen(c_str))) {}
+
+    template <typename char_at, typename traits_at>
+    inline value_view_t(std::basic_string_view<char_at, traits_at> view) noexcept
+        : ptr_(ukv_bytes_cptr_t(view.data())), length_(static_cast<ukv_length_t>(view.size() * sizeof(char_at))) {}
 
     inline operator bool() const noexcept { return length_ != ukv_length_missing_k; }
     inline std::size_t size() const noexcept { return length_ == ukv_length_missing_k ? 0 : length_; }

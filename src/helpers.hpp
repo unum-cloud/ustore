@@ -502,8 +502,6 @@ class safe_vector_gt {
     inline element_t& operator[](std::size_t i) noexcept { return ptr_[i]; }
     inline std::size_t size() const noexcept { return length_; }
     inline explicit operator bool() const noexcept { return length_; }
-    // inline operator value_view_t() const noexcept { return view(); }
-    // inline value_view_t view() const noexcept { return {ptr_, length_}; }
     inline void clear() noexcept { length_ = 0; }
 
     inline ptr_t* member_ptr() noexcept { return &ptr_; }
@@ -533,12 +531,14 @@ class growing_tape_t {
         auto old_count = lengths_.size();
 
         lengths_.push_back(length, c_error);
+
+        // We need to store one more offset for Apache Arrow.
         offsets_.resize(lengths_.size() + 1, c_error);
         if (*c_error)
             return value_view_t {};
-
         offsets_[old_count] = offset;
         offsets_[old_count + 1] = offset + length;
+
         contents_.insert(contents_.size(), value.begin(), value.end(), c_error);
         if (*c_error)
             return value_view_t {};

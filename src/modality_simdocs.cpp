@@ -26,32 +26,6 @@
 using namespace unum::ukv;
 using namespace unum;
 
-struct json_t {
-    yyjson_doc* handle = nullptr;
-    yyjson_mut_doc* mut_handle = nullptr;
-
-    ~json_t() {
-        if (mut_handle)
-            yyjson_mut_doc_free(mut_handle);
-        if (handle)
-            yyjson_doc_free(handle);
-    }
-
-    json_t() = default;
-    json_t(json_t const&) = delete;
-    json_t& operator=(json_t const&) = delete;
-
-    json_t(json_t&& other) noexcept
-        : handle(std::exchange(other.handle, nullptr)), mut_handle(std::exchange(other.mut_handle, nullptr)) {}
-    json_t& operator=(json_t&& other) noexcept {
-        std::swap(handle, other.handle);
-        std::swap(mut_handle, other.mut_handle);
-        return *this;
-    }
-
-    explicit operator bool() const noexcept { return handle || mut_handle; }
-};
-
 constexpr ukv_doc_field_type_t internal_format_k = ukv_doc_field_json_k;
 
 static constexpr char const* true_k = "true";
@@ -61,95 +35,12 @@ static constexpr char const* false_k = "false";
 constexpr std::size_t printed_number_length_limit_k = 32;
 constexpr std::size_t field_path_len_limit_k = 512;
 
+using printed_number_buffer_t = char[printed_number_length_limit_k];
 using field_path_buffer_t = char[field_path_len_limit_k];
 
 /*********************************************************/
-/*****************	 Primary Functions	  ****************/
+/*****************	 STL Compatibility	  ****************/
 /*********************************************************/
-
-static void* callback_yy_malloc(void* ctx, size_t size) {
-    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(ctx);
-    return arena.alloc<byte_t>(size, nullptr).begin();
-}
-
-static void* callback_yy_realloc(void* ctx, void* ptr, size_t size) {
-    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(ctx);
-    return arena.alloc<byte_t>(size, nullptr).begin();
-}
-
-static void callback_yy_free(void*, void*) {
-}
-
-yyjson_alc wrap_allocator(stl_arena_t& arena) {
-    yyjson_alc allocator;
-    allocator.malloc = callback_yy_malloc;
-    allocator.realloc = callback_yy_realloc;
-    allocator.free = callback_yy_free;
-    allocator.ctx = &arena;
-    return allocator;
-}
-
-json_t parse_any( //
-    value_view_t bytes,
-    ukv_doc_field_type_t const,
-    stl_arena_t& arena,
-    ukv_error_t* c_error) noexcept {
-
-    if (bytes.empty())
-        return {};
-
-    json_t result;
-    yyjson_alc allocator = wrap_allocator(arena);
-    yyjson_read_flag flg = YYJSON_READ_ALLOW_COMMENTS | YYJSON_READ_ALLOW_INF_AND_NAN;
-    result.handle = yyjson_read_opts((char*)bytes.data(), (size_t)bytes.size(), flg, &allocator, NULL);
-    if (!result.handle)
-        *c_error = "Failed to parse document!";
-    return result;
-}
-
-yyjson_val* lookup_field(yyjson_val* json, ukv_str_view_t field) noexcept {
-    return !field ? json : field[0] == '/' ? yyjson_get_pointer(json, field) : yyjson_obj_get(json, field);
-}
-
-void dump_any( //
-    yyjson_val* json,
-    ukv_doc_field_type_t const,
-    stl_arena_t& arena,
-    growing_tape_t& output,
-    ukv_error_t* c_error) noexcept {
-
-    if (!json)
-        return;
-
-    size_t result_length = 0;
-    yyjson_write_flag flg = 0;
-    yyjson_alc allocator = wrap_allocator(arena);
-    char* result_begin = yyjson_val_write_opts(json, flg, &allocator, &result_length, NULL);
-    if (!result_begin)
-        *c_error = "Failed to serialize the document!";
-
-    auto result = value_view_t {reinterpret_cast<byte_t const*>(result_begin), result_length};
-    output.push_back(result, c_error);
-    output.add_terminator(byte_t {0}, c_error);
-}
-
-void dump_any( //
-    yyjson_mut_val* json,
-    ukv_doc_field_type_t const,
-    stl_arena_t& arena,
-    growing_tape_t& output,
-    ukv_error_t* c_error) noexcept {
-
-    size_t result_length = 0;
-    yyjson_write_flag flg = 0;
-    yyjson_alc allocator = wrap_allocator(arena);
-    char* result_begin = yyjson_mut_val_write_opts(json, flg, &allocator, &result_length, NULL);
-    if (!result_begin)
-        *c_error = "Failed to serialize the modified document!";
-
-    auto result = value_view_t {reinterpret_cast<byte_t const*>(result_begin), result_length};
-    output.push_back(result, c_error);
-}
 
 template <typename at>
 std::from_chars_result from_chars(char const* begin, char const* end, at& result) {
@@ -181,13 +72,13 @@ template <typename at>
 std::to_chars_result to_chars(char* begin, char* end, at scalar) {
     if constexpr (std::is_floating_point_v<at>) {
         // Parsing and dumping floating-point numbers is still not fully implemented in STL:
-        //  std::to_chars_result result = std::to_chars(&print_buf[0], print_buf + printed_number_length_limit_k,
-        //  scalar); bool fits_terminator = result.ec != std::errc() && result.ptr < print_buf +
+        //  std::to_chars_result result = std::to_chars(&print_buffer[0], print_buffer + printed_number_length_limit_k,
+        //  scalar); bool fits_terminator = result.ec != std::errc() && result.ptr < print_buffer +
         //  printed_number_length_limit_k;
         // Using FMT would cause an extra dependency:
-        //  auto end_ptr = fmt::format_to(print_buf, "{}", scalar);
-        //  bool fits_terminator = end_ptr < print_buf + printed_number_length_limit_k;
-        // If we use `std::snprintf`, the result would be NULL-terminated:
+        //  auto end_ptr = fmt::format_to(print_buffer, "{}", scalar);
+        //  bool fits_terminator = end_ptr < print_buffer + printed_number_length_limit_k;
+        // If we use `std::snprintf`, the result will @b already be NULL-terminated:
         auto result = std::snprintf(begin, end - begin, "%f", scalar);
         return result >= 0 ? std::to_chars_result {begin + result - 1, std::errc()}
                            : std::to_chars_result {begin, std::errc::invalid_argument};
@@ -195,6 +86,317 @@ std::to_chars_result to_chars(char* begin, char* end, at scalar) {
     else
         return std::to_chars(begin, end, scalar);
 }
+
+/*********************************************************/
+/*****************	 Working with JSONs	  ****************/
+/*********************************************************/
+
+struct json_t {
+    yyjson_doc* handle = nullptr;
+    yyjson_mut_doc* mut_handle = nullptr;
+
+    ~json_t() {
+        if (mut_handle)
+            yyjson_mut_doc_free(mut_handle);
+        if (handle)
+            yyjson_doc_free(handle);
+    }
+
+    json_t() = default;
+    json_t(json_t const&) = delete;
+    json_t& operator=(json_t const&) = delete;
+
+    json_t(json_t&& other) noexcept
+        : handle(std::exchange(other.handle, nullptr)), mut_handle(std::exchange(other.mut_handle, nullptr)) {}
+    json_t& operator=(json_t&& other) noexcept {
+        std::swap(handle, other.handle);
+        std::swap(mut_handle, other.mut_handle);
+        return *this;
+    }
+
+    explicit operator bool() const noexcept { return handle || mut_handle; }
+};
+
+struct json_branch_t {
+    yyjson_val* handle = nullptr;
+    yyjson_mut_val* mut_handle = nullptr;
+
+    explicit operator bool() const noexcept { return handle || mut_handle; }
+    yyjson_val* punned() const noexcept { return mut_handle ? (yyjson_val*)(mut_handle) : handle; }
+};
+
+static void* json_yy_malloc(void* ctx, size_t size) noexcept {
+    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(ctx);
+    return arena.alloc<byte_t>(size, nullptr).begin();
+}
+
+static void* json_yy_realloc(void* ctx, void* ptr, size_t size) noexcept {
+    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(ctx);
+    return arena.alloc<byte_t>(size, nullptr).begin();
+}
+
+static void json_yy_free(void*, void*) noexcept {
+}
+
+yyjson_alc wrap_allocator(stl_arena_t& arena) {
+    yyjson_alc allocator;
+    allocator.malloc = json_yy_malloc;
+    allocator.realloc = json_yy_realloc;
+    allocator.free = json_yy_free;
+    allocator.ctx = &arena;
+    return allocator;
+}
+
+yyjson_val* json_lookup(yyjson_val* json, ukv_str_view_t field) noexcept {
+    return !field ? json : field[0] == '/' ? yyjson_get_pointer(json, field) : yyjson_obj_get(json, field);
+}
+
+json_t json_parse(value_view_t bytes, stl_arena_t& arena, ukv_error_t* c_error) noexcept {
+
+    if (bytes.empty())
+        return {};
+
+    json_t result;
+    yyjson_alc allocator = wrap_allocator(arena);
+    yyjson_read_flag flg = YYJSON_READ_ALLOW_COMMENTS | YYJSON_READ_ALLOW_INF_AND_NAN;
+    result.handle = yyjson_read_opts((char*)bytes.data(), (size_t)bytes.size(), flg, &allocator, NULL);
+    if (!result.handle)
+        *c_error = "Failed to parse document!";
+    return result;
+}
+
+value_view_t json_dump(json_branch_t json, stl_arena_t& arena, growing_tape_t& output, ukv_error_t* c_error) noexcept {
+
+    if (!json)
+        return output.push_back(value_view_t {}, c_error);
+
+    size_t result_length = 0;
+    yyjson_write_flag flg = 0;
+    yyjson_alc allocator = wrap_allocator(arena);
+    char* result_begin = json.mut_handle
+                             ? yyjson_mut_val_write_opts(json.mut_handle, flg, &allocator, &result_length, NULL)
+                             : yyjson_val_write_opts(json.handle, flg, &allocator, &result_length, NULL);
+    if (!result_begin)
+        *c_error = "Failed to serialize the document!";
+
+    auto result = value_view_t {reinterpret_cast<byte_t const*>(result_begin), result_length};
+    result = output.push_back(result, c_error);
+    output.add_terminator(byte_t {0}, c_error);
+    return result;
+}
+
+template <typename scalar_at>
+void json_to_scalar(yyjson_val* value,
+                    ukv_octet_t mask,
+                    ukv_octet_t& valid,
+                    ukv_octet_t& convert,
+                    ukv_octet_t& collide,
+                    scalar_at& scalar) noexcept {
+
+    yyjson_type const type = yyjson_get_type(value);
+    yyjson_subtype const subtype = yyjson_get_subtype(value);
+
+    switch (type) {
+    case YYJSON_TYPE_NULL:
+        convert &= ~mask;
+        collide &= ~mask;
+        valid &= ~mask;
+        break;
+    case YYJSON_TYPE_NONE:
+    case YYJSON_TYPE_OBJ:
+    case YYJSON_TYPE_ARR:
+        convert &= ~mask;
+        collide |= mask;
+        valid &= ~mask;
+        break;
+
+    case YYJSON_TYPE_BOOL:
+        scalar = yyjson_is_true(value);
+        if constexpr (std::is_same_v<scalar_at, bool>)
+            convert &= ~mask;
+        else
+            convert |= mask;
+        collide &= ~mask;
+        valid |= mask;
+        break;
+
+    case YYJSON_TYPE_STR: {
+        const char* str_begin = yyjson_get_str(value);
+        size_t str_len = yyjson_get_len(value);
+        std::from_chars_result result = from_chars(str_begin, str_begin + str_len, scalar);
+        bool entire_string_is_number = result.ec == std::errc() && result.ptr == str_begin + str_len;
+        if (entire_string_is_number) {
+            convert |= mask;
+            collide &= ~mask;
+            valid |= mask;
+        }
+        else {
+            convert &= ~mask;
+            collide |= mask;
+            valid &= ~mask;
+        }
+        break;
+    }
+
+    case YYJSON_TYPE_NUM: {
+
+        switch (subtype) {
+        case YYJSON_SUBTYPE_UINT:
+            scalar = static_cast<scalar_at>(yyjson_get_uint(value));
+            if constexpr (std::is_unsigned_v<scalar_at>)
+                convert &= ~mask;
+            else
+                convert |= mask;
+            collide &= ~mask;
+            valid |= mask;
+            break;
+
+        case YYJSON_SUBTYPE_SINT:
+            scalar = static_cast<scalar_at>(yyjson_get_sint(value));
+            if constexpr (std::is_integral_v<scalar_at> && std::is_signed_v<scalar_at>)
+                convert &= ~mask;
+            else
+                convert |= mask;
+            collide &= ~mask;
+            valid |= mask;
+            break;
+
+        case YYJSON_SUBTYPE_REAL:
+            scalar = static_cast<scalar_at>(yyjson_get_real(value));
+            if constexpr (std::is_floating_point_v<scalar_at>)
+                convert &= ~mask;
+            else
+                convert |= mask;
+            collide &= ~mask;
+            valid |= mask;
+            break;
+        }
+    }
+    }
+}
+
+template <typename scalar_at>
+std::string_view scalar_to_string(scalar_at scalar, printed_number_buffer_t& print_buffer) {
+
+    std::to_chars_result result = to_chars(print_buffer, print_buffer + printed_number_length_limit_k, scalar);
+    return result.ec == std::errc() ? std::string_view(print_buffer, result.ptr - print_buffer) : std::string_view();
+}
+
+std::string_view json_to_string(yyjson_val* value,
+                                ukv_octet_t mask,
+                                ukv_octet_t& valid,
+                                ukv_octet_t& convert,
+                                ukv_octet_t& collide,
+                                printed_number_buffer_t& print_buffer) noexcept {
+
+    yyjson_type const type = yyjson_get_type(value);
+    yyjson_subtype const subtype = yyjson_get_subtype(value);
+    std::string_view result;
+
+    switch (type) {
+    case YYJSON_TYPE_NULL:
+        convert &= ~mask;
+        collide &= ~mask;
+        valid &= ~mask;
+        break;
+    case YYJSON_TYPE_NONE:
+    case YYJSON_TYPE_OBJ:
+    case YYJSON_TYPE_ARR:
+        convert &= ~mask;
+        collide |= mask;
+        valid &= ~mask;
+        break;
+
+    case YYJSON_TYPE_BOOL: {
+        result = yyjson_is_true(value) ? std::string_view(true_k, 5) : std::string_view(false_k, 6);
+        convert |= mask;
+        collide &= ~mask;
+        valid |= mask;
+        break;
+    }
+
+    case YYJSON_TYPE_STR: {
+        const char* str_begin = yyjson_get_str(value);
+        size_t str_len = yyjson_get_len(value);
+
+        result = std::string_view(str_begin, str_len);
+        convert &= ~mask;
+        collide &= ~mask;
+        valid |= mask;
+        break;
+    }
+
+    case YYJSON_TYPE_NUM: {
+
+        switch (subtype) {
+        case YYJSON_SUBTYPE_UINT:
+            result = scalar_to_string(yyjson_get_uint(value), print_buffer);
+            convert |= mask;
+            collide = !result.empty() ? (collide & ~mask) : (collide | mask);
+            valid = result.empty() ? (valid & ~mask) : (valid | mask);
+            break;
+
+        case YYJSON_SUBTYPE_SINT:
+            result = scalar_to_string(yyjson_get_sint(value), print_buffer);
+            convert |= mask;
+            collide = !result.empty() ? (collide & ~mask) : (collide | mask);
+            valid = result.empty() ? (valid & ~mask) : (valid | mask);
+            break;
+
+        case YYJSON_SUBTYPE_REAL:
+            result = scalar_to_string(yyjson_get_real(value), print_buffer);
+            convert |= mask;
+            collide = !result.empty() ? (collide & ~mask) : (collide | mask);
+            valid = result.empty() ? (valid & ~mask) : (valid | mask);
+            break;
+        }
+    }
+    }
+
+    return result;
+}
+
+/*********************************************************/
+/*****************	 Format Conversions	  ****************/
+/*********************************************************/
+
+json_t any_parse(value_view_t bytes,
+                 ukv_doc_field_type_t const field_type,
+                 stl_arena_t& arena,
+                 ukv_error_t* c_error) noexcept {
+
+    if (field_type == ukv_doc_field_json_k)
+        return json_parse(bytes, arena, c_error);
+
+    *c_error = "Input type not supported!";
+    return {};
+}
+
+value_view_t any_dump(json_branch_t json,
+                      ukv_doc_field_type_t const field_type,
+                      stl_arena_t& arena,
+                      growing_tape_t& output,
+                      ukv_error_t* c_error) noexcept {
+
+    if (field_type == ukv_doc_field_str_k) {
+        ukv_octet_t dummy;
+        printed_number_buffer_t print_buffer;
+        auto str = json_to_string(json.punned(), 0, dummy, dummy, dummy, print_buffer);
+        auto result = output.push_back(str, c_error);
+        output.add_terminator(byte_t {0}, c_error);
+        return result;
+    }
+
+    else if (field_type == ukv_doc_field_json_k)
+        return json_dump(json, arena, output, c_error);
+
+    *c_error = "Output type not supported!";
+    return {};
+}
+
+/*********************************************************/
+/*****************	 Primary Functions	  ****************/
+/*********************************************************/
 
 template <typename callback_at>
 void read_unique_docs( //
@@ -232,7 +434,7 @@ void read_unique_docs( //
 
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
-        json_t parsed = parse_any(binary_doc, internal_format_k, arena, c_error);
+        json_t parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
 
         // This error is extremely unlikely, as we have previously accepted the data into the store.
         return_on_error(c_error);
@@ -244,9 +446,6 @@ void read_unique_docs( //
     unique_places = places;
 }
 
-/**
- * ! Returned object may not contain any fields, if multiple fields are requested from the same doc.
- */
 template <typename callback_at>
 void read_docs( //
     ukv_database_t const c_db,
@@ -320,7 +519,7 @@ void read_docs( //
     for (ukv_size_t doc_idx = 0; doc_idx != unique_places.count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
         json_t& parsed = unique_docs[doc_idx];
-        parsed = parse_any(binary_doc, internal_format_k, arena, c_error);
+        parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
 
         // This error is extremely unlikely, as we have previously accepted the data into the store.
         return_on_error(c_error);
@@ -365,7 +564,7 @@ void read_modify_write( //
         if (!parsed.mut_handle)
             return;
 
-        json_t parsed_task = parse_any(contents[task_idx], c_type, arena, c_error);
+        json_t parsed_task = any_parse(contents[task_idx], c_type, arena, c_error);
         return_on_error(c_error);
 
         // Perform modifications
@@ -383,7 +582,7 @@ void read_modify_write( //
 
     for (auto const& doc : unique_docs) {
         yyjson_mut_val* root = yyjson_mut_doc_get_root(doc.mut_handle);
-        dump_any(root, internal_format_k, arena, growing_tape, c_error);
+        any_dump({.mut_handle = root}, internal_format_k, arena, growing_tape, c_error);
         return_on_error(c_error);
     }
 
@@ -553,8 +752,8 @@ void ukv_docs_read( //
 
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, json_t const& doc) {
         yyjson_val* root = yyjson_doc_get_root(doc.handle);
-        auto branch = lookup_field(root, field);
-        dump_any(branch, c_type, arena, growing_tape, c_error);
+        auto branch = json_lookup(root, field);
+        any_dump({.handle = branch}, c_type, arena, growing_tape, c_error);
         return_on_error(c_error);
     };
     places_arg_t unique_places;
@@ -701,7 +900,7 @@ void ukv_docs_gist( //
         if (!binary_doc)
             continue;
 
-        json_t doc = parse_any(binary_doc, internal_format_k, arena, c_error);
+        json_t doc = any_parse(binary_doc, internal_format_k, arena, c_error);
         return_on_error(c_error);
         if (!doc)
             continue;
@@ -719,7 +918,7 @@ void ukv_docs_gist( //
         *c_found_fields = reinterpret_cast<ukv_char_t*>(exported_paths.contents().begin().get());
 }
 
-std::size_t min_memory_usage(ukv_doc_field_type_t type) {
+std::size_t doc_field_size_bytes(ukv_doc_field_type_t type) {
     switch (type) {
     default: return 0;
     case ukv_doc_field_null_k: return 0;
@@ -753,213 +952,38 @@ struct column_begin_t {
     ukv_byte_t* scalars;
     ukv_length_t* str_offsets;
     ukv_length_t* str_lengths;
+
+    template <typename scalar_at>
+    inline void set(std::size_t doc_idx, yyjson_val* value) noexcept {
+
+        ukv_octet_t mask = static_cast<ukv_octet_t>(1 << (doc_idx % CHAR_BIT));
+        ukv_octet_t& valid = validities[doc_idx / CHAR_BIT];
+        ukv_octet_t& convert = conversions[doc_idx / CHAR_BIT];
+        ukv_octet_t& collide = collisions[doc_idx / CHAR_BIT];
+        scalar_at& scalar = reinterpret_cast<scalar_at*>(scalars)[doc_idx];
+
+        json_to_scalar(value, mask, valid, convert, collide, scalar);
+    }
+
+    inline void set_str(std::size_t doc_idx,
+                        yyjson_val* value,
+                        printed_number_buffer_t& print_buffer,
+                        safe_vector_gt<char>& output,
+                        ukv_error_t* c_error) noexcept {
+
+        ukv_octet_t mask = static_cast<ukv_octet_t>(1 << (doc_idx % CHAR_BIT));
+        ukv_octet_t& valid = validities[doc_idx / CHAR_BIT];
+        ukv_octet_t& convert = conversions[doc_idx / CHAR_BIT];
+        ukv_octet_t& collide = collisions[doc_idx / CHAR_BIT];
+        ukv_length_t& off = str_offsets[doc_idx];
+        ukv_length_t& len = str_lengths[doc_idx];
+
+        auto str = json_to_string(value, mask, valid, convert, collide, print_buffer);
+        off = static_cast<ukv_length_t>(output.size());
+        len = static_cast<ukv_length_t>(str.size());
+        output.insert(output.size(), str.begin(), str.end(), c_error);
+    }
 };
-
-template <typename scalar_at>
-void export_scalar_column( //
-    yyjson_val* value,
-    std::size_t doc_idx,
-    column_begin_t column) {
-
-    yyjson_type const type = yyjson_get_type(value);
-    yyjson_subtype const subtype = yyjson_get_subtype(value);
-
-    // Bitmaps are indexed from the last bit within every byte
-    // https://arrow.apache.org/docs/format/Columnar.html#validity-bitmaps
-    ukv_octet_t mask_bitmap = static_cast<ukv_octet_t>(1 << (doc_idx % CHAR_BIT));
-    ukv_octet_t& ref_valid = column.validities[doc_idx / CHAR_BIT];
-    ukv_octet_t& ref_convert = column.conversions[doc_idx / CHAR_BIT];
-    ukv_octet_t& ref_collide = column.collisions[doc_idx / CHAR_BIT];
-    scalar_at& ref_scalar = reinterpret_cast<scalar_at*>(column.scalars)[doc_idx];
-
-    switch (type) {
-    case YYJSON_TYPE_NULL:
-        ref_convert &= ~mask_bitmap;
-        ref_collide &= ~mask_bitmap;
-        ref_valid &= ~mask_bitmap;
-        break;
-    case YYJSON_TYPE_NONE:
-    case YYJSON_TYPE_OBJ:
-    case YYJSON_TYPE_ARR:
-        ref_convert &= ~mask_bitmap;
-        ref_collide |= mask_bitmap;
-        ref_valid &= ~mask_bitmap;
-        break;
-
-    case YYJSON_TYPE_BOOL:
-        ref_scalar = yyjson_is_true(value);
-        if constexpr (std::is_same_v<scalar_at, bool>)
-            ref_convert &= ~mask_bitmap;
-        else
-            ref_convert |= mask_bitmap;
-        ref_collide &= ~mask_bitmap;
-        ref_valid |= mask_bitmap;
-        break;
-
-    case YYJSON_TYPE_STR: {
-        const char* str_begin = yyjson_get_str(value);
-        size_t str_len = yyjson_get_len(value);
-        std::from_chars_result result = from_chars(str_begin, str_begin + str_len, ref_scalar);
-        bool entire_string_is_number = result.ec == std::errc() && result.ptr == str_begin + str_len;
-        if (entire_string_is_number) {
-            ref_convert |= mask_bitmap;
-            ref_collide &= ~mask_bitmap;
-            ref_valid |= mask_bitmap;
-        }
-        else {
-            ref_convert &= ~mask_bitmap;
-            ref_collide |= mask_bitmap;
-            ref_valid &= ~mask_bitmap;
-        }
-        break;
-    }
-
-    case YYJSON_TYPE_NUM: {
-
-        switch (subtype) {
-        case YYJSON_SUBTYPE_UINT:
-            ref_scalar = static_cast<scalar_at>(yyjson_get_uint(value));
-            if constexpr (std::is_unsigned_v<scalar_at>)
-                ref_convert &= ~mask_bitmap;
-            else
-                ref_convert |= mask_bitmap;
-            ref_collide &= ~mask_bitmap;
-            ref_valid |= mask_bitmap;
-            break;
-
-        case YYJSON_SUBTYPE_SINT:
-            ref_scalar = static_cast<scalar_at>(yyjson_get_sint(value));
-            if constexpr (std::is_integral_v<scalar_at> && std::is_signed_v<scalar_at>)
-                ref_convert &= ~mask_bitmap;
-            else
-                ref_convert |= mask_bitmap;
-            ref_collide &= ~mask_bitmap;
-            ref_valid |= mask_bitmap;
-            break;
-
-        case YYJSON_SUBTYPE_REAL:
-            ref_scalar = static_cast<scalar_at>(yyjson_get_real(value));
-            if constexpr (std::is_floating_point_v<scalar_at>)
-                ref_convert &= ~mask_bitmap;
-            else
-                ref_convert |= mask_bitmap;
-            ref_collide &= ~mask_bitmap;
-            ref_valid |= mask_bitmap;
-            break;
-        }
-    }
-    }
-}
-
-template <typename scalar_at>
-ukv_length_t print_scalar(scalar_at scalar, safe_vector_gt<char>& output, ukv_error_t* c_error) {
-
-    /// The on-stack buffer to be used to convert/format/print numerical values into strings.
-    char print_buf[printed_number_length_limit_k];
-
-    std::to_chars_result result = to_chars(print_buf, print_buf + printed_number_length_limit_k, scalar);
-    bool fits_terminator = result.ec == std::errc() && result.ptr + 1 < print_buf + printed_number_length_limit_k;
-    if (fits_terminator) {
-        *result.ptr = '\0';
-        auto length = (result.ptr - print_buf) + 1;
-        output.insert(output.size(), print_buf, print_buf + length, c_error);
-        return static_cast<ukv_length_t>(length - 1);
-    }
-    else
-        return ukv_length_missing_k;
-}
-
-void export_string_column( //
-    yyjson_val* value,
-    std::size_t doc_idx,
-    column_begin_t column,
-    safe_vector_gt<char>& output,
-    ukv_error_t* c_error) {
-
-    yyjson_type const type = yyjson_get_type(value);
-    yyjson_subtype const subtype = yyjson_get_subtype(value);
-
-    // Bitmaps are indexed from the last bit within every byte
-    // https://arrow.apache.org/docs/format/Columnar.html#validity-bitmaps
-    ukv_octet_t mask_bitmap = static_cast<ukv_octet_t>(1 << (doc_idx % CHAR_BIT));
-    ukv_octet_t& ref_valid = column.validities[doc_idx / CHAR_BIT];
-    ukv_octet_t& ref_convert = column.conversions[doc_idx / CHAR_BIT];
-    ukv_octet_t& ref_collide = column.collisions[doc_idx / CHAR_BIT];
-    ukv_length_t& ref_off = column.str_offsets[doc_idx];
-    ukv_length_t& ref_len = column.str_lengths[doc_idx];
-
-    ref_off = static_cast<ukv_length_t>(output.size());
-
-    switch (type) {
-    case YYJSON_TYPE_NULL:
-        ref_convert &= ~mask_bitmap;
-        ref_collide &= ~mask_bitmap;
-        ref_valid &= ~mask_bitmap;
-        ref_off = ref_len = ukv_length_missing_k;
-        break;
-    case YYJSON_TYPE_NONE:
-    case YYJSON_TYPE_OBJ:
-    case YYJSON_TYPE_ARR:
-        ref_convert &= ~mask_bitmap;
-        ref_collide |= mask_bitmap;
-        ref_valid &= ~mask_bitmap;
-        ref_off = ref_len = ukv_length_missing_k;
-        break;
-
-    case YYJSON_TYPE_BOOL: {
-        if (yyjson_is_true(value)) {
-            ref_len = 5;
-            output.insert(output.size(), true_k, true_k + 5, c_error);
-        }
-        else {
-            ref_len = 6;
-            output.insert(output.size(), false_k, false_k + 6, c_error);
-        }
-        ref_convert |= mask_bitmap;
-        ref_collide &= ~mask_bitmap;
-        ref_valid |= mask_bitmap;
-        break;
-    }
-
-    case YYJSON_TYPE_STR: {
-        const char* str_begin = yyjson_get_str(value);
-        size_t str_len = yyjson_get_len(value);
-
-        ref_len = static_cast<ukv_length_t>(str_len);
-        output.insert(output.size(), str_begin, str_begin + str_len + 1, c_error);
-        ref_convert &= ~mask_bitmap;
-        ref_collide &= ~mask_bitmap;
-        ref_valid |= mask_bitmap;
-        break;
-    }
-
-    case YYJSON_TYPE_NUM: {
-
-        switch (subtype) {
-        case YYJSON_SUBTYPE_UINT:
-            ref_len = print_scalar(yyjson_get_uint(value), output, c_error);
-            ref_convert |= mask_bitmap;
-            ref_collide = ref_len != ukv_length_missing_k ? (ref_collide & ~mask_bitmap) : (ref_collide | mask_bitmap);
-            ref_valid = ref_len == ukv_length_missing_k ? (ref_valid & ~mask_bitmap) : (ref_valid | mask_bitmap);
-            break;
-
-        case YYJSON_SUBTYPE_SINT:
-            ref_len = print_scalar(yyjson_get_sint(value), output, c_error);
-            ref_convert |= mask_bitmap;
-            ref_collide = ref_len != ukv_length_missing_k ? (ref_collide & ~mask_bitmap) : (ref_collide | mask_bitmap);
-            ref_valid = ref_len == ukv_length_missing_k ? (ref_valid & ~mask_bitmap) : (ref_valid | mask_bitmap);
-            break;
-
-        case YYJSON_SUBTYPE_REAL:
-            ref_len = print_scalar(yyjson_get_real(value), output, c_error);
-            ref_convert |= mask_bitmap;
-            ref_collide = ref_len != ukv_length_missing_k ? (ref_collide & ~mask_bitmap) : (ref_collide | mask_bitmap);
-            ref_valid = ref_len == ukv_length_missing_k ? (ref_valid & ~mask_bitmap) : (ref_valid | mask_bitmap);
-            break;
-        }
-    }
-    }
-}
 
 void ukv_docs_gather( //
     ukv_database_t const c_db,
@@ -1038,7 +1062,7 @@ void ukv_docs_gather( //
     std::size_t bytes_per_addresses_row = sizeof(void*) * c_fields_count;
     std::size_t bytes_for_addresses = bytes_per_addresses_row * 6;
     std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps * c_fields_count * c_fields_count;
-    std::size_t bytes_per_scalars_row = transform_reduce_n(types, c_fields_count, 0ul, &min_memory_usage);
+    std::size_t bytes_per_scalars_row = transform_reduce_n(types, c_fields_count, 0ul, &doc_field_size_bytes);
     std::size_t bytes_for_scalars = bytes_per_scalars_row * c_docs_count;
 
     // Preallocate at least a minimum amount of memory.
@@ -1112,15 +1136,16 @@ void ukv_docs_gather( //
                 addresses_scalars[field_idx] = reinterpret_cast<ukv_byte_t*>(scalars_tape);
                 break;
             }
-            scalars_tape += min_memory_usage(type) * c_docs_count;
+            scalars_tape += doc_field_size_bytes(type) * c_docs_count;
         }
     }
 
     // Go though all the documents extracting and type-checking the relevant parts
+    printed_number_buffer_t print_buffer;
     safe_vector_gt<char> string_tape(&arena);
     for (ukv_size_t doc_idx = 0; doc_idx != c_docs_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
-        json_t doc = parse_any(binary_doc, internal_format_k, arena, c_error);
+        json_t doc = any_parse(binary_doc, internal_format_k, arena, c_error);
         return_on_error(c_error);
         if (!doc)
             continue;
@@ -1131,7 +1156,7 @@ void ukv_docs_gather( //
             // Find this field within document
             ukv_doc_field_type_t type = types[field_idx];
             ukv_str_view_t field = fields[field_idx];
-            yyjson_val* found_value = lookup_field(root, field);
+            yyjson_val* found_value = json_lookup(root, field);
 
             column_begin_t column {
                 .validities = (*c_result_bitmap_valid)[field_idx],
@@ -1145,23 +1170,23 @@ void ukv_docs_gather( //
             // Export the types
             switch (type) {
 
-            case ukv_doc_field_bool_k: export_scalar_column<bool>(found_value, doc_idx, column); break;
+            case ukv_doc_field_bool_k: column.set<bool>(doc_idx, found_value); break;
 
-            case ukv_doc_field_i8_k: export_scalar_column<std::int8_t>(found_value, doc_idx, column); break;
-            case ukv_doc_field_i16_k: export_scalar_column<std::int16_t>(found_value, doc_idx, column); break;
-            case ukv_doc_field_i32_k: export_scalar_column<std::int32_t>(found_value, doc_idx, column); break;
-            case ukv_doc_field_i64_k: export_scalar_column<std::int64_t>(found_value, doc_idx, column); break;
+            case ukv_doc_field_i8_k: column.set<std::int8_t>(doc_idx, found_value); break;
+            case ukv_doc_field_i16_k: column.set<std::int16_t>(doc_idx, found_value); break;
+            case ukv_doc_field_i32_k: column.set<std::int32_t>(doc_idx, found_value); break;
+            case ukv_doc_field_i64_k: column.set<std::int64_t>(doc_idx, found_value); break;
 
-            case ukv_doc_field_u8_k: export_scalar_column<std::uint8_t>(found_value, doc_idx, column); break;
-            case ukv_doc_field_u16_k: export_scalar_column<std::uint16_t>(found_value, doc_idx, column); break;
-            case ukv_doc_field_u32_k: export_scalar_column<std::uint32_t>(found_value, doc_idx, column); break;
-            case ukv_doc_field_u64_k: export_scalar_column<std::uint64_t>(found_value, doc_idx, column); break;
+            case ukv_doc_field_u8_k: column.set<std::uint8_t>(doc_idx, found_value); break;
+            case ukv_doc_field_u16_k: column.set<std::uint16_t>(doc_idx, found_value); break;
+            case ukv_doc_field_u32_k: column.set<std::uint32_t>(doc_idx, found_value); break;
+            case ukv_doc_field_u64_k: column.set<std::uint64_t>(doc_idx, found_value); break;
 
-            case ukv_doc_field_f32_k: export_scalar_column<float>(found_value, doc_idx, column); break;
-            case ukv_doc_field_f64_k: export_scalar_column<double>(found_value, doc_idx, column); break;
+            case ukv_doc_field_f32_k: column.set<float>(doc_idx, found_value); break;
+            case ukv_doc_field_f64_k: column.set<double>(doc_idx, found_value); break;
 
-            case ukv_doc_field_str_k: export_string_column(found_value, doc_idx, column, string_tape, c_error); break;
-            case ukv_doc_field_bin_k: export_string_column(found_value, doc_idx, column, string_tape, c_error); break;
+            case ukv_doc_field_str_k: column.set_str(doc_idx, found_value, print_buffer, string_tape, c_error); break;
+            case ukv_doc_field_bin_k: column.set_str(doc_idx, found_value, print_buffer, string_tape, c_error); break;
 
             default: break;
             }
