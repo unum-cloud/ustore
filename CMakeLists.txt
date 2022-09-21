@@ -62,6 +62,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitiz
 set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
 
 find_package(Threads REQUIRED)
+set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 
 # Install 3rd Party Packages
 include(FetchContent)

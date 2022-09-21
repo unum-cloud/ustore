@@ -117,9 +117,9 @@ static void batch_insert(bm::State& state) {
             0,
             &body,
             0,
+            ukv_doc_modify_upsert_k,
+            ukv_doc_field_json_k,
             ukv_options_default_k,
-            ukv_format_json_k,
-            ukv_type_any_k,
             arena.member_ptr(),
             status.member_ptr());
         status.throw_unhandled();
@@ -198,7 +198,6 @@ static void sample_blobs(bm::State& state) {
 static void sample_docs(bm::State& state) {
 
     // We want to trigger parsing and serialization
-    ukv_format_t format = ukv_format_json_k;
     status_t status;
     arena_t arena(db);
 
@@ -216,9 +215,8 @@ static void sample_docs(bm::State& state) {
             sizeof(ukv_key_t),
             nullptr,
             0,
+            ukv_doc_field_json_k,
             ukv_options_default_k,
-            format,
-            ukv_type_any_k,
             nullptr,
             &offsets,
             nullptr,
@@ -251,9 +249,8 @@ static void sample_field(bm::State& state) {
             sizeof(ukv_key_t),
             &field,
             0,
+            ukv_doc_field_str_k,
             ukv_options_default_k,
-            ukv_format_binary_k,
-            ukv_type_str_k,
             nullptr,
             &offsets,
             nullptr,
@@ -272,7 +269,10 @@ static void sample_tables(bm::State& state) {
 
     constexpr ukv_size_t fields_k = 4;
     ukv_str_view_t names[fields_k] {"timestamp_ms", "reply_count", "retweet_count", "favorite_count"};
-    ukv_type_t types[fields_k] {ukv_type_str_k, ukv_type_u32_k, ukv_type_u32_k, ukv_type_u32_k};
+    ukv_doc_field_type_t types[fields_k] {ukv_doc_field_str_k,
+                                          ukv_doc_field_u32_k,
+                                          ukv_doc_field_u32_k,
+                                          ukv_doc_field_u32_k};
 
     std::size_t received_bytes = 0;
     sample_randomly(state, [&](ukv_key_t const* keys, ukv_size_t count) {
@@ -293,7 +293,7 @@ static void sample_tables(bm::State& state) {
             names,
             sizeof(ukv_str_view_t),
             types,
-            sizeof(ukv_type_t),
+            sizeof(ukv_doc_field_type_t),
             ukv_options_default_k,
             &validities,
             nullptr,
@@ -337,7 +337,7 @@ static void index_file(std::string_view mapped_contents, std::vector<tweet_t>& t
 
 int main(int argc, char** argv) {
     bm::Initialize(&argc, argv);
-    thread_count = std::thread::hardware_concurrency() / 4;
+    thread_count = 2; // std::thread::hardware_concurrency() / 4;
 
     // 1. Find the dataset parts
     std::printf("Will search for .ndjson files...\n");
@@ -384,11 +384,12 @@ int main(int argc, char** argv) {
     tweet_count = 0;
     for (auto const& tweets : tweets_per_path)
         tweet_count += tweets.size();
+    std::printf("- indexed %zu tweets\n", static_cast<size_t>(tweet_count));
 
     // 4. Run the actual benchmarks
-    // db.open("/mnt/md0/rocksdb/Twitter").throw_unhandled();
+    db.open("/mnt/md0/rocksdb/Twitter").throw_unhandled();
     // db.open("/mnt/md0/leveldb/Twitter").throw_unhandled();
-    db.open().throw_unhandled();
+    // db.open().throw_unhandled();
     std::printf("Will benchmark...\n");
     bm::RegisterBenchmark("batch_insert", &batch_insert) //
         ->Iterations(tweet_count / thread_count)
@@ -421,5 +422,10 @@ int main(int argc, char** argv) {
 
     bm::RunSpecifiedBenchmarks();
     bm::Shutdown();
+
+    // To avoid sanitizer complaints, we should unmap the files:
+    for (auto mapped_content : mapped_contents)
+        munmap((void*)mapped_content.data(), mapped_content.size());
+
     return 0;
 }

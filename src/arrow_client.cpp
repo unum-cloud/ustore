@@ -174,7 +174,7 @@ void ukv_read( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgCols.c_str(),
-            ukv_type<ukv_collection_t>(),
+            ukv_doc_field<ukv_collection_t>(),
             nullptr,
             nullptr,
             collections.get(),
@@ -187,7 +187,7 @@ void ukv_read( //
         ukv_to_arrow_column( //
             c_tasks_count,
             "keys",
-            ukv_type<ukv_key_t>(),
+            ukv_doc_field<ukv_key_t>(),
             nullptr,
             nullptr,
             keys.get(),
@@ -401,7 +401,7 @@ void ukv_write( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgCols.c_str(),
-            ukv_type<ukv_collection_t>(),
+            ukv_doc_field<ukv_collection_t>(),
             nullptr,
             nullptr,
             collections.get(),
@@ -414,7 +414,7 @@ void ukv_write( //
         ukv_to_arrow_column( //
             c_tasks_count,
             "keys",
-            ukv_type<ukv_key_t>(),
+            ukv_doc_field<ukv_key_t>(),
             nullptr,
             nullptr,
             keys.get(),
@@ -427,7 +427,7 @@ void ukv_write( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgVals.c_str(),
-            ukv_type<value_view_t>(),
+            ukv_doc_field<value_view_t>(),
             presences.get(),
             offs.get(),
             joined_vals_begin,
@@ -566,7 +566,7 @@ void ukv_scan( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgCols.c_str(),
-            ukv_type<ukv_collection_t>(),
+            ukv_doc_field<ukv_collection_t>(),
             nullptr,
             nullptr,
             collections.get(),
@@ -579,7 +579,7 @@ void ukv_scan( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgScanStarts.c_str(),
-            ukv_type<ukv_key_t>(),
+            ukv_doc_field<ukv_key_t>(),
             nullptr,
             nullptr,
             start_keys.get(),
@@ -592,7 +592,7 @@ void ukv_scan( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgScanEnds.c_str(),
-            ukv_type<ukv_key_t>(),
+            ukv_doc_field<ukv_key_t>(),
             nullptr,
             nullptr,
             end_keys.get(),
@@ -605,7 +605,7 @@ void ukv_scan( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgScanLengths.c_str(),
-            ukv_type<ukv_length_t>(),
+            ukv_doc_field<ukv_length_t>(),
             nullptr,
             nullptr,
             limits.get(),

@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
 
     // Try getting the main collection
     _ = db.collection();
-    collection_t main = *db.collection();
+    bins_collection_t main = *db.collection();
 
     // Single-element access
     main[42] = "purpose of life";
@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
         (void)value;
 
     // Accessing named collections
-    collection_t prefixes = *db.collection("prefixes");
+    bins_collection_t prefixes = *db.collection("prefixes");
     prefixes.at(42) = "purpose";
     db["articles"]->at(42) = "of";
     db["suffixes"]->at(42) = "life";

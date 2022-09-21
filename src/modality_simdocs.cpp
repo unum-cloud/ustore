@@ -15,7 +15,7 @@
 #include <cstdio>   // `std::snprintf`
 
 #include <yyjson.h>
-#include <fmt/core.h>
+#include <bson.h> // Converting from/to BSON
 
 #include "helpers.hpp"
 
@@ -341,6 +341,7 @@ void replace_docs( //
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
+    ukv_doc_modification_t const c_modification,
     ukv_doc_field_type_t const c_type,
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
@@ -352,6 +353,7 @@ void read_modify_write( //
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
+    ukv_doc_modification_t const c_modification,
     ukv_doc_field_type_t const c_type,
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
@@ -484,7 +486,7 @@ void ukv_docs_write( //
                     ? &read_modify_write
                     : &replace_docs;
 
-    func(c_db, c_txn, places, contents, c_options, c_type, arena, c_error);
+    func(c_db, c_txn, places, contents, c_options, c_modification, c_type, arena, c_error);
 }
 
 void ukv_docs_read( //
