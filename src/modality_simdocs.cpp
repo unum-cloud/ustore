@@ -52,8 +52,7 @@ struct json_t {
     explicit operator bool() const noexcept { return handle || mut_handle; }
 };
 
-constexpr ukv_format_t internal_format_k = ukv_format_json_k;
-ukv_format_t ukv_format_docs_internal_k = internal_format_k;
+constexpr ukv_doc_field_type_t internal_format_k = ukv_doc_field_json_k;
 
 static constexpr char const* true_k = "true";
 static constexpr char const* false_k = "false";
@@ -92,7 +91,7 @@ yyjson_alc wrap_allocator(stl_arena_t& arena) {
 
 json_t parse_any( //
     value_view_t bytes,
-    ukv_format_t const,
+    ukv_doc_field_type_t const,
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 
@@ -114,7 +113,7 @@ yyjson_val* lookup_field(yyjson_val* json, ukv_str_view_t field) noexcept {
 
 void dump_any( //
     yyjson_val* json,
-    ukv_format_t const,
+    ukv_doc_field_type_t const,
     stl_arena_t& arena,
     growing_tape_t& output,
     ukv_error_t* c_error) noexcept {
@@ -136,7 +135,7 @@ void dump_any( //
 
 void dump_any( //
     yyjson_mut_val* json,
-    ukv_format_t const,
+    ukv_doc_field_type_t const,
     stl_arena_t& arena,
     growing_tape_t& output,
     ukv_error_t* c_error) noexcept {
@@ -342,7 +341,7 @@ void replace_docs( //
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
-    ukv_format_t const c_format,
+    ukv_doc_field_type_t const c_type,
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 }
@@ -353,7 +352,7 @@ void read_modify_write( //
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
-    ukv_format_t const c_format,
+    ukv_doc_field_type_t const c_type,
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 
@@ -364,7 +363,7 @@ void read_modify_write( //
         if (!parsed.mut_handle)
             return;
 
-        json_t parsed_task = parse_any(contents[task_idx], c_format, arena, c_error);
+        json_t parsed_task = parse_any(contents[task_idx], c_type, arena, c_error);
         return_on_error(c_error);
 
         // Perform modifications
@@ -434,9 +433,9 @@ void ukv_docs_write( //
     ukv_bytes_cptr_t const* c_vals,
     ukv_size_t const c_vals_stride,
 
+    ukv_doc_modification_t const c_modification,
+    ukv_doc_field_type_t const c_type,
     ukv_options_t const c_options,
-    ukv_format_t const c_format,
-    ukv_type_t const,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -449,7 +448,7 @@ void ukv_docs_write( //
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     auto has_fields = fields && (!fields.repeats() || *fields);
-    if (!has_fields && c_format == internal_format_k)
+    if (!has_fields && c_type == internal_format_k)
         return ukv_write( //
             c_db,
             c_txn,
@@ -481,11 +480,11 @@ void ukv_docs_write( //
     places_arg_t places {collections, keys, fields, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
-    auto func = has_fields || c_format == ukv_format_json_patch_k || c_format == ukv_format_json_merge_patch_k
+    auto func = has_fields || c_modification == ukv_doc_modify_patch_k || c_modification == ukv_doc_modify_merge_k
                     ? &read_modify_write
                     : &replace_docs;
 
-    func(c_db, c_txn, places, contents, c_options, c_format, arena, c_error);
+    func(c_db, c_txn, places, contents, c_options, c_type, arena, c_error);
 }
 
 void ukv_docs_read( //
@@ -502,9 +501,8 @@ void ukv_docs_read( //
     ukv_str_view_t const* c_fields,
     ukv_size_t const c_fields_stride,
 
+    ukv_doc_field_type_t const c_type,
     ukv_options_t const c_options,
-    ukv_format_t const c_format,
-    ukv_type_t const,
 
     ukv_octet_t** c_found_presences,
     ukv_length_t** c_found_offsets,
@@ -522,7 +520,7 @@ void ukv_docs_read( //
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     auto has_fields = fields && (!fields.repeats() || *fields);
-    if (!has_fields && c_format == internal_format_k)
+    if (!has_fields && c_type == internal_format_k)
         return ukv_read( //
             c_db,
             c_txn,
@@ -554,7 +552,7 @@ void ukv_docs_read( //
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, json_t const& doc) {
         yyjson_val* root = yyjson_doc_get_root(doc.handle);
         auto branch = lookup_field(root, field);
-        dump_any(branch, c_format, arena, growing_tape, c_error);
+        dump_any(branch, c_type, arena, growing_tape, c_error);
         return_on_error(c_error);
     };
     places_arg_t unique_places;
@@ -719,30 +717,30 @@ void ukv_docs_gist( //
         *c_found_fields = reinterpret_cast<ukv_char_t*>(exported_paths.contents().begin().get());
 }
 
-std::size_t min_memory_usage(ukv_type_t type) {
+std::size_t min_memory_usage(ukv_doc_field_type_t type) {
     switch (type) {
     default: return 0;
-    case ukv_type_null_k: return 0;
-    case ukv_type_bool_k: return 1;
-    case ukv_type_uuid_k: return 16;
+    case ukv_doc_field_null_k: return 0;
+    case ukv_doc_field_bool_k: return 1;
+    case ukv_doc_field_uuid_k: return 16;
 
-    case ukv_type_i8_k: return 1;
-    case ukv_type_i16_k: return 2;
-    case ukv_type_i32_k: return 4;
-    case ukv_type_i64_k: return 8;
+    case ukv_doc_field_i8_k: return 1;
+    case ukv_doc_field_i16_k: return 2;
+    case ukv_doc_field_i32_k: return 4;
+    case ukv_doc_field_i64_k: return 8;
 
-    case ukv_type_u8_k: return 1;
-    case ukv_type_u16_k: return 2;
-    case ukv_type_u32_k: return 4;
-    case ukv_type_u64_k: return 8;
+    case ukv_doc_field_u8_k: return 1;
+    case ukv_doc_field_u16_k: return 2;
+    case ukv_doc_field_u32_k: return 4;
+    case ukv_doc_field_u64_k: return 8;
 
-    case ukv_type_f16_k: return 2;
-    case ukv_type_f32_k: return 4;
-    case ukv_type_f64_k: return 8;
+    case ukv_doc_field_f16_k: return 2;
+    case ukv_doc_field_f32_k: return 4;
+    case ukv_doc_field_f64_k: return 8;
 
     // Offsets and lengths:
-    case ukv_type_bin_k: return 8;
-    case ukv_type_str_k: return 8;
+    case ukv_doc_field_bin_k: return 8;
+    case ukv_doc_field_str_k: return 8;
     }
 }
 
@@ -976,7 +974,7 @@ void ukv_docs_gather( //
     ukv_str_view_t const* c_fields,
     ukv_size_t const c_fields_stride,
 
-    ukv_type_t const* c_types,
+    ukv_doc_field_type_t const* c_types,
     ukv_size_t const c_types_stride,
 
     ukv_options_t const c_options,
@@ -1020,7 +1018,7 @@ void ukv_docs_gather( //
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
-    strided_iterator_gt<ukv_type_t const> types {c_types, c_types_stride};
+    strided_iterator_gt<ukv_doc_field_type_t const> types {c_types, c_types_stride};
 
     joined_bins_t found_binaries {c_docs_count, found_binary_offs, found_binary_begin};
     joined_bins_iterator_t found_binary_it = found_binaries.begin();
@@ -1098,10 +1096,10 @@ void ukv_docs_gather( //
 
         auto scalars_tape = first_collection_scalars;
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx) {
-            ukv_type_t type = types[field_idx];
+            ukv_doc_field_type_t type = types[field_idx];
             switch (type) {
-            case ukv_type_str_k:
-            case ukv_type_bin_k:
+            case ukv_doc_field_str_k:
+            case ukv_doc_field_bin_k:
                 addresses_offs[field_idx] = reinterpret_cast<ukv_length_t*>(scalars_tape);
                 addresses_lens[field_idx] = addresses_offs[field_idx] + c_docs_count;
                 addresses_scalars[field_idx] = nullptr;
@@ -1129,7 +1127,7 @@ void ukv_docs_gather( //
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx) {
 
             // Find this field within document
-            ukv_type_t type = types[field_idx];
+            ukv_doc_field_type_t type = types[field_idx];
             ukv_str_view_t field = fields[field_idx];
             yyjson_val* found_value = lookup_field(root, field);
 
@@ -1145,23 +1143,23 @@ void ukv_docs_gather( //
             // Export the types
             switch (type) {
 
-            case ukv_type_bool_k: export_scalar_column<bool>(found_value, doc_idx, column); break;
+            case ukv_doc_field_bool_k: export_scalar_column<bool>(found_value, doc_idx, column); break;
 
-            case ukv_type_i8_k: export_scalar_column<std::int8_t>(found_value, doc_idx, column); break;
-            case ukv_type_i16_k: export_scalar_column<std::int16_t>(found_value, doc_idx, column); break;
-            case ukv_type_i32_k: export_scalar_column<std::int32_t>(found_value, doc_idx, column); break;
-            case ukv_type_i64_k: export_scalar_column<std::int64_t>(found_value, doc_idx, column); break;
+            case ukv_doc_field_i8_k: export_scalar_column<std::int8_t>(found_value, doc_idx, column); break;
+            case ukv_doc_field_i16_k: export_scalar_column<std::int16_t>(found_value, doc_idx, column); break;
+            case ukv_doc_field_i32_k: export_scalar_column<std::int32_t>(found_value, doc_idx, column); break;
+            case ukv_doc_field_i64_k: export_scalar_column<std::int64_t>(found_value, doc_idx, column); break;
 
-            case ukv_type_u8_k: export_scalar_column<std::uint8_t>(found_value, doc_idx, column); break;
-            case ukv_type_u16_k: export_scalar_column<std::uint16_t>(found_value, doc_idx, column); break;
-            case ukv_type_u32_k: export_scalar_column<std::uint32_t>(found_value, doc_idx, column); break;
-            case ukv_type_u64_k: export_scalar_column<std::uint64_t>(found_value, doc_idx, column); break;
+            case ukv_doc_field_u8_k: export_scalar_column<std::uint8_t>(found_value, doc_idx, column); break;
+            case ukv_doc_field_u16_k: export_scalar_column<std::uint16_t>(found_value, doc_idx, column); break;
+            case ukv_doc_field_u32_k: export_scalar_column<std::uint32_t>(found_value, doc_idx, column); break;
+            case ukv_doc_field_u64_k: export_scalar_column<std::uint64_t>(found_value, doc_idx, column); break;
 
-            case ukv_type_f32_k: export_scalar_column<float>(found_value, doc_idx, column); break;
-            case ukv_type_f64_k: export_scalar_column<double>(found_value, doc_idx, column); break;
+            case ukv_doc_field_f32_k: export_scalar_column<float>(found_value, doc_idx, column); break;
+            case ukv_doc_field_f64_k: export_scalar_column<double>(found_value, doc_idx, column); break;
 
-            case ukv_type_str_k: export_string_column(found_value, doc_idx, column, string_tape, c_error); break;
-            case ukv_type_bin_k: export_string_column(found_value, doc_idx, column, string_tape, c_error); break;
+            case ukv_doc_field_str_k: export_string_column(found_value, doc_idx, column, string_tape, c_error); break;
+            case ukv_doc_field_bin_k: export_string_column(found_value, doc_idx, column, string_tape, c_error); break;
 
             default: break;
             }

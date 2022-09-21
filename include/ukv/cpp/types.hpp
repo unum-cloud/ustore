@@ -261,11 +261,13 @@ class arena_t {
 class any_arena_t {
 
     arena_t owned_;
-    arena_t* accessible_ = nullptr;
+    ukv_arena_t* accessible_ = nullptr;
 
   public:
     any_arena_t(ukv_database_t db) noexcept : owned_(db), accessible_(nullptr) {}
-    any_arena_t(arena_t& accessible) noexcept : owned_(nullptr), accessible_(&accessible) {}
+    any_arena_t(arena_t& accessible) noexcept : owned_(nullptr), accessible_(accessible.member_ptr()) {}
+    any_arena_t(ukv_database_t db, ukv_arena_t* accessible) noexcept
+        : owned_(accessible ? nullptr : db), accessible_(accessible) {}
 
     any_arena_t(any_arena_t&&) = default;
     any_arena_t& operator=(any_arena_t&&) = default;
@@ -273,8 +275,7 @@ class any_arena_t {
     any_arena_t(any_arena_t const&) = delete;
     any_arena_t& operator=(any_arena_t const&) = delete;
 
-    inline arena_t& arena() noexcept { return accessible_ ? *accessible_ : owned_; }
-    inline ukv_arena_t* member_ptr() noexcept { return arena().member_ptr(); }
+    inline ukv_arena_t* member_ptr() noexcept { return accessible_ ?: owned_.member_ptr(); }
     inline operator ukv_arena_t*() & noexcept { return member_ptr(); }
     inline arena_t release_owned() noexcept { return std::exchange(owned_, arena_t {owned_.db()}); }
 };

@@ -1,5 +1,5 @@
 /**
- * @file members_ref.hpp
+ * @file bins_ref.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @brief C++ bindings for @see "ukv/db.h".
@@ -10,17 +10,17 @@
 #include "ukv/cpp/types.hpp"      // `arena_t`
 #include "ukv/cpp/status.hpp"     // `status_t`
 #include "ukv/cpp/sfinae.hpp"     // `location_store_gt`
-#include "ukv/cpp/table_view.hpp" // `table_view_t`
+#include "ukv/cpp/docs_table.hpp" // `docs_table_t`
 
 namespace unum::ukv {
 
 template <typename locations_store_t>
-class members_ref_gt;
+class docs_ref_gt;
 
 /**
  * @brief A proxy object, that allows both lookups and writes
  * with `[]` and assignment operators for a batch of keys
- * simultaneously.
+ * and @b sub-keys/fields across different documents.
  * Following assignment combinations are possible:
  * > one value to many keys
  * > many values to many keys
@@ -34,7 +34,7 @@ class members_ref_gt;
  *
  * @section Memory Management
  * Every "container" that overloads the @b [] operator has an internal "arena",
- * that is shared between all the `members_ref_gt`s produced from it. That will
+ * that is shared between all the `docs_ref_gt`s produced from it. That will
  * work great, unless:
  * > multiple threads are working with same collection handle or transaction.
  * > reading responses interleaves with new requests, which gobbles temporary memory.
@@ -47,7 +47,7 @@ class members_ref_gt;
  * > Exceptions: Never.
  */
 template <typename locations_at>
-class members_ref_gt {
+class docs_ref_gt {
   public:
     static_assert(!std::is_rvalue_reference_v<locations_at>, //
                   "The internal object can't be an R-value Reference");
@@ -66,7 +66,7 @@ class members_ref_gt {
     ukv_transaction_t txn_ = nullptr;
     ukv_arena_t* arena_ = nullptr;
     locations_store_t locations_;
-    ukv_format_t format_ = ukv_format_binary_k;
+    ukv_doc_field_type_t type_ = ukv_doc_field_default_k;
 
     template <typename contents_arg_at>
     status_t any_assign(contents_arg_at&&, ukv_options_t) noexcept;
@@ -78,25 +78,25 @@ class members_ref_gt {
     expected_gt<expected_at> any_gather(contents_arg_at&&, ukv_options_t) noexcept;
 
   public:
-    members_ref_gt(ukv_database_t db,
-                   ukv_transaction_t txn,
-                   locations_store_t locations,
-                   ukv_arena_t* arena,
-                   ukv_format_t format = ukv_format_binary_k) noexcept
-        : db_(db), txn_(txn), arena_(arena), locations_(locations), format_(format) {}
+    docs_ref_gt(ukv_database_t db,
+                ukv_transaction_t txn,
+                locations_store_t locations,
+                ukv_arena_t* arena,
+                ukv_doc_field_type_t type = ukv_doc_field_default_k) noexcept
+        : db_(db), txn_(txn), arena_(arena), locations_(locations), type_(type) {}
 
-    members_ref_gt(members_ref_gt&&) = default;
-    members_ref_gt& operator=(members_ref_gt&&) = default;
-    members_ref_gt(members_ref_gt const&) = default;
-    members_ref_gt& operator=(members_ref_gt const&) = default;
+    docs_ref_gt(docs_ref_gt&&) = default;
+    docs_ref_gt& operator=(docs_ref_gt&&) = default;
+    docs_ref_gt(docs_ref_gt const&) = default;
+    docs_ref_gt& operator=(docs_ref_gt const&) = default;
 
-    members_ref_gt& on(arena_t& arena) noexcept {
+    docs_ref_gt& on(arena_t& arena) noexcept {
         arena_ = arena.member_ptr();
         return *this;
     }
 
-    members_ref_gt& as(ukv_format_t format) noexcept {
-        format_ = format;
+    docs_ref_gt& as(ukv_doc_field_type_t type) noexcept {
+        type_ = type;
         return *this;
     }
 
@@ -156,13 +156,13 @@ class members_ref_gt {
     }
 
     template <typename contents_arg_at>
-    members_ref_gt& operator=(contents_arg_at&& vals) noexcept(false) {
+    docs_ref_gt& operator=(contents_arg_at&& vals) noexcept(false) {
         auto status = assign(std::forward<contents_arg_at>(vals));
         status.throw_unhandled();
         return *this;
     }
 
-    members_ref_gt& operator=(std::nullptr_t) noexcept(false) {
+    docs_ref_gt& operator=(std::nullptr_t) noexcept(false) {
         auto status = erase();
         status.throw_unhandled();
         return *this;
@@ -177,9 +177,9 @@ class members_ref_gt {
      */
     template <typename contents_arg_at>
     status_t patch(contents_arg_at&& vals, bool flush = false) noexcept {
-        auto prev_format = std::exchange(format_, ukv_format_json_patch_k);
+        // auto prev_type = std::exchange(type_, ukv_type_json_patch_k);
         auto result = assign(std::forward<contents_arg_at>(vals), flush);
-        format_ = prev_format;
+        // type_ = prev_type;
         return result;
     }
 
@@ -189,9 +189,9 @@ class members_ref_gt {
      */
     template <typename contents_arg_at>
     status_t merge(contents_arg_at&& vals, bool flush = false) noexcept {
-        auto prev_format = std::exchange(format_, ukv_format_json_merge_patch_k);
+        // auto prev_type = std::exchange(type_, ukv_type_json_merge_patch_k);
         auto result = assign(std::forward<contents_arg_at>(vals), flush);
-        format_ = prev_format;
+        // type_ = prev_type;
         return result;
     }
 
@@ -203,39 +203,39 @@ class members_ref_gt {
 
     /**
      * @brief For N documents and M fields gather (N * M) responses.
-     * You put in a `table_layout_view_gt` and you receive a `table_view_gt`.
+     * You put in a `table_layout_view_gt` and you receive a `docs_table_gt`.
      * Any column type annotation is optional.
      * ! Applies only to document collections!
      */
-    expected_gt<table_view_t> gather(table_header_t const& header, bool track = false) noexcept {
+    expected_gt<docs_table_t> gather(table_header_t const& header, bool track = false) noexcept {
         auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
-        return any_gather<table_view_t, table_header_t const&>(header, options);
+        return any_gather<docs_table_t, table_header_t const&>(header, options);
     }
 
-    expected_gt<table_view_t> gather(table_header_view_t const& header, bool track = false) noexcept {
+    expected_gt<docs_table_t> gather(table_header_view_t const& header, bool track = false) noexcept {
         auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
-        return any_gather<table_view_t, table_header_view_t const&>(header, options);
+        return any_gather<docs_table_t, table_header_view_t const&>(header, options);
     }
 
     template <typename... column_types_at>
-    expected_gt<table_view_gt<column_types_at...>> gather( //
+    expected_gt<docs_table_gt<column_types_at...>> gather( //
         table_header_gt<column_types_at...> const& header,
         bool track = false) noexcept {
         auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
         using input_t = table_header_gt<column_types_at...>;
-        using output_t = table_view_gt<column_types_at...>;
+        using output_t = docs_table_gt<column_types_at...>;
         return any_gather<output_t, input_t const&>(header, options);
     }
 };
 
-static_assert(members_ref_gt<ukv_key_t>::is_one_k);
-static_assert(std::is_same_v<members_ref_gt<ukv_key_t>::value_t, value_view_t>);
-static_assert(members_ref_gt<ukv_key_t>::is_one_k);
-static_assert(!members_ref_gt<places_arg_t>::is_one_k);
+static_assert(docs_ref_gt<ukv_key_t>::is_one_k);
+static_assert(std::is_same_v<docs_ref_gt<ukv_key_t>::value_t, value_view_t>);
+static_assert(docs_ref_gt<ukv_key_t>::is_one_k);
+static_assert(!docs_ref_gt<places_arg_t>::is_one_k);
 
 template <typename locations_at>
 template <typename expected_at>
-expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t options) noexcept {
+expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_options_t options) noexcept {
 
     status_t status;
     ukv_length_t* found_offsets = nullptr;
@@ -253,42 +253,24 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
     auto fields = keys_extractor_t {}.fields(locs);
     auto has_fields = fields && (!fields.repeats() || *fields);
 
-    if (has_fields || format_ != ukv_format_binary_k)
-        ukv_docs_read( //
-            db_,
-            txn_,
-            count,
-            collections.get(),
-            collections.stride(),
-            keys.get(),
-            keys.stride(),
-            fields.get(),
-            fields.stride(),
-            options,
-            format_,
-            ukv_type_any_k,
-            wants_present ? &found_presences : nullptr,
-            wants_value ? &found_offsets : nullptr,
-            wants_value || wants_length ? &found_lengths : nullptr,
-            wants_value ? &found_values : nullptr,
-            arena_,
-            status.member_ptr());
-    else
-        ukv_read( //
-            db_,
-            txn_,
-            count,
-            collections.get(),
-            collections.stride(),
-            keys.get(),
-            keys.stride(),
-            options,
-            wants_present ? &found_presences : nullptr,
-            wants_value ? &found_offsets : nullptr,
-            wants_value || wants_length ? &found_lengths : nullptr,
-            wants_value ? &found_values : nullptr,
-            arena_,
-            status.member_ptr());
+    ukv_docs_read( //
+        db_,
+        txn_,
+        count,
+        collections.get(),
+        collections.stride(),
+        keys.get(),
+        keys.stride(),
+        fields.get(),
+        fields.stride(),
+        type_,
+        options,
+        wants_present ? &found_presences : nullptr,
+        wants_value ? &found_offsets : nullptr,
+        wants_value || wants_length ? &found_lengths : nullptr,
+        wants_value ? &found_values : nullptr,
+        arena_,
+        status.member_ptr());
 
     if (!status)
         return std::move(status);
@@ -318,7 +300,7 @@ expected_gt<expected_at> members_ref_gt<locations_at>::any_get(ukv_options_t opt
 
 template <typename locations_at>
 template <typename contents_arg_at>
-status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, ukv_options_t options) noexcept {
+status_t docs_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, ukv_options_t options) noexcept {
     status_t status;
     using value_extractor_t = contents_arg_extractor_gt<std::remove_reference_t<contents_arg_at>>;
 
@@ -327,60 +309,40 @@ status_t members_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, uk
     auto keys = keys_extractor_t {}.keys(locs);
     auto collections = keys_extractor_t {}.collections(locs);
     auto fields = keys_extractor_t {}.fields(locs);
-    auto has_fields = fields && (!fields.repeats() || *fields);
 
     auto vals = vals_ref;
     auto contents = value_extractor_t {}.contents(vals);
     auto offsets = value_extractor_t {}.offsets(vals);
     auto lengths = value_extractor_t {}.lengths(vals);
 
-    if (has_fields || format_ != ukv_format_binary_k)
-        ukv_docs_write( //
-            db_,
-            txn_,
-            count,
-            collections.get(),
-            collections.stride(),
-            keys.get(),
-            keys.stride(),
-            fields.get(),
-            fields.stride(),
-            nullptr,
-            offsets.get(),
-            offsets.stride(),
-            lengths.get(),
-            lengths.stride(),
-            contents.get(),
-            contents.stride(),
-            options,
-            format_,
-            ukv_type_any_k,
-            arena_,
-            status.member_ptr());
-    else
-        ukv_write( //
-            db_,
-            txn_,
-            count,
-            collections.get(),
-            collections.stride(),
-            keys.get(),
-            keys.stride(),
-            nullptr,
-            offsets.get(),
-            offsets.stride(),
-            lengths.get(),
-            lengths.stride(),
-            contents.get(),
-            contents.stride(),
-            options,
-            arena_,
-            status.member_ptr());
+    ukv_docs_write( //
+        db_,
+        txn_,
+        count,
+        collections.get(),
+        collections.stride(),
+        keys.get(),
+        keys.stride(),
+        fields.get(),
+        fields.stride(),
+        nullptr,
+        offsets.get(),
+        offsets.stride(),
+        lengths.get(),
+        lengths.stride(),
+        contents.get(),
+        contents.stride(),
+        ukv_doc_modify_upsert_k,
+        type_,
+        options,
+        arena_,
+        status.member_ptr());
+
     return status;
 }
 
 template <typename locations_at>
-expected_gt<joined_strs_t> members_ref_gt<locations_at>::gist(bool track) noexcept {
+expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool track) noexcept {
 
     status_t status;
     ukv_size_t found_count = 0;
@@ -414,8 +376,8 @@ expected_gt<joined_strs_t> members_ref_gt<locations_at>::gist(bool track) noexce
 
 template <typename locations_at>
 template <typename expected_at, typename contents_arg_at>
-expected_gt<expected_at> members_ref_gt<locations_at>::any_gather(contents_arg_at&& layout,
-                                                                  ukv_options_t options) noexcept {
+expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(contents_arg_at&& layout,
+                                                               ukv_options_t options) noexcept {
 
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
