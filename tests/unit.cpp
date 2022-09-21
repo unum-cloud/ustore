@@ -886,8 +886,8 @@ TEST(db, graph_txn) {
     EXPECT_TRUE(txn.reset());
 
     transaction_t txn2 = *db.transact();
-    collection_t txn_col2 = *txn.collection();
-    graph_ref_t txn_net2 = txn_col.as_graph();
+    collection_t txn_col2 = *txn2.collection();
+    graph_ref_t txn_net2 = txn_col2.as_graph();
 
     edge_t edge4 {4, 5, 15};
     edge_t edge5 {5, 6, 16};
