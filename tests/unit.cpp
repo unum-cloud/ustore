@@ -178,11 +178,18 @@ TEST(db, named) {
 
 TEST(db, collection_list) {
 
-    if (!ukv_supports_named_collections_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(""));
+
+    if (!ukv_supports_named_collections_k) {
+        EXPECT_FALSE(*db["name"]);
+        EXPECT_FALSE(*db.contains("name"));
+        EXPECT_FALSE(db.drop("name"));
+        EXPECT_FALSE(db.drop(""));
+        EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
+        EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
+        return;
+    }
 
     collection_t col1 = *(db["col1"]);
     collection_t col2 = *(db["col2"]);
@@ -209,6 +216,15 @@ TEST(db, collection_list) {
     EXPECT_EQ(collections[1], "col2");
     EXPECT_EQ(collections[2], "col3");
     EXPECT_EQ(collections[3], "col4");
+
+    EXPECT_TRUE(db.drop("col1"));
+    EXPECT_FALSE(*db.contains("col1"));
+    EXPECT_FALSE(db.drop(""));
+    EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
+    EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
+
+    EXPECT_TRUE(*db["default"]);
+    EXPECT_TRUE(db.drop("default"));
 }
 
 TEST(db, unnamed_and_named) {
@@ -456,6 +472,26 @@ TEST(db, docs) {
     M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "28");
     EXPECT_TRUE(db.clear());
 }
+
+#if 0
+TEST(db, doc_fields) {
+    using json_t = nlohmann::json;
+    database_t db;
+    EXPECT_TRUE(db.open(""));
+
+    collection_t collection = *db.collection(nullptr, ukv_format_json_k);
+    auto json1 = R"( {"person": "Carl", "age": 24} )"_json.dump();
+    collection[1] = json1.c_str();
+    M_EXPECT_EQ_JSON(collection[1].value()->c_str(), json1.c_str());
+    M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Carl\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "24");
+
+    collection[ckf(1, "person")] = "\"Charls\"";
+    collection[ckf(1, "age")] = "25";
+    M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Charls\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "25");
+}
+#endif
 
 TEST(db, docs_table) {
 
@@ -825,6 +861,7 @@ TEST(db, graph_random_fill) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_EQ(*graph.degree(vertex_id), 9u);
     }
+
     EXPECT_TRUE(db.clear());
 }
 
@@ -864,8 +901,8 @@ TEST(db, graph_txn) {
     EXPECT_TRUE(txn.reset());
 
     transaction_t txn2 = *db.transact();
-    collection_t txn_col2 = *txn.collection();
-    graph_ref_t txn_net2 = txn_col.as_graph();
+    collection_t txn_col2 = *txn2.collection();
+    graph_ref_t txn_net2 = txn_col2.as_graph();
 
     edge_t edge4 {4, 5, 15};
     edge_t edge5 {5, 6, 16};
@@ -877,6 +914,7 @@ TEST(db, graph_txn) {
     // ukv_option_read_track_k
     EXPECT_TRUE(txn.commit());
     EXPECT_TRUE(txn2.commit());
+
     EXPECT_TRUE(db.clear());
 }
 
@@ -899,6 +937,8 @@ TEST(db, graph_remove_vertices) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_FALSE(*graph.contains(vertex_id));
     }
+
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, graph_remove_edges_keep_vertices) {
@@ -917,6 +957,8 @@ TEST(db, graph_remove_edges_keep_vertices) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
     }
+
+    EXPECT_TRUE(db.clear());
 }
 #endif
 
