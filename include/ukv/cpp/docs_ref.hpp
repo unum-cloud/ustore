@@ -69,13 +69,13 @@ class docs_ref_gt {
     ukv_doc_field_type_t type_ = ukv_doc_field_default_k;
 
     template <typename contents_arg_at>
-    status_t any_assign(contents_arg_at&&, ukv_options_t) noexcept;
+    status_t any_write(contents_arg_at&&, ukv_doc_modification_t, ukv_doc_field_type_t, ukv_options_t) noexcept;
 
     template <typename expected_at = value_t>
-    expected_gt<expected_at> any_get(ukv_options_t) noexcept;
+    expected_gt<expected_at> any_get(ukv_doc_field_type_t, ukv_options_t) noexcept;
 
-    template <typename expected_at, typename contents_arg_at>
-    expected_gt<expected_at> any_gather(contents_arg_at&&, ukv_options_t) noexcept;
+    template <typename expected_at, typename layout_at>
+    expected_gt<expected_at> any_gather(layout_at&&, ukv_options_t) noexcept;
 
   public:
     docs_ref_gt(ukv_database_t db,
@@ -101,13 +101,17 @@ class docs_ref_gt {
     }
 
     expected_gt<value_t> value(bool track = false) noexcept {
-        return any_get<value_t>(track ? ukv_option_read_track_k : ukv_options_default_k);
+        return any_get<value_t>(type_, track ? ukv_option_read_track_k : ukv_options_default_k);
+    }
+
+    expected_gt<value_t> value(ukv_doc_field_type_t type, bool track = false) noexcept {
+        return any_get<value_t>(type, track ? ukv_option_read_track_k : ukv_options_default_k);
     }
 
     operator expected_gt<value_t>() noexcept { return value(); }
 
     expected_gt<length_t> length(bool track = false) noexcept {
-        return any_get<length_t>(track ? ukv_option_read_track_k : ukv_options_default_k);
+        return any_get<length_t>(type_, track ? ukv_option_read_track_k : ukv_options_default_k);
     }
 
     /**
@@ -115,7 +119,7 @@ class docs_ref_gt {
      * ! Related values may be empty strings.
      */
     expected_gt<present_t> present(bool track = false) noexcept {
-        return any_get<present_t>(track ? ukv_option_read_track_k : ukv_options_default_k);
+        return any_get<present_t>(type_, track ? ukv_option_read_track_k : ukv_options_default_k);
     }
 
     /**
@@ -125,8 +129,18 @@ class docs_ref_gt {
      */
     template <typename contents_arg_at>
     status_t assign(contents_arg_at&& vals, bool flush = false) noexcept {
-        return any_assign(std::forward<contents_arg_at>(vals),
-                          flush ? ukv_option_write_flush_k : ukv_options_default_k);
+        return any_write(std::forward<contents_arg_at>(vals),
+                         ukv_doc_modify_upsert_k,
+                         type_,
+                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
+    }
+
+    template <typename contents_arg_at>
+    status_t assign(contents_arg_at&& vals, ukv_doc_field_type_t type, bool flush = false) noexcept {
+        return any_write(std::forward<contents_arg_at>(vals),
+                         ukv_doc_modify_upsert_k,
+                         type,
+                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
     }
 
     /**
@@ -173,31 +187,28 @@ class docs_ref_gt {
 
     /**
      * @brief Patches hierarchical documents with RFC 6902 JSON Patches.
-     * ! Applies only to document collections!
      */
     template <typename contents_arg_at>
     status_t patch(contents_arg_at&& vals, bool flush = false) noexcept {
-        // auto prev_type = std::exchange(type_, ukv_type_json_patch_k);
-        auto result = assign(std::forward<contents_arg_at>(vals), flush);
-        // type_ = prev_type;
-        return result;
+        return any_write(std::forward<contents_arg_at>(vals),
+                         ukv_doc_modify_patch_k,
+                         type_,
+                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
     }
 
     /**
      * @brief Patches hierarchical documents with RFC 7386 JSON Merge Patches.
-     * ! Applies only to document collections!
      */
     template <typename contents_arg_at>
     status_t merge(contents_arg_at&& vals, bool flush = false) noexcept {
-        // auto prev_type = std::exchange(type_, ukv_type_json_merge_patch_k);
-        auto result = assign(std::forward<contents_arg_at>(vals), flush);
-        // type_ = prev_type;
-        return result;
+        return any_write(std::forward<contents_arg_at>(vals),
+                         ukv_doc_modify_merge_k,
+                         type_,
+                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
     }
 
     /**
      * @brief Find the names of all unique fields in requested documents.
-     * ! Applies only to document collections and when fields are not present in locations!
      */
     expected_gt<joined_strs_t> gist(bool track = false) noexcept;
 
@@ -205,7 +216,6 @@ class docs_ref_gt {
      * @brief For N documents and M fields gather (N * M) responses.
      * You put in a `table_layout_view_gt` and you receive a `docs_table_gt`.
      * Any column type annotation is optional.
-     * ! Applies only to document collections!
      */
     expected_gt<docs_table_t> gather(table_header_t const& header, bool track = false) noexcept {
         auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
@@ -235,7 +245,7 @@ static_assert(!docs_ref_gt<places_arg_t>::is_one_k);
 
 template <typename locations_at>
 template <typename expected_at>
-expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_options_t options) noexcept {
+expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t type, ukv_options_t options) noexcept {
 
     status_t status;
     ukv_length_t* found_offsets = nullptr;
@@ -263,7 +273,7 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_options_t option
         keys.stride(),
         fields.get(),
         fields.stride(),
-        type_,
+        type,
         options,
         wants_present ? &found_presences : nullptr,
         wants_value ? &found_offsets : nullptr,
@@ -300,7 +310,10 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_options_t option
 
 template <typename locations_at>
 template <typename contents_arg_at>
-status_t docs_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, ukv_options_t options) noexcept {
+status_t docs_ref_gt<locations_at>::any_write(contents_arg_at&& vals_ref,
+                                              ukv_doc_modification_t modification,
+                                              ukv_doc_field_type_t type,
+                                              ukv_options_t options) noexcept {
     status_t status;
     using value_extractor_t = contents_arg_extractor_gt<std::remove_reference_t<contents_arg_at>>;
 
@@ -332,8 +345,8 @@ status_t docs_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, ukv_o
         lengths.stride(),
         contents.get(),
         contents.stride(),
-        ukv_doc_modify_upsert_k,
-        type_,
+        modification,
+        type,
         options,
         arena_,
         status.member_ptr());
@@ -375,9 +388,8 @@ expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool track) noexcept 
 }
 
 template <typename locations_at>
-template <typename expected_at, typename contents_arg_at>
-expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(contents_arg_at&& layout,
-                                                               ukv_options_t options) noexcept {
+template <typename expected_at, typename layout_at>
+expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layout, ukv_options_t options) noexcept {
 
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
