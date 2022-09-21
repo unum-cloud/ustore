@@ -73,7 +73,7 @@ struct ArrowArrayStream {
 
 #endif // ARROW_C_STREAM_INTERFACE
 
-static char const* ukv_type_to_arrow_format(ukv_type_t const field_type) {
+static char const* ukv_doc_field_type_to_arrow_format(ukv_doc_field_type_t const field_type) {
     // Export the right format string and number of buffers to be managed by Arrow.
     // For scalar arrays we need: bitmap and data.
     // For variable length arrays we need: bitmap, @b offsets and data.
@@ -81,24 +81,24 @@ static char const* ukv_type_to_arrow_format(ukv_type_t const field_type) {
     // https://arrow.apache.org/docs/format/CDataInterface.html#data-type-description-format-strings
     // https://arrow.apache.org/docs/format/Columnar.html#buffer-listing-for-each-layout
     switch (field_type) {
-    case ukv_type_null_k: return "n";
-    case ukv_type_bool_k: return "b";
+    case ukv_doc_field_null_k: return "n";
+    case ukv_doc_field_bool_k: return "b";
     // TODO: UUID logical type may be natively supported in Arrow vocabulary:
     // https://arrow.apache.org/docs/format/Columnar.html#extension-types
-    case ukv_type_uuid_k: return "w:16";
-    case ukv_type_i8_k: return "c";
-    case ukv_type_i16_k: return "s";
-    case ukv_type_i32_k: return "i";
-    case ukv_type_i64_k: return "l";
-    case ukv_type_u8_k: return "C";
-    case ukv_type_u16_k: return "S";
-    case ukv_type_u32_k: return "I";
-    case ukv_type_u64_k: return "L";
-    case ukv_type_f16_k: return "e";
-    case ukv_type_f32_k: return "f";
-    case ukv_type_f64_k: return "g";
-    case ukv_type_bin_k: return "z";
-    case ukv_type_str_k: return "u";
+    case ukv_doc_field_uuid_k: return "w:16";
+    case ukv_doc_field_i8_k: return "c";
+    case ukv_doc_field_i16_k: return "s";
+    case ukv_doc_field_i32_k: return "i";
+    case ukv_doc_field_i64_k: return "l";
+    case ukv_doc_field_u8_k: return "C";
+    case ukv_doc_field_u16_k: return "S";
+    case ukv_doc_field_u32_k: return "I";
+    case ukv_doc_field_u64_k: return "L";
+    case ukv_doc_field_f16_k: return "e";
+    case ukv_doc_field_f32_k: return "f";
+    case ukv_doc_field_f64_k: return "g";
+    case ukv_doc_field_bin_k: return "z";
+    case ukv_doc_field_str_k: return "u";
     default: return "";
     }
 }
@@ -183,7 +183,7 @@ static void ukv_to_arrow_schema( //
 static void ukv_to_arrow_column( //
     ukv_size_t const docs_count,
     ukv_str_view_t const field_name,
-    ukv_type_t const field_type,
+    ukv_doc_field_type_t const field_type,
 
     ukv_octet_t const* column_validities,
     ukv_length_t const* column_offsets,
@@ -200,27 +200,27 @@ static void ukv_to_arrow_column( //
     schema->dictionary = NULL;
     schema->children = NULL;
     schema->release = &release_malloced_schema;
-    schema->format = ukv_type_to_arrow_format(field_type);
+    schema->format = ukv_doc_field_type_to_arrow_format(field_type);
     schema->n_children = 0;
 
     // Export the data
     switch (field_type) {
-    case ukv_type_bool_k:
-    case ukv_type_uuid_k:
-    case ukv_type_i8_k:
-    case ukv_type_i16_k:
-    case ukv_type_i32_k:
-    case ukv_type_i64_k:
-    case ukv_type_u8_k:
-    case ukv_type_u16_k:
-    case ukv_type_u32_k:
-    case ukv_type_u64_k:
-    case ukv_type_f16_k:
-    case ukv_type_f32_k:
-    case ukv_type_f64_k: array->n_buffers = 2; break;
-    case ukv_type_bin_k:
-    case ukv_type_str_k: array->n_buffers = 3; break;
-    case ukv_type_null_k: array->n_buffers = 0; break;
+    case ukv_doc_field_bool_k:
+    case ukv_doc_field_uuid_k:
+    case ukv_doc_field_i8_k:
+    case ukv_doc_field_i16_k:
+    case ukv_doc_field_i32_k:
+    case ukv_doc_field_i64_k:
+    case ukv_doc_field_u8_k:
+    case ukv_doc_field_u16_k:
+    case ukv_doc_field_u32_k:
+    case ukv_doc_field_u64_k:
+    case ukv_doc_field_f16_k:
+    case ukv_doc_field_f32_k:
+    case ukv_doc_field_f64_k: array->n_buffers = 2; break;
+    case ukv_doc_field_bin_k:
+    case ukv_doc_field_str_k: array->n_buffers = 3; break;
+    case ukv_doc_field_null_k: array->n_buffers = 0; break;
     default: array->n_buffers = 0; break;
     }
     array->offset = 0;
@@ -252,7 +252,7 @@ static void ukv_to_arrow_column( //
 static void ukv_to_arrow_list( //
     ukv_size_t const docs_count,
     ukv_str_view_t const field_name,
-    ukv_type_t const field_type,
+    ukv_doc_field_type_t const field_type,
 
     ukv_octet_t const* column_validities,
     ukv_length_t const* column_offsets,
@@ -321,7 +321,7 @@ static void ukv_to_arrow_stream( //
     ukv_str_view_t const*,
     ukv_size_t const,
 
-    ukv_type_t const*,
+    ukv_doc_field_type_t const*,
     ukv_size_t const,
 
     struct ArrowArrayStream*,

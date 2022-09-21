@@ -36,82 +36,49 @@ extern "C" {
 /*********************************************************/
 
 /**
- * @brief Formats describing contents of collections.
- * The low-level interface
- *
- * Many of the numerical values are set to their RFC proposal numbers.
- * https://en.wikipedia.org/wiki/List_of_RFCs
- */
-typedef enum {
-    ukv_format_binary_k = 0,
-    ukv_format_graph_k = 1,
-    ukv_format_doc_k = 2,
-    ukv_format_table_k = 3,
-
-    // Flexible dynamically-typed document formats
-    // https://github.com/msgpack/msgpack/blob/master/spec.md#type-system
-    ukv_format_msgpack_k = 11,
-    ukv_format_bson_k = 12,
-    ukv_format_ubjson_k = 13,
-    ukv_format_json_k = 7159,
-    ukv_format_cbor_k = 7049,
-
-    // Patches and modifiers to documents
-    // https://stackoverflow.com/a/64882070/2766161
-    ukv_format_json_patch_k = 6902,       // RFC
-    ukv_format_json_merge_patch_k = 7386, // RFC
-
-    ukv_format_csv_k = 4180,
-    ukv_format_arrow_k = 14,
-    ukv_format_parquet_k = 15,
-
-    // Generic text-based formats, that  generally come in long chunks
-    // would benefit from compression and may require full-text search.
-    ukv_format_text_k = 20,
-    ukv_format_text_xml_k = 3470,
-    ukv_format_text_html_k = 1866,
-
-    // Image formats
-    ukv_format_img_jpeg200_k = 3745, // RFC
-    ukv_format_img_jpeg_k = 1314,    // RFC
-    ukv_format_img_png_k = 2083,     // RFC
-    ukv_format_img_gif_k = 51,
-    ukv_format_img_webp_k = 52,
-
-} ukv_format_t;
-
-/**
  * Type IDs needed to describe the values stored in the leafs of
  * hierarchical documents. Most types mimic what's present in
- * Apache Arrow. Most often the `ukv_type_i64_k` and `ukv_type_f64_k`
+ * Apache Arrow. Most often the `ukv_doc_field_i64_k` and `ukv_doc_field_f64_k`
  * are used.
  */
 typedef enum {
-    ukv_type_null_k = 0,
-    ukv_type_bool_k = 1,
-    ukv_type_uuid_k = 2,
 
-    ukv_type_i8_k = 10,
-    ukv_type_i16_k = 11,
-    ukv_type_i32_k = 12,
-    ukv_type_i64_k = 13,
+    ukv_doc_field_null_k = 0,
+    ukv_doc_field_bool_k = 1,
+    ukv_doc_field_uuid_k = 2,
 
-    ukv_type_u8_k = 20,
-    ukv_type_u16_k = 21,
-    ukv_type_u32_k = 22,
-    ukv_type_u64_k = 23,
+    ukv_doc_field_i8_k = 10,
+    ukv_doc_field_i16_k = 11,
+    ukv_doc_field_i32_k = 12,
+    ukv_doc_field_i64_k = 13,
 
-    ukv_type_f16_k = 30,
-    ukv_type_f32_k = 31,
-    ukv_type_f64_k = 32,
+    ukv_doc_field_u8_k = 20,
+    ukv_doc_field_u16_k = 21,
+    ukv_doc_field_u32_k = 22,
+    ukv_doc_field_u64_k = 23,
 
-    ukv_type_bin_k = 40,
-    ukv_type_str_k = 41,
+    ukv_doc_field_f16_k = 30,
+    ukv_doc_field_f32_k = 31,
+    ukv_doc_field_f64_k = 32,
 
-    ukv_type_any_k = 0xFFFFFFFF,
-} ukv_type_t;
+    ukv_doc_field_bin_k = 40,
+    ukv_doc_field_str_k = 41,
 
-extern ukv_format_t ukv_format_docs_internal_k;
+    ukv_doc_field_json_k = 'j',
+    ukv_doc_field_bson_k = 'b',
+    ukv_doc_field_msgpack_k = 'm',
+
+    ukv_doc_field_default_k = ukv_doc_field_json_k,
+
+} ukv_doc_field_type_t;
+
+typedef enum {
+    ukv_doc_modify_upsert_k = 0,
+    ukv_doc_modify_update_k = 1,
+    ukv_doc_modify_insert_k = 2,
+    ukv_doc_modify_patch_k = 3,
+    ukv_doc_modify_merge_k = 4,
+} ukv_doc_modification_t;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -130,7 +97,7 @@ extern ukv_format_t ukv_format_docs_internal_k;
  *                         Apache Arrow Tables.
  *
  * @section Supported Formats
- * > ukv_format_json_k
+ * > ukv_field_json_k
  *      Most frequently used text-based format.
  * > ukv_format_msgpack_k, ukv_format_bson_k
  * > ukv_format_ubjson_k, ukv_format_cbor_k
@@ -171,9 +138,9 @@ void ukv_docs_write( //
     ukv_bytes_cptr_t const* values,
     ukv_size_t const values_stride,
 
+    ukv_doc_modification_t const modification,
+    ukv_doc_field_type_t const type,
     ukv_options_t const options,
-    ukv_format_t const format,
-    ukv_type_t const type,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -190,11 +157,11 @@ void ukv_docs_write( //
  *                         JSONs & BSONs from Mongo, but later exporting
  *                         Apache Arrow Tables.
  * @param[in] type         A binary type to which entries have to be converted to.
- *                         Only applies if @param format is set to `ukv_format_binary_k`
+ *                         Only applies if @param format is set to `ukv_doc_field_default_k`
  *                         and @param field is not NULL.
  *
  * @section Supported Formats
- * > ukv_format_json_k
+ * > ukv_field_json_k
  *      Most frequently used text-based format.
  * > ukv_format_msgpack_k, ukv_format_bson_k
  * > ukv_format_ubjson_k, ukv_format_cbor_k
@@ -217,9 +184,8 @@ void ukv_docs_read( //
     ukv_str_view_t const* fields,
     ukv_size_t const fields_stride,
 
+    ukv_doc_field_type_t const type,
     ukv_options_t const options,
-    ukv_format_t const format,
-    ukv_type_t const type,
 
     ukv_octet_t** found_presences,
     ukv_length_t** found_offsets,
@@ -231,7 +197,7 @@ void ukv_docs_read( //
 
 /**
  * @brief Describes the statistics (presence) of select or all fields among
- * specified documents. Will export a histogram of frequencies of every @c `ukv_type_t`
+ * specified documents. Will export a histogram of frequencies of every @c `ukv_doc_field_type_t`
  * under every field. Can be used as a preparation step before `ukv_docs_gather`
  * or `ukv_docs_read`.
  *
@@ -330,7 +296,7 @@ void ukv_docs_gather( //
     ukv_str_view_t const* fields,
     ukv_size_t const fields_stride,
 
-    ukv_type_t const* types,
+    ukv_doc_field_type_t const* types,
     ukv_size_t const types_stride,
 
     ukv_options_t const options,
