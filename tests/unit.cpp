@@ -222,6 +222,9 @@ TEST(db, collection_list) {
     EXPECT_FALSE(db.drop(""));
     EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
     EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
+
+    EXPECT_TRUE(*db["default"]);
+    EXPECT_TRUE(db.drop("default"));
 }
 
 TEST(db, unnamed_and_named) {
