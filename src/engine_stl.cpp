@@ -544,7 +544,7 @@ void ukv_read( //
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     places_arg_t places {collections, keys, {}, c_tasks_count};
-    validate_read(places, c_txn, c_options, c_error);
+    validate_read(c_txn, places, c_options, c_error);
     return_on_error(c_error);
 
     bool const needs_export = c_found_values != nullptr;
@@ -623,10 +623,10 @@ void ukv_write( //
     strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
 
     places_arg_t places {collections, keys, {}, c_tasks_count};
-    validate_write(places, c_txn, c_options, c_error);
-    return_on_error(c_error);
-
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
+
+    validate_write(c_txn, places, contents, c_options, c_error);
+    return_on_error(c_error);
 
     return c_txn ? write_txn(txn, places, contents, c_options, c_error)
                  : write_head(db, places, contents, c_options, c_error);
@@ -671,7 +671,7 @@ void ukv_scan( //
     strided_iterator_gt<ukv_length_t const> lens {c_scan_limits, c_scan_limits_stride};
     scans_arg_t scans {collections, start_keys, end_keys, lens, c_min_tasks_count};
 
-    validate_scan(scans, c_txn, c_options, c_error);
+    validate_scan(c_txn, scans, c_options, c_error);
     return_on_error(c_error);
 
     return c_txn ? scan_txn(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
