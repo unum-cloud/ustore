@@ -360,6 +360,17 @@ class sessions_t {
         free_txns_.push_back(running_txn.txn);
     }
 
+    void release_txn(session_id_t session_id) noexcept {
+        std::unique_lock _ {mutex_};
+        auto it = client_to_txn_.find(session_id);
+        if (it == client_to_txn_.end())
+            return;
+        it->second.executing = false;
+        free_arenas_.push_back(it->second.arena);
+        free_txns_.push_back(it->second.txn);
+        client_to_txn_.erase(it);
+    }
+
     ukv_arena_t request_arena(ukv_error_t* c_error) noexcept {
         std::unique_lock _ {mutex_};
         // Consider evicting some of the old sessions, if there are no more empty slots
@@ -602,7 +613,7 @@ class UKVService : public arf::FlightServerBase {
                 &session.txn,
                 status.member_ptr());
             if (!status) {
-                sessions_.release_txn(session);
+                sessions_.release_txn(params.session_id);
                 return ar::Status::ExecutionError(status.message());
             }
 
@@ -631,7 +642,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             }
 
-            sessions_.release_txn(session);
+            sessions_.release_txn(params.session_id);
             *results_ptr = return_empty();
             return ar::Status::OK();
         }
