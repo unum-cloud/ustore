@@ -446,7 +446,35 @@ TEST(db, docs) {
     M_EXPECT_EQ_JSON(*collection[ckf(1, "person")].value(), "\"Carl\"");
     M_EXPECT_EQ_JSON(*collection[ckf(1, "age")].value(), "24");
 
-    // // MsgPack
+    // Binary
+    auto maybe_person = collection[ckf(1, "person")].value(ukv_doc_field_str_k);
+    EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
+
+    // JSON-Patch Merging
+    auto json_to_merge = R"( {"person": "Bob", "age": 28} )"_json.dump();
+    expected_json = R"( {"person": "Bob", "hello": ["world"], "age": 28} )"_json.dump();
+    collection[1].merge(json_to_merge.c_str());
+    auto merge_result = collection[1].value();
+    M_EXPECT_EQ_JSON(merge_result->c_str(), expected_json.c_str());
+    M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Bob\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "28");
+
+    // JSON-Patching
+    auto json_patch =
+        R"( [
+            { "op": "replace", "path": "/person", "value": "Alice" },
+            { "op": "add", "path": "/hello", "value": ["world"] },
+            { "op": "remove", "path": "/age" }
+            ] )"_json.dump();
+    auto expected_json = R"( {"person": "Alice", "hello": ["world"]} )"_json.dump();
+    collection[1].patch(json_patch.c_str());
+    auto patch_result = collection[1].value();
+    M_EXPECT_EQ_JSON(patch_result->c_str(), expected_json.c_str());
+    M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Alice\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
+
+    // MsgPack
     // collection.as(ukv_format_msgpack_k);
     // value_view_t val = *collection[1].value();
     // M_EXPECT_EQ_MSG(val, json.c_str());
@@ -455,36 +483,6 @@ TEST(db, docs) {
     // val = *collection[ckf(1, "age")].value();
     // M_EXPECT_EQ_MSG(val, "24");
 
-    // // Binary
-    // collection.as(ukv_doc_field_default_k);
-    // auto maybe_person = collection[ckf(1, "person")].value();
-    // EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
-
-    // // JSON-Patching
-    // collection.as(ukv_format_json_patch_k);
-    // auto json_patch =
-    //     R"( [
-    //         { "op": "replace", "path": "/person", "value": "Alice" },
-    //         { "op": "add", "path": "/hello", "value": ["world"] },
-    //         { "op": "remove", "path": "/age" }
-    //         ] )"_json.dump();
-    // auto expected_json = R"( {"person": "Alice", "hello": ["world"]} )"_json.dump();
-    // collection[1] = json_patch.c_str();
-    // auto patch_result = collection[1].value();
-    // M_EXPECT_EQ_JSON(patch_result->c_str(), expected_json.c_str());
-    // M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Alice\"");
-    // M_EXPECT_EQ_JSON(collection[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
-
-    // // JSON-Patch Merging
-    // collection.as(ukv_format_json_merge_patch_k);
-    // auto json_to_merge = R"( {"person": "Bob", "age": 28} )"_json.dump();
-    // expected_json = R"( {"person": "Bob", "hello": ["world"], "age": 28} )"_json.dump();
-    // collection[1] = json_to_merge.c_str();
-    // auto merge_result = collection[1].value();
-    // M_EXPECT_EQ_JSON(merge_result->c_str(), expected_json.c_str());
-    // M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Bob\"");
-    // M_EXPECT_EQ_JSON(collection[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
-    // M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "28");
     EXPECT_TRUE(db.clear());
 }
 
