@@ -178,11 +178,18 @@ TEST(db, named) {
 
 TEST(db, collection_list) {
 
-    if (!ukv_supports_named_collections_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(""));
+
+    if (!ukv_supports_named_collections_k) {
+        EXPECT_FALSE(*db["name"]);
+        EXPECT_FALSE(*db.contains("name"));
+        EXPECT_FALSE(db.drop("name"));
+        EXPECT_FALSE(db.drop(""));
+        EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
+        EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
+        return;
+    }
 
     collection_t col1 = *(db["col1"]);
     collection_t col2 = *(db["col2"]);
@@ -209,6 +216,15 @@ TEST(db, collection_list) {
     EXPECT_EQ(collections[1], "col2");
     EXPECT_EQ(collections[2], "col3");
     EXPECT_EQ(collections[3], "col4");
+
+    EXPECT_TRUE(db.drop("col1"));
+    EXPECT_FALSE(*db.contains("col1"));
+    EXPECT_FALSE(db.drop(""));
+    EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
+    EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
+
+    EXPECT_TRUE(*db["default"]);
+    EXPECT_TRUE(db.drop("default"));
 }
 
 TEST(db, unnamed_and_named) {
@@ -414,6 +430,11 @@ TEST(db, docs) {
     M_EXPECT_EQ_JSON(collection[1].value()->c_str(), json.c_str());
     M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Carl\"");
     M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "24");
+
+    collection[ckf(1, "person")] = "\"Charls\"";
+    collection[ckf(1, "age")] = "25";
+    M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Charls\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "25");
 
     // MsgPack
     collection.as(ukv_format_msgpack_k);
@@ -928,6 +949,7 @@ TEST(db, graph_remove_edges_keep_vertices) {
 
 int main(int argc, char** argv) {
     std::filesystem::create_directory("./tmp");
+    // ::testing::GTEST_FLAG(filter) = "db.docs";
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

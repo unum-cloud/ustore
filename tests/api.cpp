@@ -1,94 +1,461 @@
-/**
- * @file api.cpp
- * @author Ashot Vardanian
- * @date 2022-07-06
- *
- * @brief A set of tests implemented using Google Test.
- */
-
-#include <array>
+#include <filesystem>
+#include <gtest/gtest.h>
 #include <vector>
 
-#include <nlohmann/json.hpp>
-
-#include "ukv/ukv.hpp"
+#include <ukv/ukv.hpp>
 
 using namespace unum::ukv;
 using namespace unum;
 
-#define macro_concat_(prefix, suffix) prefix##suffix
-#define macro_concat(prefix, suffix) macro_concat_(prefix, suffix)
-#define _ [[maybe_unused]] auto macro_concat(_, __LINE__)
-
-int main(int argc, char** argv) {
+TEST(db, validation) {
 
     database_t db;
-    _ = db.open();
+    EXPECT_TRUE(db.open("./tmp/stl"));
+    collection_t collection = *db.collection();
+    collection_t named_collection = *db.collection("col");
+    transaction_t txn = *db.transact();
+    std::vector<ukv_key_t> keys {34, 35, 36};
+    std::vector<std::uint64_t> vals {34, 35, 36};
+    ukv_length_t val_len = sizeof(std::uint64_t);
+    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
+    ukv_length_t count = 3;
 
-    // Try getting the main collection
-    _ = db.collection();
-    collection_t main = *db.collection();
+    contents_arg_t values {
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
+        .lengths_begin = {&val_len, 0},
+        .contents_begin = {&vals_begin, 0},
+        .count = count,
+    };
 
-    // Single-element access
-    main[42] = "purpose of life";
-    main.at(42) = "purpose of life";
-    *main[42].value() == "purpose of life";
-    _ = main[42].clear();
+    using value_extractor_t = contents_arg_extractor_gt<std::remove_reference_t<contents_arg_t>>;
+    auto contents = value_extractor_t {}.contents(values);
+    auto offsets = value_extractor_t {}.offsets(values);
+    auto lengths = value_extractor_t {}.lengths(values);
 
-    // Mapping multiple keys to same values
-    main[{43, 44}] = "same value";
+    status_t status;
+    std::vector<ukv_options_t> options {ukv_options_default_k, ukv_option_write_flush_k};
+    for (auto& option : options) {
+        ukv_write(db,
+                  nullptr,
+                  count,
+                  collection.member_ptr(),
+                  0,
+                  keys.data(),
+                  sizeof(ukv_key_t),
+                  nullptr,
+                  offsets.get(),
+                  offsets.stride(),
+                  lengths.get(),
+                  lengths.stride(),
+                  contents.get(),
+                  contents.stride(),
+                  option,
+                  collection.member_arena(),
+                  status.member_ptr());
 
-    // Operations on smart-references
-    _ = main[{43, 44}].clear();
-    _ = main[{43, 44}].erase();
-    _ = main[{43, 44}].present();
-    _ = main[{43, 44}].length();
-    _ = main[{43, 44}].value();
-    _ = main[std::array<ukv_key_t, 3> {65, 66, 67}];
-    _ = main[std::vector<ukv_key_t> {65, 66, 67, 68}];
-    for (value_view_t value : *main[{100, 101}].value())
-        (void)value;
+        EXPECT_TRUE(status);
+    }
 
-    // Accessing named collections
-    collection_t prefixes = *db.collection("prefixes");
-    prefixes.at(42) = "purpose";
-    db["articles"]->at(42) = "of";
-    db["suffixes"]->at(42) = "life";
+    if (!ukv_supports_named_collections_k) {
+        ukv_collection_t collections[count] = {1, 2, 3};
+        ukv_write(db,
+                  nullptr,
+                  count,
+                  &collections[0],
+                  sizeof(ukv_collection_t),
+                  keys.data(),
+                  sizeof(ukv_key_t),
+                  nullptr,
+                  offsets.get(),
+                  offsets.stride(),
+                  lengths.get(),
+                  lengths.stride(),
+                  contents.get(),
+                  contents.stride(),
+                  ukv_options_default_k,
+                  collection.member_arena(),
+                  status.member_ptr());
 
-    // Reusable memory
-    // This interface not just more performant, but also provides nicer interface:
-    //  expected_gt<joined_bins_t> tapes = main[{100, 101}].on(arena);
-    arena_t arena(db);
-    _ = main[{43, 44}].on(arena).clear();
-    _ = main[{43, 44}].on(arena).erase();
-    _ = main[{43, 44}].on(arena).present();
-    _ = main[{43, 44}].on(arena).length();
-    _ = main[{43, 44}].on(arena).value();
+        EXPECT_FALSE(status);
+        status.release_error();
 
-    // Batch-assignment: many keys to many values
-    // main[std::array<ukv_key_t, 3> {65, 66, 67}] = std::array {"A", "B", "C"};
-    // main[std::array {ckf(prefixes, 65), ckf(66), ckf(67)}] = std::array {"A", "B", "C"};
+        ukv_collection_t collections_only_default[count] = {0, 0, 0};
+        ukv_write(db,
+                  nullptr,
+                  count,
+                  &collections_only_default[0],
+                  sizeof(ukv_collection_t),
+                  keys.data(),
+                  sizeof(ukv_key_t),
+                  nullptr,
+                  offsets.get(),
+                  offsets.stride(),
+                  lengths.get(),
+                  lengths.stride(),
+                  contents.get(),
+                  contents.stride(),
+                  ukv_options_default_k,
+                  collection.member_arena(),
+                  status.member_ptr());
 
-    // Iterating over collections
-    for (ukv_key_t key : main.keys())
-        (void)key;
-    for (ukv_key_t key : main.keys(100, 200))
-        (void)key;
+        EXPECT_TRUE(status);
+    }
 
-    _ = main.members(100, 200).size_estimates()->cardinality;
+    ukv_collection_t* null_collection = nullptr;
+    ukv_write(db,
+              nullptr,
+              count,
+              null_collection,
+              0,
+              keys.data(),
+              sizeof(ukv_key_t),
+              nullptr,
+              offsets.get(),
+              offsets.stride(),
+              lengths.get(),
+              lengths.stride(),
+              contents.get(),
+              contents.stride(),
+              ukv_options_default_k,
+              collection.member_arena(),
+              status.member_ptr());
 
-    // Supporting options
-    _ = main[{43, 44}].on(arena).clear(/*flush:*/ false);
-    _ = main[{43, 44}].on(arena).erase(/*flush:*/ false);
-    _ = main[{43, 44}].on(arena).present(/*track:*/ false);
-    _ = main[{43, 44}].on(arena).length(/*track:*/ false);
-    _ = main[{43, 44}].on(arena).value(/*track:*/ false);
+    EXPECT_TRUE(status);
 
-    // Working with sub documents
-    main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
-    _ = main[ckf(56, "hello")].value() == "world";
+    // Named Collection
+    ukv_write(db,
+              nullptr,
+              count,
+              named_collection.member_ptr(),
+              0,
+              keys.data(),
+              sizeof(ukv_key_t),
+              nullptr,
+              offsets.get(),
+              offsets.stride(),
+              lengths.get(),
+              lengths.stride(),
+              contents.get(),
+              contents.stride(),
+              ukv_options_default_k,
+              collection.member_arena(),
+              status.member_ptr());
 
-    _ = db.clear();
+    if (ukv_supports_named_collections_k)
+        EXPECT_TRUE(status);
+    else {
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
 
-    return 0;
+    ukv_write(db,
+              txn,
+              count,
+              collection.member_ptr(),
+              0,
+              keys.data(),
+              sizeof(ukv_key_t),
+              nullptr,
+              offsets.get(),
+              offsets.stride(),
+              lengths.get(),
+              lengths.stride(),
+              contents.get(),
+              contents.stride(),
+              ukv_options_default_k,
+              collection.member_arena(),
+              status.member_ptr());
+
+    if (ukv_supports_transactions_k)
+        EXPECT_TRUE(status);
+    else {
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
+
+    // Transaction With Flush
+    ukv_write(db,
+              txn,
+              count,
+              collection.member_ptr(),
+              0,
+              keys.data(),
+              sizeof(ukv_key_t),
+              nullptr,
+              offsets.get(),
+              offsets.stride(),
+              lengths.get(),
+              lengths.stride(),
+              contents.get(),
+              contents.stride(),
+              ukv_option_write_flush_k,
+              collection.member_arena(),
+              status.member_ptr());
+
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    // Count = 0, Keys!= nullptr
+    ukv_write(db,
+              nullptr,
+              0,
+              collection.member_ptr(),
+              0,
+              keys.data(),
+              sizeof(ukv_key_t),
+              nullptr,
+              offsets.get(),
+              offsets.stride(),
+              lengths.get(),
+              lengths.stride(),
+              contents.get(),
+              contents.stride(),
+              ukv_options_default_k,
+              collection.member_arena(),
+              status.member_ptr());
+
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    // Count > 0; Keys == nullptr
+    ukv_write(db,
+              nullptr,
+              count,
+              collection.member_ptr(),
+              0,
+              nullptr,
+              sizeof(ukv_key_t),
+              nullptr,
+              offsets.get(),
+              offsets.stride(),
+              lengths.get(),
+              lengths.stride(),
+              contents.get(),
+              contents.stride(),
+              ukv_options_default_k,
+              collection.member_arena(),
+              status.member_ptr());
+
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    // Wrong Write Options
+    std::vector<ukv_options_t> wrong_write_options {
+        ukv_option_read_track_k,
+        ukv_option_txn_snapshot_k,
+    };
+
+    for (auto& option : wrong_write_options) {
+        ukv_write(db,
+                  nullptr,
+                  count,
+                  collection.member_ptr(),
+                  0,
+                  keys.data(),
+                  sizeof(ukv_key_t),
+                  nullptr,
+                  offsets.get(),
+                  offsets.stride(),
+                  lengths.get(),
+                  lengths.stride(),
+                  contents.get(),
+                  contents.stride(),
+                  option,
+                  collection.member_arena(),
+                  status.member_ptr());
+
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
+
+    ukv_length_t* found_offsets = nullptr;
+    ukv_length_t* found_lengths = nullptr;
+    ukv_bytes_ptr_t found_values = nullptr;
+
+    ukv_read(db,
+             nullptr,
+             count,
+             collection.member_ptr(),
+             0,
+             keys.data(),
+             sizeof(ukv_key_t),
+             ukv_options_default_k,
+             nullptr,
+             &found_offsets,
+             &found_lengths,
+             &found_values,
+             collection.member_arena(),
+             status.member_ptr());
+
+    EXPECT_TRUE(status);
+
+    ukv_read(db,
+             txn,
+             count,
+             collection.member_ptr(),
+             0,
+             keys.data(),
+             sizeof(ukv_key_t),
+             ukv_option_read_track_k,
+             nullptr,
+             &found_offsets,
+             &found_lengths,
+             &found_values,
+             collection.member_arena(),
+             status.member_ptr());
+
+    EXPECT_TRUE(status);
+
+    ukv_read(db,
+             txn,
+             count,
+             collection.member_ptr(),
+             0,
+             keys.data(),
+             sizeof(ukv_key_t),
+             ukv_option_txn_snapshot_k,
+             nullptr,
+             &found_offsets,
+             &found_lengths,
+             &found_values,
+             collection.member_arena(),
+             status.member_ptr());
+
+    EXPECT_TRUE(status);
+
+    // Wrong Read Options
+    std::vector<ukv_options_t> wrong_read_options {
+        ukv_option_write_flush_k,
+        ukv_option_read_track_k,
+        ukv_option_txn_snapshot_k,
+    };
+
+    for (auto& option : wrong_read_options) {
+        ukv_read(db,
+                 nullptr,
+                 count,
+                 collection.member_ptr(),
+                 0,
+                 keys.data(),
+                 sizeof(ukv_key_t),
+                 option,
+                 nullptr,
+                 &found_offsets,
+                 &found_lengths,
+                 &found_values,
+                 collection.member_arena(),
+                 status.member_ptr());
+
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
+
+    // Transaction
+
+    ukv_transaction_t ukv_txn = nullptr;
+    ukv_transaction_begin(db, 0, ukv_options_default_k, &ukv_txn, status.member_ptr());
+    EXPECT_TRUE(status);
+
+    ukv_transaction_begin(db, 0, ukv_options_default_k, nullptr, status.member_ptr());
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    // Wrong Transaction Begin Options
+    std::vector<ukv_options_t> wrong_txn_begin_options {
+        ukv_option_write_flush_k,
+        ukv_option_nodiscard_k,
+    };
+
+    for (auto& option : wrong_txn_begin_options) {
+        ukv_transaction_begin(db, 0, option, &ukv_txn, status.member_ptr());
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
+
+    // Wrong Transaction Commit Options
+    std::vector<ukv_options_t> wrong_txn_commit_options {
+        ukv_option_txn_snapshot_k,
+        ukv_option_nodiscard_k,
+    };
+
+    for (auto& option : wrong_txn_commit_options) {
+        ukv_transaction_commit(db, txn, option, status.member_ptr());
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
+
+    // Scans
+    ukv_key_t* found_keys = nullptr;
+    ukv_length_t* found_counts = nullptr;
+
+    ukv_scan(db,
+             txn,
+             1,
+             collection.member_ptr(),
+             0,
+             keys.data(),
+             0,
+             keys.data() + count - 1,
+             0,
+             &count,
+             0,
+             ukv_options_default_k,
+             &found_offsets,
+             &found_counts,
+             &found_keys,
+             collection.member_arena(),
+             status.member_ptr());
+
+    EXPECT_TRUE(status);
+
+    // Count > 0, Keys = nullptr
+    ukv_scan(db,
+             txn,
+             1,
+             collection.member_ptr(),
+             0,
+             nullptr,
+             0,
+             nullptr,
+             0,
+             &count,
+             0,
+             ukv_options_default_k,
+             &found_offsets,
+             &found_counts,
+             &found_keys,
+             collection.member_arena(),
+             status.member_ptr());
+
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    // Limits == nullptr
+    ukv_scan(db,
+             txn,
+             1,
+             collection.member_ptr(),
+             0,
+             keys.data(),
+             0,
+             keys.data() + count - 1,
+             0,
+             nullptr,
+             0,
+             ukv_options_default_k,
+             &found_offsets,
+             &found_counts,
+             &found_keys,
+             collection.member_arena(),
+             status.member_ptr());
+
+    EXPECT_FALSE(status);
+    status.release_error();
+}
+
+int main(int argc, char** argv) {
+    std::filesystem::create_directory("./tmp/stl");
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }
