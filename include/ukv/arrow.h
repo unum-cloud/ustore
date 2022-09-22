@@ -108,6 +108,7 @@ static void release_malloced_schema(struct ArrowSchema* schema) {
         struct ArrowSchema* child = schema->children[i];
         if (child && child->release != NULL)
             child->release(child);
+        free(child);
     }
     free(schema->children);
     schema->release = NULL;
@@ -119,6 +120,7 @@ static void release_malloced_array(struct ArrowArray* array) {
         struct ArrowArray* child = array->children[i];
         if (child && child->release != NULL)
             child->release(child);
+        free(child);
     }
     free(array->children);
     // Freeing buffers can be avoided, UKV still owns those regions
