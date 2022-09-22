@@ -106,22 +106,31 @@ message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 # Define the libraries we will need to build
 add_library(ukv_stl src/engine_stl.cpp src/modality_docs.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_stl nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+target_compile_definitions(ukv_stl PRIVATE UKV_ENGINE_IS_STL)  
 
 add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_rocksdb rocksdb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+target_compile_definitions(ukv_rocksdb PRIVATE UKV_ENGINE_IS_ROCKSDB)  
 
 add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_leveldb leveldb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
+target_compile_definitions(ukv_leveldb PRIVATE UKV_ENGINE_IS_LEVELDB)  
 
 # The rest of CMake will apply to all client libraries
 set(UKV_ENGINE_NAMES "stl" "leveldb" "rocksdb")
 set(UKV_CLIENT_NAMES "stl" "leveldb" "rocksdb")
 
 if(EXISTS ${UKV_BUILD_UNUMDB})
-  add_library(ukv_unumdb STATIC IMPORTED)
-  set_property(TARGET ukv_unumdb PROPERTY IMPORTED_LOCATION ${UKV_BUILD_UNUMDB})
-  set_property(TARGET ukv_unumdb PROPERTY LINK_LIBRARIES "")
+  add_library(unumdb STATIC IMPORTED)
+  target_link_libraries(unumdb INTERFACE dl pthread explain uring dw backward elf dwarf numa)
+  set_property(TARGET unumdb PROPERTY IMPORTED_LOCATION ${UKV_BUILD_UNUMDB})
+  set_property(TARGET unumdb PROPERTY LINK_LIBRARIES "")
+
+  add_library(ukv_unumdb src/modality_docs.cpp src/modality_graph.cpp)
+  target_link_libraries(ukv_unumdb unumdb nlohmann_json::nlohmann_json)
+  target_compile_definitions(ukv_unumdb PRIVATE UKV_ENGINE_IS_UNUMDB)  
+
   list(APPEND UKV_ENGINE_NAMES "unumdb")
   list(APPEND UKV_CLIENT_NAMES "unumdb")
 endif()
