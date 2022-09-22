@@ -392,7 +392,6 @@ class safe_vector_gt {
     stl_arena_t* arena_ptr_ = nullptr;
 
   public:
-    safe_vector_gt() noexcept = default;
     safe_vector_gt(safe_vector_gt const&) = delete;
     safe_vector_gt& operator=(safe_vector_gt const&) = delete;
 
@@ -408,8 +407,8 @@ class safe_vector_gt {
 
         return *this;
     }
-    safe_vector_gt(stl_arena_t* arena_ptr) : arena_ptr_(arena_ptr) {}
-    safe_vector_gt(std::size_t size, stl_arena_t* arena_ptr, ukv_error_t* c_error) : arena_ptr_(arena_ptr) {
+    safe_vector_gt(stl_arena_t& arena) : arena_ptr_(&arena) {}
+    safe_vector_gt(std::size_t size, stl_arena_t& arena, ukv_error_t* c_error) : arena_ptr_(&arena) {
         if (!size)
             return;
         auto tape = arena_ptr_->alloc<element_t>(size, c_error);
@@ -505,7 +504,7 @@ class growing_tape_t {
     safe_vector_gt<byte_t> contents_;
 
   public:
-    growing_tape_t(stl_arena_t& arena) : offsets_(&arena), lengths_(&arena), contents_(&arena) {}
+    growing_tape_t(stl_arena_t& arena) : offsets_(arena), lengths_(arena), contents_(arena) {}
 
     void push_back(value_view_t value, ukv_error_t* c_error) {
         offsets_.push_back(static_cast<ukv_length_t>(contents_.size()), c_error);

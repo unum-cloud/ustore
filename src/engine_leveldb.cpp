@@ -262,7 +262,7 @@ void ukv_read( //
     auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
     return_on_error(c_error);
     bool const needs_export = c_found_values != nullptr;
-    safe_vector_gt<byte_t> contents(&arena);
+    safe_vector_gt<byte_t> contents(arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
