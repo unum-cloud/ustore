@@ -195,7 +195,10 @@ inline void validate_write(ukv_transaction_t const c_txn,
                            ukv_error_t* c_error) {
 
     return_if_error(bool(places.count) == bool(places.keys_begin), c_error, 0, "Invalid Arguments!");
-    return_if_error(bool(contents.lengths_begin) == bool(contents.contents_begin), c_error, 0, "Invalid Arguments!");
+    return_if_error((contents.lengths_begin || contents.offsets_begin) == bool(contents.contents_begin),
+                    c_error,
+                    0,
+                    "Invalid Arguments!");
     return_if_error(!(c_options & (ukv_option_read_track_k | ukv_option_txn_snapshot_k)),
                     c_error,
                     0,
