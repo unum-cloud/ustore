@@ -614,27 +614,46 @@ void ukv_collection_drop(
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     auto collection_name = c_collection_name ? std::string_view(c_collection_name) : std::string_view();
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error((!collection_name.empty() || collection_name != rocksdb::kDefaultColumnFamilyName) || !invalidate,
+
+    return_if_error(!((collection_name.empty() || collection_name == rocksdb::kDefaultColumnFamilyName)) || !invalidate,
                     c_error,
                     args_combo_k,
                     "Default collection can't be invalidated.");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
+    rocksdb::ColumnFamilyHandle* collection = nullptr;
+
+    if (c_collection_name) {
+        if (!std::strlen(c_collection_name) || collection_name == rocksdb::kDefaultColumnFamilyName)
+            collection = db.native->DefaultColumnFamily();
+        else {
+            for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
+                rocksdb::ColumnFamilyHandle* collection = *it;
+                if (collection_name == (*it)->GetName())
+                    break;
+            }
+        }
+    }
+    else {
+        if (c_collection_id == ukv_collection_main_k)
+            collection = db.native->DefaultColumnFamily();
+    }
+
     if (c_mode == ukv_drop_keys_vals_handle_k) {
         for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-            if (collection_name == (*it)->GetName()) {
-                rocks_status_t status = db.native->DropColumnFamily(*it);
+            rocksdb::ColumnFamilyHandle* collection = *it;
+            if (collection_name == collection->GetName()) {
+                rocks_status_t status = db.native->DropColumnFamily(collection);
                 if (export_error(status, c_error))
                     return;
                 db.columns.erase(it--);
                 break;
             }
         }
+        return;
     }
-
     else if (c_mode == ukv_drop_keys_vals_k) {
         rocksdb::WriteBatch batch;
-        auto collection = db.native->DefaultColumnFamily();
         auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection));
         for (it->SeekToFirst(); it->Valid(); it->Next())
             batch.Delete(collection, it->key());
@@ -645,7 +664,6 @@ void ukv_collection_drop(
 
     else if (c_mode == ukv_drop_vals_k) {
         rocksdb::WriteBatch batch;
-        auto collection = db.native->DefaultColumnFamily();
         auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection));
         for (it->SeekToFirst(); it->Valid(); it->Next())
             batch.Put(collection, it->key(), rocksdb::Slice());
