@@ -19,7 +19,8 @@
 
 #include <rocksdb/db.h>
 #include <rocksdb/utilities/options_util.h>
-#include <rocksdb/utilities/transaction_db.h>
+#include <rocksdb/utilities/transaction.h>
+#include <rocksdb/utilities/optimistic_transaction_db.h>
 
 #include "ukv/db.h"
 #include "helpers.hpp"
@@ -27,7 +28,7 @@
 using namespace unum::ukv;
 using namespace unum;
 
-using rocks_native_t = rocksdb::TransactionDB;
+using rocks_native_t = rocksdb::OptimisticTransactionDB;
 using rocks_status_t = rocksdb::Status;
 using rocks_value_t = rocksdb::PinnableSlice;
 using rocks_txn_t = rocksdb::Transaction;
@@ -127,7 +128,7 @@ void ukv_database_open(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_
         options.comparator = &key_comparator_k;
         status = rocks_native_t::Open( //
             options,
-            rocksdb::TransactionDBOptions(),
+            rocksdb::OptimisticTransactionDBOptions(),
             path,
             column_descriptors,
             &db_ptr->columns,
@@ -188,6 +189,7 @@ void write_many( //
                               ? txn->Delete(collection, key)
                               : txn->Put(collection, key, to_slice(content));
             export_error(status, c_error);
+            return_on_error(c_error);
         }
     }
     else {
@@ -743,7 +745,7 @@ void ukv_transaction_begin(
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(*c_txn);
-    rocksdb::TransactionOptions options;
+    rocksdb::OptimisticTransactionOptions options;
     if (c_options & ukv_option_txn_snapshot_k)
         options.set_snapshot = true;
     txn = db.native->BeginTransaction(rocksdb::WriteOptions(), options, txn);
