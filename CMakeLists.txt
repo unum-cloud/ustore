@@ -139,7 +139,7 @@ endif()
 if(${UKV_BUILD_FLIGHT_RPC})
   include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_docs.cpp src/modality_graph.cpp)
-  target_link_libraries(ukv_flight_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
+  target_link_libraries(ukv_flight_client Threads::Threads nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
   list(APPEND UKV_CLIENT_NAMES "flight_client")
 
   foreach(engine_name IN ITEMS ${UKV_ENGINE_NAMES})
@@ -148,7 +148,7 @@ if(${UKV_BUILD_FLIGHT_RPC})
 
     string(CONCAT server_name "ukv_" ${engine_name} "_flight_server")
     add_executable(${server_name} src/arrow_server.cpp)
-    target_link_libraries(${server_name} pthread nlohmann_json::nlohmann_json arrow arrow_flight ${target_name} ${target_LIBRARIES})
+    target_link_libraries(${server_name} Threads::Threads nlohmann_json::nlohmann_json arrow arrow_flight ${target_name} ${target_LIBRARIES})
   endforeach()
 endif()
 
