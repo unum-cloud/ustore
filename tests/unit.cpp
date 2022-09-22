@@ -186,42 +186,43 @@ TEST(db, collection_list) {
         EXPECT_FALSE(*db.contains("name"));
         EXPECT_FALSE(db.drop("name"));
         EXPECT_FALSE(db.drop(""));
-        EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
+        // EXPECT_TRUE(db.drop("", ukv_drop_vals_k)); // TODO: uncomment later
         EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
         return;
     }
+    else {
+        collection_t col1 = *(db["col1"]);
+        collection_t col2 = *(db["col2"]);
+        collection_t col3 = *(db["col3"]);
+        collection_t col4 = *(db["col4"]);
 
-    collection_t col1 = *(db["col1"]);
-    collection_t col2 = *(db["col2"]);
-    collection_t col3 = *(db["col3"]);
-    collection_t col4 = *(db["col4"]);
+        EXPECT_TRUE(*db.contains("col1"));
+        EXPECT_TRUE(*db.contains("col2"));
+        EXPECT_FALSE(*db.contains("unknown_col"));
 
-    EXPECT_TRUE(*db.contains("col1"));
-    EXPECT_TRUE(*db.contains("col2"));
-    EXPECT_FALSE(*db.contains("unknown_col"));
+        arena_t memory(db);
+        auto iter = db.collection_names(memory);
+        EXPECT_TRUE(iter);
+        size_t count = 0;
+        std::vector<std::string> collections;
+        while (!iter->is_end()) {
+            collections.push_back(std::string(**iter));
+            iter->operator++();
+            ++count;
+        }
+        EXPECT_EQ(count, 4);
+        std::sort(collections.begin(), collections.end());
+        EXPECT_EQ(collections[0], "col1");
+        EXPECT_EQ(collections[1], "col2");
+        EXPECT_EQ(collections[2], "col3");
+        EXPECT_EQ(collections[3], "col4");
 
-    arena_t memory(db);
-    auto iter = db.collection_names(memory);
-    EXPECT_TRUE(iter);
-    size_t count = 0;
-    std::vector<std::string> collections;
-    while (!iter->is_end()) {
-        collections.push_back(std::string(**iter));
-        iter->operator++();
-        ++count;
+        EXPECT_TRUE(db.drop("col1"));
+        EXPECT_FALSE(*db.contains("col1"));
+        EXPECT_FALSE(db.drop(""));
+        EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
+        EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
     }
-    EXPECT_EQ(count, 4);
-    std::sort(collections.begin(), collections.end());
-    EXPECT_EQ(collections[0], "col1");
-    EXPECT_EQ(collections[1], "col2");
-    EXPECT_EQ(collections[2], "col3");
-    EXPECT_EQ(collections[3], "col4");
-
-    EXPECT_TRUE(db.drop("col1"));
-    EXPECT_FALSE(*db.contains("col1"));
-    EXPECT_FALSE(db.drop(""));
-    EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
-    EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
 }
 
 TEST(db, unnamed_and_named) {
