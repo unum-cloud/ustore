@@ -863,6 +863,10 @@ TEST(db, graph_random_fill) {
 }
 
 TEST(db, graph_txn) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+
     database_t db;
     EXPECT_TRUE(db.open(""));
 
