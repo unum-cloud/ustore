@@ -22,6 +22,16 @@ using namespace unum;
 #define M_EXPECT_EQ_MSG(str1, str2) \
     EXPECT_EQ(json_t::from_msgpack((str1).c_str(), (str1).c_str() + (str1).size()), json_t::parse((str2)));
 
+#if defined(UKV_ENGINE_IS_LEVELDB)
+constexpr const char* path = "tmp/leveldb";
+#elif defined(UKV_ENGINE_IS_ROCKSDB)
+constexpr const char* path = "tmp/rocksdb";
+#elif defined(UKV_ENGINE_IS_UNUMDB)
+constexpr const char* path = "tmp/unumdb";
+#else
+constexpr const char* path = "";
+#endif
+
 #pragma region Binary Collections
 
 template <typename locations_at>
@@ -140,7 +150,7 @@ void check_binary_collection(collection_t& collection) {
 TEST(db, basic) {
 
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
@@ -155,7 +165,7 @@ TEST(db, named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     EXPECT_TRUE(db["col1"]);
     EXPECT_TRUE(db["col2"]);
@@ -179,7 +189,7 @@ TEST(db, named) {
 TEST(db, collection_list) {
 
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     if (!ukv_supports_named_collections_k) {
         EXPECT_FALSE(*db["name"]);
@@ -231,7 +241,7 @@ TEST(db, unnamed_and_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     std::vector<ukv_key_t> keys {54, 55, 56};
     ukv_length_t val_len = sizeof(std::uint64_t);
@@ -265,7 +275,7 @@ TEST(db, txn) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
 
@@ -310,7 +320,7 @@ TEST(db, txn_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
 
@@ -356,7 +366,7 @@ TEST(db, txn_unnamed_then_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
@@ -419,7 +429,7 @@ TEST(db, docs) {
 
     using json_t = nlohmann::json;
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     // JSON
     collection_t collection = *db.collection(nullptr, ukv_format_json_k);
@@ -475,7 +485,7 @@ TEST(db, docs) {
 TEST(db, doc_fields) {
     using json_t = nlohmann::json;
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     collection_t collection = *db.collection(nullptr, ukv_format_json_k);
     auto json1 = R"( {"person": "Carl", "age": 24} )"_json.dump();
@@ -495,7 +505,7 @@ TEST(db, docs_table) {
 
     using json_t = nlohmann::json;
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     // Inject basic data
     collection_t collection = *db.collection(nullptr, ukv_format_json_k);
@@ -637,7 +647,7 @@ TEST(db, docs_table) {
 TEST(db, graph_triangle) {
 
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     collection_t main = *db.collection();
     graph_ref_t net = main.as_graph();
@@ -735,7 +745,7 @@ TEST(db, graph_triangle) {
 TEST(db, graph_triangle_batch_api) {
 
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     collection_t main = *db.collection();
     graph_ref_t net = main.as_graph();
@@ -846,7 +856,7 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
 
 TEST(db, graph_random_fill) {
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     collection_t main = *db.collection();
     graph_ref_t graph = main.as_graph();
@@ -869,7 +879,7 @@ TEST(db, graph_txn) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     collection_t main = *db.collection();
     graph_ref_t net = main.as_graph();
@@ -900,7 +910,10 @@ TEST(db, graph_txn) {
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_TRUE(*net.contains(3));
+
     EXPECT_TRUE(txn.reset());
+    txn_col = *txn.collection();
+    txn_net = txn_col.as_graph();
 
     transaction_t txn2 = *db.transact();
     collection_t txn_col2 = *txn2.collection();
@@ -915,7 +928,7 @@ TEST(db, graph_txn) {
     // This will only fail with tracking reads!
     // ukv_option_read_track_k
     EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn2.commit());
+    EXPECT_FALSE(txn2.commit());
 
     EXPECT_TRUE(db.clear());
 }
@@ -923,7 +936,7 @@ TEST(db, graph_txn) {
 #if 0
 TEST(db, graph_remove_vertices) {
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     collection_t main = *db.collection();
     graph_ref_t graph = main.as_graph();
@@ -945,7 +958,7 @@ TEST(db, graph_remove_vertices) {
 
 TEST(db, graph_remove_edges_keep_vertices) {
     database_t db;
-    EXPECT_TRUE(db.open(""));
+    EXPECT_TRUE(db.open(path));
 
     collection_t main = *db.collection();
     graph_ref_t graph = main.as_graph();
