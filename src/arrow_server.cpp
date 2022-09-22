@@ -248,7 +248,7 @@ class sessions_t {
     std::vector<ukv_arena_t> free_arenas_;
     std::vector<ukv_transaction_t> free_txns_;
     /// Links each session to memory used for its operations:
-    std::unordered_map<session_id_t, running_txn_t, session_id_hash_t> client_to_txn_;
+    client_to_txn_t client_to_txn_;
     std::vector<session_id_t> txns_aging_heap_;
     ukv_database_t db_ = nullptr;
     // On Postgre 9.6+ is set to same 30 seconds.
@@ -368,7 +368,6 @@ class sessions_t {
         it->second.executing = false;
         free_arenas_.push_back(it->second.arena);
         free_txns_.push_back(it->second.txn);
-        client_to_txn_.erase(it);
     }
 
     ukv_arena_t request_arena(ukv_error_t* c_error) noexcept {
