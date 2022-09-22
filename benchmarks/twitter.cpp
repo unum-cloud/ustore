@@ -385,29 +385,41 @@ int main(int argc, char** argv) {
     for (auto const& tweets : tweets_per_path)
         tweet_count += tweets.size();
 
-    // 4. Run the actual benchmarks
+// 4. Run the actual benchmarks
+#if defined(UKV_ENGINE_IS_LEVELDB)
+    db.open("/mnt/md0/Twitter/LevelDB").throw_unhandled();
+#elif defined(UKV_ENGINE_IS_ROCKSDB)
+    db.open("/mnt/md0/Twitter/RocksDB").throw_unhandled();
+#elif defined(UKV_ENGINE_IS_UNUMDB)
+    db.open("/mnt/md0/Twitter/UnumDB").throw_unhandled();
+#else
     db.open().throw_unhandled();
+#endif
+
     std::printf("Will benchmark...\n");
-    bm::RegisterBenchmark("batch_insert", &batch_insert)->Iterations(tweet_count)->UseRealTime()->Threads(thread_count);
-    bm::RegisterBenchmark("sample_blobs", &sample_blobs)
+    bm::RegisterBenchmark("batch_insert", &batch_insert) //
+        ->Iterations(tweet_count / thread_count)
+        ->UseRealTime()
+        ->Threads(thread_count);
+    bm::RegisterBenchmark("sample_blobs", &sample_blobs) //
         ->MinTime(20)
         ->UseRealTime()
         ->Threads(thread_count)
         ->Arg(32)
         ->Arg(256);
-    bm::RegisterBenchmark("sample_docs", &sample_docs)
+    bm::RegisterBenchmark("sample_docs", &sample_docs) //
         ->MinTime(20)
         ->UseRealTime()
         ->Threads(thread_count)
         ->Arg(32)
         ->Arg(256);
-    bm::RegisterBenchmark("sample_field", &sample_field)
+    bm::RegisterBenchmark("sample_field", &sample_field) //
         ->MinTime(20)
         ->UseRealTime()
         ->Threads(thread_count)
         ->Arg(32)
         ->Arg(256);
-    bm::RegisterBenchmark("sample_tables", &sample_tables)
+    bm::RegisterBenchmark("sample_tables", &sample_tables) //
         ->MinTime(20)
         ->UseRealTime()
         ->Threads(thread_count)
