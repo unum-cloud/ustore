@@ -110,14 +110,14 @@ rocks_collection_t* rocks_collection(rocks_db_t& db, ukv_collection_t collection
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_database_open(ukv_str_view_t, ukv_database_t* c_db, ukv_error_t* c_error) {
+void ukv_database_open(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_t* c_error) {
     try {
         rocks_db_t* db_ptr = new rocks_db_t;
         std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
         rocksdb::Options options;
         rocksdb::ConfigOptions config_options;
 
-        std::string path = "./tmp/rocksdb/"; // TODO: take the apth from config!
+        std::string path = c_config; // TODO: take the path from config!
         rocks_status_t status = rocksdb::LoadLatestOptions(config_options, path, &options, &column_descriptors);
         if (column_descriptors.empty())
             column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
