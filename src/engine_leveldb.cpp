@@ -92,13 +92,13 @@ bool export_error(level_status_t const& status, ukv_error_t* c_error) {
     return true;
 }
 
-void ukv_database_open(ukv_str_view_t, ukv_database_t* c_db, ukv_error_t* c_error) {
+void ukv_database_open(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_t* c_error) {
     try {
         level_db_t* db_ptr = nullptr;
         level_options_t options;
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
-        level_status_t status = level_db_t::Open(options, "./tmp/leveldb/", &db_ptr);
+        level_status_t status = level_db_t::Open(options, c_config, &db_ptr);
         if (!status.ok()) {
             *c_error = "Couldn't open LevelDB";
             return;
