@@ -106,22 +106,31 @@ message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 # Define the libraries we will need to build
 add_library(ukv_stl src/engine_stl.cpp src/modality_docs.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_stl nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+target_compile_definitions(ukv_stl PRIVATE UKV_ENGINE_IS_STL)  
 
 add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_rocksdb rocksdb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+target_compile_definitions(ukv_rocksdb PRIVATE UKV_ENGINE_IS_ROCKSDB)  
 
 add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_leveldb leveldb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
+target_compile_definitions(ukv_leveldb PRIVATE UKV_ENGINE_IS_LEVELDB)  
 
 # The rest of CMake will apply to all client libraries
 set(UKV_ENGINE_NAMES "stl" "leveldb" "rocksdb")
 set(UKV_CLIENT_NAMES "stl" "leveldb" "rocksdb")
 
 if(EXISTS ${UKV_BUILD_UNUMDB})
-  add_library(ukv_unumdb STATIC IMPORTED)
-  set_property(TARGET ukv_unumdb PROPERTY IMPORTED_LOCATION ${UKV_BUILD_UNUMDB})
-  set_property(TARGET ukv_unumdb PROPERTY LINK_LIBRARIES "")
+  add_library(unumdb STATIC IMPORTED)
+  target_link_libraries(unumdb INTERFACE dl pthread explain uring dw backward elf dwarf numa)
+  set_property(TARGET unumdb PROPERTY IMPORTED_LOCATION ${UKV_BUILD_UNUMDB})
+  set_property(TARGET unumdb PROPERTY LINK_LIBRARIES "")
+
+  add_library(ukv_unumdb src/modality_docs.cpp src/modality_graph.cpp)
+  target_link_libraries(ukv_unumdb unumdb nlohmann_json::nlohmann_json)
+  target_compile_definitions(ukv_unumdb PRIVATE UKV_ENGINE_IS_UNUMDB)  
+
   list(APPEND UKV_ENGINE_NAMES "unumdb")
   list(APPEND UKV_CLIENT_NAMES "unumdb")
 endif()
@@ -130,7 +139,7 @@ endif()
 if(${UKV_BUILD_FLIGHT_RPC})
   include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_docs.cpp src/modality_graph.cpp)
-  target_link_libraries(ukv_flight_client nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
+  target_link_libraries(ukv_flight_client Threads::Threads nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
   list(APPEND UKV_CLIENT_NAMES "flight_client")
 
   foreach(engine_name IN ITEMS ${UKV_ENGINE_NAMES})
@@ -139,7 +148,7 @@ if(${UKV_BUILD_FLIGHT_RPC})
 
     string(CONCAT server_name "ukv_" ${engine_name} "_flight_server")
     add_executable(${server_name} src/arrow_server.cpp)
-    target_link_libraries(${server_name} pthread nlohmann_json::nlohmann_json arrow arrow_flight ${target_name} ${target_LIBRARIES})
+    target_link_libraries(${server_name} Threads::Threads nlohmann_json::nlohmann_json arrow arrow_flight ${target_name} ${target_LIBRARIES})
   endforeach()
 endif()
 
