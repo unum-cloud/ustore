@@ -115,6 +115,10 @@ ar::ipc::IpcWriteOptions arrow_write_options(arrow_mem_pool_t& pool) {
     return options;
 }
 
+ar::Result<std::shared_ptr<ar::RecordBatch>> combined_batch(std::shared_ptr<ar::Table> table) {
+    return table->num_rows() ? table->CombineChunksToBatch() : ar::RecordBatch::MakeEmpty(table->schema());
+}
+
 ar::Status unpack_table( //
     ar::Result<std::shared_ptr<ar::Table>> const& maybe_table,
     ArrowSchema& schema_c,
@@ -129,7 +133,7 @@ ar::Status unpack_table( //
         return ar_status;
 
     // Join all the chunks to form a single table
-    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = table->CombineChunksToBatch();
+    auto maybe_batch = combined_batch(table);
     if (!maybe_batch.ok())
         return maybe_batch.status();
 
