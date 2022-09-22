@@ -668,11 +668,6 @@ class UKVService : public arf::FlightServerBase {
 
         if (is_query(desc.cmd, kFlightRead)) {
 
-            /// @param `keys`
-            auto input_keys = get_keys(input_schema_c, input_batch_c, kArgKeys);
-            if (!input_keys)
-                return ar::Status::Invalid("Keys must have been provided for reads");
-
             /// @param `collections`
             ukv_collection_t c_collection_id = ukv_collection_main_k;
             strided_iterator_gt<ukv_collection_t> input_collections;
@@ -699,6 +694,15 @@ class UKVService : public arf::FlightServerBase {
             ukv_length_t* found_lengths = nullptr;
             ukv_octet_t* found_presences = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
+            strided_iterator_gt<ukv_key_t> input_keys(nullptr, sizeof(ukv_key_t));
+
+            /// @param `keys`
+            if (tasks_count) {
+                input_keys = get_keys(input_schema_c, input_batch_c, kArgKeys);
+                if (!input_keys)
+                    return ar::Status::Invalid("Keys must have been provided for reads");
+            }
+
             ukv_read( //
                 db_,
                 session.txn,
