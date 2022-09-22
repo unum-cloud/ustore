@@ -621,15 +621,15 @@ void ukv_collection_drop(
                     "Default collection can't be invalidated.");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    rocksdb::ColumnFamilyHandle* collection = nullptr;
+    rocks_collection_t* collection = nullptr;
 
     if (c_collection_name) {
         if (!std::strlen(c_collection_name) || collection_name == rocksdb::kDefaultColumnFamilyName)
             collection = db.native->DefaultColumnFamily();
         else {
             for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-                rocksdb::ColumnFamilyHandle* collection = *it;
-                if (collection_name == (*it)->GetName())
+                collection = *it;
+                if (collection_name == collection->GetName())
                     break;
             }
         }
@@ -638,12 +638,17 @@ void ukv_collection_drop(
         if (c_collection_id == ukv_collection_main_k)
             collection = db.native->DefaultColumnFamily();
         else {
+            for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
+                collection = reinterpret_cast<rocks_collection_t*>(*it);
+                if (collection_name == collection->GetName())
+                    break;
+            }
         }
     }
 
     if (c_mode == ukv_drop_keys_vals_handle_k) {
         for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-            rocksdb::ColumnFamilyHandle* collection = *it;
+            collection = *it;
             if (collection_name == collection->GetName()) {
                 rocks_status_t status = db.native->DropColumnFamily(collection);
                 if (export_error(status, c_error))
