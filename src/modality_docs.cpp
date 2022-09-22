@@ -191,7 +191,7 @@ void dump_any( //
 struct serializing_tape_ref_t {
 
     serializing_tape_ref_t(stl_arena_t& a, ukv_error_t* c_error) noexcept
-        : arena_(a), single_doc_buffer_(&a), growing_tape(arena_), c_error(c_error) {
+        : arena_(a), single_doc_buffer_(a), growing_tape(arena_), c_error(c_error) {
         safe_section("Allocating doc exporter", c_error, [&] {
             using allocator_t = std::pmr::polymorphic_allocator<export_to_value_t>;
             shared_exporter_ = std::allocate_shared<export_to_value_t, allocator_t>(&arena_.resource);

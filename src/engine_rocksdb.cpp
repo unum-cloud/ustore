@@ -369,7 +369,7 @@ void ukv_read( //
     return_on_error(c_error);
     auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
     return_on_error(c_error);
-    safe_vector_gt<byte_t> contents(&arena);
+    safe_vector_gt<byte_t> contents(arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     rocksdb::ReadOptions options;
@@ -637,6 +637,8 @@ void ukv_collection_drop(
     else {
         if (c_collection_id == ukv_collection_main_k)
             collection = db.native->DefaultColumnFamily();
+        else {
+        }
     }
 
     if (c_mode == ukv_drop_keys_vals_handle_k) {
