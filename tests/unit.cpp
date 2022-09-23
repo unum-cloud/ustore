@@ -482,18 +482,26 @@ TEST(db, docs) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, docs_patching) {
+TEST(db, docs_merge_and_patch) {
     using json_t = nlohmann::json;
     database_t db;
     EXPECT_TRUE(db.open(path));
     collection_t collection = *db.collection(nullptr, ukv_format_json_k);
 
-    std::ifstream ifs("tests/patch.json");
-    json_t j_object = json_t::parse(ifs);
+    std::ifstream f_patch("tests/patch.json");
+    json_t j_object = json_t::parse(f_patch);
     for (auto it : j_object) {
-        collection.as(ukv_format_json_k)[2] = it["doc"].dump().c_str();
-        collection.as(ukv_format_json_patch_k)[2] = it["patch"].dump().c_str();
-        M_EXPECT_EQ_JSON(collection[2].value()->c_str(), it["expected"].dump().c_str());
+        collection.as(ukv_format_json_k)[1] = it["doc"].dump().c_str();
+        collection.as(ukv_format_json_patch_k)[1] = it["patch"].dump().c_str();
+        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), it["expected"].dump().c_str());
+    }
+
+    std::ifstream f_merge("tests/merge.json");
+    j_object = json_t::parse(f_merge);
+    for (auto it : j_object) {
+        collection.as(ukv_format_json_k)[1] = it["doc"].dump().c_str();
+        collection.as(ukv_format_json_merge_patch_k)[1] = it["merge"].dump().c_str();
+        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), it["expected"].dump().c_str());
     }
 }
 
@@ -996,6 +1004,5 @@ TEST(db, graph_remove_edges_keep_vertices) {
 int main(int argc, char** argv) {
     std::filesystem::create_directory("./tmp");
     ::testing::InitGoogleTest(&argc, argv);
-    ::testing::GTEST_FLAG(filter) = "db.docs_patching";
     return RUN_ALL_TESTS();
 }
