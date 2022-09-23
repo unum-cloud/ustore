@@ -499,30 +499,38 @@ class safe_vector_gt {
  * Is suited for data preparation before passing to the C API.
  */
 class growing_tape_t {
+    safe_vector_gt<ukv_octet_t> presences_;
     safe_vector_gt<ukv_length_t> offsets_;
     safe_vector_gt<ukv_length_t> lengths_;
     safe_vector_gt<byte_t> contents_;
 
   public:
-    growing_tape_t(stl_arena_t& arena) : offsets_(arena), lengths_(arena), contents_(arena) {}
+    growing_tape_t(stl_arena_t& arena) : presences_(arena), offsets_(arena), lengths_(arena), contents_(arena) {}
 
     void push_back(value_view_t value, ukv_error_t* c_error) {
+        presences_.reserve(presences_.size() + 1, c_error);
+        presences()[presences_.size()] = bool(value);
         offsets_.push_back(static_cast<ukv_length_t>(contents_.size()), c_error);
-        lengths_.push_back(static_cast<ukv_length_t>(value.size()), c_error);
+        lengths_.push_back(static_cast<ukv_length_t>(value ? value.size() : ukv_length_missing_k), c_error);
         contents_.insert(contents_.size(), value.begin(), value.end(), c_error);
     }
 
     void reserve(size_t new_cap, ukv_error_t* c_error) {
+        presences_.reserve(new_cap, c_error);
         offsets_.reserve(new_cap + 1, c_error);
         lengths_.reserve(new_cap, c_error);
     }
 
     void clear() {
+        presences_.clear();
         offsets_.clear();
         lengths_.clear();
         contents_.clear();
     }
 
+    strided_range_gt<ukv_octet_t> presences() noexcept {
+        return strided_range<ukv_octet_t>(presences_.begin(), presences_.end());
+    }
     strided_range_gt<ukv_length_t> offsets() noexcept {
         auto n = lengths_.size();
         offsets_[n] = offsets_[n - 1] + lengths_[n - 1];

@@ -674,8 +674,10 @@ void ukv_docs_read( //
     // Now, we need to parse all the entries to later export them into a target format.
     // Potentially sampling certain sub-fields again along the way.
     serializing_tape_ref_t serializing_tape {arena, c_error};
-    json_t null_object;
+    serializing_tape.growing_tape.reserve(c_tasks_count, c_error);
+    return_on_error(c_error);
 
+    json_t null_object;
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, json_t& parsed) {
         try {
             json_t& parsed_part = lookup_field(parsed, field, null_object);
