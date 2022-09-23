@@ -100,22 +100,22 @@ class bins_ref_gt {
         return *this;
     }
 
-    expected_gt<value_t> value(bool track = false) noexcept {
-        return any_get<value_t>(track ? ukv_option_read_track_k : ukv_options_default_k);
+    expected_gt<value_t> value(bool watch = false) noexcept {
+        return any_get<value_t>(watch ? ukv_option_watch_k : ukv_options_default_k);
     }
 
     operator expected_gt<value_t>() noexcept { return value(); }
 
-    expected_gt<length_t> length(bool track = false) noexcept {
-        return any_get<length_t>(track ? ukv_option_read_track_k : ukv_options_default_k);
+    expected_gt<length_t> length(bool watch = false) noexcept {
+        return any_get<length_t>(watch ? ukv_option_watch_k : ukv_options_default_k);
     }
 
     /**
      * @brief Checks if requested keys are present in the store.
      * ! Related values may be empty strings.
      */
-    expected_gt<present_t> present(bool track = false) noexcept {
-        return any_get<present_t>(track ? ukv_option_read_track_k : ukv_options_default_k);
+    expected_gt<present_t> present(bool watch = false) noexcept {
+        return any_get<present_t>(watch ? ukv_option_watch_k : ukv_options_default_k);
     }
 
     /**

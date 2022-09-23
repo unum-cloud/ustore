@@ -20,7 +20,7 @@ func CreateDB() Level {
 	backend := u.BackendInterface{
 		UKV_error_free:      C.ukv_error_free,
 		UKV_arena_free:      C.ukv_arena_free,
-		UKV_open:            C.ukv_database_open,
+		UKV_open:            C.ukv_database_init,
 		UKV_free:            C.ukv_database_free,
 		UKV_read:            C.ukv_read,
 		UKV_write:           C.ukv_write,

@@ -211,7 +211,7 @@ inline void validate_read_head(places_arg_t const& places, ukv_options_t const c
 
 inline void validate_read_txn(places_arg_t const& places, ukv_options_t const c_options, ukv_error_t* c_error) {
     return_if_error((c_options == ukv_options_default_k) |
-                        (c_options & (ukv_option_read_shared_k | ukv_option_read_track_k)),
+                        (c_options & (ukv_option_read_shared_k | ukv_option_watch_k)),
                     c_error,
                     args_wrong_k,
                     "Invalid options for read");

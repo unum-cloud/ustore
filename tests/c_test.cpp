@@ -143,7 +143,7 @@ TEST(db, validation) {
     status.release_error();
 
     // Wrong Options
-    std::vector<ukv_options_t> wrong_write_options {ukv_option_read_track_k,
+    std::vector<ukv_options_t> wrong_write_options {ukv_option_watch_k,
                                                     ukv_option_txn_snapshot_k,
                                                     ukv_option_read_shared_k};
 
@@ -198,7 +198,7 @@ TEST(db, validation) {
              0,
              keys.data(),
              sizeof(ukv_key_t),
-             ukv_option_read_track_k,
+             ukv_option_watch_k,
              nullptr,
              &found_offsets,
              &found_lengths,
@@ -210,7 +210,7 @@ TEST(db, validation) {
 
     // Wrong options
     std::vector<ukv_options_t> wrong_read_options {ukv_option_write_flush_k,
-                                                   ukv_option_read_track_k,
+                                                   ukv_option_watch_k,
                                                    ukv_option_txn_snapshot_k};
 
     for (auto& option : wrong_read_options) {

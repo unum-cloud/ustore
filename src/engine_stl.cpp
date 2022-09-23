@@ -8,7 +8,7 @@
  * Deficiencies:
  * > Global Lock.
  * > No support for range queries.
- * > Keeps track of all the deleted keys throughout the history.
+ * > Keeps watch of all the deleted keys throughout the history.
  */
 
 #include <vector>
@@ -335,7 +335,7 @@ void read_txn_under_lock( //
 
     stl_db_t& db = *txn.db_ptr;
     generation_t const youngest_generation = db.youngest_generation.load();
-    bool const should_track_requests = c_options & ukv_option_read_track_k;
+    bool const watch = c_options & ukv_option_watch_k;
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
@@ -360,7 +360,7 @@ void read_txn_under_lock( //
             auto value = found ? value_view(key_iterator->second.buffer) : value_view_t {};
             enumerator(i, value);
 
-            if (should_track_requests)
+            if (watch)
                 txn.requested.emplace(place.collection_key(), key_iterator->second.generation);
         }
 
@@ -368,7 +368,7 @@ void read_txn_under_lock( //
         else {
             enumerator(i, value_view_t {});
 
-            if (should_track_requests)
+            if (watch)
                 txn.requested.emplace(place.collection_key(), generation_t {});
         }
     }
@@ -496,7 +496,7 @@ void scan_txn( //
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_database_open( //
+void ukv_database_init( //
     ukv_str_view_t c_config,
     ukv_database_t* c_db,
     ukv_error_t* c_error) {
@@ -762,7 +762,7 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_open(
+void ukv_collection_init(
     // Inputs:
     ukv_database_t const c_db,
     ukv_str_view_t c_collection_name,

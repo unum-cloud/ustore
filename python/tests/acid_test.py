@@ -166,9 +166,9 @@ def test_conflict():
         txn1.main.get(0)
 
 
-def test_tracking_reads():
+def test_watch():
     db = ukv.DataBase()
-    txn = ukv.Transaction(db, track_reads=True)
+    txn = ukv.Transaction(db, watch=True)
     txn.main.get(0)
     db.main.set(0, 'value'.encode())
     with pytest.raises(Exception):

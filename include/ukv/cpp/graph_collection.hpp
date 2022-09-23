@@ -127,9 +127,9 @@ class graph_collection_t {
     expected_gt<ukv_vertex_degree_t> degree( //
         ukv_key_t vertex,
         ukv_vertex_role_t role = ukv_vertex_role_any_k,
-        bool track = false) noexcept {
+        bool watch = false) noexcept {
 
-        auto maybe_degrees = degrees({{&vertex}, 1}, {{&role}, 1}, track);
+        auto maybe_degrees = degrees({{&vertex}, 1}, {{&role}, 1}, watch);
         if (!maybe_degrees)
             return maybe_degrees.release_status();
         auto degrees = *maybe_degrees;
@@ -139,11 +139,11 @@ class graph_collection_t {
     expected_gt<indexed_range_gt<ukv_vertex_degree_t*>> degrees( //
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {},
-        bool track = false) noexcept {
+        bool watch = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
-        ukv_options_t options = track ? ukv_option_read_track_k : ukv_options_default_k;
+        ukv_options_t options = watch ? ukv_option_watch_k : ukv_options_default_k;
 
         ukv_graph_find_edges( //
             db_,
@@ -166,8 +166,8 @@ class graph_collection_t {
         return indexed_range_gt<ukv_vertex_degree_t*> {degrees_per_vertex, degrees_per_vertex + vertices.size()};
     }
 
-    expected_gt<bool> contains(ukv_key_t vertex, bool track = false) noexcept {
-        return bins_ref_gt<collection_key_field_t>(db_, txn_, ckf(collection_, vertex), arena_).present(track);
+    expected_gt<bool> contains(ukv_key_t vertex, bool watch = false) noexcept {
+        return bins_ref_gt<collection_key_field_t>(db_, txn_, ckf(collection_, vertex), arena_).present(watch);
     }
 
     /**
@@ -176,12 +176,12 @@ class graph_collection_t {
      */
     expected_gt<strided_iterator_gt<ukv_octet_t>> contains( //
         strided_range_gt<ukv_key_t const> const& vertices,
-        bool track = false) noexcept {
+        bool watch = false) noexcept {
         places_arg_t arg;
         arg.collections_begin = {&collection_, 0};
         arg.keys_begin = vertices.begin();
         arg.count = vertices.count();
-        return bins_ref_gt<places_arg_t>(db_, txn_, arg, arena_).present(track);
+        return bins_ref_gt<places_arg_t>(db_, txn_, arg, arena_).present(watch);
     }
 
     using adjacency_range_t = range_gt<graph_stream_t>;
@@ -205,7 +205,7 @@ class graph_collection_t {
     expected_gt<edges_span_t> edges( //
         ukv_key_t vertex,
         ukv_vertex_role_t role = ukv_vertex_role_any_k,
-        bool track = false) noexcept {
+        bool watch = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
@@ -221,7 +221,7 @@ class graph_collection_t {
             0,
             &role,
             0,
-            track ? ukv_option_read_track_k : ukv_options_default_k,
+            watch ? ukv_option_watch_k : ukv_options_default_k,
             &degrees_per_vertex,
             &neighborships_per_vertex,
             arena_,
@@ -237,8 +237,8 @@ class graph_collection_t {
         return edges_span_t {edges_begin, edges_begin + edges_count};
     }
 
-    expected_gt<edges_span_t> edges(ukv_key_t source, ukv_key_t target, bool track = false) noexcept {
-        auto maybe_all = edges(source, ukv_vertex_source_k, track);
+    expected_gt<edges_span_t> edges(ukv_key_t source, ukv_key_t target, bool watch = false) noexcept {
+        auto maybe_all = edges(source, ukv_vertex_source_k, watch);
         if (!maybe_all)
             return maybe_all;
 
@@ -259,7 +259,7 @@ class graph_collection_t {
     expected_gt<edges_span_t> edges_containing( //
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {},
-        bool track = false) noexcept {
+        bool watch = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
@@ -275,7 +275,7 @@ class graph_collection_t {
             vertices.stride(),
             roles.begin().get(),
             roles.stride(),
-            track ? ukv_option_read_track_k : ukv_options_default_k,
+            watch ? ukv_option_watch_k : ukv_options_default_k,
             &degrees_per_vertex,
             &neighborships_per_vertex,
             arena_,

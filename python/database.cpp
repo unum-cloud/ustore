@@ -25,7 +25,7 @@ static std::unique_ptr<py_collection_t> punned_collection( //
 
     status_t status;
     ukv_collection_t collection = ukv_collection_main_k;
-    ukv_collection_open(py_db_ptr->native, name.c_str(), nullptr, &collection, status.member_ptr());
+    ukv_collection_init(py_db_ptr->native, name.c_str(), nullptr, &collection, status.member_ptr());
     status.throw_unhandled();
 
     auto py_collection = std::make_unique<py_collection_t>();
@@ -135,18 +135,18 @@ void ukv::wrap_database(py::module& m) {
 #pragma region Transactions and Lifetime
 
     py_txn.def( //
-        py::init([](py_db_t& py_db, bool begin, bool track_reads, bool flush_writes, bool snapshot) {
+        py::init([](py_db_t& py_db, bool begin, bool watch, bool flush_writes, bool snapshot) {
             auto db_ptr = py_db.shared_from_this();
             auto maybe_txn = py_db.native.transact(snapshot);
             maybe_txn.throw_unhandled();
             auto py_txn_ptr = std::make_shared<py_transaction_t>(*std::move(maybe_txn), db_ptr);
-            py_txn_ptr->track_reads = track_reads;
+            py_txn_ptr->watch = watch;
             py_txn_ptr->flush_writes = flush_writes;
             return py_txn_ptr;
         }),
         py::arg("db"),
         py::arg("begin") = true,
-        py::arg("track_reads") = false,
+        py::arg("watch") = false,
         py::arg("flush_writes") = false,
         py::arg("snapshot") = false);
 
