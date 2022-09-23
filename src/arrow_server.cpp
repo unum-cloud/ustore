@@ -597,7 +597,6 @@ class UKVService : public arf::FlightServerBase {
             // Cleanup internal state
             ukv_transaction_begin( //
                 db_,
-                static_cast<ukv_size_t>(params.session_id.txn_id),
                 options,
                 &session.txn,
                 status.member_ptr());

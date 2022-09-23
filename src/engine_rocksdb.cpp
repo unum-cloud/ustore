@@ -715,7 +715,6 @@ void ukv_database_control( //
 void ukv_transaction_begin(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_size_t const,
     ukv_options_t const c_options,
     // Outputs:
     ukv_transaction_t* c_txn,

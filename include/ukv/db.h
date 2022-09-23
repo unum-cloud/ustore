@@ -596,14 +596,12 @@ void ukv_database_control( //
  * @brief Begins a new ACID transaction or resets an existing one.
  *
  * @param db[in]            Already open database instance, @see `ukv_database_init`.
- * @param generation[in]    If equal to 0, a new number will be generated on the fly.
  * @param txn[inout]        May be pointing to an existing transaction.
  *                          In that case, it's reset to new @param generation.
  * @param error[out]        The error message to be handled by callee.
  */
 void ukv_transaction_begin( //
     ukv_database_t const db,
-    ukv_size_t const generation,
     ukv_options_t const options,
     ukv_transaction_t* txn,
     ukv_error_t* error);

@@ -872,7 +872,6 @@ void ukv_database_control( //
 void ukv_transaction_begin(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_size_t const c_generation,
     ukv_options_t const c_options,
     // Outputs:
     ukv_transaction_t* c_txn,
@@ -889,8 +888,8 @@ void ukv_transaction_begin(
 
     arf::Action action;
     fmt::format_to(std::back_inserter(action.type), "{}?", kFlightTxnBegin);
-    if (c_generation)
-        fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, c_generation);
+    if (c_txn)
+        fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, std::uintptr_t(c_txn));
     if (c_options & ukv_option_txn_snapshot_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
 
