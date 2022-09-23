@@ -930,7 +930,6 @@ void ukv_database_control( //
 void ukv_transaction_begin(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_size_t const c_generation,
     ukv_options_t const,
     // Outputs:
     ukv_transaction_t* c_txn,
@@ -947,7 +946,7 @@ void ukv_transaction_begin(
 
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(*c_txn);
     txn.db_ptr = &db;
-    txn.generation = c_generation ? c_generation : ++db.youngest_generation;
+    txn.generation = ++db.youngest_generation;
     txn.requested.clear();
     txn.upserted.clear();
     txn.removed.clear();

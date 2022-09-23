@@ -100,7 +100,7 @@ class transaction_t : public std::enable_shared_from_this<transaction_t> {
     status_t reset(bool snapshot = false) noexcept {
         status_t status;
         auto options = snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k;
-        ukv_transaction_begin(db_, 0, options, &txn_, status.member_ptr());
+        ukv_transaction_begin(db_, options, &txn_, status.member_ptr());
         return status;
     }
 
@@ -269,7 +269,6 @@ class database_t : public std::enable_shared_from_this<database_t> {
         ukv_transaction_t raw = nullptr;
         ukv_transaction_begin( //
             db_,
-            0,
             snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k,
             &raw,
             status.member_ptr());

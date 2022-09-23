@@ -531,7 +531,6 @@ void ukv_database_control( //
 
 void ukv_transaction_begin( //
     ukv_database_t const,
-    ukv_size_t const,
     ukv_options_t const,
     ukv_transaction_t*,
     ukv_error_t* c_error) {
