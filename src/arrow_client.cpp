@@ -888,9 +888,10 @@ void ukv_transaction_begin(
     // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
+    ukv_size_t* txn_id = reinterpret_cast<ukv_size_t*>(c_txn);
     fmt::format_to(std::back_inserter(action.type), "{}?", kFlightTxnBegin);
-    if (c_generation)
-        fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, c_generation);
+    if (txn_id && *txn_id)
+        fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, *txn_id);
     if (c_options & ukv_option_txn_snapshot_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
 
