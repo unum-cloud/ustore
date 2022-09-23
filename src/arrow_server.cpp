@@ -275,9 +275,10 @@ class sessions_t {
 
     void submit(session_id_t session_id, running_txn_t running_txn) noexcept {
         running_txn.executing = false;
-        client_to_txn_.insert_or_assign(session_id, running_txn);
-        txns_aging_heap_.push_back(session_id);
-        std::push_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
+        auto res = client_to_txn_.insert_or_assign(session_id, running_txn);
+        if (res.second)
+            txns_aging_heap_.push_back(session_id);
+        std::make_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
     }
 
   public:
@@ -368,6 +369,12 @@ class sessions_t {
         it->second.executing = false;
         free_arenas_.push_back(it->second.arena);
         free_txns_.push_back(it->second.txn);
+        client_to_txn_.erase(it);
+        auto aging = std::find(txns_aging_heap_.begin(), txns_aging_heap_.end(), session_id);
+        if (aging != txns_aging_heap_.end()) {
+            txns_aging_heap_.erase(aging);
+            std::make_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
+        }
     }
 
     ukv_arena_t request_arena(ukv_error_t* c_error) noexcept {
