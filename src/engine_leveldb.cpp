@@ -92,7 +92,7 @@ bool export_error(level_status_t const& status, ukv_error_t* c_error) {
     return true;
 }
 
-void ukv_database_open(ukv_str_view_t, ukv_database_t* c_db, ukv_error_t* c_error) {
+void ukv_database_init(ukv_str_view_t, ukv_database_t* c_db, ukv_error_t* c_error) {
     try {
         level_db_t* db_ptr = nullptr;
         level_options_t options;
@@ -440,7 +440,7 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_open( //
+void ukv_collection_init( //
     ukv_database_t const,
     ukv_str_view_t c_collection_name,
     ukv_str_view_t,

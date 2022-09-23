@@ -80,9 +80,9 @@ int main(int argc, char** argv) {
     // Supporting options
     _ = main[{43, 44}].on(arena).clear(/*flush:*/ false);
     _ = main[{43, 44}].on(arena).erase(/*flush:*/ false);
-    _ = main[{43, 44}].on(arena).present(/*track:*/ false);
-    _ = main[{43, 44}].on(arena).length(/*track:*/ false);
-    _ = main[{43, 44}].on(arena).value(/*track:*/ false);
+    _ = main[{43, 44}].on(arena).present(/*watch:*/ false);
+    _ = main[{43, 44}].on(arena).length(/*watch:*/ false);
+    _ = main[{43, 44}].on(arena).value(/*watch:*/ false);
 
     // Working with sub documents
     main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();

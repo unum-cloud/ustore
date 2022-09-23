@@ -910,8 +910,6 @@ TEST(db, graph_txn) {
     EXPECT_TRUE(txn_net.upsert(edge4));
     EXPECT_TRUE(txn_net2.upsert(edge5));
 
-    // This will only fail with tracking reads!
-    // ukv_option_read_track_k
     EXPECT_TRUE(txn.commit());
     EXPECT_TRUE(txn2.commit());
 }

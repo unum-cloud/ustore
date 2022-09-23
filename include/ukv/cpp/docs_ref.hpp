@@ -100,26 +100,26 @@ class docs_ref_gt {
         return *this;
     }
 
-    expected_gt<value_t> value(bool track = false) noexcept {
-        return any_get<value_t>(type_, track ? ukv_option_read_track_k : ukv_options_default_k);
+    expected_gt<value_t> value(bool watch = false) noexcept {
+        return any_get<value_t>(type_, watch ? ukv_option_watch_k : ukv_options_default_k);
     }
 
-    expected_gt<value_t> value(ukv_doc_field_type_t type, bool track = false) noexcept {
-        return any_get<value_t>(type, track ? ukv_option_read_track_k : ukv_options_default_k);
+    expected_gt<value_t> value(ukv_doc_field_type_t type, bool watch = false) noexcept {
+        return any_get<value_t>(type, watch ? ukv_option_watch_k : ukv_options_default_k);
     }
 
     operator expected_gt<value_t>() noexcept { return value(); }
 
-    expected_gt<length_t> length(bool track = false) noexcept {
-        return any_get<length_t>(type_, track ? ukv_option_read_track_k : ukv_options_default_k);
+    expected_gt<length_t> length(bool watch = false) noexcept {
+        return any_get<length_t>(type_, watch ? ukv_option_watch_k : ukv_options_default_k);
     }
 
     /**
      * @brief Checks if requested keys are present in the store.
      * ! Related values may be empty strings.
      */
-    expected_gt<present_t> present(bool track = false) noexcept {
-        return any_get<present_t>(type_, track ? ukv_option_read_track_k : ukv_options_default_k);
+    expected_gt<present_t> present(bool watch = false) noexcept {
+        return any_get<present_t>(type_, watch ? ukv_option_watch_k : ukv_options_default_k);
     }
 
     /**
@@ -210,28 +210,28 @@ class docs_ref_gt {
     /**
      * @brief Find the names of all unique fields in requested documents.
      */
-    expected_gt<joined_strs_t> gist(bool track = false) noexcept;
+    expected_gt<joined_strs_t> gist(bool watch = false) noexcept;
 
     /**
      * @brief For N documents and M fields gather (N * M) responses.
      * You put in a `table_layout_view_gt` and you receive a `docs_table_gt`.
      * Any column type annotation is optional.
      */
-    expected_gt<docs_table_t> gather(table_header_t const& header, bool track = false) noexcept {
-        auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
+    expected_gt<docs_table_t> gather(table_header_t const& header, bool watch = false) noexcept {
+        auto options = watch ? ukv_option_watch_k : ukv_options_default_k;
         return any_gather<docs_table_t, table_header_t const&>(header, options);
     }
 
-    expected_gt<docs_table_t> gather(table_header_view_t const& header, bool track = false) noexcept {
-        auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
+    expected_gt<docs_table_t> gather(table_header_view_t const& header, bool watch = false) noexcept {
+        auto options = watch ? ukv_option_watch_k : ukv_options_default_k;
         return any_gather<docs_table_t, table_header_view_t const&>(header, options);
     }
 
     template <typename... column_types_at>
     expected_gt<docs_table_gt<column_types_at...>> gather( //
         table_header_gt<column_types_at...> const& header,
-        bool track = false) noexcept {
-        auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
+        bool watch = false) noexcept {
+        auto options = watch ? ukv_option_watch_k : ukv_options_default_k;
         using input_t = table_header_gt<column_types_at...>;
         using output_t = docs_table_gt<column_types_at...>;
         return any_gather<output_t, input_t const&>(header, options);
@@ -355,14 +355,14 @@ status_t docs_ref_gt<locations_at>::any_write(contents_arg_at&& vals_ref,
 }
 
 template <typename locations_at>
-expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool track) noexcept {
+expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool watch) noexcept {
 
     status_t status;
     ukv_size_t found_count = 0;
     ukv_length_t* found_offsets = nullptr;
     ukv_str_span_t found_strings = nullptr;
 
-    auto options = track ? ukv_option_read_track_k : ukv_options_default_k;
+    auto options = watch ? ukv_option_watch_k : ukv_options_default_k;
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
     auto keys = keys_extractor_t {}.keys(locs);

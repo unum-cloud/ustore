@@ -121,15 +121,12 @@ class transaction_t : public std::enable_shared_from_this<transaction_t> {
     /**
      * @brief Provides a view of a single collection synchronized with the transaction.
      * @tparam collection_at Can be a `bins_collection_t`, `docs_collection_t`, `graph_collection_t`.
-     *
-     * ! Unlike `database_t::collection`, config can't be passed, as you are not expected to upsert
-     * ! new collections from inside a transaction. It is a global state-changing operation.
      */
     template <typename collection_at = bins_collection_t>
     expected_gt<collection_at> collection(ukv_str_view_t name = "") noexcept {
         status_t status;
         ukv_collection_t collection = ukv_collection_main_k;
-        ukv_collection_open(db_, name, nullptr, &collection, status.member_ptr());
+        ukv_collection_init(db_, name, nullptr, &collection, status.member_ptr());
         if (!status)
             return status;
         else
@@ -158,7 +155,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
 
     status_t open(std::string const& config = "") noexcept {
         status_t status;
-        ukv_database_open(config.c_str(), &db_, status.member_ptr());
+        ukv_database_init(config.c_str(), &db_, status.member_ptr());
         return status;
     }
 
@@ -219,7 +216,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
     expected_gt<collection_at> collection(ukv_str_view_t name = "", ukv_str_view_t config = "") noexcept {
         status_t status;
         ukv_collection_t collection = ukv_collection_main_k;
-        ukv_collection_open(db_, name, config, &collection, status.member_ptr());
+        ukv_collection_init(db_, name, config, &collection, status.member_ptr());
         if (!status)
             return status;
         else

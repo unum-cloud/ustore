@@ -415,7 +415,7 @@ struct session_params_t {
     std::optional<std::string_view> opt_drop_mode;
     std::optional<std::string_view> opt_snapshot;
     std::optional<std::string_view> opt_flush;
-    std::optional<std::string_view> opt_track;
+    std::optional<std::string_view> opt_watch;
     std::optional<std::string_view> opt_shared_mem;
 };
 
@@ -440,7 +440,7 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.opt_drop_mode = param_value(params, kParamDropMode);
     result.opt_snapshot = param_value(params, kParamFlagSnapshotTxn);
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
-    result.opt_track = param_value(params, kParamFlagTrackRead);
+    result.opt_watch = param_value(params, kParamFlagWatch);
     result.opt_shared_mem = param_value(params, kParamFlagSharedMemRead);
 
     return result;
@@ -464,7 +464,7 @@ ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) {
  *
  * @section Endpoints
  *
- * > write?col=x&txn=y&lengths&track&shared (DoPut)
+ * > write?col=x&txn=y&lengths&watch&shared (DoPut)
  * > read?col=x&txn=y&flush (DoExchange)
  * > collection_upsert?col=x (DoAction): Returns collection ID
  *   Payload buffer: Collection opening config.
@@ -542,7 +542,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_collection_t collection_id = maybe_collection.throw_or_ref();
             ukv_str_view_t collection_config = get_null_terminated(action.body);
-            ukv_collection_open(db_,
+            ukv_collection_init(db_,
                                 params.collection_name->begin(),
                                 collection_config,
                                 &collection_id,

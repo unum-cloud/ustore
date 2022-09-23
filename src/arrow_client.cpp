@@ -53,7 +53,7 @@ arf::FlightCallOptions arrow_call_options(arrow_mem_pool_t& pool) {
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_database_open( //
+void ukv_database_init( //
     ukv_str_view_t c_config,
     ukv_database_t* c_db,
     ukv_error_t* c_error) {
@@ -127,7 +127,7 @@ void ukv_read( //
                                          : nullptr;
 
     bool const read_shared = c_options & ukv_option_read_shared_k;
-    bool const read_track = c_options & ukv_option_read_track_k;
+    bool const watch = c_options & ukv_option_watch_k;
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightRead);
     if (c_txn)
@@ -141,8 +141,8 @@ void ukv_read( //
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamReadPart, partial_mode);
     if (read_shared)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (read_track)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagTrackRead);
+    if (watch)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagWatch);
 
     bool const has_collections_column = collections && !same_collection;
     constexpr bool has_keys_column = true;
@@ -620,7 +620,7 @@ void ukv_scan( //
 
     // Configure the `cmd` descriptor
     bool const read_shared = c_options & ukv_option_read_shared_k;
-    bool const read_track = c_options & ukv_option_read_track_k;
+    bool const watch = c_options & ukv_option_watch_k;
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightScan);
     if (c_txn)
@@ -632,8 +632,8 @@ void ukv_scan( //
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (read_shared)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (read_track)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagTrackRead);
+    if (watch)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagWatch);
 
     // Send the request to server
     ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
@@ -715,7 +715,7 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_open(
+void ukv_collection_init(
     // Inputs:
     ukv_database_t const c_db,
     ukv_str_view_t c_collection_name,

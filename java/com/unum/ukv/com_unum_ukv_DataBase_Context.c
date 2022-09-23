@@ -18,7 +18,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_open(JNIEnv* env_
         return;
 
     ukv_error_t error_c = NULL;
-    ukv_database_open(config_c, &db_ptr_c, &error_c);
+    ukv_database_init(config_c, &db_ptr_c, &error_c);
 
     if (config_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseStringUTFChars(env_java, config_java, config_c);

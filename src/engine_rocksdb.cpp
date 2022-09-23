@@ -110,7 +110,7 @@ rocks_collection_t* rocks_collection(rocks_db_t& db, ukv_collection_t collection
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_database_open(ukv_str_view_t, ukv_database_t* c_db, ukv_error_t* c_error) {
+void ukv_database_init(ukv_str_view_t, ukv_database_t* c_db, ukv_error_t* c_error) {
     try {
         rocks_db_t* db_ptr = new rocks_db_t;
         std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
@@ -347,7 +347,7 @@ void ukv_read( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    return_if_error(!(c_txn && (c_options & ukv_option_read_track_k)),
+    return_if_error(!(c_txn && (c_options & ukv_option_watch_k)),
                     c_error,
                     args_wrong_k,
                     "RocksDB only supports transparent reads!");
@@ -431,7 +431,7 @@ void ukv_scan( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    return_if_error(!(c_txn && (c_options & ukv_option_read_track_k)),
+    return_if_error(!(c_txn && (c_options & ukv_option_watch_k)),
                     c_error,
                     args_wrong_k,
                     "RocksDB only supports transparent reads!");
@@ -571,7 +571,7 @@ void ukv_size( //
     }
 }
 
-void ukv_collection_open(
+void ukv_collection_init(
     // Inputs:
     ukv_database_t const c_db,
     ukv_str_view_t c_collection_name,

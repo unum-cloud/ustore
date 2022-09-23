@@ -151,6 +151,10 @@ yyjson_val* json_lookup(yyjson_val* json, ukv_str_view_t field) noexcept {
     return !field ? json : field[0] == '/' ? yyjson_get_pointer(json, field) : yyjson_obj_get(json, field);
 }
 
+yyjson_mut_val* json_lookup(yyjson_mut_val* json, ukv_str_view_t field) noexcept {
+    return !field ? json : field[0] == '/' ? yyjson_mut_get_pointer(json, field) : yyjson_mut_obj_get(json, field);
+}
+
 json_t json_parse(value_view_t bytes, stl_arena_t& arena, ukv_error_t* c_error) noexcept {
 
     if (bytes.empty())
@@ -221,7 +225,7 @@ void json_to_scalar(yyjson_val* value,
         break;
 
     case YYJSON_TYPE_STR: {
-        const char* str_begin = yyjson_get_str(value);
+        char const* str_begin = yyjson_get_str(value);
         size_t str_len = yyjson_get_len(value);
         std::from_chars_result result = from_chars(str_begin, str_begin + str_len, scalar);
         bool entire_string_is_number = result.ec == std::errc() && result.ptr == str_begin + str_len;
@@ -316,7 +320,7 @@ std::string_view json_to_string(yyjson_val* value,
     }
 
     case YYJSON_TYPE_STR: {
-        const char* str_begin = yyjson_get_str(value);
+        char const* str_begin = yyjson_get_str(value);
         size_t str_len = yyjson_get_len(value);
 
         result = std::string_view(str_begin, str_len);
@@ -360,16 +364,109 @@ std::string_view json_to_string(yyjson_val* value,
 /*****************	 Format Conversions	  ****************/
 /*********************************************************/
 
+static bool bson_visit_before(bson_iter_t const*, char const*, void*) {
+    return false;
+}
+static bool bson_visit_after(bson_iter_t const*, char const*, void*) {
+    return false;
+}
+static void bson_visit_corrupt(bson_iter_t const*, void*) {
+    return true;
+}
+static bool bson_visit_double(bson_iter_t const*, char const* key, double v_double, void* data);
+static bool bson_visit_utf8(bson_iter_t const*, char const* key, size_t v_utf8_len, char const* v_utf8, void* data);
+static bool bson_visit_document(bson_iter_t const*, char const* key, bson_t const* v_document, void* data);
+static bool bson_visit_array(bson_iter_t const*, char const* key, bson_t const* v_array, void* data);
+static bool bson_visit_binary(bson_iter_t const*,
+                              char const* key,
+                              bson_subtype_t v_subtype,
+                              size_t v_binary_len,
+                              const uint8_t* v_binary,
+                              void* data);
+static bool bson_visit_undefined(bson_iter_t const*, char const* key, void* data);
+static bool bson_visit_oid(bson_iter_t const*, char const* key, const bson_oid_t* v_oid, void* data);
+static bool bson_visit_bool(bson_iter_t const*, char const* key, bool v_bool, void* data);
+static bool bson_visit_date_time(bson_iter_t const*, char const* key, int64_t msec_since_epoch, void* data);
+static bool bson_visit_null(bson_iter_t const*, char const* key, void* data);
+static bool bson_visit_regex(
+    bson_iter_t const*, char const* key, char const* v_regex, char const* v_options, void* data);
+static bool bson_visit_dbpointer(bson_iter_t const*,
+                                 char const* key,
+                                 size_t v_collection_len,
+                                 char const* v_collection,
+                                 bson_oid_t const* v_oid,
+                                 void* data);
+static bool bson_visit_code(bson_iter_t const*, char const* key, size_t v_code_len, char const* v_code, void* data);
+static bool bson_visit_symbol(
+    bson_iter_t const*, char const* key, size_t v_symbol_len, char const* v_symbol, void* data);
+static bool bson_visit_codewscope(
+    bson_iter_t const*, char const* key, size_t v_code_len, char const* v_code, bson_t const* v_scope, void* data);
+static bool bson_visit_int32(bson_iter_t const*, char const* key, int32_t v_int32, void* data);
+static bool bson_visit_timestamp(
+    bson_iter_t const*, char const* key, uint32_t v_timestamp, uint32_t v_increment, void* data);
+static bool bson_visit_int64(bson_iter_t const*, char const* key, int64_t v_int64, void* data);
+static bool bson_visit_maxkey(bson_iter_t const*, char const* key, void* data);
+static bool bson_visit_minkey(bson_iter_t const*, char const* key, void* data);
+static void bson_visit_unsupported_type(bson_iter_t const*, char const* key, uint32_t type_code, void* data);
+static bool bson_visit_decimal128(bson_iter_t const*,
+                                  char const* key,
+                                  bson_decimal128_t const* v_decimal128,
+                                  void* data);
+
 json_t any_parse(value_view_t bytes,
                  ukv_doc_field_type_t const field_type,
                  stl_arena_t& arena,
                  ukv_error_t* c_error) noexcept {
 
+    if (field_type == ukv_doc_field_bson_k) {
+        bson_t bson;
+        bool success = bson_init_static(&bson, reinterpret_cast<uint8_t const*>(data), bytes.size());
+        // Using `bson_as_canonical_extended_json` is a bad idea, as it allocates dynamically.
+        // Instead we will manually iterate over the document, using the "visitor" pattern.
+        bson_visitor_t visitor = {0};
+        bson_iter_t iter;
+        safe_vector_gt<char> json(arena);
+
+        visitor.visit_before = my_visit_before;
+
+        if (!bson_iter_init(&iter, doc)) {
+            *c_error = "Failed to parse the BSON document!";
+            return {};
+        }
+
+        if (!bson_iter_visit_all(&iter, &visitor, &json)) {
+            *c_error = "Failed to iterate the BSON document!";
+            return {};
+        }
+    }
+
     if (field_type == ukv_doc_field_json_k)
         return json_parse(bytes, arena, c_error);
 
-    *c_error = "Input type not supported!";
-    return {};
+    // Wrapping binary data into a JSON object
+    yyjson_alc allocator = wrap_allocator(arena);
+    yyjson_mut_doc* doc = yyjson_mut_doc_new(&allocator);
+    yyjson_mut_val* root = nullptr;
+    switch (field_type) {
+    case ukv_doc_field_null_k:
+    case ukv_doc_field_uuid_k:
+    case ukv_doc_field_f16_k:
+    case ukv_doc_field_bin_k: *c_error = "Input type not supported";
+    case ukv_doc_field_str_k: root = yyjson_mut_strn(doc, bytes.c_str(), bytes.size()); break;
+    case ukv_doc_field_u8_k: root = yyjson_mut_uint(doc, *reinterpret_cast<uint8_t const*>(bytes.data())); break;
+    case ukv_doc_field_u16_k: root = yyjson_mut_uint(doc, *reinterpret_cast<uint16_t const*>(bytes.data())); break;
+    case ukv_doc_field_u32_k: root = yyjson_mut_uint(doc, *reinterpret_cast<uint32_t const*>(bytes.data())); break;
+    case ukv_doc_field_u64_k: root = yyjson_mut_uint(doc, *reinterpret_cast<uint64_t const*>(bytes.data())); break;
+    case ukv_doc_field_i8_k: root = yyjson_mut_sint(doc, *reinterpret_cast<int8_t const*>(bytes.data())); break;
+    case ukv_doc_field_i16_k: root = yyjson_mut_sint(doc, *reinterpret_cast<int16_t const*>(bytes.data())); break;
+    case ukv_doc_field_i32_k: root = yyjson_mut_sint(doc, *reinterpret_cast<int32_t const*>(bytes.data())); break;
+    case ukv_doc_field_i64_k: root = yyjson_mut_sint(doc, *reinterpret_cast<int64_t const*>(bytes.data())); break;
+    case ukv_doc_field_f32_k: root = yyjson_mut_real(doc, *reinterpret_cast<float const*>(bytes.data())); break;
+    case ukv_doc_field_f64_k: root = yyjson_mut_real(doc, *reinterpret_cast<double const*>(bytes.data())); break;
+    case ukv_doc_field_bool_k: root = yyjson_mut_bool(doc, *reinterpret_cast<bool const*>(bytes.data())); break;
+    }
+    yyjson_mut_doc_set_root(doc, root);
+    return {.mut_handle = doc};
 }
 
 value_view_t any_dump(json_branch_t json,
@@ -397,6 +494,39 @@ value_view_t any_dump(json_branch_t json,
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
 /*********************************************************/
+
+yyjson_mut_val* modify_recursively( //
+    yyjson_mut_val* branch,
+    std::string_view remaining_path,
+    ukv_doc_modification_t const c_modification,
+    yyjson_val* new_content) {
+
+    if (remaining_path.empty())
+        return new_content;
+
+    auto first_end = remaining_path.find('/');
+    auto key_or_idx_str = remaining_path.substr(0, first_end);
+    auto is_idx = std::all_of(key_or_idx_str.begin(), key_or_idx_str.end(), std::isdigit);
+    auto build_missing = c_modification != ukv_doc_modify_update_k;
+
+    if (is_idx) {
+        size_t idx = 0;
+        std::from_chars(key_or_idx_str.begin(), key_or_idx_str.end(), idx);
+        yyjson_mut_val* old_child = yyjson_mut_arr_get(branch, idx);
+        auto child_replacement = find_or_make(old_child, remaining_path.substr(first_end), build_missing);
+        yyjson_mut_arr_replace(branch, idx, child_replacement);
+        return branch;
+    }
+    else {
+
+        yyjson_mut_val* old_child = yyjson_mut_obj_getn(branch, key_or_idx_str.data(), key_or_idx_str.size());
+        if (old_child) {
+        }
+
+        yyjson_mut_val* new_key = yyjson_mut_strn(branch, key_or_idx_str.data(), key_or_idx_str.size());
+        bool yyjson_mut_obj_add(branch, new_key, yyjson_mut_val * val);
+    }
+}
 
 template <typename callback_at>
 void read_unique_docs( //
@@ -568,6 +698,19 @@ void read_modify_write( //
         return_on_error(c_error);
 
         // Perform modifications
+        if (c_modification == ukv_doc_modify_merge_k) {
+            yyjson_mut_val* root = yyjson_mut_doc_get_root(doc.mut_handle);
+            yyjson_mut_val* branch = json_lookup(field);
+            yyjson_mut_merge_patch(parsed.mut_handle, branch, parsed_task.handle);
+        }
+        else if (c_modification == ukv_doc_modify_patch_k) {
+            *c_error = "Patches aren't currently supported";
+        }
+        else {
+            yyjson_mut_val* root = yyjson_mut_doc_get_root(doc.mut_handle);
+            auto new_root = modify_recursively(root, field, c_modification, parsed_task.handle);
+            yyjson_mut_doc_set_root(doc.mut_handle, new_root);
+        }
     };
 
     places_arg_t unique_places;
@@ -788,7 +931,7 @@ void gist_recursively(yyjson_val* node,
         yyjson_obj_iter_init(node, &iter);
         while ((key = yyjson_obj_iter_next(&iter)) && !*c_error) {
             val = yyjson_obj_iter_get_val(key);
-            const char* key_name = yyjson_get_str(key);
+            char const* key_name = yyjson_get_str(key);
             size_t key_len = yyjson_get_len(key);
             if (path_len + slash_len + key_len + terminator_len >= field_path_len_limit_k) {
                 *c_error = "Path is too long!";
