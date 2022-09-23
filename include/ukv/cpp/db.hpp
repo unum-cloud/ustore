@@ -132,6 +132,38 @@ class transaction_t : public std::enable_shared_from_this<transaction_t> {
         else
             return collection_at {db_, collection, txn_, arena_.member_ptr()};
     }
+
+    struct collections_list_t {
+        indexed_range_gt<ukv_collection_t*> ids;
+        strings_tape_iterator_t names;
+    };
+
+    expected_gt<collections_list_t> collections() noexcept {
+        ukv_size_t count = 0;
+        ukv_str_span_t names = nullptr;
+        ukv_collection_t* ids = nullptr;
+        status_t status;
+        ukv_collection_list(db_, &count, &ids, nullptr, &names, arena_.member_ptr(), status.member_ptr());
+        collections_list_t result;
+        result.ids = {ids, ids + count};
+        result.names = {count, names};
+        return {std::move(status), std::move(result)};
+    }
+
+    template <typename collection_at = bins_collection_t>
+    expected_gt<collection_at> collection(ukv_str_view_t name = nullptr) noexcept {
+        auto cols = collections();
+        for (std::size_t i = 0; i != cols.ids.size(); ++i, ++cols.names) {
+            if (*cols.names == name)
+                break;
+        }
+
+        ukv_collection_init(db_, name, "", &collection, status.member_ptr());
+        if (!status)
+            return status;
+        else
+            return collection_at {db_, collection, nullptr, nullptr};
+    }
 };
 
 /**
@@ -213,7 +245,18 @@ class database_t : public std::enable_shared_from_this<database_t> {
     expected_gt<bins_collection_t> operator*() noexcept { return collection(""); }
 
     template <typename collection_at = bins_collection_t>
-    expected_gt<collection_at> collection(ukv_str_view_t name = "", ukv_str_view_t config = "") noexcept {
+    expected_gt<collection_at> collection(ukv_str_view_t name = nullptr) noexcept {
+        status_t status;
+        ukv_collection_t collection = ukv_collection_main_k;
+        ukv_collection_init(db_, name, "", &collection, status.member_ptr());
+        if (!status)
+            return status;
+        else
+            return collection_at {db_, collection, nullptr, nullptr};
+    }
+
+    template <typename collection_at = bins_collection_t>
+    expected_gt<collection_at> add_collection(ukv_str_view_t name, ukv_str_view_t config = "") noexcept {
         status_t status;
         ukv_collection_t collection = ukv_collection_main_k;
         ukv_collection_init(db_, name, config, &collection, status.member_ptr());
@@ -221,20 +264,6 @@ class database_t : public std::enable_shared_from_this<database_t> {
             return status;
         else
             return collection_at {db_, collection, nullptr, nullptr};
-    }
-
-    status_t drop(ukv_str_view_t name, ukv_drop_mode_t mode = ukv_drop_keys_vals_handle_k) noexcept {
-        status_t status;
-        ukv_collection_drop(db_, 0, name, mode, status.member_ptr());
-        return status;
-    }
-
-    expected_gt<strings_tape_iterator_t> collection_names(arena_t& memory) {
-        ukv_size_t count = 0;
-        ukv_str_span_t names = nullptr;
-        status_t status;
-        ukv_collection_list(db_, &count, nullptr, nullptr, &names, memory.member_ptr(), status.member_ptr());
-        return {std::move(status), {count, names}};
     }
 
     status_t clear(arena_t& memory) noexcept {
@@ -250,8 +279,8 @@ class database_t : public std::enable_shared_from_this<database_t> {
             iter->operator++();
         }
 
-        // Remove main collection
-        status = drop(nullptr, ukv_drop_keys_vals_k);
+        // Remove the main collection
+        status = drop();
         if (!status)
             return status;
 

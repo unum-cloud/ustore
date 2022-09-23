@@ -112,15 +112,21 @@ class graph_collection_t {
         return status;
     }
 
-    status_t clear_edges() noexcept {
+    status_t remove_edges() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, nullptr, ukv_drop_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, collection_, ukv_drop_vals_k, status.member_ptr());
         return status;
     }
 
     status_t clear() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, nullptr, ukv_drop_keys_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, collection_, ukv_drop_keys_vals_k, status.member_ptr());
+        return status;
+    }
+
+    status_t remove() noexcept {
+        status_t status;
+        ukv_collection_drop(db_, collection_, ukv_drop_keys_vals_handle_k, status.member_ptr());
         return status;
     }
 

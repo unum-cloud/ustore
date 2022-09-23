@@ -606,13 +606,13 @@ void ukv_collection_drop(
     // Inputs:
     ukv_database_t const c_db,
     ukv_collection_t c_collection_id,
-    ukv_str_view_t c_collection_name,
     ukv_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
+    ukv_str_view_t c_collection_name;
     auto collection_name = c_collection_name ? std::string_view(c_collection_name) : std::string_view();
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
     return_if_error(!collection_name.empty() || !invalidate,

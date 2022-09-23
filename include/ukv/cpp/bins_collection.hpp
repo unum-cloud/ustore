@@ -107,15 +107,21 @@ class bins_collection_t {
         return (maybe->min + maybe->max) / 2;
     }
 
-    status_t clear() noexcept {
+    status_t clear_values() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, nullptr, ukv_drop_keys_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, collection_, ukv_drop_vals_k, status.member_ptr());
         return status;
     }
 
-    status_t clear_values() noexcept {
+    status_t clear() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, nullptr, ukv_drop_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, collection_, ukv_drop_keys_vals_k, status.member_ptr());
+        return status;
+    }
+
+    status_t remove() noexcept {
+        status_t status;
+        ukv_collection_drop(db_, collection_, ukv_drop_keys_vals_handle_k, status.member_ptr());
         return status;
     }
 

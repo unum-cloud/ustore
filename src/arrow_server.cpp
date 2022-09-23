@@ -567,14 +567,8 @@ class UKVService : public arf::FlightServerBase {
             ukv_str_span_t c_collection_name = nullptr;
             if (params.collection_id)
                 c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-            else {
-                // The name must be null-terminated.
-                // This is not safe:
-                c_collection_name = (ukv_str_span_t)params.collection_name->begin();
-                c_collection_name[params.collection_name->size()] = 0;
-            }
 
-            ukv_collection_drop(db_, c_collection_id, c_collection_name, mode, status.member_ptr());
+            ukv_collection_drop(db_, c_collection_id, mode, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_empty();
