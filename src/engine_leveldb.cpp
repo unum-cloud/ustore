@@ -446,6 +446,7 @@ void ukv_collection_init( //
     ukv_str_view_t,
     ukv_collection_t*,
     ukv_error_t* c_error) {
+
     if (c_collection_name && std::strlen(c_collection_name))
         *c_error = "Collections not supported by LevelDB!";
 }
@@ -454,16 +455,16 @@ void ukv_collection_drop(
     // Inputs:
     ukv_database_t const c_db,
     ukv_collection_t c_collection_id,
-    ukv_str_view_t c_collection_name,
     ukv_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-
-    auto collection_name = c_collection_name ? std::string_view(c_collection_name) : std::string_view();
-    bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(!collection_name.empty() || !invalidate,
+    return_if_error(c_collection_id != ukv_collection_main_k,
+                    c_error,
+                    args_combo_k,
+                    "Collections not supported by LevelDB!");
+    return_if_error(c_mode != ukv_drop_keys_vals_handle_k,
                     c_error,
                     args_combo_k,
                     "Default collection can't be invalidated.");

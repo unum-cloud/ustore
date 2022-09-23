@@ -3,6 +3,8 @@
  * @author Ashot Vardanian
  * @date 23 Sep 2022
  * @brief C bindings for paths ~ variable length string keys collections.
+ *
+ * It is a bad practice to use strings as key.
  */
 
 #pragma once
@@ -80,7 +82,7 @@ void ukv_paths_read( //
 
 /**
  */
-void ukv_paths_scan_prefix( //
+void ukv_paths_scan( //
     ukv_database_t const db,
     ukv_transaction_t const txn,
     ukv_size_t const tasks_count,
@@ -88,11 +90,11 @@ void ukv_paths_scan_prefix( //
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
-    ukv_key_t const* start_keys,
-    ukv_size_t const start_keys_stride,
+    ukv_key_t const* start_paths,
+    ukv_size_t const start_paths_stride,
 
-    ukv_key_t const* end_keys,
-    ukv_size_t const end_keys_stride,
+    ukv_key_t const* end_paths,
+    ukv_size_t const end_paths_stride,
 
     ukv_length_t const* scan_limits,
     ukv_size_t const scan_limits_stride,

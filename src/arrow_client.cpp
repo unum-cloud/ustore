@@ -763,7 +763,6 @@ void ukv_collection_drop(
     // Inputs:
     ukv_database_t const c_db,
     ukv_collection_t c_collection_id,
-    ukv_str_view_t c_collection_name,
     ukv_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {
@@ -785,22 +784,13 @@ void ukv_collection_drop(
     // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
-    if (c_collection_name)
-        fmt::format_to(std::back_inserter(action.type),
-                       "{}?{:}={}&{}={}",
-                       kFlightColDrop,
-                       kParamCollectionName,
-                       c_collection_name,
-                       kParamDropMode,
-                       mode);
-    else
-        fmt::format_to(std::back_inserter(action.type),
-                       "{}?{}=0x{:0>16x}&{}={}",
-                       kFlightColDrop,
-                       kParamCollectionID,
-                       c_collection_id,
-                       kParamDropMode,
-                       mode);
+    fmt::format_to(std::back_inserter(action.type),
+                   "{}?{}=0x{:0>16x}&{}={}",
+                   kFlightColDrop,
+                   kParamCollectionID,
+                   c_collection_id,
+                   kParamDropMode,
+                   mode);
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
