@@ -508,7 +508,7 @@ class growing_tape_t {
     growing_tape_t(stl_arena_t& arena) : presences_(arena), offsets_(arena), lengths_(arena), contents_(arena) {}
 
     void push_back(value_view_t value, ukv_error_t* c_error) {
-        presences_.reserve(presences_.size() + 1, c_error);
+        presences_.reserve(divide_round_up(presences_.size() + 1, bits_in_byte_k), c_error);
         presences()[presences_.size()] = bool(value);
         offsets_.push_back(static_cast<ukv_length_t>(contents_.size()), c_error);
         lengths_.push_back(static_cast<ukv_length_t>(value ? value.size() : ukv_length_missing_k), c_error);
@@ -516,7 +516,7 @@ class growing_tape_t {
     }
 
     void reserve(size_t new_cap, ukv_error_t* c_error) {
-        presences_.reserve(new_cap, c_error);
+        presences_.reserve(divide_round_up(new_cap, bits_in_byte_k), c_error);
         offsets_.reserve(new_cap + 1, c_error);
         lengths_.reserve(new_cap, c_error);
     }
@@ -528,8 +528,8 @@ class growing_tape_t {
         contents_.clear();
     }
 
-    strided_range_gt<ukv_octet_t> presences() noexcept {
-        return strided_range<ukv_octet_t>(presences_.begin(), presences_.end());
+    strided_iterator_gt<ukv_octet_t> presences() noexcept {
+        return strided_iterator_gt<ukv_octet_t>(presences_.begin(), sizeof(ukv_octet_t));
     }
     strided_range_gt<ukv_length_t> offsets() noexcept {
         auto n = lengths_.size();
