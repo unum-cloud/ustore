@@ -491,17 +491,23 @@ TEST(db, docs_merge_and_patch) {
     std::ifstream f_patch("tests/patch.json");
     json_t j_object = json_t::parse(f_patch);
     for (auto it : j_object) {
-        collection.as(ukv_format_json_k)[1] = it["doc"].dump().c_str();
-        collection.as(ukv_format_json_patch_k)[1] = it["patch"].dump().c_str();
-        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), it["expected"].dump().c_str());
+        auto doc = it["doc"].dump();
+        auto patch = it["patch"].dump();
+        auto expected = it["expected"].dump();
+        collection.as(ukv_format_json_k)[1] = doc.c_str();
+        collection.as(ukv_format_json_patch_k)[1] = patch.c_str();
+        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
     }
 
     std::ifstream f_merge("tests/merge.json");
     j_object = json_t::parse(f_merge);
     for (auto it : j_object) {
-        collection.as(ukv_format_json_k)[1] = it["doc"].dump().c_str();
-        collection.as(ukv_format_json_merge_patch_k)[1] = it["merge"].dump().c_str();
-        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), it["expected"].dump().c_str());
+        auto doc = it["doc"].dump();
+        auto merge = it["merge"].dump();
+        auto expected = it["expected"].dump();
+        collection.as(ukv_format_json_k)[1] = doc.c_str();
+        collection.as(ukv_format_json_merge_patch_k)[1] = merge.c_str();
+        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
     }
 }
 
