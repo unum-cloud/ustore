@@ -202,10 +202,7 @@ inline void validate_write(ukv_transaction_t const c_txn,
                     c_error,
                     0,
                     "Invalid Arguments!");
-    return_if_error(!(c_options & (ukv_option_read_track_k | ukv_option_txn_snapshot_k)),
-                    c_error,
-                    0,
-                    "Invalid options!");
+    return_if_error(!(c_options & (ukv_option_watch_k | ukv_option_txn_snapshot_k)), c_error, 0, "Invalid options!");
 
     if (!places.same_collection() || same_collections_are_named(places.collections_begin))
         return_if_error(ukv_supports_named_collections_k, c_error, 0, "Current engine does not support collections!");
@@ -231,7 +228,7 @@ inline void validate_read(ukv_transaction_t const c_txn,
         return_if_error(ukv_supports_transactions_k, c_error, 0, "Current engine does not support transactions!");
     }
     else {
-        return_if_error(!(c_options & (ukv_option_read_track_k | ukv_option_txn_snapshot_k)),
+        return_if_error(!(c_options & (ukv_option_watch_k | ukv_option_txn_snapshot_k)),
                         c_error,
                         0,
                         "Invalid options!");
@@ -272,7 +269,7 @@ inline void validate_transaction_begin(ukv_transaction_t const c_txn,
                                        ukv_error_t* c_error) {
 
     return_if_error(c_txn, c_error, 0, "Transaction is uninitialized");
-    return_if_error(!(c_options & (ukv_option_write_flush_k | ukv_option_read_track_k | ukv_option_nodiscard_k)),
+    return_if_error(!(c_options & (ukv_option_write_flush_k | ukv_option_watch_k | ukv_option_nodiscard_k)),
                     c_error,
                     0,
                     "Invalid options!");

@@ -84,6 +84,7 @@ include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
 
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(Arrow-external Boost-external)
@@ -171,8 +172,6 @@ endforeach()
 # We build them with the original sources (instead of linking with already compiled libraries)
 # to maximize the number of exposed symbols and make debugging easier.
 if(${UKV_BUILD_TESTS})
-  include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
-
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_SOURCES ${target_name} SOURCES)
