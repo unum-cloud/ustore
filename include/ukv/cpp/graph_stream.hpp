@@ -1,5 +1,5 @@
 /**
- * @file edges_stream.hpp
+ * @file graph_stream.hpp
  * @author Ashot Vardanian
  * @date 30 Jun 2022
  * @brief C++ bindings for @see "ukv/graph.h".
@@ -7,8 +7,8 @@
 
 #pragma once
 #include "ukv/graph.h"
-#include "ukv/cpp/ranges.hpp"        // `edges_span_t`
-#include "ukv/cpp/members_range.hpp" // `keys_stream_t`
+#include "ukv/cpp/ranges.hpp"     // `edges_span_t`
+#include "ukv/cpp/bins_range.hpp" // `keys_stream_t`
 
 namespace unum::ukv {
 
@@ -16,7 +16,7 @@ namespace unum::ukv {
  * @brief A stream of all @c `edge_t`s in a graph.
  * No particular order is guaranteed.
  */
-class edges_stream_t {
+class graph_stream_t {
 
     ukv_database_t db_ = nullptr;
     ukv_collection_t collection_ = ukv_collection_main_k;
@@ -71,18 +71,18 @@ class edges_stream_t {
 
     static constexpr std::size_t default_read_ahead_k = 256;
 
-    edges_stream_t(ukv_database_t db,
+    graph_stream_t(ukv_database_t db,
                    ukv_collection_t collection = ukv_collection_main_k,
                    std::size_t read_ahead_vertices = keys_stream_t::default_read_ahead_k,
                    ukv_transaction_t txn = nullptr)
         : db_(db), collection_(collection), txn_(txn), arena_(db),
           vertex_stream_(db, collection, read_ahead_vertices, txn) {}
 
-    edges_stream_t(edges_stream_t&&) = default;
-    edges_stream_t& operator=(edges_stream_t&&) = default;
+    graph_stream_t(graph_stream_t&&) = default;
+    graph_stream_t& operator=(graph_stream_t&&) = default;
 
-    edges_stream_t(edges_stream_t const&) = delete;
-    edges_stream_t& operator=(edges_stream_t const&) = delete;
+    graph_stream_t(graph_stream_t const&) = delete;
+    graph_stream_t& operator=(graph_stream_t const&) = delete;
 
     status_t seek(ukv_key_t vertex_id) noexcept {
         auto status = vertex_stream_.seek(vertex_id);
@@ -109,7 +109,7 @@ class edges_stream_t {
      * ! meaning that the error must be propagated in a different way.
      * ! So we promote this iterator to `end()`, once an error occurs.
      */
-    inline edges_stream_t& operator++() noexcept {
+    inline graph_stream_t& operator++() noexcept {
         status_t status = advance();
         if (status)
             return *this;
@@ -140,11 +140,11 @@ class edges_stream_t {
 
     bool is_end() const noexcept { return vertex_stream_.is_end() && fetched_offset_ >= fetched_edges_.size(); }
 
-    bool operator==(edges_stream_t const& other) const noexcept {
+    bool operator==(graph_stream_t const& other) const noexcept {
         return vertex_stream_ == other.vertex_stream_ && fetched_offset_ == other.fetched_offset_;
     }
 
-    bool operator!=(edges_stream_t const& other) const noexcept {
+    bool operator!=(graph_stream_t const& other) const noexcept {
         return vertex_stream_ != other.vertex_stream_ || fetched_offset_ != other.fetched_offset_;
     }
 };

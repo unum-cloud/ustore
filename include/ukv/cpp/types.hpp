@@ -7,9 +7,10 @@
  */
 
 #pragma once
-#include <functional> // `std::hash`
-#include <utility>    // `std::exchange`
-#include <cstring>    // `std::strlen`
+#include <functional>  // `std::hash`
+#include <utility>     // `std::exchange`
+#include <cstring>     // `std::strlen`
+#include <string_view> // `std::string_view`
 
 #include "ukv/ukv.h"
 
@@ -155,6 +156,10 @@ class value_view_t {
     inline value_view_t(char const* c_str) noexcept
         : ptr_(ukv_bytes_cptr_t(c_str)), length_(static_cast<ukv_length_t>(std::strlen(c_str))) {}
 
+    template <typename char_at, typename traits_at>
+    inline value_view_t(std::basic_string_view<char_at, traits_at> view) noexcept
+        : ptr_(ukv_bytes_cptr_t(view.data())), length_(static_cast<ukv_length_t>(view.size() * sizeof(char_at))) {}
+
     inline operator bool() const noexcept { return length_ != ukv_length_missing_k; }
     inline std::size_t size() const noexcept { return length_ == ukv_length_missing_k ? 0 : length_; }
     inline byte_t const* data() const noexcept {
@@ -261,20 +266,28 @@ class arena_t {
 class any_arena_t {
 
     arena_t owned_;
-    arena_t* accessible_ = nullptr;
+    ukv_arena_t* accessible_ = nullptr;
 
   public:
     any_arena_t(ukv_database_t db) noexcept : owned_(db), accessible_(nullptr) {}
-    any_arena_t(arena_t& accessible) noexcept : owned_(nullptr), accessible_(&accessible) {}
+    any_arena_t(arena_t& accessible) noexcept : owned_(nullptr), accessible_(accessible.member_ptr()) {}
+    any_arena_t(ukv_database_t db, ukv_arena_t* accessible) noexcept
+        : owned_(accessible ? nullptr : db), accessible_(accessible) {}
 
     any_arena_t(any_arena_t&&) = default;
     any_arena_t& operator=(any_arena_t&&) = default;
 
-    any_arena_t(any_arena_t const&) = delete;
-    any_arena_t& operator=(any_arena_t const&) = delete;
+    any_arena_t(any_arena_t const& other) noexcept
+        : owned_(other.is_remote() ? nullptr : other.owned_.db()), accessible_(other.accessible_) {}
 
-    inline arena_t& arena() noexcept { return accessible_ ? *accessible_ : owned_; }
-    inline ukv_arena_t* member_ptr() noexcept { return arena().member_ptr(); }
+    any_arena_t& operator=(any_arena_t const& other) noexcept {
+        owned_ = other.is_remote() ? arena_t(nullptr) : other.owned_.db();
+        accessible_ = other.accessible_;
+        return *this;
+    }
+
+    inline bool is_remote() const noexcept { return accessible_; }
+    inline ukv_arena_t* member_ptr() noexcept { return accessible_ ?: owned_.member_ptr(); }
     inline operator ukv_arena_t*() & noexcept { return member_ptr(); }
     inline arena_t release_owned() noexcept { return std::exchange(owned_, arena_t {owned_.db()}); }
 };

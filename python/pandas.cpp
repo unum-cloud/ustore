@@ -15,38 +15,38 @@ using namespace unum::ukv::pyb;
 using namespace unum::ukv;
 using namespace unum;
 
-static ukv_type_t ukv_type_from_str(ukv_str_view_t type_name) {
+static ukv_doc_field_type_t ukv_doc_field_from_str(ukv_str_view_t type_name) {
     if (type_name == "bool"sv)
-        return ukv_type_bool_k;
+        return ukv_doc_field_bool_k;
     else if (type_name == "int8"sv)
-        return ukv_type_i8_k;
+        return ukv_doc_field_i8_k;
     else if (type_name == "int16"sv)
-        return ukv_type_i16_k;
+        return ukv_doc_field_i16_k;
     else if (type_name == "int32"sv)
-        return ukv_type_i32_k;
+        return ukv_doc_field_i32_k;
     else if (type_name == "int64"sv)
-        return ukv_type_i64_k;
+        return ukv_doc_field_i64_k;
     else if (type_name == "uint8"sv)
-        return ukv_type_u8_k;
+        return ukv_doc_field_u8_k;
     else if (type_name == "uint16"sv)
-        return ukv_type_u16_k;
+        return ukv_doc_field_u16_k;
     else if (type_name == "uint32"sv)
-        return ukv_type_u32_k;
+        return ukv_doc_field_u32_k;
     else if (type_name == "uint64"sv)
-        return ukv_type_u64_k;
+        return ukv_doc_field_u64_k;
     else if (type_name == "float16"sv)
-        return ukv_type_f16_k;
+        return ukv_doc_field_f16_k;
     else if (type_name == "float32"sv)
-        return ukv_type_f32_k;
+        return ukv_doc_field_f32_k;
     else if (type_name == "float64"sv)
-        return ukv_type_f64_k;
+        return ukv_doc_field_f64_k;
     else if (type_name == "bytes"sv)
-        return ukv_type_bin_k;
+        return ukv_doc_field_bin_k;
     else if (type_name == "str"sv)
-        return ukv_type_str_k;
+        return ukv_doc_field_str_k;
 
     throw std::invalid_argument("Unknown type name");
-    return ukv_type_any_k;
+    return ukv_doc_field_json_k;
 }
 
 static py::object materialize(py_table_collection_t& df) {
@@ -88,7 +88,8 @@ static py::object materialize(py_table_collection_t& df) {
         keys_found.resize(keys_count);
     }
 
-    auto members = df.binary.native[keys_found];
+    auto collection = docs_collection_t(df.binary.native.db(), df.binary.native, df.binary.native.txn());
+    auto members = collection[keys_found];
 
     // Extract the present fields
     if (std::holds_alternative<std::monostate>(df.columns_names)) {
@@ -108,11 +109,12 @@ static py::object materialize(py_table_collection_t& df) {
     header.count = fields.size();
     header.fields_begin = fields.begin();
     header.types_begin =
-        std::holds_alternative<ukv_type_t>(df.columns_types)
-            ? strided_iterator_gt<ukv_type_t const>(&std::get<ukv_type_t>(df.columns_types), 0)
-            : strided_iterator_gt<ukv_type_t const>(std::get<std::vector<ukv_type_t>>(df.columns_types).data(),
-                                                    sizeof(ukv_type_t));
-    table_view_t table = members.gather(header).throw_or_release();
+        std::holds_alternative<ukv_doc_field_type_t>(df.columns_types)
+            ? strided_iterator_gt<ukv_doc_field_type_t const>(&std::get<ukv_doc_field_type_t>(df.columns_types), 0)
+            : strided_iterator_gt<ukv_doc_field_type_t const>(
+                  std::get<std::vector<ukv_doc_field_type_t>>(df.columns_types).data(),
+                  sizeof(ukv_doc_field_type_t));
+    docs_table_t table = members.gather(header).throw_or_release();
     table_header_view_t table_header = table.header();
 
     // Exports results into Arrow
@@ -175,10 +177,10 @@ void ukv::wrap_pandas(py::module& m) {
                 throw std::invalid_argument("Set needed column names directly in this function call.");
 
             std::vector<ukv_str_view_t> columns_names;
-            std::vector<ukv_type_t> columns_types;
+            std::vector<ukv_doc_field_type_t> columns_types;
             py_scan_dict(dtype_py.ptr(), [&](PyObject* key, PyObject* val) {
                 columns_names.push_back(py_to_str(key));
-                columns_types.push_back(ukv_type_from_str(py_to_str(val)));
+                columns_types.push_back(ukv_doc_field_from_str(py_to_str(val)));
             });
 
             df.columns_names = columns_names;
@@ -187,7 +189,7 @@ void ukv::wrap_pandas(py::module& m) {
         // One type definition for all the columns
         // https://stackoverflow.com/a/45063514/2766161
         else if (PyBytes_Check(dtype_py.ptr())) {
-            df.columns_types = ukv_type_from_str(py_to_str(dtype_py.ptr()));
+            df.columns_types = ukv_doc_field_from_str(py_to_str(dtype_py.ptr()));
         }
         return df.shared_from_this();
     });

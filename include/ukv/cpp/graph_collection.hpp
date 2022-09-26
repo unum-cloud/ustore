@@ -1,5 +1,5 @@
 /**
- * @file graph_ref.hpp
+ * @file graph_collection.hpp
  * @author Ashot Vardanian
  * @date 30 Jun 2022
  * @brief C++ bindings for @see "ukv/graph.h".
@@ -8,8 +8,7 @@
 #pragma once
 #include "ukv/graph.h"
 #include "ukv/cpp/types.hpp"
-#include "ukv/cpp/edges_stream.hpp"
-#include "ukv/cpp/members_ref.hpp"
+#include "ukv/cpp/graph_stream.hpp"
 
 namespace unum::ukv {
 
@@ -20,25 +19,24 @@ namespace unum::ukv {
  * You can have one such object in every working thread, even for the
  * same graph collection. Supports updates/reads from within a transaction.
  */
-class graph_ref_t {
+class graph_collection_t {
     ukv_database_t db_ = nullptr;
     ukv_transaction_t txn_ = nullptr;
     ukv_collection_t collection_ = ukv_collection_main_k;
-    ukv_arena_t* arena_ = nullptr;
+    any_arena_t arena_;
 
   public:
-    graph_ref_t(ukv_database_t db, ukv_transaction_t txn, ukv_collection_t collection, ukv_arena_t* arena) noexcept
-        : db_(db), txn_(txn), collection_(collection), arena_(arena) {}
+    graph_collection_t() noexcept : arena_(nullptr) {}
+    graph_collection_t(ukv_database_t db,
+                       ukv_collection_t collection = ukv_collection_main_k,
+                       ukv_transaction_t txn = nullptr,
+                       ukv_arena_t* arena = nullptr) noexcept
+        : db_(db), txn_(txn), collection_(collection), arena_(db_, arena) {}
 
-    graph_ref_t(graph_ref_t&&) = default;
-    graph_ref_t& operator=(graph_ref_t&&) = default;
-    graph_ref_t(graph_ref_t const&) = default;
-    graph_ref_t& operator=(graph_ref_t const&) = default;
-
-    graph_ref_t& on(arena_t& arena) noexcept {
-        arena_ = arena.member_ptr();
-        return *this;
-    }
+    graph_collection_t(graph_collection_t&&) = default;
+    graph_collection_t& operator=(graph_collection_t&&) = default;
+    graph_collection_t(graph_collection_t const&) = delete;
+    graph_collection_t& operator=(graph_collection_t const&) = delete;
 
     status_t upsert(edges_view_t const& edges) noexcept {
         status_t status;
@@ -114,24 +112,30 @@ class graph_ref_t {
         return status;
     }
 
-    status_t clear_edges() noexcept {
+    status_t remove_edges() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, nullptr, ukv_drop_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, collection_, ukv_drop_vals_k, status.member_ptr());
         return status;
     }
 
     status_t clear() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, nullptr, ukv_drop_keys_vals_k, status.member_ptr());
+        ukv_collection_drop(db_, collection_, ukv_drop_keys_vals_k, status.member_ptr());
+        return status;
+    }
+
+    status_t remove() noexcept {
+        status_t status;
+        ukv_collection_drop(db_, collection_, ukv_drop_keys_vals_handle_k, status.member_ptr());
         return status;
     }
 
     expected_gt<ukv_vertex_degree_t> degree( //
         ukv_key_t vertex,
         ukv_vertex_role_t role = ukv_vertex_role_any_k,
-        bool track = false) noexcept {
+        bool watch = false) noexcept {
 
-        auto maybe_degrees = degrees({{&vertex}, 1}, {{&role}, 1}, track);
+        auto maybe_degrees = degrees({{&vertex}, 1}, {{&role}, 1}, watch);
         if (!maybe_degrees)
             return maybe_degrees.release_status();
         auto degrees = *maybe_degrees;
@@ -141,11 +145,11 @@ class graph_ref_t {
     expected_gt<indexed_range_gt<ukv_vertex_degree_t*>> degrees( //
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {},
-        bool track = false) noexcept {
+        bool watch = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
-        ukv_options_t options = track ? ukv_option_read_track_k : ukv_options_default_k;
+        ukv_options_t options = watch ? ukv_option_watch_k : ukv_options_default_k;
 
         ukv_graph_find_edges( //
             db_,
@@ -168,8 +172,8 @@ class graph_ref_t {
         return indexed_range_gt<ukv_vertex_degree_t*> {degrees_per_vertex, degrees_per_vertex + vertices.size()};
     }
 
-    expected_gt<bool> contains(ukv_key_t vertex, bool track = false) noexcept {
-        return members_ref_gt<collection_key_field_t>(db_, txn_, ckf(collection_, vertex), arena_).present(track);
+    expected_gt<bool> contains(ukv_key_t vertex, bool watch = false) noexcept {
+        return bins_ref_gt<collection_key_field_t>(db_, txn_, ckf(collection_, vertex), arena_).present(watch);
     }
 
     /**
@@ -178,21 +182,21 @@ class graph_ref_t {
      */
     expected_gt<strided_iterator_gt<ukv_octet_t>> contains( //
         strided_range_gt<ukv_key_t const> const& vertices,
-        bool track = false) noexcept {
+        bool watch = false) noexcept {
         places_arg_t arg;
         arg.collections_begin = {&collection_, 0};
         arg.keys_begin = vertices.begin();
         arg.count = vertices.count();
-        return members_ref_gt<places_arg_t>(db_, txn_, arg, arena_).present(track);
+        return bins_ref_gt<places_arg_t>(db_, txn_, arg, arena_).present(watch);
     }
 
-    using adjacency_range_t = range_gt<edges_stream_t>;
+    using adjacency_range_t = range_gt<graph_stream_t>;
 
     expected_gt<adjacency_range_t> edges(
         std::size_t vertices_read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
 
-        edges_stream_t b {db_, collection_, vertices_read_ahead, txn_};
-        edges_stream_t e {db_, collection_, vertices_read_ahead, txn_};
+        graph_stream_t b {db_, collection_, vertices_read_ahead, txn_};
+        graph_stream_t e {db_, collection_, vertices_read_ahead, txn_};
         status_t status = b.seek_to_first();
         if (!status)
             return status;
@@ -207,7 +211,7 @@ class graph_ref_t {
     expected_gt<edges_span_t> edges( //
         ukv_key_t vertex,
         ukv_vertex_role_t role = ukv_vertex_role_any_k,
-        bool track = false) noexcept {
+        bool watch = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
@@ -223,7 +227,7 @@ class graph_ref_t {
             0,
             &role,
             0,
-            track ? ukv_option_read_track_k : ukv_options_default_k,
+            watch ? ukv_option_watch_k : ukv_options_default_k,
             &degrees_per_vertex,
             &neighborships_per_vertex,
             arena_,
@@ -239,8 +243,8 @@ class graph_ref_t {
         return edges_span_t {edges_begin, edges_begin + edges_count};
     }
 
-    expected_gt<edges_span_t> edges(ukv_key_t source, ukv_key_t target, bool track = false) noexcept {
-        auto maybe_all = edges(source, ukv_vertex_source_k, track);
+    expected_gt<edges_span_t> edges(ukv_key_t source, ukv_key_t target, bool watch = false) noexcept {
+        auto maybe_all = edges(source, ukv_vertex_source_k, watch);
         if (!maybe_all)
             return maybe_all;
 
@@ -261,7 +265,7 @@ class graph_ref_t {
     expected_gt<edges_span_t> edges_containing( //
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {},
-        bool track = false) noexcept {
+        bool watch = false) noexcept {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
@@ -277,7 +281,7 @@ class graph_ref_t {
             vertices.stride(),
             roles.begin().get(),
             roles.stride(),
-            track ? ukv_option_read_track_k : ukv_options_default_k,
+            watch ? ukv_option_watch_k : ukv_options_default_k,
             &degrees_per_vertex,
             &neighborships_per_vertex,
             arena_,

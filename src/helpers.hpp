@@ -373,8 +373,8 @@ element_at inplace_inclusive_prefix_sum(element_at* begin, element_at* const end
 
 /**
  * @brief An `std::vector`-like class, with open layout,
- * friendly to our C API. Can't grow, but can shrink.
- * Just like humans after puberty :)
+ * friendly to our C API. Internal elements aren't initialized
+ * and must be trivially copy-constructible.
  */
 
 template <typename element_at>
@@ -413,7 +413,7 @@ class safe_vector_gt {
             return;
         auto tape = arena_ptr_->alloc<element_t>(size, c_error);
         ptr_ = tape.begin();
-        cap_ = length_ = size;
+        cap_ = length_ = static_cast<ukv_length_t>(size);
     }
 
     safe_vector_gt(value_view_t view) : safe_vector_gt(view.size()) { std::memcpy(ptr_, view.begin(), view.size()); }
@@ -426,8 +426,21 @@ class safe_vector_gt {
     }
 
     void resize(std::size_t size, ukv_error_t* c_error) {
-        return_if_error(cap_ >= size, c_error, args_wrong_k, "Only shrinking is currently supported");
-        length_ = size;
+        if (size == length_)
+            return;
+        if (size <= cap_) {
+            length_ = static_cast<ukv_length_t>(size);
+            return;
+        }
+
+        auto new_cap = next_power_of_two(size);
+        auto tape = ptr_ ? arena_ptr_->grow<element_t>({ptr_, cap_}, new_cap - cap_, c_error)
+                         : arena_ptr_->alloc<element_t>(new_cap, c_error);
+        return_on_error(c_error);
+
+        ptr_ = tape.begin();
+        cap_ = static_cast<ukv_length_t>(new_cap);
+        length_ = static_cast<ukv_length_t>(size);
     }
 
     void reserve(std::size_t new_cap, ukv_error_t* c_error) {
@@ -439,7 +452,7 @@ class safe_vector_gt {
         return_on_error(c_error);
 
         ptr_ = tape.begin();
-        cap_ = new_cap;
+        cap_ = static_cast<ukv_length_t>(new_cap);
     }
 
     void push_back(element_t val, ukv_error_t* c_error) {
@@ -467,14 +480,17 @@ class safe_vector_gt {
         else
             length_ = new_size;
 
-        std::memmove(ptr_ + offset + inserted_len, ptr_ + offset, following_len);
-        std::memcpy(ptr_ + offset, inserted_begin, inserted_len);
+        static_assert(std::is_trivially_copy_constructible<element_t>());
+        std::memmove(ptr_ + offset + inserted_len, ptr_ + offset, following_len * sizeof(element_t));
+        std::memcpy(ptr_ + offset, inserted_begin, inserted_len * sizeof(element_t));
     }
 
     void erase(std::size_t offset, std::size_t length, ukv_error_t* c_error) {
         return_if_error(size() >= offset + length, c_error, out_of_range_k, "Can't erase");
 
-        std::memmove(ptr_ + offset, ptr_ + offset + length, length_ - (offset + length));
+        static_assert(std::is_trivially_copy_constructible<element_t>());
+        auto following_len = length_ - (offset + length);
+        std::memmove(ptr_ + offset, ptr_ + offset + length, following_len * sizeof(element_t));
         length_ -= length;
     }
 
@@ -485,7 +501,6 @@ class safe_vector_gt {
     inline element_t& operator[](std::size_t i) noexcept { return ptr_[i]; }
     inline std::size_t size() const noexcept { return length_; }
     inline explicit operator bool() const noexcept { return length_; }
-    inline operator value_view_t() const noexcept { return {ptr_, length_}; }
     inline void clear() noexcept { length_ = 0; }
 
     inline ptr_t* member_ptr() noexcept { return &ptr_; }
@@ -507,12 +522,39 @@ class growing_tape_t {
   public:
     growing_tape_t(stl_arena_t& arena) : presences_(arena), offsets_(arena), lengths_(arena), contents_(arena) {}
 
-    void push_back(value_view_t value, ukv_error_t* c_error) {
-        presences_.reserve(divide_round_up(presences_.size() + 1, bits_in_byte_k), c_error);
+    /**
+     * @return Memory region occupied by the new copy.
+     */
+    value_view_t push_back(value_view_t value, ukv_error_t* c_error) {
+        auto offset = static_cast<ukv_length_t>(contents_.size());
+        auto length = static_cast<ukv_length_t>(value.size());
+        auto old_count = lengths_.size();
+
+        lengths_.push_back(length, c_error);
+
+        presences_.resize(divide_round_up(old_count + 1, bits_in_byte_k), c_error);
+        if (*c_error)
+            return value_view_t {};
         presences()[presences_.size()] = bool(value);
-        offsets_.push_back(static_cast<ukv_length_t>(contents_.size()), c_error);
-        lengths_.push_back(static_cast<ukv_length_t>(value ? value.size() : ukv_length_missing_k), c_error);
+
+        // We need to store one more offset for Apache Arrow.
+        offsets_.resize(lengths_.size() + 1, c_error);
+        if (*c_error)
+            return value_view_t {};
+        offsets_[old_count] = offset;
+        offsets_[old_count + 1] = offset + length;
+
         contents_.insert(contents_.size(), value.begin(), value.end(), c_error);
+        if (*c_error)
+            return value_view_t {};
+
+        return value_view_t {contents_.data() + contents_.size() - value.size(), value.size()};
+    }
+
+    void add_terminator(byte_t terminator, ukv_error_t* c_error) {
+        contents_.push_back(terminator, c_error);
+        return_on_error(c_error);
+        offsets_[lengths_.size()] += 1;
     }
 
     void reserve(size_t new_cap, ukv_error_t* c_error) {
@@ -532,8 +574,6 @@ class growing_tape_t {
         return strided_iterator_gt<ukv_octet_t>(presences_.begin(), sizeof(ukv_octet_t));
     }
     strided_range_gt<ukv_length_t> offsets() noexcept {
-        auto n = lengths_.size();
-        offsets_[n] = offsets_[n - 1] + lengths_[n - 1];
         return strided_range<ukv_length_t>(offsets_.begin(), offsets_.end());
     }
     strided_range_gt<ukv_length_t> lengths() noexcept {

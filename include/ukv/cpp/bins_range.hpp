@@ -1,5 +1,5 @@
 /**
- * @file members_range.hpp
+ * @file bins_range.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @brief C++ bindings for @see "ukv/db.h".
@@ -13,7 +13,7 @@ namespace unum::ukv {
 
 class keys_stream_t;
 class pairs_stream_t;
-struct members_range_t;
+struct bins_range_t;
 struct pairs_range_t;
 struct size_range_t;
 struct size_estimates_t;
@@ -367,7 +367,7 @@ struct size_estimates_t {
  *   That interface, however, may through exceptions.
  *   For exception-less interface use `keys_begin()`, `keys_end()`.
  */
-class members_range_t {
+class bins_range_t {
 
     ukv_database_t db_;
     ukv_transaction_t txn_;
@@ -385,17 +385,17 @@ class members_range_t {
     }
 
   public:
-    members_range_t(ukv_database_t db,
-                    ukv_transaction_t txn = nullptr,
-                    ukv_collection_t collection = ukv_collection_main_k,
-                    ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-                    ukv_key_t max_key = ukv_key_unknown_k) noexcept
+    bins_range_t(ukv_database_t db,
+                 ukv_transaction_t txn = nullptr,
+                 ukv_collection_t collection = ukv_collection_main_k,
+                 ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
+                 ukv_key_t max_key = ukv_key_unknown_k) noexcept
         : db_(db), txn_(txn), collection_(collection), min_key_(min_key), max_key_(max_key) {}
 
-    members_range_t(members_range_t&&) = default;
-    members_range_t& operator=(members_range_t&&) = default;
-    members_range_t(members_range_t const&) = default;
-    members_range_t& operator=(members_range_t const&) = default;
+    bins_range_t(bins_range_t&&) = default;
+    bins_range_t& operator=(bins_range_t&&) = default;
+    bins_range_t(bins_range_t const&) = default;
+    bins_range_t& operator=(bins_range_t const&) = default;
 
     ukv_database_t db() const noexcept { return db_; }
     ukv_transaction_t txn() const noexcept { return txn_; }
@@ -454,11 +454,11 @@ class members_range_t {
         return result;
     }
 
-    members_range_t& since(ukv_key_t min_key) noexcept {
+    bins_range_t& since(ukv_key_t min_key) noexcept {
         min_key_ = min_key;
         return *this;
     }
-    members_range_t& until(ukv_key_t max_key) noexcept {
+    bins_range_t& until(ukv_key_t max_key) noexcept {
         max_key_ = max_key;
         return *this;
     }
@@ -471,7 +471,7 @@ struct keys_range_t {
     using iterator_type = keys_stream_t;
     using sample_t = indexed_range_gt<ukv_key_t*>;
 
-    members_range_t members;
+    bins_range_t members;
 
     keys_stream_t begin() noexcept(false) { return members.keys_begin().throw_or_release(); }
     keys_stream_t end() noexcept(false) { return members.keys_end().throw_or_release(); }
@@ -512,7 +512,7 @@ struct keys_range_t {
 struct pairs_range_t {
     using iterator_type = pairs_stream_t;
 
-    members_range_t members;
+    bins_range_t members;
 
     pairs_stream_t begin() noexcept(false) { return members.pairs_begin().throw_or_release(); }
     pairs_stream_t end() noexcept(false) { return members.pairs_end().throw_or_release(); }
