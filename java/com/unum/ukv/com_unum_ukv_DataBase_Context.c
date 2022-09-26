@@ -18,7 +18,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_open(JNIEnv* env_
         return;
 
     ukv_error_t error_c = NULL;
-    ukv_database_open(config_c, &db_ptr_c, &error_c);
+    ukv_database_init(config_c, &db_ptr_c, &error_c);
 
     if (config_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseStringUTFChars(env_java, config_java, config_c);
@@ -40,7 +40,7 @@ JNIEXPORT jobject JNICALL Java_com_unum_ukv_DataBase_00024Context_transaction(JN
     }
 
     ukv_error_t error_c = NULL;
-    ukv_transaction_begin(db_ptr_c, 0, ukv_options_default_k, &txn_ptr_c, &error_c);
+    ukv_transaction_init(db_ptr_c, ukv_options_default_k, &txn_ptr_c, &error_c);
     if (forward_error(env_java, error_c))
         return NULL;
 
@@ -81,6 +81,6 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_clear__(JNIEnv* e
         return;
     }
 
-    ukv_collection_drop(db_ptr_c, ukv_collection_main_k, NULL, ukv_drop_keys_vals_k, &error_c);
+    ukv_collection_drop(db_ptr_c, ukv_collection_main_k, ukv_drop_keys_vals_k, &error_c);
     forward_ukv_error(env_java, error_c);
 }

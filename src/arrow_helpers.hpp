@@ -57,7 +57,7 @@ inline static std::string const kParamReadPart = "part";
 inline static std::string const kParamDropMode = "mode";
 inline static std::string const kParamFlagSnapshotTxn = "snapshot";
 inline static std::string const kParamFlagFlushWrite = "flush";
-inline static std::string const kParamFlagTrackRead = "track";
+inline static std::string const kParamFlagWatch = "watch";
 inline static std::string const kParamFlagSharedMemRead = "shared";
 
 inline static std::string const kParamReadPartLengths = "lengths";
