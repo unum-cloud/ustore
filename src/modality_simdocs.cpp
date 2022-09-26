@@ -371,7 +371,6 @@ static bool bson_visit_after(bson_iter_t const*, char const*, void*) {
     return false;
 }
 static void bson_visit_corrupt(bson_iter_t const*, void*) {
-    return true;
 }
 static bool bson_visit_double(bson_iter_t const*, char const* key, double v_double, void* data);
 static bool bson_visit_utf8(bson_iter_t const*, char const* key, size_t v_utf8_len, char const* v_utf8, void* data);
@@ -420,16 +419,14 @@ json_t any_parse(value_view_t bytes,
 
     if (field_type == ukv_doc_field_bson_k) {
         bson_t bson;
-        bool success = bson_init_static(&bson, reinterpret_cast<uint8_t const*>(data), bytes.size());
+        bool success = bson_init_static(&bson, reinterpret_cast<uint8_t const*>(bytes.data()), bytes.size());
         // Using `bson_as_canonical_extended_json` is a bad idea, as it allocates dynamically.
         // Instead we will manually iterate over the document, using the "visitor" pattern.
         bson_visitor_t visitor = {0};
         bson_iter_t iter;
-        safe_vector_gt<char> json(arena);
+        safe_vector_gt<char> json(&arena);
 
-        visitor.visit_before = my_visit_before;
-
-        if (!bson_iter_init(&iter, doc)) {
+        if (!bson_iter_init(&iter, &bson)) {
             *c_error = "Failed to parse the BSON document!";
             return {};
         }
@@ -466,7 +463,9 @@ json_t any_parse(value_view_t bytes,
     case ukv_doc_field_bool_k: root = yyjson_mut_bool(doc, *reinterpret_cast<bool const*>(bytes.data())); break;
     }
     yyjson_mut_doc_set_root(doc, root);
-    return {.mut_handle = doc};
+    json_t result;
+    result.mut_handle = doc;
+    return result;
 }
 
 value_view_t any_dump(json_branch_t json,
@@ -496,25 +495,26 @@ value_view_t any_dump(json_branch_t json,
 /*********************************************************/
 
 yyjson_mut_val* modify_recursively( //
+    yyjson_mut_doc* doc,
     yyjson_mut_val* branch,
     std::string_view remaining_path,
     ukv_doc_modification_t const c_modification,
     yyjson_val* new_content) {
 
     if (remaining_path.empty())
-        return new_content;
+        return yyjson_val_mut_copy(doc, new_content);
 
     auto first_end = remaining_path.find('/');
     auto key_or_idx_str = remaining_path.substr(0, first_end);
-    auto is_idx = std::all_of(key_or_idx_str.begin(), key_or_idx_str.end(), std::isdigit);
+    auto is_idx = std::all_of(key_or_idx_str.begin(), key_or_idx_str.end(), [](char c) { return std::isdigit(c); });
     auto build_missing = c_modification != ukv_doc_modify_update_k;
 
     if (is_idx) {
         size_t idx = 0;
         std::from_chars(key_or_idx_str.begin(), key_or_idx_str.end(), idx);
         yyjson_mut_val* old_child = yyjson_mut_arr_get(branch, idx);
-        auto child_replacement = find_or_make(old_child, remaining_path.substr(first_end), build_missing);
-        yyjson_mut_arr_replace(branch, idx, child_replacement);
+        // auto child_replacement = modify_recursively(doc, old_child, remaining_path.substr(first_end), build_missing);
+        // yyjson_mut_arr_replace(branch, idx, child_replacement);
         return branch;
     }
     else {
@@ -523,8 +523,8 @@ yyjson_mut_val* modify_recursively( //
         if (old_child) {
         }
 
-        yyjson_mut_val* new_key = yyjson_mut_strn(branch, key_or_idx_str.data(), key_or_idx_str.size());
-        bool yyjson_mut_obj_add(branch, new_key, yyjson_mut_val * val);
+        yyjson_mut_val* new_key = yyjson_mut_strn(doc, key_or_idx_str.data(), key_or_idx_str.size());
+        // bool yyjson_mut_obj_add(branch, new_key, yyjson_mut_val * val);
     }
 }
 
@@ -697,20 +697,22 @@ void read_modify_write( //
         json_t parsed_task = any_parse(contents[task_idx], c_type, arena, c_error);
         return_on_error(c_error);
 
-        // Perform modifications
+// Perform modifications
+#if 0
         if (c_modification == ukv_doc_modify_merge_k) {
-            yyjson_mut_val* root = yyjson_mut_doc_get_root(doc.mut_handle);
-            yyjson_mut_val* branch = json_lookup(field);
+            yyjson_mut_val* root = yyjson_mut_doc_get_root(parsed.mut_handle);
+            yyjson_mut_val* branch = json_lookup(root, field);
             yyjson_mut_merge_patch(parsed.mut_handle, branch, parsed_task.handle);
         }
         else if (c_modification == ukv_doc_modify_patch_k) {
             *c_error = "Patches aren't currently supported";
         }
         else {
-            yyjson_mut_val* root = yyjson_mut_doc_get_root(doc.mut_handle);
-            auto new_root = modify_recursively(root, field, c_modification, parsed_task.handle);
+            yyjson_mut_val* root = yyjson_mut_doc_get_root(parsed.mut_handle);
+            auto new_root = modify_recursively(doc.mut_handle, root, field, c_modification, parsed_task.handle);
             yyjson_mut_doc_set_root(doc.mut_handle, new_root);
         }
+#endif
     };
 
     places_arg_t unique_places;
