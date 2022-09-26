@@ -198,9 +198,8 @@ TEST(db, named) {
     check_binary_collection(col1);
     check_binary_collection(col2);
 
-    EXPECT_FALSE(db.drop(""));
-    EXPECT_TRUE(db.drop("col1"));
-    EXPECT_TRUE(db.drop("col2"));
+    EXPECT_TRUE(db.collection("col1")->drop());
+    EXPECT_TRUE(db.collection("col2")->drop());
     EXPECT_TRUE(*db.contains(""));
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
@@ -225,14 +224,17 @@ TEST(db, collection_list) {
     EXPECT_TRUE(*db.contains("col2"));
     EXPECT_FALSE(*db.contains("unknown_col"));
 
-    arena_t memory(db);
-    auto iter = db.collection_names(memory);
-    EXPECT_TRUE(iter);
+    auto maybe_txn = db.transact();
+    EXPECT_TRUE(maybe_txn);
+    auto maybe_cols = maybe_txn->collections();
+    EXPECT_TRUE(maybe_cols);
+
     size_t count = 0;
     std::vector<std::string> collections;
-    while (!iter->is_end()) {
-        collections.push_back(std::string(**iter));
-        iter->operator++();
+    auto cols = *maybe_cols;
+    while (!cols.names.is_end()) {
+        collections.push_back(std::string(*cols.names));
+        ++cols.names;
         ++count;
     }
     EXPECT_EQ(count, 4);
@@ -452,7 +454,7 @@ TEST(db, docs) {
 
     // JSON-Patch Merging
     auto json_to_merge = R"( {"person": "Bob", "age": 28} )"_json.dump();
-    expected_json = R"( {"person": "Bob", "hello": ["world"], "age": 28} )"_json.dump();
+    auto expected_json = R"( {"person": "Bob", "hello": ["world"], "age": 28} )"_json.dump();
     collection[1].merge(json_to_merge.c_str());
     auto merge_result = collection[1].value();
     M_EXPECT_EQ_JSON(merge_result->c_str(), expected_json.c_str());
@@ -467,7 +469,7 @@ TEST(db, docs) {
             { "op": "add", "path": "/hello", "value": ["world"] },
             { "op": "remove", "path": "/age" }
             ] )"_json.dump();
-    auto expected_json = R"( {"person": "Alice", "hello": ["world"]} )"_json.dump();
+    expected_json = R"( {"person": "Alice", "hello": ["world"]} )"_json.dump();
     collection[1].patch(json_patch.c_str());
     auto patch_result = collection[1].value();
     M_EXPECT_EQ_JSON(patch_result->c_str(), expected_json.c_str());

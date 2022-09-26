@@ -106,7 +106,7 @@ class docs_collection_t {
         return status;
     }
 
-    status_t remove() noexcept {
+    status_t drop() noexcept {
         status_t status;
         ukv_collection_drop(db_, collection_, ukv_drop_keys_vals_handle_k, status.member_ptr());
         return status;

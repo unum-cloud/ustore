@@ -923,6 +923,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_collection_list( //
                 db_,
+                nullptr, // TODO: Add transaction argument
                 &count,
                 &collections,
                 &offsets,

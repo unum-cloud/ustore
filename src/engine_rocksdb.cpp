@@ -658,6 +658,7 @@ void ukv_collection_drop(
 
 void ukv_collection_list( //
     ukv_database_t const c_db,
+    ukv_transaction_t const,
     ukv_size_t* c_count,
     ukv_collection_t** c_ids,
     ukv_length_t** c_offsets,
