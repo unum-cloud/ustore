@@ -203,8 +203,8 @@ TEST(db, named) {
     EXPECT_TRUE(db["col1"]);
     EXPECT_TRUE(db["col2"]);
 
-    bins_collection_t col1 = *(db["col1"]);
-    bins_collection_t col2 = *(db["col2"]);
+    bins_collection_t col1 = *db.add_collection("col1");
+    bins_collection_t col2 = *db.add_collection("col2");
 
     check_binary_collection(col1);
     check_binary_collection(col2);
