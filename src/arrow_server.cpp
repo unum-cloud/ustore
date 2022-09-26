@@ -249,24 +249,22 @@ class sessions_t {
     std::vector<ukv_transaction_t> free_txns_;
     /// Links each session to memory used for its operations:
     client_to_txn_t client_to_txn_;
-    std::vector<session_id_t> txns_aging_heap_;
     ukv_database_t db_ = nullptr;
     // On Postgre 9.6+ is set to same 30 seconds.
     std::size_t milliseconds_timeout = 30'000;
 
-    aging_txn_order_t order() const noexcept { return aging_txn_order_t {client_to_txn_}; }
-
     running_txn_t pop(ukv_error_t* c_error) noexcept {
-        session_id_t session_id = txns_aging_heap_.front();
-        auto it = client_to_txn_.find(session_id);
+
+        auto it = std::min_element(client_to_txn_.begin(), client_to_txn_.end(), [](auto left, auto right) {
+            return left.second.last_access < right.second.last_access && !left.second.executing;
+        });
+
         auto age = std::chrono::duration_cast<std::chrono::milliseconds>(it->second.last_access - sys_clock_t::now());
-        if (age.count() < milliseconds_timeout) {
+        if (age.count() < milliseconds_timeout || it->second.executing) {
             log_error(c_error, error_unknown_k, "Too many concurrent sessions");
             return {};
         }
 
-        std::pop_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
-        txns_aging_heap_.pop_back(); // Resize by removing one last slot
         running_txn_t released = it->second;
         client_to_txn_.erase(it);
         released.executing = false;
@@ -276,17 +274,12 @@ class sessions_t {
     void submit(session_id_t session_id, running_txn_t running_txn) noexcept {
         running_txn.executing = false;
         auto res = client_to_txn_.insert_or_assign(session_id, running_txn);
-        if (res.second)
-            txns_aging_heap_.push_back(session_id);
-        std::push_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
     }
 
   public:
-    sessions_t(ukv_database_t db, std::size_t n)
-        : db_(db), free_arenas_(n), free_txns_(n), client_to_txn_(n), txns_aging_heap_(n) {
+    sessions_t(ukv_database_t db, std::size_t n) : db_(db), free_arenas_(n), free_txns_(n), client_to_txn_(n) {
         std::fill_n(free_arenas_.begin(), n, nullptr);
         std::fill_n(free_txns_.begin(), n, nullptr);
-        txns_aging_heap_.clear();
     }
 
     ~sessions_t() noexcept {
@@ -316,10 +309,6 @@ class sessions_t {
 
         // Update the heap order.
         // With a single change shouldn't take more than `log2(n)` operations.
-        auto aging = std::find(txns_aging_heap_.begin(), txns_aging_heap_.end(), session_id);
-        if (aging != txns_aging_heap_.end())
-            txns_aging_heap_.erase(aging);
-        std::make_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
         return running;
     }
 
