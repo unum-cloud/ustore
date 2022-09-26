@@ -8,7 +8,7 @@
  * Deficiencies:
  * > Global Lock.
  * > No support for range queries.
- * > Keeps track of all the deleted keys throughout the history.
+ * > Keeps watch of all the deleted keys throughout the history.
  */
 
 #include <vector>
@@ -335,7 +335,7 @@ void read_txn_under_lock( //
 
     stl_db_t& db = *txn.db_ptr;
     generation_t const youngest_generation = db.youngest_generation.load();
-    bool const should_track_requests = c_options & ukv_option_read_track_k;
+    bool const watch = c_options & ukv_option_watch_k;
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
@@ -360,7 +360,7 @@ void read_txn_under_lock( //
             auto value = found ? value_view(key_iterator->second.buffer) : value_view_t {};
             enumerator(i, value);
 
-            if (should_track_requests)
+            if (watch)
                 txn.requested.emplace(place.collection_key(), key_iterator->second.generation);
         }
 
@@ -368,7 +368,7 @@ void read_txn_under_lock( //
         else {
             enumerator(i, value_view_t {});
 
-            if (should_track_requests)
+            if (watch)
                 txn.requested.emplace(place.collection_key(), generation_t {});
         }
     }
@@ -496,14 +496,14 @@ void scan_txn( //
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_database_open( //
+void ukv_database_init( //
     ukv_str_view_t c_config,
     ukv_database_t* c_db,
     ukv_error_t* c_error) {
 
     safe_section("Initializing DBMS", c_error, [&] {
         auto db_ptr = new stl_db_t {};
-        auto len = std::strlen(c_config);
+        auto len = c_config ? std::strlen(c_config) : 0;
         if (len) {
             db_ptr->persisted_path = std::string(c_config, len);
             read_from_disk(*db_ptr, c_error);
@@ -771,7 +771,7 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_open(
+void ukv_collection_init(
     // Inputs:
     ukv_database_t const c_db,
     ukv_str_view_t c_collection_name,
@@ -809,16 +809,14 @@ void ukv_collection_drop(
     // Inputs:
     ukv_database_t const c_db,
     ukv_collection_t c_collection_id,
-    ukv_str_view_t c_collection_name,
     ukv_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    auto collection_name = c_collection_name ? std::string_view(c_collection_name) : std::string_view();
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(!collection_name.empty() || !invalidate,
+    return_if_error(c_collection_id == ukv_collection_main_k || !invalidate,
                     c_error,
                     args_combo_k,
                     "Default collection can't be invalidated.");
@@ -829,24 +827,13 @@ void ukv_collection_drop(
     stl_collection_t* collection_ptr_to_clear = nullptr;
     auto collection_it_to_remove = db.named.end();
 
-    if (c_collection_name) {
-        if (!std::strlen(c_collection_name))
-            collection_ptr_to_clear = &db.main;
-        else {
-            collection_it_to_remove = db.named.find(collection_name);
-            if (collection_it_to_remove != db.named.end())
-                collection_ptr_to_clear = collection_it_to_remove->second.get();
-        }
-    }
+    if (c_collection_id == ukv_collection_main_k)
+        collection_ptr_to_clear = &db.main;
     else {
-        if (c_collection_id == ukv_collection_main_k)
-            collection_ptr_to_clear = &db.main;
-        else {
-            for (auto it = db.named.begin(); it != db.named.end() && collection_it_to_remove == db.named.end(); ++it) {
-                if (it->second.get() == &collection) {
-                    collection_it_to_remove = it;
-                    collection_ptr_to_clear = collection_it_to_remove->second.get();
-                }
+        for (auto it = db.named.begin(); it != db.named.end() && collection_it_to_remove == db.named.end(); ++it) {
+            if (it->second.get() == &collection) {
+                collection_it_to_remove = it;
+                collection_ptr_to_clear = collection_it_to_remove->second.get();
             }
         }
     }
@@ -874,6 +861,7 @@ void ukv_collection_drop(
 
 void ukv_collection_list( //
     ukv_database_t const c_db,
+    ukv_transaction_t const,
     ukv_size_t* c_count,
     ukv_collection_t** c_ids,
     ukv_length_t** c_offsets,
@@ -936,10 +924,9 @@ void ukv_database_control( //
 /*****************		Transactions	  ****************/
 /*********************************************************/
 
-void ukv_transaction_begin(
+void ukv_transaction_init(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_size_t const c_generation,
     ukv_options_t const c_options,
     // Outputs:
     ukv_transaction_t* c_txn,
@@ -959,7 +946,7 @@ void ukv_transaction_begin(
 
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(*c_txn);
     txn.db_ptr = &db;
-    txn.generation = c_generation ? c_generation : ++db.youngest_generation;
+    txn.generation = ++db.youngest_generation;
     txn.requested.clear();
     txn.upserted.clear();
     txn.removed.clear();

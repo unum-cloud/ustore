@@ -48,46 +48,46 @@ using column_view_gt = std::conditional_t<is_variable_length<element_at>(),
                                           column_view_scalar_gt<element_at>>;
 
 template <typename... column_types_at>
-class table_view_gt;
+class docs_table_gt;
 
 template <typename... column_types_at>
 class table_header_gt;
 
-using table_view_t = table_view_gt<std::monostate>;
+using docs_table_t = docs_table_gt<std::monostate>;
 
 using field_type_t = field_type_gt<std::monostate>;
 
 using table_header_t = table_header_gt<std::monostate>;
 
 template <typename element_at>
-constexpr ukv_type_t ukv_type() {
+constexpr ukv_doc_field_type_t ukv_doc_field() {
     if constexpr (std::is_same_v<element_at, bool>)
-        return ukv_type_bool_k;
+        return ukv_doc_field_bool_k;
     if constexpr (std::is_same_v<element_at, std::int8_t>)
-        return ukv_type_i8_k;
+        return ukv_doc_field_i8_k;
     if constexpr (std::is_same_v<element_at, std::int16_t>)
-        return ukv_type_i16_k;
+        return ukv_doc_field_i16_k;
     if constexpr (std::is_same_v<element_at, std::int32_t>)
-        return ukv_type_i32_k;
+        return ukv_doc_field_i32_k;
     if constexpr (std::is_same_v<element_at, std::int64_t>)
-        return ukv_type_i64_k;
+        return ukv_doc_field_i64_k;
     if constexpr (std::is_same_v<element_at, std::uint8_t>)
-        return ukv_type_u8_k;
+        return ukv_doc_field_u8_k;
     if constexpr (std::is_same_v<element_at, std::uint16_t>)
-        return ukv_type_u16_k;
+        return ukv_doc_field_u16_k;
     if constexpr (std::is_same_v<element_at, std::uint32_t>)
-        return ukv_type_u32_k;
+        return ukv_doc_field_u32_k;
     if constexpr (std::is_same_v<element_at, std::uint64_t>)
-        return ukv_type_u64_k;
+        return ukv_doc_field_u64_k;
     if constexpr (std::is_same_v<element_at, float>)
-        return ukv_type_f32_k;
+        return ukv_doc_field_f32_k;
     if constexpr (std::is_same_v<element_at, double>)
-        return ukv_type_f64_k;
+        return ukv_doc_field_f64_k;
     if constexpr (std::is_same_v<element_at, value_view_t>)
-        return ukv_type_bin_k;
+        return ukv_doc_field_bin_k;
     if constexpr (std::is_same_v<element_at, std::string_view>)
-        return ukv_type_str_k;
-    return ukv_type_any_k;
+        return ukv_doc_field_str_k;
+    return ukv_doc_field_json_k;
 }
 
 /**
@@ -104,11 +104,11 @@ struct table_index_view_t {
 
 struct table_header_view_t {
     strided_iterator_gt<ukv_str_view_t const> fields_begin;
-    strided_iterator_gt<ukv_type_t const> types_begin;
+    strided_iterator_gt<ukv_doc_field_type_t const> types_begin;
     std::size_t count = 0;
 
     strided_range_gt<ukv_str_view_t const> fields() const noexcept { return {fields_begin, count}; }
-    strided_range_gt<ukv_type_t const> types() const noexcept { return {types_begin, count}; }
+    strided_range_gt<ukv_doc_field_type_t const> types() const noexcept { return {types_begin, count}; }
 };
 
 template <typename element_at>
@@ -231,7 +231,7 @@ class column_view_t {
     ukv_length_t* lengths_ = nullptr;
     ukv_size_t count_ = 0;
     ukv_str_view_t name_ = nullptr;
-    ukv_type_t type_ = ukv_type_any_k;
+    ukv_doc_field_type_t type_ = ukv_doc_field_json_k;
 
   public:
     column_view_t( //
@@ -244,7 +244,7 @@ class column_view_t {
         ukv_length_t* lengths,
         ukv_size_t count,
         ukv_str_view_t name = nullptr,
-        ukv_type_t type = ukv_type_any_k) noexcept
+        ukv_doc_field_type_t type = ukv_doc_field_json_k) noexcept
         : validities_(validities), conversions_(conversions), collisions_(collisions), scalars_(scalars), tape_(tape),
           offsets_(offsets), lengths_(lengths), count_(count), name_(name), type_(type) {}
 
@@ -254,7 +254,7 @@ class column_view_t {
     column_view_t& operator=(column_view_t const&) = default;
 
     ukv_str_view_t name() const noexcept { return name_; }
-    ukv_type_t type() const noexcept { return type_; }
+    ukv_doc_field_type_t type() const noexcept { return type_; }
     std::size_t size() const noexcept { return count_; }
 
     template <typename element_at>
@@ -276,7 +276,7 @@ class column_view_t {
  * @tparam column_types_at Optional type-annotation for columns.
  */
 template <typename... column_types_at>
-class table_view_gt {
+class docs_table_gt {
 
     using empty_tuple_t = std::tuple<std::monostate>;
     using types_tuple_t = std::tuple<column_types_at...>;
@@ -293,7 +293,7 @@ class table_view_gt {
     strided_iterator_gt<ukv_collection_t const> collections_;
     strided_iterator_gt<ukv_key_t const> keys_;
     strided_iterator_gt<ukv_str_view_t const> fields_;
-    strided_iterator_gt<ukv_type_t const> types_;
+    strided_iterator_gt<ukv_doc_field_type_t const> types_;
 
     ukv_octet_t** columns_validities_ = nullptr;
     ukv_octet_t** columns_conversions_ = nullptr;
@@ -304,13 +304,13 @@ class table_view_gt {
     ukv_byte_t* tape_ = nullptr;
 
   public:
-    table_view_gt( //
+    docs_table_gt( //
         ukv_size_t docs_count,
         ukv_size_t fields_count,
         strided_iterator_gt<ukv_collection_t const> collections,
         strided_iterator_gt<ukv_key_t const> keys,
         strided_iterator_gt<ukv_str_view_t const> fields,
-        strided_iterator_gt<ukv_type_t const> types,
+        strided_iterator_gt<ukv_doc_field_type_t const> types,
         ukv_octet_t** columns_validities = nullptr,
         ukv_octet_t** columns_conversions = nullptr,
         ukv_octet_t** columns_collisions = nullptr,
@@ -323,10 +323,10 @@ class table_view_gt {
           columns_collisions_(columns_collisions), columns_scalars_(columns_scalars), columns_offsets_(columns_offsets),
           columns_lengths_(columns_lengths), tape_(tape) {}
 
-    table_view_gt(table_view_gt&&) = default;
-    table_view_gt(table_view_gt const&) = default;
-    table_view_gt& operator=(table_view_gt&&) = default;
-    table_view_gt& operator=(table_view_gt const&) = default;
+    docs_table_gt(docs_table_gt&&) = default;
+    docs_table_gt(docs_table_gt const&) = default;
+    docs_table_gt& operator=(docs_table_gt&&) = default;
+    docs_table_gt& operator=(docs_table_gt const&) = default;
 
     table_index_view_t index() const noexcept { return {collections_, keys_, docs_count_}; }
     table_header_view_t header() const noexcept { return {fields_, types_, docs_count_}; }
@@ -381,13 +381,13 @@ class table_view_gt {
 template <typename element_at>
 struct field_type_gt {
     ukv_str_view_t field = nullptr;
-    ukv_type_t type = ukv_type_any_k;
+    ukv_doc_field_type_t type = ukv_doc_field_json_k;
 };
 
 template <>
 struct field_type_gt<std::monostate> {
     ukv_str_view_t field = nullptr;
-    ukv_type_t type = ukv_type_any_k;
+    ukv_doc_field_type_t type = ukv_doc_field_json_k;
 };
 
 /**
@@ -408,7 +408,7 @@ struct table_header_gt {
         using new_columns_t = std::array<field_type_t, collections_count_k + 1>;
         new_columns_t new_columns;
         std::copy_n(columns.begin(), collections_count_k, new_columns.begin());
-        new_columns[collections_count_k] = field_type_t {name, ukv_type<element_at>()};
+        new_columns[collections_count_k] = field_type_t {name, ukv_doc_field<element_at>()};
         return {new_columns};
     }
 
@@ -416,7 +416,7 @@ struct table_header_gt {
         return strided_range(columns).members(&field_type_t::field);
     }
 
-    strided_range_gt<ukv_type_t const> types() const noexcept {
+    strided_range_gt<ukv_doc_field_type_t const> types() const noexcept {
         return strided_range(columns).members(&field_type_t::type);
     }
 };
@@ -440,10 +440,10 @@ struct table_header_gt<std::monostate> {
 
     template <typename element_at>
     table_header_gt& with(ukv_str_view_t name) & {
-        return with(name, ukv_type<element_at>());
+        return with(name, ukv_doc_field<element_at>());
     }
 
-    table_header_gt& with(ukv_str_view_t name, ukv_type_t type) & {
+    table_header_gt& with(ukv_str_view_t name, ukv_doc_field_type_t type) & {
         columns.push_back({name, type});
         return *this;
     }
@@ -452,7 +452,7 @@ struct table_header_gt<std::monostate> {
         return strided_range(columns).members(&field_type_t::field);
     }
 
-    strided_range_gt<ukv_type_t const> types() const noexcept {
+    strided_range_gt<ukv_doc_field_type_t const> types() const noexcept {
         return strided_range(columns).members(&field_type_t::type);
     }
 };

@@ -8,7 +8,7 @@ else()
     ExternalProject_Add(
         Arrow-external
         GIT_REPOSITORY https://github.com/apache/arrow.git
-        GIT_TAG "apache-arrow-8.0.1"
+        GIT_TAG "apache-arrow-9.0.0"
         GIT_SHALLOW TRUE
 
         DOWNLOAD_DIR "_deps/arrow-src"
@@ -44,11 +44,11 @@ else()
         -DARROW_COMPUTE=OFF
         -DARROW_JEMALLOC=OFF
 
+        -DARROW_PYTHON=ON
+        -DARROW_FLIGHT=ON
         -DARROW_JSON=OFF
         -DARROW_CSV=OFF
-        -DARROW_PYTHON=OFF
         -DARROW_PARQUET=OFF
-        -DARROW_FLIGHT=OFF
         -DARROW_FLIGHT_SQL=OFF
         -DARROW_WITH_UCX=OFF
         -DARROW_WITH_RE2=OFF
