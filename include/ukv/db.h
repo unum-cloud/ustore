@@ -600,7 +600,7 @@ void ukv_database_control( //
  *                          In that case, it's reset to new @param generation.
  * @param error[out]        The error message to be handled by callee.
  */
-void ukv_transaction_begin( //
+void ukv_transaction_init( //
     ukv_database_t const db,
     ukv_options_t const options,
     ukv_transaction_t* txn,
@@ -610,7 +610,7 @@ void ukv_transaction_begin( //
  * @brief Commits an ACID transaction.
  * Regardless of result, the content is preserved to allow further
  * logging, serialization or retries. The underlying memory can be
- * cleaned and reused by consecutive `ukv_transaction_begin` call.
+ * cleaned and reused by consecutive `ukv_transaction_init` call.
  */
 void ukv_transaction_commit( //
     ukv_database_t const db,

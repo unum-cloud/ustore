@@ -924,7 +924,7 @@ void ukv_database_control( //
 /*****************		Transactions	  ****************/
 /*********************************************************/
 
-void ukv_transaction_begin(
+void ukv_transaction_init(
     // Inputs:
     ukv_database_t const c_db,
     ukv_options_t const,

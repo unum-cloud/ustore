@@ -111,7 +111,7 @@ rocks_collection_t* rocks_collection(rocks_db_t& db, ukv_collection_t collection
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_database_open(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_t* c_error) {
+void ukv_database_init(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_t* c_error) {
     try {
         rocks_db_t* db_ptr = new rocks_db_t;
         std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
@@ -736,7 +736,7 @@ void ukv_database_control( //
     *c_error = "Controls aren't supported in this implementation!";
 }
 
-void ukv_transaction_begin(
+void ukv_transaction_init(
     // Inputs:
     ukv_database_t const c_db,
     ukv_options_t const c_options,

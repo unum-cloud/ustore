@@ -40,7 +40,7 @@ JNIEXPORT jobject JNICALL Java_com_unum_ukv_DataBase_00024Context_transaction(JN
     }
 
     ukv_error_t error_c = NULL;
-    ukv_transaction_begin(db_ptr_c, ukv_options_default_k, &txn_ptr_c, &error_c);
+    ukv_transaction_init(db_ptr_c, ukv_options_default_k, &txn_ptr_c, &error_c);
     if (forward_error(env_java, error_c))
         return NULL;
 
