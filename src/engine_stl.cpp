@@ -816,12 +816,8 @@ void ukv_collection_drop(
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    auto collection_name = c_collection_name ? std::string_view(c_collection_name) : std::string_view();
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(!collection_name.empty() || !invalidate,
-                    c_error,
-                    args_combo_k,
-                    "Default collection can't be invalidated.");
+    return_if_error(c_collection_id || !invalidate, c_error, args_combo_k, "Default collection can't be invalidated.");
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     std::unique_lock _ {db.mutex};
@@ -829,24 +825,13 @@ void ukv_collection_drop(
     stl_collection_t* collection_ptr_to_clear = nullptr;
     auto collection_it_to_remove = db.named.end();
 
-    if (c_collection_name) {
-        if (!std::strlen(c_collection_name))
-            collection_ptr_to_clear = &db.main;
-        else {
-            collection_it_to_remove = db.named.find(collection_name);
-            if (collection_it_to_remove != db.named.end())
-                collection_ptr_to_clear = collection_it_to_remove->second.get();
-        }
-    }
+    if (c_collection_id == ukv_collection_main_k)
+        collection_ptr_to_clear = &db.main;
     else {
-        if (c_collection_id == ukv_collection_main_k)
-            collection_ptr_to_clear = &db.main;
-        else {
-            for (auto it = db.named.begin(); it != db.named.end() && collection_it_to_remove == db.named.end(); ++it) {
-                if (it->second.get() == &collection) {
-                    collection_it_to_remove = it;
-                    collection_ptr_to_clear = collection_it_to_remove->second.get();
-                }
+        for (auto it = db.named.begin(); it != db.named.end() && collection_it_to_remove == db.named.end(); ++it) {
+            if (it->second.get() == &collection) {
+                collection_it_to_remove = it;
+                collection_ptr_to_clear = collection_it_to_remove->second.get();
             }
         }
     }

@@ -461,12 +461,8 @@ void ukv_collection_drop(
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    auto collection_name = c_collection_name ? std::string_view(c_collection_name) : std::string_view();
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(collection_name.empty() && !invalidate,
-                    c_error,
-                    args_combo_k,
-                    "Collections not supported by LevelDB!");
+    return_if_error(!c_collection_id && !invalidate, c_error, args_combo_k, "Collections not supported by LevelDB!");
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
 
