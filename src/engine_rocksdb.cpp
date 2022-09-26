@@ -371,7 +371,7 @@ void ukv_read( //
     return_on_error(c_error);
     auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
     return_on_error(c_error);
-    safe_vector_gt<byte_t> contents(&arena);
+    safe_vector_gt<byte_t> contents(arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     rocksdb::ReadOptions options;
@@ -623,15 +623,15 @@ void ukv_collection_drop(
                     "Default collection can't be invalidated.");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    rocksdb::ColumnFamilyHandle* collection = nullptr;
+    rocks_collection_t* collection = nullptr;
 
     if (c_collection_name) {
         if (!std::strlen(c_collection_name) || collection_name == rocksdb::kDefaultColumnFamilyName)
             collection = db.native->DefaultColumnFamily();
         else {
             for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-                rocksdb::ColumnFamilyHandle* collection = *it;
-                if (collection_name == (*it)->GetName())
+                collection = *it;
+                if (collection_name == collection->GetName())
                     break;
             }
         }
@@ -639,11 +639,18 @@ void ukv_collection_drop(
     else {
         if (c_collection_id == ukv_collection_main_k)
             collection = db.native->DefaultColumnFamily();
+        else {
+            for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
+                collection = reinterpret_cast<rocks_collection_t*>(*it);
+                if (collection_name == collection->GetName())
+                    break;
+            }
+        }
     }
 
     if (c_mode == ukv_drop_keys_vals_handle_k) {
         for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-            rocksdb::ColumnFamilyHandle* collection = *it;
+            collection = *it;
             if (collection_name == collection->GetName()) {
                 rocks_status_t status = db.native->DropColumnFamily(collection);
                 if (export_error(status, c_error))
