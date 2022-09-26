@@ -191,7 +191,7 @@ void dump_any( //
 struct serializing_tape_ref_t {
 
     serializing_tape_ref_t(stl_arena_t& a, ukv_error_t* c_error) noexcept
-        : arena_(a), single_doc_buffer_(&a), growing_tape(arena_), c_error(c_error) {
+        : arena_(a), single_doc_buffer_(a), growing_tape(arena_), c_error(c_error) {
         safe_section("Allocating doc exporter", c_error, [&] {
             using allocator_t = std::pmr::polymorphic_allocator<export_to_value_t>;
             shared_exporter_ = std::allocate_shared<export_to_value_t, allocator_t>(&arena_.resource);
@@ -417,7 +417,7 @@ void replace_docs( //
         places.collections_begin.stride(),
         places.keys_begin.get(),
         places.keys_begin.stride(),
-        nullptr,
+        growing_tape.presences().get(),
         growing_tape.offsets().begin().get(),
         growing_tape.offsets().stride(),
         growing_tape.lengths().begin().get(),
@@ -492,7 +492,7 @@ void read_modify_write( //
         read_order.collections_begin.stride(),
         read_order.keys_begin.get(),
         read_order.keys_begin.stride(),
-        nullptr,
+        serializing_tape.growing_tape.presences().get(),
         serializing_tape.growing_tape.offsets().begin().get(),
         serializing_tape.growing_tape.offsets().stride(),
         serializing_tape.growing_tape.lengths().begin().get(),
@@ -674,8 +674,10 @@ void ukv_docs_read( //
     // Now, we need to parse all the entries to later export them into a target format.
     // Potentially sampling certain sub-fields again along the way.
     serializing_tape_ref_t serializing_tape {arena, c_error};
-    json_t null_object;
+    serializing_tape.growing_tape.reserve(c_tasks_count, c_error);
+    return_on_error(c_error);
 
+    json_t null_object;
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, json_t& parsed) {
         try {
             json_t& parsed_part = lookup_field(parsed, field, null_object);
