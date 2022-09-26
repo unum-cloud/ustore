@@ -201,6 +201,8 @@ void ukv_read( //
     return_if_error(maybe_batch.ok(), c_error, error_unknown_k, "Can't pack RecordBatch");
 
     std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
+    if (batch_ptr->num_rows() == 0)
+        return;
     ar::Result<arf::FlightClient::DoExchangeResult> result = db.flight->DoExchange(options, descriptor);
     return_if_error(result.ok(), c_error, network_k, "Failed to exchange with Arrow server");
 
@@ -640,6 +642,8 @@ void ukv_scan( //
     return_if_error(maybe_batch.ok(), c_error, error_unknown_k, "Can't pack RecordBatch");
 
     std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
+    if (batch_ptr->num_rows() == 0)
+        return;
     ar::Result<arf::FlightClient::DoExchangeResult> result = db.flight->DoExchange(options, descriptor);
     return_if_error(result.ok(), c_error, network_k, "Failed to exchange with Arrow server");
 
