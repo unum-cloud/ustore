@@ -324,7 +324,7 @@ void export_edge_tuples( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     // Even if we need just the node degrees, we can't limit ourselves to just entry lengths.
@@ -427,7 +427,7 @@ void pull_and_link_for_updates( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     // Fetch the existing entries
@@ -486,7 +486,7 @@ void update_neighborhoods( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     strided_iterator_gt<ukv_collection_t const> edge_collections {c_collections, c_collections_stride};
@@ -725,7 +725,7 @@ void ukv_graph_remove_vertices( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     strided_iterator_gt<ukv_collection_t const> vertex_collections {c_collections, c_collections_stride};
