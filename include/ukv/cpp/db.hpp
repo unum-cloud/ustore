@@ -289,6 +289,12 @@ class database_t : public std::enable_shared_from_this<database_t> {
     operator expected_gt<bins_collection_t>() noexcept { return collection(); }
     expected_gt<ukv_collection_t> find(std::string_view name) noexcept { return context_t {db_, nullptr}.find(name); }
     expected_gt<bool> contains(std::string_view name) noexcept { return context_t {db_, nullptr}.contains(name); }
+    status_t drop(std::string_view name) noexcept {
+        auto maybe_collection = collection(name);
+        if (!maybe_collection)
+            return maybe_collection.release_status();
+        return maybe_collection->drop();
+    }
 
     template <typename collection_at = bins_collection_t>
     expected_gt<collection_at> collection(std::string_view name = {}) noexcept {

@@ -424,7 +424,7 @@ json_t any_parse(value_view_t bytes,
         // Instead we will manually iterate over the document, using the "visitor" pattern.
         bson_visitor_t visitor = {0};
         bson_iter_t iter;
-        safe_vector_gt<char> json(&arena);
+        safe_vector_gt<char> json(arena);
 
         if (!bson_iter_init(&iter, &bson)) {
             *c_error = "Failed to parse the BSON document!";
@@ -716,7 +716,7 @@ void read_modify_write( //
     };
 
     places_arg_t unique_places;
-    safe_vector_gt<json_t> unique_docs;
+    safe_vector_gt<json_t> unique_docs(arena);
     read_docs(c_db, c_txn, places, c_options, arena, unique_places, unique_docs, c_error, safe_callback);
     return_on_error(c_error);
 
@@ -902,7 +902,7 @@ void ukv_docs_read( //
         return_on_error(c_error);
     };
     places_arg_t unique_places;
-    safe_vector_gt<json_t> unique_docs(&arena);
+    safe_vector_gt<json_t> unique_docs(arena);
     read_docs(c_db, c_txn, places, c_options, arena, unique_places, unique_docs, c_error, safe_callback);
 
     if (c_found_offsets)
@@ -1038,7 +1038,7 @@ void ukv_docs_gist( //
 
     // Export all the elements into a heap-allocated hash-set, keeping only unique entries
     field_path_buffer_t field_name = {0};
-    safe_vector_gt<std::string_view> sorted_paths(&arena);
+    safe_vector_gt<std::string_view> sorted_paths(arena);
     growing_tape_t exported_paths(arena);
     for (ukv_size_t doc_idx = 0; doc_idx != c_docs_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
@@ -1287,7 +1287,7 @@ void ukv_docs_gather( //
 
     // Go though all the documents extracting and type-checking the relevant parts
     printed_number_buffer_t print_buffer;
-    safe_vector_gt<char> string_tape(&arena);
+    safe_vector_gt<char> string_tape(arena);
     for (ukv_size_t doc_idx = 0; doc_idx != c_docs_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
         json_t doc = any_parse(binary_doc, internal_format_k, arena, c_error);

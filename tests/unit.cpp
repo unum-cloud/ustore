@@ -209,8 +209,8 @@ TEST(db, named) {
     check_binary_collection(col1);
     check_binary_collection(col2);
 
-    EXPECT_TRUE(db.collection("col1")->drop());
-    EXPECT_TRUE(db.collection("col2")->drop());
+    EXPECT_TRUE(db.drop("col1"));
+    EXPECT_TRUE(db.drop("col2"));
     EXPECT_TRUE(*db.contains(""));
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
@@ -229,15 +229,14 @@ TEST(db, collection_list) {
         EXPECT_FALSE(*db.contains("name"));
         EXPECT_FALSE(db.drop("name"));
         EXPECT_FALSE(db.drop(""));
-        // EXPECT_TRUE(db.drop("", ukv_drop_vals_k)); // TODO: uncomment later
-        EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
+        EXPECT_TRUE(db.collection()->clear());
         return;
     }
     else {
-        collection_t col1 = *(db["col1"]);
-        collection_t col2 = *(db["col2"]);
-        collection_t col3 = *(db["col3"]);
-        collection_t col4 = *(db["col4"]);
+        bins_collection_t col1 = *db.add_collection("col1");
+        bins_collection_t col2 = *db.add_collection("col2");
+        bins_collection_t col3 = *db.add_collection("col3");
+        bins_collection_t col4 = *db.add_collection("col4");
 
         EXPECT_TRUE(*db.contains("col1"));
         EXPECT_TRUE(*db.contains("col2"));
@@ -266,8 +265,7 @@ TEST(db, collection_list) {
         EXPECT_TRUE(db.drop("col1"));
         EXPECT_FALSE(*db.contains("col1"));
         EXPECT_FALSE(db.drop(""));
-        EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
-        EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
+        EXPECT_TRUE(db.collection()->clear());
     }
 }
 
@@ -478,6 +476,7 @@ TEST(db, docs) {
     auto maybe_person = collection[ckf(1, "person")].value(ukv_doc_field_str_k);
     EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
 
+#if 0
     // JSON-Patch Merging
     auto json_to_merge = R"( {"person": "Bob", "age": 28} )"_json.dump();
     auto expected_json = R"( {"person": "Bob", "hello": ["world"], "age": 28} )"_json.dump();
@@ -503,13 +502,14 @@ TEST(db, docs) {
     M_EXPECT_EQ_JSON(collection[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
 
     // MsgPack
-    // collection.as(ukv_format_msgpack_k);
-    // value_view_t val = *collection[1].value();
-    // M_EXPECT_EQ_MSG(val, json.c_str());
-    // val = *collection[ckf(1, "person")].value();
-    // M_EXPECT_EQ_MSG(val, "\"Carl\"");
-    // val = *collection[ckf(1, "age")].value();
-    // M_EXPECT_EQ_MSG(val, "24");
+    collection.as(ukv_format_msgpack_k);
+    value_view_t val = *collection[1].value();
+    M_EXPECT_EQ_MSG(val, json.c_str());
+    val = *collection[ckf(1, "person")].value();
+    M_EXPECT_EQ_MSG(val, "\"Carl\"");
+    val = *collection[ckf(1, "age")].value();
+    M_EXPECT_EQ_MSG(val, "24");
+#endif
 
     EXPECT_TRUE(db.clear());
 }
@@ -518,7 +518,7 @@ TEST(db, docs_merge_and_patch) {
     using json_t = nlohmann::json;
     database_t db;
     EXPECT_TRUE(db.open(path));
-    collection_t collection = *db.collection(nullptr, ukv_format_json_k);
+    docs_collection_t collection = *db.collection<docs_collection_t>();
 
     std::ifstream f_patch("tests/patch.json");
     json_t j_object = json_t::parse(f_patch);
@@ -526,8 +526,8 @@ TEST(db, docs_merge_and_patch) {
         auto doc = it["doc"].dump();
         auto patch = it["patch"].dump();
         auto expected = it["expected"].dump();
-        collection.as(ukv_format_json_k)[1] = doc.c_str();
-        collection.as(ukv_format_json_patch_k)[1] = patch.c_str();
+        collection[1] = doc.c_str();
+        collection[1] = patch.c_str();
         M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
     }
 
@@ -537,8 +537,8 @@ TEST(db, docs_merge_and_patch) {
         auto doc = it["doc"].dump();
         auto merge = it["merge"].dump();
         auto expected = it["expected"].dump();
-        collection.as(ukv_format_json_k)[1] = doc.c_str();
-        collection.as(ukv_format_json_merge_patch_k)[1] = merge.c_str();
+        collection[1] = doc.c_str();
+        collection[1] = merge.c_str();
         M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
     }
 }
@@ -549,7 +549,7 @@ TEST(db, doc_fields) {
     database_t db;
     EXPECT_TRUE(db.open(path));
 
-    collection_t collection = *db.collection(nullptr, ukv_format_json_k);
+    bins_collection_t collection = *db.collection(nullptr, ukv_format_json_k);
     auto json1 = R"( {"person": "Carl", "age": 24} )"_json.dump();
     collection[1] = json1.c_str();
     M_EXPECT_EQ_JSON(collection[1].value()->c_str(), json1.c_str());
@@ -984,8 +984,7 @@ TEST(db, graph_txn) {
     EXPECT_TRUE(*net.contains(3));
 
     EXPECT_TRUE(txn.reset());
-    txn_col = *txn.collection();
-    txn_net = txn_col.as_graph();
+    txn_net = *txn.collection<graph_collection_t>();
 
     transaction_t txn2 = *db.transact();
     graph_collection_t txn_net2 = *txn2.collection<graph_collection_t>();
