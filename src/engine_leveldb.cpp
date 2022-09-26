@@ -92,13 +92,13 @@ bool export_error(level_status_t const& status, ukv_error_t* c_error) {
     return true;
 }
 
-void ukv_database_init(ukv_str_view_t, ukv_database_t* c_db, ukv_error_t* c_error) {
+void ukv_database_open(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_t* c_error) {
     try {
         level_db_t* db_ptr = nullptr;
         level_options_t options;
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
-        level_status_t status = level_db_t::Open(options, "./tmp/leveldb/", &db_ptr);
+        level_status_t status = level_db_t::Open(options, c_config, &db_ptr);
         if (!status.ok()) {
             *c_error = "Couldn't open LevelDB";
             return;
@@ -262,7 +262,7 @@ void ukv_read( //
     auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
     return_on_error(c_error);
     bool const needs_export = c_found_values != nullptr;
-    safe_vector_gt<byte_t> contents(&arena);
+    safe_vector_gt<byte_t> contents(arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
@@ -460,38 +460,26 @@ void ukv_collection_drop(
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    return_if_error(c_collection_id != ukv_collection_main_k,
+    bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
+    return_if_error(c_collection_id == ukv_collection_main_k && !invalidate,
                     c_error,
                     args_combo_k,
                     "Collections not supported by LevelDB!");
-    return_if_error(c_mode != ukv_drop_keys_vals_handle_k,
-                    c_error,
-                    args_combo_k,
-                    "Default collection can't be invalidated.");
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
 
-    if (c_mode == ukv_drop_keys_vals_handle_k) {
-        // TODO
-    }
-
-    else if (c_mode == ukv_drop_keys_vals_k) {
-        leveldb::WriteBatch batch;
-        auto it = std::unique_ptr<leveldb::Iterator>(db.NewIterator(leveldb::ReadOptions()));
+    leveldb::WriteBatch batch;
+    auto it = std::unique_ptr<leveldb::Iterator>(db.NewIterator(leveldb::ReadOptions()));
+    if (c_mode == ukv_drop_keys_vals_k) {
         for (it->SeekToFirst(); it->Valid(); it->Next())
             batch.Delete(it->key());
-        level_status_t status = db.Write(leveldb::WriteOptions(), &batch);
-        export_error(status, c_error);
     }
-
     else if (c_mode == ukv_drop_vals_k) {
-        leveldb::WriteBatch batch;
-        auto it = std::unique_ptr<leveldb::Iterator>(db.NewIterator(leveldb::ReadOptions()));
         for (it->SeekToFirst(); it->Valid(); it->Next())
             batch.Put(it->key(), leveldb::Slice());
-        level_status_t status = db.Write(leveldb::WriteOptions(), &batch);
-        export_error(status, c_error);
     }
+    level_status_t status = db.Write(leveldb::WriteOptions(), &batch);
+    export_error(status, c_error);
 }
 
 void ukv_collection_list( //

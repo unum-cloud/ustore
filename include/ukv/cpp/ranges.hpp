@@ -228,6 +228,13 @@ class strided_range_gt {
         using member_t = typename decltype(begin_members)::value_type;
         return strided_range_gt<member_t> {{begin_members.get(), begin_members.stride()}, count()};
     }
+
+    inline bool same_elements() {
+        return !begin_ || begin_.repeats() ||
+               !transform_reduce_n(begin_, count_, false, [=](ukv_collection_t collection) {
+                   return collection != begin_[0];
+               });
+    }
 };
 
 template <typename element_t>
@@ -448,7 +455,6 @@ class embedded_chunks_gt {
     using element_t = typename chunk_t::value_type;
 
     ukv_size_t count_ = 0;
-
     ukv_length_t* offsets_ = nullptr;
     ukv_length_t* lengths_ = nullptr;
     element_t* contents_ = nullptr;
@@ -460,7 +466,7 @@ class embedded_chunks_gt {
 
     template <typename same_size_at>
     embedded_chunks_gt(ukv_size_t elements, ukv_length_t* offs, ukv_length_t* lens, same_size_at* vals) noexcept
-        : contents_((element_t*)(vals)), offsets_(offs), lengths_(lens), count_(elements) {
+        : count_(elements), offsets_(offs), lengths_(lens), contents_((element_t*)(vals)) {
         static_assert(sizeof(same_size_at) == sizeof(element_t));
     }
 

@@ -6,7 +6,6 @@
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 #include "cast.hpp"
 
-#include <arrow/python/pyarrow.h>
 #include <arrow/api.h>
 #include <arrow/array.h>
 #include <arrow/table.h>
@@ -36,7 +35,23 @@ struct parsed_places_t {
     std::variant<std::monostate, viewed_t, owned_t> viewed_or_owned;
     ukv_collection_t single_col = ukv_collection_main_k;
 
-    operator places_arg_t() const noexcept {}
+    operator places_arg_t() const noexcept {
+        if (std::holds_alternative<std::monostate>(viewed_or_owned))
+            return {};
+        else if (std::holds_alternative<owned_t>(viewed_or_owned)) {
+            auto const& owned = std::get<owned_t>(viewed_or_owned);
+            places_arg_extractor_gt<owned_t> extractor;
+            viewed_t view;
+            view.collections_begin = extractor.collections(owned);
+            view.keys_begin = extractor.keys(owned);
+            view.fields_begin = extractor.fields(owned);
+            view.count = owned.size();
+            return view;
+        }
+        else
+            return std::get<viewed_t>(viewed_or_owned);
+    }
+
     parsed_places_t(PyObject* keys, std::optional<ukv_collection_t> col) {
         single_col = col.value_or(ukv_collection_main_k);
 
@@ -71,8 +86,8 @@ struct parsed_places_t {
         else if (PyObject_CheckBuffer(keys)) {
             py_buffer_t buf = py_buffer(keys);
 
-            if (*buf.raw.format == format_code_gt<int64_t>::value[0] ||
-                *buf.raw.format == format_code_gt<uint64_t>::value[0])
+            if (buf.raw.format[0] == format_code_gt<std::int64_t>::value[0] ||
+                buf.raw.format[0] == format_code_gt<std::uint64_t>::value[0])
                 view_numpy(buf);
             else
                 copy_numpy(buf);
@@ -106,12 +121,12 @@ struct parsed_places_t {
 
     void copy_numpy(py_buffer_t const& keys_buffer) {
         Py_buffer const* buf = &keys_buffer.raw;
-        size_t size = buf->len / buf->itemsize;
+        std::size_t size = buf->len / buf->itemsize;
         owned_t casted_keys;
         casted_keys.reserve(size);
 
         byte_t* buf_ptr = reinterpret_cast<byte_t*>(buf->buf);
-        for (size_t i = 0; i < size; i++)
+        for (std::size_t i = 0; i < size; i++)
             casted_keys.emplace_back(single_col,
                                      py_cast_scalar<ukv_key_t>(buf_ptr + (i * buf->itemsize), buf->format[0]));
 
@@ -201,9 +216,6 @@ struct parsed_contents_t {
     parsed_contents_t(PyObject* contents) {
         // Check if we can do zero-copy
         if (arrow::py::is_array(contents) || arrow::py::is_table(contents)) {
-            if (arrow::py::import_pyarrow())
-                throw std::runtime_error("Failed to initialize PyArrow");
-
             std::shared_ptr<arrow::BinaryArray> arrow_array(nullptr);
             if (arrow::py::is_array(contents)) {
                 auto result = arrow::py::unwrap_array(contents);
@@ -223,16 +235,17 @@ struct parsed_contents_t {
             }
 
             values_tape_start = arrow_array->value_data()->data();
-            contents_arg_t contents;
-            contents.offsets_begin = {reinterpret_cast<ukv_length_t const*>(arrow_array->value_offsets()->data()),
-                                      sizeof(ukv_length_t)};
-            contents.contents_begin = {&values_tape_start, 0};
-            contents.count = static_cast<ukv_size_t>(arrow_array->length());
-            contents.presences_begin = arrow_array->null_count()
-                                           ? reinterpret_cast<ukv_octet_t const*>(arrow_array->null_bitmap()->data())
-                                           : nullptr;
+            contents_arg_t viewed_contents;
+            viewed_contents.offsets_begin = {
+                reinterpret_cast<ukv_length_t const*>(arrow_array->value_offsets()->data()),
+                sizeof(ukv_length_t)};
+            viewed_contents.contents_begin = {&values_tape_start, 0};
+            viewed_contents.count = static_cast<ukv_size_t>(arrow_array->length());
+            viewed_contents.presences_begin =
+                arrow_array->null_count() ? reinterpret_cast<ukv_octet_t const*>(arrow_array->null_bitmap()->data())
+                                          : nullptr;
 
-            viewed_or_owned = std::move(contents);
+            viewed_or_owned = std::move(viewed_contents);
         }
         else {
             std::vector<value_view_t> values_vec;

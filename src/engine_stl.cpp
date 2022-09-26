@@ -136,7 +136,7 @@ void save_to_disk(stl_collection_t const& collection, std::string const& path, u
     {
         auto n = static_cast<ukv_size_t>(collection.unique_elements.load());
         auto saved_len = std::fwrite(&n, sizeof(ukv_size_t), 1, handle);
-        return_if_error(saved_len == sizeof(ukv_size_t), c_error, 0, "Couldn't write anything to file.");
+        return_if_error(saved_len == 1, c_error, 0, "Couldn't write anything to file.");
     }
 
     // Save the entries
@@ -145,15 +145,15 @@ void save_to_disk(stl_collection_t const& collection, std::string const& path, u
             continue;
 
         auto saved_len = std::fwrite(&key, sizeof(ukv_key_t), 1, handle);
-        return_if_error(saved_len != sizeof(ukv_key_t), c_error, 0, "Write partially failed on key.");
+        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on key.");
 
         auto const& buf = seq_val.buffer;
         auto buf_len = static_cast<ukv_length_t>(buf.size());
         saved_len = std::fwrite(&buf_len, sizeof(ukv_length_t), 1, handle);
-        return_if_error(saved_len != sizeof(ukv_length_t), c_error, 0, "Write partially failed on value len.");
+        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on value len.");
 
         saved_len = std::fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
-        return_if_error(saved_len != buf.size(), c_error, 0, "Write partially failed on value.");
+        return_if_error(saved_len == buf.size(), c_error, 0, "Write partially failed on value.");
     }
 
     log_error(c_error, 0, handle.close().release_error());
@@ -169,7 +169,7 @@ void read_from_disk(stl_collection_t& collection, std::string const& path, ukv_e
     auto n = ukv_size_t(0);
     {
         auto read_len = std::fread(&n, sizeof(ukv_size_t), 1, handle);
-        return_if_error(read_len == sizeof(ukv_size_t), c_error, 0, "Couldn't read anything from file.");
+        return_if_error(read_len == 1, c_error, 0, "Couldn't read anything from file.");
     }
 
     // Load the entries
@@ -181,11 +181,11 @@ void read_from_disk(stl_collection_t& collection, std::string const& path, ukv_e
 
         auto key = ukv_key_t {};
         auto read_len = std::fread(&key, sizeof(ukv_key_t), 1, handle);
-        return_if_error(read_len == sizeof(ukv_key_t), c_error, 0, "Read partially failed on key.");
+        return_if_error(read_len == 1, c_error, 0, "Read partially failed on key.");
 
         auto buf_len = ukv_length_t(0);
         read_len = std::fread(&buf_len, sizeof(ukv_length_t), 1, handle);
-        return_if_error(read_len == sizeof(ukv_length_t), c_error, 0, "Read partially failed on value len.");
+        return_if_error(read_len == 1, c_error, 0, "Read partially failed on value len.");
 
         auto buf = buffer_t(buf_len);
         read_len = std::fread(buf.data(), sizeof(byte_t), buf.size(), handle);
@@ -544,6 +544,9 @@ void ukv_read( //
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     places_arg_t places {collections, keys, {}, c_tasks_count};
+    validate_read(c_txn, places, c_options, c_error);
+    return_on_error(c_error);
+
     bool const needs_export = c_found_values != nullptr;
 
     // 1. Allocate a tape for all the values to be pulled
@@ -622,6 +625,9 @@ void ukv_write( //
     places_arg_t places {collections, keys, {}, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
+    validate_write(c_txn, places, contents, c_options, c_error);
+    return_on_error(c_error);
+
     return c_txn ? write_txn(txn, places, contents, c_options, c_error)
                  : write_head(db, places, contents, c_options, c_error);
 }
@@ -664,6 +670,9 @@ void ukv_scan( //
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_scan_limits, c_scan_limits_stride};
     scans_arg_t scans {collections, start_keys, end_keys, lens, c_min_tasks_count};
+
+    validate_scan(c_txn, scans, c_options, c_error);
+    return_on_error(c_error);
 
     return c_txn ? scan_txn(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
                  : scan_head(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);
@@ -806,10 +815,8 @@ void ukv_collection_drop(
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    ukv_str_view_t c_collection_name;
-    auto collection_name = c_collection_name ? std::string_view(c_collection_name) : std::string_view();
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(!collection_name.empty() || !invalidate,
+    return_if_error(c_collection_id == ukv_collection_main_k || !invalidate,
                     c_error,
                     args_combo_k,
                     "Default collection can't be invalidated.");
@@ -820,24 +827,13 @@ void ukv_collection_drop(
     stl_collection_t* collection_ptr_to_clear = nullptr;
     auto collection_it_to_remove = db.named.end();
 
-    if (c_collection_name) {
-        if (!std::strlen(c_collection_name))
-            collection_ptr_to_clear = &db.main;
-        else {
-            collection_it_to_remove = db.named.find(collection_name);
-            if (collection_it_to_remove != db.named.end())
-                collection_ptr_to_clear = collection_it_to_remove->second.get();
-        }
-    }
+    if (c_collection_id == ukv_collection_main_k)
+        collection_ptr_to_clear = &db.main;
     else {
-        if (c_collection_id == ukv_collection_main_k)
-            collection_ptr_to_clear = &db.main;
-        else {
-            for (auto it = db.named.begin(); it != db.named.end() && collection_it_to_remove == db.named.end(); ++it) {
-                if (it->second.get() == &collection) {
-                    collection_it_to_remove = it;
-                    collection_ptr_to_clear = collection_it_to_remove->second.get();
-                }
+        for (auto it = db.named.begin(); it != db.named.end() && collection_it_to_remove == db.named.end(); ++it) {
+            if (it->second.get() == &collection) {
+                collection_it_to_remove = it;
+                collection_ptr_to_clear = collection_it_to_remove->second.get();
             }
         }
     }
@@ -937,6 +933,9 @@ void ukv_transaction_begin(
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    validate_transaction_begin(c_txn, c_options, c_error);
+    return_on_error(c_error);
+
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
 
     safe_section("Initializing transaction state", c_error, [&] {
@@ -962,7 +961,8 @@ void ukv_transaction_commit( //
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
 
-    return_if_error(c_txn, c_error, uninitialized_state_k, "Transaction is uninitialized");
+    validate_transaction_commit(c_txn, c_options, c_error);
+    return_on_error(c_error);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
 
     // This write may fail with out-of-memory errors, if Hash-Tables

@@ -201,6 +201,8 @@ void ukv_read( //
     return_if_error(maybe_batch.ok(), c_error, error_unknown_k, "Can't pack RecordBatch");
 
     std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
+    if (batch_ptr->num_rows() == 0)
+        return;
     ar::Result<arf::FlightClient::DoExchangeResult> result = db.flight->DoExchange(options, descriptor);
     return_if_error(result.ok(), c_error, network_k, "Failed to exchange with Arrow server");
 
@@ -640,6 +642,8 @@ void ukv_scan( //
     return_if_error(maybe_batch.ok(), c_error, error_unknown_k, "Can't pack RecordBatch");
 
     std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
+    if (batch_ptr->num_rows() == 0)
+        return;
     ar::Result<arf::FlightClient::DoExchangeResult> result = db.flight->DoExchange(options, descriptor);
     return_if_error(result.ok(), c_error, network_k, "Failed to exchange with Arrow server");
 
@@ -869,6 +873,7 @@ void ukv_transaction_begin(
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    return_if_error(c_txn, c_error, uninitialized_state_k, "Transaction is uninitialized");
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
     // TODO: Can we somehow reuse the IPC-needed memory?
@@ -878,9 +883,10 @@ void ukv_transaction_begin(
     // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
+    ukv_size_t txn_id = *reinterpret_cast<ukv_size_t*>(c_txn);
     fmt::format_to(std::back_inserter(action.type), "{}?", kFlightTxnBegin);
-    if (c_txn)
-        fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, std::uintptr_t(c_txn));
+    if (txn_id != 0)
+        fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, txn_id);
     if (c_options & ukv_option_txn_snapshot_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
 

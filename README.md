@@ -2,6 +2,10 @@
 
 ## The BLAS of CRUD
 
+⚠️ Under active development!
+
+⚠️ Not all APIs are stable!
+
 ![Universal Key Values by Unum](assets/UKV.png)
 
 Imagine having a standardized cross-lingual interface for all your things "Data":
