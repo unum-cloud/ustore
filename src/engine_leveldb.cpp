@@ -92,7 +92,7 @@ bool export_error(level_status_t const& status, ukv_error_t* c_error) {
     return true;
 }
 
-void ukv_database_open(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_t* c_error) {
+void ukv_database_init(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_t* c_error) {
     try {
         level_db_t* db_ptr = nullptr;
         level_options_t options;
@@ -519,7 +519,7 @@ void ukv_database_control( //
 /*****************		Transactions	  ****************/
 /*********************************************************/
 
-void ukv_transaction_begin( //
+void ukv_transaction_init( //
     ukv_database_t const,
     ukv_options_t const,
     ukv_transaction_t*,

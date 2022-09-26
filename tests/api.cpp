@@ -354,10 +354,10 @@ TEST(db, validation) {
     // Transaction
 
     ukv_transaction_t ukv_txn = nullptr;
-    ukv_transaction_begin(db, 0, ukv_options_default_k, &ukv_txn, status.member_ptr());
+    ukv_transaction_init(db, 0, ukv_options_default_k, &ukv_txn, status.member_ptr());
     EXPECT_TRUE(status);
 
-    ukv_transaction_begin(db, 0, ukv_options_default_k, nullptr, status.member_ptr());
+    ukv_transaction_init(db, 0, ukv_options_default_k, nullptr, status.member_ptr());
     EXPECT_FALSE(status);
     status.release_error();
 
@@ -368,7 +368,7 @@ TEST(db, validation) {
     };
 
     for (auto& option : wrong_txn_begin_options) {
-        ukv_transaction_begin(db, 0, option, &ukv_txn, status.member_ptr());
+        ukv_transaction_init(db, 0, option, &ukv_txn, status.member_ptr());
         EXPECT_FALSE(status);
         status.release_error();
     }

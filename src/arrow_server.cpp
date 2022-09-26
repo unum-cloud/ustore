@@ -604,7 +604,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             // Cleanup internal state
-            ukv_transaction_begin( //
+            ukv_transaction_init( //
                 db_,
                 options,
                 &session.txn,

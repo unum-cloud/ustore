@@ -185,7 +185,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
     status_t reset(bool snapshot = false) noexcept {
         status_t status;
         auto options = snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k;
-        ukv_transaction_begin(db_, options, &txn_, status.member_ptr());
+        ukv_transaction_init(db_, options, &txn_, status.member_ptr());
         return status;
     }
 
@@ -274,7 +274,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
     expected_gt<context_t> transact(bool snapshot = false) noexcept {
         status_t status;
         ukv_transaction_t raw = nullptr;
-        ukv_transaction_begin( //
+        ukv_transaction_init( //
             db_,
             snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k,
             &raw,
