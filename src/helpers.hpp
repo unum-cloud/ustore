@@ -392,7 +392,6 @@ class safe_vector_gt {
     stl_arena_t* arena_ptr_ = nullptr;
 
   public:
-    safe_vector_gt() noexcept = default;
     safe_vector_gt(safe_vector_gt const&) = delete;
     safe_vector_gt& operator=(safe_vector_gt const&) = delete;
 
@@ -408,8 +407,8 @@ class safe_vector_gt {
 
         return *this;
     }
-    safe_vector_gt(stl_arena_t* arena_ptr) : arena_ptr_(arena_ptr) {}
-    safe_vector_gt(std::size_t size, stl_arena_t* arena_ptr, ukv_error_t* c_error) : arena_ptr_(arena_ptr) {
+    safe_vector_gt(stl_arena_t& arena) : arena_ptr_(&arena) {}
+    safe_vector_gt(std::size_t size, stl_arena_t& arena, ukv_error_t* c_error) : arena_ptr_(&arena) {
         if (!size)
             return;
         auto tape = arena_ptr_->alloc<element_t>(size, c_error);
@@ -500,30 +499,38 @@ class safe_vector_gt {
  * Is suited for data preparation before passing to the C API.
  */
 class growing_tape_t {
+    safe_vector_gt<ukv_octet_t> presences_;
     safe_vector_gt<ukv_length_t> offsets_;
     safe_vector_gt<ukv_length_t> lengths_;
     safe_vector_gt<byte_t> contents_;
 
   public:
-    growing_tape_t(stl_arena_t& arena) : offsets_(&arena), lengths_(&arena), contents_(&arena) {}
+    growing_tape_t(stl_arena_t& arena) : presences_(arena), offsets_(arena), lengths_(arena), contents_(arena) {}
 
     void push_back(value_view_t value, ukv_error_t* c_error) {
+        presences_.reserve(divide_round_up(presences_.size() + 1, bits_in_byte_k), c_error);
+        presences()[presences_.size()] = bool(value);
         offsets_.push_back(static_cast<ukv_length_t>(contents_.size()), c_error);
-        lengths_.push_back(static_cast<ukv_length_t>(value.size()), c_error);
+        lengths_.push_back(static_cast<ukv_length_t>(value ? value.size() : ukv_length_missing_k), c_error);
         contents_.insert(contents_.size(), value.begin(), value.end(), c_error);
     }
 
     void reserve(size_t new_cap, ukv_error_t* c_error) {
+        presences_.reserve(divide_round_up(new_cap, bits_in_byte_k), c_error);
         offsets_.reserve(new_cap + 1, c_error);
         lengths_.reserve(new_cap, c_error);
     }
 
     void clear() {
+        presences_.clear();
         offsets_.clear();
         lengths_.clear();
         contents_.clear();
     }
 
+    strided_iterator_gt<ukv_octet_t> presences() noexcept {
+        return strided_iterator_gt<ukv_octet_t>(presences_.begin(), sizeof(ukv_octet_t));
+    }
     strided_range_gt<ukv_length_t> offsets() noexcept {
         auto n = lengths_.size();
         offsets_[n] = offsets_[n - 1] + lengths_[n - 1];
