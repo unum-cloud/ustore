@@ -12,6 +12,8 @@
 # )
 # FetchContent_MakeAvailable(fpfor)
 
+include(ExternalProject)
+
 if(${UKV_PREINSTALLED_TURBOPFOR})
 #
 else()

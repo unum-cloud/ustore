@@ -81,7 +81,7 @@ bool is_query(std::string_view uri, std::string_view name) {
 }
 
 bool validate_column_collections(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
-    if (schema_ptr->format != ukv_type_to_arrow_format(ukv_type<ukv_collection_t>()))
+    if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<ukv_collection_t>()))
         return false;
     if (column_ptr->null_count != 0)
         return false;
@@ -89,7 +89,7 @@ bool validate_column_collections(ArrowSchema* schema_ptr, ArrowArray* column_ptr
 }
 
 bool validate_column_keys(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
-    if (schema_ptr->format != ukv_type_to_arrow_format(ukv_type<ukv_key_t>()))
+    if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<ukv_key_t>()))
         return false;
     if (column_ptr->null_count != 0)
         return false;
@@ -97,7 +97,7 @@ bool validate_column_keys(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
 }
 
 bool validate_column_vals(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
-    if (schema_ptr->format != ukv_type_to_arrow_format(ukv_type<value_view_t>()))
+    if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<value_view_t>()))
         return false;
     if (column_ptr->null_count != 0)
         return false;
@@ -430,7 +430,7 @@ struct session_params_t {
     std::optional<std::string_view> opt_drop_mode;
     std::optional<std::string_view> opt_snapshot;
     std::optional<std::string_view> opt_flush;
-    std::optional<std::string_view> opt_track;
+    std::optional<std::string_view> opt_watch;
     std::optional<std::string_view> opt_shared_mem;
 };
 
@@ -455,7 +455,7 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.opt_drop_mode = param_value(params, kParamDropMode);
     result.opt_snapshot = param_value(params, kParamFlagSnapshotTxn);
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
-    result.opt_track = param_value(params, kParamFlagTrackRead);
+    result.opt_watch = param_value(params, kParamFlagWatch);
     result.opt_shared_mem = param_value(params, kParamFlagSharedMemRead);
 
     return result;
@@ -479,7 +479,7 @@ ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) {
  *
  * @section Endpoints
  *
- * > write?col=x&txn=y&lengths&track&shared (DoPut)
+ * > write?col=x&txn=y&lengths&watch&shared (DoPut)
  * > read?col=x&txn=y&flush (DoExchange)
  * > collection_upsert?col=x (DoAction): Returns collection ID
  *   Payload buffer: Collection opening config.
@@ -557,7 +557,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_collection_t collection_id = maybe_collection.throw_or_ref();
             ukv_str_view_t collection_config = get_null_terminated(action.body);
-            ukv_collection_open(db_,
+            ukv_collection_init(db_,
                                 params.collection_name->begin(),
                                 collection_config,
                                 &collection_id,
@@ -582,14 +582,8 @@ class UKVService : public arf::FlightServerBase {
             ukv_str_span_t c_collection_name = nullptr;
             if (params.collection_id)
                 c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-            else {
-                // The name must be null-terminated.
-                // This is not safe:
-                c_collection_name = (ukv_str_span_t)params.collection_name->begin();
-                c_collection_name[params.collection_name->size()] = 0;
-            }
 
-            ukv_collection_drop(db_, c_collection_id, c_collection_name, mode, status.member_ptr());
+            ukv_collection_drop(db_, c_collection_id, mode, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_empty();
@@ -610,9 +604,8 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             // Cleanup internal state
-            ukv_transaction_begin( //
+            ukv_transaction_init( //
                 db_,
-                0,
                 options,
                 &session.txn,
                 status.member_ptr());
@@ -733,7 +726,7 @@ class UKVService : public arf::FlightServerBase {
                 ukv_to_arrow_column( //
                     result_length,
                     kArgVals.c_str(),
-                    ukv_type_bin_k,
+                    ukv_doc_field_bin_k,
                     found_presences,
                     found_offsets,
                     found_values,
@@ -744,7 +737,7 @@ class UKVService : public arf::FlightServerBase {
                 ukv_to_arrow_column( //
                     result_length,
                     kArgLengths.c_str(),
-                    ukv_type<ukv_length_t>(),
+                    ukv_doc_field<ukv_length_t>(),
                     found_presences,
                     nullptr,
                     found_lengths,
@@ -755,7 +748,7 @@ class UKVService : public arf::FlightServerBase {
                 ukv_to_arrow_column( //
                     result_length,
                     kArgPresences.c_str(),
-                    ukv_type<ukv_octet_t>(),
+                    ukv_doc_field<ukv_octet_t>(),
                     nullptr,
                     nullptr,
                     found_presences,
@@ -825,7 +818,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_to_arrow_list( //
                 tasks_count,
                 kArgKeys.c_str(),
-                ukv_type<ukv_key_t>(),
+                ukv_doc_field<ukv_key_t>(),
                 nullptr,
                 found_offsets,
                 found_keys,
@@ -946,6 +939,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_collection_list( //
                 db_,
+                nullptr, // TODO: Add transaction argument
                 &count,
                 &collections,
                 &offsets,
@@ -965,7 +959,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_to_arrow_column( //
                 count,
                 kArgCols.c_str(),
-                ukv_type<ukv_collection_t>(),
+                ukv_doc_field<ukv_collection_t>(),
                 nullptr,
                 nullptr,
                 ukv_bytes_ptr_t(collections),
@@ -978,7 +972,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_to_arrow_column( //
                 count,
                 kArgNames.c_str(),
-                ukv_type_str_k,
+                ukv_doc_field_str_k,
                 nullptr,
                 offsets,
                 ukv_bytes_ptr_t(names),

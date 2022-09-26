@@ -53,7 +53,7 @@ arf::FlightCallOptions arrow_call_options(arrow_mem_pool_t& pool) {
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_database_open( //
+void ukv_database_init( //
     ukv_str_view_t c_config,
     ukv_database_t* c_db,
     ukv_error_t* c_error) {
@@ -127,7 +127,7 @@ void ukv_read( //
                                          : nullptr;
 
     bool const read_shared = c_options & ukv_option_read_shared_k;
-    bool const read_track = c_options & ukv_option_read_track_k;
+    bool const watch = c_options & ukv_option_watch_k;
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightRead);
     if (c_txn)
@@ -141,8 +141,8 @@ void ukv_read( //
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamReadPart, partial_mode);
     if (read_shared)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (read_track)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagTrackRead);
+    if (watch)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagWatch);
 
     bool const has_collections_column = collections && !same_collection;
     constexpr bool has_keys_column = true;
@@ -174,7 +174,7 @@ void ukv_read( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgCols.c_str(),
-            ukv_type<ukv_collection_t>(),
+            ukv_doc_field<ukv_collection_t>(),
             nullptr,
             nullptr,
             collections.get(),
@@ -187,7 +187,7 @@ void ukv_read( //
         ukv_to_arrow_column( //
             c_tasks_count,
             "keys",
-            ukv_type<ukv_key_t>(),
+            ukv_doc_field<ukv_key_t>(),
             nullptr,
             nullptr,
             keys.get(),
@@ -403,7 +403,7 @@ void ukv_write( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgCols.c_str(),
-            ukv_type<ukv_collection_t>(),
+            ukv_doc_field<ukv_collection_t>(),
             nullptr,
             nullptr,
             collections.get(),
@@ -416,7 +416,7 @@ void ukv_write( //
         ukv_to_arrow_column( //
             c_tasks_count,
             "keys",
-            ukv_type<ukv_key_t>(),
+            ukv_doc_field<ukv_key_t>(),
             nullptr,
             nullptr,
             keys.get(),
@@ -429,7 +429,7 @@ void ukv_write( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgVals.c_str(),
-            ukv_type<value_view_t>(),
+            ukv_doc_field<value_view_t>(),
             presences.get(),
             offs.get(),
             joined_vals_begin,
@@ -568,7 +568,7 @@ void ukv_scan( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgCols.c_str(),
-            ukv_type<ukv_collection_t>(),
+            ukv_doc_field<ukv_collection_t>(),
             nullptr,
             nullptr,
             collections.get(),
@@ -581,7 +581,7 @@ void ukv_scan( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgScanStarts.c_str(),
-            ukv_type<ukv_key_t>(),
+            ukv_doc_field<ukv_key_t>(),
             nullptr,
             nullptr,
             start_keys.get(),
@@ -594,7 +594,7 @@ void ukv_scan( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgScanEnds.c_str(),
-            ukv_type<ukv_key_t>(),
+            ukv_doc_field<ukv_key_t>(),
             nullptr,
             nullptr,
             end_keys.get(),
@@ -607,7 +607,7 @@ void ukv_scan( //
         ukv_to_arrow_column( //
             c_tasks_count,
             kArgScanLengths.c_str(),
-            ukv_type<ukv_length_t>(),
+            ukv_doc_field<ukv_length_t>(),
             nullptr,
             nullptr,
             limits.get(),
@@ -622,7 +622,7 @@ void ukv_scan( //
 
     // Configure the `cmd` descriptor
     bool const read_shared = c_options & ukv_option_read_shared_k;
-    bool const read_track = c_options & ukv_option_read_track_k;
+    bool const watch = c_options & ukv_option_watch_k;
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightScan);
     if (c_txn)
@@ -634,8 +634,8 @@ void ukv_scan( //
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (read_shared)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (read_track)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagTrackRead);
+    if (watch)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagWatch);
 
     // Send the request to server
     ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
@@ -719,7 +719,7 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_open(
+void ukv_collection_init(
     // Inputs:
     ukv_database_t const c_db,
     ukv_str_view_t c_collection_name,
@@ -767,7 +767,6 @@ void ukv_collection_drop(
     // Inputs:
     ukv_database_t const c_db,
     ukv_collection_t c_collection_id,
-    ukv_str_view_t c_collection_name,
     ukv_drop_mode_t c_mode,
     // Outputs:
     ukv_error_t* c_error) {
@@ -789,22 +788,13 @@ void ukv_collection_drop(
     // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
-    if (c_collection_name)
-        fmt::format_to(std::back_inserter(action.type),
-                       "{}?{:}={}&{}={}",
-                       kFlightColDrop,
-                       kParamCollectionName,
-                       c_collection_name,
-                       kParamDropMode,
-                       mode);
-    else
-        fmt::format_to(std::back_inserter(action.type),
-                       "{}?{}=0x{:0>16x}&{}={}",
-                       kFlightColDrop,
-                       kParamCollectionID,
-                       c_collection_id,
-                       kParamDropMode,
-                       mode);
+    fmt::format_to(std::back_inserter(action.type),
+                   "{}?{}=0x{:0>16x}&{}={}",
+                   kFlightColDrop,
+                   kParamCollectionID,
+                   c_collection_id,
+                   kParamDropMode,
+                   mode);
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
@@ -812,6 +802,7 @@ void ukv_collection_drop(
 
 void ukv_collection_list( //
     ukv_database_t const c_db,
+    ukv_transaction_t const, // TODO: add support for transactions
     ukv_size_t* c_count,
     ukv_collection_t** c_ids,
     ukv_length_t** c_offsets,
@@ -873,10 +864,9 @@ void ukv_database_control( //
 /*****************		Transactions	  ****************/
 /*********************************************************/
 
-void ukv_transaction_begin(
+void ukv_transaction_init(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_size_t const c_generation,
     ukv_options_t const c_options,
     // Outputs:
     ukv_transaction_t* c_txn,

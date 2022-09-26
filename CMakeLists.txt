@@ -62,6 +62,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitiz
 set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
 
 find_package(Threads REQUIRED)
+set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 
 # Install 3rd Party Packages
 include(FetchContent)
@@ -76,11 +77,14 @@ set(UKV_BUILD_FLIGHT_RPC ON CACHE BOOL "Building Apache Arrow Flight RPC server 
 set(UKV_BUILD_UNUMDB "" CACHE STRING "Pass a path to UnumDB copy to produce a full range of bindings")
 
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/bson.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
 
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(Arrow-external Boost-external)
@@ -104,18 +108,17 @@ link_directories($ENV{CONDA_PREFIX}/lib)
 message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
-add_library(ukv_stl src/engine_stl.cpp src/modality_docs.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_stl nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
-target_compile_definitions(ukv_stl PRIVATE UKV_ENGINE_IS_STL)  
+add_library(ukv_stl src/engine_stl.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+target_link_libraries(ukv_stl yyjson bson ${jemalloc_LIBRARIES})
 
-add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_rocksdb rocksdb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
-target_compile_definitions(ukv_rocksdb PRIVATE UKV_ENGINE_IS_ROCKSDB)  
+add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+target_link_libraries(ukv_rocksdb rocksdb yyjson bson ${jemalloc_LIBRARIES})
 
-add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_leveldb leveldb nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+target_link_libraries(ukv_leveldb leveldb yyjson bson ${jemalloc_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
-target_compile_definitions(ukv_leveldb PRIVATE UKV_ENGINE_IS_LEVELDB)  
+
+# target_compile_definitions(ukv_leveldb PRIVATE UKV_ENGINE_IS_LEVELDB)
 
 # The rest of CMake will apply to all client libraries
 set(UKV_ENGINE_NAMES "stl" "leveldb" "rocksdb")
@@ -129,7 +132,7 @@ if(EXISTS ${UKV_BUILD_UNUMDB})
 
   add_library(ukv_unumdb src/modality_docs.cpp src/modality_graph.cpp)
   target_link_libraries(ukv_unumdb unumdb nlohmann_json::nlohmann_json)
-  target_compile_definitions(ukv_unumdb PRIVATE UKV_ENGINE_IS_UNUMDB)  
+  target_compile_definitions(ukv_unumdb PRIVATE UKV_ENGINE_IS_UNUMDB)
 
   list(APPEND UKV_ENGINE_NAMES "unumdb")
   list(APPEND UKV_CLIENT_NAMES "unumdb")
@@ -138,8 +141,8 @@ endif()
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT_RPC})
   include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
-  add_library(ukv_flight_client src/arrow_client.cpp src/modality_docs.cpp src/modality_graph.cpp)
-  target_link_libraries(ukv_flight_client Threads::Threads nlohmann_json::nlohmann_json fmt::fmt arrow arrow_flight)
+  add_library(ukv_flight_client src/arrow_client.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+  target_link_libraries(ukv_flight_client yyjson bson fmt::fmt arrow arrow_flight)
   list(APPEND UKV_CLIENT_NAMES "flight_client")
 
   foreach(engine_name IN ITEMS ${UKV_ENGINE_NAMES})
@@ -147,8 +150,8 @@ if(${UKV_BUILD_FLIGHT_RPC})
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
 
     string(CONCAT server_name "ukv_" ${engine_name} "_flight_server")
-    add_executable(${server_name} src/arrow_server.cpp)
-    target_link_libraries(${server_name} Threads::Threads nlohmann_json::nlohmann_json arrow arrow_flight ${target_name} ${target_LIBRARIES})
+    add_executable(${server_name} src/arrow_server.cpp ${lib_SOURCES})
+    target_link_libraries(${server_name} pthread yyjson bson arrow arrow_flight ${lib_LIBRARIES})
   endforeach()
 endif()
 
@@ -169,8 +172,6 @@ endforeach()
 # We build them with the original sources (instead of linking with already compiled libraries)
 # to maximize the number of exposed symbols and make debugging easier.
 if(${UKV_BUILD_TESTS})
-  include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
-
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_SOURCES ${target_name} SOURCES)
@@ -211,9 +212,8 @@ endif()
 
 # Build Python bindings linking to precompiled client SDKs
 if(${UKV_BUILD_PYTHON})
-  find_package(Python 3.9 COMPONENTS Interpreter Development NumPy REQUIRED)
-  include_directories(${Python_NumPy_INCLUDE_DIRS})
   include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
+  find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
