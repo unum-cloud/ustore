@@ -9,6 +9,7 @@
 #include <vector>
 #include <unordered_set>
 #include <filesystem>
+#include <fstream>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -479,6 +480,35 @@ TEST(db, docs) {
     M_EXPECT_EQ_JSON(collection[ckf(1, "/hello/0")].value()->c_str(), "\"world\"");
     M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "28");
     EXPECT_TRUE(db.clear());
+}
+
+TEST(db, docs_merge_and_patch) {
+    using json_t = nlohmann::json;
+    database_t db;
+    EXPECT_TRUE(db.open(path));
+    collection_t collection = *db.collection(nullptr, ukv_format_json_k);
+
+    std::ifstream f_patch("tests/patch.json");
+    json_t j_object = json_t::parse(f_patch);
+    for (auto it : j_object) {
+        auto doc = it["doc"].dump();
+        auto patch = it["patch"].dump();
+        auto expected = it["expected"].dump();
+        collection.as(ukv_format_json_k)[1] = doc.c_str();
+        collection.as(ukv_format_json_patch_k)[1] = patch.c_str();
+        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+    }
+
+    std::ifstream f_merge("tests/merge.json");
+    j_object = json_t::parse(f_merge);
+    for (auto it : j_object) {
+        auto doc = it["doc"].dump();
+        auto merge = it["merge"].dump();
+        auto expected = it["expected"].dump();
+        collection.as(ukv_format_json_k)[1] = doc.c_str();
+        collection.as(ukv_format_json_merge_patch_k)[1] = merge.c_str();
+        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+    }
 }
 
 #if 0
