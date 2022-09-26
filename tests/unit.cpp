@@ -1001,7 +1001,6 @@ TEST(db, graph_txn) {
     EXPECT_TRUE(db.clear());
 }
 
-#if 0
 TEST(db, graph_remove_vertices) {
     database_t db;
     EXPECT_TRUE(db.open(path));
@@ -1009,8 +1008,8 @@ TEST(db, graph_remove_vertices) {
     bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
 
-    constexpr std::size_t vertices_count = 2;
-    auto edges_vec = make_edges(vertices_count, 1);
+    constexpr std::size_t vertices_count = 1000;
+    auto edges_vec = make_edges(vertices_count, 100);
     EXPECT_TRUE(graph.upsert(edges(edges_vec)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
@@ -1043,7 +1042,6 @@ TEST(db, graph_remove_edges_keep_vertices) {
 
     EXPECT_TRUE(db.clear());
 }
-#endif
 
 int main(int argc, char** argv) {
     std::filesystem::create_directory("./tmp");
