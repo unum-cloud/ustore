@@ -8,7 +8,7 @@
             "name": "C++: Test STL",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_stl_unit_tests",
+            "program": "${workspaceFolder}/build/bin/ukv_stl_unit_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -31,7 +31,7 @@
             "name": "C++: Test RocksDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_rocksdb_unit_tests",
+            "program": "${workspaceFolder}/build/bin/ukv_rocksdb_unit_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -49,7 +49,7 @@
             "name": "C++: Test LevelDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_leveldb_unit_tests",
+            "program": "${workspaceFolder}/build/bin/ukv_leveldb_unit_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -64,10 +64,64 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
+            "name": "C++: Test STL API",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/ukv_stl_api_test",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug STL Test API",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "C++: Test RocksDB API",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/ukv_rocksdb_api_test",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug RocksDB Test API",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "C++: Test LevelDB API",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/ukv_leveldb_api_test",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug LevelDB Test API",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
             "name": "C++: Test Arrow Client",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_flight_client_unit_tests",
+            "program": "${workspaceFolder}/build/bin/ukv_flight_client_unit_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"

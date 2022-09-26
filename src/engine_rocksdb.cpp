@@ -19,7 +19,8 @@
 
 #include <rocksdb/db.h>
 #include <rocksdb/utilities/options_util.h>
-#include <rocksdb/utilities/transaction_db.h>
+#include <rocksdb/utilities/transaction.h>
+#include <rocksdb/utilities/optimistic_transaction_db.h>
 
 #include "ukv/db.h"
 #include "helpers.hpp"
@@ -27,7 +28,7 @@
 using namespace unum::ukv;
 using namespace unum;
 
-using rocks_native_t = rocksdb::TransactionDB;
+using rocks_native_t = rocksdb::OptimisticTransactionDB;
 using rocks_status_t = rocksdb::Status;
 using rocks_value_t = rocksdb::PinnableSlice;
 using rocks_txn_t = rocksdb::Transaction;
@@ -110,14 +111,14 @@ rocks_collection_t* rocks_collection(rocks_db_t& db, ukv_collection_t collection
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_database_init(ukv_str_view_t, ukv_database_t* c_db, ukv_error_t* c_error) {
+void ukv_database_open(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_t* c_error) {
     try {
         rocks_db_t* db_ptr = new rocks_db_t;
         std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
         rocksdb::Options options;
         rocksdb::ConfigOptions config_options;
 
-        std::string path = "./tmp/rocksdb/"; // TODO: take the apth from config!
+        std::string path = c_config; // TODO: take the path from config!
         rocks_status_t status = rocksdb::LoadLatestOptions(config_options, path, &options, &column_descriptors);
         if (column_descriptors.empty())
             column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
@@ -127,7 +128,7 @@ void ukv_database_init(ukv_str_view_t, ukv_database_t* c_db, ukv_error_t* c_erro
         options.comparator = &key_comparator_k;
         status = rocks_native_t::Open( //
             options,
-            rocksdb::TransactionDBOptions(),
+            rocksdb::OptimisticTransactionDBOptions(),
             path,
             column_descriptors,
             &db_ptr->columns,
@@ -188,6 +189,7 @@ void write_many( //
                               ? txn->Delete(collection, key)
                               : txn->Put(collection, key, to_slice(content));
             export_error(status, c_error);
+            return_on_error(c_error);
         }
     }
     else {
@@ -369,7 +371,7 @@ void ukv_read( //
     return_on_error(c_error);
     auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
     return_on_error(c_error);
-    safe_vector_gt<byte_t> contents(&arena);
+    safe_vector_gt<byte_t> contents(arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     rocksdb::ReadOptions options;
@@ -612,33 +614,51 @@ void ukv_collection_drop(
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    ukv_str_view_t c_collection_name;
-    auto collection_name = c_collection_name ? std::string_view(c_collection_name) : std::string_view();
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(!collection_name.empty() || !invalidate,
+    return_if_error(c_collection_id == ukv_collection_main_k || !invalidate,
                     c_error,
                     args_combo_k,
                     "Default collection can't be invalidated.");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    if (c_mode == ukv_drop_keys_vals_handle_k) {
+    rocks_collection_t* collection_ptr = reinterpret_cast<rocks_collection_t*>(c_collection_id);
+    rocks_collection_t* collection_ptr_to_clear = nullptr;
+
+    if (c_collection_id == ukv_collection_main_k)
+        collection_ptr_to_clear = db.native->DefaultColumnFamily();
+    else {
         for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-            if (c_collection_name == (*it)->GetName() && (*it)->GetName() != "default") {
-                rocks_status_t status = db.native->DropColumnFamily(*it);
-                if (export_error(status, c_error))
-                    return;
-                db.columns.erase(it--);
+            collection_ptr_to_clear = reinterpret_cast<rocks_collection_t*>(*it);
+            if (collection_ptr_to_clear == collection_ptr)
                 break;
-            }
         }
     }
 
+    if (c_mode == ukv_drop_keys_vals_handle_k) {
+        if (collection_ptr_to_clear == *db.columns.end())
+            return;
+
+        rocks_status_t status = db.native->DropColumnFamily(collection_ptr_to_clear);
+        if (export_error(status, c_error))
+            return;
+
+        for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
+            if (collection_ptr_to_clear == *it) {
+                rocks_status_t status = db.native->DropColumnFamily(collection_ptr_to_clear);
+                if (export_error(status, c_error))
+                    return;
+                db.columns.erase(it);
+                break;
+            }
+        }
+        return;
+    }
     else if (c_mode == ukv_drop_keys_vals_k) {
         rocksdb::WriteBatch batch;
-        auto collection = db.native->DefaultColumnFamily();
-        auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection));
+        auto it =
+            std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection_ptr_to_clear));
         for (it->SeekToFirst(); it->Valid(); it->Next())
-            batch.Delete(collection, it->key());
+            batch.Delete(collection_ptr_to_clear, it->key());
         rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
         export_error(status, c_error);
         return;
@@ -646,10 +666,10 @@ void ukv_collection_drop(
 
     else if (c_mode == ukv_drop_vals_k) {
         rocksdb::WriteBatch batch;
-        auto collection = db.native->DefaultColumnFamily();
-        auto it = std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection));
+        auto it =
+            std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection_ptr_to_clear));
         for (it->SeekToFirst(); it->Valid(); it->Next())
-            batch.Put(collection, it->key(), rocksdb::Slice());
+            batch.Put(collection_ptr_to_clear, it->key(), rocksdb::Slice());
         rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
         export_error(status, c_error);
         return;
@@ -673,7 +693,7 @@ void ukv_collection_list( //
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
-    std::size_t collections_count = db.columns.size();
+    std::size_t collections_count = db.columns.size() - 1;
     *c_count = static_cast<ukv_size_t>(collections_count);
 
     // Every string will be null-terminated
@@ -693,6 +713,9 @@ void ukv_collection_list( //
 
     std::size_t i = 0;
     for (auto const& column : db.columns) {
+        if (column->GetName() == rocksdb::kDefaultColumnFamilyName)
+            continue;
+
         auto len = column->GetName().size();
         std::memcpy(names, column->GetName().data(), len);
         names[len] = '\0';
@@ -723,7 +746,7 @@ void ukv_transaction_begin(
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(*c_txn);
-    rocksdb::TransactionOptions options;
+    rocksdb::OptimisticTransactionOptions options;
     if (c_options & ukv_option_txn_snapshot_k)
         options.set_snapshot = true;
     txn = db.native->BeginTransaction(rocksdb::WriteOptions(), options, txn);

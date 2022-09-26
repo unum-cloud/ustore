@@ -248,7 +248,7 @@ class sessions_t {
     std::vector<ukv_arena_t> free_arenas_;
     std::vector<ukv_transaction_t> free_txns_;
     /// Links each session to memory used for its operations:
-    std::unordered_map<session_id_t, running_txn_t, session_id_hash_t> client_to_txn_;
+    client_to_txn_t client_to_txn_;
     std::vector<session_id_t> txns_aging_heap_;
     ukv_database_t db_ = nullptr;
     // On Postgre 9.6+ is set to same 30 seconds.
@@ -275,8 +275,9 @@ class sessions_t {
 
     void submit(session_id_t session_id, running_txn_t running_txn) noexcept {
         running_txn.executing = false;
-        client_to_txn_.insert_or_assign(session_id, running_txn);
-        txns_aging_heap_.push_back(session_id);
+        auto res = client_to_txn_.insert_or_assign(session_id, running_txn);
+        if (res.second)
+            txns_aging_heap_.push_back(session_id);
         std::push_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
     }
 
@@ -315,6 +316,9 @@ class sessions_t {
 
         // Update the heap order.
         // With a single change shouldn't take more than `log2(n)` operations.
+        auto aging = std::find(txns_aging_heap_.begin(), txns_aging_heap_.end(), session_id);
+        if (aging != txns_aging_heap_.end())
+            txns_aging_heap_.erase(aging);
         std::make_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
         return running;
     }
@@ -358,6 +362,17 @@ class sessions_t {
         std::unique_lock _ {mutex_};
         free_arenas_.push_back(running_txn.arena);
         free_txns_.push_back(running_txn.txn);
+    }
+
+    void release_txn(session_id_t session_id) noexcept {
+        std::unique_lock _ {mutex_};
+        auto it = client_to_txn_.find(session_id);
+        if (it == client_to_txn_.end())
+            return;
+        it->second.executing = false;
+        free_arenas_.push_back(it->second.arena);
+        free_txns_.push_back(it->second.txn);
+        client_to_txn_.erase(it);
     }
 
     ukv_arena_t request_arena(ukv_error_t* c_error) noexcept {
@@ -595,7 +610,7 @@ class UKVService : public arf::FlightServerBase {
                 &session.txn,
                 status.member_ptr());
             if (!status) {
-                sessions_.release_txn(session);
+                sessions_.release_txn(params.session_id);
                 return ar::Status::ExecutionError(status.message());
             }
 
@@ -624,7 +639,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             }
 
-            sessions_.release_txn(session);
+            sessions_.release_txn(params.session_id);
             *results_ptr = return_empty();
             return ar::Status::OK();
         }
@@ -682,6 +697,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_length_t* found_lengths = nullptr;
             ukv_octet_t* found_presences = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
+
             ukv_read( //
                 db_,
                 session.txn,

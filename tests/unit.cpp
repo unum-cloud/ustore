@@ -9,6 +9,7 @@
 #include <vector>
 #include <unordered_set>
 #include <filesystem>
+#include <fstream>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -53,6 +54,16 @@ static json_t json_parse(char const* begin, char const* end) {
     EXPECT_EQ(json_parse(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 #define M_EXPECT_EQ_MSG(str1, str2) \
     EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
+
+#if defined(UKV_ENGINE_IS_LEVELDB)
+constexpr const char* path = "tmp/leveldb";
+#elif defined(UKV_ENGINE_IS_ROCKSDB)
+constexpr const char* path = "tmp/rocksdb";
+#elif defined(UKV_ENGINE_IS_UNUMDB)
+constexpr const char* path = "tmp/unumdb";
+#else
+constexpr const char* path = "";
+#endif
 
 #pragma region Binary Collections
 
@@ -172,7 +183,7 @@ void check_binary_collection(bins_collection_t& collection) {
 TEST(db, basic) {
 
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
@@ -187,7 +198,7 @@ TEST(db, named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     EXPECT_TRUE(db["col1"]);
     EXPECT_TRUE(db["col2"]);
@@ -209,40 +220,55 @@ TEST(db, named) {
 
 TEST(db, collection_list) {
 
-    if (!ukv_supports_named_collections_k)
-        return;
-
     database_t db;
-    EXPECT_TRUE(db.open());
 
-    bins_collection_t col1 = *(db["col1"]);
-    bins_collection_t col2 = *(db["col2"]);
-    bins_collection_t col3 = *(db["col3"]);
-    bins_collection_t col4 = *(db["col4"]);
+    EXPECT_TRUE(db.open(path));
 
-    EXPECT_TRUE(*db.contains("col1"));
-    EXPECT_TRUE(*db.contains("col2"));
-    EXPECT_FALSE(*db.contains("unknown_col"));
-
-    auto maybe_txn = db.transact();
-    EXPECT_TRUE(maybe_txn);
-    auto maybe_cols = maybe_txn->collections();
-    EXPECT_TRUE(maybe_cols);
-
-    size_t count = 0;
-    std::vector<std::string> collections;
-    auto cols = *maybe_cols;
-    while (!cols.names.is_end()) {
-        collections.push_back(std::string(*cols.names));
-        ++cols.names;
-        ++count;
+    if (!ukv_supports_named_collections_k) {
+        EXPECT_FALSE(*db["name"]);
+        EXPECT_FALSE(*db.contains("name"));
+        EXPECT_FALSE(db.drop("name"));
+        EXPECT_FALSE(db.drop(""));
+        // EXPECT_TRUE(db.drop("", ukv_drop_vals_k)); // TODO: uncomment later
+        EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
+        return;
     }
-    EXPECT_EQ(count, 4);
-    std::sort(collections.begin(), collections.end());
-    EXPECT_EQ(collections[0], "col1");
-    EXPECT_EQ(collections[1], "col2");
-    EXPECT_EQ(collections[2], "col3");
-    EXPECT_EQ(collections[3], "col4");
+    else {
+        collection_t col1 = *(db["col1"]);
+        collection_t col2 = *(db["col2"]);
+        collection_t col3 = *(db["col3"]);
+        collection_t col4 = *(db["col4"]);
+
+        EXPECT_TRUE(*db.contains("col1"));
+        EXPECT_TRUE(*db.contains("col2"));
+        EXPECT_FALSE(*db.contains("unknown_col"));
+
+        auto maybe_txn = db.transact();
+        EXPECT_TRUE(maybe_txn);
+        auto maybe_cols = maybe_txn->collections();
+        EXPECT_TRUE(maybe_cols);
+
+        size_t count = 0;
+        std::vector<std::string> collections;
+        auto cols = *maybe_cols;
+        while (!cols.names.is_end()) {
+            collections.push_back(std::string(*cols.names));
+            ++cols.names;
+            ++count;
+        }
+        EXPECT_EQ(count, 4);
+        std::sort(collections.begin(), collections.end());
+        EXPECT_EQ(collections[0], "col1");
+        EXPECT_EQ(collections[1], "col2");
+        EXPECT_EQ(collections[2], "col3");
+        EXPECT_EQ(collections[3], "col4");
+
+        EXPECT_TRUE(db.drop("col1"));
+        EXPECT_FALSE(*db.contains("col1"));
+        EXPECT_FALSE(db.drop(""));
+        EXPECT_TRUE(db.drop("", ukv_drop_vals_k));
+        EXPECT_TRUE(db.drop("", ukv_drop_keys_vals_k));
+    }
 }
 
 TEST(db, unnamed_and_named) {
@@ -251,7 +277,7 @@ TEST(db, unnamed_and_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     std::vector<ukv_key_t> keys {54, 55, 56};
     ukv_length_t val_len = sizeof(std::uint64_t);
@@ -285,7 +311,7 @@ TEST(db, txn) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
 
@@ -330,7 +356,7 @@ TEST(db, txn_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
 
@@ -376,7 +402,7 @@ TEST(db, txn_unnamed_then_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
@@ -438,7 +464,7 @@ TEST(db, txn_unnamed_then_named) {
 TEST(db, docs) {
 
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     // JSON
     docs_collection_t collection = *db.collection<docs_collection_t>();
@@ -488,11 +514,60 @@ TEST(db, docs) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, docs_merge_and_patch) {
+    using json_t = nlohmann::json;
+    database_t db;
+    EXPECT_TRUE(db.open(path));
+    collection_t collection = *db.collection(nullptr, ukv_format_json_k);
+
+    std::ifstream f_patch("tests/patch.json");
+    json_t j_object = json_t::parse(f_patch);
+    for (auto it : j_object) {
+        auto doc = it["doc"].dump();
+        auto patch = it["patch"].dump();
+        auto expected = it["expected"].dump();
+        collection.as(ukv_format_json_k)[1] = doc.c_str();
+        collection.as(ukv_format_json_patch_k)[1] = patch.c_str();
+        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+    }
+
+    std::ifstream f_merge("tests/merge.json");
+    j_object = json_t::parse(f_merge);
+    for (auto it : j_object) {
+        auto doc = it["doc"].dump();
+        auto merge = it["merge"].dump();
+        auto expected = it["expected"].dump();
+        collection.as(ukv_format_json_k)[1] = doc.c_str();
+        collection.as(ukv_format_json_merge_patch_k)[1] = merge.c_str();
+        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+    }
+}
+
+#if 0
+TEST(db, doc_fields) {
+    using json_t = nlohmann::json;
+    database_t db;
+    EXPECT_TRUE(db.open(path));
+
+    collection_t collection = *db.collection(nullptr, ukv_format_json_k);
+    auto json1 = R"( {"person": "Carl", "age": 24} )"_json.dump();
+    collection[1] = json1.c_str();
+    M_EXPECT_EQ_JSON(collection[1].value()->c_str(), json1.c_str());
+    M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Carl\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "24");
+
+    collection[ckf(1, "person")] = "\"Charls\"";
+    collection[ckf(1, "age")] = "25";
+    M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Charls\"");
+    M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "25");
+}
+#endif
+
 TEST(db, docs_table) {
 
     using json_t = nlohmann::json;
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     // Inject basic data
     docs_collection_t collection = *db.collection<docs_collection_t>();
@@ -647,7 +722,7 @@ TEST(db, docs_table) {
 TEST(db, graph_triangle) {
 
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     graph_collection_t net = *db.collection<graph_collection_t>();
 
@@ -744,7 +819,7 @@ TEST(db, graph_triangle) {
 TEST(db, graph_triangle_batch_api) {
 
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     bins_collection_t main = *db.collection();
     graph_collection_t net = *db.collection<graph_collection_t>();
@@ -855,7 +930,7 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
 
 TEST(db, graph_random_fill) {
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
@@ -868,11 +943,17 @@ TEST(db, graph_random_fill) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_EQ(*graph.degree(vertex_id), 9u);
     }
+
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, graph_txn) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     graph_collection_t net = *db.collection<graph_collection_t>();
 
@@ -901,7 +982,10 @@ TEST(db, graph_txn) {
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_TRUE(*net.contains(3));
+
     EXPECT_TRUE(txn.reset());
+    txn_col = *txn.collection();
+    txn_net = txn_col.as_graph();
 
     transaction_t txn2 = *db.transact();
     graph_collection_t txn_net2 = *txn2.collection<graph_collection_t>();
@@ -913,13 +997,15 @@ TEST(db, graph_txn) {
     EXPECT_TRUE(txn_net2.upsert(edge5));
 
     EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn2.commit());
+    EXPECT_FALSE(txn2.commit());
+
+    EXPECT_TRUE(db.clear());
 }
 
 #if 0
 TEST(db, graph_remove_vertices) {
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
@@ -935,11 +1021,13 @@ TEST(db, graph_remove_vertices) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_FALSE(*graph.contains(vertex_id));
     }
+
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, graph_remove_edges_keep_vertices) {
     database_t db;
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(path));
 
     bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
@@ -953,6 +1041,8 @@ TEST(db, graph_remove_edges_keep_vertices) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
     }
+
+    EXPECT_TRUE(db.clear());
 }
 #endif
 

@@ -45,6 +45,9 @@ PYBIND11_MODULE(UKV_PYTHON_MODULE_NAME, m) {
         "> Apache Arrow exports for inter-process communication.\n"
         "---------------------------------------------\n";
 
+    if (arrow::py::import_pyarrow())
+        throw std::runtime_error("Failed to initialize PyArrow");
+
     wrap_database(m);
     wrap_pandas(m);
     wrap_networkx(m);
