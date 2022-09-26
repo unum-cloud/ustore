@@ -615,7 +615,7 @@ void ukv_collection_drop(
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(c_collection_id == ukv_collection_main_k || !invalidate,
+    return_if_error(c_collection_id != ukv_collection_main_k || !invalidate,
                     c_error,
                     args_combo_k,
                     "Default collection can't be invalidated.");
