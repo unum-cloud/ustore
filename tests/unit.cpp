@@ -267,6 +267,7 @@ TEST(db, collection_list) {
         EXPECT_FALSE(db.drop(""));
         EXPECT_TRUE(db.collection()->clear());
     }
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, unnamed_and_named) {
@@ -294,7 +295,7 @@ TEST(db, unnamed_and_named) {
         for (auto& j : vals)
             j += 7;
 
-        bins_collection_t collection = *db.collection(i);
+        bins_collection_t collection = *db.add_collection(i);
         auto collection_ref = collection[keys];
         check_length(collection_ref, ukv_length_missing_k);
         round_trip(collection_ref, values);
@@ -437,8 +438,8 @@ TEST(db, txn_unnamed_then_named) {
     check_equalities(collection_ref, values);
 
     // Transaction with named collection
-    EXPECT_TRUE(db.collection("named_col"));
-    bins_collection_t named_collection = *db.collection("named_col");
+    EXPECT_TRUE(db.add_collection("named_col"));
+    bins_collection_t named_collection = *db.add_collection("named_col");
     std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
     auto txn_named_collection_ref = txn[sub_keys];
     round_trip(txn_named_collection_ref, values);

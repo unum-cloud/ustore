@@ -524,6 +524,7 @@ void ukv_size( //
 void ukv_collection_list( //
     ukv_database_t const db,
     ukv_transaction_t const txn,
+    ukv_options_t const options,
     ukv_size_t* count,
     ukv_collection_t** ids,
     ukv_length_t** offsets,
