@@ -40,30 +40,39 @@ using field_path_buffer_t = char[field_path_len_limit_k];
 /*****************	 STL Compatibility	  ****************/
 /*********************************************************/
 
+/**
+ * @brief Parses `float`, `double`, `bool` or any integral type from string.
+ * @return true If not the entire string was recognized as a number.
+ */
 template <typename at>
-std::from_chars_result from_chars(char const* begin, char const* end, at& result) {
+bool parse_entire_number(char const* begin, char const* end, at& result) {
+    // Floats:
     if constexpr (std::is_same_v<at, float>) {
-        char* end = nullptr;
-        result = std::strtof(begin, &end);
-        return {end, begin == end ? std::errc::invalid_argument : std::errc()};
+        char* number_end = nullptr;
+        result = std::strtof(begin, &number_end);
+        return end == number_end;
     }
+    // Doubles:
     else if constexpr (std::is_same_v<at, double>) {
-        char* end = nullptr;
-        result = std::strtod(begin, &end);
-        return {end, begin == end ? std::errc::invalid_argument : std::errc()};
+        char* number_end = nullptr;
+        result = std::strtod(begin, &number_end);
+        return end == number_end;
     }
+    // Booleans:
     else if constexpr (std::is_same_v<at, bool>) {
-        bool is_true = end - begin == 4 && std::equal(begin, end, true_k);
-        bool is_false = end - begin == 5 && std::equal(begin, end, false_k);
+        bool is_true = (end - begin) == 4 && std::equal(begin, end, true_k);
+        bool is_false = (end - begin) == 5 && std::equal(begin, end, false_k);
         if (is_true | is_false) {
             result = is_true;
-            return {end, std::errc()};
+            return true;
         }
         else
-            return {end, std::errc::invalid_argument};
+            return false;
     }
-    else
-        return std::from_chars(begin, end, result);
+    // Integers:
+    else {
+        return std::from_chars(begin, end, result).ptr == end;
+    }
 }
 
 /**
@@ -71,7 +80,7 @@ std::from_chars_result from_chars(char const* begin, char const* end, at& result
  * @return The string-vew until the termination character. Empty string on failure.
  */
 template <typename at>
-std::string_view print_chars(char* begin, char* end, at scalar) {
+std::string_view print_number(char* begin, char* end, at scalar) {
     if constexpr (std::is_floating_point_v<at>) {
         // Parsing and dumping floating-point numbers is still not fully implemented in STL:
         //  std::to_chars_result result = std::to_chars(&print_buffer[0], print_buffer + printed_number_length_limit_k,
@@ -82,7 +91,9 @@ std::string_view print_chars(char* begin, char* end, at scalar) {
         //  bool fits_terminator = end_ptr < print_buffer + printed_number_length_limit_k;
         // If we use `std::snprintf`, the result will @b already be NULL-terminated:
         auto result = std::snprintf(begin, end - begin, "%f", scalar);
-        return result >= 0 ? std::string_view {begin, result - 1} : std::string_view {};
+        return result > 0 //
+                   ? std::string_view {begin, static_cast<std::size_t>(result - 1)}
+                   : std::string_view {};
     }
     else {
         // `std::to_chars` won't NULL-terminate the string, but we should.
@@ -235,9 +246,7 @@ void json_to_scalar(yyjson_val* value,
     case YYJSON_TYPE_STR: {
         char const* str_begin = yyjson_get_str(value);
         size_t str_len = yyjson_get_len(value);
-        std::from_chars_result result = from_chars(str_begin, str_begin + str_len, scalar);
-        bool entire_string_is_number = result.ec == std::errc() && result.ptr == str_begin + str_len;
-        if (entire_string_is_number) {
+        if (parse_entire_number(str_begin, str_begin + str_len, scalar)) {
             convert |= mask;
             collide &= ~mask;
             valid |= mask;
@@ -285,11 +294,6 @@ void json_to_scalar(yyjson_val* value,
         }
     }
     }
-}
-
-template <typename scalar_at>
-std::string_view scalar_to_string(scalar_at scalar, printed_number_buffer_t& print_buffer) {
-    return print_chars(print_buffer, print_buffer + printed_number_length_limit_k, scalar);
 }
 
 std::string_view json_to_string(yyjson_val* value,
@@ -340,21 +344,21 @@ std::string_view json_to_string(yyjson_val* value,
 
         switch (subtype) {
         case YYJSON_SUBTYPE_UINT:
-            result = scalar_to_string(yyjson_get_uint(value), print_buffer);
+            result = print_number(yyjson_get_uint(value), print_buffer, print_buffer + printed_number_length_limit_k);
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
             break;
 
         case YYJSON_SUBTYPE_SINT:
-            result = scalar_to_string(yyjson_get_sint(value), print_buffer);
+            result = print_number(yyjson_get_sint(value), print_buffer, print_buffer + printed_number_length_limit_k);
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
             break;
 
         case YYJSON_SUBTYPE_REAL:
-            result = scalar_to_string(yyjson_get_real(value), print_buffer);
+            result = print_number(yyjson_get_real(value), print_buffer, print_buffer + printed_number_length_limit_k);
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
@@ -968,7 +972,7 @@ void gist_recursively(yyjson_val* node,
         while ((val = yyjson_arr_iter_next(&iter)) && !*c_error) {
 
             path[path_len] = '/';
-            auto result = print_chars(path + path_len + slash_len, path + field_path_len_limit_k, idx);
+            auto result = print_number(path + path_len + slash_len, path + field_path_len_limit_k, idx);
             if (result.empty()) {
                 *c_error = "Path is too long!";
                 return;
