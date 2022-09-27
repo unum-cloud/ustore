@@ -635,13 +635,6 @@ void ukv_collection_drop(
     }
 
     if (c_mode == ukv_drop_keys_vals_handle_k) {
-        if (collection_ptr_to_clear == *db.columns.end())
-            return;
-
-        rocks_status_t status = db.native->DropColumnFamily(collection_ptr_to_clear);
-        if (export_error(status, c_error))
-            return;
-
         for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
             if (collection_ptr_to_clear == *it) {
                 rocks_status_t status = db.native->DropColumnFamily(collection_ptr_to_clear);
