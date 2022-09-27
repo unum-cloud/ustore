@@ -117,7 +117,7 @@ void ukv_read( //
 
     // Configure the `cmd` descriptor
     bool const same_collection = places.same_collection();
-    bool const same_named_collection = same_collection && places.same_collections_are_named();
+    bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const request_only_presences = c_found_presences && !c_found_lengths && !c_found_values;
     bool const request_only_lengths = c_found_lengths && !c_found_values;
     char const* partial_mode = request_only_presences //
@@ -315,7 +315,7 @@ void ukv_write( //
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     bool const same_collection = places.same_collection();
-    bool const same_named_collection = same_collection && places.same_collections_are_named();
+    bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const write_flush = c_options & ukv_option_write_flush_k;
 
     bool const has_collections_column = collections && !same_collection;
@@ -521,7 +521,7 @@ void ukv_scan( //
     places_arg_t places {collections, start_keys, {}, c_tasks_count};
 
     bool const same_collection = places.same_collection();
-    bool const same_named_collection = same_collection && places.same_collections_are_named();
+    bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const write_flush = c_options & ukv_option_write_flush_k;
 
     bool const has_collections_column = !same_collection;
