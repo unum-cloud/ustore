@@ -609,6 +609,9 @@ void ukv_graph_find_edges( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    if (!c_tasks_count)
+        return;
+
     bool only_degrees = !c_neighborships_per_vertex;
     auto func = only_degrees //
                     ? &export_edge_tuples<false, false, false>
@@ -652,6 +655,9 @@ void ukv_graph_upsert_edges( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    if (!c_tasks_count)
+        return;
+
     return update_neighborhoods<false>( //
         c_db,
         c_txn,
@@ -691,6 +697,9 @@ void ukv_graph_remove_edges( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
+    if (!c_tasks_count)
+        return;
+
     return update_neighborhoods<true>( //
         c_db,
         c_txn,
@@ -726,6 +735,9 @@ void ukv_graph_remove_vertices( //
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
+
+    if (!c_vertices_count)
+        return;
 
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
