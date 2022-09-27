@@ -23,7 +23,7 @@
 #include <rocksdb/utilities/optimistic_transaction_db.h>
 
 #include "ukv/db.h"
-#include "helpers.hpp"
+#include "helpers/vector.hpp" // `safe_vector_gt`
 
 using namespace unum::ukv;
 using namespace unum;
