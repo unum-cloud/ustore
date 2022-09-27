@@ -16,7 +16,9 @@
 #include <optional> // `std::optional`
 #include <limits>   // `std::numeric_limits`
 
-#include "helpers.hpp"
+#include "ukv/ukv.hpp"
+#include "helpers/pmr.hpp"       // `stl_arena_t`
+#include "helpers/algorithm.hpp" // `equal_subrange`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/

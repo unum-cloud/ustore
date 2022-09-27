@@ -108,13 +108,13 @@ link_directories($ENV{CONDA_PREFIX}/lib)
 message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
-add_library(ukv_stl src/engine_stl.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+add_library(ukv_stl src/engine_stl.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_stl yyjson bson ${jemalloc_LIBRARIES})
 
-add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_rocksdb rocksdb yyjson bson ${jemalloc_LIBRARIES})
 
-add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_leveldb leveldb yyjson bson ${jemalloc_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 
@@ -130,7 +130,7 @@ if(EXISTS ${UKV_BUILD_UNUMDB})
   set_property(TARGET unumdb PROPERTY IMPORTED_LOCATION ${UKV_BUILD_UNUMDB})
   set_property(TARGET unumdb PROPERTY LINK_LIBRARIES "")
 
-  add_library(ukv_unumdb src/modality_docs.cpp src/modality_graph.cpp)
+  add_library(ukv_unumdb src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp)
   target_link_libraries(ukv_unumdb unumdb nlohmann_json::nlohmann_json)
   target_compile_definitions(ukv_unumdb PRIVATE UKV_ENGINE_IS_UNUMDB)
 
@@ -141,7 +141,7 @@ endif()
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT_RPC})
   include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
-  add_library(ukv_flight_client src/arrow_client.cpp src/modality_simdocs.cpp src/modality_graph.cpp)
+  add_library(ukv_flight_client src/arrow_client.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
   target_link_libraries(ukv_flight_client yyjson bson fmt::fmt arrow arrow_flight)
   list(APPEND UKV_CLIENT_NAMES "flight_client")
 

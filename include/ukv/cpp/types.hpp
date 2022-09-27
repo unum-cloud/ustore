@@ -170,6 +170,7 @@ class value_view_t {
     inline byte_t const* begin() const noexcept { return data(); }
     inline byte_t const* end() const noexcept { return data() + size(); }
     inline bool empty() const noexcept { return !size(); }
+    operator std::string_view() const noexcept { return {c_str(), size()}; }
 
     ukv_bytes_cptr_t const* member_ptr() const noexcept { return &ptr_; }
     ukv_length_t const* member_length() const noexcept { return &length_; }

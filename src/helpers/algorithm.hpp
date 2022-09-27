@@ -47,7 +47,7 @@ element_at inplace_inclusive_prefix_sum(element_at* begin, element_at* const end
  * "gather+scatter" operation gets two more stages: deduplication and join.
  *
  */
-void deduplicate_gather_join_scatter() {
+inline void deduplicate_gather_join_scatter() {
 }
 
 } // namespace unum::ukv
