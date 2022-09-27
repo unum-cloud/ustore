@@ -554,6 +554,8 @@ void ukv_read( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c_tasks_count)
+        return;
 
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
@@ -631,6 +633,8 @@ void ukv_write( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c_tasks_count)
+        return;
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
@@ -678,6 +682,8 @@ void ukv_scan( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c_tasks_count)
+        return;
 
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
@@ -724,6 +730,9 @@ void ukv_size( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c_tasks_count)
+        return;
+
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
@@ -957,7 +966,6 @@ void ukv_transaction_init(
     return_on_error(c_error);
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
-
     safe_section("Initializing transaction state", c_error, [&] {
         if (!*c_txn)
             *c_txn = new stl_txn_t();
