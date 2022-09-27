@@ -28,7 +28,7 @@ struct hash_t {
     ukv_key_t operator()(std::string_view key_str) const noexcept {
         using stl_t = std::hash<std::string_view>;
         auto result = stl_t {}(key_str);
-#ifdef DEBUG
+#ifdef UKV_DEBUG
         result %= 10ul;
 #endif
         return static_cast<ukv_key_t>(result);
