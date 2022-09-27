@@ -122,7 +122,7 @@ typedef enum {
      * If the requested key was updated since the read, the transaction
      * will fail on commit or prior to that.
      */
-    ukv_option_watch_k = 1 << 2,
+    ukv_option_txn_watch_k = 1 << 2,
     /**
      * @brief When a transaction is started with this flag, a persistent
      * snapshot is created. It guarantees that the global state of all the

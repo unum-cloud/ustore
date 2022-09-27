@@ -349,7 +349,7 @@ void ukv_read( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    return_if_error(!(c_txn && (c_options & ukv_option_watch_k)),
+    return_if_error(!(c_txn && (c_options & ukv_option_txn_watch_k)),
                     c_error,
                     args_wrong_k,
                     "RocksDB only supports transparent reads!");
@@ -433,7 +433,7 @@ void ukv_scan( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    return_if_error(!(c_txn && (c_options & ukv_option_watch_k)),
+    return_if_error(!(c_txn && (c_options & ukv_option_txn_watch_k)),
                     c_error,
                     args_wrong_k,
                     "RocksDB only supports transparent reads!");

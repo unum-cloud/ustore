@@ -596,8 +596,8 @@ TEST(db, docs_merge_and_patch) {
 
     EXPECT_TRUE(db.clear());
 }
-#endif
-TEST(db, doc_fields) {
+
+TEST(db, doc_fields_update) {
     using json_t = nlohmann::json;
     database_t db;
     EXPECT_TRUE(db.open(path_k));
@@ -616,7 +616,7 @@ TEST(db, doc_fields) {
 
     EXPECT_TRUE(db.clear());
 }
-
+#endif
 TEST(db, docs_table) {
 
     using json_t = nlohmann::json;
