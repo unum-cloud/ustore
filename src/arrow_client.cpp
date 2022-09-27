@@ -58,7 +58,7 @@ void ukv_database_init( //
     ukv_database_t* c_db,
     ukv_error_t* c_error) {
 
-#ifdef DEBUG
+#ifdef UKV_DEBUG
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(5s);
 #endif
