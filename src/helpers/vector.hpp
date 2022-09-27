@@ -165,7 +165,7 @@ class growing_tape_t {
         auto length = static_cast<ukv_length_t>(value.size());
         auto old_count = lengths_.size();
 
-        lengths_.push_back(length, c_error);
+        lengths_.push_back(value ? length : ukv_length_missing_k, c_error);
 
         presences_.resize(divide_round_up(old_count + 1, bits_in_byte_k), c_error);
         if (*c_error)
