@@ -60,12 +60,12 @@ One ~~ring~~ data-lake to rule them all.
 Backends differ in their functionality and purposes.
 The underlying embedded key value stores include:
 
-| Name    |      OSes       | ACID  | Collections | Persistent | Safe Reads | GPU Acceleration |
-| :------ | :-------------: | :---: | :---------: | :--------: | :--------: | :--------------: |
-| STL     | POSIX + Windows |   ✅   |      ✅      |     ❌      |     ✅      |        ❌         |
-| LevelDB | POSIX + Windows |   ❌   |      ❌      |     ✅      |     ❌      |        ❌         |
-| RocksDB | POSIX + Windows |   ✅   |      ✅      |     ✅      |     ❌      |        ❌         |
-| UnumDB  |      Linux      |   ✅   |      ✅      |     ✅      |     ✅      |        ✅         |
+| Name    |      OSes       | [ACID][3]\nTransactions | Auxiliary\nCollections | Persistent | [Snapshots][2] | [Watching][1]\nReads | GPU\nAcceleration |
+| :------ | :-------------: | :---------------------: | :--------------------: | :--------: | :------------: | :------------------: | :---------------: |
+| STL     | POSIX + Windows |            ✅            |           ✅            |     ❌      |       ❌        |          ✅           |         ❌         |
+| LevelDB | POSIX + Windows |            ❌            |           ❌            |     ✅      |       ❌        |          ❌           |         ❌         |
+| RocksDB | POSIX + Windows |            ✅            |           ✅            |     ✅      |       ✅        |          ❌           |         ❌         |
+| UnumDB  |      Linux      |            ✅            |           ✅            |     ✅      |       ✅        |          ✅           |         ✅         |
 
 The STL backend originally served educational purposes, yet, with a proper web-server implementation, is comparable to other in-memory stores like Redis, MemCached or ETCD.
 LevelDB is Key-Value stored designed at Google and extensively adopted across the industry, thanks to its simplicity.
@@ -73,6 +73,10 @@ RocksDB improves over LevelDB, extending its functionality with transactions, na
 All of those backends were [benchmarked for weeks](https://unum.cloud/ucsb) using [UCSB](https://github.com/unum-cloud/ucsb), so you can choose the best stack for you specific use case.
 
 ![UCSB 10 TB Results](https://unum.cloud/assets/post/2022-09-13-ucsb-10tb/ucsb-10tb-duration.png)
+
+[1]: https://redis.io/commands/watch/
+[2]: https://github.com/facebook/rocksdb/wiki/Snapshot
+[3]: https://en.wikipedia.org/wiki/ACID
 
 ## Frontends
 
