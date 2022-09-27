@@ -609,7 +609,7 @@ void ukv_graph_find_edges( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    if (!c_tasks_count)
+    if (!c_vertices_count)
         return;
 
     bool only_degrees = !c_neighborships_per_vertex;

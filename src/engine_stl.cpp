@@ -730,7 +730,7 @@ void ukv_size( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    if (!c_tasks_count)
+    if (!n)
         return;
 
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
