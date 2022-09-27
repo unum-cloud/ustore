@@ -58,7 +58,7 @@ consecutive_bins_iterator_t get_bucket_vals(value_view_t bucket, ukv_length_t si
     auto lengths = reinterpret_cast<ukv_length_t const*>(bucket.data());
     auto bytes_for_counters = size * 2u * counter_size_k;
     auto bytes_for_keys = std::accumulate(lengths + 1u, lengths + 1u + size, 0ul);
-    return {lengths + 1u, bucket.data() + bytes_in_header_k + bytes_for_counters + bytes_for_keys};
+    return {lengths + 1u + size, bucket.data() + bytes_in_header_k + bytes_for_counters + bytes_for_keys};
 }
 
 struct bucket_member_t {
@@ -157,7 +157,7 @@ void upsert_in_bucket( //
     auto old_keys = get_bucket_keys(bucket, old_size);
     auto old_vals = get_bucket_vals(bucket, old_size);
     for (std::size_t i = 0; i != old_size; ++i, ++old_keys, ++old_vals) {
-        if (i == old_idx)
+        if (!is_missing && i == old_idx)
             continue;
 
         value_view_t old_key = *old_keys;
@@ -220,6 +220,7 @@ void ukv_paths_write( //
     keys_str_args.offsets_begin = {c_paths_offsets, c_paths_offsets_stride};
     keys_str_args.lengths_begin = {c_paths_lengths, c_paths_lengths_stride};
     keys_str_args.contents_begin = {(ukv_bytes_cptr_t const*)c_paths, c_paths_stride};
+    keys_str_args.count = c_tasks_count;
 
     // Getting hash-collisions is such a rare case, that we will not
     // optimize for it in the current implementation. Sorting and
@@ -232,7 +233,7 @@ void ukv_paths_write( //
     hash_t hash;
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     for (std::size_t i = 0; i != c_tasks_count; ++i)
-        unique_col_keys[i] = {collections[i], hash(keys_str_args[i])};
+        unique_col_keys[i] = {collections ? collections[i] : ukv_collection_main_k, hash(keys_str_args[i])};
 
     // We must sort and deduplicate this bucket IDs
     unique_col_keys = {unique_col_keys.begin(), sort_and_deduplicate(unique_col_keys.begin(), unique_col_keys.end())};
@@ -280,11 +281,11 @@ void ukv_paths_write( //
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     // Update every unique bucket
-    for (std::size_t i = 0; i != unique_places.count; ++i) {
+    for (std::size_t i = 0; i != c_tasks_count; ++i) {
         std::string_view key_str = keys_str_args[i];
         ukv_key_t key = hash(key_str);
         value_view_t new_val = contents[i];
-        collection_key_t collection_key {collections[i], key};
+        collection_key_t collection_key {collections ? collections[i] : ukv_collection_main_k, key};
         auto bucket_idx = offset_in_sorted(unique_col_keys, collection_key);
         value_view_t& bucket = updated_buckets[bucket_idx];
 
@@ -352,6 +353,7 @@ void ukv_paths_read( //
     keys_str_args.offsets_begin = {c_paths_offsets, c_paths_offsets_stride};
     keys_str_args.lengths_begin = {c_paths_lengths, c_paths_lengths_stride};
     keys_str_args.contents_begin = {(ukv_bytes_cptr_t const*)c_paths, c_paths_stride};
+    keys_str_args.count = c_tasks_count;
 
     // Getting hash-collisions is such a rare case, that we will not
     // optimize for it in the current implementation. Sorting and
