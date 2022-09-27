@@ -290,6 +290,7 @@ TEST(db, paths) {
         reinterpret_cast<ukv_bytes_cptr_t*>(vals),
         sizeof(char const*),
         ukv_options_default_k,
+        0,
         arena.member_ptr(),
         status.member_ptr());
 
@@ -308,6 +309,7 @@ TEST(db, paths) {
         keys,
         sizeof(char const*),
         ukv_options_default_k,
+        0,
         nullptr,
         &key_hashes,
         nullptr,
