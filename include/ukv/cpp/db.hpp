@@ -101,7 +101,15 @@ class context_t : public std::enable_shared_from_this<context_t> {
         ukv_str_span_t names = nullptr;
         ukv_collection_t* ids = nullptr;
         status_t status;
-        ukv_collection_list(db_, txn_, &count, &ids, nullptr, &names, arena_.member_ptr(), status.member_ptr());
+        ukv_collection_list(db_,
+                            txn_,
+                            ukv_options_default_k,
+                            &count,
+                            &ids,
+                            nullptr,
+                            &names,
+                            arena_.member_ptr(),
+                            status.member_ptr());
         collections_list_t result;
         result.ids = {ids, ids + count};
         result.names = {count, names};
