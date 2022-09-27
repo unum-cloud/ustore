@@ -1044,10 +1044,10 @@ TEST(db, graph_remove_edges_keep_vertices) {
 TEST(db, paths) {
 
     database_t db;
-    char const* keys[] = ["Facebook", "Apple", "Amazon", "Netflix", "Google"];
-    char const* vals[] = ["F", "A", "A", "N", "G"];
+    char const* keys[] {"Facebook", "Apple", "Amazon", "Netflix", "Google"};
+    char const* vals[] {"F", "A", "A", "N", "G"};
 
-    arena_t arena;
+    arena_t arena(db);
     status_t status;
     ukv_paths_write( //
         db,
@@ -1066,14 +1066,14 @@ TEST(db, paths) {
         0,
         nullptr,
         0,
-        vals,
+        reinterpret_cast<ukv_bytes_cptr_t*>(vals),
         sizeof(char const*),
         ukv_options_default_k,
         arena.member_ptr(),
         status.member_ptr());
 
     ukv_key_t* key_hashes = nullptr;
-    ukv_byte_t* vals_recovered = nullptr;
+    char* vals_recovered = nullptr;
     ukv_paths_read( //
         db,
         nullptr,
@@ -1088,10 +1088,10 @@ TEST(db, paths) {
         sizeof(char const*),
         ukv_options_default_k,
         nullptr,
-        key_hashes,
+        &key_hashes,
         nullptr,
         nullptr,
-        vals_recovered,
+        reinterpret_cast<ukv_bytes_ptr_t*>(&vals_recovered),
         arena.member_ptr(),
         status.member_ptr());
 
