@@ -947,7 +947,7 @@ TEST(db, graph_random_fill) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, graph_txn) {
+TEST(db, graph_conflicting_transactions) {
 
     if (!ukv_supports_transactions_k)
         return;
@@ -1005,7 +1005,6 @@ TEST(db, graph_remove_vertices) {
     database_t db;
     EXPECT_TRUE(db.open(path));
 
-    bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
@@ -1027,7 +1026,6 @@ TEST(db, graph_remove_edges_keep_vertices) {
     database_t db;
     EXPECT_TRUE(db.open(path));
 
-    bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
@@ -1041,6 +1039,63 @@ TEST(db, graph_remove_edges_keep_vertices) {
     }
 
     EXPECT_TRUE(db.clear());
+}
+
+TEST(db, paths) {
+
+    database_t db;
+    char const* keys[] = ["Facebook", "Apple", "Amazon", "Netflix", "Google"];
+    char const* vals[] = ["F", "A", "A", "N", "G"];
+
+    arena_t arena;
+    status_t status;
+    ukv_paths_write( //
+        db,
+        nullptr,
+        5,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        keys,
+        sizeof(char const*),
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        vals,
+        sizeof(char const*),
+        ukv_options_default_k,
+        arena.member_ptr(),
+        status.member_ptr());
+
+    ukv_key_t* key_hashes = nullptr;
+    ukv_byte_t* vals_recovered = nullptr;
+    ukv_paths_read( //
+        db,
+        nullptr,
+        5,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        keys,
+        sizeof(char const*),
+        ukv_options_default_k,
+        nullptr,
+        key_hashes,
+        nullptr,
+        nullptr,
+        vals_recovered,
+        arena.member_ptr(),
+        status.member_ptr());
+
+    EXPECT_EQ(std::string_view(vals_recovered, 6), "FAANG");
 }
 
 int main(int argc, char** argv) {
