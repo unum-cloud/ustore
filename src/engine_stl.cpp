@@ -46,6 +46,10 @@ using namespace unum::ukv;
 using namespace unum;
 namespace fs = std::filesystem;
 
+using allocator_t = std::allocator<byte_t>;
+using buffer_t = std::vector<byte_t, allocator_t>;
+using generation_t = std::int64_t;
+
 struct stl_db_t;
 struct stl_collection_t;
 struct stl_txn_t;
@@ -117,6 +121,20 @@ struct stl_db_t {
 
 stl_collection_t& stl_collection(stl_db_t& db, ukv_collection_t collection) {
     return collection == ukv_collection_main_k ? db.main : *reinterpret_cast<stl_collection_t*>(collection);
+}
+
+/**
+ * @brief Solves the problem of modulo arithmetic and `generation_t` overflow.
+ * Still works correctly, when `max` has overflown, but `min` hasn't yet,
+ * so `min` can be bigger than `max`.
+ */
+inline bool entry_was_overwritten(generation_t entry_generation,
+                                  generation_t transaction_generation,
+                                  generation_t youngest_generation) noexcept {
+
+    return transaction_generation <= youngest_generation
+               ? ((entry_generation >= transaction_generation) & (entry_generation <= youngest_generation))
+               : ((entry_generation >= transaction_generation) | (entry_generation <= youngest_generation));
 }
 
 void save_to_disk(stl_collection_t const& collection, std::string const& path, ukv_error_t* c_error) {

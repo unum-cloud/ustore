@@ -20,9 +20,12 @@
 #include <arrow/c/bridge.h>
 #pragma GCC diagnostic pop
 
-#include "helpers.hpp" // `stl_arena_t`
+#include "helpers/pmr.hpp" // `stl_arena_t`
 
 namespace unum::ukv {
+
+constexpr std::size_t arrow_extra_offsets_k = 1;
+constexpr std::size_t arrow_bytes_alignment_k = 64;
 
 namespace arf = arrow::flight;
 namespace ar = arrow;
