@@ -439,6 +439,7 @@ void pull_and_link_for_updates( //
     ukv_size_t unique_count = static_cast<ukv_size_t>(unique_entries.size());
     auto collections = unique_entries.immutable().members(&updated_entry_t::collection);
     auto keys = unique_entries.immutable().members(&updated_entry_t::key);
+    auto opts = ukv_options_t(c_options | (c_txn ? ukv_option_watch_k : 0));
     ukv_read( //
         c_db,
         c_txn,
@@ -447,7 +448,7 @@ void pull_and_link_for_updates( //
         collections.begin().stride(),
         keys.begin().get(),
         keys.begin().stride(),
-        c_options,
+        opts,
         nullptr,
         &found_binary_offs,
         nullptr,
