@@ -354,7 +354,7 @@ void ukv_read( //
                     args_wrong_k,
                     "RocksDB only supports transparent reads!");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -438,7 +438,7 @@ void ukv_scan( //
                     args_wrong_k,
                     "RocksDB only supports transparent reads!");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -524,7 +524,7 @@ void ukv_size( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     auto min_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_cardinalities);
@@ -689,7 +689,7 @@ void ukv_collection_list( //
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     return_if_error(c_count && c_names, c_error, args_combo_k, "Need names and outputs!");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
