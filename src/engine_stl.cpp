@@ -658,7 +658,7 @@ void ukv_write( //
 void ukv_scan( //
     ukv_database_t const c_db,
     ukv_transaction_t const c_txn,
-    ukv_size_t const c_min_tasks_count,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
@@ -694,7 +694,7 @@ void ukv_scan( //
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_scan_limits, c_scan_limits_stride};
-    scans_arg_t scans {collections, start_keys, end_keys, lens, c_min_tasks_count};
+    scans_arg_t scans {collections, start_keys, end_keys, lens, c_tasks_count};
 
     validate_scan(c_txn, scans, c_options, c_error);
     return_on_error(c_error);
