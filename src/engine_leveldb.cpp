@@ -11,7 +11,7 @@
 #include <leveldb/write_batch.h>
 
 #include "ukv/db.h"
-#include "helpers.hpp"
+#include "helpers/vector.hpp" // `safe_vector_gt`
 
 using namespace unum::ukv;
 using namespace unum;
