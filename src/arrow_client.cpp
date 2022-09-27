@@ -697,7 +697,7 @@ void ukv_size( //
     ukv_key_t const* c_end_keys,
     ukv_size_t const c_end_keys_stride,
 
-    ukv_options_t const,
+    ukv_options_t const c_options,
 
     ukv_size_t** c_min_cardinalities,
     ukv_size_t** c_max_cardinalities,
@@ -803,6 +803,7 @@ void ukv_collection_drop(
 void ukv_collection_list( //
     ukv_database_t const c_db,
     ukv_transaction_t const, // TODO: add support for transactions
+    ukv_options_t const c_options,
     ukv_size_t* c_count,
     ukv_collection_t** c_ids,
     ukv_length_t** c_offsets,
