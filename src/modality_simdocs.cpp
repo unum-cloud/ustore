@@ -6,18 +6,16 @@
  * Sits on top of any @see "ukv.h"-compatible system.
  */
 
-#include <vector>
-#include <string>
-#include <string_view>
-#include <unordered_set>
-#include <variant>
-#include <charconv> // `std::to_chars`
-#include <cstdio>   // `std::snprintf`
+#include <cstdio>      // `std::snprintf`
+#include <charconv>    // `std::to_chars`
+#include <string_view> // `std::string_view`
 
-#include <yyjson.h>
-#include <bson.h> // Converting from/to BSON
+#include <yyjson.h> // Primary internal JSON representation
+#include <bson.h>   // Converting from/to BSON
 
-#include "helpers.hpp"
+#include "helpers/pmr.hpp"
+#include "helpers/algorithm.hpp"
+#include "helpers/vector.hpp" // `growing_tape_t`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/

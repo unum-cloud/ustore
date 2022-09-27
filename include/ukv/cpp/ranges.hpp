@@ -333,7 +333,7 @@ class consecutive_chunks_iterator_gt {
     using chunk_t = chunk_at;
     using element_t = typename chunk_t::value_type;
 
-    ukv_length_t* lengths_ = nullptr;
+    ukv_length_t const* lengths_ = nullptr;
     element_t* contents_ = nullptr;
 
   public:
@@ -344,7 +344,7 @@ class consecutive_chunks_iterator_gt {
     using reference = void;
 
     template <typename same_size_at>
-    consecutive_chunks_iterator_gt(ukv_length_t* lens, same_size_at* vals) noexcept
+    consecutive_chunks_iterator_gt(ukv_length_t const* lens, same_size_at* vals) noexcept
         : lengths_(lens), contents_((element_t*)(vals)) {
         static_assert(sizeof(same_size_at) == sizeof(element_t));
     }
@@ -356,8 +356,8 @@ class consecutive_chunks_iterator_gt {
     }
 
     consecutive_chunks_iterator_gt operator++(int) const noexcept { return {lengths_ + 1, contents_ + *lengths_}; }
-    chunk_t operator*() const noexcept { return {contents_, contents_ + *lengths_}; }
-    chunk_t operator[](std::size_t i) const noexcept { return {contents_, contents_ + *lengths_}; }
+    chunk_t operator*() const noexcept { return {contents_, *lengths_}; }
+    chunk_t operator[](std::size_t i) const noexcept { return {contents_, *lengths_}; }
 
     bool operator==(consecutive_chunks_iterator_gt const& other) const noexcept { return lengths_ == other.lengths_; }
     bool operator!=(consecutive_chunks_iterator_gt const& other) const noexcept { return lengths_ != other.lengths_; }
@@ -402,7 +402,7 @@ class joined_chunks_iterator_gt {
     joined_chunks_iterator_gt operator--(int) const noexcept { return {offsets_ - 1, contents_}; }
     chunk_t operator*() const noexcept { return {contents_ + offsets_[0], offsets_[1] - offsets_[0]}; }
     chunk_t operator[](std::size_t i) const noexcept {
-        return {offsets_[i + 1] - offsets_[i], contents_ + offsets_[i]};
+        return {contents_ + offsets_[i], offsets_[i + 1] - offsets_[i]};
     }
 
     bool operator==(joined_chunks_iterator_gt const& other) const noexcept { return offsets_ == other.offsets_; }
