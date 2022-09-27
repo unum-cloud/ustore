@@ -54,7 +54,7 @@ struct py_transaction_t : public std::enable_shared_from_this<py_transaction_t> 
 
     std::weak_ptr<py_db_t> py_db_ptr;
 
-    bool watch = false;
+    bool watch = true;
     bool flush_writes = false;
 
     py_transaction_t(transaction_t&& t, std::shared_ptr<py_db_t> py_db_ptr) noexcept
@@ -85,7 +85,7 @@ struct py_collection_t {
         auto base = ukv_options_default_k;
         return txn_ptr ? static_cast<ukv_options_t>( //
                              base |                  //
-                             (txn_ptr->watch ? ukv_option_watch_k : base) |
+                             (txn_ptr->watch ? ukv_option_txn_watch_k : base) |
                              (txn_ptr->flush_writes ? ukv_option_write_flush_k : base))
                        : base;
     }

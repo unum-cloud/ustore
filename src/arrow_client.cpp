@@ -127,7 +127,7 @@ void ukv_read( //
                                          : nullptr;
 
     bool const read_shared = c_options & ukv_option_read_shared_k;
-    bool const watch = c_options & ukv_option_watch_k;
+    bool const watch = c_options & ukv_option_txn_watch_k;
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightRead);
     if (c_txn)
@@ -622,7 +622,7 @@ void ukv_scan( //
 
     // Configure the `cmd` descriptor
     bool const read_shared = c_options & ukv_option_read_shared_k;
-    bool const watch = c_options & ukv_option_watch_k;
+    bool const watch = c_options & ukv_option_txn_watch_k;
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightScan);
     if (c_txn)
