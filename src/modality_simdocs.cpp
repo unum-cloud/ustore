@@ -344,21 +344,21 @@ std::string_view json_to_string(yyjson_val* value,
 
         switch (subtype) {
         case YYJSON_SUBTYPE_UINT:
-            result = print_number(yyjson_get_uint(value), print_buffer, print_buffer + printed_number_length_limit_k);
+            result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, yyjson_get_uint(value));
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
             break;
 
         case YYJSON_SUBTYPE_SINT:
-            result = print_number(yyjson_get_sint(value), print_buffer, print_buffer + printed_number_length_limit_k);
+            result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, yyjson_get_sint(value));
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
             break;
 
         case YYJSON_SUBTYPE_REAL:
-            result = print_number(yyjson_get_real(value), print_buffer, print_buffer + printed_number_length_limit_k);
+            result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, yyjson_get_real(value));
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
