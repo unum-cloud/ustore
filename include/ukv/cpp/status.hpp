@@ -193,3 +193,9 @@ enum error_code_t {
         if (*c_error)            \
             return;              \
     }
+
+#define return_error(c_error, message) \
+    {                                  \
+        *c_error = message;            \
+        return;                        \
+    }
