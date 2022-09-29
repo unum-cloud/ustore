@@ -305,7 +305,7 @@ inline void hash_combine(std::size_t& seed, hashable_at const& v) {
     seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
-struct sub_key_hash_t {
+struct collection_key_hash_t {
     inline std::size_t operator()(collection_key_t const& sub) const noexcept {
         std::size_t result = SIZE_MAX;
         hash_combine(result, sub.key);
@@ -357,4 +357,8 @@ template <>
 inline void swap(unum::ukv::value_ref_t& a, unum::ukv::value_ref_t& b) noexcept {
     a.swap(b);
 }
+
+template <>
+class hash<unum::ukv::collection_key_t> : public unum::ukv::collection_key_hash_t {};
+
 } // namespace std
