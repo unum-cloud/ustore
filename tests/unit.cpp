@@ -1,5 +1,5 @@
 /**
- * @file units.cpp
+ * @file unit.cpp
  * @author Ashot Vardanian
  * @date 2022-07-06
  *
@@ -55,12 +55,8 @@ static json_t json_parse(char const* begin, char const* end) {
 #define M_EXPECT_EQ_MSG(str1, str2) \
     EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 
-#if defined(UKV_ENGINE_IS_LEVELDB)
-constexpr char const* path_k = "tmp/leveldb";
-#elif defined(UKV_ENGINE_IS_ROCKSDB)
-constexpr char const* path_k = "tmp/rocksdb";
-#elif defined(UKV_ENGINE_IS_UNUMDB)
-constexpr char const* path_k = "tmp/unumdb";
+#if defined(UKV_TEST_PATH)
+constexpr char const* path_k = UKV_TEST_PATH;
 #else
 constexpr char const* path_k = "";
 #endif

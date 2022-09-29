@@ -110,15 +110,19 @@ message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 # Define the libraries we will need to build
 add_library(ukv_stl src/engine_stl.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_stl yyjson bson ${jemalloc_LIBRARIES})
+target_compile_definitions(ukv_stl INTERFACE UKV_VERSION="${_VERSION_}")
+target_compile_definitions(ukv_stl INTERFACE UKV_ENGINE_NAME=stl)
 
 add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_rocksdb rocksdb yyjson bson ${jemalloc_LIBRARIES})
+target_compile_definitions(ukv_rocksdb INTERFACE UKV_VERSION="${_VERSION_}")
+target_compile_definitions(ukv_rocksdb INTERFACE UKV_ENGINE_NAME=rocksdb)
 
 add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_leveldb leveldb yyjson bson ${jemalloc_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
-
-# target_compile_definitions(ukv_leveldb PRIVATE UKV_ENGINE_IS_LEVELDB)
+target_compile_definitions(ukv_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
+target_compile_definitions(ukv_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
 
 # The rest of CMake will apply to all client libraries
 set(UKV_ENGINE_NAMES "stl" "leveldb" "rocksdb")
@@ -132,7 +136,8 @@ if(EXISTS ${UKV_BUILD_UNUMDB})
 
   add_library(ukv_unumdb src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp)
   target_link_libraries(ukv_unumdb unumdb nlohmann_json::nlohmann_json)
-  target_compile_definitions(ukv_unumdb PRIVATE UKV_ENGINE_IS_UNUMDB)
+  target_compile_definitions(ukv_unumdb INTERFACE UKV_VERSION="${_VERSION_}")
+  target_compile_definitions(ukv_unumdb INTERFACE UKV_ENGINE_NAME=unumdb)
 
   list(APPEND UKV_ENGINE_NAMES "unumdb")
   list(APPEND UKV_CLIENT_NAMES "unumdb")
@@ -179,15 +184,18 @@ if(${UKV_BUILD_TESTS})
 
     string(CONCAT test_name "ukv_" ${client_name} "_compilation_test")
     add_executable(${test_name} tests/compilation.cpp ${target_SOURCES})
+    target_compile_definitions(${test_name} PUBLIC UKV_TEST_PATH="tmp/${client_name}")
     target_link_libraries(${test_name} ${target_LIBRARIES})
 
     string(CONCAT test_name "ukv_" ${client_name} "_unit_test")
     add_executable(${test_name} tests/unit.cpp ${target_SOURCES})
     target_link_libraries(${test_name} gtest ${target_LIBRARIES})
+    target_compile_definitions(${test_name} PUBLIC UKV_TEST_PATH="tmp/${client_name}")
     add_test(NAME "${client_name}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_name}")
 
     string(CONCAT test_name "ukv_" ${client_name} "_api_test")
     add_executable(${test_name} tests/api.cpp ${target_SOURCES})
+    target_compile_definitions(${test_name} PUBLIC UKV_TEST_PATH="tmp/${client_name}")
     target_link_libraries(${test_name} gtest ${target_LIBRARIES})
   endforeach()
 endif()
