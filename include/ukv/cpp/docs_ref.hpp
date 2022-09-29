@@ -207,6 +207,30 @@ class docs_ref_gt {
                          flush ? ukv_option_write_flush_k : ukv_options_default_k);
     }
 
+    template <typename contents_arg_at>
+    status_t insert(contents_arg_at&& vals, bool flush = false) noexcept {
+        return any_write(std::forward<contents_arg_at>(vals),
+                         ukv_doc_modify_insert_k,
+                         type_,
+                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
+    }
+
+    template <typename contents_arg_at>
+    status_t upsert(contents_arg_at&& vals, bool flush = false) noexcept {
+        return any_write(std::forward<contents_arg_at>(vals),
+                         ukv_doc_modify_upsert_k,
+                         type_,
+                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
+    }
+
+    template <typename contents_arg_at>
+    status_t update(contents_arg_at&& vals, bool flush = false) noexcept {
+        return any_write(std::forward<contents_arg_at>(vals),
+                         ukv_doc_modify_update_k,
+                         type_,
+                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
+    }
+
     /**
      * @brief Find the names of all unique fields in requested documents.
      */
