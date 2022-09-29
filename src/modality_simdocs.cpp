@@ -102,7 +102,7 @@ std::string_view print_number(char* begin, char* end, at scalar) {
             return {};
 
         *result.ptr = '\0';
-        return {begin, result.ptr - begin};
+        return {begin, static_cast<std::size_t>(result.ptr - begin)};
     }
 }
 
