@@ -149,7 +149,7 @@ class graph_collection_t {
 
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
-        ukv_options_t options = watch ? ukv_option_txn_watch_k : ukv_options_default_k;
+        ukv_options_t options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
 
         ukv_graph_find_edges( //
             db_,
@@ -227,7 +227,7 @@ class graph_collection_t {
             0,
             &role,
             0,
-            watch ? ukv_option_txn_watch_k : ukv_options_default_k,
+            !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k,
             &degrees_per_vertex,
             &neighborships_per_vertex,
             arena_,
@@ -281,7 +281,7 @@ class graph_collection_t {
             vertices.stride(),
             roles.begin().get(),
             roles.stride(),
-            watch ? ukv_option_txn_watch_k : ukv_options_default_k,
+            !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k,
             &degrees_per_vertex,
             &neighborships_per_vertex,
             arena_,
