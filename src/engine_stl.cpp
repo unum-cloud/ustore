@@ -25,7 +25,8 @@
 #include <stdio.h>    // Saving/reading from disk
 
 #include "ukv/db.h"
-#include "helpers.hpp"
+#include "helpers/pmr.hpp"
+#include "helpers/file.hpp"
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -45,6 +46,10 @@ bool const ukv_supports_snapshots_k = false;
 using namespace unum::ukv;
 using namespace unum;
 namespace fs = std::filesystem;
+
+using allocator_t = std::allocator<byte_t>;
+using buffer_t = std::vector<byte_t, allocator_t>;
+using generation_t = std::int64_t;
 
 struct stl_db_t;
 struct stl_collection_t;
@@ -86,8 +91,8 @@ using stl_collection_ptr_t = std::unique_ptr<stl_collection_t>;
 
 struct stl_txn_t {
     std::map<collection_key_t, buffer_t> upserted;
-    std::unordered_map<collection_key_t, generation_t, sub_key_hash_t> requested;
-    std::unordered_set<collection_key_t, sub_key_hash_t> removed;
+    std::unordered_map<collection_key_t, generation_t, collection_key_hash_t> requested;
+    std::unordered_set<collection_key_t, collection_key_hash_t> removed;
 
     stl_db_t* db_ptr {nullptr};
     generation_t generation {0};
@@ -117,6 +122,20 @@ struct stl_db_t {
 
 stl_collection_t& stl_collection(stl_db_t& db, ukv_collection_t collection) {
     return collection == ukv_collection_main_k ? db.main : *reinterpret_cast<stl_collection_t*>(collection);
+}
+
+/**
+ * @brief Solves the problem of modulo arithmetic and `generation_t` overflow.
+ * Still works correctly, when `max` has overflown, but `min` hasn't yet,
+ * so `min` can be bigger than `max`.
+ */
+inline bool entry_was_overwritten(generation_t entry_generation,
+                                  generation_t transaction_generation,
+                                  generation_t youngest_generation) noexcept {
+
+    return transaction_generation <= youngest_generation
+               ? ((entry_generation >= transaction_generation) & (entry_generation <= youngest_generation))
+               : ((entry_generation >= transaction_generation) | (entry_generation <= youngest_generation));
 }
 
 void save_to_disk(stl_collection_t const& collection, std::string const& path, ukv_error_t* c_error) {
@@ -335,7 +354,7 @@ void read_txn_under_lock( //
 
     stl_db_t& db = *txn.db_ptr;
     generation_t const youngest_generation = db.youngest_generation.load();
-    bool const watch = c_options & ukv_option_watch_k;
+    bool const dont_watch = c_options & ukv_option_transaction_dont_watch_k;
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
@@ -360,7 +379,7 @@ void read_txn_under_lock( //
             auto value = found ? value_view(key_iterator->second.buffer) : value_view_t {};
             enumerator(i, value);
 
-            if (watch)
+            if (!dont_watch)
                 txn.requested.emplace(place.collection_key(), key_iterator->second.generation);
         }
 
@@ -368,7 +387,7 @@ void read_txn_under_lock( //
         else {
             enumerator(i, value_view_t {});
 
-            if (watch)
+            if (!dont_watch)
                 txn.requested.emplace(place.collection_key(), generation_t {});
         }
     }
@@ -535,8 +554,10 @@ void ukv_read( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c_tasks_count)
+        return;
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
@@ -612,6 +633,8 @@ void ukv_write( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c_tasks_count)
+        return;
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
     stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
@@ -635,7 +658,7 @@ void ukv_write( //
 void ukv_scan( //
     ukv_database_t const c_db,
     ukv_transaction_t const c_txn,
-    ukv_size_t const c_min_tasks_count,
+    ukv_size_t const c_tasks_count,
 
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
@@ -659,8 +682,10 @@ void ukv_scan( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c_tasks_count)
+        return;
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
@@ -669,7 +694,7 @@ void ukv_scan( //
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_scan_limits, c_scan_limits_stride};
-    scans_arg_t scans {collections, start_keys, end_keys, lens, c_min_tasks_count};
+    scans_arg_t scans {collections, start_keys, end_keys, lens, c_tasks_count};
 
     validate_scan(c_txn, scans, c_options, c_error);
     return_on_error(c_error);
@@ -692,7 +717,7 @@ void ukv_size( //
     ukv_key_t const* c_end_keys,
     ukv_size_t const c_end_keys_stride,
 
-    ukv_options_t const,
+    ukv_options_t const c_options,
 
     ukv_size_t** c_min_cardinalities,
     ukv_size_t** c_max_cardinalities,
@@ -705,7 +730,10 @@ void ukv_size( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    if (!n)
+        return;
+
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     auto min_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_cardinalities);
@@ -816,7 +844,7 @@ void ukv_collection_drop(
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(c_collection_id == ukv_collection_main_k || !invalidate,
+    return_if_error(c_collection_id != ukv_collection_main_k || !invalidate,
                     c_error,
                     args_combo_k,
                     "Default collection can't be invalidated.");
@@ -862,6 +890,7 @@ void ukv_collection_drop(
 void ukv_collection_list( //
     ukv_database_t const c_db,
     ukv_transaction_t const,
+    ukv_options_t const c_options,
     ukv_size_t* c_count,
     ukv_collection_t** c_ids,
     ukv_length_t** c_offsets,
@@ -872,7 +901,7 @@ void ukv_collection_list( //
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     return_if_error(c_count && c_names, c_error, args_combo_k, "Need names and outputs!");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
@@ -937,7 +966,6 @@ void ukv_transaction_init(
     return_on_error(c_error);
 
     stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
-
     safe_section("Initializing transaction state", c_error, [&] {
         if (!*c_txn)
             *c_txn = new stl_txn_t();

@@ -1,5 +1,5 @@
 /**
- * @file units.cpp
+ * @file unit.cpp
  * @author Ashot Vardanian
  * @date 2022-07-06
  *
@@ -55,14 +55,10 @@ static json_t json_parse(char const* begin, char const* end) {
 #define M_EXPECT_EQ_MSG(str1, str2) \
     EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 
-#if defined(UKV_ENGINE_IS_LEVELDB)
-constexpr const char* path = "tmp/leveldb";
-#elif defined(UKV_ENGINE_IS_ROCKSDB)
-constexpr const char* path = "tmp/rocksdb";
-#elif defined(UKV_ENGINE_IS_UNUMDB)
-constexpr const char* path = "tmp/unumdb";
+#if defined(UKV_TEST_PATH)
+constexpr char const* path_k = UKV_TEST_PATH;
 #else
-constexpr const char* path = "";
+constexpr char const* path_k = "";
 #endif
 
 #pragma region Binary Collections
@@ -168,22 +164,12 @@ void check_binary_collection(bins_collection_t& collection) {
     // Remove all of the values and check that they are missing
     EXPECT_TRUE(ref.erase());
     check_length(ref, ukv_length_missing_k);
-#if 0
-    // Invalid values
-    contents_arg_t invalid_values {
-        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
-        .lengths_begin = {&val_len, 0},
-        .contents_begin = {nullptr, 0},
-        .count = 3,
-    };
-    EXPECT_FALSE(ref.assign(invalid_values));
-#endif
 }
 
 TEST(db, basic) {
 
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
@@ -198,13 +184,13 @@ TEST(db, named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
     EXPECT_TRUE(db["col1"]);
     EXPECT_TRUE(db["col2"]);
 
-    bins_collection_t col1 = *(db["col1"]);
-    bins_collection_t col2 = *(db["col2"]);
+    bins_collection_t col1 = *db.add_collection("col1");
+    bins_collection_t col2 = *db.add_collection("col2");
 
     check_binary_collection(col1);
     check_binary_collection(col2);
@@ -222,7 +208,7 @@ TEST(db, collection_list) {
 
     database_t db;
 
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
     if (!ukv_supports_named_collections_k) {
         EXPECT_FALSE(*db["name"]);
@@ -267,6 +253,70 @@ TEST(db, collection_list) {
         EXPECT_FALSE(db.drop(""));
         EXPECT_TRUE(db.collection()->clear());
     }
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, paths) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path_k));
+
+    char const* keys[] {"Facebook", "Apple", "Amazon", "Netflix", "Google"};
+    char const* vals[] {"F", "A", "A", "N", "G"};
+
+    arena_t arena(db);
+    status_t status;
+    ukv_paths_write( //
+        db,
+        nullptr,
+        5,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        keys,
+        sizeof(char const*),
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        reinterpret_cast<ukv_bytes_cptr_t*>(vals),
+        sizeof(char const*),
+        ukv_options_default_k,
+        0,
+        arena.member_ptr(),
+        status.member_ptr());
+
+    ukv_key_t* key_hashes = nullptr;
+    char* vals_recovered = nullptr;
+    ukv_paths_read( //
+        db,
+        nullptr,
+        5,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        keys,
+        sizeof(char const*),
+        ukv_options_default_k,
+        0,
+        nullptr,
+        &key_hashes,
+        nullptr,
+        nullptr,
+        reinterpret_cast<ukv_bytes_ptr_t*>(&vals_recovered),
+        arena.member_ptr(),
+        status.member_ptr());
+
+    EXPECT_TRUE(status);
+    EXPECT_EQ(std::string_view(vals_recovered, 5), "FAANG");
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, unnamed_and_named) {
@@ -275,7 +325,7 @@ TEST(db, unnamed_and_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
     std::vector<ukv_key_t> keys {54, 55, 56};
     ukv_length_t val_len = sizeof(std::uint64_t);
@@ -294,7 +344,7 @@ TEST(db, unnamed_and_named) {
         for (auto& j : vals)
             j += 7;
 
-        bins_collection_t collection = *db.collection(i);
+        bins_collection_t collection = *db.add_collection(i);
         auto collection_ref = collection[keys];
         check_length(collection_ref, ukv_length_missing_k);
         round_trip(collection_ref, values);
@@ -309,7 +359,7 @@ TEST(db, txn) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
 
@@ -354,7 +404,7 @@ TEST(db, txn_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
 
@@ -400,7 +450,7 @@ TEST(db, txn_unnamed_then_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
@@ -437,8 +487,8 @@ TEST(db, txn_unnamed_then_named) {
     check_equalities(collection_ref, values);
 
     // Transaction with named collection
-    EXPECT_TRUE(db.collection("named_col"));
-    bins_collection_t named_collection = *db.collection("named_col");
+    EXPECT_TRUE(db.add_collection("named_col"));
+    bins_collection_t named_collection = *db.add_collection("named_col");
     std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
     auto txn_named_collection_ref = txn[sub_keys];
     round_trip(txn_named_collection_ref, values);
@@ -462,7 +512,7 @@ TEST(db, txn_unnamed_then_named) {
 TEST(db, docs) {
 
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
     // JSON
     docs_collection_t collection = *db.collection<docs_collection_t>();
@@ -490,9 +540,9 @@ TEST(db, docs) {
     // JSON-Patching
     auto json_patch =
         R"( [
-            { "op": "replace", "path": "/person", "value": "Alice" },
-            { "op": "add", "path": "/hello", "value": ["world"] },
-            { "op": "remove", "path": "/age" }
+            { "op": "replace", "path_k": "/person", "value": "Alice" },
+            { "op": "add", "path_k": "/hello", "value": ["world"] },
+            { "op": "remove", "path_k": "/age" }
             ] )"_json.dump();
     expected_json = R"( {"person": "Alice", "hello": ["world"]} )"_json.dump();
     collection[1].patch(json_patch.c_str());
@@ -513,11 +563,11 @@ TEST(db, docs) {
 
     EXPECT_TRUE(db.clear());
 }
-
+#if 0
 TEST(db, docs_merge_and_patch) {
     using json_t = nlohmann::json;
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
     docs_collection_t collection = *db.collection<docs_collection_t>();
 
     std::ifstream f_patch("tests/patch.json");
@@ -541,15 +591,16 @@ TEST(db, docs_merge_and_patch) {
         collection[1] = merge.c_str();
         M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
     }
+
+    EXPECT_TRUE(db.clear());
 }
 
-#if 0
-TEST(db, doc_fields) {
+TEST(db, doc_fields_update) {
     using json_t = nlohmann::json;
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
-    bins_collection_t collection = *db.collection(nullptr, ukv_format_json_k);
+    docs_collection_t collection = *db.collection<docs_collection_t>();
     auto json1 = R"( {"person": "Carl", "age": 24} )"_json.dump();
     collection[1] = json1.c_str();
     M_EXPECT_EQ_JSON(collection[1].value()->c_str(), json1.c_str());
@@ -560,14 +611,15 @@ TEST(db, doc_fields) {
     collection[ckf(1, "age")] = "25";
     M_EXPECT_EQ_JSON(collection[ckf(1, "person")].value()->c_str(), "\"Charls\"");
     M_EXPECT_EQ_JSON(collection[ckf(1, "age")].value()->c_str(), "25");
+
+    EXPECT_TRUE(db.clear());
 }
 #endif
-
 TEST(db, docs_table) {
 
     using json_t = nlohmann::json;
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
     // Inject basic data
     docs_collection_t collection = *db.collection<docs_collection_t>();
@@ -722,7 +774,7 @@ TEST(db, docs_table) {
 TEST(db, graph_triangle) {
 
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
     graph_collection_t net = *db.collection<graph_collection_t>();
 
@@ -819,7 +871,7 @@ TEST(db, graph_triangle) {
 TEST(db, graph_triangle_batch_api) {
 
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
     bins_collection_t main = *db.collection();
     graph_collection_t net = *db.collection<graph_collection_t>();
@@ -930,7 +982,7 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
 
 TEST(db, graph_random_fill) {
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
     bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
@@ -947,13 +999,13 @@ TEST(db, graph_random_fill) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, graph_txn) {
+TEST(db, graph_conflicting_transactions) {
 
     if (!ukv_supports_transactions_k)
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
     graph_collection_t net = *db.collection<graph_collection_t>();
 
@@ -1001,16 +1053,14 @@ TEST(db, graph_txn) {
     EXPECT_TRUE(db.clear());
 }
 
-#if 0
 TEST(db, graph_remove_vertices) {
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
-    bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
 
-    constexpr std::size_t vertices_count = 2;
-    auto edges_vec = make_edges(vertices_count, 1);
+    constexpr std::size_t vertices_count = 1000;
+    auto edges_vec = make_edges(vertices_count, 100);
     EXPECT_TRUE(graph.upsert(edges(edges_vec)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
@@ -1026,9 +1076,8 @@ TEST(db, graph_remove_vertices) {
 
 TEST(db, graph_remove_edges_keep_vertices) {
     database_t db;
-    EXPECT_TRUE(db.open(path));
+    EXPECT_TRUE(db.open(path_k));
 
-    bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
@@ -1043,7 +1092,6 @@ TEST(db, graph_remove_edges_keep_vertices) {
 
     EXPECT_TRUE(db.clear());
 }
-#endif
 
 int main(int argc, char** argv) {
     std::filesystem::create_directory("./tmp");

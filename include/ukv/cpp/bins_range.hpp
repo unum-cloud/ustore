@@ -227,7 +227,7 @@ class pairs_stream_t {
             0,
             found_keys,
             sizeof(ukv_key_t),
-            ukv_option_nodiscard_k,
+            ukv_option_dont_discard_memory_k,
             nullptr,
             &found_offs,
             nullptr,

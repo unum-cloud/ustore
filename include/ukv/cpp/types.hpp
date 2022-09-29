@@ -170,6 +170,7 @@ class value_view_t {
     inline byte_t const* begin() const noexcept { return data(); }
     inline byte_t const* end() const noexcept { return data() + size(); }
     inline bool empty() const noexcept { return !size(); }
+    operator std::string_view() const noexcept { return {c_str(), size()}; }
 
     ukv_bytes_cptr_t const* member_ptr() const noexcept { return &ptr_; }
     ukv_length_t const* member_length() const noexcept { return &length_; }
@@ -304,7 +305,7 @@ inline void hash_combine(std::size_t& seed, hashable_at const& v) {
     seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
-struct sub_key_hash_t {
+struct collection_key_hash_t {
     inline std::size_t operator()(collection_key_t const& sub) const noexcept {
         std::size_t result = SIZE_MAX;
         hash_combine(result, sub.key);
@@ -356,4 +357,8 @@ template <>
 inline void swap(unum::ukv::value_ref_t& a, unum::ukv::value_ref_t& b) noexcept {
     a.swap(b);
 }
+
+template <>
+class hash<unum::ukv::collection_key_t> : public unum::ukv::collection_key_hash_t {};
+
 } // namespace std

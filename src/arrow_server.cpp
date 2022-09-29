@@ -20,7 +20,7 @@
 #include "ukv/cpp/db.hpp"
 #include "ukv/cpp/types.hpp" // `hash_combine`
 
-#include "arrow_helpers.hpp"
+#include "helpers/arrow.hpp"
 #include "ukv/arrow.h"
 
 using namespace unum::ukv;
@@ -158,12 +158,12 @@ enum client_id_t : base_id_t {};
 enum txn_id_t : base_id_t {};
 static_assert(sizeof(txn_id_t) == sizeof(ukv_transaction_t));
 
-client_id_t parse_parse_client_id(arf::ServerCallContext const& ctx) {
+client_id_t parse_client_id(arf::ServerCallContext const& ctx) noexcept {
     std::string const& peer_addr = ctx.peer();
     return static_cast<client_id_t>(std::hash<std::string> {}(peer_addr));
 }
 
-base_id_t parse_u64_hex(std::string_view str, base_id_t default_ = 0) {
+base_id_t parse_u64_hex(std::string_view str, base_id_t default_ = 0) noexcept {
     // if (str.size() != 16 + 2)
     //     return default_;
     // auto result = boost::lexical_cast<base_id_t>(str.data(), str.size());
@@ -232,8 +232,8 @@ struct session_lock_t {
     ukv_transaction_t txn = nullptr;
     ukv_arena_t arena = nullptr;
 
-    inline bool is_txn() const noexcept { return txn; }
-    ~session_lock_t();
+    bool is_txn() const noexcept { return txn; }
+    ~session_lock_t() noexcept;
 };
 
 /**
@@ -249,24 +249,22 @@ class sessions_t {
     std::vector<ukv_transaction_t> free_txns_;
     /// Links each session to memory used for its operations:
     client_to_txn_t client_to_txn_;
-    std::vector<session_id_t> txns_aging_heap_;
     ukv_database_t db_ = nullptr;
     // On Postgre 9.6+ is set to same 30 seconds.
     std::size_t milliseconds_timeout = 30'000;
 
-    aging_txn_order_t order() const noexcept { return aging_txn_order_t {client_to_txn_}; }
-
     running_txn_t pop(ukv_error_t* c_error) noexcept {
-        session_id_t session_id = txns_aging_heap_.front();
-        auto it = client_to_txn_.find(session_id);
+
+        auto it = std::min_element(client_to_txn_.begin(), client_to_txn_.end(), [](auto left, auto right) {
+            return left.second.last_access < right.second.last_access && !left.second.executing;
+        });
+
         auto age = std::chrono::duration_cast<std::chrono::milliseconds>(it->second.last_access - sys_clock_t::now());
-        if (age.count() < milliseconds_timeout) {
+        if (age.count() < milliseconds_timeout || it->second.executing) {
             log_error(c_error, error_unknown_k, "Too many concurrent sessions");
             return {};
         }
 
-        std::pop_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
-        txns_aging_heap_.pop_back(); // Resize by removing one last slot
         running_txn_t released = it->second;
         client_to_txn_.erase(it);
         released.executing = false;
@@ -276,17 +274,12 @@ class sessions_t {
     void submit(session_id_t session_id, running_txn_t running_txn) noexcept {
         running_txn.executing = false;
         auto res = client_to_txn_.insert_or_assign(session_id, running_txn);
-        if (res.second)
-            txns_aging_heap_.push_back(session_id);
-        std::push_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
     }
 
   public:
-    sessions_t(ukv_database_t db, std::size_t n)
-        : db_(db), free_arenas_(n), free_txns_(n), client_to_txn_(n), txns_aging_heap_(n) {
+    sessions_t(ukv_database_t db, std::size_t n) : db_(db), free_arenas_(n), free_txns_(n), client_to_txn_(n) {
         std::fill_n(free_arenas_.begin(), n, nullptr);
         std::fill_n(free_txns_.begin(), n, nullptr);
-        txns_aging_heap_.clear();
     }
 
     ~sessions_t() noexcept {
@@ -316,10 +309,6 @@ class sessions_t {
 
         // Update the heap order.
         // With a single change shouldn't take more than `log2(n)` operations.
-        auto aging = std::find(txns_aging_heap_.begin(), txns_aging_heap_.end(), session_id);
-        if (aging != txns_aging_heap_.end())
-            txns_aging_heap_.erase(aging);
-        std::make_heap(txns_aging_heap_.begin(), txns_aging_heap_.end(), order());
         return running;
     }
 
@@ -406,7 +395,7 @@ class sessions_t {
     }
 };
 
-session_lock_t::~session_lock_t() {
+session_lock_t::~session_lock_t() noexcept {
     if (is_txn())
         sessions.hold_txn( //
             session_id,
@@ -425,19 +414,20 @@ struct session_params_t {
     std::optional<std::string_view> transaction_id;
     std::optional<std::string_view> collection_name;
     std::optional<std::string_view> collection_id;
+    std::optional<std::string_view> collection_drop_mode;
+    std::optional<std::string_view> read_part;
 
-    std::optional<std::string_view> opt_read_part;
-    std::optional<std::string_view> opt_drop_mode;
     std::optional<std::string_view> opt_snapshot;
     std::optional<std::string_view> opt_flush;
-    std::optional<std::string_view> opt_watch;
-    std::optional<std::string_view> opt_shared_mem;
+    std::optional<std::string_view> opt_dont_watch;
+    std::optional<std::string_view> opt_shared_memory;
+    std::optional<std::string_view> opt_dont_discard_memory;
 };
 
-session_params_t session_params(arf::ServerCallContext const& server_call, std::string_view uri) {
+session_params_t session_params(arf::ServerCallContext const& server_call, std::string_view uri) noexcept {
 
     session_params_t result;
-    result.session_id.client_id = parse_parse_client_id(server_call);
+    result.session_id.client_id = parse_client_id(server_call);
 
     auto params_offs = uri.find('?');
     if (params_offs == std::string_view::npos)
@@ -451,23 +441,39 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.collection_name = param_value(params, kParamCollectionName);
     result.collection_id = param_value(params, kParamCollectionID);
 
-    result.opt_read_part = param_value(params, kParamReadPart);
-    result.opt_drop_mode = param_value(params, kParamDropMode);
+    result.collection_drop_mode = param_value(params, kParamDropMode);
+    result.read_part = param_value(params, kParamReadPart);
+
     result.opt_snapshot = param_value(params, kParamFlagSnapshotTxn);
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
-    result.opt_watch = param_value(params, kParamFlagWatch);
-    result.opt_shared_mem = param_value(params, kParamFlagSharedMemRead);
-
+    result.opt_dont_watch = param_value(params, kParamFlagDontWatch);
+    result.opt_shared_memory = param_value(params, kParamFlagSharedMemRead);
+    result.opt_dont_discard_memory;
     return result;
 }
 
-ukv_str_view_t get_null_terminated(ar::Buffer const& buf) {
+ukv_options_t ukv_options(session_params_t const& params) noexcept {
+    ukv_options_t result = ukv_options_default_k;
+    if (params.opt_dont_watch)
+        result = ukv_options_t(result | ukv_option_transaction_dont_watch_k);
+    if (params.opt_snapshot)
+        result = ukv_options_t(result | ukv_option_transaction_snapshot_k);
+    if (params.opt_flush)
+        result = ukv_options_t(result | ukv_option_write_flush_k);
+    if (params.opt_shared_memory)
+        result = ukv_options_t(result | ukv_option_read_shared_memory_k);
+    if (params.opt_dont_discard_memory)
+        result = ukv_options_t(result | ukv_option_dont_discard_memory_k);
+    return result;
+}
+
+ukv_str_view_t get_null_terminated(ar::Buffer const& buf) noexcept {
     ukv_str_view_t collection_config = reinterpret_cast<ukv_str_view_t>(buf.data());
     auto end_config = collection_config + buf.capacity();
     return std::find(collection_config, end_config, '\0') == end_config ? nullptr : collection_config;
 }
 
-ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) {
+ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) noexcept {
     return buf_ptr ? get_null_terminated(*buf_ptr) : nullptr;
 }
 
@@ -570,16 +576,15 @@ class UKVService : public arf::FlightServerBase {
 
         // Dropping a collection
         if (is_query(action.type, kActionColDrop.type)) {
-            if (!params.collection_id && !params.collection_name)
-                return ar::Status::Invalid("Missing collection name argument");
+            if (!params.collection_id)
+                return ar::Status::Invalid("Missing collection ID argument");
 
             ukv_drop_mode_t mode = //
-                params.opt_drop_mode == kParamDropModeValues     ? ukv_drop_vals_k
-                : params.opt_drop_mode == kParamDropModeContents ? ukv_drop_keys_vals_k
-                                                                 : ukv_drop_keys_vals_handle_k;
+                params.collection_drop_mode == kParamDropModeValues     ? ukv_drop_vals_k
+                : params.collection_drop_mode == kParamDropModeContents ? ukv_drop_keys_vals_k
+                                                                        : ukv_drop_keys_vals_handle_k;
 
             ukv_collection_t c_collection_id = ukv_collection_main_k;
-            ukv_str_span_t c_collection_name = nullptr;
             if (params.collection_id)
                 c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
 
@@ -592,9 +597,6 @@ class UKVService : public arf::FlightServerBase {
 
         // Starting a transaction
         if (is_query(action.type, kActionTxnBegin.type)) {
-            ukv_options_t options = ukv_options_default_k;
-            if (params.opt_snapshot)
-                options = ukv_option_txn_snapshot_k;
             if (!params.transaction_id)
                 params.session_id.txn_id = static_cast<txn_id_t>(std::rand());
 
@@ -604,11 +606,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             // Cleanup internal state
-            ukv_transaction_init( //
-                db_,
-                options,
-                &session.txn,
-                status.member_ptr());
+            ukv_transaction_init(db_, ukv_options(params), &session.txn, status.member_ptr());
             if (!status) {
                 sessions_.release_txn(params.session_id);
                 return ar::Status::ExecutionError(status.message());
@@ -623,9 +621,6 @@ class UKVService : public arf::FlightServerBase {
         if (is_query(action.type, kActionTxnCommit.type)) {
             if (!params.transaction_id)
                 return ar::Status::Invalid("Missing transaction ID argument");
-            ukv_options_t options = ukv_options_default_k;
-            if (params.opt_flush)
-                options = ukv_option_write_flush_k;
 
             running_txn_t session = sessions_.continue_txn(params.session_id, status.member_ptr());
             if (!status) {
@@ -633,7 +628,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             }
 
-            ukv_transaction_commit(db_, session.txn, options, status.member_ptr());
+            ukv_transaction_commit(db_, session.txn, ukv_options(params), status.member_ptr());
             if (!status) {
                 sessions_.hold_txn(params.session_id, session);
                 return ar::Status::ExecutionError(status.message());
@@ -681,8 +676,8 @@ class UKVService : public arf::FlightServerBase {
             else
                 input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
 
-            bool const request_only_presences = params.opt_read_part == kParamReadPartPresences;
-            bool const request_only_lengths = params.opt_read_part == kParamReadPartLengths;
+            bool const request_only_presences = params.read_part == kParamReadPartPresences;
+            bool const request_only_lengths = params.read_part == kParamReadPartLengths;
             bool const request_content = !request_only_lengths && !request_only_presences;
 
             // Reserve resources for the execution of this request
@@ -706,7 +701,7 @@ class UKVService : public arf::FlightServerBase {
                 input_collections.stride(),
                 input_keys.get(),
                 input_keys.stride(),
-                ukv_options_default_k,
+                ukv_options(params),
                 &found_presences,
                 request_content ? &found_offsets : nullptr,
                 request_only_lengths ? &found_lengths : nullptr,
@@ -802,7 +797,7 @@ class UKVService : public arf::FlightServerBase {
                 input_end_keys.stride(),
                 input_lengths.get(),
                 input_lengths.stride(),
-                ukv_options_default_k,
+                ukv_options(params),
                 &found_offsets,
                 nullptr,
                 &found_keys,
@@ -905,7 +900,7 @@ class UKVService : public arf::FlightServerBase {
                 input_vals.lengths_begin.stride(),
                 input_vals.contents_begin.get(),
                 input_vals.contents_begin.stride(),
-                ukv_options_default_k,
+                ukv_options(params),
                 &session.arena,
                 status.member_ptr());
 
@@ -940,6 +935,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_collection_list( //
                 db_,
                 nullptr, // TODO: Add transaction argument
+                ukv_options(params),
                 &count,
                 &collections,
                 &offsets,
