@@ -20,7 +20,9 @@
 #include <memory_resource> // `std::pmr::vector`
 #endif
 
-#include "ukv/ukv.hpp"
+#include "ukv/cpp/types.hpp"  // `byte_t`, `next_power_of_two`
+#include "ukv/cpp/ranges.hpp" // `strided_range_gt`
+#include "ukv/cpp/status.hpp" // `out_of_memory_k`
 
 #if __APPLE__
 namespace std::pmr {
@@ -37,27 +39,27 @@ inline auto get_default_resource() {
 
 namespace unum::ukv {
 
-inline thread_local std::pmr::memory_resource* thrlocal_memres = std::pmr::get_default_resource();
+inline thread_local std::pmr::memory_resource* local_memory = std::pmr::get_default_resource();
 
 class monotonic_resource_t final : public std::pmr::memory_resource {
   public:
     enum type_t { capped_k, growing_k, borrowed_k };
 
   private:
-    static constexpr size_t growth_factor_k = 2;
+    static constexpr std::size_t growth_factor_k = 2;
 
     struct buffer_t {
         void* begin = nullptr;
-        size_t total_memory = 0;
-        size_t available_memory = 0;
+        std::size_t total_memory = 0;
+        std::size_t available_memory = 0;
 
         buffer_t() = default;
-        buffer_t(void* bg, size_t tm, size_t am) : begin(bg), total_memory(tm), available_memory(am) {};
+        buffer_t(void* bg, std::size_t tm, std::size_t am) : begin(bg), total_memory(tm), available_memory(am) {};
     };
 
     std::forward_list<buffer_t> buffers_;
     std::pmr::memory_resource* upstream_;
-    size_t alignment_;
+    std::size_t alignment_;
     type_t type_;
 
   public:
@@ -67,8 +69,8 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
     explicit monotonic_resource_t(std::pmr::memory_resource* upstream) noexcept
         : buffers_(), upstream_(upstream), alignment_(0), type_(type_t::borrowed_k) {};
 
-    monotonic_resource_t(size_t buffer_size,
-                         size_t alignment,
+    monotonic_resource_t(std::size_t buffer_size,
+                         std::size_t alignment,
                          type_t type = type_t::capped_k,
                          std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
         : buffers_(), upstream_(upstream), alignment_(alignment), type_(type) {
@@ -100,10 +102,11 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
     }
 
     std::size_t capacity() const noexcept {
-        return type_ == borrowed_k ? reinterpret_cast<monotonic_resource_t*>(upstream_)->capacity()
-                                   : std::accumulate(buffers_.begin(), buffers_.end(), 0, [](size_t sum, auto& buf) {
-                                         return sum + buf.total_memory;
-                                     });
+        return type_ == borrowed_k
+                   ? reinterpret_cast<monotonic_resource_t*>(upstream_)->capacity()
+                   : std::accumulate(buffers_.begin(), buffers_.end(), 0, [](std::size_t sum, auto& buf) {
+                         return sum + buf.total_memory;
+                     });
     }
 
     std::size_t used() const noexcept {
@@ -128,7 +131,7 @@ class monotonic_resource_t final : public std::pmr::memory_resource {
             buffers_.front().available_memory -= bytes;
         }
         else if (type_ == type_t::growing_k) {
-            size_t new_size = buffers_.front().total_memory * growth_factor_k;
+            std::size_t new_size = buffers_.front().total_memory * growth_factor_k;
             if (new_size < (bytes + alignment))
                 new_size = next_power_of_two(bytes + alignment);
             buffers_.emplace_front(upstream_->allocate(new_size, alignment_), new_size, new_size);
@@ -162,8 +165,8 @@ class polymorphic_allocator_gt {
     using value_type = at;
     using size_type = std::size_t;
 
-    void deallocate(at* ptr, std::size_t size) { thrlocal_memres->deallocate(ptr, sizeof(at) * size); }
-    at* allocate(std::size_t size) { return reinterpret_cast<at*>(thrlocal_memres->allocate(sizeof(at) * size)); }
+    void deallocate(at* ptr, std::size_t size) { local_memory->deallocate(ptr, sizeof(at) * size); }
+    at* allocate(std::size_t size) { return reinterpret_cast<at*>(local_memory->allocate(sizeof(at) * size)); }
 };
 
 template <typename at>
@@ -202,17 +205,17 @@ struct stl_arena_t {
     explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept
         : resource(mem_resource), using_shared_memory(false) {}
     explicit stl_arena_t( //
-        std::size_t initial_buffer_size = 1024ul * 1024ul,
+        std::size_t initial_size = 1024ul * 1024ul,
         monotonic_resource_t::type_t type = monotonic_resource_t::growing_k,
         bool use_shared_memory = false)
-        : resource(initial_buffer_size,
+        : resource(initial_size,
                    64ul,
                    type,
                    use_shared_memory ? shared_resource_t::get_default_resource() : std::pmr::get_default_resource()),
           using_shared_memory(use_shared_memory) {
-        thrlocal_memres = &resource;
+        local_memory = &resource;
     }
-    ~stl_arena_t() { thrlocal_memres = std::pmr::get_default_resource(); }
+    ~stl_arena_t() noexcept { local_memory = std::pmr::get_default_resource(); }
 
     template <typename at>
     span_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
@@ -270,18 +273,20 @@ void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dang
 
 inline stl_arena_t prepare_arena(ukv_arena_t* c_arena, ukv_options_t options, ukv_error_t* c_error) noexcept {
     try {
-        stl_arena_t** arena = reinterpret_cast<stl_arena_t**>(c_arena);
-
-        if (!*arena || ((options & ukv_option_read_shared_memory_k) && !(*arena)->using_shared_memory)) {
-            delete *arena;
-            *arena = new stl_arena_t(1024ul * 1024ul,
-                                     monotonic_resource_t::growing_k,
-                                     options & ukv_option_read_shared_memory_k);
+        stl_arena_t** arena_output = reinterpret_cast<stl_arena_t**>(c_arena);
+        stl_arena_t*& arena = *arena_output;
+        bool wants_shared_memory = options & ukv_option_read_shared_memory_k;
+        if (!arena || (wants_shared_memory && !arena->using_shared_memory)) {
+            delete arena;
+            arena = new stl_arena_t(1024ul * 1024ul,
+                                    monotonic_resource_t::growing_k,
+                                    options & ukv_option_read_shared_memory_k);
         }
 
-        if (!(options & ukv_option_dont_discard_memory_k))
-            (*arena)->resource.release();
-        return stl_arena_t(&(*arena)->resource);
+        bool keep_old_data = options & ukv_option_dont_discard_memory_k;
+        if (!keep_old_data)
+            arena->resource.release();
+        return stl_arena_t(&arena->resource);
     }
     catch (...) {
         log_error(c_error, out_of_memory_k, "");
