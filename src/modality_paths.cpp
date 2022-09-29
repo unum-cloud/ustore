@@ -19,9 +19,11 @@
  * tree-like directory structure.
  */
 
-#include "helpers/pmr.hpp"       // `stl_arena_t`
-#include "helpers/algorithm.hpp" // `sort_and_deduplicate`
-#include "helpers/vector.hpp"    // `safe_vector_gt`
+#include "ukv/paths.h"
+#include "helpers/pmr.hpp"         // `stl_arena_t`
+#include "helpers/algorithm.hpp"   // `sort_and_deduplicate`
+#include "helpers/vector.hpp"      // `safe_vector_gt`
+#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
