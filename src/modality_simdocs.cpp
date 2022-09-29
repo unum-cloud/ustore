@@ -6,18 +6,16 @@
  * Sits on top of any @see "ukv.h"-compatible system.
  */
 
-#include <vector>
-#include <string>
-#include <string_view>
-#include <unordered_set>
-#include <variant>
-#include <charconv> // `std::to_chars`
-#include <cstdio>   // `std::snprintf`
+#include <cstdio>      // `std::snprintf`
+#include <charconv>    // `std::to_chars`
+#include <string_view> // `std::string_view`
 
-#include <yyjson.h>
-#include <bson.h> // Converting from/to BSON
+#include <yyjson.h> // Primary internal JSON representation
+#include <bson.h>   // Converting from/to BSON
 
-#include "helpers.hpp"
+#include "helpers/pmr.hpp"
+#include "helpers/algorithm.hpp"
+#include "helpers/vector.hpp" // `growing_tape_t`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -42,34 +40,47 @@ using field_path_buffer_t = char[field_path_len_limit_k];
 /*****************	 STL Compatibility	  ****************/
 /*********************************************************/
 
+/**
+ * @brief Parses `float`, `double`, `bool` or any integral type from string.
+ * @return true If not the entire string was recognized as a number.
+ */
 template <typename at>
-std::from_chars_result from_chars(char const* begin, char const* end, at& result) {
+bool parse_entire_number(char const* begin, char const* end, at& result) {
+    // Floats:
     if constexpr (std::is_same_v<at, float>) {
-        char* end = nullptr;
-        result = std::strtof(begin, &end);
-        return {end, begin == end ? std::errc::invalid_argument : std::errc()};
+        char* number_end = nullptr;
+        result = std::strtof(begin, &number_end);
+        return end == number_end;
     }
+    // Doubles:
     else if constexpr (std::is_same_v<at, double>) {
-        char* end = nullptr;
-        result = std::strtod(begin, &end);
-        return {end, begin == end ? std::errc::invalid_argument : std::errc()};
+        char* number_end = nullptr;
+        result = std::strtod(begin, &number_end);
+        return end == number_end;
     }
+    // Booleans:
     else if constexpr (std::is_same_v<at, bool>) {
-        bool is_true = end - begin == 4 && std::equal(begin, end, true_k);
-        bool is_false = end - begin == 5 && std::equal(begin, end, false_k);
+        bool is_true = (end - begin) == 4 && std::equal(begin, end, true_k);
+        bool is_false = (end - begin) == 5 && std::equal(begin, end, false_k);
         if (is_true | is_false) {
             result = is_true;
-            return {end, std::errc()};
+            return true;
         }
         else
-            return {end, std::errc::invalid_argument};
+            return false;
     }
-    else
-        return std::from_chars(begin, end, result);
+    // Integers:
+    else {
+        return std::from_chars(begin, end, result).ptr == end;
+    }
 }
 
+/**
+ * @brief Prints a number into a string buffer. Terminates with zero character.
+ * @return The string-vew until the termination character. Empty string on failure.
+ */
 template <typename at>
-std::to_chars_result to_chars(char* begin, char* end, at scalar) {
+std::string_view print_number(char* begin, char* end, at scalar) {
     if constexpr (std::is_floating_point_v<at>) {
         // Parsing and dumping floating-point numbers is still not fully implemented in STL:
         //  std::to_chars_result result = std::to_chars(&print_buffer[0], print_buffer + printed_number_length_limit_k,
@@ -80,11 +91,19 @@ std::to_chars_result to_chars(char* begin, char* end, at scalar) {
         //  bool fits_terminator = end_ptr < print_buffer + printed_number_length_limit_k;
         // If we use `std::snprintf`, the result will @b already be NULL-terminated:
         auto result = std::snprintf(begin, end - begin, "%f", scalar);
-        return result >= 0 ? std::to_chars_result {begin + result - 1, std::errc()}
-                           : std::to_chars_result {begin, std::errc::invalid_argument};
+        return result > 0 //
+                   ? std::string_view {begin, static_cast<std::size_t>(result - 1)}
+                   : std::string_view {};
     }
-    else
-        return std::to_chars(begin, end, scalar);
+    else {
+        // `std::to_chars` won't NULL-terminate the string, but we should.
+        auto result = std::to_chars(begin, end, scalar);
+        if (result.ec != std::errc() || result.ptr == end)
+            return {};
+
+        *result.ptr = '\0';
+        return {begin, static_cast<std::size_t>(result.ptr - begin)};
+    }
 }
 
 /*********************************************************/
@@ -238,9 +257,7 @@ void json_to_scalar(yyjson_val* value,
     case YYJSON_TYPE_STR: {
         char const* str_begin = yyjson_get_str(value);
         size_t str_len = yyjson_get_len(value);
-        std::from_chars_result result = from_chars(str_begin, str_begin + str_len, scalar);
-        bool entire_string_is_number = result.ec == std::errc() && result.ptr == str_begin + str_len;
-        if (entire_string_is_number) {
+        if (parse_entire_number(str_begin, str_begin + str_len, scalar)) {
             convert |= mask;
             collide &= ~mask;
             valid |= mask;
@@ -288,13 +305,6 @@ void json_to_scalar(yyjson_val* value,
         }
     }
     }
-}
-
-template <typename scalar_at>
-std::string_view scalar_to_string(scalar_at scalar, printed_number_buffer_t& print_buffer) {
-
-    std::to_chars_result result = to_chars(print_buffer, print_buffer + printed_number_length_limit_k, scalar);
-    return result.ec == std::errc() ? std::string_view(print_buffer, result.ptr - print_buffer) : std::string_view();
 }
 
 std::string_view json_to_string(yyjson_val* value,
@@ -345,21 +355,21 @@ std::string_view json_to_string(yyjson_val* value,
 
         switch (subtype) {
         case YYJSON_SUBTYPE_UINT:
-            result = scalar_to_string(yyjson_get_uint(value), print_buffer);
+            result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, yyjson_get_uint(value));
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
             break;
 
         case YYJSON_SUBTYPE_SINT:
-            result = scalar_to_string(yyjson_get_sint(value), print_buffer);
+            result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, yyjson_get_sint(value));
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
             break;
 
         case YYJSON_SUBTYPE_REAL:
-            result = scalar_to_string(yyjson_get_real(value), print_buffer);
+            result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, yyjson_get_real(value));
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
@@ -799,7 +809,8 @@ void read_modify_write( //
 
     places_arg_t unique_places;
     safe_vector_gt<json_t> unique_docs(arena);
-    read_docs(c_db, c_txn, places, c_options, arena, unique_places, unique_docs, c_error, safe_callback);
+    auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
+    read_docs(c_db, c_txn, places, opts, arena, unique_places, unique_docs, c_error, safe_callback);
     return_on_error(c_error);
 
     // By now, the tape contains concatenated updates docs:
@@ -857,7 +868,10 @@ void ukv_docs_write( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    if (!c_tasks_count)
+        return;
+
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -889,10 +903,10 @@ void ukv_docs_write( //
 
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
+    strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
-    strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
+    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
 
     places_arg_t places {collections, keys, fields, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
@@ -924,7 +938,10 @@ void ukv_docs_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    if (!c_tasks_count)
+        return;
+
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1021,15 +1038,12 @@ void gist_recursively(yyjson_val* node,
         while ((val = yyjson_arr_iter_next(&iter)) && !*c_error) {
 
             path[path_len] = '/';
-            auto result = to_chars(path + path_len + slash_len, path + field_path_len_limit_k, idx);
-            bool fits_terminator =
-                result.ec == std::errc() && result.ptr + terminator_len < path + field_path_len_limit_k;
-            if (!fits_terminator) {
+            auto result = print_number(path + path_len + slash_len, path + field_path_len_limit_k, idx);
+            if (result.empty()) {
                 *c_error = "Path is too long!";
                 return;
             }
 
-            result.ptr[0] = 0;
             gist_recursively(val, path, sorted_paths, exported_paths, c_error);
             ++idx;
         }
@@ -1073,7 +1087,10 @@ void ukv_docs_gist( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    if (!c_docs_count)
+        return;
+
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1193,6 +1210,8 @@ struct column_begin_t {
         off = static_cast<ukv_length_t>(output.size());
         len = static_cast<ukv_length_t>(str.size());
         output.insert(output.size(), str.begin(), str.end(), c_error);
+        return_on_error(c_error);
+        output.push_back('\0', c_error);
     }
 };
 
@@ -1227,10 +1246,12 @@ void ukv_docs_gather( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    if (!c_docs_count || !c_fields_count)
+        return;
+
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
-    // Validate the input arguments
 
     // Retrieve the entire documents before we can sample internal fields
     ukv_byte_t* found_binary_begin = nullptr;

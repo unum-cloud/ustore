@@ -46,6 +46,7 @@ void ukv_paths_write( //
     ukv_size_t const values_bytes_stride,
 
     ukv_options_t const options,
+    ukv_char_t const separator,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
@@ -70,6 +71,7 @@ void ukv_paths_read( //
     ukv_size_t const paths_stride,
 
     ukv_options_t const options,
+    ukv_char_t const separator,
 
     ukv_octet_t** presences,
     ukv_key_t** keys,
@@ -82,7 +84,7 @@ void ukv_paths_read( //
 
 /**
  */
-void ukv_paths_scan( //
+void ukv_paths_match( //
     ukv_database_t const db,
     ukv_transaction_t const txn,
     ukv_size_t const tasks_count,
@@ -90,20 +92,34 @@ void ukv_paths_scan( //
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
-    ukv_key_t const* start_paths,
-    ukv_size_t const start_paths_stride,
+    ukv_length_t const* prefixes_offsets,
+    ukv_size_t const prefixes_offsets_stride,
 
-    ukv_key_t const* end_paths,
-    ukv_size_t const end_paths_stride,
+    ukv_length_t const* prefixes_lengths,
+    ukv_size_t const prefixes_lengths_stride,
+
+    ukv_str_view_t const* prefixes,
+    ukv_size_t const prefixes_stride,
+
+    ukv_length_t const* previous_offsets,
+    ukv_size_t const previous_offsets_stride,
+
+    ukv_length_t const* previous_lengths,
+    ukv_size_t const previous_lengths_stride,
+
+    ukv_str_view_t const* previous,
+    ukv_size_t const previous_stride,
 
     ukv_length_t const* scan_limits,
     ukv_size_t const scan_limits_stride,
 
     ukv_options_t const options,
+    ukv_char_t const separator,
 
-    ukv_length_t** offsets,
     ukv_length_t** counts,
-    ukv_key_t** keys,
+    ukv_length_t*** offsets,
+    ukv_key_t*** keys,
+    ukv_char_t** paths,
 
     ukv_arena_t* arena,
     ukv_error_t* error);

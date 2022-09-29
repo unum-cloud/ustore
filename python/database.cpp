@@ -140,13 +140,13 @@ void ukv::wrap_database(py::module& m) {
             auto maybe_txn = py_db.native.transact(snapshot);
             maybe_txn.throw_unhandled();
             auto py_txn_ptr = std::make_shared<py_transaction_t>(*std::move(maybe_txn), db_ptr);
-            py_txn_ptr->watch = watch;
+            py_txn_ptr->dont_watch = !watch;
             py_txn_ptr->flush_writes = flush_writes;
             return py_txn_ptr;
         }),
         py::arg("db"),
         py::arg("begin") = true,
-        py::arg("watch") = false,
+        py::arg("watch") = true,
         py::arg("flush_writes") = false,
         py::arg("snapshot") = false);
 

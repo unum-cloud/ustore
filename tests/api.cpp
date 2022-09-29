@@ -242,8 +242,8 @@ TEST(db, validation) {
 
     // Wrong Write Options
     std::vector<ukv_options_t> wrong_write_options {
-        ukv_option_watch_k,
-        ukv_option_txn_snapshot_k,
+        ukv_option_transaction_dont_watch_k,
+        ukv_option_transaction_snapshot_k,
     };
 
     for (auto& option : wrong_write_options) {
@@ -297,7 +297,7 @@ TEST(db, validation) {
              0,
              keys.data(),
              sizeof(ukv_key_t),
-             ukv_option_watch_k,
+             ukv_option_transaction_dont_watch_k,
              nullptr,
              &found_offsets,
              &found_lengths,
@@ -314,7 +314,7 @@ TEST(db, validation) {
              0,
              keys.data(),
              sizeof(ukv_key_t),
-             ukv_option_txn_snapshot_k,
+             ukv_option_transaction_snapshot_k,
              nullptr,
              &found_offsets,
              &found_lengths,
@@ -327,8 +327,8 @@ TEST(db, validation) {
     // Wrong Read Options
     std::vector<ukv_options_t> wrong_read_options {
         ukv_option_write_flush_k,
-        ukv_option_watch_k,
-        ukv_option_txn_snapshot_k,
+        ukv_option_transaction_dont_watch_k,
+        ukv_option_transaction_snapshot_k,
     };
 
     for (auto& option : wrong_read_options) {
@@ -364,7 +364,7 @@ TEST(db, validation) {
     // Wrong Transaction Begin Options
     std::vector<ukv_options_t> wrong_txn_begin_options {
         ukv_option_write_flush_k,
-        ukv_option_nodiscard_k,
+        ukv_option_dont_discard_memory_k,
     };
 
     for (auto& option : wrong_txn_begin_options) {
@@ -375,8 +375,8 @@ TEST(db, validation) {
 
     // Wrong Transaction Commit Options
     std::vector<ukv_options_t> wrong_txn_commit_options {
-        ukv_option_txn_snapshot_k,
-        ukv_option_nodiscard_k,
+        ukv_option_transaction_snapshot_k,
+        ukv_option_dont_discard_memory_k,
     };
 
     for (auto& option : wrong_txn_commit_options) {

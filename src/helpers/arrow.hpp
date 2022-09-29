@@ -1,5 +1,5 @@
 /**
- * @file arrow_helpers.hpp
+ * @file helpers/arrow.hpp
  * @author Ashot Vardanian
  *
  * @brief Helper functions for Apache Arrow interoperability.
@@ -20,9 +20,12 @@
 #include <arrow/c/bridge.h>
 #pragma GCC diagnostic pop
 
-#include "helpers.hpp" // `stl_arena_t`
+#include "pmr.hpp" // `stl_arena_t`
 
 namespace unum::ukv {
+
+constexpr std::size_t arrow_extra_offsets_k = 1;
+constexpr std::size_t arrow_bytes_alignment_k = 64;
 
 namespace arf = arrow::flight;
 namespace ar = arrow;
@@ -57,7 +60,7 @@ inline static std::string const kParamReadPart = "part";
 inline static std::string const kParamDropMode = "mode";
 inline static std::string const kParamFlagSnapshotTxn = "snapshot";
 inline static std::string const kParamFlagFlushWrite = "flush";
-inline static std::string const kParamFlagWatch = "watch";
+inline static std::string const kParamFlagDontWatch = "dont_watch";
 inline static std::string const kParamFlagSharedMemRead = "shared";
 
 inline static std::string const kParamReadPartLengths = "lengths";

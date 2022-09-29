@@ -11,7 +11,7 @@
 #include <leveldb/write_batch.h>
 
 #include "ukv/db.h"
-#include "helpers.hpp"
+#include "helpers/vector.hpp" // `safe_vector_gt`
 
 using namespace unum::ukv;
 using namespace unum;
@@ -247,7 +247,7 @@ void ukv_read( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
@@ -314,7 +314,7 @@ void ukv_scan( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
@@ -381,7 +381,7 @@ void ukv_size( //
     ukv_key_t const* c_end_keys,
     ukv_size_t const c_end_keys_stride,
 
-    ukv_options_t const,
+    ukv_options_t const c_options,
 
     ukv_size_t** c_min_cardinalities,
     ukv_size_t** c_max_cardinalities,
@@ -395,7 +395,7 @@ void ukv_size( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     auto min_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_cardinalities);
@@ -485,6 +485,7 @@ void ukv_collection_drop(
 void ukv_collection_list( //
     ukv_database_t const c_db,
     ukv_transaction_t const,
+    ukv_options_t const c_options,
     ukv_size_t* c_count,
     ukv_collection_t** c_ids,
     ukv_length_t** c_offsets,

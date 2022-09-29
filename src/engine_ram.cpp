@@ -91,8 +91,8 @@ using stl_collection_ptr_t = std::unique_ptr<stl_collection_t>;
 
 struct stl_txn_t {
     std::map<collection_key_t, buffer_t> upserted;
-    std::unordered_map<collection_key_t, generation_t, collection_key_hash_t> requested;
-    std::unordered_set<collection_key_t, collection_key_hash_t> removed;
+    std::unordered_map<collection_key_t, generation_t, sub_key_hash_t> requested;
+    std::unordered_set<collection_key_t, sub_key_hash_t> removed;
 
     stl_db_t* db_ptr {nullptr};
     generation_t generation {0};

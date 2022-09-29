@@ -13,11 +13,11 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 * Storing binary blobs
 * Building up graphs & indexes
 * Querying structured documents
+* [ACID](https://en.wikipedia.org/wiki/ACID) transactions across tables, docs & graphs
+* [Apache Arrow](https://arrow.apache.org/) interop and [Flight RPC](https://arrow.apache.org/docs/format/Flight.html)
+* Familiar high-level [drivers](#frontends) for tabular & graph analytics
 * Handling JSON, [BSON](https://www.mongodb.com/json-and-bson), [MsgPack](https://msgpack.org/index.html)
 * [JSON-Pointers](https://datatracker.ietf.org/doc/html/rfc6901) & [Field-level Patches](https://datatracker.ietf.org/doc/html/rfc6902), no custom Query Languages
-* [ACID](https://en.wikipedia.org/wiki/ACID) transactions across tables, docs & graphs
-* Familiar high-level [drivers](#frontends) for tabular & graph analytics
-* [Apache Arrow](https://arrow.apache.org/) interop and [Flight RPC](https://arrow.apache.org/docs/format/Flight.html)
 * Packing Tensors for [PyTorch](https://pytorch.org/) and [TensorFlow](tensorflow.org)
 
 UKV does just that, abstracting away the implementation from the user.
@@ -60,12 +60,12 @@ One ~~ring~~ data-lake to rule them all.
 Backends differ in their functionality and purposes.
 The underlying embedded key value stores include:
 
-| Name    |      OSes       | ACID  | Collections | Persistent | Safe Reads | GPU Acceleration |
-| :------ | :-------------: | :---: | :---------: | :--------: | :--------: | :--------------: |
-| STL     | POSIX + Windows |   ✅   |      ✅      |     ❌      |     ✅      |        ❌         |
-| LevelDB | POSIX + Windows |   ❌   |      ❌      |     ✅      |     ❌      |        ❌         |
-| RocksDB | POSIX + Windows |   ✅   |      ✅      |     ✅      |     ❌      |        ❌         |
-| UnumDB  |      Linux      |   ✅   |      ✅      |     ✅      |     ✅      |        ✅         |
+| Name            | Approximate<br/>Speed |      OSes       | [ACID][3]<br/>Transactions | Auxiliary<br/>Collections | Persistent | [Snapshots][2] | [Watching][1]<br/>Reads |
+| :-------------- | :-------------------: | :-------------: | :------------------------: | :-----------------------: | :--------: | :------------: | :---------------------: |
+| STL *in-memory* |        **10x**        | POSIX + Windows |             ✅              |             ✅             |     ❌      |       ❌        |            ✅            |
+| LevelDB         |         0.5x          | POSIX + Windows |             ❌              |             ❌             |     ✅      |       ❌        |            ❌            |
+| RocksDB         |          1x           | POSIX + Windows |             ✅              |             ✅             |     ✅      |       ✅        |            ✅            |
+| UnumDB          |        **5x**         |      Linux      |             ✅              |             ✅             |     ✅      |       ✅        |            ✅            |
 
 The STL backend originally served educational purposes, yet, with a proper web-server implementation, is comparable to other in-memory stores like Redis, MemCached or ETCD.
 LevelDB is Key-Value stored designed at Google and extensively adopted across the industry, thanks to its simplicity.
@@ -73,6 +73,10 @@ RocksDB improves over LevelDB, extending its functionality with transactions, na
 All of those backends were [benchmarked for weeks](https://unum.cloud/ucsb) using [UCSB](https://github.com/unum-cloud/ucsb), so you can choose the best stack for you specific use case.
 
 ![UCSB 10 TB Results](https://unum.cloud/assets/post/2022-09-13-ucsb-10tb/ucsb-10tb-duration.png)
+
+[1]: https://redis.io/commands/watch/
+[2]: https://github.com/facebook/rocksdb/wiki/Snapshot
+[3]: https://en.wikipedia.org/wiki/ACID
 
 ## Frontends
 
@@ -260,7 +264,7 @@ conan create . ukv/testing --build=missing
     * C11 API.
     * Many bindings, including JS and *currently* better Java support.
     * MacOS and Windows support, that we *currently* don't prioritize.
-  * **Cons**: 
+  * **Cons**:
     * Very slow.
     * No ACID transactions.
     * No way to swap the backend "engine".

@@ -67,7 +67,7 @@ struct contents_arg_t {
             return {};
 
         auto begin = reinterpret_cast<byte_t const*>(contents_begin[i]);
-        auto off = offsets_begin ? offsets_begin[i] : 0;
+        auto off = offsets_begin ? offsets_begin[i] : 0u;
         ukv_length_t len = 0;
         if (lengths_begin)
             len = lengths_begin[i];
@@ -197,20 +197,21 @@ inline void validate_write(ukv_transaction_t const c_txn,
                            ukv_options_t const c_options,
                            ukv_error_t* c_error) {
 
-    return_if_error(bool(places.count) == bool(places.keys_begin), c_error, 0, "Invalid Arguments!");
-    return_if_error((contents.lengths_begin || contents.offsets_begin) == bool(contents.contents_begin),
+    return_if_error(places.keys_begin, c_error, 0, "No keys were provided!");
+    bool const remove_all = !contents.contents_begin;
+    if (remove_all)
+        return_if_error(!contents.lengths_begin && !contents.offsets_begin, c_error, 0, "Can't address NULLs!");
+
+    return_if_error(!(c_options & ukv_option_transaction_snapshot_k),
                     c_error,
                     0,
-                    "Invalid Arguments!");
-    return_if_error(!(c_options & (ukv_option_watch_k | ukv_option_txn_snapshot_k)), c_error, 0, "Invalid options!");
+                    "Writes are not supported on snapshots!");
 
     if (!places.same_collection() || same_collections_are_named(places.collections_begin))
         return_if_error(ukv_supports_named_collections_k, c_error, 0, "Current engine does not support collections!");
 
-    if (c_txn) {
+    if (c_txn)
         return_if_error(ukv_supports_transactions_k, c_error, 0, "Current engine does not support transactions!");
-        return_if_error(!(c_options & ukv_option_write_flush_k), c_error, 0, "Invalid options!");
-    }
 }
 
 inline void validate_read(ukv_transaction_t const c_txn,
@@ -218,21 +219,14 @@ inline void validate_read(ukv_transaction_t const c_txn,
                           ukv_options_t const c_options,
                           ukv_error_t* c_error) {
 
-    return_if_error(bool(places.count) == bool(places.keys_begin), c_error, 0, "Invalid Arguments!");
-    return_if_error(!(c_options & ukv_option_write_flush_k), c_error, 0, "Invalid options!");
+    return_if_error(places.keys_begin, c_error, 0, "No keys were provided!");
+    return_if_error(!(c_options & ukv_option_write_flush_k), c_error, 0, "Can't flush reads!");
 
     if (!places.same_collection() || same_collections_are_named(places.collections_begin))
         return_if_error(ukv_supports_named_collections_k, c_error, 0, "Current engine does not support collections!");
 
-    if (c_txn) {
+    if (c_txn)
         return_if_error(ukv_supports_transactions_k, c_error, 0, "Current engine does not support transactions!");
-    }
-    else {
-        return_if_error(!(c_options & (ukv_option_watch_k | ukv_option_txn_snapshot_k)),
-                        c_error,
-                        0,
-                        "Invalid options!");
-    }
 }
 
 inline void validate_scan(ukv_transaction_t const c_txn,
@@ -258,7 +252,7 @@ inline void validate_transaction_commit(ukv_transaction_t const c_txn,
                                         ukv_error_t* c_error) {
 
     return_if_error(c_txn, c_error, 0, "Transaction is uninitialized");
-    return_if_error(!(c_options & (ukv_option_txn_snapshot_k | ukv_option_nodiscard_k)),
+    return_if_error(!(c_options & (ukv_option_transaction_snapshot_k | ukv_option_dont_discard_memory_k)),
                     c_error,
                     0,
                     "Invalid options!");
@@ -269,7 +263,7 @@ inline void validate_transaction_begin(ukv_transaction_t const c_txn,
                                        ukv_error_t* c_error) {
 
     return_if_error(c_txn, c_error, 0, "Transaction is uninitialized");
-    return_if_error(!(c_options & (ukv_option_write_flush_k | ukv_option_watch_k | ukv_option_nodiscard_k)),
+    return_if_error(!(c_options & (ukv_option_write_flush_k | ukv_option_dont_discard_memory_k)),
                     c_error,
                     0,
                     "Invalid options!");

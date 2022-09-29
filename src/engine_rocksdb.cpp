@@ -23,7 +23,7 @@
 #include <rocksdb/utilities/optimistic_transaction_db.h>
 
 #include "ukv/db.h"
-#include "helpers.hpp"
+#include "helpers/vector.hpp" // `safe_vector_gt`
 
 using namespace unum::ukv;
 using namespace unum;
@@ -349,12 +349,7 @@ void ukv_read( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    return_if_error(!(c_txn && (c_options & ukv_option_watch_k)),
-                    c_error,
-                    args_wrong_k,
-                    "RocksDB only supports transparent reads!");
-
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -375,7 +370,7 @@ void ukv_read( //
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     rocksdb::ReadOptions options;
-    if (txn && (c_options & ukv_option_txn_snapshot_k))
+    if (txn && (c_options & ukv_option_transaction_snapshot_k))
         options.snapshot = txn->GetSnapshot();
 
     try {
@@ -433,12 +428,7 @@ void ukv_scan( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    return_if_error(!(c_txn && (c_options & ukv_option_watch_k)),
-                    c_error,
-                    args_wrong_k,
-                    "RocksDB only supports transparent reads!");
-
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -510,7 +500,7 @@ void ukv_size( //
     ukv_key_t const* c_end_keys,
     ukv_size_t const c_end_keys_stride,
 
-    ukv_options_t const,
+    ukv_options_t const c_options,
 
     ukv_size_t** c_min_cardinalities,
     ukv_size_t** c_max_cardinalities,
@@ -524,7 +514,7 @@ void ukv_size( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     auto min_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_cardinalities);
@@ -615,7 +605,7 @@ void ukv_collection_drop(
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(c_collection_id == ukv_collection_main_k || !invalidate,
+    return_if_error(c_collection_id != ukv_collection_main_k || !invalidate,
                     c_error,
                     args_combo_k,
                     "Default collection can't be invalidated.");
@@ -635,13 +625,6 @@ void ukv_collection_drop(
     }
 
     if (c_mode == ukv_drop_keys_vals_handle_k) {
-        if (collection_ptr_to_clear == *db.columns.end())
-            return;
-
-        rocks_status_t status = db.native->DropColumnFamily(collection_ptr_to_clear);
-        if (export_error(status, c_error))
-            return;
-
         for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
             if (collection_ptr_to_clear == *it) {
                 rocks_status_t status = db.native->DropColumnFamily(collection_ptr_to_clear);
@@ -679,6 +662,7 @@ void ukv_collection_drop(
 void ukv_collection_list( //
     ukv_database_t const c_db,
     ukv_transaction_t const,
+    ukv_options_t const c_options,
     ukv_size_t* c_count,
     ukv_collection_t** c_ids,
     ukv_length_t** c_offsets,
@@ -689,7 +673,7 @@ void ukv_collection_list( //
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     return_if_error(c_count && c_names, c_error, args_combo_k, "Need names and outputs!");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -747,7 +731,7 @@ void ukv_transaction_init(
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(*c_txn);
     rocksdb::OptimisticTransactionOptions options;
-    if (c_options & ukv_option_txn_snapshot_k)
+    if (c_options & ukv_option_transaction_snapshot_k)
         options.set_snapshot = true;
     txn = db.native->BeginTransaction(rocksdb::WriteOptions(), options, txn);
     if (!txn)

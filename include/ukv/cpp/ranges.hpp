@@ -325,6 +325,51 @@ struct range_gt {
 /**
  * @brief A read-only iterator for values packed into a
  * contiguous memory range. Doesn't own underlying memory.
+ * Only needs element "lengths", but can only be forward-iterated.
+ */
+template <typename chunk_at>
+class consecutive_chunks_iterator_gt {
+
+    using chunk_t = chunk_at;
+    using element_t = typename chunk_t::value_type;
+
+    ukv_length_t const* lengths_ = nullptr;
+    element_t* contents_ = nullptr;
+
+  public:
+    using iterator_category = std::random_access_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = chunk_t;
+    using pointer = void;
+    using reference = void;
+
+    template <typename same_size_at>
+    consecutive_chunks_iterator_gt(ukv_length_t const* lens, same_size_at* vals) noexcept
+        : lengths_(lens), contents_((element_t*)(vals)) {
+        static_assert(sizeof(same_size_at) == sizeof(element_t));
+    }
+
+    consecutive_chunks_iterator_gt& operator++() noexcept {
+        contents_ += *lengths_;
+        ++lengths_;
+        return *this;
+    }
+
+    consecutive_chunks_iterator_gt operator++(int) const noexcept { return {lengths_ + 1, contents_ + *lengths_}; }
+    chunk_t operator*() const noexcept { return {contents_, *lengths_}; }
+    chunk_t operator[](std::size_t i) const noexcept { return {contents_, *lengths_}; }
+
+    bool operator==(consecutive_chunks_iterator_gt const& other) const noexcept { return lengths_ == other.lengths_; }
+    bool operator!=(consecutive_chunks_iterator_gt const& other) const noexcept { return lengths_ != other.lengths_; }
+};
+
+using consecutive_strs_iterator_t = consecutive_chunks_iterator_gt<std::string_view>;
+using consecutive_bins_iterator_t = consecutive_chunks_iterator_gt<value_view_t>;
+
+/**
+ * @brief A read-only iterator for values packed into a
+ * contiguous memory range. Doesn't own underlying memory.
+ * Relies on "offsets" to be in an Arrow-compatible form.
  */
 template <typename chunk_at>
 class joined_chunks_iterator_gt {
@@ -357,7 +402,7 @@ class joined_chunks_iterator_gt {
     joined_chunks_iterator_gt operator--(int) const noexcept { return {offsets_ - 1, contents_}; }
     chunk_t operator*() const noexcept { return {contents_ + offsets_[0], offsets_[1] - offsets_[0]}; }
     chunk_t operator[](std::size_t i) const noexcept {
-        return {offsets_[i + 1] - offsets_[i], contents_ + offsets_[i]};
+        return {contents_ + offsets_[i], offsets_[i + 1] - offsets_[i]};
     }
 
     bool operator==(joined_chunks_iterator_gt const& other) const noexcept { return offsets_ == other.offsets_; }
@@ -374,7 +419,6 @@ class joined_chunks_gt {
     using element_t = typename chunk_t::value_type;
 
     ukv_size_t count_ = 0;
-
     ukv_length_t* offsets_ = nullptr;
     element_t* contents_ = nullptr;
 

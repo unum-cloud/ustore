@@ -7,16 +7,14 @@
  * Understanding the costs of remote communication, might keep a cache.
  */
 
-#include <unordered_map>
-#include <iostream>
+#include <thread> // `std::this_thread`
 
-#include <fmt/core.h>
+#include <fmt/core.h> // `fmt::format_to`
 #include <arrow/flight/client.h>
 
 #include "ukv/db.h"
 
-#include "helpers.hpp"
-#include "arrow_helpers.hpp"
+#include "helpers/arrow.hpp"
 #include "ukv/arrow.h"
 
 /*********************************************************/
@@ -58,7 +56,7 @@ void ukv_database_init( //
     ukv_database_t* c_db,
     ukv_error_t* c_error) {
 
-#ifdef DEBUG
+#ifdef UKV_DEBUG
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(5s);
 #endif
@@ -103,7 +101,7 @@ void ukv_read( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
@@ -117,7 +115,7 @@ void ukv_read( //
 
     // Configure the `cmd` descriptor
     bool const same_collection = places.same_collection();
-    bool const same_named_collection = same_collection && places.same_collections_are_named();
+    bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const request_only_presences = c_found_presences && !c_found_lengths && !c_found_values;
     bool const request_only_lengths = c_found_lengths && !c_found_values;
     char const* partial_mode = request_only_presences //
@@ -126,8 +124,8 @@ void ukv_read( //
                                          ? kParamReadPartLengths.c_str()
                                          : nullptr;
 
-    bool const read_shared = c_options & ukv_option_read_shared_k;
-    bool const watch = c_options & ukv_option_watch_k;
+    bool const read_shared = c_options & ukv_option_read_shared_memory_k;
+    bool const dont_watch = c_options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightRead);
     if (c_txn)
@@ -141,8 +139,8 @@ void ukv_read( //
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamReadPart, partial_mode);
     if (read_shared)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (watch)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagWatch);
+    if (dont_watch)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagDontWatch);
 
     bool const has_collections_column = collections && !same_collection;
     constexpr bool has_keys_column = true;
@@ -300,7 +298,7 @@ void ukv_write( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
@@ -315,7 +313,7 @@ void ukv_write( //
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
     bool const same_collection = places.same_collection();
-    bool const same_named_collection = same_collection && places.same_collections_are_named();
+    bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const write_flush = c_options & ukv_option_write_flush_k;
 
     bool const has_collections_column = collections && !same_collection;
@@ -509,7 +507,7 @@ void ukv_scan( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
@@ -521,7 +519,7 @@ void ukv_scan( //
     places_arg_t places {collections, start_keys, {}, c_tasks_count};
 
     bool const same_collection = places.same_collection();
-    bool const same_named_collection = same_collection && places.same_collections_are_named();
+    bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const write_flush = c_options & ukv_option_write_flush_k;
 
     bool const has_collections_column = !same_collection;
@@ -621,8 +619,8 @@ void ukv_scan( //
     arf::FlightCallOptions options = arrow_call_options(pool);
 
     // Configure the `cmd` descriptor
-    bool const read_shared = c_options & ukv_option_read_shared_k;
-    bool const watch = c_options & ukv_option_watch_k;
+    bool const read_shared = c_options & ukv_option_read_shared_memory_k;
+    bool const dont_watch = c_options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightScan);
     if (c_txn)
@@ -634,8 +632,8 @@ void ukv_scan( //
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (read_shared)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (watch)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagWatch);
+    if (dont_watch)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagDontWatch);
 
     // Send the request to server
     ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
@@ -697,7 +695,7 @@ void ukv_size( //
     ukv_key_t const* c_end_keys,
     ukv_size_t const c_end_keys_stride,
 
-    ukv_options_t const,
+    ukv_options_t const c_options,
 
     ukv_size_t** c_min_cardinalities,
     ukv_size_t** c_max_cardinalities,
@@ -711,7 +709,7 @@ void ukv_size( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 }
 
@@ -803,6 +801,7 @@ void ukv_collection_drop(
 void ukv_collection_list( //
     ukv_database_t const c_db,
     ukv_transaction_t const, // TODO: add support for transactions
+    ukv_options_t const c_options,
     ukv_size_t* c_count,
     ukv_collection_t** c_ids,
     ukv_length_t** c_offsets,
@@ -812,7 +811,7 @@ void ukv_collection_list( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, {}, c_error);
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     ar::Status ar_status;
@@ -887,7 +886,7 @@ void ukv_transaction_init(
     fmt::format_to(std::back_inserter(action.type), "{}?", kFlightTxnBegin);
     if (txn_id != 0)
         fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, txn_id);
-    if (c_options & ukv_option_txn_snapshot_k)
+    if (c_options & ukv_option_transaction_snapshot_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
