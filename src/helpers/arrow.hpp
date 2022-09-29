@@ -20,7 +20,7 @@
 #include <arrow/c/bridge.h>
 #pragma GCC diagnostic pop
 
-#include "helpers/pmr.hpp" // `stl_arena_t`
+#include "pmr.hpp" // `stl_arena_t`
 
 namespace unum::ukv {
 
