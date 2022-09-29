@@ -101,17 +101,17 @@ class docs_ref_gt {
     }
 
     expected_gt<value_t> value(bool watch = true) noexcept {
-        return any_get<value_t>(type_, watch ? ukv_option_txn_watch_k : ukv_options_default_k);
+        return any_get<value_t>(type_, !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
     }
 
     expected_gt<value_t> value(ukv_doc_field_type_t type, bool watch = true) noexcept {
-        return any_get<value_t>(type, watch ? ukv_option_txn_watch_k : ukv_options_default_k);
+        return any_get<value_t>(type, !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
     }
 
     operator expected_gt<value_t>() noexcept { return value(); }
 
     expected_gt<length_t> length(bool watch = true) noexcept {
-        return any_get<length_t>(type_, watch ? ukv_option_txn_watch_k : ukv_options_default_k);
+        return any_get<length_t>(type_, !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
     }
 
     /**
@@ -119,7 +119,7 @@ class docs_ref_gt {
      * ! Related values may be empty strings.
      */
     expected_gt<present_t> present(bool watch = true) noexcept {
-        return any_get<present_t>(type_, watch ? ukv_option_txn_watch_k : ukv_options_default_k);
+        return any_get<present_t>(type_, !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
     }
 
     /**
@@ -218,12 +218,12 @@ class docs_ref_gt {
      * Any column type annotation is optional.
      */
     expected_gt<docs_table_t> gather(table_header_t const& header, bool watch = true) noexcept {
-        auto options = watch ? ukv_option_txn_watch_k : ukv_options_default_k;
+        auto options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
         return any_gather<docs_table_t, table_header_t const&>(header, options);
     }
 
     expected_gt<docs_table_t> gather(table_header_view_t const& header, bool watch = true) noexcept {
-        auto options = watch ? ukv_option_txn_watch_k : ukv_options_default_k;
+        auto options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
         return any_gather<docs_table_t, table_header_view_t const&>(header, options);
     }
 
@@ -231,7 +231,7 @@ class docs_ref_gt {
     expected_gt<docs_table_gt<column_types_at...>> gather( //
         table_header_gt<column_types_at...> const& header,
         bool watch = true) noexcept {
-        auto options = watch ? ukv_option_txn_watch_k : ukv_options_default_k;
+        auto options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
         using input_t = table_header_gt<column_types_at...>;
         using output_t = docs_table_gt<column_types_at...>;
         return any_gather<output_t, input_t const&>(header, options);
@@ -362,7 +362,7 @@ expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool watch) noexcept 
     ukv_length_t* found_offsets = nullptr;
     ukv_str_span_t found_strings = nullptr;
 
-    auto options = watch ? ukv_option_txn_watch_k : ukv_options_default_k;
+    auto options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
     auto keys = keys_extractor_t {}.keys(locs);

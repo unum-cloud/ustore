@@ -349,11 +349,6 @@ void ukv_read( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    return_if_error(!(c_txn && (c_options & ukv_option_txn_watch_k)),
-                    c_error,
-                    args_wrong_k,
-                    "RocksDB only supports transparent reads!");
-
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
@@ -375,7 +370,7 @@ void ukv_read( //
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     rocksdb::ReadOptions options;
-    if (txn && (c_options & ukv_option_txn_snapshot_k))
+    if (txn && (c_options & ukv_option_transaction_snapshot_k))
         options.snapshot = txn->GetSnapshot();
 
     try {
@@ -432,11 +427,6 @@ void ukv_scan( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-
-    return_if_error(!(c_txn && (c_options & ukv_option_txn_watch_k)),
-                    c_error,
-                    args_wrong_k,
-                    "RocksDB only supports transparent reads!");
 
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
@@ -741,7 +731,7 @@ void ukv_transaction_init(
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(*c_txn);
     rocksdb::OptimisticTransactionOptions options;
-    if (c_options & ukv_option_txn_snapshot_k)
+    if (c_options & ukv_option_transaction_snapshot_k)
         options.set_snapshot = true;
     txn = db.native->BeginTransaction(rocksdb::WriteOptions(), options, txn);
     if (!txn)

@@ -354,7 +354,7 @@ void read_txn_under_lock( //
 
     stl_db_t& db = *txn.db_ptr;
     generation_t const youngest_generation = db.youngest_generation.load();
-    bool const watch = c_options & ukv_option_txn_watch_k;
+    bool const dont_watch = c_options & ukv_option_transaction_dont_watch_k;
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
@@ -379,7 +379,7 @@ void read_txn_under_lock( //
             auto value = found ? value_view(key_iterator->second.buffer) : value_view_t {};
             enumerator(i, value);
 
-            if (watch)
+            if (!dont_watch)
                 txn.requested.emplace(place.collection_key(), key_iterator->second.generation);
         }
 
@@ -387,7 +387,7 @@ void read_txn_under_lock( //
         else {
             enumerator(i, value_view_t {});
 
-            if (watch)
+            if (!dont_watch)
                 txn.requested.emplace(place.collection_key(), generation_t {});
         }
     }

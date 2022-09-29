@@ -727,7 +727,7 @@ void read_modify_write( //
 
     places_arg_t unique_places;
     safe_vector_gt<json_t> unique_docs(arena);
-    auto opts = ukv_options_t(c_options | (c_txn ? ukv_option_txn_watch_k : 0));
+    auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
     read_docs(c_db, c_txn, places, opts, arena, unique_places, unique_docs, c_error, safe_callback);
     return_on_error(c_error);
 

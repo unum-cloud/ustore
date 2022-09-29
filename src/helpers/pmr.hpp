@@ -272,13 +272,14 @@ inline stl_arena_t prepare_arena(ukv_arena_t* c_arena, ukv_options_t options, uk
     try {
         stl_arena_t** arena = reinterpret_cast<stl_arena_t**>(c_arena);
 
-        if (!*arena || ((options & ukv_option_read_shared_k) && !(*arena)->using_shared_memory)) {
+        if (!*arena || ((options & ukv_option_read_shared_memory_k) && !(*arena)->using_shared_memory)) {
             delete *arena;
-            *arena =
-                new stl_arena_t(1024ul * 1024ul, monotonic_resource_t::growing_k, options & ukv_option_read_shared_k);
+            *arena = new stl_arena_t(1024ul * 1024ul,
+                                     monotonic_resource_t::growing_k,
+                                     options & ukv_option_read_shared_memory_k);
         }
 
-        if (!(options & ukv_option_nodiscard_k))
+        if (!(options & ukv_option_dont_discard_memory_k))
             (*arena)->resource.release();
         return stl_arena_t(&(*arena)->resource);
     }
