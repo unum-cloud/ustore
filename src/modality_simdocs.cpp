@@ -981,9 +981,9 @@ void ukv_docs_read( //
     return_on_error(c_error);
 
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, json_t const& doc) {
-        yyjson_mut_val* root = yyjson_mut_doc_get_root(doc.mut_handle);
-        yyjson_mut_val* branch = json_lookup(root, field);
-        any_dump({.mut_handle = branch}, c_type, arena, growing_tape, c_error);
+        yyjson_val* root = yyjson_doc_get_root(doc.handle);
+        yyjson_val* branch = json_lookup(root, field);
+        any_dump({.handle = branch}, c_type, arena, growing_tape, c_error);
         return_on_error(c_error);
     };
     places_arg_t unique_places;
