@@ -2,17 +2,23 @@
 #include <gtest/gtest.h>
 #include <vector>
 
-#include <ukv/ukv.hpp>
+#include "ukv/ukv.hpp"
 
 using namespace unum::ukv;
 using namespace unum;
 
+#if defined(UKV_TEST_PATH)
+constexpr char const* path_k = UKV_TEST_PATH;
+#else
+constexpr char const* path_k = "";
+#endif
+
 TEST(db, validation) {
 
     database_t db;
-    EXPECT_TRUE(db.open("./tmp/stl"));
-    collection_t collection = *db.collection();
-    collection_t named_collection = *db.collection("col");
+    EXPECT_TRUE(db.open(path_k));
+    bins_collection_t collection = *db.collection();
+    bins_collection_t named_collection = *db.collection("col");
     transaction_t txn = *db.transact();
     std::vector<ukv_key_t> keys {34, 35, 36};
     std::vector<std::uint64_t> vals {34, 35, 36};
@@ -242,8 +248,8 @@ TEST(db, validation) {
 
     // Wrong Write Options
     std::vector<ukv_options_t> wrong_write_options {
-        ukv_option_txn_watch_k,
-        ukv_option_txn_snapshot_k,
+        ukv_option_transaction_dont_watch_k,
+        ukv_option_transaction_snapshot_k,
     };
 
     for (auto& option : wrong_write_options) {
@@ -297,7 +303,7 @@ TEST(db, validation) {
              0,
              keys.data(),
              sizeof(ukv_key_t),
-             ukv_option_txn_watch_k,
+             ukv_option_transaction_dont_watch_k,
              nullptr,
              &found_offsets,
              &found_lengths,
@@ -314,7 +320,7 @@ TEST(db, validation) {
              0,
              keys.data(),
              sizeof(ukv_key_t),
-             ukv_option_txn_snapshot_k,
+             ukv_option_transaction_snapshot_k,
              nullptr,
              &found_offsets,
              &found_lengths,
@@ -327,8 +333,8 @@ TEST(db, validation) {
     // Wrong Read Options
     std::vector<ukv_options_t> wrong_read_options {
         ukv_option_write_flush_k,
-        ukv_option_txn_watch_k,
-        ukv_option_txn_snapshot_k,
+        ukv_option_transaction_dont_watch_k,
+        ukv_option_transaction_snapshot_k,
     };
 
     for (auto& option : wrong_read_options) {
@@ -354,29 +360,29 @@ TEST(db, validation) {
     // Transaction
 
     ukv_transaction_t ukv_txn = nullptr;
-    ukv_transaction_init(db, 0, ukv_options_default_k, &ukv_txn, status.member_ptr());
+    ukv_transaction_init(db, ukv_options_default_k, &ukv_txn, status.member_ptr());
     EXPECT_TRUE(status);
 
-    ukv_transaction_init(db, 0, ukv_options_default_k, nullptr, status.member_ptr());
+    ukv_transaction_init(db, ukv_options_default_k, nullptr, status.member_ptr());
     EXPECT_FALSE(status);
     status.release_error();
 
     // Wrong Transaction Begin Options
     std::vector<ukv_options_t> wrong_txn_begin_options {
         ukv_option_write_flush_k,
-        ukv_option_nodiscard_k,
+        ukv_option_dont_discard_memory_k,
     };
 
     for (auto& option : wrong_txn_begin_options) {
-        ukv_transaction_init(db, 0, option, &ukv_txn, status.member_ptr());
+        ukv_transaction_init(db, option, &ukv_txn, status.member_ptr());
         EXPECT_FALSE(status);
         status.release_error();
     }
 
     // Wrong Transaction Commit Options
     std::vector<ukv_options_t> wrong_txn_commit_options {
-        ukv_option_txn_snapshot_k,
-        ukv_option_nodiscard_k,
+        ukv_option_transaction_snapshot_k,
+        ukv_option_dont_discard_memory_k,
     };
 
     for (auto& option : wrong_txn_commit_options) {
@@ -455,7 +461,7 @@ TEST(db, validation) {
 }
 
 int main(int argc, char** argv) {
-    std::filesystem::create_directory("./tmp/stl");
+    std::filesystem::create_directory(path_k);
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
