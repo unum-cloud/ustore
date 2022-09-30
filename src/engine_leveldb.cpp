@@ -11,7 +11,8 @@
 #include <leveldb/write_batch.h>
 
 #include "ukv/db.h"
-#include "helpers/vector.hpp" // `safe_vector_gt`
+#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
+#include "helpers/vector.hpp"      // `safe_vector_gt`
 
 using namespace unum::ukv;
 using namespace unum;

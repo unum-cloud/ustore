@@ -57,12 +57,14 @@ class context_t : public std::enable_shared_from_this<context_t> {
         return *this;
     }
 
-    inline ukv_database_t db() const noexcept { return db_; }
-
     inline ~context_t() noexcept {
         ukv_transaction_free(db_, txn_);
         txn_ = nullptr;
     }
+
+    inline ukv_database_t db() const noexcept { return db_; }
+    inline ukv_transaction_t txn() const noexcept { return txn_; }
+    inline operator ukv_transaction_t() const noexcept { return txn_; }
 
     bins_ref_gt<places_arg_t> operator[](strided_range_gt<collection_key_t const> collections_and_keys) noexcept {
         places_arg_t arg;
@@ -178,7 +180,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
                 continue;
             return collection_at {db_, *id_it, txn_, arena_.member_ptr()};
         }
-        return status_t {"No such colelction is present"};
+        return status_t {"No such collection is present"};
     }
 
     /**

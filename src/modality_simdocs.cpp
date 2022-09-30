@@ -13,9 +13,11 @@
 #include <yyjson.h> // Primary internal JSON representation
 #include <bson.h>   // Converting from/to BSON
 
-#include "helpers/pmr.hpp"
-#include "helpers/algorithm.hpp"
-#include "helpers/vector.hpp" // `growing_tape_t`
+#include "ukv/docs.h"
+#include "helpers/pmr.hpp"         // `stl_arena_t`
+#include "helpers/vector.hpp"      // `growing_tape_t`
+#include "helpers/algorithm.hpp"   // `transform_n`
+#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
