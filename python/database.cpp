@@ -33,8 +33,13 @@ static std::unique_ptr<py_collection_t> punned_collection( //
     py_collection->py_db_ptr = py_db_ptr;
     py_collection->py_txn_ptr = py_txn_ptr;
     py_collection->in_txn = py_txn_ptr != nullptr;
-    py_collection->native =
-        bins_collection_t {py_db_ptr->native, collection, py_txn_ptr ? py_txn_ptr->native : ukv_transaction_t(nullptr)};
+    py_collection->native = bins_collection_t {
+        py_db_ptr->native,
+        collection,
+        py_txn_ptr //
+            ? ukv_transaction_t(py_txn_ptr->native)
+            : ukv_transaction_t(nullptr),
+    };
     return py_collection;
 }
 
@@ -85,7 +90,7 @@ void ukv::wrap_database(py::module& m) {
         py::init([](std::string const& config, bool open, bool prefer_arrow) {
             database_t db;
             if (open)
-                db.open(config).throw_unhandled();
+                db.open(config.c_str()).throw_unhandled();
             auto py_db_ptr = std::make_shared<py_db_t>(std::move(db), config);
             py_db_ptr->export_into_arrow = prefer_arrow;
             return py_db_ptr;
@@ -110,20 +115,8 @@ void ukv::wrap_database(py::module& m) {
     py_collection.def("__contains__", &has_binary);
     py_collection.def("__getitem__", &read_binary);
 
-    py_collection.def("clear", [](py_collection_t& py_collection) {
-        py_db_t& py_db = *py_collection.py_db_ptr.lock().get();
-        database_t& db = py_db.native;
-        db.drop(py_collection.name.c_str(), ukv_drop_keys_vals_k).throw_unhandled();
-    });
-
-    py_collection.def("remove", [](py_collection_t& py_collection) {
-        if (ukv_collection_main_k == py_collection.native)
-            throw std::invalid_argument("Can't remove main collection");
-
-        py_db_t& py_db = *py_collection.py_db_ptr.lock().get();
-        database_t& db = py_db.native;
-        db.drop(py_collection.name.c_str(), ukv_drop_keys_vals_handle_k).throw_unhandled();
-    });
+    py_collection.def("clear", [](py_collection_t& py_collection) { py_collection.native.clear().throw_unhandled(); });
+    py_collection.def("remove", [](py_collection_t& py_collection) { py_collection.native.drop().throw_unhandled(); });
 
     // ML-oriented procedures for zero-copy variants exporting
     // Apache Arrow shared memory handles:
@@ -162,7 +155,7 @@ void ukv::wrap_database(py::module& m) {
 
     py_db.def("__enter__", [](py_db_t& py_db) {
         if (!py_db.native)
-            py_db.native.open(py_db.config).throw_unhandled();
+            py_db.native.open(py_db.config.c_str()).throw_unhandled();
         return py_db.shared_from_this();
     });
     py_db.def("close", [](py_db_t& py_db) { py_db.native.close(); });

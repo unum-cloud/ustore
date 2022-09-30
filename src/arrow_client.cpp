@@ -10,12 +10,13 @@
 #include <thread> // `std::this_thread`
 
 #include <fmt/core.h> // `fmt::format_to`
+#include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
 
 #include "ukv/db.h"
-
-#include "helpers/arrow.hpp"
 #include "ukv/arrow.h"
+#include "ukv/cpp/types.hpp" // `ukv_doc_field`
+#include "helpers/arrow.hpp"
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
