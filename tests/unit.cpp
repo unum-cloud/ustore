@@ -566,6 +566,31 @@ TEST(db, docs_modify) {
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
+    // Patch
+    modifier =
+        R"([ { "op": "add", "path": "/a/key", "value": "value" },
+             { "op": "replace", "path": "/a/0/b/0", "value": {"1":"3"} },
+             { "op": "copy", "path": "/a/another_key", "from": "/a/key" },
+             { "op": "move", "path": "/a/0/b/5", "from": "/a/0/b/1" },
+             { "op": "remove", "path": "/a/b" }  ])"_json.dump();
+
+    expected =
+        R"( { "a": {"key" : "value","another_key" : "value","0":{"b":[{"1":"3"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"},{"3":"14"}]} } })"_json
+            .dump();
+    collection[1].patch(modifier.c_str());
+    result = collection[1].value();
+    M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
+
+    // Patch By Field
+    modifier = R"([ { "op": "add", "path": "/6", "value": {"15":"16"} } ])"_json.dump();
+    expected =
+        R"( { "a": {"key" : "value","another_key" :
+        "value","0":{"b":[{"1":"3"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"},{"3":"14"},{"15":"16"}]} } })"_json
+            .dump();
+    collection[ckf(1, "/a/0/b")].patch(modifier.c_str());
+    result = collection[1].value();
+    M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
+
     // Update
     modifier = R"( {"person": {"name":"Carl", "age": 24}} )"_json.dump();
     collection[1].update(modifier.c_str());
