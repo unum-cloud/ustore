@@ -85,7 +85,7 @@ struct py_collection_t {
         auto base = ukv_options_default_k;
         return txn_ptr ? static_cast<ukv_options_t>( //
                              base |                  //
-                             (txn_ptr->dont_watch ? ukv_option_transaction_dont_dont_watch_k : base) |
+                             (txn_ptr->dont_watch ? ukv_option_transaction_dont_watch_k : base) |
                              (txn_ptr->flush_writes ? ukv_option_write_flush_k : base))
                        : base;
     }
@@ -97,7 +97,7 @@ struct py_collection_t {
     ukv_transaction_t txn() noexcept(false) {
         if (in_txn && py_txn_ptr.expired())
             throw std::domain_error("Collection references closed transaction");
-        return in_txn ? py_txn_ptr.lock()->native : ukv_transaction_t(nullptr);
+        return in_txn ? ukv_transaction_t(py_txn_ptr.lock()->native) : ukv_transaction_t(nullptr);
     }
 
     /**

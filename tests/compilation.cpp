@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
 
     // Try getting the main collection
     _ = db.collection();
-    collection_t main = *db.collection();
+    bins_collection_t main = *db.collection();
 
     // Single-element access
     main[42] = "purpose of life";
@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
         (void)value;
 
     // Accessing named collections
-    collection_t prefixes = *db.collection("prefixes");
+    bins_collection_t prefixes = *db.collection("prefixes");
     prefixes.at(42) = "purpose";
     db["articles"]->at(42) = "of";
     db["suffixes"]->at(42) = "life";
@@ -85,8 +85,9 @@ int main(int argc, char** argv) {
     _ = main[{43, 44}].on(arena).value(/*track:*/ false);
 
     // Working with sub documents
-    main[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
-    _ = main[ckf(56, "hello")].value() == "world";
+    docs_collection_t docs = *db.collection<docs_collection_t>("docs");
+    docs[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
+    _ = docs[ckf(56, "hello")].value() == "world";
 
     _ = db.clear();
 
