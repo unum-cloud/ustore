@@ -167,7 +167,7 @@ void write_one( //
 
     if (txn)
         status = !content //
-                     ? txn->SingleDelete(collection, key, watch)
+                     ? watch ? txn->SingleDelete(collection, key) : txn->DeleteUntracked(collection, key)
                      : watch ? txn->Put(collection, key, to_slice(content))
                              : txn->PutUntracked(collection, key, to_slice(content));
     else
@@ -199,7 +199,7 @@ void write_many( //
             auto collection = rocks_collection(db, place.collection);
             auto key = to_slice(place.key);
             auto status = !content //
-                              ? txn->Delete(collection, key, watch)
+                              ? watch ? txn->SingleDelete(collection, key) : txn->DeleteUntracked(collection, key)
                               : watch ? txn->Put(collection, key, to_slice(content))
                                       : txn->PutUntracked(collection, key, to_slice(content));
             export_error(status, c_error);
