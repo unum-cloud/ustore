@@ -24,6 +24,8 @@
 #include <stdio.h>       // Saving/reading from disk
 #include <filesystem>    // Enumerating the directory
 
+#include <fmt/core.h>
+
 #include "ukv/db.h"
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 #include "helpers/pmr.hpp"         // `stl_arena_t`
@@ -105,15 +107,28 @@ struct entry_t {
     }
     bool assign_null(generation_t generation) const noexcept { return assign_blob(value_view_t {}, generation); }
 
-    bool assign_blob(value_view_t value, generation_t g) const noexcept {
+    bool alloc_blob(std::size_t length, generation_t g) const noexcept {
+        generation = g;
+        if (value_end - value_begin == length)
+            return true;
+
         release_blob();
-        if (value.size()) {
-            auto begin = allocator_t {}.allocate(value.size());
+        if (length) {
+            auto begin = allocator_t {}.allocate(length);
             if (!begin)
                 return false;
             value_begin = begin;
-            value_end = begin + value.size();
-            generation = g;
+            value_end = begin + length;
+        }
+        generation = g;
+        return true;
+    }
+
+    bool assign_blob(value_view_t value, generation_t g) const noexcept {
+        if (!alloc_blob(value.size(), g))
+            return false;
+
+        if (value.size()) {
             std::memcpy(value_begin, value.data(), value.size());
             return true;
         }
@@ -228,8 +243,63 @@ inline bool entry_was_overwritten(generation_t entry_generation,
                ? ((entry_generation >= transaction_generation) & (entry_generation <= youngest_generation))
                : ((entry_generation >= transaction_generation) | (entry_generation <= youngest_generation));
 }
-#if 0
-void save_to_disk(collection_t const& collection, std::string const& path, ukv_error_t* c_error) {
+
+template <typename entries_iterator_at>
+void write_entries(file_handle_t const& handle,
+                   entries_iterator_at begin,
+                   entries_iterator_at end,
+                   ukv_error_t* c_error) {
+
+    for (; begin != end; ++begin) {
+        entry_t const& entry = *begin;
+        if (!entry)
+            continue;
+
+        auto saved_len = std::fwrite(&entry.collection, sizeof(ukv_collection_t), 1, handle);
+        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on collection.");
+
+        saved_len = std::fwrite(&entry.key, sizeof(ukv_key_t), 1, handle);
+        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on key.");
+
+        auto buf = value_view_t(entry);
+        auto buf_len = static_cast<ukv_length_t>(buf.size());
+        saved_len = std::fwrite(&buf_len, sizeof(ukv_length_t), 1, handle);
+        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on value len.");
+
+        saved_len = std::fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
+        return_if_error(saved_len == buf.size(), c_error, 0, "Write partially failed on value.");
+    }
+}
+
+template <typename entries_iterator_at>
+void read_entries(file_handle_t const& handle, entries_iterator_at output, ukv_error_t* c_error) {
+
+    while (std::feof(handle) == 0) {
+        entry_t entry;
+
+        auto read_len = std::fread(&entry.collection, sizeof(ukv_collection_t), 1, handle);
+        return_if_error(read_len == 1, c_error, 0, "Read partially failed on collection.");
+
+        read_len = std::fread(&entry.key, sizeof(ukv_key_t), 1, handle);
+        return_if_error(read_len == 1, c_error, 0, "Read partially failed on key.");
+
+        auto buf_len = ukv_length_t(0);
+        read_len = std::fread(&buf_len, sizeof(ukv_length_t), 1, handle);
+        return_if_error(read_len == 1, c_error, 0, "Read partially failed on value len.");
+
+        return_if_error(!entry.alloc_blob(buf_len, 0),
+                        c_error,
+                        out_of_memory_k,
+                        "Failed to allocate memory for new node");
+        read_len = std::fread(entry.value_begin, sizeof(byte_t), buf_len, handle);
+        return_if_error(read_len == buf_len, c_error, 0, "Read partially failed on value.");
+
+        *output = std::move(entry);
+        ++output;
+    }
+}
+
+void write(database_t const& db, std::string const& path, ukv_error_t* c_error) {
     // Using the classical C++ IO mechanisms is a bad tone in the modern world.
     // They are ugly and, more importantly, painfully slow.
     // https://www.reddit.com/r/cpp_questions/comments/e2xia9/performance_comparison_of_various_ways_of_reading/
@@ -242,119 +312,64 @@ void save_to_disk(collection_t const& collection, std::string const& path, ukv_e
     if ((*c_error = handle.open(path.c_str(), "wb+").release_error()))
         return;
 
-    // Save the collection size
-    {
-        auto n = static_cast<ukv_size_t>(collection.unique_elements);
-        auto saved_len = std::fwrite(&n, sizeof(ukv_size_t), 1, handle);
-        return_if_error(saved_len == 1, c_error, 0, "Couldn't write anything to file.");
-    }
+    // Print stats about the overall dataset:
+    // https://fmt.dev/latest/api.html#_CPPv4IDpEN3fmt5printEvPNSt4FILEE13format_stringIDp1TEDpRR1T
+    std::fprintf(handle, "Total Items: %zu\n", db.entries.size());
+    std::fprintf(handle, "Named Collections: %zu\n", db.names.size());
+    for (auto const& name_and_handle : db.names)
+        std::fprintf(handle, "-%s: 0x%016zx\n", name_and_handle.first.c_str(), name_and_handle.second);
+    std::fprintf(handle, "\n");
 
     // Save the entries
-    for (auto const& [key, seq_val] : db.entries) {
-        if (seq_val.is_deleted)
-            continue;
+    write_entries(handle, db.entries.begin(), db.entries.end(), c_error);
+    return_on_error(c_error);
 
-        auto saved_len = std::fwrite(&key, sizeof(ukv_key_t), 1, handle);
-        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on key.");
-
-        auto const& buf = seq_val.buffer;
-        auto buf_len = static_cast<ukv_length_t>(buf.size());
-        saved_len = std::fwrite(&buf_len, sizeof(ukv_length_t), 1, handle);
-        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on value len.");
-
-        saved_len = std::fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
-        return_if_error(saved_len == buf.size(), c_error, 0, "Write partially failed on value.");
-    }
-
+    // Close the file
     log_error(c_error, 0, handle.close().release_error());
 }
 
-void read_from_disk(collection_t& collection, std::string const& path, ukv_error_t* c_error) {
+void read(database_t& db, std::string const& path, ukv_error_t* c_error) {
+    db.entries.clear();
+    db.names.clear();
+
+    // Check if file even exists
+    if (!std::filesystem::exists(path))
+        return;
+
     // Similar to serialization, we don't use STL here
     file_handle_t handle;
     if ((*c_error = handle.open(path.c_str(), "rb+").release_error()))
         return;
 
     // Get the collection size, to preallocate entries
-    auto n = ukv_size_t(0);
-    {
-        auto read_len = std::fread(&n, sizeof(ukv_size_t), 1, handle);
-        return_if_error(read_len == 1, c_error, 0, "Couldn't read anything from file.");
+    char line_buffer[256];
+    while (std::fgets(line_buffer, sizeof(line_buffer), handle) != NULL) {
+        // Check if it is a collection description
+        auto line_length = std::find(line_buffer, line_buffer + sizeof(line_buffer), '\n') - line_buffer;
+        if (line_length == 0)
+            break;
+        if (line_buffer[0] == '-') {
+            auto name_length = std::find(line_buffer + 1, line_buffer + sizeof(line_buffer), ':') - line_buffer;
+            auto name = std::string_view(line_buffer + 1, name_length);
+            auto id_str_begin = line_buffer + line_length - 16;
+            auto id_str_end = line_buffer + line_length;
+            auto id = std::strtoull(id_str_begin, &id_str_end, 16);
+            db.names.emplace(name, id);
+        }
+        else
+            // Skip metadata rows
+            continue;
     }
 
     // Load the entries
-    db.entries.clear();
-    collection.reserve_entry_nodes(n);
-    collection.unique_elements = n;
+    read_entries(handle, std::inserter(db.entries, db.entries.end()), c_error);
+    return_on_error(c_error);
 
-    for (ukv_size_t i = 0; i != n; ++i) {
-
-        auto key = ukv_key_t {};
-        auto read_len = std::fread(&key, sizeof(ukv_key_t), 1, handle);
-        return_if_error(read_len == 1, c_error, 0, "Read partially failed on key.");
-
-        auto buf_len = ukv_length_t(0);
-        read_len = std::fread(&buf_len, sizeof(ukv_length_t), 1, handle);
-        return_if_error(read_len == 1, c_error, 0, "Read partially failed on value len.");
-
-        auto buf = blob_t(buf_len);
-        read_len = std::fread(buf.data(), sizeof(byte_t), buf.size(), handle);
-        return_if_error(read_len == buf.size(), c_error, 0, "Read partially failed on value.");
-
-        db.entries.emplace(key, entry_t {std::move(buf), generation_t {0}, false});
-    }
-
+    // Close the file
     log_error(c_error, 0, handle.close().release_error());
 }
 
-void save_to_disk(database_t const& db, ukv_error_t* c_error) {
-    auto dir_path = fs::path(db.persisted_path);
-    return_if_error(fs::is_directory(dir_path), c_error, args_wrong_k, "Supplied path is not a directory!");
-
-    save_to_disk(db.main, dir_path / ".stl.ukv", c_error);
-    return_on_error(c_error);
-
-    for (auto const& name_and_collection : db.names) {
-        auto name_with_ext = std::string(name_and_collection.first) + ".stl.ukv";
-        save_to_disk(*name_and_collection.second, dir_path / name_with_ext, c_error);
-        return_on_error(c_error);
-    }
-}
-
-void read_from_disk(database_t& db, ukv_error_t* c_error) {
-    auto dir_path = fs::path(db.persisted_path);
-    return_if_error(fs::is_directory(dir_path), c_error, args_wrong_k, "Supplied path is not a directory!");
-
-    // Parse the main main col
-    if (fs::path path = dir_path / ".stl.ukv"; fs::is_regular_file(path)) {
-        auto path_str = path.native();
-        read_from_disk(db.main, path_str, c_error);
-    }
-
-    // Parse all the named collections we can find
-    for (auto const& dir_entry : fs::directory_iterator {dir_path}) {
-        if (!dir_entry.is_regular_file())
-            continue;
-        fs::path const& path = dir_entry.path();
-        auto path_str = path.native();
-        if (path_str.size() <= 8 || path_str.substr(path_str.size() - 8) != ".stl.ukv")
-            continue;
-
-        auto filename_w_ext = path.filename().native();
-        auto filename = filename_w_ext.substr(0, filename_w_ext.size() - 8);
-        auto collection = std::make_unique<collection_t>();
-        collection->name = filename;
-        read_from_disk(*collection, path_str, c_error);
-        db.names.emplace(std::string_view(collection->name), std::move(collection));
-    }
-}
-#endif
-void save_to_disk(database_t const& db, ukv_error_t* c_error) {
-}
-void read_from_disk(database_t& db, ukv_error_t* c_error) {
-}
-
-void write_head( //
+void write( //
     database_t& db,
     places_arg_t places,
     contents_arg_t contents,
@@ -384,10 +399,10 @@ void write_head( //
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c_options & ukv_option_write_flush_k)
-        save_to_disk(db, c_error);
+        write(db, db.persisted_path, c_error);
 }
 
-void write_txn( //
+void write( //
     transaction_t& txn,
     places_arg_t places,
     contents_arg_t contents,
@@ -622,7 +637,7 @@ void ukv_database_init( //
         auto len = c_config ? std::strlen(c_config) : 0;
         if (len) {
             db_ptr->persisted_path = std::string(c_config, len);
-            read_from_disk(*db_ptr, c_error);
+            read(*db_ptr, db_ptr->persisted_path, c_error);
         }
         *c_db = db_ptr;
     });
@@ -748,8 +763,7 @@ void ukv_write( //
     validate_write(c_txn, places, contents, c_options, c_error);
     return_on_error(c_error);
 
-    return c_txn ? write_txn(txn, places, contents, c_options, c_error)
-                 : write_head(db, places, contents, c_options, c_error);
+    return c_txn ? write(txn, places, contents, c_options, c_error) : write(db, places, contents, c_options, c_error);
 }
 
 void ukv_scan( //
@@ -1125,7 +1139,7 @@ void ukv_transaction_commit( //
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c_options & ukv_option_write_flush_k)
-        save_to_disk(db, c_error);
+        write(db, db.persisted_path, c_error);
 }
 
 /*********************************************************/
