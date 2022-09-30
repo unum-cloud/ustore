@@ -30,6 +30,7 @@
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 #include "helpers/pmr.hpp"         // `stl_arena_t`
 #include "helpers/file.hpp"        // `file_handle_t`
+#include "helpers/reserve.hpp"     // `reserve_allocator_gt`
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -163,11 +164,19 @@ struct entry_compare_t {
     bool operator()(ukv_collection_t a, entry_t const& b) const noexcept { return a < b.collection; }
 };
 
+using entry_allocator_t = reserve_allocator_gt<std::allocator<entry_t>>;
+using entries_set_t = std::set<entry_t, entry_compare_t, entry_allocator_t>;
+
 using collection_ptr_t = std::unique_ptr<collection_t>;
 
 struct transaction_t {
-    std::set<entry_t, entry_compare_t> changes;
-    std::unordered_map<collection_key_t, generation_t> watched;
+    entries_set_t changes;
+    std::unordered_map<collection_key_t,
+                       generation_t,
+                       std::hash<collection_key_t>,
+                       std::equal_to<collection_key_t>,
+                       reserve_allocator_gt<std::allocator<std::pair<collection_key_t const, generation_t>>>>
+        watched;
 
     database_t* db_ptr {nullptr};
     generation_t generation {0};
@@ -192,7 +201,7 @@ struct string_less_t : public std::less<std::string_view> {
 
 struct database_t {
     std::shared_mutex mutex;
-    std::set<entry_t, entry_compare_t> entries;
+    entries_set_t entries;
 
     /**
      * @brief A variable-size set of named collections.
@@ -243,6 +252,10 @@ inline bool entry_was_overwritten(generation_t entry_generation,
                ? ((entry_generation >= transaction_generation) & (entry_generation <= youngest_generation))
                : ((entry_generation >= transaction_generation) | (entry_generation <= youngest_generation));
 }
+
+/*********************************************************/
+/*****************	 Writing to Disk	  ****************/
+/*********************************************************/
 
 template <typename entries_iterator_at>
 void write_entries(file_handle_t const& handle,
@@ -369,33 +382,51 @@ void read(database_t& db, std::string const& path, ukv_error_t* c_error) {
     log_error(c_error, 0, handle.close().release_error());
 }
 
+/*********************************************************/
+/*****************	 Read/Write Head/Txn  ****************/
+/*********************************************************/
+
+void populate( //
+    places_arg_t places,
+    contents_arg_t contents,
+    generation_t generation,
+    entries_set_t& entries,
+    ukv_error_t* c_error) noexcept {
+
+    safe_section("Building batch tree", c_error, [&] {
+        for (std::size_t i = 0; i != places.size(); ++i) {
+            auto place = places[i];
+            auto content = contents[i];
+            entry_t entry {place.collection_key()};
+            auto entry_allocated = entry.assign_blob(content, generation);
+            return_if_error(entry_allocated, c_error, out_of_memory_k, "Couldn't allocate a blob");
+            entries.insert(std::move(entry));
+        }
+    });
+}
+
+void clear(places_arg_t places, entries_set_t& entries) noexcept {
+    for (std::size_t i = 0; i != places.size(); ++i) {
+        auto place = places[i];
+        entries.erase(place.collection_key());
+    }
+}
+
 void write( //
     database_t& db,
     places_arg_t places,
     contents_arg_t contents,
     ukv_options_t const c_options,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept {
 
     std::unique_lock _ {db.mutex};
-    auto new_generation = ++db.youngest_generation;
+    auto generation = ++db.youngest_generation;
+    entries_set_t entries;
+    populate(places, contents, generation, entries, c_error);
+    return_on_error(c_error);
 
-    for (std::size_t i = 0; i != places.size(); ++i) {
-
-        auto place = places[i];
-        auto content = contents[i];
-        auto db_iterator = db.entries.find(place.collection_key());
-
-        // We want to insert a new entry, but let's check if we
-        // can overwrite the existing value without causing reallocations.
-        safe_section("Copying new value", c_error, [&] {
-            if (db_iterator == db.entries.end())
-                db_iterator = db.entries.emplace(place.collection_key()).first;
-
-            entry_t const& entry = *db_iterator;
-            entry.assign_blob(content, new_generation);
-        });
-        return_on_error(c_error);
-    }
+    clear(places, db.entries);
+    db.entries.merge(entries);
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c_options & ukv_option_write_flush_k)
@@ -407,44 +438,37 @@ void write( //
     places_arg_t places,
     contents_arg_t contents,
     ukv_options_t const c_options,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept {
 
     // No need for locking here, until we commit, unless, of course,
     // a collection is being deleted.
     database_t& db = *txn.db_ptr;
-    std::shared_lock _ {db.mutex};
     bool dont_watch = c_options & ukv_option_transaction_dont_watch_k;
 
-    for (std::size_t i = 0; i != places.size(); ++i) {
-
-        auto place = places[i];
-        auto content = contents[i];
-
+    // Track potential future changes
+    if (!dont_watch) {
+        std::shared_lock _ {db.mutex};
         safe_section("Copying new value", c_error, [&] {
-            // Track potential future changes
-            if (!dont_watch) {
+            for (std::size_t i = 0; i != places.size(); ++i) {
+                auto place = places[i];
                 auto db_iterator = db.entries.find(place.collection_key());
                 auto last_generation =
                     db_iterator != db.entries.end() ? db_iterator->generation : missing_data_generation_k;
                 txn.watched.insert_or_assign(place.collection_key(), last_generation);
             }
-
-            // Update transaction state
-            entry_t entry {place.collection_key()};
-            entry.assign_blob(content, txn.generation);
-            txn.changes.insert(std::move(entry));
         });
-        return_on_error(c_error);
     }
+
+    populate(places, contents, txn.generation, txn.changes, c_error);
 }
 
 template <typename value_enumerator_at>
-void read_head_under_lock( //
+void read_under_lock( //
     database_t& db,
     places_arg_t tasks,
     ukv_options_t const,
     value_enumerator_at enumerator,
-    ukv_error_t*) {
+    ukv_error_t*) noexcept {
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
@@ -455,12 +479,12 @@ void read_head_under_lock( //
 }
 
 template <typename value_enumerator_at>
-void read_txn_under_lock( //
+void read_under_lock( //
     transaction_t& txn,
     places_arg_t tasks,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept {
 
     database_t& db = *txn.db_ptr;
     generation_t const youngest_generation = db.youngest_generation.load();
@@ -495,7 +519,7 @@ void read_txn_under_lock( //
     }
 }
 
-void scan_head( //
+void scan( //
     database_t& db,
     scans_arg_t tasks,
     ukv_options_t const options,
@@ -503,7 +527,7 @@ void scan_head( //
     ukv_length_t** c_found_counts,
     ukv_key_t** c_found_keys,
     stl_arena_t& arena,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept {
 
     std::shared_lock _ {db.mutex};
 
@@ -545,7 +569,7 @@ void scan_head( //
     offsets[tasks.size()] = keys_output - *c_found_keys;
 }
 
-void scan_txn( //
+void scan( //
     transaction_t& txn,
     scans_arg_t tasks,
     ukv_options_t const c_options,
@@ -553,7 +577,7 @@ void scan_txn( //
     ukv_length_t** c_found_counts,
     ukv_key_t** c_found_keys,
     stl_arena_t& arena,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept {
 
     database_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
@@ -700,8 +724,8 @@ void ukv_read( //
     };
 
     std::shared_lock _ {db.mutex};
-    c_txn ? read_txn_under_lock(txn, places, c_options, meta_enumerator, c_error)
-          : read_head_under_lock(db, places, c_options, meta_enumerator, c_error);
+    c_txn ? read_under_lock(txn, places, c_options, meta_enumerator, c_error)
+          : read_under_lock(db, places, c_options, meta_enumerator, c_error);
     offs[places.count] = total_length;
     if (!needs_export)
         return;
@@ -713,8 +737,8 @@ void ukv_read( //
     };
 
     *c_found_values = reinterpret_cast<ukv_byte_t*>(tape);
-    c_txn ? read_txn_under_lock(txn, places, c_options, data_enumerator, c_error)
-          : read_head_under_lock(db, places, c_options, data_enumerator, c_error);
+    c_txn ? read_under_lock(txn, places, c_options, data_enumerator, c_error)
+          : read_under_lock(db, places, c_options, data_enumerator, c_error);
 }
 
 void ukv_write( //
@@ -810,8 +834,8 @@ void ukv_scan( //
     validate_scan(c_txn, scans, c_options, c_error);
     return_on_error(c_error);
 
-    return c_txn ? scan_txn(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
-                 : scan_head(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);
+    return c_txn ? scan(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
+                 : scan(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);
 }
 
 void ukv_size( //
@@ -1098,7 +1122,7 @@ void ukv_transaction_commit( //
     }
 
     // 2. Check for collisions among incoming values
-    for (auto const& changed_entry : txn.changes) {
+    for (entry_t const& changed_entry : txn.changes) {
         auto db_iterator = db.entries.find(changed_entry.collection_key());
         if (db_iterator == db.entries.end())
             continue;
@@ -1111,31 +1135,10 @@ void ukv_transaction_commit( //
             return;
     }
 
-    // 3. Allocate space for more nodes across different collections
-    db.reserve_entry_nodes(txn.changes.size());
-    return_on_error(c_error);
-
-    // 4. Import the data, as no collisions were detected
-    for (entry_t const& changed_entry : txn.changes) {
-        auto db_iterator = db.entries.find(changed_entry.collection_key());
-        // A key was deleted:
-        // if (changed_entry.empty()) {
-        //     if (db_iterator != db.entries.end())
-        //         db.entries.erase(db_iterator);
-        // }
-        // A keys was updated:
-        // else
-        if (db_iterator != db.entries.end())
-            db_iterator->swap_blob(changed_entry);
-
-        // A key was inserted:
-        else {
-            entry_t new_entry {changed_entry.collection_key()};
-            new_entry.generation = missing_data_generation_k;
-            new_entry.swap_blob(changed_entry);
-            db.entries.insert(std::move(new_entry));
-        }
-    }
+    // 3. Import the data, removing the older version beforehand
+    for (entry_t const& changed_entry : txn.changes)
+        db.entries.erase(changed_entry.collection_key());
+    db.entries.merge(txn.changes);
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c_options & ukv_option_write_flush_k)
