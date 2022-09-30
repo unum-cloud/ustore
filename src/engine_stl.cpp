@@ -405,10 +405,18 @@ void populate( //
     });
 }
 
-void clear(places_arg_t places, entries_set_t& entries) noexcept {
-    for (std::size_t i = 0; i != places.size(); ++i) {
-        auto place = places[i];
-        entries.erase(place.collection_key());
+/**
+ * @brief Unlike `std::set<>::merge`, this function overwrites existing values.
+ *
+ * https://en.cppreference.com/w/cpp/container/set#Member_types
+ * https://en.cppreference.com/w/cpp/container/set/insert
+ */
+void merge_overwrite(entries_set_t& target, entries_set_t& source) {
+    for (auto source_it = source.begin(); source_it != source.end();) {
+        auto node = source.extract(source_it++);
+        auto result = target.insert(std::move(node));
+        if (!result.inserted)
+            result.position->swap_blob(result.node.value());
     }
 }
 
@@ -419,14 +427,17 @@ void write( //
     ukv_options_t const c_options,
     ukv_error_t* c_error) noexcept {
 
-    std::unique_lock _ {db.mutex};
-    auto generation = ++db.youngest_generation;
+    // In here we don't care about the consistency,
+    // just the fact of either writing all values or not.
+    // So we can build the entries before the write lock
+    // and not check generations afterwards.
     entries_set_t entries;
+    auto generation = ++db.youngest_generation;
     populate(places, contents, generation, entries, c_error);
     return_on_error(c_error);
 
-    clear(places, db.entries);
-    db.entries.merge(entries);
+    std::unique_lock _ {db.mutex};
+    merge_overwrite(db.entries, entries);
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c_options & ukv_option_write_flush_k)
@@ -1136,9 +1147,7 @@ void ukv_transaction_commit( //
     }
 
     // 3. Import the data, removing the older version beforehand
-    for (entry_t const& changed_entry : txn.changes)
-        db.entries.erase(changed_entry.collection_key());
-    db.entries.merge(txn.changes);
+    merge_overwrite(db.entries, txn.changes);
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c_options & ukv_option_write_flush_k)
