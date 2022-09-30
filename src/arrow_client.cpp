@@ -7,17 +7,16 @@
  * Understanding the costs of remote communication, might keep a cache.
  */
 
-#include <unordered_map>
-#include <iostream>
+#include <thread> // `std::this_thread`
 
-#include <fmt/core.h>
+#include <fmt/core.h> // `fmt::format_to`
+#include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
 
 #include "ukv/db.h"
-
-#include "helpers.hpp"
-#include "arrow_helpers.hpp"
 #include "ukv/arrow.h"
+#include "ukv/cpp/types.hpp" // `ukv_doc_field`
+#include "helpers/arrow.hpp"
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -126,8 +125,8 @@ void ukv_read( //
                                          ? kParamReadPartLengths.c_str()
                                          : nullptr;
 
-    bool const read_shared = c_options & ukv_option_read_shared_k;
-    bool const watch = c_options & ukv_option_txn_watch_k;
+    bool const read_shared = c_options & ukv_option_read_shared_memory_k;
+    bool const dont_watch = c_options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightRead);
     if (c_txn)
@@ -141,8 +140,8 @@ void ukv_read( //
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamReadPart, partial_mode);
     if (read_shared)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (watch)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagWatch);
+    if (dont_watch)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagDontWatch);
 
     bool const has_collections_column = collections && !same_collection;
     constexpr bool has_keys_column = true;
@@ -621,8 +620,8 @@ void ukv_scan( //
     arf::FlightCallOptions options = arrow_call_options(pool);
 
     // Configure the `cmd` descriptor
-    bool const read_shared = c_options & ukv_option_read_shared_k;
-    bool const watch = c_options & ukv_option_txn_watch_k;
+    bool const read_shared = c_options & ukv_option_read_shared_memory_k;
+    bool const dont_watch = c_options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightScan);
     if (c_txn)
@@ -634,8 +633,8 @@ void ukv_scan( //
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (read_shared)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (watch)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagWatch);
+    if (dont_watch)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagDontWatch);
 
     // Send the request to server
     ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
@@ -888,7 +887,7 @@ void ukv_transaction_init(
     fmt::format_to(std::back_inserter(action.type), "{}?", kFlightTxnBegin);
     if (txn_id != 0)
         fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, txn_id);
-    if (c_options & ukv_option_txn_snapshot_k)
+    if (c_options & ukv_option_transaction_snapshot_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);

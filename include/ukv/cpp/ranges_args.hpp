@@ -7,7 +7,8 @@
  */
 
 #pragma once
-#include "ukv/cpp/ranges.hpp"
+#include "ukv/cpp/ranges.hpp" // `strided_iterator_gt`
+#include "ukv/cpp/status.hpp" // `return_if_error`
 
 namespace unum::ukv {
 
@@ -202,7 +203,10 @@ inline void validate_write(ukv_transaction_t const c_txn,
     if (remove_all)
         return_if_error(!contents.lengths_begin && !contents.offsets_begin, c_error, 0, "Can't address NULLs!");
 
-    return_if_error(!(c_options & ukv_option_txn_snapshot_k), c_error, 0, "Writes are not supported on snapshots!");
+    return_if_error(!(c_options & ukv_option_transaction_snapshot_k),
+                    c_error,
+                    0,
+                    "Writes are not supported on snapshots!");
 
     if (!places.same_collection() || same_collections_are_named(places.collections_begin))
         return_if_error(ukv_supports_named_collections_k, c_error, 0, "Current engine does not support collections!");
@@ -249,7 +253,7 @@ inline void validate_transaction_commit(ukv_transaction_t const c_txn,
                                         ukv_error_t* c_error) {
 
     return_if_error(c_txn, c_error, 0, "Transaction is uninitialized");
-    return_if_error(!(c_options & (ukv_option_txn_snapshot_k | ukv_option_nodiscard_k)),
+    return_if_error(!(c_options & (ukv_option_transaction_snapshot_k | ukv_option_dont_discard_memory_k)),
                     c_error,
                     0,
                     "Invalid options!");
@@ -260,7 +264,7 @@ inline void validate_transaction_begin(ukv_transaction_t const c_txn,
                                        ukv_error_t* c_error) {
 
     return_if_error(c_txn, c_error, 0, "Transaction is uninitialized");
-    return_if_error(!(c_options & (ukv_option_write_flush_k | ukv_option_txn_watch_k | ukv_option_nodiscard_k)),
+    return_if_error(!(c_options & (ukv_option_write_flush_k | ukv_option_dont_discard_memory_k)),
                     c_error,
                     0,
                     "Invalid options!");
