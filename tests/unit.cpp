@@ -488,7 +488,7 @@ TEST(db, txn_unnamed_then_named) {
 
     // Transaction with named collection
     EXPECT_TRUE(db.add_collection("named_col"));
-    bins_collection_t named_collection = *db.add_collection("named_col");
+    bins_collection_t named_collection = *db.collection("named_col");
     std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
     auto txn_named_collection_ref = txn[sub_keys];
     round_trip(txn_named_collection_ref, values);
