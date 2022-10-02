@@ -13,9 +13,11 @@
 #include <yyjson.h> // Primary internal JSON representation
 #include <bson.h>   // Converting from/to BSON
 
-#include "helpers/pmr.hpp"
-#include "helpers/algorithm.hpp"
-#include "helpers/vector.hpp" // `growing_tape_t`
+#include "ukv/docs.h"
+#include "helpers/pmr.hpp"         // `stl_arena_t`
+#include "helpers/vector.hpp"      // `growing_tape_t`
+#include "helpers/algorithm.hpp"   // `transform_n`
+#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -40,30 +42,39 @@ using field_path_buffer_t = char[field_path_len_limit_k];
 /*****************	 STL Compatibility	  ****************/
 /*********************************************************/
 
+/**
+ * @brief Parses `float`, `double`, `bool` or any integral type from string.
+ * @return true If not the entire string was recognized as a number.
+ */
 template <typename at>
-std::from_chars_result from_chars(char const* begin, char const* end, at& result) {
+bool parse_entire_number(char const* begin, char const* end, at& result) {
+    // Floats:
     if constexpr (std::is_same_v<at, float>) {
-        char* end = nullptr;
-        result = std::strtof(begin, &end);
-        return {end, begin == end ? std::errc::invalid_argument : std::errc()};
+        char* number_end = nullptr;
+        result = std::strtof(begin, &number_end);
+        return end == number_end;
     }
+    // Doubles:
     else if constexpr (std::is_same_v<at, double>) {
-        char* end = nullptr;
-        result = std::strtod(begin, &end);
-        return {end, begin == end ? std::errc::invalid_argument : std::errc()};
+        char* number_end = nullptr;
+        result = std::strtod(begin, &number_end);
+        return end == number_end;
     }
+    // Booleans:
     else if constexpr (std::is_same_v<at, bool>) {
-        bool is_true = end - begin == 4 && std::equal(begin, end, true_k);
-        bool is_false = end - begin == 5 && std::equal(begin, end, false_k);
+        bool is_true = (end - begin) == 4 && std::equal(begin, end, true_k);
+        bool is_false = (end - begin) == 5 && std::equal(begin, end, false_k);
         if (is_true | is_false) {
             result = is_true;
-            return {end, std::errc()};
+            return true;
         }
         else
-            return {end, std::errc::invalid_argument};
+            return false;
     }
-    else
-        return std::from_chars(begin, end, result);
+    // Integers:
+    else {
+        return std::from_chars(begin, end, result).ptr == end;
+    }
 }
 
 /**
@@ -71,7 +82,7 @@ std::from_chars_result from_chars(char const* begin, char const* end, at& result
  * @return The string-vew until the termination character. Empty string on failure.
  */
 template <typename at>
-std::string_view print_chars(char* begin, char* end, at scalar) {
+std::string_view print_number(char* begin, char* end, at scalar) {
     if constexpr (std::is_floating_point_v<at>) {
         // Parsing and dumping floating-point numbers is still not fully implemented in STL:
         //  std::to_chars_result result = std::to_chars(&print_buffer[0], print_buffer + printed_number_length_limit_k,
@@ -82,7 +93,9 @@ std::string_view print_chars(char* begin, char* end, at scalar) {
         //  bool fits_terminator = end_ptr < print_buffer + printed_number_length_limit_k;
         // If we use `std::snprintf`, the result will @b already be NULL-terminated:
         auto result = std::snprintf(begin, end - begin, "%f", scalar);
-        return result >= 0 ? std::string_view {begin, result - 1} : std::string_view {};
+        return result > 0 //
+                   ? std::string_view {begin, static_cast<std::size_t>(result - 1)}
+                   : std::string_view {};
     }
     else {
         // `std::to_chars` won't NULL-terminate the string, but we should.
@@ -91,7 +104,7 @@ std::string_view print_chars(char* begin, char* end, at scalar) {
             return {};
 
         *result.ptr = '\0';
-        return {begin, result.ptr - begin};
+        return {begin, static_cast<std::size_t>(result.ptr - begin)};
     }
 }
 
@@ -159,8 +172,18 @@ yyjson_val* json_lookup(yyjson_val* json, ukv_str_view_t field) noexcept {
     return !field ? json : field[0] == '/' ? yyjson_get_pointer(json, field) : yyjson_obj_get(json, field);
 }
 
+yyjson_val* json_lookupn(yyjson_val* json, ukv_str_view_t field, size_t len) noexcept {
+    return !field ? json : field[0] == '/' ? yyjson_get_pointern(json, field, len) : yyjson_obj_getn(json, field, len);
+}
+
 yyjson_mut_val* json_lookup(yyjson_mut_val* json, ukv_str_view_t field) noexcept {
     return !field ? json : field[0] == '/' ? yyjson_mut_get_pointer(json, field) : yyjson_mut_obj_get(json, field);
+}
+
+yyjson_mut_val* json_lookupn(yyjson_mut_val* json, ukv_str_view_t field, size_t len) noexcept {
+    return !field            ? json
+           : field[0] == '/' ? yyjson_mut_get_pointern(json, field, len)
+                             : yyjson_mut_obj_getn(json, field, len);
 }
 
 json_t json_parse(value_view_t bytes, stl_arena_t& arena, ukv_error_t* c_error) noexcept {
@@ -171,9 +194,10 @@ json_t json_parse(value_view_t bytes, stl_arena_t& arena, ukv_error_t* c_error) 
     json_t result;
     yyjson_alc allocator = wrap_allocator(arena);
     yyjson_read_flag flg = YYJSON_READ_ALLOW_COMMENTS | YYJSON_READ_ALLOW_INF_AND_NAN;
-    result.handle = yyjson_read_opts((char*)bytes.data(), (size_t)bytes.size(), flg, &allocator, NULL);
-    if (!result.handle)
-        *c_error = "Failed to parse document!";
+    // result.handle = yyjson_read_opts((char*)bytes.data(), (size_t)bytes.size(), flg, &allocator, NULL);
+    result.handle = yyjson_read((char*)bytes.data(), (size_t)bytes.size(), flg);
+    log_if_error(result.handle, c_error, 0, "Failed to parse document!");
+    result.mut_handle = yyjson_doc_mut_copy(result.handle, &allocator);
     return result;
 }
 
@@ -184,13 +208,13 @@ value_view_t json_dump(json_branch_t json, stl_arena_t& arena, growing_tape_t& o
 
     size_t result_length = 0;
     yyjson_write_flag flg = 0;
-    yyjson_alc allocator = wrap_allocator(arena);
-    char* result_begin = json.mut_handle
-                             ? yyjson_mut_val_write_opts(json.mut_handle, flg, &allocator, &result_length, NULL)
-                             : yyjson_val_write_opts(json.handle, flg, &allocator, &result_length, NULL);
-    if (!result_begin)
-        *c_error = "Failed to serialize the document!";
-
+    // yyjson_alc allocator = wrap_allocator(arena);
+    // char* result_begin = json.mut_handle
+    //                          ? yyjson_mut_val_write_opts(json.mut_handle, flg, &allocator, &result_length, NULL)
+    //                          : yyjson_val_write_opts(json.handle, flg, &allocator, &result_length, NULL);
+    char* result_begin = json.mut_handle ? yyjson_mut_val_write(json.mut_handle, flg, &result_length)
+                                         : yyjson_val_write(json.handle, flg, &result_length);
+    log_if_error(result_begin, c_error, 0, "Failed to serialize the document!");
     auto result = value_view_t {reinterpret_cast<byte_t const*>(result_begin), result_length};
     result = output.push_back(result, c_error);
     output.add_terminator(byte_t {0}, c_error);
@@ -235,9 +259,7 @@ void json_to_scalar(yyjson_val* value,
     case YYJSON_TYPE_STR: {
         char const* str_begin = yyjson_get_str(value);
         size_t str_len = yyjson_get_len(value);
-        std::from_chars_result result = from_chars(str_begin, str_begin + str_len, scalar);
-        bool entire_string_is_number = result.ec == std::errc() && result.ptr == str_begin + str_len;
-        if (entire_string_is_number) {
+        if (parse_entire_number(str_begin, str_begin + str_len, scalar)) {
             convert |= mask;
             collide &= ~mask;
             valid |= mask;
@@ -285,11 +307,6 @@ void json_to_scalar(yyjson_val* value,
         }
     }
     }
-}
-
-template <typename scalar_at>
-std::string_view scalar_to_string(scalar_at scalar, printed_number_buffer_t& print_buffer) {
-    return print_chars(print_buffer, print_buffer + printed_number_length_limit_k, scalar);
 }
 
 std::string_view json_to_string(yyjson_val* value,
@@ -340,21 +357,21 @@ std::string_view json_to_string(yyjson_val* value,
 
         switch (subtype) {
         case YYJSON_SUBTYPE_UINT:
-            result = scalar_to_string(yyjson_get_uint(value), print_buffer);
+            result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, yyjson_get_uint(value));
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
             break;
 
         case YYJSON_SUBTYPE_SINT:
-            result = scalar_to_string(yyjson_get_sint(value), print_buffer);
+            result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, yyjson_get_sint(value));
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
             break;
 
         case YYJSON_SUBTYPE_REAL:
-            result = scalar_to_string(yyjson_get_real(value), print_buffer);
+            result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, yyjson_get_real(value));
             convert |= mask;
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
@@ -500,38 +517,202 @@ value_view_t any_dump(json_branch_t json,
 /*****************	 Primary Functions	  ****************/
 /*********************************************************/
 
-yyjson_mut_val* modify_recursively( //
-    yyjson_mut_doc* doc,
-    yyjson_mut_val* branch,
-    std::string_view remaining_path,
+void modify_field( //
+    yyjson_mut_doc* original_doc,
+    yyjson_mut_val* modifier,
+    ukv_str_view_t field,
     ukv_doc_modification_t const c_modification,
-    yyjson_val* new_content) {
+    ukv_error_t* c_error) {
 
-    if (remaining_path.empty())
-        return yyjson_val_mut_copy(doc, new_content);
+    std::string_view json_ptr(field);
+    auto last_key_pos = json_ptr.rfind('/');
+    auto last_key_or_idx = json_ptr.substr(last_key_pos + 1);
+    auto is_idx = std::all_of(last_key_or_idx.begin(), last_key_or_idx.end(), [](char c) { return std::isdigit(c); });
 
-    auto first_end = remaining_path.find('/');
-    auto key_or_idx_str = remaining_path.substr(0, first_end);
-    auto is_idx = std::all_of(key_or_idx_str.begin(), key_or_idx_str.end(), [](char c) { return std::isdigit(c); });
-    auto build_missing = c_modification != ukv_doc_modify_update_k;
+    yyjson_mut_val* val = json_lookupn(original_doc->root, json_ptr.data(), last_key_pos);
+    return_if_error(val, c_error, 0, "Invalid field!");
 
-    if (is_idx) {
+    if (yyjson_mut_is_arr(val)) {
+        return_if_error(is_idx, c_error, 0, "Invalid field!");
         size_t idx = 0;
-        std::from_chars(key_or_idx_str.begin(), key_or_idx_str.end(), idx);
-        yyjson_mut_val* old_child = yyjson_mut_arr_get(branch, idx);
-        // auto child_replacement = modify_recursively(doc, old_child, remaining_path.substr(first_end), build_missing);
-        // yyjson_mut_arr_replace(branch, idx, child_replacement);
-        return branch;
+        std::from_chars(last_key_or_idx.begin(), last_key_or_idx.end(), idx);
+        if (c_modification == ukv_doc_modify_merge_k) {
+            yyjson_mut_val* mergeable = yyjson_mut_arr_get(val, idx);
+            return_if_error(mergeable, c_error, 0, "Invalid field!");
+            yyjson_mut_val* merge_result = yyjson_mut_merge_patch(original_doc, mergeable, modifier);
+            return_if_error(merge_result, c_error, 0, "Failed To Merge!");
+            return_if_error(yyjson_mut_arr_replace(val, idx, merge_result), c_error, 0, "Failed To Merge!");
+        }
+        else if (c_modification == ukv_doc_modify_insert_k) {
+            return_if_error(yyjson_mut_arr_append(val, modifier), c_error, 0, "Failed To Insert!");
+        }
+        else if (c_modification == ukv_doc_modify_remove_k) {
+            return_if_error(yyjson_mut_arr_remove(val, idx), c_error, 0, "Failed To Insert!");
+        }
+        else if (c_modification == ukv_doc_modify_update_k) {
+            return_if_error(yyjson_mut_arr_replace(val, idx, modifier), c_error, 0, "Failed To Update!");
+        }
+        else if (c_modification == ukv_doc_modify_upsert_k) {
+            if (yyjson_mut_arr_get(val, idx)) {
+                return_if_error(yyjson_mut_arr_replace(val, idx, modifier), c_error, 0, "Failed To Update!");
+            }
+            else {
+                return_if_error(yyjson_mut_arr_append(val, modifier), c_error, 0, "Failed To Update!");
+            }
+        }
+        else {
+            return_error(c_error, "Invalid Modification Mod!");
+        }
+    }
+    else if (yyjson_mut_is_obj(val)) {
+        if (c_modification == ukv_doc_modify_merge_k) {
+            yyjson_mut_val* mergeable = yyjson_mut_obj_getn(val, last_key_or_idx.data(), last_key_or_idx.size());
+            yyjson_mut_val* merge_result = yyjson_mut_merge_patch(original_doc, mergeable, modifier);
+            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            yyjson_mut_obj_replace(val, key, merge_result);
+        }
+        else if (c_modification == ukv_doc_modify_insert_k) {
+            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            return_if_error(yyjson_mut_obj_add(val, key, modifier), c_error, 0, "Failed To Insert!");
+        }
+        else if (c_modification == ukv_doc_modify_remove_k) {
+            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            return_if_error(yyjson_mut_obj_remove(val, key), c_error, 0, "Failed To Insert!");
+        }
+        else if (c_modification == ukv_doc_modify_update_k) {
+            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            return_if_error(yyjson_mut_obj_replace(val, key, modifier), c_error, 0, "Failed To Update!");
+        }
+        else if (c_modification == ukv_doc_modify_upsert_k) {
+            if (yyjson_mut_obj_get(val, last_key_or_idx.data())) {
+                yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+                return_if_error(yyjson_mut_obj_replace(val, key, modifier), c_error, 0, "Failed To Update!");
+            }
+            else {
+                yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+                return_if_error(yyjson_mut_obj_add(val, key, modifier), c_error, 0, "Failed To Update!");
+            }
+        }
+        else {
+            return_error(c_error, "Invalid Modification Mode!");
+        }
+    }
+}
+
+void patch( //
+    yyjson_mut_doc* original_doc,
+    yyjson_mut_val* patch_doc,
+    ukv_str_view_t field,
+    ukv_error_t* c_error) {
+
+    return_if_error(yyjson_mut_is_arr(patch_doc), c_error, 0, "Invalid Patch Doc!");
+    yyjson_mut_val* obj;
+    yyjson_mut_arr_iter arr_iter;
+    yyjson_mut_arr_iter_init(patch_doc, &arr_iter);
+    while ((obj = yyjson_mut_arr_iter_next(&arr_iter))) {
+        return_if_error(yyjson_mut_is_obj(obj), c_error, 0, "Invalid Patch Doc!");
+        yyjson_mut_obj_iter obj_iter;
+        yyjson_mut_obj_iter_init(obj, &obj_iter);
+        yyjson_mut_val* op = yyjson_mut_obj_iter_get(&obj_iter, "op");
+        return_if_error(op, c_error, 0, "Invalid Patch Doc!");
+        if (yyjson_mut_equals_str(op, "add")) {
+            return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
+            yyjson_mut_val* path = yyjson_mut_obj_iter_get(&obj_iter, "path");
+            return_if_error(path, c_error, 0, "Invalid Patch Doc!");
+            yyjson_mut_val* value = yyjson_mut_obj_iter_get(&obj_iter, "value");
+            return_if_error(value, c_error, 0, "Invalid Patch Doc!");
+            modify_field(original_doc,
+                         value,
+                         (std::string(field) + yyjson_mut_get_str(path)).c_str(),
+                         ukv_doc_modify_insert_k,
+                         c_error);
+        }
+        else if (yyjson_mut_equals_str(op, "remove")) {
+            return_if_error((yyjson_mut_obj_size(obj) == 2), c_error, 0, "Invalid Patch Doc!");
+            yyjson_mut_val* path = yyjson_mut_obj_iter_get(&obj_iter, "path");
+            return_if_error(path, c_error, 0, "Invalid Patch Doc!");
+            modify_field(original_doc,
+                         nullptr,
+                         (std::string(field) + yyjson_mut_get_str(path)).c_str(),
+                         ukv_doc_modify_remove_k,
+                         c_error);
+        }
+        else if (yyjson_mut_equals_str(op, "replace")) {
+            return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
+            yyjson_mut_val* path = yyjson_mut_obj_iter_get(&obj_iter, "path");
+            return_if_error(path, c_error, 0, "Invalid Patch Doc!");
+            yyjson_mut_val* value = yyjson_mut_obj_iter_get(&obj_iter, "value");
+            return_if_error(value, c_error, 0, "Invalid Patch Doc!");
+            modify_field(original_doc,
+                         value,
+                         (std::string(field) + yyjson_mut_get_str(path)).c_str(),
+                         ukv_doc_modify_update_k,
+                         c_error);
+        }
+        else if (yyjson_mut_equals_str(op, "copy")) {
+            return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
+            yyjson_mut_val* path = yyjson_mut_obj_iter_get(&obj_iter, "path");
+            return_if_error(path, c_error, 0, "Invalid Patch Doc!");
+            yyjson_mut_val* from = yyjson_mut_obj_iter_get(&obj_iter, "from");
+            return_if_error(from, c_error, 0, "Invalid Patch Doc!");
+            yyjson_mut_val* value =
+                yyjson_mut_val_mut_copy(original_doc, json_lookup(original_doc->root, yyjson_mut_get_str(from)));
+            return_if_error(value, c_error, 0, "Invalid Patch Doc!");
+            modify_field(original_doc,
+                         value,
+                         (std::string(field) + yyjson_mut_get_str(path)).c_str(),
+                         ukv_doc_modify_upsert_k,
+                         c_error);
+        }
+        else if (yyjson_mut_equals_str(op, "move")) {
+            return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
+            yyjson_mut_val* path = yyjson_mut_obj_iter_get(&obj_iter, "path");
+            return_if_error(path, c_error, 0, "Invalid Patch Doc!");
+            yyjson_mut_val* from = yyjson_mut_obj_iter_get(&obj_iter, "from");
+            return_if_error(from, c_error, 0, "Invalid Patch Doc!");
+            yyjson_mut_val* value =
+                yyjson_mut_val_mut_copy(original_doc, json_lookup(original_doc->root, yyjson_mut_get_str(from)));
+            return_if_error(value, c_error, 0, "Invalid Patch Doc!");
+            modify_field(original_doc,
+                         nullptr,
+                         (std::string(field) + yyjson_mut_get_str(from)).c_str(),
+                         ukv_doc_modify_remove_k,
+                         c_error);
+            modify_field(original_doc,
+                         value,
+                         (std::string(field) + yyjson_mut_get_str(path)).c_str(),
+                         ukv_doc_modify_upsert_k,
+                         c_error);
+        }
+    }
+}
+
+void modify( //
+    yyjson_mut_doc* original_doc,
+    yyjson_mut_val* modifier,
+    ukv_str_view_t field,
+    ukv_doc_modification_t const c_modification,
+    ukv_error_t* c_error) {
+
+    if (field && c_modification != ukv_doc_modify_patch_k) {
+        modify_field(original_doc, modifier, field, c_modification, c_error);
+        return_if_error(original_doc->root, c_error, 0, "Failed To Modify!");
+        return;
+    }
+
+    if (c_modification == ukv_doc_modify_merge_k) {
+        original_doc->root = yyjson_mut_merge_patch(original_doc, original_doc->root, modifier);
+    }
+    else if (c_modification == ukv_doc_modify_patch_k) {
+        if (field)
+            patch(original_doc, modifier, field, c_error);
+        else
+            patch(original_doc, modifier, "", c_error);
     }
     else {
-
-        yyjson_mut_val* old_child = yyjson_mut_obj_getn(branch, key_or_idx_str.data(), key_or_idx_str.size());
-        if (old_child) {
-        }
-
-        yyjson_mut_val* new_key = yyjson_mut_strn(doc, key_or_idx_str.data(), key_or_idx_str.size());
-        // bool yyjson_mut_obj_add(branch, new_key, yyjson_mut_val * val);
+        original_doc->root = yyjson_mut_val_mut_copy(original_doc, modifier);
     }
+    return_if_error(original_doc->root, c_error, 0, "Failed To Modify!");
 }
 
 template <typename callback_at>
@@ -542,7 +723,7 @@ void read_unique_docs( //
     ukv_options_t const c_options,
     stl_arena_t& arena,
     places_arg_t& unique_places,
-    safe_vector_gt<json_t>&,
+    safe_vector_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
@@ -693,6 +874,10 @@ void read_modify_write( //
     stl_arena_t& arena,
     ukv_error_t* c_error) noexcept {
 
+    growing_tape_t growing_tape {arena};
+    growing_tape.reserve(places.size(), c_error);
+    return_on_error(c_error);
+
     yyjson_alc allocator = wrap_allocator(arena);
     auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, json_t& parsed) {
         if (!parsed.mut_handle)
@@ -703,40 +888,17 @@ void read_modify_write( //
         json_t parsed_task = any_parse(contents[task_idx], c_type, arena, c_error);
         return_on_error(c_error);
 
-// Perform modifications
-#if 0
-        if (c_modification == ukv_doc_modify_merge_k) {
-            yyjson_mut_val* root = yyjson_mut_doc_get_root(parsed.mut_handle);
-            yyjson_mut_val* branch = json_lookup(root, field);
-            yyjson_mut_merge_patch(parsed.mut_handle, branch, parsed_task.handle);
-        }
-        else if (c_modification == ukv_doc_modify_patch_k) {
-            *c_error = "Patches aren't currently supported";
-        }
-        else {
-            yyjson_mut_val* root = yyjson_mut_doc_get_root(parsed.mut_handle);
-            auto new_root = modify_recursively(doc.mut_handle, root, field, c_modification, parsed_task.handle);
-            yyjson_mut_doc_set_root(doc.mut_handle, new_root);
-        }
-#endif
+        // Perform modifications
+        modify(parsed.mut_handle, parsed_task.mut_handle->root, field, c_modification, c_error);
+        any_dump({.mut_handle = parsed.mut_handle->root}, internal_format_k, arena, growing_tape, c_error);
+        return_on_error(c_error);
     };
 
     places_arg_t unique_places;
     safe_vector_gt<json_t> unique_docs(arena);
-    auto opts = ukv_options_t(c_options | (c_txn ? ukv_option_watch_k : 0));
+    auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
     read_docs(c_db, c_txn, places, opts, arena, unique_places, unique_docs, c_error, safe_callback);
     return_on_error(c_error);
-
-    // Export all those modified documents
-    growing_tape_t growing_tape {arena};
-    growing_tape.reserve(unique_places.size(), c_error);
-    return_on_error(c_error);
-
-    for (auto const& doc : unique_docs) {
-        yyjson_mut_val* root = yyjson_mut_doc_get_root(doc.mut_handle);
-        any_dump({.mut_handle = root}, internal_format_k, arena, growing_tape, c_error);
-        return_on_error(c_error);
-    }
 
     // By now, the tape contains concatenated updates docs:
     ukv_byte_t* tape_begin = reinterpret_cast<ukv_byte_t*>(growing_tape.contents().begin().get());
@@ -804,7 +966,7 @@ void ukv_docs_write( //
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     auto has_fields = fields && (!fields.repeats() || *fields);
-    if (!has_fields && c_type == internal_format_k)
+    if (!has_fields && c_type == internal_format_k && c_modification == ukv_doc_modify_upsert_k)
         return ukv_write( //
             c_db,
             c_txn,
@@ -835,12 +997,7 @@ void ukv_docs_write( //
 
     places_arg_t places {collections, keys, fields, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
-
-    auto func = has_fields || c_modification == ukv_doc_modify_patch_k || c_modification == ukv_doc_modify_merge_k
-                    ? &read_modify_write
-                    : &replace_docs;
-
-    func(c_db, c_txn, places, contents, c_options, c_modification, c_type, arena, c_error);
+    read_modify_write(c_db, c_txn, places, contents, c_options, c_modification, c_type, arena, c_error);
 }
 
 void ukv_docs_read( //
@@ -910,7 +1067,7 @@ void ukv_docs_read( //
 
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, json_t const& doc) {
         yyjson_val* root = yyjson_doc_get_root(doc.handle);
-        auto branch = json_lookup(root, field);
+        yyjson_val* branch = json_lookup(root, field);
         any_dump({.handle = branch}, c_type, arena, growing_tape, c_error);
         return_on_error(c_error);
     };
@@ -968,7 +1125,7 @@ void gist_recursively(yyjson_val* node,
         while ((val = yyjson_arr_iter_next(&iter)) && !*c_error) {
 
             path[path_len] = '/';
-            auto result = print_chars(path + path_len + slash_len, path + field_path_len_limit_k, idx);
+            auto result = print_number(path + path_len + slash_len, path + field_path_len_limit_k, idx);
             if (result.empty()) {
                 *c_error = "Path is too long!";
                 return;

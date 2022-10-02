@@ -57,12 +57,14 @@ class context_t : public std::enable_shared_from_this<context_t> {
         return *this;
     }
 
-    inline ukv_database_t db() const noexcept { return db_; }
-
     inline ~context_t() noexcept {
         ukv_transaction_free(db_, txn_);
         txn_ = nullptr;
     }
+
+    inline ukv_database_t db() const noexcept { return db_; }
+    inline ukv_transaction_t txn() const noexcept { return txn_; }
+    inline operator ukv_transaction_t() const noexcept { return txn_; }
 
     bins_ref_gt<places_arg_t> operator[](strided_range_gt<collection_key_t const> collections_and_keys) noexcept {
         places_arg_t arg;
@@ -178,7 +180,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
                 continue;
             return collection_at {db_, *id_it, txn_, arena_.member_ptr()};
         }
-        return status_t {"No such colelction is present"};
+        return status_t {"No such collection is present"};
     }
 
     /**
@@ -192,7 +194,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
      */
     status_t reset(bool snapshot = false) noexcept {
         status_t status;
-        auto options = snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k;
+        auto options = snapshot ? ukv_option_transaction_snapshot_k : ukv_options_default_k;
         ukv_transaction_init(db_, options, &txn_, status.member_ptr());
         return status;
     }
@@ -284,7 +286,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
         ukv_transaction_t raw = nullptr;
         ukv_transaction_init( //
             db_,
-            snapshot ? ukv_option_txn_snapshot_k : ukv_options_default_k,
+            snapshot ? ukv_option_transaction_snapshot_k : ukv_options_default_k,
             &raw,
             status.member_ptr());
         if (!status)

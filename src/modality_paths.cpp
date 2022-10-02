@@ -11,11 +11,19 @@
  * * N: value lengths
  * * N concatenated keys
  * * N concatenated values
+ *
+ * TODO:
+ * To allow fast traversals, we can index path components.
+ * In that case we can split ID/key space into positive and
+ * negative part, where the negative elements would store
+ * tree-like directory structure.
  */
 
-#include "helpers/pmr.hpp"       // `stl_arena_t`
-#include "helpers/algorithm.hpp" // `sort_and_deduplicate`
-#include "helpers/vector.hpp"    // `safe_vector_gt`
+#include "ukv/paths.h"
+#include "helpers/pmr.hpp"         // `stl_arena_t`
+#include "helpers/algorithm.hpp"   // `sort_and_deduplicate`
+#include "helpers/vector.hpp"      // `safe_vector_gt`
+#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -209,6 +217,7 @@ void ukv_paths_write( //
     ukv_size_t const c_values_bytes_stride,
 
     ukv_options_t const c_options,
+    ukv_char_t const,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -336,6 +345,7 @@ void ukv_paths_read( //
     ukv_size_t const c_paths_stride,
 
     ukv_options_t const c_options,
+    ukv_char_t const,
 
     ukv_octet_t** c_presences,
     ukv_key_t** c_keys,
@@ -446,6 +456,7 @@ void ukv_paths_scan( //
     ukv_size_t const c_scan_limits_stride,
 
     ukv_options_t const c_options,
+    ukv_char_t const,
 
     ukv_length_t** c_offsets,
     ukv_length_t** c_counts,

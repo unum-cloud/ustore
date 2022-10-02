@@ -60,12 +60,12 @@ One ~~ring~~ data-lake to rule them all.
 Backends differ in their functionality and purposes.
 The underlying embedded key value stores include:
 
-| Name    |      OSes       | [ACID][3]\nTransactions | Auxiliary\nCollections | Persistent | [Snapshots][2] | [Watching][1]\nReads | GPU\nAcceleration |
-| :------ | :-------------: | :---------------------: | :--------------------: | :--------: | :------------: | :------------------: | :---------------: |
-| STL     | POSIX + Windows |            ✅            |           ✅            |     ❌      |       ❌        |          ✅           |         ❌         |
-| LevelDB | POSIX + Windows |            ❌            |           ❌            |     ✅      |       ❌        |          ❌           |         ❌         |
-| RocksDB | POSIX + Windows |            ✅            |           ✅            |     ✅      |       ✅        |          ❌           |         ❌         |
-| UnumDB  |      Linux      |            ✅            |           ✅            |     ✅      |       ✅        |          ✅           |         ✅         |
+| Name            | Approximate<br/>Speed |      OSes       | [ACID][3]<br/>Transactions | Auxiliary<br/>Collections | Persistent | [Snapshots][2] | [Watching][1]<br/>Reads |
+| :-------------- | :-------------------: | :-------------: | :------------------------: | :-----------------------: | :--------: | :------------: | :---------------------: |
+| STL *in-memory* |        **10x**        | POSIX + Windows |             ✅              |             ✅             |     ❌      |       ❌        |            ✅            |
+| LevelDB         |         0.5x          | POSIX + Windows |             ❌              |             ❌             |     ✅      |       ❌        |            ❌            |
+| RocksDB         |          1x           | POSIX + Windows |             ✅              |             ✅             |     ✅      |       ✅        |            ✅            |
+| UnumDB          |        **5x**         |      Linux      |             ✅              |             ✅             |     ✅      |       ✅        |            ✅            |
 
 The STL backend originally served educational purposes, yet, with a proper web-server implementation, is comparable to other in-memory stores like Redis, MemCached or ETCD.
 LevelDB is Key-Value stored designed at Google and extensively adopted across the industry, thanks to its simplicity.
@@ -264,7 +264,7 @@ conan create . ukv/testing --build=missing
     * C11 API.
     * Many bindings, including JS and *currently* better Java support.
     * MacOS and Windows support, that we *currently* don't prioritize.
-  * **Cons**: 
+  * **Cons**:
     * Very slow.
     * No ACID transactions.
     * No way to swap the backend "engine".
