@@ -394,13 +394,18 @@ typedef struct {
     ukv_error_t* c_error;
 } json_state_t;
 
-void bson_to_json_string(safe_vector_gt<char>* json_str, /* IN */
-                         const char* str,                /* IN */
-                         ukv_error_t* c_error) {
+void bson_to_json_string(safe_vector_gt<char>* json_str, const char* str, ukv_error_t* c_error) {
     uint32_t len = (uint32_t)strlen(str);
 
     json_str->insert(json_str->size(), str, str + len, c_error);
     json_str->push_back('\0', c_error);
+}
+
+template <typename at>
+void bson_to_json_number(safe_vector_gt<char>* json_str, at scalar, ukv_error_t* c_error) {
+    printed_number_buffer_t print_buffer;
+    auto result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, scalar);
+    json_str->insert(json_str->size(), result.data(), result.data() + result.size(), c_error);
 }
 
 static bool bson_visit_before(bson_iter_t const*, char const* key, void* data) {
@@ -451,8 +456,8 @@ static bool bson_visit_double(bson_iter_t const*, char const* key, double v_doub
             bson_to_json_string(state->json_str, "-Infinity", state->c_error);
         }
     }
-    // else
-    //   print_number(state->json_str,v_double);
+    else
+        bson_to_json_number(state->json_str, v_double, state->c_error);
 
     bson_to_json_string(state->json_str, "\" }", state->c_error);
 
@@ -519,7 +524,7 @@ static bool bson_visit_binary(bson_iter_t const*,
     bson_to_json_string(state->json_str, "{ \"$binary\" : { \"base64\" : \"", state->c_error);
     bson_to_json_string(state->json_str, b64, state->c_error);
     bson_to_json_string(state->json_str, "\", \"subType\" : \"", state->c_error);
-    // print_number(state->json_str, v_subtype);
+    bson_to_json_number(state->json_str, v_subtype, state->c_error);
     bson_to_json_string(state->json_str, "\" } }", state->c_error);
 
     return false;
@@ -542,7 +547,7 @@ static bool bson_visit_bool(bson_iter_t const*, char const* key, bool v_bool, vo
 static bool bson_visit_date_time(bson_iter_t const*, char const* key, int64_t msec_since_epoch, void* data) {
     json_state_t* state = reinterpret_cast<json_state_t*>(data);
     bson_to_json_string(state->json_str, "{ \"$date\" : { \"$numberLong\" : \"", state->c_error);
-    // print_number<int64_t>(state->json_str, msec_since_epoch);
+    bson_to_json_number(state->json_str, msec_since_epoch, state->c_error);
     bson_to_json_string(state->json_str, "\" } }", state->c_error);
     return false;
 }
@@ -586,7 +591,7 @@ static bool bson_visit_codewscope(
 }
 static bool bson_visit_int32(bson_iter_t const*, char const* key, int32_t v_int32, void* data) {
     json_state_t* state = reinterpret_cast<json_state_t*>(data);
-    // print_number(state->json_str, v_int32);
+    bson_to_json_number(state->json_str, v_int32, state->c_error);
     return false;
 }
 static bool bson_visit_timestamp(
@@ -594,16 +599,16 @@ static bool bson_visit_timestamp(
     json_state_t* state = reinterpret_cast<json_state_t*>(data);
 
     bson_to_json_string(state->json_str, "{ \"$timestamp\" : { \"t\" : ", state->c_error);
-    // print_number(state->json_str, v_timestamp);
+    bson_to_json_number(state->json_str, v_timestamp, state->c_error);
     bson_to_json_string(state->json_str, ", \"i\" : ", state->c_error);
-    // print_number(state->json_str, v_increment);
+    bson_to_json_number(state->json_str, v_increment, state->c_error);
     bson_to_json_string(state->json_str, " } }", state->c_error);
 
     return false;
 }
 static bool bson_visit_int64(bson_iter_t const*, char const* key, int64_t v_int64, void* data) {
     json_state_t* state = reinterpret_cast<json_state_t*>(data);
-    // print_number(state->json_str, v_int64);
+    bson_to_json_number(state->json_str, v_int64, state->c_error);
     return false;
 }
 static bool bson_visit_maxkey(bson_iter_t const*, char const* key, void* data) {
