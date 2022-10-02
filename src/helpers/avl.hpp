@@ -11,12 +11,13 @@
  * 2. random sampling requires explicit access to subtree sizes.
  * The first issue can be used by having a composition of multiple
  * containers each under its shared lock, while the second would anyways
- * require explicit acceess to the container internals.
+ * require explicit access to the container internals.
  *
  */
 
 #pragma once
 #include <algorithm> // `std::max`
+#include <memory>    // `std::allocator`
 
 namespace unum::ukv {
 
@@ -25,16 +26,20 @@ namespace unum::ukv {
  * This "node" class implements the primary logic, but doesn't take part in memory
  * management.
  *
- * @tparam element_at
- * @tparam comparator_at
- * @tparam node_allocator_at
+ * > Never throws! Even if new node allocation had failed.
+ * > Implements `find_successor` for faster and lighter iterators.
+ *   Alternative would be - Binary Threaded Search Tree,
+ * > Implements sampling methods.
+ *
+ * @tparam element_at       Type of elements to store in this tree.
+ * @tparam comparator_at    A comparator function object, that overload
+ *                          `bool operator ()(element_at, element_at) const`.
  */
-template <typename element_at, typename comparator_at, typename node_allocator_at>
+template <typename element_at, typename comparator_at>
 class avl_node_gt {
   public:
     using element_t = element_at;
     using comparator_t = comparator_at;
-    using node_allocator_t = node_allocator_at;
     using height_t = std::int16_t;
     using node_t = avl_node_gt;
 
@@ -48,18 +53,16 @@ class avl_node_gt {
         return node ? get_height(node->left) - get_height(node->right) : 0;
     }
 
-    static node_t* new_node(element_t element) noexcept {
-        node_t* node = new node_t();
-        node->element = element;
-        node->left = nullptr;
-        node->right = nullptr;
-        node->height = 1;
-        return node;
-    }
-
-    static void delete_node(node_t* node) noexcept { delete node; }
-
 #pragma mark - Search
+
+    template <typename callback_at>
+    static void for_each(node_t* node, callback_at&& callback) noexcept {
+        if (!node)
+            return;
+        callback(node);
+        for_each(node->left, callback);
+        for_each(node->right, callback);
+    }
 
     static node_t* find_min(node_t* node) noexcept {
         while (node->left)
@@ -90,6 +93,85 @@ class avl_node_gt {
                 break;
         }
         return node;
+    }
+
+    /**
+     * @brief Searches for the shortest node, that is ancestor of both provided keys.
+     * @return NULL if nothing was found.
+     * ! Recursive implementation is suboptimal.
+     */
+    template <typename comparable_a_at, typename comparable_b_at>
+    static node_t* lowest_common_ancestor(node_t* node, comparable_a_at&& a, comparable_b_at&& b) noexcept {
+        if (!node)
+            return nullptr;
+
+        auto less = comparator_t {};
+        // If both `a` and `b` are smaller than `node`, then LCA lies in left
+        if (less(a, node->element) && less(b, node->element))
+            return lowest_common_ancestor(node->left, a, b);
+
+        // If both `a` and `b` are greater than `node`, then LCA lies in right
+        else if (less(node->element, a) && less(node->element, b))
+            return lowest_common_ancestor(node->right, a, b);
+
+        else
+            return node;
+    }
+
+    /**
+     * @brief Searches for the first/smallest element that compares equal to the provided element.
+     */
+    template <typename comparable_at>
+    static node_t* lower_bound(node_t* node, comparable_at&& comparable) noexcept;
+
+    /**
+     * @brief Searches for the last/biggest element that compares equal to the provided element.
+     */
+    template <typename comparable_at>
+    static node_t* upper_bound(node_t* node, comparable_at&& comparable) noexcept;
+
+    struct node_range_t {
+        node_t* lower_bound = nullptr;
+        node_t* upper_bound = nullptr;
+        node_t* lowest_common_ancestor = nullptr;
+    };
+
+    /**
+     * @brief Complex method, that detects the left-most and right-most nodes
+     * containing keys in a provided ranges, as well as their lowest common ancestors.
+     * ! Has a recursive implementation for now.
+     */
+    template <typename lower_at, typename upper_at, typename callback_at>
+    static node_range_t find_range(node_t* node, lower_at&& low, upper_at&& high, callback_at&& callback) noexcept {
+        if (!node)
+            return {};
+
+        // If this node fits into the range - analyze its children.
+        // The first call to reach this branch in the call-stack
+        // will be by definition the Lowest Common Ancestor.
+        auto less = comparator_t {};
+        if (!less(high, node->element) && !less(node->element, low)) {
+            callback(node);
+            auto left_subrange = find_range(node->left, low, high, callback);
+            auto right_subrange = find_range(node->right, low, high, callback);
+
+            auto result = node_range_t {};
+            result.lower_bound = left_subrange.lower_bound ?: node;
+            result.upper_bound = right_subrange.upper_bound ?: node;
+            result.lowest_common_ancestor = node;
+            return result;
+        }
+
+        else if (less(node->element, low))
+            return find_range(node->right, low, high, callback);
+
+        else
+            return find_range(node->left, low, high, callback);
+    }
+
+    template <typename comparable_at>
+    static node_range_t equal_range(node_t* node, comparable_at&& comparable) noexcept {
+        return find_range(node, comparable, comparable);
     }
 
     /**
@@ -165,29 +247,35 @@ class avl_node_gt {
         node_t* root = nullptr;
         node_t* match = nullptr;
         bool inserted = false;
+
+        /**
+         * @return True if the allocation of the new node has failed.
+         */
+        bool failed() const noexcept { return inserted && !match; }
     };
 
-    inline static node_t* rebalance_after_insert(node_t* node) noexcept {
+    template <typename comparable_at>
+    inline static node_t* rebalance_after_insert(node_t* node, comparable_at&& comparable) noexcept {
         // Update height and check if branches aren't balanced
         node->height = std::max(get_height(node->left), get_height(node->right)) + 1;
         auto balance = get_balance(node);
         auto less = comparator_t {};
 
         // Left Left Case
-        if (balance > 1 && less(element, node->left->element))
+        if (balance > 1 && less(comparable, node->left->element))
             return rotate_right(node);
 
         // Right Right Case
-        else if (balance < -1 && less(node->right->element, element))
+        else if (balance < -1 && less(node->right->element, comparable))
             return rotate_left(node);
 
         // Left Right Case
-        else if (balance > 1 && less(node->left->element, element)) {
+        else if (balance > 1 && less(node->left->element, comparable)) {
             node->left = rotate_left(node->left);
             return rotate_right(node);
         }
         // Right Left Case
-        else if (balance < -1 && less(element, node->right->element)) {
+        else if (balance < -1 && less(comparable, node->right->element)) {
             node->right = rotate_right(node->right);
             return rotate_left(node);
         }
@@ -200,7 +288,13 @@ class avl_node_gt {
                                               comparable_at&& comparable,
                                               node_allocator_at&& node_allocator) noexcept {
         if (!node) {
-            node = new_node(comparable);
+            node = node_allocator();
+            if (node) {
+                node->element = comparable;
+                node->left = nullptr;
+                node->right = nullptr;
+                node->height = 1;
+            }
             return {node, node, true};
         }
 
@@ -226,7 +320,7 @@ class avl_node_gt {
     }
 
     template <typename node_allocator_at>
-    static node_t* insert(node_t* node, element_t element) noexcept {
+    static node_t* insert(node_t* node, element_t&& element, node_allocator_at&& node_allocator) noexcept {
         auto result = find_or_make(node, element, node_allocator);
         if (result.inserted)
             result.match->element = std::move(element);
@@ -267,6 +361,43 @@ class avl_node_gt {
             return node;
     }
 
+    /**
+     * @brief Pops the root replacing it with one of descendants, if present.
+     * @param comparable Any key comparable with stored elements.
+     */
+    static pop_result_t pop(node_t* node) noexcept {
+
+        // If the node has two children, replace it with the
+        // smallest entry in the right branch.
+        if (node->left && node->right) {
+            node_t* midpoint = find_min(node->right);
+            auto downstream = pop(midpoint->right, midpoint->element);
+            midpoint = downstream.popped.release();
+            midpoint->left = node->left;
+            midpoint->right = downstream.root;
+            // Detach the `node` from the descendants.
+            node->left = node->right = nullptr;
+            return {midpoint, {node}};
+        }
+        // Just one child is present, so it is the natural successor.
+        else if (node->left || node->right) {
+            node_t* replacement = node->left ? node->left : node->right;
+            // Detach the `node` from the descendants.
+            node->left = node->right = nullptr;
+            return {replacement, {node}};
+        }
+        // No children are present.
+        else {
+            // Detach the `node` from the descendants.
+            node->left = node->right = nullptr;
+            return {nullptr, {node}};
+        }
+    }
+
+    /**
+     * @brief Searches for a matching ancestor and pops it out.
+     * @param comparable Any key comparable with stored elements.
+     */
     template <typename comparable_at>
     static pop_result_t pop(node_t* node, comparable_at&& comparable) noexcept {
         if (!node)
@@ -274,7 +405,7 @@ class avl_node_gt {
 
         auto less = comparator_t {};
         if (less(comparable, node->element)) {
-            auto downstream = pop(node->left, element);
+            auto downstream = pop(node->left, comparable);
             node->left = downstream.node;
             if (downstream.popped)
                 node = rebalance_after_pop(node);
@@ -282,41 +413,16 @@ class avl_node_gt {
         }
 
         else if (less(node->element, comparable)) {
-            auto downstream = pop(node->right, element);
+            auto downstream = pop(node->right, comparable);
             node->right = downstream.node;
             if (downstream.popped)
                 node = rebalance_after_pop(node);
             return {node, std::move(downstream.popped)};
         }
 
-        // We have found the node to pop!
-        else {
-            // If the node has two children, replace it with the
-            // smallest entry in the right branch.
-            if (node->left && node->right) {
-                node_t* midpoint = find_min(node->right);
-                auto downstream = pop(midpoint->right, midpoint->element);
-                midpoint = downstream.popped.release();
-                midpoint->left = node->left;
-                midpoint->right = downstream.root;
-                // Detach the `node` from the descendants.
-                node->left = node->right = nullptr;
-                return {midpoint, {node}};
-            }
-            // Just one child is present, so it is the natural successor.
-            else if (node->left || node->right) {
-                node_t* replacement = node->left ? node->left : node->right;
-                // Detach the `node` from the descendants.
-                node->left = node->right = nullptr;
-                return {replacement, {node}};
-            }
-            // No children are present.
-            else {
-                // Detach the `node` from the descendants.
-                node->left = node->right = nullptr;
-                return {nullptr, {node}};
-            }
-        }
+        else
+            // We have found the node to pop!
+            return pop(node);
     }
 
     struct remove_if_result_t {
@@ -324,10 +430,15 @@ class avl_node_gt {
         std::size_t count = 0;
     };
 
-    template <typename predicate_at>
-    static remove_if_result_t remove_if(node_t* node, predicate_at&& predicate) noexcept {
-        if (!node)
-            return node;
+    template <typename predicate_at, typename node_deallocator_at>
+    static remove_if_result_t remove_if(node_t* node,
+                                        predicate_at&& predicate,
+                                        node_deallocator_at&& node_deallocator) noexcept {
+        return {};
+    }
+
+    static node_t* remove_range(node_t* node, node_range_t&& range) noexcept {
+        return node;
     }
 };
 
@@ -337,9 +448,12 @@ template <typename element_at,
 class avl_tree_gt {
   public:
     using node_t = avl_node_gt<element_at, comparator_at>;
+    using node_allocator_t = node_allocator_at;
+    using element_t = element_at;
 
   private:
     node_t* root_ = nullptr;
+    std::size_t size_ = 0;
 
   public:
     template <typename comparable_at>
@@ -354,23 +468,88 @@ class avl_tree_gt {
 
     struct node_element_ref_t {
         node_t* node = nullptr;
+        bool inserted = false;
+
+        node_element_ref_t& operator=(element_t&& element) noexcept {
+            node->element = element;
+            return *this;
+        }
     };
 
-    node_element_ref_t insert(comparable_at&& comparable) {}
+    template <typename comparable_at>
+    node_element_ref_t upsert(comparable_at&& comparable) noexcept {
+        auto result = node_t::find_or_make(root_, std::forward<comparable_at>(comparable), [] {
+            return node_allocator_t {}.allocate(1);
+        });
+        root_ = result.root;
+        return {result.match, result.inserted};
+    }
 };
 
-template <typename key_at, typename value_at, typename key_comparator_at, typename node_allocator_at>
-class acid_kvs_gt {
+template <typename element_at,
+          typename comparator_at,
+          typename node_allocator_at = std::allocator<avl_node_gt<element_at, comparator_at>>,
+          std::size_t forest_size_ak = 32>
+class avl_forest_gt {
+    // class tree_t {
+    //     std::shared_mutex mutex;
+    //     tree_t tree;
+    // };
+    // std::array<tree_t, forest_size_ak> trees_;
+};
+
+/**
+ * @brief Transactional Concurrent In-Memory Container with Snapshots support.
+ *
+ * @section Writes Consistency
+ * Writing one entry or a batch is logically different.
+ * Either all fail or all succeed. Thats why `set` and `set_many`
+ * are implemented separately. Transactions write only on `submit`,
+ * thus they don't need `set_many`.
+ *
+ * @section Read Consistency
+ * Reading a batch of entries is same as reading one by one.
+ * The received items might not be consistent with each other.
+ * If such behaviour is needed - you must create snapshot.
+ *
+ * @section Pitfalls with WATCH-ing missing values
+ * If an entry was missing. Then:
+ *      1. WATCH-ed in a transaction.
+ *      2. added in the second transaction.
+ *      3. removed in the third transaction.
+ * The first transaction will succeed, if we try to commit it.
+ *
+ */
+template <typename key_at,
+          typename value_at,
+          typename key_comparator_at = std::less<>,
+          typename key_hash_at = std::hash<key_at>,
+          typename allocator_at = std::allocator<std::pair<key_at, value_at>>>
+class acid_gt {
   public:
     using key_t = key_at;
     using value_t = value_at;
     using generation_t = std::size_t;
     using key_comparator_t = key_comparator_at;
+    using key_hash_t = key_hash_at;
+    using allocator_t = allocator_at;
+    using allocator_traits_t = std::allocator_traits<allocator_t>;
+    using acid_t = acid_gt;
+
+    static_assert(std::is_trivially_copy_constructible<key_t>());
+    static_assert(std::is_trivially_copy_assignable<key_t>());
+    static_assert(std::is_nothrow_move_constructible<value_t>());
+    static_assert(std::is_nothrow_move_assignable<value_t>());
 
     struct entry_t {
         key_t key;
-        generaton_t generation = 0;
+        generation_t generation = 0;
         value_t value;
+    };
+
+    struct entry_generation_t {
+        key_t key;
+        generation_t generation = 0;
     };
 
     struct entry_comparator_t {
@@ -382,21 +561,100 @@ class acid_kvs_gt {
         }
     };
 
-    using tree_t = avl_tree_gt<entry_t, entry_comparator_t, node_allocator_at>;
+    using entries_alloc_t = typename allocator_traits_t::template rebind_alloc<entry_t>;
+    using entries_tree_t = avl_tree_gt<entry_t, entry_comparator_t, entries_alloc_t>;
+
+    using watched_alloc_t = typename allocator_traits_t::template rebind_alloc<entry_generation_t>;
+    using watched_tree_t = avl_tree_gt<entry_generation_t, entry_comparator_t, watched_alloc_t>;
+
+    using snapshots_alloc_t = typename allocator_traits_t::template rebind_alloc<generation_t>;
+    using snapshots_tree_t = avl_tree_gt<generation_t, std::less<>, watched_alloc_t>;
+
+    class snapshot_t {
+        acid_t& acid_;
+        generation_t generation_;
+    };
 
     class transaction_t {
+        acid_t& acid_;
+        entries_tree_t updated_;
+        watched_tree_t watched_;
+        generation_t generation_;
+
       public:
-        bool get(key_t const&, value_t& value) noexcept;
-        bool set(key_t const&, value_t const& value) noexcept;
+        bool watch(key_t const&) noexcept;
+        bool contains(key_t const&, bool watch = true) noexcept;
+        bool get(key_t const&, value_t& value, bool watch = true) noexcept;
+        bool set(key_t const&, value_t const& value, bool watch = true) noexcept;
+        bool next(key_t const&, key_t&, bool watch = true) noexcept;
+
+        bool reset() noexcept;
+        bool commit() noexcept;
+
+        template <typename callback_found_at, typename callback_missing_at>
+        void for_one(key_t const& key,
+                     callback_found_at&& callback_found,
+                     callback_missing_at& callback_missing,
+                     bool watch = false) noexcept {}
     };
 
-    class tree_t {
-        std::shared_mutex mutex;
-        tree_t tree;
-    };
+  private:
+    entries_tree_t entries_;
+    snapshots_tree_t snapshots_;
 
-    bool get(key_t const&, value_t& value) noexcept;
-    bool set(key_t const&, value_t const& value) noexcept;
+  public:
+    snapshot_t snapshot();
+    transaction_t transaction(bool snapshot = false);
+
+    bool set(key_t const& key, value_t&& value) noexcept {
+        auto ref = entries_.upsert(key);
+        if (!ref)
+            return false;
+        ref = value;
+        return true;
+    }
+
+    template <typename keys_iterator_at, typename values_iterator_at>
+    bool set_many(keys_iterator_at keys_begin, keys_iterator_at keys_end, values_iterator_at values) noexcept {
+        // - find generation Y of last needed snapshot
+        // - choose generation X newer than every running transaction
+        // - reserve N nodes in allocator
+        // - pre-construct those nodes and move values into them
+        // - for every key:
+        //      - lock parent tree
+        //      - insert key+X
+        //      - move-assign the value
+        // - if a failure occurs on any one of the inserts, for each key:
+        //      - lock parent tree
+        //      - remove the key+X
+        // - if all succeeded, for each key:
+        //      - if it was a removal operation:
+        //          - if key+Y or earlier entries with that key exist:
+        //              -
+        //      - else:
+        //          -
+    }
+
+    bool contains(key_t const& key) noexcept { return entries_.find(key) != nullptr; }
+
+    bool next(key_t const& key, key_t& result) noexcept {
+        auto it = entries_.find_successor(key);
+        if (!it)
+            return false;
+        result = it->element.key;
+        return true;
+    }
+
+    bool remove_range(key_t const&, key_t const&) noexcept;
+
+    template <typename callback_at>
+    void for_range(key_t const&, key_t const&, callback_at&&) noexcept;
+
+    template <typename callback_found_at, typename callback_missing_at>
+    void for_one(key_t const& key, callback_found_at&& callback_found, callback_missing_at& callback_missing) noexcept {
+        auto it = entries_.find(key);
+        return it ? callback_found(it->element.value) : callback_missing(it->element.value);
+    }
 };
 
 } // namespace unum::ukv

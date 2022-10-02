@@ -118,25 +118,26 @@ typedef enum {
      */
     ukv_option_write_flush_k = 1 << 1,
     /**
-     * @brief When reading from a transaction, tracks requested keys.
+     * @brief When reading from a transaction, we track the requested keys.
      * If the requested key was updated since the read, the transaction
-     * will fail on commit or prior to that.
+     * will fail on commit or prior to that. This option disables collision
+     * detection on separate parts of transactional reads and writes.
      */
-    ukv_option_watch_k = 1 << 2,
+    ukv_option_transaction_dont_watch_k = 1 << 2,
     /**
      * @brief When a transaction is started with this flag, a persistent
      * snapshot is created. It guarantees that the global state of all the
      * keys in the DB will be unchanged during the entire lifetime of the
      * transaction. Will not affect the writes in any way.
      */
-    ukv_option_txn_snapshot_k = 1 << 3,
+    ukv_option_transaction_snapshot_k = 1 << 3,
     /**
      * @brief This flag is intended for internal use.
      * When passed to `prepare_arena`, old_arena is not released,
      * and rather a new one is casted and returned,
      * if it existed in the first place, otherwise behaviour is unaffected.
      */
-    ukv_option_nodiscard_k = 1 << 4,
+    ukv_option_dont_discard_memory_k = 1 << 4,
     /**
      * @brief Will output data into shared memory, not the one privately
      * viewed by current process. That will allow any higher-level package
@@ -144,7 +145,7 @@ typedef enum {
      * Is relevant for standalone distributions used with drivers supporting
      * Apache Arrow buffers or standardized Tensor representations.
      */
-    ukv_option_read_shared_k = 1 << 5,
+    ukv_option_read_shared_memory_k = 1 << 5,
     /**
      * @brief When set, the underlying engine may avoid strict keys ordering
      * and may include irrelevant (deleted & duplicate) keys in order to maximize
@@ -632,7 +633,7 @@ void ukv_arena_free(ukv_database_t const db, ukv_arena_t const arena);
 
 /**
  * @brief Deallocates memory used by transaction.
- * If snapshot was created via `ukv_option_txn_snapshot_k`,
+ * If snapshot was created via `ukv_option_transaction_snapshot_k`,
  * it will be released.
  * Passing NULLs is safe.
  */
