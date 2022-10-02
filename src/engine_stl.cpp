@@ -1122,31 +1122,21 @@ void ukv_transaction_commit( //
     std::unique_lock _ {db.mutex};
     generation_t const youngest_generation = db.youngest_generation.load();
 
-    // 1. Check for refreshes among fetched keys
+    // 1. Check for changes in DBMS
     for (auto const& [collection_key, watched_generation] : txn.watched) {
         auto db_iterator = db.entries.find(collection_key);
-        if (db_iterator == db.entries.end())
-            continue;
-        if (db_iterator->generation != watched_generation &&
-            (*c_error = "Requested key was already overwritten since the start of the transaction!"))
-            return;
+        bool missing = db_iterator == db.entries.end();
+        if (watched_generation == missing_data_generation_k) {
+            return_if_error(missing, c_error, consistency_k, "WATCH-ed key was added");
+        }
+        else {
+            return_if_error(!missing, c_error, consistency_k, "WATCH-ed key was deleted");
+            bool untouched = db_iterator->generation == watched_generation;
+            return_if_error(untouched, c_error, consistency_k, "WATCH-ed key was updated");
+        }
     }
 
-    // 2. Check for collisions among incoming values
-    for (entry_t const& changed_entry : txn.changes) {
-        auto db_iterator = db.entries.find(changed_entry.collection_key());
-        if (db_iterator == db.entries.end())
-            continue;
-
-        if (db_iterator->generation == txn.generation && (*c_error = "Can't commit same entry more than once!"))
-            return;
-
-        if (entry_was_overwritten(db_iterator->generation, txn.generation, youngest_generation) &&
-            (*c_error = "Incoming key collides with newer entry!"))
-            return;
-    }
-
-    // 3. Import the data, removing the older version beforehand
+    // 2. Import the data, removing the older version beforehand
     merge_overwrite(db.entries, txn.changes);
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
