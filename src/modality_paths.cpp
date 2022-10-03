@@ -26,6 +26,7 @@
  * > N: number of direct children
  * >
  */
+#include <re2/re2.h>
 
 #include "ukv/paths.h"
 #include "helpers/pmr.hpp"         // `stl_arena_t`
@@ -460,7 +461,7 @@ void ukv_paths_read( //
 /**
  * > Same collection
  * > One scan request
- * > Has previous results
+ * > May have previous results
  */
 void scan_one_collection_one_range( //
     ukv_database_t const c_db,
@@ -562,43 +563,6 @@ void scan_one_collection_one_range( //
     count = found_paths;
 }
 
-/**
- * > Same collection
- * > Multiple requests
- * > No previous results
- */
-void scan_one_collection_many_prefixes( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    ukv_collection_t collection,
-    contents_arg_t prefixes,
-    strided_range_gt<ukv_length_t const> max_counts,
-    ukv_options_t const options,
-    span_gt<ukv_length_t> counts,
-    growing_tape_t& paths,
-    stl_arena_t& arena,
-    ukv_error_t* c_error) {
-}
-
-/**
- * > Same collection
- * > Multiple requests
- * > Has previous results
- */
-void scan_one_collection_many_ranges( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    ukv_collection_t collection,
-    contents_arg_t prefixes,
-    contents_arg_t previous,
-    strided_range_gt<ukv_length_t const> max_counts,
-    ukv_options_t const options,
-    span_gt<ukv_length_t> counts,
-    growing_tape_t& paths,
-    stl_arena_t& arena,
-    ukv_error_t* c_error) {
-}
-
 struct prefix_match_task_t {
     ukv_collection_t collection = ukv_collection_main_k;
     value_view_t prefix;
@@ -685,36 +649,10 @@ void ukv_paths_match( //
             arena,
             c_error);
 
-    else if (is_same_collection) {
-        has_previous                             //
-            ? scan_one_collection_many_prefixes( //
-                  c_db,
-                  c_txn,
-                  first_collection,
-                  prefixes_args,
-                  scan_limits,
-                  c_options,
-                  found_counts,
-                  found_paths,
-                  arena,
-                  c_error)
-            : scan_one_collection_many_ranges( //
-                  c_db,
-                  c_txn,
-                  first_collection,
-                  prefixes_args,
-                  previous_args,
-                  scan_limits,
-                  c_options,
-                  found_counts,
-                  found_paths,
-                  arena,
-                  c_error);
-    }
-
     else {
         // If we have multiple tasks fro different collections - lets group them together
         // and solve one by one.
+        safe_vector_gt<safe_vector_gt<char>> paths_per_query(arena);
     }
 
     // Export the results

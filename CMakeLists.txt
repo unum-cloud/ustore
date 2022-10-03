@@ -86,6 +86,7 @@ include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/bson.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/re2.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
 
 # Distributions:
@@ -110,7 +111,7 @@ message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
 add_library(ukv_stl src/engine_stl.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_stl pthread yyjson bson ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_stl pthread yyjson bson re2 ${jemalloc_LIBRARIES})
 target_compile_definitions(ukv_stl INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_stl INTERFACE UKV_ENGINE_NAME=stl)
 
@@ -130,6 +131,7 @@ if(NOT APPLE)
   add_dependencies(ukv_rocksdb jemalloc)
   add_dependencies(ukv_leveldb jemalloc)
 endif()
+
 # The rest of CMake will apply to all client libraries
 set(UKV_ENGINE_NAMES "stl" "leveldb" "rocksdb")
 set(UKV_CLIENT_NAMES "stl" "leveldb" "rocksdb")
@@ -141,9 +143,11 @@ if(EXISTS ${UKV_BUILD_UNUMDB})
   set_property(TARGET unumdb PROPERTY LINK_LIBRARIES "")
 
   add_library(ukv_unumdb src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
+
   if(NOT APPLE)
     add_dependencies(ukv_unumdb jemalloc)
   endif()
+
   target_link_libraries(ukv_unumdb unumdb yyjson bson nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
   target_compile_definitions(ukv_unumdb INTERFACE UKV_VERSION="${_VERSION_}")
   target_compile_definitions(ukv_unumdb INTERFACE UKV_ENGINE_NAME=unumdb)
@@ -158,6 +162,7 @@ if(${UKV_BUILD_FLIGHT_RPC})
   target_link_libraries(ukv_flight_client pthread yyjson bson fmt::fmt arrow arrow_flight ${jemalloc_LIBRARIES})
   list(APPEND UKV_CLIENT_NAMES "flight_client")
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
+
   if(NOT APPLE)
     add_dependencies(ukv_flight_client jemalloc)
   endif()
