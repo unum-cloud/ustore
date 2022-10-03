@@ -443,8 +443,6 @@ static void bson_visit_corrupt(bson_iter_t const*, void*) {
 }
 static bool bson_visit_double(bson_iter_t const*, char const*, double v_double, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    uint32_t start_len;
-
     bson_to_json_string(state.json_str, "{ \"$numberDouble\" : \"", state.c_error);
 
     if (v_double != v_double) {
@@ -467,7 +465,6 @@ static bool bson_visit_double(bson_iter_t const*, char const*, double v_double, 
 }
 static bool bson_visit_utf8(bson_iter_t const*, char const*, size_t v_utf8_len, char const* v_utf8, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-
     char* escaped = bson_utf8_escape_for_json(v_utf8, v_utf8_len); // TODO
 
     if (escaped) {
@@ -1037,18 +1034,6 @@ void read_docs( //
         json_t& parsed = unique_docs[parsed_idx];
         callback(task_idx, place.field, parsed);
     }
-}
-
-void replace_docs( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    places_arg_t const& places,
-    contents_arg_t const& contents,
-    ukv_options_t const c_options,
-    ukv_doc_modification_t const c_modification,
-    ukv_doc_field_type_t const c_type,
-    stl_arena_t& arena,
-    ukv_error_t* c_error) noexcept {
 }
 
 void read_modify_write( //
