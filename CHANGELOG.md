@@ -9,10 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Collections with variable-length string keys.
+- Faster `yyjson`-based backend for Docs.
+- Concurrent writes support in STL backend.
+- Zero-copy forwarding for Arrow/NumPy PyBind arguments with matching types.
+- Supporting `substrate.io` serialized computations.
+
+- Integer compression in Graphs.
 - Media deserialization and exports via TenPack.
 - Extending RPC to Document and Graph modalities.
-- Integer compression in Graphs.
-- Zero-copy forwarding for Arrow/NumPy PyBind arguments with matching types.
 
 ## [0.3.0] - August 2022
 

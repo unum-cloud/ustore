@@ -7,16 +7,24 @@
  *
  * For every string key hash we store:
  * * N: number of entries (1 if no collisions appeared)
- * * N: key offsets
- * * N: value lengths
+ * * N key offsets
+ * * N value lengths
  * * N concatenated keys
  * * N concatenated values
  *
- * TODO:
- * To allow fast traversals, we can index path components.
- * In that case we can split ID/key space into positive and
- * negative part, where the negative elements would store
- * tree-like directory structure.
+ * @section Mirror "Directory" Entries for Nested Paths
+ *
+ * Furthermore, we need to store mirror entries, that will
+ * store the directory tree. In other words, for an input
+ * like @b home/user/media/name we would keep:
+ * > home/: @b home/user
+ * > home/user/: @b home/user/media
+ * > home/user/media/: @b home/user/media/name
+ *
+ * The mirror "directory" entries can have negative IDs.
+ * Their values would be structured differently:
+ * > N: number of direct children
+ * >
  */
 
 #include "ukv/paths.h"
@@ -89,6 +97,13 @@ bucket_member_t find_in_bucket(value_view_t bucket, std::string_view key_str) no
             return {i, *bucket_keys, *bucket_vals};
 
     return {};
+}
+
+std::size_t path_segments_counts(std::string_view key_str, ukv_char_t const c_separator) noexcept {
+}
+
+template <typename keys_callback_at>
+void path_segments_enumerate(std::string_view key_str) noexcept {
 }
 
 /**
@@ -217,7 +232,7 @@ void ukv_paths_write( //
     ukv_size_t const c_values_bytes_stride,
 
     ukv_options_t const c_options,
-    ukv_char_t const,
+    ukv_char_t const c_separator,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
@@ -231,10 +246,6 @@ void ukv_paths_write( //
     keys_str_args.contents_begin = {(ukv_bytes_cptr_t const*)c_paths, c_paths_stride};
     keys_str_args.count = c_tasks_count;
 
-    // Getting hash-collisions is such a rare case, that we will not
-    // optimize for it in the current implementation. Sorting and
-    // deduplicating the IDs will cost more overall, than a repeated
-    // read every once in a while.
     auto unique_col_keys = arena.alloc<collection_key_t>(c_tasks_count, c_error);
     return_on_error(c_error);
 
@@ -446,11 +457,23 @@ void ukv_paths_scan( //
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
 
-    ukv_key_t const* c_start_paths,
-    ukv_size_t const c_start_paths_stride,
+    ukv_length_t const* c_prefixes_offsets,
+    ukv_size_t const c_prefixes_offsets_stride,
 
-    ukv_key_t const* c_end_paths,
-    ukv_size_t const c_end_paths_stride,
+    ukv_length_t const* c_prefixes_lengths,
+    ukv_size_t const c_prefixes_lengths_stride,
+
+    ukv_str_view_t const* c_prefixes,
+    ukv_size_t const c_prefixes_stride,
+
+    ukv_length_t const* c_previous_offsets,
+    ukv_size_t const c_previous_offsets_stride,
+
+    ukv_length_t const* c_previous_lengths,
+    ukv_size_t const c_previous_lengths_stride,
+
+    ukv_str_view_t const* c_previous,
+    ukv_size_t const c_previous_stride,
 
     ukv_length_t const* c_scan_limits,
     ukv_size_t const c_scan_limits_stride,
@@ -458,10 +481,71 @@ void ukv_paths_scan( //
     ukv_options_t const c_options,
     ukv_char_t const,
 
-    ukv_length_t** c_offsets,
     ukv_length_t** c_counts,
+    ukv_length_t** c_offsets,
     ukv_key_t** c_keys,
+    ukv_char_t** c_paths,
 
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
+
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    return_on_error(c_error);
+
+    contents_arg_t prefixes_args;
+    prefixes_args.offsets_begin = {c_prefixes_offsets, c_prefixes_offsets_stride};
+    prefixes_args.lengths_begin = {c_prefixes_lengths, c_prefixes_lengths_stride};
+    prefixes_args.contents_begin = {(ukv_bytes_cptr_t const*)c_prefixes, c_prefixes_stride};
+    prefixes_args.count = c_tasks_count;
+
+    contents_arg_t previous_args;
+    previous_args.offsets_begin = {c_previous_offsets, c_previous_offsets_stride};
+    previous_args.lengths_begin = {c_previous_lengths, c_previous_lengths_stride};
+    previous_args.contents_begin = {(ukv_bytes_cptr_t const*)c_previous, c_previous_stride};
+    previous_args.count = c_tasks_count;
+
+    // Getting hash-collisions is such a rare case, that we will not
+    // optimize for it in the current implementation. Sorting and
+    // deduplicating the IDs will cost more overall, than a repeated
+    // read every once in a while.
+    auto unique_col_keys = arena.alloc<collection_key_t>(c_tasks_count, c_error);
+    return_on_error(c_error);
+
+    // Parse and hash input string unique_col_keys
+    hash_t hash;
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
+    for (std::size_t i = 0; i != c_tasks_count; ++i)
+        unique_col_keys[i].collection = collections ? collections[i] : ukv_collection_main_k,
+        unique_col_keys[i].key = previous_args[i] ? hash(previous_args[i]) : 0;
+
+    // Read from disk
+    // We don't need:
+    // > presences: zero length buckets are impossible here.
+    // > lengths: value lengths are always smaller than buckets.
+    // We can infer those and export differently.
+    ukv_arena_t buckets_arena = &arena;
+    ukv_length_t* buckets_offsets = nullptr;
+    ukv_byte_t* buckets_values = nullptr;
+    places_arg_t unique_places;
+    auto unique_col_keys_strided = strided_range(unique_col_keys.begin(), unique_col_keys.end()).immutable();
+    unique_places.collections_begin = unique_col_keys_strided.members(&collection_key_t::collection).begin();
+    unique_places.keys_begin = unique_col_keys_strided.members(&collection_key_t::key).begin();
+    unique_places.fields_begin = {};
+    unique_places.count = static_cast<ukv_size_t>(unique_col_keys.size());
+    ukv_scan( //
+        c_db,
+        c_txn,
+        unique_places.count,
+        unique_places.collections_begin.get(),
+        unique_places.collections_begin.stride(),
+        unique_places.keys_begin.get(),
+        unique_places.keys_begin.stride(),
+        c_options,
+        nullptr,
+        &buckets_offsets,
+        nullptr,
+        &buckets_values,
+        &buckets_arena,
+        c_error);
+    return_on_error(c_error);
 }
