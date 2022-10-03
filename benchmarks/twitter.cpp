@@ -14,6 +14,7 @@
 #include <benchmark/benchmark.h>
 
 #include <ukv/ukv.hpp>
+#include <ukv/cpp/ranges.hpp> // `sort_and_deduplicate`
 
 namespace bm = benchmark;
 using namespace unum::ukv;
@@ -388,27 +389,24 @@ static void graph_construct_from_docs(bm::State& state) {
                 edges_array.push_back(edge_t {
                     .source_id = ids_users[i],
                     .target_id = ids_retweeters[i],
-                    .edge_id = ids_retweets[i],
+                    .id = ids_retweets[i],
                 });
         }
 
         // Insert or update those edges
         auto strided = edges(edges_array);
-        auto source_ids = strided.members(&edge_t::source_id);
-        auto target_ids = strided.members(&edge_t::target_id);
-        auto edge_ids = strided.members(&edge_t::id);
         ukv_graph_upsert_edges( //
             db,
             nullptr,
             count,
             &collection_graph_k,
             0,
-            edge_ids.begin().get(),
-            edge_ids.stride(),
-            source_ids.begin().get(),
-            source_ids.stride(),
-            target_ids.begin().get(),
-            target_ids.stride(),
+            strided.edge_ids.begin().get(),
+            strided.edge_ids.stride(),
+            strided.source_ids.begin().get(),
+            strided.source_ids.stride(),
+            strided.target_ids.begin().get(),
+            strided.target_ids.stride(),
             ukv_options_default_k,
             arena.member_ptr(),
             status.member_ptr());
@@ -460,9 +458,9 @@ static void graph_traverse_two_hops(bm::State& state) {
         auto unique_ids = sort_and_deduplicate(ids_in_edges, ids_in_edges + total_ids);
 
         // Second hop
-        ukv_vertex_role_t role = ukv_vertex_role_any_k;
-        ukv_vertex_degree_t* degrees = nullptr;
-        ukv_key_t* ids_in_edges = nullptr;
+        role = ukv_vertex_role_any_k;
+        degrees = nullptr;
+        ids_in_edges = nullptr;
         ukv_graph_find_edges( //
             db,
             nullptr,
@@ -642,10 +640,10 @@ int main(int argc, char** argv) {
     bm::RunSpecifiedBenchmarks();
     bm::Shutdown();
 
-    db.clear();
     // To avoid sanitizer complaints, we should unmap the files:
     for (auto mapped_content : mapped_contents)
         munmap((void*)mapped_content.data(), mapped_content.size());
+    db.clear().throw_unhandled();
 
     return 0;
 }

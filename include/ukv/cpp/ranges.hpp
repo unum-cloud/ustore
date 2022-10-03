@@ -12,7 +12,8 @@
  */
 
 #pragma once
-#include <limits.h> // `CHAR_BIT`
+#include <limits.h>  // `CHAR_BIT`
+#include <algorithm> // `std::sort`
 
 #include "ukv/cpp/types.hpp" // `value_view_t`
 
@@ -655,6 +656,12 @@ bool all_ascending(iterator_at begin, std::size_t n) {
         if (*begin <= *std::exchange(previous, begin))
             return false;
     return true;
+}
+
+template <typename iterator_at>
+std::size_t sort_and_deduplicate(iterator_at begin, iterator_at end) {
+    std::sort(begin, end);
+    return std::unique(begin, end) - begin;
 }
 
 template <typename at>
