@@ -132,6 +132,12 @@
         "build/lib/**/*.jar"
     ],
     "cSpell.words": [
-        "txns"
+        "txns",
+        "upsert",
+        "neighborship",
+        "neighborships",
+        "bson",
+        "msgpack",
+        "yyjson",
     ]
 }
