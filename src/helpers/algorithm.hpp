@@ -17,12 +17,6 @@ inline range_at equal_subrange(range_at range, comparable_at&& comparable) {
     return range_at {p.first, p.second};
 }
 
-template <typename iterator_at>
-std::size_t sort_and_deduplicate(iterator_at begin, iterator_at end) {
-    std::sort(begin, end);
-    return std::unique(begin, end) - begin;
-}
-
 template <typename element_at, typename alloc_at = std::allocator<element_at>>
 void sort_and_deduplicate(std::vector<element_at, alloc_at>& elems) {
     elems.erase(elems.begin() + sort_and_deduplicate(elems.begin(), elems.end()), elems.end());

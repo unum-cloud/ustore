@@ -14,19 +14,22 @@
 #include <vector>
 #include <string>
 #include <string_view>
-#include <map>
-#include <unordered_map>
-#include <unordered_set>
-#include <shared_mutex>
-#include <mutex>      // `std::unique_lock`
-#include <numeric>    // `std::accumulate`
-#include <atomic>     // Thread-safe generation counters
-#include <filesystem> // Enumerating the directory
-#include <stdio.h>    // Saving/reading from disk
+#include <map>           // Collection names
+#include <unordered_map> // Watched keys generations
+#include <set>           // Primary entries container
+#include <shared_mutex>  // Syncing access to entries container
+#include <mutex>         // `std::unique_lock`
+#include <numeric>       // `std::accumulate`
+#include <atomic>        // Thread-safe generation counters
+#include <stdio.h>       // Saving/reading from disk
+#include <filesystem>    // Enumerating the directory
+
+#include <fmt/core.h>
 
 #include "ukv/db.h"
-#include "helpers/pmr.hpp"
-#include "helpers/file.hpp"
+#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
+#include "helpers/pmr.hpp"         // `stl_arena_t`
+#include "helpers/file.hpp"        // `file_handle_t`
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -48,66 +51,163 @@ using namespace unum;
 namespace fs = std::filesystem;
 
 using allocator_t = std::allocator<byte_t>;
-using buffer_t = std::vector<byte_t, allocator_t>;
+using byte_ptr_t = byte_t*;
 using generation_t = std::int64_t;
 
-struct stl_db_t;
-struct stl_collection_t;
-struct stl_txn_t;
+constexpr generation_t missing_data_generation_k = std::numeric_limits<generation_t>::min();
 
-struct stl_value_t {
-    buffer_t buffer;
-    generation_t generation {0};
-    bool is_deleted {false};
+struct database_t;
+struct collection_t;
+struct transaction_t;
 
-    void reset(generation_t gen) {
-        is_deleted = true;
-        generation = gen;
-        buffer.clear();
+struct entry_t {
+    ukv_collection_t collection {ukv_collection_main_k};
+    ukv_key_t key {ukv_key_unknown_k};
+    mutable generation_t generation {missing_data_generation_k};
+    mutable byte_ptr_t value_begin {nullptr};
+    mutable byte_ptr_t value_end {nullptr};
+
+    entry_t() noexcept = default;
+    entry_t(collection_key_t col_key) noexcept : collection(col_key.collection), key(col_key.key) {}
+    entry_t(entry_t const&) = delete;
+    entry_t& operator=(entry_t const&) = delete;
+
+    entry_t(entry_t&& other) noexcept
+        : collection(other.collection), key(other.key), generation(other.generation),
+          value_begin(std::exchange(other.value_begin, nullptr)), value_end(std::exchange(other.value_end, nullptr)) {}
+
+    entry_t& operator=(entry_t&& other) noexcept {
+        std::swap(collection, other.collection);
+        std::swap(key, other.key);
+        std::swap(generation, other.generation);
+        std::swap(value_begin, other.value_begin);
+        std::swap(value_end, other.value_end);
+        return *this;
+    }
+
+    ~entry_t() noexcept { release_blob(); }
+
+    collection_key_t collection_key() const noexcept { return {collection, key}; }
+    bool is_deleted() const noexcept { return !value_begin && !value_end; }
+    bool is_empty() const noexcept { return value_begin == value_end; }
+    explicit operator bool() const noexcept { return !is_deleted(); }
+    operator value_view_t() const noexcept {
+        return !is_deleted() ? value_view_t {value_begin, value_end} : value_view_t {};
+    }
+
+    void release_blob() const noexcept {
+        if (value_end != value_begin)
+            allocator_t {}.deallocate(value_begin, value_end - value_begin);
+        value_begin = value_end = nullptr;
+        generation = missing_data_generation_k;
+    }
+
+    bool assign_empty(generation_t generation) const noexcept {
+        return assign_blob(value_view_t {(byte_ptr_t)(this), (byte_ptr_t)(this)}, generation);
+    }
+    bool assign_null(generation_t generation) const noexcept { return assign_blob(value_view_t {}, generation); }
+
+    bool alloc_blob(std::size_t length, generation_t g) const noexcept {
+        generation = g;
+        if (value_end - value_begin == length)
+            return true;
+
+        release_blob();
+        if (length) {
+            auto begin = allocator_t {}.allocate(length);
+            if (!begin)
+                return false;
+            value_begin = begin;
+            value_end = begin + length;
+        }
+        generation = g;
+        return true;
+    }
+
+    bool assign_blob(value_view_t value, generation_t g) const noexcept {
+        if (!alloc_blob(value.size(), g))
+            return false;
+
+        if (value.size()) {
+            std::memcpy(value_begin, value.data(), value.size());
+            return true;
+        }
+        else {
+            // Dirty-hack - using self-reference to distinguish empty (zero
+            // length) value from deleted one.
+            value_begin = value_end = value ? (byte_ptr_t)(this) : nullptr;
+            generation = g;
+            return true;
+        }
+    }
+
+    void swap_blob(entry_t const& other) const noexcept {
+        std::swap(generation, other.generation);
+        std::swap(value_begin, other.value_begin);
+        std::swap(value_end, other.value_end);
     }
 };
 
-struct stl_collection_t {
-    std::string name;
-    /**
-     * @brief Primary data-store.
-     * Associative container is used to allow scans.
-     */
-    std::map<ukv_key_t, stl_value_t> pairs;
-
-    /**
-     * @brief Keeps the number of unique elements submitted to the store.
-     * It may be different from `pairs.size()`, if some of the entries
-     * were deleted.
-     */
-    std::atomic<std::size_t> unique_elements;
-
-    void reserve_more(std::size_t) {
-        //  pairs.reserve(pairs.size() + n);
+struct entry_compare_t {
+    using is_transparent = void;
+    bool operator()(entry_t const& a, entry_t const& b) const noexcept {
+        return a.collection == b.collection ? a.key < b.key : a.collection < b.collection;
     }
+    bool operator()(entry_t const& a, collection_key_t b) const noexcept {
+        return a.collection == b.collection ? a.key < b.key : a.collection < b.collection;
+    }
+    bool operator()(collection_key_t a, entry_t const& b) const noexcept {
+        return a.collection == b.collection ? a.key < b.key : a.collection < b.collection;
+    }
+    bool operator()(entry_t const& a, ukv_collection_t b) const noexcept { return a.collection < b; }
+    bool operator()(ukv_collection_t a, entry_t const& b) const noexcept { return a < b.collection; }
 };
 
-using stl_collection_ptr_t = std::unique_ptr<stl_collection_t>;
+using entry_allocator_t = std::allocator<entry_t>;
+using entries_set_t = std::set<entry_t, entry_compare_t, entry_allocator_t>;
 
-struct stl_txn_t {
-    std::map<collection_key_t, buffer_t> upserted;
-    std::unordered_map<collection_key_t, generation_t, collection_key_hash_t> requested;
-    std::unordered_set<collection_key_t, collection_key_hash_t> removed;
+using collection_ptr_t = std::unique_ptr<collection_t>;
 
-    stl_db_t* db_ptr {nullptr};
+struct transaction_t {
+    entries_set_t changes;
+    std::unordered_map<collection_key_t,
+                       generation_t,
+                       std::hash<collection_key_t>,
+                       std::equal_to<collection_key_t>,
+                       std::allocator<std::pair<collection_key_t const, generation_t>>>
+        watched;
+
+    database_t* db_ptr {nullptr};
     generation_t generation {0};
 };
 
-struct stl_db_t {
+struct string_hash_t {
+    using stl_t = std::hash<std::string_view>;
+    using is_transparent = void;
+
+    auto operator()(const char* str) const { return stl_t {}(str); }
+    auto operator()(std::string_view str) const { return stl_t {}(str); }
+    auto operator()(std::string const& str) const { return stl_t {}(str); }
+};
+
+struct string_eq_t : public std::equal_to<std::string_view> {
+    using is_transparent = void;
+};
+
+struct string_less_t : public std::less<std::string_view> {
+    using is_transparent = void;
+};
+
+struct database_t {
     std::shared_mutex mutex;
-    stl_collection_t main;
+    entries_set_t entries;
 
     /**
      * @brief A variable-size set of named collections.
      * It's cleaner to implement it with heterogenous lookups as
-     * an @c `std::unordered_set`, but it requires GCC11.
+     * an @c `std::unordered_mao`, but it requires GCC11 and C++20.
      */
-    std::unordered_map<std::string_view, stl_collection_ptr_t> named;
+    std::map<std::string, ukv_collection_t, string_less_t> names;
     /**
      * @brief The generation/transactions ID of the most recent update.
      * This can be updated even outside of the main @p `mutex` on HEAD state.
@@ -118,11 +218,25 @@ struct stl_db_t {
      * When closed, we will try saving the DB on disk.
      */
     std::string persisted_path;
-};
 
-stl_collection_t& stl_collection(stl_db_t& db, ukv_collection_t collection) {
-    return collection == ukv_collection_main_k ? db.main : *reinterpret_cast<stl_collection_t*>(collection);
-}
+    void reserve_entry_nodes(std::size_t) {
+        //  pairs.reserve(pairs.size() + n);
+    }
+
+    ukv_collection_t new_collection() const noexcept {
+        bool is_new = false;
+        ukv_collection_t new_handle = ukv_collection_main_k;
+        while (!is_new) {
+            auto top = static_cast<std::uint64_t>(std::rand());
+            auto bottom = static_cast<std::uint64_t>(std::rand());
+            new_handle = static_cast<ukv_collection_t>((top << 32) | bottom);
+            is_new = new_handle != ukv_collection_main_k;
+            for (auto const& [name, existing_handle] : names)
+                is_new &= new_handle != existing_handle;
+        }
+        return new_handle;
+    }
+};
 
 /**
  * @brief Solves the problem of modulo arithmetic and `generation_t` overflow.
@@ -138,7 +252,66 @@ inline bool entry_was_overwritten(generation_t entry_generation,
                : ((entry_generation >= transaction_generation) | (entry_generation <= youngest_generation));
 }
 
-void save_to_disk(stl_collection_t const& collection, std::string const& path, ukv_error_t* c_error) {
+/*********************************************************/
+/*****************	 Writing to Disk	  ****************/
+/*********************************************************/
+
+template <typename entries_iterator_at>
+void write_entries(file_handle_t const& handle,
+                   entries_iterator_at begin,
+                   entries_iterator_at end,
+                   ukv_error_t* c_error) {
+
+    for (; begin != end; ++begin) {
+        entry_t const& entry = *begin;
+        if (!entry)
+            continue;
+
+        auto saved_len = std::fwrite(&entry.collection, sizeof(ukv_collection_t), 1, handle);
+        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on collection.");
+
+        saved_len = std::fwrite(&entry.key, sizeof(ukv_key_t), 1, handle);
+        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on key.");
+
+        auto buf = value_view_t(entry);
+        auto buf_len = static_cast<ukv_length_t>(buf.size());
+        saved_len = std::fwrite(&buf_len, sizeof(ukv_length_t), 1, handle);
+        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on value len.");
+
+        saved_len = std::fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
+        return_if_error(saved_len == buf.size(), c_error, 0, "Write partially failed on value.");
+    }
+}
+
+template <typename entries_iterator_at>
+void read_entries(file_handle_t const& handle, entries_iterator_at output, ukv_error_t* c_error) {
+
+    while (std::feof(handle) == 0) {
+        entry_t entry;
+
+        auto read_len = std::fread(&entry.collection, sizeof(ukv_collection_t), 1, handle);
+        return_if_error(read_len == 1, c_error, 0, "Read partially failed on collection.");
+
+        read_len = std::fread(&entry.key, sizeof(ukv_key_t), 1, handle);
+        return_if_error(read_len == 1, c_error, 0, "Read partially failed on key.");
+
+        auto buf_len = ukv_length_t(0);
+        read_len = std::fread(&buf_len, sizeof(ukv_length_t), 1, handle);
+        return_if_error(read_len == 1, c_error, 0, "Read partially failed on value len.");
+
+        return_if_error(!entry.alloc_blob(buf_len, 0),
+                        c_error,
+                        out_of_memory_k,
+                        "Failed to allocate memory for new node");
+        read_len = std::fread(entry.value_begin, sizeof(byte_t), buf_len, handle);
+        return_if_error(read_len == buf_len, c_error, 0, "Read partially failed on value.");
+
+        *output = std::move(entry);
+        ++output;
+    }
+}
+
+void write(database_t const& db, std::string const& path, ukv_error_t* c_error) {
     // Using the classical C++ IO mechanisms is a bad tone in the modern world.
     // They are ugly and, more importantly, painfully slow.
     // https://www.reddit.com/r/cpp_questions/comments/e2xia9/performance_comparison_of_various_ways_of_reading/
@@ -151,236 +324,202 @@ void save_to_disk(stl_collection_t const& collection, std::string const& path, u
     if ((*c_error = handle.open(path.c_str(), "wb+").release_error()))
         return;
 
-    // Save the collection size
-    {
-        auto n = static_cast<ukv_size_t>(collection.unique_elements.load());
-        auto saved_len = std::fwrite(&n, sizeof(ukv_size_t), 1, handle);
-        return_if_error(saved_len == 1, c_error, 0, "Couldn't write anything to file.");
-    }
+    // Print stats about the overall dataset:
+    // https://fmt.dev/latest/api.html#_CPPv4IDpEN3fmt5printEvPNSt4FILEE13format_stringIDp1TEDpRR1T
+    std::fprintf(handle, "Total Items: %zu\n", db.entries.size());
+    std::fprintf(handle, "Named Collections: %zu\n", db.names.size());
+    for (auto const& name_and_handle : db.names)
+        std::fprintf(handle,
+                     "-%s: 0x%016zx\n",
+                     name_and_handle.first.c_str(),
+                     static_cast<std::size_t>(name_and_handle.second));
+    std::fprintf(handle, "\n");
 
     // Save the entries
-    for (auto const& [key, seq_val] : collection.pairs) {
-        if (seq_val.is_deleted)
-            continue;
+    write_entries(handle, db.entries.begin(), db.entries.end(), c_error);
+    return_on_error(c_error);
 
-        auto saved_len = std::fwrite(&key, sizeof(ukv_key_t), 1, handle);
-        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on key.");
-
-        auto const& buf = seq_val.buffer;
-        auto buf_len = static_cast<ukv_length_t>(buf.size());
-        saved_len = std::fwrite(&buf_len, sizeof(ukv_length_t), 1, handle);
-        return_if_error(saved_len == 1, c_error, 0, "Write partially failed on value len.");
-
-        saved_len = std::fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
-        return_if_error(saved_len == buf.size(), c_error, 0, "Write partially failed on value.");
-    }
-
+    // Close the file
     log_error(c_error, 0, handle.close().release_error());
 }
 
-void read_from_disk(stl_collection_t& collection, std::string const& path, ukv_error_t* c_error) {
+void read(database_t& db, std::string const& path, ukv_error_t* c_error) {
+    db.entries.clear();
+    db.names.clear();
+
+    // Check if file even exists
+    if (!std::filesystem::exists(path))
+        return;
+
     // Similar to serialization, we don't use STL here
     file_handle_t handle;
     if ((*c_error = handle.open(path.c_str(), "rb+").release_error()))
         return;
 
     // Get the collection size, to preallocate entries
-    auto n = ukv_size_t(0);
-    {
-        auto read_len = std::fread(&n, sizeof(ukv_size_t), 1, handle);
-        return_if_error(read_len == 1, c_error, 0, "Couldn't read anything from file.");
+    char line_buffer[256];
+    while (std::fgets(line_buffer, sizeof(line_buffer), handle) != NULL) {
+        // Check if it is a collection description
+        auto line_length = std::find(line_buffer, line_buffer + sizeof(line_buffer), '\n') - line_buffer;
+        if (line_length == 0)
+            break;
+        if (line_buffer[0] == '-') {
+            auto name_length = std::find(line_buffer + 1, line_buffer + sizeof(line_buffer), ':') - line_buffer;
+            auto name = std::string_view(line_buffer + 1, name_length);
+            auto id_str_begin = line_buffer + line_length - 16;
+            auto id_str_end = line_buffer + line_length;
+            auto id = std::strtoull(id_str_begin, &id_str_end, 16);
+            db.names.emplace(name, id);
+        }
+        else
+            // Skip metadata rows
+            continue;
     }
 
     // Load the entries
-    collection.pairs.clear();
-    collection.reserve_more(n);
-    collection.unique_elements = n;
+    read_entries(handle, std::inserter(db.entries, db.entries.end()), c_error);
+    return_on_error(c_error);
 
-    for (ukv_size_t i = 0; i != n; ++i) {
-
-        auto key = ukv_key_t {};
-        auto read_len = std::fread(&key, sizeof(ukv_key_t), 1, handle);
-        return_if_error(read_len == 1, c_error, 0, "Read partially failed on key.");
-
-        auto buf_len = ukv_length_t(0);
-        read_len = std::fread(&buf_len, sizeof(ukv_length_t), 1, handle);
-        return_if_error(read_len == 1, c_error, 0, "Read partially failed on value len.");
-
-        auto buf = buffer_t(buf_len);
-        read_len = std::fread(buf.data(), sizeof(byte_t), buf.size(), handle);
-        return_if_error(read_len == buf.size(), c_error, 0, "Read partially failed on value.");
-
-        collection.pairs.emplace(key, stl_value_t {std::move(buf), generation_t {0}, false});
-    }
-
+    // Close the file
     log_error(c_error, 0, handle.close().release_error());
 }
 
-void save_to_disk(stl_db_t const& db, ukv_error_t* c_error) {
-    auto dir_path = fs::path(db.persisted_path);
-    return_if_error(fs::is_directory(dir_path), c_error, args_wrong_k, "Supplied path is not a directory!");
+/*********************************************************/
+/*****************	 Read/Write Head/Txn  ****************/
+/*********************************************************/
 
-    save_to_disk(db.main, dir_path / ".stl.ukv", c_error);
-    return_on_error(c_error);
+void populate( //
+    places_arg_t places,
+    contents_arg_t contents,
+    generation_t generation,
+    entries_set_t& entries,
+    ukv_error_t* c_error) noexcept {
 
-    for (auto const& name_and_collection : db.named) {
-        auto name_with_ext = std::string(name_and_collection.first) + ".stl.ukv";
-        save_to_disk(*name_and_collection.second, dir_path / name_with_ext, c_error);
-        return_on_error(c_error);
+    safe_section("Building batch tree", c_error, [&] {
+        for (std::size_t i = 0; i != places.size(); ++i) {
+            auto place = places[i];
+            auto content = contents[i];
+            entry_t entry {place.collection_key()};
+            auto entry_allocated = entry.assign_blob(content, generation);
+            return_if_error(entry_allocated, c_error, out_of_memory_k, "Couldn't allocate a blob");
+            entries.insert(std::move(entry));
+        }
+    });
+}
+
+/**
+ * @brief Unlike `std::set<>::merge`, this function overwrites existing values.
+ *
+ * https://en.cppreference.com/w/cpp/container/set#Member_types
+ * https://en.cppreference.com/w/cpp/container/set/insert
+ */
+void merge_overwrite(entries_set_t& target, entries_set_t& source) {
+    for (auto source_it = source.begin(); source_it != source.end();) {
+        auto node = source.extract(source_it++);
+        auto result = target.insert(std::move(node));
+        if (!result.inserted)
+            result.position->swap_blob(result.node.value());
     }
 }
 
-void read_from_disk(stl_db_t& db, ukv_error_t* c_error) {
-    auto dir_path = fs::path(db.persisted_path);
-    return_if_error(fs::is_directory(dir_path), c_error, args_wrong_k, "Supplied path is not a directory!");
-
-    // Parse the main main col
-    if (fs::path path = dir_path / ".stl.ukv"; fs::is_regular_file(path)) {
-        auto path_str = path.native();
-        read_from_disk(db.main, path_str, c_error);
-    }
-
-    // Parse all the named collections we can find
-    for (auto const& dir_entry : fs::directory_iterator {dir_path}) {
-        if (!dir_entry.is_regular_file())
-            continue;
-        fs::path const& path = dir_entry.path();
-        auto path_str = path.native();
-        if (path_str.size() <= 8 || path_str.substr(path_str.size() - 8) != ".stl.ukv")
-            continue;
-
-        auto filename_w_ext = path.filename().native();
-        auto filename = filename_w_ext.substr(0, filename_w_ext.size() - 8);
-        auto collection = std::make_unique<stl_collection_t>();
-        collection->name = filename;
-        read_from_disk(*collection, path_str, c_error);
-        db.named.emplace(std::string_view(collection->name), std::move(collection));
-    }
-}
-
-void write_head( //
-    stl_db_t& db,
+void write( //
+    database_t& db,
     places_arg_t places,
     contents_arg_t contents,
     ukv_options_t const c_options,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept {
+
+    // In here we don't care about the consistency,
+    // just the fact of either writing all values or not.
+    // So we can build the entries before the write lock
+    // and not check generations afterwards.
+    entries_set_t entries;
+    auto generation = ++db.youngest_generation;
+    populate(places, contents, generation, entries, c_error);
+    return_on_error(c_error);
 
     std::unique_lock _ {db.mutex};
-
-    for (std::size_t i = 0; i != places.size(); ++i) {
-
-        auto place = places[i];
-        auto content = contents[i];
-        stl_collection_t& collection = stl_collection(db, place.collection);
-        auto key_iterator = collection.pairs.find(place.key);
-
-        // We want to insert a new entry, but let's check if we
-        // can overwrite the existing value without causing reallocations.
-        safe_section("Copying new value", c_error, [&] {
-            if (key_iterator != collection.pairs.end()) {
-                key_iterator->second.generation = ++db.youngest_generation;
-                key_iterator->second.buffer.assign(content.begin(), content.end());
-                key_iterator->second.is_deleted = !content;
-            }
-            else if (content) {
-                buffer_t buffer {content.begin(), content.end()};
-                stl_value_t value_w_generation {std::move(buffer), ++db.youngest_generation};
-                collection.pairs.emplace(place.key, std::move(value_w_generation));
-                ++collection.unique_elements;
-            }
-        });
-        return_on_error(c_error);
-    }
+    merge_overwrite(db.entries, entries);
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c_options & ukv_option_write_flush_k)
-        save_to_disk(db, c_error);
+        write(db, db.persisted_path, c_error);
 }
 
-void write_txn( //
-    stl_txn_t& txn,
+void write( //
+    transaction_t& txn,
     places_arg_t places,
     contents_arg_t contents,
-    ukv_options_t const,
-    ukv_error_t* c_error) {
+    ukv_options_t const c_options,
+    ukv_error_t* c_error) noexcept {
 
     // No need for locking here, until we commit, unless, of course,
     // a collection is being deleted.
-    stl_db_t& db = *txn.db_ptr;
-    std::shared_lock _ {db.mutex};
+    database_t& db = *txn.db_ptr;
+    bool dont_watch = c_options & ukv_option_transaction_dont_watch_k;
 
-    for (std::size_t i = 0; i != places.size(); ++i) {
-
-        auto place = places[i];
-        auto content = contents[i];
+    // Track potential future changes
+    if (!dont_watch) {
+        std::shared_lock _ {db.mutex};
         safe_section("Copying new value", c_error, [&] {
-            if (!content) {
-                txn.upserted.erase(place.collection_key());
-                txn.removed.insert(place.collection_key());
-            }
-            else {
-                txn.upserted.insert_or_assign(place.collection_key(), buffer_t {content.begin(), content.end()});
+            for (std::size_t i = 0; i != places.size(); ++i) {
+                auto place = places[i];
+                auto db_iterator = db.entries.find(place.collection_key());
+                auto last_generation =
+                    db_iterator != db.entries.end() ? db_iterator->generation : missing_data_generation_k;
+                txn.watched.insert_or_assign(place.collection_key(), last_generation);
             }
         });
-        return_on_error(c_error);
     }
+
+    populate(places, contents, txn.generation, txn.changes, c_error);
 }
 
 template <typename value_enumerator_at>
-void read_head_under_lock( //
-    stl_db_t& db,
+void read_under_lock( //
+    database_t& db,
     places_arg_t tasks,
     ukv_options_t const,
     value_enumerator_at enumerator,
-    ukv_error_t*) {
+    ukv_error_t*) noexcept {
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
-        stl_collection_t const& collection = stl_collection(db, place.collection);
-        auto key_iterator = collection.pairs.find(place.key);
-        bool found = key_iterator != collection.pairs.end() && !key_iterator->second.is_deleted;
-        auto value = found ? value_view(key_iterator->second.buffer) : value_view_t {};
+        auto db_iterator = db.entries.find(place.collection_key());
+        auto value = db_iterator != db.entries.end() ? value_view_t(*db_iterator) : value_view_t {};
         enumerator(i, value);
     }
 }
 
 template <typename value_enumerator_at>
-void read_txn_under_lock( //
-    stl_txn_t& txn,
+void read_under_lock( //
+    transaction_t& txn,
     places_arg_t tasks,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept {
 
-    stl_db_t& db = *txn.db_ptr;
+    database_t& db = *txn.db_ptr;
     generation_t const youngest_generation = db.youngest_generation.load();
     bool const dont_watch = c_options & ukv_option_transaction_dont_watch_k;
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
-        stl_collection_t const& collection = stl_collection(db, place.collection);
 
         // Some keys may already be overwritten inside of transaction
-        if (auto inner_iterator = txn.upserted.find(place.collection_key()); inner_iterator != txn.upserted.end())
-            enumerator(i, value_view(inner_iterator->second));
-
-        // Some may have been deleted inside the transaction
-        else if (auto inner_iterator = txn.removed.find(place.collection_key()); inner_iterator != txn.removed.end())
-            enumerator(i, value_view_t {});
+        if (auto txn_iterator = txn.changes.find(place.collection_key()); txn_iterator != txn.changes.end())
+            enumerator(i, value_view_t(*txn_iterator));
 
         // Others should be pulled from the main store
-        else if (auto key_iterator = collection.pairs.find(place.key); key_iterator != collection.pairs.end()) {
+        else if (auto db_iterator = db.entries.find(place.collection_key()); db_iterator != db.entries.end()) {
 
-            if (entry_was_overwritten(key_iterator->second.generation, txn.generation, youngest_generation) &&
+            if (entry_was_overwritten(db_iterator->generation, txn.generation, youngest_generation) &&
                 (*c_error = "Requested key was already overwritten since the start of the transaction!"))
                 return;
 
-            bool found = !key_iterator->second.is_deleted;
-            auto value = found ? value_view(key_iterator->second.buffer) : value_view_t {};
-            enumerator(i, value);
-
+            enumerator(i, value_view_t(*db_iterator));
             if (!dont_watch)
-                txn.requested.emplace(place.collection_key(), key_iterator->second.generation);
+                txn.watched.emplace(place.collection_key(), db_iterator->generation);
         }
 
         // But some will be missing
@@ -388,20 +527,20 @@ void read_txn_under_lock( //
             enumerator(i, value_view_t {});
 
             if (!dont_watch)
-                txn.requested.emplace(place.collection_key(), generation_t {});
+                txn.watched.emplace(place.collection_key(), missing_data_generation_k);
         }
     }
 }
 
-void scan_head( //
-    stl_db_t& db,
+void scan( //
+    database_t& db,
     scans_arg_t tasks,
     ukv_options_t const options,
     ukv_length_t** c_found_offsets,
     ukv_length_t** c_found_counts,
     ukv_key_t** c_found_keys,
     stl_arena_t& arena,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept {
 
     std::shared_lock _ {db.mutex};
 
@@ -418,16 +557,22 @@ void scan_head( //
     // 2. Fetch the data
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         scan_t scan = tasks[i];
-        stl_collection_t const& collection = stl_collection(db, scan.collection);
         offsets[i] = keys_output - *c_found_keys;
 
         ukv_length_t j = 0;
-        auto key_iterator = collection.pairs.lower_bound(scan.min_key);
-        for (; j != scan.limit && key_iterator != collection.pairs.end() && key_iterator->first < scan.max_key;
-             ++key_iterator) {
-            if (key_iterator->second.is_deleted)
+        auto db_iterator = db.entries.lower_bound(collection_key_t {scan.collection, scan.min_key});
+        while (j != scan.limit &&                            //
+               db_iterator != db.entries.end() &&            //
+               db_iterator->collection == scan.collection && //
+               db_iterator->key < scan.max_key) {
+
+            if (db_iterator->is_deleted()) {
+                ++db_iterator;
                 continue;
-            *keys_output = key_iterator->first;
+            }
+
+            *keys_output = db_iterator->key;
+            ++db_iterator;
             ++keys_output;
             ++j;
         }
@@ -437,18 +582,19 @@ void scan_head( //
     offsets[tasks.size()] = keys_output - *c_found_keys;
 }
 
-void scan_txn( //
-    stl_txn_t& txn,
+void scan( //
+    transaction_t& txn,
     scans_arg_t tasks,
-    ukv_options_t const options,
+    ukv_options_t const c_options,
     ukv_length_t** c_found_offsets,
     ukv_length_t** c_found_counts,
     ukv_key_t** c_found_keys,
     stl_arena_t& arena,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept {
 
-    stl_db_t& db = *txn.db_ptr;
+    database_t& db = *txn.db_ptr;
     std::shared_lock _ {db.mutex};
+    bool const dont_watch = c_options & ukv_option_transaction_dont_watch_k;
 
     // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy<ukv_length_t>(tasks.count + 1, c_error, c_found_offsets);
@@ -463,23 +609,24 @@ void scan_txn( //
     // 2. Fetch the data
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         scan_t scan = tasks[i];
-        stl_collection_t const& collection = stl_collection(db, scan.collection);
         offsets[i] = keys_output - *c_found_keys;
 
         ukv_length_t j = 0;
-        auto key_iterator = collection.pairs.lower_bound(scan.min_key);
-        auto txn_iterator = txn.upserted.lower_bound(scan.min_key);
-        for (; j != scan.limit && key_iterator != collection.pairs.end();) {
+        auto db_iterator = db.entries.lower_bound(collection_key_t {scan.collection, scan.min_key});
+        auto txn_iterator = txn.changes.lower_bound(collection_key_t {scan.collection, scan.min_key});
+        while (j != scan.limit && db_iterator != db.entries.end() && db_iterator->collection == scan.collection) {
+
             // Check if the key was already removed:
-            if (key_iterator->second.is_deleted || txn.removed.find(key_iterator->first) != txn.removed.end()) {
-                ++key_iterator;
+            auto join_iterator = txn.changes.find(db_iterator->collection_key());
+            if (db_iterator->is_deleted() || (join_iterator != txn.changes.end() && join_iterator->is_deleted())) {
+                ++db_iterator;
                 continue;
             }
 
             // Compare against the incoming inserted keys:
-            bool check_in_txn = txn_iterator != txn.upserted.end() && txn_iterator->first.collection == scan.collection;
-            if (check_in_txn && txn_iterator->first.key <= key_iterator->first) {
-                *keys_output = txn_iterator->first.key;
+            bool check_in_txn = txn_iterator != txn.changes.end() && txn_iterator->collection == scan.collection;
+            if (check_in_txn && txn_iterator->key <= db_iterator->key) {
+                *keys_output = txn_iterator->key;
                 ++keys_output;
                 ++txn_iterator;
                 ++j;
@@ -487,20 +634,22 @@ void scan_txn( //
             }
 
             // Make sure we haven't reached the end keys
-            if (key_iterator->first >= scan.max_key)
+            if (db_iterator->key >= scan.max_key)
                 break;
 
             // Export from the main store:
-            *keys_output = key_iterator->first;
+            *keys_output = db_iterator->key;
             ++keys_output;
-            ++key_iterator;
+            ++db_iterator;
             ++j;
         }
 
         // As in any `set_union`, don't forget the tail :)
-        while (j != scan.limit && txn_iterator != txn.upserted.end() &&
-               txn_iterator->first.collection == scan.collection && txn_iterator->first.key < scan.max_key) {
-            *keys_output = txn_iterator->first.key;
+        while (j != scan.limit &&                             //
+               txn_iterator != txn.changes.end() &&           //
+               txn_iterator->collection == scan.collection && //
+               txn_iterator->key < scan.max_key) {
+            *keys_output = txn_iterator->key;
             ++keys_output;
             ++txn_iterator;
             ++j;
@@ -521,11 +670,11 @@ void ukv_database_init( //
     ukv_error_t* c_error) {
 
     safe_section("Initializing DBMS", c_error, [&] {
-        auto db_ptr = new stl_db_t {};
+        auto db_ptr = new database_t {};
         auto len = c_config ? std::strlen(c_config) : 0;
         if (len) {
             db_ptr->persisted_path = std::string(c_config, len);
-            read_from_disk(*db_ptr, c_error);
+            read(*db_ptr, db_ptr->persisted_path, c_error);
         }
         *c_db = db_ptr;
     });
@@ -560,8 +709,8 @@ void ukv_read( //
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
-    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
-    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
+    database_t& db = *reinterpret_cast<database_t*>(c_db);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     places_arg_t places {collections, keys, {}, c_tasks_count};
@@ -588,8 +737,8 @@ void ukv_read( //
     };
 
     std::shared_lock _ {db.mutex};
-    c_txn ? read_txn_under_lock(txn, places, c_options, meta_enumerator, c_error)
-          : read_head_under_lock(db, places, c_options, meta_enumerator, c_error);
+    c_txn ? read_under_lock(txn, places, c_options, meta_enumerator, c_error)
+          : read_under_lock(db, places, c_options, meta_enumerator, c_error);
     offs[places.count] = total_length;
     if (!needs_export)
         return;
@@ -601,8 +750,8 @@ void ukv_read( //
     };
 
     *c_found_values = reinterpret_cast<ukv_byte_t*>(tape);
-    c_txn ? read_txn_under_lock(txn, places, c_options, data_enumerator, c_error)
-          : read_head_under_lock(db, places, c_options, data_enumerator, c_error);
+    c_txn ? read_under_lock(txn, places, c_options, data_enumerator, c_error)
+          : read_under_lock(db, places, c_options, data_enumerator, c_error);
 }
 
 void ukv_write( //
@@ -636,8 +785,8 @@ void ukv_write( //
     if (!c_tasks_count)
         return;
 
-    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
-    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
+    database_t& db = *reinterpret_cast<database_t*>(c_db);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
@@ -651,8 +800,7 @@ void ukv_write( //
     validate_write(c_txn, places, contents, c_options, c_error);
     return_on_error(c_error);
 
-    return c_txn ? write_txn(txn, places, contents, c_options, c_error)
-                 : write_head(db, places, contents, c_options, c_error);
+    return c_txn ? write(txn, places, contents, c_options, c_error) : write(db, places, contents, c_options, c_error);
 }
 
 void ukv_scan( //
@@ -688,8 +836,8 @@ void ukv_scan( //
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
-    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
-    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
+    database_t& db = *reinterpret_cast<database_t*>(c_db);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
@@ -699,8 +847,8 @@ void ukv_scan( //
     validate_scan(c_txn, scans, c_options, c_error);
     return_on_error(c_error);
 
-    return c_txn ? scan_txn(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
-                 : scan_head(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);
+    return c_txn ? scan(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
+                 : scan(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);
 }
 
 void ukv_size( //
@@ -744,8 +892,8 @@ void ukv_size( //
     auto max_space_usages = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_space_usages);
     return_on_error(c_error);
 
-    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
-    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
+    database_t& db = *reinterpret_cast<database_t*>(c_db);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
@@ -753,7 +901,7 @@ void ukv_size( //
     std::shared_lock _ {db.mutex};
 
     for (ukv_size_t i = 0; i != n; ++i) {
-        stl_collection_t const& collection = stl_collection(db, collections[i]);
+        ukv_collection_t const collection = collections[i];
         ukv_key_t const min_key = start_keys[i];
         ukv_key_t const max_key = end_keys[i];
         std::size_t deleted_count = 0;
@@ -761,26 +909,25 @@ void ukv_size( //
         // Estimate the presence in the main store
         std::size_t main_count = 0;
         std::size_t main_bytes = 0;
-        auto min_iterator = collection.pairs.lower_bound(min_key);
-        auto max_iterator = collection.pairs.lower_bound(max_key);
+        auto min_iterator = db.entries.lower_bound(collection_key_t {collection, min_key});
+        auto max_iterator = db.entries.upper_bound(collection_key_t {collection, max_key});
         for (; min_iterator != max_iterator; ++min_iterator) {
-            if (min_iterator->second.is_deleted) {
+            if (min_iterator->is_deleted()) {
                 ++deleted_count;
                 continue;
             }
             ++main_count;
-            main_bytes += min_iterator->second.buffer.size();
+            main_bytes += value_view_t(*min_iterator).size();
         }
 
         // Estimate the metrics from within a transaction
         std::size_t txn_count = 0;
         std::size_t txn_bytes = 0;
         if (c_txn) {
-            auto min_iterator = txn.upserted.lower_bound(min_key);
-            auto max_iterator = txn.upserted.lower_bound(max_key);
+            auto min_iterator = txn.changes.lower_bound(collection_key_t {collection, min_key});
+            auto max_iterator = txn.changes.upper_bound(collection_key_t {collection, max_key});
             for (; min_iterator != max_iterator; ++min_iterator, ++txn_count)
-                txn_bytes += min_iterator->second.size();
-            deleted_count += txn.removed.size();
+                txn_bytes += value_view_t(*min_iterator).size();
         }
 
         //
@@ -802,8 +949,8 @@ void ukv_size( //
 void ukv_collection_init(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_str_view_t c_collection_name,
-    ukv_str_view_t,
+    ukv_str_view_t const c_collection_name,
+    ukv_str_view_t const,
     // Outputs:
     ukv_collection_t* c_collection,
     ukv_error_t* c_error) {
@@ -815,75 +962,55 @@ void ukv_collection_init(
     }
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+    database_t& db = *reinterpret_cast<database_t*>(c_db);
     std::unique_lock _ {db.mutex};
 
-    auto const collection_name = std::string_view(c_collection_name, name_len);
-    auto collection_it = db.named.find(collection_name);
-    if (collection_it == db.named.end()) {
-        safe_section("Inserting new collection", c_error, [&] {
-            auto new_collection = std::make_unique<stl_collection_t>();
-            new_collection->name = collection_name;
-            *c_collection = reinterpret_cast<ukv_collection_t>(new_collection.get());
-            db.named.emplace(new_collection->name, std::move(new_collection));
-        });
-    }
-    else {
-        *c_collection = reinterpret_cast<ukv_collection_t>(collection_it->second.get());
-    }
+    std::string_view collection_name {c_collection_name, name_len};
+    auto collection_it = db.names.find(collection_name);
+    return_if_error(collection_it == db.names.end(), c_error, args_wrong_k, "Such collection already exists!");
+
+    auto new_collection = db.new_collection();
+    safe_section("Inserting new collection", c_error, [&] { db.names.emplace(collection_name, new_collection); });
+    *c_collection = new_collection;
 }
 
 void ukv_collection_drop(
     // Inputs:
     ukv_database_t const c_db,
-    ukv_collection_t c_collection_id,
-    ukv_drop_mode_t c_mode,
+    ukv_collection_t const c_collection,
+    ukv_drop_mode_t const c_mode,
     // Outputs:
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
     bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(c_collection_id != ukv_collection_main_k || !invalidate,
+    return_if_error(c_collection != ukv_collection_main_k || !invalidate,
                     c_error,
                     args_combo_k,
                     "Default collection can't be invalidated.");
 
-    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+    database_t& db = *reinterpret_cast<database_t*>(c_db);
     std::unique_lock _ {db.mutex};
-    stl_collection_t const& collection = stl_collection(db, c_collection_id);
-    stl_collection_t* collection_ptr_to_clear = nullptr;
-    auto collection_it_to_remove = db.named.end();
 
-    if (c_collection_id == ukv_collection_main_k)
-        collection_ptr_to_clear = &db.main;
-    else {
-        for (auto it = db.named.begin(); it != db.named.end() && collection_it_to_remove == db.named.end(); ++it) {
-            if (it->second.get() == &collection) {
-                collection_it_to_remove = it;
-                collection_ptr_to_clear = collection_it_to_remove->second.get();
-            }
+    auto [begin, end] = db.entries.equal_range(c_collection);
+    if (c_mode == ukv_drop_keys_vals_handle_k) {
+        db.entries.erase(begin, end);
+        for (auto it = db.names.begin(); it != db.names.end(); ++it) {
+            if (c_collection != it->second)
+                continue;
+            db.names.erase(it);
+            break;
         }
     }
 
-    if (c_mode == ukv_drop_keys_vals_handle_k) {
-        if (collection_it_to_remove == db.named.end())
-            return;
-        db.named.erase(collection_it_to_remove);
-    }
-    else if (c_mode == ukv_drop_keys_vals_k) {
-        if (!collection_ptr_to_clear)
-            return;
-        collection_ptr_to_clear->pairs.clear();
-        collection_ptr_to_clear->unique_elements = 0;
-    }
+    else if (c_mode == ukv_drop_keys_vals_k)
+        db.entries.erase(begin, end);
 
     else if (c_mode == ukv_drop_vals_k) {
-        if (!collection_ptr_to_clear)
-            return;
         generation_t gen = ++db.youngest_generation;
-        for (auto& kv : collection_ptr_to_clear->pairs)
-            kv.second.reset(gen);
+        for (; begin != end; ++begin)
+            begin->assign_empty(gen);
     }
 }
 
@@ -904,15 +1031,15 @@ void ukv_collection_list( //
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
-    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+    database_t& db = *reinterpret_cast<database_t*>(c_db);
     std::shared_lock _ {db.mutex};
-    std::size_t collections_count = db.named.size();
+    std::size_t collections_count = db.names.size();
     *c_count = static_cast<ukv_size_t>(collections_count);
 
     // Every string will be null-terminated
     std::size_t strings_length = 0;
-    for (auto const& name_and_contents : db.named)
-        strings_length += name_and_contents.first.size() + 1;
+    for (auto const& name_and_handle : db.names)
+        strings_length += name_and_handle.first.size() + 1;
     auto names = arena.alloc<char>(strings_length, c_error).begin();
     *c_names = names;
     return_on_error(c_error);
@@ -924,11 +1051,11 @@ void ukv_collection_list( //
     return_on_error(c_error);
 
     std::size_t i = 0;
-    for (auto const& name_and_contents : db.named) {
-        auto len = name_and_contents.first.size();
-        std::memcpy(names, name_and_contents.first.data(), len);
+    for (auto const& name_and_handle : db.names) {
+        auto len = name_and_handle.first.size();
+        std::memcpy(names, name_and_handle.first.data(), len);
         names[len] = '\0';
-        ids[i] = reinterpret_cast<ukv_collection_t>(name_and_contents.second.get());
+        ids[i] = name_and_handle.second;
         offs[i] = static_cast<ukv_length_t>(names - *c_names);
         names += len + 1;
         ++i;
@@ -965,19 +1092,18 @@ void ukv_transaction_init(
     validate_transaction_begin(c_txn, c_options, c_error);
     return_on_error(c_error);
 
-    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+    database_t& db = *reinterpret_cast<database_t*>(c_db);
     safe_section("Initializing transaction state", c_error, [&] {
         if (!*c_txn)
-            *c_txn = new stl_txn_t();
+            *c_txn = new transaction_t();
     });
     return_on_error(c_error);
 
-    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(*c_txn);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(*c_txn);
     txn.db_ptr = &db;
     txn.generation = ++db.youngest_generation;
-    txn.requested.clear();
-    txn.upserted.clear();
-    txn.removed.clear();
+    txn.watched.clear();
+    txn.changes.clear();
 }
 
 void ukv_transaction_commit( //
@@ -987,102 +1113,37 @@ void ukv_transaction_commit( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+    database_t& db = *reinterpret_cast<database_t*>(c_db);
 
     validate_transaction_commit(c_txn, c_options, c_error);
     return_on_error(c_error);
-    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
 
     // This write may fail with out-of-memory errors, if Hash-Tables
     // bucket allocation fails, but no values will be copied, only moved.
     std::unique_lock _ {db.mutex};
     generation_t const youngest_generation = db.youngest_generation.load();
 
-    // 1. Check for refreshes among fetched keys
-    for (auto const& [collection_key, sub_generation] : txn.requested) {
-        stl_collection_t& collection = stl_collection(db, collection_key.collection);
-        auto key_iterator = collection.pairs.find(collection_key.key);
-        if (key_iterator == collection.pairs.end())
-            continue;
-        if (key_iterator->second.generation != sub_generation &&
-            (*c_error = "Requested key was already overwritten since the start of the transaction!"))
-            return;
-    }
-
-    // 2. Check for collisions among incoming values
-    for (auto const& [collection_key, value] : txn.upserted) {
-        stl_collection_t& collection = stl_collection(db, collection_key.collection);
-        auto key_iterator = collection.pairs.find(collection_key.key);
-        if (key_iterator == collection.pairs.end())
-            continue;
-
-        if (key_iterator->second.generation == txn.generation && (*c_error = "Can't commit same entry more than once!"))
-            return;
-
-        if (entry_was_overwritten(key_iterator->second.generation, txn.generation, youngest_generation) &&
-            (*c_error = "Incoming key collides with newer entry!"))
-            return;
-    }
-
-    // 3. Check for collisions among deleted values
-    for (auto const& collection_key : txn.removed) {
-        stl_collection_t& collection = stl_collection(db, collection_key.collection);
-        auto key_iterator = collection.pairs.find(collection_key.key);
-        if (key_iterator == collection.pairs.end())
-            continue;
-
-        if (key_iterator->second.generation == txn.generation && (*c_error = "Can't commit same entry more than once!"))
-            return;
-
-        if (entry_was_overwritten(key_iterator->second.generation, txn.generation, youngest_generation) &&
-            (*c_error = "Removed key collides with newer entry!"))
-            return;
-    }
-
-    // 4. Allocate space for more nodes across different collections
-    safe_section("Inserting new collections", c_error, [&] {
-        db.main.reserve_more(txn.upserted.size());
-        for (auto& name_and_collection : db.named)
-            name_and_collection.second->reserve_more(txn.upserted.size());
-    });
-    return_on_error(c_error);
-
-    // 5. Import the data, as no collisions were detected
-    for (auto& sub_key_and_value : txn.upserted) {
-        stl_collection_t& collection = stl_collection(db, sub_key_and_value.first.collection);
-        auto key_iterator = collection.pairs.find(sub_key_and_value.first.key);
-        // A key was deleted:
-        // if (sub_key_and_value.second.empty()) {
-        //     if (key_iterator != collection.pairs.end())
-        //         collection.pairs.erase(key_iterator);
-        // }
-        // A keys was updated:
-        // else
-        if (key_iterator != collection.pairs.end()) {
-            key_iterator->second.generation = txn.generation;
-            std::swap(key_iterator->second.buffer, sub_key_and_value.second);
+    // 1. Check for changes in DBMS
+    for (auto const& [collection_key, watched_generation] : txn.watched) {
+        auto db_iterator = db.entries.find(collection_key);
+        bool missing = db_iterator == db.entries.end();
+        if (watched_generation == missing_data_generation_k) {
+            return_if_error(missing, c_error, consistency_k, "WATCH-ed key was added");
         }
-        // A key was inserted:
         else {
-            stl_value_t value_w_generation {std::move(sub_key_and_value.second), txn.generation};
-            collection.pairs.emplace(sub_key_and_value.first.key, std::move(value_w_generation));
-            ++collection.unique_elements;
+            return_if_error(!missing, c_error, consistency_k, "WATCH-ed key was deleted");
+            bool untouched = db_iterator->generation == watched_generation;
+            return_if_error(untouched, c_error, consistency_k, "WATCH-ed key was updated");
         }
     }
 
-    // 6. Remove the requested entries
-    for (auto const& collection_key : txn.removed) {
-        stl_collection_t& collection = stl_collection(db, collection_key.collection);
-        auto key_iterator = collection.pairs.find(collection_key.key);
-        if (key_iterator == collection.pairs.end())
-            continue;
-
-        key_iterator->second.reset(txn.generation);
-    }
+    // 2. Import the data, removing the older version beforehand
+    merge_overwrite(db.entries, txn.changes);
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c_options & ukv_option_write_flush_k)
-        save_to_disk(db, c_error);
+        write(db, db.persisted_path, c_error);
 }
 
 /*********************************************************/
@@ -1099,14 +1160,14 @@ void ukv_arena_free(ukv_database_t const, ukv_arena_t c_arena) {
 void ukv_transaction_free(ukv_database_t const, ukv_transaction_t const c_txn) {
     if (!c_txn)
         return;
-    stl_txn_t& txn = *reinterpret_cast<stl_txn_t*>(c_txn);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
     delete &txn;
 }
 
 void ukv_database_free(ukv_database_t c_db) {
     if (!c_db)
         return;
-    stl_db_t& db = *reinterpret_cast<stl_db_t*>(c_db);
+    database_t& db = *reinterpret_cast<database_t*>(c_db);
     delete &db;
 }
 
