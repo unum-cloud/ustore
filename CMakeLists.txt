@@ -140,7 +140,7 @@ set(UKV_CLIENT_NAMES "stl" "leveldb" "rocksdb")
 
 if(EXISTS ${UKV_BUILD_UNUMDB})
   add_library(unumdb STATIC IMPORTED)
-  target_link_libraries(unumdb INTERFACE dl pthread explain uring dw backward elf dwarf numa)
+  target_link_libraries(unumdb INTERFACE dl pthread explain uring numa)
   set_property(TARGET unumdb PROPERTY IMPORTED_LOCATION ${UKV_BUILD_UNUMDB})
   set_property(TARGET unumdb PROPERTY LINK_LIBRARIES "")
 
