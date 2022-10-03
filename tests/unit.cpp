@@ -644,7 +644,7 @@ TEST(db, docs_modify) {
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, docs_merge_and_patch) {
