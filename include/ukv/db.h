@@ -429,6 +429,9 @@ void ukv_read( //
  *
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
+ *
+ * @section Why use "last keys" instead of "start keys"?
+ *
  */
 void ukv_scan( //
     ukv_database_t const db,
