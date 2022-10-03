@@ -1,7 +1,7 @@
 
 include(ExternalProject)
 
-if(!APPLE)
+if(NOT APPLE)
     set(JEMALLOC_PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps/jemalloc)
     set(JEMALLOC_SRC_DIR ${JEMALLOC_PREFIX_DIR}/src/jemalloc)
     set(JEMALLOC_INSTALL_DIR ${JEMALLOC_PREFIX_DIR}/install)

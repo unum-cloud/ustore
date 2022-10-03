@@ -487,7 +487,7 @@ static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v
 
         bson_visitor_t visitor = {0};
         if (bson_iter_visit_all(&child, &visitor, &child_state))
-            *state.c_error = "Failed to iterate the BSON document!";
+            log_error(state.c_error, 0, "Failed to iterate the BSON document!");
 
         bson_to_json_string(child_state.json_str, " }", state.c_error);
     }
@@ -504,7 +504,7 @@ static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_ar
 
         bson_visitor_t visitor = {0};
         if (bson_iter_visit_all(&child, &visitor, &child_state))
-            *state.c_error = "Failed to iterate the BSON array!";
+            log_error(state.c_error, 0, "Failed to iterate the BSON array!");
 
         bson_to_json_string(child_state.json_str, " ]", state.c_error);
     }
@@ -533,7 +533,9 @@ static bool bson_visit_undefined(bson_iter_t const*, char const*, void* data) {
     bson_to_json_string(state.json_str, "{ \"$undefined\" : true }", state.c_error);
     return false;
 }
-static bool bson_visit_oid(bson_iter_t const*, char const*, const bson_oid_t* v_oid, void*) {
+static bool bson_visit_oid(bson_iter_t const*, char const*, const bson_oid_t*, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    log_error(state.c_error, 0, "Unsupported type");
     return false;
 }
 static bool bson_visit_bool(bson_iter_t const*, char const*, bool v_bool, void* data) {
@@ -553,19 +555,29 @@ static bool bson_visit_null(bson_iter_t const*, char const*, void* data) {
     bson_to_json_string(state.json_str, "null", state.c_error);
     return false;
 }
-static bool bson_visit_regex(bson_iter_t const*, char const*, char const*, char const*, void*) {
+static bool bson_visit_regex(bson_iter_t const*, char const*, char const*, char const*, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    log_error(state.c_error, 0, "Unsupported type");
     return false;
 }
-static bool bson_visit_dbpointer(bson_iter_t const*, char const*, size_t, char const*, bson_oid_t const*, void*) {
+static bool bson_visit_dbpointer(bson_iter_t const*, char const*, size_t, char const*, bson_oid_t const*, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    log_error(state.c_error, 0, "Unsupported type");
     return false;
 }
-static bool bson_visit_code(bson_iter_t const*, char const*, size_t, char const*, void*) {
+static bool bson_visit_code(bson_iter_t const*, char const*, size_t, char const*, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    log_error(state.c_error, 0, "Unsupported type");
     return false;
 }
-static bool bson_visit_symbol(bson_iter_t const*, char const*, size_t, char const*, void*) {
+static bool bson_visit_symbol(bson_iter_t const*, char const*, size_t, char const*, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    log_error(state.c_error, 0, "Unsupported type");
     return false;
 }
-static bool bson_visit_codewscope(bson_iter_t const*, char const*, size_t, char const*, bson_t const*, void*) {
+static bool bson_visit_codewscope(bson_iter_t const*, char const*, size_t, char const*, bson_t const*, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    log_error(state->c_error, 0, "Unsupported type");
     return false;
 }
 static bool bson_visit_int32(bson_iter_t const*, char const*, int32_t v_int32, void* data) {
@@ -600,9 +612,13 @@ static bool bson_visit_minkey(bson_iter_t const*, char const*, void* data) {
     bson_to_json_string(state.json_str, "{ \"$minKey\" : 1 }", state.c_error);
     return false;
 }
-static void bson_visit_unsupported_type(bson_iter_t const*, char const*, uint32_t, void*) {
+static void bson_visit_unsupported_type(bson_iter_t const*, char const*, uint32_t, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    return_error(state.c_error, "BSON unsupported type");
 }
-static bool bson_visit_decimal128(bson_iter_t const*, char const*, bson_decimal128_t const*, void*) {
+static bool bson_visit_decimal128(bson_iter_t const*, char const*, bson_decimal128_t const*, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    log_error(state.c_error, 0, "Unsupported type");
     return false;
 }
 
@@ -745,28 +761,28 @@ void modify_field( //
         if (c_modification == ukv_doc_modify_merge_k) {
             yyjson_mut_val* mergeable = yyjson_mut_obj_getn(val, last_key_or_idx.data(), last_key_or_idx.size());
             yyjson_mut_val* merge_result = yyjson_mut_merge_patch(original_doc, mergeable, modifier);
-            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
             yyjson_mut_obj_replace(val, key, merge_result);
         }
         else if (c_modification == ukv_doc_modify_insert_k) {
-            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
             return_if_error(yyjson_mut_obj_add(val, key, modifier), c_error, 0, "Failed To Insert!");
         }
         else if (c_modification == ukv_doc_modify_remove_k) {
-            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
             return_if_error(yyjson_mut_obj_remove(val, key), c_error, 0, "Failed To Insert!");
         }
         else if (c_modification == ukv_doc_modify_update_k) {
-            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
             return_if_error(yyjson_mut_obj_replace(val, key, modifier), c_error, 0, "Failed To Update!");
         }
         else if (c_modification == ukv_doc_modify_upsert_k) {
             if (yyjson_mut_obj_get(val, last_key_or_idx.data())) {
-                yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+                yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
                 return_if_error(yyjson_mut_obj_replace(val, key, modifier), c_error, 0, "Failed To Update!");
             }
             else {
-                yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+                yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
                 return_if_error(yyjson_mut_obj_add(val, key, modifier), c_error, 0, "Failed To Update!");
             }
         }
