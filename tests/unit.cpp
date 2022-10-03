@@ -553,7 +553,7 @@ TEST(db, docs_modify) {
     auto modifier =
         R"( { "a": {"b": "c","0":{"b":[{"1":"2"},{"3":"14"},{"5":"6"},{"7":"8"},{"9":"10"},{"11":"12"}]} } })"_json
             .dump();
-    collection[1].merge(modifier.c_str());
+    EXPECT_TRUE(collection[1].merge(modifier.c_str()));
     auto result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
@@ -562,7 +562,7 @@ TEST(db, docs_modify) {
     auto expected =
         R"( { "a": {"b": "c","0":{"b":[{"1":"2"},{"3":"14"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"}]} } })"_json
             .dump();
-    collection[ckf(1, "/a/0/b/4")].merge(modifier.c_str());
+    EXPECT_TRUE(collection[ckf(1, "/a/0/b/4")].merge(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
@@ -577,7 +577,7 @@ TEST(db, docs_modify) {
     expected =
         R"( { "a": {"key" : "value","another_key" : "value","0":{"b":[{"1":"3"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"},{"3":"14"}]} } })"_json
             .dump();
-    collection[1].patch(modifier.c_str());
+    EXPECT_TRUE(collection[1].patch(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
@@ -587,52 +587,52 @@ TEST(db, docs_modify) {
         R"( { "a": {"key" : "value","another_key" :
         "value","0":{"b":[{"1":"3"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"},{"3":"14"},{"15":"16"}]} } })"_json
             .dump();
-    collection[ckf(1, "/a/0/b")].patch(modifier.c_str());
+    EXPECT_TRUE(collection[ckf(1, "/a/0/b")].patch(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Update
     modifier = R"( {"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    collection[1].update(modifier.c_str());
+    EXPECT_TRUE(collection[1].update(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
     // Update By Field
     modifier = R"( {"name": "Jack", "age": 28} )"_json.dump();
     expected = R"( {"person": {"name":"Jack", "age": 28}} )"_json.dump();
-    collection[ckf(1, "/person")].update(modifier.c_str());
+    EXPECT_TRUE(collection[ckf(1, "/person")].update(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Insert
     modifier = R"( {"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    collection[1].insert(modifier.c_str());
+    EXPECT_TRUE(collection[1].insert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
     // Insert By Field
     modifier = R"("Grilish" )"_json.dump();
     expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Grilish"}} )"_json.dump();
-    collection[ckf(1, "/person/surname")].insert(modifier.c_str());
+    EXPECT_TRUE(collection[ckf(1, "/person/surname")].insert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Upsert
     modifier = R"( {"person": {"name":"Jack", "age": 28}} )"_json.dump();
-    collection[1].upsert(modifier.c_str());
+    EXPECT_TRUE(collection[1].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
     // Upsert By Field
     modifier = R"("Carl")"_json.dump();
     expected = R"( {"person": {"name":"Carl", "age": 28}} )"_json.dump();
-    collection[ckf(1, "/person/name")].upsert(modifier.c_str());
+    EXPECT_TRUE(collection[ckf(1, "/person/name")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     modifier = R"("Grilish")"_json.dump();
     expected = R"( {"person": {"name":"Carl", "age": 28, "surname" : "Grilish"}} )"_json.dump();
-    collection[ckf(1, "/person/surname")].upsert(modifier.c_str());
+    EXPECT_TRUE(collection[ckf(1, "/person/surname")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
@@ -652,7 +652,7 @@ TEST(db, docs_merge_and_patch) {
         auto patch = it["patch"].dump();
         auto expected = it["expected"].dump();
         collection[1] = doc.c_str();
-        collection[1].patch(patch.c_str());
+        EXPECT_TRUE(collection[1].patch(patch.c_str()));
         M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
     }
 
@@ -663,7 +663,7 @@ TEST(db, docs_merge_and_patch) {
         auto merge = it["merge"].dump();
         auto expected = it["expected"].dump();
         collection[1] = doc.c_str();
-        collection[1].merge(merge.c_str());
+        EXPECT_TRUE(collection[1].merge(merge.c_str()));
         M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
     }
 
