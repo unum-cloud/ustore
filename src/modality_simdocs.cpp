@@ -488,7 +488,7 @@ static bool bson_visit_document(bson_iter_t const*, char const* key, bson_t cons
 
         bson_visitor_t visitor = {0};
         if (bson_iter_visit_all(&child, &visitor, &child_state))
-            *state->c_error = "Failed to iterate the BSON document!";
+            log_error(state->c_error, "Failed to iterate the BSON document!");
 
         bson_to_json_string(child_state.json_str, " }", state->c_error);
     }
@@ -505,7 +505,7 @@ static bool bson_visit_array(bson_iter_t const*, char const* key, bson_t const* 
 
         bson_visitor_t visitor = {0};
         if (bson_iter_visit_all(&child, &visitor, &child_state))
-            *state->c_error = "Failed to iterate the BSON array!";
+            log_error(state->c_error, "Failed to iterate the BSON array!");
 
         bson_to_json_string(child_state.json_str, " ]", state->c_error);
     }
@@ -535,8 +535,8 @@ static bool bson_visit_undefined(bson_iter_t const*, char const* key, void* data
     return false;
 }
 static bool bson_visit_oid(bson_iter_t const*, char const* key, const bson_oid_t* v_oid, void* data) {
-    // TODO?
-
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    log_error(state->c_error, "Unsupported_type");
     return false;
 }
 static bool bson_visit_bool(bson_iter_t const*, char const* key, bool v_bool, void* data) {
@@ -558,8 +558,8 @@ static bool bson_visit_null(bson_iter_t const*, char const* key, void* data) {
 }
 static bool bson_visit_regex(
     bson_iter_t const*, char const* key, char const* v_regex, char const* v_options, void* data) {
-    // TODO?
-
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    log_error(state->c_error, "Unsupported_type");
     return false;
 }
 static bool bson_visit_dbpointer(bson_iter_t const*,
@@ -568,25 +568,25 @@ static bool bson_visit_dbpointer(bson_iter_t const*,
                                  char const* v_collection,
                                  bson_oid_t const* v_oid,
                                  void* data) {
-    // TODO?
-
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    log_error(state->c_error, "Unsupported_type");
     return false;
 }
 static bool bson_visit_code(bson_iter_t const*, char const* key, size_t v_code_len, char const* v_code, void* data) {
-    // TODO?
-
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    log_error(state->c_error, "Unsupported_type");
     return false;
 }
 static bool bson_visit_symbol(
     bson_iter_t const*, char const* key, size_t v_symbol_len, char const* v_symbol, void* data) {
-    // TODO?
-
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    log_error(state->c_error, "Unsupported_type");
     return false;
 }
 static bool bson_visit_codewscope(
     bson_iter_t const*, char const* key, size_t v_code_len, char const* v_code, bson_t const* v_scope, void* data) {
-    // TODO?
-
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    log_error(state->c_error, "Unsupported_type");
     return false;
 }
 static bool bson_visit_int32(bson_iter_t const*, char const* key, int32_t v_int32, void* data) {
@@ -622,14 +622,15 @@ static bool bson_visit_minkey(bson_iter_t const*, char const* key, void* data) {
     return false;
 }
 static void bson_visit_unsupported_type(bson_iter_t const*, char const* key, uint32_t type_code, void* data) {
-    // TODO?
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    return_error(state->c_error, "BSON unsupported_type");
 }
 static bool bson_visit_decimal128(bson_iter_t const*,
                                   char const* key,
                                   bson_decimal128_t const* v_decimal128,
                                   void* data) {
-    // TODO?
-
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    log_error(state->c_error, "Unsupported_type");
     return false;
 }
 
