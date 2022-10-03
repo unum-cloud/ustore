@@ -30,7 +30,6 @@
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 #include "helpers/pmr.hpp"         // `stl_arena_t`
 #include "helpers/file.hpp"        // `file_handle_t`
-#include "helpers/reserve.hpp"     // `reserve_allocator_gt`
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -164,7 +163,7 @@ struct entry_compare_t {
     bool operator()(ukv_collection_t a, entry_t const& b) const noexcept { return a < b.collection; }
 };
 
-using entry_allocator_t = reserve_allocator_gt<std::allocator<entry_t>>;
+using entry_allocator_t = std::allocator<entry_t>;
 using entries_set_t = std::set<entry_t, entry_compare_t, entry_allocator_t>;
 
 using collection_ptr_t = std::unique_ptr<collection_t>;
@@ -175,7 +174,7 @@ struct transaction_t {
                        generation_t,
                        std::hash<collection_key_t>,
                        std::equal_to<collection_key_t>,
-                       reserve_allocator_gt<std::allocator<std::pair<collection_key_t const, generation_t>>>>
+                       std::allocator<std::pair<collection_key_t const, generation_t>>>
         watched;
 
     database_t* db_ptr {nullptr};
@@ -330,7 +329,10 @@ void write(database_t const& db, std::string const& path, ukv_error_t* c_error) 
     std::fprintf(handle, "Total Items: %zu\n", db.entries.size());
     std::fprintf(handle, "Named Collections: %zu\n", db.names.size());
     for (auto const& name_and_handle : db.names)
-        std::fprintf(handle, "-%s: 0x%016zx\n", name_and_handle.first.c_str(), name_and_handle.second);
+        std::fprintf(handle,
+                     "-%s: 0x%016zx\n",
+                     name_and_handle.first.c_str(),
+                     static_cast<std::size_t>(name_and_handle.second));
     std::fprintf(handle, "\n");
 
     // Save the entries
