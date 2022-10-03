@@ -55,11 +55,19 @@ static json_t json_parse(char const* begin, char const* end) {
 #define M_EXPECT_EQ_MSG(str1, str2) \
     EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 
-#if defined(UKV_TEST_PATH)
-constexpr char const* path_k = UKV_TEST_PATH;
+static char const* path() {
+    char* path = std::getenv("UKV_BACKEND_PATH");
+    if (path)
+        return path;
+
+#if defined(UKV_FLIGHT_CLIENT)
+    return nullptr;
+#elif defined(UKV_TEST_PATH)
+    return UKV_TEST_PATH;
 #else
-constexpr char const* path_k = "";
+    return nullptr;
 #endif
+}
 
 #pragma region Binary Collections
 
@@ -169,7 +177,7 @@ void check_binary_collection(bins_collection_t& collection) {
 TEST(db, basic) {
 
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
@@ -184,7 +192,7 @@ TEST(db, named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     EXPECT_TRUE(db["col1"]);
     EXPECT_TRUE(db["col2"]);
@@ -208,7 +216,7 @@ TEST(db, collection_list) {
 
     database_t db;
 
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     if (!ukv_supports_named_collections_k) {
         EXPECT_FALSE(*db["name"]);
@@ -259,7 +267,7 @@ TEST(db, collection_list) {
 TEST(db, paths) {
 
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     char const* keys[] {"Facebook", "Apple", "Amazon", "Netflix", "Google"};
     char const* vals[] {"F", "A", "A", "N", "G"};
@@ -325,7 +333,7 @@ TEST(db, unnamed_and_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     std::vector<ukv_key_t> keys {54, 55, 56};
     ukv_length_t val_len = sizeof(std::uint64_t);
@@ -359,7 +367,7 @@ TEST(db, txn) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
 
@@ -404,7 +412,7 @@ TEST(db, txn_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
 
@@ -450,7 +458,7 @@ TEST(db, txn_unnamed_then_named) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
@@ -512,7 +520,7 @@ TEST(db, txn_unnamed_then_named) {
 TEST(db, docs) {
 
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     // JSON
     docs_collection_t collection = *db.collection<docs_collection_t>();
@@ -542,7 +550,7 @@ TEST(db, docs) {
 
 TEST(db, docs_modify) {
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
 
     auto json = R"( { "a": {"b": "c","0":{"b":[{"1":"2"},{"3":"4"},{"5":"6"},{"7":"8"},{"9":"10"}]} } })"_json.dump();
@@ -642,7 +650,7 @@ TEST(db, docs_modify) {
 TEST(db, docs_merge_and_patch) {
     using json_t = nlohmann::json;
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
 
     std::ifstream f_patch("tests/patch.json");
@@ -674,7 +682,7 @@ TEST(db, docs_table) {
 
     using json_t = nlohmann::json;
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     // Inject basic data
     docs_collection_t collection = *db.collection<docs_collection_t>();
@@ -829,7 +837,7 @@ TEST(db, docs_table) {
 TEST(db, graph_triangle) {
 
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     graph_collection_t net = *db.collection<graph_collection_t>();
 
@@ -926,7 +934,7 @@ TEST(db, graph_triangle) {
 TEST(db, graph_triangle_batch_api) {
 
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     bins_collection_t main = *db.collection();
     graph_collection_t net = *db.collection<graph_collection_t>();
@@ -1037,7 +1045,7 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
 
 TEST(db, graph_random_fill) {
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
@@ -1060,7 +1068,7 @@ TEST(db, graph_conflicting_transactions) {
         return;
 
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     graph_collection_t net = *db.collection<graph_collection_t>();
 
@@ -1110,7 +1118,7 @@ TEST(db, graph_conflicting_transactions) {
 
 TEST(db, graph_remove_vertices) {
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     graph_collection_t graph = *db.collection<graph_collection_t>();
 
@@ -1131,7 +1139,7 @@ TEST(db, graph_remove_vertices) {
 
 TEST(db, graph_remove_edges_keep_vertices) {
     database_t db;
-    EXPECT_TRUE(db.open(path_k));
+    EXPECT_TRUE(db.open(path()));
 
     graph_collection_t graph = *db.collection<graph_collection_t>();
 
