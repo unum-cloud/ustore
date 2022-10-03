@@ -76,15 +76,25 @@ set(UKV_BUILD_BENCHMARKS ON CACHE BOOL "Building C/C++ native benchmarks")
 set(UKV_BUILD_FLIGHT_RPC ON CACHE BOOL "Building Apache Arrow Flight RPC server for all backends")
 set(UKV_BUILD_UNUMDB "" CACHE STRING "Pass a path to UnumDB copy to produce a full range of bindings")
 
-include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/bson.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
+# Engines:
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+
+# Modalities:
 include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/bson.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
+
+# Distributions:
+include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
+
+# Frontends:
 include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
 
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(Arrow-external Boost-external)
@@ -145,7 +155,6 @@ endif()
 
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT_RPC})
-  include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
   target_link_libraries(ukv_flight_client pthread yyjson bson fmt::fmt arrow arrow_flight)
   list(APPEND UKV_CLIENT_NAMES "flight_client")
@@ -201,8 +210,6 @@ endif()
 
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
-  include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
-
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
@@ -219,7 +226,6 @@ endif()
 
 # Build Python bindings linking to precompiled client SDKs
 if(${UKV_BUILD_PYTHON})
-  include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
   find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 
