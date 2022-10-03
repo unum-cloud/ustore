@@ -22,11 +22,11 @@
  * > home/user/media/: @b home/user/media/name
  *
  * The mirror "directory" entries can have negative IDs.
- * Their values would be structured differently:
- * > N: number of direct children
- * >
+ * Their values would be structured differently.
  */
-#include <re2/re2.h>
+
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
 
 #include "ukv/paths.h"
 #include "helpers/pmr.hpp"         // `stl_arena_t`
@@ -111,6 +111,7 @@ bool starts_with(std::string_view str, std::string_view prefix) noexcept {
 }
 
 std::size_t path_segments_counts(std::string_view key_str, ukv_char_t const c_separator) noexcept {
+    return 0;
 }
 
 template <typename keys_callback_at>
@@ -563,13 +564,6 @@ void scan_one_collection_one_range( //
     count = found_paths;
 }
 
-struct prefix_match_task_t {
-    ukv_collection_t collection = ukv_collection_main_k;
-    value_view_t prefix;
-    value_view_t previous;
-    ukv_length_t max_count = 0;
-};
-
 void ukv_paths_match( //
     ukv_database_t const c_db,
     ukv_transaction_t const c_txn,
@@ -627,33 +621,25 @@ void ukv_paths_match( //
     strided_range_gt<ukv_collection_t const> collections {{c_collections, c_collections_stride}, c_tasks_count};
     strided_range_gt<ukv_length_t const> scan_limits {{c_scan_limits, c_scan_limits_stride}, c_tasks_count};
 
-    auto first_collection = c_collections ? c_collections[0] : ukv_collection_main_k;
-    auto is_same_collection = collections.same_elements();
-    auto has_previous = c_previous != nullptr;
-
     auto scan_limits_sum = transform_reduce_n(scan_limits.begin(), c_tasks_count, 0ul);
     auto found_counts = arena.alloc<ukv_length_t>(c_tasks_count, c_error);
     auto found_paths = growing_tape_t(arena);
+    found_paths.reserve(scan_limits_sum, c_error);
+    return_on_error(c_error);
 
-    if (c_tasks_count == 1)
+    for (std::size_t i = 0; i != c_tasks_count && !*c_error; ++i)
         scan_one_collection_one_range( //
             c_db,
             c_txn,
-            first_collection,
-            prefixes_args[0],
-            previous_args[0],
-            c_scan_limits[0],
+            collections ? collections[i] : ukv_collection_main_k,
+            prefixes_args[i],
+            previous_args[i],
+            scan_limits[i],
             c_options,
-            found_counts[0],
+            found_counts[i],
             found_paths,
             arena,
             c_error);
-
-    else {
-        // If we have multiple tasks fro different collections - lets group them together
-        // and solve one by one.
-        safe_vector_gt<safe_vector_gt<char>> paths_per_query(arena);
-    }
 
     // Export the results
     if (c_counts)
