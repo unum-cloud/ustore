@@ -29,8 +29,8 @@ You can combine every [engine](#engines) with every modality, [frontend](#fronte
 |         |          |              |           |
 | STL     | Blobs    | Embedded     | C and C++ |
 | LevelDB | Docs     | Standalone   | Python    |
-| RocksDB | Graphs   |              | GoLang    |
-| UnumDB  |          |              | Java      |
+| RocksDB | Graphs   | Distributed <sup>*coming*</sup>  | GoLang <sup>*in-progress*</sup>   |
+| UnumDB  |          |              | Java <sup>*in-progress*</sup>     |
 
 This would produce hundreds of binaries for all kinds of use cases, like:
 
