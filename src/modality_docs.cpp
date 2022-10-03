@@ -16,7 +16,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "helpers.hpp"
+#include "ukv/media.h"        // `ukv_format_field_type_t`
+#include "helpers/pmr.hpp"    // `stl_arena_t`
+#include "helpers/vector.hpp" // `safe_vector_gt`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -44,8 +46,8 @@ using json_t = nlohmann::basic_json< //
     polymorphic_allocator_gt>;
 using json_ptr_t = json_t::json_pointer;
 
-constexpr ukv_doc_field_type_t internal_format_k = ukv_format_msgpack_k;
-ukv_doc_field_type_t ukv_doc_field_default_k = internal_format_k;
+constexpr ukv_format_field_type_t internal_format_k = ukv_format_msgpack_k;
+// ukv_doc_field_type_t ukv_doc_field_default_k = internal_format_k;
 
 static constexpr char const* true_k = "true";
 static constexpr char const* false_k = "false";
@@ -120,7 +122,7 @@ json_t parse_any( //
         case ukv_format_bson_k: result = json_t::from_bson(str, str + len, false, false); break;
         case ukv_format_cbor_k: result = json_t::from_cbor(str, str + len, false, false); break;
         case ukv_format_ubjson_k: result = json_t::from_ubjson(str, str + len, false, false); break;
-        case ukv_doc_field_default_k:
+        case ukv_format_field_default_k:
             result = json_t::binary({reinterpret_cast<std::int8_t const*>(bytes.begin()),
                                      reinterpret_cast<std::int8_t const*>(bytes.end())});
             break;
@@ -155,7 +157,7 @@ void dump_any( //
         case ukv_format_bson_k: return binary_serializer_t(value).write_bson(json);
         case ukv_format_cbor_k: return binary_serializer_t(value).write_cbor(json);
         case ukv_format_ubjson_k: return binary_serializer_t(value).write_ubjson(json, true, true);
-        case ukv_doc_field_default_k: {
+        case ukv_format_field_default_k: {
             switch (json.type()) {
             case json_t::value_t::null: break;
             case json_t::value_t::discarded: break;
