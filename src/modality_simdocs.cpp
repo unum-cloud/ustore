@@ -6,6 +6,8 @@
  * Sits on top of any @see "ukv.h"-compatible system.
  */
 
+#include <fmt/format.h> // `fmt::format_int`
+
 #include <cstdio>      // `std::snprintf`
 #include <cctype>      // `std::isdigit`
 #include <charconv>    // `std::to_chars`
@@ -388,7 +390,51 @@ std::string_view json_to_string(yyjson_val* value,
 /*****************	 Format Conversions	  ****************/
 /*********************************************************/
 
-static bool bson_visit_before(bson_iter_t const*, char const*, void*) {
+typedef struct {
+    uint32_t count;
+    bool keys;
+    safe_vector_gt<char>* json_str;
+    ukv_error_t* c_error;
+} json_state_t;
+
+void bson_to_json_string(safe_vector_gt<char>* json_str, const char* str, ukv_error_t* c_error) {
+    uint32_t len = (uint32_t)strlen(str);
+
+    json_str->insert(json_str->size(), str, str + len, c_error);
+    json_str->push_back('\0', c_error);
+}
+
+template <typename at>
+void bson_to_json_number(safe_vector_gt<char>* json_str, at scalar, ukv_error_t* c_error) {
+    printed_number_buffer_t print_buffer;
+    auto result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, scalar);
+    json_str->insert(json_str->size(), result.data(), result.data() + result.size(), c_error);
+}
+
+static bool bson_visit_before(bson_iter_t const*, char const* key, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+
+    char* escaped;
+
+    if (state->count)
+        bson_to_json_string(state->json_str, ", ", state->c_error);
+
+    if (state->keys) {
+        escaped = bson_utf8_escape_for_json(key, -1);
+        if (escaped) {
+            bson_to_json_string(state->json_str, "\"", state->c_error);
+            bson_to_json_string(state->json_str, escaped, state->c_error);
+            bson_to_json_string(state->json_str, "\" : ", state->c_error);
+
+            bson_free(escaped);
+        }
+        else {
+            return true;
+        }
+    }
+
+    state->count++;
+
     return false;
 }
 static bool bson_visit_after(bson_iter_t const*, char const*, void*) {
@@ -396,45 +442,199 @@ static bool bson_visit_after(bson_iter_t const*, char const*, void*) {
 }
 static void bson_visit_corrupt(bson_iter_t const*, void*) {
 }
-static bool bson_visit_double(bson_iter_t const*, char const* key, double v_double, void* data);
-static bool bson_visit_utf8(bson_iter_t const*, char const* key, size_t v_utf8_len, char const* v_utf8, void* data);
-static bool bson_visit_document(bson_iter_t const*, char const* key, bson_t const* v_document, void* data);
-static bool bson_visit_array(bson_iter_t const*, char const* key, bson_t const* v_array, void* data);
+static bool bson_visit_double(bson_iter_t const*, char const* key, double v_double, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    uint32_t start_len;
+
+    bson_to_json_string(state->json_str, "{ \"$numberDouble\" : \"", state->c_error);
+
+    if (v_double != v_double) {
+        bson_to_json_string(state->json_str, "NaN", state->c_error);
+    }
+    else if (v_double * 0 != 0) {
+        if (v_double > 0) {
+            bson_to_json_string(state->json_str, "Infinity", state->c_error);
+        }
+        else {
+            bson_to_json_string(state->json_str, "-Infinity", state->c_error);
+        }
+    }
+    else
+        bson_to_json_number(state->json_str, v_double, state->c_error);
+
+    bson_to_json_string(state->json_str, "\" }", state->c_error);
+
+    return false;
+}
+static bool bson_visit_utf8(bson_iter_t const*, char const* key, size_t v_utf8_len, char const* v_utf8, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+
+    char* escaped = bson_utf8_escape_for_json(v_utf8, v_utf8_len); // TODO
+
+    if (escaped) {
+        bson_to_json_string(state->json_str, "\"", state->c_error);
+        bson_to_json_string(state->json_str, escaped, state->c_error);
+        bson_to_json_string(state->json_str, "\"", state->c_error);
+        bson_free(escaped);
+        return false;
+    }
+
+    return false;
+}
+static bool bson_visit_document(bson_iter_t const*, char const* key, bson_t const* v_document, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    json_state_t child_state = {0, true, state->json_str, state->c_error};
+    bson_iter_t child;
+
+    if (bson_iter_init(&child, v_document)) {
+        bson_to_json_string(child_state.json_str, "{ ", state->c_error);
+
+        bson_visitor_t visitor = {0};
+        if (bson_iter_visit_all(&child, &visitor, &child_state))
+            *state->c_error = "Failed to iterate the BSON document!";
+
+        bson_to_json_string(child_state.json_str, " }", state->c_error);
+    }
+
+    return false;
+}
+static bool bson_visit_array(bson_iter_t const*, char const* key, bson_t const* v_array, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    json_state_t child_state = {0, false, state->json_str, state->c_error};
+    bson_iter_t child;
+
+    if (bson_iter_init(&child, v_array)) {
+        bson_to_json_string(child_state.json_str, "[ ", state->c_error);
+
+        bson_visitor_t visitor = {0};
+        if (bson_iter_visit_all(&child, &visitor, &child_state))
+            *state->c_error = "Failed to iterate the BSON array!";
+
+        bson_to_json_string(child_state.json_str, " ]", state->c_error);
+    }
+
+    return false;
+}
 static bool bson_visit_binary(bson_iter_t const*,
                               char const* key,
                               bson_subtype_t v_subtype,
                               size_t v_binary_len,
                               const uint8_t* v_binary,
-                              void* data);
-static bool bson_visit_undefined(bson_iter_t const*, char const* key, void* data);
-static bool bson_visit_oid(bson_iter_t const*, char const* key, const bson_oid_t* v_oid, void* data);
-static bool bson_visit_bool(bson_iter_t const*, char const* key, bool v_bool, void* data);
-static bool bson_visit_date_time(bson_iter_t const*, char const* key, int64_t msec_since_epoch, void* data);
-static bool bson_visit_null(bson_iter_t const*, char const* key, void* data);
+                              void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    char* b64 = reinterpret_cast<char*>(const_cast<uint8_t*>(v_binary));
+
+    bson_to_json_string(state->json_str, "{ \"$binary\" : { \"base64\" : \"", state->c_error);
+    bson_to_json_string(state->json_str, b64, state->c_error);
+    bson_to_json_string(state->json_str, "\", \"subType\" : \"", state->c_error);
+    bson_to_json_number(state->json_str, v_subtype, state->c_error);
+    bson_to_json_string(state->json_str, "\" } }", state->c_error);
+
+    return false;
+}
+static bool bson_visit_undefined(bson_iter_t const*, char const* key, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    bson_to_json_string(state->json_str, "{ \"$undefined\" : true }", state->c_error);
+    return false;
+}
+static bool bson_visit_oid(bson_iter_t const*, char const* key, const bson_oid_t* v_oid, void* data) {
+    // TODO?
+
+    return false;
+}
+static bool bson_visit_bool(bson_iter_t const*, char const* key, bool v_bool, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    bson_to_json_string(state->json_str, v_bool ? "true" : "false", state->c_error);
+    return false;
+}
+static bool bson_visit_date_time(bson_iter_t const*, char const* key, int64_t msec_since_epoch, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    bson_to_json_string(state->json_str, "{ \"$date\" : { \"$numberLong\" : \"", state->c_error);
+    bson_to_json_number(state->json_str, msec_since_epoch, state->c_error);
+    bson_to_json_string(state->json_str, "\" } }", state->c_error);
+    return false;
+}
+static bool bson_visit_null(bson_iter_t const*, char const* key, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    bson_to_json_string(state->json_str, "null", state->c_error);
+    return false;
+}
 static bool bson_visit_regex(
-    bson_iter_t const*, char const* key, char const* v_regex, char const* v_options, void* data);
+    bson_iter_t const*, char const* key, char const* v_regex, char const* v_options, void* data) {
+    // TODO?
+
+    return false;
+}
 static bool bson_visit_dbpointer(bson_iter_t const*,
                                  char const* key,
                                  size_t v_collection_len,
                                  char const* v_collection,
                                  bson_oid_t const* v_oid,
-                                 void* data);
-static bool bson_visit_code(bson_iter_t const*, char const* key, size_t v_code_len, char const* v_code, void* data);
+                                 void* data) {
+    // TODO?
+
+    return false;
+}
+static bool bson_visit_code(bson_iter_t const*, char const* key, size_t v_code_len, char const* v_code, void* data) {
+    // TODO?
+
+    return false;
+}
 static bool bson_visit_symbol(
-    bson_iter_t const*, char const* key, size_t v_symbol_len, char const* v_symbol, void* data);
+    bson_iter_t const*, char const* key, size_t v_symbol_len, char const* v_symbol, void* data) {
+    // TODO?
+
+    return false;
+}
 static bool bson_visit_codewscope(
-    bson_iter_t const*, char const* key, size_t v_code_len, char const* v_code, bson_t const* v_scope, void* data);
-static bool bson_visit_int32(bson_iter_t const*, char const* key, int32_t v_int32, void* data);
+    bson_iter_t const*, char const* key, size_t v_code_len, char const* v_code, bson_t const* v_scope, void* data) {
+    // TODO?
+
+    return false;
+}
+static bool bson_visit_int32(bson_iter_t const*, char const* key, int32_t v_int32, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    bson_to_json_number(state->json_str, v_int32, state->c_error);
+    return false;
+}
 static bool bson_visit_timestamp(
-    bson_iter_t const*, char const* key, uint32_t v_timestamp, uint32_t v_increment, void* data);
-static bool bson_visit_int64(bson_iter_t const*, char const* key, int64_t v_int64, void* data);
-static bool bson_visit_maxkey(bson_iter_t const*, char const* key, void* data);
-static bool bson_visit_minkey(bson_iter_t const*, char const* key, void* data);
-static void bson_visit_unsupported_type(bson_iter_t const*, char const* key, uint32_t type_code, void* data);
+    bson_iter_t const*, char const* key, uint32_t v_timestamp, uint32_t v_increment, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+
+    bson_to_json_string(state->json_str, "{ \"$timestamp\" : { \"t\" : ", state->c_error);
+    bson_to_json_number(state->json_str, v_timestamp, state->c_error);
+    bson_to_json_string(state->json_str, ", \"i\" : ", state->c_error);
+    bson_to_json_number(state->json_str, v_increment, state->c_error);
+    bson_to_json_string(state->json_str, " } }", state->c_error);
+
+    return false;
+}
+static bool bson_visit_int64(bson_iter_t const*, char const* key, int64_t v_int64, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    bson_to_json_number(state->json_str, v_int64, state->c_error);
+    return false;
+}
+static bool bson_visit_maxkey(bson_iter_t const*, char const* key, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    bson_to_json_string(state->json_str, "{ \"$maxKey\" : 1 }", state->c_error);
+    return false;
+}
+static bool bson_visit_minkey(bson_iter_t const*, char const* key, void* data) {
+    json_state_t* state = reinterpret_cast<json_state_t*>(data);
+    bson_to_json_string(state->json_str, "{ \"$minKey\" : 1 }", state->c_error);
+    return false;
+}
+static void bson_visit_unsupported_type(bson_iter_t const*, char const* key, uint32_t type_code, void* data) {
+    // TODO?
+}
 static bool bson_visit_decimal128(bson_iter_t const*,
                                   char const* key,
                                   bson_decimal128_t const* v_decimal128,
-                                  void* data);
+                                  void* data) {
+    // TODO?
+
+    return false;
+}
 
 json_t any_parse(value_view_t bytes,
                  ukv_doc_field_type_t const field_type,
@@ -449,13 +649,14 @@ json_t any_parse(value_view_t bytes,
         bson_visitor_t visitor = {0};
         bson_iter_t iter;
         safe_vector_gt<char> json(arena);
+        json_state_t state = {0, false, &json, c_error};
 
         if (!bson_iter_init(&iter, &bson)) {
             *c_error = "Failed to parse the BSON document!";
             return {};
         }
 
-        if (!bson_iter_visit_all(&iter, &visitor, &json)) {
+        if (!bson_iter_visit_all(&iter, &visitor, &state)) {
             *c_error = "Failed to iterate the BSON document!";
             return {};
         }
