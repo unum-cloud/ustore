@@ -708,7 +708,7 @@ void modify_field( //
     return_if_error(val, c_error, 0, "Invalid field!");
 
     if (yyjson_mut_is_arr(val)) {
-        return_if_error(is_idx, c_error, 0, "Invalid field!");
+        return_if_error(is_idx || last_key_or_idx == "-", c_error, 0, "Invalid field!");
         size_t idx = 0;
         std::from_chars(last_key_or_idx.begin(), last_key_or_idx.end(), idx);
         if (c_modification == ukv_doc_modify_merge_k) {
@@ -719,7 +719,12 @@ void modify_field( //
             return_if_error(yyjson_mut_arr_replace(val, idx, merge_result), c_error, 0, "Failed To Merge!");
         }
         else if (c_modification == ukv_doc_modify_insert_k) {
-            return_if_error(yyjson_mut_arr_append(val, modifier), c_error, 0, "Failed To Insert!");
+            if (is_idx) {
+                return_if_error(yyjson_mut_arr_insert(val, modifier, idx), c_error, 0, "Failed To Insert!");
+            }
+            else {
+                return_if_error(yyjson_mut_arr_add_val(val, modifier), c_error, 0, "Failed To Insert!");
+            }
         }
         else if (c_modification == ukv_doc_modify_remove_k) {
             return_if_error(yyjson_mut_arr_remove(val, idx), c_error, 0, "Failed To Insert!");
@@ -774,9 +779,22 @@ void modify_field( //
     }
 }
 
-ukv_str_view_t field_concat(ukv_str_view_t field, ukv_str_view_t suffix, stl_arena_t&, ukv_error_t*) {
-    (void)field; // TODO: Implement!
-    return suffix;
+ukv_str_view_t field_concat(ukv_str_view_t field, ukv_str_view_t suffix, stl_arena_t& arena, ukv_error_t* c_error) {
+    auto field_len = field ? std::strlen(field) : 0;
+    auto suffix_len = suffix ? std::strlen(suffix) : 0;
+
+    if (!(field_len | suffix_len))
+        return nullptr;
+    if (!field_len)
+        return suffix;
+    if (!suffix_len)
+        return field;
+
+    auto result = arena.alloc<char>(field_len + suffix_len + 1, c_error).begin();
+    std::memcpy(result, field, field_len);
+    std::memcpy(result + field_len, suffix, suffix_len);
+    result[field_len + suffix_len] = '\0';
+    return result;
 }
 
 void patch( //
@@ -804,7 +822,8 @@ void patch( //
             return_if_error(value, c_error, 0, "Invalid Patch Doc!");
             auto nested_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
             return_on_error(c_error);
-            modify_field(original_doc, value, nested_path, ukv_doc_modify_insert_k, c_error);
+            nested_path ? modify_field(original_doc, value, nested_path, ukv_doc_modify_insert_k, c_error)
+                        : yyjson_mut_doc_set_root(original_doc, value);
         }
         else if (yyjson_mut_equals_str(op, "remove")) {
             return_if_error((yyjson_mut_obj_size(obj) == 2), c_error, 0, "Invalid Patch Doc!");
@@ -812,7 +831,8 @@ void patch( //
             return_if_error(path, c_error, 0, "Invalid Patch Doc!");
             auto nested_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
             return_on_error(c_error);
-            modify_field(original_doc, nullptr, nested_path, ukv_doc_modify_remove_k, c_error);
+            nested_path ? modify_field(original_doc, nullptr, nested_path, ukv_doc_modify_remove_k, c_error)
+                        : yyjson_mut_doc_set_root(original_doc, NULL);
         }
         else if (yyjson_mut_equals_str(op, "replace")) {
             return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
@@ -822,7 +842,8 @@ void patch( //
             return_if_error(value, c_error, 0, "Invalid Patch Doc!");
             auto nested_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
             return_on_error(c_error);
-            modify_field(original_doc, value, nested_path, ukv_doc_modify_update_k, c_error);
+            nested_path ? modify_field(original_doc, value, nested_path, ukv_doc_modify_update_k, c_error)
+                        : yyjson_mut_doc_set_root(original_doc, value);
         }
         else if (yyjson_mut_equals_str(op, "copy")) {
             return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
