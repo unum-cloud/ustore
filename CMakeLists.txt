@@ -134,8 +134,8 @@ if(EXISTS ${UKV_BUILD_UNUMDB})
   set_property(TARGET unumdb PROPERTY IMPORTED_LOCATION ${UKV_BUILD_UNUMDB})
   set_property(TARGET unumdb PROPERTY LINK_LIBRARIES "")
 
-  add_library(ukv_unumdb src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-  target_link_libraries(ukv_unumdb unumdb nlohmann_json::nlohmann_json)
+  add_library(ukv_unumdb src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
+  target_link_libraries(ukv_unumdb unumdb yyjson bson nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
   target_compile_definitions(ukv_unumdb INTERFACE UKV_VERSION="${_VERSION_}")
   target_compile_definitions(ukv_unumdb INTERFACE UKV_ENGINE_NAME=unumdb)
 
