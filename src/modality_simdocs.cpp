@@ -1253,6 +1253,14 @@ std::size_t doc_field_size_bytes(ukv_doc_field_type_t type) {
     }
 }
 
+bool doc_field_is_variable_length(ukv_doc_field_type_t type) {
+    switch (type) {
+    case ukv_doc_field_bin_k: return true;
+    case ukv_doc_field_str_k: return true;
+    default: return false;
+    }
+}
+
 struct column_begin_t {
     ukv_octet_t* validities;
     ukv_octet_t* conversions;
@@ -1368,7 +1376,7 @@ void ukv_docs_gather( //
     // https://arrow.apache.org/docs/format/Columnar.html#buffer-alignment-and-padding
     bool wants_conversions = c_result_bitmap_converted;
     bool wants_collisions = c_result_bitmap_collision;
-    std::size_t slots_per_bitmap = c_docs_count / 8 + (c_docs_count % 8 != 0);
+    std::size_t slots_per_bitmap = divide_round_up(c_docs_count, bits_in_byte_k);
     std::size_t count_bitmaps = 1ul + wants_conversions + wants_collisions;
     std::size_t bytes_per_bitmap = sizeof(ukv_octet_t) * slots_per_bitmap;
     std::size_t bytes_per_addresses_row = sizeof(void*) * c_fields_count;
@@ -1376,6 +1384,10 @@ void ukv_docs_gather( //
     std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps * c_fields_count * c_fields_count;
     std::size_t bytes_per_scalars_row = transform_reduce_n(types, c_fields_count, 0ul, &doc_field_size_bytes);
     std::size_t bytes_for_scalars = bytes_per_scalars_row * c_docs_count;
+
+    std::size_t string_columns = transform_reduce_n(types, c_fields_count, 0ul, doc_field_is_variable_length);
+    bool has_string_columns = string_columns != 0;
+    bool has_scalar_columns = string_columns != c_fields_count;
 
     // Preallocate at least a minimum amount of memory.
     // It will be organized in the following way:
@@ -1405,33 +1417,42 @@ void ukv_docs_gather( //
     // 1, 2, 3. Export validity maps addresses
     std::size_t tape_progress = 0;
     {
-        auto addresses = *c_result_bitmap_valid = reinterpret_cast<ukv_octet_t**>(tape_ptr + tape_progress);
+        auto addresses = reinterpret_cast<ukv_octet_t**>(tape_ptr + tape_progress);
+        if (c_result_bitmap_valid)
+            *c_result_bitmap_valid = addresses;
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx)
             addresses[field_idx] = first_collection_validities + field_idx * slots_per_bitmap;
         tape_progress += bytes_per_addresses_row;
     }
     if (wants_conversions) {
-        auto addresses = *c_result_bitmap_converted = reinterpret_cast<ukv_octet_t**>(tape_ptr + tape_progress);
+        auto addresses = reinterpret_cast<ukv_octet_t**>(tape_ptr + tape_progress);
+        if (c_result_bitmap_converted)
+            *c_result_bitmap_converted = addresses;
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx)
             addresses[field_idx] = first_collection_conversions + field_idx * slots_per_bitmap;
         tape_progress += bytes_per_addresses_row;
     }
     if (wants_collisions) {
-        auto addresses = *c_result_bitmap_collision = reinterpret_cast<ukv_octet_t**>(tape_ptr + tape_progress);
+        auto addresses = reinterpret_cast<ukv_octet_t**>(tape_ptr + tape_progress);
+        if (c_result_bitmap_collision)
+            *c_result_bitmap_collision = addresses;
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx)
             addresses[field_idx] = first_collection_collisions + field_idx * slots_per_bitmap;
         tape_progress += bytes_per_addresses_row;
     }
 
     // 4, 5, 6. Export addresses for scalars, strings offsets and strings lengths
-    {
-        auto addresses_offs = *c_result_strs_offsets =
-            reinterpret_cast<ukv_length_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 0);
-        auto addresses_lens = *c_result_strs_lengths =
-            reinterpret_cast<ukv_length_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 1);
-        auto addresses_scalars = *c_result_scalars =
-            reinterpret_cast<ukv_byte_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 2);
+    auto addresses_offs = reinterpret_cast<ukv_length_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 0);
+    if (c_result_strs_offsets)
+        *c_result_strs_offsets = addresses_offs;
+    auto addresses_lens = reinterpret_cast<ukv_length_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 1);
+    if (c_result_strs_lengths)
+        *c_result_strs_lengths = addresses_lens;
+    auto addresses_scalars = reinterpret_cast<ukv_byte_t**>(tape_ptr + tape_progress + bytes_per_addresses_row * 2);
+    if (c_result_scalars)
+        *c_result_scalars = addresses_scalars;
 
+    {
         auto scalars_tape = first_collection_scalars;
         for (ukv_size_t field_idx = 0; field_idx != c_fields_count; ++field_idx) {
             ukv_doc_field_type_t type = types[field_idx];
@@ -1474,9 +1495,9 @@ void ukv_docs_gather( //
                 .validities = (*c_result_bitmap_valid)[field_idx],
                 .conversions = (*(c_result_bitmap_converted ?: c_result_bitmap_valid))[field_idx],
                 .collisions = (*(c_result_bitmap_collision ?: c_result_bitmap_valid))[field_idx],
-                .scalars = (*c_result_scalars)[field_idx],
-                .str_offsets = (*c_result_strs_offsets)[field_idx],
-                .str_lengths = (*c_result_strs_lengths)[field_idx],
+                .scalars = addresses_scalars[field_idx],
+                .str_offsets = addresses_offs[field_idx],
+                .str_lengths = addresses_lens[field_idx],
             };
 
             // Export the types
