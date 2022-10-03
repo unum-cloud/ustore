@@ -86,17 +86,13 @@ include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/bson.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/re2.cmake")
+
+include("${CMAKE_SOURCE_DIR}/cmake/pcre2.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
 
 # Distributions:
 include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
-
-# Frontends:
-include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
 
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(Arrow-external Boost-external)
@@ -111,17 +107,17 @@ message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
 add_library(ukv_stl src/engine_stl.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_stl pthread yyjson bson re2 ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_stl pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
 target_compile_definitions(ukv_stl INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_stl INTERFACE UKV_ENGINE_NAME=stl)
 
 add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_rocksdb rocksdb pthread yyjson bson ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_rocksdb rocksdb pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_ENGINE_NAME=rocksdb)
 
 add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_leveldb leveldb pthread yyjson bson ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_leveldb leveldb pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 target_compile_definitions(ukv_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
@@ -148,7 +144,7 @@ if(EXISTS ${UKV_BUILD_UNUMDB})
     add_dependencies(ukv_unumdb jemalloc)
   endif()
 
-  target_link_libraries(ukv_unumdb unumdb yyjson bson nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+  target_link_libraries(ukv_unumdb unumdb pthread yyjson bson pcre2 nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
   target_compile_definitions(ukv_unumdb INTERFACE UKV_VERSION="${_VERSION_}")
   target_compile_definitions(ukv_unumdb INTERFACE UKV_ENGINE_NAME=unumdb)
 
@@ -159,7 +155,7 @@ endif()
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT_RPC})
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-  target_link_libraries(ukv_flight_client pthread yyjson bson fmt::fmt arrow arrow_flight ${jemalloc_LIBRARIES})
+  target_link_libraries(ukv_flight_client pthread yyjson bson pcre2 fmt::fmt arrow arrow_flight ${jemalloc_LIBRARIES})
   list(APPEND UKV_CLIENT_NAMES "flight_client")
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
 
@@ -194,6 +190,8 @@ endforeach()
 # We build them with the original sources (instead of linking with already compiled libraries)
 # to maximize the number of exposed symbols and make debugging easier.
 if(${UKV_BUILD_TESTS})
+  include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
+
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
@@ -218,6 +216,8 @@ endif()
 
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
+  include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
+
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
@@ -235,6 +235,7 @@ endif()
 # Build Python bindings linking to precompiled client SDKs
 if(${UKV_BUILD_PYTHON})
   find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
+  include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
