@@ -748,28 +748,28 @@ void modify_field( //
         if (c_modification == ukv_doc_modify_merge_k) {
             yyjson_mut_val* mergeable = yyjson_mut_obj_getn(val, last_key_or_idx.data(), last_key_or_idx.size());
             yyjson_mut_val* merge_result = yyjson_mut_merge_patch(original_doc, mergeable, modifier);
-            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
             yyjson_mut_obj_replace(val, key, merge_result);
         }
         else if (c_modification == ukv_doc_modify_insert_k) {
-            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
             return_if_error(yyjson_mut_obj_add(val, key, modifier), c_error, 0, "Failed To Insert!");
         }
         else if (c_modification == ukv_doc_modify_remove_k) {
-            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
             return_if_error(yyjson_mut_obj_remove(val, key), c_error, 0, "Failed To Insert!");
         }
         else if (c_modification == ukv_doc_modify_update_k) {
-            yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+            yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
             return_if_error(yyjson_mut_obj_replace(val, key, modifier), c_error, 0, "Failed To Update!");
         }
         else if (c_modification == ukv_doc_modify_upsert_k) {
             if (yyjson_mut_obj_get(val, last_key_or_idx.data())) {
-                yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+                yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
                 return_if_error(yyjson_mut_obj_replace(val, key, modifier), c_error, 0, "Failed To Update!");
             }
             else {
-                yyjson_mut_val* key = yyjson_mut_strcpy(original_doc, last_key_or_idx.data());
+                yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
                 return_if_error(yyjson_mut_obj_add(val, key, modifier), c_error, 0, "Failed To Update!");
             }
         }
