@@ -2,7 +2,9 @@ include(FetchContent)
 FetchContent_Declare(
     pybind11
     GIT_REPOSITORY https://github.com/pybind/pybind11
-    GIT_TAG v2.6.1
+    GIT_TAG v2.10.0
+    GIT_SHALLOW 1
+    GIT_PROGRESS 1
 )
 FetchContent_MakeAvailable(pybind11)
 
