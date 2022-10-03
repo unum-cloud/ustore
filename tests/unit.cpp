@@ -645,7 +645,6 @@ TEST(db, docs_merge_and_patch) {
     EXPECT_TRUE(db.open(path_k));
     docs_collection_t collection = *db.collection<docs_collection_t>();
 
-#if 0
     std::ifstream f_patch("tests/patch.json");
     json_t j_object = json_t::parse(f_patch);
     for (auto it : j_object) {
@@ -653,13 +652,12 @@ TEST(db, docs_merge_and_patch) {
         auto patch = it["patch"].dump();
         auto expected = it["expected"].dump();
         collection[1] = doc.c_str();
-        collection[1] = patch.c_str();
+        collection[1].patch(patch.c_str());
         M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
     }
-#endif
 
     std::ifstream f_merge("tests/merge.json");
-    auto j_object = json_t::parse(f_merge);
+    j_object = json_t::parse(f_merge);
     for (auto it : j_object) {
         auto doc = it["doc"].dump();
         auto merge = it["merge"].dump();
