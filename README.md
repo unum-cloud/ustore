@@ -1,10 +1,8 @@
 # Universal Keys & Values
 
+⚠️ Under active development! Not all APIs are stable!
+
 ## The BLAS of CRUD
-
-⚠️ Under active development!
-
-⚠️ Not all APIs are stable!
 
 ![Universal Key Values by Unum](assets/UKV.png)
 
@@ -283,18 +281,60 @@ conan create . ukv/testing --build=missing
     * Bindings are just string exchange interfaces.
     * No C API [yet](https://surrealdb.com/docs/integration/libraries/c).
 
-## Limitations
+## Presets, Limitations and FAQ
 
-* Keys are constant length native integer types. High-performance solutions are impossible with variable size keys. 64-bit unsigned integers are currently chosen as the smallest native numeric type, that can address modern datasets.
-* Values are serialized into variable-length byte strings.
-* Iterators and enumerators often come with certain relevance, consistency or performance tradeoffs or aren't supported at all. Check the specs of exact backend.
-* Transactions are ACI(D) by-default, meaning that:
-  * Atomicity is guaranteed,
-  * Consistency is implemented in the strongest form - tracking all key and metadata lookups by default,
-  * Isolation is guaranteed, but may be implemented differently, depending on backend - in-memory systems generally prefer "locking" over "multi-versioning".
-  * Durability doesn't apply to in-memory systems, but even in persistent stores its often disabled to be implemented in higher layers of infrastructure.
+<details>
+<summary>Keys are 64-bit integers. String keys are possible, but discouraged on hot-paths</summary>
 
-## FAQ
+Using variable length keys forces numerous limitations on the design of a Key-Value store.
+Besides slow comparisons it means solving the "persistent space allocation" problem twice - for both keys and values.
+
+The recommended approach to dealing with string keys is:
+
+1. Choose a mechanism to generate unique integer keys (UID). Ex: monotonically increasing values.
+2. Use "paths" modality to build-up a persistent hash-map of strings to UIDs.
+3. Use those UIDs to address the rest of the data in binary, document and graph modalities.
+
+Once support of 16-byte integers becomes industry standard, we will add support for UUID keys.
+
+</details>
+
+<details>
+<summary>Values are binary strings under 4 GB long</summary>
+
+</details>
+
+
+<details>
+<summary>Transactions are ACI(D) by-default</summary>
+
+Atomicity is guaranteed.
+Even on non-transactional writes - either all updates pass or all fail.
+
+Consistency is implemented in the strongest form - tracking all key and metadata lookups by default.
+Just like with `WATCH` verb in Redis, we will track collisions between all the touched keys.
+To avoid such checks - pass the `ukv_option_transaction_dont_watch_k` option.
+
+Isolation is guaranteed, but may be implemented differently, depending on backend.
+In-memory systems generally prefer "locking" over "multi-versioning".
+
+Durability doesn't apply to in-memory systems by definition.
+In hybrid or persistent systems we prefer to disable it by default.
+Almost every DBMS that builds on top of KVS prefers to implement its own durability mechanism.
+Even more so in distributed databases, where three separate Write Ahead Logs may exist:
+
+* In KVS,
+* In DBMS,
+* In Distributed Consensus implementation.
+
+If you still need durability, flush writes with `ukv_option_write_flush_k`.
+
+</details>
+
+<details>
+<summary>Not all engines support ordered scans</summary>
+
+</details>
 
 <details>
 <summary>Why not use LevelDB interface?</summary>
@@ -302,7 +342,7 @@ conan create . ukv/testing --build=missing
 ... Which was also adopted by RocksDB.
 
 1. Dynamic polymorphism.
-2. Dependancy on STL.
+2. Dependance on Standard Templates Library containers.
 3. No support for custom allocators.
 
 These and other problems mean that interface can't be portable, ABI-safe or performant.
