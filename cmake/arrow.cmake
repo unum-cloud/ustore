@@ -1,7 +1,7 @@
 # Installation scripts can be take from here:
 # https://arrow.apache.org/install/
 if(${UKV_PREINSTALLED_ARROW})
-    find_package(Arrow CONFIG REQUIRED)
+    find_package(Arrow CONFIG)
 else()
     include(ExternalProject)
     set(THREADS_PREFER_PTHREAD_FLAG ON)

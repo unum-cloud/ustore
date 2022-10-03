@@ -10,12 +10,13 @@
 #include <thread> // `std::this_thread`
 
 #include <fmt/core.h> // `fmt::format_to`
+#include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
 
 #include "ukv/db.h"
-
-#include "helpers/arrow.hpp"
 #include "ukv/arrow.h"
+#include "ukv/cpp/types.hpp" // `ukv_doc_field`
+#include "helpers/arrow.hpp"
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -800,7 +801,7 @@ void ukv_collection_drop(
 
 void ukv_collection_list( //
     ukv_database_t const c_db,
-    ukv_transaction_t const, // TODO: add support for transactions
+    ukv_transaction_t const c_txn,
     ukv_options_t const c_options,
     ukv_size_t* c_count,
     ukv_collection_t** c_ids,
@@ -821,6 +822,8 @@ void ukv_collection_list( //
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
 
     arf::Ticket ticket {kFlightListCols};
+    if (c_txn)
+        fmt::format_to(std::back_inserter(ticket.ticket), "?{}=0x{:0>16x}", kParamTransactionID, std::uintptr_t(c_txn));
     ar::Result<std::unique_ptr<arf::FlightStreamReader>> maybe_stream = db.flight->DoGet(ticket);
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
 

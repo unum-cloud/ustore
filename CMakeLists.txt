@@ -68,6 +68,7 @@ set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 set(UKV_PREINSTALLED_BOOST ON CACHE BOOL "True, if a pre-installed external version of Boost should be used")
+set(UKV_USE_JEMALLOC ON CACHE BOOL "A faster allocator, that requires autoconf to be installed")
 set(UKV_PREINSTALLED_ARROW ON CACHE BOOL "True, if a pre-installed external version of Apache Arrow should be used")
 set(UKV_PREINSTALLED_TURBOPFOR ON CACHE BOOL "True, if a pre-installed external version of TurboPFOR should be used")
 set(UKV_BUILD_PYTHON ON CACHE BOOL "Building Python bidings for all SDKs")
@@ -76,28 +77,28 @@ set(UKV_BUILD_BENCHMARKS ON CACHE BOOL "Building C/C++ native benchmarks")
 set(UKV_BUILD_FLIGHT_RPC ON CACHE BOOL "Building Apache Arrow Flight RPC server for all backends")
 set(UKV_BUILD_UNUMDB "" CACHE STRING "Pass a path to UnumDB copy to produce a full range of bindings")
 
-include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/bson.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
+# Engines:
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+
+# Modalities:
 include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/bson.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
+
+# Distributions:
+include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
+
+# Frontends:
 include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
 
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(Arrow-external Boost-external)
-endif()
-
-if(!APPLE)
-  add_dependencies(ukv_stl jemalloc)
-  add_dependencies(ukv_rocksdb jemalloc)
-  add_dependencies(ukv_leveldb jemalloc)
-  add_dependencies(ukv_rpc_client jemalloc)
-  add_dependencies(ukv_stl_unit_test jemalloc)
-  add_dependencies(ukv_leveldb_unit_test jemalloc)
-  add_dependencies(ukv_rocksdb_unit_test jemalloc)
 endif()
 
 include_directories(include/)
@@ -109,33 +110,41 @@ message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
 add_library(ukv_stl src/engine_stl.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_stl yyjson bson ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_stl pthread yyjson bson ${jemalloc_LIBRARIES})
 target_compile_definitions(ukv_stl INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_stl INTERFACE UKV_ENGINE_NAME=stl)
 
 add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_rocksdb rocksdb yyjson bson ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_rocksdb rocksdb pthread yyjson bson ${jemalloc_LIBRARIES})
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_ENGINE_NAME=rocksdb)
 
 add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_leveldb leveldb yyjson bson ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_leveldb leveldb pthread yyjson bson ${jemalloc_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 target_compile_definitions(ukv_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
 
+if(NOT APPLE)
+  add_dependencies(ukv_stl jemalloc)
+  add_dependencies(ukv_rocksdb jemalloc)
+  add_dependencies(ukv_leveldb jemalloc)
+endif()
 # The rest of CMake will apply to all client libraries
 set(UKV_ENGINE_NAMES "stl" "leveldb" "rocksdb")
 set(UKV_CLIENT_NAMES "stl" "leveldb" "rocksdb")
 
 if(EXISTS ${UKV_BUILD_UNUMDB})
   add_library(unumdb STATIC IMPORTED)
-  target_link_libraries(unumdb INTERFACE dl pthread explain uring dw backward elf dwarf numa)
+  target_link_libraries(unumdb INTERFACE dl pthread explain uring numa)
   set_property(TARGET unumdb PROPERTY IMPORTED_LOCATION ${UKV_BUILD_UNUMDB})
   set_property(TARGET unumdb PROPERTY LINK_LIBRARIES "")
 
-  add_library(ukv_unumdb src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-  target_link_libraries(ukv_unumdb unumdb nlohmann_json::nlohmann_json)
+  add_library(ukv_unumdb src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
+  if(NOT APPLE)
+    add_dependencies(ukv_unumdb jemalloc)
+  endif()
+  target_link_libraries(ukv_unumdb unumdb yyjson bson nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
   target_compile_definitions(ukv_unumdb INTERFACE UKV_VERSION="${_VERSION_}")
   target_compile_definitions(ukv_unumdb INTERFACE UKV_ENGINE_NAME=unumdb)
 
@@ -145,10 +154,13 @@ endif()
 
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT_RPC})
-  include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-  target_link_libraries(ukv_flight_client yyjson bson fmt::fmt arrow arrow_flight)
+  target_link_libraries(ukv_flight_client pthread yyjson bson fmt::fmt arrow arrow_flight ${jemalloc_LIBRARIES})
   list(APPEND UKV_CLIENT_NAMES "flight_client")
+  target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
+  if(NOT APPLE)
+    add_dependencies(ukv_flight_client jemalloc)
+  endif()
 
   foreach(engine_name IN ITEMS ${UKV_ENGINE_NAMES})
     string(CONCAT target_name "ukv_" ${engine_name})
@@ -201,8 +213,6 @@ endif()
 
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
-  include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
-
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
@@ -211,15 +221,14 @@ if(${UKV_BUILD_BENCHMARKS})
     add_executable(${bench_name} benchmarks/twitter.cpp)
     target_link_libraries(${bench_name} benchmark ${target_name} ${target_LIBRARIES})
 
-    string(CONCAT bench_name "ukv_" ${client_name} "_bitcoin_benchmark")
-    add_executable(${bench_name} benchmarks/bitcoin.cpp)
+    string(CONCAT bench_name "ukv_" ${client_name} "_tabular_graph_benchmark")
+    add_executable(${bench_name} benchmarks/tabular_graph.cpp)
     target_link_libraries(${bench_name} leveldb benchmark ${target_name} ${target_LIBRARIES})
   endforeach()
 endif()
 
 # Build Python bindings linking to precompiled client SDKs
 if(${UKV_BUILD_PYTHON})
-  include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
   find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 
@@ -231,7 +240,7 @@ if(${UKV_BUILD_PYTHON})
 
     pybind11_add_module(${wrap_lib_name} MODULE python/pybind.cpp python/database.cpp python/networkx.cpp python/documents.cpp python/pandas.cpp)
     target_include_directories(${wrap_lib_name} PUBLIC python/)
-    target_link_libraries(${wrap_lib_name} PRIVATE arrow arrow_dataset arrow_flight arrow_python arrow_python_flight ${target_name} ${target_LIBRARIES})
+    target_link_libraries(${wrap_lib_name} PRIVATE pthread arrow arrow_dataset arrow_flight arrow_python arrow_python_flight ${target_name} ${target_LIBRARIES})
     target_compile_definitions(${wrap_lib_name} PRIVATE UKV_VERSION="${_VERSION_}" UKV_PYTHON_MODULE_NAME=${client_name})
     set_target_properties(${wrap_lib_name} PROPERTIES OUTPUT_NAME ukv/${client_name})
   endforeach()

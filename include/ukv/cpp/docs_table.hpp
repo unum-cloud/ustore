@@ -59,37 +59,6 @@ using field_type_t = field_type_gt<std::monostate>;
 
 using table_header_t = table_header_gt<std::monostate>;
 
-template <typename element_at>
-constexpr ukv_doc_field_type_t ukv_doc_field() {
-    if constexpr (std::is_same_v<element_at, bool>)
-        return ukv_doc_field_bool_k;
-    if constexpr (std::is_same_v<element_at, std::int8_t>)
-        return ukv_doc_field_i8_k;
-    if constexpr (std::is_same_v<element_at, std::int16_t>)
-        return ukv_doc_field_i16_k;
-    if constexpr (std::is_same_v<element_at, std::int32_t>)
-        return ukv_doc_field_i32_k;
-    if constexpr (std::is_same_v<element_at, std::int64_t>)
-        return ukv_doc_field_i64_k;
-    if constexpr (std::is_same_v<element_at, std::uint8_t>)
-        return ukv_doc_field_u8_k;
-    if constexpr (std::is_same_v<element_at, std::uint16_t>)
-        return ukv_doc_field_u16_k;
-    if constexpr (std::is_same_v<element_at, std::uint32_t>)
-        return ukv_doc_field_u32_k;
-    if constexpr (std::is_same_v<element_at, std::uint64_t>)
-        return ukv_doc_field_u64_k;
-    if constexpr (std::is_same_v<element_at, float>)
-        return ukv_doc_field_f32_k;
-    if constexpr (std::is_same_v<element_at, double>)
-        return ukv_doc_field_f64_k;
-    if constexpr (std::is_same_v<element_at, value_view_t>)
-        return ukv_doc_field_bin_k;
-    if constexpr (std::is_same_v<element_at, std::string_view>)
-        return ukv_doc_field_str_k;
-    return ukv_doc_field_json_k;
-}
-
 /**
  * @brief The first column of the table, describing its contents.
  */
