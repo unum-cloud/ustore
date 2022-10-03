@@ -14,6 +14,7 @@
 #include <benchmark/benchmark.h>
 
 #include <ukv/ukv.hpp>
+#include <ukv/cpp/ranges.hpp> // `sort_and_deduplicate`
 
 namespace bm = benchmark;
 using namespace unum::ukv;
@@ -49,6 +50,9 @@ static database_t db;
 static std::size_t thread_count = 0;
 static std::size_t tweet_count = 0;
 
+static ukv_collection_t collection_docs_k = ukv_collection_main_k;
+static ukv_collection_t collection_graph_k = ukv_collection_main_k;
+
 static inline std::uint64_t ror64(std::uint64_t v, int r) {
     return (v >> r) | (v << (64 - r));
 }
@@ -67,7 +71,7 @@ static inline std::size_t hash(tweet_t const& tweet) {
     return mix;
 }
 
-static void batch_insert(bm::State& state) {
+static void docs_upsert(bm::State& state) {
     status_t status;
     arena_t arena(db);
 
@@ -93,9 +97,9 @@ static void batch_insert(bm::State& state) {
         // Generate multiple IDs for each tweet, to augment the dataset.
         auto const& tweet = tweets_per_path[file_idx][internal_tweet_idx];
         auto const tweet_hash = hash(tweet);
-        std::array<ukv_key_t, copies_per_tweet_k> keys;
+        std::array<ukv_key_t, copies_per_tweet_k> ids_tweets;
         for (std::size_t copy_idx = 0; copy_idx != copies_per_tweet_k; ++copy_idx)
-            keys[copy_idx] = static_cast<ukv_key_t>(tweet_hash * primes_k[copy_idx]);
+            ids_tweets[copy_idx] = static_cast<ukv_key_t>(tweet_hash * primes_k[copy_idx]);
 
         // Finally, import the data.
         ukv_bytes_cptr_t body = reinterpret_cast<ukv_bytes_cptr_t>(tweet.body.data());
@@ -104,9 +108,9 @@ static void batch_insert(bm::State& state) {
             db,
             nullptr,
             copies_per_tweet_k,
-            nullptr,
+            &collection_docs_k,
             0,
-            keys.data(),
+            ids_tweets.data(),
             sizeof(ukv_key_t),
             nullptr,
             0,
@@ -165,22 +169,22 @@ void sample_randomly(bm::State& state, callback_at callback) {
     state.counters["batches/s"] = bm::Counter(iterations, bm::Counter::kIsRate);
 }
 
-static void sample_blobs(bm::State& state) {
+static void docs_sample_blobs(bm::State& state) {
 
     status_t status;
     arena_t arena(db);
 
     std::size_t received_bytes = 0;
-    sample_randomly(state, [&](ukv_key_t const* keys, ukv_size_t count) {
+    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
         ukv_read( //
             db,
             nullptr,
             count,
-            nullptr,
+            &collection_docs_k,
             0,
-            keys,
+            ids_tweets,
             sizeof(ukv_key_t),
             ukv_options_default_k,
             nullptr,
@@ -195,23 +199,23 @@ static void sample_blobs(bm::State& state) {
     state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
 }
 
-static void sample_docs(bm::State& state) {
+static void docs_sample_objects(bm::State& state) {
 
     // We want to trigger parsing and serialization
     status_t status;
     arena_t arena(db);
 
     std::size_t received_bytes = 0;
-    sample_randomly(state, [&](ukv_key_t const* keys, ukv_size_t count) {
+    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
         ukv_docs_read( //
             db,
             nullptr,
             count,
-            nullptr,
+            &collection_docs_k,
             0,
-            keys,
+            ids_tweets,
             sizeof(ukv_key_t),
             nullptr,
             0,
@@ -229,23 +233,23 @@ static void sample_docs(bm::State& state) {
     state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
 }
 
-static void sample_field(bm::State& state) {
+static void docs_sample_field(bm::State& state) {
 
     status_t status;
     arena_t arena(db);
     ukv_str_view_t field = "text";
 
     std::size_t received_bytes = 0;
-    sample_randomly(state, [&](ukv_key_t const* keys, ukv_size_t count) {
+    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
         ukv_docs_read( //
             db,
             nullptr,
             count,
-            nullptr,
+            &collection_docs_k,
             0,
-            keys,
+            ids_tweets,
             sizeof(ukv_key_t),
             &field,
             0,
@@ -263,7 +267,7 @@ static void sample_field(bm::State& state) {
     state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
 }
 
-static void sample_tables(bm::State& state) {
+static void docs_sample_table(bm::State& state) {
     status_t status;
     arena_t arena(db);
 
@@ -275,7 +279,7 @@ static void sample_tables(bm::State& state) {
                                           ukv_doc_field_u32_k};
 
     std::size_t received_bytes = 0;
-    sample_randomly(state, [&](ukv_key_t const* keys, ukv_size_t count) {
+    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_octet_t** validities = nullptr;
         ukv_byte_t** scalars = nullptr;
         ukv_length_t** offsets = nullptr;
@@ -286,9 +290,9 @@ static void sample_tables(bm::State& state) {
             nullptr,
             count,
             fields_k,
-            nullptr,
+            &collection_docs_k,
             0,
-            keys,
+            ids_tweets,
             sizeof(ukv_key_t),
             names,
             sizeof(ukv_str_view_t),
@@ -306,10 +310,185 @@ static void sample_tables(bm::State& state) {
             status.member_ptr());
         status.throw_unhandled();
 
+        // One column is just stirngs
         received_bytes += std::accumulate(&lengths[0][0], &lengths[0][0] + count - 1, 0ul);
-        received_bytes += 3 * sizeof(std::uint32_t) * count;
+        // Others are scalars
+        received_bytes += (fields_k - 1) * sizeof(std::uint32_t) * count;
     });
     state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
+}
+
+/**
+ * @brief Two-step benchmark, that samples documents and constructs a graph between:
+ * > Tweets and their Authors.
+ * > Tweets and their Retweets.
+ * > Authors and Retweeters labeled by Retweet IDs.
+ *
+ * Evaluates:
+ * 1. Speed of documents Batch-Selections.
+ * 2. Parsing and sampling their documents.
+ * 3. Batch-upserts into Graph layout.
+ */
+static void graph_construct_from_docs(bm::State& state) {
+    status_t status;
+    arena_t arena(db);
+
+    constexpr ukv_size_t fields_k = 3;
+    ukv_str_view_t names[fields_k] {"/user/id", "/retweeted_status/id", "/retweeted_status/user/id"};
+    ukv_doc_field_type_t types[fields_k] {ukv_doc_field_u64_k, ukv_doc_field_u64_k, ukv_doc_field_u64_k};
+    std::vector<edge_t> edges_array;
+
+    std::size_t received_bytes = 0;
+    std::size_t added_edges = 0;
+    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
+        ukv_octet_t** validities = nullptr;
+        ukv_byte_t** scalars = nullptr;
+        ukv_byte_t* strings = nullptr;
+        ukv_docs_gather( //
+            db,
+            nullptr,
+            count,
+            fields_k,
+            &collection_docs_k,
+            0,
+            ids_tweets,
+            sizeof(ukv_key_t),
+            names,
+            sizeof(ukv_str_view_t),
+            types,
+            sizeof(ukv_doc_field_type_t),
+            ukv_options_default_k,
+            &validities,
+            nullptr,
+            nullptr,
+            &scalars,
+            nullptr,
+            nullptr,
+            &strings,
+            arena.member_ptr(),
+            status.member_ptr());
+        status.throw_unhandled();
+
+        // Check which edges can be constructed
+        edges_array.clear();
+        edges_array.reserve(count * 3);
+        strided_iterator_gt<ukv_key_t> ids_users((ukv_key_t*)(scalars[0]), sizeof(ukv_key_t));
+        strided_iterator_gt<ukv_key_t> ids_retweets((ukv_key_t*)(scalars[1]), sizeof(ukv_key_t));
+        strided_iterator_gt<ukv_key_t> ids_retweeters((ukv_key_t*)(scalars[2]), sizeof(ukv_key_t));
+        strided_iterator_gt<ukv_octet_t> valid_users(validities[0]);
+        strided_iterator_gt<ukv_octet_t> valid_retweets(validities[1]);
+        strided_iterator_gt<ukv_octet_t> valid_retweeters(validities[2]);
+        for (std::size_t i = 0; i != count; ++i) {
+            // Tweet <-> Author
+            edges_array.push_back(edge_t {.source_id = ids_tweets[i], .target_id = ids_users[i]});
+            // Tweet <-> Retweet
+            if (valid_retweets[i])
+                edges_array.push_back(edge_t {.source_id = ids_tweets[i], .target_id = ids_retweets[i]});
+            // Author <- Tweet -> Retweeter
+            if (valid_retweeters[i])
+                edges_array.push_back(edge_t {
+                    .source_id = ids_users[i],
+                    .target_id = ids_retweeters[i],
+                    .id = ids_retweets[i],
+                });
+        }
+
+        // Insert or update those edges
+        auto strided = edges(edges_array);
+        ukv_graph_upsert_edges( //
+            db,
+            nullptr,
+            count,
+            &collection_graph_k,
+            0,
+            strided.edge_ids.begin().get(),
+            strided.edge_ids.stride(),
+            strided.source_ids.begin().get(),
+            strided.source_ids.stride(),
+            strided.target_ids.begin().get(),
+            strided.target_ids.stride(),
+            ukv_options_default_k,
+            arena.member_ptr(),
+            status.member_ptr());
+        status.throw_unhandled();
+
+        received_bytes += fields_k * sizeof(std::uint64_t) * count;
+        added_edges += edges_array.size();
+    });
+    state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
+    state.counters["edges/s"] = bm::Counter(added_edges, bm::Counter::kIsRate);
+}
+
+/**
+ * @brief Most Tweets in the graph have just one connection - to their Author.
+ * That is why we make a two-hop benchmark. For every Tweet vertex we gather their
+ * Authors and all the Retweets, as well as the connections of those Authors and
+ * Retweets.
+ */
+static void graph_traverse_two_hops(bm::State& state) {
+    status_t status;
+    arena_t arena(db);
+    std::plus plus;
+
+    std::size_t received_bytes = 0;
+    std::size_t received_edges = 0;
+    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
+        // First hop
+        ukv_vertex_role_t const role = ukv_vertex_role_any_k;
+        ukv_vertex_degree_t* degrees = nullptr;
+        ukv_key_t* ids_in_edges = nullptr;
+        ukv_graph_find_edges( //
+            db,
+            nullptr,
+            count,
+            &collection_graph_k,
+            0,
+            ids_tweets,
+            sizeof(ukv_key_t),
+            &role,
+            0,
+            ukv_options_default_k,
+            &degrees,
+            &ids_in_edges,
+            arena.member_ptr(),
+            status.member_ptr());
+        status.throw_unhandled();
+
+        // Now keep only the unique objects
+        auto total_edges = std::transform_reduce(degrees, degrees + count, 0ul, plus, [](ukv_vertex_degree_t d) {
+            return d != ukv_vertex_degree_missing_k ? d : 0;
+        });
+        auto total_ids = total_edges * 3;
+        auto unique_ids = sort_and_deduplicate(ids_in_edges, ids_in_edges + total_ids);
+
+        // Second hop
+        ukv_graph_find_edges( //
+            db,
+            nullptr,
+            unique_ids,
+            &collection_graph_k,
+            0,
+            ids_in_edges,
+            sizeof(ukv_key_t),
+            &role,
+            0,
+            ukv_option_dont_discard_memory_k,
+            &degrees,
+            &ids_in_edges,
+            arena.member_ptr(),
+            status.member_ptr());
+        status.throw_unhandled();
+
+        total_edges += std::transform_reduce(degrees, degrees + count, 0ul, plus, [](ukv_vertex_degree_t d) {
+            return d != ukv_vertex_degree_missing_k ? d : 0;
+        });
+        total_ids = total_edges * 3;
+
+        received_bytes += total_ids * sizeof(ukv_key_t);
+        received_edges += total_edges;
+    });
+    state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
+    state.counters["edges/s"] = bm::Counter(received_edges, bm::Counter::kIsRate);
 }
 
 static void index_file(std::string_view mapped_contents, std::vector<tweet_t>& tweets) {
@@ -397,44 +576,66 @@ int main(int argc, char** argv) {
     db.open().throw_unhandled();
 #endif
 
+    bool can_build_graph = false;
+    if (ukv_supports_named_collections_k) {
+        status_t status;
+        ukv_collection_init(db, "twitter.docs", "", &collection_docs_k, status.member_ptr());
+        status.throw_unhandled();
+        ukv_collection_init(db, "twitter.graph", "", &collection_graph_k, status.member_ptr());
+        status.throw_unhandled();
+        can_build_graph = true;
+    }
+
     std::printf("Will benchmark...\n");
-    bm::RegisterBenchmark("batch_insert", &batch_insert) //
+    auto min_time = 10;
+
+    bm::RegisterBenchmark("docs_upsert", &docs_upsert) //
         ->Iterations(tweet_count / thread_count)
         ->UseRealTime()
         ->Threads(thread_count);
-    bm::RegisterBenchmark("sample_blobs", &sample_blobs) //
-        ->MinTime(20)
+
+    bm::RegisterBenchmark("docs_sample_blobs", &docs_sample_blobs) //
+        ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
         ->Arg(32)
         ->Arg(256);
-    bm::RegisterBenchmark("sample_docs", &sample_docs) //
-        ->MinTime(20)
+
+    bm::RegisterBenchmark("docs_sample_objects", &docs_sample_objects) //
+        ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
-        ->Arg(256)
         ->Arg(32)
         ->Arg(256);
-    bm::RegisterBenchmark("sample_field", &sample_field) //
-        ->MinTime(20)
+
+    bm::RegisterBenchmark("docs_sample_field", &docs_sample_field) //
+        ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
-        ->Arg(256)
         ->Arg(32)
         ->Arg(256);
-    bm::RegisterBenchmark("sample_tables", &sample_tables) //
-        ->MinTime(20)
+
+    bm::RegisterBenchmark("docs_sample_table", &docs_sample_table) //
+        ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
-        ->Arg(256)
         ->Arg(32)
-        ->UseRealTime();
-    bm::RegisterBenchmark("sample_tables", &sample_tables) //
-        ->MinTime(30)
-        ->Threads(thread_count)
-        ->Arg(256)
-        ->Arg(32)
-        ->UseRealTime();
+        ->Arg(256);
+
+    if (collection_graph_k != collection_docs_k) {
+
+        bm::RegisterBenchmark("graph_construct_from_docs", &graph_construct_from_docs) //
+            ->Iterations(tweet_count / thread_count)
+            ->Threads(thread_count)
+            ->Arg(32)
+            ->Arg(256);
+
+        bm::RegisterBenchmark("graph_traverse_two_hops", &graph_traverse_two_hops) //
+            ->MinTime(min_time)
+            ->Threads(thread_count)
+            ->Arg(32)
+            ->Arg(256);
+    }
 
     bm::RunSpecifiedBenchmarks();
     bm::Shutdown();
@@ -442,6 +643,7 @@ int main(int argc, char** argv) {
     // To avoid sanitizer complaints, we should unmap the files:
     for (auto mapped_content : mapped_contents)
         munmap((void*)mapped_content.data(), mapped_content.size());
+    db.clear().throw_unhandled();
 
     return 0;
 }

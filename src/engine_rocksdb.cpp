@@ -151,8 +151,14 @@ void write_one( //
     rocks_txn_t* txn,
     places_arg_t const& places,
     contents_arg_t const& contents,
-    rocksdb::WriteOptions const& options,
+    ukv_options_t const c_options,
     ukv_error_t* c_error) {
+
+    rocksdb::WriteOptions options;
+    if (c_options & ukv_option_write_flush_k)
+        options.sync = true;
+
+    bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
 
     auto place = places[0];
     auto content = contents[0];
@@ -162,8 +168,9 @@ void write_one( //
 
     if (txn)
         status = !content //
-                     ? txn->SingleDelete(collection, key)
-                     : txn->Put(collection, key, to_slice(content));
+                     ? watch ? txn->SingleDelete(collection, key) : txn->DeleteUntracked(collection, key)
+                     : watch ? txn->Put(collection, key, to_slice(content))
+                             : txn->PutUntracked(collection, key, to_slice(content));
     else
         status = !content //
                      ? db.native->SingleDelete(options, collection, key)
@@ -177,8 +184,14 @@ void write_many( //
     rocks_txn_t* txn,
     places_arg_t const& places,
     contents_arg_t const& contents,
-    rocksdb::WriteOptions const& options,
+    ukv_options_t const c_options,
     ukv_error_t* c_error) {
+
+    rocksdb::WriteOptions options;
+    if (c_options & ukv_option_write_flush_k)
+        options.sync = true;
+
+    bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
 
     if (txn) {
         for (std::size_t i = 0; i != places.size(); ++i) {
@@ -187,8 +200,9 @@ void write_many( //
             auto collection = rocks_collection(db, place.collection);
             auto key = to_slice(place.key);
             auto status = !content //
-                              ? txn->Delete(collection, key)
-                              : txn->Put(collection, key, to_slice(content));
+                              ? watch ? txn->SingleDelete(collection, key) : txn->DeleteUntracked(collection, key)
+                              : watch ? txn->Put(collection, key, to_slice(content))
+                                      : txn->PutUntracked(collection, key, to_slice(content));
             export_error(status, c_error);
             return_on_error(c_error);
         }
@@ -252,13 +266,9 @@ void ukv_write( //
     places_arg_t places {collections, keys, {}, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
 
-    rocksdb::WriteOptions options;
-    if (c_options & ukv_option_write_flush_k)
-        options.sync = true;
-
     try {
         auto func = c_tasks_count == 1 ? &write_one : &write_many;
-        func(db, txn, places, contents, options, c_error);
+        func(db, txn, places, contents, c_options, c_error);
     }
     catch (...) {
         *c_error = "Write Failure";
@@ -270,18 +280,25 @@ void read_one( //
     rocks_db_t& db,
     rocks_txn_t* txn,
     places_arg_t places,
-    rocksdb::ReadOptions const& options,
+    ukv_options_t const c_options,
     value_enumerator_at enumerator,
     ukv_error_t* c_error) {
+
+    rocksdb::ReadOptions options;
+    if (txn && (c_options & ukv_option_transaction_snapshot_k))
+        options.snapshot = txn->GetSnapshot();
+
+    bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
 
     place_t place = places[0];
     auto col = rocks_collection(db, place.collection);
     auto key = to_slice(place.key);
     auto value_uptr = make_value(c_error);
     rocks_value_t& value = *value_uptr.get();
-    rocks_status_t status = txn //
-                                ? txn->Get(options, col, key, &value)
-                                : db.native->Get(options, col, key, &value);
+    rocks_status_t status =
+        txn //
+            ? watch ? txn->Get(options, col, key, &value) : txn->GetForUpdate(options, col, key, &value)
+            : db.native->Get(options, col, key, &value);
     if (!status.IsNotFound()) {
         if (export_error(status, c_error))
             return;
@@ -298,9 +315,15 @@ void read_many( //
     rocks_db_t& db,
     rocks_txn_t* txn,
     places_arg_t places,
-    rocksdb::ReadOptions const& options,
+    ukv_options_t const c_options,
     value_enumerator_at enumerator,
     ukv_error_t* c_error) {
+
+    rocksdb::ReadOptions options;
+    if (txn && (c_options & ukv_option_transaction_snapshot_k))
+        options.snapshot = txn->GetSnapshot();
+
+    bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
 
     std::vector<rocks_collection_t*> cols(places.count);
     std::vector<rocksdb::Slice> keys(places.count);
@@ -311,9 +334,10 @@ void read_many( //
         keys[i] = to_slice(place.key);
     }
 
-    std::vector<rocks_status_t> statuses = txn //
-                                               ? txn->MultiGet(options, cols, keys, &vals)
-                                               : db.native->MultiGet(options, cols, keys, &vals);
+    std::vector<rocks_status_t> statuses =
+        txn //
+            ? watch ? txn->MultiGet(options, cols, keys, &vals) : txn->MultiGetForUpdate(options, cols, keys, &vals)
+            : db.native->MultiGet(options, cols, keys, &vals);
     for (std::size_t i = 0; i != places.size(); ++i) {
         if (!statuses[i].IsNotFound()) {
             if (export_error(statuses[i], c_error))
@@ -370,9 +394,6 @@ void ukv_read( //
     safe_vector_gt<byte_t> contents(arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
-    rocksdb::ReadOptions options;
-    if (txn && (c_options & ukv_option_transaction_snapshot_k))
-        options.snapshot = txn->GetSnapshot();
 
     try {
         bool const needs_export = c_found_values != nullptr;
@@ -387,9 +408,9 @@ void ukv_read( //
         };
 
         if (c_tasks_count == 1)
-            read_one(db, txn, places, options, data_enumerator, c_error);
+            read_one(db, txn, places, c_options, data_enumerator, c_error);
         else
-            read_many(db, txn, places, options, data_enumerator, c_error);
+            read_many(db, txn, places, c_options, data_enumerator, c_error);
 
         offs[places.count] = contents.size();
 
