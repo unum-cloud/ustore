@@ -44,8 +44,7 @@ struct places_arg_t {
     }
 
     bool same_collection() const noexcept {
-        strided_range_gt<ukv_collection_t const> range(collections_begin, count);
-        return range.same_elements();
+        return strided_range_gt<ukv_collection_t const>(collections_begin, count).same_elements();
     }
 };
 

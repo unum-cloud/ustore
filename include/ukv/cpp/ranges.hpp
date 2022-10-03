@@ -230,7 +230,7 @@ class strided_range_gt {
         return strided_range_gt<member_t> {{begin_members.get(), begin_members.stride()}, count()};
     }
 
-    inline bool same_elements() {
+    inline bool same_elements() const noexcept {
         return !begin_ || begin_.repeats() ||
                !transform_reduce_n(begin_, count_, false, [=](ukv_collection_t collection) {
                    return collection != begin_[0];
