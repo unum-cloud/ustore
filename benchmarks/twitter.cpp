@@ -428,12 +428,13 @@ static void graph_construct_from_docs(bm::State& state) {
 static void graph_traverse_two_hops(bm::State& state) {
     status_t status;
     arena_t arena(db);
+    std::plus plus;
 
     std::size_t received_bytes = 0;
     std::size_t received_edges = 0;
     sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         // First hop
-        ukv_vertex_role_t role = ukv_vertex_role_any_k;
+        ukv_vertex_role_t const role = ukv_vertex_role_any_k;
         ukv_vertex_degree_t* degrees = nullptr;
         ukv_key_t* ids_in_edges = nullptr;
         ukv_graph_find_edges( //
@@ -451,16 +452,16 @@ static void graph_traverse_two_hops(bm::State& state) {
             &ids_in_edges,
             arena.member_ptr(),
             status.member_ptr());
+        status.throw_unhandled();
 
         // Now keep only the unique objects
-        auto total_edges = std::accumulate(degrees, degrees + count, 0ul);
+        auto total_edges = std::transform_reduce(degrees, degrees + count, 0ul, plus, [](ukv_vertex_degree_t d) {
+            return d != ukv_vertex_degree_missing_k ? d : 0;
+        });
         auto total_ids = total_edges * 3;
         auto unique_ids = sort_and_deduplicate(ids_in_edges, ids_in_edges + total_ids);
 
         // Second hop
-        role = ukv_vertex_role_any_k;
-        degrees = nullptr;
-        ids_in_edges = nullptr;
         ukv_graph_find_edges( //
             db,
             nullptr,
@@ -471,13 +472,16 @@ static void graph_traverse_two_hops(bm::State& state) {
             sizeof(ukv_key_t),
             &role,
             0,
-            ukv_options_default_k,
+            ukv_option_dont_discard_memory_k,
             &degrees,
             &ids_in_edges,
             arena.member_ptr(),
             status.member_ptr());
+        status.throw_unhandled();
 
-        total_edges += std::accumulate(degrees, degrees + count, 0ul);
+        total_edges += std::transform_reduce(degrees, degrees + count, 0ul, plus, [](ukv_vertex_degree_t d) {
+            return d != ukv_vertex_degree_missing_k ? d : 0;
+        });
         total_ids = total_edges * 3;
 
         received_bytes += total_ids * sizeof(ukv_key_t);
@@ -583,6 +587,7 @@ int main(int argc, char** argv) {
     }
 
     std::printf("Will benchmark...\n");
+    auto min_time = 10;
 
     bm::RegisterBenchmark("docs_upsert", &docs_upsert) //
         ->Iterations(tweet_count / thread_count)
@@ -590,51 +595,46 @@ int main(int argc, char** argv) {
         ->Threads(thread_count);
 
     bm::RegisterBenchmark("docs_sample_blobs", &docs_sample_blobs) //
-        ->MinTime(20)
+        ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
         ->Arg(32)
         ->Arg(256);
 
     bm::RegisterBenchmark("docs_sample_objects", &docs_sample_objects) //
-        ->MinTime(20)
+        ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
-        ->Arg(256)
         ->Arg(32)
         ->Arg(256);
 
     bm::RegisterBenchmark("docs_sample_field", &docs_sample_field) //
-        ->MinTime(20)
+        ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
-        ->Arg(256)
         ->Arg(32)
         ->Arg(256);
 
     bm::RegisterBenchmark("docs_sample_table", &docs_sample_table) //
-        ->MinTime(20)
+        ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
-        ->Arg(256)
         ->Arg(32)
-        ->UseRealTime();
+        ->Arg(256);
 
     if (collection_graph_k != collection_docs_k) {
 
         bm::RegisterBenchmark("graph_construct_from_docs", &graph_construct_from_docs) //
-            ->MinTime(30)
+            ->Iterations(tweet_count / thread_count)
             ->Threads(thread_count)
-            ->Arg(256)
             ->Arg(32)
-            ->UseRealTime();
+            ->Arg(256);
 
         bm::RegisterBenchmark("graph_traverse_two_hops", &graph_traverse_two_hops) //
-            ->MinTime(30)
+            ->MinTime(min_time)
             ->Threads(thread_count)
-            ->Arg(256)
             ->Arg(32)
-            ->UseRealTime();
+            ->Arg(256);
     }
 
     bm::RunSpecifiedBenchmarks();
