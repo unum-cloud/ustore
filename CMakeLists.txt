@@ -158,6 +158,8 @@ if(${UKV_BUILD_FLIGHT_RPC})
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
   target_link_libraries(ukv_flight_client pthread yyjson bson fmt::fmt arrow arrow_flight)
   list(APPEND UKV_CLIENT_NAMES "flight_client")
+  target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
+
 
   foreach(engine_name IN ITEMS ${UKV_ENGINE_NAMES})
     string(CONCAT target_name "ukv_" ${engine_name})
