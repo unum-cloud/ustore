@@ -24,7 +24,7 @@ extern "C" {
  * https://en.wikipedia.org/wiki/List_of_RFCs
  */
 typedef enum {
-    ukv_doc_field_default_k = 0,
+    ukv_format_field_default_k = 0,
     ukv_format_graph_k = 1,
     ukv_format_doc_k = 2,
     ukv_format_table_k = 3,
@@ -59,7 +59,7 @@ typedef enum {
     ukv_format_img_gif_k = 51,
     ukv_format_img_webp_k = 52,
 
-} ukv_doc_field_type_t;
+} ukv_format_field_type_t;
 
 #ifdef __cplusplus
 } /* end extern "C" */
