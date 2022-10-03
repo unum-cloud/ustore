@@ -76,15 +76,25 @@ set(UKV_BUILD_BENCHMARKS ON CACHE BOOL "Building C/C++ native benchmarks")
 set(UKV_BUILD_FLIGHT_RPC ON CACHE BOOL "Building Apache Arrow Flight RPC server for all backends")
 set(UKV_BUILD_UNUMDB "" CACHE STRING "Pass a path to UnumDB copy to produce a full range of bindings")
 
-include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/bson.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
+# Engines:
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+
+# Modalities:
 include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/bson.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
+
+# Distributions:
+include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
+
+# Frontends:
 include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
 
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(Arrow-external Boost-external)
@@ -134,8 +144,8 @@ if(EXISTS ${UKV_BUILD_UNUMDB})
   set_property(TARGET unumdb PROPERTY IMPORTED_LOCATION ${UKV_BUILD_UNUMDB})
   set_property(TARGET unumdb PROPERTY LINK_LIBRARIES "")
 
-  add_library(ukv_unumdb src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-  target_link_libraries(ukv_unumdb unumdb nlohmann_json::nlohmann_json)
+  add_library(ukv_unumdb src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
+  target_link_libraries(ukv_unumdb unumdb yyjson bson nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
   target_compile_definitions(ukv_unumdb INTERFACE UKV_VERSION="${_VERSION_}")
   target_compile_definitions(ukv_unumdb INTERFACE UKV_ENGINE_NAME=unumdb)
 
@@ -145,7 +155,6 @@ endif()
 
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT_RPC})
-  include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_simdocs.cpp src/modality_paths.cpp src/modality_graph.cpp)
   target_link_libraries(ukv_flight_client pthread yyjson bson fmt::fmt arrow arrow_flight)
   list(APPEND UKV_CLIENT_NAMES "flight_client")
@@ -201,8 +210,6 @@ endif()
 
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
-  include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
-
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
@@ -211,15 +218,14 @@ if(${UKV_BUILD_BENCHMARKS})
     add_executable(${bench_name} benchmarks/twitter.cpp)
     target_link_libraries(${bench_name} benchmark ${target_name} ${target_LIBRARIES})
 
-    string(CONCAT bench_name "ukv_" ${client_name} "_bitcoin_benchmark")
-    add_executable(${bench_name} benchmarks/bitcoin.cpp)
+    string(CONCAT bench_name "ukv_" ${client_name} "_tabular_graph_benchmark")
+    add_executable(${bench_name} benchmarks/tabular_graph.cpp)
     target_link_libraries(${bench_name} leveldb benchmark ${target_name} ${target_LIBRARIES})
   endforeach()
 endif()
 
 # Build Python bindings linking to precompiled client SDKs
 if(${UKV_BUILD_PYTHON})
-  include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
   find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 

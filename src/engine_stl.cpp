@@ -30,7 +30,6 @@
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 #include "helpers/pmr.hpp"         // `stl_arena_t`
 #include "helpers/file.hpp"        // `file_handle_t`
-#include "helpers/reserve.hpp"     // `reserve_allocator_gt`
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -164,7 +163,7 @@ struct entry_compare_t {
     bool operator()(ukv_collection_t a, entry_t const& b) const noexcept { return a < b.collection; }
 };
 
-using entry_allocator_t = reserve_allocator_gt<std::allocator<entry_t>>;
+using entry_allocator_t = std::allocator<entry_t>;
 using entries_set_t = std::set<entry_t, entry_compare_t, entry_allocator_t>;
 
 using collection_ptr_t = std::unique_ptr<collection_t>;
@@ -175,7 +174,7 @@ struct transaction_t {
                        generation_t,
                        std::hash<collection_key_t>,
                        std::equal_to<collection_key_t>,
-                       reserve_allocator_gt<std::allocator<std::pair<collection_key_t const, generation_t>>>>
+                       std::allocator<std::pair<collection_key_t const, generation_t>>>
         watched;
 
     database_t* db_ptr {nullptr};
@@ -330,7 +329,10 @@ void write(database_t const& db, std::string const& path, ukv_error_t* c_error) 
     std::fprintf(handle, "Total Items: %zu\n", db.entries.size());
     std::fprintf(handle, "Named Collections: %zu\n", db.names.size());
     for (auto const& name_and_handle : db.names)
-        std::fprintf(handle, "-%s: 0x%016zx\n", name_and_handle.first.c_str(), name_and_handle.second);
+        std::fprintf(handle,
+                     "-%s: 0x%016zx\n",
+                     name_and_handle.first.c_str(),
+                     static_cast<std::size_t>(name_and_handle.second));
     std::fprintf(handle, "\n");
 
     // Save the entries
@@ -405,10 +407,18 @@ void populate( //
     });
 }
 
-void clear(places_arg_t places, entries_set_t& entries) noexcept {
-    for (std::size_t i = 0; i != places.size(); ++i) {
-        auto place = places[i];
-        entries.erase(place.collection_key());
+/**
+ * @brief Unlike `std::set<>::merge`, this function overwrites existing values.
+ *
+ * https://en.cppreference.com/w/cpp/container/set#Member_types
+ * https://en.cppreference.com/w/cpp/container/set/insert
+ */
+void merge_overwrite(entries_set_t& target, entries_set_t& source) {
+    for (auto source_it = source.begin(); source_it != source.end();) {
+        auto node = source.extract(source_it++);
+        auto result = target.insert(std::move(node));
+        if (!result.inserted)
+            result.position->swap_blob(result.node.value());
     }
 }
 
@@ -419,14 +429,17 @@ void write( //
     ukv_options_t const c_options,
     ukv_error_t* c_error) noexcept {
 
-    std::unique_lock _ {db.mutex};
-    auto generation = ++db.youngest_generation;
+    // In here we don't care about the consistency,
+    // just the fact of either writing all values or not.
+    // So we can build the entries before the write lock
+    // and not check generations afterwards.
     entries_set_t entries;
+    auto generation = ++db.youngest_generation;
     populate(places, contents, generation, entries, c_error);
     return_on_error(c_error);
 
-    clear(places, db.entries);
-    db.entries.merge(entries);
+    std::unique_lock _ {db.mutex};
+    merge_overwrite(db.entries, entries);
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c_options & ukv_option_write_flush_k)
@@ -1111,34 +1124,22 @@ void ukv_transaction_commit( //
     std::unique_lock _ {db.mutex};
     generation_t const youngest_generation = db.youngest_generation.load();
 
-    // 1. Check for refreshes among fetched keys
+    // 1. Check for changes in DBMS
     for (auto const& [collection_key, watched_generation] : txn.watched) {
         auto db_iterator = db.entries.find(collection_key);
-        if (db_iterator == db.entries.end())
-            continue;
-        if (db_iterator->generation != watched_generation &&
-            (*c_error = "Requested key was already overwritten since the start of the transaction!"))
-            return;
+        bool missing = db_iterator == db.entries.end();
+        if (watched_generation == missing_data_generation_k) {
+            return_if_error(missing, c_error, consistency_k, "WATCH-ed key was added");
+        }
+        else {
+            return_if_error(!missing, c_error, consistency_k, "WATCH-ed key was deleted");
+            bool untouched = db_iterator->generation == watched_generation;
+            return_if_error(untouched, c_error, consistency_k, "WATCH-ed key was updated");
+        }
     }
 
-    // 2. Check for collisions among incoming values
-    for (entry_t const& changed_entry : txn.changes) {
-        auto db_iterator = db.entries.find(changed_entry.collection_key());
-        if (db_iterator == db.entries.end())
-            continue;
-
-        if (db_iterator->generation == txn.generation && (*c_error = "Can't commit same entry more than once!"))
-            return;
-
-        if (entry_was_overwritten(db_iterator->generation, txn.generation, youngest_generation) &&
-            (*c_error = "Incoming key collides with newer entry!"))
-            return;
-    }
-
-    // 3. Import the data, removing the older version beforehand
-    for (entry_t const& changed_entry : txn.changes)
-        db.entries.erase(changed_entry.collection_key());
-    db.entries.merge(txn.changes);
+    // 2. Import the data, removing the older version beforehand
+    merge_overwrite(db.entries, txn.changes);
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c_options & ukv_option_write_flush_k)

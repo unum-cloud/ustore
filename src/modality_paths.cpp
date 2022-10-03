@@ -418,8 +418,9 @@ void ukv_paths_read( //
     // Some of the entries will contain more then one key-value pair in case of collisions.
     ukv_length_t exported_volume = 0;
     joined_bins_t buckets {c_tasks_count, buckets_offsets, buckets_values};
-    auto presences =
-        arena.alloc_or_dummy<ukv_octet_t>(divide_round_up(c_tasks_count, bits_in_byte_k), c_error, c_presences);
+    auto presences = arena.alloc_or_dummy<ukv_octet_t>(divide_round_up<std::size_t>(c_tasks_count, bits_in_byte_k),
+                                                       c_error,
+                                                       c_presences);
     auto lengths = arena.alloc_or_dummy<ukv_length_t>(c_tasks_count, c_error, c_lengths);
     auto offsets = arena.alloc_or_dummy<ukv_length_t>(c_tasks_count, c_error, c_offsets);
 

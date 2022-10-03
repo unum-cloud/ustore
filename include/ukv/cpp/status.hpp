@@ -168,6 +168,7 @@ enum error_code_t {
     args_wrong_k,
     uninitialized_state_k,
     network_k,
+    consistency_k,
     missing_feature_k,
     error_unknown_k
 };
