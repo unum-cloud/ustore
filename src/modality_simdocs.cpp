@@ -7,6 +7,7 @@
  */
 
 #include <cstdio>      // `std::snprintf`
+#include <cctype>      // `std::isdigit`
 #include <charconv>    // `std::to_chars`
 #include <string_view> // `std::string_view`
 
@@ -599,10 +600,16 @@ void modify_field( //
     }
 }
 
+ukv_str_view_t field_concat(ukv_str_view_t field, ukv_str_view_t suffix, stl_arena_t&, ukv_error_t*) {
+    (void)field; // TODO: Implement!
+    return suffix;
+}
+
 void patch( //
     yyjson_mut_doc* original_doc,
     yyjson_mut_val* patch_doc,
     ukv_str_view_t field,
+    stl_arena_t& arena,
     ukv_error_t* c_error) {
 
     return_if_error(yyjson_mut_is_arr(patch_doc), c_error, 0, "Invalid Patch Doc!");
@@ -621,21 +628,17 @@ void patch( //
             return_if_error(path, c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* value = yyjson_mut_obj_iter_get(&obj_iter, "value");
             return_if_error(value, c_error, 0, "Invalid Patch Doc!");
-            modify_field(original_doc,
-                         value,
-                         (std::string(field) + yyjson_mut_get_str(path)).c_str(),
-                         ukv_doc_modify_insert_k,
-                         c_error);
+            auto nested_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
+            return_on_error(c_error);
+            modify_field(original_doc, value, nested_path, ukv_doc_modify_insert_k, c_error);
         }
         else if (yyjson_mut_equals_str(op, "remove")) {
             return_if_error((yyjson_mut_obj_size(obj) == 2), c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* path = yyjson_mut_obj_iter_get(&obj_iter, "path");
             return_if_error(path, c_error, 0, "Invalid Patch Doc!");
-            modify_field(original_doc,
-                         nullptr,
-                         (std::string(field) + yyjson_mut_get_str(path)).c_str(),
-                         ukv_doc_modify_remove_k,
-                         c_error);
+            auto nested_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
+            return_on_error(c_error);
+            modify_field(original_doc, nullptr, nested_path, ukv_doc_modify_remove_k, c_error);
         }
         else if (yyjson_mut_equals_str(op, "replace")) {
             return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
@@ -643,11 +646,9 @@ void patch( //
             return_if_error(path, c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* value = yyjson_mut_obj_iter_get(&obj_iter, "value");
             return_if_error(value, c_error, 0, "Invalid Patch Doc!");
-            modify_field(original_doc,
-                         value,
-                         (std::string(field) + yyjson_mut_get_str(path)).c_str(),
-                         ukv_doc_modify_update_k,
-                         c_error);
+            auto nested_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
+            return_on_error(c_error);
+            modify_field(original_doc, value, nested_path, ukv_doc_modify_update_k, c_error);
         }
         else if (yyjson_mut_equals_str(op, "copy")) {
             return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
@@ -658,11 +659,9 @@ void patch( //
             yyjson_mut_val* value =
                 yyjson_mut_val_mut_copy(original_doc, json_lookup(original_doc->root, yyjson_mut_get_str(from)));
             return_if_error(value, c_error, 0, "Invalid Patch Doc!");
-            modify_field(original_doc,
-                         value,
-                         (std::string(field) + yyjson_mut_get_str(path)).c_str(),
-                         ukv_doc_modify_upsert_k,
-                         c_error);
+            auto nested_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
+            return_on_error(c_error);
+            modify_field(original_doc, value, nested_path, ukv_doc_modify_upsert_k, c_error);
         }
         else if (yyjson_mut_equals_str(op, "move")) {
             return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
@@ -673,16 +672,12 @@ void patch( //
             yyjson_mut_val* value =
                 yyjson_mut_val_mut_copy(original_doc, json_lookup(original_doc->root, yyjson_mut_get_str(from)));
             return_if_error(value, c_error, 0, "Invalid Patch Doc!");
-            modify_field(original_doc,
-                         nullptr,
-                         (std::string(field) + yyjson_mut_get_str(from)).c_str(),
-                         ukv_doc_modify_remove_k,
-                         c_error);
-            modify_field(original_doc,
-                         value,
-                         (std::string(field) + yyjson_mut_get_str(path)).c_str(),
-                         ukv_doc_modify_upsert_k,
-                         c_error);
+            auto nested_from_path = field_concat(field, yyjson_mut_get_str(from), arena, c_error);
+            return_on_error(c_error);
+            modify_field(original_doc, nullptr, nested_from_path, ukv_doc_modify_remove_k, c_error);
+            auto nested_to_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
+            return_on_error(c_error);
+            modify_field(original_doc, value, nested_to_path, ukv_doc_modify_upsert_k, c_error);
         }
     }
 }
@@ -692,6 +687,7 @@ void modify( //
     yyjson_mut_val* modifier,
     ukv_str_view_t field,
     ukv_doc_modification_t const c_modification,
+    stl_arena_t& arena,
     ukv_error_t* c_error) {
 
     if (field && c_modification != ukv_doc_modify_patch_k) {
@@ -700,18 +696,15 @@ void modify( //
         return;
     }
 
-    if (c_modification == ukv_doc_modify_merge_k) {
+    if (c_modification == ukv_doc_modify_merge_k)
         original_doc->root = yyjson_mut_merge_patch(original_doc, original_doc->root, modifier);
-    }
-    else if (c_modification == ukv_doc_modify_patch_k) {
-        if (field)
-            patch(original_doc, modifier, field, c_error);
-        else
-            patch(original_doc, modifier, "", c_error);
-    }
-    else {
+
+    else if (c_modification == ukv_doc_modify_patch_k)
+        patch(original_doc, modifier, field, arena, c_error);
+
+    else
         original_doc->root = yyjson_mut_val_mut_copy(original_doc, modifier);
-    }
+
     return_if_error(original_doc->root, c_error, 0, "Failed To Modify!");
 }
 
@@ -889,7 +882,7 @@ void read_modify_write( //
         return_on_error(c_error);
 
         // Perform modifications
-        modify(parsed.mut_handle, parsed_task.mut_handle->root, field, c_modification, c_error);
+        modify(parsed.mut_handle, parsed_task.mut_handle->root, field, c_modification, arena, c_error);
         any_dump({.mut_handle = parsed.mut_handle->root}, internal_format_k, arena, growing_tape, c_error);
         return_on_error(c_error);
     };
