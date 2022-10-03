@@ -74,7 +74,6 @@ void ukv_paths_read( //
     ukv_char_t const separator,
 
     ukv_octet_t** presences,
-    ukv_key_t** keys,
     ukv_length_t** offsets,
     ukv_length_t** lengths,
     ukv_byte_t** values,
@@ -110,16 +109,15 @@ void ukv_paths_match( //
     ukv_str_view_t const* previous,
     ukv_size_t const previous_stride,
 
-    ukv_length_t const* scan_limits,
-    ukv_size_t const scan_limits_stride,
+    ukv_length_t const* match_counts_limits,
+    ukv_size_t const match_counts_limits_stride,
 
     ukv_options_t const options,
     ukv_char_t const separator,
 
-    ukv_length_t** counts,
-    ukv_length_t*** offsets,
-    ukv_key_t*** keys,
-    ukv_char_t** paths,
+    ukv_length_t** match_counts_per_prefix,
+    ukv_length_t** paths_offsets,
+    ukv_char_t** paths_strings,
 
     ukv_arena_t* arena,
     ukv_error_t* error);
