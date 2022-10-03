@@ -116,6 +116,31 @@ template <typename keys_callback_at>
 void path_segments_enumerate(std::string_view key_str) noexcept {
 }
 
+bool is_prefix(std::string_view prefix_or_pattern) noexcept {
+    return std::all_of(prefix_or_pattern.begin(), prefix_or_pattern.end(), [](char c) {
+        // https://www3.ntu.edu.sg/home/ehchua/programming/howto/Regexe.html
+        switch (c) {
+        case '.':  // any character
+        case '+':  // one or more
+        case '*':  // zero or more
+        case '?':  // zero or one ~ optional
+        case '^':  // (not one of) | (start of line)
+        case '$':  // end of line
+        case '(':  // back-reference start
+        case ')':  // back-reference end
+        case '[':  // character class start
+        case ']':  // character class end
+        case '{':  // repetitions count start
+        case '}':  // repetitions count end
+        case '|':  // binary OR
+        case '\\': // escape character
+            return false;
+        default: //
+            return true;
+        }
+    });
+}
+
 /**
  * @brief Removes part of variable length string.
  * @return The shortened view of the input. Will start from same address.
