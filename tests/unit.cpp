@@ -263,6 +263,7 @@ TEST(db, paths) {
 
     char const* keys[] {"Facebook", "Apple", "Amazon", "Netflix", "Google"};
     char const* vals[] {"F", "A", "A", "N", "G"};
+    ukv_char_t separator = '\0';
 
     arena_t arena(db);
     status_t status;
@@ -286,11 +287,10 @@ TEST(db, paths) {
         reinterpret_cast<ukv_bytes_cptr_t*>(vals),
         sizeof(char const*),
         ukv_options_default_k,
-        0,
+        separator,
         arena.member_ptr(),
         status.member_ptr());
 
-    ukv_key_t* key_hashes = nullptr;
     char* vals_recovered = nullptr;
     ukv_paths_read( //
         db,
@@ -305,9 +305,8 @@ TEST(db, paths) {
         keys,
         sizeof(char const*),
         ukv_options_default_k,
-        0,
+        separator,
         nullptr,
-        &key_hashes,
         nullptr,
         nullptr,
         reinterpret_cast<ukv_bytes_ptr_t*>(&vals_recovered),
@@ -316,6 +315,42 @@ TEST(db, paths) {
 
     EXPECT_TRUE(status);
     EXPECT_EQ(std::string_view(vals_recovered, 5), "FAANG");
+
+    ukv_str_view_t prefix = "A";
+    ukv_length_t max_count = 10;
+    ukv_length_t* results_counts = nullptr;
+    ukv_length_t* tape_offsets = nullptr;
+    ukv_char_t* tape_begin = nullptr;
+    ukv_paths_match( //
+        db,
+        nullptr,
+        1,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &prefix,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &max_count,
+        0,
+        ukv_options_default_k,
+        separator,
+        &results_counts,
+        &tape_offsets,
+        &tape_begin,
+        arena.member_ptr(),
+        status.member_ptr());
+
+    EXPECT_EQ(results_counts[0], 2);
+
     EXPECT_TRUE(db.clear());
 }
 
