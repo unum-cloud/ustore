@@ -923,7 +923,7 @@ class UKVService : public arf::FlightServerBase {
         if (is_query(ticket.ticket, kFlightListCols)) {
 
             // We will need some temporary memory for exports
-            auto session = sessions_.lock({.client_id = params.session_id.client_id}, status.member_ptr());
+            auto session = sessions_.lock(params.session_id, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -934,7 +934,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_collection_list( //
                 db_,
-                nullptr, // TODO: Add transaction argument
+                session.txn,
                 ukv_options(params),
                 &count,
                 &collections,
