@@ -481,7 +481,8 @@ void scan_one_collection_one_range( //
 
     bool has_reached_previous = previous.empty();
     while (found_paths < max_count) {
-        ukv_key_t previous_key = previous.empty() ? hash(previous) : ukv_key_unknown_k;
+        ukv_key_t const previous_key = previous.empty() ? hash(previous) : ukv_key_unknown_k;
+        ukv_length_t const scan_length = std::max<ukv_length_t>(max_count, 2u);
         ukv_length_t* found_buckets_count = nullptr;
         ukv_key_t* found_buckets_keys = nullptr;
         ukv_scan( //
@@ -494,7 +495,7 @@ void scan_one_collection_one_range( //
             0,
             nullptr,
             0,
-            &max_count,
+            &scan_length,
             0,
             c_options,
             nullptr,
