@@ -707,83 +707,48 @@ void scan_regex( //
     pcre2_general_context_free(pcre2_context);
 }
 
-void ukv_paths_match( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    ukv_size_t const c_tasks_count,
+void ukv_paths_match(ukv_paths_match_t const* c_ptr) {
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
-
-    ukv_length_t const* c_patterns_offsets,
-    ukv_size_t const c_patterns_offsets_stride,
-
-    ukv_length_t const* c_patterns_lengths,
-    ukv_size_t const c_patterns_lengths_stride,
-
-    ukv_str_view_t const* c_patterns_strings,
-    ukv_size_t const c_patterns_strings_stride,
-
-    ukv_length_t const* c_previous_offsets,
-    ukv_size_t const c_previous_offsets_stride,
-
-    ukv_length_t const* c_previous_lengths,
-    ukv_size_t const c_previous_lengths_stride,
-
-    ukv_str_view_t const* c_previous,
-    ukv_size_t const c_previous_stride,
-
-    ukv_length_t const* c_scan_limits,
-    ukv_size_t const c_scan_limits_stride,
-
-    ukv_options_t const c_options,
-    ukv_char_t const,
-
-    ukv_length_t** c_counts,
-    ukv_length_t** c_offsets,
-    ukv_char_t** c_paths,
-
-    ukv_arena_t* c_arena,
-    ukv_error_t* c_error) {
-
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
-    return_on_error(c_error);
+    ukv_paths_match_t const& c = *c_ptr;
+    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    return_on_error(c.error);
 
     contents_arg_t patterns_args;
-    patterns_args.offsets_begin = {c_patterns_offsets, c_patterns_offsets_stride};
-    patterns_args.lengths_begin = {c_patterns_lengths, c_patterns_lengths_stride};
-    patterns_args.contents_begin = {(ukv_bytes_cptr_t const*)c_patterns_strings, c_patterns_strings_stride};
-    patterns_args.count = c_tasks_count;
+    patterns_args.offsets_begin = {c.patterns_offsets, c.patterns_offsets_stride};
+    patterns_args.lengths_begin = {c.patterns_lengths, c.patterns_lengths_stride};
+    patterns_args.contents_begin = {(ukv_bytes_cptr_t const*)c.patterns, c.patterns_stride};
+    patterns_args.count = c.tasks_count;
 
     contents_arg_t previous_args;
-    previous_args.offsets_begin = {c_previous_offsets, c_previous_offsets_stride};
-    previous_args.lengths_begin = {c_previous_lengths, c_previous_lengths_stride};
-    previous_args.contents_begin = {(ukv_bytes_cptr_t const*)c_previous, c_previous_stride};
-    previous_args.count = c_tasks_count;
+    previous_args.offsets_begin = {c.previous_offsets, c.previous_offsets_stride};
+    previous_args.lengths_begin = {c.previous_lengths, c.previous_lengths_stride};
+    previous_args.contents_begin = {(ukv_bytes_cptr_t const*)c.previous, c.previous_stride};
+    previous_args.count = c.tasks_count;
 
-    strided_range_gt<ukv_collection_t const> collections {{c_collections, c_collections_stride}, c_tasks_count};
-    strided_range_gt<ukv_length_t const> scan_limits {{c_scan_limits, c_scan_limits_stride}, c_tasks_count};
+    strided_range_gt<ukv_collection_t const> collections {{c.collections, c.collections_stride}, c.tasks_count};
+    strided_range_gt<ukv_length_t const> scan_limits {{c.match_counts_limits, c.match_counts_limits_stride},
+                                                      c.tasks_count};
 
-    auto scan_limits_sum = transform_reduce_n(scan_limits.begin(), c_tasks_count, 0ul);
-    auto found_counts = arena.alloc<ukv_length_t>(c_tasks_count, c_error);
+    auto scan_limits_sum = transform_reduce_n(scan_limits.begin(), c.tasks_count, 0ul);
+    auto found_counts = arena.alloc<ukv_length_t>(c.tasks_count, c.error);
     auto found_paths = growing_tape_t(arena);
-    found_paths.reserve(scan_limits_sum, c_error);
-    return_on_error(c_error);
+    found_paths.reserve(scan_limits_sum, c.error);
+    return_on_error(c.error);
 
-    for (std::size_t i = 0; i != c_tasks_count && !*c_error; ++i) {
+    for (std::size_t i = 0; i != c.tasks_count && !*c.error; ++i) {
         auto col = collections ? collections[i] : ukv_collection_main_k;
         auto pattern = patterns_args[i];
         auto previous = previous_args[i];
         auto limit = scan_limits[i];
         auto func = is_prefix(pattern) ? &scan_prefix : &scan_regex;
-        func(c_db, c_txn, col, pattern, previous, limit, c_options, found_counts[i], found_paths, arena, c_error);
+        func(c.db, c.txn, col, pattern, previous, limit, c.options, found_counts[i], found_paths, arena, c.error);
     }
 
     // Export the results
-    if (c_counts)
-        *c_counts = found_counts.begin();
-    if (c_offsets)
-        *c_offsets = found_paths.offsets().begin().get();
-    if (c_paths)
-        *c_paths = (ukv_char_t*)found_paths.contents().begin().get();
+    if (c.match_counts)
+        *c.match_counts = found_counts.begin();
+    if (c.paths_offsets)
+        *c.paths_offsets = found_paths.offsets().begin().get();
+    if (c.paths_strings)
+        *c.paths_strings = (ukv_char_t*)found_paths.contents().begin().get();
 }

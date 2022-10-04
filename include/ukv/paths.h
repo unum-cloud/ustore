@@ -99,50 +99,55 @@ void ukv_paths_read( //
     ukv_arena_t* arena,
     ukv_error_t* error);
 
+typedef struct ukv_paths_match_t {
+
+    ukv_database_t db;
+    ukv_transaction_t txn = NULL;
+    ukv_size_t tasks_count = 1;
+
+    ukv_collection_t const* collections = NULL;
+    ukv_size_t collections_stride = 0;
+
+    ukv_length_t const* patterns_offsets = NULL;
+    ukv_size_t patterns_offsets_stride = 0;
+
+    ukv_length_t const* patterns_lengths = NULL;
+    ukv_size_t patterns_lengths_stride = 0;
+
+    ukv_str_view_t const* patterns;
+    ukv_size_t patterns_stride = 0;
+
+    ukv_length_t const* previous_offsets = NULL;
+    ukv_size_t previous_offsets_stride = 0;
+
+    ukv_length_t const* previous_lengths = NULL;
+    ukv_size_t previous_lengths_stride = 0;
+
+    ukv_str_view_t const* previous = NULL;
+    ukv_size_t previous_stride = 0;
+
+    ukv_length_t const* match_counts_limits;
+    ukv_size_t match_counts_limits_stride = 0;
+
+    ukv_options_t options = ukv_options_default_k;
+    ukv_char_t separator = '\0';
+
+    ukv_length_t** match_counts = NULL;
+    ukv_length_t** paths_offsets = NULL;
+    ukv_char_t** paths_strings = NULL;
+
+    ukv_arena_t* arena = NULL;
+    ukv_error_t* error;
+
+} ukv_paths_match_t;
+
 /**
  * @brief Implement "prefix" and "pattern" matching on paths stored in potentially
  * different collections. If a "pattern" contains RegEx special symbols, than it is
  * treated as a RegEx pattern: ., +, *, ?, ^, $, (, ), [, ], {, }, |, \.
  * Otherwise, it is treated as a prefix for search.
  */
-void ukv_paths_match( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_size_t const tasks_count,
-
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
-
-    ukv_length_t const* pattern_offsets,
-    ukv_size_t const pattern_offsets_stride,
-
-    ukv_length_t const* pattern_lengths,
-    ukv_size_t const pattern_lengths_stride,
-
-    ukv_str_view_t const* pattern_strings,
-    ukv_size_t const pattern_strings_stride,
-
-    ukv_length_t const* previous_offsets,
-    ukv_size_t const previous_offsets_stride,
-
-    ukv_length_t const* previous_lengths,
-    ukv_size_t const previous_lengths_stride,
-
-    ukv_str_view_t const* previous_matches,
-    ukv_size_t const previous_matches_stride,
-
-    ukv_length_t const* match_counts_limits,
-    ukv_size_t const match_counts_limits_stride,
-
-    ukv_options_t const options,
-    ukv_char_t const separator,
-
-    ukv_length_t** match_counts_per_prefix,
-    ukv_length_t** paths_offsets,
-    ukv_char_t** paths_strings,
-
-    ukv_arena_t* arena,
-    ukv_error_t* error);
+void ukv_paths_match(ukv_paths_match_t const*);
 
 #ifdef __cplusplus
 } /* end extern "C" */
