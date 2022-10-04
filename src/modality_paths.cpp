@@ -31,7 +31,7 @@
 #include "ukv/paths.h"
 #include "helpers/pmr.hpp"         // `stl_arena_t`
 #include "helpers/algorithm.hpp"   // `sort_and_deduplicate`
-#include "helpers/vector.hpp"      // `safe_vector_gt`
+#include "helpers/vector.hpp"      // `uninitialized_vector_gt`
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
 /*********************************************************/
@@ -327,7 +327,7 @@ void ukv_paths_write( //
     return_on_error(c_error);
 
     joined_bins_t joined_buckets {unique_places.count, buckets_offsets, buckets_values};
-    safe_vector_gt<value_view_t> updated_buckets(unique_places.count, arena, c_error);
+    uninitialized_vector_gt<value_view_t> updated_buckets(unique_places.count, arena, c_error);
     return_on_error(c_error);
     transform_n(joined_buckets.begin(), unique_places.count, updated_buckets.begin());
 
