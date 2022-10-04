@@ -1507,6 +1507,76 @@ TEST(db, graph_conflicting_transactions) {
 
     EXPECT_TRUE(db.clear());
 }
+TEST(db, graph_upsert_edges) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t graph = *db.collection<graph_collection_t>();
+
+    std::vector<ukv_key_t> vertices = {1, 2, 3, 4, 5};
+    auto over_the_vertices = [&](bool exist, size_t degree) {
+        for (auto& vertex_id : vertices) {
+            EXPECT_EQ(*graph.contains(vertex_id), exist);
+            EXPECT_EQ(*graph.degree(vertex_id), degree);
+        }
+    };
+
+    over_the_vertices(false, 0);
+
+    std::vector<edge_t> star {
+        {1, 1, 3},
+        {2, 1, 4},
+        {3, 2, 4},
+        {4, 2, 5},
+        {5, 3, 5},
+    };
+    EXPECT_TRUE(graph.upsert(edges(star)));
+    EXPECT_EQ(*graph.degree(1), 2u);
+    EXPECT_EQ(*graph.degree(2), 2u);
+    EXPECT_EQ(*graph.degree(3), 1u);
+    star.push_back({6, 3, 1});
+    star.push_back({7, 4, 1});
+    star.push_back({8, 4, 2});
+    star.push_back({9, 5, 2});
+    star.push_back({10, 5, 3});
+    over_the_vertices(true, 2u);
+
+    std::vector<edge_t> pentagon {
+        {11, 1, 2},
+        {12, 2, 3},
+        {13, 3, 4},
+        {14, 4, 5},
+        {15, 5, 1},
+        {16, 1, 5},
+        {17, 5, 4},
+        {18, 4, 3},
+        {19, 3, 2},
+        {20, 2, 1},
+    };
+    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    over_the_vertices(true, 4u);
+
+    EXPECT_TRUE(graph.remove(edges(star)));
+    over_the_vertices(true, 2u);
+
+    EXPECT_TRUE(graph.upsert(edges(star)));
+    over_the_vertices(true, 4u);
+
+    EXPECT_TRUE(graph.remove(edges(pentagon)));
+    over_the_vertices(true, 2u);
+
+    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    over_the_vertices(true, 4u);
+
+    EXPECT_TRUE(graph.remove(edges(star)));
+    EXPECT_TRUE(graph.remove(edges(pentagon)));
+
+    over_the_vertices(true, 0);
+
+    EXPECT_TRUE(db.clear());
+
+    over_the_vertices(false, 0);
+}
 
 TEST(db, graph_remove_vertices) {
     database_t db;
