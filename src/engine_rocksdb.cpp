@@ -154,11 +154,12 @@ void write_one( //
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
-    rocksdb::WriteOptions options;
-    if (c_options & ukv_option_write_flush_k)
-        options.sync = true;
+    bool const safe = c_options & ukv_option_write_flush_k;
+    bool const watch = !(c_options & ukv_option_transaction_dont_watch_k);
 
-    bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
+    rocksdb::WriteOptions options;
+    options.sync = safe;
+    options.disableWAL = !safe;
 
     auto place = places[0];
     auto content = contents[0];
@@ -187,11 +188,12 @@ void write_many( //
     ukv_options_t const c_options,
     ukv_error_t* c_error) {
 
-    rocksdb::WriteOptions options;
-    if (c_options & ukv_option_write_flush_k)
-        options.sync = true;
+    bool const safe = c_options & ukv_option_write_flush_k;
+    bool const watch = !(c_options & ukv_option_transaction_dont_watch_k);
 
-    bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
+    rocksdb::WriteOptions options;
+    options.sync = safe;
+    options.disableWAL = !safe;
 
     if (txn) {
         for (std::size_t i = 0; i != places.size(); ++i) {
@@ -773,8 +775,6 @@ void ukv_transaction_commit( //
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c_txn);
     rocks_status_t status = txn->Commit();
     export_error(status, c_error);
-
-    // TODO: where do we flush?! in transactions and outside
 }
 
 void ukv_arena_free(ukv_database_t const, ukv_arena_t c_arena) {
