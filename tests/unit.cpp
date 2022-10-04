@@ -734,11 +734,17 @@ TEST(db, unnamed_and_named) {
         .count = 3,
     };
 
-    for (auto&& i : {"one", "", "three"}) {
-        for (auto& j : vals)
-            j += 7;
+    for (auto&& name : {"one", "", "three"}) {
+        for (auto& val : vals)
+            val += 7;
 
-        bins_collection_t collection = *db.add_collection(i);
+        bins_collection_t collection = *db.add_collection(name);
+        if (name == "") {
+            EXPECT_FALSE(collection);
+            continue;
+        }
+        EXPECT_TRUE(collection);
+
         auto collection_ref = collection[keys];
         check_length(collection_ref, ukv_length_missing_k);
         round_trip(collection_ref, values);
