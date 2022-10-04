@@ -269,8 +269,9 @@ TEST(db, paths) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    char const* keys[] {"Facebook", "Apple", "Amazon", "Netflix", "Google"};
-    char const* vals[] {"F", "A", "A", "N", "G"};
+    char const* keys[] {"Facebook", "Apple", "Amazon", "Netflix", "Google", "Nvidia", "Adobe"};
+    char const* vals[] {"F", "A", "A", "N", "G", "N", "A"};
+    std::size_t keys_count = sizeof(keys) / sizeof(keys[0]);
     ukv_char_t separator = '\0';
 
     arena_t arena(db);
@@ -278,7 +279,7 @@ TEST(db, paths) {
     ukv_paths_write( //
         db,
         nullptr,
-        5,
+        keys_count,
         nullptr,
         0,
         nullptr,
@@ -303,7 +304,7 @@ TEST(db, paths) {
     ukv_paths_read( //
         db,
         nullptr,
-        5,
+        keys_count,
         nullptr,
         0,
         nullptr,
@@ -322,10 +323,11 @@ TEST(db, paths) {
         status.member_ptr());
 
     EXPECT_TRUE(status);
-    EXPECT_EQ(std::string_view(vals_recovered, 5), "FAANG");
+    EXPECT_EQ(std::string_view(vals_recovered, keys_count), "FAANGNA");
 
-    ukv_str_view_t prefix = "A";
-    ukv_length_t max_count = 10;
+    // Try getting either "Netflix" or "Nvidia" as one of the keys with "N" prefix
+    ukv_str_view_t prefix = "N";
+    ukv_length_t max_count = 1;
     ukv_length_t* results_counts = nullptr;
     ukv_length_t* tape_offsets = nullptr;
     ukv_char_t* tape_begin = nullptr;
@@ -356,8 +358,158 @@ TEST(db, paths) {
         &tape_begin,
         arena.member_ptr(),
         status.member_ptr());
+    auto first_match_for_a = std::string_view(tape_begin);
+    EXPECT_EQ(results_counts[0], 1);
+    EXPECT_TRUE(first_match_for_a == "Netflix" || first_match_for_a == "Nvidia");
 
+    // Try getting the remaining results, which is the other one from that same pair
+    max_count = 10;
+    ukv_paths_match( //
+        db,
+        nullptr,
+        1,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &prefix,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &tape_begin,
+        0,
+        &max_count,
+        0,
+        ukv_option_dont_discard_memory_k,
+        separator,
+        &results_counts,
+        &tape_offsets,
+        &tape_begin,
+        arena.member_ptr(),
+        status.member_ptr());
+    auto second_match_for_a = std::string_view(tape_begin);
+    EXPECT_EQ(results_counts[0], 1);
+    EXPECT_TRUE(second_match_for_a == "Netflix" || second_match_for_a == "Nvidia");
+    EXPECT_NE(first_match_for_a, second_match_for_a);
+
+    // Try performing parallel queries in the same collection
+    ukv_str_view_t prefixes[2] = {"A", "N"};
+    std::size_t prefixes_count = sizeof(prefixes) / sizeof(prefixes[0]);
+    max_count = 10;
+    ukv_paths_match( //
+        db,
+        nullptr,
+        prefixes_count,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        prefixes,
+        sizeof(ukv_str_view_t),
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &max_count,
+        0,
+        ukv_options_default_k,
+        separator,
+        &results_counts,
+        &tape_offsets,
+        &tape_begin,
+        arena.member_ptr(),
+        status.member_ptr());
+    auto total_count = std::accumulate(results_counts, results_counts + prefixes_count, 0ul);
+    strings_tape_iterator_t tape_iterator {total_count, tape_begin};
+    std::set<std::string> tape_parts;
+    while (!tape_iterator.is_end()) {
+        tape_parts.insert(*tape_iterator);
+        ++tape_iterator;
+    }
+    EXPECT_EQ(results_counts[0], 3);
+    EXPECT_EQ(results_counts[1], 2);
+    EXPECT_NE(tape_parts.find("Netflix"), tape_parts.end());
+    EXPECT_NE(tape_parts.find("Adobe"), tape_parts.end());
+
+    // Now try matching a Regular Expression
+    prefix = "Netflix|Google";
+    max_count = 20;
+    ukv_paths_match( //
+        db,
+        nullptr,
+        1,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &prefix,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &max_count,
+        0,
+        ukv_options_default_k,
+        separator,
+        &results_counts,
+        &tape_offsets,
+        &tape_begin,
+        arena.member_ptr(),
+        status.member_ptr());
+    first_match_for_a = std::string_view(tape_begin);
+    second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
     EXPECT_EQ(results_counts[0], 2);
+    EXPECT_TRUE(first_match_for_a == "Netflix" || first_match_for_a == "Google");
+    EXPECT_TRUE(second_match_for_a == "Netflix" || second_match_for_a == "Google");
+
+    // Try a more complex regular expression
+    prefix = "A.*e";
+    max_count = 20;
+    ukv_paths_match( //
+        db,
+        nullptr,
+        1,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &prefix,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &max_count,
+        0,
+        ukv_options_default_k,
+        separator,
+        &results_counts,
+        &tape_offsets,
+        &tape_begin,
+        arena.member_ptr(),
+        status.member_ptr());
+    first_match_for_a = std::string_view(tape_begin);
+    second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
+    EXPECT_EQ(results_counts[0], 2);
+    EXPECT_TRUE(first_match_for_a == "Apple" || first_match_for_a == "Adobe");
+    EXPECT_TRUE(second_match_for_a == "Apple" || second_match_for_a == "Adobe");
 
     EXPECT_TRUE(db.clear());
 }

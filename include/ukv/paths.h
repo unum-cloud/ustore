@@ -113,14 +113,14 @@ void ukv_paths_match( //
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
-    ukv_length_t const* prefixes_offsets,
-    ukv_size_t const prefixes_offsets_stride,
+    ukv_length_t const* pattern_offsets,
+    ukv_size_t const pattern_offsets_stride,
 
-    ukv_length_t const* prefixes_lengths,
-    ukv_size_t const prefixes_lengths_stride,
+    ukv_length_t const* pattern_lengths,
+    ukv_size_t const pattern_lengths_stride,
 
-    ukv_str_view_t const* prefixes,
-    ukv_size_t const prefixes_stride,
+    ukv_str_view_t const* pattern_strings,
+    ukv_size_t const pattern_strings_stride,
 
     ukv_length_t const* previous_offsets,
     ukv_size_t const previous_offsets_stride,
@@ -128,8 +128,8 @@ void ukv_paths_match( //
     ukv_length_t const* previous_lengths,
     ukv_size_t const previous_lengths_stride,
 
-    ukv_str_view_t const* previous,
-    ukv_size_t const previous_stride,
+    ukv_str_view_t const* previous_matches,
+    ukv_size_t const previous_matches_stride,
 
     ukv_length_t const* match_counts_limits,
     ukv_size_t const match_counts_limits_stride,

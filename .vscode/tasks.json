@@ -3,37 +3,43 @@
     "tasks": [
         {
             "label": "Build Native: Debug STL Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_stl_unit_test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_stl_unit_test",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug RocksDB Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_rocksdb_unit_test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_rocksdb_unit_test",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug LevelDB Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_leveldb_unit_test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_leveldb_unit_test",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug STL Test API",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_stl_api_test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_stl_api_test",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug RocksDB Test API",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_rocksdb_api_test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_rocksdb_api_test",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug LevelDB Test API",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_leveldb_api_test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_leveldb_api_test",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Native: Debug UnumDB Test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_unumdb_unit_tests",
             "args": [],
             "type": "shell"
         },
