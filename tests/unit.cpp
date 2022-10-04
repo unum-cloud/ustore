@@ -430,12 +430,86 @@ TEST(db, paths) {
     auto total_count = std::accumulate(results_counts, results_counts + prefixes_count, 0ul);
     strings_tape_iterator_t tape_iterator {total_count, tape_begin};
     std::set<std::string> tape_parts;
-    while (!tape_iterator.is_end())
+    while (!tape_iterator.is_end()) {
         tape_parts.insert(*tape_iterator);
+        ++tape_iterator;
+    }
     EXPECT_EQ(results_counts[0], 3);
     EXPECT_EQ(results_counts[1], 2);
     EXPECT_NE(tape_parts.find("Netflix"), tape_parts.end());
     EXPECT_NE(tape_parts.find("Adobe"), tape_parts.end());
+
+    // Now try matching a Regular Expression
+    prefix = "Netflix|Google";
+    max_count = 20;
+    ukv_paths_match( //
+        db,
+        nullptr,
+        1,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &prefix,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &max_count,
+        0,
+        ukv_options_default_k,
+        separator,
+        &results_counts,
+        &tape_offsets,
+        &tape_begin,
+        arena.member_ptr(),
+        status.member_ptr());
+    first_match_for_a = std::string_view(tape_begin);
+    second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
+    EXPECT_EQ(results_counts[0], 2);
+    EXPECT_TRUE(first_match_for_a == "Netflix" || first_match_for_a == "Google");
+    EXPECT_TRUE(second_match_for_a == "Netflix" || second_match_for_a == "Google");
+
+    // Try a more complex regular expression
+    prefix = "A.*e";
+    max_count = 20;
+    ukv_paths_match( //
+        db,
+        nullptr,
+        1,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &prefix,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        &max_count,
+        0,
+        ukv_options_default_k,
+        separator,
+        &results_counts,
+        &tape_offsets,
+        &tape_begin,
+        arena.member_ptr(),
+        status.member_ptr());
+    first_match_for_a = std::string_view(tape_begin);
+    second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
+    EXPECT_EQ(results_counts[0], 2);
+    EXPECT_TRUE(first_match_for_a == "Apple" || first_match_for_a == "Adobe");
+    EXPECT_TRUE(second_match_for_a == "Apple" || second_match_for_a == "Adobe");
 
     EXPECT_TRUE(db.clear());
 }
