@@ -12,7 +12,7 @@
 
 #include "ukv/db.h"
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
-#include "helpers/vector.hpp"      // `safe_vector_gt`
+#include "helpers/vector.hpp"      // `uninitialized_vector_gt`
 
 using namespace unum::ukv;
 using namespace unum;
@@ -263,7 +263,7 @@ void ukv_read( //
     auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
     return_on_error(c_error);
     bool const needs_export = c_found_values != nullptr;
-    safe_vector_gt<byte_t> contents(arena);
+    uninitialized_vector_gt<byte_t> contents(arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
