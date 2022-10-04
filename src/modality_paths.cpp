@@ -471,7 +471,8 @@ void ukv_paths_read( //
             lengths[i] = static_cast<ukv_length_t>(val.size());
             if (c_values)
                 std::memmove(buckets_values + exported_volume, val.data(), val.size());
-            exported_volume += static_cast<ukv_length_t>(val.size());
+            buckets_values[exported_volume + val.size()] = ukv_byte_t {0};
+            exported_volume += static_cast<ukv_length_t>(val.size()) + 1;
         }
         else {
             presences[i] = false;

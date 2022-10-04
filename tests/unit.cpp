@@ -323,7 +323,8 @@ TEST(db, paths) {
         status.member_ptr());
 
     EXPECT_TRUE(status);
-    EXPECT_EQ(std::string_view(vals_recovered, keys_count), "FAANGNA");
+    EXPECT_EQ(std::string_view(vals_recovered, keys_count * 2),
+              std::string_view("F\0A\0A\0N\0G\0N\0A\0", keys_count * 2));
 
     // Try getting either "Netflix" or "Nvidia" as one of the keys with "N" prefix
     ukv_str_view_t prefix = "N";
