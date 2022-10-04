@@ -216,24 +216,26 @@ void upsert_in_bucket( //
 
     auto old_keys = get_bucket_keys(bucket, old_size);
     auto old_vals = get_bucket_vals(bucket, old_size);
+    std::size_t new_idx = 0;
     for (std::size_t i = 0; i != old_size; ++i, ++old_keys, ++old_vals) {
         if (!is_missing && i == old_idx)
             continue;
 
         value_view_t old_key = *old_keys;
         value_view_t old_val = *old_vals;
-        new_keys_lengths[i] = static_cast<ukv_length_t>(old_key.size());
-        new_vals_lengths[i] = static_cast<ukv_length_t>(old_val.size());
+        new_keys_lengths[new_idx] = static_cast<ukv_length_t>(old_key.size());
+        new_vals_lengths[new_idx] = static_cast<ukv_length_t>(old_val.size());
         std::memcpy(new_keys_output, old_key.data(), old_key.size());
         std::memcpy(new_vals_output, old_val.data(), old_val.size());
 
         new_keys_output += old_key.size();
         new_vals_output += old_val.size();
+        ++new_idx;
     }
 
     // Append the new entry at the end
-    new_keys_lengths[new_size - 1] = static_cast<ukv_length_t>(key.size());
-    new_vals_lengths[new_size - 1] = static_cast<ukv_length_t>(val.size());
+    new_keys_lengths[new_idx] = static_cast<ukv_length_t>(key.size());
+    new_vals_lengths[new_idx] = static_cast<ukv_length_t>(val.size());
     std::memcpy(new_keys_output, key.data(), key.size());
     std::memcpy(new_vals_output, val.data(), val.size());
 
