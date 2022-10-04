@@ -113,14 +113,14 @@ void ukv_paths_match( //
     ukv_collection_t const* collections,
     ukv_size_t const collections_stride,
 
-    ukv_length_t const* regex_offsets,
-    ukv_size_t const regex_offsets_stride,
+    ukv_length_t const* pattern_offsets,
+    ukv_size_t const pattern_offsets_stride,
 
-    ukv_length_t const* regex_lengths,
-    ukv_size_t const regex_lengths_stride,
+    ukv_length_t const* pattern_lengths,
+    ukv_size_t const pattern_lengths_stride,
 
-    ukv_str_view_t const* regex_patterns,
-    ukv_size_t const regex_patterns_stride,
+    ukv_str_view_t const* pattern_strings,
+    ukv_size_t const pattern_strings_stride,
 
     ukv_length_t const* previous_offsets,
     ukv_size_t const previous_offsets_stride,

@@ -507,9 +507,8 @@ void scan_predicate( //
     ukv_length_t found_paths = 0;
     ukv_arena_t c_arena = &arena;
     bool has_reached_previous = previous_path.empty();
+    ukv_key_t start_key = !previous_path.empty() ? hash(previous_path) : std::numeric_limits<ukv_key_t>::min();
     while (found_paths < c_scan_limit && !*c_error) {
-        ukv_key_t const previous_key =
-            !previous_path.empty() ? hash(previous_path) : std::numeric_limits<ukv_key_t>::min();
         ukv_length_t const scan_length = std::max<ukv_length_t>(c_scan_limit, 2u);
         ukv_length_t* found_buckets_count = nullptr;
         ukv_key_t* found_buckets_keys = nullptr;
@@ -519,7 +518,7 @@ void scan_predicate( //
             1,
             &c_collection,
             0,
-            &previous_key,
+            &start_key,
             0,
             nullptr,
             0,
@@ -578,16 +577,16 @@ void scan_predicate( //
                     return;
 
                 // All the matches in this section should be exported
-                value_view_t key_copy = paths.push_back(member.key, c_error);
+                paths.push_back(member.key, c_error);
                 return_on_error(c_error);
                 paths.add_terminator(byte_t {0}, c_error);
                 return_on_error(c_error);
                 ++found_paths;
-
-                // Prepare for the next round of search
-                previous_path = key_copy;
             });
         }
+
+        auto count_buckets = found_buckets_count[0];
+        start_key = found_buckets_keys[count_buckets - 1] + 1;
     }
 
     count = found_paths;
@@ -631,6 +630,7 @@ static void* pcre2_malloc(PCRE2_SIZE length, void* ctx_ptr) noexcept {
 }
 
 static void pcre2_free(void*, void*) noexcept {
+    // Our arenas only grow, we don't dealloc!
 }
 
 void scan_regex( //
@@ -711,14 +711,14 @@ void ukv_paths_match( //
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
 
-    ukv_length_t const* c_prefixes_offsets,
-    ukv_size_t const c_prefixes_offsets_stride,
+    ukv_length_t const* c_patterns_offsets,
+    ukv_size_t const c_patterns_offsets_stride,
 
-    ukv_length_t const* c_prefixes_lengths,
-    ukv_size_t const c_prefixes_lengths_stride,
+    ukv_length_t const* c_patterns_lengths,
+    ukv_size_t const c_patterns_lengths_stride,
 
-    ukv_str_view_t const* c_prefixes,
-    ukv_size_t const c_prefixes_stride,
+    ukv_str_view_t const* c_patterns_strings,
+    ukv_size_t const c_patterns_strings_stride,
 
     ukv_length_t const* c_previous_offsets,
     ukv_size_t const c_previous_offsets_stride,
@@ -745,11 +745,11 @@ void ukv_paths_match( //
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
-    contents_arg_t prefixes_args;
-    prefixes_args.offsets_begin = {c_prefixes_offsets, c_prefixes_offsets_stride};
-    prefixes_args.lengths_begin = {c_prefixes_lengths, c_prefixes_lengths_stride};
-    prefixes_args.contents_begin = {(ukv_bytes_cptr_t const*)c_prefixes, c_prefixes_stride};
-    prefixes_args.count = c_tasks_count;
+    contents_arg_t patterns_args;
+    patterns_args.offsets_begin = {c_patterns_offsets, c_patterns_offsets_stride};
+    patterns_args.lengths_begin = {c_patterns_lengths, c_patterns_lengths_stride};
+    patterns_args.contents_begin = {(ukv_bytes_cptr_t const*)c_patterns_strings, c_patterns_strings_stride};
+    patterns_args.count = c_tasks_count;
 
     contents_arg_t previous_args;
     previous_args.offsets_begin = {c_previous_offsets, c_previous_offsets_stride};
@@ -766,19 +766,14 @@ void ukv_paths_match( //
     found_paths.reserve(scan_limits_sum, c_error);
     return_on_error(c_error);
 
-    for (std::size_t i = 0; i != c_tasks_count && !*c_error; ++i)
-        scan_prefix( //
-            c_db,
-            c_txn,
-            collections ? collections[i] : ukv_collection_main_k,
-            prefixes_args[i],
-            previous_args[i],
-            scan_limits[i],
-            c_options,
-            found_counts[i],
-            found_paths,
-            arena,
-            c_error);
+    for (std::size_t i = 0; i != c_tasks_count && !*c_error; ++i) {
+        auto col = collections ? collections[i] : ukv_collection_main_k;
+        auto pattern = patterns_args[i];
+        auto previous = previous_args[i];
+        auto limit = scan_limits[i];
+        auto func = is_prefix(pattern) ? &scan_prefix : &scan_regex;
+        func(c_db, c_txn, col, pattern, previous, limit, c_options, found_counts[i], found_paths, arena, c_error);
+    }
 
     // Export the results
     if (c_counts)
