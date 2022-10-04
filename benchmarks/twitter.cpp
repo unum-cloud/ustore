@@ -519,7 +519,7 @@ static void paths_construct_from_nicknames(bm::State& state) {
     std::size_t const first_tweet_idx = state.thread_index() * batches_per_thread * batch_size;
     tweets_iterator_t tweets_iterator {first_tweet_idx};
 
-    std::size_t tweets_bytes = 0;
+    std::size_t injected_bytes = 0;
     for (auto _ : state) {
 
         // Prepare a batch from multiple entries
@@ -527,7 +527,8 @@ static void paths_construct_from_nicknames(bm::State& state) {
             auto const& tweet = *tweets_iterator;
             batch_usernames[i] = tweet.username;
             batch_id_strs[i] = tweet.id_str;
-            tweets_bytes += tweet.body.size();
+            injected_bytes += std::strlen(tweet.username);
+            injected_bytes += std::strlen(tweet.id_str);
         }
 
         // Finally, import the data.
@@ -557,9 +558,9 @@ static void paths_construct_from_nicknames(bm::State& state) {
         status.throw_unhandled();
     }
 
-    state.counters["docs/s"] = bm::Counter(tweets_per_thread * batch_size, bm::Counter::kIsRate);
-    state.counters["batches/s"] = bm::Counter(tweets_per_thread, bm::Counter::kIsRate);
-    state.counters["bytes/s"] = bm::Counter(tweets_bytes, bm::Counter::kIsRate);
+    state.counters["docs/s"] = bm::Counter(tweets_per_thread, bm::Counter::kIsRate);
+    state.counters["batches/s"] = bm::Counter(batches_per_thread, bm::Counter::kIsRate);
+    state.counters["bytes/s"] = bm::Counter(injected_bytes, bm::Counter::kIsRate);
 }
 
 static void index_file(std::string_view mapped_contents, std::vector<tweet_t>& tweets) {
