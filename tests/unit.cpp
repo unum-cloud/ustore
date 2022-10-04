@@ -515,6 +515,204 @@ TEST(db, paths) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, paths_linked_list) {
+
+    constexpr std::size_t count = 3;
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    arena_t arena(db);
+    ukv_char_t separator = '\0';
+    status_t status;
+
+    // Generate some random strings for our tests
+    constexpr auto alphabet = "abcdefghijklmnop";
+    auto make_random_str = []() {
+        auto str = std::string();
+        auto len = static_cast<std::size_t>(std::rand() % 100) + 8;
+        for (std::size_t i = 0; i != len; ++i)
+            str.push_back(alphabet[std::rand() % 16]);
+        return str;
+    };
+    std::set<std::string> unique;
+    while (unique.size() != count)
+        unique.insert(make_random_str());
+
+    // Lets form a linked list, where every key maps into the the next key.
+    // Then we will traverse the linked list from start to end.
+    // Then we will re-link it in reverse order and traverse again.
+    std::vector<ukv_str_view_t> begins(unique.size());
+    std::transform(unique.begin(), unique.end(), begins.begin(), [](std::string const& str) { return str.c_str(); });
+
+    // Link forward
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        ukv_paths_write( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &smaller,
+            0,
+            nullptr,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            reinterpret_cast<ukv_bytes_cptr_t*>(&bigger),
+            0,
+            ukv_options_default_k,
+            separator,
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+
+        // Check if it was successfully written:
+        ukv_str_span_t bigger_received = nullptr;
+        ukv_paths_read( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &smaller,
+            0,
+            ukv_options_default_k,
+            separator,
+            nullptr,
+            nullptr,
+            nullptr,
+            reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received),
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(bigger), std::string_view(bigger_received));
+    }
+
+    // Traverse forward, counting the entries and checking the order
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        ukv_str_span_t bigger_received = nullptr;
+        ukv_paths_read( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &smaller,
+            0,
+            ukv_options_default_k,
+            separator,
+            nullptr,
+            nullptr,
+            nullptr,
+            reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received),
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(bigger), std::string_view(bigger_received));
+    }
+
+    // Re-link in reverse order
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        ukv_paths_write( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &bigger,
+            0,
+            nullptr,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            reinterpret_cast<ukv_bytes_cptr_t*>(&smaller),
+            0,
+            ukv_options_default_k,
+            separator,
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+
+        // Check if it was successfully over-written:
+        ukv_str_span_t smaller_received = nullptr;
+        ukv_paths_read( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &bigger,
+            0,
+            ukv_options_default_k,
+            separator,
+            nullptr,
+            nullptr,
+            nullptr,
+            reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received),
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
+    }
+
+    // Traverse backwards, counting the entries and checking the order
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        ukv_str_span_t smaller_received = nullptr;
+        ukv_paths_read( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &bigger,
+            0,
+            ukv_options_default_k,
+            separator,
+            nullptr,
+            nullptr,
+            nullptr,
+            reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received),
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
+    }
+}
+
 TEST(db, unnamed_and_named) {
 
     if (!ukv_supports_named_collections_k)
