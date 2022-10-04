@@ -332,66 +332,25 @@ TEST(db, paths) {
     ukv_length_t* results_counts = nullptr;
     ukv_length_t* tape_offsets = nullptr;
     ukv_char_t* tape_begin = nullptr;
-    ukv_paths_match( //
-        db,
-        nullptr,
-        1,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        &prefix,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        &max_count,
-        0,
-        ukv_options_default_k,
-        separator,
-        &results_counts,
-        &tape_offsets,
-        &tape_begin,
-        arena.member_ptr(),
-        status.member_ptr());
+    ukv_paths_match_t paths_match {
+        .db = db,
+        .patterns = &prefix,
+        .match_counts_limits = &max_count,
+        .match_counts = &results_counts,
+        .paths_offsets = &tape_offsets,
+        .paths_strings = &tape_begin,
+        .arena = arena.member_ptr(),
+        .error = status.member_ptr(),
+    };
+    ukv_paths_match(&paths_match);
     auto first_match_for_a = std::string_view(tape_begin);
     EXPECT_EQ(results_counts[0], 1);
     EXPECT_TRUE(first_match_for_a == "Netflix" || first_match_for_a == "Nvidia");
 
     // Try getting the remaining results, which is the other one from that same pair
     max_count = 10;
-    ukv_paths_match( //
-        db,
-        nullptr,
-        1,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        &prefix,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        &tape_begin,
-        0,
-        &max_count,
-        0,
-        ukv_option_dont_discard_memory_k,
-        separator,
-        &results_counts,
-        &tape_offsets,
-        &tape_begin,
-        arena.member_ptr(),
-        status.member_ptr());
+    paths_match.previous = &tape_begin;
+    ukv_paths_match(&paths_match);
     auto second_match_for_a = std::string_view(tape_begin);
     EXPECT_EQ(results_counts[0], 1);
     EXPECT_TRUE(second_match_for_a == "Netflix" || second_match_for_a == "Nvidia");
@@ -401,33 +360,11 @@ TEST(db, paths) {
     ukv_str_view_t prefixes[2] = {"A", "N"};
     std::size_t prefixes_count = sizeof(prefixes) / sizeof(prefixes[0]);
     max_count = 10;
-    ukv_paths_match( //
-        db,
-        nullptr,
-        prefixes_count,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        prefixes,
-        sizeof(ukv_str_view_t),
-        nullptr,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        &max_count,
-        0,
-        ukv_options_default_k,
-        separator,
-        &results_counts,
-        &tape_offsets,
-        &tape_begin,
-        arena.member_ptr(),
-        status.member_ptr());
+    paths_match.tasks_count = prefixes_count;
+    paths_match.patterns = prefixes;
+    paths_match.patterns_stride = sizeof(ukv_str_view_t);
+    paths_match.previous = nullptr;
+    ukv_paths_match(&paths_match);
     auto total_count = std::accumulate(results_counts, results_counts + prefixes_count, 0ul);
     strings_tape_iterator_t tape_iterator {total_count, tape_begin};
     std::set<std::string> tape_parts;
@@ -443,33 +380,9 @@ TEST(db, paths) {
     // Now try matching a Regular Expression
     prefix = "Netflix|Google";
     max_count = 20;
-    ukv_paths_match( //
-        db,
-        nullptr,
-        1,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        &prefix,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        &max_count,
-        0,
-        ukv_options_default_k,
-        separator,
-        &results_counts,
-        &tape_offsets,
-        &tape_begin,
-        arena.member_ptr(),
-        status.member_ptr());
+    paths_match.tasks_count = 1;
+    paths_match.patterns = &prefix;
+    ukv_paths_match(&paths_match);
     first_match_for_a = std::string_view(tape_begin);
     second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
     EXPECT_EQ(results_counts[0], 2);
@@ -479,33 +392,7 @@ TEST(db, paths) {
     // Try a more complex regular expression
     prefix = "A.*e";
     max_count = 20;
-    ukv_paths_match( //
-        db,
-        nullptr,
-        1,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        &prefix,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        &max_count,
-        0,
-        ukv_options_default_k,
-        separator,
-        &results_counts,
-        &tape_offsets,
-        &tape_begin,
-        arena.member_ptr(),
-        status.member_ptr());
+    ukv_paths_match(&paths_match);
     first_match_for_a = std::string_view(tape_begin);
     second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
     EXPECT_EQ(results_counts[0], 2);
@@ -517,7 +404,7 @@ TEST(db, paths) {
 
 TEST(db, paths_linked_list) {
 
-    constexpr std::size_t count = 3;
+    constexpr std::size_t count = 500;
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
