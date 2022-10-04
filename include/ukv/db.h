@@ -600,10 +600,9 @@ void ukv_database_control( //
 /**
  * @brief Begins a new ACID transaction or resets an existing one.
  *
- * @param db[in]            Already open database instance, @see `ukv_database_init`.
- * @param txn[inout]        May be pointing to an existing transaction.
- *                          In that case, it's reset to new @param generation.
- * @param error[out]        The error message to be handled by callee.
+ * @param db[in]        Already open database instance, @see `ukv_database_init`.
+ * @param txn[inout]    When points to existing handle, resets and reuses its memory.
+ * @param error[out]    The error message to be handled by callee.
  */
 void ukv_transaction_init( //
     ukv_database_t const db,

@@ -4,7 +4,21 @@
  * @date 23 Sep 2022
  * @brief C bindings for paths ~ variable length string keys collections.
  *
- * It is a bad practice to use strings as key.
+ * It is a bad practice to use strings as key, but if your application depends
+ * on them, use "paths collections" to map such strings into Unique IDs and
+ * saving them as values. Those Unique IDs can then be used to address richer
+ * modalities, like Graphs and Docs.
+ *
+ * @section Separators
+ * Strings keys often represent hierarchical paths. The character used as
+ * delimeter/separator can be passed together with the queries to add transparent
+ * indexes, that on prefix scan - would narrow down the search space.
+ *
+ * @section Allowed Characters
+ * String keys can contain any characters, but if you plan to use `ukv_paths_match`
+ * for both RegEx and prefix matches it is recommended to avoid RegEx special characters
+ * in names: ., +, *, ?, ^, $, (, ), [, ], {, }, |, \.
+ * The other punctuation marks like: /, :, @, -, _, #, ~, comma.
  */
 
 #pragma once
@@ -16,8 +30,8 @@ extern "C" {
 #endif
 
 /**
- * @brief
- *
+ * @brief Maps string paths to string values.
+ * Exact generalization of `ukv_write` for variable-length keys.
  */
 void ukv_paths_write( //
     ukv_database_t const db,
@@ -54,6 +68,8 @@ void ukv_paths_write( //
     ukv_error_t* error);
 
 /**
+ * @brief Retrieves binary values, given string paths.
+ * Exact generalization of `ukv_read` for variable-length keys.
  */
 void ukv_paths_read( //
     ukv_database_t const db,
@@ -84,6 +100,10 @@ void ukv_paths_read( //
     ukv_error_t* error);
 
 /**
+ * @brief Implement "prefix" and "pattern" matching on paths stored in potentially
+ * different collections. If a "pattern" contains RegEx special symbols, than it is
+ * treated as a RegEx pattern: ., +, *, ?, ^, $, (, ), [, ], {, }, |, \.
+ * Otherwise, it is treated as a prefix for search.
  */
 void ukv_paths_match( //
     ukv_database_t const db,
