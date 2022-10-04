@@ -216,24 +216,26 @@ void upsert_in_bucket( //
 
     auto old_keys = get_bucket_keys(bucket, old_size);
     auto old_vals = get_bucket_vals(bucket, old_size);
+    std::size_t new_idx = 0;
     for (std::size_t i = 0; i != old_size; ++i, ++old_keys, ++old_vals) {
         if (!is_missing && i == old_idx)
             continue;
 
         value_view_t old_key = *old_keys;
         value_view_t old_val = *old_vals;
-        new_keys_lengths[i] = static_cast<ukv_length_t>(old_key.size());
-        new_vals_lengths[i] = static_cast<ukv_length_t>(old_val.size());
+        new_keys_lengths[new_idx] = static_cast<ukv_length_t>(old_key.size());
+        new_vals_lengths[new_idx] = static_cast<ukv_length_t>(old_val.size());
         std::memcpy(new_keys_output, old_key.data(), old_key.size());
         std::memcpy(new_vals_output, old_val.data(), old_val.size());
 
         new_keys_output += old_key.size();
         new_vals_output += old_val.size();
+        ++new_idx;
     }
 
     // Append the new entry at the end
-    new_keys_lengths[new_size - 1] = static_cast<ukv_length_t>(key.size());
-    new_vals_lengths[new_size - 1] = static_cast<ukv_length_t>(val.size());
+    new_keys_lengths[new_idx] = static_cast<ukv_length_t>(key.size());
+    new_vals_lengths[new_idx] = static_cast<ukv_length_t>(val.size());
     std::memcpy(new_keys_output, key.data(), key.size());
     std::memcpy(new_vals_output, val.data(), val.size());
 
@@ -309,6 +311,7 @@ void ukv_paths_write( //
     unique_places.keys_begin = unique_col_keys_strided.members(&collection_key_t::key).begin();
     unique_places.fields_begin = {};
     unique_places.count = static_cast<ukv_size_t>(unique_col_keys.size());
+    auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
     ukv_read( //
         c_db,
         c_txn,
@@ -317,7 +320,7 @@ void ukv_paths_write( //
         unique_places.collections_begin.stride(),
         unique_places.keys_begin.get(),
         unique_places.keys_begin.stride(),
-        c_options,
+        opts,
         nullptr,
         &buckets_offsets,
         nullptr,
@@ -370,7 +373,7 @@ void ukv_paths_write( //
         sizeof(value_view_t),
         updated_buckets[0].member_ptr(),
         sizeof(value_view_t),
-        c_options,
+        opts,
         &buckets_arena,
         c_error);
 }
@@ -470,7 +473,8 @@ void ukv_paths_read( //
             lengths[i] = static_cast<ukv_length_t>(val.size());
             if (c_values)
                 std::memmove(buckets_values + exported_volume, val.data(), val.size());
-            exported_volume += static_cast<ukv_length_t>(val.size());
+            buckets_values[exported_volume + val.size()] = ukv_byte_t {0};
+            exported_volume += static_cast<ukv_length_t>(val.size()) + 1;
         }
         else {
             presences[i] = false;
