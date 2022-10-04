@@ -22,15 +22,16 @@
  * > home/user/media/: @b home/user/media/name
  *
  * The mirror "directory" entries can have negative IDs.
- * Their values would be structured differently:
- * > N: number of direct children
- * >
+ * Their values would be structured differently.
  */
+
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
 
 #include "ukv/paths.h"
 #include "helpers/pmr.hpp"         // `stl_arena_t`
 #include "helpers/algorithm.hpp"   // `sort_and_deduplicate`
-#include "helpers/vector.hpp"      // `safe_vector_gt`
+#include "helpers/vector.hpp"      // `uninitialized_vector_gt`
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
 /*********************************************************/
@@ -110,6 +111,7 @@ bool starts_with(std::string_view str, std::string_view prefix) noexcept {
 }
 
 std::size_t path_segments_counts(std::string_view key_str, ukv_char_t const c_separator) noexcept {
+    return 0;
 }
 
 template <typename keys_callback_at>
@@ -325,7 +327,7 @@ void ukv_paths_write( //
     return_on_error(c_error);
 
     joined_bins_t joined_buckets {unique_places.count, buckets_offsets, buckets_values};
-    safe_vector_gt<value_view_t> updated_buckets(unique_places.count, arena, c_error);
+    uninitialized_vector_gt<value_view_t> updated_buckets(unique_places.count, arena, c_error);
     return_on_error(c_error);
     transform_n(joined_buckets.begin(), unique_places.count, updated_buckets.begin());
 
@@ -485,41 +487,42 @@ void ukv_paths_read( //
 /**
  * > Same collection
  * > One scan request
- * > Has previous results
+ * > May have previous results
  */
-void scan_one_collection_one_range( //
+template <typename predicate_at>
+void scan_predicate( //
     ukv_database_t const c_db,
     ukv_transaction_t const c_txn,
-    ukv_collection_t collection,
-    std::string_view prefix,
-    std::string_view previous,
-    ukv_length_t max_count,
+    ukv_collection_t c_collection,
+    std::string_view previous_path,
+    ukv_length_t c_scan_limit,
     ukv_options_t const c_options,
     ukv_length_t& count,
     growing_tape_t& paths,
     stl_arena_t& arena,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error,
+    predicate_at predicate) {
 
     hash_t hash;
     ukv_length_t found_paths = 0;
     ukv_arena_t c_arena = &arena;
-
-    bool has_reached_previous = previous.empty();
-    while (found_paths < max_count) {
-        ukv_key_t previous_key = previous.empty() ? hash(previous) : ukv_key_unknown_k;
+    bool has_reached_previous = previous_path.empty();
+    ukv_key_t start_key = !previous_path.empty() ? hash(previous_path) : std::numeric_limits<ukv_key_t>::min();
+    while (found_paths < c_scan_limit && !*c_error) {
+        ukv_length_t const scan_length = std::max<ukv_length_t>(c_scan_limit, 2u);
         ukv_length_t* found_buckets_count = nullptr;
         ukv_key_t* found_buckets_keys = nullptr;
         ukv_scan( //
             c_db,
             c_txn,
             1,
-            &collection,
+            &c_collection,
             0,
-            &previous_key,
+            &start_key,
             0,
             nullptr,
             0,
-            &max_count,
+            &scan_length,
             0,
             c_options,
             nullptr,
@@ -527,10 +530,11 @@ void scan_one_collection_one_range( //
             &found_buckets_keys,
             &c_arena,
             c_error);
-        return_on_error(c_error);
+        if (*c_error)
+            break;
 
         if (found_buckets_count[0] <= 1)
-            // We have reached the end of collection
+            // We have reached the end of c_collection
             break;
 
         ukv_length_t* found_buckets_offsets = nullptr;
@@ -539,7 +543,7 @@ void scan_one_collection_one_range( //
             c_db,
             c_txn,
             found_buckets_count[0],
-            &collection,
+            &c_collection,
             0,
             found_buckets_keys,
             sizeof(ukv_key_t),
@@ -550,15 +554,17 @@ void scan_one_collection_one_range( //
             &found_buckets_data,
             &c_arena,
             c_error);
+        if (*c_error)
+            break;
 
         joined_bins_iterator_t found_buckets {found_buckets_offsets, found_buckets_data};
         for (std::size_t i = 0; i != found_buckets_count[0]; ++i, ++found_buckets) {
             value_view_t bucket = *found_buckets;
             for_each_in_bucket(bucket, [&](bucket_member_t const& member) {
-                if (!starts_with(member.key, prefix))
+                if (!predicate(member.key))
                     // Skip irrelevant entries
                     return;
-                if (member.key == previous) {
+                if (member.key == previous_path) {
                     // We may have reached the boundary between old results and new ones
                     has_reached_previous = true;
                     return;
@@ -566,69 +572,136 @@ void scan_one_collection_one_range( //
                 if (!has_reached_previous)
                     // Skip the results we have already seen
                     return;
-                if (found_paths >= max_count)
+                if (found_paths >= c_scan_limit)
                     // We have more than we need
                     return;
 
                 // All the matches in this section should be exported
-                value_view_t key_copy = paths.push_back(member.key, c_error);
+                paths.push_back(member.key, c_error);
                 return_on_error(c_error);
                 paths.add_terminator(byte_t {0}, c_error);
                 return_on_error(c_error);
                 ++found_paths;
-
-                // Prepare for the next round of search
-                previous = key_copy;
             });
         }
+
+        auto count_buckets = found_buckets_count[0];
+        start_key = found_buckets_keys[count_buckets - 1] + 1;
     }
 
     count = found_paths;
 }
 
-/**
- * > Same collection
- * > Multiple requests
- * > No previous results
- */
-void scan_one_collection_many_prefixes( //
+void scan_prefix( //
     ukv_database_t const c_db,
     ukv_transaction_t const c_txn,
-    ukv_collection_t collection,
-    contents_arg_t prefixes,
-    strided_range_gt<ukv_length_t const> max_counts,
-    ukv_options_t const options,
-    span_gt<ukv_length_t> counts,
+    ukv_collection_t c_collection,
+    std::string_view prefix,
+    std::string_view previous_path,
+    ukv_length_t c_scan_limit,
+    ukv_options_t const c_options,
+    ukv_length_t& count,
     growing_tape_t& paths,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
+
+    scan_predicate( //
+        c_db,
+        c_txn,
+        c_collection,
+        previous_path,
+        c_scan_limit,
+        c_options,
+        count,
+        paths,
+        arena,
+        c_error,
+        [=](std::string_view body) { return starts_with(body, prefix); });
 }
 
-/**
- * > Same collection
- * > Multiple requests
- * > Has previous results
- */
-void scan_one_collection_many_ranges( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    ukv_collection_t collection,
-    contents_arg_t prefixes,
-    contents_arg_t previous,
-    strided_range_gt<ukv_length_t const> max_counts,
-    ukv_options_t const options,
-    span_gt<ukv_length_t> counts,
-    growing_tape_t& paths,
-    stl_arena_t& arena,
-    ukv_error_t* c_error) {
-}
-
-struct prefix_match_task_t {
-    ukv_collection_t collection = ukv_collection_main_k;
-    value_view_t prefix;
-    value_view_t previous;
-    ukv_length_t max_count = 0;
+struct pcre2_ctx_t {
+    stl_arena_t& arena;
+    ukv_error_t* c_error;
 };
+
+static void* pcre2_malloc(PCRE2_SIZE length, void* ctx_ptr) noexcept {
+    pcre2_ctx_t& ctx = *reinterpret_cast<pcre2_ctx_t*>(ctx_ptr);
+    return ctx.arena.alloc<byte_t>(static_cast<std::size_t>(length), ctx.c_error).begin();
+}
+
+static void pcre2_free(void*, void*) noexcept {
+    // Our arenas only grow, we don't dealloc!
+}
+
+void scan_regex( //
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
+    ukv_collection_t c_collection,
+    std::string_view pattern,
+    std::string_view previous_path,
+    ukv_length_t c_scan_limit,
+    ukv_options_t const c_options,
+    ukv_length_t& count,
+    growing_tape_t& paths,
+    stl_arena_t& arena,
+    ukv_error_t* c_error) {
+
+    pcre2_ctx_t ctx {arena, c_error};
+
+    // https://www.pcre.org/current/doc/html/pcre2_compile.html
+    pcre2_general_context* pcre2_context = pcre2_general_context_create(&pcre2_malloc, &pcre2_free, &ctx);
+    pcre2_compile_context* pcre2_compile_context = pcre2_compile_context_create(pcre2_context);
+    int pcre2_pattern_error_code = 0;
+    PCRE2_SIZE pcre2_pattern_error_offset = 0;
+    pcre2_code* pcre2_code = pcre2_compile( //
+        PCRE2_SPTR8(pattern.data()),
+        PCRE2_SIZE(pattern.size()),
+        PCRE2_MATCH_INVALID_UTF,
+        &pcre2_pattern_error_code,
+        &pcre2_pattern_error_offset,
+        pcre2_compile_context);
+
+    // https://www.pcre.org/current/doc/html/pcre2_jit_compile.html
+    auto jit_status = pcre2_jit_compile(pcre2_code, PCRE2_JIT_COMPLETE);
+    if (jit_status != 0)
+        *c_error = "Failed to JIT-compile the RegEx query";
+
+    pcre2_match_data* match_data = pcre2_match_data_create_from_pattern(pcre2_code, pcre2_context);
+    if (!match_data)
+        *c_error = "Failed to allocate memory for RegEx pattern matches";
+
+    if (!*c_error)
+        scan_predicate( //
+            c_db,
+            c_txn,
+            c_collection,
+            previous_path,
+            c_scan_limit,
+            c_options,
+            count,
+            paths,
+            arena,
+            c_error,
+            [=](std::string_view body) {
+                // https://www.pcre.org/current/doc/html/pcre2_jit_match.html
+                // pcre2_match_data match_data;
+                // pcre2_match_context match_context;
+                auto found_matches = pcre2_jit_match( //
+                    pcre2_code,
+                    PCRE2_SPTR(body.data()),
+                    PCRE2_SIZE(body.size()),
+                    PCRE2_SIZE(0), // start offset
+                    PCRE2_NO_UTF_CHECK,
+                    match_data,
+                    NULL);
+                return found_matches > 0;
+            });
+
+    pcre2_match_data_free(match_data);
+    pcre2_code_free(pcre2_code);
+    pcre2_compile_context_free(pcre2_compile_context);
+    pcre2_general_context_free(pcre2_context);
+}
 
 void ukv_paths_match( //
     ukv_database_t const c_db,
@@ -638,14 +711,14 @@ void ukv_paths_match( //
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
 
-    ukv_length_t const* c_prefixes_offsets,
-    ukv_size_t const c_prefixes_offsets_stride,
+    ukv_length_t const* c_patterns_offsets,
+    ukv_size_t const c_patterns_offsets_stride,
 
-    ukv_length_t const* c_prefixes_lengths,
-    ukv_size_t const c_prefixes_lengths_stride,
+    ukv_length_t const* c_patterns_lengths,
+    ukv_size_t const c_patterns_lengths_stride,
 
-    ukv_str_view_t const* c_prefixes,
-    ukv_size_t const c_prefixes_stride,
+    ukv_str_view_t const* c_patterns_strings,
+    ukv_size_t const c_patterns_strings_stride,
 
     ukv_length_t const* c_previous_offsets,
     ukv_size_t const c_previous_offsets_stride,
@@ -672,11 +745,11 @@ void ukv_paths_match( //
     stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
-    contents_arg_t prefixes_args;
-    prefixes_args.offsets_begin = {c_prefixes_offsets, c_prefixes_offsets_stride};
-    prefixes_args.lengths_begin = {c_prefixes_lengths, c_prefixes_lengths_stride};
-    prefixes_args.contents_begin = {(ukv_bytes_cptr_t const*)c_prefixes, c_prefixes_stride};
-    prefixes_args.count = c_tasks_count;
+    contents_arg_t patterns_args;
+    patterns_args.offsets_begin = {c_patterns_offsets, c_patterns_offsets_stride};
+    patterns_args.lengths_begin = {c_patterns_lengths, c_patterns_lengths_stride};
+    patterns_args.contents_begin = {(ukv_bytes_cptr_t const*)c_patterns_strings, c_patterns_strings_stride};
+    patterns_args.count = c_tasks_count;
 
     contents_arg_t previous_args;
     previous_args.offsets_begin = {c_previous_offsets, c_previous_offsets_stride};
@@ -687,58 +760,19 @@ void ukv_paths_match( //
     strided_range_gt<ukv_collection_t const> collections {{c_collections, c_collections_stride}, c_tasks_count};
     strided_range_gt<ukv_length_t const> scan_limits {{c_scan_limits, c_scan_limits_stride}, c_tasks_count};
 
-    auto first_collection = c_collections ? c_collections[0] : ukv_collection_main_k;
-    auto is_same_collection = collections.same_elements();
-    auto has_previous = c_previous != nullptr;
-
     auto scan_limits_sum = transform_reduce_n(scan_limits.begin(), c_tasks_count, 0ul);
     auto found_counts = arena.alloc<ukv_length_t>(c_tasks_count, c_error);
     auto found_paths = growing_tape_t(arena);
+    found_paths.reserve(scan_limits_sum, c_error);
+    return_on_error(c_error);
 
-    if (c_tasks_count == 1)
-        scan_one_collection_one_range( //
-            c_db,
-            c_txn,
-            first_collection,
-            prefixes_args[0],
-            previous_args[0],
-            c_scan_limits[0],
-            c_options,
-            found_counts[0],
-            found_paths,
-            arena,
-            c_error);
-
-    else if (is_same_collection) {
-        has_previous                             //
-            ? scan_one_collection_many_prefixes( //
-                  c_db,
-                  c_txn,
-                  first_collection,
-                  prefixes_args,
-                  scan_limits,
-                  c_options,
-                  found_counts,
-                  found_paths,
-                  arena,
-                  c_error)
-            : scan_one_collection_many_ranges( //
-                  c_db,
-                  c_txn,
-                  first_collection,
-                  prefixes_args,
-                  previous_args,
-                  scan_limits,
-                  c_options,
-                  found_counts,
-                  found_paths,
-                  arena,
-                  c_error);
-    }
-
-    else {
-        // If we have multiple tasks fro different collections - lets group them together
-        // and solve one by one.
+    for (std::size_t i = 0; i != c_tasks_count && !*c_error; ++i) {
+        auto col = collections ? collections[i] : ukv_collection_main_k;
+        auto pattern = patterns_args[i];
+        auto previous = previous_args[i];
+        auto limit = scan_limits[i];
+        auto func = is_prefix(pattern) ? &scan_prefix : &scan_regex;
+        func(c_db, c_txn, col, pattern, previous, limit, c_options, found_counts[i], found_paths, arena, c_error);
     }
 
     // Export the results

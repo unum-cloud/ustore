@@ -147,8 +147,8 @@ void read(txn_t& txn, places_arg_t places, ukv_options_t const options, enumerat
 template <typename enumerator_at>
 void write(db_t& db, places_arg_t places, contents_arg_t contents, ukv_options_t const, ukv_error_t* c_error) {
 
-    safe_vector_gt<collection_key_t> keys(places.count, c_error);
-    safe_vector_gt<blob_t> copies(places.count, c_error);
+    uninitialized_vector_gt<collection_key_t> keys(places.count, c_error);
+    uninitialized_vector_gt<blob_t> copies(places.count, c_error);
     return_on_error(c_error);
 
     for (std::size_t i = 0; i != places.size(); ++i) {
