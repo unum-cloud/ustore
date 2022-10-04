@@ -309,6 +309,7 @@ void ukv_paths_write( //
     unique_places.keys_begin = unique_col_keys_strided.members(&collection_key_t::key).begin();
     unique_places.fields_begin = {};
     unique_places.count = static_cast<ukv_size_t>(unique_col_keys.size());
+    auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
     ukv_read( //
         c_db,
         c_txn,
@@ -317,7 +318,7 @@ void ukv_paths_write( //
         unique_places.collections_begin.stride(),
         unique_places.keys_begin.get(),
         unique_places.keys_begin.stride(),
-        c_options,
+        opts,
         nullptr,
         &buckets_offsets,
         nullptr,
@@ -370,7 +371,7 @@ void ukv_paths_write( //
         sizeof(value_view_t),
         updated_buckets[0].member_ptr(),
         sizeof(value_view_t),
-        c_options,
+        opts,
         &buckets_arena,
         c_error);
 }
