@@ -1453,6 +1453,43 @@ TEST(db, graph_triangle_batch_api) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, graph_transaction_watch) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    graph_collection_t net = *db.collection<graph_collection_t>();
+    transaction_t txn = *db.transact();
+    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
+
+    edge_t edge1 {1, 2, 1};
+    edge_t edge2 {3, 1, 2};
+
+    EXPECT_TRUE(net.upsert(edge1));
+    EXPECT_TRUE(net.upsert(edge2));
+    txn_net.degree(1);
+    EXPECT_TRUE(txn.commit());
+
+    EXPECT_TRUE(txn.reset());
+    txn_net.degree(1);
+    EXPECT_TRUE(txn.commit());
+
+    txn_net.degree(1);
+    EXPECT_TRUE(net.remove(edge1));
+    EXPECT_TRUE(net.remove(edge2));
+    EXPECT_FALSE(txn.commit());
+    EXPECT_TRUE(txn.reset());
+
+    txn_net.degree(1, ukv_vertex_role_any_k, false);
+    EXPECT_TRUE(net.upsert(edge1));
+    EXPECT_TRUE(net.upsert(edge2));
+    EXPECT_TRUE(txn.commit());
+
+    EXPECT_TRUE(db.clear());
+}
+
 edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
     return {v1, v2, edge_id};
 }
