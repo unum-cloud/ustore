@@ -1507,6 +1507,7 @@ TEST(db, graph_conflicting_transactions) {
 
     EXPECT_TRUE(db.clear());
 }
+
 TEST(db, graph_upsert_edges) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1524,34 +1525,21 @@ TEST(db, graph_upsert_edges) {
     over_the_vertices(false, 0);
 
     std::vector<edge_t> star {
-        {1, 1, 3},
-        {2, 1, 4},
-        {3, 2, 4},
-        {4, 2, 5},
-        {5, 3, 5},
+        {1, 3, 1},
+        {1, 4, 2},
+        {2, 4, 3},
+        {2, 5, 4},
+        {3, 5, 5},
     };
     EXPECT_TRUE(graph.upsert(edges(star)));
-    EXPECT_EQ(*graph.degree(1), 2u);
-    EXPECT_EQ(*graph.degree(2), 2u);
-    EXPECT_EQ(*graph.degree(3), 1u);
-    star.push_back({6, 3, 1});
-    star.push_back({7, 4, 1});
-    star.push_back({8, 4, 2});
-    star.push_back({9, 5, 2});
-    star.push_back({10, 5, 3});
     over_the_vertices(true, 2u);
 
     std::vector<edge_t> pentagon {
-        {11, 1, 2},
-        {12, 2, 3},
-        {13, 3, 4},
-        {14, 4, 5},
-        {15, 5, 1},
-        {16, 1, 5},
-        {17, 5, 4},
-        {18, 4, 3},
-        {19, 3, 2},
-        {20, 2, 1},
+        {1, 2, 6},
+        {2, 3, 7},
+        {3, 4, 8},
+        {4, 5, 9},
+        {5, 1, 10},
     };
     EXPECT_TRUE(graph.upsert(edges(pentagon)));
     over_the_vertices(true, 4u);
@@ -1568,8 +1556,23 @@ TEST(db, graph_upsert_edges) {
     EXPECT_TRUE(graph.upsert(edges(pentagon)));
     over_the_vertices(true, 4u);
 
+    std::vector<edge_t> itself {
+        {1, 1, 11},
+        {2, 2, 12},
+        {3, 3, 13},
+        {4, 4, 14},
+        {5, 5, 15},
+    };
+
+    EXPECT_TRUE(graph.upsert(edges(itself)));
+    over_the_vertices(true, 6u);
+
     EXPECT_TRUE(graph.remove(edges(star)));
     EXPECT_TRUE(graph.remove(edges(pentagon)));
+
+    over_the_vertices(true, 2u);
+
+    EXPECT_TRUE(graph.remove(edges(itself)));
 
     over_the_vertices(true, 0);
 
