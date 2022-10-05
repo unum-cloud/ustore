@@ -130,8 +130,8 @@ void check_equalities(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
 }
 
 template <typename locations_at>
-void round_trip(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
-    EXPECT_TRUE(ref.assign(values)) << "Failed to assign";
+void round_trip(bins_ref_gt<locations_at>& ref, contents_arg_t values, bool flush = false) {
+    EXPECT_TRUE(ref.assign(values, flush)) << "Failed to assign";
     check_equalities(ref, values);
 }
 
@@ -183,6 +183,41 @@ TEST(db, basic) {
     EXPECT_TRUE(db.collection());
     bins_collection_t collection = *db.collection();
     check_binary_collection(collection);
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, flush) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    std::vector<ukv_key_t> keys {54, 55, 56};
+    ukv_length_t val_len = sizeof(std::uint64_t);
+    std::vector<std::uint64_t> vals {1, 2, 3};
+    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
+
+    contents_arg_t values {
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
+        .lengths_begin = {&val_len, 0},
+        .contents_begin = {&vals_begin, 0},
+        .count = 3,
+    };
+
+    bins_collection_t collection = *db.collection();
+    auto collection_ref = collection[keys];
+    check_length(collection_ref, ukv_length_missing_k);
+    round_trip(collection_ref, values, true);
+    check_length(collection_ref, 8);
+    db.close();
+
+    EXPECT_TRUE(db.open(path()));
+    bins_collection_t collection2 = *db.collection();
+    auto collection_ref2 = collection2[keys];
+
+    check_equalities(collection_ref2, values);
+    check_length(collection_ref2, 8);
+
     EXPECT_TRUE(db.clear());
 }
 
