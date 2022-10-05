@@ -1439,7 +1439,6 @@ TEST(db, graph_random_fill) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
@@ -1618,6 +1617,34 @@ TEST(db, graph_remove_edges_keep_vertices) {
         EXPECT_TRUE(*graph.contains(vertex_id));
     }
 
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, graph_get_edges) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t graph = *db.collection<graph_collection_t>();
+
+    constexpr std::size_t vertices_count = 1000;
+    auto edges_vec = make_edges(vertices_count, 100);
+    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+
+    std::vector<edge_t> received_edges;
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        auto es = *graph.edges(vertex_id);
+        EXPECT_EQ(es.size(), 9u);
+        for (size_t i = 0; i != es.size(); ++i)
+            received_edges.push_back(es[i]);
+    }
+
+    EXPECT_TRUE(graph.remove(edges(received_edges)));
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_TRUE(*graph.contains(vertex_id));
+        auto es = *graph.edges(vertex_id);
+        EXPECT_EQ(es.size(), 0);
+    }
     EXPECT_TRUE(db.clear());
 }
 
