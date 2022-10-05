@@ -1041,15 +1041,16 @@ TEST(db, docs_modify) {
 
     // Insert
     modifier = R"( {"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    EXPECT_TRUE(collection[1].insert(modifier.c_str()));
-    result = collection[1].value();
+    EXPECT_FALSE(collection[1].insert(modifier.c_str()));
+    EXPECT_TRUE(collection[2].insert(modifier.c_str()));
+    result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
     // Insert By Field
     modifier = R"("Grilish" )"_json.dump();
     expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Grilish"}} )"_json.dump();
-    EXPECT_TRUE(collection[ckf(1, "/person/surname")].insert(modifier.c_str()));
-    result = collection[1].value();
+    EXPECT_TRUE(collection[ckf(2, "/person/surname")].insert(modifier.c_str()));
+    result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Upsert
