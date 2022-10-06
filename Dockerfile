@@ -11,9 +11,15 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -y -V --fix-missing \
     build-essential \
+    git \
     cmake \
-    libarrow-dev \
-    libarrow-flight-dev 
+    libarrow-dataset-dev \
+    libarrow-flight-dev \
+    libarrow-python-dev \
+    libarrow-python-flight-dev \
+    libplasma-dev \
+    libgandiva-dev \
+    libparquet-dev
 
 COPY . /usr/src/ukv
 WORKDIR /usr/src/ukv
