@@ -14,16 +14,21 @@
 #include <numeric>    // `std::accumulate`
 #include <forward_list>
 
+#define std_memory_resource_m 0
+
+#if std_memory_resource_m
 #if __APPLE__
 #include <experimental/memory_resource> // `std::pmr::vector`
 #else
 #include <memory_resource> // `std::pmr::vector`
 #endif
+#endif // std_memory_resource_m
 
 #include "ukv/cpp/types.hpp"  // `byte_t`, `next_power_of_two`
 #include "ukv/cpp/ranges.hpp" // `strided_range_gt`
 #include "ukv/cpp/status.hpp" // `out_of_memory_k`
 
+#if std_memory_resource_m
 #if __APPLE__
 namespace std::pmr {
 template <typename at>
@@ -36,6 +41,50 @@ inline auto get_default_resource() {
 }
 } // namespace std::pmr
 #endif
+#endif // std_memory_resource_m
+
+#if !std_memory_resource_m
+namespace std::pmr {
+class memory_resource {
+  public:
+    // https://en.cppreference.com/w/cpp/types/max_align_t
+    static const size_t max_align_k = alignof(max_align_t);
+
+  public:
+    virtual ~memory_resource() = default;
+
+    void* allocate(size_t bytes, size_t align = max_align_k) { return do_allocate(bytes, align); }
+    void deallocate(void* ptr, size_t bytes, size_t align = max_align_k) { do_deallocate(ptr, bytes, align); }
+    bool is_equal(memory_resource const& other) const noexcept { return do_is_equal(other); }
+
+  private:
+    virtual void* do_allocate(size_t, size_t) = 0;
+    virtual void do_deallocate(void*, size_t, size_t) = 0;
+    virtual bool do_is_equal(memory_resource const&) const noexcept = 0;
+};
+
+class new_delete_memory_resource : public memory_resource {
+  public:
+    ~new_delete_memory_resource() override = default;
+
+  private:
+    void* do_allocate(size_t size, size_t align = max_align_k) override { return aligned_alloc(align, size); }
+    void do_deallocate(void* ptr,
+                       [[maybe_unused]] size_t size = 0,
+                       [[maybe_unused]] size_t align = max_align_k) override {
+        free(ptr);
+    }
+    bool do_is_equal(memory_resource const& other) const noexcept override { return &other == this; }
+};
+
+static new_delete_memory_resource default_memory_resource;
+
+inline memory_resource* get_default_resource() {
+    return &default_memory_resource;
+}
+
+} // namespace std::pmr
+#endif // std_memory_resource_m
 
 namespace unum::ukv {
 
