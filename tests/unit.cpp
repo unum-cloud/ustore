@@ -1648,6 +1648,31 @@ TEST(db, graph_get_edges) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, graph_degrees) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t graph = *db.collection<graph_collection_t>();
+
+    constexpr std::size_t vertices_count = 1000;
+    std::vector<ukv_key_t> vertices(1);
+    // Crash
+    //  vertices[0] = 0;
+    //  graph.degrees({{vertices.data(), vertices.size()}, vertices.size()});
+
+    vertices.resize(vertices_count);
+    for (ukv_key_t vertex_id = 1; vertex_id != vertices_count; ++vertex_id)
+        vertices[vertex_id] = vertex_id;
+
+    auto edges_vec = make_edges(vertices_count, 100);
+    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+
+    auto degrees = *graph.degrees({{vertices.data(), vertices.size()}, vertices.size()});
+    EXPECT_EQ(degrees.size(), vertices_count);
+
+    EXPECT_TRUE(db.clear());
+}
+
 int main(int argc, char** argv) {
     std::filesystem::create_directory("./tmp");
     ::testing::InitGoogleTest(&argc, argv);
