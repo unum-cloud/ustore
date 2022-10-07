@@ -130,6 +130,36 @@ struct scans_arg_t {
     }
 };
 
+struct relationship_t {
+    ukv_collection_t collection;
+    ukv_key_t const& key;
+    ukv_vertex_role_t role;
+};
+/**
+ * Working with batched data is ugly in C++.
+ * This handle doesn't help in the general case,
+ * but at least allow reusing the arguments.
+ */
+struct vertices_arg_t {
+    using value_type = relationship_t;
+    strided_iterator_gt<ukv_collection_t const> collections_begin;
+    strided_iterator_gt<ukv_key_t const> keys_begin;
+    strided_iterator_gt<ukv_vertex_role_t const> roles_begin;
+    ukv_size_t count = 0;
+
+    inline std::size_t size() const noexcept { return count; }
+    inline relationship_t operator[](std::size_t i) const noexcept {
+        ukv_collection_t collection = collections_begin ? collections_begin[i] : ukv_collection_main_k;
+        ukv_key_t const& key = keys_begin[i];
+        ukv_vertex_role_t role = roles_begin ? roles_begin[i] : ukv_vertex_role_any_k;
+        return {collection, key, role};
+    }
+
+    bool same_collection() const noexcept {
+        return strided_range_gt<ukv_collection_t const>(collections_begin, count).same_elements();
+    }
+};
+
 template <typename id_at>
 struct edges_range_gt {
 
