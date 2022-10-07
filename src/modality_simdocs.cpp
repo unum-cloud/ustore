@@ -1148,7 +1148,7 @@ void ukv_docs_write( //
     if (!c_tasks_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1218,7 +1218,7 @@ void ukv_docs_read( //
     if (!c_tasks_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1367,7 +1367,7 @@ void ukv_docs_gist( //
     if (!c_docs_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1534,7 +1534,7 @@ void ukv_docs_gather( //
     if (!c_docs_count || !c_fields_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 

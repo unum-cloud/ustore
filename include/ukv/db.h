@@ -133,7 +133,7 @@ typedef enum {
     ukv_option_transaction_snapshot_k = 1 << 3,
     /**
      * @brief This flag is intended for internal use.
-     * When passed to `prepare_arena`, old_arena is not released,
+     * When passed to `make_stl_arena`, old_arena is not released,
      * and rather a new one is casted and returned,
      * if it existed in the first place, otherwise behaviour is unaffected.
      */

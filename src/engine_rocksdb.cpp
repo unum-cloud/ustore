@@ -376,7 +376,7 @@ void ukv_read( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -387,11 +387,11 @@ void ukv_read( //
     places_arg_t places {collections, keys, {}, c_tasks_count};
 
     // 1. Allocate a tape for all the values to be pulled
-    auto offs = arena.alloc_or_dummy<ukv_length_t>(places.count + 1, c_error, c_found_offsets);
+    auto offs = arena.alloc_or_dummy(places.count + 1, c_error, c_found_offsets);
     return_on_error(c_error);
-    auto lens = arena.alloc_or_dummy<ukv_length_t>(places.count, c_error, c_found_lengths);
+    auto lens = arena.alloc_or_dummy(places.count, c_error, c_found_lengths);
     return_on_error(c_error);
-    auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c_error, c_found_presences);
+    auto presences = arena.alloc_or_dummy(places.count, c_error, c_found_presences);
     return_on_error(c_error);
     uninitialized_vector_gt<byte_t> contents(arena);
 
@@ -452,7 +452,7 @@ void ukv_scan( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -464,9 +464,9 @@ void ukv_scan( //
     scans_arg_t tasks {collections, start_keys, end_keys, limits, c_min_tasks_count};
 
     // 1. Allocate a tape for all the values to be fetched
-    auto offsets = arena.alloc_or_dummy<ukv_length_t>(tasks.count + 1, c_error, c_found_offsets);
+    auto offsets = arena.alloc_or_dummy(tasks.count + 1, c_error, c_found_offsets);
     return_on_error(c_error);
-    auto counts = arena.alloc_or_dummy<ukv_length_t>(tasks.count, c_error, c_found_counts);
+    auto counts = arena.alloc_or_dummy(tasks.count, c_error, c_found_counts);
     return_on_error(c_error);
 
     auto total_keys = reduce_n(tasks.limits, tasks.count, 0ul);
@@ -538,15 +538,15 @@ void ukv_size( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
-    auto min_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_cardinalities);
-    auto max_cardinalities = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_cardinalities);
-    auto min_value_bytes = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_value_bytes);
-    auto max_value_bytes = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_value_bytes);
-    auto min_space_usages = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_min_space_usages);
-    auto max_space_usages = arena.alloc_or_dummy<ukv_size_t>(n, c_error, c_max_space_usages);
+    auto min_cardinalities = arena.alloc_or_dummy(n, c_error, c_min_cardinalities);
+    auto max_cardinalities = arena.alloc_or_dummy(n, c_error, c_max_cardinalities);
+    auto min_value_bytes = arena.alloc_or_dummy(n, c_error, c_min_value_bytes);
+    auto max_value_bytes = arena.alloc_or_dummy(n, c_error, c_max_value_bytes);
+    auto min_space_usages = arena.alloc_or_dummy(n, c_error, c_min_space_usages);
+    auto max_space_usages = arena.alloc_or_dummy(n, c_error, c_max_space_usages);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -697,7 +697,7 @@ void ukv_collection_list( //
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     return_if_error(c_count && c_names, c_error, args_combo_k, "Need names and outputs!");
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c_db);
@@ -714,9 +714,9 @@ void ukv_collection_list( //
     return_on_error(c_error);
 
     // For every collection we also need to export IDs and offsets
-    auto ids = arena.alloc_or_dummy<ukv_collection_t>(collections_count, c_error, c_ids);
+    auto ids = arena.alloc_or_dummy(collections_count, c_error, c_ids);
     return_on_error(c_error);
-    auto offs = arena.alloc_or_dummy<ukv_length_t>(collections_count + 1, c_error, c_offsets);
+    auto offs = arena.alloc_or_dummy(collections_count + 1, c_error, c_offsets);
     return_on_error(c_error);
 
     std::size_t i = 0;
