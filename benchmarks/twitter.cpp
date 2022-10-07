@@ -492,7 +492,7 @@ static void graph_traverse_two_hops(bm::State& state) {
             status.member_ptr());
         status.throw_unhandled();
 
-        total_edges += std::transform_reduce(degrees, degrees + count, 0ul, plus, [](ukv_vertex_degree_t d) {
+        total_edges += std::transform_reduce(degrees, degrees + unique_ids, 0ul, plus, [](ukv_vertex_degree_t d) {
             return d != ukv_vertex_degree_missing_k ? d : 0;
         });
         total_ids = total_edges * 3;
