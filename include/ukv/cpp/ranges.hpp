@@ -292,23 +292,45 @@ strided_range_gt<at> strided_range(at* begin, at* end) noexcept {
  */
 template <typename pointer_at>
 struct indexed_range_gt {
-    pointer_at begin_ = nullptr;
-    pointer_at end_ = nullptr;
+    using pointer_t = pointer_at;
+    using element_t = std::remove_pointer_t<pointer_t>;
+    using strided_t = strided_range_gt<element_t>;
 
-    inline pointer_at begin() const noexcept { return begin_; }
-    inline pointer_at end() const noexcept { return end_; }
-    inline decltype(auto) operator[](std::size_t i) const noexcept { return begin_[i]; }
-    inline decltype(auto) at(std::size_t i) const noexcept { return begin_[i]; }
+    pointer_t begin_ = nullptr;
+    pointer_t end_ = nullptr;
 
-    inline std::size_t size() const noexcept { return end_ - begin_; }
-    inline bool empty() const noexcept { return end_ == begin_; }
-    inline explicit operator bool() const noexcept { return end_ != begin_; }
-    inline auto strided() const noexcept {
-        using element_t = std::remove_pointer_t<pointer_at>;
-        using strided_t = strided_range_gt<element_t>;
+    indexed_range_gt() noexcept : begin_(nullptr), end_(nullptr) {}
+    indexed_range_gt(pointer_t begin, pointer_t end) noexcept : begin_(begin), end_(end) {}
+    indexed_range_gt(pointer_t ptr, std::size_t sz) noexcept : begin_(ptr), end_(ptr + sz) {}
+
+    pointer_t begin() const noexcept { return begin_; }
+    pointer_t end() const noexcept { return end_; }
+    decltype(auto) operator[](std::size_t i) noexcept { return begin_[i]; }
+    decltype(auto) at(std::size_t i) noexcept { return begin_[i]; }
+    decltype(auto) operator[](std::size_t i) const noexcept { return begin_[i]; }
+    decltype(auto) at(std::size_t i) const noexcept { return begin_[i]; }
+
+    std::size_t size() const noexcept { return end_ - begin_; }
+    std::size_t size_bytes() const noexcept { return size() * sizeof(begin_[0]); }
+    bool empty() const noexcept { return end_ == begin_; }
+    explicit operator bool() const noexcept { return end_ != begin_; }
+    operator strided_t() const noexcept { return strided(); }
+    strided_t strided() const noexcept {
         return strided_t {{begin_, sizeof(element_t)}, static_cast<ukv_size_t>(size())};
     }
+
+    template <typename other_at>
+    indexed_range_gt<other_at> cast() const noexcept {
+        return {reinterpret_cast<other_at*>(begin_), size_bytes() / sizeof(other_at)};
+    }
+
+    indexed_range_gt<byte_t const> span_bytes() const noexcept {
+        return {reinterpret_cast<byte_t const*>(begin_), size_bytes()};
+    }
 };
+
+template <typename element_at>
+using ptr_range_gt = indexed_range_gt<element_at*>;
 
 template <typename pointer_at>
 struct range_gt {
