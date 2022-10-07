@@ -60,7 +60,7 @@ ukv_length_t get_bucket_size(value_view_t bucket) noexcept {
     return bucket.size() > bytes_in_header_k ? *lengths : 0u;
 }
 
-indexed_range_gt<ukv_length_t const*> get_bucket_counters(value_view_t bucket, ukv_length_t size) noexcept {
+ptr_range_gt<ukv_length_t const> get_bucket_counters(value_view_t bucket, ukv_length_t size) noexcept {
     auto lengths = reinterpret_cast<ukv_length_t const*>(bucket.data());
     return {lengths, lengths + size * 2u + 1u};
 }
