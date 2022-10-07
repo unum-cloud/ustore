@@ -225,7 +225,7 @@ struct range_or_dummy_gt {
     using reference = typename range_t::reference;
 
     range_t range_;
-    element_t dummy_;
+    value_type dummy_;
 
     reference operator[](std::size_t i) & noexcept { return range_ ? reference(range_[i]) : reference(dummy_); }
     reference operator[](std::size_t i) const& noexcept { return range_ ? reference(range_[i]) : reference(dummy_); }
@@ -234,24 +234,27 @@ struct range_or_dummy_gt {
 };
 
 struct stl_arena_t {
-    explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept
-        : resource(mem_resource), using_shared_memory(false) {}
+    static constexpr std::size_t initial_size_k = 1024ul * 1024ul;
+
+    explicit stl_arena_t(monotonic_resource_t* resource) noexcept : resource_(resource), is_shared_memory_(false) {}
+
     explicit stl_arena_t( //
-        std::size_t initial_size = 1024ul * 1024ul,
+        std::size_t initial_size = initial_size_k,
         monotonic_resource_t::type_t type = monotonic_resource_t::growing_k,
-        bool use_shared_memory = false)
-        : resource(initial_size,
-                   64ul,
-                   type,
-                   use_shared_memory ? shared_resource_t::get_default_resource() : std::pmr::get_default_resource()),
-          using_shared_memory(use_shared_memory) {
-        local_memory = &resource;
+        bool is_shared_memory = false)
+        : resource_(initial_size,
+                    64ul,
+                    type,
+                    is_shared_memory ? shared_resource_t::get_default_resource() : std::pmr::get_default_resource()),
+          is_shared_memory_(is_shared_memory) {
+        local_memory = &resource_;
     }
+
     ~stl_arena_t() noexcept { local_memory = std::pmr::get_default_resource(); }
 
     template <typename at>
     ptr_range_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
-        void* result = resource.allocate(sizeof(at) * size, alignment);
+        void* result = resource_.allocate(sizeof(at) * size, alignment);
         log_if_error(result, c_error, out_of_memory_k, "");
         return {reinterpret_cast<at*>(result), size};
     }
@@ -264,7 +267,7 @@ struct stl_arena_t {
         std::size_t alignment = sizeof(at)) noexcept {
 
         auto new_size = span.size() + additional_size;
-        void* result = resource.allocate(sizeof(at) * new_size, alignment);
+        void* result = resource_.allocate(sizeof(at) * new_size, alignment);
         if (result)
             std::memcpy(result, span.begin(), span.size_bytes());
         else
@@ -272,17 +275,18 @@ struct stl_arena_t {
         return {reinterpret_cast<at*>(result), new_size};
     }
 
-    range_or_dummy_gt<span_bits_t> alloc_or_dummy( //
+    range_or_dummy_gt<bits_span_t> alloc_or_dummy( //
         std::size_t size,
         ukv_error_t* c_error,
         ukv_octet_t** output,
         std::size_t alignment = sizeof(ukv_octet_t)) noexcept {
 
-        using strided_t = strided_range_gt<at>;
-        auto strided = output //
-                           ? strided_t {{((*output) = alloc<at>(size, c_error, alignment).begin()), sizeof(at)}, size}
-                           : strided_t {{nullptr, 0}, size};
-        return {strided, {}};
+        using range_t = bits_span_t;
+        auto slots = divide_round_up(size, bits_in_byte_k);
+        auto range = output //
+                         ? range_t {(*output = alloc<ukv_octet_t>(slots, c_error, alignment).begin())}
+                         : range_t {nullptr};
+        return {range, {}};
     }
 
     template <typename at>
@@ -292,19 +296,20 @@ struct stl_arena_t {
         at** output,
         std::size_t alignment = sizeof(at)) noexcept {
 
-        using strided_t = strided_range_gt<at>;
-        auto strided = output //
-                           ? strided_t {{((*output) = alloc<at>(size, c_error, alignment).begin()), sizeof(at)}, size}
-                           : strided_t {{nullptr, 0}, size};
-        return {strided, {}};
+        static_assert(!std::is_same<at, ukv_octet_t>());
+        using range_t = ptr_range_gt<at>;
+        auto range = output //
+                         ? range_t {(*output = alloc<at>(size, c_error, alignment).begin()), size}
+                         : range_t {nullptr, nullptr};
+        return {range, {}};
     }
 
-    monotonic_resource_t resource;
-    bool using_shared_memory;
+    monotonic_resource_t resource_;
+    bool is_shared_memory_;
 };
 
 template <typename dangerous_at>
-void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dangerous) {
+void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dangerous) noexcept {
     try {
         dangerous();
     }
@@ -316,22 +321,20 @@ void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dang
     }
 }
 
-inline stl_arena_t prepare_arena(ukv_arena_t* c_arena, ukv_options_t options, ukv_error_t* c_error) noexcept {
+inline stl_arena_t make_stl_arena(ukv_arena_t* c_arena, ukv_options_t options, ukv_error_t* c_error) noexcept {
     try {
         stl_arena_t** arena_output = reinterpret_cast<stl_arena_t**>(c_arena);
         stl_arena_t*& arena = *arena_output;
-        bool wants_shared_memory = options & ukv_option_read_shared_memory_k;
-        if (!arena || (wants_shared_memory && !arena->using_shared_memory)) {
+        bool is_shared_memory = options & ukv_option_read_shared_memory_k;
+        if (!arena || (is_shared_memory && !arena->is_shared_memory_)) {
             delete arena;
-            arena = new stl_arena_t(1024ul * 1024ul,
-                                    monotonic_resource_t::growing_k,
-                                    options & ukv_option_read_shared_memory_k);
+            arena = new stl_arena_t(stl_arena_t::initial_size_k, monotonic_resource_t::growing_k, is_shared_memory);
         }
 
         bool keep_old_data = options & ukv_option_dont_discard_memory_k;
         if (!keep_old_data)
-            arena->resource.release();
-        return stl_arena_t(&arena->resource);
+            arena->resource_.release();
+        return stl_arena_t(&arena->resource_);
     }
     catch (...) {
         log_error(c_error, out_of_memory_k, "");

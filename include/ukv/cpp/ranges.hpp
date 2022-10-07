@@ -119,7 +119,7 @@ class bits_span_t {
     };
 
     using element_t = ukv_octet_t;
-    using value_type = bool;
+    using value_type = ukv_octet_t;
     using reference = ref_t;
 
   protected:
@@ -267,6 +267,8 @@ struct indexed_range_gt {
     using pointer_t = pointer_at;
     using element_t = std::remove_pointer_t<pointer_t>;
     using strided_t = strided_range_gt<element_t>;
+    using value_type = element_t;
+    using reference = element_t&;
 
     pointer_t begin_ = nullptr;
     pointer_t end_ = nullptr;
