@@ -39,7 +39,7 @@ struct updated_entry_t : public collection_key_t {
     inline operator value_view_t() const noexcept { return {content, length}; }
 };
 
-indexed_range_gt<neighborship_t const*> neighbors( //
+ptr_range_gt<neighborship_t const> neighbors( //
     ukv_vertex_degree_t const* degrees,
     ukv_key_t const* neighborships,
     ukv_vertex_role_t role = ukv_vertex_role_any_k) {
@@ -54,7 +54,7 @@ indexed_range_gt<neighborship_t const*> neighbors( //
     __builtin_unreachable();
 }
 
-indexed_range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+ptr_range_gt<neighborship_t const> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
     // Handle missing vertices
     if (bytes.size() < bytes_in_degrees_header_k)
         return {};
@@ -65,8 +65,8 @@ indexed_range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex
 
 struct neighborhood_t {
     ukv_key_t center = 0;
-    indexed_range_gt<neighborship_t const*> targets;
-    indexed_range_gt<neighborship_t const*> sources;
+    ptr_range_gt<neighborship_t const> targets;
+    ptr_range_gt<neighborship_t const> sources;
 
     neighborhood_t() = default;
     neighborhood_t(neighborhood_t const&) = default;
@@ -124,11 +124,11 @@ struct neighborhood_t {
         return edges;
     }
 
-    inline indexed_range_gt<neighborship_t const*> outgoing_to(ukv_key_t target) const noexcept {
+    inline ptr_range_gt<neighborship_t const> outgoing_to(ukv_key_t target) const noexcept {
         return equal_subrange(targets, target);
     }
 
-    inline indexed_range_gt<neighborship_t const*> incoming_from(ukv_key_t source) const noexcept {
+    inline ptr_range_gt<neighborship_t const> incoming_from(ukv_key_t source) const noexcept {
         return equal_subrange(sources, source);
     }
 
@@ -142,7 +142,7 @@ struct neighborhood_t {
         return r.size() ? r.begin() : nullptr;
     }
 
-    inline indexed_range_gt<neighborship_t const*> only(ukv_vertex_role_t role) const noexcept {
+    inline ptr_range_gt<neighborship_t const> only(ukv_vertex_role_t role) const noexcept {
         switch (role) {
         case ukv_vertex_source_k: return targets;
         case ukv_vertex_target_k: return sources;
