@@ -132,7 +132,7 @@ struct scans_arg_t {
 
 struct relationship_t {
     ukv_collection_t collection;
-    ukv_key_t const& key;
+    ukv_key_t const& vertex_id;
     ukv_vertex_role_t role;
 };
 /**
@@ -143,16 +143,16 @@ struct relationship_t {
 struct vertices_arg_t {
     using value_type = relationship_t;
     strided_iterator_gt<ukv_collection_t const> collections_begin;
-    strided_iterator_gt<ukv_key_t const> keys_begin;
+    strided_iterator_gt<ukv_key_t const> vertex_id_begin;
     strided_iterator_gt<ukv_vertex_role_t const> roles_begin;
     ukv_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
     inline relationship_t operator[](std::size_t i) const noexcept {
         ukv_collection_t collection = collections_begin ? collections_begin[i] : ukv_collection_main_k;
-        ukv_key_t const& key = keys_begin[i];
+        ukv_key_t const& vertex_id = vertex_id_begin[i];
         ukv_vertex_role_t role = roles_begin ? roles_begin[i] : ukv_vertex_role_any_k;
-        return {collection, key, role};
+        return {collection, vertex_id, role};
     }
 
     bool same_collection() const noexcept {
