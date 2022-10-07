@@ -186,7 +186,7 @@ TEST(db, basic) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, consistency) {
+TEST(db, persistency) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -980,7 +980,20 @@ TEST(db, docs_modify) {
     EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
 
-    auto json = R"( { "a": {"b": "c","0":{"b":[{"1":"2"},{"3":"4"},{"5":"6"},{"7":"8"},{"9":"10"}]} } })"_json.dump();
+    auto json = R"( { 
+        "a": {
+            "b": "c",
+            "0": { 
+                "b": [
+                    {"1":"2"},
+                    {"3":"4"},
+                    {"5":"6"},
+                    {"7":"8"},
+                    {"9":"10"}
+                ]
+            }
+        }
+    })"_json.dump();
     collection[1] = json.c_str();
     M_EXPECT_EQ_JSON(*collection[1].value(), json);
 
@@ -1002,16 +1015,29 @@ TEST(db, docs_modify) {
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Patch
-    modifier =
-        R"([ { "op": "add", "path": "/a/key", "value": "value" },
-             { "op": "replace", "path": "/a/0/b/0", "value": {"1":"3"} },
-             { "op": "copy", "path": "/a/another_key", "from": "/a/key" },
-             { "op": "move", "path": "/a/0/b/5", "from": "/a/0/b/1" },
-             { "op": "remove", "path": "/a/b" }  ])"_json.dump();
-
-    expected =
-        R"( { "a": {"key" : "value","another_key" : "value","0":{"b":[{"1":"3"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"},{"3":"14"}]} } })"_json
-            .dump();
+    modifier = R"([ 
+        { "op": "add", "path": "/a/key", "value": "value" },
+        { "op": "replace", "path": "/a/0/b/0", "value": {"1":"3"} },
+        { "op": "copy", "path": "/a/another_key", "from": "/a/key" },
+        { "op": "move", "path": "/a/0/b/5", "from": "/a/0/b/1" },
+        { "op": "remove", "path": "/a/b" }
+    ])"_json.dump();
+    expected = R"( { 
+        "a": {
+            "key" : "value",
+            "another_key" : "value",
+            "0": {
+                "b":[
+                    {"1":"3"},
+                    {"5":"6"},
+                    {"7":"8"},
+                    {"9":"11"},
+                    {"11":"12"},
+                    {"3":"14"}
+                ]
+            } 
+        } 
+    })"_json.dump();
     EXPECT_TRUE(collection[1].patch(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
@@ -1047,8 +1073,8 @@ TEST(db, docs_modify) {
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
     // Insert By Field
-    modifier = R"("Grilish" )"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Grilish"}} )"_json.dump();
+    modifier = R"("Doe" )"_json.dump();
+    expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Doe"}} )"_json.dump();
     EXPECT_TRUE(collection[ckf(2, "/person/surname")].insert(modifier.c_str()));
     result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
@@ -1066,8 +1092,8 @@ TEST(db, docs_modify) {
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
-    modifier = R"("Grilish")"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 28, "surname" : "Grilish"}} )"_json.dump();
+    modifier = R"("Doe")"_json.dump();
+    expected = R"( {"person": {"name":"Carl", "age": 28, "surname" : "Doe"}} )"_json.dump();
     EXPECT_TRUE(collection[ckf(1, "/person/surname")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
