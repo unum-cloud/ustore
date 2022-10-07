@@ -3,6 +3,7 @@
 #include <random>
 #include <thread>
 #include <mutex>
+#include <chrono>
 #include <charconv>
 #include <filesystem>
 
@@ -25,6 +26,9 @@ static char const* path() {
     return nullptr;
 #endif
 }
+
+static std::random_device random_device;
+static std::mt19937 engine(random_device());
 
 template <std::size_t threads_cnt, std::size_t txn_cnt, std::size_t op_per_txn>
 void insert_concurrent_transactions() {
@@ -70,26 +74,23 @@ void insert_concurrent_transactions() {
 }
 
 struct operation_t {
-    enum op_code { select, insert, remove };
+    typedef enum { select_k, insert_k, remove_k } op_code_t;
 
-    op_code type;
+    op_code_t type;
     std::vector<ukv_key_t> keys;
     std::vector<std::uint64_t> values;
 
-    inline operation_t(op_code op, std::vector<ukv_key_t>&& moved_keys, std::vector<std::uint64_t>&& moved_values)
+    inline operation_t(op_code_t op, std::vector<ukv_key_t>&& moved_keys, std::vector<std::uint64_t>&& moved_values)
         : type(op), keys(std::move(moved_keys)), values(std::move(moved_values)) {};
 };
 
 template <typename element_t>
 void random_fill(std::vector<element_t>& vec) {
-    std::random_device rd;
-    std::mt19937 engine(rd());
-    std::uniform_int_distribution<element_t> dist(std::numeric_limits<element_t>::min(),
-                                                  std::numeric_limits<element_t>::max());
-    std::generate(vec.begin(), vec.end(), [&dist, &engine]() { return dist(engine); });
+    std::uniform_int_distribution<element_t> dist(std::numeric_limits<element_t>::min());
+    std::generate(vec.begin(), vec.end(), [&dist]() { return dist(engine); });
 }
 
-template <std::size_t threads_cnt, std::size_t txn_cnt, std::size_t max_op_per_txn>
+template <std::size_t threads_cnt, std::size_t txn_cnt, std::size_t op_cnt>
 void time_point_concurrent_transactions() {
 
     database_t db;
@@ -97,92 +98,84 @@ void time_point_concurrent_transactions() {
     EXPECT_TRUE(db.clear());
     std::mutex mutex;
 
-    using time_point_t = std::uint64_t;
+    using time_point_t = std::chrono::high_resolution_clock::time_point;
     std::map<time_point_t, operation_t> operations;
+    ukv_length_t val_len = sizeof(std::uint64_t);
+    std::vector<ukv_length_t> offsets(op_cnt);
+    for (std::size_t i = 0; i != op_cnt; ++i)
+        offsets[i] = i * val_len;
 
     auto task_insert = [&]() {
-        for (std::size_t txn_idx = 0; txn_idx != txn_cnt; ++txn_idx) {
+        std::vector<ukv_key_t> keys(op_cnt);
+        std::vector<std::uint64_t> values(op_cnt);
+        auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(values.data());
+        contents_arg_t contents {
+            .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
+            .lengths_begin = {&val_len, 0},
+            .contents_begin = {&vals_begin, 0},
+            .count = op_cnt,
+        };
 
-            std::size_t op_cnt = std::rand() % max_op_per_txn;
-            std::vector<ukv_key_t> keys(op_cnt);
-            std::vector<std::uint64_t> values(op_cnt);
-            std::vector<ukv_length_t> offsets(op_cnt);
+        for (std::size_t txn_idx = 0; txn_idx != txn_cnt; ++txn_idx) {
             random_fill(keys);
             random_fill(values);
 
-            ukv_length_t val_len = sizeof(std::uint64_t);
-            auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(values.data());
-            for (std::size_t i = 0; i != op_cnt; ++i)
-                offsets[i] = i * val_len;
-
-            contents_arg_t contents {
-                .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
-                .lengths_begin = {&val_len, 0},
-                .contents_begin = {&vals_begin, 0},
-                .count = op_cnt,
-            };
-
             transaction_t txn = *db.transact();
             auto txn_ref = txn[keys];
-            txn_ref.assign(contents);
-            status_t status = txn.commit();
-            auto time =
-                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
-                    .count();
+            status_t status = txn_ref.assign(contents);
+            if (!status)
+                continue;
+            status = txn.commit();
+            auto time = std::chrono::high_resolution_clock::now();
             if (!status)
                 continue;
 
             mutex.lock();
             operations.insert(std::pair<time_point_t, operation_t>(
                 time,
-                operation_t(operation_t::insert, std::move(keys), std::move(values))));
+                operation_t(operation_t::insert_k, std::move(keys), std::move(values))));
             mutex.unlock();
         }
     };
 
     auto task_remove = [&]() {
+        std::vector<ukv_key_t> keys(op_cnt);
         for (std::size_t txn_idx = 0; txn_idx != txn_cnt; ++txn_idx) {
-
-            std::size_t op_cnt = std::rand() % max_op_per_txn;
-            std::vector<ukv_key_t> keys(op_cnt);
             random_fill(keys);
 
             transaction_t txn = *db.transact();
             auto txn_ref = txn[keys];
-            txn_ref.erase();
-            status_t status = txn.commit();
-            auto time =
-                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
-                    .count();
+            status_t status = txn_ref.erase();
+            if (!status)
+                continue;
+            status = txn.commit();
+            auto time = std::chrono::high_resolution_clock::now();
+
             if (!status)
                 continue;
 
             mutex.lock();
             operations.insert(std::pair<time_point_t, operation_t>(
                 time,
-                operation_t(operation_t::remove, std::move(keys), std::vector<std::uint64_t>())));
+                operation_t(operation_t::remove_k, std::move(keys), std::vector<std::uint64_t>())));
             mutex.unlock();
         }
     };
 
     auto task_select = [&]() {
+        std::vector<ukv_key_t> keys(op_cnt);
+        std::vector<std::uint64_t> values(op_cnt);
         for (std::size_t txn_idx = 0; txn_idx != txn_cnt; ++txn_idx) {
-
-            std::size_t op_cnt = std::rand() % max_op_per_txn;
-            std::vector<ukv_key_t> keys(op_cnt);
             random_fill(keys);
 
             transaction_t txn = *db.transact();
             auto txn_ref = txn[keys];
             auto const& retrieved = *txn_ref.value();
             status_t status = txn.commit();
-            auto time =
-                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
-                    .count();
+            auto time = std::chrono::high_resolution_clock::now();
             if (!status)
                 continue;
 
-            std::vector<std::uint64_t> values(op_cnt);
             auto it = retrieved.begin();
             for (std::size_t i = 0; i != op_cnt; ++i, ++it) {
                 value_view_t val_view = *it;
@@ -193,7 +186,7 @@ void time_point_concurrent_transactions() {
             mutex.lock();
             operations.insert(std::pair<time_point_t, operation_t>(
                 time,
-                operation_t(operation_t::select, std::move(keys), std::move(values))));
+                operation_t(operation_t::select_k, std::move(keys), std::move(values))));
             mutex.unlock();
         }
     };
@@ -225,42 +218,32 @@ void time_point_concurrent_transactions() {
     for (auto& time_and_operation : operations) {
         auto operation = time_and_operation.second;
         auto ref = collection[operation.keys];
-        if (operation.type == operation_t::remove) {
+        if (operation.type == operation_t::remove_k)
             EXPECT_TRUE(ref.erase());
-        }
-        else if (operation.type == operation_t::insert) {
-            ukv_length_t val_len = sizeof(std::uint64_t);
+        else if (operation.type == operation_t::insert_k) {
             auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(operation.values.data());
-            std::vector<ukv_length_t> offsets(operation.values.size());
-            for (std::size_t i = 0; i != operation.values.size(); ++i)
-                offsets[i] = i * val_len;
 
             contents_arg_t contents {
                 .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
                 .lengths_begin = {&val_len, 0},
                 .contents_begin = {&vals_begin, 0},
-                .count = operation.values.size(),
+                .count = op_cnt,
             };
 
             EXPECT_TRUE(ref.assign(contents));
         }
         else {
-            ukv_length_t val_len = sizeof(std::uint64_t);
             auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(operation.values.data());
-            std::vector<ukv_length_t> offsets(operation.keys.size());
-            for (std::size_t i = 0; i != operation.values.size(); ++i)
-                offsets[i] = i * val_len;
-
             contents_arg_t contents {
                 .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
                 .lengths_begin = {&val_len, 0},
                 .contents_begin = {&vals_begin, 0},
-                .count = operation.values.size(),
+                .count = op_cnt,
             };
 
             auto const& retrieved = *ref.value();
             auto it = retrieved.begin();
-            for (std::size_t i = 0; i != operation.values.size(); ++i, ++it) {
+            for (std::size_t i = 0; i != op_cnt; ++i, ++it) {
                 value_view_t val_view = *it;
                 if (!val_view) {
                     EXPECT_EQ(operation.values[i], 0);
