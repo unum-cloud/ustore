@@ -299,7 +299,7 @@ void read_one( //
     rocks_value_t& value = *value_uptr.get();
     rocks_status_t status =
         txn //
-            ? watch ? txn->Get(options, col, key, &value) : txn->GetForUpdate(options, col, key, &value)
+            ? watch ? txn->GetForUpdate(options, col, key, &value) : txn->Get(options, col, key, &value)
             : db.native->Get(options, col, key, &value);
     if (!status.IsNotFound()) {
         if (export_error(status, c_error))
@@ -338,7 +338,7 @@ void read_many( //
 
     std::vector<rocks_status_t> statuses =
         txn //
-            ? watch ? txn->MultiGet(options, cols, keys, &vals) : txn->MultiGetForUpdate(options, cols, keys, &vals)
+            ? watch ? txn->MultiGetForUpdate(options, cols, keys, &vals) : txn->MultiGet(options, cols, keys, &vals)
             : db.native->MultiGet(options, cols, keys, &vals);
     for (std::size_t i = 0; i != places.size(); ++i) {
         if (!statuses[i].IsNotFound()) {
