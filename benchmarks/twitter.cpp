@@ -600,7 +600,10 @@ int main(int argc, char** argv) {
 
     // 1. Find the dataset parts
     std::printf("Will search for .ndjson files...\n");
-    auto dataset_path = dataset_directory; // std::filesystem::absolute(dataset_directory);
+    auto dataset_path = dataset_directory;
+    auto home_path = std::getenv("HOME");
+    if (dataset_path.front() == '~')
+        dataset_path = std::filesystem::path(home_path) / dataset_path.substr(2);
     auto opts = std::filesystem::directory_options::follow_directory_symlink;
     for (auto const& dir_entry : std::filesystem::directory_iterator(dataset_path, opts)) {
         if (dir_entry.path().extension() != ".ndjson")
