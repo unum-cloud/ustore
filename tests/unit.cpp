@@ -1469,20 +1469,20 @@ TEST(db, graph_transaction_watch) {
 
     EXPECT_TRUE(net.upsert(edge1));
     EXPECT_TRUE(net.upsert(edge2));
-    txn_net.degree(1);
+    EXPECT_TRUE(txn_net.degree(1));
     EXPECT_TRUE(txn.commit());
 
     EXPECT_TRUE(txn.reset());
-    txn_net.degree(1);
+    EXPECT_TRUE(txn_net.degree(1));
     EXPECT_TRUE(txn.commit());
 
-    txn_net.degree(1);
+    EXPECT_TRUE(txn_net.degree(1));
     EXPECT_TRUE(net.remove(edge1));
     EXPECT_TRUE(net.remove(edge2));
     EXPECT_FALSE(txn.commit());
     EXPECT_TRUE(txn.reset());
 
-    txn_net.degree(1, ukv_vertex_role_any_k, false);
+    EXPECT_TRUE(txn_net.degree(1, ukv_vertex_role_any_k, false));
     EXPECT_TRUE(net.upsert(edge1));
     EXPECT_TRUE(net.upsert(edge2));
     EXPECT_TRUE(txn.commit());
@@ -1556,8 +1556,7 @@ TEST(db, graph_conflicting_transactions) {
     EXPECT_FALSE(*net.contains(2));
     EXPECT_FALSE(*net.contains(3));
 
-    auto status = txn.commit();
-    status.throw_unhandled();
+    EXPECT_TRUE(txn.commit());
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_TRUE(*net.contains(3));
