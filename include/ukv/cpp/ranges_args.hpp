@@ -60,6 +60,7 @@ struct contents_arg_t {
     strided_iterator_gt<ukv_length_t const> lengths_begin;
     strided_iterator_gt<ukv_bytes_cptr_t const> contents_begin;
     ukv_size_t count = 0;
+    ukv_char_t separator = '\0';
 
     inline std::size_t size() const noexcept { return count; }
     inline value_view_t operator[](std::size_t i) const noexcept {
@@ -73,8 +74,11 @@ struct contents_arg_t {
             len = lengths_begin[i];
         else if (offsets_begin)
             len = offsets_begin[i + 1] - off;
-        else
-            len = std::strlen(reinterpret_cast<char const*>(begin) + off);
+        else {
+            auto item = reinterpret_cast<char const*>(begin) + off;
+            while (item[len++] != separator)
+                ;
+        }
         return {begin + off, len};
     }
 

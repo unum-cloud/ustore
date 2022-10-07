@@ -907,7 +907,54 @@ class UKVService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
         }
+        else if (is_query(desc.cmd, kFlightWritePath)) {
+            /// @param `paths`
+            auto input_paths = get_contents(input_schema_c, input_batch_c, "paths");
 
+            /// @param `collections`
+            ukv_collection_t c_collection_id = ukv_collection_main_k;
+            strided_iterator_gt<ukv_collection_t> input_collections;
+            if (params.collection_id) {
+                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
+                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
+            }
+            else
+                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
+
+            auto input_vals = get_contents(input_schema_c, input_batch_c, kArgVals);
+
+            auto session = sessions_.lock(params.session_id, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
+            ukv_paths_write( //
+                db_,
+                session.txn,
+                tasks_count,
+                input_collections.get(),
+                input_collections.stride(),
+                input_paths.offsets_begin.get(),
+                input_paths.offsets_begin.stride(),
+                input_paths.lengths_begin.get(),
+                input_paths.lengths_begin.stride(),
+                reinterpret_cast<ukv_str_view_t const*>(input_paths.contents_begin.get()),
+                input_paths.contents_begin.stride(),
+                input_vals.presences_begin.get(),
+                input_vals.offsets_begin.get(),
+                input_vals.offsets_begin.stride(),
+                input_vals.lengths_begin.get(),
+                input_vals.lengths_begin.stride(),
+                input_vals.contents_begin.get(),
+                input_vals.contents_begin.stride(),
+                ukv_options(params),
+                input_paths.separator,
+                &session.arena,
+                status.member_ptr());
+
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+        }
         return ar::Status::OK();
     }
 

@@ -38,10 +38,11 @@ inline static std::string const kFlightColDrop = "remove_collection"; /// `DoAct
 inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
 inline static std::string const kFlightTxnCommit = "commit_transaction"; /// `DoAction`
 
-inline static std::string const kFlightWrite = "write"; /// `DoPut`
-inline static std::string const kFlightRead = "read";   /// `DoExchange`
-inline static std::string const kFlightScan = "scan";   /// `DoExchange`
-inline static std::string const kFlightSize = "size";   /// `DoExchange`
+inline static std::string const kFlightWritePath = "write_path"; /// `DoPut`
+inline static std::string const kFlightWrite = "write";          /// `DoPut`
+inline static std::string const kFlightRead = "read";            /// `DoExchange`
+inline static std::string const kFlightScan = "scan";            /// `DoExchange`
+inline static std::string const kFlightSize = "size";            /// `DoExchange`
 
 inline static std::string const kArgCols = "collections";
 inline static std::string const kArgKeys = "keys";
