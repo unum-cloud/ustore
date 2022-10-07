@@ -207,6 +207,11 @@ if(${UKV_BUILD_TESTS})
     target_compile_definitions(${test_name} PUBLIC UKV_TEST_PATH="tmp/${client_name}")
     add_test(NAME "${client_name}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_name}")
 
+    string(CONCAT test_name "ukv_" ${client_name} "_stress_test")
+    add_executable(${test_name} tests/transaction_stress_test.cpp)
+    target_link_libraries(${test_name} gtest ${target_name} ${target_LIBRARIES})
+    target_compile_definitions(${test_name} PUBLIC UKV_TEST_PATH="tmp/${client_name}/")
+
     string(CONCAT test_name "ukv_" ${client_name} "_api_test")
     add_executable(${test_name} tests/api.cpp)
     target_compile_definitions(${test_name} PUBLIC UKV_TEST_PATH="tmp/${client_name}")
