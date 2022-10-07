@@ -258,7 +258,7 @@ void ukv_read( //
             auto lens = *c_found_lengths = arena.alloc<ukv_length_t>(places.count, c_error).begin();
             return_on_error(c_error);
             if (presences_ptr) {
-                auto presences = strided_iterator_gt<ukv_octet_t const>(presences_ptr, sizeof(ukv_octet_t));
+                auto presences = bits_view_t(presences_ptr);
                 for (std::size_t i = 0; i != places.count; ++i)
                     lens[i] = presences[i] ? (offs_ptr[i + 1] - offs_ptr[i]) : ukv_length_missing_k;
             }
@@ -308,7 +308,7 @@ void ukv_write( //
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
-    strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c_presences};
 
     places_arg_t places {collections, keys, {}, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
@@ -347,7 +347,7 @@ void ukv_write( //
         auto slots_presences = arena.alloc<ukv_octet_t>(slots_count, c_error);
         return_on_error(c_error);
         std::memset(slots_presences.begin(), 0, slots_count);
-        auto joined_presences = strided_iterator_gt<ukv_octet_t>(slots_presences.begin(), sizeof(ukv_octet_t));
+        auto joined_presences = bits_span_t(slots_presences.begin());
 
         // Exports into the Arrow-compatible form
         ukv_length_t exported_bytes = 0;
@@ -363,7 +363,7 @@ void ukv_write( //
         joined_vals_begin = (ukv_bytes_cptr_t)joined_vals.begin();
         vals = {&joined_vals_begin, 0};
         offs = {joined_offs.begin(), sizeof(ukv_key_t)};
-        presences = {slots_presences.begin(), sizeof(ukv_octet_t)};
+        presences = {slots_presences.begin()};
     }
     // It may be the case, that we only have `c_tasks_count` offsets instead of `c_tasks_count+1`,
     // which won't be enough for Arrow.
@@ -374,7 +374,7 @@ void ukv_write( //
         auto slots_presences = arena.alloc<ukv_octet_t>(slots_count, c_error);
         return_on_error(c_error);
         std::memset(slots_presences.begin(), 0, slots_count);
-        auto joined_presences = strided_iterator_gt<ukv_octet_t>(slots_presences.begin(), sizeof(ukv_octet_t));
+        auto joined_presences = bits_span_t(slots_presences.begin());
 
         // Exports into the Arrow-compatible form
         ukv_length_t exported_bytes = 0;
@@ -388,7 +388,7 @@ void ukv_write( //
 
         vals = {&joined_vals_begin, 0};
         offs = {joined_offs.begin(), sizeof(ukv_key_t)};
-        presences = {slots_presences.begin(), sizeof(ukv_octet_t)};
+        presences = {slots_presences.begin()};
     }
 
     // Now build-up the Arrow representation

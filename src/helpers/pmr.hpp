@@ -218,6 +218,21 @@ class polymorphic_allocator_gt {
     at* allocate(std::size_t size) { return reinterpret_cast<at*>(local_memory->allocate(sizeof(at) * size)); }
 };
 
+template <typename range_at>
+struct range_or_dummy_gt {
+    using range_t = range_at;
+    using value_type = typename range_t::value_type;
+    using reference = typename range_t::reference;
+
+    range_t range_;
+    element_t dummy_;
+
+    reference operator[](std::size_t i) & noexcept { return range_ ? reference(range_[i]) : reference(dummy_); }
+    reference operator[](std::size_t i) const& noexcept { return range_ ? reference(range_[i]) : reference(dummy_); }
+    std::size_t size() const noexcept { return range_.size(); }
+    explicit operator bool() const noexcept { return range_; }
+};
+
 struct stl_arena_t {
     explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept
         : resource(mem_resource), using_shared_memory(false) {}
@@ -257,8 +272,21 @@ struct stl_arena_t {
         return {reinterpret_cast<at*>(result), new_size};
     }
 
+    range_or_dummy_gt<span_bits_t> alloc_or_dummy( //
+        std::size_t size,
+        ukv_error_t* c_error,
+        ukv_octet_t** output,
+        std::size_t alignment = sizeof(ukv_octet_t)) noexcept {
+
+        using strided_t = strided_range_gt<at>;
+        auto strided = output //
+                           ? strided_t {{((*output) = alloc<at>(size, c_error, alignment).begin()), sizeof(at)}, size}
+                           : strided_t {{nullptr, 0}, size};
+        return {strided, {}};
+    }
+
     template <typename at>
-    strided_range_or_dummy_gt<at> alloc_or_dummy( //
+    range_or_dummy_gt<ptr_range_gt<at>> alloc_or_dummy( //
         std::size_t size,
         ukv_error_t* c_error,
         at** output,

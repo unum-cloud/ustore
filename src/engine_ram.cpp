@@ -290,7 +290,7 @@ void ukv_write( //
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
-    strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c_presences};
 
     places_arg_t places {collections, keys, {}, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};

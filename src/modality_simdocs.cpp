@@ -1156,7 +1156,7 @@ void ukv_docs_write( //
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c_fields, c_fields_stride};
     auto has_fields = fields && (!fields.repeats() || *fields);
-    if (false && !has_fields && c_type == internal_format_k && c_modification == ukv_doc_modify_upsert_k)
+    if (!has_fields && c_type == internal_format_k && c_modification == ukv_doc_modify_upsert_k)
         return ukv_write( //
             c_db,
             c_txn,
@@ -1180,7 +1180,7 @@ void ukv_docs_write( //
 
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c_presences};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
