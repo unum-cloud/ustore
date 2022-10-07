@@ -150,7 +150,7 @@ void ukv_read( //
     if (has_collections_column && !collections.is_continuous()) {
         auto continuous = arena.alloc<ukv_collection_t>(places.count, c_error);
         return_on_error(c_error);
-        transform_n(keys, places.count, continuous.begin());
+        transform_n(collections, places.count, continuous.begin());
         collections = {continuous.begin(), sizeof(ukv_collection_t)};
     }
 
@@ -630,7 +630,7 @@ void ukv_paths_write( //
         paths = {&joined_paths_begin, 0};
         path_offs = {joined_offs.begin(), sizeof(ukv_length_t)};
     }
-    else if (has_contents_column && !contents.is_arrow()) {
+    else if (has_paths_column && !path_contents.is_arrow()) {
         auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c_error);
         return_on_error(c_error);
         size_t slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
