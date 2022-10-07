@@ -128,7 +128,7 @@ struct neighborship_t {
  * @brief Similar to `std::optional<std::string_view>`.
  * It's NULL state and "empty string" states are not identical.
  * The NULL state generally reflects missing values.
- * Unlike `indexed_range_gt<byte_t const*>`, this classes layout allows
+ * Unlike `ptr_range_gt<byte_t const>`, this classes layout allows
  * easily passing it to the internals of UKV implementations
  * without additional bit-twiddling.
  */

@@ -18,7 +18,7 @@ class docs_pairs_stream_t {
     ukv_length_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
-    indexed_range_gt<ukv_key_t*> fetched_keys_;
+    ptr_range_gt<ukv_key_t> fetched_keys_;
     embedded_bins_t values_view;
     std::size_t fetched_offset_ = 0;
 
@@ -56,7 +56,7 @@ class docs_pairs_stream_t {
         if (!status)
             return status;
 
-        fetched_keys_ = indexed_range_gt<ukv_key_t*> {found_keys, found_keys + *found_counts};
+        fetched_keys_ = ptr_range_gt<ukv_key_t> {found_keys, found_keys + *found_counts};
         fetched_offset_ = 0;
         auto count = static_cast<ukv_size_t>(fetched_keys_.size());
 
