@@ -1167,7 +1167,13 @@ void ukv_transaction_free(ukv_database_t const, ukv_transaction_t const c_txn) {
 void ukv_database_free(ukv_database_t c_db) {
     if (!c_db)
         return;
+
     database_t& db = *reinterpret_cast<database_t*>(c_db);
+    if (!db.persisted_path.empty()) {
+        ukv_error_t c_error = nullptr;
+        write(db, db.persisted_path, &c_error);
+    }
+
     delete &db;
 }
 
