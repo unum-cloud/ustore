@@ -180,6 +180,8 @@ extern bool const ukv_supports_snapshots_k;
 /*********************************************************/
 
 /**
+ * @struct DataBase Init task descriptor.
+ *
  * @brief Opens the underlying Key-Value Store, which can be any of:
  * > embedded persistent transactional KVS
  * > embedded in-memory transactional KVS
@@ -190,10 +192,13 @@ extern bool const ukv_supports_snapshots_k;
  * @param[out] db     A pointer to the opened KVS, unless @param error is filled.
  * @param[out] error  The error message to be handled by callee.
  */
-void ukv_database_init( //
-    ukv_str_view_t config,
-    ukv_database_t* db,
-    ukv_error_t* error);
+typedef struct ukv_database_init_t {
+    ukv_str_view_t config = NULL;
+    ukv_database_t* db;
+    ukv_error_t* error;
+} ukv_database_init_t;
+
+void ukv_database_init(ukv_database_init_t*);
 
 /**
  * @brief The primary "setter" interface.
@@ -287,32 +292,37 @@ void ukv_database_init( //
  * 3. If @param lengths is NULL, we expect `N+1` @param offsets (like Arrow) to determine entry length.
  * 4. If @param lengths and @param offsets are NULL, we expect NULL-terminated entries and will `std::strlen`.
  */
-void ukv_write( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_size_t const tasks_count,
+typedef struct ukv_write_t {
 
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_transaction_t transaction = NULL;
+    ukv_arena_t* arena = NULL;
+    ukv_options_t options = ukv_options_default_k;
+    ukv_size_t tasks_count = 1;
 
-    ukv_key_t const* keys,
-    ukv_size_t const keys_stride,
+    // Inputs: Keys
+    ukv_collection_t const* collections = NULL;
+    ukv_size_t collections_stride = 0;
 
-    ukv_octet_t const* presences,
+    ukv_key_t const* keys = NULL;
+    ukv_size_t keys_stride = 0;
 
-    ukv_length_t const* offsets,
-    ukv_size_t const offsets_stride,
+    // Inputs: Values
+    ukv_octet_t const* presences = NULL;
 
-    ukv_length_t const* lengths,
-    ukv_size_t const lengths_stride,
+    ukv_length_t const* offsets = NULL;
+    ukv_size_t offsets_stride = 0;
 
-    ukv_bytes_cptr_t const* values,
-    ukv_size_t const values_stride,
+    ukv_length_t const* lengths = NULL;
+    ukv_size_t lengths_stride = 0;
 
-    ukv_options_t const options,
+    ukv_bytes_cptr_t const* values = NULL;
+    ukv_size_t values_stride = 0;
 
-    ukv_arena_t* arena,
-    ukv_error_t* error);
+} ukv_write_t;
+
+void ukv_write(ukv_write_t*);
 
 /**
  * @brief The primary "getter" interface.
@@ -371,26 +381,30 @@ void ukv_write( //
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
  */
-void ukv_read( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_size_t const tasks_count,
+struct ukv_read_t {
 
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_transaction_t transaction = NULL;
+    ukv_arena_t* arena = NULL;
+    ukv_options_t options = ukv_options_default_k;
+    ukv_size_t tasks_count = 1;
 
-    ukv_key_t const* keys,
-    ukv_size_t const keys_stride,
+    // Inputs:
+    ukv_collection_t const* collections = NULL;
+    ukv_size_t collections_stride = 0;
 
-    ukv_options_t const options,
+    ukv_key_t const* keys = NULL;
+    ukv_size_t keys_stride = 0;
 
-    ukv_octet_t** presences,
-    ukv_length_t** offsets,
-    ukv_length_t** lengths,
-    ukv_byte_t** values,
+    // Outputs:
+    ukv_octet_t** presences = NULL;
+    ukv_length_t** offsets = NULL;
+    ukv_length_t** lengths = NULL;
+    ukv_byte_t** values = NULL;
+};
 
-    ukv_arena_t* arena,
-    ukv_error_t* error);
+void ukv_read(ukv_read_t*);
 
 /**
  * @brief Retrieves the following (upto) @param scan_limits[i] keys starting
@@ -433,31 +447,33 @@ void ukv_read( //
  * @section Why use "last keys" instead of "start keys"?
  *
  */
-void ukv_scan( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_size_t const tasks_count,
+typedef struct ukv_scan_t {
 
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_transaction_t transaction = NULL;
+    ukv_arena_t* arena = NULL;
+    ukv_options_t options = ukv_options_default_k;
+    ukv_size_t tasks_count = 1;
 
-    ukv_key_t const* start_keys,
-    ukv_size_t const start_keys_stride,
+    // Inputs:
+    ukv_collection_t const* collections = NULL;
+    ukv_size_t collections_stride = 0;
 
-    ukv_key_t const* end_keys,
-    ukv_size_t const end_keys_stride,
+    ukv_key_t const* start_keys = NULL;
+    ukv_size_t start_keys_stride = 0;
 
-    ukv_length_t const* scan_limits,
-    ukv_size_t const scan_limits_stride,
+    ukv_length_t const* scan_limits;
+    ukv_size_t scan_limits_stride = 0;
 
-    ukv_options_t const options,
+    // Outputs:
+    ukv_length_t** offsets = NULL;
+    ukv_length_t** counts;
+    ukv_key_t** keys;
 
-    ukv_length_t** offsets,
-    ukv_length_t** counts,
-    ukv_key_t** keys,
+} ukv_scan_t;
 
-    ukv_arena_t* arena,
-    ukv_error_t* error);
+void ukv_scan(ukv_scan_t*);
 
 /**
  * @brief Estimates the number of entries and memory usage for a range of keys.
@@ -483,31 +499,36 @@ void ukv_scan( //
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
  */
-void ukv_size( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_size_t const tasks_count,
+typedef struct ukv_size_t {
 
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_transaction_t transaction = NULL;
+    ukv_arena_t* arena = NULL;
+    ukv_options_t options = ukv_options_default_k;
+    ukv_size_t tasks_count = 1;
 
-    ukv_key_t const* start_keys,
-    ukv_size_t const start_keys_stride,
+    // Inputs:
+    ukv_collection_t const* collections = NULL;
+    ukv_size_t collections_stride = 0;
 
-    ukv_key_t const* end_keys,
-    ukv_size_t const end_keys_stride,
+    ukv_key_t const* start_keys = NULL;
+    ukv_size_t start_keys_stride = 0;
 
-    ukv_options_t const options,
+    ukv_key_t const* end_keys = NULL;
+    ukv_size_t end_keys_stride = 0;
 
-    ukv_size_t** min_cardinalities,
-    ukv_size_t** max_cardinalities,
-    ukv_size_t** min_value_bytes,
-    ukv_size_t** max_value_bytes,
-    ukv_size_t** min_space_usages,
-    ukv_size_t** max_space_usages,
+    // Outputs
+    ukv_size_t** min_cardinalities;
+    ukv_size_t** max_cardinalities;
+    ukv_size_t** min_value_bytes;
+    ukv_size_t** max_value_bytes;
+    ukv_size_t** min_space_usages;
+    ukv_size_t** max_space_usages;
 
-    ukv_arena_t* arena,
-    ukv_error_t* error);
+} ukv_size_t;
+
+void ukv_size(ukv_size_t*);
 
 /*********************************************************/
 /***************** Collection Management  ****************/
@@ -525,16 +546,22 @@ void ukv_size( //
  * @param[out] names    A NULL-terminated output string with comma-delimited column names.
  * @param[out] error    The error message to be handled by callee.
  */
-void ukv_collection_list( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_options_t const options,
-    ukv_size_t* count,
-    ukv_collection_t** ids,
-    ukv_length_t** offsets,
-    ukv_char_t** names,
-    ukv_arena_t* arena,
-    ukv_error_t* error);
+typedef struct ukv_collection_list_t {
+
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_transaction_t transaction = NULL;
+    ukv_arena_t* arena = NULL;
+    ukv_options_t options = ukv_options_default_k;
+
+    ukv_size_t* count;
+    ukv_collection_t** ids;
+    ukv_length_t** offsets;
+    ukv_char_t** names;
+
+} ukv_collection_list_t;
+
+void ukv_collection_list(ukv_collection_list_t*);
 
 /**
  * @brief Inserts a new named collection into DB or opens existing one.
@@ -547,12 +574,19 @@ void ukv_collection_list( //
  * @param[out] id          Address to which the collection ID will be exported.
  * @param[out] error       The error message to be handled by callee.
  */
-void ukv_collection_init( //
-    ukv_database_t const db,
-    ukv_str_view_t name,
-    ukv_str_view_t config,
-    ukv_collection_t* id,
-    ukv_error_t* error);
+typedef struct ukv_collection_init_t {
+    ukv_database_t db;
+    ukv_error_t* error;
+
+    // Inputs:
+    ukv_str_view_t name;
+    ukv_str_view_t config;
+
+    // Outputs:
+    ukv_collection_t* id;
+};
+
+void ukv_collection_init(ukv_collection_init_t*);
 
 /**
  * @brief Removes a collection or its contents depending on @param mode.
@@ -563,11 +597,16 @@ void ukv_collection_init( //
  * @param[in] name    An optional NULL-terminated collection name.
  * @param[out] error  The error message to be handled by callee.
  */
-void ukv_collection_drop( //
-    ukv_database_t const db,
-    ukv_collection_t id,
-    ukv_drop_mode_t mode,
-    ukv_error_t* error);
+typedef struct ukv_collection_drop_t {
+    ukv_database_t db;
+    ukv_error_t* error;
+
+    // Inputs:
+    ukv_collection_t id;
+    ukv_drop_mode_t mode;
+};
+
+void ukv_collection_drop(ukv_collection_drop_t*);
 
 /**
  * @brief Performs free-form queries on the DB, that may not necessarily
@@ -587,11 +626,18 @@ void ukv_collection_drop( //
  * > "info":    Metadata about the current software version, used for debugging.
  * > "usage":   Metadata about approximate collection sizes, RAM and disk usage.
  */
-void ukv_database_control( //
-    ukv_database_t const db,
-    ukv_str_view_t request,
-    ukv_str_view_t* response,
-    ukv_error_t* error);
+typedef struct ukv_database_control_t {
+    ukv_database_t db;
+    ukv_error_t* error;
+
+    // Inputs:
+    ukv_str_view_t request;
+
+    // Outputs:
+    ukv_str_view_t* response;
+} ukv_database_control_t;
+
+void ukv_database_control(ukv_database_control_t*);
 
 /*********************************************************/
 /*****************		Transactions	  ****************/
@@ -604,11 +650,16 @@ void ukv_database_control( //
  * @param txn[inout]    When points to existing handle, resets and reuses its memory.
  * @param error[out]    The error message to be handled by callee.
  */
-void ukv_transaction_init( //
-    ukv_database_t const db,
-    ukv_options_t const options,
-    ukv_transaction_t* txn,
-    ukv_error_t* error);
+typedef struct ukv_transaction_init_t {
+
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_options_t options = ukv_options_default_k;
+
+    ukv_transaction_t* txn;
+} ukv_transaction_init_t;
+
+void ukv_transaction_init(ukv_transaction_init_t*);
 
 /**
  * @brief Commits an ACID transaction.
@@ -616,11 +667,16 @@ void ukv_transaction_init( //
  * logging, serialization or retries. The underlying memory can be
  * cleaned and reused by consecutive `ukv_transaction_init` call.
  */
-void ukv_transaction_commit( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_options_t const options,
-    ukv_error_t* error);
+typedef struct ukv_transaction_commit_t {
+
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_transaction_t transaction;
+    ukv_options_t options = ukv_options_default_k;
+
+} ukv_transaction_commit_t;
+
+void ukv_transaction_commit(ukv_transaction_commit_t*);
 
 /*********************************************************/
 /*****************	 Memory Reclamation   ****************/
@@ -631,7 +687,7 @@ void ukv_transaction_commit( //
  * deallocate and return memory to the OS.
  * Passing NULLs is safe.
  */
-void ukv_arena_free(ukv_database_t const db, ukv_arena_t const arena);
+void ukv_arena_free(ukv_database_t, ukv_arena_t);
 
 /**
  * @brief Deallocates memory used by transaction.
@@ -639,14 +695,14 @@ void ukv_arena_free(ukv_database_t const db, ukv_arena_t const arena);
  * it will be released.
  * Passing NULLs is safe.
  */
-void ukv_transaction_free(ukv_database_t const db, ukv_transaction_t const txn);
+void ukv_transaction_free(ukv_database_t, ukv_transaction_t);
 
 /**
  * @brief Closes the DB and deallocates the state.
  * The database would still persist on disk.
  * Passing NULLs is safe.
  */
-void ukv_database_free(ukv_database_t const db);
+void ukv_database_free(ukv_database_t);
 
 /**
  * @brief A function to be called after any function failure,
@@ -654,7 +710,7 @@ void ukv_database_free(ukv_database_t const db);
  * That's why, unlike other `...free` methods, doesn't need `db`.
  * Passing NULLs is safe.
  */
-void ukv_error_free(ukv_error_t const error);
+void ukv_error_free(ukv_error_t);
 
 #ifdef __cplusplus
 } /* end extern "C" */
