@@ -1,5 +1,6 @@
 #include <vector>
 #include <numeric>
+#include <random>
 #include <thread>
 #include <mutex>
 #include <charconv>
@@ -79,6 +80,15 @@ struct operation_t {
         : type(op), keys(std::move(moved_keys)), values(std::move(moved_values)) {};
 };
 
+template <typename element_t>
+void random_fill(std::vector<element_t>& vec) {
+    std::random_device rd;
+    std::mt19937 engine(rd());
+    std::uniform_int_distribution<element_t> dist(std::numeric_limits<element_t>::min(),
+                                                  std::numeric_limits<element_t>::max());
+    std::generate(vec.begin(), vec.end(), [&dist, &engine]() { return dist(engine); });
+}
+
 template <std::size_t threads_cnt, std::size_t txn_cnt, std::size_t max_op_per_txn>
 void time_point_concurrent_transactions() {
 
@@ -97,11 +107,11 @@ void time_point_concurrent_transactions() {
             std::vector<ukv_key_t> keys(op_cnt);
             std::vector<std::uint64_t> values(op_cnt);
             std::vector<ukv_length_t> offsets(op_cnt);
+            random_fill(keys);
+            random_fill(values);
+
             ukv_length_t val_len = sizeof(std::uint64_t);
             auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(values.data());
-            std::srand(std::time(nullptr));
-            std::generate(keys.begin(), keys.end(), std::rand);
-            std::generate(values.begin(), values.end(), std::rand);
             for (std::size_t i = 0; i != op_cnt; ++i)
                 offsets[i] = i * val_len;
 
@@ -135,8 +145,7 @@ void time_point_concurrent_transactions() {
 
             std::size_t op_cnt = std::rand() % max_op_per_txn;
             std::vector<ukv_key_t> keys(op_cnt);
-            std::srand(std::time(nullptr));
-            std::generate(keys.begin(), keys.end(), std::rand);
+            random_fill(keys);
 
             transaction_t txn = *db.transact();
             auto txn_ref = txn[keys];
@@ -161,8 +170,7 @@ void time_point_concurrent_transactions() {
 
             std::size_t op_cnt = std::rand() % max_op_per_txn;
             std::vector<ukv_key_t> keys(op_cnt);
-            std::srand(std::time(nullptr));
-            std::generate(keys.begin(), keys.end(), std::rand);
+            random_fill(keys);
 
             transaction_t txn = *db.transact();
             auto txn_ref = txn[keys];
