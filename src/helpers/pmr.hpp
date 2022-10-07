@@ -218,38 +218,6 @@ class polymorphic_allocator_gt {
     at* allocate(std::size_t size) { return reinterpret_cast<at*>(local_memory->allocate(sizeof(at) * size)); }
 };
 
-template <typename at>
-struct span_gt {
-    span_gt() noexcept : ptr_(nullptr), size_(0) {}
-    span_gt(at* ptr, std::size_t sz) noexcept : ptr_(ptr), size_(sz) {}
-
-    constexpr at* begin() const noexcept { return ptr_; }
-    constexpr at* end() const noexcept { return ptr_ + size_; }
-    at const* cbegin() const noexcept { return ptr_; }
-    at const* cend() const noexcept { return ptr_ + size_; }
-
-    at& operator[](std::size_t i) noexcept { return ptr_[i]; }
-    at& operator[](std::size_t i) const noexcept { return ptr_[i]; }
-
-    template <typename another_at>
-    span_gt<another_at> cast() const noexcept {
-        return {reinterpret_cast<another_at*>(ptr_), size_ * sizeof(at) / sizeof(another_at)};
-    }
-
-    span_gt<byte_t const> span_bytes() const noexcept {
-        return {reinterpret_cast<byte_t const*>(ptr_), size_ * sizeof(at)};
-    }
-
-    std::size_t size_bytes() const noexcept { return size_ * sizeof(at); }
-    std::size_t size() const noexcept { return size_; }
-
-    strided_range_gt<at> strided() const noexcept { return {{ptr_, sizeof(at)}, size_}; }
-
-  private:
-    at* ptr_;
-    std::size_t size_;
-};
-
 struct stl_arena_t {
     explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept
         : resource(mem_resource), using_shared_memory(false) {}
@@ -267,15 +235,15 @@ struct stl_arena_t {
     ~stl_arena_t() noexcept { local_memory = std::pmr::get_default_resource(); }
 
     template <typename at>
-    span_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
+    ptr_range_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
         void* result = resource.allocate(sizeof(at) * size, alignment);
         log_if_error(result, c_error, out_of_memory_k, "");
         return {reinterpret_cast<at*>(result), size};
     }
 
     template <typename at>
-    span_gt<at> grow( //
-        span_gt<at> span,
+    ptr_range_gt<at> grow( //
+        ptr_range_gt<at> span,
         std::size_t additional_size,
         ukv_error_t* c_error,
         std::size_t alignment = sizeof(at)) noexcept {
