@@ -338,12 +338,12 @@ void ukv_write( //
     // Check if the input is continuous and is already in an Arrow-compatible form
     ukv_bytes_cptr_t joined_vals_begin = vals ? vals[0] : nullptr;
     if (has_contents_column && !contents.is_continuous()) {
-        auto total = transform_reduce_n(contents, places.size(), 0ul, std::mem_fn(&value_view_t::size));
+        size_t total = transform_reduce_n(contents, places.size(), 0ul, std::mem_fn(&value_view_t::size));
         auto joined_vals = arena.alloc<byte_t>(total, c_error);
         return_on_error(c_error);
         auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c_error);
         return_on_error(c_error);
-        auto slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
+        size_t slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
         auto slots_presences = arena.alloc<ukv_octet_t>(slots_count, c_error);
         return_on_error(c_error);
         std::memset(slots_presences.begin(), 0, slots_count);
@@ -370,7 +370,7 @@ void ukv_write( //
     else if (has_contents_column && !contents.is_arrow()) {
         auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c_error);
         return_on_error(c_error);
-        auto slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
+        size_t slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
         auto slots_presences = arena.alloc<ukv_octet_t>(slots_count, c_error);
         return_on_error(c_error);
         std::memset(slots_presences.begin(), 0, slots_count);
@@ -478,6 +478,332 @@ void ukv_write( //
     // std::shared_ptr<ar::Buffer> response;
     // ar_status = result->reader->ReadMetadata(&response);
     // return_if_error(ar_status.ok(), c_error, network_k, "No response");
+}
+
+void ukv_paths_write( //
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
+    ukv_size_t const c_tasks_count,
+
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
+
+    ukv_length_t const* c_paths_offsets,
+    ukv_size_t const c_paths_offsets_stride,
+
+    ukv_length_t const* c_paths_lengths,
+    ukv_size_t const c_paths_lengths_stride,
+
+    ukv_str_view_t const* c_paths,
+    ukv_size_t const c_paths_stride,
+
+    ukv_octet_t const* c_values_presences,
+
+    ukv_length_t const* c_values_offsets,
+    ukv_size_t const c_values_offsets_stride,
+
+    ukv_length_t const* c_values_lengths,
+    ukv_size_t const c_values_lengths_stride,
+
+    ukv_bytes_cptr_t const* c_values_bytes,
+    ukv_size_t const c_values_bytes_stride,
+
+    ukv_options_t const c_options,
+    ukv_char_t const c_separator,
+
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+
+    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+
+    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    return_on_error(c_error);
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
+    strided_iterator_gt<ukv_length_t const> path_offs {c_paths_offsets, c_paths_offsets_stride};
+    strided_iterator_gt<ukv_length_t const> path_lens {c_paths_lengths, c_paths_lengths_stride};
+    strided_iterator_gt<ukv_bytes_cptr_t const> paths {reinterpret_cast<ukv_bytes_cptr_t const*>(c_paths),
+                                                       c_paths_stride};
+
+    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_values_bytes, c_values_bytes_stride};
+    strided_iterator_gt<ukv_length_t const> offs {c_values_offsets, c_values_offsets_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c_values_lengths, c_values_lengths_stride};
+    strided_iterator_gt<ukv_octet_t const> presences {c_values_presences, sizeof(ukv_octet_t)};
+
+    places_arg_t places {collections, {}, {}, c_tasks_count};
+    contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
+    contents_arg_t path_contents {nullptr, path_offs, path_lens, paths, c_tasks_count, c_separator};
+
+    bool const same_collection = places.same_collection();
+    bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
+    bool const write_flush = c_options & ukv_option_write_flush_k;
+
+    bool const has_collections_column = collections && !same_collection;
+    constexpr bool has_paths_column = true;
+    bool const has_contents_column = vals != nullptr;
+
+    if (has_collections_column && !collections.is_continuous()) {
+        auto continuous = arena.alloc<ukv_collection_t>(places.size(), c_error);
+        return_on_error(c_error);
+        transform_n(collections, places.size(), continuous.begin());
+        collections = {continuous.begin(), places.size()};
+    }
+
+    // Check if the input is continuous and is already in an Arrow-compatible form
+    ukv_bytes_cptr_t joined_vals_begin = vals ? vals[0] : nullptr;
+    if (has_contents_column && !contents.is_continuous()) {
+        size_t total = transform_reduce_n(contents, places.size(), 0ul, std::mem_fn(&value_view_t::size));
+        auto joined_vals = arena.alloc<byte_t>(total, c_error);
+        return_on_error(c_error);
+        auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c_error);
+        return_on_error(c_error);
+        size_t slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
+        auto slots_presences = arena.alloc<ukv_octet_t>(slots_count, c_error);
+        return_on_error(c_error);
+        std::memset(slots_presences.begin(), 0, slots_count);
+        auto joined_presences = strided_iterator_gt<ukv_octet_t>(slots_presences.begin(), sizeof(ukv_octet_t));
+
+        // Exports into the Arrow-compatible form
+        ukv_length_t exported_bytes = 0;
+        for (std::size_t i = 0; i != c_tasks_count; ++i) {
+            auto value = contents[i];
+            joined_presences[i] = value;
+            joined_offs[i] = exported_bytes;
+            std::memcpy(joined_vals.begin() + exported_bytes, value.begin(), value.size());
+            exported_bytes += value.size();
+        }
+        joined_offs[places.size()] = exported_bytes;
+
+        joined_vals_begin = (ukv_bytes_cptr_t)joined_vals.begin();
+        vals = {&joined_vals_begin, 0};
+        offs = {joined_offs.begin(), sizeof(ukv_length_t)};
+        presences = {slots_presences.begin(), sizeof(ukv_octet_t)};
+    }
+    // It may be the case, that we only have `c_tasks_count` offsets instead of `c_tasks_count+1`,
+    // which won't be enough for Arrow.
+    else if (has_contents_column && !contents.is_arrow()) {
+        auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c_error);
+        return_on_error(c_error);
+        size_t slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
+        auto slots_presences = arena.alloc<ukv_octet_t>(slots_count, c_error);
+        return_on_error(c_error);
+        std::memset(slots_presences.begin(), 0, slots_count);
+        auto joined_presences = strided_iterator_gt<ukv_octet_t>(slots_presences.begin(), sizeof(ukv_octet_t));
+
+        // Exports into the Arrow-compatible form
+        ukv_length_t exported_bytes = 0;
+        for (std::size_t i = 0; i != c_tasks_count; ++i) {
+            auto value = contents[i];
+            joined_presences[i] = value;
+            joined_offs[i] = exported_bytes;
+            exported_bytes += value.size();
+        }
+        joined_offs[places.size()] = exported_bytes;
+
+        vals = {&joined_vals_begin, 0};
+        offs = {joined_offs.begin(), sizeof(ukv_length_t)};
+        presences = {slots_presences.begin(), sizeof(ukv_octet_t)};
+    }
+
+    // Check if the paths are continuous and are already in an Arrow-compatible form
+    ukv_bytes_cptr_t joined_paths_begin = paths[0];
+    if (has_paths_column && !path_contents.is_continuous()) {
+        size_t total = transform_reduce_n(path_contents, places.size(), 0ul, std::mem_fn(&value_view_t::size));
+        auto joined_paths = arena.alloc<byte_t>(total, c_error);
+        return_on_error(c_error);
+        auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c_error);
+        return_on_error(c_error);
+        size_t slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
+
+        // Exports into the Arrow-compatible form
+        ukv_length_t exported_bytes = 0;
+        for (std::size_t i = 0; i != c_tasks_count; ++i) {
+            auto path = path_contents[i];
+            joined_offs[i] = exported_bytes;
+            std::memcpy(joined_paths.begin() + exported_bytes, path.begin(), path.size());
+            exported_bytes += path.size();
+        }
+        joined_offs[places.size()] = exported_bytes;
+
+        joined_paths_begin = (ukv_bytes_cptr_t)joined_paths.begin();
+        paths = {&joined_paths_begin, 0};
+        path_offs = {joined_offs.begin(), sizeof(ukv_length_t)};
+    }
+    else if (has_contents_column && !contents.is_arrow()) {
+        auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c_error);
+        return_on_error(c_error);
+        size_t slots_count = divide_round_up<std::size_t>(places.size(), CHAR_BIT);
+
+        // Exports into the Arrow-compatible form
+        ukv_length_t exported_bytes = 0;
+        for (std::size_t i = 0; i != c_tasks_count; ++i) {
+            auto path = path_contents[i];
+            joined_offs[i] = exported_bytes;
+            exported_bytes += path.size();
+        }
+        joined_offs[places.size()] = exported_bytes;
+
+        paths = {&joined_paths_begin, 0};
+        path_offs = {joined_offs.begin(), sizeof(ukv_length_t)};
+    }
+
+    // Now build-up the Arrow representation
+    ArrowArray input_array_c;
+    ArrowSchema input_schema_c;
+    auto count_collections = has_collections_column + has_paths_column + has_contents_column;
+    ukv_to_arrow_schema(c_tasks_count, count_collections, &input_schema_c, &input_array_c, c_error);
+    return_on_error(c_error);
+
+    if (has_collections_column)
+        ukv_to_arrow_column( //
+            c_tasks_count,
+            kArgCols.c_str(),
+            ukv_doc_field<ukv_collection_t>(),
+            nullptr,
+            nullptr,
+            collections.get(),
+            input_schema_c.children[0],
+            input_array_c.children[0],
+            c_error);
+    return_on_error(c_error);
+
+    if (has_paths_column)
+        ukv_to_arrow_column( //
+            c_tasks_count,
+            "paths",
+            ukv_doc_field<ukv_str_view_t>(),
+            nullptr,
+            path_offs.get(),
+            joined_paths_begin,
+            input_schema_c.children[has_collections_column],
+            input_array_c.children[has_collections_column],
+            c_error);
+    return_on_error(c_error);
+
+    if (has_contents_column)
+        ukv_to_arrow_column( //
+            c_tasks_count,
+            kArgVals.c_str(),
+            ukv_doc_field<value_view_t>(),
+            presences.get(),
+            offs.get(),
+            joined_vals_begin,
+            input_schema_c.children[has_collections_column + has_paths_column],
+            input_array_c.children[has_collections_column + has_paths_column],
+            c_error);
+    return_on_error(c_error);
+
+    // Send everything over the network and wait for the response
+    ar::Status ar_status;
+    arrow_mem_pool_t pool(arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
+
+    // Configure the `cmd` descriptor
+    arf::FlightDescriptor descriptor;
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightWritePath);
+    if (c_txn)
+        fmt::format_to(std::back_inserter(descriptor.cmd),
+                       "{}=0x{:0>16x}&",
+                       kParamTransactionID,
+                       std::uintptr_t(c_txn));
+    if (!has_collections_column && collections)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
+    if (write_flush)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagFlushWrite);
+
+    // Send the request to server
+    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
+    return_if_error(maybe_batch.ok(), c_error, error_unknown_k, "Can't pack RecordBatch");
+
+    std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
+    ar::Result<arf::FlightClient::DoPutResult> result = db.flight->DoPut(options, descriptor, batch_ptr->schema());
+    return_if_error(result.ok(), c_error, network_k, "Failed to exchange with Arrow server");
+
+    // This writer has already been started!
+    // ar_status = result->writer->Begin(batch_ptr->schema());
+    // return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing schema");
+
+    auto table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
+    ar_status = result->writer->WriteTable(*table);
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Serializing request");
+
+    ar_status = result->writer->DoneWriting();
+    return_if_error(ar_status.ok(), c_error, error_unknown_k, "Submitting request");
+
+    // Fetch the responses
+    // std::shared_ptr<ar::Buffer> response;
+    // ar_status = result->reader->ReadMetadata(&response);
+    // return_if_error(ar_status.ok(), c_error, network_k, "No response");
+}
+
+void ukv_paths_match( //
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
+    ukv_size_t const c_tasks_count,
+
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
+
+    ukv_length_t const* c_patterns_offsets,
+    ukv_size_t const c_patterns_offsets_stride,
+
+    ukv_length_t const* c_patterns_lengths,
+    ukv_size_t const c_patterns_lengths_stride,
+
+    ukv_str_view_t const* c_patterns_strings,
+    ukv_size_t const c_patterns_strings_stride,
+
+    ukv_length_t const* c_previous_offsets,
+    ukv_size_t const c_previous_offsets_stride,
+
+    ukv_length_t const* c_previous_lengths,
+    ukv_size_t const c_previous_lengths_stride,
+
+    ukv_str_view_t const* c_previous,
+    ukv_size_t const c_previous_stride,
+
+    ukv_length_t const* c_scan_limits,
+    ukv_size_t const c_scan_limits_stride,
+
+    ukv_options_t const c_options,
+    ukv_char_t const,
+
+    ukv_length_t** c_counts,
+    ukv_length_t** c_offsets,
+    ukv_char_t** c_paths,
+
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
+}
+
+void ukv_paths_read( //
+    ukv_database_t const c_db,
+    ukv_transaction_t const c_txn,
+    ukv_size_t const c_tasks_count,
+
+    ukv_collection_t const* c_collections,
+    ukv_size_t const c_collections_stride,
+
+    ukv_length_t const* c_paths_offsets,
+    ukv_size_t const c_paths_offsets_stride,
+
+    ukv_length_t const* c_paths_lengths,
+    ukv_size_t const c_paths_lengths_stride,
+
+    ukv_str_view_t const* c_paths,
+    ukv_size_t const c_paths_stride,
+
+    ukv_options_t const c_options,
+    ukv_char_t const,
+
+    ukv_octet_t** c_presences,
+    ukv_length_t** c_offsets,
+    ukv_length_t** c_lengths,
+    ukv_byte_t** c_values,
+
+    ukv_arena_t* c_arena,
+    ukv_error_t* c_error) {
 }
 
 void ukv_scan( //
