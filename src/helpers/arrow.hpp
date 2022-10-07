@@ -40,6 +40,7 @@ inline static std::string const kFlightTxnCommit = "commit_transaction"; /// `Do
 
 inline static std::string const kFlightWritePath = "write_path"; /// `DoPut`
 inline static std::string const kFlightWrite = "write";          /// `DoPut`
+inline static std::string const kFlightReadPath = "read_path";   /// `DoExchange`
 inline static std::string const kFlightRead = "read";            /// `DoExchange`
 inline static std::string const kFlightScan = "scan";            /// `DoExchange`
 inline static std::string const kFlightSize = "size";            /// `DoExchange`
