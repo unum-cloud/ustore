@@ -130,8 +130,8 @@ void check_equalities(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
 }
 
 template <typename locations_at>
-void round_trip(bins_ref_gt<locations_at>& ref, contents_arg_t values, bool flush = false) {
-    EXPECT_TRUE(ref.assign(values, flush)) << "Failed to assign";
+void round_trip(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
+    EXPECT_TRUE(ref.assign(values)) << "Failed to assign";
     check_equalities(ref, values);
 }
 
@@ -186,7 +186,7 @@ TEST(db, basic) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, flush) {
+TEST(db, consistency) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -207,7 +207,7 @@ TEST(db, flush) {
     bins_collection_t collection = *db.collection();
     auto collection_ref = collection[keys];
     check_length(collection_ref, ukv_length_missing_k);
-    round_trip(collection_ref, values, true);
+    round_trip(collection_ref, values);
     check_length(collection_ref, 8);
     db.close();
 
