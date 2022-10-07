@@ -78,6 +78,7 @@ struct contents_arg_t {
             auto item = reinterpret_cast<char const*>(begin) + off;
             while (item[len++] != separator)
                 ;
+            --len;
         }
         return {begin + off, len};
     }
