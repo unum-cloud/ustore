@@ -388,9 +388,9 @@ static void graph_construct_from_docs(bm::State& state) {
         strided_iterator_gt<ukv_key_t> ids_users((ukv_key_t*)(scalars[0]), sizeof(ukv_key_t));
         strided_iterator_gt<ukv_key_t> ids_retweets((ukv_key_t*)(scalars[1]), sizeof(ukv_key_t));
         strided_iterator_gt<ukv_key_t> ids_retweeters((ukv_key_t*)(scalars[2]), sizeof(ukv_key_t));
-        strided_iterator_gt<ukv_octet_t> valid_users(validities[0]);
-        strided_iterator_gt<ukv_octet_t> valid_retweets(validities[1]);
-        strided_iterator_gt<ukv_octet_t> valid_retweeters(validities[2]);
+        bits_span_t valid_users(validities[0]);
+        bits_span_t valid_retweets(validities[1]);
+        bits_span_t valid_retweeters(validities[2]);
         for (std::size_t i = 0; i != count; ++i) {
             // Tweet <-> Author
             edges_array.push_back(edge_t {.source_id = ids_tweets[i], .target_id = ids_users[i]});

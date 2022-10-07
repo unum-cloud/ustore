@@ -334,7 +334,7 @@ void ukv_paths_write( //
     return_on_error(c_error);
     transform_n(joined_buckets.begin(), unique_places.count, updated_buckets.begin());
 
-    strided_iterator_gt<ukv_octet_t const> presences {c_values_presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c_values_presences};
     strided_iterator_gt<ukv_length_t const> offs {c_values_offsets, c_values_offsets_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_values_lengths, c_values_lengths_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_values_bytes, c_values_bytes_stride};

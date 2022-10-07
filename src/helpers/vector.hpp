@@ -221,9 +221,7 @@ class growing_tape_t {
         contents_.clear();
     }
 
-    strided_iterator_gt<ukv_octet_t> presences() noexcept {
-        return strided_iterator_gt<ukv_octet_t>(presences_.begin(), sizeof(ukv_octet_t));
-    }
+    bits_span_t presences() noexcept { return bits_span_t(presences_.begin()); }
     strided_range_gt<ukv_length_t> offsets() noexcept {
         return strided_range<ukv_length_t>(offsets_.begin(), offsets_.end());
     }
