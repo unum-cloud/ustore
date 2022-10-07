@@ -18,7 +18,7 @@
 namespace unum::ukv {
 
 struct collections_list_t {
-    indexed_range_gt<ukv_collection_t*> ids;
+    ptr_range_gt<ukv_collection_t> ids;
     strings_tape_iterator_t names;
 };
 
