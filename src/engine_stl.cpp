@@ -289,9 +289,13 @@ void read_entries(file_handle_t const& handle, entries_iterator_at output, ukv_e
     while (std::feof(handle) == 0) {
         entry_t entry;
 
+        // An empty row may contain no content
         auto read_len = std::fread(&entry.collection, sizeof(ukv_collection_t), 1, handle);
-        return_if_error(read_len == 1, c_error, 0, "Read partially failed on collection.");
+        if (read_len == 0)
+            break;
+        return_if_error(read_len <= 1, c_error, 0, "Read yielded unexpected result on key.");
 
+        // .. but if the row exists, it shouldn't be partial
         read_len = std::fread(&entry.key, sizeof(ukv_key_t), 1, handle);
         return_if_error(read_len == 1, c_error, 0, "Read partially failed on key.");
 
@@ -299,7 +303,7 @@ void read_entries(file_handle_t const& handle, entries_iterator_at output, ukv_e
         read_len = std::fread(&buf_len, sizeof(ukv_length_t), 1, handle);
         return_if_error(read_len == 1, c_error, 0, "Read partially failed on value len.");
 
-        return_if_error(!entry.alloc_blob(buf_len, 0),
+        return_if_error(entry.alloc_blob(buf_len, 0),
                         c_error,
                         out_of_memory_k,
                         "Failed to allocate memory for new node");
