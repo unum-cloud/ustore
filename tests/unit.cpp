@@ -186,6 +186,41 @@ TEST(db, basic) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, consistency) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    std::vector<ukv_key_t> keys {54, 55, 56};
+    ukv_length_t val_len = sizeof(std::uint64_t);
+    std::vector<std::uint64_t> vals {1, 2, 3};
+    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
+
+    contents_arg_t values {
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
+        .lengths_begin = {&val_len, 0},
+        .contents_begin = {&vals_begin, 0},
+        .count = 3,
+    };
+
+    bins_collection_t collection = *db.collection();
+    auto collection_ref = collection[keys];
+    check_length(collection_ref, ukv_length_missing_k);
+    round_trip(collection_ref, values);
+    check_length(collection_ref, 8);
+    db.close();
+
+    EXPECT_TRUE(db.open(path()));
+    bins_collection_t collection2 = *db.collection();
+    auto collection_ref2 = collection2[keys];
+
+    check_equalities(collection_ref2, values);
+    check_length(collection_ref2, 8);
+
+    EXPECT_TRUE(db.clear());
+}
+
 TEST(db, named) {
 
     if (!ukv_supports_named_collections_k)
@@ -1006,15 +1041,16 @@ TEST(db, docs_modify) {
 
     // Insert
     modifier = R"( {"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    EXPECT_TRUE(collection[1].insert(modifier.c_str()));
-    result = collection[1].value();
+    EXPECT_FALSE(collection[1].insert(modifier.c_str()));
+    EXPECT_TRUE(collection[2].insert(modifier.c_str()));
+    result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
     // Insert By Field
     modifier = R"("Grilish" )"_json.dump();
     expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Grilish"}} )"_json.dump();
-    EXPECT_TRUE(collection[ckf(1, "/person/surname")].insert(modifier.c_str()));
-    result = collection[1].value();
+    EXPECT_TRUE(collection[ckf(2, "/person/surname")].insert(modifier.c_str()));
+    result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Upsert
@@ -1414,6 +1450,43 @@ TEST(db, graph_triangle_batch_api) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, graph_transaction_watch) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    graph_collection_t net = *db.collection<graph_collection_t>();
+    transaction_t txn = *db.transact();
+    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
+
+    edge_t edge1 {1, 2, 1};
+    edge_t edge2 {3, 1, 2};
+
+    EXPECT_TRUE(net.upsert(edge1));
+    EXPECT_TRUE(net.upsert(edge2));
+    txn_net.degree(1);
+    EXPECT_TRUE(txn.commit());
+
+    EXPECT_TRUE(txn.reset());
+    txn_net.degree(1);
+    EXPECT_TRUE(txn.commit());
+
+    txn_net.degree(1);
+    EXPECT_TRUE(net.remove(edge1));
+    EXPECT_TRUE(net.remove(edge2));
+    EXPECT_FALSE(txn.commit());
+    EXPECT_TRUE(txn.reset());
+
+    txn_net.degree(1, ukv_vertex_role_any_k, false);
+    EXPECT_TRUE(net.upsert(edge1));
+    EXPECT_TRUE(net.upsert(edge2));
+    EXPECT_TRUE(txn.commit());
+
     EXPECT_TRUE(db.clear());
 }
 
