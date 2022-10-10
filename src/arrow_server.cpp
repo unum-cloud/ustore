@@ -756,9 +756,9 @@ class UKVService : public arf::FlightServerBase {
         else if (is_query(desc.cmd, kFlightReadPath)) {
 
             /// @param `keys`
-            auto input_paths = get_contents(input_schema_c, input_batch_c, "paths");
+            auto input_paths = get_contents(input_schema_c, input_batch_c, kArgPaths.c_str());
             if (!input_paths.contents_begin)
-                return ar::Status::Invalid("paths must have been provided for reads");
+                return ar::Status::Invalid("Keys must have been provided for reads");
 
             /// @param `collections`
             ukv_collection_t c_collection_id = ukv_collection_main_k;
@@ -848,6 +848,112 @@ class UKVService : public arf::FlightServerBase {
                     output_schema_c.children[0],
                     output_batch_c.children[0],
                     status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+        }
+        else if (is_query(desc.cmd, kFlightMatchPath)) {
+            /// @param `previous`
+            auto input_prevs = get_contents(input_schema_c, input_batch_c, kArgPrevPatterns.c_str());
+
+            /// @param `patterns`
+            auto input_patrns = get_contents(input_schema_c, input_batch_c, kArgPatterns.c_str());
+            if (!input_patrns.contents_begin)
+                return ar::Status::Invalid("Patterns must have been provided for reads");
+
+            /// @param `limits`
+            auto input_limits = get_lengths(input_schema_c, input_batch_c, kArgScanLengths);
+
+            /// @param `collections`
+            ukv_collection_t c_collection_id = ukv_collection_main_k;
+            strided_iterator_gt<ukv_collection_t> input_collections;
+            if (params.collection_id) {
+                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
+                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
+            }
+            else
+                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
+
+            bool const request_only_counts = params.read_part == kParamReadPartLengths;
+            bool const request_content = !request_only_counts;
+
+            // Reserve resources for the execution of this request
+            auto session = sessions_.lock(params.session_id, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            // As we are immediately exporting in the Arrow format,
+            // we don't need the lengths, just the NULL indicators
+            ukv_char_t* found_values = nullptr;
+            ukv_length_t* found_offsets = nullptr;
+            ukv_length_t* found_counts = nullptr;
+            ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
+
+            ukv_paths_match( //
+                db_,
+                session.txn,
+                tasks_count,
+                input_collections.get(),
+                input_collections.stride(),
+                input_patrns.offsets_begin.get(),
+                input_patrns.offsets_begin.stride(),
+                input_patrns.lengths_begin.get(),
+                input_patrns.lengths_begin.stride(),
+                reinterpret_cast<ukv_str_view_t const*>(input_patrns.contents_begin.get()),
+                input_patrns.contents_begin.stride(),
+                input_prevs.offsets_begin.get(),
+                input_prevs.offsets_begin.stride(),
+                input_prevs.lengths_begin.get(),
+                input_prevs.lengths_begin.stride(),
+                reinterpret_cast<ukv_str_view_t const*>(input_prevs.contents_begin.get()),
+                input_prevs.contents_begin.stride(),
+                input_limits.get(),
+                input_limits.stride(),
+                ukv_options(params),
+                input_patrns.separator,
+                &found_counts,
+                request_content ? &found_offsets : nullptr,
+                request_content ? &found_values : nullptr,
+                &session.arena,
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            auto arena = prepare_arena(&session.arena, ukv_options_default_k, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+            ukv_size_t result_length = std::accumulate(found_counts, found_counts + tasks_count, 0);
+            auto rounded_counts = arena.alloc<ukv_length_t>(result_length, 0);
+            std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
+            ukv_size_t collections_count = 1 + request_content;
+            ukv_to_arrow_schema(result_length,
+                                collections_count,
+                                &output_schema_c,
+                                &output_batch_c,
+                                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+            ukv_to_arrow_column( //
+                result_length,
+                kArgLengths.c_str(),
+                ukv_doc_field<ukv_length_t>(),
+                nullptr,
+                nullptr,
+                rounded_counts.begin(),
+                output_schema_c.children[0],
+                output_batch_c.children[0],
+                status.member_ptr());
+            if (request_content)
+                ukv_to_arrow_column( //
+                    result_length,
+                    kArgVals.c_str(),
+                    ukv_doc_field_bin_k,
+                    nullptr,
+                    found_offsets,
+                    found_values,
+                    output_schema_c.children[1],
+                    output_batch_c.children[1],
+                    status.member_ptr());
+
             if (!status)
                 return ar::Status::ExecutionError(status.message());
         }
@@ -1006,8 +1112,10 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
         }
         else if (is_query(desc.cmd, kFlightWritePath)) {
-            /// @param `paths`
-            auto input_paths = get_contents(input_schema_c, input_batch_c, "paths");
+            /// @param `keys`
+            auto input_paths = get_contents(input_schema_c, input_batch_c, kArgPaths.c_str());
+            if (!input_paths.contents_begin)
+                return ar::Status::Invalid("Keys must have been provided for reads");
 
             /// @param `collections`
             ukv_collection_t c_collection_id = ukv_collection_main_k;
