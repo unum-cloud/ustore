@@ -264,7 +264,7 @@ inline contents_arg_t get_contents( //
     result.contents_begin = {(ukv_bytes_cptr_t const*)&array.buffers[2], 0};
     result.offsets_begin = {(ukv_length_t const*)array.buffers[1], sizeof(ukv_length_t)};
     if (array.buffers[0] && array.null_count != 0)
-        result.presences_begin = {(ukv_octet_t const*)array.buffers[0], sizeof(ukv_octet_t)};
+        result.presences_begin = {(ukv_octet_t const*)array.buffers[0]};
     result.count = static_cast<ukv_size_t>(batch_c.length);
     return result;
 }
