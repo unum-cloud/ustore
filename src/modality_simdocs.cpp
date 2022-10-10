@@ -1289,7 +1289,7 @@ void ukv_docs_write( //
     if (!c_tasks_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1321,7 +1321,7 @@ void ukv_docs_write( //
 
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c_presences};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
@@ -1367,7 +1367,7 @@ void ukv_docs_read( //
     if (!c_tasks_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1525,7 +1525,7 @@ void ukv_docs_gist( //
     if (!c_docs_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1692,7 +1692,7 @@ void ukv_docs_gather( //
     if (!c_docs_count || !c_fields_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
