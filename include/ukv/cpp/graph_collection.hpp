@@ -142,7 +142,7 @@ class graph_collection_t {
         return ukv_vertex_degree_t(degrees[0]);
     }
 
-    expected_gt<indexed_range_gt<ukv_vertex_degree_t*>> degrees( //
+    expected_gt<ptr_range_gt<ukv_vertex_degree_t>> degrees( //
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {},
         bool watch = true) noexcept {
@@ -169,7 +169,7 @@ class graph_collection_t {
         if (!status)
             return status;
 
-        return indexed_range_gt<ukv_vertex_degree_t*> {degrees_per_vertex, degrees_per_vertex + vertices.size()};
+        return ptr_range_gt<ukv_vertex_degree_t> {degrees_per_vertex, degrees_per_vertex + vertices.size()};
     }
 
     expected_gt<bool> contains(ukv_key_t vertex, bool watch = true) noexcept {
@@ -180,7 +180,7 @@ class graph_collection_t {
      * @brief Checks if certain vertices are present in the graph.
      * They maybe disconnected from everything else.
      */
-    expected_gt<strided_iterator_gt<ukv_octet_t>> contains( //
+    expected_gt<bits_span_t> contains( //
         strided_range_gt<ukv_key_t const> const& vertices,
         bool watch = true) noexcept {
         places_arg_t arg;

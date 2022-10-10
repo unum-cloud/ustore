@@ -39,7 +39,7 @@ struct updated_entry_t : public collection_key_t {
     inline operator value_view_t() const noexcept { return {content, length}; }
 };
 
-indexed_range_gt<neighborship_t const*> neighbors( //
+ptr_range_gt<neighborship_t const> neighbors( //
     ukv_vertex_degree_t const* degrees,
     ukv_key_t const* neighborships,
     ukv_vertex_role_t role = ukv_vertex_role_any_k) {
@@ -54,7 +54,7 @@ indexed_range_gt<neighborship_t const*> neighbors( //
     __builtin_unreachable();
 }
 
-indexed_range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
+ptr_range_gt<neighborship_t const> neighbors(value_view_t bytes, ukv_vertex_role_t role = ukv_vertex_role_any_k) {
     // Handle missing vertices
     if (bytes.size() < bytes_in_degrees_header_k)
         return {};
@@ -65,8 +65,8 @@ indexed_range_gt<neighborship_t const*> neighbors(value_view_t bytes, ukv_vertex
 
 struct neighborhood_t {
     ukv_key_t center = 0;
-    indexed_range_gt<neighborship_t const*> targets;
-    indexed_range_gt<neighborship_t const*> sources;
+    ptr_range_gt<neighborship_t const> targets;
+    ptr_range_gt<neighborship_t const> sources;
 
     neighborhood_t() = default;
     neighborhood_t(neighborhood_t const&) = default;
@@ -124,11 +124,11 @@ struct neighborhood_t {
         return edges;
     }
 
-    inline indexed_range_gt<neighborship_t const*> outgoing_to(ukv_key_t target) const noexcept {
+    inline ptr_range_gt<neighborship_t const> outgoing_to(ukv_key_t target) const noexcept {
         return equal_subrange(targets, target);
     }
 
-    inline indexed_range_gt<neighborship_t const*> incoming_from(ukv_key_t source) const noexcept {
+    inline ptr_range_gt<neighborship_t const> incoming_from(ukv_key_t source) const noexcept {
         return equal_subrange(sources, source);
     }
 
@@ -142,7 +142,7 @@ struct neighborhood_t {
         return r.size() ? r.begin() : nullptr;
     }
 
-    inline indexed_range_gt<neighborship_t const*> only(ukv_vertex_role_t role) const noexcept {
+    inline ptr_range_gt<neighborship_t const> only(ukv_vertex_role_t role) const noexcept {
         switch (role) {
         case ukv_vertex_source_k: return targets;
         case ukv_vertex_target_k: return sources;
@@ -326,7 +326,7 @@ void export_edge_tuples( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     // Even if we need just the node degrees, we can't limit ourselves to just entry lengths.
@@ -369,9 +369,9 @@ void export_edge_tuples( //
     }
 
     // Export into arena
-    auto ids = arena.alloc_or_dummy<ukv_key_t>(count_ids, c_error, c_neighborships_per_vertex);
+    auto ids = arena.alloc_or_dummy(count_ids, c_error, c_neighborships_per_vertex);
     return_on_error(c_error);
-    auto degrees = arena.alloc_or_dummy<ukv_vertex_degree_t>(c_vertices_count, c_error, c_degrees_per_vertex);
+    auto degrees = arena.alloc_or_dummy(c_vertices_count, c_error, c_degrees_per_vertex);
     return_on_error(c_error);
 
     std::size_t passed_ids = 0;
@@ -429,7 +429,7 @@ void pull_and_link_for_updates( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     // Fetch the existing entries
@@ -489,7 +489,7 @@ void update_neighborhoods( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     strided_iterator_gt<ukv_collection_t const> edge_collections {c_collections, c_collections_stride};
@@ -740,7 +740,7 @@ void ukv_graph_remove_vertices( //
     if (!c_vertices_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     strided_iterator_gt<ukv_collection_t const> vertex_collections {c_collections, c_collections_stride};

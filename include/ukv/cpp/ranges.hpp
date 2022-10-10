@@ -104,8 +104,7 @@ class strided_iterator_gt {
     }
 };
 
-template <>
-class strided_iterator_gt<ukv_octet_t> {
+class bits_span_t {
   public:
     struct ref_t {
         ukv_octet_t* raw = nullptr;
@@ -120,37 +119,31 @@ class strided_iterator_gt<ukv_octet_t> {
     };
 
     using element_t = ukv_octet_t;
-    using value_type = bool;
+    using value_type = ukv_octet_t;
     using reference = ref_t;
 
   protected:
     element_t* begin_ = nullptr;
-    ukv_size_t stride_ = 0;
 
   public:
-    strided_iterator_gt(element_t* begin = nullptr, std::size_t stride = 0) noexcept
-        : begin_(begin), stride_(static_cast<ukv_size_t>(stride)) {}
-    strided_iterator_gt(strided_iterator_gt&&) noexcept = default;
-    strided_iterator_gt(strided_iterator_gt const&) noexcept = default;
-    strided_iterator_gt& operator=(strided_iterator_gt&&) noexcept = default;
-    strided_iterator_gt& operator=(strided_iterator_gt const&) noexcept = default;
+    bits_span_t(element_t* begin = nullptr) noexcept : begin_(begin) {}
+    bits_span_t(bits_span_t&&) noexcept = default;
+    bits_span_t(bits_span_t const&) noexcept = default;
+    bits_span_t& operator=(bits_span_t&&) noexcept = default;
+    bits_span_t& operator=(bits_span_t const&) noexcept = default;
 
     ref_t at(std::size_t idx) const noexcept {
-        return {begin_ + stride_ * idx / CHAR_BIT, static_cast<element_t>(1 << (idx % CHAR_BIT))};
+        return {begin_ + idx / CHAR_BIT, static_cast<element_t>(1 << (idx % CHAR_BIT))};
     }
     ref_t operator[](std::size_t idx) const noexcept { return at(idx); }
 
     explicit operator bool() const noexcept { return begin_ != nullptr; }
-    ukv_size_t stride() const noexcept { return stride_; }
-    bool repeats() const noexcept { return !stride_; }
-    bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
     element_t* get() const noexcept { return begin_; }
-    bool operator==(strided_iterator_gt const& other) const noexcept { return begin_ == other.begin_; }
-    bool operator!=(strided_iterator_gt const& other) const noexcept { return begin_ != other.begin_; }
+    bool operator==(bits_span_t const& other) const noexcept { return begin_ == other.begin_; }
+    bool operator!=(bits_span_t const& other) const noexcept { return begin_ != other.begin_; }
 };
 
-template <>
-class strided_iterator_gt<ukv_octet_t const> {
+class bits_view_t {
   public:
     using element_t = ukv_octet_t const;
     using value_type = bool;
@@ -158,27 +151,23 @@ class strided_iterator_gt<ukv_octet_t const> {
 
   protected:
     element_t* begin_ = nullptr;
-    ukv_size_t stride_ = 0;
 
   public:
-    strided_iterator_gt(element_t* begin = nullptr, std::size_t stride = 0) noexcept
-        : begin_(begin), stride_(static_cast<ukv_size_t>(stride)) {}
-    strided_iterator_gt(strided_iterator_gt&&) noexcept = default;
-    strided_iterator_gt(strided_iterator_gt const&) noexcept = default;
-    strided_iterator_gt& operator=(strided_iterator_gt&&) noexcept = default;
-    strided_iterator_gt& operator=(strided_iterator_gt const&) noexcept = default;
+    bits_view_t(element_t* begin = nullptr) noexcept : begin_(begin) {}
+    bits_view_t(bits_view_t&&) noexcept = default;
+    bits_view_t(bits_view_t const&) noexcept = default;
+    bits_view_t& operator=(bits_view_t&&) noexcept = default;
+    bits_view_t& operator=(bits_view_t const&) noexcept = default;
 
     bool at(std::size_t idx) const noexcept {
-        return begin_[stride_ * idx / CHAR_BIT] & static_cast<element_t>(1 << (idx % CHAR_BIT));
+        return begin_[idx / CHAR_BIT] & static_cast<element_t>(1 << (idx % CHAR_BIT));
     }
     bool operator[](std::size_t idx) const noexcept { return at(idx); }
 
     explicit operator bool() const noexcept { return begin_ != nullptr; }
-    bool repeats() const noexcept { return !stride_; }
-    bool is_continuous() const noexcept { return stride_ == sizeof(element_t); }
     element_t* get() const noexcept { return begin_; }
-    bool operator==(strided_iterator_gt const& other) const noexcept { return begin_ == other.begin_; }
-    bool operator!=(strided_iterator_gt const& other) const noexcept { return begin_ != other.begin_; }
+    bool operator==(bits_view_t const& other) const noexcept { return begin_ == other.begin_; }
+    bool operator!=(bits_view_t const& other) const noexcept { return begin_ != other.begin_; }
 };
 
 template <typename element_at>
@@ -238,23 +227,6 @@ class strided_range_gt {
     }
 };
 
-template <typename element_t>
-struct strided_range_or_dummy_gt {
-    using strided_t = strided_range_gt<element_t>;
-    using value_type = typename strided_t::value_type;
-    using reference = typename strided_t::reference;
-
-    strided_t strided_;
-    element_t dummy_;
-
-    reference operator[](std::size_t i) & noexcept { return strided_ ? reference(strided_[i]) : reference(dummy_); }
-    reference operator[](std::size_t i) const& noexcept {
-        return strided_ ? reference(strided_[i]) : reference(dummy_);
-    }
-    std::size_t size() const noexcept { return strided_.size(); }
-    explicit operator bool() const noexcept { return strided_; }
-};
-
 template <typename at, typename alloc_at = std::allocator<at>>
 strided_range_gt<at> strided_range(std::vector<at, alloc_at>& vec) noexcept {
     return {{vec.data(), sizeof(at)}, vec.size()};
@@ -292,23 +264,47 @@ strided_range_gt<at> strided_range(at* begin, at* end) noexcept {
  */
 template <typename pointer_at>
 struct indexed_range_gt {
-    pointer_at begin_ = nullptr;
-    pointer_at end_ = nullptr;
+    using pointer_t = pointer_at;
+    using element_t = std::remove_pointer_t<pointer_t>;
+    using strided_t = strided_range_gt<element_t>;
+    using value_type = element_t;
+    using reference = element_t&;
 
-    inline pointer_at begin() const noexcept { return begin_; }
-    inline pointer_at end() const noexcept { return end_; }
-    inline decltype(auto) operator[](std::size_t i) const noexcept { return begin_[i]; }
-    inline decltype(auto) at(std::size_t i) const noexcept { return begin_[i]; }
+    pointer_t begin_ = nullptr;
+    pointer_t end_ = nullptr;
 
-    inline std::size_t size() const noexcept { return end_ - begin_; }
-    inline bool empty() const noexcept { return end_ == begin_; }
-    inline explicit operator bool() const noexcept { return end_ != begin_; }
-    inline auto strided() const noexcept {
-        using element_t = std::remove_pointer_t<pointer_at>;
-        using strided_t = strided_range_gt<element_t>;
+    indexed_range_gt() noexcept : begin_(nullptr), end_(nullptr) {}
+    indexed_range_gt(pointer_t begin, pointer_t end) noexcept : begin_(begin), end_(end) {}
+    indexed_range_gt(pointer_t ptr, std::size_t sz) noexcept : begin_(ptr), end_(ptr + sz) {}
+
+    pointer_t begin() const noexcept { return begin_; }
+    pointer_t end() const noexcept { return end_; }
+    decltype(auto) operator[](std::size_t i) noexcept { return begin_[i]; }
+    decltype(auto) at(std::size_t i) noexcept { return begin_[i]; }
+    decltype(auto) operator[](std::size_t i) const noexcept { return begin_[i]; }
+    decltype(auto) at(std::size_t i) const noexcept { return begin_[i]; }
+
+    std::size_t size() const noexcept { return end_ - begin_; }
+    std::size_t size_bytes() const noexcept { return size() * sizeof(begin_[0]); }
+    bool empty() const noexcept { return end_ == begin_; }
+    explicit operator bool() const noexcept { return end_ != begin_; }
+    operator strided_t() const noexcept { return strided(); }
+    strided_t strided() const noexcept {
         return strided_t {{begin_, sizeof(element_t)}, static_cast<ukv_size_t>(size())};
     }
+
+    template <typename other_at>
+    indexed_range_gt<other_at> cast() const noexcept {
+        return {reinterpret_cast<other_at*>(begin_), size_bytes() / sizeof(other_at)};
+    }
+
+    indexed_range_gt<byte_t const> span_bytes() const noexcept {
+        return {reinterpret_cast<byte_t const*>(begin_), size_bytes()};
+    }
 };
+
+template <typename element_at>
+using ptr_range_gt = indexed_range_gt<element_at*>;
 
 template <typename pointer_at>
 struct range_gt {

@@ -7,6 +7,8 @@
  */
 
 #pragma once
+#include <limits> // `std::numeric_limits`
+
 #include "ukv/cpp/ranges.hpp" // `strided_iterator_gt`
 #include "ukv/cpp/status.hpp" // `return_if_error`
 
@@ -55,7 +57,7 @@ struct places_arg_t {
  */
 struct contents_arg_t {
     using value_type = value_view_t;
-    strided_iterator_gt<ukv_octet_t const> presences_begin;
+    bits_view_t presences_begin;
     strided_iterator_gt<ukv_length_t const> offsets_begin;
     strided_iterator_gt<ukv_length_t const> lengths_begin;
     strided_iterator_gt<ukv_bytes_cptr_t const> contents_begin;
@@ -83,10 +85,7 @@ struct contents_arg_t {
         return {begin + off, len};
     }
 
-    inline bool is_arrow() const noexcept {
-        return contents_begin.repeats() && offsets_begin && !lengths_begin &&
-               (!presences_begin || presences_begin.is_continuous());
-    }
+    inline bool is_arrow() const noexcept { return contents_begin.repeats() && offsets_begin && !lengths_begin; }
 
     inline bool is_continuous() const noexcept {
         auto last = operator[](0);

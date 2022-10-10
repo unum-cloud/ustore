@@ -38,6 +38,7 @@ constexpr std::size_t primes_k[copies_per_tweet_k] = {
 
 struct tweet_t {
     char id_str[id_str_max_length_k] = {0};
+    char username[id_str_max_length_k] = {0};
     std::string_view body;
 };
 
@@ -52,24 +53,48 @@ static std::size_t tweet_count = 0;
 
 static ukv_collection_t collection_docs_k = ukv_collection_main_k;
 static ukv_collection_t collection_graph_k = ukv_collection_main_k;
+static ukv_collection_t collection_paths_k = ukv_collection_main_k;
 
-static inline std::uint64_t ror64(std::uint64_t v, int r) {
+static inline std::uint64_t hash_mix_ror64(std::uint64_t v, int r) {
     return (v >> r) | (v << (64 - r));
 }
 
-static inline std::uint64_t rrxmrrxmsx_0(std::uint64_t v) {
-    v ^= ror64(v, 25) ^ ror64(v, 50);
+static inline std::uint64_t hash_mix_rrxmrrxmsx_0(std::uint64_t v) {
+    v ^= hash_mix_ror64(v, 25) ^ hash_mix_ror64(v, 50);
     v *= 0xA24BAED4963EE407UL;
-    v ^= ror64(v, 24) ^ ror64(v, 49);
+    v ^= hash_mix_ror64(v, 24) ^ hash_mix_ror64(v, 49);
     v *= 0x9FB21C651E98DF25UL;
     return v ^ v >> 28;
 }
 
 static inline std::size_t hash(tweet_t const& tweet) {
     auto u64s = reinterpret_cast<std::uint64_t const*>(tweet.id_str);
-    auto mix = rrxmrrxmsx_0(u64s[0]) ^ rrxmrrxmsx_0(u64s[1]) ^ rrxmrrxmsx_0(u64s[2]);
+    auto mix = hash_mix_rrxmrrxmsx_0(u64s[0]) ^ hash_mix_rrxmrrxmsx_0(u64s[1]) ^ hash_mix_rrxmrrxmsx_0(u64s[2]);
     return mix;
 }
+
+class tweets_iterator_t {
+    std::size_t internal_tweet_idx = 0;
+    std::size_t file_idx = 0;
+
+  public:
+    tweets_iterator_t(std::size_t global_offset) noexcept {
+        internal_tweet_idx = global_offset;
+        while (tweets_per_path[file_idx].size() <= internal_tweet_idx) {
+            internal_tweet_idx -= tweets_per_path[file_idx].size();
+            file_idx++;
+        }
+    }
+    tweets_iterator_t& operator++() noexcept {
+        internal_tweet_idx++;
+        while (file_idx < tweets_per_path.size() && internal_tweet_idx >= tweets_per_path[file_idx].size()) {
+            file_idx++;
+            internal_tweet_idx = 0;
+        }
+        return *this;
+    }
+    tweet_t const& operator*() const noexcept { return tweets_per_path[file_idx][internal_tweet_idx]; }
+};
 
 static void docs_upsert(bm::State& state) {
     status_t status;
@@ -77,25 +102,14 @@ static void docs_upsert(bm::State& state) {
 
     // Locate the portion of tweets in a disjoint array.
     std::size_t const tweets_per_thread = tweet_count / thread_count;
-    std::size_t global_tweet_idx = state.thread_index() * tweets_per_thread;
-    std::size_t internal_tweet_idx = global_tweet_idx;
-    std::size_t file_idx = 0;
-    while (tweets_per_path[file_idx].size() <= internal_tweet_idx) {
-        internal_tweet_idx -= tweets_per_path[file_idx].size();
-        file_idx++;
-    }
+    std::size_t const first_tweet_idx = state.thread_index() * tweets_per_thread;
+    tweets_iterator_t tweets_iterator {first_tweet_idx};
 
     std::size_t tweets_bytes = 0;
     for (auto _ : state) {
 
-        // Detect if we need to jump to another file.
-        while (internal_tweet_idx >= tweets_per_path[file_idx].size()) {
-            file_idx++;
-            internal_tweet_idx = 0;
-        }
-
         // Generate multiple IDs for each tweet, to augment the dataset.
-        auto const& tweet = tweets_per_path[file_idx][internal_tweet_idx];
+        auto const& tweet = *tweets_iterator;
         auto const tweet_hash = hash(tweet);
         std::array<ukv_key_t, copies_per_tweet_k> ids_tweets;
         for (std::size_t copy_idx = 0; copy_idx != copies_per_tweet_k; ++copy_idx)
@@ -128,8 +142,7 @@ static void docs_upsert(bm::State& state) {
             status.member_ptr());
         status.throw_unhandled();
 
-        internal_tweet_idx++;
-        global_tweet_idx++;
+        ++tweets_iterator;
         tweets_bytes += tweet.body.size();
     }
 
@@ -139,7 +152,7 @@ static void docs_upsert(bm::State& state) {
 }
 
 template <typename callback_at>
-void sample_randomly(bm::State& state, callback_at callback) {
+void sample_tweet_id_batches(bm::State& state, callback_at callback) {
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -175,7 +188,7 @@ static void docs_sample_blobs(bm::State& state) {
     arena_t arena(db);
 
     std::size_t received_bytes = 0;
-    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
+    sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
         ukv_read( //
@@ -206,7 +219,7 @@ static void docs_sample_objects(bm::State& state) {
     arena_t arena(db);
 
     std::size_t received_bytes = 0;
-    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
+    sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
         ukv_docs_read( //
@@ -240,7 +253,7 @@ static void docs_sample_field(bm::State& state) {
     ukv_str_view_t field = "text";
 
     std::size_t received_bytes = 0;
-    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
+    sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
         ukv_docs_read( //
@@ -279,7 +292,7 @@ static void docs_sample_table(bm::State& state) {
                                           ukv_doc_field_u32_k};
 
     std::size_t received_bytes = 0;
-    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
+    sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_octet_t** validities = nullptr;
         ukv_byte_t** scalars = nullptr;
         ukv_length_t** offsets = nullptr;
@@ -340,7 +353,7 @@ static void graph_construct_from_docs(bm::State& state) {
 
     std::size_t received_bytes = 0;
     std::size_t added_edges = 0;
-    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
+    sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_octet_t** validities = nullptr;
         ukv_byte_t** scalars = nullptr;
         ukv_byte_t* strings = nullptr;
@@ -375,9 +388,9 @@ static void graph_construct_from_docs(bm::State& state) {
         strided_iterator_gt<ukv_key_t> ids_users((ukv_key_t*)(scalars[0]), sizeof(ukv_key_t));
         strided_iterator_gt<ukv_key_t> ids_retweets((ukv_key_t*)(scalars[1]), sizeof(ukv_key_t));
         strided_iterator_gt<ukv_key_t> ids_retweeters((ukv_key_t*)(scalars[2]), sizeof(ukv_key_t));
-        strided_iterator_gt<ukv_octet_t> valid_users(validities[0]);
-        strided_iterator_gt<ukv_octet_t> valid_retweets(validities[1]);
-        strided_iterator_gt<ukv_octet_t> valid_retweeters(validities[2]);
+        bits_span_t valid_users(validities[0]);
+        bits_span_t valid_retweets(validities[1]);
+        bits_span_t valid_retweeters(validities[2]);
         for (std::size_t i = 0; i != count; ++i) {
             // Tweet <-> Author
             edges_array.push_back(edge_t {.source_id = ids_tweets[i], .target_id = ids_users[i]});
@@ -432,7 +445,7 @@ static void graph_traverse_two_hops(bm::State& state) {
 
     std::size_t received_bytes = 0;
     std::size_t received_edges = 0;
-    sample_randomly(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
+    sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         // First hop
         ukv_vertex_role_t const role = ukv_vertex_role_any_k;
         ukv_vertex_degree_t* degrees = nullptr;
@@ -479,7 +492,7 @@ static void graph_traverse_two_hops(bm::State& state) {
             status.member_ptr());
         status.throw_unhandled();
 
-        total_edges += std::transform_reduce(degrees, degrees + count, 0ul, plus, [](ukv_vertex_degree_t d) {
+        total_edges += std::transform_reduce(degrees, degrees + unique_ids, 0ul, plus, [](ukv_vertex_degree_t d) {
             return d != ukv_vertex_degree_missing_k ? d : 0;
         });
         total_ids = total_edges * 3;
@@ -491,8 +504,68 @@ static void graph_traverse_two_hops(bm::State& state) {
     state.counters["edges/s"] = bm::Counter(received_edges, bm::Counter::kIsRate);
 }
 
+static void paths_construct_from_nicknames(bm::State& state) {
+    auto const batch_size = static_cast<ukv_size_t>(state.range(0));
+    std::vector<ukv_str_view_t> batch_usernames(batch_size);
+    std::vector<ukv_str_view_t> batch_id_strs(batch_size);
+
+    status_t status;
+    arena_t arena(db);
+    ukv_char_t separator = 0;
+
+    // Locate the portion of tweets in a disjoint array.
+    std::size_t const tweets_per_thread = tweet_count / thread_count;
+    std::size_t const batches_per_thread = tweets_per_thread / batch_size;
+    std::size_t const first_tweet_idx = state.thread_index() * batches_per_thread * batch_size;
+    tweets_iterator_t tweets_iterator {first_tweet_idx};
+
+    std::size_t injected_bytes = 0;
+    for (auto _ : state) {
+
+        // Prepare a batch from multiple entries
+        for (std::size_t i = 0; i != batch_size; ++i, ++tweets_iterator) {
+            auto const& tweet = *tweets_iterator;
+            batch_usernames[i] = tweet.username;
+            batch_id_strs[i] = tweet.id_str;
+            injected_bytes += std::strlen(tweet.username);
+            injected_bytes += std::strlen(tweet.id_str);
+        }
+
+        // Finally, import the data.
+        ukv_paths_write( //
+            db,
+            nullptr,
+            batch_size,
+            &collection_paths_k,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            (ukv_str_view_t*)batch_usernames.data(),
+            sizeof(ukv_str_view_t),
+            nullptr,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            (ukv_bytes_cptr_t*)batch_id_strs.data(),
+            sizeof(ukv_str_view_t),
+            ukv_options_default_k,
+            separator,
+            arena.member_ptr(),
+            status.member_ptr());
+        status.throw_unhandled();
+    }
+
+    state.counters["docs/s"] = bm::Counter(tweets_per_thread, bm::Counter::kIsRate);
+    state.counters["batches/s"] = bm::Counter(batches_per_thread, bm::Counter::kIsRate);
+    state.counters["bytes/s"] = bm::Counter(injected_bytes, bm::Counter::kIsRate);
+}
+
 static void index_file(std::string_view mapped_contents, std::vector<tweet_t>& tweets) {
-    char const* id_key = "\"id\":";
+    constexpr char const* id_key = "\"id\":";
+    constexpr char const* username_key = "\"screen_name\":";
     char const* line_begin = mapped_contents.begin();
     char const* const end = mapped_contents.end();
     while (line_begin < end) {
@@ -509,6 +582,13 @@ static void index_file(std::string_view mapped_contents, std::vector<tweet_t>& t
         auto id_begin = id_key_begin + 5;
         auto id_length = std::min<std::size_t>(id_str_max_length_k, line_end - id_begin);
         std::memcpy(tweet.id_str, id_begin, id_length);
+
+        auto username_key_begin = std::search(tweet.body.begin(), tweet.body.end(), username_key, username_key + 14);
+        auto username_begin = username_key_begin + 14;
+        auto username_end =
+            std::find(username_begin, std::min(username_begin + sizeof(tweet.username), tweet.body.end()), ',');
+        std::memcpy(tweet.username, username_begin, username_end - username_begin);
+
         tweets.push_back(tweet);
         line_begin = line_end + 1;
     }
@@ -520,7 +600,10 @@ int main(int argc, char** argv) {
 
     // 1. Find the dataset parts
     std::printf("Will search for .ndjson files...\n");
-    auto dataset_path = dataset_directory; // std::filesystem::absolute(dataset_directory);
+    auto dataset_path = dataset_directory;
+    auto home_path = std::getenv("HOME");
+    if (dataset_path.front() == '~')
+        dataset_path = std::filesystem::path(home_path) / dataset_path.substr(2);
     auto opts = std::filesystem::directory_options::follow_directory_symlink;
     for (auto const& dir_entry : std::filesystem::directory_iterator(dataset_path, opts)) {
         if (dir_entry.path().extension() != ".ndjson")
@@ -577,6 +660,7 @@ int main(int argc, char** argv) {
 #endif
 
     bool can_build_graph = false;
+    bool can_build_paths = false;
     if (ukv_supports_named_collections_k) {
         status_t status;
         ukv_collection_init(db, "twitter.docs", "", &collection_docs_k, status.member_ptr());
@@ -584,10 +668,16 @@ int main(int argc, char** argv) {
         ukv_collection_init(db, "twitter.graph", "", &collection_graph_k, status.member_ptr());
         status.throw_unhandled();
         can_build_graph = true;
+        ukv_collection_init(db, "twitter.nicks", "", &collection_paths_k, status.member_ptr());
+        status.throw_unhandled();
+        can_build_paths = true;
     }
+    can_build_paths = false;
 
     std::printf("Will benchmark...\n");
     auto min_time = 10;
+    auto small_batch_size = 32;
+    auto big_batch_size = 256;
 
     bm::RegisterBenchmark("docs_upsert", &docs_upsert) //
         ->Iterations(tweet_count / thread_count)
@@ -598,43 +688,51 @@ int main(int argc, char** argv) {
         ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
-        ->Arg(32)
-        ->Arg(256);
+        ->Arg(small_batch_size)
+        ->Arg(big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_objects", &docs_sample_objects) //
         ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
-        ->Arg(32)
-        ->Arg(256);
+        ->Arg(small_batch_size)
+        ->Arg(big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_field", &docs_sample_field) //
         ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
-        ->Arg(32)
-        ->Arg(256);
+        ->Arg(small_batch_size)
+        ->Arg(big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_table", &docs_sample_table) //
         ->MinTime(min_time)
         ->UseRealTime()
         ->Threads(thread_count)
-        ->Arg(32)
-        ->Arg(256);
+        ->Arg(small_batch_size)
+        ->Arg(big_batch_size);
 
-    if (collection_graph_k != collection_docs_k) {
+    if (can_build_graph) {
 
         bm::RegisterBenchmark("graph_construct_from_docs", &graph_construct_from_docs) //
-            ->Iterations(tweet_count / thread_count)
+            ->MinTime(min_time)
             ->Threads(thread_count)
-            ->Arg(32)
-            ->Arg(256);
+            ->Arg(small_batch_size)
+            ->Arg(big_batch_size);
 
         bm::RegisterBenchmark("graph_traverse_two_hops", &graph_traverse_two_hops) //
             ->MinTime(min_time)
             ->Threads(thread_count)
-            ->Arg(32)
-            ->Arg(256);
+            ->Arg(small_batch_size)
+            ->Arg(big_batch_size);
+    }
+
+    if (can_build_paths) {
+
+        bm::RegisterBenchmark("paths_construct_from_nicknames", &paths_construct_from_nicknames) //
+            ->Iterations((tweet_count / thread_count) / big_batch_size)
+            ->Threads(thread_count)
+            ->Arg(big_batch_size);
     }
 
     bm::RunSpecifiedBenchmarks();

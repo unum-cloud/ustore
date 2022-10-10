@@ -216,6 +216,7 @@ endif()
 
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
+  include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
   include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
 
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})

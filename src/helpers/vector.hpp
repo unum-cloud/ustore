@@ -15,7 +15,7 @@ namespace unum::ukv {
  * and must be trivially copy-constructible.
  */
 template <typename element_at>
-class safe_vector_gt {
+class uninitialized_vector_gt {
     using element_t = element_at;
     using elementc_t = element_t const;
     using ptrc_t = elementc_t*;
@@ -28,22 +28,22 @@ class safe_vector_gt {
     stl_arena_t* arena_ptr_ = nullptr;
 
   public:
-    safe_vector_gt(safe_vector_gt const&) = delete;
-    safe_vector_gt& operator=(safe_vector_gt const&) = delete;
+    uninitialized_vector_gt(uninitialized_vector_gt const&) = delete;
+    uninitialized_vector_gt& operator=(uninitialized_vector_gt const&) = delete;
 
-    safe_vector_gt(safe_vector_gt&& v) noexcept
+    uninitialized_vector_gt(uninitialized_vector_gt&& v) noexcept
         : ptr_(std::exchange(v.ptr_, nullptr)), length_(std::exchange(v.length_, 0)), cap_(std::exchange(v.cap_, 0)),
           arena_ptr_(std::exchange(v.arena_ptr_, nullptr)) {}
 
-    safe_vector_gt& operator=(safe_vector_gt&& v) noexcept {
+    uninitialized_vector_gt& operator=(uninitialized_vector_gt&& v) noexcept {
         std::swap(v.ptr_, ptr_);
         std::swap(v.length_, length_);
         std::swap(v.cap_, cap_);
         std::swap(v.arena_ptr_, arena_ptr_);
         return *this;
     }
-    safe_vector_gt(stl_arena_t& arena) : arena_ptr_(&arena) {}
-    safe_vector_gt(std::size_t size, stl_arena_t& arena, ukv_error_t* c_error) : arena_ptr_(&arena) {
+    uninitialized_vector_gt(stl_arena_t& arena) : arena_ptr_(&arena) {}
+    uninitialized_vector_gt(std::size_t size, stl_arena_t& arena, ukv_error_t* c_error) : arena_ptr_(&arena) {
         if (!size)
             return;
         auto tape = arena_ptr_->alloc<element_t>(size, c_error);
@@ -51,8 +51,10 @@ class safe_vector_gt {
         cap_ = length_ = static_cast<ukv_length_t>(size);
     }
 
-    safe_vector_gt(value_view_t view) : safe_vector_gt(view.size()) { std::memcpy(ptr_, view.begin(), view.size()); }
-    ~safe_vector_gt() { reset(); }
+    uninitialized_vector_gt(value_view_t view) : uninitialized_vector_gt(view.size()) {
+        std::memcpy(ptr_, view.begin(), view.size());
+    }
+    ~uninitialized_vector_gt() { reset(); }
 
     void reset() {
         ptr_ = nullptr;
@@ -95,7 +97,7 @@ class safe_vector_gt {
         reserve(new_size, c_error);
         return_on_error(c_error);
 
-        ptr_[length_] = val;
+        ptr_[length_] = std::move(val);
         length_ = new_size;
     }
 
@@ -115,7 +117,6 @@ class safe_vector_gt {
         else
             length_ = new_size;
 
-        static_assert(std::is_trivially_copy_constructible<element_t>());
         std::memmove(ptr_ + offset + inserted_len, ptr_ + offset, following_len * sizeof(element_t));
         std::memcpy(ptr_ + offset, inserted_begin, inserted_len * sizeof(element_t));
     }
@@ -123,7 +124,6 @@ class safe_vector_gt {
     void erase(std::size_t offset, std::size_t length, ukv_error_t* c_error) {
         return_if_error(size() >= offset + length, c_error, out_of_range_k, "Can't erase");
 
-        static_assert(std::is_trivially_copy_constructible<element_t>());
         auto following_len = length_ - (offset + length);
         std::memmove(ptr_ + offset, ptr_ + offset + length, following_len * sizeof(element_t));
         length_ -= length;
@@ -143,16 +143,32 @@ class safe_vector_gt {
     inline ukv_length_t* member_cap() noexcept { return &cap_; }
 };
 
+template <typename element_at>
+class initialized_range_gt {
+    using element_t = element_at;
+    using vector_t = uninitialized_vector_gt<element_t>;
+    vector_t const& owner_;
+
+  public:
+    static_assert(std::is_nothrow_constructible<element_t>());
+
+    initialized_range_gt(vector_t const& owner) noexcept : owner_(owner) {
+        std::uninitialized_default_construct(owner_.begin(), owner_.end());
+    }
+
+    ~initialized_range_gt() noexcept { std::destroy(owner_.begin(), owner_.end()); }
+};
+
 /**
  * @brief Append-only data-structure for variable length blobs.
  * Owns the underlying arena and is external to the underlying DB.
  * Is suited for data preparation before passing to the C API.
  */
 class growing_tape_t {
-    safe_vector_gt<ukv_octet_t> presences_;
-    safe_vector_gt<ukv_length_t> offsets_;
-    safe_vector_gt<ukv_length_t> lengths_;
-    safe_vector_gt<byte_t> contents_;
+    uninitialized_vector_gt<ukv_octet_t> presences_;
+    uninitialized_vector_gt<ukv_length_t> offsets_;
+    uninitialized_vector_gt<ukv_length_t> lengths_;
+    uninitialized_vector_gt<byte_t> contents_;
 
   public:
     growing_tape_t(stl_arena_t& arena) : presences_(arena), offsets_(arena), lengths_(arena), contents_(arena) {}
@@ -205,9 +221,7 @@ class growing_tape_t {
         contents_.clear();
     }
 
-    strided_iterator_gt<ukv_octet_t> presences() noexcept {
-        return strided_iterator_gt<ukv_octet_t>(presences_.begin(), sizeof(ukv_octet_t));
-    }
+    bits_span_t presences() noexcept { return bits_span_t(presences_.begin()); }
     strided_range_gt<ukv_length_t> offsets() noexcept {
         return strided_range<ukv_length_t>(offsets_.begin(), offsets_.end());
     }

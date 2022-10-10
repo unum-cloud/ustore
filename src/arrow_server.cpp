@@ -12,8 +12,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <chrono> // `std::time_point`
+#include <cstdio> // `std::printf`
 #include <mutex>
-#include <iostream>
 
 #include <arrow/flight/server.h>
 
@@ -1258,7 +1258,7 @@ ar::Status run_server() {
     arf::FlightServerOptions options(server_location);
     auto server = std::make_unique<UKVService>(std::move(db));
     ARROW_RETURN_NOT_OK(server->Init(options));
-    std::cout << "Listening on port " << server->port() << std::endl;
+    std::printf("Listening on port: %i\n", server->port());
     return server->Serve();
 }
 
