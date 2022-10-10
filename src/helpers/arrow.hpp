@@ -81,7 +81,7 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
     monotonic_resource_t resource_;
 
   public:
-    arrow_mem_pool_t(stl_arena_t& arena) : resource_(&arena.resource) {}
+    arrow_mem_pool_t(stl_arena_t& arena) : resource_(&arena.resource_) {}
     ~arrow_mem_pool_t() {}
 
     ar::Status Allocate(int64_t size, uint8_t** ptr) override {
@@ -280,7 +280,7 @@ void ukv_to_continous_bin( //
     size_t places_count,
     size_t c_tasks_count,
     ukv_bytes_cptr_t* continous_bin,
-    span_gt<ukv_length_t> continous_bin_offs,
+    ptr_range_gt<ukv_length_t> continous_bin_offs,
     stl_arena_t& arena,
     ukv_error_t* c_error) {
 

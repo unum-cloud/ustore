@@ -516,7 +516,7 @@ void ukv_paths_write( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
@@ -529,7 +529,7 @@ void ukv_paths_write( //
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_values_bytes, c_values_bytes_stride};
     strided_iterator_gt<ukv_length_t const> offs {c_values_offsets, c_values_offsets_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_values_lengths, c_values_lengths_stride};
-    strided_iterator_gt<ukv_octet_t const> presences {c_values_presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c_values_presences};
 
     places_arg_t places {collections, {}, {}, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
@@ -702,7 +702,7 @@ void ukv_paths_match( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
@@ -931,7 +931,7 @@ void ukv_paths_read( //
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
