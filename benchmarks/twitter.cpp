@@ -388,9 +388,9 @@ static void graph_construct_from_docs(bm::State& state) {
         strided_iterator_gt<ukv_key_t> ids_users((ukv_key_t*)(scalars[0]), sizeof(ukv_key_t));
         strided_iterator_gt<ukv_key_t> ids_retweets((ukv_key_t*)(scalars[1]), sizeof(ukv_key_t));
         strided_iterator_gt<ukv_key_t> ids_retweeters((ukv_key_t*)(scalars[2]), sizeof(ukv_key_t));
-        strided_iterator_gt<ukv_octet_t> valid_users(validities[0]);
-        strided_iterator_gt<ukv_octet_t> valid_retweets(validities[1]);
-        strided_iterator_gt<ukv_octet_t> valid_retweeters(validities[2]);
+        bits_span_t valid_users(validities[0]);
+        bits_span_t valid_retweets(validities[1]);
+        bits_span_t valid_retweeters(validities[2]);
         for (std::size_t i = 0; i != count; ++i) {
             // Tweet <-> Author
             edges_array.push_back(edge_t {.source_id = ids_tweets[i], .target_id = ids_users[i]});
@@ -492,7 +492,7 @@ static void graph_traverse_two_hops(bm::State& state) {
             status.member_ptr());
         status.throw_unhandled();
 
-        total_edges += std::transform_reduce(degrees, degrees + count, 0ul, plus, [](ukv_vertex_degree_t d) {
+        total_edges += std::transform_reduce(degrees, degrees + unique_ids, 0ul, plus, [](ukv_vertex_degree_t d) {
             return d != ukv_vertex_degree_missing_k ? d : 0;
         });
         total_ids = total_edges * 3;
@@ -600,7 +600,10 @@ int main(int argc, char** argv) {
 
     // 1. Find the dataset parts
     std::printf("Will search for .ndjson files...\n");
-    auto dataset_path = dataset_directory; // std::filesystem::absolute(dataset_directory);
+    auto dataset_path = dataset_directory;
+    auto home_path = std::getenv("HOME");
+    if (dataset_path.front() == '~')
+        dataset_path = std::filesystem::path(home_path) / dataset_path.substr(2);
     auto opts = std::filesystem::directory_options::follow_directory_symlink;
     for (auto const& dir_entry : std::filesystem::directory_iterator(dataset_path, opts)) {
         if (dir_entry.path().extension() != ".ndjson")

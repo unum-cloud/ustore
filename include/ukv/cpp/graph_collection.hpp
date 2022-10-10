@@ -180,7 +180,7 @@ class graph_collection_t {
      * @brief Checks if certain vertices are present in the graph.
      * They maybe disconnected from everything else.
      */
-    expected_gt<strided_iterator_gt<ukv_octet_t>> contains( //
+    expected_gt<bits_span_t> contains( //
         strided_range_gt<ukv_key_t const> const& vertices,
         bool watch = true) noexcept {
         places_arg_t arg;

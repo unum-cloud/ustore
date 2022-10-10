@@ -46,13 +46,13 @@
         {
             "label": "Build Native: Debug Arrow Test",
             // Both must pass builds
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_flight_client_unit_test ukv_stl_flight_server",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && make ukv_flight_client_unit_test ukv_stl_flight_server",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug Arrow",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_stl_flight_server",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && make ukv_stl_flight_server",
             "args": [],
             "type": "shell"
         },
@@ -64,7 +64,7 @@
         },
         {
             "label": "Build Native: Debug Twitter STL Benchmark",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_stl_twitter_benchmark",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=1 . && make ukv_stl_twitter_benchmark",
             "args": [],
             "type": "shell"
         },
