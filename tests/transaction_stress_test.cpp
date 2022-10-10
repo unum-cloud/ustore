@@ -37,8 +37,8 @@ void serializability_insert() {
     EXPECT_TRUE(db.clear());
 
     constexpr std::size_t keys_size = txn_cnt_ak * op_per_txn_ak;
-    std::vector<ukv_key_t> keys(keys_size);
-    std::iota(std::begin(keys), std::end(keys), 0);
+    std::array<ukv_key_t, keys_size> keys;
+    std::iota(keys.begin(), keys.end(), 0);
 
     auto task = [&](size_t thread_idx) {
         for (std::size_t txn_idx = 0; txn_idx != txn_cnt_ak; ++txn_idx) {
@@ -54,14 +54,14 @@ void serializability_insert() {
         }
     };
 
-    std::vector<std::thread> threads(threads_cnt_ak);
+    std::array<std::thread, threads_cnt_ak> threads;
     for (std::size_t i = 0; i < threads_cnt_ak; ++i)
         threads[i] = std::thread(task, i);
     for (std::size_t i = 0; i < threads_cnt_ak; ++i)
         threads[i].join();
 
     bins_collection_t collection = db.collection().throw_or_release();
-    auto ref = collection[keys];
+    auto ref = collection[strided_range_gt<ukv_key_t>(keys.data(), keys_size)];
     auto const& retrieved = ref.value().throw_or_release();
 
     for (std::size_t i = 0; i != retrieved.size() - 1; ++i)
@@ -212,6 +212,8 @@ void serializability_mix() {
 
     for (std::size_t i = 0; i != threads_cnt_ak; ++i)
         threads[i].join();
+
+    std::sort(operations.begin(), operations.end(), [](auto& left, auto& right) { return left.first < right.first; });
 
     std::filesystem::path second_db_path(path());
     if (second_db_path.has_filename())
