@@ -376,7 +376,7 @@ constexpr ukv_doc_field_type_t ukv_doc_field() {
         return ukv_doc_field_f64_k;
     if constexpr (std::is_same_v<element_at, value_view_t>)
         return ukv_doc_field_bin_k;
-    if constexpr (std::is_same_v<element_at, std::string_view>)
+    if constexpr (std::is_same_v<element_at, std::string_view> || std::is_same_v<element_at, ukv_str_view_t>)
         return ukv_doc_field_str_k;
     return ukv_doc_field_json_k;
 }
