@@ -356,7 +356,7 @@ void export_edge_tuples( //
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
     constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
 
-    vertices_arg_t vertices {{}, vertices_ids.begin(), roles, c_vertices_count};
+    find_edges_t find_edges {{}, vertices_ids.begin(), roles, c_vertices_count};
 
     // Estimate the amount of memory we will need for the arena
     std::size_t count_ids = 0;
@@ -364,7 +364,7 @@ void export_edge_tuples( //
         joined_bins_iterator_t values_it = values.begin();
         for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
             value_view_t value = *values_it;
-            count_ids += neighbors(value, vertices[i].role).size();
+            count_ids += neighbors(value, find_edges[i].role).size();
         }
         count_ids *= tuple_size_k;
     }
@@ -379,7 +379,7 @@ void export_edge_tuples( //
     joined_bins_iterator_t values_it = values.begin();
     for (std::size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
         value_view_t value = *values_it;
-        relationship_t relation = vertices[i];
+        relationship_t relation = find_edges[i];
 
         // Some values may be missing
         if (!value) {
