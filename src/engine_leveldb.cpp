@@ -268,6 +268,9 @@ void ukv_read( //
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
+        if (c_options & ukv_option_transaction_snapshot_k)
+            options.snapshot = db.GetSnapshot();
+
         std::string value_buffer;
         ukv_length_t progress_in_tape = 0;
         auto data_enumerator = [&](std::size_t i, value_view_t value) {
@@ -281,6 +284,8 @@ void ukv_read( //
         offs[places.count] = contents.size();
         if (needs_export)
             *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(contents.begin());
+
+        db.ReleaseSnapshot(options.snapshot);
     }
     catch (...) {
         *c_error = "Read Failure";
@@ -338,11 +343,15 @@ void ukv_scan( //
     leveldb::ReadOptions options;
     options.fill_cache = false;
 
+    if (c_options & ukv_option_transaction_snapshot_k)
+        options.snapshot = db.GetSnapshot();
+
     level_iter_uptr_t it;
     try {
         it = level_iter_uptr_t(db.NewIterator(options));
     }
     catch (...) {
+        db.ReleaseSnapshot(options.snapshot);
         *c_error = "Fail To Create Iterator";
         return;
     }
@@ -366,6 +375,8 @@ void ukv_scan( //
     }
 
     offsets[tasks.size()] = keys_output - *c_found_keys;
+
+    db.ReleaseSnapshot(options.snapshot);
 }
 
 void ukv_size( //
