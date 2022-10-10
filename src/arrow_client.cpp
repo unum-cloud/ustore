@@ -12,6 +12,7 @@
 #include <fmt/core.h> // `fmt::format_to`
 #include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
+#include <mutex>
 
 #include "ukv/db.h"
 #include "ukv/arrow.h"
@@ -38,6 +39,8 @@ using namespace unum;
 
 struct rpc_client_t {
     std::unique_ptr<arf::FlightClient> flight;
+    ukv_arena_t* arena;
+    std::mutex arena_lock;
 };
 
 arf::FlightCallOptions arrow_call_options(arrow_mem_pool_t& pool) {
@@ -73,6 +76,8 @@ void ukv_database_init( //
         auto maybe_flight_ptr = arf::FlightClient::Connect(*maybe_location);
         return_if_error(maybe_flight_ptr.ok(), c_error, network_k, "Flight Client Connection");
 
+        make_stl_arena(db_ptr->arena, ukv_options_default_k, c_error);
+        return_if_error(maybe_location.ok(), c_error, args_wrong_k, "Failed to allocate default arena.");
         db_ptr->flight = maybe_flight_ptr.MoveValueUnsafe();
         *c_db = db_ptr;
     });
@@ -1366,11 +1371,6 @@ void ukv_collection_init(
     }
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
-    // TODO: Can we somehow reuse the IPC-needed memory?
-    // Do we need to add that arena argument to every call?
-    // ar::Status ar_status;
-    // arrow_mem_pool_t pool(arena);
-    // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
     fmt::format_to(std::back_inserter(action.type),
@@ -1381,7 +1381,11 @@ void ukv_collection_init(
     if (c_collection_config)
         action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c_collection_config});
 
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
+    db.arena_lock.lock();
+    arrow_mem_pool_t pool(db.arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
+    db.arena_lock.unlock();
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
 
     auto& stream_ptr = maybe_stream.ValueUnsafe();
@@ -1411,11 +1415,6 @@ void ukv_collection_drop(
     }
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
-    // TODO: Can we somehow reuse the IPC-needed memory?
-    // Do we need to add that arena argument to every call?
-    // ar::Status ar_status;
-    // arrow_mem_pool_t pool(arena);
-    // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
     fmt::format_to(std::back_inserter(action.type),
@@ -1426,7 +1425,11 @@ void ukv_collection_drop(
                    kParamDropMode,
                    mode);
 
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
+    db.arena_lock.lock();
+    arrow_mem_pool_t pool(db.arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
+    db.arena_lock.unlock();
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
 }
 
@@ -1509,11 +1512,6 @@ void ukv_transaction_init(
     return_if_error(c_txn, c_error, uninitialized_state_k, "Transaction is uninitialized");
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
-    // TODO: Can we somehow reuse the IPC-needed memory?
-    // Do we need to add that arena argument to every call?
-    // ar::Status ar_status;
-    // arrow_mem_pool_t pool(arena);
-    // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
     ukv_size_t txn_id = *reinterpret_cast<ukv_size_t*>(c_txn);
@@ -1523,7 +1521,11 @@ void ukv_transaction_init(
     if (c_options & ukv_option_transaction_snapshot_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
 
+    db.arena_lock.lock();
+    arrow_mem_pool_t pool(db.arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
+    db.arena_lock.unlock();
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
 
     auto& stream_ptr = maybe_stream.ValueUnsafe();
@@ -1544,11 +1546,6 @@ void ukv_transaction_commit( //
     return_if_error(c_txn, c_error, uninitialized_state_k, "Transaction is uninitialized");
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
-    // TODO: Can we somehow reuse the IPC-needed memory?
-    // Do we need to add that arena argument to every call?
-    // ar::Status ar_status;
-    // arrow_mem_pool_t pool(arena);
-    // arf::FlightCallOptions options = arrow_call_options(pool);
 
     arf::Action action;
     fmt::format_to(std::back_inserter(action.type),
@@ -1559,7 +1556,11 @@ void ukv_transaction_commit( //
     if (c_options & ukv_option_write_flush_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagFlushWrite);
 
+    db.arena_lock.lock();
+    arrow_mem_pool_t pool(db.arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
+    db.arena_lock.unlock();
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
 }
 
