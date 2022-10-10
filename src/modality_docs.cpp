@@ -1,5 +1,5 @@
 /**
- * @file modality_simdocs.cpp
+ * @file modality_docs.cpp
  * @author Ashot Vardanian
  *
  * @brief Document storage using "nlohmann/JSON" lib.
