@@ -477,6 +477,9 @@ void ukv_scan( //
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
+    if (txn && (c_options & ukv_option_transaction_snapshot_k))
+        options.snapshot = txn->GetSnapshot();
+
     for (ukv_size_t i = 0; i != c_min_tasks_count; ++i) {
         scan_t task = tasks[i];
         auto collection = rocks_collection(db, task.collection);
