@@ -64,7 +64,7 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Test STL_STRESS",
+            "name": "C++: Stress Test STL",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/bin/ukv_stl_stress_test",
@@ -82,12 +82,12 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug STL_STRESS Test",
+            "preLaunchTask": "Build Native: Debug STL Stress Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Test ROCKSDB_STRESS",
+            "name": "C++: Stress Test RocksDB",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/bin/ukv_rocksdb_stress_test",
@@ -105,7 +105,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug ROCKSDB_STRESS Test",
+            "preLaunchTask": "Build Native: Debug RocksDB Stress Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
