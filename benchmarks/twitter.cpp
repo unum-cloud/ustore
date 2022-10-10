@@ -118,28 +118,22 @@ static void docs_upsert(bm::State& state) {
         // Finally, import the data.
         ukv_bytes_cptr_t body = reinterpret_cast<ukv_bytes_cptr_t>(tweet.body.data());
         ukv_length_t length = static_cast<ukv_length_t>(tweet.body.size());
-        ukv_docs_write( //
-            db,
-            nullptr,
-            copies_per_tweet_k,
-            &collection_docs_k,
-            0,
-            ids_tweets.data(),
-            sizeof(ukv_key_t),
-            nullptr,
-            0,
-            nullptr,
-            nullptr,
-            0,
-            &length,
-            0,
-            &body,
-            0,
-            ukv_doc_modify_upsert_k,
-            ukv_doc_field_json_k,
-            ukv_options_default_k,
-            arena.member_ptr(),
-            status.member_ptr());
+
+        ukv_docs_write_t docs_write {
+            .db = db,
+            .error = status.member_ptr(),
+            .modification = ukv_doc_modify_upsert_k,
+            .arena = arena.member_ptr(),
+            .type = ukv_doc_field_json_k,
+            .tasks_count = copies_per_tweet_k,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets.data(),
+            .keys_stride = sizeof(ukv_key_t),
+            .lengths = &length,
+            .values = &body,
+        };
+
+        ukv_docs_write(&docs_write);
         status.throw_unhandled();
 
         ++tweets_iterator;
@@ -222,24 +216,21 @@ static void docs_sample_objects(bm::State& state) {
     sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
-        ukv_docs_read( //
-            db,
-            nullptr,
-            count,
-            &collection_docs_k,
-            0,
-            ids_tweets,
-            sizeof(ukv_key_t),
-            nullptr,
-            0,
-            ukv_doc_field_json_k,
-            ukv_options_default_k,
-            nullptr,
-            &offsets,
-            nullptr,
-            &values,
-            arena.member_ptr(),
-            status.member_ptr());
+
+        ukv_docs_read_t docs_read {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .type = ukv_doc_field_json_k,
+            .tasks_count = count,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets,
+            .keys_stride = sizeof(ukv_key_t),
+            .found_offsets = &offsets,
+            .found_values = &values,
+        };
+
+        ukv_docs_read(&docs_read);
         status.throw_unhandled();
         received_bytes += offsets[count];
     });
@@ -256,24 +247,22 @@ static void docs_sample_field(bm::State& state) {
     sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
-        ukv_docs_read( //
-            db,
-            nullptr,
-            count,
-            &collection_docs_k,
-            0,
-            ids_tweets,
-            sizeof(ukv_key_t),
-            &field,
-            0,
-            ukv_doc_field_str_k,
-            ukv_options_default_k,
-            nullptr,
-            &offsets,
-            nullptr,
-            &values,
-            arena.member_ptr(),
-            status.member_ptr());
+
+        ukv_docs_read_t docs_read {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .type = ukv_doc_field_str_k,
+            .tasks_count = count,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets,
+            .keys_stride = sizeof(ukv_key_t),
+            .fields = &field,
+            .found_offsets = &offsets,
+            .found_values = &values,
+        };
+
+        ukv_docs_read(&docs_read);
         status.throw_unhandled();
         received_bytes += offsets[count];
     });
@@ -298,29 +287,28 @@ static void docs_sample_table(bm::State& state) {
         ukv_length_t** offsets = nullptr;
         ukv_length_t** lengths = nullptr;
         ukv_byte_t* strings = nullptr;
-        ukv_docs_gather( //
-            db,
-            nullptr,
-            count,
-            fields_k,
-            &collection_docs_k,
-            0,
-            ids_tweets,
-            sizeof(ukv_key_t),
-            names,
-            sizeof(ukv_str_view_t),
-            types,
-            sizeof(ukv_doc_field_type_t),
-            ukv_options_default_k,
-            &validities,
-            nullptr,
-            nullptr,
-            &scalars,
-            &offsets,
-            &lengths,
-            &strings,
-            arena.member_ptr(),
-            status.member_ptr());
+
+        ukv_docs_gather_t docs_gather {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .docs_count = count,
+            .fields_count = fields_k,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets,
+            .keys_stride = sizeof(ukv_key_t),
+            .fields = names,
+            .fields_stride = sizeof(ukv_str_view_t),
+            .types = types,
+            .types_stride = sizeof(ukv_doc_field_type_t),
+            .columns_validities = &validities,
+            .columns_scalars = &scalars,
+            .columns_offsets = &offsets,
+            .columns_lengths = &lengths,
+            .joined_strings = &strings,
+        };
+
+        ukv_docs_gather(&docs_gather);
         status.throw_unhandled();
 
         // One column is just stirngs
@@ -357,29 +345,26 @@ static void graph_construct_from_docs(bm::State& state) {
         ukv_octet_t** validities = nullptr;
         ukv_byte_t** scalars = nullptr;
         ukv_byte_t* strings = nullptr;
-        ukv_docs_gather( //
-            db,
-            nullptr,
-            count,
-            fields_k,
-            &collection_docs_k,
-            0,
-            ids_tweets,
-            sizeof(ukv_key_t),
-            names,
-            sizeof(ukv_str_view_t),
-            types,
-            sizeof(ukv_doc_field_type_t),
-            ukv_options_default_k,
-            &validities,
-            nullptr,
-            nullptr,
-            &scalars,
-            nullptr,
-            nullptr,
-            &strings,
-            arena.member_ptr(),
-            status.member_ptr());
+
+        ukv_docs_gather_t docs_gather {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .docs_count = count,
+            .fields_count = fields_k,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets,
+            .keys_stride = sizeof(ukv_key_t),
+            .fields = names,
+            .fields_stride = sizeof(ukv_str_view_t),
+            .types = types,
+            .types_stride = sizeof(ukv_doc_field_type_t),
+            .columns_validities = &validities,
+            .columns_scalars = &scalars,
+            .joined_strings = &strings,
+        };
+
+        ukv_docs_gather(&docs_gather);
         status.throw_unhandled();
 
         // Check which edges can be constructed

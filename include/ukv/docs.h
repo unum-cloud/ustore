@@ -114,37 +114,42 @@ typedef enum {
  * With documents, we can often infer the ID from the documents @b "_id" field,
  * similar to MongoDB and ElasticSearch.
  */
-void ukv_docs_write( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
+typedef struct ukv_docs_write_t {
 
-    ukv_key_t const* keys,
-    ukv_size_t const keys_stride,
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_doc_modification_t const modification;
+    ukv_transaction_t transaction = NULL;
+    ukv_arena_t* arena = NULL;
+    ukv_doc_field_type_t const type = ukv_doc_field_default_k;
+    ukv_options_t options = ukv_options_default_k;
+    ukv_size_t tasks_count = 1;
 
-    ukv_str_view_t const* fields,
-    ukv_size_t const fields_stride,
+    // Inputs:
+    ukv_collection_t const* collections = NULL;
+    ukv_size_t collections_stride = 0;
 
-    ukv_octet_t const* presences,
+    ukv_key_t const* keys = NULL;
+    ukv_size_t keys_stride = 0;
 
-    ukv_length_t const* offsets,
-    ukv_size_t const offsets_stride,
+    ukv_str_view_t const* fields = NULL;
+    ukv_size_t fields_stride = 0;
 
-    ukv_length_t const* lengths,
-    ukv_size_t const lengths_stride,
+    ukv_octet_t const* presences = NULL;
 
-    ukv_bytes_cptr_t const* values,
-    ukv_size_t const values_stride,
+    ukv_length_t const* offsets = NULL;
+    ukv_size_t offsets_stride = 0;
 
-    ukv_doc_modification_t const modification,
-    ukv_doc_field_type_t const type,
-    ukv_options_t const options,
+    ukv_length_t const* lengths = NULL;
+    ukv_size_t lengths_stride = 0;
 
-    ukv_arena_t* arena,
-    ukv_error_t* error);
+    ukv_bytes_cptr_t const* values = NULL;
+    ukv_size_t values_stride = 0;
+
+} ukv_docs_write_t;
+
+void ukv_docs_write(ukv_docs_write_t*);
 
 /**
  * @brief The primary "getter" interface for sub-document-level data.
@@ -171,30 +176,35 @@ void ukv_docs_write( //
  *      Describe a set of transforms to be applied at document & sub-document
  *      level. Transforms themselves are standardized and packed in JSON.
  */
-void ukv_docs_read( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_size_t const tasks_count,
 
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
+typedef struct ukv_docs_read_t {
 
-    ukv_key_t const* keys,
-    ukv_size_t const keys_stride,
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_transaction_t transaction = NULL;
+    ukv_arena_t* arena = NULL;
+    ukv_doc_field_type_t const type = ukv_doc_field_default_k;
+    ukv_options_t options = ukv_options_default_k;
+    ukv_size_t tasks_count = 1;
 
-    ukv_str_view_t const* fields,
-    ukv_size_t const fields_stride,
+    // Inputs:
+    ukv_collection_t const* collections = NULL;
+    ukv_size_t collections_stride = 0;
 
-    ukv_doc_field_type_t const type,
-    ukv_options_t const options,
+    ukv_key_t const* keys = NULL;
+    ukv_size_t keys_stride = 0;
 
-    ukv_octet_t** found_presences,
-    ukv_length_t** found_offsets,
-    ukv_length_t** found_lengths,
-    ukv_bytes_ptr_t* found_values,
+    ukv_str_view_t const* fields = NULL;
+    ukv_size_t fields_stride = 0;
 
-    ukv_arena_t* arena,
-    ukv_error_t* error);
+    ukv_octet_t** found_presences = NULL;
+    ukv_length_t** found_offsets = NULL;
+    ukv_length_t** found_lengths = NULL;
+    ukv_bytes_ptr_t* found_values = NULL;
+
+} ukv_docs_read_t;
+
+void ukv_docs_read(ukv_docs_read_t*);
 
 /**
  * @brief Describes the statistics (presence) of select or all fields among
@@ -206,25 +216,30 @@ void ukv_docs_read( //
  *                      appearing in all the documents. That might be a very heavy
  *                      query for big collections of flexible schema documents.
  */
-void ukv_docs_gist( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_size_t const docs_count,
 
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
+typedef struct ukv_docs_gist_t {
 
-    ukv_key_t const* keys,
-    ukv_size_t const keys_stride,
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_transaction_t transaction = NULL;
+    ukv_arena_t* arena = NULL;
+    ukv_options_t options = ukv_options_default_k;
+    ukv_size_t docs_count = 1;
 
-    ukv_options_t const options,
+    // Inputs:
+    ukv_collection_t const* collections = NULL;
+    ukv_size_t collections_stride = 0;
 
-    ukv_size_t* found_fields_count,
-    ukv_length_t** found_offsets,
-    ukv_char_t** found_fields,
+    ukv_key_t const* keys = NULL;
+    ukv_size_t keys_stride = 0;
 
-    ukv_arena_t* arena,
-    ukv_error_t* error);
+    ukv_size_t* found_fields_count = NULL;
+    ukv_length_t** found_offsets = NULL;
+    ukv_char_t** found_fields = NULL;
+
+} ukv_docs_gist_t;
+
+void ukv_docs_gist(ukv_docs_gist_t*);
 
 /**
  * @brief The vectorized "gather" interface, that collects, type-checks and
@@ -282,36 +297,41 @@ void ukv_docs_gist( //
  * A user may want to join fields stored under different same keys in different collections.
  * That should be implemented as two (or multiple) separate requests for space-efficiency.
  */
-void ukv_docs_gather( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_size_t const docs_count,
-    ukv_size_t const fields_count,
 
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
+typedef struct ukv_docs_gather_t {
 
-    ukv_key_t const* keys,
-    ukv_size_t const keys_stride,
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_transaction_t transaction = NULL;
+    ukv_arena_t* arena = NULL;
+    ukv_options_t options = ukv_options_default_k;
+    ukv_size_t docs_count = 1;
+    ukv_size_t fields_count = 1;
 
-    ukv_str_view_t const* fields,
-    ukv_size_t const fields_stride,
+    // Inputs:
+    ukv_collection_t const* collections = NULL;
+    ukv_size_t collections_stride = 0;
 
-    ukv_doc_field_type_t const* types,
-    ukv_size_t const types_stride,
+    ukv_key_t const* keys = NULL;
+    ukv_size_t keys_stride = 0;
 
-    ukv_options_t const options,
+    ukv_str_view_t const* fields = NULL;
+    ukv_size_t fields_stride = 0;
 
-    ukv_octet_t*** columns_validities,
-    ukv_octet_t*** columns_conversions,
-    ukv_octet_t*** columns_collisions,
-    ukv_byte_t*** columns_scalars,
-    ukv_length_t*** columns_offsets,
-    ukv_length_t*** columns_lengths,
-    ukv_byte_t** joined_strings,
+    ukv_doc_field_type_t const* types = NULL;
+    ukv_size_t const types_stride = 0;
 
-    ukv_arena_t* arena,
-    ukv_error_t* error);
+    ukv_octet_t*** columns_validities = NULL;
+    ukv_octet_t*** columns_conversions = NULL;
+    ukv_octet_t*** columns_collisions = NULL;
+    ukv_byte_t*** columns_scalars = NULL;
+    ukv_length_t*** columns_offsets = NULL;
+    ukv_length_t*** columns_lengths = NULL;
+    ukv_byte_t** joined_strings = NULL;
+
+} ukv_docs_gather_t;
+
+void ukv_docs_gather(ukv_docs_gather_t*);
 
 #ifdef __cplusplus
 } /* end extern "C" */
