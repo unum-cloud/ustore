@@ -31,7 +31,7 @@
 #include "ukv/paths.h"
 #include "helpers/pmr.hpp"         // `stl_arena_t`
 #include "helpers/algorithm.hpp"   // `sort_and_deduplicate`
-#include "helpers/vector.hpp"      // `safe_vector_gt`
+#include "helpers/vector.hpp"      // `uninitialized_vector_gt`
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
 /*********************************************************/
@@ -60,7 +60,7 @@ ukv_length_t get_bucket_size(value_view_t bucket) noexcept {
     return bucket.size() > bytes_in_header_k ? *lengths : 0u;
 }
 
-indexed_range_gt<ukv_length_t const*> get_bucket_counters(value_view_t bucket, ukv_length_t size) noexcept {
+ptr_range_gt<ukv_length_t const> get_bucket_counters(value_view_t bucket, ukv_length_t size) noexcept {
     auto lengths = reinterpret_cast<ukv_length_t const*>(bucket.data());
     return {lengths, lengths + size * 2u + 1u};
 }
@@ -216,24 +216,26 @@ void upsert_in_bucket( //
 
     auto old_keys = get_bucket_keys(bucket, old_size);
     auto old_vals = get_bucket_vals(bucket, old_size);
+    std::size_t new_idx = 0;
     for (std::size_t i = 0; i != old_size; ++i, ++old_keys, ++old_vals) {
         if (!is_missing && i == old_idx)
             continue;
 
         value_view_t old_key = *old_keys;
         value_view_t old_val = *old_vals;
-        new_keys_lengths[i] = static_cast<ukv_length_t>(old_key.size());
-        new_vals_lengths[i] = static_cast<ukv_length_t>(old_val.size());
+        new_keys_lengths[new_idx] = static_cast<ukv_length_t>(old_key.size());
+        new_vals_lengths[new_idx] = static_cast<ukv_length_t>(old_val.size());
         std::memcpy(new_keys_output, old_key.data(), old_key.size());
         std::memcpy(new_vals_output, old_val.data(), old_val.size());
 
         new_keys_output += old_key.size();
         new_vals_output += old_val.size();
+        ++new_idx;
     }
 
     // Append the new entry at the end
-    new_keys_lengths[new_size - 1] = static_cast<ukv_length_t>(key.size());
-    new_vals_lengths[new_size - 1] = static_cast<ukv_length_t>(val.size());
+    new_keys_lengths[new_idx] = static_cast<ukv_length_t>(key.size());
+    new_vals_lengths[new_idx] = static_cast<ukv_length_t>(val.size());
     std::memcpy(new_keys_output, key.data(), key.size());
     std::memcpy(new_vals_output, val.data(), val.size());
 
@@ -274,7 +276,7 @@ void ukv_paths_write( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     contents_arg_t keys_str_args;
@@ -309,6 +311,7 @@ void ukv_paths_write( //
     unique_places.keys_begin = unique_col_keys_strided.members(&collection_key_t::key).begin();
     unique_places.fields_begin = {};
     unique_places.count = static_cast<ukv_size_t>(unique_col_keys.size());
+    auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
     ukv_read( //
         c_db,
         c_txn,
@@ -317,7 +320,7 @@ void ukv_paths_write( //
         unique_places.collections_begin.stride(),
         unique_places.keys_begin.get(),
         unique_places.keys_begin.stride(),
-        c_options,
+        opts,
         nullptr,
         &buckets_offsets,
         nullptr,
@@ -327,11 +330,11 @@ void ukv_paths_write( //
     return_on_error(c_error);
 
     joined_bins_t joined_buckets {unique_places.count, buckets_offsets, buckets_values};
-    safe_vector_gt<value_view_t> updated_buckets(unique_places.count, arena, c_error);
+    uninitialized_vector_gt<value_view_t> updated_buckets(unique_places.count, arena, c_error);
     return_on_error(c_error);
     transform_n(joined_buckets.begin(), unique_places.count, updated_buckets.begin());
 
-    strided_iterator_gt<ukv_octet_t const> presences {c_values_presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c_values_presences};
     strided_iterator_gt<ukv_length_t const> offs {c_values_offsets, c_values_offsets_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_values_lengths, c_values_lengths_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_values_bytes, c_values_bytes_stride};
@@ -370,7 +373,7 @@ void ukv_paths_write( //
         sizeof(value_view_t),
         updated_buckets[0].member_ptr(),
         sizeof(value_view_t),
-        c_options,
+        opts,
         &buckets_arena,
         c_error);
 }
@@ -403,7 +406,7 @@ void ukv_paths_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     contents_arg_t keys_str_args;
@@ -452,11 +455,10 @@ void ukv_paths_read( //
     // Some of the entries will contain more then one key-value pair in case of collisions.
     ukv_length_t exported_volume = 0;
     joined_bins_t buckets {c_tasks_count, buckets_offsets, buckets_values};
-    auto presences = arena.alloc_or_dummy<ukv_octet_t>(divide_round_up<std::size_t>(c_tasks_count, bits_in_byte_k),
-                                                       c_error,
-                                                       c_presences);
-    auto lengths = arena.alloc_or_dummy<ukv_length_t>(c_tasks_count, c_error, c_lengths);
-    auto offsets = arena.alloc_or_dummy<ukv_length_t>(c_tasks_count, c_error, c_offsets);
+    auto presences =
+        arena.alloc_or_dummy(divide_round_up<std::size_t>(c_tasks_count, bits_in_byte_k), c_error, c_presences);
+    auto lengths = arena.alloc_or_dummy(c_tasks_count, c_error, c_lengths);
+    auto offsets = arena.alloc_or_dummy(c_tasks_count, c_error, c_offsets);
 
     for (std::size_t i = 0; i != c_tasks_count; ++i) {
         std::string_view key_str = keys_str_args[i];
@@ -470,7 +472,8 @@ void ukv_paths_read( //
             lengths[i] = static_cast<ukv_length_t>(val.size());
             if (c_values)
                 std::memmove(buckets_values + exported_volume, val.data(), val.size());
-            exported_volume += static_cast<ukv_length_t>(val.size());
+            buckets_values[exported_volume + val.size()] = ukv_byte_t {0};
+            exported_volume += static_cast<ukv_length_t>(val.size()) + 1;
         }
         else {
             presences[i] = false;
@@ -742,7 +745,7 @@ void ukv_paths_match( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
 
     contents_arg_t patterns_args;

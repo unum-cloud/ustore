@@ -186,6 +186,41 @@ TEST(db, basic) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, persistency) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    std::vector<ukv_key_t> keys {54, 55, 56};
+    ukv_length_t val_len = sizeof(std::uint64_t);
+    std::vector<std::uint64_t> vals {1, 2, 3};
+    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
+
+    contents_arg_t values {
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
+        .lengths_begin = {&val_len, 0},
+        .contents_begin = {&vals_begin, 0},
+        .count = 3,
+    };
+
+    bins_collection_t collection = *db.collection();
+    auto collection_ref = collection[keys];
+    check_length(collection_ref, ukv_length_missing_k);
+    round_trip(collection_ref, values);
+    check_length(collection_ref, 8);
+    db.close();
+
+    EXPECT_TRUE(db.open(path()));
+    bins_collection_t collection2 = *db.collection();
+    auto collection_ref2 = collection2[keys];
+
+    check_equalities(collection_ref2, values);
+    check_length(collection_ref2, 8);
+
+    EXPECT_TRUE(db.clear());
+}
+
 TEST(db, named) {
 
     if (!ukv_supports_named_collections_k)
@@ -323,7 +358,8 @@ TEST(db, paths) {
         status.member_ptr());
 
     EXPECT_TRUE(status);
-    EXPECT_EQ(std::string_view(vals_recovered, keys_count), "FAANGNA");
+    EXPECT_EQ(std::string_view(vals_recovered, keys_count * 2),
+              std::string_view("F\0A\0A\0N\0G\0N\0A\0", keys_count * 2));
 
     // Try getting either "Netflix" or "Nvidia" as one of the keys with "N" prefix
     ukv_str_view_t prefix = "N";
@@ -514,6 +550,204 @@ TEST(db, paths) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, paths_linked_list) {
+
+    constexpr std::size_t count = 3;
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    arena_t arena(db);
+    ukv_char_t separator = '\0';
+    status_t status;
+
+    // Generate some random strings for our tests
+    constexpr auto alphabet = "abcdefghijklmnop";
+    auto make_random_str = []() {
+        auto str = std::string();
+        auto len = static_cast<std::size_t>(std::rand() % 100) + 8;
+        for (std::size_t i = 0; i != len; ++i)
+            str.push_back(alphabet[std::rand() % 16]);
+        return str;
+    };
+    std::set<std::string> unique;
+    while (unique.size() != count)
+        unique.insert(make_random_str());
+
+    // Lets form a linked list, where every key maps into the the next key.
+    // Then we will traverse the linked list from start to end.
+    // Then we will re-link it in reverse order and traverse again.
+    std::vector<ukv_str_view_t> begins(unique.size());
+    std::transform(unique.begin(), unique.end(), begins.begin(), [](std::string const& str) { return str.c_str(); });
+
+    // Link forward
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        ukv_paths_write( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &smaller,
+            0,
+            nullptr,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            reinterpret_cast<ukv_bytes_cptr_t*>(&bigger),
+            0,
+            ukv_options_default_k,
+            separator,
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+
+        // Check if it was successfully written:
+        ukv_str_span_t bigger_received = nullptr;
+        ukv_paths_read( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &smaller,
+            0,
+            ukv_options_default_k,
+            separator,
+            nullptr,
+            nullptr,
+            nullptr,
+            reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received),
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(bigger), std::string_view(bigger_received));
+    }
+
+    // Traverse forward, counting the entries and checking the order
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        ukv_str_span_t bigger_received = nullptr;
+        ukv_paths_read( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &smaller,
+            0,
+            ukv_options_default_k,
+            separator,
+            nullptr,
+            nullptr,
+            nullptr,
+            reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received),
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(bigger), std::string_view(bigger_received));
+    }
+
+    // Re-link in reverse order
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        ukv_paths_write( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &bigger,
+            0,
+            nullptr,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            reinterpret_cast<ukv_bytes_cptr_t*>(&smaller),
+            0,
+            ukv_options_default_k,
+            separator,
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+
+        // Check if it was successfully over-written:
+        ukv_str_span_t smaller_received = nullptr;
+        ukv_paths_read( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &bigger,
+            0,
+            ukv_options_default_k,
+            separator,
+            nullptr,
+            nullptr,
+            nullptr,
+            reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received),
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
+    }
+
+    // Traverse backwards, counting the entries and checking the order
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        ukv_str_span_t smaller_received = nullptr;
+        ukv_paths_read( //
+            db,
+            nullptr,
+            1,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            0,
+            &bigger,
+            0,
+            ukv_options_default_k,
+            separator,
+            nullptr,
+            nullptr,
+            nullptr,
+            reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received),
+            arena.member_ptr(),
+            status.member_ptr());
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
+    }
+}
+
 TEST(db, unnamed_and_named) {
 
     if (!ukv_supports_named_collections_k)
@@ -535,11 +769,17 @@ TEST(db, unnamed_and_named) {
         .count = 3,
     };
 
-    for (auto&& i : {"one", "", "three"}) {
-        for (auto& j : vals)
-            j += 7;
+    for (auto&& name : {"one", "", "three"}) {
+        for (auto& val : vals)
+            val += 7;
 
-        bins_collection_t collection = *db.add_collection(i);
+        bins_collection_t collection = *db.add_collection(name);
+        if (name == "") {
+            EXPECT_FALSE(collection);
+            continue;
+        }
+        EXPECT_TRUE(collection);
+
         auto collection_ref = collection[keys];
         check_length(collection_ref, ukv_length_missing_k);
         round_trip(collection_ref, values);
@@ -740,7 +980,20 @@ TEST(db, docs_modify) {
     EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
 
-    auto json = R"( { "a": {"b": "c","0":{"b":[{"1":"2"},{"3":"4"},{"5":"6"},{"7":"8"},{"9":"10"}]} } })"_json.dump();
+    auto json = R"( { 
+        "a": {
+            "b": "c",
+            "0": { 
+                "b": [
+                    {"1":"2"},
+                    {"3":"4"},
+                    {"5":"6"},
+                    {"7":"8"},
+                    {"9":"10"}
+                ]
+            }
+        }
+    })"_json.dump();
     collection[1] = json.c_str();
     M_EXPECT_EQ_JSON(*collection[1].value(), json);
 
@@ -762,16 +1015,29 @@ TEST(db, docs_modify) {
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Patch
-    modifier =
-        R"([ { "op": "add", "path": "/a/key", "value": "value" },
-             { "op": "replace", "path": "/a/0/b/0", "value": {"1":"3"} },
-             { "op": "copy", "path": "/a/another_key", "from": "/a/key" },
-             { "op": "move", "path": "/a/0/b/5", "from": "/a/0/b/1" },
-             { "op": "remove", "path": "/a/b" }  ])"_json.dump();
-
-    expected =
-        R"( { "a": {"key" : "value","another_key" : "value","0":{"b":[{"1":"3"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"},{"3":"14"}]} } })"_json
-            .dump();
+    modifier = R"([ 
+        { "op": "add", "path": "/a/key", "value": "value" },
+        { "op": "replace", "path": "/a/0/b/0", "value": {"1":"3"} },
+        { "op": "copy", "path": "/a/another_key", "from": "/a/key" },
+        { "op": "move", "path": "/a/0/b/5", "from": "/a/0/b/1" },
+        { "op": "remove", "path": "/a/b" }
+    ])"_json.dump();
+    expected = R"( { 
+        "a": {
+            "key" : "value",
+            "another_key" : "value",
+            "0": {
+                "b":[
+                    {"1":"3"},
+                    {"5":"6"},
+                    {"7":"8"},
+                    {"9":"11"},
+                    {"11":"12"},
+                    {"3":"14"}
+                ]
+            } 
+        } 
+    })"_json.dump();
     EXPECT_TRUE(collection[1].patch(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
@@ -801,15 +1067,16 @@ TEST(db, docs_modify) {
 
     // Insert
     modifier = R"( {"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    EXPECT_TRUE(collection[1].insert(modifier.c_str()));
-    result = collection[1].value();
+    EXPECT_FALSE(collection[1].insert(modifier.c_str()));
+    EXPECT_TRUE(collection[2].insert(modifier.c_str()));
+    result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
     // Insert By Field
-    modifier = R"("Grilish" )"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Grilish"}} )"_json.dump();
-    EXPECT_TRUE(collection[ckf(1, "/person/surname")].insert(modifier.c_str()));
-    result = collection[1].value();
+    modifier = R"("Doe" )"_json.dump();
+    expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Doe"}} )"_json.dump();
+    EXPECT_TRUE(collection[ckf(2, "/person/surname")].insert(modifier.c_str()));
+    result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Upsert
@@ -825,8 +1092,8 @@ TEST(db, docs_modify) {
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
-    modifier = R"("Grilish")"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 28, "surname" : "Grilish"}} )"_json.dump();
+    modifier = R"("Doe")"_json.dump();
+    expected = R"( {"person": {"name":"Carl", "age": 28, "surname" : "Doe"}} )"_json.dump();
     EXPECT_TRUE(collection[ckf(1, "/person/surname")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
@@ -1212,6 +1479,43 @@ TEST(db, graph_triangle_batch_api) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, graph_transaction_watch) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    graph_collection_t net = *db.collection<graph_collection_t>();
+    transaction_t txn = *db.transact();
+    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
+
+    edge_t edge1 {1, 2, 1};
+    edge_t edge2 {3, 1, 2};
+
+    EXPECT_TRUE(net.upsert(edge1));
+    EXPECT_TRUE(net.upsert(edge2));
+    EXPECT_TRUE(txn_net.degree(1));
+    EXPECT_TRUE(txn.commit());
+
+    EXPECT_TRUE(txn.reset());
+    EXPECT_TRUE(txn_net.degree(1));
+    EXPECT_TRUE(txn.commit());
+
+    EXPECT_TRUE(txn_net.degree(1));
+    EXPECT_TRUE(net.remove(edge1));
+    EXPECT_TRUE(net.remove(edge2));
+    EXPECT_FALSE(txn.commit());
+    EXPECT_TRUE(txn.reset());
+
+    EXPECT_TRUE(txn_net.degree(1, ukv_vertex_role_any_k, false));
+    EXPECT_TRUE(net.upsert(edge1));
+    EXPECT_TRUE(net.upsert(edge2));
+    EXPECT_TRUE(txn.commit());
+
+    EXPECT_TRUE(db.clear());
+}
+
 edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
     return {v1, v2, edge_id};
 }
@@ -1234,7 +1538,6 @@ TEST(db, graph_random_fill) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
@@ -1279,8 +1582,7 @@ TEST(db, graph_conflicting_transactions) {
     EXPECT_FALSE(*net.contains(2));
     EXPECT_FALSE(*net.contains(3));
 
-    auto status = txn.commit();
-    status.throw_unhandled();
+    EXPECT_TRUE(txn.commit());
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_TRUE(*net.contains(3));
@@ -1301,6 +1603,79 @@ TEST(db, graph_conflicting_transactions) {
     EXPECT_FALSE(txn2.commit());
 
     EXPECT_TRUE(db.clear());
+}
+
+TEST(db, graph_upsert_edges) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t graph = *db.collection<graph_collection_t>();
+
+    std::vector<ukv_key_t> vertices = {1, 2, 3, 4, 5};
+    auto over_the_vertices = [&](bool exist, size_t degree) {
+        for (auto& vertex_id : vertices) {
+            EXPECT_EQ(*graph.contains(vertex_id), exist);
+            EXPECT_EQ(*graph.degree(vertex_id), degree);
+        }
+    };
+
+    over_the_vertices(false, 0);
+
+    std::vector<edge_t> star {
+        {1, 3, 1},
+        {1, 4, 2},
+        {2, 4, 3},
+        {2, 5, 4},
+        {3, 5, 5},
+    };
+    EXPECT_TRUE(graph.upsert(edges(star)));
+    over_the_vertices(true, 2u);
+
+    std::vector<edge_t> pentagon {
+        {1, 2, 6},
+        {2, 3, 7},
+        {3, 4, 8},
+        {4, 5, 9},
+        {5, 1, 10},
+    };
+    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    over_the_vertices(true, 4u);
+
+    EXPECT_TRUE(graph.remove(edges(star)));
+    over_the_vertices(true, 2u);
+
+    EXPECT_TRUE(graph.upsert(edges(star)));
+    over_the_vertices(true, 4u);
+
+    EXPECT_TRUE(graph.remove(edges(pentagon)));
+    over_the_vertices(true, 2u);
+
+    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    over_the_vertices(true, 4u);
+
+    std::vector<edge_t> itself {
+        {1, 1, 11},
+        {2, 2, 12},
+        {3, 3, 13},
+        {4, 4, 14},
+        {5, 5, 15},
+    };
+
+    EXPECT_TRUE(graph.upsert(edges(itself)));
+    over_the_vertices(true, 6u);
+
+    EXPECT_TRUE(graph.remove(edges(star)));
+    EXPECT_TRUE(graph.remove(edges(pentagon)));
+
+    over_the_vertices(true, 2u);
+
+    EXPECT_TRUE(graph.remove(edges(itself)));
+
+    over_the_vertices(true, 0);
+
+    EXPECT_TRUE(db.clear());
+
+    over_the_vertices(false, 0);
 }
 
 TEST(db, graph_remove_vertices) {
@@ -1340,6 +1715,34 @@ TEST(db, graph_remove_edges_keep_vertices) {
         EXPECT_TRUE(*graph.contains(vertex_id));
     }
 
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, graph_get_edges) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t graph = *db.collection<graph_collection_t>();
+
+    constexpr std::size_t vertices_count = 1000;
+    auto edges_vec = make_edges(vertices_count, 100);
+    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+
+    std::vector<edge_t> received_edges;
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        auto es = *graph.edges(vertex_id);
+        EXPECT_EQ(es.size(), 9u);
+        for (size_t i = 0; i != es.size(); ++i)
+            received_edges.push_back(es[i]);
+    }
+
+    EXPECT_TRUE(graph.remove(edges(received_edges)));
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_TRUE(*graph.contains(vertex_id));
+        auto es = *graph.edges(vertex_id);
+        EXPECT_EQ(es.size(), 0);
+    }
     EXPECT_TRUE(db.clear());
 }
 

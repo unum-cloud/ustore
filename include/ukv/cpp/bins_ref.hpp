@@ -58,8 +58,8 @@ class bins_ref_gt {
     static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
     using value_t = std::conditional_t<is_one_k, value_view_t, embedded_bins_t>;
-    using present_t = std::conditional_t<is_one_k, bool, strided_iterator_gt<ukv_octet_t>>;
-    using length_t = std::conditional_t<is_one_k, ukv_length_t, indexed_range_gt<ukv_length_t*>>;
+    using present_t = std::conditional_t<is_one_k, bool, bits_span_t>;
+    using length_t = std::conditional_t<is_one_k, ukv_length_t, ptr_range_gt<ukv_length_t>>;
 
   protected:
     ukv_database_t db_ = nullptr;
@@ -215,14 +215,14 @@ expected_gt<expected_at> bins_ref_gt<locations_at>::any_get(ukv_options_t option
         return std::move(status);
 
     if constexpr (wants_length) {
-        indexed_range_gt<ukv_length_t*> many {found_lengths, found_lengths + count};
+        ptr_range_gt<ukv_length_t> many {found_lengths, found_lengths + count};
         if constexpr (is_one_k)
             return many[0];
         else
             return many;
     }
     else if constexpr (wants_present) {
-        strided_iterator_gt<ukv_octet_t> many {found_presences};
+        bits_span_t many {found_presences};
         if constexpr (is_one_k)
             return bool(many[0]);
         else

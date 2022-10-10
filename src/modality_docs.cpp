@@ -18,7 +18,7 @@
 
 #include "ukv/media.h"        // `ukv_format_field_type_t`
 #include "helpers/pmr.hpp"    // `stl_arena_t`
-#include "helpers/vector.hpp" // `safe_vector_gt`
+#include "helpers/vector.hpp" // `uninitialized_vector_gt`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -69,11 +69,11 @@ value_view_t to_view(char const* str, std::size_t len) noexcept {
 
 struct export_to_value_t final : public nlohmann::detail::output_adapter_protocol<char>,
                                  public std::enable_shared_from_this<export_to_value_t> {
-    safe_vector_gt<byte_t>* value_ptr = nullptr;
+    uninitialized_vector_gt<byte_t>* value_ptr = nullptr;
     ukv_error_t* c_error = nullptr;
 
     export_to_value_t() = default;
-    export_to_value_t(safe_vector_gt<byte_t>& value) noexcept : value_ptr(&value) {}
+    export_to_value_t(uninitialized_vector_gt<byte_t>& value) noexcept : value_ptr(&value) {}
     void write_character(char c) override { value_ptr->push_back(static_cast<byte_t>(c), c_error); }
     void write_characters(char const* s, std::size_t length) override {
         auto ptr = reinterpret_cast<byte_t const*>(s);
@@ -224,7 +224,7 @@ struct serializing_tape_ref_t {
   private:
     stl_arena_t& arena_;
     std::shared_ptr<export_to_value_t> shared_exporter_;
-    safe_vector_gt<byte_t> single_doc_buffer_;
+    uninitialized_vector_gt<byte_t> single_doc_buffer_;
 
   public:
     growing_tape_t growing_tape;
@@ -569,7 +569,7 @@ void ukv_docs_write( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -604,7 +604,7 @@ void ukv_docs_write( //
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
-    strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c_presences};
 
     places_arg_t places {collections, keys, fields, c_tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
@@ -642,7 +642,7 @@ void ukv_docs_read( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -725,7 +725,7 @@ void ukv_docs_gist( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1120,7 +1120,7 @@ void ukv_docs_gather( //
     ukv_arena_t* c_arena,
     ukv_error_t* c_error) {
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
     // Validate the input arguments
@@ -1183,7 +1183,7 @@ void ukv_docs_gather( //
     // 5. lengths of all strings
     // 6. scalars for all fields
 
-    span_gt<byte_t> tape = arena.alloc<byte_t>(bytes_for_addresses + bytes_for_bitmaps + bytes_for_scalars, c_error);
+    auto tape = arena.alloc<byte_t>(bytes_for_addresses + bytes_for_bitmaps + bytes_for_scalars, c_error);
     byte_t* const tape_ptr = tape.begin();
 
     // If those pointers were not provided, we can reuse the validity bitmap

@@ -14,16 +14,21 @@
 #include <numeric>    // `std::accumulate`
 #include <forward_list>
 
+#define std_memory_resource_m 0
+
+#if std_memory_resource_m
 #if __APPLE__
 #include <experimental/memory_resource> // `std::pmr::vector`
 #else
 #include <memory_resource> // `std::pmr::vector`
 #endif
+#endif // std_memory_resource_m
 
 #include "ukv/cpp/types.hpp"  // `byte_t`, `next_power_of_two`
 #include "ukv/cpp/ranges.hpp" // `strided_range_gt`
 #include "ukv/cpp/status.hpp" // `out_of_memory_k`
 
+#if std_memory_resource_m
 #if __APPLE__
 namespace std::pmr {
 template <typename at>
@@ -36,6 +41,50 @@ inline auto get_default_resource() {
 }
 } // namespace std::pmr
 #endif
+#endif // std_memory_resource_m
+
+#if !std_memory_resource_m
+namespace std::pmr {
+class memory_resource {
+  public:
+    // https://en.cppreference.com/w/cpp/types/max_align_t
+    static const size_t max_align_k = alignof(max_align_t);
+
+  public:
+    virtual ~memory_resource() = default;
+
+    void* allocate(size_t bytes, size_t align = max_align_k) { return do_allocate(bytes, align); }
+    void deallocate(void* ptr, size_t bytes, size_t align = max_align_k) { do_deallocate(ptr, bytes, align); }
+    bool is_equal(memory_resource const& other) const noexcept { return do_is_equal(other); }
+
+  private:
+    virtual void* do_allocate(size_t, size_t) = 0;
+    virtual void do_deallocate(void*, size_t, size_t) = 0;
+    virtual bool do_is_equal(memory_resource const&) const noexcept = 0;
+};
+
+class new_delete_memory_resource : public memory_resource {
+  public:
+    ~new_delete_memory_resource() override = default;
+
+  private:
+    void* do_allocate(size_t size, size_t align = max_align_k) override { return aligned_alloc(align, size); }
+    void do_deallocate(void* ptr,
+                       [[maybe_unused]] size_t size = 0,
+                       [[maybe_unused]] size_t align = max_align_k) override {
+        free(ptr);
+    }
+    bool do_is_equal(memory_resource const& other) const noexcept override { return &other == this; }
+};
+
+static new_delete_memory_resource default_memory_resource;
+
+inline memory_resource* get_default_resource() {
+    return &default_memory_resource;
+}
+
+} // namespace std::pmr
+#endif // std_memory_resource_m
 
 namespace unum::ukv {
 
@@ -169,70 +218,56 @@ class polymorphic_allocator_gt {
     at* allocate(std::size_t size) { return reinterpret_cast<at*>(local_memory->allocate(sizeof(at) * size)); }
 };
 
-template <typename at>
-struct span_gt {
-    span_gt() noexcept : ptr_(nullptr), size_(0) {}
-    span_gt(at* ptr, std::size_t sz) noexcept : ptr_(ptr), size_(sz) {}
+template <typename range_at>
+struct range_or_dummy_gt {
+    using range_t = range_at;
+    using value_type = typename range_t::value_type;
+    using reference = typename range_t::reference;
 
-    constexpr at* begin() const noexcept { return ptr_; }
-    constexpr at* end() const noexcept { return ptr_ + size_; }
-    at const* cbegin() const noexcept { return ptr_; }
-    at const* cend() const noexcept { return ptr_ + size_; }
+    range_t range_;
+    value_type dummy_;
 
-    at& operator[](std::size_t i) noexcept { return ptr_[i]; }
-    at& operator[](std::size_t i) const noexcept { return ptr_[i]; }
-
-    template <typename another_at>
-    span_gt<another_at> cast() const noexcept {
-        return {reinterpret_cast<another_at*>(ptr_), size_ * sizeof(at) / sizeof(another_at)};
-    }
-
-    span_gt<byte_t const> span_bytes() const noexcept {
-        return {reinterpret_cast<byte_t const*>(ptr_), size_ * sizeof(at)};
-    }
-
-    std::size_t size_bytes() const noexcept { return size_ * sizeof(at); }
-    std::size_t size() const noexcept { return size_; }
-
-    strided_range_gt<at> strided() const noexcept { return {{ptr_, sizeof(at)}, size_}; }
-
-  private:
-    at* ptr_;
-    std::size_t size_;
+    reference operator[](std::size_t i) & noexcept { return range_ ? reference(range_[i]) : reference(dummy_); }
+    reference operator[](std::size_t i) const& noexcept { return range_ ? reference(range_[i]) : reference(dummy_); }
+    std::size_t size() const noexcept { return range_.size(); }
+    explicit operator bool() const noexcept { return range_; }
 };
 
 struct stl_arena_t {
-    explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept
-        : resource(mem_resource), using_shared_memory(false) {}
+    static constexpr std::size_t initial_size_k = 1024ul * 1024ul;
+
+    explicit stl_arena_t(monotonic_resource_t* resource) noexcept : resource_(resource), is_shared_memory_(false) {}
+
     explicit stl_arena_t( //
-        std::size_t initial_size = 1024ul * 1024ul,
+        std::size_t initial_size = initial_size_k,
         monotonic_resource_t::type_t type = monotonic_resource_t::growing_k,
-        bool use_shared_memory = false)
-        : resource(initial_size,
-                   64ul,
-                   type,
-                   use_shared_memory ? shared_resource_t::get_default_resource() : std::pmr::get_default_resource()),
-          using_shared_memory(use_shared_memory) {
-        local_memory = &resource;
+        bool is_shared_memory = false)
+        : resource_(initial_size,
+                    64ul,
+                    type,
+                    is_shared_memory ? shared_resource_t::get_default_resource() : std::pmr::get_default_resource()),
+          is_shared_memory_(is_shared_memory) {
+        local_memory = &resource_;
     }
+
     ~stl_arena_t() noexcept { local_memory = std::pmr::get_default_resource(); }
 
     template <typename at>
-    span_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
-        void* result = resource.allocate(sizeof(at) * size, alignment);
+    ptr_range_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
+        void* result = resource_.allocate(sizeof(at) * size, alignment);
         log_if_error(result, c_error, out_of_memory_k, "");
         return {reinterpret_cast<at*>(result), size};
     }
 
     template <typename at>
-    span_gt<at> grow( //
-        span_gt<at> span,
+    ptr_range_gt<at> grow( //
+        ptr_range_gt<at> span,
         std::size_t additional_size,
         ukv_error_t* c_error,
         std::size_t alignment = sizeof(at)) noexcept {
 
         auto new_size = span.size() + additional_size;
-        void* result = resource.allocate(sizeof(at) * new_size, alignment);
+        void* result = resource_.allocate(sizeof(at) * new_size, alignment);
         if (result)
             std::memcpy(result, span.begin(), span.size_bytes());
         else
@@ -240,26 +275,41 @@ struct stl_arena_t {
         return {reinterpret_cast<at*>(result), new_size};
     }
 
+    range_or_dummy_gt<bits_span_t> alloc_or_dummy( //
+        std::size_t size,
+        ukv_error_t* c_error,
+        ukv_octet_t** output,
+        std::size_t alignment = sizeof(ukv_octet_t)) noexcept {
+
+        using range_t = bits_span_t;
+        auto slots = divide_round_up(size, bits_in_byte_k);
+        auto range = output //
+                         ? range_t {(*output = alloc<ukv_octet_t>(slots, c_error, alignment).begin())}
+                         : range_t {nullptr};
+        return {range, {}};
+    }
+
     template <typename at>
-    strided_range_or_dummy_gt<at> alloc_or_dummy( //
+    range_or_dummy_gt<ptr_range_gt<at>> alloc_or_dummy( //
         std::size_t size,
         ukv_error_t* c_error,
         at** output,
         std::size_t alignment = sizeof(at)) noexcept {
 
-        using strided_t = strided_range_gt<at>;
-        auto strided = output //
-                           ? strided_t {{((*output) = alloc<at>(size, c_error, alignment).begin()), sizeof(at)}, size}
-                           : strided_t {{nullptr, 0}, size};
-        return {strided, {}};
+        static_assert(!std::is_same<at, ukv_octet_t>());
+        using range_t = ptr_range_gt<at>;
+        auto range = output //
+                         ? range_t {(*output = alloc<at>(size, c_error, alignment).begin()), size}
+                         : range_t {nullptr, nullptr};
+        return {range, {}};
     }
 
-    monotonic_resource_t resource;
-    bool using_shared_memory;
+    monotonic_resource_t resource_;
+    bool is_shared_memory_;
 };
 
 template <typename dangerous_at>
-void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dangerous) {
+void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dangerous) noexcept {
     try {
         dangerous();
     }
@@ -271,22 +321,20 @@ void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dang
     }
 }
 
-inline stl_arena_t prepare_arena(ukv_arena_t* c_arena, ukv_options_t options, ukv_error_t* c_error) noexcept {
+inline stl_arena_t make_stl_arena(ukv_arena_t* c_arena, ukv_options_t options, ukv_error_t* c_error) noexcept {
     try {
         stl_arena_t** arena_output = reinterpret_cast<stl_arena_t**>(c_arena);
         stl_arena_t*& arena = *arena_output;
-        bool wants_shared_memory = options & ukv_option_read_shared_memory_k;
-        if (!arena || (wants_shared_memory && !arena->using_shared_memory)) {
+        bool is_shared_memory = options & ukv_option_read_shared_memory_k;
+        if (!arena || (is_shared_memory && !arena->is_shared_memory_)) {
             delete arena;
-            arena = new stl_arena_t(1024ul * 1024ul,
-                                    monotonic_resource_t::growing_k,
-                                    options & ukv_option_read_shared_memory_k);
+            arena = new stl_arena_t(stl_arena_t::initial_size_k, monotonic_resource_t::growing_k, is_shared_memory);
         }
 
         bool keep_old_data = options & ukv_option_dont_discard_memory_k;
         if (!keep_old_data)
-            arena->resource.release();
-        return stl_arena_t(&arena->resource);
+            arena->resource_.release();
+        return stl_arena_t(&arena->resource_);
     }
     catch (...) {
         log_error(c_error, out_of_memory_k, "");

@@ -119,7 +119,7 @@ struct json_t {
     yyjson_doc* handle = nullptr;
     yyjson_mut_doc* mut_handle = nullptr;
 
-    ~json_t() {
+    ~json_t() noexcept {
         if (mut_handle)
             yyjson_mut_doc_free(mut_handle);
         if (handle)
@@ -390,7 +390,7 @@ std::string_view json_to_string(yyjson_val* value,
 /*****************	 Format Conversions	  ****************/
 /*********************************************************/
 
-using string_t = safe_vector_gt<char>;
+using string_t = uninitialized_vector_gt<char>;
 struct json_state_t {
     string_t& json_str;
     ukv_error_t* c_error;
@@ -924,7 +924,7 @@ void read_unique_docs( //
     ukv_options_t const c_options,
     stl_arena_t& arena,
     places_arg_t& unique_places,
-    safe_vector_gt<json_t>& unique_docs,
+    uninitialized_vector_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
@@ -972,7 +972,7 @@ void read_docs( //
     ukv_options_t const c_options,
     stl_arena_t& arena,
     places_arg_t& unique_places,
-    safe_vector_gt<json_t>& unique_docs,
+    uninitialized_vector_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) {
 
@@ -1030,6 +1030,7 @@ void read_docs( //
     // Alternatively we can compensate it with additional memory:
     unique_docs.resize(unique_places.count, c_error);
     return_on_error(c_error);
+    initialized_range_gt<json_t> unique_docs_raii {unique_docs};
 
     // Parse all the unique documents
     auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
@@ -1084,7 +1085,7 @@ void read_modify_write( //
     };
 
     places_arg_t unique_places;
-    safe_vector_gt<json_t> unique_docs(arena);
+    uninitialized_vector_gt<json_t> unique_docs(arena);
     auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
     read_docs(c_db, c_txn, places, opts, arena, unique_places, unique_docs, c_error, safe_callback);
     return_on_error(c_error);
@@ -1147,7 +1148,7 @@ void ukv_docs_write( //
     if (!c_tasks_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1179,7 +1180,7 @@ void ukv_docs_write( //
 
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_octet_t const> presences {c_presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c_presences};
     strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
@@ -1217,7 +1218,7 @@ void ukv_docs_read( //
     if (!c_tasks_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1261,7 +1262,7 @@ void ukv_docs_read( //
         return_on_error(c_error);
     };
     places_arg_t unique_places;
-    safe_vector_gt<json_t> unique_docs(arena);
+    uninitialized_vector_gt<json_t> unique_docs(arena);
     read_docs(c_db, c_txn, places, c_options, arena, unique_places, unique_docs, c_error, safe_callback);
 
     if (c_found_offsets)
@@ -1278,7 +1279,7 @@ void ukv_docs_read( //
 
 void gist_recursively(yyjson_val* node,
                       field_path_buffer_t& path,
-                      safe_vector_gt<std::string_view>& sorted_paths,
+                      uninitialized_vector_gt<std::string_view>& sorted_paths,
                       growing_tape_t& exported_paths,
                       ukv_error_t* c_error) {
 
@@ -1366,7 +1367,7 @@ void ukv_docs_gist( //
     if (!c_docs_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1397,7 +1398,7 @@ void ukv_docs_gist( //
 
     // Export all the elements into a heap-allocated hash-set, keeping only unique entries
     field_path_buffer_t field_name = {0};
-    safe_vector_gt<std::string_view> sorted_paths(arena);
+    uninitialized_vector_gt<std::string_view> sorted_paths(arena);
     growing_tape_t exported_paths(arena);
     for (ukv_size_t doc_idx = 0; doc_idx != c_docs_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
@@ -1533,7 +1534,7 @@ void ukv_docs_gather( //
     if (!c_docs_count || !c_fields_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c_arena, c_options, c_error);
+    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
     return_on_error(c_error);
     ukv_arena_t new_arena = &arena;
 
@@ -1594,7 +1595,7 @@ void ukv_docs_gather( //
     // 5. lengths of all strings
     // 6. scalars for all fields
 
-    span_gt<byte_t> tape = arena.alloc<byte_t>(bytes_for_addresses + bytes_for_bitmaps + bytes_for_scalars, c_error);
+    auto tape = arena.alloc<byte_t>(bytes_for_addresses + bytes_for_bitmaps + bytes_for_scalars, c_error);
     byte_t* const tape_ptr = tape.begin();
 
     // If those pointers were not provided, we can reuse the validity bitmap
