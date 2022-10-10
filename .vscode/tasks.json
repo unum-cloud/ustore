@@ -20,13 +20,13 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug STL_STRESS Test",
+            "label": "Build Native: Debug STL Stress Test",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_stl_stress_test",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug ROCKSDB_STRESS Test",
+            "label": "Build Native: Debug RocksDB Stress Test",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_rocksdb_stress_test",
             "args": [],
             "type": "shell"
