@@ -64,6 +64,52 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
+            "name": "C++: Test STL_STRESS",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/ukv_stl_stress_test",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                }
+            ],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug STL_STRESS Test",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "C++: Test ROCKSDB_STRESS",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/ukv_rocksdb_stress_test",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                }
+            ],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug ROCKSDB_STRESS Test",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
             "name": "C++: Test STL API",
             "type": "cppdbg",
             "request": "launch",
