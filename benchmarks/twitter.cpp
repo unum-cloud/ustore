@@ -531,30 +531,20 @@ static void paths_construct_from_nicknames(bm::State& state) {
             injected_bytes += std::strlen(tweet.id_str);
         }
 
+        ukv_paths_write_t paths_write {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .tasks_count = batch_size,
+            .path_separator = separator,
+            .paths = (ukv_str_view_t*)batch_usernames.data(),
+            .paths_stride = sizeof(ukv_str_view_t),
+            .values_bytes = (ukv_bytes_cptr_t*)batch_id_strs.data(),
+            .values_bytes_stride = sizeof(ukv_str_view_t),
+        };
+
         // Finally, import the data.
-        ukv_paths_write( //
-            db,
-            nullptr,
-            batch_size,
-            &collection_paths_k,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            (ukv_str_view_t*)batch_usernames.data(),
-            sizeof(ukv_str_view_t),
-            nullptr,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            (ukv_bytes_cptr_t*)batch_id_strs.data(),
-            sizeof(ukv_str_view_t),
-            ukv_options_default_k,
-            separator,
-            arena.member_ptr(),
-            status.member_ptr());
+        ukv_paths_write(&paths_write);
         status.throw_unhandled();
     }
 
