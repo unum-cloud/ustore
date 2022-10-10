@@ -137,7 +137,7 @@ struct relationship_t {
  * This handle doesn't help in the general case,
  * but at least allow reusing the arguments.
  */
-struct vertices_arg_t {
+struct find_edges_t {
     using value_type = relationship_t;
     strided_iterator_gt<ukv_collection_t const> collections_begin;
     strided_iterator_gt<ukv_key_t const> vertex_id_begin;
