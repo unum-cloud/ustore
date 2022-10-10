@@ -191,6 +191,8 @@ void serializability_mix() {
                 value_view_t val_view = *it;
                 if (val_view)
                     std::memcpy((void*)&values[i], (const void*)val_view.data(), sizeof(std::uint64_t));
+                else
+                    values[i] = 0;
             }
             operation_t operation(operation_t::select_k, op_cnt, std::move(keys), std::move(values));
 
