@@ -38,10 +38,11 @@ inline static std::string const kFlightColDrop = "remove_collection"; /// `DoAct
 inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
 inline static std::string const kFlightTxnCommit = "commit_transaction"; /// `DoAction`
 
-inline static std::string const kFlightWritePath = "write_path"; /// `DoPut`
 inline static std::string const kFlightWrite = "write";          /// `DoPut`
-inline static std::string const kFlightReadPath = "read_path";   /// `DoExchange`
 inline static std::string const kFlightRead = "read";            /// `DoExchange`
+inline static std::string const kFlightWritePath = "write_path"; /// `DoPut`
+inline static std::string const kFlightMatchPath = "match_path"; /// `DoExchange`
+inline static std::string const kFlightReadPath = "read_path";   /// `DoExchange`
 inline static std::string const kFlightScan = "scan";            /// `DoExchange`
 inline static std::string const kFlightSize = "size";            /// `DoExchange`
 
@@ -55,6 +56,9 @@ inline static std::string const kArgScanLengths = "scan_limits";
 inline static std::string const kArgPresences = "fields";
 inline static std::string const kArgLengths = "lengths";
 inline static std::string const kArgNames = "names";
+inline static std::string const kArgPaths = "paths";
+inline static std::string const kArgPatterns = "patterns";
+inline static std::string const kArgPrevPatterns = "prev_patterns";
 
 inline static std::string const kParamCollectionID = "collection_id";
 inline static std::string const kParamCollectionName = "collection_name";
@@ -271,4 +275,47 @@ inline contents_arg_t get_contents( //
     return result;
 }
 
+void ukv_to_continous_bin( //
+    contents_arg_t& contents,
+    size_t places_count,
+    size_t c_tasks_count,
+    ukv_bytes_cptr_t* continous_bin,
+    span_gt<ukv_length_t> continous_bin_offs,
+    stl_arena_t& arena,
+    ukv_error_t* c_error) {
+
+    // Check if the paths are continuous and are already in an Arrow-compatible form
+    if (!contents.is_continuous()) {
+        size_t total = transform_reduce_n(contents, places_count, 0ul, std::mem_fn(&value_view_t::size));
+        auto joined_paths = arena.alloc<byte_t>(total, c_error);
+        return_on_error(c_error);
+        size_t slots_count = divide_round_up<std::size_t>(places_count, CHAR_BIT);
+
+        // Exports into the Arrow-compatible form
+        ukv_length_t exported_bytes = 0;
+        for (std::size_t i = 0; i != c_tasks_count; ++i) {
+            auto path = contents[i];
+            continous_bin_offs[i] = exported_bytes;
+            std::memcpy(joined_paths.begin() + exported_bytes, path.begin(), path.size());
+            exported_bytes += path.size();
+        }
+        continous_bin_offs[places_count] = exported_bytes;
+
+        *continous_bin = (ukv_bytes_cptr_t)joined_paths.begin();
+    }
+    // It may be the case, that we only have `c_tasks_count` offsets instead of `c_tasks_count+1`,
+    // which won't be enough for Arrow.
+    else if (!contents.is_arrow()) {
+        size_t slots_count = divide_round_up<std::size_t>(places_count, CHAR_BIT);
+
+        // Exports into the Arrow-compatible form
+        ukv_length_t exported_bytes = 0;
+        for (std::size_t i = 0; i != c_tasks_count; ++i) {
+            auto path = contents[i];
+            continous_bin_offs[i] = exported_bytes;
+            exported_bytes += path.size();
+        }
+        continous_bin_offs[places_count] = exported_bytes;
+    }
+}
 } // namespace unum::ukv
