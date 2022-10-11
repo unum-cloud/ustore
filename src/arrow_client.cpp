@@ -8,11 +8,11 @@
  */
 
 #include <thread> // `std::this_thread`
+#include <mutex>  // `std::mutex`
 
 #include <fmt/core.h> // `fmt::format_to`
 #include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
-#include <mutex>
 
 #include "ukv/db.h"
 #include "ukv/arrow.h"
@@ -39,7 +39,7 @@ using namespace unum;
 
 struct rpc_client_t {
     std::unique_ptr<arf::FlightClient> flight;
-    ukv_arena_t* arena;
+    stl_arena_t arena;
     std::mutex arena_lock;
 };
 
@@ -76,7 +76,7 @@ void ukv_database_init( //
         auto maybe_flight_ptr = arf::FlightClient::Connect(*maybe_location);
         return_if_error(maybe_flight_ptr.ok(), c_error, network_k, "Flight Client Connection");
 
-        make_stl_arena(db_ptr->arena, ukv_options_default_k, c_error);
+        make_stl_arena(reinterpret_cast<ukv_arena_t*>(&db_ptr->arena), ukv_option_dont_discard_memory_k, c_error);
         return_if_error(maybe_location.ok(), c_error, args_wrong_k, "Failed to allocate default arena.");
         db_ptr->flight = maybe_flight_ptr.MoveValueUnsafe();
         *c_db = db_ptr;
@@ -1381,13 +1381,14 @@ void ukv_collection_init(
     if (c_collection_config)
         action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c_collection_config});
 
-    db.arena_lock.lock();
-    arrow_mem_pool_t pool(db.arena);
-    arf::FlightCallOptions options = arrow_call_options(pool);
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
-    db.arena_lock.unlock();
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
+    {
+        std::lock_guard<std::mutex> lk(db.arena_lock);
+        arrow_mem_pool_t pool(db.arena);
+        arf::FlightCallOptions options = arrow_call_options(pool);
+        maybe_stream = db.flight->DoAction(options, action);
+    }
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
-
     auto& stream_ptr = maybe_stream.ValueUnsafe();
     ar::Result<std::unique_ptr<arf::Result>> maybe_id = stream_ptr->Next();
     return_if_error(maybe_id.ok(), c_error, network_k, "No response received");
@@ -1425,11 +1426,10 @@ void ukv_collection_drop(
                    kParamDropMode,
                    mode);
 
-    db.arena_lock.lock();
+    std::lock_guard<std::mutex> lk(db.arena_lock);
     arrow_mem_pool_t pool(db.arena);
     arf::FlightCallOptions options = arrow_call_options(pool);
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
-    db.arena_lock.unlock();
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
 }
 
@@ -1521,11 +1521,13 @@ void ukv_transaction_init(
     if (c_options & ukv_option_transaction_snapshot_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
 
-    db.arena_lock.lock();
-    arrow_mem_pool_t pool(db.arena);
-    arf::FlightCallOptions options = arrow_call_options(pool);
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
-    db.arena_lock.unlock();
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
+    {
+        std::lock_guard<std::mutex> lk(db.arena_lock);
+        arrow_mem_pool_t pool(db.arena);
+        arf::FlightCallOptions options = arrow_call_options(pool);
+        maybe_stream = db.flight->DoAction(options, action);
+    }
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
 
     auto& stream_ptr = maybe_stream.ValueUnsafe();
@@ -1556,11 +1558,10 @@ void ukv_transaction_commit( //
     if (c_options & ukv_option_write_flush_k)
         fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagFlushWrite);
 
-    db.arena_lock.lock();
+    std::lock_guard<std::mutex> lk(db.arena_lock);
     arrow_mem_pool_t pool(db.arena);
     arf::FlightCallOptions options = arrow_call_options(pool);
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(action);
-    db.arena_lock.unlock();
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
     return_if_error(maybe_stream.ok(), c_error, network_k, "Failed to act on Arrow server");
 }
 
