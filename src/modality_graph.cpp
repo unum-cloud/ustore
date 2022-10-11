@@ -352,9 +352,12 @@ void export_edge_tuples( //
     return_on_error(c_error);
 
     joined_bins_t values {c_vertices_count, c_found_offsets, c_found_values};
+    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_range_gt<ukv_key_t const> vertices_ids {{c_vertices_ids, c_vertices_stride}, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
     constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
+
+    find_edges_t find_edges {collections, vertices_ids.begin(), roles, c_vertices_count};
 
     // Estimate the amount of memory we will need for the arena
     std::size_t count_ids = 0;
@@ -362,8 +365,7 @@ void export_edge_tuples( //
         joined_bins_iterator_t values_it = values.begin();
         for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
             value_view_t value = *values_it;
-            ukv_vertex_role_t role = roles[i];
-            count_ids += neighbors(value, role).size();
+            count_ids += neighbors(value, find_edges[i].role).size();
         }
         count_ids *= tuple_size_k;
     }
@@ -378,8 +380,7 @@ void export_edge_tuples( //
     joined_bins_iterator_t values_it = values.begin();
     for (std::size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
         value_view_t value = *values_it;
-        ukv_key_t vertex_id = vertices_ids[i];
-        ukv_vertex_role_t role = roles[i];
+        find_edge_t find_edge = find_edges[i];
 
         // Some values may be missing
         if (!value) {
@@ -388,12 +389,12 @@ void export_edge_tuples( //
         }
 
         ukv_vertex_degree_t degree = 0;
-        if (role & ukv_vertex_source_k) {
+        if (find_edge.role & ukv_vertex_source_k) {
             auto ns = neighbors(value, ukv_vertex_source_k);
             if constexpr (tuple_size_k != 0)
                 for (neighborship_t n : ns) {
                     if constexpr (export_center_ak)
-                        ids[passed_ids + 0] = vertex_id;
+                        ids[passed_ids + 0] = find_edge.vertex_id;
                     if constexpr (export_neighbor_ak)
                         ids[passed_ids + export_center_ak] = n.neighbor_id;
                     if constexpr (export_edge_ak)
@@ -402,14 +403,14 @@ void export_edge_tuples( //
                 }
             degree += static_cast<ukv_vertex_degree_t>(ns.size());
         }
-        if (role & ukv_vertex_target_k) {
+        if (find_edge.role & ukv_vertex_target_k) {
             auto ns = neighbors(value, ukv_vertex_target_k);
             if constexpr (tuple_size_k != 0)
                 for (neighborship_t n : ns) {
                     if constexpr (export_neighbor_ak)
                         ids[passed_ids + 0] = n.neighbor_id;
                     if constexpr (export_center_ak)
-                        ids[passed_ids + export_neighbor_ak] = vertex_id;
+                        ids[passed_ids + export_neighbor_ak] = find_edge.vertex_id;
                     if constexpr (export_edge_ak)
                         ids[passed_ids + export_center_ak + export_neighbor_ak] = n.edge_id;
                     passed_ids += tuple_size_k;
