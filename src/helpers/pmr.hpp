@@ -14,16 +14,21 @@
 #include <numeric>    // `std::accumulate`
 #include <forward_list>
 
+#define std_memory_resource_m 0
+
+#if std_memory_resource_m
 #if __APPLE__
 #include <experimental/memory_resource> // `std::pmr::vector`
 #else
 #include <memory_resource> // `std::pmr::vector`
 #endif
+#endif // std_memory_resource_m
 
 #include "ukv/cpp/types.hpp"  // `byte_t`, `next_power_of_two`
 #include "ukv/cpp/ranges.hpp" // `strided_range_gt`
 #include "ukv/cpp/status.hpp" // `out_of_memory_k`
 
+#if std_memory_resource_m
 #if __APPLE__
 namespace std::pmr {
 template <typename at>
@@ -36,6 +41,50 @@ inline auto get_default_resource() {
 }
 } // namespace std::pmr
 #endif
+#endif // std_memory_resource_m
+
+#if !std_memory_resource_m
+namespace std::pmr {
+class memory_resource {
+  public:
+    // https://en.cppreference.com/w/cpp/types/max_align_t
+    static const size_t max_align_k = alignof(max_align_t);
+
+  public:
+    virtual ~memory_resource() = default;
+
+    void* allocate(size_t bytes, size_t align = max_align_k) { return do_allocate(bytes, align); }
+    void deallocate(void* ptr, size_t bytes, size_t align = max_align_k) { do_deallocate(ptr, bytes, align); }
+    bool is_equal(memory_resource const& other) const noexcept { return do_is_equal(other); }
+
+  private:
+    virtual void* do_allocate(size_t, size_t) = 0;
+    virtual void do_deallocate(void*, size_t, size_t) = 0;
+    virtual bool do_is_equal(memory_resource const&) const noexcept = 0;
+};
+
+class new_delete_memory_resource : public memory_resource {
+  public:
+    ~new_delete_memory_resource() override = default;
+
+  private:
+    void* do_allocate(size_t size, size_t align = max_align_k) override { return aligned_alloc(align, size); }
+    void do_deallocate(void* ptr,
+                       [[maybe_unused]] size_t size = 0,
+                       [[maybe_unused]] size_t align = max_align_k) override {
+        free(ptr);
+    }
+    bool do_is_equal(memory_resource const& other) const noexcept override { return &other == this; }
+};
+
+static new_delete_memory_resource default_memory_resource;
+
+inline memory_resource* get_default_resource() {
+    return &default_memory_resource;
+}
+
+} // namespace std::pmr
+#endif // std_memory_resource_m
 
 namespace unum::ukv {
 
@@ -169,38 +218,6 @@ class polymorphic_allocator_gt {
     at* allocate(std::size_t size) { return reinterpret_cast<at*>(local_memory->allocate(sizeof(at) * size)); }
 };
 
-template <typename at>
-struct span_gt {
-    span_gt() noexcept : ptr_(nullptr), size_(0) {}
-    span_gt(at* ptr, std::size_t sz) noexcept : ptr_(ptr), size_(sz) {}
-
-    constexpr at* begin() const noexcept { return ptr_; }
-    constexpr at* end() const noexcept { return ptr_ + size_; }
-    at const* cbegin() const noexcept { return ptr_; }
-    at const* cend() const noexcept { return ptr_ + size_; }
-
-    at& operator[](std::size_t i) noexcept { return ptr_[i]; }
-    at& operator[](std::size_t i) const noexcept { return ptr_[i]; }
-
-    template <typename another_at>
-    span_gt<another_at> cast() const noexcept {
-        return {reinterpret_cast<another_at*>(ptr_), size_ * sizeof(at) / sizeof(another_at)};
-    }
-
-    span_gt<byte_t const> span_bytes() const noexcept {
-        return {reinterpret_cast<byte_t const*>(ptr_), size_ * sizeof(at)};
-    }
-
-    std::size_t size_bytes() const noexcept { return size_ * sizeof(at); }
-    std::size_t size() const noexcept { return size_; }
-
-    strided_range_gt<at> strided() const noexcept { return {{ptr_, sizeof(at)}, size_}; }
-
-  private:
-    at* ptr_;
-    std::size_t size_;
-};
-
 struct stl_arena_t {
     explicit stl_arena_t(monotonic_resource_t* mem_resource) noexcept
         : resource(mem_resource), using_shared_memory(false) {}
@@ -218,15 +235,15 @@ struct stl_arena_t {
     ~stl_arena_t() noexcept { local_memory = std::pmr::get_default_resource(); }
 
     template <typename at>
-    span_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
+    ptr_range_gt<at> alloc(std::size_t size, ukv_error_t* c_error, std::size_t alignment = sizeof(at)) noexcept {
         void* result = resource.allocate(sizeof(at) * size, alignment);
         log_if_error(result, c_error, out_of_memory_k, "");
         return {reinterpret_cast<at*>(result), size};
     }
 
     template <typename at>
-    span_gt<at> grow( //
-        span_gt<at> span,
+    ptr_range_gt<at> grow( //
+        ptr_range_gt<at> span,
         std::size_t additional_size,
         ukv_error_t* c_error,
         std::size_t alignment = sizeof(at)) noexcept {

@@ -42,7 +42,7 @@ class keys_stream_t {
     ukv_length_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
-    indexed_range_gt<ukv_key_t*> fetched_keys_;
+    ptr_range_gt<ukv_key_t> fetched_keys_;
     std::size_t fetched_offset_ = 0;
 
     status_t prefetch() noexcept {
@@ -74,7 +74,7 @@ class keys_stream_t {
         if (!status)
             return status;
 
-        fetched_keys_ = indexed_range_gt<ukv_key_t*> {found_keys, found_keys + *found_counts};
+        fetched_keys_ = ptr_range_gt<ukv_key_t> {found_keys, found_keys + *found_counts};
         fetched_offset_ = 0;
 
         auto count = static_cast<ukv_length_t>(fetched_keys_.size());
@@ -144,7 +144,7 @@ class keys_stream_t {
      * @brief Exposes all the fetched keys at once, including the passed ones.
      * Should be used with `seek_to_next_batch`. Next `advance` will do the same.
      */
-    indexed_range_gt<ukv_key_t const*> keys_batch() noexcept {
+    ptr_range_gt<ukv_key_t const> keys_batch() noexcept {
         fetched_offset_ = fetched_keys_.size();
         return {fetched_keys_.begin(), fetched_keys_.end()};
     }
@@ -180,7 +180,7 @@ class pairs_stream_t {
     ukv_length_t read_ahead_ = 0;
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
-    indexed_range_gt<ukv_key_t*> fetched_keys_;
+    ptr_range_gt<ukv_key_t> fetched_keys_;
     joined_bins_t values_view;
     std::size_t fetched_offset_ = 0;
 
@@ -213,7 +213,7 @@ class pairs_stream_t {
         if (!status)
             return status;
 
-        fetched_keys_ = indexed_range_gt<ukv_key_t*> {found_keys, found_keys + *found_counts};
+        fetched_keys_ = ptr_range_gt<ukv_key_t> {found_keys, found_keys + *found_counts};
         fetched_offset_ = 0;
         auto count = static_cast<ukv_size_t>(fetched_keys_.size());
 
@@ -316,7 +316,7 @@ class pairs_stream_t {
      * @brief Exposes all the fetched keys at once, including the passed ones.
      * Should be used with `seek_to_next_batch`. Next `advance` will do the same.
      */
-    indexed_range_gt<ukv_key_t const*> keys_batch() noexcept {
+    ptr_range_gt<ukv_key_t const> keys_batch() noexcept {
         fetched_offset_ = fetched_keys_.size();
         return {fetched_keys_.begin(), fetched_keys_.end()};
     }
@@ -469,7 +469,7 @@ class bins_range_t {
 
 struct keys_range_t {
     using iterator_type = keys_stream_t;
-    using sample_t = indexed_range_gt<ukv_key_t*>;
+    using sample_t = ptr_range_gt<ukv_key_t>;
 
     bins_range_t members;
 
