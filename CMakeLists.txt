@@ -154,7 +154,7 @@ endif()
 
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT_RPC})
-  add_library(ukv_flight_client src/arrow_client.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp)
+  add_library(ukv_flight_client src/arrow_client.cpp src/modality_docs.cpp src/modality_graph.cpp)
   target_link_libraries(ukv_flight_client pthread yyjson bson pcre2 fmt::fmt arrow arrow_flight ${jemalloc_LIBRARIES})
   list(APPEND UKV_CLIENT_NAMES "flight_client")
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
@@ -206,6 +206,11 @@ if(${UKV_BUILD_TESTS})
     target_link_libraries(${test_name} gtest ${target_name} ${target_LIBRARIES})
     target_compile_definitions(${test_name} PUBLIC UKV_TEST_PATH="tmp/${client_name}")
     add_test(NAME "${client_name}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_name}")
+
+    string(CONCAT test_name "ukv_" ${client_name} "_stress_test")
+    add_executable(${test_name} tests/transaction_stress_test.cpp)
+    target_link_libraries(${test_name} gtest ${target_name} ${target_LIBRARIES})
+    target_compile_definitions(${test_name} PUBLIC UKV_TEST_PATH="tmp/${client_name}/")
 
     string(CONCAT test_name "ukv_" ${client_name} "_api_test")
     add_executable(${test_name} tests/api.cpp)
