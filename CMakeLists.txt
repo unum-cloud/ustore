@@ -106,7 +106,7 @@ link_directories($ENV{CONDA_PREFIX}/lib)
 message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
-add_library(ukv_stl src/engine_stl.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp)
+add_library(ukv_stl src/engine_ram.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_stl pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
 target_compile_definitions(ukv_stl INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_stl INTERFACE UKV_ENGINE_NAME=stl)
