@@ -496,7 +496,10 @@ void ukv_collection_drop(
         for (it->SeekToFirst(); it->Valid(); it->Next())
             batch.Put(it->key(), leveldb::Slice());
     }
-    level_status_t status = db.Write(leveldb::WriteOptions(), &batch);
+
+    leveldb::WriteOptions options;
+    options.sync = true;
+    level_status_t status = db.Write(options, &batch);
     export_error(status, c_error);
 }
 
