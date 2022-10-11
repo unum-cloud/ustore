@@ -125,6 +125,7 @@ void ukv_database_init(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_
             column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
 
         rocks_native_t* native_db = nullptr;
+        options.compression = rocksdb::kNoCompression;
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
         status = rocks_native_t::Open( //
@@ -477,6 +478,9 @@ void ukv_scan( //
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
+    if (txn && (c_options & ukv_option_transaction_snapshot_k))
+        options.snapshot = txn->GetSnapshot();
+
     for (ukv_size_t i = 0; i != c_min_tasks_count; ++i) {
         scan_t task = tasks[i];
         auto collection = rocks_collection(db, task.collection);
@@ -648,6 +652,9 @@ void ukv_collection_drop(
         }
     }
 
+    rocksdb::WriteOptions options;
+    options.sync = true;
+
     if (c_mode == ukv_drop_keys_vals_handle_k) {
         for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
             if (collection_ptr_to_clear == *it) {
@@ -666,7 +673,7 @@ void ukv_collection_drop(
             std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection_ptr_to_clear));
         for (it->SeekToFirst(); it->Valid(); it->Next())
             batch.Delete(collection_ptr_to_clear, it->key());
-        rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
+        rocks_status_t status = db.native->Write(options, &batch);
         export_error(status, c_error);
         return;
     }
@@ -677,7 +684,7 @@ void ukv_collection_drop(
             std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection_ptr_to_clear));
         for (it->SeekToFirst(); it->Valid(); it->Next())
             batch.Put(collection_ptr_to_clear, it->key(), rocksdb::Slice());
-        rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
+        rocks_status_t status = db.native->Write(options, &batch);
         export_error(status, c_error);
         return;
     }

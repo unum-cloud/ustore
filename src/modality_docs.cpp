@@ -159,17 +159,31 @@ struct json_branch_t {
     yyjson_val* punned() const noexcept { return mut_handle ? (yyjson_val*)(mut_handle) : handle; }
 };
 
-static void* json_yy_malloc(void* ctx, size_t size) noexcept {
+static void* json_yy_malloc(void* ctx, size_t length) noexcept {
+    ukv_error_t error = nullptr;
     stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(ctx);
-    return arena.alloc<byte_t>(size, nullptr).begin();
+    auto result = arena.alloc<byte_t>(length + sizeof(length), &error).begin();
+    if (!result)
+        return result;
+    std::memcpy(result, &length, sizeof(length));
+    return result + sizeof(length);
 }
 
-static void* json_yy_realloc(void* ctx, void* ptr, size_t size) noexcept {
+static void* json_yy_realloc(void* ctx, void* ptr, size_t length) noexcept {
+    ukv_error_t error = nullptr;
     stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(ctx);
-    return arena.alloc<byte_t>(size, nullptr).begin();
+    auto bytes = reinterpret_cast<byte_t*>(ptr) - sizeof(length);
+    auto old_length = *reinterpret_cast<size_t*>(bytes);
+    auto old_size = old_length + sizeof(length);
+    auto new_size = length + sizeof(length);
+    auto result = arena.grow<byte_t>({bytes, old_size}, new_size - old_size, &error).begin();
+    if (!result)
+        return result;
+    std::memcpy(result, &length, sizeof(length));
+    return result + sizeof(length);
 }
 
-static void json_yy_free(void*, void*) noexcept {
+static void json_yy_free(void*, void* ptr) noexcept {
 }
 
 yyjson_alc wrap_allocator(stl_arena_t& arena) {
@@ -207,8 +221,7 @@ json_t json_parse(value_view_t bytes, stl_arena_t& arena, ukv_error_t* c_error) 
     json_t result;
     yyjson_alc allocator = wrap_allocator(arena);
     yyjson_read_flag flg = YYJSON_READ_ALLOW_COMMENTS | YYJSON_READ_ALLOW_INF_AND_NAN;
-    // result.handle = yyjson_read_opts((char*)bytes.data(), (size_t)bytes.size(), flg, &allocator, NULL);
-    result.handle = yyjson_read((char*)bytes.data(), (size_t)bytes.size(), flg);
+    result.handle = yyjson_read_opts((char*)bytes.data(), (size_t)bytes.size(), flg, &allocator, NULL);
     log_if_error(result.handle, c_error, 0, "Failed to parse document!");
     result.mut_handle = yyjson_doc_mut_copy(result.handle, &allocator);
     return result;
@@ -221,12 +234,10 @@ value_view_t json_dump(json_branch_t json, stl_arena_t& arena, growing_tape_t& o
 
     size_t result_length = 0;
     yyjson_write_flag flg = 0;
-    // yyjson_alc allocator = wrap_allocator(arena);
-    // char* result_begin = json.mut_handle
-    //                          ? yyjson_mut_val_write_opts(json.mut_handle, flg, &allocator, &result_length, NULL)
-    //                          : yyjson_val_write_opts(json.handle, flg, &allocator, &result_length, NULL);
-    char* result_begin = json.mut_handle ? yyjson_mut_val_write(json.mut_handle, flg, &result_length)
-                                         : yyjson_val_write(json.handle, flg, &result_length);
+    yyjson_alc allocator = wrap_allocator(arena);
+    char* result_begin = json.mut_handle
+                             ? yyjson_mut_val_write_opts(json.mut_handle, flg, &allocator, &result_length, NULL)
+                             : yyjson_val_write_opts(json.handle, flg, &allocator, &result_length, NULL);
     log_if_error(result_begin, c_error, 0, "Failed to serialize the document!");
     auto result = value_view_t {reinterpret_cast<byte_t const*>(result_begin), result_length};
     result = output.push_back(result, c_error);
