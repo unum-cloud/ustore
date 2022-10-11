@@ -53,6 +53,10 @@ struct key_comparator_t final : public leveldb::Comparator {
     }
 };
 
+struct level_txn_t {
+    leveldb::Snapshot const* snapshot = nullptr;
+};
+
 static key_comparator_t const key_comparator_k = {};
 
 /*********************************************************/
@@ -97,6 +101,7 @@ void ukv_database_init(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_
     try {
         level_db_t* db_ptr = nullptr;
         level_options_t options;
+        options.compression = leveldb::kNoCompression;
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
         level_status_t status = level_db_t::Open(options, c_config, &db_ptr);
@@ -176,6 +181,10 @@ void ukv_write( //
     ukv_error_t* c_error) {
 
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    return_if_error(!(c_options & ukv_option_transaction_snapshot_k),
+                    c_error,
+                    uninitialized_state_k,
+                    "Snapshot doesn't support in write mode");
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
@@ -227,7 +236,7 @@ void read_enumerate( //
 
 void ukv_read( //
     ukv_database_t const c_db,
-    ukv_transaction_t const,
+    ukv_transaction_t const c_txn,
     ukv_size_t const c_tasks_count,
 
     ukv_collection_t const*,
@@ -252,6 +261,7 @@ void ukv_read( //
     return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    level_txn_t* txn = reinterpret_cast<level_txn_t*>(c_txn);
     strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
     places_arg_t places {{}, keys, {}, c_tasks_count};
 
@@ -268,8 +278,8 @@ void ukv_read( //
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
-        if (c_options & ukv_option_transaction_snapshot_k)
-            options.snapshot = db.GetSnapshot();
+        if (txn && (c_options & ukv_option_transaction_snapshot_k))
+            options.snapshot = txn->snapshot;
 
         std::string value_buffer;
         ukv_length_t progress_in_tape = 0;
@@ -284,8 +294,6 @@ void ukv_read( //
         offs[places.count] = contents.size();
         if (needs_export)
             *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(contents.begin());
-
-        db.ReleaseSnapshot(options.snapshot);
     }
     catch (...) {
         *c_error = "Read Failure";
@@ -294,7 +302,7 @@ void ukv_read( //
 
 void ukv_scan( //
     ukv_database_t const c_db,
-    ukv_transaction_t const,
+    ukv_transaction_t const c_txn,
     ukv_size_t const c_min_tasks_count,
 
     ukv_collection_t const*,
@@ -324,6 +332,7 @@ void ukv_scan( //
     return_on_error(c_error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    level_txn_t* txn = reinterpret_cast<level_txn_t*>(c_txn);
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c_scan_limits, c_scan_limits_stride};
@@ -343,15 +352,14 @@ void ukv_scan( //
     leveldb::ReadOptions options;
     options.fill_cache = false;
 
-    if (c_options & ukv_option_transaction_snapshot_k)
-        options.snapshot = db.GetSnapshot();
+    if (txn && (c_options & ukv_option_transaction_snapshot_k))
+        options.snapshot = txn->snapshot;
 
     level_iter_uptr_t it;
     try {
         it = level_iter_uptr_t(db.NewIterator(options));
     }
     catch (...) {
-        db.ReleaseSnapshot(options.snapshot);
         *c_error = "Fail To Create Iterator";
         return;
     }
@@ -375,8 +383,6 @@ void ukv_scan( //
     }
 
     offsets[tasks.size()] = keys_output - *c_found_keys;
-
-    db.ReleaseSnapshot(options.snapshot);
 }
 
 void ukv_size( //
@@ -532,12 +538,26 @@ void ukv_database_control( //
 /*****************		Transactions	  ****************/
 /*********************************************************/
 
-void ukv_transaction_init( //
-    ukv_database_t const,
-    ukv_options_t const,
-    ukv_transaction_t*,
+void ukv_transaction_init(
+    // Inputs:
+    ukv_database_t const c_db,
+    ukv_options_t const c_options,
+    // Outputs:
+    ukv_transaction_t* c_txn,
     ukv_error_t* c_error) {
-    *c_error = "Transactions not supported by LevelDB!";
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    level_txn_t* txn = reinterpret_cast<level_txn_t*>(*c_txn);
+
+    if (c_options & ukv_option_transaction_snapshot_k) {
+        txn->snapshot = db.GetSnapshot();
+
+        if (!txn->snapshot)
+            *c_error = "Couldn't start a transaction!";
+        else
+            *c_txn = txn;
+    }
+    else
+        *c_error = "Transactions not supported by LevelDB!";
 }
 
 void ukv_transaction_commit( //
@@ -559,7 +579,17 @@ void ukv_arena_free(ukv_database_t const, ukv_arena_t c_arena) {
     delete &arena;
 }
 
-void ukv_transaction_free(ukv_database_t const, ukv_transaction_t) {
+void ukv_transaction_free(ukv_database_t const c_db, ukv_transaction_t c_txn) {
+    if (!c_db || !c_txn)
+        return;
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    level_txn_t* txn = reinterpret_cast<level_txn_t*>(c_txn);
+    if (!txn)
+        return;
+
+    if (txn->snapshot)
+        db.ReleaseSnapshot(txn->snapshot);
+    delete txn;
 }
 
 void ukv_collection_free(ukv_database_t const, ukv_collection_t const) {
