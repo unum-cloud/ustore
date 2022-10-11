@@ -11,9 +11,9 @@
  * > Keeps watch of all the deleted keys throughout the history.
  */
 
-#include <vector>
-#include <string>
 #include <string_view>
+#include <string>
+#include <vector>
 #include <map>           // Collection names
 #include <unordered_map> // Watched keys generations
 #include <set>           // Primary entries container
@@ -167,19 +167,6 @@ using entry_allocator_t = std::allocator<entry_t>;
 using entries_set_t = std::set<entry_t, entry_compare_t, entry_allocator_t>;
 
 using collection_ptr_t = std::unique_ptr<collection_t>;
-
-struct transaction_t {
-    entries_set_t changes;
-    std::unordered_map<collection_key_t,
-                       generation_t,
-                       std::hash<collection_key_t>,
-                       std::equal_to<collection_key_t>,
-                       std::allocator<std::pair<collection_key_t const, generation_t>>>
-        watched;
-
-    database_t* db_ptr {nullptr};
-    generation_t generation {0};
-};
 
 struct string_hash_t {
     using stl_t = std::hash<std::string_view>;
@@ -409,21 +396,6 @@ void populate( //
             entries.insert(std::move(entry));
         }
     });
-}
-
-/**
- * @brief Unlike `std::set<>::merge`, this function overwrites existing values.
- *
- * https://en.cppreference.com/w/cpp/container/set#Member_types
- * https://en.cppreference.com/w/cpp/container/set/insert
- */
-void merge_overwrite(entries_set_t& target, entries_set_t& source) {
-    for (auto source_it = source.begin(); source_it != source.end();) {
-        auto node = source.extract(source_it++);
-        auto result = target.insert(std::move(node));
-        if (!result.inserted)
-            result.position->swap_blob(result.node.value());
-    }
 }
 
 void write( //
@@ -741,8 +713,9 @@ void ukv_read( //
     };
 
     std::shared_lock _ {db.mutex};
-    c_txn ? read_under_lock(txn, places, c_options, meta_enumerator, c_error)
-          : read_under_lock(db, places, c_options, meta_enumerator, c_error);
+    c_txn //
+        ? read_under_lock(txn, places, c_options, meta_enumerator, c_error)
+        : read_under_lock(db, places, c_options, meta_enumerator, c_error);
     offs[places.count] = total_length;
     if (!needs_export)
         return;
@@ -754,8 +727,9 @@ void ukv_read( //
     };
 
     *c_found_values = reinterpret_cast<ukv_byte_t*>(tape);
-    c_txn ? read_under_lock(txn, places, c_options, data_enumerator, c_error)
-          : read_under_lock(db, places, c_options, data_enumerator, c_error);
+    c_txn //
+        ? read_under_lock(txn, places, c_options, data_enumerator, c_error)
+        : read_under_lock(db, places, c_options, data_enumerator, c_error);
 }
 
 void ukv_write( //
@@ -804,7 +778,9 @@ void ukv_write( //
     validate_write(c_txn, places, contents, c_options, c_error);
     return_on_error(c_error);
 
-    return c_txn ? write(txn, places, contents, c_options, c_error) : write(db, places, contents, c_options, c_error);
+    return c_txn //
+               ? write(txn, places, contents, c_options, c_error)
+               : write(db, places, contents, c_options, c_error);
 }
 
 void ukv_scan( //
@@ -851,8 +827,9 @@ void ukv_scan( //
     validate_scan(c_txn, scans, c_options, c_error);
     return_on_error(c_error);
 
-    return c_txn ? scan(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
-                 : scan(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);
+    return c_txn //
+               ? scan(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
+               : scan(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);
 }
 
 void ukv_size( //

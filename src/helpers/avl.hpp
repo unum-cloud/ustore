@@ -33,7 +33,9 @@ namespace unum::ukv {
  *
  * @tparam element_at       Type of elements to store in this tree.
  * @tparam comparator_at    A comparator function object, that overload
- *                          `bool operator ()(element_at, element_at) const`.
+ *                          @code
+ *                              bool operator ()(element_at, element_at) const
+ *                          @endcode
  */
 template <typename element_at, typename comparator_at>
 class avl_node_gt {
@@ -486,18 +488,6 @@ class avl_tree_gt {
     }
 };
 
-template <typename element_at,
-          typename comparator_at,
-          typename node_allocator_at = std::allocator<avl_node_gt<element_at, comparator_at>>,
-          std::size_t forest_size_ak = 32>
-class avl_forest_gt {
-    // class tree_t {
-    //     std::shared_mutex mutex;
-    //     tree_t tree;
-    // };
-    // std::array<tree_t, forest_size_ak> trees_;
-};
-
 /**
  * @brief Transactional Concurrent In-Memory Container with Snapshots support.
  *
@@ -542,9 +532,9 @@ class acid_gt {
     static_assert(std::is_nothrow_move_assignable<value_t>());
 
     struct entry_t {
+        value_t value;
         key_t key;
         generation_t generation = 0;
-        value_t value;
     };
 
     struct entry_generation_t {

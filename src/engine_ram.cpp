@@ -27,6 +27,8 @@
 #include "helpers/pmr.hpp"
 #include "helpers/file.hpp"
 #include "helpers/avl.hpp"
+#include "helpers/set_stl.hpp"     //
+#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -48,26 +50,36 @@ using namespace unum;
 namespace fs = std::filesystem;
 
 using blob_allocator_t = std::allocator<byte_t>;
-struct blob_t {
+struct pair_t {
+    collection_key_t collection_key;
     value_view_t range;
 
-    blob_t() = default;
-    blob_t(blob_t const&) = delete;
-    blob_t& operator=(blob_t const&) = delete;
+    pair_t() = default;
+    pair_t(pair_t const&) = delete;
+    pair_t& operator=(pair_t const&) = delete;
 
-    blob_t(value_view_t other, ukv_error_t* c_error) {
+    pair_t(value_view_t other, ukv_error_t* c_error) noexcept {
         auto begin = blob_allocator_t {}.allocate(other.size());
-        return_if_error(begin != nullptr, c_error, "Failed to copy a blob");
+        return_if_error(begin != nullptr, c_error, out_of_memory_k, "Failed to copy a blob");
         range = {begin, other.size()};
     }
 
-    ~blob_t() {
+    ~pair_t() noexcept {
         if (range)
             blob_allocator_t {}.deallocate((byte_t*)range.data(), range.size());
     }
+
+    pair_t(pair_t&&) noexcept;
+    pair_t& operator=(pair_t&&) noexcept;
+    operator collection_key_t() const noexcept { return collection_key; }
 };
 
-using acid_t = acid_gt<collection_key_t, blob_t>;
+struct pair_compare_t {
+    using value_type = collection_key_t;
+    bool operator()(collection_key_t const& a, collection_key_t const& b) const noexcept { return a < b; }
+};
+
+using acid_t = set_stl_gt<pair_t>;
 using txn_t = typename acid_t::transaction_t;
 using generation_t = typename acid_t::generation_t;
 
@@ -124,8 +136,8 @@ void read(db_t& db, places_arg_t places, ukv_options_t const, enumerator_at enum
         collection_key_t key = place.collection_key();
         db.acid.for_one(
             key,
-            [&](blob_t const& value) { enumerator(i, value); },
-            [&]() { enumerator(i, value_view_t {}); });
+            [&](pair_t const& value) { enumerator(i, value); },
+            [&] { enumerator(i, value_view_t {}); });
     }
 }
 
@@ -139,8 +151,8 @@ void read(txn_t& txn, places_arg_t places, ukv_options_t const options, enumerat
         txn.for_one(
             key,
             watch,
-            [&](blob_t const& value) { enumerator(i, value); },
-            [&]() { enumerator(i, value_view_t {}); });
+            [&](pair_t const& value) { enumerator(i, value); },
+            [&] { enumerator(i, value_view_t {}); });
     }
 }
 
@@ -148,7 +160,7 @@ template <typename enumerator_at>
 void write(db_t& db, places_arg_t places, contents_arg_t contents, ukv_options_t const, ukv_error_t* c_error) {
 
     uninitialized_vector_gt<collection_key_t> keys(places.count, c_error);
-    uninitialized_vector_gt<blob_t> copies(places.count, c_error);
+    uninitialized_vector_gt<pair_t> copies(places.count, c_error);
     return_on_error(c_error);
 
     for (std::size_t i = 0; i != places.size(); ++i) {
@@ -156,7 +168,7 @@ void write(db_t& db, places_arg_t places, contents_arg_t contents, ukv_options_t
         value_view_t content = contents[i];
         collection_key_t key = place.collection_key();
         keys[i] = key;
-        copies[i] = blob_t {content, c_error};
+        copies[i] = pair_t {content, c_error};
         return_on_error(c_error);
     }
 
