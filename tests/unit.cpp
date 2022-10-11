@@ -186,6 +186,41 @@ TEST(db, basic) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, consistency) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    std::vector<ukv_key_t> keys {54, 55, 56};
+    ukv_length_t val_len = sizeof(std::uint64_t);
+    std::vector<std::uint64_t> vals {1, 2, 3};
+    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
+
+    contents_arg_t values {
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
+        .lengths_begin = {&val_len, 0},
+        .contents_begin = {&vals_begin, 0},
+        .count = 3,
+    };
+
+    bins_collection_t collection = *db.collection();
+    auto collection_ref = collection[keys];
+    check_length(collection_ref, ukv_length_missing_k);
+    round_trip(collection_ref, values);
+    check_length(collection_ref, 8);
+    db.close();
+
+    EXPECT_TRUE(db.open(path()));
+    bins_collection_t collection2 = *db.collection();
+    auto collection_ref2 = collection2[keys];
+
+    check_equalities(collection_ref2, values);
+    check_length(collection_ref2, 8);
+
+    EXPECT_TRUE(db.clear());
+}
+
 TEST(db, named) {
 
     if (!ukv_supports_named_collections_k)
@@ -276,52 +311,30 @@ TEST(db, paths) {
 
     arena_t arena(db);
     status_t status;
-    ukv_paths_write( //
-        db,
-        nullptr,
-        keys_count,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        keys,
-        sizeof(char const*),
-        nullptr,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        reinterpret_cast<ukv_bytes_cptr_t*>(vals),
-        sizeof(char const*),
-        ukv_options_default_k,
-        separator,
-        arena.member_ptr(),
-        status.member_ptr());
-
+    ukv_paths_write_t paths_write {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .tasks_count = keys_count,
+        .path_separator = separator,
+        .paths = keys,
+        .paths_stride = sizeof(char const*),
+        .values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(vals),
+        .values_bytes_stride = sizeof(char const*),
+    };
+    ukv_paths_write(&paths_write);
     char* vals_recovered = nullptr;
-    ukv_paths_read( //
-        db,
-        nullptr,
-        keys_count,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        0,
-        keys,
-        sizeof(char const*),
-        ukv_options_default_k,
-        separator,
-        nullptr,
-        nullptr,
-        nullptr,
-        reinterpret_cast<ukv_bytes_ptr_t*>(&vals_recovered),
-        arena.member_ptr(),
-        status.member_ptr());
-
+    ukv_paths_read_t paths_read {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .tasks_count = keys_count,
+        .path_separator = separator,
+        .paths = keys,
+        .paths_stride = sizeof(char const*),
+        .values = reinterpret_cast<ukv_bytes_ptr_t*>(&vals_recovered),
+    };
+    ukv_paths_read(&paths_read);
     EXPECT_TRUE(status);
     EXPECT_EQ(std::string_view(vals_recovered, keys_count * 2),
               std::string_view("F\0A\0A\0N\0G\0N\0A\0", keys_count * 2));
@@ -334,13 +347,13 @@ TEST(db, paths) {
     ukv_char_t* tape_begin = nullptr;
     ukv_paths_match_t paths_match {
         .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
         .patterns = &prefix,
         .match_counts_limits = &max_count,
         .match_counts = &results_counts,
         .paths_offsets = &tape_offsets,
         .paths_strings = &tape_begin,
-        .arena = arena.member_ptr(),
-        .error = status.member_ptr(),
     };
     ukv_paths_match(&paths_match);
     auto first_match_for_a = std::string_view(tape_begin);
@@ -412,6 +425,23 @@ TEST(db, paths_linked_list) {
     ukv_char_t separator = '\0';
     status_t status;
 
+    ukv_paths_write_t paths_write {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .path_separator = separator,
+    };
+
+    ukv_paths_read_t paths_read {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .path_separator = separator,
+        // .paths = keys,
+        // .paths_stride = sizeof(char const*),
+        // .values = reinterpret_cast<ukv_bytes_ptr_t*>(&vals_recovered),
+    };
+
     // Generate some random strings for our tests
     constexpr auto alphabet = "abcdefghijklmnop";
     auto make_random_str = []() {
@@ -435,53 +465,16 @@ TEST(db, paths_linked_list) {
     for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
         ukv_str_view_t smaller = begins[i];
         ukv_str_view_t bigger = begins[i + 1];
-        ukv_paths_write( //
-            db,
-            nullptr,
-            1,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            &smaller,
-            0,
-            nullptr,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            reinterpret_cast<ukv_bytes_cptr_t*>(&bigger),
-            0,
-            ukv_options_default_k,
-            separator,
-            arena.member_ptr(),
-            status.member_ptr());
+        paths_write.paths = &smaller;
+        paths_write.values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(&bigger);
+        ukv_paths_write(&paths_write);
         EXPECT_TRUE(status);
 
         // Check if it was successfully written:
         ukv_str_span_t bigger_received = nullptr;
-        ukv_paths_read( //
-            db,
-            nullptr,
-            1,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            &smaller,
-            0,
-            ukv_options_default_k,
-            separator,
-            nullptr,
-            nullptr,
-            nullptr,
-            reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received),
-            arena.member_ptr(),
-            status.member_ptr());
+        paths_read.paths = &smaller;
+        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received);
+        ukv_paths_read(&paths_read);
         EXPECT_TRUE(status);
         EXPECT_EQ(std::string_view(bigger), std::string_view(bigger_received));
     }
@@ -491,26 +484,9 @@ TEST(db, paths_linked_list) {
         ukv_str_view_t smaller = begins[i];
         ukv_str_view_t bigger = begins[i + 1];
         ukv_str_span_t bigger_received = nullptr;
-        ukv_paths_read( //
-            db,
-            nullptr,
-            1,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            &smaller,
-            0,
-            ukv_options_default_k,
-            separator,
-            nullptr,
-            nullptr,
-            nullptr,
-            reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received),
-            arena.member_ptr(),
-            status.member_ptr());
+        paths_read.paths = &smaller;
+        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received);
+        ukv_paths_read(&paths_read);
         EXPECT_TRUE(status);
         EXPECT_EQ(std::string_view(bigger), std::string_view(bigger_received));
     }
@@ -519,53 +495,16 @@ TEST(db, paths_linked_list) {
     for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
         ukv_str_view_t smaller = begins[i];
         ukv_str_view_t bigger = begins[i + 1];
-        ukv_paths_write( //
-            db,
-            nullptr,
-            1,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            &bigger,
-            0,
-            nullptr,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            reinterpret_cast<ukv_bytes_cptr_t*>(&smaller),
-            0,
-            ukv_options_default_k,
-            separator,
-            arena.member_ptr(),
-            status.member_ptr());
+        paths_write.paths = &smaller;
+        paths_write.values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(&bigger);
+        ukv_paths_write(&paths_write);
         EXPECT_TRUE(status);
 
         // Check if it was successfully over-written:
         ukv_str_span_t smaller_received = nullptr;
-        ukv_paths_read( //
-            db,
-            nullptr,
-            1,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            &bigger,
-            0,
-            ukv_options_default_k,
-            separator,
-            nullptr,
-            nullptr,
-            nullptr,
-            reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received),
-            arena.member_ptr(),
-            status.member_ptr());
+        paths_read.paths = &bigger;
+        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received);
+        ukv_paths_read(&paths_read);
         EXPECT_TRUE(status);
         EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
     }
@@ -575,26 +514,9 @@ TEST(db, paths_linked_list) {
         ukv_str_view_t smaller = begins[i];
         ukv_str_view_t bigger = begins[i + 1];
         ukv_str_span_t smaller_received = nullptr;
-        ukv_paths_read( //
-            db,
-            nullptr,
-            1,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            &bigger,
-            0,
-            ukv_options_default_k,
-            separator,
-            nullptr,
-            nullptr,
-            nullptr,
-            reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received),
-            arena.member_ptr(),
-            status.member_ptr());
+        paths_read.paths = &bigger;
+        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received);
+        ukv_paths_read(&paths_read);
         EXPECT_TRUE(status);
         EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
     }
@@ -893,15 +815,16 @@ TEST(db, docs_modify) {
 
     // Insert
     modifier = R"( {"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    EXPECT_TRUE(collection[1].insert(modifier.c_str()));
-    result = collection[1].value();
+    EXPECT_FALSE(collection[1].insert(modifier.c_str()));
+    EXPECT_TRUE(collection[2].insert(modifier.c_str()));
+    result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
     // Insert By Field
     modifier = R"("Grilish" )"_json.dump();
     expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Grilish"}} )"_json.dump();
-    EXPECT_TRUE(collection[ckf(1, "/person/surname")].insert(modifier.c_str()));
-    result = collection[1].value();
+    EXPECT_TRUE(collection[ckf(2, "/person/surname")].insert(modifier.c_str()));
+    result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Upsert
@@ -1304,6 +1227,43 @@ TEST(db, graph_triangle_batch_api) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, graph_transaction_watch) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    graph_collection_t net = *db.collection<graph_collection_t>();
+    transaction_t txn = *db.transact();
+    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
+
+    edge_t edge1 {1, 2, 1};
+    edge_t edge2 {3, 1, 2};
+
+    EXPECT_TRUE(net.upsert(edge1));
+    EXPECT_TRUE(net.upsert(edge2));
+    txn_net.degree(1);
+    EXPECT_TRUE(txn.commit());
+
+    EXPECT_TRUE(txn.reset());
+    txn_net.degree(1);
+    EXPECT_TRUE(txn.commit());
+
+    txn_net.degree(1);
+    EXPECT_TRUE(net.remove(edge1));
+    EXPECT_TRUE(net.remove(edge2));
+    EXPECT_FALSE(txn.commit());
+    EXPECT_TRUE(txn.reset());
+
+    txn_net.degree(1, ukv_vertex_role_any_k, false);
+    EXPECT_TRUE(net.upsert(edge1));
+    EXPECT_TRUE(net.upsert(edge2));
+    EXPECT_TRUE(txn.commit());
+
+    EXPECT_TRUE(db.clear());
+}
+
 edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
     return {v1, v2, edge_id};
 }
@@ -1326,7 +1286,6 @@ TEST(db, graph_random_fill) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    bins_collection_t main = *db.collection();
     graph_collection_t graph = *db.collection<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
@@ -1395,6 +1354,79 @@ TEST(db, graph_conflicting_transactions) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, graph_upsert_edges) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t graph = *db.collection<graph_collection_t>();
+
+    std::vector<ukv_key_t> vertices = {1, 2, 3, 4, 5};
+    auto over_the_vertices = [&](bool exist, size_t degree) {
+        for (auto& vertex_id : vertices) {
+            EXPECT_EQ(*graph.contains(vertex_id), exist);
+            EXPECT_EQ(*graph.degree(vertex_id), degree);
+        }
+    };
+
+    over_the_vertices(false, 0);
+
+    std::vector<edge_t> star {
+        {1, 3, 1},
+        {1, 4, 2},
+        {2, 4, 3},
+        {2, 5, 4},
+        {3, 5, 5},
+    };
+    EXPECT_TRUE(graph.upsert(edges(star)));
+    over_the_vertices(true, 2u);
+
+    std::vector<edge_t> pentagon {
+        {1, 2, 6},
+        {2, 3, 7},
+        {3, 4, 8},
+        {4, 5, 9},
+        {5, 1, 10},
+    };
+    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    over_the_vertices(true, 4u);
+
+    EXPECT_TRUE(graph.remove(edges(star)));
+    over_the_vertices(true, 2u);
+
+    EXPECT_TRUE(graph.upsert(edges(star)));
+    over_the_vertices(true, 4u);
+
+    EXPECT_TRUE(graph.remove(edges(pentagon)));
+    over_the_vertices(true, 2u);
+
+    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    over_the_vertices(true, 4u);
+
+    std::vector<edge_t> itself {
+        {1, 1, 11},
+        {2, 2, 12},
+        {3, 3, 13},
+        {4, 4, 14},
+        {5, 5, 15},
+    };
+
+    EXPECT_TRUE(graph.upsert(edges(itself)));
+    over_the_vertices(true, 6u);
+
+    EXPECT_TRUE(graph.remove(edges(star)));
+    EXPECT_TRUE(graph.remove(edges(pentagon)));
+
+    over_the_vertices(true, 2u);
+
+    EXPECT_TRUE(graph.remove(edges(itself)));
+
+    over_the_vertices(true, 0);
+
+    EXPECT_TRUE(db.clear());
+
+    over_the_vertices(false, 0);
+}
+
 TEST(db, graph_remove_vertices) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1432,6 +1464,34 @@ TEST(db, graph_remove_edges_keep_vertices) {
         EXPECT_TRUE(*graph.contains(vertex_id));
     }
 
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, graph_get_edges) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t graph = *db.collection<graph_collection_t>();
+
+    constexpr std::size_t vertices_count = 1000;
+    auto edges_vec = make_edges(vertices_count, 100);
+    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+
+    std::vector<edge_t> received_edges;
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        auto es = *graph.edges(vertex_id);
+        EXPECT_EQ(es.size(), 9u);
+        for (size_t i = 0; i != es.size(); ++i)
+            received_edges.push_back(es[i]);
+    }
+
+    EXPECT_TRUE(graph.remove(edges(received_edges)));
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_TRUE(*graph.contains(vertex_id));
+        auto es = *graph.edges(vertex_id);
+        EXPECT_EQ(es.size(), 0);
+    }
     EXPECT_TRUE(db.clear());
 }
 

@@ -59,11 +59,11 @@ class docs_ref_gt {
 
     using value_t = std::conditional_t<is_one_k, value_view_t, embedded_bins_t>;
     using present_t = std::conditional_t<is_one_k, bool, strided_iterator_gt<ukv_octet_t>>;
-    using length_t = std::conditional_t<is_one_k, ukv_length_t, indexed_range_gt<ukv_length_t*>>;
+    using length_t = std::conditional_t<is_one_k, ukv_length_t, ptr_range_gt<ukv_length_t>>;
 
   protected:
     ukv_database_t db_ = nullptr;
-    ukv_transaction_t txn_ = nullptr;
+    ukv_transaction_t transaction_ = nullptr;
     ukv_arena_t* arena_ = nullptr;
     locations_store_t locations_;
     ukv_doc_field_type_t type_ = ukv_doc_field_default_k;
@@ -83,7 +83,7 @@ class docs_ref_gt {
                 locations_store_t locations,
                 ukv_arena_t* arena,
                 ukv_doc_field_type_t type = ukv_doc_field_default_k) noexcept
-        : db_(db), txn_(txn), arena_(arena), locations_(locations), type_(type) {}
+        : db_(db), transaction_(txn), arena_(arena), locations_(locations), type_(type) {}
 
     docs_ref_gt(docs_ref_gt&&) = default;
     docs_ref_gt& operator=(docs_ref_gt&&) = default;
@@ -287,30 +287,33 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t
     auto fields = keys_extractor_t {}.fields(locs);
     auto has_fields = fields && (!fields.repeats() || *fields);
 
-    ukv_docs_read( //
-        db_,
-        txn_,
-        count,
-        collections.get(),
-        collections.stride(),
-        keys.get(),
-        keys.stride(),
-        fields.get(),
-        fields.stride(),
-        type,
-        options,
-        wants_present ? &found_presences : nullptr,
-        wants_value ? &found_offsets : nullptr,
-        wants_value || wants_length ? &found_lengths : nullptr,
-        wants_value ? &found_values : nullptr,
-        arena_,
-        status.member_ptr());
+    ukv_docs_read_t docs_read {
+        .db = db_,
+        .error = status.member_ptr(),
+        .transaction = transaction_,
+        .arena = arena_,
+        .type = type,
+        .options = options,
+        .tasks_count = count,
+        .collections = collections.get(),
+        .collections_stride = collections.stride(),
+        .keys = keys.get(),
+        .keys_stride = keys.stride(),
+        .fields = fields.get(),
+        .fields_stride = fields.stride(),
+        .found_presences = wants_present ? &found_presences : nullptr,
+        .found_offsets = wants_value ? &found_offsets : nullptr,
+        .found_lengths = wants_value || wants_length ? &found_lengths : nullptr,
+        .found_values = wants_value ? &found_values : nullptr,
+    };
+
+    ukv_docs_read(&docs_read);
 
     if (!status)
         return std::move(status);
 
     if constexpr (wants_length) {
-        indexed_range_gt<ukv_length_t*> many {found_lengths, found_lengths + count};
+        ptr_range_gt<ukv_length_t> many {found_lengths, found_lengths + count};
         if constexpr (is_one_k)
             return many[0];
         else
@@ -352,28 +355,30 @@ status_t docs_ref_gt<locations_at>::any_write(contents_arg_at&& vals_ref,
     auto offsets = value_extractor_t {}.offsets(vals);
     auto lengths = value_extractor_t {}.lengths(vals);
 
-    ukv_docs_write( //
-        db_,
-        txn_,
-        count,
-        collections.get(),
-        collections.stride(),
-        keys.get(),
-        keys.stride(),
-        fields.get(),
-        fields.stride(),
-        nullptr,
-        offsets.get(),
-        offsets.stride(),
-        lengths.get(),
-        lengths.stride(),
-        contents.get(),
-        contents.stride(),
-        modification,
-        type,
-        options,
-        arena_,
-        status.member_ptr());
+    ukv_docs_write_t docs_write {
+        .db = db_,
+        .error = status.member_ptr(),
+        .modification = modification,
+        .transaction = transaction_,
+        .arena = arena_,
+        .type = type,
+        .options = options,
+        .tasks_count = count,
+        .collections = collections.get(),
+        .collections_stride = collections.stride(),
+        .keys = keys.get(),
+        .keys_stride = keys.stride(),
+        .fields = fields.get(),
+        .fields_stride = fields.stride(),
+        .offsets = offsets.get(),
+        .offsets_stride = offsets.stride(),
+        .lengths = lengths.get(),
+        .lengths_stride = lengths.stride(),
+        .values = contents.get(),
+        .values_stride = contents.stride(),
+    };
+
+    ukv_docs_write(&docs_write);
 
     return status;
 }
@@ -392,20 +397,23 @@ expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool watch) noexcept 
     auto keys = keys_extractor_t {}.keys(locs);
     auto collections = keys_extractor_t {}.collections(locs);
 
-    ukv_docs_gist( //
-        db_,
-        txn_,
-        count,
-        collections.get(),
-        collections.stride(),
-        keys.get(),
-        keys.stride(),
-        options,
-        &found_count,
-        &found_offsets,
-        &found_strings,
-        arena_,
-        status.member_ptr());
+    ukv_docs_gist_t docs_gist {
+        .db = db_,
+        .error = status.member_ptr(),
+        .transaction = transaction_,
+        .arena = arena_,
+        .options = options,
+        .docs_count = count,
+        .collections = collections.get(),
+        .collections_stride = collections.stride(),
+        .keys = keys.get(),
+        .keys_stride = keys.stride(),
+        .found_fields_count = &found_count,
+        .found_offsets = &found_offsets,
+        .found_fields = &found_strings,
+    };
+
+    ukv_docs_gist(&docs_gist);
 
     joined_strs_t view {found_count, found_offsets, found_strings};
     return {std::move(status), std::move(view)};
@@ -430,33 +438,32 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layou
         layout.types().begin().get(),
     };
 
-    ukv_docs_gather( // Inputs:
-        db_,
-        txn_,
-        count,
-        layout.fields().size(),
-        collections.get(),
-        collections.stride(),
-        keys.get(),
-        keys.stride(),
-        layout.fields().begin().get(),
-        layout.fields().stride(),
-        layout.types().begin().get(),
-        layout.types().stride(),
-        options,
+    ukv_docs_gather_t docs_gather {
+        .db = db_,
+        .error = status.member_ptr(),
+        .transaction = transaction_,
+        .arena = arena_,
+        .options = options,
+        .docs_count = count,
+        .fields_count = layout.fields().size(),
+        .collections = collections.get(),
+        .collections_stride = collections.stride(),
+        .keys = keys.get(),
+        .keys_stride = keys.stride(),
+        .fields = layout.fields().begin().get(),
+        .fields_stride = layout.fields().stride(),
+        .types = layout.types().begin().get(),
+        .types_stride = layout.types().stride(),
+        .columns_validities = view.member_validities(),
+        .columns_conversions = view.member_conversions(),
+        .columns_collisions = view.member_collisions(),
+        .columns_scalars = view.member_scalars(),
+        .columns_offsets = view.member_offsets(),
+        .columns_lengths = view.member_lengths(),
+        .joined_strings = view.member_tape(),
+    };
 
-        // Outputs:
-        view.member_validities(),
-        view.member_conversions(),
-        view.member_collisions(),
-        view.member_scalars(),
-        view.member_offsets(),
-        view.member_lengths(),
-        view.member_tape(),
-
-        // Meta
-        arena_,
-        status.member_ptr());
+    ukv_docs_gather(&docs_gather);
 
     return {std::move(status), std::move(view)};
 }

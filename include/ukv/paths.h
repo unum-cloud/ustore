@@ -65,13 +65,13 @@ typedef struct ukv_paths_write_t {
     ukv_bytes_cptr_t const* values_bytes = NULL;
     ukv_size_t values_bytes_stride = 0;
 
-} ukv_paths_wite_t;
+} ukv_paths_write_t;
 
 /**
  * @brief Maps string paths to string values.
- * Exact generalization of `ukv_write` for variable-length keys.
+ * Exact generalization of ukv_write for variable-length keys.
  */
-void ukv_paths_write(ukv_paths_wite_t*);
+void ukv_paths_write(ukv_paths_write_t*);
 
 typedef struct ukv_paths_read_t {
 
