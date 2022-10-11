@@ -76,9 +76,8 @@ typedef enum {
     ukv_doc_modify_upsert_k = 0,
     ukv_doc_modify_update_k = 1,
     ukv_doc_modify_insert_k = 2,
-    ukv_doc_modify_remove_k = 3,
-    ukv_doc_modify_patch_k = 4,
-    ukv_doc_modify_merge_k = 5,
+    ukv_doc_modify_patch_k = 3,
+    ukv_doc_modify_merge_k = 4,
 } ukv_doc_modification_t;
 
 /*********************************************************/
