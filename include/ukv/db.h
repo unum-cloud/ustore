@@ -214,7 +214,7 @@ void ukv_database_init(ukv_database_init_t*);
  * as the offset of the first NULL-termination (zero) symbol.
  *
  * @param[in] db             Already open database instance, @see `ukv_database_init`.
- * @param[in] txn            Transaction, through which the operation must go.
+ * @param[in] transaction    Transaction, through which the operation must go.
  *                           Can be NULL.
  * @param[in] tasks_count    Number of elements in @param keys.
  *
@@ -339,7 +339,7 @@ void ukv_write(ukv_write_t*);
  * > Size Estimates and Exports
  *
  * @param[in] db             Already open database instance, @see `ukv_database_init`.
- * @param[in] txn            Transaction or the snapshot, through which the
+ * @param[in] transaction    Transaction or the snapshot, through which the
  * @param[in] tasks_count    Number of elements in @param keys.
  *
  * @param[in] collections    Array of collections owning the @param keys.
@@ -353,7 +353,7 @@ void ukv_write(ukv_write_t*);
  *                           Zero stride is not allowed!
  *
  * @param[in] options        Read options:
- *                           > watch: Adds collision-detection on keys read through txn.
+ *                           > watch: Adds collision-detection on keys read through transaction.
  *                           > shared: Exports to shared memory to accelerate inter-process communication.
  *                           > bulk: Suggests that the list of keys was received from a bulk scan.
  *
@@ -412,7 +412,7 @@ void ukv_read(ukv_read_t*);
  * Values are not exported, for that - follow up with @see ukv_read.
  *
  * @param[in] db             Already open database instance, @see `ukv_database_init`.
- * @param[in] txn            Transaction or the snapshot, through which the
+ * @param[in] transaction    Transaction or the snapshot, through which the
  * @param[in] tasks_count    Number of elements in @param start_keys.
  *
  * @param[in] collections    Array of collections owning the @param start_keys.
@@ -432,7 +432,7 @@ void ukv_read(ukv_read_t*);
  *                           Zero stride is not allowed!
  *
  * @param[in] options        Read options:
- *                           > watch: Adds collision-detection on keys read through txn.
+ *                           > watch: Adds collision-detection on keys read through transaction.
  *                           > lengths: Will fetches lengths of values, after the keys.
  *                           > bulk: Skips keys ordering and relevance checks for speed.
  *
@@ -463,6 +463,9 @@ typedef struct ukv_scan_t {
     ukv_key_t const* start_keys = NULL;
     ukv_size_t start_keys_stride = 0;
 
+    ukv_key_t const* end_keys = NULL;
+    ukv_size_t end_keys_stride = 0;
+
     ukv_length_t const* scan_limits;
     ukv_size_t scan_limits_stride = 0;
 
@@ -479,7 +482,7 @@ void ukv_scan(ukv_scan_t*);
  * @brief Estimates the number of entries and memory usage for a range of keys.
  *
  * @param[in] db             Already open database instance, @see `ukv_database_init`.
- * @param[in] txn            Transaction and/or snapshot in which to count.
+ * @param[in] transaction    Transaction and/or snapshot in which to count.
  * @param[in] tasks_count    Number ranges to be introspected.
  *
  * @param[in] collections    Array of collections owning the @param keys.
@@ -499,7 +502,7 @@ void ukv_scan(ukv_scan_t*);
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
  */
-typedef struct ukv_size_t {
+typedef struct ukv_size_st {
 
     ukv_database_t db;
     ukv_error_t* error;
@@ -526,9 +529,9 @@ typedef struct ukv_size_t {
     ukv_size_t** min_space_usages;
     ukv_size_t** max_space_usages;
 
-} ukv_size_t;
+} ukv_size_st;
 
-void ukv_size(ukv_size_t*);
+void ukv_size(ukv_size_st*);
 
 /*********************************************************/
 /***************** Collection Management  ****************/
@@ -540,11 +543,11 @@ void ukv_size(ukv_size_t*);
  * present. This is the only collection-management operation that can be performed
  * on a DB state snapshot, and not just on the HEAD state.
  *
- * @param[in] db        Already open database instance, @see `ukv_database_init`.
- * @param[in] txn       A snapshot in which to enumerate collections.
- * @param[out] count    Will contain the number of found unique collections.
- * @param[out] names    A NULL-terminated output string with comma-delimited column names.
- * @param[out] error    The error message to be handled by callee.
+ * @param[in] db            Already open database instance, @see `ukv_database_init`.
+ * @param[in] transaction   A snapshot in which to enumerate collections.
+ * @param[out] count        Will contain the number of found unique collections.
+ * @param[out] names        A NULL-terminated output string with comma-delimited column names.
+ * @param[out] error        The error message to be handled by callee.
  */
 typedef struct ukv_collection_list_t {
 
@@ -646,9 +649,9 @@ void ukv_database_control(ukv_database_control_t*);
 /**
  * @brief Begins a new ACID transaction or resets an existing one.
  *
- * @param db[in]        Already open database instance, @see `ukv_database_init`.
- * @param txn[inout]    When points to existing handle, resets and reuses its memory.
- * @param error[out]    The error message to be handled by callee.
+ * @param db[in]                Already open database instance, @see `ukv_database_init`.
+ * @param transaction[inout]    When points to existing handle, resets and reuses its memory.
+ * @param error[out]            The error message to be handled by callee.
  */
 typedef struct ukv_transaction_init_t {
 
@@ -656,7 +659,7 @@ typedef struct ukv_transaction_init_t {
     ukv_error_t* error;
     ukv_options_t options = ukv_options_default_k;
 
-    ukv_transaction_t* txn;
+    ukv_transaction_t* transaction;
 } ukv_transaction_init_t;
 
 void ukv_transaction_init(ukv_transaction_init_t*);

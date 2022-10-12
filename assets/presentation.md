@@ -227,10 +227,13 @@ typedef char const* ukv_error_t;
  * @param[out] db     A pointer to the opened KVS, unless @p `error` is filled.
  * @param[out] error  The error message to be handled by callee.
  */
-void ukv_database_init( //
-    ukv_str_view_t config,
-    ukv_database_t* db,
-    ukv_error_t* error);
+typedef struct ukv_database_init_t {
+    ukv_str_view_t config = NULL;
+    ukv_database_t* db;
+    ukv_error_t* error;
+} ukv_database_init_t;
+
+void ukv_database_init(ukv_database_init_t* c_ptr);
 ```
 
 ---
@@ -259,32 +262,21 @@ std::vector<float> z;
 ## Designing a C API: Strides
 
 ```c
-void ukv_write( //
-    ukv_database_t const db,
-    ukv_transaction_t const txn,
-    ukv_size_t const tasks_count,
+typedef struct ukv_size_st {
 
-    ukv_collection_t const* collections,
-    ukv_size_t const collections_stride,
+    ukv_database_t db;
+    ukv_error_t* error;
+    ukv_transaction_t transaction = NULL;
+    ukv_arena_t* arena = NULL;
+    ukv_options_t options = ukv_options_default_k;
+    ukv_size_t tasks_count = 1;
 
-    ukv_key_t const* keys,
-    ukv_size_t const keys_stride,
+    // Inputs: //...//
 
-    ukv_octet_t const* presences,
+    // Outputs //...//
+} ukv_size_st;
 
-    ukv_length_t const* offsets,
-    ukv_size_t const offsets_stride,
-
-    ukv_length_t const* lengths,
-    ukv_size_t const lengths_stride,
-    
-    ukv_bytes_cptr_t const* values,
-    ukv_size_t const values_stride,
-
-    ukv_options_t const options,
-
-    ukv_arena_t* arena,
-    ukv_error_t* error);
+void ukv_write(ukv_write_t* c_ptr);
 ```
 
 ---
@@ -398,7 +390,12 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_open(JNIEnv* env_
         return;
 
     ukv_error_t error_c = NULL;
-    ukv_database_init(config_c, &db_ptr_c, &error_c);
+    ukv_database_init_t database {
+        .config = config_c,
+        .db = &db_ptr_c,
+        .error = &error_c,
+    };
+    ukv_database_init(&database);
     if (config_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseStringUTFChars(env_java, config_java, config_c);
     if (forward_error(env_java, error_c))
@@ -478,8 +475,13 @@ func (db *DataBase) ReConnect(config string) error {
 	error_c := C.ukv_error_t(nil)
 	config_c := C.CString(config)
 	defer C.free(unsafe.Pointer(config_c))
+    ukv_database_init_t database {
+        .config = config_c,
+        .db = &db.raw,
+        .error = &error_c,
+    };
 
-	C.ukv_database_init(config_c, &db.raw, &error_c)
+	C.ukv_database_init(&database)
 	return forwardError(error_c)
 }
 ```

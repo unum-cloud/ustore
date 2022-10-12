@@ -185,21 +185,19 @@ static void docs_sample_blobs(bm::State& state) {
     sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
-        ukv_read( //
-            db,
-            nullptr,
-            count,
-            &collection_docs_k,
-            0,
-            ids_tweets,
-            sizeof(ukv_key_t),
-            ukv_options_default_k,
-            nullptr,
-            &offsets,
-            nullptr,
-            &values,
-            arena.member_ptr(),
-            status.member_ptr());
+        ukv_read_t read {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .tasks_count = count,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets,
+            .keys_stride = sizeof(ukv_key_t),
+            .offsets = &offsets,
+            .values = &values,
+        };
+
+        ukv_read(&read);
         status.throw_unhandled();
         received_bytes += offsets[count];
     });
@@ -635,12 +633,24 @@ int main(int argc, char** argv) {
     bool can_build_paths = false;
     if (ukv_supports_named_collections_k) {
         status_t status;
-        ukv_collection_init(db, "twitter.docs", "", &collection_docs_k, status.member_ptr());
+        ukv_collection_init_t coll_init {
+            .db = db,
+            .error = status.member_ptr(),
+            .name = "twitter.docs",
+            .config = "",
+            .id = &collection_docs_k,
+        };
+
+        ukv_collection_init(&coll_init);
         status.throw_unhandled();
-        ukv_collection_init(db, "twitter.graph", "", &collection_graph_k, status.member_ptr());
+        coll_init.name = "twitter.graph";
+        coll_init.id = &collection_graph_k;
+        ukv_collection_init(&coll_init);
         status.throw_unhandled();
         can_build_graph = true;
-        ukv_collection_init(db, "twitter.nicks", "", &collection_paths_k, status.member_ptr());
+        coll_init.name = "twitter.nicks";
+        coll_init.id = &collection_paths_k;
+        ukv_collection_init(&coll_init);
         status.throw_unhandled();
         can_build_paths = true;
     }
