@@ -54,25 +54,24 @@ class docs_pairs_stream_t {
         fetched_keys_ = ptr_range_gt<ukv_key_t> {found_keys, found_keys + *found_counts};
         fetched_offset_ = 0;
         auto count = static_cast<ukv_size_t>(fetched_keys_.size());
+        ukv_docs_read_t docs_read {
+            .db = db_,
+            .error = status.member_ptr()
+            .transaction = txn_,
+            .arena = arena_read_.member_ptr(),
+            .type = ukv_doc_field_json_k,
+            .tasks_count = count,
+            .collections = &collection_,
+            .keys = found_keys,
+            .keys_stride = sizeof(ukv_key_t),
+            .fields = &fields,
+            .fields_stride = 0,
+            .found_offsets = &found_offsets,
+            .found_lengths = &found_lengths,
+            .found_values = &found_values,
+        };
 
-        ukv_docs_read( //
-            db_,
-            txn_,
-            count,
-            &collection_,
-            0,
-            found_keys,
-            sizeof(ukv_key_t),
-            &fields,
-            0,
-            ukv_doc_field_json_k,
-            ukv_options_default_k,
-            nullptr,
-            &found_offsets,
-            &found_lengths,
-            &found_values,
-            arena_read_.member_ptr(),
-            status.member_ptr());
+        ukv_docs_read(&read);
         if (!status)
             return status;
 
