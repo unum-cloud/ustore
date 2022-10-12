@@ -126,37 +126,40 @@ consistent_set_status_t find_and_watch(set_or_transaction_at& set_or_transaction
 
 template <typename set_or_transaction_at, typename callback_at>
 consistent_set_status_t scan_and_watch(set_or_transaction_at& set_or_transaction,
-                                       collection_key_t previous,
+                                       collection_key_t start,
                                        std::size_t range_limit,
                                        ukv_options_t options,
                                        callback_at&& callback) noexcept {
 
-    for (std::size_t match_idx = 0; match_idx != range_limit; ++match_idx) {
-        auto watch_status = consistent_set_status_t();
-        auto callback_pair = [&](pair_t const& pair) {
-            auto reached_other_collection = pair.collection_key.collection != previous.collection;
-            if (reached_other_collection)
-                return;
-
-            if constexpr (!std::is_same<set_or_transaction_at, consistent_set_t>()) {
-                bool dont_watch = options & ukv_option_transaction_dont_watch_k;
-                if (!dont_watch)
-                    if (watch_status = set_or_transaction.watch(pair); !watch_status)
-                        return;
-            }
-
-            callback(pair);
-            previous.key = pair.collection_key.key;
-        };
-
-        auto reached_end = false;
-        auto callback_nothing = [&] {
-            reached_end = true;
-        };
-
-        auto find_status = set_or_transaction.find_next(previous, callback_pair, callback_nothing);
+    std::size_t match_idx = 0;
+    collection_key_t previous = start;
+    bool reached_end = false;
+    auto watch_status = consistent_set_status_t();
+    auto callback_pair = [&](pair_t const& pair) {
+        reached_end = pair.collection_key.collection != previous.collection;
         if (reached_end)
-            break;
+            return;
+
+        if constexpr (!std::is_same<set_or_transaction_at, consistent_set_t>()) {
+            bool dont_watch = options & ukv_option_transaction_dont_watch_k;
+            if (!dont_watch)
+                if (watch_status = set_or_transaction.watch(pair); !watch_status)
+                    return;
+        }
+
+        callback(pair);
+        previous.key = pair.collection_key.key;
+        ++match_idx;
+    };
+
+    auto find_status = set_or_transaction.find(start, callback_pair, [] {});
+    if (!find_status)
+        return find_status;
+    if (!watch_status)
+        return watch_status;
+
+    while (match_idx != range_limit && !reached_end) {
+        find_status = set_or_transaction.find_next(previous, callback_pair, [&] { reached_end = true; });
         if (!find_status)
             return find_status;
         if (!watch_status)
@@ -628,9 +631,8 @@ void ukv_scan( //
     transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
     strided_iterator_gt<ukv_length_t const> lens {c_scan_limits, c_scan_limits_stride};
-    scans_arg_t scans {collections, start_keys, end_keys, lens, c_tasks_count};
+    scans_arg_t scans {collections, start_keys, lens, c_tasks_count};
 
     validate_scan(c_txn, scans, c_options, c_error);
     return_on_error(c_error);
