@@ -387,7 +387,9 @@ void read(database_t& db, std::string const& path, ukv_error_t* c_error) {
         if (!should_continue)
             break;
         return_on_error(c_error);
-        db.pairs.upsert(std::move(pair));
+        auto status = db.pairs.upsert(std::move(pair));
+        if (!status)
+            return export_error_code(status, c_error);
     }
 
     // Close the file
