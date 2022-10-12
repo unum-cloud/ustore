@@ -21,19 +21,35 @@ using namespace unum::ukv;
 using uniform_idx_t = std::uniform_int_distribution<std::size_t>;
 
 constexpr std::size_t id_str_max_length_k = 24;
-constexpr std::size_t copies_per_tweet_k = 10;
+constexpr std::size_t copies_per_tweet_k = 100;
+constexpr std::size_t tweet_file_size_k = 1; // GB
 
 constexpr std::size_t primes_k[copies_per_tweet_k] = {
-    9223372036854777211ull,
-    14223002033854726039ull,
-    9223372036854777293ull,
-    14223002033854726067ull,
-    9223372036854777341ull,
-    14223002033854726081ull,
-    9223372036854777343ull,
-    14223002033854726111ull,
-    9223372036854777353ull,
-    14223002033854726163ull,
+    12569589282558108893ull, 10373281427301508897ull, 10008795057561858269ull, 7948791514834664467ull,
+    3838954299457218127ull,  3120785516547182557ull,  4393300032555048899ull,  7004376283452977123ull,
+    9223372036854777211ull,  14223002033854726039ull, 9223372036854777293ull,  14223002033854726067ull,
+    2400445992553322941ull,  7610199643906768511ull,  1057293803246848247ull,  2038660339199745551ull,
+    8361297840661149799ull,  5868535710016424509ull,  6027311394490700579ull,  5943660934723204943ull,
+    2094115702880657593ull,  3140666882080323017ull,  7760430618278960933ull,  6873072972236380241ull,
+    9223372036854777341ull,  14223002033854726081ull, 9223372036854777343ull,  14223002033854726111ull,
+    6795671851311995789ull,  1351473000834705907ull,  2268507068162180357ull,  5644432768880692667ull,
+    5138321953585775243ull,  9093228448182973739ull,  8361721925721877541ull,  4026045413825251741ull,
+    7656187714642488053ull,  4784429641543729987ull,  4318730088657872861ull,  6914886887575787999ull,
+    8173209983052349799ull,  5305425057627062821ull,  6087027882323524897ull,  8766152961033445163ull,
+    10418630437308180299ull, 14075865680893402591ull, 10163156291297837117ull, 18077780250763319701ull,
+    6137167220161520359ull,  5573097357874852957ull,  2177473509970310161ull,  7017271200647874559ull,
+    2605171251953385517ull,  4624197988349522207ull,  5600005528373969639ull,  3467147448838520857ull,
+    4659395790226376879ull,  3747345793616544157ull,  3571553057936507177ull,  5951561671725137389ull,
+    2512903254975431057ull,  3784831916450787899ull,  9939651098248888697ull,  3559489787587522993ull,
+    8862473820545766469ull,  1592758508155117249ull,  6562663209751260211ull,  5328603983932857451ull,
+    10086415893179756723ull, 11865224483816137289ull, 15953537372516590507ull, 12263243032781001451ull,
+    4584969444095621069ull,  3900124486756399469ull,  9024661002745317511ull,  7196994623644519289ull,
+    7658610878204970317ull,  7863158793182220391ull,  8617876949595084013ull,  7948869872106641419ull,
+    6673555355008989617ull,  9485947537665069839ull,  5143840846497713699ull,  3339354536417374873ull,
+    3953417099769745759ull,  4168758563627460947ull,  1602550336683279341ull,  3352622256776997709ull,
+    8169658195990788769ull,  8288953878290018909ull,  4673431322226133517ull,  2501537406610420733ull,
+    9223372036854777353ull,  14223002033854726163ull, 10739949005710698439ull, 15618974819613138553ull,
+    4930670520436784183ull,  1646044952356259251ull,  1276965327440183483ull,  9345165794939122411ull,
 };
 
 struct tweet_t {
@@ -42,7 +58,7 @@ struct tweet_t {
     std::string_view body;
 };
 
-static std::string dataset_directory = "~/Datasets/Twitter/";
+static std::string dataset_directory = "~/../sftp/Datasets/Twitter/";
 static std::vector<std::string> paths;
 static std::vector<std::size_t> sizes;
 static std::vector<std::string_view> mapped_contents;
@@ -107,7 +123,7 @@ static void docs_upsert(bm::State& state) {
 
     std::size_t tweets_bytes = 0;
     for (auto _ : state) {
-
+        // TODO: Implement another way to select the batch size. Now it's equal copies_per_tweet_k
         // Generate multiple IDs for each tweet, to augment the dataset.
         auto const& tweet = *tweets_iterator;
         auto const tweet_hash = hash(tweet);
@@ -323,7 +339,7 @@ static void docs_sample_table(bm::State& state) {
             status.member_ptr());
         status.throw_unhandled();
 
-        // One column is just stirngs
+        // One column is just strings
         received_bytes += std::accumulate(&lengths[0][0], &lengths[0][0] + count - 1, 0ul);
         // Others are scalars
         received_bytes += (fields_k - 1) * sizeof(std::uint32_t) * count;
@@ -596,7 +612,9 @@ static void index_file(std::string_view mapped_contents, std::vector<tweet_t>& t
 
 int main(int argc, char** argv) {
     bm::Initialize(&argc, argv);
-    thread_count = 2; // std::thread::hardware_concurrency() / 4;
+
+    std::size_t db_volume = 1000; // GB
+    thread_count = std::thread::hardware_concurrency() / 8;
 
     // 1. Find the dataset parts
     std::printf("Will search for .ndjson files...\n");
@@ -613,7 +631,7 @@ int main(int argc, char** argv) {
         sizes.push_back(dir_entry.file_size());
     }
     std::printf("- found %i files\n", static_cast<int>(paths.size()));
-    paths.resize(thread_count);
+    paths.resize(db_volume / (tweet_file_size_k * copies_per_tweet_k));
     std::printf("- kept only %i files\n", static_cast<int>(paths.size()));
     tweets_per_path.resize(paths.size());
     mapped_contents.resize(paths.size());
@@ -652,7 +670,7 @@ int main(int argc, char** argv) {
 #if defined(UKV_ENGINE_IS_LEVELDB)
     db.open("/mnt/md0/Twitter/LevelDB").throw_unhandled();
 #elif defined(UKV_ENGINE_IS_ROCKSDB)
-    db.open("/mnt/md0/Twitter/RocksDB").throw_unhandled();
+db.open("/mnt/md0/Twitter/RocksDB").throw_unhandled();
 #elif defined(UKV_ENGINE_IS_UNUMDB)
     db.open("/mnt/md0/Twitter/UnumDB").throw_unhandled();
 #else
