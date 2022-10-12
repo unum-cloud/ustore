@@ -56,7 +56,7 @@ static json_t json_parse(char const* begin, char const* end) {
     EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 
 static char const* path() {
-    char* path = std::getenv("UKV_BACKEND_PATH");
+    char* path = std::getenv("UKV_TEST_PATH");
     if (path)
         return path;
 
@@ -187,6 +187,9 @@ TEST(db, basic) {
 }
 
 TEST(db, persistency) {
+
+    if (!path())
+        return;
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
