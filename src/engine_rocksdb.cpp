@@ -77,29 +77,29 @@ inline rocksdb::Slice to_slice(value_view_t value) noexcept {
     return {reinterpret_cast<const char*>(value.begin()), value.size()};
 }
 
-inline std::unique_ptr<rocks_value_t> make_value(ukv_error_t* c_error) noexcept {
+inline std::unique_ptr<rocks_value_t> make_value(ukv_error_t* c.error) noexcept {
     std::unique_ptr<rocks_value_t> value_uptr;
     try {
         value_uptr = std::make_unique<rocks_value_t>();
     }
     catch (...) {
-        *c_error = "Fail to allocate value";
+        *c.error = "Fail to allocate value";
     }
     return value_uptr;
 }
 
-bool export_error(rocks_status_t const& status, ukv_error_t* c_error) {
+bool export_error(rocks_status_t const& status, ukv_error_t* c.error) {
     if (status.ok())
         return false;
 
     if (status.IsCorruption())
-        *c_error = "Failure: DB Corruption";
+        *c.error = "Failure: DB Corruption";
     else if (status.IsIOError())
-        *c_error = "Failure: IO  Error";
+        *c.error = "Failure: IO  Error";
     else if (status.IsInvalidArgument())
-        *c_error = "Failure: Invalid Argument";
+        *c.error = "Failure: Invalid Argument";
     else
-        *c_error = "Failure";
+        *c.error = "Failure";
     return true;
 }
 
@@ -127,6 +127,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
             column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
 
         rocks_native_t* native_db = nullptr;
+        options.compression = rocksdb::kNoCompression;
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
         status = rocks_native_t::Open( //
@@ -154,7 +155,7 @@ void write_one( //
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
-    ukv_error_t* c_error) {
+    ukv_error_t* c.error) {
 
     bool const safe = c_options & ukv_option_write_flush_k;
     bool const watch = !(c_options & ukv_option_transaction_dont_watch_k);
@@ -179,7 +180,7 @@ void write_one( //
                      ? db.native->SingleDelete(options, collection, key)
                      : db.native->Put(options, collection, key, to_slice(content));
 
-    export_error(status, c_error);
+    export_error(status, c.error);
 }
 
 void write_many( //
@@ -188,7 +189,7 @@ void write_many( //
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
-    ukv_error_t* c_error) {
+    ukv_error_t* c.error) {
 
     bool const safe = c_options & ukv_option_write_flush_k;
     bool const watch = !(c_options & ukv_option_transaction_dont_watch_k);
@@ -207,8 +208,8 @@ void write_many( //
                               ? watch ? txn->SingleDelete(collection, key) : txn->DeleteUntracked(collection, key)
                               : watch ? txn->Put(collection, key, to_slice(content))
                                       : txn->PutUntracked(collection, key, to_slice(content));
-            export_error(status, c_error);
-            return_on_error(c_error);
+            export_error(status, c.error);
+            return_on_error(c.error);
         }
     }
     else {
@@ -221,11 +222,11 @@ void write_many( //
             auto status = !content //
                               ? batch.Delete(collection, key)
                               : batch.Put(collection, key, to_slice(content));
-            export_error(status, c_error);
+            export_error(status, c.error);
         }
 
         rocks_status_t status = db.native->Write(options, &batch);
-        export_error(status, c_error);
+        export_error(status, c.error);
     }
 }
 
@@ -241,7 +242,7 @@ void ukv_write(ukv_write_t* c_ptr) {
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values, c.values_stride};
     strided_iterator_gt<ukv_length_t const> offs {c.offsets, c.offsets_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.lengths, c.lengths_stride};
-    strided_iterator_gt<ukv_octet_t const> presences {c.presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c.presences};
 
     places_arg_t places {collections, keys, {}, c.tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
@@ -262,7 +263,7 @@ void read_one( //
     places_arg_t places,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
-    ukv_error_t* c_error) {
+    ukv_error_t* c.error) {
 
     rocksdb::ReadOptions options;
     if (txn && (c_options & ukv_option_transaction_snapshot_k))
@@ -273,14 +274,14 @@ void read_one( //
     place_t place = places[0];
     auto col = rocks_collection(db, place.collection);
     auto key = to_slice(place.key);
-    auto value_uptr = make_value(c_error);
+    auto value_uptr = make_value(c.error);
     rocks_value_t& value = *value_uptr.get();
     rocks_status_t status =
         txn //
             ? watch ? txn->GetForUpdate(options, col, key, &value) : txn->Get(options, col, key, &value)
             : db.native->Get(options, col, key, &value);
     if (!status.IsNotFound()) {
-        if (export_error(status, c_error))
+        if (export_error(status, c.error))
             return;
         auto begin = reinterpret_cast<ukv_bytes_cptr_t>(value.data());
         auto length = static_cast<ukv_length_t>(value.size());
@@ -314,13 +315,14 @@ void read_many( //
         keys[i] = to_slice(place.key);
     }
 
-    std::vector<rocks_status_t> statuses =
-        txn //
-            ? watch ? txn->MultiGetForUpdate(options, cols, keys, &vals) : txn->MultiGet(options, cols, keys, &vals)
-            : db.native->MultiGet(options, cols, keys, &vals);
+    std::vector<rocks_status_t> statuses = txn         //
+                                               ? watch //
+                                                     ? txn->MultiGetForUpdate(options, cols, keys, &vals)
+                                                     : txn->MultiGet(options, cols, keys, &vals)
+                                               : db.native->MultiGet(options, cols, keys, &vals);
     for (std::size_t i = 0; i != places.size(); ++i) {
         if (!statuses[i].IsNotFound()) {
-            if (export_error(statuses[i], c_error))
+            if (export_error(statuses[i], c.error))
                 return;
             auto begin = reinterpret_cast<ukv_bytes_cptr_t>(vals[i].data());
             auto length = static_cast<ukv_length_t>(vals[i].size());
@@ -337,7 +339,7 @@ void ukv_read(ukv_read_t* c_ptr) {
 
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
@@ -348,11 +350,11 @@ void ukv_read(ukv_read_t* c_ptr) {
     places_arg_t places {collections, keys, {}, c.tasks_count};
 
     // 1. Allocate a tape for all the values to be pulled
-    auto offs = arena.alloc_or_dummy<ukv_length_t>(places.count + 1, c.error, c.offsets);
+    auto offs = arena.alloc_or_dummy(places.count + 1, c.error, c.offsets);
     return_on_error(c.error);
-    auto lens = arena.alloc_or_dummy<ukv_length_t>(places.count, c.error, c.lengths);
+    auto lens = arena.alloc_or_dummy(places.count, c.error, c.lengths);
     return_on_error(c.error);
-    auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c.error, c.presences);
+    auto presences = arena.alloc_or_dummy(places.count, c.error, c.presences);
     return_on_error(c.error);
     uninitialized_vector_gt<byte_t> contents(arena);
 
@@ -390,7 +392,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     ukv_scan_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
@@ -402,9 +404,9 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     scans_arg_t tasks {collections, start_keys, end_keys, limits, c.tasks_count};
 
     // 1. Allocate a tape for all the values to be fetched
-    auto offsets = arena.alloc_or_dummy<ukv_length_t>(tasks.count + 1, c.error, c.offsets);
+    auto offsets = arena.alloc_or_dummy(tasks.count + 1, c.error, c.offsets);
     return_on_error(c.error);
-    auto counts = arena.alloc_or_dummy<ukv_length_t>(tasks.count, c.error, c.counts);
+    auto counts = arena.alloc_or_dummy(tasks.count, c.error, c.counts);
     return_on_error(c.error);
 
     auto total_keys = reduce_n(tasks.limits, tasks.count, 0ul);
@@ -415,13 +417,17 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
+    if (txn && (c.options & ukv_option_transaction_snapshot_k))
+        options.snapshot = txn->GetSnapshot();
+
     for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
         scan_t task = tasks[i];
         auto collection = rocks_collection(db, task.collection);
 
         std::unique_ptr<rocksdb::Iterator> it;
         try {
-            it = txn ? std::unique_ptr<rocksdb::Iterator>(txn->GetIterator(options, collection))
+            it = txn //
+                     ? std::unique_ptr<rocksdb::Iterator>(txn->GetIterator(options, collection))
                      : std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(options, collection));
         }
         catch (...) {
@@ -453,15 +459,15 @@ void ukv_size(ukv_size_st* c_ptr) {
     ukv_size_st& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
-    auto min_cardinalities = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.min_cardinalities);
-    auto max_cardinalities = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.max_cardinalities);
-    auto min_value_bytes = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.min_value_bytes);
-    auto max_value_bytes = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.max_value_bytes);
-    auto min_space_usages = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.min_space_usages);
-    auto max_space_usages = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.max_space_usages);
+    auto min_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_cardinalities);
+    auto max_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_cardinalities);
+    auto min_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_value_bytes);
+    auto max_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_value_bytes);
+    auto min_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_space_usages);
+    auto max_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_space_usages);
     return_on_error(c.error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
@@ -552,6 +558,9 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
         }
     }
 
+    rocksdb::WriteOptions options;
+    options.sync = true;
+
     if (c.mode == ukv_drop_keys_vals_handle_k) {
         for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
             if (collection_ptr_to_clear == *it) {
@@ -570,7 +579,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
             std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection_ptr_to_clear));
         for (it->SeekToFirst(); it->Valid(); it->Next())
             batch.Delete(collection_ptr_to_clear, it->key());
-        rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
+        rocks_status_t status = db.native->Write(options, &batch);
         export_error(status, c.error);
         return;
     }
@@ -581,7 +590,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
             std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection_ptr_to_clear));
         for (it->SeekToFirst(); it->Valid(); it->Next())
             batch.Put(collection_ptr_to_clear, it->key(), rocksdb::Slice());
-        rocks_status_t status = db.native->Write(rocksdb::WriteOptions(), &batch);
+        rocks_status_t status = db.native->Write(options, &batch);
         export_error(status, c.error);
         return;
     }
@@ -593,7 +602,7 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_if_error(c.count && c.names, c.error, args_combo_k, "Need names and outputs!");
 
-    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
@@ -610,9 +619,9 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
     return_on_error(c.error);
 
     // For every collection we also need to export IDs and offsets
-    auto ids = arena.alloc_or_dummy<ukv_collection_t>(collections_count, c.error, c.ids);
+    auto ids = arena.alloc_or_dummy(collections_count, c.error, c.ids);
     return_on_error(c.error);
-    auto offs = arena.alloc_or_dummy<ukv_length_t>(collections_count + 1, c.error, c.offsets);
+    auto offs = arena.alloc_or_dummy(collections_count + 1, c.error, c.offsets);
     return_on_error(c.error);
 
     std::size_t i = 0;
@@ -641,7 +650,6 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
     ukv_transaction_init_t& c = *c_ptr;
-
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(*c.transaction);
     rocksdb::OptimisticTransactionOptions options;

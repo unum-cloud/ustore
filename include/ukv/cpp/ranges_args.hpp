@@ -57,11 +57,12 @@ struct places_arg_t {
  */
 struct contents_arg_t {
     using value_type = value_view_t;
-    strided_iterator_gt<ukv_octet_t const> presences_begin;
+    bits_view_t presences_begin;
     strided_iterator_gt<ukv_length_t const> offsets_begin;
     strided_iterator_gt<ukv_length_t const> lengths_begin;
     strided_iterator_gt<ukv_bytes_cptr_t const> contents_begin;
     ukv_size_t count = 0;
+    ukv_char_t separator = '\0';
 
     inline std::size_t size() const noexcept { return count; }
     inline value_view_t operator[](std::size_t i) const noexcept {
@@ -75,15 +76,16 @@ struct contents_arg_t {
             len = lengths_begin[i];
         else if (offsets_begin)
             len = offsets_begin[i + 1] - off;
-        else
-            len = std::strlen(reinterpret_cast<char const*>(begin) + off);
+        else {
+            auto item = reinterpret_cast<char const*>(begin) + off;
+            while (item[len++] != separator)
+                ;
+            --len;
+        }
         return {begin + off, len};
     }
 
-    inline bool is_arrow() const noexcept {
-        return contents_begin.repeats() && offsets_begin && !lengths_begin &&
-               (!presences_begin || presences_begin.is_continuous());
-    }
+    inline bool is_arrow() const noexcept { return contents_begin.repeats() && offsets_begin && !lengths_begin; }
 
     inline bool is_continuous() const noexcept {
         auto last = operator[](0);
@@ -127,6 +129,36 @@ struct scans_arg_t {
     bool same_collection() const noexcept {
         strided_range_gt<ukv_collection_t const> range(collections, count);
         return range.same_elements();
+    }
+};
+
+struct find_edge_t {
+    ukv_collection_t collection;
+    ukv_key_t const& vertex_id;
+    ukv_vertex_role_t role;
+};
+/**
+ * Working with batched data is ugly in C++.
+ * This handle doesn't help in the general case,
+ * but at least allow reusing the arguments.
+ */
+struct find_edges_t {
+    using value_type = find_edge_t;
+    strided_iterator_gt<ukv_collection_t const> collections_begin;
+    strided_iterator_gt<ukv_key_t const> vertex_id_begin;
+    strided_iterator_gt<ukv_vertex_role_t const> roles_begin;
+    ukv_size_t count = 0;
+
+    inline std::size_t size() const noexcept { return count; }
+    inline find_edge_t operator[](std::size_t i) const noexcept {
+        ukv_collection_t collection = collections_begin ? collections_begin[i] : ukv_collection_main_k;
+        ukv_key_t const& vertex_id = vertex_id_begin[i];
+        ukv_vertex_role_t role = roles_begin ? roles_begin[i] : ukv_vertex_role_any_k;
+        return {collection, vertex_id, role};
+    }
+
+    bool same_collection() const noexcept {
+        return strided_range_gt<ukv_collection_t const>(collections_begin, count).same_elements();
     }
 };
 

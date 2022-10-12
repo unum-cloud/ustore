@@ -186,7 +186,7 @@ TEST(db, basic) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, consistency) {
+TEST(db, persistency) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -754,7 +754,20 @@ TEST(db, docs_modify) {
     EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
 
-    auto json = R"( { "a": {"b": "c","0":{"b":[{"1":"2"},{"3":"4"},{"5":"6"},{"7":"8"},{"9":"10"}]} } })"_json.dump();
+    auto json = R"( { 
+        "a": {
+            "b": "c",
+            "0": { 
+                "b": [
+                    {"1":"2"},
+                    {"3":"4"},
+                    {"5":"6"},
+                    {"7":"8"},
+                    {"9":"10"}
+                ]
+            }
+        }
+    })"_json.dump();
     collection[1] = json.c_str();
     M_EXPECT_EQ_JSON(*collection[1].value(), json);
 
@@ -776,16 +789,29 @@ TEST(db, docs_modify) {
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Patch
-    modifier =
-        R"([ { "op": "add", "path": "/a/key", "value": "value" },
-             { "op": "replace", "path": "/a/0/b/0", "value": {"1":"3"} },
-             { "op": "copy", "path": "/a/another_key", "from": "/a/key" },
-             { "op": "move", "path": "/a/0/b/5", "from": "/a/0/b/1" },
-             { "op": "remove", "path": "/a/b" }  ])"_json.dump();
-
-    expected =
-        R"( { "a": {"key" : "value","another_key" : "value","0":{"b":[{"1":"3"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"},{"3":"14"}]} } })"_json
-            .dump();
+    modifier = R"([ 
+        { "op": "add", "path": "/a/key", "value": "value" },
+        { "op": "replace", "path": "/a/0/b/0", "value": {"1":"3"} },
+        { "op": "copy", "path": "/a/another_key", "from": "/a/key" },
+        { "op": "move", "path": "/a/0/b/5", "from": "/a/0/b/1" },
+        { "op": "remove", "path": "/a/b" }
+    ])"_json.dump();
+    expected = R"( { 
+        "a": {
+            "key" : "value",
+            "another_key" : "value",
+            "0": {
+                "b":[
+                    {"1":"3"},
+                    {"5":"6"},
+                    {"7":"8"},
+                    {"9":"11"},
+                    {"11":"12"},
+                    {"3":"14"}
+                ]
+            } 
+        } 
+    })"_json.dump();
     EXPECT_TRUE(collection[1].patch(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
@@ -821,8 +847,8 @@ TEST(db, docs_modify) {
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
     // Insert By Field
-    modifier = R"("Grilish" )"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Grilish"}} )"_json.dump();
+    modifier = R"("Doe" )"_json.dump();
+    expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Doe"}} )"_json.dump();
     EXPECT_TRUE(collection[ckf(2, "/person/surname")].insert(modifier.c_str()));
     result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
@@ -840,8 +866,8 @@ TEST(db, docs_modify) {
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
-    modifier = R"("Grilish")"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 28, "surname" : "Grilish"}} )"_json.dump();
+    modifier = R"("Doe")"_json.dump();
+    expected = R"( {"person": {"name":"Carl", "age": 28, "surname" : "Doe"}} )"_json.dump();
     EXPECT_TRUE(collection[ckf(1, "/person/surname")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
@@ -1243,20 +1269,20 @@ TEST(db, graph_transaction_watch) {
 
     EXPECT_TRUE(net.upsert(edge1));
     EXPECT_TRUE(net.upsert(edge2));
-    txn_net.degree(1);
+    EXPECT_TRUE(txn_net.degree(1));
     EXPECT_TRUE(txn.commit());
 
     EXPECT_TRUE(txn.reset());
-    txn_net.degree(1);
+    EXPECT_TRUE(txn_net.degree(1));
     EXPECT_TRUE(txn.commit());
 
-    txn_net.degree(1);
+    EXPECT_TRUE(txn_net.degree(1));
     EXPECT_TRUE(net.remove(edge1));
     EXPECT_TRUE(net.remove(edge2));
     EXPECT_FALSE(txn.commit());
     EXPECT_TRUE(txn.reset());
 
-    txn_net.degree(1, ukv_vertex_role_any_k, false);
+    EXPECT_TRUE(txn_net.degree(1, ukv_vertex_role_any_k, false));
     EXPECT_TRUE(net.upsert(edge1));
     EXPECT_TRUE(net.upsert(edge2));
     EXPECT_TRUE(txn.commit());
@@ -1330,8 +1356,7 @@ TEST(db, graph_conflicting_transactions) {
     EXPECT_FALSE(*net.contains(2));
     EXPECT_FALSE(*net.contains(3));
 
-    auto status = txn.commit();
-    status.throw_unhandled();
+    EXPECT_TRUE(txn.commit());
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_TRUE(*net.contains(3));
@@ -1492,6 +1517,27 @@ TEST(db, graph_get_edges) {
         auto es = *graph.edges(vertex_id);
         EXPECT_EQ(es.size(), 0);
     }
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, graph_degrees) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t graph = *db.collection<graph_collection_t>();
+
+    constexpr std::size_t vertices_count = 1000;
+    std::vector<ukv_key_t> vertices(vertices_count);
+    vertices.resize(vertices_count);
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id)
+        vertices[vertex_id] = vertex_id;
+
+    auto edges_vec = make_edges(vertices_count, 100);
+    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+
+    auto degrees = *graph.degrees({{vertices.data(), sizeof(ukv_key_t)}, vertices.size()});
+    EXPECT_EQ(degrees.size(), vertices_count);
+
     EXPECT_TRUE(db.clear());
 }
 
