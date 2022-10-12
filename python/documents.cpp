@@ -34,25 +34,20 @@ class docs_pairs_stream_t {
         ukv_bytes_ptr_t found_values = nullptr;
         ukv_str_view_t fields = nullptr;
         status_t status;
+        ukv_scan_t scan {
+            .db = db_,
+            .error = status.member_ptr(),
+            .transaction = txn_,
+            .arena = arena_scan_.member_ptr(),
+            .collections = &collection_,
+            .start_keys = &next_min_key_,
+            .scan_limits = &read_ahead_,
+            .offsets = &found_offsets,
+            .counts = &found_counts,
+            .keys = &found_keys,
+        };
 
-        ukv_scan( //
-            db_,
-            txn_,
-            1,
-            &collection_,
-            0,
-            &next_min_key_,
-            0,
-            nullptr,
-            0,
-            &read_ahead_,
-            0,
-            ukv_options_default_k,
-            &found_offsets,
-            &found_counts,
-            &found_keys,
-            arena_scan_.member_ptr(),
-            status.member_ptr());
+        ukv_scan(&scan);
         if (!status)
             return status;
 

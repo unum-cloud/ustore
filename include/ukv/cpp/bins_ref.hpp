@@ -194,22 +194,24 @@ expected_gt<expected_at> bins_ref_gt<locations_at>::any_get(ukv_options_t option
     auto count = keys_extractor_t {}.count(locs);
     auto keys = keys_extractor_t {}.keys(locs);
     auto collections = keys_extractor_t {}.collections(locs);
+    ukv_read_t read {
+        .db = db_,
+        .error = status.member_ptr(),
+        .transaction = txn_,
+        .arena = arena_,
+        .options = options,
+        .tasks_count = count,
+        .collections = collections.get(),
+        .collections_stride = collections.stride(),
+        .keys = keys.get(),
+        .keys_stride = keys.stride(),
+        .presences = wants_present ? &found_presences : nullptr,
+        .offsets = wants_value ? &found_offsets : nullptr,
+        .lengths = wants_value || wants_length ? &found_lengths : nullptr,
+        .values = wants_value ? &found_values : nullptr,
+    };
 
-    ukv_read( //
-        db_,
-        txn_,
-        count,
-        collections.get(),
-        collections.stride(),
-        keys.get(),
-        keys.stride(),
-        options,
-        wants_present ? &found_presences : nullptr,
-        wants_value ? &found_offsets : nullptr,
-        wants_value || wants_length ? &found_lengths : nullptr,
-        wants_value ? &found_values : nullptr,
-        arena_,
-        status.member_ptr());
+    ukv_read(&read);
 
     if (!status)
         return std::move(status);
@@ -253,24 +255,26 @@ status_t bins_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, ukv_o
     auto offsets = value_extractor_t {}.offsets(vals);
     auto lengths = value_extractor_t {}.lengths(vals);
 
-    ukv_write( //
-        db_,
-        txn_,
-        count,
-        collections.get(),
-        collections.stride(),
-        keys.get(),
-        keys.stride(),
-        nullptr,
-        offsets.get(),
-        offsets.stride(),
-        lengths.get(),
-        lengths.stride(),
-        contents.get(),
-        contents.stride(),
-        options,
-        arena_,
-        status.member_ptr());
+    ukv_write_t write {
+        .db = db_,
+        .error = status.member_ptr(),
+        .transaction = txn_,
+        .arena = arena_,
+        .options = options,
+        .tasks_count = count,
+        .collections = collections.get(),
+        .collections_stride = collections.stride(),
+        .keys = keys.get(),
+        .keys_stride = keys.stride(),
+        .offsets = offsets.get(),
+        .offsets_stride = offsets.stride(),
+        .lengths = lengths.get(),
+        .lengths_stride = lengths.stride(),
+        .values = contents.get(),
+        .values_stride = contents.stride(),
+    };
+
+    ukv_write(&write);
     return status;
 }
 

@@ -281,21 +281,22 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     unique_places.fields_begin = {};
     unique_places.count = static_cast<ukv_size_t>(unique_col_keys.size());
     auto opts = c.transaction ? ukv_options_t(c.options & ~ukv_option_transaction_dont_watch_k) : c.options;
-    ukv_read( //
-        c.db,
-        c.transaction,
-        unique_places.count,
-        unique_places.collections_begin.get(),
-        unique_places.collections_begin.stride(),
-        unique_places.keys_begin.get(),
-        unique_places.keys_begin.stride(),
-        opts,
-        nullptr,
-        &buckets_offsets,
-        nullptr,
-        &buckets_values,
-        &buckets_arena,
-        c.error);
+    ukv_read_t read {
+        .db = c.db,
+        .error = c.error,
+        .transaction = c.transaction,
+        .arena = &buckets_arena,
+        .options = opts,
+        .tasks_count = unique_places.count,
+        .collections = unique_places.collections_begin.get(),
+        .collections_stride = unique_places.collections_begin.stride(),
+        .keys = unique_places.keys_begin.get(),
+        .keys_stride = unique_places.keys_begin.stride(),
+        .offsets = &buckets_offsets,
+        .values = &buckets_values,
+    };
+
+    ukv_read(&read);
     return_on_error(c.error);
 
     joined_bins_t joined_buckets {unique_places.count, buckets_offsets, buckets_values};
@@ -326,25 +327,25 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
             remove_from_bucket(bucket, key_str);
     }
 
+    ukv_write_t write {
+        .db = c.db,
+        .error = c.error,
+        .transaction = c.transaction,
+        .arena = &buckets_arena,
+        .options = opts,
+        .tasks_count = unique_places.count,
+        .collections = unique_places.collections_begin.get(),
+        .collections_stride = unique_places.collections_begin.stride(),
+        .keys = unique_places.keys_begin.get(),
+        .keys_stride = unique_places.keys_begin.stride(),
+        .lengths = updated_buckets[0].member_length(),
+        .lengths_stride = sizeof(value_view_t),
+        .values = updated_buckets[0].member_ptr(),
+        .values_stride = sizeof(value_view_t),
+    };
+
     // Once all is updated, we can safely write back
-    ukv_write( //
-        c.db,
-        c.transaction,
-        unique_places.count,
-        unique_places.collections_begin.get(),
-        unique_places.collections_begin.stride(),
-        unique_places.keys_begin.get(),
-        unique_places.keys_begin.stride(),
-        nullptr,
-        nullptr,
-        0,
-        updated_buckets[0].member_length(),
-        sizeof(value_view_t),
-        updated_buckets[0].member_ptr(),
-        sizeof(value_view_t),
-        opts,
-        &buckets_arena,
-        c.error);
+    ukv_write(&write);
 }
 
 void ukv_paths_read(ukv_paths_read_t* c_ptr) {
@@ -379,21 +380,22 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     ukv_arena_t buckets_arena = &arena;
     ukv_length_t* buckets_offsets = nullptr;
     ukv_byte_t* buckets_values = nullptr;
-    ukv_read( //
-        c.db,
-        c.transaction,
-        c.tasks_count,
-        c.collections,
-        c.collections_stride,
-        buckets_keys.begin(),
-        sizeof(ukv_key_t),
-        c.options,
-        nullptr,
-        &buckets_offsets,
-        nullptr,
-        &buckets_values,
-        &buckets_arena,
-        c.error);
+    ukv_read_t read {
+        .db = c.db,
+        .error = c.error,
+        .transaction = c.transaction,
+        .arena = &buckets_arena,
+        .options = c.options,
+        .tasks_count = c.tasks_count,
+        .collections = c.collections,
+        .collections_stride = c.collections_stride,
+        .keys = buckets_keys.begin(),
+        .keys_stride = sizeof(ukv_key_t),
+        .offsets = &buckets_offsets,
+        .values = &buckets_values,
+    };
+
+    ukv_read(&read);
     return_on_error(c.error);
 
     // Some of the entries will contain more then one key-value pair in case of collisions.
@@ -460,24 +462,20 @@ void scan_predicate( //
         ukv_length_t const scan_length = std::max<ukv_length_t>(c_scan_limit, 2u);
         ukv_length_t* found_buckets_count = nullptr;
         ukv_key_t* found_buckets_keys = nullptr;
-        ukv_scan( //
-            c_db,
-            c_transaction,
-            1,
-            &c_collection,
-            0,
-            &start_key,
-            0,
-            nullptr,
-            0,
-            &scan_length,
-            0,
-            c_options,
-            nullptr,
-            &found_buckets_count,
-            &found_buckets_keys,
-            &c_arena,
-            c_error);
+        ukv_scan_t scan {
+            .db = c_db,
+            .error = c_error,
+            .transaction = c_transaction,
+            .arena = &c_arena,
+            .options = c_options,
+            .collections = &c_collection,
+            .start_keys = &start_key,
+            .scan_limits = &scan_length,
+            .counts = &found_buckets_count,
+            .keys = &found_buckets_keys,
+        };
+
+        ukv_scan(&scan);
         if (*c_error)
             break;
 
@@ -487,21 +485,21 @@ void scan_predicate( //
 
         ukv_length_t* found_buckets_offsets = nullptr;
         ukv_byte_t* found_buckets_data = nullptr;
-        ukv_read( //
-            c_db,
-            c_transaction,
-            found_buckets_count[0],
-            &c_collection,
-            0,
-            found_buckets_keys,
-            sizeof(ukv_key_t),
-            ukv_options_t(c_options | ukv_option_dont_discard_memory_k),
-            nullptr,
-            &found_buckets_offsets,
-            nullptr,
-            &found_buckets_data,
-            &c_arena,
-            c_error);
+        ukv_read_t read {
+            .db = c_db,
+            .error = c_error,
+            .transaction = c_transaction,
+            .arena = &c_arena,
+            .options = ukv_options_t(c_options | ukv_option_dont_discard_memory_k),
+            .tasks_count = found_buckets_count[0],
+            .collections = &c_collection,
+            .collections_stride = 0,
+            .keys = found_buckets_keys,
+            .keys_stride = sizeof(ukv_key_t),
+            .offsets = &found_buckets_offsets,
+            .values = &found_buckets_data,
+        };
+        ukv_read(&read);
         if (*c_error)
             break;
 

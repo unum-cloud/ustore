@@ -120,19 +120,37 @@ class graph_collection_t {
 
     status_t remove_edges() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, ukv_drop_vals_k, status.member_ptr());
+        ukv_collection_drop_t coll_drop {
+            .db = db_,
+            .error = status.member_ptr(),
+            .id = collection_,
+            .mode = ukv_drop_vals_k,
+        };
+        ukv_collection_drop(&coll_drop);
         return status;
     }
 
     status_t clear() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, ukv_drop_keys_vals_k, status.member_ptr());
+        ukv_collection_drop_t coll_drop {
+            .db = db_,
+            .error = status.member_ptr(),
+            .id = collection_,
+            .mode = ukv_drop_keys_vals_k,
+        };
+        ukv_collection_drop(&coll_drop);
         return status;
     }
 
     status_t remove() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, ukv_drop_keys_vals_handle_k, status.member_ptr());
+        ukv_collection_drop_t coll_drop {
+            .db = db_,
+            .error = status.member_ptr(),
+            .id = collection_,
+            .mode = ukv_drop_keys_vals_handle_k,
+        };
+        ukv_collection_drop(&coll_drop);
         return status;
     }
 

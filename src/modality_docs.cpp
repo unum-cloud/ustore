@@ -244,21 +244,22 @@ places_arg_t const& read_unique_docs( //
     ukv_arena_t arena_ptr = &arena;
     ukv_byte_t* found_binary_begin = nullptr;
     ukv_length_t* found_binary_offs = nullptr;
-    ukv_read( //
-        c_db,
-        c_transaction,
-        places.count,
-        places.collections_begin.get(),
-        places.collections_begin.stride(),
-        places.keys_begin.get(),
-        places.keys_begin.stride(),
-        c_options,
-        nullptr,
-        &found_binary_offs,
-        nullptr,
-        &found_binary_begin,
-        &arena_ptr,
-        c_error);
+    ukv_read_t read {
+        .db = c_db,
+        .error = c_error,
+        .transaction = c_transaction,
+        .arena = &arena_ptr,
+        .options = c_options,
+        .tasks_count = places.count,
+        .collections = places.collections_begin.get(),
+        .collections_stride = places.collections_begin.stride(),
+        .keys = places.keys_begin.get(),
+        .keys_stride = places.keys_begin.stride(),
+        .offsets = &found_binary_offs,
+        .values = &found_binary_begin,
+    };
+
+    ukv_read(&read);
 
     auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
@@ -321,21 +322,24 @@ places_arg_t read_docs( //
     auto unique_places_strided = strided_range(unique_places.begin(), unique_places.end()).immutable();
     auto collections = unique_places_strided.members(&collection_key_t::collection);
     auto keys = unique_places_strided.members(&collection_key_t::key);
-    ukv_read( //
-        c_db,
-        c_transaction,
-        unique_places_count,
-        collections.begin().get(),
-        collections.begin().stride(),
-        keys.begin().get(),
-        keys.begin().stride(),
-        c_options,
-        nullptr,
-        &found_binary_offs,
-        nullptr,
-        &found_binary_begin,
-        &arena_ptr,
-        c_error);
+    ukv_read_t read {
+        .db = c_db,
+        .error = c_error,
+        .transaction = c_transaction,
+        .arena = &arena_ptr,
+        .options = c_options,
+        .tasks_count = unique_places_count,
+        .collections = collections.begin().get(),
+        .collections_stride = collections.begin().stride(),
+        .keys = keys.begin().get(),
+        .keys_stride = keys.begin().stride(),
+        .presences = nullptr,
+        .offsets = &found_binary_offs,
+        .lengths = nullptr,
+        .values = &found_binary_begin,
+    };
+
+    ukv_read(&read);
     if (*c_error)
         return {};
 
@@ -411,24 +415,27 @@ void replace_docs( //
     auto tape_begin = growing_tape.contents().begin().get();
     ukv_byte_t* tape_begin_punned = reinterpret_cast<ukv_byte_t*>(tape_begin);
     ukv_arena_t arena_ptr = &arena;
-    ukv_write( //
-        c_db,
-        c_transaction,
-        places.count,
-        places.collections_begin.get(),
-        places.collections_begin.stride(),
-        places.keys_begin.get(),
-        places.keys_begin.stride(),
-        growing_tape.presences().get(),
-        growing_tape.offsets().begin().get(),
-        growing_tape.offsets().stride(),
-        growing_tape.lengths().begin().get(),
-        growing_tape.lengths().stride(),
-        &tape_begin_punned,
-        0,
-        c_options,
-        &arena_ptr,
-        c_error);
+
+    ukv_write_t write {
+        .db = c_db,
+        .error = c_error,
+        .transaction = c_transaction,
+        .arena = &arena_ptr,
+        .options = c_options,
+        .tasks_count = places.count,
+        .collections = places.collections_begin.get(),
+        .collections_stride = places.collections_begin.stride(),
+        .keys = places.keys_begin.get(),
+        .keys_stride = places.keys_begin.stride(),
+        .presences = growing_tape.presences().get(),
+        .offsets = growing_tape.offsets().begin().get(),
+        .offsets_stride = growing_tape.offsets().stride(),
+        .lengths = growing_tape.lengths().begin().get(),
+        .lengths_stride = growing_tape.lengths().stride(),
+        .values = &tape_begin_punned,
+    };
+
+    ukv_write(&write);
 }
 
 void read_modify_write( //
@@ -486,24 +493,27 @@ void read_modify_write( //
     ukv_byte_t* found_binary_begin =
         reinterpret_cast<ukv_byte_t*>(serializing_tape.growing_tape.contents().begin().get());
     ukv_arena_t arena_ptr = &arena;
-    ukv_write( //
-        c_db,
-        c_transaction,
-        unique_places_count,
-        read_order.collections_begin.get(),
-        read_order.collections_begin.stride(),
-        read_order.keys_begin.get(),
-        read_order.keys_begin.stride(),
-        serializing_tape.growing_tape.presences().get(),
-        serializing_tape.growing_tape.offsets().begin().get(),
-        serializing_tape.growing_tape.offsets().stride(),
-        serializing_tape.growing_tape.lengths().begin().get(),
-        serializing_tape.growing_tape.lengths().stride(),
-        &found_binary_begin,
-        0,
-        c_options,
-        &arena_ptr,
-        c_error);
+
+    ukv_write_t write {
+        .db = c_db,
+        .error = c_error,
+        .transaction = c_transaction,
+        .arena = &arena_ptr,
+        .options = c_options,
+        .tasks_count = unique_places_count,
+        .collections = read_order.collections_begin.get(),
+        .collections_stride = read_order.collections_begin.stride(),
+        .keys = read_order.keys_begin.get(),
+        .keys_stride = read_order.keys_begin.stride(),
+        .presences = serializing_tape.growing_tape.presences().get(),
+        .offsets = serializing_tape.growing_tape.offsets().begin().get(),
+        .offsets_stride = serializing_tape.growing_tape.offsets().stride(),
+        .lengths = serializing_tape.growing_tape.lengths().begin().get(),
+        .lengths_stride = serializing_tape.growing_tape.lengths().stride(),
+        .values = &found_binary_begin,
+    };
+
+    ukv_write(&write);
 }
 
 void parse_fields( //
@@ -549,25 +559,29 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
     auto has_fields = fields && (!fields.repeats() || *fields);
-    if (!has_fields && c.format == internal_format_k)
-        return ukv_write( //
-            c.db,
-            c.transaction,
-            c.tasks_count,
-            c.collections,
-            c.collections_stride,
-            c.keys,
-            c.keys_stride,
-            c.presences,
-            c.offs,
-            c.offs_stride,
-            c.lens,
-            c.lens_stride,
-            c.vals,
-            c.vals_stride,
-            c.options,
-            &new_arena,
-            c.error);
+    if (!has_fields && c.format == internal_format_k) {
+        ukv_write_t write {
+            .db = c.db,
+            .error = c.error,
+            .transaction = c.transaction,
+            .arena = &new_arena,
+            .options = c.options,
+            .tasks_count = c.tasks_count,
+            .collections = c.collections,
+            .collections_stride = c.collections_stride,
+            .keys = c.keys,
+            .keys_stride = c.keys_stride,
+            .presences = c.presences,
+            .offsets = c.offs,
+            .offsets_stride = c.offs_stride,
+            .lengths = c.lens,
+            .lengths_stride = c.lens_stride,
+            .values = c.vals,
+            .values_stride = c.vals_stride,
+        };
+
+        return ukv_write(&write);
+    }
 
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
@@ -590,7 +604,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
 
 void ukv_docs_read(ukv_docs_read_t* c_ptr) {
 
-    ukv_docs_read_t& c = *c_ptr; 
+    ukv_docs_read_t& c = *c_ptr;
 
     stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
@@ -601,21 +615,23 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
     strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
     auto has_fields = fields && (!fields.repeats() || *fields);
     if (!has_fields && c.format == internal_format_k)
-        return ukv_read( //
-            c.db,
-            c.transaction,
-            c.tasks_count,
-            c.collections,
-            c.collections_stride,
-            c.keys,
-            c.keys_stride,
-            c.options,
-            c.found_presences,
-            c.found_offsets,
-            c.found_lengths,
-            c.found_values,
-            &new_arena,
-            c.error);
+        ukv_read_t read {
+            .db = c.db,
+            .error = c.error,
+            .transaction = c.transaction,
+            .arena = &new_arena,
+            .options = c.options,
+            .tasks_count = c.tasks_count,
+            .collections = c.collections,
+            .collections_stride = c.collections_stride,
+            .keys = c.keys,
+            .keys_stride = c.keys_stride,
+            .presences = c.found_presences,
+            .offsets = c.found_offsets,
+            .lengths = c.found_lengths,
+            .values = c.found_values,
+        };
+    return ukv_read(&read);
 
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
@@ -665,21 +681,22 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
 
     ukv_byte_t* found_binary_begin = nullptr;
     ukv_length_t* found_binary_offs = nullptr;
-    ukv_read( //
-        c.db,
-        c.transaction,
-        c.docs_count,
-        c.collections,
-        c.collections_stride,
-        c.keys,
-        c.keys_stride,
-        c.options,
-        nullptr,
-        &found_binary_offs,
-        nullptr,
-        &found_binary_begin,
-        &new_arena,
-        c.error);
+    ukv_read_t read {
+        .db = c.db,
+        .error = c.error,
+        .transaction = c.transaction,
+        .arena = &new_arena,
+        .options = c.options,
+        .tasks_count = c.docs_count,
+        .collections = c.collections,
+        .collections_stride = c.collections_stride,
+        .keys = c.keys,
+        .keys_stride = c.keys_stride,
+        .offsets = &found_binary_offs,
+        .values = &found_binary_begin,
+    };
+
+    ukv_read(&read);
     return_on_error(c.error);
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
@@ -1035,21 +1052,22 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     // Retrieve the entire documents before we can sample internal fields
     ukv_byte_t* found_binary_begin = nullptr;
     ukv_length_t* found_binary_offs = nullptr;
-    ukv_read( //
-        c.db,
-        c.transaction,
-        c.docs_count,
-        c.collections,
-        c.collections_stride,
-        c.keys,
-        c.keys_stride,
-        c.options,
-        nullptr,
-        &found_binary_offs,
-        nullptr,
-        &found_binary_begin,
-        &new_arena,
-        c.error);
+    ukv_read_t read {
+        .db = c.db,
+        .error = c.error,
+        .transaction = c.transaction,
+        .arena = &new_arena,
+        .options = c.options,
+        .tasks_count = c.docs_count,
+        .collections = c.collections,
+        .collections_stride = c.collections_stride,
+        .keys = c.keys,
+        .keys_stride = c.keys_stride,
+        .offsets = &found_binary_offs,
+        .values = &found_binary_begin,
+    };
+
+    ukv_read(&read);
     return_on_error(c.error);
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};

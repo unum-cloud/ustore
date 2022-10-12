@@ -334,21 +334,22 @@ void export_edge_tuples( //
     ukv_arena_t arena_ptr = &arena;
     ukv_bytes_ptr_t c_found_values = nullptr;
     ukv_length_t* c_found_offsets = nullptr;
-    ukv_read( //
-        c_db,
-        c_transaction,
-        c_vertices_count,
-        c_collections,
-        c_collections_stride,
-        c_vertices_ids,
-        c_vertices_stride,
-        c_options,
-        nullptr,
-        &c_found_offsets,
-        nullptr,
-        &c_found_values,
-        &arena_ptr,
-        c_error);
+    ukv_read_t read {
+        .db = c_db,
+        .error = c_error,
+        .transaction = c_transaction,
+        .arena = &arena_ptr,
+        .options = c_options,
+        .tasks_count = c_vertices_count,
+        .collections = c_collections,
+        .collections_stride = c_collections_stride,
+        .keys = c_vertices_ids,
+        .keys_stride = c_vertices_stride,
+        .offsets = &c_found_offsets,
+        .values = &c_found_values,
+    };
+
+    ukv_read(&read);
     return_on_error(c_error);
 
     joined_bins_t values {c_vertices_count, c_found_offsets, c_found_values};
@@ -440,21 +441,22 @@ void pull_and_link_for_updates( //
     auto collections = unique_entries.immutable().members(&updated_entry_t::collection);
     auto keys = unique_entries.immutable().members(&updated_entry_t::key);
     auto opts = c_transaction ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
-    ukv_read( //
-        c_db,
-        c_transaction,
-        unique_count,
-        collections.begin().get(),
-        collections.begin().stride(),
-        keys.begin().get(),
-        keys.begin().stride(),
-        opts,
-        nullptr,
-        &found_binary_offs,
-        nullptr,
-        &found_binary_begin,
-        &arena_ptr,
-        c_error);
+    ukv_read_t read {
+        .db = c_db,
+        .error = c_error,
+        .transaction = c_transaction,
+        .arena = &arena_ptr,
+        .options = opts,
+        .tasks_count = unique_count,
+        .collections = collections.begin().get(),
+        .collections_stride = collections.begin().stride(),
+        .keys = keys.begin().get(),
+        .keys_stride = keys.begin().stride(),
+        .offsets = &found_binary_offs,
+        .values = &found_binary_begin,
+    };
+
+    ukv_read(&read);
     return_on_error(c_error);
 
     // Link the response buffer to `unique_entries`
@@ -568,24 +570,25 @@ void update_neighborhoods( //
     auto keys = unique_strided.immutable().members(&updated_entry_t::key);
     auto contents = unique_strided.immutable().members(&updated_entry_t::content);
     auto lengths = unique_strided.immutable().members(&updated_entry_t::length);
-    ukv_write( //
-        c_db,
-        c_transaction,
-        unique_count,
-        collections.begin().get(),
-        collections.begin().stride(),
-        keys.begin().get(),
-        keys.begin().stride(),
-        nullptr,
-        nullptr,
-        0,
-        lengths.begin().get(),
-        lengths.begin().stride(),
-        contents.begin().get(),
-        contents.begin().stride(),
-        c_options,
-        &arena_ptr,
-        c_error);
+
+    ukv_write_t write {
+        .db = c_db,
+        .error = c_error,
+        .transaction = c_transaction,
+        .arena = &arena_ptr,
+        .options = c_options,
+        .tasks_count = unique_count,
+        .collections = collections.begin().get(),
+        .collections_stride = collections.begin().stride(),
+        .keys = keys.begin().get(),
+        .keys_stride = keys.begin().stride(),
+        .lengths = lengths.begin().get(),
+        .lengths_stride = lengths.begin().stride(),
+        .values = contents.begin().get(),
+        .values_stride = contents.begin().stride(),
+    };
+
+    ukv_write(&write);
 }
 
 void ukv_graph_find_edges(ukv_graph_find_edges_t* c_ptr) {
@@ -755,22 +758,23 @@ void ukv_graph_remove_vertices(ukv_graph_remove_vertices_t* c_ptr) {
     auto keys = unique_strided.immutable().members(&updated_entry_t::key);
     auto lengths = unique_strided.immutable().members(&updated_entry_t::length);
     auto contents = unique_strided.immutable().members(&updated_entry_t::content);
-    ukv_write( //
-        c.db,
-        c.transaction,
-        unique_count,
-        collections.begin().get(),
-        collections.begin().stride(),
-        keys.begin().get(),
-        keys.begin().stride(),
-        nullptr,
-        nullptr,
-        0,
-        lengths.begin().get(),
-        lengths.begin().stride(),
-        contents.begin().get(),
-        contents.begin().stride(),
-        c.options,
-        &arena_ptr,
-        c.error);
+
+    ukv_write_t write {
+        .db = c.db,
+        .error = c.error,
+        .transaction = c.transaction,
+        .arena = &arena_ptr,
+        .options = c.options,
+        .tasks_count = unique_count,
+        .collections = collections.begin().get(),
+        .collections_stride = collections.begin().stride(),
+        .keys = keys.begin().get(),
+        .keys_stride = keys.begin().stride(),
+        .lengths = lengths.begin().get(),
+        .lengths_stride = lengths.begin().stride(),
+        .values = contents.begin().get(),
+        .values_stride = contents.begin().stride(),
+    };
+
+    ukv_write(&write);
 }
