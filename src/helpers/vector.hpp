@@ -186,7 +186,7 @@ class growing_tape_t {
         presences_.resize(divide_round_up(old_count + 1, bits_in_byte_k), c_error);
         if (*c_error)
             return value_view_t {};
-        presences()[presences_.size()] = bool(value);
+        presences()[old_count] = bool(value);
 
         // We need to store one more offset for Apache Arrow.
         offsets_.resize(lengths_.size() + 1, c_error);
