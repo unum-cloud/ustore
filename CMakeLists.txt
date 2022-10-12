@@ -80,6 +80,7 @@ set(UKV_BUILD_UNUMDB "" CACHE STRING "Pass a path to UnumDB copy to produce a fu
 # Engines:
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/consistent_set.cmake")
 
 # Modalities:
 include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
