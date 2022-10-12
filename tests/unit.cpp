@@ -178,6 +178,7 @@ TEST(db, basic) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.clear());
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
