@@ -176,7 +176,7 @@ consistent_set_status_t scan_full(set_or_transaction_at& set_or_transaction, cal
     while (true) {
         auto callback_pair = [&](pair_t const& pair) {
             callback(pair);
-            previous.key = pair.collection_key.key;
+            previous = pair.collection_key;
         };
 
         auto reached_end = false;
