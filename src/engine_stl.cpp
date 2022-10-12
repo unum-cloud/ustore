@@ -11,9 +11,9 @@
  * > Keeps watch of all the deleted keys throughout the history.
  */
 
-#include <vector>
-#include <string>
 #include <string_view>
+#include <string>
+#include <vector>
 #include <map>           // Collection names
 #include <unordered_map> // Watched keys generations
 #include <set>           // Primary entries container
@@ -168,19 +168,6 @@ using entries_set_t = std::set<entry_t, entry_compare_t, entry_allocator_t>;
 
 using collection_ptr_t = std::unique_ptr<collection_t>;
 
-struct transaction_t {
-    entries_set_t changes;
-    std::unordered_map<collection_key_t,
-                       generation_t,
-                       std::hash<collection_key_t>,
-                       std::equal_to<collection_key_t>,
-                       std::allocator<std::pair<collection_key_t const, generation_t>>>
-        watched;
-
-    database_t* db_ptr {nullptr};
-    generation_t generation {0};
-};
-
 struct string_hash_t {
     using stl_t = std::hash<std::string_view>;
     using is_transparent = void;
@@ -289,9 +276,13 @@ void read_entries(file_handle_t const& handle, entries_iterator_at output, ukv_e
     while (std::feof(handle) == 0) {
         entry_t entry;
 
+        // An empty row may contain no content
         auto read_len = std::fread(&entry.collection, sizeof(ukv_collection_t), 1, handle);
-        return_if_error(read_len == 1, c_error, 0, "Read partially failed on collection.");
+        if (read_len == 0)
+            break;
+        return_if_error(read_len <= 1, c_error, 0, "Read yielded unexpected result on key.");
 
+        // .. but if the row exists, it shouldn't be partial
         read_len = std::fread(&entry.key, sizeof(ukv_key_t), 1, handle);
         return_if_error(read_len == 1, c_error, 0, "Read partially failed on key.");
 
@@ -299,7 +290,7 @@ void read_entries(file_handle_t const& handle, entries_iterator_at output, ukv_e
         read_len = std::fread(&buf_len, sizeof(ukv_length_t), 1, handle);
         return_if_error(read_len == 1, c_error, 0, "Read partially failed on value len.");
 
-        return_if_error(!entry.alloc_blob(buf_len, 0),
+        return_if_error(entry.alloc_blob(buf_len, 0),
                         c_error,
                         out_of_memory_k,
                         "Failed to allocate memory for new node");
@@ -405,21 +396,6 @@ void populate( //
             entries.insert(std::move(entry));
         }
     });
-}
-
-/**
- * @brief Unlike `std::set<>::merge`, this function overwrites existing values.
- *
- * https://en.cppreference.com/w/cpp/container/set#Member_types
- * https://en.cppreference.com/w/cpp/container/set/insert
- */
-void merge_overwrite(entries_set_t& target, entries_set_t& source) {
-    for (auto source_it = source.begin(); source_it != source.end();) {
-        auto node = source.extract(source_it++);
-        auto result = target.insert(std::move(node));
-        if (!result.inserted)
-            result.position->swap_blob(result.node.value());
-    }
 }
 
 void write( //
@@ -545,9 +521,9 @@ void scan( //
     std::shared_lock _ {db.mutex};
 
     // 1. Allocate a tape for all the values to be fetched
-    auto offsets = arena.alloc_or_dummy<ukv_length_t>(tasks.count + 1, c_error, c_found_offsets);
+    auto offsets = arena.alloc_or_dummy(tasks.count + 1, c_error, c_found_offsets);
     return_on_error(c_error);
-    auto counts = arena.alloc_or_dummy<ukv_length_t>(tasks.count, c_error, c_found_counts);
+    auto counts = arena.alloc_or_dummy(tasks.count, c_error, c_found_counts);
     return_on_error(c_error);
 
     auto total_keys = reduce_n(tasks.limits, tasks.count, 0ul);
@@ -597,9 +573,9 @@ void scan( //
     bool const dont_watch = c_options & ukv_option_transaction_dont_watch_k;
 
     // 1. Allocate a tape for all the values to be fetched
-    auto offsets = arena.alloc_or_dummy<ukv_length_t>(tasks.count + 1, c_error, c_found_offsets);
+    auto offsets = arena.alloc_or_dummy(tasks.count + 1, c_error, c_found_offsets);
     return_on_error(c_error);
-    auto counts = arena.alloc_or_dummy<ukv_length_t>(tasks.count, c_error, c_found_counts);
+    auto counts = arena.alloc_or_dummy(tasks.count, c_error, c_found_counts);
     return_on_error(c_error);
 
     auto total_keys = reduce_n(tasks.limits, tasks.count, 0ul);
@@ -685,7 +661,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
@@ -699,11 +675,11 @@ void ukv_read(ukv_read_t* c_ptr) {
     bool const needs_export = c.values != nullptr;
 
     // 1. Allocate a tape for all the values to be pulled
-    auto offs = arena.alloc_or_dummy<ukv_length_t>(places.count + 1, c.error, c.offsets);
+    auto offs = arena.alloc_or_dummy(places.count + 1, c.error, c.offsets);
     return_on_error(c.error);
-    auto lens = arena.alloc_or_dummy<ukv_length_t>(places.count, c.error, c.lengths);
+    auto lens = arena.alloc_or_dummy(places.count, c.error, c.lengths);
     return_on_error(c.error);
-    auto presences = arena.alloc_or_dummy<ukv_octet_t>(places.count, c.error, c.presences);
+    auto presences = arena.alloc_or_dummy(places.count, c.error, c.presences);
     return_on_error(c.error);
 
     // 2. Pull metadata
@@ -716,8 +692,9 @@ void ukv_read(ukv_read_t* c_ptr) {
     };
 
     std::shared_lock _ {db.mutex};
-    c.transaction ? read_under_lock(txn, places, c.options, meta_enumerator, c.error)
-                  : read_under_lock(db, places, c.options, meta_enumerator, c.error);
+    c.transaction //
+        ? read_under_lock(txn, places, c.options, meta_enumerator, c.error)
+        : read_under_lock(db, places, c.options, meta_enumerator, c.error);
     offs[places.count] = total_length;
     if (!needs_export)
         return;
@@ -729,8 +706,9 @@ void ukv_read(ukv_read_t* c_ptr) {
     };
 
     *c.values = reinterpret_cast<ukv_byte_t*>(tape);
-    c.transaction ? read_under_lock(txn, places, c.options, data_enumerator, c.error)
-                  : read_under_lock(db, places, c.options, data_enumerator, c.error);
+    c.transaction //
+        ? read_under_lock(txn, places, c.options, data_enumerator, c.error)
+        : read_under_lock(db, places, c.options, data_enumerator, c.error);
 }
 
 void ukv_write(ukv_write_t* c_ptr) {
@@ -755,8 +733,9 @@ void ukv_write(ukv_write_t* c_ptr) {
     validate_write(c.transaction, places, contents, c.options, c.error);
     return_on_error(c.error);
 
-    return c.transaction ? write(txn, places, contents, c.options, c.error)
-                         : write(db, places, contents, c.options, c.error);
+    return c.transaction //
+               ? write(txn, places, contents, c.options, c.error)
+               : write(db, places, contents, c.options, c.error);
 }
 
 void ukv_scan(ukv_scan_t* c_ptr) {
@@ -766,7 +745,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
@@ -780,8 +759,9 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     validate_scan(c.transaction, scans, c.options, c.error);
     return_on_error(c.error);
 
-    return c.transaction ? scan(txn, scans, c.options, c.offsets, c.counts, c.keys, arena, c.error)
-                         : scan(db, scans, c.options, c.offsets, c.counts, c.keys, arena, c.error);
+    return c.transaction //
+               ? scan(txn, scans, c.options, c.offsets, c.counts, c.keys, arena, c.error)
+               : scan(db, scans, c.options, c.offsets, c.counts, c.keys, arena, c.error);
 }
 
 void ukv_size(ukv_size_st* c_ptr) {
@@ -791,15 +771,15 @@ void ukv_size(ukv_size_st* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
-    auto min_cardinalities = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.min_cardinalities);
-    auto max_cardinalities = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.max_cardinalities);
-    auto min_value_bytes = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.min_value_bytes);
-    auto max_value_bytes = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.max_value_bytes);
-    auto min_space_usages = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.min_space_usages);
-    auto max_space_usages = arena.alloc_or_dummy<ukv_size_t>(c.tasks_count, c.error, c.max_space_usages);
+    auto min_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_cardinalities);
+    auto max_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_cardinalities);
+    auto min_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_value_bytes);
+    auto max_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_value_bytes);
+    auto min_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_space_usages);
+    auto max_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_space_usages);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
@@ -919,7 +899,7 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_if_error(c.count && c.names, c.error, args_combo_k, "Need names and outputs!");
 
-    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
@@ -936,9 +916,9 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
     return_on_error(c.error);
 
     // For every collection we also need to export IDs and offsets
-    auto ids = arena.alloc_or_dummy<ukv_collection_t>(collections_count, c.error, c.ids);
+    auto ids = arena.alloc_or_dummy(collections_count, c.error, c.ids);
     return_on_error(c.error);
-    auto offs = arena.alloc_or_dummy<ukv_length_t>(collections_count + 1, c.error, c.offsets);
+    auto offs = arena.alloc_or_dummy(collections_count + 1, c.error, c.offsets);
     return_on_error(c.error);
 
     std::size_t i = 0;
@@ -1047,7 +1027,13 @@ void ukv_transaction_free(ukv_database_t const, ukv_transaction_t const c_txn) {
 void ukv_database_free(ukv_database_t c_db) {
     if (!c_db)
         return;
+
     database_t& db = *reinterpret_cast<database_t*>(c_db);
+    if (!db.persisted_path.empty()) {
+        ukv_error_t c_error = nullptr;
+        write(db, db.persisted_path, &c_error);
+    }
+
     delete &db;
 }
 

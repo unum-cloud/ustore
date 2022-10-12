@@ -245,7 +245,7 @@ void upsert_in_bucket( //
 void ukv_paths_write(ukv_paths_write_t* c_ptr) {
 
     ukv_paths_write_t& c = *c_ptr;
-    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     contents_arg_t keys_str_args;
@@ -304,7 +304,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     return_on_error(c.error);
     transform_n(joined_buckets.begin(), unique_places.count, updated_buckets.begin());
 
-    strided_iterator_gt<ukv_octet_t const> presences {c.values_presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c.values_presences};
     strided_iterator_gt<ukv_length_t const> offs {c.values_offsets, c.values_offsets_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.values_lengths, c.values_lengths_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values_bytes, c.values_bytes_stride};
@@ -351,7 +351,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
 void ukv_paths_read(ukv_paths_read_t* c_ptr) {
 
     ukv_paths_read_t& c = *c_ptr;
-    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     contents_arg_t keys_str_args;
@@ -401,11 +401,10 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     // Some of the entries will contain more then one key-value pair in case of collisions.
     ukv_length_t exported_volume = 0;
     joined_bins_t buckets {c.tasks_count, buckets_offsets, buckets_values};
-    auto presences = arena.alloc_or_dummy<ukv_octet_t>(divide_round_up<std::size_t>(c.tasks_count, bits_in_byte_k),
-                                                       c.error,
-                                                       c.presences);
-    auto lengths = arena.alloc_or_dummy<ukv_length_t>(c.tasks_count, c.error, c.lengths);
-    auto offsets = arena.alloc_or_dummy<ukv_length_t>(c.tasks_count, c.error, c.offsets);
+    auto presences =
+        arena.alloc_or_dummy(divide_round_up<std::size_t>(c.tasks_count, bits_in_byte_k), c.error, c.presences);
+    auto lengths = arena.alloc_or_dummy(c.tasks_count, c.error, c.lengths);
+    auto offsets = arena.alloc_or_dummy(c.tasks_count, c.error, c.offsets);
 
     for (std::size_t i = 0; i != c.tasks_count; ++i) {
         std::string_view key_str = keys_str_args[i];
@@ -652,7 +651,7 @@ void scan_regex( //
 void ukv_paths_match(ukv_paths_match_t* c_ptr) {
 
     ukv_paths_match_t const& c = *c_ptr;
-    stl_arena_t arena = prepare_arena(c.arena, c.options, c.error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     contents_arg_t patterns_args;

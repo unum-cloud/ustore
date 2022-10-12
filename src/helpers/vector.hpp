@@ -186,7 +186,7 @@ class growing_tape_t {
         presences_.resize(divide_round_up(old_count + 1, bits_in_byte_k), c_error);
         if (*c_error)
             return value_view_t {};
-        presences()[presences_.size()] = bool(value);
+        presences()[old_count] = bool(value);
 
         // We need to store one more offset for Apache Arrow.
         offsets_.resize(lengths_.size() + 1, c_error);
@@ -221,9 +221,7 @@ class growing_tape_t {
         contents_.clear();
     }
 
-    strided_iterator_gt<ukv_octet_t> presences() noexcept {
-        return strided_iterator_gt<ukv_octet_t>(presences_.begin(), sizeof(ukv_octet_t));
-    }
+    bits_span_t presences() noexcept { return bits_span_t(presences_.begin()); }
     strided_range_gt<ukv_length_t> offsets() noexcept {
         return strided_range<ukv_length_t>(offsets_.begin(), offsets_.end());
     }

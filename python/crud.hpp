@@ -135,7 +135,7 @@ static py::object has_one_binary(py_collection_t& collection, PyObject* key_py) 
     //     PyObject* obj_ptr = arrow::py::wrap_scalar(std::static_pointer_cast<arrow::Scalar>(shared));
     //     return py::reinterpret_steal<py::object>(obj_ptr);
     // }
-    strided_iterator_gt<ukv_octet_t> presences {found_presences, sizeof(ukv_octet_t)};
+    bits_span_t presences {found_presences};
     PyObject* obj_ptr = presences[0] ? Py_True : Py_False;
     return py::reinterpret_borrow<py::object>(obj_ptr);
 }
@@ -203,7 +203,7 @@ static py::object has_many_binaries(py_collection_t& collection, PyObject* keys_
         status.throw_unhandled();
     }
 
-    strided_iterator_gt<ukv_octet_t> presences {found_presences, sizeof(ukv_octet_t)};
+    bits_span_t presences {found_presences};
     PyObject* tuple_ptr = PyTuple_New(places.size());
     for (std::size_t i = 0; i != places.size(); ++i) {
         PyObject* obj_ptr = presences[i] ? Py_True : Py_False;
