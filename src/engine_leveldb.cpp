@@ -244,7 +244,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
-        if (c.transaction && (c.options & ukv_option_transaction_snapshot_k))
+        if (c.transaction)
             options.snapshot = txn.snapshot;
 
         std::string value_buffer;
@@ -277,9 +277,8 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
-    strided_iterator_gt<ukv_key_t const> end_keys {c.end_keys, c.end_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.scan_limits, c.scan_limits_stride};
-    scans_arg_t tasks {{}, start_keys, end_keys, limits, c.tasks_count};
+    scans_arg_t tasks {{}, start_keys, limits, c.tasks_count};
 
     // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy(tasks.count + 1, c.error, c.offsets);
@@ -295,7 +294,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     leveldb::ReadOptions options;
     options.fill_cache = false;
 
-    if (c.transaction && (c.options & ukv_option_transaction_snapshot_k))
+    if (c.transaction)
         options.snapshot = txn.snapshot;
 
     level_iter_uptr_t it;
@@ -313,10 +312,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
 
         ukv_size_t j = 0;
         while (it->Valid() && j != task.limit) {
-            auto key = *reinterpret_cast<ukv_key_t const*>(it->key().data());
-            if (key >= task.max_key)
-                break;
-            std::memcpy(keys_output, &key, sizeof(ukv_key_t));
+            std::memcpy(keys_output, it->key().data(), sizeof(ukv_key_t));
             ++keys_output;
             ++j;
             it->Next();
