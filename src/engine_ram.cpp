@@ -94,6 +94,8 @@ struct pair_t {
 struct pair_compare_t {
     using value_type = collection_key_t;
     bool operator()(collection_key_t const& a, collection_key_t const& b) const noexcept { return a < b; }
+    bool operator()(collection_key_t const& a, ukv_collection_t b) const noexcept { return a.collection < b; }
+    bool operator()(ukv_collection_t a, collection_key_t const& b) const noexcept { return a < b.collection; }
 };
 
 /*********************************************************/
