@@ -56,7 +56,7 @@ static json_t json_parse(char const* begin, char const* end) {
     EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 
 static char const* path() {
-    char* path = std::getenv("UKV_BACKEND_PATH");
+    char* path = std::getenv("UKV_TEST_PATH");
     if (path)
         return path;
 
@@ -122,10 +122,10 @@ void check_equalities(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
         auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
         auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
 
-        value_view_t val_view = *it;
+        value_view_t retrieved_view = *it;
         value_view_t expected_view(expected_begin, expected_begin + expected_len);
-        EXPECT_EQ(val_view.size(), expected_len);
-        EXPECT_EQ(val_view, expected_view);
+        EXPECT_EQ(retrieved_view.size(), expected_view.size());
+        EXPECT_EQ(retrieved_view, expected_view);
     }
 }
 
@@ -134,6 +134,38 @@ void round_trip(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
     EXPECT_TRUE(ref.assign(values)) << "Failed to assign";
     check_equalities(ref, values);
 }
+
+struct triplet_t {
+    std::array<ukv_key_t, 3> keys {'a', 'b', 'c'};
+
+    std::array<char, 3> vals {'A', 'B', 'C'};
+    std::array<ukv_length_t, 3> lengths {1, 1, 1};
+    std::array<ukv_length_t, 4> offsets {0, 1, 2, 3};
+    ukv_octet_t presences = 1 | (1 << 1) | (1 << 2);
+    std::array<ukv_bytes_ptr_t, 3> vals_pointers;
+
+    triplet_t() noexcept {
+        vals_pointers[0] = (ukv_bytes_ptr_t)&vals[0];
+        vals_pointers[1] = (ukv_bytes_ptr_t)&vals[1];
+        vals_pointers[2] = (ukv_bytes_ptr_t)&vals[2];
+    }
+    contents_arg_t contents() const noexcept { return contents_arrow(); }
+    contents_arg_t contents_lengths() const noexcept {
+        return {
+            .lengths_begin = {&lengths[0], sizeof(lengths[0])},
+            .contents_begin = {&vals_pointers[0], sizeof(vals_pointers[0])},
+            .count = 3,
+        };
+    }
+    contents_arg_t contents_arrow() const noexcept {
+        return {
+            .offsets_begin = {&offsets[0], sizeof(offsets[0])},
+            .lengths_begin = {&lengths[0], 0},
+            .contents_begin = {&vals_pointers[0], 0},
+            .count = 3,
+        };
+    }
+};
 
 void check_binary_collection(bins_collection_t& collection) {
     std::vector<ukv_key_t> keys {34, 35, 36};
@@ -178,6 +210,7 @@ TEST(db, basic) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.clear());
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
@@ -187,6 +220,9 @@ TEST(db, basic) {
 }
 
 TEST(db, persistency) {
+
+    if (!path())
+        return;
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -254,7 +290,6 @@ TEST(db, collection_list) {
     EXPECT_TRUE(db.open(path()));
 
     if (!ukv_supports_named_collections_k) {
-        EXPECT_FALSE(*db["name"]);
         EXPECT_FALSE(*db.contains("name"));
         EXPECT_FALSE(db.drop("name"));
         EXPECT_FALSE(db.drop(""));
@@ -543,17 +578,15 @@ TEST(db, unnamed_and_named) {
         .count = 3,
     };
 
-    for (auto&& name : {"one", "", "three"}) {
+    EXPECT_FALSE(db.add_collection(""));
+
+    for (auto&& name : {"one", "three"}) {
         for (auto& val : vals)
             val += 7;
 
-        bins_collection_t collection = *db.add_collection(name);
-        if (name == "") {
-            EXPECT_FALSE(collection);
-            continue;
-        }
-        EXPECT_TRUE(collection);
-
+        auto maybe_collection = db.add_collection(name);
+        EXPECT_TRUE(maybe_collection);
+        bins_collection_t collection = std::move(maybe_collection).throw_or_release();
         auto collection_ref = collection[keys];
         check_length(collection_ref, ukv_length_missing_k);
         round_trip(collection_ref, values);
@@ -594,11 +627,8 @@ TEST(db, txn) {
 
     // Check for missing values before commit
     check_length(collection_ref, ukv_length_missing_k);
-
-    auto status = txn.commit();
-    status.throw_unhandled();
-    status = txn.reset();
-    status.throw_unhandled();
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
     check_equalities(collection_ref, values);
@@ -640,11 +670,8 @@ TEST(db, txn_named) {
     // Check for missing values before commit
     auto named_collection_ref = named_collection[keys];
     check_length(named_collection_ref, ukv_length_missing_k);
-
-    auto status = txn.commit();
-    status.throw_unhandled();
-    status = txn.reset();
-    status.throw_unhandled();
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
     check_equalities(named_collection_ref, values);
@@ -686,11 +713,8 @@ TEST(db, txn_unnamed_then_named) {
 
     // Check for missing values before commit
     check_length(collection_ref, ukv_length_missing_k);
-
-    auto status = txn.commit();
-    status.throw_unhandled();
-    status = txn.reset();
-    status.throw_unhandled();
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
     check_equalities(collection_ref, values);
@@ -705,11 +729,8 @@ TEST(db, txn_unnamed_then_named) {
     // Check for missing values before commit
     auto named_collection_ref = named_collection[keys];
     check_length(named_collection_ref, ukv_length_missing_k);
-
-    status = txn.commit();
-    status.throw_unhandled();
-    status = txn.reset();
-    status.throw_unhandled();
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
     check_equalities(named_collection_ref, values);

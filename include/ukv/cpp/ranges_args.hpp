@@ -102,7 +102,6 @@ struct contents_arg_t {
 struct scan_t {
     ukv_collection_t collection;
     ukv_key_t min_key;
-    ukv_key_t max_key;
     ukv_length_t limit;
 };
 
@@ -113,17 +112,15 @@ struct scan_t {
 struct scans_arg_t {
     strided_iterator_gt<ukv_collection_t const> collections;
     strided_iterator_gt<ukv_key_t const> start_keys;
-    strided_iterator_gt<ukv_key_t const> end_keys;
     strided_iterator_gt<ukv_length_t const> limits;
     ukv_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
     inline scan_t operator[](std::size_t i) const noexcept {
         ukv_collection_t collection = collections ? collections[i] : ukv_collection_main_k;
-        ukv_key_t start_key = start_keys ? start_keys[i] : std::numeric_limits<ukv_key_t>::min();
-        ukv_key_t end_key = end_keys ? end_keys[i] : std::numeric_limits<ukv_key_t>::max();
+        ukv_key_t min_key = start_keys ? start_keys[i] : std::numeric_limits<ukv_key_t>::min();
         ukv_length_t limit = limits[i];
-        return {collection, start_key, end_key, limit};
+        return {collection, min_key, limit};
     }
 
     bool same_collection() const noexcept {

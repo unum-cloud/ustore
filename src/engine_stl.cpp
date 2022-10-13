@@ -840,11 +840,7 @@ void ukv_collection_init(ukv_collection_init_t* c_ptr) {
 
     ukv_collection_init_t& c = *c_ptr;
     auto name_len = c.name ? std::strlen(c.name) : 0;
-    if (!name_len) {
-        *c.id = ukv_collection_main_k;
-        return;
-    }
-
+    return_if_error(name_len, c.error, args_wrong_k, "Default collection is always present");
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     database_t& db = *reinterpret_cast<database_t*>(c.db);
     std::unique_lock _ {db.mutex};

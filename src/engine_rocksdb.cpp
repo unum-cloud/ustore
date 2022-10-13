@@ -266,7 +266,7 @@ void read_one( //
     ukv_error_t* c_error) {
 
     rocksdb::ReadOptions options;
-    if (txn && (c_options & ukv_option_transaction_snapshot_k))
+    if (txn)
         options.snapshot = txn->GetSnapshot();
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
@@ -301,7 +301,7 @@ void read_many( //
     ukv_error_t* c_error) {
 
     rocksdb::ReadOptions options;
-    if (txn && (c_options & ukv_option_transaction_snapshot_k))
+    if (txn)
         options.snapshot = txn->GetSnapshot();
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
@@ -417,7 +417,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
-    if (txn && (c.options & ukv_option_transaction_snapshot_k))
+    if (txn)
         options.snapshot = txn->GetSnapshot();
 
     for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
