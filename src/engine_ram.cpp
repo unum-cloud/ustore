@@ -94,6 +94,8 @@ struct pair_t {
 struct pair_compare_t {
     using value_type = collection_key_t;
     bool operator()(collection_key_t const& a, collection_key_t const& b) const noexcept { return a < b; }
+    bool operator()(collection_key_t const& a, ukv_collection_t b) const noexcept { return a.collection < b; }
+    bool operator()(ukv_collection_t a, collection_key_t const& b) const noexcept { return a < b.collection; }
 };
 
 /*********************************************************/
@@ -126,37 +128,40 @@ consistent_set_status_t find_and_watch(set_or_transaction_at& set_or_transaction
 
 template <typename set_or_transaction_at, typename callback_at>
 consistent_set_status_t scan_and_watch(set_or_transaction_at& set_or_transaction,
-                                       collection_key_t previous,
+                                       collection_key_t start,
                                        std::size_t range_limit,
                                        ukv_options_t options,
                                        callback_at&& callback) noexcept {
 
-    for (std::size_t match_idx = 0; match_idx != range_limit; ++match_idx) {
-        auto watch_status = consistent_set_status_t();
-        auto callback_pair = [&](pair_t const& pair) {
-            auto reached_other_collection = pair.collection_key.collection != previous.collection;
-            if (reached_other_collection)
-                return;
-
-            if constexpr (!std::is_same<set_or_transaction_at, consistent_set_t>()) {
-                bool dont_watch = options & ukv_option_transaction_dont_watch_k;
-                if (!dont_watch)
-                    if (watch_status = set_or_transaction.watch(pair); !watch_status)
-                        return;
-            }
-
-            callback(pair);
-            previous.key = pair.collection_key.key;
-        };
-
-        auto reached_end = false;
-        auto callback_nothing = [&] {
-            reached_end = true;
-        };
-
-        auto find_status = set_or_transaction.find_next(previous, callback_pair, callback_nothing);
+    std::size_t match_idx = 0;
+    collection_key_t previous = start;
+    bool reached_end = false;
+    auto watch_status = consistent_set_status_t();
+    auto callback_pair = [&](pair_t const& pair) {
+        reached_end = pair.collection_key.collection != previous.collection;
         if (reached_end)
-            break;
+            return;
+
+        if constexpr (!std::is_same<set_or_transaction_at, consistent_set_t>()) {
+            bool dont_watch = options & ukv_option_transaction_dont_watch_k;
+            if (!dont_watch)
+                if (watch_status = set_or_transaction.watch(pair); !watch_status)
+                    return;
+        }
+
+        callback(pair);
+        previous.key = pair.collection_key.key;
+        ++match_idx;
+    };
+
+    auto find_status = set_or_transaction.find(start, callback_pair, [] {});
+    if (!find_status)
+        return find_status;
+    if (!watch_status)
+        return watch_status;
+
+    while (match_idx != range_limit && !reached_end) {
+        find_status = set_or_transaction.find_next(previous, callback_pair, [&] { reached_end = true; });
         if (!find_status)
             return find_status;
         if (!watch_status)
@@ -173,7 +178,7 @@ consistent_set_status_t scan_full(set_or_transaction_at& set_or_transaction, cal
     while (true) {
         auto callback_pair = [&](pair_t const& pair) {
             callback(pair);
-            previous.key = pair.collection_key.key;
+            previous = pair.collection_key;
         };
 
         auto reached_end = false;
@@ -387,7 +392,9 @@ void read(database_t& db, std::string const& path, ukv_error_t* c_error) {
         if (!should_continue)
             break;
         return_on_error(c_error);
-        db.pairs.upsert(std::move(pair));
+        auto status = db.pairs.upsert(std::move(pair));
+        if (!status)
+            return export_error_code(status, c_error);
     }
 
     // Close the file
@@ -559,9 +566,8 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
-    strided_iterator_gt<ukv_key_t const> end_keys {c.end_keys, c.end_keys_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.scan_limits, c.scan_limits_stride};
-    scans_arg_t scans {collections, start_keys, end_keys, lens, c.tasks_count};
+    scans_arg_t scans {collections, start_keys, lens, c.tasks_count};
 
     validate_scan(c.transaction, scans, c.options, c.error);
     return_on_error(c.error);
@@ -635,11 +641,7 @@ void ukv_collection_init(ukv_collection_init_t* c_ptr) {
 
     ukv_collection_init_t& c = *c_ptr;
     auto name_len = c.name ? std::strlen(c.name) : 0;
-    if (!name_len) {
-        *c.id = ukv_collection_main_k;
-        return;
-    }
-
+    return_if_error(name_len, c.error, args_wrong_k, "Default collection is always present");
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     database_t& db = *reinterpret_cast<database_t*>(c.db);
     std::unique_lock _ {db.restructuring_mutex};
@@ -778,7 +780,10 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
     validate_transaction_commit(c.transaction, c.options, c.error);
     return_on_error(c.error);
     transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
-    auto status = txn.commit();
+    auto status = txn.stage();
+    if (!status)
+        return export_error_code(status, c.error);
+    status = txn.commit();
     if (!status)
         return export_error_code(status, c.error);
 
