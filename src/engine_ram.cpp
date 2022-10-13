@@ -606,9 +606,9 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     offsets[scans.count] = keys_output - *c.keys;
 }
 
-void ukv_size(ukv_size_st* c_ptr) {
+void ukv_measure(ukv_measure_t* c_ptr) {
 
-    ukv_size_st& c = *c_ptr;
+    ukv_measure_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     if (!c.tasks_count)
         return;
