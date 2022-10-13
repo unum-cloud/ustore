@@ -278,7 +278,7 @@ void ukv_read( //
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
-        if (txn && (c_options & ukv_option_transaction_snapshot_k))
+        if (txn)
             options.snapshot = txn->snapshot;
 
         std::string value_buffer;
@@ -352,7 +352,7 @@ void ukv_scan( //
     leveldb::ReadOptions options;
     options.fill_cache = false;
 
-    if (txn && (c_options & ukv_option_transaction_snapshot_k))
+    if (txn)
         options.snapshot = txn->snapshot;
 
     level_iter_uptr_t it;
