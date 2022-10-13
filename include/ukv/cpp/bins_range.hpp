@@ -419,7 +419,7 @@ class bins_range_t {
         ukv_size_t* max_value_bytes = nullptr;
         ukv_size_t* min_space_usages = nullptr;
         ukv_size_t* max_space_usages = nullptr;
-        ukv_size_st size {
+        ukv_measure_t size {
             .db = db_,
             .error = s,
             .transaction = txn_,
@@ -435,7 +435,7 @@ class bins_range_t {
             .max_space_usages = &max_space_usages,
         };
 
-        ukv_size(&size);
+        ukv_measure(&size);
         if (!status)
             return status;
         size_estimates_t result {{min_cardinalities[0], max_cardinalities[0]},

@@ -502,7 +502,7 @@ void ukv_scan(ukv_scan_t*);
  * @param[out] error         The error message to be handled by callee.
  * @param[inout] arena       Temporary memory region, that can be reused between operations.
  */
-typedef struct ukv_size_st {
+typedef struct ukv_measure_t {
 
     ukv_database_t db;
     ukv_error_t* error;
@@ -529,9 +529,9 @@ typedef struct ukv_size_st {
     ukv_size_t** min_space_usages;
     ukv_size_t** max_space_usages;
 
-} ukv_size_st;
+} ukv_measure_t;
 
-void ukv_size(ukv_size_st*);
+void ukv_measure(ukv_measure_t*);
 
 /*********************************************************/
 /***************** Collection Management  ****************/
@@ -587,7 +587,7 @@ typedef struct ukv_collection_init_t {
 
     // Outputs:
     ukv_collection_t* id;
-};
+} ukv_collection_init_t;
 
 void ukv_collection_init(ukv_collection_init_t*);
 
@@ -606,8 +606,8 @@ typedef struct ukv_collection_drop_t {
 
     // Inputs:
     ukv_collection_t id;
-    ukv_drop_mode_t mode;
-};
+    ukv_drop_mode_t mode = ukv_drop_keys_vals_handle_k;
+} ukv_collection_drop_t;
 
 void ukv_collection_drop(ukv_collection_drop_t*);
 

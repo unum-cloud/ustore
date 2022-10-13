@@ -262,7 +262,7 @@ std::vector<float> z;
 ## Designing a C API: Strides
 
 ```c
-typedef struct ukv_size_st {
+typedef struct ukv_measure_t {
 
     ukv_database_t db;
     ukv_error_t* error;
@@ -274,7 +274,7 @@ typedef struct ukv_size_st {
     // Inputs: //...//
 
     // Outputs //...//
-} ukv_size_st;
+} ukv_measure_t;
 
 void ukv_write(ukv_write_t* c_ptr);
 ```
