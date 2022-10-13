@@ -735,11 +735,7 @@ void ukv_collection_init(
     ukv_error_t* c_error) {
 
     auto name_len = c_collection_name ? std::strlen(c_collection_name) : 0;
-    if (!name_len) {
-        *c_collection = ukv_collection_main_k;
-        return;
-    }
-
+    return_if_error(name_len, c_error, args_wrong_k, "Default collection is always present");
     return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
     database_t& db = *reinterpret_cast<database_t*>(c_db);
     std::unique_lock _ {db.restructuring_mutex};
@@ -904,7 +900,10 @@ void ukv_transaction_commit( //
     validate_transaction_commit(c_txn, c_options, c_error);
     return_on_error(c_error);
     transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
-    auto status = txn.commit();
+    auto status = txn.stage();
+    if (!status)
+        return export_error_code(status, c_error);
+    status = txn.commit();
     if (!status)
         return export_error_code(status, c_error);
 

@@ -122,10 +122,10 @@ void check_equalities(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
         auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
         auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
 
-        value_view_t val_view = *it;
+        value_view_t retrieved_view = *it;
         value_view_t expected_view(expected_begin, expected_begin + expected_len);
-        EXPECT_EQ(val_view.size(), expected_len);
-        EXPECT_EQ(val_view, expected_view);
+        EXPECT_EQ(retrieved_view.size(), expected_view.size());
+        EXPECT_EQ(retrieved_view, expected_view);
     }
 }
 
@@ -258,7 +258,6 @@ TEST(db, collection_list) {
     EXPECT_TRUE(db.open(path()));
 
     if (!ukv_supports_named_collections_k) {
-        EXPECT_FALSE(*db["name"]);
         EXPECT_FALSE(*db.contains("name"));
         EXPECT_FALSE(db.drop("name"));
         EXPECT_FALSE(db.drop(""));
@@ -773,17 +772,15 @@ TEST(db, unnamed_and_named) {
         .count = 3,
     };
 
-    for (auto&& name : {"one", "", "three"}) {
+    EXPECT_FALSE(db.add_collection(""));
+
+    for (auto&& name : {"one", "three"}) {
         for (auto& val : vals)
             val += 7;
 
-        bins_collection_t collection = *db.add_collection(name);
-        if (name == "") {
-            EXPECT_FALSE(collection);
-            continue;
-        }
-        EXPECT_TRUE(collection);
-
+        auto maybe_collection = db.add_collection(name);
+        EXPECT_TRUE(maybe_collection);
+        bins_collection_t collection = std::move(maybe_collection).throw_or_release();
         auto collection_ref = collection[keys];
         check_length(collection_ref, ukv_length_missing_k);
         round_trip(collection_ref, values);
@@ -824,11 +821,8 @@ TEST(db, txn) {
 
     // Check for missing values before commit
     check_length(collection_ref, ukv_length_missing_k);
-
-    auto status = txn.commit();
-    status.throw_unhandled();
-    status = txn.reset();
-    status.throw_unhandled();
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
     check_equalities(collection_ref, values);
@@ -870,11 +864,8 @@ TEST(db, txn_named) {
     // Check for missing values before commit
     auto named_collection_ref = named_collection[keys];
     check_length(named_collection_ref, ukv_length_missing_k);
-
-    auto status = txn.commit();
-    status.throw_unhandled();
-    status = txn.reset();
-    status.throw_unhandled();
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
     check_equalities(named_collection_ref, values);
@@ -916,11 +907,8 @@ TEST(db, txn_unnamed_then_named) {
 
     // Check for missing values before commit
     check_length(collection_ref, ukv_length_missing_k);
-
-    auto status = txn.commit();
-    status.throw_unhandled();
-    status = txn.reset();
-    status.throw_unhandled();
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
     check_equalities(collection_ref, values);
@@ -935,11 +923,8 @@ TEST(db, txn_unnamed_then_named) {
     // Check for missing values before commit
     auto named_collection_ref = named_collection[keys];
     check_length(named_collection_ref, ukv_length_missing_k);
-
-    status = txn.commit();
-    status.throw_unhandled();
-    status = txn.reset();
-    status.throw_unhandled();
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
     check_equalities(named_collection_ref, values);
