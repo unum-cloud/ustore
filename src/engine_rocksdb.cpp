@@ -115,6 +115,11 @@ rocks_collection_t* rocks_collection(rocks_db_t& db, ukv_collection_t collection
 void ukv_database_init(ukv_database_init_t* c_ptr) {
 
     ukv_database_init_t& c = *c_ptr;
+    if (!c.config || !std::strlen(c.config)) {
+        *c.error = "RocksDB requires a configuration file or a path!";
+        return;
+    }
+
     try {
         rocks_db_t* db_ptr = new rocks_db_t;
         std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
