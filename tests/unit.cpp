@@ -452,7 +452,7 @@ TEST(db, paths) {
 
 TEST(db, paths_linked_list) {
 
-    constexpr std::size_t count = 500;
+    constexpr std::size_t count = 100;
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -472,9 +472,6 @@ TEST(db, paths_linked_list) {
         .error = status.member_ptr(),
         .arena = arena.member_ptr(),
         .path_separator = separator,
-        // .paths = keys,
-        // .paths_stride = sizeof(char const*),
-        // .values = reinterpret_cast<ukv_bytes_ptr_t*>(&vals_recovered),
     };
 
     // Generate some random strings for our tests
@@ -530,8 +527,8 @@ TEST(db, paths_linked_list) {
     for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
         ukv_str_view_t smaller = begins[i];
         ukv_str_view_t bigger = begins[i + 1];
-        paths_write.paths = &smaller;
-        paths_write.values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(&bigger);
+        paths_write.paths = &bigger;
+        paths_write.values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(&smaller);
         ukv_paths_write(&paths_write);
         EXPECT_TRUE(status);
 
