@@ -1,6 +1,7 @@
 # RocksDB:
 # https://github.com/facebook/rocksdb/blob/main/CMakeLists.txt
 
+include(FetchContent)
 FetchContent_Declare(
     rocksdb
     GIT_REPOSITORY https://github.com/facebook/rocksdb.git
