@@ -77,29 +77,29 @@ inline rocksdb::Slice to_slice(value_view_t value) noexcept {
     return {reinterpret_cast<const char*>(value.begin()), value.size()};
 }
 
-inline std::unique_ptr<rocks_value_t> make_value(ukv_error_t* c.error) noexcept {
+inline std::unique_ptr<rocks_value_t> make_value(ukv_error_t* c_error) noexcept {
     std::unique_ptr<rocks_value_t> value_uptr;
     try {
         value_uptr = std::make_unique<rocks_value_t>();
     }
     catch (...) {
-        *c.error = "Fail to allocate value";
+        *c_error = "Fail to allocate value";
     }
     return value_uptr;
 }
 
-bool export_error(rocks_status_t const& status, ukv_error_t* c.error) {
+bool export_error(rocks_status_t const& status, ukv_error_t* c_error) {
     if (status.ok())
         return false;
 
     if (status.IsCorruption())
-        *c.error = "Failure: DB Corruption";
+        *c_error = "Failure: DB Corruption";
     else if (status.IsIOError())
-        *c.error = "Failure: IO  Error";
+        *c_error = "Failure: IO  Error";
     else if (status.IsInvalidArgument())
-        *c.error = "Failure: Invalid Argument";
+        *c_error = "Failure: Invalid Argument";
     else
-        *c.error = "Failure";
+        *c_error = "Failure";
     return true;
 }
 
@@ -155,7 +155,7 @@ void write_one( //
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
-    ukv_error_t* c.error) {
+    ukv_error_t* c_error) {
 
     bool const safe = c_options & ukv_option_write_flush_k;
     bool const watch = !(c_options & ukv_option_transaction_dont_watch_k);
@@ -180,7 +180,7 @@ void write_one( //
                      ? db.native->SingleDelete(options, collection, key)
                      : db.native->Put(options, collection, key, to_slice(content));
 
-    export_error(status, c.error);
+    export_error(status, c_error);
 }
 
 void write_many( //
@@ -189,7 +189,7 @@ void write_many( //
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
-    ukv_error_t* c.error) {
+    ukv_error_t* c_error) {
 
     bool const safe = c_options & ukv_option_write_flush_k;
     bool const watch = !(c_options & ukv_option_transaction_dont_watch_k);
@@ -208,8 +208,8 @@ void write_many( //
                               ? watch ? txn->SingleDelete(collection, key) : txn->DeleteUntracked(collection, key)
                               : watch ? txn->Put(collection, key, to_slice(content))
                                       : txn->PutUntracked(collection, key, to_slice(content));
-            export_error(status, c.error);
-            return_on_error(c.error);
+            export_error(status, c_error);
+            return_on_error(c_error);
         }
     }
     else {
@@ -222,11 +222,11 @@ void write_many( //
             auto status = !content //
                               ? batch.Delete(collection, key)
                               : batch.Put(collection, key, to_slice(content));
-            export_error(status, c.error);
+            export_error(status, c_error);
         }
 
         rocks_status_t status = db.native->Write(options, &batch);
-        export_error(status, c.error);
+        export_error(status, c_error);
     }
 }
 
@@ -263,7 +263,7 @@ void read_one( //
     places_arg_t places,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
-    ukv_error_t* c.error) {
+    ukv_error_t* c_error) {
 
     rocksdb::ReadOptions options;
     if (txn && (c_options & ukv_option_transaction_snapshot_k))
@@ -274,14 +274,14 @@ void read_one( //
     place_t place = places[0];
     auto col = rocks_collection(db, place.collection);
     auto key = to_slice(place.key);
-    auto value_uptr = make_value(c.error);
+    auto value_uptr = make_value(c_error);
     rocks_value_t& value = *value_uptr.get();
     rocks_status_t status =
         txn //
             ? watch ? txn->GetForUpdate(options, col, key, &value) : txn->Get(options, col, key, &value)
             : db.native->Get(options, col, key, &value);
     if (!status.IsNotFound()) {
-        if (export_error(status, c.error))
+        if (export_error(status, c_error))
             return;
         auto begin = reinterpret_cast<ukv_bytes_cptr_t>(value.data());
         auto length = static_cast<ukv_length_t>(value.size());
@@ -322,7 +322,7 @@ void read_many( //
                                                : db.native->MultiGet(options, cols, keys, &vals);
     for (std::size_t i = 0; i != places.size(); ++i) {
         if (!statuses[i].IsNotFound()) {
-            if (export_error(statuses[i], c.error))
+            if (export_error(statuses[i], c_error))
                 return;
             auto begin = reinterpret_cast<ukv_bytes_cptr_t>(vals[i].data());
             auto length = static_cast<ukv_length_t>(vals[i].size());
