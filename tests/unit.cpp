@@ -135,6 +135,38 @@ void round_trip(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
     check_equalities(ref, values);
 }
 
+struct triplet_t {
+    std::array<ukv_key_t, 3> keys {'a', 'b', 'c'};
+
+    std::array<char, 3> vals {'A', 'B', 'C'};
+    std::array<ukv_length_t, 3> lengths {1, 1, 1};
+    std::array<ukv_length_t, 4> offsets {0, 1, 2, 3};
+    ukv_octet_t presences = 1 | (1 << 1) | (1 << 2);
+    std::array<ukv_bytes_ptr_t, 3> vals_pointers;
+
+    triplet_t() noexcept {
+        vals_pointers[0] = (ukv_bytes_ptr_t)&vals[0];
+        vals_pointers[1] = (ukv_bytes_ptr_t)&vals[1];
+        vals_pointers[2] = (ukv_bytes_ptr_t)&vals[2];
+    }
+    contents_arg_t contents() const noexcept { return contents_arrow(); }
+    contents_arg_t contents_lengths() const noexcept {
+        return {
+            .lengths_begin = {&lengths[0], sizeof(lengths[0])},
+            .contents_begin = {&vals_pointers[0], sizeof(vals_pointers[0])},
+            .count = 3,
+        };
+    }
+    contents_arg_t contents_arrow() const noexcept {
+        return {
+            .offsets_begin = {&offsets[0], sizeof(offsets[0])},
+            .lengths_begin = {&lengths[0], 0},
+            .contents_begin = {&vals_pointers[0], 0},
+            .count = 3,
+        };
+    }
+};
+
 void check_binary_collection(bins_collection_t& collection) {
     std::vector<ukv_key_t> keys {34, 35, 36};
     ukv_length_t val_len = sizeof(std::uint64_t);
