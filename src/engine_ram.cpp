@@ -21,6 +21,7 @@
 #include <stdio.h>    // Saving/reading from disk
 
 #include <consistent_set.hpp> // `av::consistent_set_gt`
+#include <locked_set.hpp>     // `av::locked_gt`
 
 #include "ukv/db.h"
 #include "helpers/pmr.hpp"
@@ -102,7 +103,7 @@ struct pair_compare_t {
 /*****************  Using Consistent Sets ****************/
 /*********************************************************/
 
-using consistent_set_t = consistent_set_gt<pair_t, pair_compare_t>;
+using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>>;
 using transaction_t = typename consistent_set_t::transaction_t;
 using generation_t = typename consistent_set_t::generation_t;
 
@@ -411,7 +412,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
     safe_section("Initializing DBMS", c.error, [&] {
         auto maybe_pairs = consistent_set_t::make();
         return_if_error(maybe_pairs, c.error, error_unknown_k, "Couldn't build consistent set");
-        auto db = database_t(std::move(maybe_pairs.value()));
+        auto db = database_t(std::move(maybe_pairs).value());
         auto db_ptr = std::make_unique<database_t>(std::move(db)).release();
         auto len = c.config ? std::strlen(c.config) : 0;
         if (len) {
@@ -670,7 +671,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     std::unique_lock _ {db.restructuring_mutex};
 
     if (c.mode == ukv_drop_keys_vals_handle_k) {
-        auto status = db.pairs.erase_all(c.id);
+        auto status = db.pairs.erase_equals(c.id);
         if (!status)
             return export_error_code(status, c.error);
 
@@ -683,12 +684,14 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     }
 
     else if (c.mode == ukv_drop_keys_vals_k) {
-        auto status = db.pairs.erase_all(c.id);
+        auto status = db.pairs.erase_equals(c.id);
         return export_error_code(status, c.error);
     }
 
     else if (c.mode == ukv_drop_vals_k) {
-        auto status = db.pairs.find_all(c.id, [&](pair_t& pair) { pair = pair_t {pair.collection_key, {}, nullptr}; });
+        auto status = db.pairs.find_equals(c.id, [&](pair_t& pair) {
+            pair = pair_t {pair.collection_key, {}, nullptr};
+        });
         return export_error_code(status, c.error);
     }
 }
@@ -762,7 +765,7 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
         auto maybe_txn = db.pairs.transaction();
         return_if_error(maybe_txn, c.error, error_unknown_k, "Couldn't start a transaction");
-        *c.transaction = std::make_unique<transaction_t>(std::move(maybe_txn.value())).release();
+        *c.transaction = std::make_unique<transaction_t>(std::move(maybe_txn).value()).release();
     });
     return_on_error(c.error);
 
