@@ -600,22 +600,22 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     offsets[scans.count] = keys_output - *c.keys;
 }
 
-void ukv_size(ukv_size_t* c_ptr) {
+void ukv_size(ukv_size_st* c_ptr) {
 
-    ukv_size_t& c = *c_ptr;
+    ukv_size_st& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    if (!n)
+    if (!c.tasks_count)
         return;
 
     stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
     return_on_error(c.error);
 
-    auto min_cardinalities = arena.alloc_or_dummy(n, c.error, c.min_cardinalities);
-    auto max_cardinalities = arena.alloc_or_dummy(n, c.error, c.max_cardinalities);
-    auto min_value_bytes = arena.alloc_or_dummy(n, c.error, c.min_value_bytes);
-    auto max_value_bytes = arena.alloc_or_dummy(n, c.error, c.max_value_bytes);
-    auto min_space_usages = arena.alloc_or_dummy(n, c.error, c.min_space_usages);
-    auto max_space_usages = arena.alloc_or_dummy(n, c.error, c.max_space_usages);
+    auto min_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_cardinalities);
+    auto max_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_cardinalities);
+    auto min_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_value_bytes);
+    auto max_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_value_bytes);
+    auto min_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_space_usages);
+    auto max_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_space_usages);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
