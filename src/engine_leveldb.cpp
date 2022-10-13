@@ -159,8 +159,8 @@ void ukv_write(ukv_write_t* c_ptr) {
 
     ukv_write_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_if_error(!(c_options & ukv_option_transaction_snapshot_k),
-                    c_error,
+    return_if_error(!(c.options & ukv_option_transaction_snapshot_k),
+                    c.error,
                     uninitialized_state_k,
                     "Snapshot doesn't support in write mode");
 
@@ -239,7 +239,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
-        if (txn && (c_options & ukv_option_transaction_snapshot_k))
+        if (txn && (c.options & ukv_option_transaction_snapshot_k))
             options.snapshot = txn->snapshot;
 
         std::string value_buffer;
@@ -329,7 +329,7 @@ void ukv_size(ukv_size_st* c_ptr) {
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
-    return_on_error(c_error);
+    return_on_error(c.error);
 
     auto min_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_cardinalities);
     auto max_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_cardinalities);
@@ -337,7 +337,7 @@ void ukv_size(ukv_size_st* c_ptr) {
     auto max_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_value_bytes);
     auto min_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_space_usages);
     auto max_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_space_usages);
-    return_on_error(c_error);
+    return_on_error(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
