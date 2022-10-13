@@ -81,18 +81,18 @@ class bins_collection_t {
 
     inline bins_range_t members( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-        ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+        ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
         return {db_, txn_, collection_, min_key, max_key};
     }
     inline keys_range_t keys( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-        ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+        ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
         return {members(min_key, max_key)};
     }
 
     inline pairs_range_t items( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-        ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+        ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
         return {bins_range_t {db_, txn_, collection_, min_key, max_key}};
     }
 

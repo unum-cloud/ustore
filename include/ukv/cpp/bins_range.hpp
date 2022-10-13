@@ -389,7 +389,7 @@ class bins_range_t {
                  ukv_transaction_t txn = nullptr,
                  ukv_collection_t collection = ukv_collection_main_k,
                  ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-                 ukv_key_t max_key = ukv_key_unknown_k) noexcept
+                 ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) noexcept
         : db_(db), txn_(txn), collection_(collection), min_key_(min_key), max_key_(max_key) {}
 
     bins_range_t(bins_range_t&&) = default;
@@ -406,7 +406,7 @@ class bins_range_t {
     }
 
     expected_gt<keys_stream_t> keys_end() noexcept {
-        return make_stream<keys_stream_t>(max_key_, max_key_ == ukv_key_unknown_k ? 0u : 1u);
+        return make_stream<keys_stream_t>(max_key_, max_key_ == std::numeric_limits<ukv_key_t>::max() ? 0u : 1u);
     }
 
     expected_gt<pairs_stream_t> pairs_begin(std::size_t read_ahead = pairs_stream_t::default_read_ahead_k) noexcept {
@@ -414,7 +414,7 @@ class bins_range_t {
     }
 
     expected_gt<pairs_stream_t> pairs_end() noexcept {
-        return make_stream<pairs_stream_t>(max_key_, max_key_ == ukv_key_unknown_k ? 0u : 1u);
+        return make_stream<pairs_stream_t>(max_key_, max_key_ == std::numeric_limits<ukv_key_t>::max() ? 0u : 1u);
     }
 
     expected_gt<size_estimates_t> size_estimates() noexcept {
