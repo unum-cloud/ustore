@@ -14,7 +14,7 @@ using namespace unum::ukv;
 using namespace unum;
 
 static char const* path() {
-    char* path = std::getenv("UKV_BACKEND_PATH");
+    char* path = std::getenv("UKV_TEST_PATH");
     if (path)
         return path;
 
