@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-rm -rf build && rm -rf CMakeCache.txt && cmake . && make -j 4 py_stl &&
+rm -rf src/ukv.egg-info ukv.egg-info build CMakeCache.txt && cmake . -DCMAKE_BUILD_TYPE=Release && make -j 4 py_stl &&
     pip install --upgrade --force-reinstall . && pytest --capture=no python/tests/

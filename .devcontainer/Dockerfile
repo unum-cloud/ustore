@@ -29,3 +29,6 @@ RUN apt update && apt install -y -V ca-certificates lsb-release wget && cd /tmp 
     && apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
     && apt update && apt install -y -V libarrow-dev libarrow-dataset-dev libarrow-flight-dev \
     libarrow-python-dev libarrow-python-flight-dev libplasma-dev libgandiva-dev libparquet-dev
+
+# Pip installations
+RUN pip install pytest twine numpy pyarrow wheel
