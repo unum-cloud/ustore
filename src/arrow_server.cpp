@@ -563,11 +563,15 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_collection_t collection_id = maybe_collection.throw_or_ref();
             ukv_str_view_t collection_config = get_null_terminated(action.body);
-            ukv_collection_init(db_,
-                                params.collection_name->begin(),
-                                collection_config,
-                                &collection_id,
-                                status.member_ptr());
+            ukv_collection_init_t coll_init {
+                .db = db_,
+                .error = status.member_ptr(),
+                .name = params.collection_name->begin(),
+                .config = collection_config,
+                .id = &collection_id,
+            };
+
+            ukv_collection_init(&coll_init);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_scalar<ukv_collection_t>(collection_id);
@@ -588,7 +592,13 @@ class UKVService : public arf::FlightServerBase {
             if (params.collection_id)
                 c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
 
-            ukv_collection_drop(db_, c_collection_id, mode, status.member_ptr());
+            ukv_collection_drop_t coll_drop {
+                .db = db_,
+                .error = status.member_ptr(),
+                .id = c_collection_id,
+                .mode = mode,
+            };
+            ukv_collection_drop(&coll_drop);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_empty();
@@ -606,7 +616,14 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             // Cleanup internal state
-            ukv_transaction_init(db_, ukv_options(params), &session.txn, status.member_ptr());
+            ukv_transaction_init_t txn_init {
+                .db = db_,
+                .error = status.member_ptr(),
+                .options = ukv_options(params),
+                .transaction = &session.txn,
+            };
+
+            ukv_transaction_init(&txn_init);
             if (!status) {
                 sessions_.release_txn(params.session_id);
                 return ar::Status::ExecutionError(status.message());
@@ -628,7 +645,13 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             }
 
-            ukv_transaction_commit(db_, session.txn, ukv_options(params), status.member_ptr());
+            ukv_transaction_commit_t txn_commit {
+                .db = db_,
+                .error = status.member_ptr(),
+                .transaction = session.txn,
+                .options = ukv_options(params),
+            };
+            ukv_transaction_commit(&txn_commit);
             if (!status) {
                 sessions_.hold_txn(params.session_id, session);
                 return ar::Status::ExecutionError(status.message());
@@ -692,22 +715,24 @@ class UKVService : public arf::FlightServerBase {
             ukv_length_t* found_lengths = nullptr;
             ukv_octet_t* found_presences = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
+            ukv_read_t read {
+                .db = db_,
+                .error = status.member_ptr(),
+                .transaction = session.txn,
+                .arena = &session.arena,
+                .options = ukv_options(params),
+                .tasks_count = tasks_count,
+                .collections = input_collections.get(),
+                .collections_stride = input_collections.stride(),
+                .keys = input_keys.get(),
+                .keys_stride = input_keys.stride(),
+                .presences = &found_presences,
+                .offsets = request_content ? &found_offsets : nullptr,
+                .lengths = request_only_lengths ? &found_lengths : nullptr,
+                .values = request_content ? &found_values : nullptr,
+            };
 
-            ukv_read( //
-                db_,
-                session.txn,
-                tasks_count,
-                input_collections.get(),
-                input_collections.stride(),
-                input_keys.get(),
-                input_keys.stride(),
-                ukv_options(params),
-                &found_presences,
-                request_content ? &found_offsets : nullptr,
-                request_only_lengths ? &found_lengths : nullptr,
-                request_content ? &found_values : nullptr,
-                &session.arena,
-                status.member_ptr());
+            ukv_read(&read);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -786,27 +811,29 @@ class UKVService : public arf::FlightServerBase {
             ukv_length_t* found_lengths = nullptr;
             ukv_octet_t* found_presences = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
+            ukv_paths_read_t read {
+                .db = db_,
+                .error = status.member_ptr(),
+                .transaction = session.txn,
+                .arena = &session.arena,
+                .options = ukv_options(params),
+                .tasks_count = tasks_count,
+                .path_separator = input_paths.separator,
+                .collections = input_collections.get(),
+                .collections_stride = input_collections.stride(),
+                .paths = reinterpret_cast<ukv_str_view_t const*>(input_paths.contents_begin.get()),
+                .paths_stride = input_paths.contents_begin.stride(),
+                .paths_offsets = input_paths.offsets_begin.get(),
+                .paths_offsets_stride = input_paths.offsets_begin.stride(),
+                .paths_lengths = input_paths.lengths_begin.get(),
+                .paths_lengths_stride = input_paths.lengths_begin.stride(),
+                .presences = &found_presences,
+                .offsets = request_content ? &found_offsets : nullptr,
+                .lengths = request_only_lengths ? &found_lengths : nullptr,
+                .values = request_content ? &found_values : nullptr,
+            };
 
-            ukv_paths_read( //
-                db_,
-                session.txn,
-                tasks_count,
-                input_collections.get(),
-                input_collections.stride(),
-                input_paths.offsets_begin.get(),
-                input_paths.offsets_begin.stride(),
-                input_paths.lengths_begin.get(),
-                input_paths.lengths_begin.stride(),
-                reinterpret_cast<ukv_str_view_t const*>(input_paths.contents_begin.get()),
-                input_paths.contents_begin.stride(),
-                ukv_options(params),
-                input_paths.separator,
-                &found_presences,
-                request_content ? &found_offsets : nullptr,
-                request_only_lengths ? &found_lengths : nullptr,
-                request_content ? &found_values : nullptr,
-                &session.arena,
-                status.member_ptr());
+            ukv_paths_read(&read);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -887,34 +914,36 @@ class UKVService : public arf::FlightServerBase {
             ukv_length_t* found_offsets = nullptr;
             ukv_length_t* found_counts = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
+            ukv_paths_match_t match {
+                .db = db_,
+                .error = status.member_ptr(),
+                .transaction = session.txn,
+                .arena = &session.arena,
+                .options = ukv_options(params),
+                .tasks_count = tasks_count,
+                .path_separator = input_patrns.separator,
+                .collections = input_collections.get(),
+                .collections_stride = input_collections.stride(),
+                .patterns = reinterpret_cast<ukv_str_view_t const*>(input_patrns.contents_begin.get()),
+                .patterns_stride = input_patrns.contents_begin.stride(),
+                .patterns_offsets = input_patrns.offsets_begin.get(),
+                .patterns_offsets_stride = input_patrns.offsets_begin.stride(),
+                .patterns_lengths = input_patrns.lengths_begin.get(),
+                .patterns_lengths_stride = input_patrns.lengths_begin.stride(),
+                .match_counts_limits = input_limits.get(),
+                .match_counts_limits_stride = input_limits.stride(),
+                .previous = reinterpret_cast<ukv_str_view_t const*>(input_prevs.contents_begin.get()),
+                .previous_stride = input_prevs.contents_begin.stride(),
+                .previous_offsets = input_prevs.offsets_begin.get(),
+                .previous_offsets_stride = input_prevs.offsets_begin.stride(),
+                .previous_lengths = input_prevs.lengths_begin.get(),
+                .previous_lengths_stride = input_prevs.lengths_begin.stride(),
+                .match_counts = &found_counts,
+                .paths_offsets = request_content ? &found_offsets : nullptr,
+                .paths_strings = request_content ? &found_values : nullptr,
+            };
 
-            ukv_paths_match( //
-                db_,
-                session.txn,
-                tasks_count,
-                input_collections.get(),
-                input_collections.stride(),
-                input_patrns.offsets_begin.get(),
-                input_patrns.offsets_begin.stride(),
-                input_patrns.lengths_begin.get(),
-                input_patrns.lengths_begin.stride(),
-                reinterpret_cast<ukv_str_view_t const*>(input_patrns.contents_begin.get()),
-                input_patrns.contents_begin.stride(),
-                input_prevs.offsets_begin.get(),
-                input_prevs.offsets_begin.stride(),
-                input_prevs.lengths_begin.get(),
-                input_prevs.lengths_begin.stride(),
-                reinterpret_cast<ukv_str_view_t const*>(input_prevs.contents_begin.get()),
-                input_prevs.contents_begin.stride(),
-                input_limits.get(),
-                input_limits.stride(),
-                ukv_options(params),
-                input_patrns.separator,
-                &found_counts,
-                request_content ? &found_offsets : nullptr,
-                request_content ? &found_values : nullptr,
-                &session.arena,
-                status.member_ptr());
+            ukv_paths_match(&match);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -989,24 +1018,26 @@ class UKVService : public arf::FlightServerBase {
             ukv_length_t* found_lengths = nullptr;
             ukv_key_t* found_keys = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
-            ukv_scan( //
-                db_,
-                session.txn,
-                tasks_count,
-                input_collections.get(),
-                input_collections.stride(),
-                input_start_keys.get(),
-                input_start_keys.stride(),
-                input_end_keys.get(),
-                input_end_keys.stride(),
-                input_lengths.get(),
-                input_lengths.stride(),
-                ukv_options(params),
-                &found_offsets,
-                nullptr,
-                &found_keys,
-                &session.arena,
-                status.member_ptr());
+            ukv_scan_t scan {
+                .db = db_,
+                .error = status.member_ptr(),
+                .transaction = session.txn,
+                .arena = &session.arena,
+                .options = ukv_options(params),
+                .tasks_count = tasks_count,
+                .collections = input_collections.get(),
+                .collections_stride = input_collections.stride(),
+                .start_keys = input_start_keys.get(),
+                .start_keys_stride = input_start_keys.stride(),
+                .end_keys = input_end_keys.get(),
+                .end_keys_stride = input_end_keys.stride(),
+                .scan_limits = input_lengths.get(),
+                .scan_limits_stride = input_lengths.stride(),
+                .offsets = &found_offsets,
+                .keys = &found_keys,
+            };
+
+            ukv_scan(&scan);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -1089,24 +1120,27 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
-            ukv_write( //
-                db_,
-                session.txn,
-                tasks_count,
-                input_collections.get(),
-                input_collections.stride(),
-                input_keys.get(),
-                input_keys.stride(),
-                input_vals.presences_begin.get(),
-                input_vals.offsets_begin.get(),
-                input_vals.offsets_begin.stride(),
-                input_vals.lengths_begin.get(),
-                input_vals.lengths_begin.stride(),
-                input_vals.contents_begin.get(),
-                input_vals.contents_begin.stride(),
-                ukv_options(params),
-                &session.arena,
-                status.member_ptr());
+            ukv_write_t write {
+                .db = db_,
+                .error = status.member_ptr(),
+                .transaction = session.txn,
+                .arena = &session.arena,
+                .options = ukv_options(params),
+                .tasks_count = tasks_count,
+                .collections = input_collections.get(),
+                .collections_stride = input_collections.stride(),
+                .keys = input_keys.get(),
+                .keys_stride = input_keys.stride(),
+                .presences = input_vals.presences_begin.get(),
+                .offsets = input_vals.offsets_begin.get(),
+                .offsets_stride = input_vals.offsets_begin.stride(),
+                .lengths = input_vals.lengths_begin.get(),
+                .lengths_stride = input_vals.lengths_begin.stride(),
+                .values = input_vals.contents_begin.get(),
+                .values_stride = input_vals.contents_begin.stride(),
+            };
+
+            ukv_write(&write);
 
             if (!status)
                 return ar::Status::ExecutionError(status.message());
@@ -1134,29 +1168,32 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
-            ukv_paths_write( //
-                db_,
-                session.txn,
-                tasks_count,
-                input_collections.get(),
-                input_collections.stride(),
-                input_paths.offsets_begin.get(),
-                input_paths.offsets_begin.stride(),
-                input_paths.lengths_begin.get(),
-                input_paths.lengths_begin.stride(),
-                reinterpret_cast<ukv_str_view_t const*>(input_paths.contents_begin.get()),
-                input_paths.contents_begin.stride(),
-                input_vals.presences_begin.get(),
-                input_vals.offsets_begin.get(),
-                input_vals.offsets_begin.stride(),
-                input_vals.lengths_begin.get(),
-                input_vals.lengths_begin.stride(),
-                input_vals.contents_begin.get(),
-                input_vals.contents_begin.stride(),
-                ukv_options(params),
-                input_paths.separator,
-                &session.arena,
-                status.member_ptr());
+            ukv_paths_write_t write {
+                .db = db_,
+                .error = status.member_ptr(),
+                .transaction = session.txn,
+                .arena = &session.arena,
+                .options = ukv_options(params),
+                .tasks_count = tasks_count,
+                .path_separator = input_paths.separator,
+                .collections = input_collections.get(),
+                .collections_stride = input_collections.stride(),
+                .paths = reinterpret_cast<ukv_str_view_t const*>(input_paths.contents_begin.get()),
+                .paths_stride = input_paths.contents_begin.stride(),
+                .paths_offsets = input_paths.offsets_begin.get(),
+                .paths_offsets_stride = input_paths.offsets_begin.stride(),
+                .paths_lengths = input_paths.lengths_begin.get(),
+                .paths_lengths_stride = input_paths.lengths_begin.stride(),
+                .values_presences = input_vals.presences_begin.get(),
+                .values_offsets = input_vals.offsets_begin.get(),
+                .values_offsets_stride = input_vals.offsets_begin.stride(),
+                .values_lengths = input_vals.lengths_begin.get(),
+                .values_lengths_stride = input_vals.lengths_begin.stride(),
+                .values_bytes = input_vals.contents_begin.get(),
+                .values_bytes_stride = input_vals.contents_begin.stride(),
+            };
+
+            ukv_paths_write(&write);
 
             if (!status)
                 return ar::Status::ExecutionError(status.message());
@@ -1184,17 +1221,19 @@ class UKVService : public arf::FlightServerBase {
             ukv_collection_t* collections = nullptr;
             ukv_length_t* offsets = nullptr;
             ukv_str_span_t names = nullptr;
+            ukv_collection_list_t coll_list {
+                .db = db_,
+                .error = status.member_ptr(),
+                .transaction = session.txn,
+                .arena = &session.arena,
+                .options = ukv_options(params),
+                .count = &count,
+                .ids = &collections,
+                .offsets = &offsets,
+                .names = &names,
+            };
 
-            ukv_collection_list( //
-                db_,
-                session.txn,
-                ukv_options(params),
-                &count,
-                &collections,
-                &offsets,
-                &names,
-                &session.arena,
-                status.member_ptr());
+            ukv_collection_list(&coll_list);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
