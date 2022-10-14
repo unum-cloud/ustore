@@ -52,25 +52,21 @@ class keys_stream_t {
 
         ukv_length_t* found_counts = nullptr;
         ukv_key_t* found_keys = nullptr;
+
         status_t status;
-        ukv_scan( //
-            db_,
-            txn_,
-            1,
-            &collection_,
-            0,
-            &next_min_key_,
-            0,
-            nullptr,
-            0,
-            &read_ahead_,
-            0,
-            ukv_options_default_k,
-            nullptr,
-            &found_counts,
-            &found_keys,
-            arena_.member_ptr(),
-            status.member_ptr());
+        ukv_scan_t scan {
+            .db = db_,
+            .error = status.member_ptr(),
+            .transaction = txn_,
+            .arena = arena_.member_ptr(),
+            .collections = &collection_,
+            .start_keys = &next_min_key_,
+            .scan_limits = &read_ahead_,
+            .counts = &found_counts,
+            .keys = &found_keys,
+        };
+
+        ukv_scan(&scan);
         if (!status)
             return status;
 
@@ -192,24 +188,19 @@ class pairs_stream_t {
         ukv_length_t* found_counts = nullptr;
         ukv_key_t* found_keys = nullptr;
         status_t status;
-        ukv_scan( //
-            db_,
-            txn_,
-            1,
-            &collection_,
-            0,
-            &next_min_key_,
-            0,
-            nullptr,
-            0,
-            &read_ahead_,
-            0,
-            ukv_options_default_k,
-            nullptr,
-            &found_counts,
-            &found_keys,
-            arena_.member_ptr(),
-            status.member_ptr());
+        ukv_scan_t scan {
+            .db = db_,
+            .error = status.member_ptr(),
+            .transaction = txn_,
+            .arena = arena_.member_ptr(),
+            .collections = &collection_,
+            .start_keys = &next_min_key_,
+            .scan_limits = &read_ahead_,
+            .counts = &found_counts,
+            .keys = &found_keys,
+        };
+
+        ukv_scan(&scan);
         if (!status)
             return status;
 
@@ -219,21 +210,21 @@ class pairs_stream_t {
 
         ukv_bytes_ptr_t found_vals = nullptr;
         ukv_length_t* found_offs = nullptr;
-        ukv_read( //
-            db_,
-            txn_,
-            count,
-            &collection_,
-            0,
-            found_keys,
-            sizeof(ukv_key_t),
-            ukv_option_dont_discard_memory_k,
-            nullptr,
-            &found_offs,
-            nullptr,
-            &found_vals,
-            arena_.member_ptr(),
-            status.member_ptr());
+        ukv_read_t read {
+            .db = db_,
+            .error = status.member_ptr(),
+            .transaction = txn_,
+            .arena = arena_.member_ptr(),
+            .options = ukv_option_dont_discard_memory_k,
+            .tasks_count = count,
+            .collections = &collection_,
+            .keys = found_keys,
+            .keys_stride = sizeof(ukv_key_t),
+            .offsets = &found_offs,
+            .values = &found_vals,
+        };
+
+        ukv_read(&read);
         if (!status)
             return status;
 
@@ -389,7 +380,7 @@ class bins_range_t {
                  ukv_transaction_t txn = nullptr,
                  ukv_collection_t collection = ukv_collection_main_k,
                  ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-                 ukv_key_t max_key = ukv_key_unknown_k) noexcept
+                 ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) noexcept
         : db_(db), txn_(txn), collection_(collection), min_key_(min_key), max_key_(max_key) {}
 
     bins_range_t(bins_range_t&&) = default;
@@ -406,7 +397,7 @@ class bins_range_t {
     }
 
     expected_gt<keys_stream_t> keys_end() noexcept {
-        return make_stream<keys_stream_t>(max_key_, max_key_ == ukv_key_unknown_k ? 0u : 1u);
+        return make_stream<keys_stream_t>(max_key_, max_key_ == std::numeric_limits<ukv_key_t>::max() ? 0u : 1u);
     }
 
     expected_gt<pairs_stream_t> pairs_begin(std::size_t read_ahead = pairs_stream_t::default_read_ahead_k) noexcept {
@@ -414,7 +405,7 @@ class bins_range_t {
     }
 
     expected_gt<pairs_stream_t> pairs_end() noexcept {
-        return make_stream<pairs_stream_t>(max_key_, max_key_ == ukv_key_unknown_k ? 0u : 1u);
+        return make_stream<pairs_stream_t>(max_key_, max_key_ == std::numeric_limits<ukv_key_t>::max() ? 0u : 1u);
     }
 
     expected_gt<size_estimates_t> size_estimates() noexcept {
@@ -428,24 +419,23 @@ class bins_range_t {
         ukv_size_t* max_value_bytes = nullptr;
         ukv_size_t* min_space_usages = nullptr;
         ukv_size_t* max_space_usages = nullptr;
-        ukv_size(db_,
-                 txn_,
-                 1,
-                 &collection_,
-                 0,
-                 &min_key_,
-                 0,
-                 &max_key_,
-                 0,
-                 ukv_options_default_k,
-                 &min_cardinalities,
-                 &max_cardinalities,
-                 &min_value_bytes,
-                 &max_value_bytes,
-                 &min_space_usages,
-                 &max_space_usages,
-                 a,
-                 s);
+        ukv_measure_t size {
+            .db = db_,
+            .error = s,
+            .transaction = txn_,
+            .arena = a,
+            .collections = &collection_,
+            .start_keys = &min_key_,
+            .end_keys = &max_key_,
+            .min_cardinalities = &min_cardinalities,
+            .max_cardinalities = &max_cardinalities,
+            .min_value_bytes = &min_value_bytes,
+            .max_value_bytes = &max_value_bytes,
+            .min_space_usages = &min_space_usages,
+            .max_space_usages = &max_space_usages,
+        };
+
+        ukv_measure(&size);
         if (!status)
             return status;
         size_estimates_t result {{min_cardinalities[0], max_cardinalities[0]},
@@ -483,24 +473,19 @@ struct keys_range_t {
         status_t status;
         ukv_length_t c_count = static_cast<ukv_length_t>(count);
         ukv_collection_t c_collection = members.collection();
-        ukv_scan( //
-            members.db(),
-            members.txn(),
-            1,
-            &c_collection,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            &c_count,
-            0,
-            ukv_option_scan_sample_k,
-            nullptr,
-            &found_counts,
-            &found_keys,
-            arena.member_ptr(),
-            status.member_ptr());
+        ukv_scan_t scan {
+            .db = members.db(),
+            .error = status.member_ptr(),
+            .transaction = members.txn(),
+            .arena = arena.member_ptr(),
+            .options = ukv_option_scan_sample_k,
+            .collections = &c_collection,
+            .scan_limits = &c_count,
+            .counts = &found_counts,
+            .keys = &found_keys,
+        };
+
+        ukv_scan(&scan);
 
         if (!status)
             return std::move(status);

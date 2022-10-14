@@ -1,3 +1,4 @@
+include(FetchContent)
 FetchContent_Declare(
     simdjson
     GIT_REPOSITORY https://github.com/simdjson/simdjson

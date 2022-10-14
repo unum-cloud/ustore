@@ -1,3 +1,4 @@
+include(FetchContent)
 FetchContent_Declare(
     yyjson
     GIT_REPOSITORY https://github.com/ibireme/yyjson

@@ -162,6 +162,7 @@ class [[nodiscard]] given_gt : public expected_gt<object_at> {
 };
 
 enum error_code_t {
+    success_k = 0,
     out_of_memory_k,
     out_of_range_k,
     args_combo_k,

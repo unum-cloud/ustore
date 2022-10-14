@@ -11,9 +11,9 @@
  * > Keeps watch of all the deleted keys throughout the history.
  */
 
-#include <vector>
-#include <string>
 #include <string_view>
+#include <string>
+#include <vector>
 #include <map>           // Collection names
 #include <unordered_map> // Watched keys generations
 #include <set>           // Primary entries container
@@ -167,19 +167,6 @@ using entry_allocator_t = std::allocator<entry_t>;
 using entries_set_t = std::set<entry_t, entry_compare_t, entry_allocator_t>;
 
 using collection_ptr_t = std::unique_ptr<collection_t>;
-
-struct transaction_t {
-    entries_set_t changes;
-    std::unordered_map<collection_key_t,
-                       generation_t,
-                       std::hash<collection_key_t>,
-                       std::equal_to<collection_key_t>,
-                       std::allocator<std::pair<collection_key_t const, generation_t>>>
-        watched;
-
-    database_t* db_ptr {nullptr};
-    generation_t generation {0};
-};
 
 struct string_hash_t {
     using stl_t = std::hash<std::string_view>;
@@ -409,21 +396,6 @@ void populate( //
             entries.insert(std::move(entry));
         }
     });
-}
-
-/**
- * @brief Unlike `std::set<>::merge`, this function overwrites existing values.
- *
- * https://en.cppreference.com/w/cpp/container/set#Member_types
- * https://en.cppreference.com/w/cpp/container/set/insert
- */
-void merge_overwrite(entries_set_t& target, entries_set_t& source) {
-    for (auto source_it = source.begin(); source_it != source.end();) {
-        auto node = source.extract(source_it++);
-        auto result = target.insert(std::move(node));
-        if (!result.inserted)
-            result.position->swap_blob(result.node.value());
-    }
 }
 
 void write( //
@@ -668,68 +640,47 @@ void scan( //
 /*****************	    C Interface 	  ****************/
 /*********************************************************/
 
-void ukv_database_init( //
-    ukv_str_view_t c_config,
-    ukv_database_t* c_db,
-    ukv_error_t* c_error) {
+void ukv_database_init(ukv_database_init_t* c_ptr) {
 
-    safe_section("Initializing DBMS", c_error, [&] {
+    ukv_database_init_t& c = *c_ptr;
+    safe_section("Initializing DBMS", c.error, [&] {
         auto db_ptr = new database_t {};
-        auto len = c_config ? std::strlen(c_config) : 0;
+        auto len = c.config ? std::strlen(c.config) : 0;
         if (len) {
-            db_ptr->persisted_path = std::string(c_config, len);
-            read(*db_ptr, db_ptr->persisted_path, c_error);
+            db_ptr->persisted_path = std::string(c.config, len);
+            read(*db_ptr, db_ptr->persisted_path, c.error);
         }
-        *c_db = db_ptr;
+        *c.db = db_ptr;
     });
 }
 
-void ukv_read( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    ukv_size_t const c_tasks_count,
+void ukv_read(ukv_read_t* c_ptr) {
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
-
-    ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_stride,
-
-    ukv_options_t const c_options,
-
-    ukv_octet_t** c_found_presences,
-
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_lengths,
-    ukv_bytes_ptr_t* c_found_values,
-
-    ukv_arena_t* c_arena,
-    ukv_error_t* c_error) {
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    if (!c_tasks_count)
+    ukv_read_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
-    return_on_error(c_error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    return_on_error(c.error);
 
-    database_t& db = *reinterpret_cast<database_t*>(c_db);
-    transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
-    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    places_arg_t places {collections, keys, {}, c_tasks_count};
-    validate_read(c_txn, places, c_options, c_error);
-    return_on_error(c_error);
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
+    strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
+    places_arg_t places {collections, keys, {}, c.tasks_count};
+    validate_read(c.transaction, places, c.options, c.error);
+    return_on_error(c.error);
 
-    bool const needs_export = c_found_values != nullptr;
+    bool const needs_export = c.values != nullptr;
 
     // 1. Allocate a tape for all the values to be pulled
-    auto offs = arena.alloc_or_dummy(places.count + 1, c_error, c_found_offsets);
-    return_on_error(c_error);
-    auto lens = arena.alloc_or_dummy(places.count, c_error, c_found_lengths);
-    return_on_error(c_error);
-    auto presences = arena.alloc_or_dummy(places.count, c_error, c_found_presences);
-    return_on_error(c_error);
+    auto offs = arena.alloc_or_dummy(places.count + 1, c.error, c.offsets);
+    return_on_error(c.error);
+    auto lens = arena.alloc_or_dummy(places.count, c.error, c.lengths);
+    return_on_error(c.error);
+    auto presences = arena.alloc_or_dummy(places.count, c.error, c.presences);
+    return_on_error(c.error);
 
     // 2. Pull metadata
     ukv_length_t total_length = 0;
@@ -741,170 +692,105 @@ void ukv_read( //
     };
 
     std::shared_lock _ {db.mutex};
-    c_txn ? read_under_lock(txn, places, c_options, meta_enumerator, c_error)
-          : read_under_lock(db, places, c_options, meta_enumerator, c_error);
+    c.transaction //
+        ? read_under_lock(txn, places, c.options, meta_enumerator, c.error)
+        : read_under_lock(db, places, c.options, meta_enumerator, c.error);
     offs[places.count] = total_length;
     if (!needs_export)
         return;
 
     // 3. Pull the data, once we know the total length
-    auto tape = arena.alloc<byte_t>(total_length, c_error).begin();
+    auto tape = arena.alloc<byte_t>(total_length, c.error).begin();
     auto data_enumerator = [&](std::size_t i, value_view_t value) {
         std::memcpy(std::exchange(tape, tape + value.size()), value.begin(), value.size());
     };
 
-    *c_found_values = reinterpret_cast<ukv_byte_t*>(tape);
-    c_txn ? read_under_lock(txn, places, c_options, data_enumerator, c_error)
-          : read_under_lock(db, places, c_options, data_enumerator, c_error);
+    *c.values = reinterpret_cast<ukv_byte_t*>(tape);
+    c.transaction //
+        ? read_under_lock(txn, places, c.options, data_enumerator, c.error)
+        : read_under_lock(db, places, c.options, data_enumerator, c.error);
 }
 
-void ukv_write( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    ukv_size_t const c_tasks_count,
+void ukv_write(ukv_write_t* c_ptr) {
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
-
-    ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_stride,
-
-    ukv_octet_t const* c_presences,
-
-    ukv_length_t const* c_offs,
-    ukv_size_t const c_offs_stride,
-
-    ukv_length_t const* c_lens,
-    ukv_size_t const c_lens_stride,
-
-    ukv_bytes_cptr_t const* c_vals,
-    ukv_size_t const c_vals_stride,
-
-    ukv_options_t const c_options,
-
-    ukv_arena_t*,
-    ukv_error_t* c_error) {
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    if (!c_tasks_count)
+    ukv_write_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
         return;
 
-    database_t& db = *reinterpret_cast<database_t*>(c_db);
-    transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
-    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
-    strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
-    strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
-    bits_view_t presences {c_presences};
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
+    strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
+    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values, c.values_stride};
+    strided_iterator_gt<ukv_length_t const> offs {c.offsets, c.offsets_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c.lengths, c.lengths_stride};
+    strided_iterator_gt<ukv_octet_t const> presences {c.presences, sizeof(ukv_octet_t)};
 
-    places_arg_t places {collections, keys, {}, c_tasks_count};
-    contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
+    places_arg_t places {collections, keys, {}, c.tasks_count};
+    contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
 
-    validate_write(c_txn, places, contents, c_options, c_error);
-    return_on_error(c_error);
+    validate_write(c.transaction, places, contents, c.options, c.error);
+    return_on_error(c.error);
 
-    return c_txn ? write(txn, places, contents, c_options, c_error) : write(db, places, contents, c_options, c_error);
+    return c.transaction //
+               ? write(txn, places, contents, c.options, c.error)
+               : write(db, places, contents, c.options, c.error);
 }
 
-void ukv_scan( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    ukv_size_t const c_tasks_count,
+void ukv_scan(ukv_scan_t* c_ptr) {
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
-
-    ukv_key_t const* c_start_keys,
-    ukv_size_t const c_start_keys_stride,
-
-    ukv_key_t const* c_end_keys,
-    ukv_size_t const c_end_keys_stride,
-
-    ukv_length_t const* c_scan_limits,
-    ukv_size_t const c_scan_limits_stride,
-
-    ukv_options_t const c_options,
-
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_counts,
-    ukv_key_t** c_found_keys,
-
-    ukv_arena_t* c_arena,
-    ukv_error_t* c_error) {
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    if (!c_tasks_count)
+    ukv_scan_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
-    return_on_error(c_error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    return_on_error(c.error);
 
-    database_t& db = *reinterpret_cast<database_t*>(c_db);
-    transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
-    strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
-    strided_iterator_gt<ukv_length_t const> lens {c_scan_limits, c_scan_limits_stride};
-    scans_arg_t scans {collections, start_keys, end_keys, lens, c_tasks_count};
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
+    strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
+    strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
+    strided_iterator_gt<ukv_key_t const> end_keys {c.end_keys, c.end_keys_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c.scan_limits, c.scan_limits_stride};
+    scans_arg_t scans {collections, start_keys, end_keys, lens, c.tasks_count};
 
-    validate_scan(c_txn, scans, c_options, c_error);
-    return_on_error(c_error);
+    validate_scan(c.transaction, scans, c.options, c.error);
+    return_on_error(c.error);
 
-    return c_txn ? scan(txn, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error)
-                 : scan(db, scans, c_options, c_found_offsets, c_found_counts, c_found_keys, arena, c_error);
+    return c.transaction //
+               ? scan(txn, scans, c.options, c.offsets, c.counts, c.keys, arena, c.error)
+               : scan(db, scans, c.options, c.offsets, c.counts, c.keys, arena, c.error);
 }
 
-void ukv_size( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    ukv_size_t const n,
+void ukv_measure(ukv_measure_t* c_ptr) {
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
-
-    ukv_key_t const* c_start_keys,
-    ukv_size_t const c_start_keys_stride,
-
-    ukv_key_t const* c_end_keys,
-    ukv_size_t const c_end_keys_stride,
-
-    ukv_options_t const c_options,
-
-    ukv_size_t** c_min_cardinalities,
-    ukv_size_t** c_max_cardinalities,
-    ukv_size_t** c_min_value_bytes,
-    ukv_size_t** c_max_value_bytes,
-    ukv_size_t** c_min_space_usages,
-    ukv_size_t** c_max_space_usages,
-
-    ukv_arena_t* c_arena,
-    ukv_error_t* c_error) {
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    if (!n)
+    ukv_measure_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
-    return_on_error(c_error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    return_on_error(c.error);
 
-    auto min_cardinalities = arena.alloc_or_dummy(n, c_error, c_min_cardinalities);
-    auto max_cardinalities = arena.alloc_or_dummy(n, c_error, c_max_cardinalities);
-    auto min_value_bytes = arena.alloc_or_dummy(n, c_error, c_min_value_bytes);
-    auto max_value_bytes = arena.alloc_or_dummy(n, c_error, c_max_value_bytes);
-    auto min_space_usages = arena.alloc_or_dummy(n, c_error, c_min_space_usages);
-    auto max_space_usages = arena.alloc_or_dummy(n, c_error, c_max_space_usages);
-    return_on_error(c_error);
+    auto min_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_cardinalities);
+    auto max_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_cardinalities);
+    auto min_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_value_bytes);
+    auto max_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_value_bytes);
+    auto min_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_space_usages);
+    auto max_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_space_usages);
+    return_on_error(c.error);
 
-    database_t& db = *reinterpret_cast<database_t*>(c_db);
-    transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
-    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
-    strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
+    strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
+    strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
+    strided_iterator_gt<ukv_key_t const> end_keys {c.end_keys, c.end_keys_stride};
 
     std::shared_lock _ {db.mutex};
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
         ukv_collection_t const collection = collections[i];
         ukv_key_t const min_key = start_keys[i];
         ukv_key_t const max_key = end_keys[i];
@@ -927,7 +813,7 @@ void ukv_size( //
         // Estimate the metrics from within a transaction
         std::size_t txn_count = 0;
         std::size_t txn_bytes = 0;
-        if (c_txn) {
+        if (c.transaction) {
             auto min_iterator = txn.changes.lower_bound(collection_key_t {collection, min_key});
             auto max_iterator = txn.changes.upper_bound(collection_key_t {collection, max_key});
             for (; min_iterator != max_iterator; ++min_iterator, ++txn_count)
@@ -950,109 +836,86 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_init(
-    // Inputs:
-    ukv_database_t const c_db,
-    ukv_str_view_t const c_collection_name,
-    ukv_str_view_t const,
-    // Outputs:
-    ukv_collection_t* c_collection,
-    ukv_error_t* c_error) {
+void ukv_collection_init(ukv_collection_init_t* c_ptr) {
 
-    auto name_len = c_collection_name ? std::strlen(c_collection_name) : 0;
-    if (!name_len) {
-        *c_collection = ukv_collection_main_k;
-        return;
-    }
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    database_t& db = *reinterpret_cast<database_t*>(c_db);
+    ukv_collection_init_t& c = *c_ptr;
+    auto name_len = c.name ? std::strlen(c.name) : 0;
+    return_if_error(name_len, c.error, args_wrong_k, "Default collection is always present");
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
     std::unique_lock _ {db.mutex};
 
-    std::string_view collection_name {c_collection_name, name_len};
+    std::string_view collection_name {c.name, name_len};
     auto collection_it = db.names.find(collection_name);
-    return_if_error(collection_it == db.names.end(), c_error, args_wrong_k, "Such collection already exists!");
+    return_if_error(collection_it == db.names.end(), c.error, args_wrong_k, "Such collection already exists!");
 
     auto new_collection = db.new_collection();
-    safe_section("Inserting new collection", c_error, [&] { db.names.emplace(collection_name, new_collection); });
-    *c_collection = new_collection;
+    safe_section("Inserting new collection", c.error, [&] { db.names.emplace(collection_name, new_collection); });
+    *c.id = new_collection;
 }
 
-void ukv_collection_drop(
-    // Inputs:
-    ukv_database_t const c_db,
-    ukv_collection_t const c_collection,
-    ukv_drop_mode_t const c_mode,
-    // Outputs:
-    ukv_error_t* c_error) {
+void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
 
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    ukv_collection_drop_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(c_collection != ukv_collection_main_k || !invalidate,
-                    c_error,
+    bool invalidate = c.mode == ukv_drop_keys_vals_handle_k;
+    return_if_error(c.id != ukv_collection_main_k || !invalidate,
+                    c.error,
                     args_combo_k,
                     "Default collection can't be invalidated.");
 
-    database_t& db = *reinterpret_cast<database_t*>(c_db);
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
     std::unique_lock _ {db.mutex};
 
-    auto [begin, end] = db.entries.equal_range(c_collection);
-    if (c_mode == ukv_drop_keys_vals_handle_k) {
+    auto [begin, end] = db.entries.equal_range(c.id);
+    if (c.mode == ukv_drop_keys_vals_handle_k) {
         db.entries.erase(begin, end);
         for (auto it = db.names.begin(); it != db.names.end(); ++it) {
-            if (c_collection != it->second)
+            if (c.id != it->second)
                 continue;
             db.names.erase(it);
             break;
         }
     }
 
-    else if (c_mode == ukv_drop_keys_vals_k)
+    else if (c.mode == ukv_drop_keys_vals_k)
         db.entries.erase(begin, end);
 
-    else if (c_mode == ukv_drop_vals_k) {
+    else if (c.mode == ukv_drop_vals_k) {
         generation_t gen = ++db.youngest_generation;
         for (; begin != end; ++begin)
             begin->assign_empty(gen);
     }
 }
 
-void ukv_collection_list( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const,
-    ukv_options_t const c_options,
-    ukv_size_t* c_count,
-    ukv_collection_t** c_ids,
-    ukv_length_t** c_offsets,
-    ukv_char_t** c_names,
-    ukv_arena_t* c_arena,
-    ukv_error_t* c_error) {
+void ukv_collection_list(ukv_collection_list_t* c_ptr) {
 
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    return_if_error(c_count && c_names, c_error, args_combo_k, "Need names and outputs!");
+    ukv_collection_list_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_if_error(c.count && c.names, c.error, args_combo_k, "Need names and outputs!");
 
-    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
-    return_on_error(c_error);
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    return_on_error(c.error);
 
-    database_t& db = *reinterpret_cast<database_t*>(c_db);
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
     std::shared_lock _ {db.mutex};
     std::size_t collections_count = db.names.size();
-    *c_count = static_cast<ukv_size_t>(collections_count);
+    *c.count = static_cast<ukv_size_t>(collections_count);
 
     // Every string will be null-terminated
     std::size_t strings_length = 0;
     for (auto const& name_and_handle : db.names)
         strings_length += name_and_handle.first.size() + 1;
-    auto names = arena.alloc<char>(strings_length, c_error).begin();
-    *c_names = names;
-    return_on_error(c_error);
+    auto names = arena.alloc<char>(strings_length, c.error).begin();
+    *c.names = names;
+    return_on_error(c.error);
 
     // For every collection we also need to export IDs and offsets
-    auto ids = arena.alloc_or_dummy(collections_count, c_error, c_ids);
-    return_on_error(c_error);
-    auto offs = arena.alloc_or_dummy(collections_count + 1, c_error, c_offsets);
-    return_on_error(c_error);
+    auto ids = arena.alloc_or_dummy(collections_count, c.error, c.ids);
+    return_on_error(c.error);
+    auto offs = arena.alloc_or_dummy(collections_count + 1, c.error, c.offsets);
+    return_on_error(c.error);
 
     std::size_t i = 0;
     for (auto const& name_and_handle : db.names) {
@@ -1060,68 +923,57 @@ void ukv_collection_list( //
         std::memcpy(names, name_and_handle.first.data(), len);
         names[len] = '\0';
         ids[i] = name_and_handle.second;
-        offs[i] = static_cast<ukv_length_t>(names - *c_names);
+        offs[i] = static_cast<ukv_length_t>(names - *c.names);
         names += len + 1;
         ++i;
     }
-    offs[i] = static_cast<ukv_length_t>(names - *c_names);
+    offs[i] = static_cast<ukv_length_t>(names - *c.names);
 }
 
-void ukv_database_control( //
-    ukv_database_t const c_db,
-    ukv_str_view_t c_request,
-    ukv_char_t** c_response,
-    ukv_error_t* c_error) {
+void ukv_database_control(ukv_database_control_t* c_ptr) {
 
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    return_if_error(c_request, c_error, uninitialized_state_k, "Request is uninitialized");
+    ukv_database_control_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_if_error(c.request, c.error, uninitialized_state_k, "Request is uninitialized");
 
-    *c_response = NULL;
-    log_error(c_error, missing_feature_k, "Controls aren't supported in this implementation!");
+    *c.response = NULL;
+    log_error(c.error, missing_feature_k, "Controls aren't supported in this implementation!");
 }
 
 /*********************************************************/
 /*****************		Transactions	  ****************/
 /*********************************************************/
 
-void ukv_transaction_init(
-    // Inputs:
-    ukv_database_t const c_db,
-    ukv_options_t const c_options,
-    // Outputs:
-    ukv_transaction_t* c_txn,
-    ukv_error_t* c_error) {
+void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    validate_transaction_begin(c_txn, c_options, c_error);
-    return_on_error(c_error);
+    ukv_transaction_init_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    validate_transaction_begin(c.transaction, c.options, c.error);
+    return_on_error(c.error);
 
-    database_t& db = *reinterpret_cast<database_t*>(c_db);
-    safe_section("Initializing transaction state", c_error, [&] {
-        if (!*c_txn)
-            *c_txn = new transaction_t();
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
+    safe_section("Initializing transaction state", c.error, [&] {
+        if (!*c.transaction)
+            *c.transaction = new transaction_t();
     });
-    return_on_error(c_error);
+    return_on_error(c.error);
 
-    transaction_t& txn = *reinterpret_cast<transaction_t*>(*c_txn);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(*c.transaction);
     txn.db_ptr = &db;
     txn.generation = ++db.youngest_generation;
     txn.watched.clear();
     txn.changes.clear();
 }
 
-void ukv_transaction_commit( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    ukv_options_t const c_options,
-    ukv_error_t* c_error) {
+void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    database_t& db = *reinterpret_cast<database_t*>(c_db);
+    ukv_transaction_commit_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
 
-    validate_transaction_commit(c_txn, c_options, c_error);
-    return_on_error(c_error);
-    transaction_t& txn = *reinterpret_cast<transaction_t*>(c_txn);
+    validate_transaction_commit(c.transaction, c.options, c.error);
+    return_on_error(c.error);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
 
     // This write may fail with out-of-memory errors, if Hash-Tables
     // bucket allocation fails, but no values will be copied, only moved.
@@ -1133,12 +985,12 @@ void ukv_transaction_commit( //
         auto db_iterator = db.entries.find(collection_key);
         bool missing = db_iterator == db.entries.end();
         if (watched_generation == missing_data_generation_k) {
-            return_if_error(missing, c_error, consistency_k, "WATCH-ed key was added");
+            return_if_error(missing, c.error, consistency_k, "WATCH-ed key was added");
         }
         else {
-            return_if_error(!missing, c_error, consistency_k, "WATCH-ed key was deleted");
+            return_if_error(!missing, c.error, consistency_k, "WATCH-ed key was deleted");
             bool untouched = db_iterator->generation == watched_generation;
-            return_if_error(untouched, c_error, consistency_k, "WATCH-ed key was updated");
+            return_if_error(untouched, c.error, consistency_k, "WATCH-ed key was updated");
         }
     }
 
@@ -1146,8 +998,8 @@ void ukv_transaction_commit( //
     merge_overwrite(db.entries, txn.changes);
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
-    if (c_options & ukv_option_write_flush_k)
-        write(db, db.persisted_path, c_error);
+    if (c.options & ukv_option_write_flush_k)
+        write(db, db.persisted_path, c.error);
 }
 
 /*********************************************************/

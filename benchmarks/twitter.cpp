@@ -21,19 +21,35 @@ using namespace unum::ukv;
 using uniform_idx_t = std::uniform_int_distribution<std::size_t>;
 
 constexpr std::size_t id_str_max_length_k = 24;
-constexpr std::size_t copies_per_tweet_k = 10;
+constexpr std::size_t copies_per_tweet_k = 100;
+constexpr std::size_t tweet_file_size_k = 1; // GB
 
 constexpr std::size_t primes_k[copies_per_tweet_k] = {
-    9223372036854777211ull,
-    14223002033854726039ull,
-    9223372036854777293ull,
-    14223002033854726067ull,
-    9223372036854777341ull,
-    14223002033854726081ull,
-    9223372036854777343ull,
-    14223002033854726111ull,
-    9223372036854777353ull,
-    14223002033854726163ull,
+    12569589282558108893ull, 10373281427301508897ull, 10008795057561858269ull, 7948791514834664467ull,
+    3838954299457218127ull,  3120785516547182557ull,  4393300032555048899ull,  7004376283452977123ull,
+    9223372036854777211ull,  14223002033854726039ull, 9223372036854777293ull,  14223002033854726067ull,
+    2400445992553322941ull,  7610199643906768511ull,  1057293803246848247ull,  2038660339199745551ull,
+    8361297840661149799ull,  5868535710016424509ull,  6027311394490700579ull,  5943660934723204943ull,
+    2094115702880657593ull,  3140666882080323017ull,  7760430618278960933ull,  6873072972236380241ull,
+    9223372036854777341ull,  14223002033854726081ull, 9223372036854777343ull,  14223002033854726111ull,
+    6795671851311995789ull,  1351473000834705907ull,  2268507068162180357ull,  5644432768880692667ull,
+    5138321953585775243ull,  9093228448182973739ull,  8361721925721877541ull,  4026045413825251741ull,
+    7656187714642488053ull,  4784429641543729987ull,  4318730088657872861ull,  6914886887575787999ull,
+    8173209983052349799ull,  5305425057627062821ull,  6087027882323524897ull,  8766152961033445163ull,
+    10418630437308180299ull, 14075865680893402591ull, 10163156291297837117ull, 18077780250763319701ull,
+    6137167220161520359ull,  5573097357874852957ull,  2177473509970310161ull,  7017271200647874559ull,
+    2605171251953385517ull,  4624197988349522207ull,  5600005528373969639ull,  3467147448838520857ull,
+    4659395790226376879ull,  3747345793616544157ull,  3571553057936507177ull,  5951561671725137389ull,
+    2512903254975431057ull,  3784831916450787899ull,  9939651098248888697ull,  3559489787587522993ull,
+    8862473820545766469ull,  1592758508155117249ull,  6562663209751260211ull,  5328603983932857451ull,
+    10086415893179756723ull, 11865224483816137289ull, 15953537372516590507ull, 12263243032781001451ull,
+    4584969444095621069ull,  3900124486756399469ull,  9024661002745317511ull,  7196994623644519289ull,
+    7658610878204970317ull,  7863158793182220391ull,  8617876949595084013ull,  7948869872106641419ull,
+    6673555355008989617ull,  9485947537665069839ull,  5143840846497713699ull,  3339354536417374873ull,
+    3953417099769745759ull,  4168758563627460947ull,  1602550336683279341ull,  3352622256776997709ull,
+    8169658195990788769ull,  8288953878290018909ull,  4673431322226133517ull,  2501537406610420733ull,
+    9223372036854777353ull,  14223002033854726163ull, 10739949005710698439ull, 15618974819613138553ull,
+    4930670520436784183ull,  1646044952356259251ull,  1276965327440183483ull,  9345165794939122411ull,
 };
 
 struct tweet_t {
@@ -42,7 +58,7 @@ struct tweet_t {
     std::string_view body;
 };
 
-static std::string dataset_directory = "~/Datasets/Twitter/";
+static std::string dataset_directory = "~/../sftp/Datasets/Twitter/";
 static std::vector<std::string> paths;
 static std::vector<std::size_t> sizes;
 static std::vector<std::string_view> mapped_contents;
@@ -107,7 +123,7 @@ static void docs_upsert(bm::State& state) {
 
     std::size_t tweets_bytes = 0;
     for (auto _ : state) {
-
+        // TODO: Implement another way to select the batch size. Now it's equal copies_per_tweet_k
         // Generate multiple IDs for each tweet, to augment the dataset.
         auto const& tweet = *tweets_iterator;
         auto const tweet_hash = hash(tweet);
@@ -118,28 +134,22 @@ static void docs_upsert(bm::State& state) {
         // Finally, import the data.
         ukv_bytes_cptr_t body = reinterpret_cast<ukv_bytes_cptr_t>(tweet.body.data());
         ukv_length_t length = static_cast<ukv_length_t>(tweet.body.size());
-        ukv_docs_write( //
-            db,
-            nullptr,
-            copies_per_tweet_k,
-            &collection_docs_k,
-            0,
-            ids_tweets.data(),
-            sizeof(ukv_key_t),
-            nullptr,
-            0,
-            nullptr,
-            nullptr,
-            0,
-            &length,
-            0,
-            &body,
-            0,
-            ukv_doc_modify_upsert_k,
-            ukv_doc_field_json_k,
-            ukv_options_default_k,
-            arena.member_ptr(),
-            status.member_ptr());
+
+        ukv_docs_write_t docs_write {
+            .db = db,
+            .error = status.member_ptr(),
+            .modification = ukv_doc_modify_upsert_k,
+            .arena = arena.member_ptr(),
+            .type = ukv_doc_field_json_k,
+            .tasks_count = copies_per_tweet_k,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets.data(),
+            .keys_stride = sizeof(ukv_key_t),
+            .lengths = &length,
+            .values = &body,
+        };
+
+        ukv_docs_write(&docs_write);
         status.throw_unhandled();
 
         ++tweets_iterator;
@@ -191,21 +201,19 @@ static void docs_sample_blobs(bm::State& state) {
     sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
-        ukv_read( //
-            db,
-            nullptr,
-            count,
-            &collection_docs_k,
-            0,
-            ids_tweets,
-            sizeof(ukv_key_t),
-            ukv_options_default_k,
-            nullptr,
-            &offsets,
-            nullptr,
-            &values,
-            arena.member_ptr(),
-            status.member_ptr());
+        ukv_read_t read {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .tasks_count = count,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets,
+            .keys_stride = sizeof(ukv_key_t),
+            .offsets = &offsets,
+            .values = &values,
+        };
+
+        ukv_read(&read);
         status.throw_unhandled();
         received_bytes += offsets[count];
     });
@@ -222,24 +230,21 @@ static void docs_sample_objects(bm::State& state) {
     sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
-        ukv_docs_read( //
-            db,
-            nullptr,
-            count,
-            &collection_docs_k,
-            0,
-            ids_tweets,
-            sizeof(ukv_key_t),
-            nullptr,
-            0,
-            ukv_doc_field_json_k,
-            ukv_options_default_k,
-            nullptr,
-            &offsets,
-            nullptr,
-            &values,
-            arena.member_ptr(),
-            status.member_ptr());
+
+        ukv_docs_read_t docs_read {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .type = ukv_doc_field_json_k,
+            .tasks_count = count,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets,
+            .keys_stride = sizeof(ukv_key_t),
+            .found_offsets = &offsets,
+            .found_values = &values,
+        };
+
+        ukv_docs_read(&docs_read);
         status.throw_unhandled();
         received_bytes += offsets[count];
     });
@@ -256,24 +261,22 @@ static void docs_sample_field(bm::State& state) {
     sample_tweet_id_batches(state, [&](ukv_key_t const* ids_tweets, ukv_size_t count) {
         ukv_length_t* offsets = nullptr;
         ukv_byte_t* values = nullptr;
-        ukv_docs_read( //
-            db,
-            nullptr,
-            count,
-            &collection_docs_k,
-            0,
-            ids_tweets,
-            sizeof(ukv_key_t),
-            &field,
-            0,
-            ukv_doc_field_str_k,
-            ukv_options_default_k,
-            nullptr,
-            &offsets,
-            nullptr,
-            &values,
-            arena.member_ptr(),
-            status.member_ptr());
+
+        ukv_docs_read_t docs_read {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .type = ukv_doc_field_str_k,
+            .tasks_count = count,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets,
+            .keys_stride = sizeof(ukv_key_t),
+            .fields = &field,
+            .found_offsets = &offsets,
+            .found_values = &values,
+        };
+
+        ukv_docs_read(&docs_read);
         status.throw_unhandled();
         received_bytes += offsets[count];
     });
@@ -298,32 +301,31 @@ static void docs_sample_table(bm::State& state) {
         ukv_length_t** offsets = nullptr;
         ukv_length_t** lengths = nullptr;
         ukv_byte_t* strings = nullptr;
-        ukv_docs_gather( //
-            db,
-            nullptr,
-            count,
-            fields_k,
-            &collection_docs_k,
-            0,
-            ids_tweets,
-            sizeof(ukv_key_t),
-            names,
-            sizeof(ukv_str_view_t),
-            types,
-            sizeof(ukv_doc_field_type_t),
-            ukv_options_default_k,
-            &validities,
-            nullptr,
-            nullptr,
-            &scalars,
-            &offsets,
-            &lengths,
-            &strings,
-            arena.member_ptr(),
-            status.member_ptr());
+
+        ukv_docs_gather_t docs_gather {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .docs_count = count,
+            .fields_count = fields_k,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets,
+            .keys_stride = sizeof(ukv_key_t),
+            .fields = names,
+            .fields_stride = sizeof(ukv_str_view_t),
+            .types = types,
+            .types_stride = sizeof(ukv_doc_field_type_t),
+            .columns_validities = &validities,
+            .columns_scalars = &scalars,
+            .columns_offsets = &offsets,
+            .columns_lengths = &lengths,
+            .joined_strings = &strings,
+        };
+
+        ukv_docs_gather(&docs_gather);
         status.throw_unhandled();
 
-        // One column is just stirngs
+        // One column is just strings
         received_bytes += std::accumulate(&lengths[0][0], &lengths[0][0] + count - 1, 0ul);
         // Others are scalars
         received_bytes += (fields_k - 1) * sizeof(std::uint32_t) * count;
@@ -357,29 +359,26 @@ static void graph_construct_from_docs(bm::State& state) {
         ukv_octet_t** validities = nullptr;
         ukv_byte_t** scalars = nullptr;
         ukv_byte_t* strings = nullptr;
-        ukv_docs_gather( //
-            db,
-            nullptr,
-            count,
-            fields_k,
-            &collection_docs_k,
-            0,
-            ids_tweets,
-            sizeof(ukv_key_t),
-            names,
-            sizeof(ukv_str_view_t),
-            types,
-            sizeof(ukv_doc_field_type_t),
-            ukv_options_default_k,
-            &validities,
-            nullptr,
-            nullptr,
-            &scalars,
-            nullptr,
-            nullptr,
-            &strings,
-            arena.member_ptr(),
-            status.member_ptr());
+
+        ukv_docs_gather_t docs_gather {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .docs_count = count,
+            .fields_count = fields_k,
+            .collections = &collection_docs_k,
+            .keys = ids_tweets,
+            .keys_stride = sizeof(ukv_key_t),
+            .fields = names,
+            .fields_stride = sizeof(ukv_str_view_t),
+            .types = types,
+            .types_stride = sizeof(ukv_doc_field_type_t),
+            .columns_validities = &validities,
+            .columns_scalars = &scalars,
+            .joined_strings = &strings,
+        };
+
+        ukv_docs_gather(&docs_gather);
         status.throw_unhandled();
 
         // Check which edges can be constructed
@@ -408,21 +407,21 @@ static void graph_construct_from_docs(bm::State& state) {
 
         // Insert or update those edges
         auto strided = edges(edges_array);
-        ukv_graph_upsert_edges( //
-            db,
-            nullptr,
-            count,
-            &collection_graph_k,
-            0,
-            strided.edge_ids.begin().get(),
-            strided.edge_ids.stride(),
-            strided.source_ids.begin().get(),
-            strided.source_ids.stride(),
-            strided.target_ids.begin().get(),
-            strided.target_ids.stride(),
-            ukv_options_default_k,
-            arena.member_ptr(),
-            status.member_ptr());
+        ukv_graph_upsert_edges_t graph_upsert_edges {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .tasks_count = count,
+            .collections = &collection_graph_k,
+            .edges_ids = strided.edge_ids.begin().get(),
+            .edges_stride = strided.edge_ids.stride(),
+            .sources_ids = strided.source_ids.begin().get(),
+            .sources_stride = strided.source_ids.stride(),
+            .targets_ids = strided.target_ids.begin().get(),
+            .targets_stride = strided.target_ids.stride(),
+        };
+
+        ukv_graph_upsert_edges(&graph_upsert_edges);
         status.throw_unhandled();
 
         received_bytes += fields_k * sizeof(std::uint64_t) * count;
@@ -450,21 +449,21 @@ static void graph_traverse_two_hops(bm::State& state) {
         ukv_vertex_role_t const role = ukv_vertex_role_any_k;
         ukv_vertex_degree_t* degrees = nullptr;
         ukv_key_t* ids_in_edges = nullptr;
-        ukv_graph_find_edges( //
-            db,
-            nullptr,
-            count,
-            &collection_graph_k,
-            0,
-            ids_tweets,
-            sizeof(ukv_key_t),
-            &role,
-            0,
-            ukv_options_default_k,
-            &degrees,
-            &ids_in_edges,
-            arena.member_ptr(),
-            status.member_ptr());
+
+        ukv_graph_find_edges_t graph_find_edges_first {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .tasks_count = count,
+            .collections = &collection_graph_k,
+            .vertices_ids = ids_tweets,
+            .vertices_stride = sizeof(ukv_key_t),
+            .roles = &role,
+            .degrees_per_vertex = &degrees,
+            .edges_per_vertex = &ids_in_edges,
+        };
+
+        ukv_graph_find_edges(&graph_find_edges_first);
         status.throw_unhandled();
 
         // Now keep only the unique objects
@@ -474,22 +473,22 @@ static void graph_traverse_two_hops(bm::State& state) {
         auto total_ids = total_edges * 3;
         auto unique_ids = sort_and_deduplicate(ids_in_edges, ids_in_edges + total_ids);
 
+        ukv_graph_find_edges_t graph_find_edges_second {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .options = ukv_option_dont_discard_memory_k,
+            .tasks_count = unique_ids,
+            .collections = &collection_graph_k,
+            .vertices_ids = ids_in_edges,
+            .vertices_stride = sizeof(ukv_key_t),
+            .roles = &role,
+            .degrees_per_vertex = &degrees,
+            .edges_per_vertex = &ids_in_edges,
+        };
+
         // Second hop
-        ukv_graph_find_edges( //
-            db,
-            nullptr,
-            unique_ids,
-            &collection_graph_k,
-            0,
-            ids_in_edges,
-            sizeof(ukv_key_t),
-            &role,
-            0,
-            ukv_option_dont_discard_memory_k,
-            &degrees,
-            &ids_in_edges,
-            arena.member_ptr(),
-            status.member_ptr());
+        ukv_graph_find_edges(&graph_find_edges_second);
         status.throw_unhandled();
 
         total_edges += std::transform_reduce(degrees, degrees + unique_ids, 0ul, plus, [](ukv_vertex_degree_t d) {
@@ -531,30 +530,20 @@ static void paths_construct_from_nicknames(bm::State& state) {
             injected_bytes += std::strlen(tweet.id_str);
         }
 
+        ukv_paths_write_t paths_write {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .tasks_count = batch_size,
+            .path_separator = separator,
+            .paths = (ukv_str_view_t*)batch_usernames.data(),
+            .paths_stride = sizeof(ukv_str_view_t),
+            .values_bytes = (ukv_bytes_cptr_t*)batch_id_strs.data(),
+            .values_bytes_stride = sizeof(ukv_str_view_t),
+        };
+
         // Finally, import the data.
-        ukv_paths_write( //
-            db,
-            nullptr,
-            batch_size,
-            &collection_paths_k,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            (ukv_str_view_t*)batch_usernames.data(),
-            sizeof(ukv_str_view_t),
-            nullptr,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            (ukv_bytes_cptr_t*)batch_id_strs.data(),
-            sizeof(ukv_str_view_t),
-            ukv_options_default_k,
-            separator,
-            arena.member_ptr(),
-            status.member_ptr());
+        ukv_paths_write(&paths_write);
         status.throw_unhandled();
     }
 
@@ -596,7 +585,9 @@ static void index_file(std::string_view mapped_contents, std::vector<tweet_t>& t
 
 int main(int argc, char** argv) {
     bm::Initialize(&argc, argv);
-    thread_count = 2; // std::thread::hardware_concurrency() / 4;
+
+    std::size_t db_volume = 1000; // GB
+    thread_count = std::thread::hardware_concurrency() / 8;
 
     // 1. Find the dataset parts
     std::printf("Will search for .ndjson files...\n");
@@ -613,7 +604,7 @@ int main(int argc, char** argv) {
         sizes.push_back(dir_entry.file_size());
     }
     std::printf("- found %i files\n", static_cast<int>(paths.size()));
-    paths.resize(thread_count);
+    paths.resize(db_volume / (tweet_file_size_k * copies_per_tweet_k));
     std::printf("- kept only %i files\n", static_cast<int>(paths.size()));
     tweets_per_path.resize(paths.size());
     mapped_contents.resize(paths.size());
@@ -663,12 +654,24 @@ int main(int argc, char** argv) {
     bool can_build_paths = false;
     if (ukv_supports_named_collections_k) {
         status_t status;
-        ukv_collection_init(db, "twitter.docs", "", &collection_docs_k, status.member_ptr());
+        ukv_collection_init_t coll_init {
+            .db = db,
+            .error = status.member_ptr(),
+            .name = "twitter.docs",
+            .config = "",
+            .id = &collection_docs_k,
+        };
+
+        ukv_collection_init(&coll_init);
         status.throw_unhandled();
-        ukv_collection_init(db, "twitter.graph", "", &collection_graph_k, status.member_ptr());
+        coll_init.name = "twitter.graph";
+        coll_init.id = &collection_graph_k;
+        ukv_collection_init(&coll_init);
         status.throw_unhandled();
         can_build_graph = true;
-        ukv_collection_init(db, "twitter.nicks", "", &collection_paths_k, status.member_ptr());
+        coll_init.name = "twitter.nicks";
+        coll_init.id = &collection_paths_k;
+        ukv_collection_init(&coll_init);
         status.throw_unhandled();
         can_build_paths = true;
     }
