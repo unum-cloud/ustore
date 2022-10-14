@@ -168,25 +168,16 @@ struct triplet_t {
 };
 
 void check_binary_collection(bins_collection_t& collection) {
-    std::vector<ukv_key_t> keys {34, 35, 36};
-    ukv_length_t val_len = sizeof(std::uint64_t);
-    std::vector<std::uint64_t> vals {34, 35, 36};
-    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
-    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
 
-    auto ref = collection[keys];
-    contents_arg_t values {
-        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
-        .lengths_begin = {&val_len, 0},
-        .contents_begin = {&vals_begin, 0},
-        .count = 3,
-    };
-    round_trip(ref, values);
+    triplet_t triplet;
+    auto ref = collection[triplet.keys];
+
+    round_trip(ref, triplet.contents());
 
     // Overwrite those values with same size integers and try again
-    for (auto& val : vals)
+    for (auto& val : triplet.vals)
         val += 100;
-    round_trip(ref, values);
+    round_trip(ref, triplet.contents());
 
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(ref.clear());
@@ -195,8 +186,8 @@ void check_binary_collection(bins_collection_t& collection) {
     // Check scans
     keys_range_t present_keys = collection.keys();
     keys_stream_t present_it = present_keys.begin();
-    auto expected_it = keys.begin();
-    for (; expected_it != keys.end(); ++present_it, ++expected_it) {
+    auto expected_it = triplet.keys.begin();
+    for (; expected_it != triplet.keys.end(); ++present_it, ++expected_it) {
         EXPECT_EQ(*expected_it, *present_it);
     }
     EXPECT_TRUE(present_it.is_end());
@@ -226,32 +217,21 @@ TEST(db, persistency) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
-
-    std::vector<ukv_key_t> keys {54, 55, 56};
-    ukv_length_t val_len = sizeof(std::uint64_t);
-    std::vector<std::uint64_t> vals {1, 2, 3};
-    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
-    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
-
-    contents_arg_t values {
-        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
-        .lengths_begin = {&val_len, 0},
-        .contents_begin = {&vals_begin, 0},
-        .count = 3,
-    };
+    
+    triplet_t triplet;
 
     bins_collection_t collection = *db.collection();
-    auto collection_ref = collection[keys];
+    auto collection_ref = collection[triplet.keys];
     check_length(collection_ref, ukv_length_missing_k);
-    round_trip(collection_ref, values);
+    round_trip(collection_ref, triplet.contents());
     check_length(collection_ref, 8);
     db.close();
 
     EXPECT_TRUE(db.open(path()));
     bins_collection_t collection2 = *db.collection();
-    auto collection_ref2 = collection2[keys];
+    auto collection_ref2 = collection2[triplet.keys];
 
-    check_equalities(collection_ref2, values);
+    check_equalities(collection_ref2, triplet.contents());
     check_length(collection_ref2, 8);
 
     EXPECT_TRUE(db.clear());
@@ -562,31 +542,20 @@ TEST(db, unnamed_and_named) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    std::vector<ukv_key_t> keys {54, 55, 56};
-    ukv_length_t val_len = sizeof(std::uint64_t);
-    std::vector<std::uint64_t> vals {1, 2, 3};
-    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
-    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
-
-    contents_arg_t values {
-        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
-        .lengths_begin = {&val_len, 0},
-        .contents_begin = {&vals_begin, 0},
-        .count = 3,
-    };
+    triplet_t triplet;
 
     EXPECT_FALSE(db.add_collection(""));
 
     for (auto&& name : {"one", "three"}) {
-        for (auto& val : vals)
+        for (auto& val : triplet.vals)
             val += 7;
 
         auto maybe_collection = db.add_collection(name);
         EXPECT_TRUE(maybe_collection);
         bins_collection_t collection = std::move(maybe_collection).throw_or_release();
-        auto collection_ref = collection[keys];
+        auto collection_ref = collection[triplet.keys];
         check_length(collection_ref, ukv_length_missing_k);
-        round_trip(collection_ref, values);
+        round_trip(collection_ref, triplet.contents());
         check_length(collection_ref, 8);
     }
     EXPECT_TRUE(db.clear());
@@ -601,26 +570,15 @@ TEST(db, txn) {
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
+    
+    triplet_t triplet;
 
-    std::vector<ukv_key_t> keys {54, 55, 56};
-    ukv_length_t val_len = sizeof(std::uint64_t);
-    std::vector<std::uint64_t> vals {54, 55, 56};
-    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
-    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
-
-    contents_arg_t values {
-        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
-        .lengths_begin = {&val_len, 0},
-        .contents_begin = {&vals_begin, 0},
-        .count = 3,
-    };
-
-    auto txn_ref = txn[keys];
-    round_trip(txn_ref, values);
+    auto txn_ref = txn[triplet.keys];
+    round_trip(txn_ref, triplet.contents());
 
     EXPECT_TRUE(db.collection());
     bins_collection_t collection = *db.collection();
-    auto collection_ref = collection[keys];
+    auto collection_ref = collection[triplet.keys];
 
     // Check for missing values before commit
     check_length(collection_ref, ukv_length_missing_k);
@@ -628,7 +586,7 @@ TEST(db, txn) {
     EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
-    check_equalities(collection_ref, values);
+    check_equalities(collection_ref, triplet.contents());
     EXPECT_TRUE(db.clear());
 }
 
@@ -640,38 +598,26 @@ TEST(db, txn_named) {
         return;
 
     database_t db;
+    triplet_t triplet;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
-
-    std::vector<ukv_key_t> keys {54, 55, 56};
-    ukv_length_t val_len = sizeof(std::uint64_t);
-    std::vector<std::uint64_t> vals {54, 55, 56};
-    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
-    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
-
-    contents_arg_t values {
-        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
-        .lengths_begin = {&val_len, 0},
-        .contents_begin = {&vals_begin, 0},
-        .count = 3,
-    };
 
     // Transaction with named collection
     EXPECT_TRUE(db.collection("named_col"));
     bins_collection_t named_collection = *db.collection("named_col");
     std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
     auto txn_named_collection_ref = txn[sub_keys];
-    round_trip(txn_named_collection_ref, values);
+    round_trip(txn_named_collection_ref, triplet.contents());
 
     // Check for missing values before commit
-    auto named_collection_ref = named_collection[keys];
+    auto named_collection_ref = named_collection[triplet.keys];
     check_length(named_collection_ref, ukv_length_missing_k);
     EXPECT_TRUE(txn.commit());
     EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
-    check_equalities(named_collection_ref, values);
+    check_equalities(named_collection_ref, triplet.contents());
     EXPECT_TRUE(db.clear());
 }
 
@@ -687,26 +633,15 @@ TEST(db, txn_unnamed_then_named) {
 
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
+    
+    triplet_t triplet;
 
-    std::vector<ukv_key_t> keys {54, 55, 56};
-    ukv_length_t val_len = sizeof(std::uint64_t);
-    std::vector<std::uint64_t> vals {54, 55, 56};
-    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
-    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
-
-    contents_arg_t values {
-        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
-        .lengths_begin = {&val_len, 0},
-        .contents_begin = {&vals_begin, 0},
-        .count = 3,
-    };
-
-    auto txn_ref = txn[keys];
-    round_trip(txn_ref, values);
+    auto txn_ref = txn[triplet.keys];
+    round_trip(txn_ref, triplet.contents());
 
     EXPECT_TRUE(db.collection());
     bins_collection_t collection = *db.collection();
-    auto collection_ref = collection[keys];
+    auto collection_ref = collection[triplet.keys];
 
     // Check for missing values before commit
     check_length(collection_ref, ukv_length_missing_k);
@@ -714,23 +649,23 @@ TEST(db, txn_unnamed_then_named) {
     EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
-    check_equalities(collection_ref, values);
+    check_equalities(collection_ref, triplet.contents());
 
     // Transaction with named collection
     EXPECT_TRUE(db.add_collection("named_col"));
     bins_collection_t named_collection = *db.collection("named_col");
     std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
     auto txn_named_collection_ref = txn[sub_keys];
-    round_trip(txn_named_collection_ref, values);
+    round_trip(txn_named_collection_ref, triplet.contents());
 
     // Check for missing values before commit
-    auto named_collection_ref = named_collection[keys];
+    auto named_collection_ref = named_collection[triplet.keys];
     check_length(named_collection_ref, ukv_length_missing_k);
     EXPECT_TRUE(txn.commit());
     EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
-    check_equalities(named_collection_ref, values);
+    check_equalities(named_collection_ref, triplet.contents());
     EXPECT_TRUE(db.clear());
 }
 
