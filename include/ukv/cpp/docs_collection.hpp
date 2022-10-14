@@ -73,13 +73,13 @@ class docs_collection_t {
 
     inline bins_range_t members( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-        ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+        ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
         return {db_, txn_, collection_, min_key, max_key};
     }
 
     inline keys_range_t keys( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-        ukv_key_t max_key = ukv_key_unknown_k) const noexcept {
+        ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
         return {members(min_key, max_key)};
     }
 
@@ -96,19 +96,37 @@ class docs_collection_t {
 
     status_t clear_values() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, ukv_drop_vals_k, status.member_ptr());
+        ukv_collection_drop_t coll_drop {
+            .db = db_,
+            .error = status.member_ptr(),
+            .id = collection_,
+            .mode = ukv_drop_vals_k,
+        };
+        ukv_collection_drop(&coll_drop);
         return status;
     }
 
     status_t clear() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, ukv_drop_keys_vals_k, status.member_ptr());
+        ukv_collection_drop_t coll_drop {
+            .db = db_,
+            .error = status.member_ptr(),
+            .id = collection_,
+            .mode = ukv_drop_keys_vals_k,
+        };
+        ukv_collection_drop(&coll_drop);
         return status;
     }
 
     status_t drop() noexcept {
         status_t status;
-        ukv_collection_drop(db_, collection_, ukv_drop_keys_vals_handle_k, status.member_ptr());
+        ukv_collection_drop_t coll_drop {
+            .db = db_,
+            .error = status.member_ptr(),
+            .id = collection_,
+            .mode = ukv_drop_keys_vals_handle_k,
+        };
+        ukv_collection_drop(&coll_drop);
         return status;
     }
 

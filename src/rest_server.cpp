@@ -305,7 +305,14 @@ void respond_to_one(db_session_t& session,
         std::memcpy(collection_name_buffer, collection_val->data(), std::min(collection_val->size(), 64ul));
 
         status_t status;
-        ukv_collection_init(session.db(), collection_name_buffer, NULL, &collection.raw, error.member_ptr());
+        ukv_collection_init_t coll_init {
+            .db = session.db(),
+            .error = error.member_ptr(),
+            .name = collection_name_buffer,
+            .id = &collection.raw,
+        };
+
+        ukv_collection_init(&coll_init);
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
     }
@@ -319,17 +326,19 @@ void respond_to_one(db_session_t& session,
 
         arena_t tape(session.db());
         status_t status;
-        ukv_read(session.db(),
-                 txn.raw,
-                 &collection.raw,
-                 0,
-                 &key,
-                 1,
-                 0,
-                 options,
-                 &tape.ptr,
-                 &tape.capacity,
-                 error.member_ptr());
+        ukv_read_t read {
+            .db = session.db(),
+            .error = error.member_ptr(),
+            .transaction = txn.raw,
+            .options = options,
+            .collections = &collection.raw,
+            .keys = &key,
+            .keys_stride = 1,
+            .lengths = &tape.capacity,
+            .values = &tape.ptr,
+        };
+
+        ukv_read(&read);
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -361,17 +370,19 @@ void respond_to_one(db_session_t& session,
         arena_t tape(session.db());
         status_t status;
         options = ukv_option_read_lengths_k;
-        ukv_read(session.db(),
-                 txn.raw,
-                 &collection.raw,
-                 0,
-                 &key,
-                 1,
-                 0,
-                 options,
-                 &tape.ptr,
-                 &tape.capacity,
-                 error.member_ptr());
+        ukv_read_t read {
+            .db = session.db(),
+            .transaction = txn.raw,
+            .collections = &collection.raw,
+            .keys = &key,
+            .keys_stride = 1,
+            .options = options,
+            .lengths = &tape.capacity,
+            .values = &tape.ptr,
+            .error = error.member_ptr(),
+        };
+
+        ukv_read(&read);
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -392,17 +403,19 @@ void respond_to_one(db_session_t& session,
         arena_t tape(session.db());
         status_t status;
         options = ukv_option_read_lengths_k;
-        ukv_read(session.db(),
-                 txn.raw,
-                 &collection.raw,
-                 0,
-                 &key,
-                 1,
-                 0,
-                 options,
-                 &tape.ptr,
-                 &tape.capacity,
-                 error.member_ptr());
+        ukv_read_t read {
+            .db = session.db(),
+            .transaction = txn.raw,
+            .collections = &collection.raw,
+            .keys = &key,
+            .keys_stride = 1,
+            .options = options,
+            .lengths = &tape.capacity,
+            .values = &tape.ptr,
+            .error = error.member_ptr(),
+        };
+
+        ukv_read(&read);
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -432,21 +445,20 @@ void respond_to_one(db_session_t& session,
         auto value_ptr = reinterpret_cast<ukv_bytes_ptr_t>(value.data());
         auto value_len = static_cast<ukv_length_t>(*opt_payload_len);
         ukv_length_t value_off = 0;
-        ukv_write(session.db(),
-                  txn.raw,
-                  &collection.raw,
-                  0,
-                  &key,
-                  1,
-                  0,
-                  &value_off,
-                  0,
-                  &value_len,
-                  0,
-                  &value_ptr,
-                  0,
-                  options,
-                  error.member_ptr());
+
+        ukv_write_t write {
+            .db = session.db(),
+            .error = error.member_ptr(),
+            .transaction = txn.raw,
+            .options = options.collections = &collection.raw,
+            .keys = &key,
+            .keys_stride = 1,
+            .offsets = &value_off,
+            .lengths = &value_len,
+            .values = &value_ptr,
+        };
+
+        ukv_write(&write);
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -464,21 +476,20 @@ void respond_to_one(db_session_t& session,
         ukv_bytes_ptr_t value_ptr = nullptr;
         ukv_length_t value_len = 0;
         ukv_length_t value_off = 0;
-        ukv_write(session.db(),
-                  txn.raw,
-                  &collection.raw,
-                  0,
-                  &key,
-                  1,
-                  0,
-                  &value_off,
-                  0,
-                  &value_len,
-                  0,
-                  &value_ptr,
-                  0,
-                  options,
-                  error.member_ptr());
+
+        ukv_write_t write {
+            .db = session.db(),
+            .error = error.member_ptr(),
+            .transaction = txn.raw,
+            .options = options.collections = &collection.raw,
+            .keys = &key,
+            .keys_stride = 1,
+            .offsets = &value_off,
+            .lengths = &value_len,
+            .values = &value_ptr,
+        };
+
+        ukv_write(&write);
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -526,7 +537,14 @@ void respond_to_aos(db_session_t& session,
 
         status_t status;
         bins_collection_t collection(session.db());
-        ukv_collection_init(session.db(), collection_name_buffer, NULL, &collection.raw, error.member_ptr());
+        ukv_collection_init_t coll_init {
+            .db = session.db(),
+            .error = error.member_ptr(),
+            .name = collection_name_buffer,
+            .id = &collection.raw,
+        };
+        
+        ukv_collection_init(&coll_init);
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
@@ -913,7 +931,13 @@ int main(int argc, char* argv[]) {
     // Check if we can initialize the DB
     auto session = std::make_shared<db_w_clients_t>();
     status_t status;
-    ukv_database_init(db_config.c_str(), &session->raw, error.member_ptr());
+    ukv_database_init_t database {
+        .config = db_config.c_str(),
+        .db = &session->raw,
+        .error = error.member_ptr(),
+    };
+
+    ukv_database_init(&database);
     if (!status) {
         std::cerr << "Couldn't initialize DB: " << error.raw << std::endl;
         return EXIT_FAILURE;
