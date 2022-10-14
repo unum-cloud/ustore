@@ -79,12 +79,9 @@ inline rocksdb::Slice to_slice(value_view_t value) noexcept {
 
 inline std::unique_ptr<rocks_value_t> make_value(ukv_error_t* c_error) noexcept {
     std::unique_ptr<rocks_value_t> value_uptr;
-    try {
+    safe_section("Allocating RocksDB-compatible value buffer", c_error, [&] {
         value_uptr = std::make_unique<rocks_value_t>();
-    }
-    catch (...) {
-        *c_error = "Fail to allocate value";
-    }
+    });
     return value_uptr;
 }
 
@@ -120,7 +117,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         return;
     }
 
-    try {
+    safe_section("Opening RocksDB", c.error, [&] {
         rocks_db_t* db_ptr = new rocks_db_t;
         std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
         rocksdb::Options options;
@@ -128,6 +125,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 
         std::string path = c.config; // TODO: take the path from config!
         rocks_status_t status = rocksdb::LoadLatestOptions(config_options, path, &options, &column_descriptors);
+        return_if_error(status.ok(), c.error, error_unknown_k, "Loading last RocksDB options");
         if (column_descriptors.empty())
             column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
 
@@ -135,23 +133,13 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         options.compression = rocksdb::kNoCompression;
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
-        status = rocks_native_t::Open( //
-            options,
-            rocksdb::OptimisticTransactionDBOptions(),
-            path,
-            column_descriptors,
-            &db_ptr->columns,
-            &native_db);
+        rocksdb::OptimisticTransactionDBOptions txn_options;
+        status = rocks_native_t::Open(options, txn_options, path, column_descriptors, &db_ptr->columns, &native_db);
+        return_if_error(status.ok(), c.error, error_unknown_k, "Opening RocksDB with options");
 
         db_ptr->native = std::unique_ptr<rocks_native_t>(native_db);
-
-        if (!status.ok())
-            *c.error = "Open Error";
         *c.db = db_ptr;
-    }
-    catch (...) {
-        *c.error = "Open Failure";
-    }
+    });
 }
 
 void write_one( //
@@ -160,7 +148,7 @@ void write_one( //
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept(false) {
 
     bool const safe = c_options & ukv_option_write_flush_k;
     bool const watch = !(c_options & ukv_option_transaction_dont_watch_k);
@@ -176,14 +164,19 @@ void write_one( //
     rocks_status_t status;
 
     if (txn)
-        status = !content //
-                     ? watch ? txn->SingleDelete(collection, key) : txn->DeleteUntracked(collection, key)
-                     : watch ? txn->Put(collection, key, to_slice(content))
-                             : txn->PutUntracked(collection, key, to_slice(content));
+        status =        //
+            !content    //
+                ? watch //
+                      ? txn->SingleDelete(collection, key)
+                      : txn->DeleteUntracked(collection, key)
+                : watch //
+                      ? txn->Put(collection, key, to_slice(content))
+                      : txn->PutUntracked(collection, key, to_slice(content));
     else
-        status = !content //
-                     ? db.native->SingleDelete(options, collection, key)
-                     : db.native->Put(options, collection, key, to_slice(content));
+        status =     //
+            !content //
+                ? db.native->SingleDelete(options, collection, key)
+                : db.native->Put(options, collection, key, to_slice(content));
 
     export_error(status, c_error);
 }
@@ -194,7 +187,7 @@ void write_many( //
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept(false) {
 
     bool const safe = c_options & ukv_option_write_flush_k;
     bool const watch = !(c_options & ukv_option_transaction_dont_watch_k);
@@ -209,10 +202,14 @@ void write_many( //
             auto content = contents[i];
             auto collection = rocks_collection(db, place.collection);
             auto key = to_slice(place.key);
-            auto status = !content //
-                              ? watch ? txn->SingleDelete(collection, key) : txn->DeleteUntracked(collection, key)
-                              : watch ? txn->Put(collection, key, to_slice(content))
-                                      : txn->PutUntracked(collection, key, to_slice(content));
+            auto status =   //
+                !content    //
+                    ? watch //
+                          ? txn->SingleDelete(collection, key)
+                          : txn->DeleteUntracked(collection, key)
+                    : watch //
+                          ? txn->Put(collection, key, to_slice(content))
+                          : txn->PutUntracked(collection, key, to_slice(content));
             export_error(status, c_error);
             return_on_error(c_error);
         }
@@ -252,13 +249,10 @@ void ukv_write(ukv_write_t* c_ptr) {
     places_arg_t places {collections, keys, {}, c.tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
 
-    try {
+    safe_section("Writing into RocksDB", c.error, [&] {
         auto func = c.tasks_count == 1 ? &write_one : &write_many;
         func(db, txn, places, contents, c.options, c.error);
-    }
-    catch (...) {
-        *c.error = "Write Failure";
-    }
+    });
 }
 
 template <typename value_enumerator_at>
@@ -268,7 +262,7 @@ void read_one( //
     places_arg_t places,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
     if (txn)
@@ -280,10 +274,14 @@ void read_one( //
     auto col = rocks_collection(db, place.collection);
     auto key = to_slice(place.key);
     auto value_uptr = make_value(c_error);
+    return_on_error(c_error);
+
     rocks_value_t& value = *value_uptr.get();
-    rocks_status_t status =
-        txn //
-            ? watch ? txn->GetForUpdate(options, col, key, &value) : txn->Get(options, col, key, &value)
+    rocks_status_t status = //
+        txn                 //
+            ? watch         //
+                  ? txn->GetForUpdate(options, col, key, &value)
+                  : txn->Get(options, col, key, &value)
             : db.native->Get(options, col, key, &value);
     if (!status.IsNotFound()) {
         if (export_error(status, c_error))
@@ -303,14 +301,13 @@ void read_many( //
     places_arg_t places,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
-    ukv_error_t* c_error) {
+    ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
     if (txn)
         options.snapshot = txn->GetSnapshot();
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
-
     std::vector<rocks_collection_t*> cols(places.count);
     std::vector<rocksdb::Slice> keys(places.count);
     std::vector<std::string> vals(places.count);
@@ -320,11 +317,12 @@ void read_many( //
         keys[i] = to_slice(place.key);
     }
 
-    std::vector<rocks_status_t> statuses = txn         //
-                                               ? watch //
-                                                     ? txn->MultiGetForUpdate(options, cols, keys, &vals)
-                                                     : txn->MultiGet(options, cols, keys, &vals)
-                                               : db.native->MultiGet(options, cols, keys, &vals);
+    std::vector<rocks_status_t> statuses = //
+        txn                                //
+            ? watch                        //
+                  ? txn->MultiGetForUpdate(options, cols, keys, &vals)
+                  : txn->MultiGet(options, cols, keys, &vals)
+            : db.native->MultiGet(options, cols, keys, &vals);
     for (std::size_t i = 0; i != places.size(); ++i) {
         if (!statuses[i].IsNotFound()) {
             if (export_error(statuses[i], c_error))
@@ -364,32 +362,25 @@ void ukv_read(ukv_read_t* c_ptr) {
     uninitialized_vector_gt<byte_t> contents(arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
+    bool const needs_export = c.values != nullptr;
+    auto data_enumerator = [&](std::size_t i, value_view_t value) {
+        presences[i] = bool(value);
+        lens[i] = value ? value.size() : ukv_length_missing_k;
+        if (needs_export) {
+            offs[i] = contents.size();
+            contents.insert(contents.size(), value.begin(), value.end(), c.error);
+        }
+    };
 
-    try {
-        bool const needs_export = c.values != nullptr;
-
-        auto data_enumerator = [&](std::size_t i, value_view_t value) {
-            presences[i] = bool(value);
-            lens[i] = value ? value.size() : ukv_length_missing_k;
-            if (needs_export) {
-                offs[i] = contents.size();
-                contents.insert(contents.size(), value.begin(), value.end(), c.error);
-            }
-        };
-
-        if (c.tasks_count == 1)
-            read_one(db, txn, places, c.options, data_enumerator, c.error);
-        else
-            read_many(db, txn, places, c.options, data_enumerator, c.error);
-
+    safe_section("Reading from RocksDB", c.error, [&] {
+        c.tasks_count == 1 //
+            ? read_one(db, txn, places, c.options, data_enumerator, c.error)
+            : read_many(db, txn, places, c.options, data_enumerator, c.error);
         offs[places.count] = contents.size();
 
         if (needs_export)
             *c.values = reinterpret_cast<ukv_bytes_ptr_t>(contents.begin());
-    }
-    catch (...) {
-        *c.error = "Read Failure";
-    }
+    });
 }
 
 void ukv_scan(ukv_scan_t* c_ptr) {
@@ -404,9 +395,8 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     rocks_txn_t* txn = reinterpret_cast<rocks_txn_t*>(c.transaction);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
-    strided_iterator_gt<ukv_key_t const> end_keys {c.end_keys, c.end_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.scan_limits, c.scan_limits_stride};
-    scans_arg_t tasks {collections, start_keys, end_keys, limits, c.tasks_count};
+    scans_arg_t tasks {collections, start_keys, limits, c.tasks_count};
 
     // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy(tasks.count + 1, c.error, c.offsets);
@@ -430,24 +420,19 @@ void ukv_scan(ukv_scan_t* c_ptr) {
         auto collection = rocks_collection(db, task.collection);
 
         std::unique_ptr<rocksdb::Iterator> it;
-        try {
+        safe_section("Creating a RocksDB iterator", c.error, [&] {
             it = txn //
                      ? std::unique_ptr<rocksdb::Iterator>(txn->GetIterator(options, collection))
                      : std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(options, collection));
-        }
-        catch (...) {
-            *c.error = "Failed To Create Iterator";
-        }
+        });
+        return_on_error(c.error);
 
         ukv_size_t j = 0;
         it->Seek(to_slice(task.min_key));
         offsets[i] = keys_output - *c.keys;
 
         while (it->Valid() && j != task.limit) {
-            auto key = *reinterpret_cast<ukv_key_t const*>(it->key().data());
-            if (key >= task.max_key)
-                break;
-            std::memcpy(keys_output, &key, sizeof(ukv_key_t));
+            std::memcpy(keys_output, it->key().data(), sizeof(ukv_key_t));
             ++keys_output;
             ++j;
             it->Next();
@@ -492,16 +477,14 @@ void ukv_measure(ukv_measure_t* c_ptr) {
         ukv_key_t const min_key = start_keys[i];
         ukv_key_t const max_key = end_keys[i];
         range = rocksdb::Range(to_slice(min_key), to_slice(max_key));
-        try {
+        safe_section("Retrieving properties from RocksDB", c.error, [&] {
             status = db.native->GetApproximateSizes(options, collection, &range, 1, &approximate_size);
             if (export_error(status, c.error))
                 return;
             db.native->GetIntProperty(collection, "rocksdb.estimate-num-keys", &keys_size);
             db.native->GetIntProperty(collection, "rocksdb.total-sst-files-size", &sst_files_size);
-        }
-        catch (...) {
-            *c.error = "Property Read Failure";
-        }
+        });
+        return_on_error(c.error);
 
         ukv_size_t estimate[6];
         min_cardinalities[i] = estimate[0] = static_cast<ukv_size_t>(0);
