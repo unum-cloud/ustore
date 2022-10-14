@@ -322,17 +322,28 @@ struct txn_with_operations {
     std::size_t operation_count;
 };
 
+std::FILE* open_log_file() {
+    std::filesystem::path log_file_path(path());
+    log_file_path = log_file_path.parent_path();
+    log_file_path += "_stress_test_log";
+    return std::fopen(log_file_path.c_str(), "wb");
+}
+
+void log_updated_keys(std::FILE* stream, std::map<ukv_key_t, bool> const& updated_keys) {
+    std::fprintf(stream, "\nLater Updated Keys\n\n");
+    for (auto& key_and_presence : updated_keys) {
+        std::fprintf(stream, "%ld", key_and_presence.first);
+        if (key_and_presence.second)
+            std::fprintf(stream, " PRESENT");
+        std::fprintf(stream, "\n");
+    }
+}
+
 template <std::size_t max_batch_size_ak>
-void log_and_terminate( //
+void log_operations( //
+    std::FILE* stream,
     std::array<operation_t, max_batch_size_ak> const& operations,
-    std::size_t operations_count,
-    std::map<ukv_key_t, bool> const& updated_keys) {
-
-    std::filesystem::path lof_file_path(path());
-    lof_file_path = lof_file_path.parent_path();
-    lof_file_path += "_stress_test_log";
-
-    auto stream = std::fopen(lof_file_path.c_str(), "wb+");
+    std::size_t operations_count) {
 
     std::fprintf(stream, "Operations In Transaction With Watch\n\n");
     for (std::size_t idx = 0; idx != operations_count; ++idx) {
@@ -340,19 +351,12 @@ void log_and_terminate( //
             continue;
 
         switch (operations[idx].type) {
-        case operation_code_t::insert_k: std::fwrite("INSERT - ", sizeof(char), 9, stream); break;
-        case operation_code_t::remove_k: std::fwrite("REMOVE - ", sizeof(char), 9, stream); break;
-        case operation_code_t::select_k: std::fwrite("SELECT - ", sizeof(char), 9, stream); break;
+        case operation_code_t::insert_k: std::fprintf(stream, "INSERT - "); break;
+        case operation_code_t::remove_k: std::fprintf(stream, "REMOVE - "); break;
+        case operation_code_t::select_k: std::fprintf(stream, "SELECT - "); break;
         }
         std::fprintf(stream, "%ld\n", operations[idx].key);
     }
-
-    std::fprintf(stream, "\nLater Updated Keys\n\n");
-    for (auto& key_and_presence : updated_keys)
-        std::fprintf(stream, "%ld\n", key_and_presence.first);
-
-    std::fclose(stream);
-    exit(0);
 }
 
 template <std::size_t max_batch_size_ak>
@@ -418,14 +422,27 @@ void transactions_durability(std::size_t transaction_count) {
     std::map<ukv_key_t, bool> updated_keys;
     for (std::size_t task_idx = 0; task_idx != tasks.size(); ++task_idx) {
         auto status = tasks[task_idx].txn.commit();
-        if (will_success(tasks[task_idx].operations, tasks[task_idx].operation_count, updated_keys) != status)
-            log_and_terminate(tasks[task_idx].operations, tasks[task_idx].operation_count, updated_keys);
+        if (will_success(tasks[task_idx].operations, tasks[task_idx].operation_count, updated_keys) != status) {
+            auto stream = open_log_file();
+            log_operations(stream, tasks[task_idx].operations, tasks[task_idx].operation_count);
+            log_updated_keys(stream, updated_keys);
+            std::fclose(stream);
+            EXPECT_TRUE(false);
+            exit(1);
+        }
         if (status)
             add_updated_keys(tasks[task_idx].operations, tasks[task_idx].operation_count, updated_keys);
     }
 
-    for (auto& key_and_presence : updated_keys)
-        EXPECT_EQ(collection[key_and_presence.first].present(), key_and_presence.second);
+    for (auto& key_and_presence : updated_keys) {
+        if (collection[key_and_presence.first].present() != key_and_presence.second) {
+            auto stream = open_log_file();
+            log_updated_keys(stream, updated_keys);
+            std::fclose(stream);
+            EXPECT_TRUE(false);
+            exit(1);
+        }
+    }
 }
 
 TEST(db, insert_atomic_isolated) {
