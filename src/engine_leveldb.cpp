@@ -97,22 +97,29 @@ bool export_error(level_status_t const& status, ukv_error_t* c_error) {
     return true;
 }
 
-void ukv_database_init(ukv_str_view_t c_config, ukv_database_t* c_db, ukv_error_t* c_error) {
+void ukv_database_init(ukv_database_init_t* c_ptr) {
+
+    ukv_database_init_t& c = *c_ptr;
+    if (!c.config || !std::strlen(c.config)) {
+        *c.error = "LevelDB requires a configuration file or a path!";
+        return;
+    }
+
     try {
         level_db_t* db_ptr = nullptr;
         level_options_t options;
         options.compression = leveldb::kNoCompression;
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
-        level_status_t status = level_db_t::Open(options, c_config, &db_ptr);
+        level_status_t status = level_db_t::Open(options, c.config, &db_ptr);
         if (!status.ok()) {
-            *c_error = "Couldn't open LevelDB";
+            *c.error = "Couldn't open LevelDB";
             return;
         }
-        *c_db = db_ptr;
+        *c.db = db_ptr;
     }
     catch (...) {
-        *c_error = "Open Failure";
+        *c.error = "Open Failure";
     }
 }
 
@@ -153,60 +160,36 @@ void write_many( //
     export_error(status, c_error);
 }
 
-void ukv_write( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const,
-    ukv_size_t const c_tasks_count,
+void ukv_write(ukv_write_t* c_ptr) {
 
-    ukv_collection_t const* c_collections,
-    ukv_size_t const c_collections_stride,
-
-    ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_stride,
-
-    ukv_octet_t const* c_presences,
-
-    ukv_length_t const* c_offs,
-    ukv_size_t const c_offs_stride,
-
-    ukv_length_t const* c_lens,
-    ukv_size_t const c_lens_stride,
-
-    ukv_bytes_cptr_t const* c_vals,
-    ukv_size_t const c_vals_stride,
-
-    ukv_options_t const c_options,
-
-    ukv_arena_t*,
-    ukv_error_t* c_error) {
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    return_if_error(!(c_options & ukv_option_transaction_snapshot_k),
-                    c_error,
+    ukv_write_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_if_error(!(c.options & ukv_option_transaction_snapshot_k),
+                    c.error,
                     uninitialized_state_k,
                     "Snapshot doesn't support in write mode");
 
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
-    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c_vals, c_vals_stride};
-    strided_iterator_gt<ukv_length_t const> offs {c_offs, c_offs_stride};
-    strided_iterator_gt<ukv_length_t const> lens {c_lens, c_lens_stride};
-    bits_view_t presences {c_presences};
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
+    strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values, c.values_stride};
+    strided_iterator_gt<ukv_length_t const> offs {c.offsets, c.offsets_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c.lengths, c.lengths_stride};
+    bits_view_t presences {c.presences};
 
-    places_arg_t places {collections, keys, {}, c_tasks_count};
-    contents_arg_t contents {presences, offs, lens, vals, c_tasks_count};
+    places_arg_t places {collections, keys, {}, c.tasks_count};
+    contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
 
     leveldb::WriteOptions options;
-    if (c_options & ukv_option_write_flush_k)
+    if (c.options & ukv_option_write_flush_k)
         options.sync = true;
 
     try {
-        auto func = c_tasks_count == 1 ? &write_one : &write_many;
-        func(db, places, contents, options, c_error);
+        auto func = c.tasks_count == 1 ? &write_one : &write_many;
+        func(db, places, contents, options, c.error);
     }
     catch (...) {
-        *c_error = "Write Failure";
+        *c.error = "Write Failure";
     }
 }
 
@@ -234,52 +217,35 @@ void read_enumerate( //
     }
 }
 
-void ukv_read( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    ukv_size_t const c_tasks_count,
+void ukv_read(ukv_read_t* c_ptr) {
 
-    ukv_collection_t const*,
-    ukv_size_t const,
+    ukv_read_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    ukv_key_t const* c_keys,
-    ukv_size_t const c_keys_stride,
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    return_on_error(c.error);
 
-    ukv_options_t const c_options,
-
-    ukv_octet_t** c_found_presences,
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_lengths,
-    ukv_bytes_ptr_t* c_found_values,
-
-    ukv_arena_t* c_arena,
-    ukv_error_t* c_error) {
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-
-    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
-    return_on_error(c_error);
-
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    level_txn_t* txn = reinterpret_cast<level_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_key_t const> keys {c_keys, c_keys_stride};
-    places_arg_t places {{}, keys, {}, c_tasks_count};
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
+    strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
+    places_arg_t places {{}, keys, {}, c.tasks_count};
 
     // 1. Allocate a tape for all the values to be pulled
-    auto offs = arena.alloc_or_dummy(places.count + 1, c_error, c_found_offsets);
-    return_on_error(c_error);
-    auto lens = arena.alloc_or_dummy(places.count, c_error, c_found_lengths);
-    return_on_error(c_error);
-    auto presences = arena.alloc_or_dummy(places.count, c_error, c_found_presences);
-    return_on_error(c_error);
-    bool const needs_export = c_found_values != nullptr;
+    auto offs = arena.alloc_or_dummy(places.count + 1, c.error, c.offsets);
+    return_on_error(c.error);
+    auto lens = arena.alloc_or_dummy(places.count, c.error, c.lengths);
+    return_on_error(c.error);
+    auto presences = arena.alloc_or_dummy(places.count, c.error, c.presences);
+    return_on_error(c.error);
+    bool const needs_export = c.values != nullptr;
+
     uninitialized_vector_gt<byte_t> contents(arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
-        if (txn)
-            options.snapshot = txn->snapshot;
+        if (c.transaction)
+            options.snapshot = txn.snapshot;
 
         std::string value_buffer;
         ukv_length_t progress_in_tape = 0;
@@ -288,92 +254,65 @@ void ukv_read( //
             lens[i] = value ? value.size() : ukv_length_missing_k;
             offs[i] = contents.size();
             if (needs_export)
-                contents.insert(contents.size(), value.begin(), value.end(), c_error);
+                contents.insert(contents.size(), value.begin(), value.end(), c.error);
         };
-        read_enumerate(db, places, options, value_buffer, data_enumerator, c_error);
+        read_enumerate(db, places, options, value_buffer, data_enumerator, c.error);
         offs[places.count] = contents.size();
         if (needs_export)
-            *c_found_values = reinterpret_cast<ukv_bytes_ptr_t>(contents.begin());
+            *c.values = reinterpret_cast<ukv_bytes_ptr_t>(contents.begin());
     }
     catch (...) {
-        *c_error = "Read Failure";
+        *c.error = "Read Failure";
     }
 }
 
-void ukv_scan( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const c_txn,
-    ukv_size_t const c_min_tasks_count,
+void ukv_scan(ukv_scan_t* c_ptr) {
 
-    ukv_collection_t const*,
-    ukv_size_t const,
+    ukv_scan_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    ukv_key_t const* c_start_keys,
-    ukv_size_t const c_start_keys_stride,
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    return_on_error(c.error);
 
-    ukv_key_t const* c_end_keys,
-    ukv_size_t const c_end_keys_stride,
-
-    ukv_length_t const* c_scan_limits,
-    ukv_size_t const c_scan_limits_stride,
-
-    ukv_options_t const c_options,
-
-    ukv_length_t** c_found_offsets,
-    ukv_length_t** c_found_counts,
-    ukv_key_t** c_found_keys,
-
-    ukv_arena_t* c_arena,
-    ukv_error_t* c_error) {
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-
-    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
-    return_on_error(c_error);
-
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    level_txn_t* txn = reinterpret_cast<level_txn_t*>(c_txn);
-    strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
-    strided_iterator_gt<ukv_length_t const> limits {c_scan_limits, c_scan_limits_stride};
-    scans_arg_t tasks {{}, start_keys, end_keys, limits, c_min_tasks_count};
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
+    strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
+    strided_iterator_gt<ukv_length_t const> limits {c.scan_limits, c.scan_limits_stride};
+    scans_arg_t tasks {{}, start_keys, limits, c.tasks_count};
 
     // 1. Allocate a tape for all the values to be fetched
-    auto offsets = arena.alloc_or_dummy(tasks.count + 1, c_error, c_found_offsets);
-    return_on_error(c_error);
-    auto counts = arena.alloc_or_dummy(tasks.count, c_error, c_found_counts);
-    return_on_error(c_error);
+    auto offsets = arena.alloc_or_dummy(tasks.count + 1, c.error, c.offsets);
+    return_on_error(c.error);
+    auto counts = arena.alloc_or_dummy(tasks.count, c.error, c.counts);
+    return_on_error(c.error);
 
     auto total_keys = reduce_n(tasks.limits, tasks.count, 0ul);
-    auto keys_output = *c_found_keys = arena.alloc<ukv_key_t>(total_keys, c_error).begin();
-    return_on_error(c_error);
+    auto keys_output = *c.keys = arena.alloc<ukv_key_t>(total_keys, c.error).begin();
+    return_on_error(c.error);
 
     // 2. Fetch the data
     leveldb::ReadOptions options;
     options.fill_cache = false;
 
-    if (txn)
-        options.snapshot = txn->snapshot;
+    if (c.transaction)
+        options.snapshot = txn.snapshot;
 
     level_iter_uptr_t it;
     try {
         it = level_iter_uptr_t(db.NewIterator(options));
     }
     catch (...) {
-        *c_error = "Fail To Create Iterator";
+        *c.error = "Fail To Create Iterator";
         return;
     }
-    for (ukv_size_t i = 0; i != c_min_tasks_count; ++i) {
+    for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
         scan_t task = tasks[i];
         it->Seek(to_slice(task.min_key));
-        offsets[i] = keys_output - *c_found_keys;
+        offsets[i] = keys_output - *c.keys;
 
         ukv_size_t j = 0;
         while (it->Valid() && j != task.limit) {
-            auto key = *reinterpret_cast<ukv_key_t const*>(it->key().data());
-            if (key >= task.max_key)
-                break;
-            std::memcpy(keys_output, &key, sizeof(ukv_key_t));
+            std::memcpy(keys_output, it->key().data(), sizeof(ukv_key_t));
             ++keys_output;
             ++j;
             it->Next();
@@ -382,56 +321,33 @@ void ukv_scan( //
         counts[i] = j;
     }
 
-    offsets[tasks.size()] = keys_output - *c_found_keys;
+    offsets[tasks.size()] = keys_output - *c.keys;
 }
 
-void ukv_size( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const,
-    ukv_size_t const n,
+void ukv_measure(ukv_measure_t* c_ptr) {
 
-    ukv_collection_t const*,
-    ukv_size_t const,
+    ukv_measure_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    ukv_key_t const* c_start_keys,
-    ukv_size_t const c_start_keys_stride,
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    return_on_error(c.error);
 
-    ukv_key_t const* c_end_keys,
-    ukv_size_t const c_end_keys_stride,
+    auto min_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_cardinalities);
+    auto max_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_cardinalities);
+    auto min_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_value_bytes);
+    auto max_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_value_bytes);
+    auto min_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_space_usages);
+    auto max_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_space_usages);
+    return_on_error(c.error);
 
-    ukv_options_t const c_options,
-
-    ukv_size_t** c_min_cardinalities,
-    ukv_size_t** c_max_cardinalities,
-    ukv_size_t** c_min_value_bytes,
-    ukv_size_t** c_max_value_bytes,
-    ukv_size_t** c_min_space_usages,
-    ukv_size_t** c_max_space_usages,
-
-    ukv_arena_t* c_arena,
-    ukv_error_t* c_error) {
-
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-
-    stl_arena_t arena = make_stl_arena(c_arena, c_options, c_error);
-    return_on_error(c_error);
-
-    auto min_cardinalities = arena.alloc_or_dummy(n, c_error, c_min_cardinalities);
-    auto max_cardinalities = arena.alloc_or_dummy(n, c_error, c_max_cardinalities);
-    auto min_value_bytes = arena.alloc_or_dummy(n, c_error, c_min_value_bytes);
-    auto max_value_bytes = arena.alloc_or_dummy(n, c_error, c_max_value_bytes);
-    auto min_space_usages = arena.alloc_or_dummy(n, c_error, c_min_space_usages);
-    auto max_space_usages = arena.alloc_or_dummy(n, c_error, c_max_space_usages);
-    return_on_error(c_error);
-
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    strided_iterator_gt<ukv_key_t const> start_keys {c_start_keys, c_start_keys_stride};
-    strided_iterator_gt<ukv_key_t const> end_keys {c_end_keys, c_end_keys_stride};
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
+    strided_iterator_gt<ukv_key_t const> end_keys {c.end_keys, c.end_keys_stride};
     uint64_t approximate_size = 0;
     std::optional<std::string> memory_usage;
     level_status_t status;
 
-    for (ukv_size_t i = 0; i != n; ++i) {
+    for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
         min_cardinalities[i] = static_cast<ukv_size_t>(0);
         max_cardinalities[i] = static_cast<ukv_size_t>(0);
         min_value_bytes[i] = static_cast<ukv_size_t>(0);
@@ -449,7 +365,7 @@ void ukv_size( //
             max_space_usages[i] = std::stoi(memory_usage.value());
         }
         catch (...) {
-            *c_error = "Property Read Failure";
+            *c.error = "Property Read Failure";
         }
     }
 }
@@ -458,41 +374,34 @@ void ukv_size( //
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_init( //
-    ukv_database_t const,
-    ukv_str_view_t c_collection_name,
-    ukv_str_view_t,
-    ukv_collection_t*,
-    ukv_error_t* c_error) {
+void ukv_collection_init(ukv_collection_init_t* c_ptr) {
 
-    if (c_collection_name && std::strlen(c_collection_name))
-        *c_error = "Collections not supported by LevelDB!";
+    ukv_collection_init_t& c = *c_ptr;
+    if (c.name && std::strlen(c.name))
+        *c.error = "Collections not supported by LevelDB!";
 }
 
-void ukv_collection_drop(
-    // Inputs:
-    ukv_database_t const c_db,
-    ukv_collection_t c_collection_id,
-    ukv_drop_mode_t c_mode,
-    // Outputs:
-    ukv_error_t* c_error) {
+void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
 
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
-    bool invalidate = c_mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(c_collection_id == ukv_collection_main_k && !invalidate,
-                    c_error,
+    ukv_collection_drop_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    bool invalidate = c.mode == ukv_drop_keys_vals_handle_k;
+    return_if_error(c.id == ukv_collection_main_k && !invalidate,
+                    c.error,
                     args_combo_k,
                     "Collections not supported by LevelDB!");
 
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
 
     leveldb::WriteBatch batch;
     auto it = std::unique_ptr<leveldb::Iterator>(db.NewIterator(leveldb::ReadOptions()));
-    if (c_mode == ukv_drop_keys_vals_k) {
+
+    if (c.mode == ukv_drop_keys_vals_k) {
         for (it->SeekToFirst(); it->Valid(); it->Next())
             batch.Delete(it->key());
     }
-    else if (c_mode == ukv_drop_vals_k) {
+
+    else if (c.mode == ukv_drop_vals_k) {
         for (it->SeekToFirst(); it->Valid(); it->Next())
             batch.Put(it->key(), leveldb::Slice());
     }
@@ -500,75 +409,56 @@ void ukv_collection_drop(
     leveldb::WriteOptions options;
     options.sync = true;
     level_status_t status = db.Write(options, &batch);
-    export_error(status, c_error);
+    export_error(status, c.error);
 }
 
-void ukv_collection_list( //
-    ukv_database_t const c_db,
-    ukv_transaction_t const,
-    ukv_options_t const c_options,
-    ukv_size_t* c_count,
-    ukv_collection_t** c_ids,
-    ukv_length_t** c_offsets,
-    ukv_char_t** c_names,
-    ukv_arena_t* c_arena,
-    ukv_error_t* c_error) {
-    *c_count = 0;
-    if (c_ids)
-        *c_ids = nullptr;
-    if (c_offsets)
-        *c_offsets = nullptr;
-    if (c_names)
-        *c_names = nullptr;
+void ukv_collection_list(ukv_collection_list_t* c_ptr) {
+
+    ukv_collection_list_t& c = *c_ptr;
+    *c.count = 0;
+    if (c.ids)
+        *c.ids = nullptr;
+    if (c.offsets)
+        *c.offsets = nullptr;
+    if (c.names)
+        *c.names = nullptr;
 }
 
-void ukv_database_control( //
-    ukv_database_t const c_db,
-    ukv_str_view_t c_request,
-    ukv_char_t** c_response,
-    ukv_error_t* c_error) {
+void ukv_database_control(ukv_database_control_t* c_ptr) {
 
-    return_if_error(c_db, c_error, uninitialized_state_k, "DataBase is uninitialized");
+    ukv_database_control_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    if (!c_request && (*c_error = "Request is NULL!"))
+    if (!c.request && (*c.error = "Request is NULL!"))
         return;
 
-    *c_response = NULL;
-    *c_error = "Controls aren't supported in this implementation!";
+    *c.response = NULL;
+    *c.error = "Controls aren't supported in this implementation!";
 }
 
 /*********************************************************/
 /*****************		Transactions	  ****************/
 /*********************************************************/
 
-void ukv_transaction_init(
-    // Inputs:
-    ukv_database_t const c_db,
-    ukv_options_t const c_options,
-    // Outputs:
-    ukv_transaction_t* c_txn,
-    ukv_error_t* c_error) {
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    level_txn_t* txn = reinterpret_cast<level_txn_t*>(*c_txn);
+void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
-    if (c_options & ukv_option_transaction_snapshot_k) {
-        txn->snapshot = db.GetSnapshot();
+    ukv_transaction_init_t& c = *c_ptr;
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
 
-        if (!txn->snapshot)
-            *c_error = "Couldn't start a transaction!";
-        else
-            *c_txn = txn;
+    if (c.options & ukv_option_transaction_snapshot_k) {
+        txn.snapshot = db.GetSnapshot();
+        if (!txn.snapshot)
+            *c.error = "Couldn't start a transaction!";
     }
     else
-        *c_error = "Transactions not supported by LevelDB!";
+        *c.error = "Transactions not supported by LevelDB!";
 }
 
-void ukv_transaction_commit( //
-    ukv_database_t const,
-    ukv_transaction_t const,
-    ukv_options_t const,
-    ukv_error_t* c_error) {
-    *c_error = "Transactions not supported by LevelDB!";
+void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
+
+    ukv_transaction_commit_t& c = *c_ptr;
+    *c.error = "Transactions not supported by LevelDB!";
 }
 
 /*********************************************************/
