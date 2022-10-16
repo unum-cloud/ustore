@@ -1357,10 +1357,10 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
             .collections_stride = c.collections_stride,
             .keys = c.keys,
             .keys_stride = c.keys_stride,
-            .presences = c.found_presences,
-            .offsets = c.found_offsets,
-            .lengths = c.found_lengths,
-            .values = c.found_values,
+            .presences = c.presences,
+            .offsets = c.offsets,
+            .lengths = c.lengths,
+            .values = c.values,
         };
         return ukv_read(&read);
     }
@@ -1396,12 +1396,12 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
                      c.error,
                      safe_callback);
 
-    if (c.found_offsets)
-        *c.found_offsets = growing_tape.offsets().begin().get();
-    if (c.found_lengths)
-        *c.found_lengths = growing_tape.lengths().begin().get();
-    if (c.found_values)
-        *c.found_values = reinterpret_cast<ukv_byte_t*>(growing_tape.contents().begin().get());
+    if (c.offsets)
+        *c.offsets = growing_tape.offsets().begin().get();
+    if (c.lengths)
+        *c.lengths = growing_tape.lengths().begin().get();
+    if (c.values)
+        *c.values = reinterpret_cast<ukv_byte_t*>(growing_tape.contents().begin().get());
 }
 
 /*********************************************************/
@@ -1532,12 +1532,12 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
         return_on_error(c.error);
     }
 
-    if (c.found_fields_count)
-        *c.found_fields_count = static_cast<ukv_size_t>(sorted_paths.size());
-    if (c.found_offsets)
-        *c.found_offsets = exported_paths.offsets().begin().get();
-    if (c.found_fields)
-        *c.found_fields = reinterpret_cast<ukv_char_t*>(exported_paths.contents().begin().get());
+    if (c.fields_count)
+        *c.fields_count = static_cast<ukv_size_t>(sorted_paths.size());
+    if (c.offsets)
+        *c.offsets = exported_paths.offsets().begin().get();
+    if (c.fields)
+        *c.fields = reinterpret_cast<ukv_char_t*>(exported_paths.contents().begin().get());
 }
 
 std::size_t doc_field_size_bytes(ukv_doc_field_type_t type) {
