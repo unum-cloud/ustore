@@ -196,10 +196,11 @@ typedef struct ukv_docs_read_t {
     ukv_str_view_t const* fields = NULL;
     ukv_size_t fields_stride = 0;
 
-    ukv_octet_t** found_presences = NULL;
-    ukv_length_t** found_offsets = NULL;
-    ukv_length_t** found_lengths = NULL;
-    ukv_bytes_ptr_t* found_values = NULL;
+    // Outputs:
+    ukv_octet_t** presences = NULL;
+    ukv_length_t** offsets = NULL;
+    ukv_length_t** lengths = NULL;
+    ukv_bytes_ptr_t* values = NULL;
 
 } ukv_docs_read_t;
 
@@ -232,9 +233,10 @@ typedef struct ukv_docs_gist_t {
     ukv_key_t const* keys = NULL;
     ukv_size_t keys_stride = 0;
 
-    ukv_size_t* found_fields_count = NULL;
-    ukv_length_t** found_offsets = NULL;
-    ukv_char_t** found_fields = NULL;
+    // Outputs:
+    ukv_size_t* fields_count = NULL;
+    ukv_length_t** offsets = NULL;
+    ukv_char_t** fields = NULL;
 
 } ukv_docs_gist_t;
 
@@ -320,6 +322,7 @@ typedef struct ukv_docs_gather_t {
     ukv_doc_field_type_t const* types = NULL;
     ukv_size_t const types_stride = 0;
 
+    // Outputs:
     ukv_octet_t*** columns_validities = NULL;
     ukv_octet_t*** columns_conversions = NULL;
     ukv_octet_t*** columns_collisions = NULL;
