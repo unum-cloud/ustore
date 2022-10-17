@@ -269,8 +269,10 @@ TEST(db, named) {
     EXPECT_TRUE(db["col1"]);
     EXPECT_TRUE(db["col2"]);
 
-    bins_collection_t col1 = *db.add_collection("col1");
-    bins_collection_t col2 = *db.add_collection("col2");
+    EXPECT_FALSE(db.add_collection("col1"));
+    bins_collection_t col1 = *db["col1"];
+    EXPECT_FALSE(db.add_collection("col2"));
+    bins_collection_t col2 = *db["col2"];
 
     check_binary_collection(col1);
     check_binary_collection(col2);
@@ -718,7 +720,8 @@ TEST(db, txn_named) {
     };
 
     // Transaction with named collection
-    EXPECT_TRUE(db.collection("named_col"));
+    EXPECT_FALSE(db.collection("named_col"));
+    EXPECT_TRUE(db.collection("named_col", true));
     bins_collection_t named_collection = *db.collection("named_col");
     std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
     auto txn_named_collection_ref = txn[sub_keys];
