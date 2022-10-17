@@ -340,7 +340,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
     expected_gt<ukv_collection_t> find(std::string_view name, bool make = false) noexcept {
         auto ctx = context_t {db_, nullptr}.find(name);
         if (!ctx && make) {
-            auto col = add_collection<collection_at>(name.data()).throw_or_release();
+            auto col = collection_create<collection_at>(name.data()).throw_or_release();
             return ukv_collection_t(*col.member_ptr());
         }
         return ctx;
