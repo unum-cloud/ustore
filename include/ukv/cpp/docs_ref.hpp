@@ -301,10 +301,10 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t
         .keys_stride = keys.stride(),
         .fields = fields.get(),
         .fields_stride = fields.stride(),
-        .found_presences = wants_present ? &found_presences : nullptr,
-        .found_offsets = wants_value ? &found_offsets : nullptr,
-        .found_lengths = wants_value || wants_length ? &found_lengths : nullptr,
-        .found_values = wants_value ? &found_values : nullptr,
+        .presences = wants_present ? &found_presences : nullptr,
+        .offsets = wants_value ? &found_offsets : nullptr,
+        .lengths = wants_value || wants_length ? &found_lengths : nullptr,
+        .values = wants_value ? &found_values : nullptr,
     };
 
     ukv_docs_read(&docs_read);
@@ -408,9 +408,9 @@ expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool watch) noexcept 
         .collections_stride = collections.stride(),
         .keys = keys.get(),
         .keys_stride = keys.stride(),
-        .found_fields_count = &found_count,
-        .found_offsets = &found_offsets,
-        .found_fields = &found_strings,
+        .fields_count = &found_count,
+        .offsets = &found_offsets,
+        .fields = &found_strings,
     };
 
     ukv_docs_gist(&docs_gist);

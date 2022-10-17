@@ -20,13 +20,13 @@
 #include <filesystem> // Enumerating the directory
 #include <stdio.h>    // Saving/reading from disk
 
-#include <consistent_set.hpp> // `av::consistent_set_gt`
-#include <locked_set.hpp>     // `av::locked_gt`
+#include <consistent_set/consistent_set.hpp> // `av::consistent_set_gt`
+#include <consistent_set/locked.hpp>         // `av::locked_gt`
+#include <consistent_set/partitioned.hpp>    // `av::partitioned_gt`
 
 #include "ukv/db.h"
 #include "helpers/pmr.hpp"
 #include "helpers/file.hpp"
-#include "helpers/avl.hpp"
 #include "helpers/vector.hpp"      // `unintialized_vector_gt`
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
@@ -39,7 +39,7 @@ ukv_length_t const ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max
 ukv_key_t const ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 bool const ukv_supports_transactions_k = true;
 bool const ukv_supports_named_collections_k = true;
-bool const ukv_supports_snapshots_k = true;
+bool const ukv_supports_snapshots_k = false;
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -104,6 +104,7 @@ struct pair_compare_t {
 /*********************************************************/
 
 using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>>;
+// using consistent_set_t = consistent_set_gt<pair_t, pair_compare_t>;
 using transaction_t = typename consistent_set_t::transaction_t;
 using generation_t = typename consistent_set_t::generation_t;
 
@@ -567,7 +568,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
-    strided_iterator_gt<ukv_length_t const> lens {c.scan_limits, c.scan_limits_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
     scans_arg_t scans {collections, start_keys, lens, c.tasks_count};
 
     validate_scan(c.transaction, scans, c.options, c.error);
@@ -638,9 +639,9 @@ void ukv_measure(ukv_measure_t* c_ptr) {
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_init(ukv_collection_init_t* c_ptr) {
+void ukv_collection_create(ukv_collection_create_t* c_ptr) {
 
-    ukv_collection_init_t& c = *c_ptr;
+    ukv_collection_create_t& c = *c_ptr;
     auto name_len = c.name ? std::strlen(c.name) : 0;
     return_if_error(name_len, c.error, args_wrong_k, "Default collection is always present");
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
@@ -671,7 +672,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     std::unique_lock _ {db.restructuring_mutex};
 
     if (c.mode == ukv_drop_keys_vals_handle_k) {
-        auto status = db.pairs.erase_equals(c.id);
+        auto status = db.pairs.erase_interval(c.id);
         if (!status)
             return export_error_code(status, c.error);
 
@@ -684,12 +685,12 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     }
 
     else if (c.mode == ukv_drop_keys_vals_k) {
-        auto status = db.pairs.erase_equals(c.id);
+        auto status = db.pairs.erase_interval(c.id);
         return export_error_code(status, c.error);
     }
 
     else if (c.mode == ukv_drop_vals_k) {
-        auto status = db.pairs.find_equals(c.id, [&](pair_t& pair) {
+        auto status = db.pairs.find_interval(c.id, [&](pair_t& pair) {
             pair = pair_t {pair.collection_key, {}, nullptr};
         });
         return export_error_code(status, c.error);
@@ -799,14 +800,14 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
-void ukv_arena_free(ukv_database_t const, ukv_arena_t c_arena) {
+void ukv_arena_free(ukv_arena_t c_arena) {
     if (!c_arena)
         return;
     stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
     delete &arena;
 }
 
-void ukv_transaction_free(ukv_database_t const, ukv_transaction_t const c_transaction) {
+void ukv_transaction_free(ukv_transaction_t const c_transaction) {
     if (!c_transaction)
         return;
     transaction_t& txn = *reinterpret_cast<transaction_t*>(c_transaction);
@@ -824,11 +825,6 @@ void ukv_database_free(ukv_database_t c_db) {
     }
 
     delete &db;
-}
-
-void ukv_collection_free(ukv_database_t const, ukv_collection_t const) {
-    // In this in-memory freeing the collection handle does nothing.
-    // The DB destructor will automatically cleanup the memory.
 }
 
 void ukv_error_free(ukv_error_t) {

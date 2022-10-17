@@ -109,37 +109,37 @@ class bins_collection_t {
 
     status_t clear_values() noexcept {
         status_t status;
-        ukv_collection_drop_t coll_drop {
+        ukv_collection_drop_t collection_drop {
             .db = db_,
             .error = status.member_ptr(),
             .id = collection_,
             .mode = ukv_drop_vals_k,
         };
-        ukv_collection_drop(&coll_drop);
+        ukv_collection_drop(&collection_drop);
         return status;
     }
 
     status_t clear() noexcept {
         status_t status;
-        ukv_collection_drop_t coll_drop {
+        ukv_collection_drop_t collection_drop {
             .db = db_,
             .error = status.member_ptr(),
             .id = collection_,
             .mode = ukv_drop_keys_vals_k,
         };
-        ukv_collection_drop(&coll_drop);
+        ukv_collection_drop(&collection_drop);
         return status;
     }
 
     status_t drop() noexcept {
         status_t status;
-        ukv_collection_drop_t coll_drop {
+        ukv_collection_drop_t collection_drop {
             .db = db_,
             .error = status.member_ptr(),
             .id = collection_,
             .mode = ukv_drop_keys_vals_handle_k,
         };
-        ukv_collection_drop(&coll_drop);
+        ukv_collection_drop(&collection_drop);
         return status;
     }
 
