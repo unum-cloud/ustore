@@ -82,6 +82,8 @@ class graph_collection_t {
         return status;
     }
 
+    inline ukv_collection_t* member_ptr() noexcept { return &collection_; }
+
     status_t upsert(edge_t const& edge) noexcept { return upsert(edges_view_t {&edge, &edge + 1}); }
     status_t remove(edge_t const& edge) noexcept { return remove(edges_view_t {&edge, &edge + 1}); }
 

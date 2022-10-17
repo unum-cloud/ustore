@@ -157,7 +157,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
                 continue;
             return ukv_collection_t(*id_it);
         }
-        return ukv_collection_t(ukv_collection_main_k);
+        return status_t {"Collection not found."};
     }
 
     /**
@@ -334,9 +334,17 @@ class database_t : public std::enable_shared_from_this<database_t> {
             return context_t {db_, raw};
     }
 
-    expected_gt<bins_collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
+    expected_gt<bins_collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name, true); }
     operator expected_gt<bins_collection_t>() noexcept { return collection(); }
-    expected_gt<ukv_collection_t> find(std::string_view name) noexcept { return context_t {db_, nullptr}.find(name); }
+    template <typename collection_at = bins_collection_t>
+    expected_gt<ukv_collection_t> find(std::string_view name, bool make = false) noexcept {
+        auto ctx = context_t {db_, nullptr}.find(name);
+        if (!ctx && make) {
+            auto col = add_collection<collection_at>(name.data()).throw_or_release();
+            return ukv_collection_t(*col.member_ptr());
+        }
+        return ctx;
+    }
     expected_gt<bool> contains(std::string_view name) noexcept { return context_t {db_, nullptr}.contains(name); }
     status_t drop(std::string_view name) noexcept {
         auto maybe_collection = collection(name);
@@ -346,8 +354,8 @@ class database_t : public std::enable_shared_from_this<database_t> {
     }
 
     template <typename collection_at = bins_collection_t>
-    expected_gt<collection_at> collection(std::string_view name = {}) noexcept {
-        auto maybe_id = find(name);
+    expected_gt<collection_at> collection(std::string_view name = {}, bool make = false) noexcept {
+        auto maybe_id = find<collection_at>(name, make);
         if (!maybe_id)
             return maybe_id.release_status();
         return collection_at {db_, *maybe_id, nullptr, nullptr};
