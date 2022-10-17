@@ -137,6 +137,7 @@ void round_trip(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
 }
 
 struct triplet_t {
+    static constexpr std::size_t val_size_k = sizeof(char);
     std::array<ukv_key_t, 3> keys {'a', 'b', 'c'};
 
     std::array<char, 3> vals {'A', 'B', 'C'};
@@ -177,7 +178,7 @@ void check_binary_collection(bins_collection_t& collection) {
 
     // Overwrite those values with same size integers and try again
     for (auto& val : triplet.vals)
-        val += 100;
+        val += 7;
     round_trip(ref, triplet.contents());
 
     // Overwrite with empty values, but check for existence
@@ -218,14 +219,14 @@ TEST(db, persistency) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
-    
+
     triplet_t triplet;
 
     bins_collection_t collection = *db.collection();
     auto collection_ref = collection[triplet.keys];
     check_length(collection_ref, ukv_length_missing_k);
     round_trip(collection_ref, triplet.contents());
-    check_length(collection_ref, 8);
+    check_length(collection_ref, triplet_t::val_size_k);
     db.close();
 
     EXPECT_TRUE(db.open(path()));
@@ -233,7 +234,7 @@ TEST(db, persistency) {
     auto collection_ref2 = collection2[triplet.keys];
 
     check_equalities(collection_ref2, triplet.contents());
-    check_length(collection_ref2, 8);
+    check_length(collection_ref2, triplet_t::val_size_k);
 
     EXPECT_TRUE(db.clear());
 }
@@ -557,7 +558,7 @@ TEST(db, unnamed_and_named) {
         auto collection_ref = collection[triplet.keys];
         check_length(collection_ref, ukv_length_missing_k);
         round_trip(collection_ref, triplet.contents());
-        check_length(collection_ref, 8);
+        check_length(collection_ref, triplet_t::val_size_k);
     }
     EXPECT_TRUE(db.clear());
 }
@@ -571,7 +572,7 @@ TEST(db, txn) {
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
-    
+
     triplet_t triplet;
 
     auto txn_ref = txn[triplet.keys];
@@ -666,7 +667,11 @@ TEST(db, txn_named) {
     // Transaction with named collection
     EXPECT_TRUE(db.collection("named_col"));
     bins_collection_t named_collection = *db.collection("named_col");
-    std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
+    std::vector<collection_key_t> sub_keys {
+        {named_collection, triplet.keys[0]},
+        {named_collection, triplet.keys[1]},
+        {named_collection, triplet.keys[2]},
+    };
     auto txn_named_collection_ref = txn[sub_keys];
     round_trip(txn_named_collection_ref, triplet.contents());
 
@@ -693,7 +698,7 @@ TEST(db, txn_unnamed_then_named) {
 
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
-    
+
     triplet_t triplet;
 
     auto txn_ref = txn[triplet.keys];
@@ -714,7 +719,11 @@ TEST(db, txn_unnamed_then_named) {
     // Transaction with named collection
     EXPECT_TRUE(db.collection_create("named_col"));
     bins_collection_t named_collection = *db.collection("named_col");
-    std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
+    std::vector<collection_key_t> sub_keys {
+        {named_collection, triplet.keys[0]},
+        {named_collection, triplet.keys[1]},
+        {named_collection, triplet.keys[2]},
+    };
     auto txn_named_collection_ref = txn[sub_keys];
     round_trip(txn_named_collection_ref, triplet.contents());
 
