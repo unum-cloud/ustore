@@ -27,7 +27,6 @@
 #include "ukv/db.h"
 #include "helpers/pmr.hpp"
 #include "helpers/file.hpp"
-#include "helpers/avl.hpp"
 #include "helpers/vector.hpp"      // `unintialized_vector_gt`
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
@@ -104,7 +103,7 @@ struct pair_compare_t {
 /*****************  Using Consistent Sets ****************/
 /*********************************************************/
 
-using consistent_set_t = partitioned_gt<locked_gt<consistent_set_gt<pair_t, pair_compare_t>>>;
+using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>>;
 // using consistent_set_t = consistent_set_gt<pair_t, pair_compare_t>;
 using transaction_t = typename consistent_set_t::transaction_t;
 using generation_t = typename consistent_set_t::generation_t;
