@@ -58,7 +58,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
     }
 
     inline ~context_t() noexcept {
-        ukv_transaction_free(db_, txn_);
+        ukv_transaction_free(txn_);
         txn_ = nullptr;
     }
 
@@ -103,7 +103,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
         ukv_str_span_t names = nullptr;
         ukv_collection_t* ids = nullptr;
         status_t status;
-        ukv_collection_list_t coll_list {
+        ukv_collection_list_t collection_list {
             .db = db_,
             .error = status.member_ptr(),
             .transaction = txn_,
@@ -113,7 +113,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
             .names = &names,
         };
 
-        ukv_collection_list(&coll_list);
+        ukv_collection_list(&collection_list);
         collections_list_t result;
         result.ids = {ids, ids + count};
         result.names = {count, names};
@@ -270,10 +270,10 @@ class database_t : public std::enable_shared_from_this<database_t> {
     }
 
     template <typename collection_at = bins_collection_t>
-    expected_gt<collection_at> add_collection(ukv_str_view_t name, ukv_str_view_t config = "") noexcept {
+    expected_gt<collection_at> collection_create(ukv_str_view_t name, ukv_str_view_t config = "") noexcept {
         status_t status;
         ukv_collection_t collection = ukv_collection_main_k;
-        ukv_collection_init_t coll_init {
+        ukv_collection_create_t collection_init {
             .db = db_,
             .error = status.member_ptr(),
             .name = name,
@@ -281,7 +281,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
             .id = &collection,
         };
 
-        ukv_collection_init(&coll_init);
+        ukv_collection_create(&collection_init);
         if (!status)
             return status;
         else
@@ -298,22 +298,22 @@ class database_t : public std::enable_shared_from_this<database_t> {
 
         status_t status;
         auto cols = *maybe_cols;
-        ukv_collection_drop_t coll_drop {
+        ukv_collection_drop_t collection_drop {
             .db = db_,
             .error = status.member_ptr(),
             .mode = ukv_drop_keys_vals_handle_k,
         };
         for (auto id : cols.ids) {
-            coll_drop.id = id;
-            ukv_collection_drop(&coll_drop);
+            collection_drop.id = id;
+            ukv_collection_drop(&collection_drop);
             if (!status)
                 return status;
         }
 
         // Clear the main collection
-        coll_drop.id = ukv_collection_main_k;
-        coll_drop.mode = ukv_drop_keys_vals_k;
-        ukv_collection_drop(&coll_drop);
+        collection_drop.id = ukv_collection_main_k;
+        collection_drop.mode = ukv_drop_keys_vals_k;
+        ukv_collection_drop(&collection_drop);
         return status;
     }
 

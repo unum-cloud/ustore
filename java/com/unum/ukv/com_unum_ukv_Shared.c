@@ -48,7 +48,7 @@ ukv_collection_t collection_ptr(JNIEnv* env_java, ukv_database_t db_ptr, jstring
 
     ukv_error_t error_c = NULL;
     ukv_collection_t collection_c = NULL;
-    ukv_collection_init_t coll_init {
+    ukv_collection_create_t collection_init {
         .db = db_ptr,
         .error = &error_c,
         .name = name_c,
@@ -56,7 +56,7 @@ ukv_collection_t collection_ptr(JNIEnv* env_java, ukv_database_t db_ptr, jstring
         .id = &collection_c,
     };
 
-    ukv_collection_init(&coll_init);
+    ukv_collection_create(&collection_init);
 
     if (name_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseStringUTFChars(env_java, name_java, name_c);

@@ -410,7 +410,7 @@ struct ukv_read_t {
 void ukv_read(ukv_read_t*);
 
 /**
- * @brief Retrieves the following (upto) @param scan_limits[i] keys starting
+ * @brief Retrieves the following (upto) @param count_limits[i] keys starting
  * from @param start_key[i] or the smallest following key in each collection.
  * Values are not exported, for that - follow up with @see ukv_read.
  *
@@ -441,7 +441,7 @@ void ukv_read(ukv_read_t*);
  *
  * @param[out] offsets       Will contain the offset of each run in joined @param keys.
  *                           Will have @param tasks_count +1 outputs, to match Arrow format.
- * @param[out] counts        Will contain the height of each column (< scan_limit).
+ * @param[out] counts        Will contain the height of each column (< count_limit).
  * @param[out] keys          Will contain columns of following keys for each task.
  *
  * @param[out] error         The error message to be handled by callee.
@@ -466,11 +466,8 @@ typedef struct ukv_scan_t {
     ukv_key_t const* start_keys = NULL;
     ukv_size_t start_keys_stride = 0;
 
-    ukv_key_t const* end_keys = NULL;
-    ukv_size_t end_keys_stride = 0;
-
-    ukv_length_t const* scan_limits;
-    ukv_size_t scan_limits_stride = 0;
+    ukv_length_t const* count_limits;
+    ukv_size_t count_limits_stride = 0;
 
     // Outputs:
     ukv_length_t** offsets = NULL;
@@ -580,7 +577,7 @@ void ukv_collection_list(ukv_collection_list_t*);
  * @param[out] id          Address to which the collection ID will be exported.
  * @param[out] error       The error message to be handled by callee.
  */
-typedef struct ukv_collection_init_t {
+typedef struct ukv_collection_create_t {
     ukv_database_t db;
     ukv_error_t* error;
 
@@ -590,9 +587,9 @@ typedef struct ukv_collection_init_t {
 
     // Outputs:
     ukv_collection_t* id;
-} ukv_collection_init_t;
+} ukv_collection_create_t;
 
-void ukv_collection_init(ukv_collection_init_t*);
+void ukv_collection_create(ukv_collection_create_t*);
 
 /**
  * @brief Removes a collection or its contents depending on @param mode.
@@ -693,7 +690,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t*);
  * deallocate and return memory to the OS.
  * Passing NULLs is safe.
  */
-void ukv_arena_free(ukv_database_t, ukv_arena_t);
+void ukv_arena_free(ukv_arena_t);
 
 /**
  * @brief Deallocates memory used by transaction.
@@ -701,7 +698,7 @@ void ukv_arena_free(ukv_database_t, ukv_arena_t);
  * it will be released.
  * Passing NULLs is safe.
  */
-void ukv_transaction_free(ukv_database_t, ukv_transaction_t);
+void ukv_transaction_free(ukv_transaction_t);
 
 /**
  * @brief Closes the DB and deallocates the state.

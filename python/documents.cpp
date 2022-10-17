@@ -41,7 +41,7 @@ class docs_pairs_stream_t {
             .arena = arena_scan_.member_ptr(),
             .collections = &collection_,
             .start_keys = &next_min_key_,
-            .scan_limits = &read_ahead_,
+            .count_limits = &read_ahead_,
             .offsets = &found_offsets,
             .counts = &found_counts,
             .keys = &found_keys,
@@ -242,8 +242,8 @@ static py::object has_doc(py_docs_collection_t& collection, py::object key_py) {
     return has_binary(collection.binary, key_py);
 }
 
-static py::object scan_doc(py_docs_collection_t& collection, ukv_key_t min_key, ukv_size_t scan_limit) {
-    return scan_binary(collection.binary, min_key, scan_limit);
+static py::object scan_doc(py_docs_collection_t& collection, ukv_key_t min_key, ukv_size_t count_limit) {
+    return scan_binary(collection.binary, min_key, count_limit);
 }
 
 static void merge_patch(py_docs_collection_t& collection,
