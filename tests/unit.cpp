@@ -633,6 +633,10 @@ TEST(db, txn) {
 }
 
 TEST(db, snapshots) {
+
+    if (!ukv_supports_snapshots_k)
+        return;
+
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
