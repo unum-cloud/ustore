@@ -125,14 +125,16 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 
         std::string path = c.config; // TODO: take the path from config!
         rocks_status_t status = rocksdb::LoadLatestOptions(config_options, path, &options, &column_descriptors);
-        return_if_error(status.ok(), c.error, error_unknown_k, "Loading last RocksDB options");
         if (column_descriptors.empty())
             column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
 
+        if (status.IsNotFound()) {
+            options.compression = rocksdb::kNoCompression;
+            options.create_if_missing = true;
+            options.comparator = &key_comparator_k;
+        }
+
         rocks_native_t* native_db = nullptr;
-        options.compression = rocksdb::kNoCompression;
-        options.create_if_missing = true;
-        options.comparator = &key_comparator_k;
         rocksdb::OptimisticTransactionDBOptions txn_options;
         status = rocks_native_t::Open(options, txn_options, path, column_descriptors, &db_ptr->columns, &native_db);
         return_if_error(status.ok(), c.error, error_unknown_k, "Opening RocksDB with options");
