@@ -284,9 +284,9 @@ class sessions_t {
 
     ~sessions_t() noexcept {
         for (auto a : free_arenas_)
-            ukv_arena_free(db_, a);
+            ukv_arena_free(a);
         for (auto t : free_txns_)
-            ukv_arena_free(db_, t);
+            ukv_transaction_free(t);
     }
 
     running_txn_t continue_txn(session_id_t session_id, ukv_error_t* c_error) noexcept {
@@ -563,7 +563,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_collection_t collection_id = maybe_collection.throw_or_ref();
             ukv_str_view_t collection_config = get_null_terminated(action.body);
-            ukv_collection_init_t coll_init {
+            ukv_collection_create_t collection_init {
                 .db = db_,
                 .error = status.member_ptr(),
                 .name = params.collection_name->begin(),
@@ -571,7 +571,7 @@ class UKVService : public arf::FlightServerBase {
                 .id = &collection_id,
             };
 
-            ukv_collection_init(&coll_init);
+            ukv_collection_create(&collection_init);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_scalar<ukv_collection_t>(collection_id);
@@ -592,13 +592,13 @@ class UKVService : public arf::FlightServerBase {
             if (params.collection_id)
                 c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
 
-            ukv_collection_drop_t coll_drop {
+            ukv_collection_drop_t collection_drop {
                 .db = db_,
                 .error = status.member_ptr(),
                 .id = c_collection_id,
                 .mode = mode,
             };
-            ukv_collection_drop(&coll_drop);
+            ukv_collection_drop(&collection_drop);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_empty();
@@ -1221,7 +1221,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_collection_t* collections = nullptr;
             ukv_length_t* offsets = nullptr;
             ukv_str_span_t names = nullptr;
-            ukv_collection_list_t coll_list {
+            ukv_collection_list_t collection_list {
                 .db = db_,
                 .error = status.member_ptr(),
                 .transaction = session.txn,
@@ -1233,7 +1233,7 @@ class UKVService : public arf::FlightServerBase {
                 .names = &names,
             };
 
-            ukv_collection_list(&coll_list);
+            ukv_collection_list(&collection_list);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 

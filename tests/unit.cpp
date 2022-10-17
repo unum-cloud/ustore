@@ -269,8 +269,8 @@ TEST(db, named) {
     EXPECT_TRUE(db["col1"]);
     EXPECT_TRUE(db["col2"]);
 
-    bins_collection_t col1 = *db.add_collection("col1");
-    bins_collection_t col2 = *db.add_collection("col2");
+    bins_collection_t col1 = *db.collection_create("col1");
+    bins_collection_t col2 = *db.collection_create("col2");
 
     check_binary_collection(col1);
     check_binary_collection(col2);
@@ -298,10 +298,10 @@ TEST(db, collection_list) {
         return;
     }
     else {
-        bins_collection_t col1 = *db.add_collection("col1");
-        bins_collection_t col2 = *db.add_collection("col2");
-        bins_collection_t col3 = *db.add_collection("col3");
-        bins_collection_t col4 = *db.add_collection("col4");
+        bins_collection_t col1 = *db.collection_create("col1");
+        bins_collection_t col2 = *db.collection_create("col2");
+        bins_collection_t col3 = *db.collection_create("col3");
+        bins_collection_t col4 = *db.collection_create("col4");
 
         EXPECT_TRUE(*db.contains("col1"));
         EXPECT_TRUE(*db.contains("col2"));
@@ -576,13 +576,13 @@ TEST(db, unnamed_and_named) {
         .count = 3,
     };
 
-    EXPECT_FALSE(db.add_collection(""));
+    EXPECT_FALSE(db.collection_create(""));
 
     for (auto&& name : {"one", "three"}) {
         for (auto& val : vals)
             val += 7;
 
-        auto maybe_collection = db.add_collection(name);
+        auto maybe_collection = db.collection_create(name);
         EXPECT_TRUE(maybe_collection);
         bins_collection_t collection = std::move(maybe_collection).throw_or_release();
         auto collection_ref = collection[keys];
@@ -777,7 +777,7 @@ TEST(db, txn_unnamed_then_named) {
     check_equalities(collection_ref, values);
 
     // Transaction with named collection
-    EXPECT_TRUE(db.add_collection("named_col"));
+    EXPECT_TRUE(db.collection_create("named_col"));
     bins_collection_t named_collection = *db.collection("named_col");
     std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
     auto txn_named_collection_ref = txn[sub_keys];

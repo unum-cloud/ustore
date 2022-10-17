@@ -580,7 +580,7 @@ void ukv_collection_list(ukv_collection_list_t*);
  * @param[out] id          Address to which the collection ID will be exported.
  * @param[out] error       The error message to be handled by callee.
  */
-typedef struct ukv_collection_init_t {
+typedef struct ukv_collection_create_t {
     ukv_database_t db;
     ukv_error_t* error;
 
@@ -590,9 +590,9 @@ typedef struct ukv_collection_init_t {
 
     // Outputs:
     ukv_collection_t* id;
-} ukv_collection_init_t;
+} ukv_collection_create_t;
 
-void ukv_collection_init(ukv_collection_init_t*);
+void ukv_collection_create(ukv_collection_create_t*);
 
 /**
  * @brief Removes a collection or its contents depending on @param mode.
@@ -693,7 +693,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t*);
  * deallocate and return memory to the OS.
  * Passing NULLs is safe.
  */
-void ukv_arena_free(ukv_database_t, ukv_arena_t);
+void ukv_arena_free(ukv_arena_t);
 
 /**
  * @brief Deallocates memory used by transaction.
@@ -701,7 +701,7 @@ void ukv_arena_free(ukv_database_t, ukv_arena_t);
  * it will be released.
  * Passing NULLs is safe.
  */
-void ukv_transaction_free(ukv_database_t, ukv_transaction_t);
+void ukv_transaction_free(ukv_transaction_t);
 
 /**
  * @brief Closes the DB and deallocates the state.

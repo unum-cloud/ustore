@@ -25,7 +25,7 @@ static std::unique_ptr<py_collection_t> punned_collection( //
 
     status_t status;
     ukv_collection_t collection = ukv_collection_main_k;
-    ukv_collection_init_t coll_init {
+    ukv_collection_create_t collection_init {
         .db = py_db_ptr->native,
         .error = status.member_ptr(),
         .name = name.c_str(),
@@ -33,7 +33,7 @@ static std::unique_ptr<py_collection_t> punned_collection( //
         .id = &collection,
     };
 
-    ukv_collection_init(&coll_init);
+    ukv_collection_create(&collection_init);
     status.throw_unhandled();
 
     auto py_collection = std::make_unique<py_collection_t>();
