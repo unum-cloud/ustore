@@ -316,7 +316,7 @@ struct operation_t {
 };
 
 template <std::size_t arr_size_ak>
-struct txn_with_operations {
+struct txn_with_operations_gt {
     transaction_t txn;
     std::array<operation_t, arr_size_ak> operations;
     std::size_t operation_count;
@@ -329,7 +329,7 @@ std::FILE* open_log_file() {
     return std::fopen(log_file_path.c_str(), "wb");
 }
 
-void log_updated_keys(std::FILE* stream, std::map<ukv_key_t, bool> const& updated_keys) {
+void log_updated_keys(std::FILE* stream, std::unordered_map<ukv_key_t, bool> const& updated_keys) {
     std::fprintf(stream, "\nLater Updated Keys\n\n");
     for (auto& key_and_presence : updated_keys) {
         std::fprintf(stream, "%ld", key_and_presence.first);
@@ -363,7 +363,7 @@ template <std::size_t max_batch_size_ak>
 bool add_updated_keys( //
     std::array<operation_t, max_batch_size_ak> const& operations,
     std::size_t operations_count,
-    std::map<ukv_key_t, bool>& updated_keys) {
+    std::unordered_map<ukv_key_t, bool>& updated_keys) {
 
     for (std::size_t idx = 0; idx != operations_count; ++idx) {
         if (operations[idx].type == operation_code_t::remove_k || operations[idx].type == operation_code_t::insert_k)
@@ -374,7 +374,7 @@ bool add_updated_keys( //
 template <std::size_t max_batch_size_ak>
 bool will_success(std::array<operation_t, max_batch_size_ak> const& operations,
                   std::size_t operations_count,
-                  std::map<ukv_key_t, bool> const& updated_keys) {
+                  std::unordered_map<ukv_key_t, bool> const& updated_keys) {
 
     for (std::size_t idx = 0; idx != operations_count; ++idx) {
         if (operations[idx].watch)
@@ -395,7 +395,7 @@ void transactions_consistency(std::size_t transaction_count) {
     std::uniform_int_distribution<> choose_operation_type(0, 2);
     std::uniform_int_distribution<> choose_batch_size(1, max_batch_size_ak);
     std::uniform_int_distribution<> choose_key(0, transaction_count * max_batch_size_ak / 4);
-    std::vector<txn_with_operations<max_batch_size_ak>> tasks(transaction_count);
+    std::vector<txn_with_operations_gt<max_batch_size_ak>> tasks(transaction_count);
 
     for (std::size_t iter_idx = 0; iter_idx != transaction_count; ++iter_idx) {
         tasks[iter_idx].operation_count = choose_batch_size(random_generator);
@@ -419,7 +419,7 @@ void transactions_consistency(std::size_t transaction_count) {
         }
     }
 
-    std::map<ukv_key_t, bool> updated_keys;
+    std::unordered_map<ukv_key_t, bool> updated_keys;
     for (std::size_t task_idx = 0; task_idx != tasks.size(); ++task_idx) {
         auto status = tasks[task_idx].txn.commit();
         if (will_success(tasks[task_idx].operations, tasks[task_idx].operation_count, updated_keys) != status) {
@@ -427,7 +427,6 @@ void transactions_consistency(std::size_t transaction_count) {
             log_operations(stream, tasks[task_idx].operations, tasks[task_idx].operation_count);
             log_updated_keys(stream, updated_keys);
             std::fclose(stream);
-            EXPECT_TRUE(false);
             exit(1);
         }
         if (status)
@@ -439,7 +438,6 @@ void transactions_consistency(std::size_t transaction_count) {
             auto stream = open_log_file();
             log_updated_keys(stream, updated_keys);
             std::fclose(stream);
-            EXPECT_TRUE(false);
             exit(1);
         }
     }
