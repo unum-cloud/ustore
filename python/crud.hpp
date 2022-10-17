@@ -342,7 +342,7 @@ static void update_binary(py_collection_t& collection, py::object dict_py) {
 static py::array_t<ukv_key_t> scan_binary( //
     py_collection_t& collection,
     ukv_key_t min_key,
-    ukv_length_t scan_limit) {
+    ukv_length_t count_limit) {
 
     status_t status;
     ukv_length_t* found_lengths = nullptr;
@@ -356,7 +356,7 @@ static py::array_t<ukv_key_t> scan_binary( //
         .options = collection.options(),
         .collections = collection.member_collection(),
         .start_keys = &min_key,
-        .scan_limits = &scan_limit,
+        .count_limits = &count_limit,
         .counts = &found_lengths,
         .keys = &found_keys,
     };

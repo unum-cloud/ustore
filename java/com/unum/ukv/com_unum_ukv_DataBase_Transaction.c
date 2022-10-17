@@ -50,7 +50,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
     };
 
     ukv_write(&write);
-    ukv_arena_free(db_ptr_c, arena_c);
+    ukv_arena_free(arena_c);
 
     if (value_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseByteArrayElements(env_java, value_java, value_ptr_java, 0);
@@ -93,12 +93,12 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
     ukv_read(&read);
 
     if (forward_error(env_java, error_c)) {
-        ukv_arena_free(db_ptr_c, arena_c);
+        ukv_arena_free(arena_c);
         return JNI_FALSE;
     }
 
     jboolean result = found_presences_c[0] != 0 ? JNI_TRUE : JNI_FALSE;
-    ukv_arena_free(db_ptr_c, arena_c);
+    ukv_arena_free(arena_c);
     return result;
 }
 
@@ -142,7 +142,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     ukv_read(&read);
 
     if (forward_ukv_error(env_java, error_c)) {
-        ukv_arena_free(db_ptr_c, arena_c);
+        ukv_arena_free(arena_c);
         return NULL;
     }
 
@@ -162,7 +162,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
                                             (jbyte const*)(found_values_c + found_offsets_c[0]));
     }
 
-    ukv_arena_free(db_ptr_c, arena_c);
+    ukv_arena_free(arena_c);
     return result_java;
 }
 
@@ -199,7 +199,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
     };
 
     ukv_write(&write);
-    ukv_arena_free(db_ptr_c, arena_c);
+    ukv_arena_free(arena_c);
     forward_ukv_error(env_java, error_c);
 }
 
@@ -223,7 +223,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_rollback( //
     ukv_transaction_init_t txn_init {
         .db = db_ptr_c,
         .error = &error_c,
-        .transaction =&txn_ptr_c,
+        .transaction = &txn_ptr_c,
     };
 
     ukv_transaction_init(&txn_init);

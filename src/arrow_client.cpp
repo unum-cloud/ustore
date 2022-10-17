@@ -600,7 +600,7 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
-    strided_iterator_gt<ukv_length_t const> scan_limits {c.match_counts_limits, c.match_counts_limits_stride};
+    strided_iterator_gt<ukv_length_t const> count_limits {c.match_counts_limits, c.match_counts_limits_stride};
 
     strided_iterator_gt<ukv_length_t const> pattern_offs {c.patterns_offsets, c.patterns_offsets_stride};
     strided_iterator_gt<ukv_length_t const> pattern_lens {c.patterns_lengths, c.patterns_lengths_stride};
@@ -648,7 +648,7 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
 
     bool const has_collections_column = collections && !same_collection;
     bool const has_previous_column = previous != nullptr;
-    bool const has_limits_column = scan_limits != nullptr;
+    bool const has_limits_column = count_limits != nullptr;
 
     // If all requests map to the same collection, we can avoid passing its ID
     if (has_collections_column && !collections.is_continuous()) {
@@ -658,11 +658,11 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
         collections = {continuous.begin(), sizeof(ukv_collection_t)};
     }
 
-    if (has_limits_column && !scan_limits.is_continuous()) {
+    if (has_limits_column && !count_limits.is_continuous()) {
         auto continuous = arena.alloc<ukv_length_t>(places.size(), c.error);
         return_on_error(c.error);
-        transform_n(scan_limits, places.size(), continuous.begin());
-        scan_limits = {continuous.begin(), places.size()};
+        transform_n(count_limits, places.size(), continuous.begin());
+        count_limits = {continuous.begin(), places.size()};
     }
 
     ukv_bytes_cptr_t joined_patrns_begin = patterns[0];
@@ -715,11 +715,11 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     if (has_limits_column)
         ukv_to_arrow_column( //
             c.tasks_count,
-            kArgScanLengths.c_str(),
+            kArgCountLimits.c_str(),
             ukv_doc_field<ukv_length_t>(),
             nullptr,
             nullptr,
-            scan_limits.get(),
+            count_limits.get(),
             input_schema_c.children[has_collections_column],
             input_array_c.children[has_collections_column],
             c.error);
@@ -990,9 +990,8 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
-    strided_iterator_gt<ukv_key_t const> end_keys {c.end_keys, c.end_keys_stride};
-    strided_iterator_gt<ukv_length_t const> limits {c.scan_limits, c.scan_limits_stride};
-    scans_arg_t scans {collections, start_keys, end_keys, limits, c.tasks_count};
+    strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
+    scans_arg_t scans {collections, start_keys, limits, c.tasks_count};
     places_arg_t places {collections, start_keys, {}, c.tasks_count};
 
     bool const same_collection = places.same_collection();
@@ -1001,7 +1000,6 @@ void ukv_scan(ukv_scan_t* c_ptr) {
 
     bool const has_collections_column = !same_collection;
     constexpr bool has_start_keys_column = true;
-    bool const has_end_keys_column = static_cast<bool>(end_keys);
     constexpr bool has_lens_column = true;
 
     if (has_collections_column && !collections.is_continuous()) {
@@ -1016,13 +1014,6 @@ void ukv_scan(ukv_scan_t* c_ptr) {
         return_on_error(c.error);
         transform_n(start_keys, places.size(), continuous.begin());
         start_keys = {continuous.begin(), places.size()};
-    }
-
-    if (has_end_keys_column && !end_keys.is_continuous()) {
-        auto continuous = arena.alloc<ukv_key_t>(places.size(), c.error);
-        return_on_error(c.error);
-        transform_n(end_keys, places.size(), continuous.begin());
-        end_keys = {continuous.begin(), places.size()};
     }
 
     if (has_lens_column && !limits.is_continuous()) {
@@ -1065,29 +1056,16 @@ void ukv_scan(ukv_scan_t* c_ptr) {
             c.error);
     return_on_error(c.error);
 
-    if (has_end_keys_column)
-        ukv_to_arrow_column( //
-            c.tasks_count,
-            kArgScanEnds.c_str(),
-            ukv_doc_field<ukv_key_t>(),
-            nullptr,
-            nullptr,
-            end_keys.get(),
-            input_schema_c.children[has_collections_column + has_start_keys_column],
-            input_array_c.children[has_collections_column + has_start_keys_column],
-            c.error);
-    return_on_error(c.error);
-
     if (has_lens_column)
         ukv_to_arrow_column( //
             c.tasks_count,
-            kArgScanLengths.c_str(),
+            kArgCountLimits.c_str(),
             ukv_doc_field<ukv_length_t>(),
             nullptr,
             nullptr,
             limits.get(),
-            input_schema_c.children[has_collections_column + has_start_keys_column + has_end_keys_column],
-            input_array_c.children[has_collections_column + has_start_keys_column + has_end_keys_column],
+            input_schema_c.children[has_collections_column + has_start_keys_column],
+            input_array_c.children[has_collections_column + has_start_keys_column],
             c.error);
     return_on_error(c.error);
 
@@ -1171,9 +1149,9 @@ void ukv_measure(ukv_measure_t* c_ptr) {
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_init(ukv_collection_init_t* c_ptr) {
+void ukv_collection_create(ukv_collection_create_t* c_ptr) {
 
-    ukv_collection_init_t& c = *c_ptr;
+    ukv_collection_create_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     if (!c.name || !std::strlen(c.name)) {
@@ -1355,14 +1333,14 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
-void ukv_arena_free(ukv_database_t const, ukv_arena_t c_arena) {
+void ukv_arena_free(ukv_arena_t c_arena) {
     if (!c_arena)
         return;
     stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
     delete &arena;
 }
 
-void ukv_transaction_free(ukv_database_t const, ukv_transaction_t const c_transaction) {
+void ukv_transaction_free(ukv_transaction_t const c_transaction) {
     if (!c_transaction)
         return;
 }
@@ -1372,11 +1350,6 @@ void ukv_database_free(ukv_database_t c_db) {
         return;
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
     delete &db;
-}
-
-void ukv_collection_free(ukv_database_t const, ukv_collection_t const) {
-    // In this in-memory freeing the collection handle does nothing.
-    // The DB destructor will automatically cleanup the memory.
 }
 
 void ukv_error_free(ukv_error_t) {

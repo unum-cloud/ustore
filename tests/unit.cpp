@@ -56,6 +56,7 @@ static json_t json_parse(char const* begin, char const* end) {
     EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 
 static char const* path() {
+    return nullptr;
     char* path = std::getenv("UKV_TEST_PATH");
     if (path)
         return path;
@@ -248,8 +249,8 @@ TEST(db, named) {
     EXPECT_TRUE(db["col1"]);
     EXPECT_TRUE(db["col2"]);
 
-    bins_collection_t col1 = *db.add_collection("col1");
-    bins_collection_t col2 = *db.add_collection("col2");
+    bins_collection_t col1 = *db.collection_create("col1");
+    bins_collection_t col2 = *db.collection_create("col2");
 
     check_binary_collection(col1);
     check_binary_collection(col2);
@@ -277,10 +278,10 @@ TEST(db, collection_list) {
         return;
     }
     else {
-        bins_collection_t col1 = *db.add_collection("col1");
-        bins_collection_t col2 = *db.add_collection("col2");
-        bins_collection_t col3 = *db.add_collection("col3");
-        bins_collection_t col4 = *db.add_collection("col4");
+        bins_collection_t col1 = *db.collection_create("col1");
+        bins_collection_t col2 = *db.collection_create("col2");
+        bins_collection_t col3 = *db.collection_create("col3");
+        bins_collection_t col4 = *db.collection_create("col4");
 
         EXPECT_TRUE(*db.contains("col1"));
         EXPECT_TRUE(*db.contains("col2"));
@@ -544,13 +545,13 @@ TEST(db, unnamed_and_named) {
 
     triplet_t triplet;
 
-    EXPECT_FALSE(db.add_collection(""));
+    EXPECT_FALSE(db.collection_create(""));
 
     for (auto&& name : {"one", "three"}) {
         for (auto& val : triplet.vals)
             val += 7;
 
-        auto maybe_collection = db.add_collection(name);
+        auto maybe_collection = db.collection_create(name);
         EXPECT_TRUE(maybe_collection);
         bins_collection_t collection = std::move(maybe_collection).throw_or_release();
         auto collection_ref = collection[triplet.keys];
@@ -587,6 +588,65 @@ TEST(db, txn) {
 
     // Validate that values match after commit
     check_equalities(collection_ref, triplet.contents());
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, snapshots) {
+
+    if (!ukv_supports_snapshots_k)
+        return;
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    std::vector<ukv_key_t> keys {54, 55, 56};
+    ukv_length_t val_len = sizeof(std::uint64_t);
+    std::vector<std::uint64_t> vals_1 {54, 55, 56};
+    std::vector<std::uint64_t> vals_2 {50, 50, 50};
+    std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals_1.data());
+
+    contents_arg_t values {
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
+        .lengths_begin = {&val_len, 0},
+        .contents_begin = {&vals_begin, 0},
+        .count = 3,
+    };
+
+    EXPECT_TRUE(db.collection());
+    bins_collection_t collection = *db.collection();
+    auto collection_ref = collection[keys];
+
+    check_length(collection_ref, ukv_length_missing_k);
+    round_trip(collection_ref, values);
+
+    transaction_t txn = *db.transact(true);
+    auto txn_ref = txn[keys];
+    check_equalities(txn_ref, values);
+
+    auto begin = reinterpret_cast<ukv_bytes_ptr_t>(vals_2.data());
+    values.contents_begin = {&begin, 0};
+
+    round_trip(collection_ref, values);
+
+    // Validate that values match
+    auto maybe_retrieved = txn_ref.value();
+    auto const& retrieved = *maybe_retrieved;
+    auto it = retrieved.begin();
+    for (std::size_t i = 0; i != values.size(); ++i, ++it) {
+        auto expected_len = static_cast<std::size_t>(values.lengths_begin[i]);
+        auto expected_begin = reinterpret_cast<byte_t const*>(values.contents_begin[i]) + values.offsets_begin[i];
+
+        value_view_t retrieved_view = *it;
+        value_view_t expected_view(expected_begin, expected_begin + expected_len);
+        EXPECT_EQ(retrieved_view.size(), expected_view.size());
+        EXPECT_NE(retrieved_view, expected_view);
+    }
+
+    txn = *db.transact(true);
+    auto ref = txn[keys];
+    round_trip(ref, values);
+
     EXPECT_TRUE(db.clear());
 }
 
@@ -652,7 +712,7 @@ TEST(db, txn_unnamed_then_named) {
     check_equalities(collection_ref, triplet.contents());
 
     // Transaction with named collection
-    EXPECT_TRUE(db.add_collection("named_col"));
+    EXPECT_TRUE(db.collection_create("named_col"));
     bins_collection_t named_collection = *db.collection("named_col");
     std::vector<collection_key_t> sub_keys {{named_collection, 54}, {named_collection, 55}, {named_collection, 56}};
     auto txn_named_collection_ref = txn[sub_keys];
