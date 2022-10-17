@@ -47,15 +47,15 @@ void insert_atomic_isolated(std::size_t count_batches) {
 
     auto task = [&](size_t thread_idx) {
         for (std::size_t idx_batch = 0; idx_batch != count_batches; ++idx_batch) {
+
+            ukv_key_t const first_key_in_batch = idx_batch * batch_size_ak;
+            std::iota(keys.begin(), keys.end(), first_key_in_batch);
+            std::uint64_t const num_value = idx_batch * threads_count_ak + thread_idx;
+            value_view_t value((byte_t const*)&num_value, sizeof(num_value));
+
             while (true) {
                 transaction_t txn = db.transact().throw_or_release();
                 auto collection = txn.collection().throw_or_release();
-
-                ukv_key_t const first_key_in_batch = idx_batch * batch_size_ak;
-                std::iota(keys.begin(), keys.end(), first_key_in_batch);
-
-                std::uint64_t const num_value = idx_batch * threads_count_ak + thread_idx;
-                value_view_t value((byte_t const*)&num_value, sizeof(num_value));
                 collection[keys] = value;
                 status_t status = txn.commit();
                 if (status)
@@ -309,6 +309,140 @@ void serializable_transactions(std::size_t iteration_count) {
     EXPECT_TRUE(present_it_simulation.is_end());
 }
 
+struct operation_t {
+    operation_code_t type;
+    ukv_key_t key;
+    bool watch;
+};
+
+template <std::size_t arr_size_ak>
+struct txn_with_operations_gt {
+    transaction_t txn;
+    std::array<operation_t, arr_size_ak> operations;
+    std::size_t operation_count;
+};
+
+std::FILE* open_log_file() {
+    std::filesystem::path log_file_path(path());
+    log_file_path = log_file_path.parent_path();
+    log_file_path += "_stress_test_log";
+    return std::fopen(log_file_path.c_str(), "wb");
+}
+
+void log_updated_keys(std::FILE* stream, std::unordered_map<ukv_key_t, bool> const& updated_keys) {
+    std::fprintf(stream, "\nLater Updated Keys\n\n");
+    for (auto& key_and_presence : updated_keys) {
+        std::fprintf(stream, "%ld", key_and_presence.first);
+        if (key_and_presence.second)
+            std::fprintf(stream, " PRESENT");
+        std::fprintf(stream, "\n");
+    }
+}
+
+template <std::size_t max_batch_size_ak>
+void log_operations( //
+    std::FILE* stream,
+    std::array<operation_t, max_batch_size_ak> const& operations,
+    std::size_t operations_count) {
+
+    std::fprintf(stream, "Operations In Transaction With Watch\n\n");
+    for (std::size_t idx = 0; idx != operations_count; ++idx) {
+        if (!operations[idx].watch)
+            continue;
+
+        switch (operations[idx].type) {
+        case operation_code_t::insert_k: std::fprintf(stream, "INSERT - "); break;
+        case operation_code_t::remove_k: std::fprintf(stream, "REMOVE - "); break;
+        case operation_code_t::select_k: std::fprintf(stream, "SELECT - "); break;
+        }
+        std::fprintf(stream, "%ld\n", operations[idx].key);
+    }
+}
+
+template <std::size_t max_batch_size_ak>
+bool add_updated_keys( //
+    std::array<operation_t, max_batch_size_ak> const& operations,
+    std::size_t operations_count,
+    std::unordered_map<ukv_key_t, bool>& updated_keys) {
+
+    for (std::size_t idx = 0; idx != operations_count; ++idx) {
+        if (operations[idx].type == operation_code_t::remove_k || operations[idx].type == operation_code_t::insert_k)
+            updated_keys[operations[idx].key] = operations[idx].type == operation_code_t::insert_k;
+    }
+}
+
+template <std::size_t max_batch_size_ak>
+bool will_success(std::array<operation_t, max_batch_size_ak> const& operations,
+                  std::size_t operations_count,
+                  std::unordered_map<ukv_key_t, bool> const& updated_keys) {
+
+    for (std::size_t idx = 0; idx != operations_count; ++idx) {
+        if (operations[idx].watch)
+            if (updated_keys.find(operations[idx].key) != updated_keys.end())
+                return false;
+    }
+    return true;
+}
+
+template <std::size_t max_batch_size_ak>
+void transactions_consistency(std::size_t transaction_count) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    auto collection = db.collection().throw_or_release();
+
+    std::uniform_int_distribution<> choose_watch(0, 1);
+    std::uniform_int_distribution<> choose_operation_type(0, 2);
+    std::uniform_int_distribution<> choose_batch_size(1, max_batch_size_ak);
+    std::uniform_int_distribution<> choose_key(0, transaction_count * max_batch_size_ak / 4);
+    std::vector<txn_with_operations_gt<max_batch_size_ak>> tasks(transaction_count);
+
+    for (std::size_t iter_idx = 0; iter_idx != transaction_count; ++iter_idx) {
+        tasks[iter_idx].operation_count = choose_batch_size(random_generator);
+        tasks[iter_idx].txn = db.transact().throw_or_release();
+        auto collection = tasks[iter_idx].txn.collection().throw_or_release();
+
+        for (std::size_t batch_idx = 0; batch_idx != tasks[iter_idx].operation_count; ++batch_idx) {
+            auto type = choose_operation_type(random_generator);
+            auto key = choose_key(random_generator);
+            auto watch = choose_watch(random_generator);
+            if (type == static_cast<int>(operation_code_t::insert_k))
+                collection[key].assign("value", watch);
+            else if (type == static_cast<int>(operation_code_t::remove_k))
+                collection[key].erase(watch);
+            else if (type == static_cast<int>(operation_code_t::select_k))
+                auto _ = collection[key].value(watch);
+
+            tasks[iter_idx].operations[batch_idx].type = static_cast<operation_code_t>(type);
+            tasks[iter_idx].operations[batch_idx].key = key;
+            tasks[iter_idx].operations[batch_idx].watch = watch;
+        }
+    }
+
+    std::unordered_map<ukv_key_t, bool> updated_keys;
+    for (std::size_t task_idx = 0; task_idx != tasks.size(); ++task_idx) {
+        auto status = tasks[task_idx].txn.commit();
+        if (will_success(tasks[task_idx].operations, tasks[task_idx].operation_count, updated_keys) != status) {
+            auto stream = open_log_file();
+            log_operations(stream, tasks[task_idx].operations, tasks[task_idx].operation_count);
+            log_updated_keys(stream, updated_keys);
+            std::fclose(stream);
+            exit(1);
+        }
+        if (status)
+            add_updated_keys(tasks[task_idx].operations, tasks[task_idx].operation_count, updated_keys);
+    }
+
+    for (auto& key_and_presence : updated_keys) {
+        if (collection[key_and_presence.first].present() != key_and_presence.second) {
+            auto stream = open_log_file();
+            log_updated_keys(stream, updated_keys);
+            std::fclose(stream);
+            exit(1);
+        }
+    }
+}
+
 TEST(db, insert_atomic_isolated) {
     insert_atomic_isolated<4, 100>(1'000);
     insert_atomic_isolated<8, 100>(1'000);
@@ -319,6 +453,12 @@ TEST(db, serializable_transactions) {
     serializable_transactions<4, 100>(1'000);
     serializable_transactions<8, 100>(1'000);
     serializable_transactions<16, 1000>(1'000);
+}
+
+TEST(db, transactions_consistency) {
+    transactions_consistency<100>(100);
+    transactions_consistency<100>(1'000);
+    transactions_consistency<1000>(10'000);
 }
 
 int main(int argc, char** argv) {

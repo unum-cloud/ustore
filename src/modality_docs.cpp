@@ -544,7 +544,7 @@ static bool bson_visit_binary(bson_iter_t const*,
     bson_to_json_string(state.json_str, "{ \"$binary\" : { \"base64\" : \"", state.c_error);
     bson_to_json_string(state.json_str, b64, state.c_error);
     bson_to_json_string(state.json_str, "\", \"subType\" : \"", state.c_error);
-    bson_to_json_number(state.json_str, v_subtype, state.c_error);
+    bson_to_json_number(state.json_str, static_cast<int>(v_subtype), state.c_error);
     bson_to_json_string(state.json_str, "\" } }", state.c_error);
 
     return false;
