@@ -113,7 +113,7 @@ func forwardError(db *DataBase, error_c C.ukv_error_t) error {
 }
 
 func freeArena(db *DataBase, arena_c C.ukv_arena_t) {
-	C.u_arena_free(db.Backend.UKV_arena_free, db.raw, arena_c)
+	C.u_arena_free(db.Backend.UKV_arena_free, arena_c)
 }
 
 func (db *DataBase) ReConnect(config string) error {

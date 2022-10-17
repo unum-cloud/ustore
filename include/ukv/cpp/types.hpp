@@ -247,7 +247,7 @@ class arena_t {
     arena_t& operator=(arena_t const&) = delete;
 
     ~arena_t() {
-        ukv_arena_free(db_, memory_);
+        ukv_arena_free(memory_);
         memory_ = nullptr;
     }
 

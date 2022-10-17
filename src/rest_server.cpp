@@ -305,14 +305,14 @@ void respond_to_one(db_session_t& session,
         std::memcpy(collection_name_buffer, collection_val->data(), std::min(collection_val->size(), 64ul));
 
         status_t status;
-        ukv_collection_init_t coll_init {
+        ukv_collection_create_t collection_init {
             .db = session.db(),
             .error = error.member_ptr(),
             .name = collection_name_buffer,
             .id = &collection.raw,
         };
 
-        ukv_collection_init(&coll_init);
+        ukv_collection_create(&collection_init);
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
     }
@@ -537,14 +537,14 @@ void respond_to_aos(db_session_t& session,
 
         status_t status;
         bins_collection_t collection(session.db());
-        ukv_collection_init_t coll_init {
+        ukv_collection_create_t collection_init {
             .db = session.db(),
             .error = error.member_ptr(),
             .name = collection_name_buffer,
             .id = &collection.raw,
         };
-        
-        ukv_collection_init(&coll_init);
+
+        ukv_collection_create(&collection_init);
         if (!status)
             return send_response(make_error(req, http::status::internal_server_error, error.raw));
 
