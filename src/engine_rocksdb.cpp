@@ -128,11 +128,11 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         if (column_descriptors.empty())
             column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
 
-        if (status.IsNotFound()) {
+        return_if_error(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
+        if (status.IsNotFound())
             options.compression = rocksdb::kNoCompression;
-            options.create_if_missing = true;
-            options.comparator = &key_comparator_k;
-        }
+        options.create_if_missing = true;
+        options.comparator = &key_comparator_k;
 
         rocks_native_t* native_db = nullptr;
         rocksdb::OptimisticTransactionDBOptions txn_options;
