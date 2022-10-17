@@ -106,6 +106,9 @@ typedef void* ukv_arena_t;
 typedef uint8_t* ukv_bytes_ptr_t;
 typedef uint8_t const* ukv_bytes_cptr_t;
 
+typedef void* ukv_callback_payload_t;
+typedef void (*ukv_callback_t)(ukv_callback_payload_t);
+
 typedef enum {
 
     ukv_options_default_k = 0,
