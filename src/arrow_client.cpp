@@ -600,7 +600,7 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
-    strided_iterator_gt<ukv_length_t const> scan_limits {c.match_counts_limits, c.match_counts_limits_stride};
+    strided_iterator_gt<ukv_length_t const> count_limits {c.match_counts_limits, c.match_counts_limits_stride};
 
     strided_iterator_gt<ukv_length_t const> pattern_offs {c.patterns_offsets, c.patterns_offsets_stride};
     strided_iterator_gt<ukv_length_t const> pattern_lens {c.patterns_lengths, c.patterns_lengths_stride};
@@ -648,7 +648,7 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
 
     bool const has_collections_column = collections && !same_collection;
     bool const has_previous_column = previous != nullptr;
-    bool const has_limits_column = scan_limits != nullptr;
+    bool const has_limits_column = count_limits != nullptr;
 
     // If all requests map to the same collection, we can avoid passing its ID
     if (has_collections_column && !collections.is_continuous()) {
@@ -658,11 +658,11 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
         collections = {continuous.begin(), sizeof(ukv_collection_t)};
     }
 
-    if (has_limits_column && !scan_limits.is_continuous()) {
+    if (has_limits_column && !count_limits.is_continuous()) {
         auto continuous = arena.alloc<ukv_length_t>(places.size(), c.error);
         return_on_error(c.error);
-        transform_n(scan_limits, places.size(), continuous.begin());
-        scan_limits = {continuous.begin(), places.size()};
+        transform_n(count_limits, places.size(), continuous.begin());
+        count_limits = {continuous.begin(), places.size()};
     }
 
     ukv_bytes_cptr_t joined_patrns_begin = patterns[0];
@@ -715,11 +715,11 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     if (has_limits_column)
         ukv_to_arrow_column( //
             c.tasks_count,
-            kArgScanLengths.c_str(),
+            kArgCountLimits.c_str(),
             ukv_doc_field<ukv_length_t>(),
             nullptr,
             nullptr,
-            scan_limits.get(),
+            count_limits.get(),
             input_schema_c.children[has_collections_column],
             input_array_c.children[has_collections_column],
             c.error);
@@ -990,7 +990,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
-    strided_iterator_gt<ukv_length_t const> limits {c.scan_limits, c.scan_limits_stride};
+    strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
     scans_arg_t scans {collections, start_keys, limits, c.tasks_count};
     places_arg_t places {collections, start_keys, {}, c.tasks_count};
 
@@ -1059,7 +1059,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     if (has_lens_column)
         ukv_to_arrow_column( //
             c.tasks_count,
-            kArgScanLengths.c_str(),
+            kArgCountLimits.c_str(),
             ukv_doc_field<ukv_length_t>(),
             nullptr,
             nullptr,

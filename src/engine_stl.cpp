@@ -752,9 +752,8 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
-    strided_iterator_gt<ukv_key_t const> end_keys {c.end_keys, c.end_keys_stride};
-    strided_iterator_gt<ukv_length_t const> lens {c.scan_limits, c.scan_limits_stride};
-    scans_arg_t scans {collections, start_keys, end_keys, lens, c.tasks_count};
+    strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
+    scans_arg_t scans {collections, start_keys, lens, c.tasks_count};
 
     validate_scan(c.transaction, scans, c.options, c.error);
     return_on_error(c.error);

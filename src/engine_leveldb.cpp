@@ -278,7 +278,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
-    strided_iterator_gt<ukv_length_t const> limits {c.scan_limits, c.scan_limits_stride};
+    strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
     scans_arg_t tasks {{}, start_keys, limits, c.tasks_count};
 
     // 1. Allocate a tape for all the values to be fetched
