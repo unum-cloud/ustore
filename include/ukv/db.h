@@ -410,7 +410,7 @@ struct ukv_read_t {
 void ukv_read(ukv_read_t*);
 
 /**
- * @brief Retrieves the following (upto) @param scan_limits[i] keys starting
+ * @brief Retrieves the following (upto) @param count_limits[i] keys starting
  * from @param start_key[i] or the smallest following key in each collection.
  * Values are not exported, for that - follow up with @see ukv_read.
  *
@@ -441,7 +441,7 @@ void ukv_read(ukv_read_t*);
  *
  * @param[out] offsets       Will contain the offset of each run in joined @param keys.
  *                           Will have @param tasks_count +1 outputs, to match Arrow format.
- * @param[out] counts        Will contain the height of each column (< scan_limit).
+ * @param[out] counts        Will contain the height of each column (< count_limit).
  * @param[out] keys          Will contain columns of following keys for each task.
  *
  * @param[out] error         The error message to be handled by callee.
@@ -466,11 +466,8 @@ typedef struct ukv_scan_t {
     ukv_key_t const* start_keys = NULL;
     ukv_size_t start_keys_stride = 0;
 
-    ukv_key_t const* end_keys = NULL;
-    ukv_size_t end_keys_stride = 0;
-
-    ukv_length_t const* scan_limits;
-    ukv_size_t scan_limits_stride = 0;
+    ukv_length_t const* count_limits;
+    ukv_size_t count_limits_stride = 0;
 
     // Outputs:
     ukv_length_t** offsets = NULL;

@@ -888,7 +888,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::Invalid("Patterns must have been provided for reads");
 
             /// @param `limits`
-            auto input_limits = get_lengths(input_schema_c, input_batch_c, kArgScanLengths);
+            auto input_limits = get_lengths(input_schema_c, input_batch_c, kArgCountLimits);
 
             /// @param `collections`
             ukv_collection_t c_collection_id = ukv_collection_main_k;
@@ -990,10 +990,8 @@ class UKVService : public arf::FlightServerBase {
 
             /// @param `start_keys`
             auto input_start_keys = get_keys(input_schema_c, input_batch_c, kArgScanStarts);
-            /// @param `start_keys`
-            auto input_end_keys = get_keys(input_schema_c, input_batch_c, kArgScanEnds);
             /// @param `lengths`
-            auto input_lengths = get_lengths(input_schema_c, input_batch_c, kArgScanLengths);
+            auto input_lengths = get_lengths(input_schema_c, input_batch_c, kArgCountLimits);
             /// @param `collections`
             ukv_collection_t c_collection_id = ukv_collection_main_k;
             strided_iterator_gt<ukv_collection_t> input_collections;
@@ -1029,10 +1027,8 @@ class UKVService : public arf::FlightServerBase {
                 .collections_stride = input_collections.stride(),
                 .start_keys = input_start_keys.get(),
                 .start_keys_stride = input_start_keys.stride(),
-                .end_keys = input_end_keys.get(),
-                .end_keys_stride = input_end_keys.stride(),
-                .scan_limits = input_lengths.get(),
-                .scan_limits_stride = input_lengths.stride(),
+                .count_limits = input_lengths.get(),
+                .count_limits_stride = input_lengths.stride(),
                 .offsets = &found_offsets,
                 .keys = &found_keys,
             };
