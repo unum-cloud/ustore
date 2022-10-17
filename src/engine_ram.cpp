@@ -20,8 +20,8 @@
 #include <filesystem> // Enumerating the directory
 #include <stdio.h>    // Saving/reading from disk
 
-#include <consistent_set.hpp> // `av::consistent_set_gt`
-#include <locked_set.hpp>     // `av::locked_gt`
+#include <consistent_set/consistent_set.hpp> // `av::consistent_set_gt`
+#include <consistent_set/locked.hpp>         // `av::locked_gt`
 
 #include "ukv/db.h"
 #include "helpers/pmr.hpp"
