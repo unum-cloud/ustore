@@ -61,7 +61,7 @@ class keys_stream_t {
             .arena = arena_.member_ptr(),
             .collections = &collection_,
             .start_keys = &next_min_key_,
-            .scan_limits = &read_ahead_,
+            .count_limits = &read_ahead_,
             .counts = &found_counts,
             .keys = &found_keys,
         };
@@ -195,7 +195,7 @@ class pairs_stream_t {
             .arena = arena_.member_ptr(),
             .collections = &collection_,
             .start_keys = &next_min_key_,
-            .scan_limits = &read_ahead_,
+            .count_limits = &read_ahead_,
             .counts = &found_counts,
             .keys = &found_keys,
         };
@@ -480,7 +480,7 @@ struct keys_range_t {
             .arena = arena.member_ptr(),
             .options = ukv_option_scan_sample_k,
             .collections = &c_collection,
-            .scan_limits = &c_count,
+            .count_limits = &c_count,
             .counts = &found_counts,
             .keys = &found_keys,
         };

@@ -444,7 +444,7 @@ void scan_predicate( //
     ukv_transaction_t const c_transaction,
     ukv_collection_t c_collection,
     std::string_view previous_path,
-    ukv_length_t c_scan_limit,
+    ukv_length_t c_count_limit,
     ukv_options_t const c_options,
     ukv_length_t& count,
     growing_tape_t& paths,
@@ -457,8 +457,8 @@ void scan_predicate( //
     ukv_arena_t c_arena = &arena;
     bool has_reached_previous = previous_path.empty();
     ukv_key_t start_key = !previous_path.empty() ? hash(previous_path) : std::numeric_limits<ukv_key_t>::min();
-    while (found_paths < c_scan_limit && !*c_error) {
-        ukv_length_t const scan_length = std::max<ukv_length_t>(c_scan_limit, 2u);
+    while (found_paths < c_count_limit && !*c_error) {
+        ukv_length_t const scan_length = std::max<ukv_length_t>(c_count_limit, 2u);
         ukv_length_t* found_buckets_count = nullptr;
         ukv_key_t* found_buckets_keys = nullptr;
         ukv_scan_t scan {
@@ -469,7 +469,7 @@ void scan_predicate( //
             .options = c_options,
             .collections = &c_collection,
             .start_keys = &start_key,
-            .scan_limits = &scan_length,
+            .count_limits = &scan_length,
             .counts = &found_buckets_count,
             .keys = &found_buckets_keys,
         };
@@ -517,7 +517,7 @@ void scan_predicate( //
                 if (!has_reached_previous)
                     // Skip the results we have already seen
                     return;
-                if (found_paths >= c_scan_limit)
+                if (found_paths >= c_count_limit)
                     // We have more than we need
                     return;
 
@@ -543,7 +543,7 @@ void scan_prefix( //
     ukv_collection_t c_collection,
     std::string_view prefix,
     std::string_view previous_path,
-    ukv_length_t c_scan_limit,
+    ukv_length_t c_count_limit,
     ukv_options_t const c_options,
     ukv_length_t& count,
     growing_tape_t& paths,
@@ -555,7 +555,7 @@ void scan_prefix( //
         c_transaction,
         c_collection,
         previous_path,
-        c_scan_limit,
+        c_count_limit,
         c_options,
         count,
         paths,
@@ -584,7 +584,7 @@ void scan_regex( //
     ukv_collection_t c_collection,
     std::string_view pattern,
     std::string_view previous_path,
-    ukv_length_t c_scan_limit,
+    ukv_length_t c_count_limit,
     ukv_options_t const c_options,
     ukv_length_t& count,
     growing_tape_t& paths,
@@ -621,7 +621,7 @@ void scan_regex( //
             c_transaction,
             c_collection,
             previous_path,
-            c_scan_limit,
+            c_count_limit,
             c_options,
             count,
             paths,
@@ -667,20 +667,20 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     previous_args.count = c.tasks_count;
 
     strided_range_gt<ukv_collection_t const> collections {{c.collections, c.collections_stride}, c.tasks_count};
-    strided_range_gt<ukv_length_t const> scan_limits {{c.match_counts_limits, c.match_counts_limits_stride},
-                                                      c.tasks_count};
+    strided_range_gt<ukv_length_t const> count_limits {{c.match_counts_limits, c.match_counts_limits_stride},
+                                                       c.tasks_count};
 
-    auto scan_limits_sum = transform_reduce_n(scan_limits.begin(), c.tasks_count, 0ul);
+    auto count_limits_sum = transform_reduce_n(count_limits.begin(), c.tasks_count, 0ul);
     auto found_counts = arena.alloc<ukv_length_t>(c.tasks_count, c.error);
     auto found_paths = growing_tape_t(arena);
-    found_paths.reserve(scan_limits_sum, c.error);
+    found_paths.reserve(count_limits_sum, c.error);
     return_on_error(c.error);
 
     for (std::size_t i = 0; i != c.tasks_count && !*c.error; ++i) {
         auto col = collections ? collections[i] : ukv_collection_main_k;
         auto pattern = patterns_args[i];
         auto previous = previous_args[i];
-        auto limit = scan_limits[i];
+        auto limit = count_limits[i];
         auto func = is_prefix(pattern) ? &scan_prefix : &scan_regex;
         func(c.db,
              c.transaction,

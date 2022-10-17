@@ -240,8 +240,8 @@ static void docs_sample_objects(bm::State& state) {
             .collections = &collection_docs_k,
             .keys = ids_tweets,
             .keys_stride = sizeof(ukv_key_t),
-            .found_offsets = &offsets,
-            .found_values = &values,
+            .offsets = &offsets,
+            .values = &values,
         };
 
         ukv_docs_read(&docs_read);
@@ -272,8 +272,8 @@ static void docs_sample_field(bm::State& state) {
             .keys = ids_tweets,
             .keys_stride = sizeof(ukv_key_t),
             .fields = &field,
-            .found_offsets = &offsets,
-            .found_values = &values,
+            .offsets = &offsets,
+            .values = &values,
         };
 
         ukv_docs_read(&docs_read);
@@ -654,7 +654,7 @@ int main(int argc, char** argv) {
     bool can_build_paths = false;
     if (ukv_supports_named_collections_k) {
         status_t status;
-        ukv_collection_init_t coll_init {
+        ukv_collection_create_t collection_init {
             .db = db,
             .error = status.member_ptr(),
             .name = "twitter.docs",
@@ -662,16 +662,16 @@ int main(int argc, char** argv) {
             .id = &collection_docs_k,
         };
 
-        ukv_collection_init(&coll_init);
+        ukv_collection_create(&collection_init);
         status.throw_unhandled();
-        coll_init.name = "twitter.graph";
-        coll_init.id = &collection_graph_k;
-        ukv_collection_init(&coll_init);
+        collection_init.name = "twitter.graph";
+        collection_init.id = &collection_graph_k;
+        ukv_collection_create(&collection_init);
         status.throw_unhandled();
         can_build_graph = true;
-        coll_init.name = "twitter.nicks";
-        coll_init.id = &collection_paths_k;
-        ukv_collection_init(&coll_init);
+        collection_init.name = "twitter.nicks";
+        collection_init.id = &collection_paths_k;
+        ukv_collection_create(&collection_init);
         status.throw_unhandled();
         can_build_paths = true;
     }

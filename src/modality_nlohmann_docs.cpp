@@ -620,10 +620,10 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
             .collections_stride = c.collections_stride,
             .keys = c.keys,
             .keys_stride = c.keys_stride,
-            .presences = c.found_presences,
-            .offsets = c.found_offsets,
-            .lengths = c.found_lengths,
-            .values = c.found_values,
+            .presences = c.presences,
+            .offsets = c.offsets,
+            .lengths = c.lengths,
+            .values = c.values,
         };
         return ukv_read(&read);
     }
@@ -654,12 +654,12 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
     read_docs(c.db, c.transaction, places, c.options, arena, c.error, safe_callback);
 
     auto serialized_view = serializing_tape.view();
-    if (c.found_values)
-        *c.found_values = reinterpret_cast<ukv_byte_t*>(serialized_view.contents());
-    if (c.found_offsets)
-        *c.found_offsets = serialized_view.offsets();
-    if (c.found_lengths)
-        *c.found_lengths = serialized_view.lengths();
+    if (c.values)
+        *c.values = reinterpret_cast<ukv_byte_t*>(serialized_view.contents());
+    if (c.offsets)
+        *c.offsets = serialized_view.offsets();
+    if (c.lengths)
+        *c.lengths = serialized_view.lengths();
 }
 
 /*********************************************************/
@@ -741,9 +741,9 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
     for (auto const& path : *paths)
         std::memcpy(std::exchange(tape_ptr, tape_ptr + path.size() + 1), path.c_str(), path.size() + 1);
 
-    *c.found_fields_count = static_cast<ukv_size_t>(paths->size());
-    *c.found_offsets = reinterpret_cast<ukv_length_t*>(offs.begin());
-    *c.found_fields = reinterpret_cast<ukv_char_t*>(tape.begin());
+    *c.fields_count = static_cast<ukv_size_t>(paths->size());
+    *c.offsets = reinterpret_cast<ukv_length_t*>(offs.begin());
+    *c.fields = reinterpret_cast<ukv_char_t*>(tape.begin());
 }
 
 std::size_t min_memory_usage(ukv_doc_field_type_t type) {
