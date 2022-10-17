@@ -385,7 +385,7 @@ bool will_success(std::array<operation_t, max_batch_size_ak> const& operations,
 }
 
 template <std::size_t max_batch_size_ak>
-void transactions_durability(std::size_t transaction_count) {
+void transactions_consistency(std::size_t transaction_count) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -457,10 +457,10 @@ TEST(db, serializable_transactions) {
     serializable_transactions<16, 1000>(1'000);
 }
 
-TEST(db, transactions_durability) {
-    transactions_durability<100>(100);
-    transactions_durability<100>(1'000);
-    transactions_durability<1000>(10'000);
+TEST(db, transactions_consistency) {
+    transactions_consistency<100>(100);
+    transactions_consistency<100>(1'000);
+    transactions_consistency<1000>(10'000);
 }
 
 int main(int argc, char** argv) {
