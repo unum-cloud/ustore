@@ -240,8 +240,8 @@ static void docs_sample_objects(bm::State& state) {
             .collections = &collection_docs_k,
             .keys = ids_tweets,
             .keys_stride = sizeof(ukv_key_t),
-            .found_offsets = &offsets,
-            .found_values = &values,
+            .offsets = &offsets,
+            .values = &values,
         };
 
         ukv_docs_read(&docs_read);
@@ -272,8 +272,8 @@ static void docs_sample_field(bm::State& state) {
             .keys = ids_tweets,
             .keys_stride = sizeof(ukv_key_t),
             .fields = &field,
-            .found_offsets = &offsets,
-            .found_values = &values,
+            .offsets = &offsets,
+            .values = &values,
         };
 
         ukv_docs_read(&docs_read);

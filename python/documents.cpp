@@ -66,9 +66,9 @@ class docs_pairs_stream_t {
             .keys_stride = sizeof(ukv_key_t),
             .fields = &fields,
             .fields_stride = 0,
-            .found_offsets = &found_offsets,
-            .found_lengths = &found_lengths,
-            .found_values = &found_values,
+            .offsets = &found_offsets,
+            .lengths = &found_lengths,
+            .values = &found_values,
         };
 
         ukv_docs_read(&docs_read);
