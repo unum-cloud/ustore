@@ -22,6 +22,7 @@
 
 #include <consistent_set/consistent_set.hpp> // `av::consistent_set_gt`
 #include <consistent_set/locked.hpp>         // `av::locked_gt`
+#include <consistent_set/partitioned.hpp>    // `av::partitioned_gt`
 
 #include "ukv/db.h"
 #include "helpers/pmr.hpp"
@@ -39,7 +40,7 @@ ukv_length_t const ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max
 ukv_key_t const ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 bool const ukv_supports_transactions_k = true;
 bool const ukv_supports_named_collections_k = true;
-bool const ukv_supports_snapshots_k = true;
+bool const ukv_supports_snapshots_k = false;
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -103,7 +104,8 @@ struct pair_compare_t {
 /*****************  Using Consistent Sets ****************/
 /*********************************************************/
 
-using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>>;
+using consistent_set_t = partitioned_gt<locked_gt<consistent_set_gt<pair_t, pair_compare_t>>>;
+// using consistent_set_t = consistent_set_gt<pair_t, pair_compare_t>;
 using transaction_t = typename consistent_set_t::transaction_t;
 using generation_t = typename consistent_set_t::generation_t;
 
@@ -671,7 +673,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     std::unique_lock _ {db.restructuring_mutex};
 
     if (c.mode == ukv_drop_keys_vals_handle_k) {
-        auto status = db.pairs.erase_equals(c.id);
+        auto status = db.pairs.erase_interval(c.id);
         if (!status)
             return export_error_code(status, c.error);
 
@@ -684,12 +686,12 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     }
 
     else if (c.mode == ukv_drop_keys_vals_k) {
-        auto status = db.pairs.erase_equals(c.id);
+        auto status = db.pairs.erase_interval(c.id);
         return export_error_code(status, c.error);
     }
 
     else if (c.mode == ukv_drop_vals_k) {
-        auto status = db.pairs.find_equals(c.id, [&](pair_t& pair) {
+        auto status = db.pairs.find_interval(c.id, [&](pair_t& pair) {
             pair = pair_t {pair.collection_key, {}, nullptr};
         });
         return export_error_code(status, c.error);
