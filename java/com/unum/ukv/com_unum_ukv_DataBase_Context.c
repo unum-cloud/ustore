@@ -49,7 +49,7 @@ JNIEXPORT jobject JNICALL Java_com_unum_ukv_DataBase_00024Context_transaction(JN
     ukv_transaction_init_t txn_init {
         .db = db_ptr_c,
         .error = &error_c,
-        .transaction =&txn_ptr_c,
+        .transaction = &txn_ptr_c,
     };
 
     ukv_transaction_init(&txn_init);
@@ -93,13 +93,13 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_clear__(JNIEnv* e
         return;
     }
 
-    ukv_collection_drop_t coll_drop {
+    ukv_collection_drop_t collection_drop {
         db = db_ptr_c;
         error = &error_c;
         id = ukv_collection_main_k;
         mode = ukv_drop_keys_vals_k;
     };
 
-    ukv_collection_drop(&coll_drop);
+    ukv_collection_drop(&collection_drop);
     forward_ukv_error(env_java, error_c);
 }

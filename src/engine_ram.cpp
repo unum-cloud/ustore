@@ -639,9 +639,9 @@ void ukv_measure(ukv_measure_t* c_ptr) {
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_init(ukv_collection_init_t* c_ptr) {
+void ukv_collection_create(ukv_collection_create_t* c_ptr) {
 
-    ukv_collection_init_t& c = *c_ptr;
+    ukv_collection_create_t& c = *c_ptr;
     auto name_len = c.name ? std::strlen(c.name) : 0;
     return_if_error(name_len, c.error, args_wrong_k, "Default collection is always present");
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
@@ -800,14 +800,14 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
-void ukv_arena_free(ukv_database_t const, ukv_arena_t c_arena) {
+void ukv_arena_free(ukv_arena_t c_arena) {
     if (!c_arena)
         return;
     stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
     delete &arena;
 }
 
-void ukv_transaction_free(ukv_database_t const, ukv_transaction_t const c_transaction) {
+void ukv_transaction_free(ukv_transaction_t const c_transaction) {
     if (!c_transaction)
         return;
     transaction_t& txn = *reinterpret_cast<transaction_t*>(c_transaction);
@@ -825,11 +825,6 @@ void ukv_database_free(ukv_database_t c_db) {
     }
 
     delete &db;
-}
-
-void ukv_collection_free(ukv_database_t const, ukv_collection_t const) {
-    // In this in-memory freeing the collection handle does nothing.
-    // The DB destructor will automatically cleanup the memory.
 }
 
 void ukv_error_free(ukv_error_t) {

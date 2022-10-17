@@ -54,6 +54,7 @@ struct key_comparator_t final : public leveldb::Comparator {
 };
 
 struct level_txn_t {
+    leveldb::DB* db = nullptr;
     leveldb::Snapshot const* snapshot = nullptr;
 };
 
@@ -374,9 +375,9 @@ void ukv_measure(ukv_measure_t* c_ptr) {
 /*****************	Collections Management	****************/
 /*********************************************************/
 
-void ukv_collection_init(ukv_collection_init_t* c_ptr) {
+void ukv_collection_create(ukv_collection_create_t* c_ptr) {
 
-    ukv_collection_init_t& c = *c_ptr;
+    ukv_collection_create_t& c = *c_ptr;
     if (c.name && std::strlen(c.name))
         *c.error = "Collections not supported by LevelDB!";
 }
@@ -443,11 +444,16 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
     ukv_transaction_init_t& c = *c_ptr;
+    if (!c_ptr)
+        safe_section("Allocating transaction handle", c.error, [&] { *c.transaction = new level_txn_t(); });
+    return_on_error(c.error);
+
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
 
     if (c.options & ukv_option_transaction_snapshot_k) {
         txn.snapshot = db.GetSnapshot();
+        txn.db = &db;
         if (!txn.snapshot)
             *c.error = "Couldn't start a transaction!";
     }
@@ -465,27 +471,23 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 /*****************	  Memory Management   ****************/
 /*********************************************************/
 
-void ukv_arena_free(ukv_database_t const, ukv_arena_t c_arena) {
+void ukv_arena_free(ukv_arena_t c_arena) {
     if (!c_arena)
         return;
     stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
     delete &arena;
 }
 
-void ukv_transaction_free(ukv_database_t const c_db, ukv_transaction_t c_txn) {
-    if (!c_db || !c_txn)
+void ukv_transaction_free(ukv_transaction_t c_txn) {
+    if (!c_txn)
         return;
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c_db);
-    level_txn_t* txn = reinterpret_cast<level_txn_t*>(c_txn);
-    if (!txn)
-        return;
-
-    if (txn->snapshot)
-        db.ReleaseSnapshot(txn->snapshot);
-    delete txn;
-}
-
-void ukv_collection_free(ukv_database_t const, ukv_collection_t const) {
+    level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c_txn);
+    level_db_t& db = *txn.db;
+    if (txn.snapshot)
+        db.ReleaseSnapshot(txn.snapshot);
+    txn.db = nullptr;
+    txn.snapshot = nullptr;
+    delete &txn;
 }
 
 void ukv_database_free(ukv_database_t c_db) {
