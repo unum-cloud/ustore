@@ -56,7 +56,7 @@ class docs_pairs_stream_t {
         auto count = static_cast<ukv_size_t>(fetched_keys_.size());
         ukv_docs_read_t docs_read {
             .db = db_,
-            .error = status.member_ptr()
+            .error = status.member_ptr(),
             .transaction = txn_,
             .arena = arena_read_.member_ptr(),
             .type = ukv_doc_field_json_k,
@@ -71,7 +71,7 @@ class docs_pairs_stream_t {
             .found_values = &found_values,
         };
 
-        ukv_docs_read(&read);
+        ukv_docs_read(&docs_read);
         if (!status)
             return status;
 
