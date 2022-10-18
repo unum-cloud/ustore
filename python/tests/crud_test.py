@@ -29,7 +29,7 @@ def only_explicit_batch(col):
     assert len(vals) == 2
     targets = [b'x', b'y']
     for i, v in enumerate(vals):
-        assert v == targets[i]
+        assert v.as_py() == targets[i]
 
     col.set((3, 4), None)
     assert col.has_key((3, 4)) == (False, False)
