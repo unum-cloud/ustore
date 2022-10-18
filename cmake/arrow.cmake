@@ -5,6 +5,7 @@ if(${UKV_PREINSTALLED_ARROW})
 else()
     include(ExternalProject)
     set(THREADS_PREFER_PTHREAD_FLAG ON)
+    set(ARROW_DEPENDENCY Arrow-external)
     ExternalProject_Add(
         Arrow-external
         GIT_REPOSITORY https://github.com/apache/arrow.git
@@ -38,7 +39,7 @@ else()
         -DARROW_BUILD_INTEGRATION=OFF
         -DARROW_EXTRA_ERROR_CONTEXT=OFF
 
-        -DARROW_DATASET=OFF
+        -DARROW_DATASET=ON
         -DARROW_CUDA=OFF
         -DARROW_IPC=OFF
         -DARROW_COMPUTE=OFF
@@ -81,4 +82,13 @@ else()
     add_library(arrow::cuda STATIC IMPORTED)
     set_property(TARGET arrow::cuda PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_cuda.a)
     add_dependencies(arrow::cuda Arrow-external)
+
+    add_library(arrow::python STATIC IMPORTED)
+    set_property(TARGET arrow::python PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_python.a)
+    add_dependencies(arrow::python Arrow-external)
+
+
+    add_library(arrow::dataset STATIC IMPORTED)
+    set_property(TARGET arrow::dataset PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_dataset.a)
+    add_dependencies(arrow::dataset Arrow-external)
 endif()

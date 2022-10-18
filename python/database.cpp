@@ -23,18 +23,7 @@ static std::unique_ptr<py_collection_t> punned_collection( //
     std::shared_ptr<py_transaction_t> py_txn_ptr,
     std::string const& name) {
 
-    status_t status;
-    ukv_collection_t collection = ukv_collection_main_k;
-    ukv_collection_create_t collection_init {
-        .db = py_db_ptr->native,
-        .error = status.member_ptr(),
-        .name = name.c_str(),
-        .config = nullptr,
-        .id = &collection,
-    };
-
-    ukv_collection_create(&collection_init);
-    status.throw_unhandled();
+    ukv_collection_t collection = py_db_ptr->native.find<bins_collection_t>(name, true);
 
     auto py_collection = std::make_unique<py_collection_t>();
     py_collection->name = name;
