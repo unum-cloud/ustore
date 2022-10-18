@@ -967,7 +967,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
             auto lens = *c.lengths = arena.alloc<ukv_length_t>(places.count, c.error).begin();
             return_on_error(c.error);
             if (presences_ptr) {
-                auto presences = strided_iterator_gt<ukv_octet_t const>(presences_ptr, sizeof(ukv_octet_t));
+                auto presences = bits_view_t(presences_ptr);
                 for (std::size_t i = 0; i != places.count; ++i)
                     lens[i] = presences[i] ? (offs_ptr[i + 1] - offs_ptr[i]) : ukv_length_missing_k;
             }
