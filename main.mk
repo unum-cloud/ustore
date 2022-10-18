@@ -225,7 +225,7 @@ QT_AUTOBRIEF           = NO #care
 # not recognized any more.
 # The default value is: NO.
 
-MULTILINE_CPP_IS_BRIEF = NO #care
+MULTILINE_CPP_IS_BRIEF = YES #care
 
 # By default Python docstrings are displayed as preformatted text and doxygen's
 # special commands cannot be used. By setting PYTHON_DOCSTRING to NO the
@@ -864,7 +864,7 @@ WARN_LOGFILE           = #care
 # spaces. See also FILE_PATTERNS and EXTENSION_MAPPING
 # Note: If this tag is empty the current directory is searched.
 
-INPUT                  = include/ukv include/ukv/cpp src/ src/helpers python/ #care
+INPUT                  = include/ukv include/ukv/cpp
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
