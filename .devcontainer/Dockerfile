@@ -23,13 +23,13 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends clang-format autoconf 
 
 
-# Install Arrow
+# Install Arrow and Documentation Tools
 RUN apt update && apt install -y -V ca-certificates lsb-release wget && cd /tmp \
     && wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
     && apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
     && apt update && apt install -y -V libarrow-dev libarrow-dataset-dev libarrow-flight-dev \
     libarrow-python-dev libarrow-python-flight-dev libplasma-dev libgandiva-dev libparquet-dev \
-    doxygen grpahviz dia
+    doxygen graphviz dia
 
 # Pip installations
 RUN pip install pytest twine numpy pyarrow wheel
