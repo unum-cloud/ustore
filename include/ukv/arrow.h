@@ -73,6 +73,9 @@ struct ArrowArrayStream {
 
 #endif // ARROW_C_STREAM_INTERFACE
 
+/**
+ * @brief Converts `ukv_doc_field_type_t` to a "format" string supported by Apache Arrow.
+ */
 static char const* ukv_doc_field_type_to_arrow_format(ukv_doc_field_type_t const field_type) {
     // Export the right format string and number of buffers to be managed by Arrow.
     // For scalar arrays we need: bitmap and data.
@@ -132,6 +135,10 @@ static void release_malloced_array(struct ArrowArray* array) {
     array->release = NULL;
 }
 
+/**
+ * @brief Defines the structure of the continuous `arrow::RecordBatch` 
+ * represented in C as a combination of `ArrowSchema` and `ArrowArray`.
+ */
 static void ukv_to_arrow_schema( //
     ukv_size_t const docs_count,
     ukv_size_t const fields_count,
@@ -182,6 +189,11 @@ static void ukv_to_arrow_schema( //
         }
 }
 
+/**
+ * @brief Fill a column in a continuous `arrow::RecordBatch`, pre-structured 
+ * by the `ukv_to_arrow_schema` call. Supports scalar and string entries.
+ * For lists use `ukv_to_arrow_list`.
+ */
 static void ukv_to_arrow_column( //
     ukv_size_t const docs_count,
     ukv_str_view_t const field_name,
@@ -251,6 +263,11 @@ static void ukv_to_arrow_column( //
     }
 }
 
+/**
+ * @brief Fill a column in a continuous `arrow::RecordBatch`, pre-structured 
+ * by the `ukv_to_arrow_schema` call. Supports lists of scalars.
+ * For regular scalars or strings use `ukv_to_arrow_column`.
+ */
 static void ukv_to_arrow_list( //
     ukv_size_t const docs_count,
     ukv_str_view_t const field_name,
@@ -303,10 +320,7 @@ static void ukv_to_arrow_list( //
 }
 
 /**
- *
- * @param[in] collections   Can have 0, 1 or `fields_count` elements.
- *                          It allows joining the data from different collections
- *                          stored in documents under the same key.
+ * @brief Placeholder for future streaming exports.
  */
 static void ukv_to_arrow_stream( //
     ukv_database_t const,

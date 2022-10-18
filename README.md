@@ -22,13 +22,13 @@ UKV does just that, abstracting away the implementation from the user.
 In under 20K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
 You can combine every [engine](#engines) with every modality, [frontend](#frontends) and distribution form:
 
-| Engine  | Modality | Distribution | Frontend  |
-| :------ | :------- | :----------- | :-------- |
-|         |          |              |           |
-| STL     | Blobs    | Embedded     | C and C++ |
-| LevelDB | Docs     | Standalone   | Python    |
-| RocksDB | Graphs   | Distributed <sup>*coming*</sup>  | GoLang <sup>*in-progress*</sup>   |
-| UnumDB  |          |              | Java <sup>*in-progress*</sup>     |
+| Engine  | Modality | Distribution                    | Frontend                        |
+| :------ | :------- | :------------------------------ | :------------------------------ |
+|         |          |                                 |                                 |
+| RAM     | Blobs    | Embedded                        | C and C++                       |
+| LevelDB | Docs     | Standalone                      | Python                          |
+| RocksDB | Graphs   | Distributed <sup>*coming*</sup> | GoLang <sup>*in-progress*</sup> |
+| UnumKV  |          |                                 | Java <sup>*in-progress*</sup>   |
 
 This would produce hundreds of binaries for all kinds of use cases, like:
 
@@ -49,32 +49,36 @@ It is normal to have a separate Postgres for your transactional data, a MongoDB 
 So when the data is updated, you have to apply changes across all those instances, manually rolling them back if one of the parts failed.
 Needless to say, every system has a different API, different guarantees, and runtime constraints.
 UKV provides something far more uniform, simple, and performant *with the right backend*.
-When picking the UnumDB backend, we bring our entire IO stack, bypassing the Linux kernel for storage and networking operations.
+When picking the UnumKV backend, we bring our entire IO stack, bypassing the Linux kernel for storage and networking operations.
 This yields speedups not just for small-ish OLTP and mid-size OLAP, but even streaming-out Gigabyte-sized videos.
-One ~~ring~~ data-lake to rule them all.
+**One ~~ring~~ data-lake to rule them all.**
 
 ## Engines
 
 Backends differ in their functionality and purposes.
 The underlying embedded key value stores include:
 
-| Name            | Approximate<br/>Speed |      OSes       | [ACID][3]<br/>Transactions | Auxiliary<br/>Collections | Persistent | [Snapshots][2] | [Watching][1]<br/>Reads |
-| :-------------- | :-------------------: | :-------------: | :------------------------: | :-----------------------: | :--------: | :------------: | :---------------------: |
-| STL *in-memory* |        **10x**        | POSIX + Windows |             ✅              |             ✅             |     ❌      |       ❌        |            ✅            |
-| LevelDB         |         0.5x          | POSIX + Windows |             ❌              |             ❌             |     ✅      |       ❌        |            ❌            |
-| RocksDB         |          1x           | POSIX + Windows |             ✅              |             ✅             |     ✅      |       ✅        |            ✅            |
-| UnumDB          |        **5x**         |      Linux      |             ✅              |             ✅             |     ✅      |       ✅        |            ✅            |
+| Name    |  Speed   |       OS        | Transact | Collections | Persistent | [Snapshots][2] | [Watches][1] |
+| :------ | :------: | :-------------: | :------: | :---------: | :--------: | :------------: | :----------: |
+| RAM     | **10x**  | POSIX + Windows |    ✅     |      ✅      |     ❌      |       ❌        |      ✅       |
+| LevelDB |   0.5x   | POSIX + Windows |    ❌     |      ❌      |     ✅      |       ❌        |      ❌       |
+| RocksDB |    1x    | POSIX + Windows |    ✅     |      ✅      |     ✅      |       ✅        |      ✅       |
+| UnumKV  | **3-5x** |      Linux      |    ✅     |      ✅      |     ✅      |       ✅        |      ✅       |
 
-The STL backend originally served educational purposes, yet, with a proper web-server implementation, is comparable to other in-memory stores like Redis, MemCached or ETCD.
-LevelDB is Key-Value stored designed at Google and extensively adopted across the industry, thanks to its simplicity.
-RocksDB improves over LevelDB, extending its functionality with transactions, named collections, and higher performance.
+
+* RAM in-memory backend was originally served educational purposes. Then it was superseeded by the [`consistent_set`][consistent_set] and can now be considered the fastest in-memory Key-Value Store, superior to Redis, MemCached or ETCD.
+* LevelDB was originally designed at Google and extensively used across the industry, thanks to its simplicity.
+* RocksDB improves over LevelDB, extending its functionality with transactions, named collections, and higher performance.
+* UnumKV is our proprietary in-house implementation with superior concurrency and kernel-bypass techniques, as well as, GPU acceleration.
+
 All of those backends were [benchmarked for weeks](https://unum.cloud/ucsb) using [UCSB](https://github.com/unum-cloud/ucsb), so you can choose the best stack for you specific use case.
 
 ![UCSB 10 TB Results](https://unum.cloud/assets/post/2022-09-13-ucsb-10tb/ucsb-10tb-duration.png)
 
 [1]: https://redis.io/commands/watch/
 [2]: https://github.com/facebook/rocksdb/wiki/Snapshot
-[3]: https://en.wikipedia.org/wiki/ACID
+[acid]: https://en.wikipedia.org/wiki/ACID
+[consistent_set]: https://github.com/ashvardanian/consistent_set
 
 ## Frontends
 
@@ -82,14 +86,16 @@ Currently, at Proof-of-Concept stage, we support only the essential functionalit
 
 | Name        | Transact | Collections | Batches | Docs  | Graphs | Copies |
 | :---------- | :------: | :---------: | :-----: | :---: | :----: | :----: |
+| C ³         |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
 | C++ ³       |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
 | Python ¹ ³  |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  0-1   |
+| Arrow RPC ³ |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  0-2   |
 | GoLang      |    ✅     |      ✅      |    ✅    |   ❌   |   ❌    |   1    |
 | Java        |    ✅     |      ✅      |    ❌    |   ❌   |   ❌    |   1    |
+|             |          |             |         |       |        |        |
 | C# ²        |    ❌     |      ❌      |    ❌    |   ❌   |   ❌    |        |
-| REST API ²  |    ✅     |      ✅      |    ✅    |   ✅   |   ❌    |        |
-| Arrow RPC ² |    ✅     |      ✅      |    ✅    |   ✅   |   ❌    |        |
-| Wolfram ¹ ² |    ❌     |      ✅      |    ✅    |   ❌   |   ✅    |        |
+| REST API ²  |    ❌     |      ❌      |    ❌    |   ❌   |   ❌    |        |
+| Wolfram ¹ ² |    ❌     |      ❌      |    ❌    |   ❌   |   ❌    |        |
 
 * Copies: Number of re-allocations/conversions per byte.
 * ¹: Support tensor lookups and media data.
@@ -111,9 +117,10 @@ It's feature-rich, but not very performant, supporting:
 Using it can be as easy as:
 
 ```python
-import ukv.stl as ukv
+import ukv.ram as ukv
 # import ukv.level as ukv
 # import ukv.rocks as ukv
+# import ukv.unum as ukv
 
 db = ukv.DataBase()
 db[42] = 'purpose of life'.encode()
@@ -283,70 +290,11 @@ conan create . ukv/testing --build=missing
 
 ## Presets, Limitations and FAQ
 
-<details>
-<summary>Keys are 64-bit integers. String keys are possible, but discouraged on hot-paths</summary>
-
-Using variable length keys forces numerous limitations on the design of a Key-Value store.
-Besides slow comparisons it means solving the "persistent space allocation" problem twice - for both keys and values.
-
-The recommended approach to dealing with string keys is:
-
-1. Choose a mechanism to generate unique integer keys (UID). Ex: monotonically increasing values.
-2. Use "paths" modality to build-up a persistent hash-map of strings to UIDs.
-3. Use those UIDs to address the rest of the data in binary, document and graph modalities.
-
-Once support of 16-byte integers becomes industry standard, we will add support for UUID keys.
-
-</details>
-
-<details>
-<summary>Values are binary strings under 4 GB long</summary>
-
-</details>
-
-
-<details>
-<summary>Transactions are ACI(D) by-default</summary>
-
-Atomicity is guaranteed.
-Even on non-transactional writes - either all updates pass or all fail.
-
-Consistency is implemented in the strongest form - tracking all key and metadata lookups by default.
-Just like with `WATCH` verb in Redis, we will track collisions between all the touched keys.
-To avoid such checks - pass the `ukv_option_transaction_dont_watch_k` option.
-
-Isolation is guaranteed, but may be implemented differently, depending on backend.
-In-memory systems generally prefer "locking" over "multi-versioning".
-
-Durability doesn't apply to in-memory systems by definition.
-In hybrid or persistent systems we prefer to disable it by default.
-Almost every DBMS that builds on top of KVS prefers to implement its own durability mechanism.
-Even more so in distributed databases, where three separate Write Ahead Logs may exist:
-
-* In KVS,
-* In DBMS,
-* In Distributed Consensus implementation.
-
-If you still need durability, flush writes with `ukv_option_write_flush_k`.
-
-</details>
-
-<details>
-<summary>Not all engines support ordered scans</summary>
-
-</details>
-
-<details>
-<summary>Why not use LevelDB interface?</summary>
-
-... Which was also adopted by RocksDB.
-
-1. Dynamic polymorphism.
-2. Dependance on Standard Templates Library containers.
-3. No support for custom allocators.
-
-These and other problems mean that interface can't be portable, ABI-safe or performant.
-</details>
+* Keys are 64-bit integers. Use "paths" modality for string keys. [Why?](ukv_key_t)
+* Values are binary strings under 4 GB long. [Why?](ukv_length_t)
+* Transactions are ACI(D) by-default. [What does it mean?](ukv_transaction_t)
+* Why not use LevelDB or RocksDB interface? [](ukv.h)
+* Why not use SQL, MQL or Cypher? [](ukv.h)
 
 <details>
 <summary>Why mix Docs and Graphs in one DBMS?</summary>
@@ -357,13 +305,4 @@ The others would take 2 different DBMS solutions - one for large collections of 
 In that case, every DBMS will have a custom modality-specific scaling, sharding, and replication strategy, but synchronizing them would be impossible in mutable conditions.
 This makes it hard for the developers to choose a future-proof solution for their projects.
 By putting different modality collections in one DBMS, we allow operation-level consistency controls giving the users all the flexibility one can get.
-</details>
-
-<details>
-<summary>Why not adapt MQL or Cypher?</summary>
-
-Mongo Query Language and Cypher by Neo4J are pretty popular but are vendor-specific.
-Furthermore, for core functionality, using text-based protocols in 2022 is inefficient.
-Instead, we adopt JSON-Pointer, JSON-Patch, and JSON-MergePatch RFCs for document and sub-document level updates.
-And even those operations, as well as graph operations, are transmitted in binary form.
 </details>
