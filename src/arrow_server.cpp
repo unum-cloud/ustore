@@ -81,6 +81,7 @@ bool is_query(std::string_view uri, std::string_view name) {
 }
 
 bool validate_column_collections(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
+    // This is safe even in the form of a pointer comparison, doesn't have to be `std::strcmp`.
     if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<ukv_collection_t>()))
         return false;
     if (column_ptr->null_count != 0)
@@ -89,6 +90,7 @@ bool validate_column_collections(ArrowSchema* schema_ptr, ArrowArray* column_ptr
 }
 
 bool validate_column_keys(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
+    // This is safe even in the form of a pointer comparison, doesn't have to be `std::strcmp`.
     if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<ukv_key_t>()))
         return false;
     if (column_ptr->null_count != 0)
@@ -97,6 +99,7 @@ bool validate_column_keys(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
 }
 
 bool validate_column_vals(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
+    // This is safe even in the form of a pointer comparison, doesn't have to be `std::strcmp`.
     if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<value_view_t>()))
         return false;
     if (column_ptr->null_count != 0)

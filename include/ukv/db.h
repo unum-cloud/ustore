@@ -2,25 +2,17 @@
  * @file db.h
  * @author Ashot Vardanian
  * @date 12 Jun 2022
- * @brief C bindings for binary collections.
+ * @brief C bindings for Key-Value Stores and binary collections.
  *
- * ## Interface Conventions
+ * ## Usage Recommendations
  *
- * 1. We try to expose just opaque struct pointers and functions to
- * 	  clients. This allows us to change internal representations
- *    without forcing clients to recompile code, that uses shared lib.
- * 2. Errors are encoded into NULL-terminated C strings.
- * 3. Functions that accept `collections`, @b can receive 0, 1 or N such
- *    arguments, where N is the number of passed `keys`.
- * 4. Collections, Iterators and Transactions are referencing the DB,
- *    so the DB shouldn't die/close before those objects are freed.
- *    This also allows us to reduce the number of function arguments for
- *    interface functions.
- * 5. Strides! Higher level systems may pack groups of arguments into AoS
- *    instead of SoA. To minimize the need of copies and data re-layout,
- *    we use @b byte-length strides arguments, similar to BLAS libraries.
- *    Passing Zero as a "stride" means repeating the same value.
+ * ### Pack operations into batches wherever possible
  *
+ * Using the batch APIs to issue a single read/write request is trivial, but achieving
+ * batch-level performance with singular operations is impossible. Especially, with
+ * a client-server setup. Regardless of IO layer, a lot of synchronization and locks
+ * must be issued to provide consistency.
+ * 
  * ## Why use offsets?
  *
  * In the underlying layer, using offsets to adds no additional overhead,
@@ -71,45 +63,93 @@ extern "C" {
 /*********************************************************/
 
 /**
- * @brief Opaque Database handle.
+ * @brief Opaque multi-modal Database handle.
  * @see `ukv_database_free`.
  *
+ * Properties:
  * - Thread safety: Safe to use across threads after open and before free.
  * - Lifetime: Must live longer than all the transactions.
  *
+ * ## Concurrency
+ *
+ * In embedded setup this handle manages the lifetime of the database.
+ * In that case user must guarantee, that concurrent processes won't be 
+ * opening the same database (generally same directory).
+ *
+ * In standalone "client-server" setup, manages the lifetime of the "client".
+ * Many concurrent clients can be connecting to the same server from the same
+ * process.
+ *
+ * ## Collections
+ *
+ * Every database always has at least one collection - the `ukv_collection_main_k`.
+ * That one has no name and can't be deleted. Others are referenced by names.
+ * The same database can have many collections, of different modalities:
+ * - Binary Large Objects or BLOBs.
+ * - Hierarchical documents, like JSONs, BSONs, MessagePacks.
+ * - Discrete labeled and potentially directed Graphs.
+ * - Paths or collections of string keys.
+ *
  * ## Choosing the Engine
+ *
+ * Dynamic dispatch of engines isn't yet supported.
  *
  * ## CAP Theorem
  *
- * ## Usage Recommendations
- *
- * ### Pack operations into batches wherever possible
- *
- * Using the batch APIs to issue a single read/write request is trivial, but achieving
- * batch-level performance with singular operations is impossible. Especially, with
- * a client-server setup. Regardless of IO layer, a lot of synchronization and locks
- * must be issued to provide consistency.
- *
+ * Distributed engines are not yet supported.
  */
 typedef void* ukv_database_t;
 
 /**
- * @brief Opaque transaction handle.
+ * @brief Opaque Transaction handle.
  * @see `ukv_transaction_free`.
  *
+ * Allows ACID-ly grouping operations across different collections and even modalities.
+ * This means, that the same transaction might be:
+ * - inserting a blob of media data into a collection of images.
+ * - updating users metadata in a documents collection to reference new avatar.
+ * - introducing links between the user and other in a graph collection...
+ * and all of the operations here either succeed or fail together. DBMS will
+ * do the synchronization heavylifting, so you don't have to.
+ *
+ * Properties:
  * - Thread safety: None.
  * - Lifetime: Must be freed before the `ukv_database_t` is closed.
+ * - Concurrency Control: Optimistic.
  *
- * ## ACID-ity
+ * ## ACI(D)-ity
  *
- * ### A: Atomicity
+ * ### A: Atomicity !
  *
- * ### C: Consistency
+ * Atomicity is always guaranteed.
+ * Even on non-transactional writes - either all updates pass or all fail.
  *
- * ### I: Isolation
+ * ### C: Consistency !
  *
- * ### D: Durability
+ * Consistency is implemented in the strictest possible form - ["Strict Serializability"][ss]
+ * meaning that:
+ * - reads are ["Serializable"][s],
+ * - writes are ["Linearizable"][l]. 
+ * The default behaviour, however, can be tweaked at the level of specific operations.
+ * For that the `ukv_option_transaction_dont_watch_k` can be passed to `ukv_transaction_init`
+ * or any transactional read/write operation, to control the consistency checks during staging.  
  *
+ * [ss]: https://jepsen.io/consistency/models/strict-serializable
+ * [s]: https://jepsen.io/consistency/models/serializable
+ * [l]: https://jepsen.io/consistency/models/linearizable
+ *
+ * ### I: Isolation !
+ *
+ * ### D: Durability ?
+ *
+ * Durability doesn't apply to in-memory systems by definition.
+ * In hybrid or persistent systems we prefer to disable it by default.
+ * Almost every DBMS that builds on top of KVS prefers to implement its own durability mechanism.
+ * Even more so in distributed databases, where three separate Write Ahead Logs may exist:
+ * - in KVS,
+ * - in DBMS,
+ * - in Distributed Consensus implementation.
+ * If you still need durability, flush writes or `ukv_transaction_commit` with `ukv_option_write_flush_k`.
  */
 typedef void* ukv_transaction_t;
 
@@ -122,6 +162,25 @@ typedef uint64_t ukv_collection_t;
 
 /**
  * @brief The unique identifier of any value within a single collection.
+ *
+ * ## On Variable Length Keys
+ *
+ * As of current version, 64-bit signed integers are used to allow unique
+ * keys in the range from `[0, 2^63)`. 128-bit builds with UUIDs can be
+ * considered, but variable length keys are highly discouraged.
+ *
+ * Using variable length keys forces numerous limitations on the design of a Key-Value store.
+ * Besides slow character-wise comparisons it means solving the "persistent space allocation"
+ * problem twice - for both keys and values.
+ *
+ * The recommended approach to dealing with string keys is:
+ * 
+ * 1. Choose a mechanism to generate unique integer keys (UID). Ex: monotonically increasing values.
+ * 2. Use "paths" modality to build-up a persistent hash-map of strings to UIDs.
+ * 3. Use those UIDs to address the rest of the data in binary, document and graph modalities.
+ *
+ * This will result in a single conversion point from string to integer representations
+ * and will keep most of the system snappy and the interfaces simpler than what they could have been.
  */
 typedef int64_t ukv_key_t;
 
@@ -137,6 +196,14 @@ typedef char ukv_char_t;
 
 /**
  * @brief The length of any value in the DB.
+ *
+ * ## Why not use 64-bit lengths?
+ *
+ * Key-Value Stores are generally intended for high-frequency operations.
+ * Frequently (thousands of times each second) accessing and modifing 4 GB and larger files
+ * is impossible on modern hardware. So we stick to smaller length types, which also makes
+ * using Apache Arrow representation slightly easier and allows the KVs to compress indexes
+ * better.
  */
 typedef uint32_t ukv_length_t;
 
@@ -211,9 +278,7 @@ typedef enum {
      */
     ukv_option_dont_discard_memory_k = 1 << 4,
     /**
-     * @brief
-     *
-     * * Will output data into shared memory, not the one privately
+     * @brief Will output data into shared memory, not the one privately
      * to do further transformations without any copies.
      * Is relevant for standalone distributions used with drivers supporting
      * Apache Arrow buffers or standardized Tensor representations.
@@ -234,12 +299,23 @@ typedef enum {
 
 } ukv_options_t;
 
+/**
+ * @brief The "mode" of collection removal.
+ */
 typedef enum {
+    /** @brief Clear the values, but keep the keys. */
     ukv_drop_vals_k = 0,
+    /** @brief Remove keys and values, but keep the collection. */
     ukv_drop_keys_vals_k = 1,
+    /** @brief Remove the handle and all of the contents. */
     ukv_drop_keys_vals_handle_k = 2,
 } ukv_drop_mode_t;
 
+/** 
+ * @brief The handle to the default nameless collection.
+ * It exists from start, doesn't have to be created and can't be fully dropped.
+ * Only `ukv_drop_keys_vals_k` and `ukv_drop_vals_k` apply to it.
+ */
 extern ukv_collection_t const ukv_collection_main_k;
 extern ukv_length_t const ukv_length_missing_k;
 extern ukv_key_t const ukv_key_unknown_k;
@@ -986,27 +1062,6 @@ void ukv_sample(ukv_sample_t*);
 /**
  * @brief Estimates the number of entries and memory usage for a range of keys.
  * @see `ukv_measure`.
- *
- * @param[in] db             Already open database instance, @see `ukv_database_init`.
- * @param[in] transaction    Transaction and/or snapshot in which to count.
- * @param[in] tasks_count    Number ranges to be introspected.
- *
- * @param[in] collections    Array of collections owning the @param keys.
- *                           If NULL is passed, the default collection is assumed.
- *                           If multiple collections are passed, the step between
- *                           them is equal to @param collections_stride @b bytes!
- *                           Zero stride would redirect all the keys to the same collection.
- * @param[in] start_keys     For every task contains the beginning of range-of-interest.
- * @param[in] end_keys       For every task contains the ending of range-of-interest.
- *
- * @param[out] estimates     For every task (range) will export @b six integers:
- *                           > min & max cardinality,
- *                           > min & max bytes in values,
- *                           > min & max (persistent) memory usage.
- *                           The memory must be allocated and provided by the user.
- *
- * @param[out] error         The error message to be handled by callee.
- * @param[inout] arena       Temporary memory region, that can be reused between operations.
  */
 typedef struct ukv_measure_t {
 
