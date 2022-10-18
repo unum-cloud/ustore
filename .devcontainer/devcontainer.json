@@ -19,7 +19,8 @@
 				"ms-vscode.cpptools",
 				"ms-vscode.cmake-tools",
 				"xaver.clang-format",
-				"mhutchie.git-graph"
+				"mhutchie.git-graph",
+				"mutantdino.resourcemonitor"
 			]
 		}
 	},

@@ -42,6 +42,10 @@ setup(
         # 'Framework :: Apache Airflow :: Provider',
         # 'Framework :: IPython',
     ],
+    install_requires=[
+        'numpy>=1.16',
+        'pyarrow>=9'
+    ],
     py_modules=['ukv'],
     extras_require={'test': 'pytest'},
     python_requires='>=3.6',

@@ -77,6 +77,11 @@ set(UKV_BUILD_BENCHMARKS ON CACHE BOOL "Building C/C++ native benchmarks")
 set(UKV_BUILD_FLIGHT_RPC ON CACHE BOOL "Building Apache Arrow Flight RPC server for all backends")
 set(UKV_BUILD_UNUMDB "" CACHE STRING "Pass a path to UnumDB copy to produce a full range of bindings")
 
+if(${UKV_BUILD_PYTHON})
+  set(UKV_PREINSTALLED_ARROW OFF)
+  set(UKV_USE_JEMALLOC OFF)
+endif()
+
 # Engines:
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
@@ -89,14 +94,15 @@ include("${CMAKE_SOURCE_DIR}/cmake/bson.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
 
 include("${CMAKE_SOURCE_DIR}/cmake/pcre2.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
-
+if(${UKV_USE_JEMALLOC})
+  include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
+endif()
 # Distributions:
 include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
-  add_dependencies(Arrow-external Boost-external)
+  add_dependencies(${ARROW_DEPENDENCY} Boost-external)
 endif()
 
 include_directories(include/)
@@ -123,10 +129,10 @@ set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno
 target_compile_definitions(ukv_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
 
-if(NOT APPLE)
-  add_dependencies(ukv_stl jemalloc)
-  add_dependencies(ukv_rocksdb jemalloc)
-  add_dependencies(ukv_leveldb jemalloc)
+if((NOT APPLE) AND ((DEFINED ${JEMALLOC_DEPENDENCY}) OR (DEFINED {ARROW_DEPENDENCY})))
+  add_dependencies(ukv_stl ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
+  add_dependencies(ukv_rocksdb ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
+  add_dependencies(ukv_leveldb ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
 endif()
 
 # The rest of CMake will apply to all client libraries
@@ -160,8 +166,8 @@ if(${UKV_BUILD_FLIGHT_RPC})
   list(APPEND UKV_CLIENT_NAMES "flight_client")
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
 
-  if(NOT APPLE)
-    add_dependencies(ukv_flight_client jemalloc)
+  if((NOT APPLE) AND DEFINED ${JEMALLOC_DEPENDENCY})
+    add_dependencies(ukv_flight_client ${JEMALLOC_DEPENDENCY})
   endif()
 
   foreach(engine_name IN ITEMS ${UKV_ENGINE_NAMES})
@@ -253,7 +259,7 @@ if(${UKV_BUILD_PYTHON})
 
     pybind11_add_module(${wrap_lib_name} MODULE python/pybind.cpp python/database.cpp python/networkx.cpp python/documents.cpp python/pandas.cpp)
     target_include_directories(${wrap_lib_name} PUBLIC python/)
-    target_link_libraries(${wrap_lib_name} PRIVATE pthread arrow arrow_dataset arrow_flight arrow_python arrow_python_flight ${target_name} ${target_LIBRARIES})
+    target_link_libraries(${wrap_lib_name} PRIVATE pthread arrow::arrow arrow::dataset arrow::flight arrow::bundled arrow::python ${target_name} ${target_LIBRARIES})
     target_compile_definitions(${wrap_lib_name} PRIVATE UKV_VERSION="${_VERSION_}" UKV_PYTHON_MODULE_NAME=${client_name})
     set_target_properties(${wrap_lib_name} PROPERTIES OUTPUT_NAME ukv/${client_name})
   endforeach()
