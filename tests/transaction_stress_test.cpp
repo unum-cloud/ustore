@@ -404,12 +404,39 @@ void transactions_consistency(std::size_t transaction_count) {
 
         for (std::size_t batch_idx = 0; batch_idx != tasks[iter_idx].operation_count; ++batch_idx) {
             auto type = choose_operation_type(random_generator);
-            auto key = choose_key(random_generator);
-            auto watch = choose_watch(random_generator);
-            if (type == static_cast<int>(operation_code_t::insert_k))
-                collection[key].assign("value", watch);
-            else if (type == static_cast<int>(operation_code_t::remove_k))
-                collection[key].erase(watch);
+            ukv_key_t key = choose_key(random_generator);
+            bool watch = choose_watch(random_generator);
+            if (type == static_cast<int>(operation_code_t::insert_k)) {
+                status_t status;
+                value_view_t value("value");
+                ukv_length_t length = value.size();
+                ukv_write_t write {
+                    .db = db,
+                    .error = status.member_ptr(),
+                    .transaction = tasks[iter_idx].txn,
+                    .arena = collection.member_arena(),
+                    .options = watch ? ukv_options_default_k : ukv_option_transaction_dont_watch_k,
+                    .collections = collection.member_ptr(),
+                    .keys = &key,
+                    .lengths = &length,
+                    .values = value.member_ptr(),
+                };
+                ukv_write(&write);
+            }
+            else if (type == static_cast<int>(operation_code_t::remove_k)) {
+                status_t status;
+                ukv_write_t write {
+                    .db = db,
+                    .error = status.member_ptr(),
+                    .transaction = tasks[iter_idx].txn,
+                    .arena = collection.member_arena(),
+                    .options = watch ? ukv_options_default_k : ukv_option_transaction_dont_watch_k,
+                    .collections = collection.member_ptr(),
+                    .keys = &key,
+                    .values = nullptr,
+                };
+                ukv_write(&write);
+            }
             else if (type == static_cast<int>(operation_code_t::select_k))
                 auto _ = collection[key].value(watch);
 
