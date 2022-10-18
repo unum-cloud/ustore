@@ -16,8 +16,15 @@ namespace unum::ukv {
 
 class [[nodiscard]] status_t {
     ukv_error_t raw_ = nullptr;
+    bool is_view_ = false;
 
   public:
+    static status_t status_view(const char* msg) {
+        status_t st(msg);
+        st.is_view_ = true;
+        return st;
+    }
+
     status_t(ukv_error_t err = nullptr) noexcept : raw_(err) {}
     operator bool() const noexcept { return !raw_; }
 
@@ -30,7 +37,7 @@ class [[nodiscard]] status_t {
         return *this;
     }
     ~status_t() {
-        if (raw_)
+        if (raw_ && !is_view_)
             ukv_error_free(raw_);
         raw_ = nullptr;
     }

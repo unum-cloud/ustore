@@ -1,10 +1,15 @@
 
 include(ExternalProject)
+set(JEMALLOC_DISABLE_TLS )
+if (${UKV_BUILD_PYTHON})
+    set(JEMALLOC_DISABLE_TLS --disable-initial-exec-tls)
+endif()
 
 if(NOT APPLE)
     set(JEMALLOC_PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps/jemalloc)
     set(JEMALLOC_SRC_DIR ${JEMALLOC_PREFIX_DIR}/src/jemalloc)
     set(JEMALLOC_INSTALL_DIR ${JEMALLOC_PREFIX_DIR}/install)
+    set(JEMALLOC_DEPENDENCY jemalloc)
 
     ExternalProject_Add(jemalloc
         GIT_REPOSITORY https://github.com/jemalloc/jemalloc.git
@@ -13,7 +18,7 @@ if(NOT APPLE)
         CONFIGURE_COMMAND echo Configuring jemalloc
         && cd ${JEMALLOC_SRC_DIR}
         && ./autogen.sh && ./configure
-        --prefix=${JEMALLOC_INSTALL_DIR} --enable-prof # --with-jemalloc-prefix=je_
+        --prefix=${JEMALLOC_INSTALL_DIR} --enable-prof ${JEMALLOC_DISABLE_TLS} # --with-jemalloc-prefix=je_
         BUILD_COMMAND echo Building jemalloc && cd ${JEMALLOC_SRC_DIR}
         && make install_lib_static install_include
         INSTALL_COMMAND ""
