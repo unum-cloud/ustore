@@ -1068,7 +1068,7 @@ void read_modify_unique_docs( //
         };
         ukv_read(&read);
 
-        strided_iterator_gt<ukv_octet_t> presents {found_presences};
+        bits_view_t presents {found_presences};
         for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx) {
             json_t parsed;
             ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
