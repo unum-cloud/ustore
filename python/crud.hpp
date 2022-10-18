@@ -122,14 +122,16 @@ static py::object has_one_binary(py_collection_t& collection, PyObject* key_py) 
 
     {
         [[maybe_unused]] py::gil_scoped_release release;
-        ukv_read_t read {.db = collection.db(),
-                         .error = status.member_ptr(),
-                         .transaction = collection.txn(),
-                         .arena = collection.member_arena(),
-                         .options = collection.options(),
-                         .collections = collection.member_collection(),
-                         .keys = &key,
-                         .presences = &found_presences};
+        ukv_read_t read {
+            .db = collection.db(),
+            .error = status.member_ptr(),
+            .transaction = collection.txn(),
+            .arena = collection.member_arena(),
+            .options = collection.options(),
+            .collections = collection.member_collection(),
+            .keys = &key,
+            .presences = &found_presences,
+        };
 
         ukv_read(&read);
         status.throw_unhandled();
