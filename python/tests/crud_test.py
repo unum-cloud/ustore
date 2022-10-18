@@ -25,7 +25,11 @@ def only_explicit_batch(col):
     col.set([3, 4], (b'x', b'y'))
     col.get((3, 4))
     assert col.has_key((3, 4)) == (True, True)
-    assert col.get((3, 4)).to_pylist() == [b'x', b'y']
+    vals = col.get((3, 4))
+    assert len(vals) == 2
+    targets = [b'x', b'y']
+    for i, v in enumerate(vals):
+        assert v == targets[i]
 
     col.set((3, 4), None)
     assert col.has_key((3, 4)) == (False, False)
