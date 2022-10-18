@@ -62,13 +62,21 @@ static void write_many_binaries(py_collection_t& collection, PyObject* keys_py, 
 
     ukv_write_t write {
         .db = collection.db(),
-        .error = status.member_ptr());
-        .transaction = collection.txn(), .arena = collection.member_arena(), .options = collection.options(),
-        .tasks_count = places.count, .collections = collection.member_collection(), .keys = places.keys_begin.get(),
-        .keys_stride = places.keys_begin.stride(), .presences = contents.presences_begin.get(),
-        .offsets = contents.offsets_begin.get(), .offsets_stride = contents.offsets_begin.stride(),
-        .lengths = contents.lengths_begin.get(), .lengths_stride = contents.lengths_begin.stride(),
-        .values = contents.contents_begin.get(), .values_stride = contents.contents_begin.stride(),
+        .error = status.member_ptr(),
+        .transaction = collection.txn(),
+        .arena = collection.member_arena(),
+        .options = collection.options(),
+        .tasks_count = places.count,
+        .collections = collection.member_collection(),
+        .keys = places.keys_begin.get(),
+        .keys_stride = places.keys_begin.stride(),
+        .presences = contents.presences_begin.get(),
+        .offsets = contents.offsets_begin.get(),
+        .offsets_stride = contents.offsets_begin.stride(),
+        .lengths = contents.lengths_begin.get(),
+        .lengths_stride = contents.lengths_begin.stride(),
+        .values = contents.contents_begin.get(),
+        .values_stride = contents.contents_begin.stride(),
     };
 
     ukv_write(&write);
@@ -117,9 +125,9 @@ static py::object has_one_binary(py_collection_t& collection, PyObject* key_py) 
         ukv_read_t read {
             .db = collection.db(),
             .error = status.member_ptr(),
+            .transaction = collection.txn(),
             .arena = collection.member_arena(),
             .options = collection.options(),
-            .transaction = collection.txn(),
             .collections = collection.member_collection(),
             .keys = &key,
             .presences = &found_presences,

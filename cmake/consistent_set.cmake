@@ -7,4 +7,4 @@ FetchContent_Declare(
     BUILD_COMMAND ""
 )
 FetchContent_MakeAvailable(consistent_set)
-include_directories(${consistent_set_SOURCE_DIR}/include/)
+include_directories(${consistent_set_SOURCE_DIR}/include)
