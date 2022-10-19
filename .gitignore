@@ -55,7 +55,7 @@ openapitools.json
 build_version.cc
 CPackConfig.cmake
 CPackSourceConfig.cmake
-doxygen*/
+doxygen_docs/html
 
 # Allow
 !gradle/wrapper/gradle-wrapper.jar

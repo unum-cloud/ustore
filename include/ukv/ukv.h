@@ -2,12 +2,13 @@
  * @file ukv.h
  * @author Ashot Vardanian
  * @date 12 Jun 2022
+ * @addtogroup C
  *
  * @brief C bindings for Universal Key-Value Stores, that provide:
  * - @b ABI stability for the essential CRUD operations,
  * - @b Interoperability with higher-level languages.
  * - @b Flexibility in choosing the underlying engine.
- * - @b ACID transactions and snapshots support. 
+ * - @b ACID transactions and snapshots support.
  * - @b Batch operations support.
  *
  * ## Hourglass Design
@@ -16,7 +17,7 @@
  * and the libraries. Still, maintaining shared ABI-stable C++ interface
  * is essentially impossible in todays reality.
  *
- * That is why the "hourglass" pattern is used. The implementation is in 
+ * That is why the "hourglass" pattern is used. The implementation is in
  * C++, the heavily templated convinient wrappers are in C++, but the
  * intermediate layer is C99 to maintain ABI stability and allow rolling
  * minor updates without recompilation of the user code.
@@ -38,7 +39,7 @@
  *   and strides. The majority of those are optional. This makes it impossible
  *   to remember the exact order. Using `struct`, the order becomes irrelevant.
  *   All arguments get names and default values can be skipped.
- * 
+ *
  * ### Why not use LevelDB or RocksDB interface?
  *
  * In no particular order:
@@ -58,8 +59,8 @@
  * is called every microsecond, the interface must be binary.
  *
  * For those few places where such functionality can be implemented efficiently we follow
- * standardized community-drived RFCs, rather than proprietary languages. As suc, for 
- * sub-document level gathers and updates we use: 
+ * standardized community-drived RFCs, rather than proprietary languages. As suc, for
+ * sub-document level gathers and updates we use:
  * - JSON Pointer: RFC 6901
  * - JSON Patch: RFC 6902
  * - JSON MergePatch: RFC 7386

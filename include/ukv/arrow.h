@@ -1,5 +1,6 @@
 /**
- * Implements bindings for the Apache Arrow.
+ * @brief Implements bindings for the Apache Arrow.
+ *
  * Internally replicates the bare-minimum defintions required
  * for Arrow to be ABI-compatiable.
  *
@@ -136,7 +137,7 @@ static void release_malloced_array(struct ArrowArray* array) {
 }
 
 /**
- * @brief Defines the structure of the continuous `arrow::RecordBatch` 
+ * @brief Defines the structure of the continuous `arrow::RecordBatch`
  * represented in C as a combination of `ArrowSchema` and `ArrowArray`.
  */
 static void ukv_to_arrow_schema( //
@@ -190,7 +191,7 @@ static void ukv_to_arrow_schema( //
 }
 
 /**
- * @brief Fill a column in a continuous `arrow::RecordBatch`, pre-structured 
+ * @brief Fill a column in a continuous `arrow::RecordBatch`, pre-structured
  * by the `ukv_to_arrow_schema` call. Supports scalar and string entries.
  * For lists use `ukv_to_arrow_list`.
  */
@@ -264,7 +265,7 @@ static void ukv_to_arrow_column( //
 }
 
 /**
- * @brief Fill a column in a continuous `arrow::RecordBatch`, pre-structured 
+ * @brief Fill a column in a continuous `arrow::RecordBatch`, pre-structured
  * by the `ukv_to_arrow_schema` call. Supports lists of scalars.
  * For regular scalars or strings use `ukv_to_arrow_column`.
  */

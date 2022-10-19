@@ -6,9 +6,9 @@
  *
  * Every row is treated as a separate edge.
  * All of its columns are treated as different document fields, except for
- * > Integer column for source node ID.
- * > Integer column for target node ID.
- * > Optional integer column for document/edge ID.
+ * - Integer column for source node ID.
+ * - Integer column for target node ID.
+ * - Optional integer column for document/edge ID.
  * If the last one isn't provided, the row number is used as the document ID.
  *
  * https://arrow.apache.org/docs/cpp/dataset.html#dataset-discovery
