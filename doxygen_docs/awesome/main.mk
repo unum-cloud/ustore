@@ -58,7 +58,7 @@ PROJECT_LOGO           = assets/UKV.png
 # entered, it will be relative to the location where doxygen was started. If
 # left blank the current directory will be used.
 
-OUTPUT_DIRECTORY       = doxygen_docs #care
+OUTPUT_DIRECTORY       = doxygen_docs
 
 # If the CREATE_SUBDIRS tag is set to YES then doxygen will create 4096 sub-
 # directories (in 2 levels) under the output directory of each output format and
@@ -67,8 +67,8 @@ OUTPUT_DIRECTORY       = doxygen_docs #care
 # putting all generated files in the same directory would otherwise causes
 # performance problems for the file system.
 # The default value is: NO.
-
-CREATE_SUBDIRS         = YES #care
+#care
+CREATE_SUBDIRS         = YES
 
 # If the ALLOW_UNICODE_NAMES tag is set to YES, doxygen will allow non-ASCII
 # characters to appear in the names of generated files. If set to NO, non-ASCII
@@ -105,8 +105,8 @@ OUTPUT_TEXT_DIRECTION  = None
 # descriptions after the members that are listed in the file and class
 # documentation (similar to Javadoc). Set to NO to disable this.
 # The default value is: YES.
-
-BRIEF_MEMBER_DESC      = YES #care
+#care
+BRIEF_MEMBER_DESC      = YES
 
 # If the REPEAT_BRIEF tag is set to YES, doxygen will prepend the brief
 # description of a member or function before the detailed description
@@ -114,8 +114,8 @@ BRIEF_MEMBER_DESC      = YES #care
 # Note: If both HIDE_UNDOC_MEMBERS and BRIEF_MEMBER_DESC are set to NO, the
 # brief descriptions will be completely suppressed.
 # The default value is: YES.
-
-REPEAT_BRIEF           = YES #care
+#care
+REPEAT_BRIEF           = YES
 
 # This tag implements a quasi-intelligent brief description abbreviator that is
 # used to form the text in various listings. Each string in this list, if found
@@ -126,6 +126,7 @@ REPEAT_BRIEF           = YES #care
 # the entity):The $name class, The $name widget, The $name file, is, provides,
 # specifies, contains, represents, a, an and the.
 
+#care
 ABBREVIATE_BRIEF       = "The $name class" \
                          "The $name widget" \
                          "The $name file" \
@@ -136,29 +137,29 @@ ABBREVIATE_BRIEF       = "The $name class" \
                          represents \
                          a \
                          an \
-                         the #care
+                         the
 
 # If the ALWAYS_DETAILED_SEC and REPEAT_BRIEF tags are both set to YES then
 # doxygen will generate a detailed section even if there is only a brief
 # description.
 # The default value is: NO.
-
-ALWAYS_DETAILED_SEC    = NO #care
+#care
+ALWAYS_DETAILED_SEC    = NO
 
 # If the INLINE_INHERITED_MEMB tag is set to YES, doxygen will show all
 # inherited members of a class in the documentation of that class as if those
 # members were ordinary class members. Constructors, destructors and assignment
 # operators of the base classes will not be shown.
 # The default value is: NO.
-
-INLINE_INHERITED_MEMB  = NO #care
+#care
+INLINE_INHERITED_MEMB  = NO
 
 # If the FULL_PATH_NAMES tag is set to YES, doxygen will prepend the full path
 # before files name in the file list and in the header files. If set to NO the
 # shortest path that makes the file name unique will be used
 # The default value is: YES.
-
-FULL_PATH_NAMES        = NO #care
+#care
+FULL_PATH_NAMES        = NO
 
 # The STRIP_FROM_PATH tag can be used to strip a user-defined part of the path.
 # Stripping is only done if one of the specified strings matches the left-hand
@@ -194,8 +195,8 @@ SHORT_NAMES            = NO
 # style comments (thus requiring an explicit @brief command for a brief
 # description.)
 # The default value is: NO.
-
-JAVADOC_AUTOBRIEF      = NO #care
+#care
+JAVADOC_AUTOBRIEF      = NO
 
 # If the JAVADOC_BANNER tag is set to YES then doxygen will interpret a line
 # such as
@@ -204,16 +205,16 @@ JAVADOC_AUTOBRIEF      = NO #care
 # Javadoc-style will behave just like regular comments and it will not be
 # interpreted by doxygen.
 # The default value is: NO.
-
-JAVADOC_BANNER         = NO #care
+#care
+JAVADOC_BANNER         = NO
 
 # If the QT_AUTOBRIEF tag is set to YES then doxygen will interpret the first
 # line (until the first dot) of a Qt-style comment as the brief description. If
 # set to NO, the Qt-style will behave just like regular Qt-style comments (thus
 # requiring an explicit \brief command for a brief description.)
 # The default value is: NO.
-
-QT_AUTOBRIEF           = NO #care
+#care
+QT_AUTOBRIEF           = NO
 
 # The MULTILINE_CPP_IS_BRIEF tag can be set to YES to make doxygen treat a
 # multi-line C++ special comment block (i.e. a block of //! or /// comments) as
@@ -224,29 +225,29 @@ QT_AUTOBRIEF           = NO #care
 # Note that setting this tag to YES also means that rational rose comments are
 # not recognized any more.
 # The default value is: NO.
-
-MULTILINE_CPP_IS_BRIEF = YES #care
+#care
+MULTILINE_CPP_IS_BRIEF = YES
 
 # By default Python docstrings are displayed as preformatted text and doxygen's
 # special commands cannot be used. By setting PYTHON_DOCSTRING to NO the
 # doxygen's special commands can be used and the contents of the docstring
 # documentation blocks is shown as doxygen documentation.
 # The default value is: YES.
-
-PYTHON_DOCSTRING       = YES #care
+#care
+PYTHON_DOCSTRING       = YES
 
 # If the INHERIT_DOCS tag is set to YES then an undocumented member inherits the
 # documentation from any documented member that it re-implements.
 # The default value is: YES.
-
-INHERIT_DOCS           = YES #care
+#care
+INHERIT_DOCS           = YES
 
 # If the SEPARATE_MEMBER_PAGES tag is set to YES then doxygen will produce a new
 # page for each member. If set to NO, the documentation of a member will be part
 # of the file/class/namespace that contains it.
 # The default value is: NO.
-
-SEPARATE_MEMBER_PAGES  = NO #care
+#care
+SEPARATE_MEMBER_PAGES  = NO
 
 # The TAB_SIZE tag can be used to set the number of spaces in a tab. Doxygen
 # uses this value to replace tabs by spaces in code fragments.
@@ -276,8 +277,8 @@ ALIASES                =
 # instance, some of the names that are used will be different. The list of all
 # members will be omitted, etc.
 # The default value is: NO.
-
-OPTIMIZE_OUTPUT_FOR_C  = NO #care
+#care
+OPTIMIZE_OUTPUT_FOR_C  = NO
 
 # Set the OPTIMIZE_OUTPUT_JAVA tag to YES if your project consists of Java or
 # Python sources only. Doxygen will then generate output that is more tailored
@@ -327,8 +328,8 @@ OPTIMIZE_OUTPUT_SLICE  = NO
 # * to the FILE_PATTERNS.
 #
 # Note see also the list of default file extension mappings.
-
-EXTENSION_MAPPING      = #care
+#care
+EXTENSION_MAPPING      =
 
 # If the MARKDOWN_SUPPORT tag is enabled then doxygen pre-processes all comments
 # according to the Markdown format, which allows for more readable
@@ -337,8 +338,8 @@ EXTENSION_MAPPING      = #care
 # mix doxygen, HTML, and XML commands with Markdown formatting. Disable only in
 # case of backward compatibilities issues.
 # The default value is: YES.
-
-MARKDOWN_SUPPORT       = YES #care
+#care
+MARKDOWN_SUPPORT       = YES
 
 # When the TOC_INCLUDE_HEADINGS tag is set to a non-zero value, all headings up
 # to that level are automatically included in the table of contents, even if
@@ -354,8 +355,8 @@ TOC_INCLUDE_HEADINGS   = 5
 # be prevented in individual cases by putting a % sign in front of the word or
 # globally by setting AUTOLINK_SUPPORT to NO.
 # The default value is: YES.
-
-AUTOLINK_SUPPORT       = YES #care
+#care
+AUTOLINK_SUPPORT       = YES
 
 # If you use STL classes (i.e. std::string, std::vector, etc.) but do not want
 # to include (a tag file for) the STL sources as input, then you should set this
@@ -364,8 +365,8 @@ AUTOLINK_SUPPORT       = YES #care
 # versus func(std::string) {}). This also make the inheritance and collaboration
 # diagrams that involve STL classes more complete and accurate.
 # The default value is: NO.
-
-BUILTIN_STL_SUPPORT    = YES #care
+#care
+BUILTIN_STL_SUPPORT    = YES
 
 # If you use Microsoft's C++/CLI language, you should set this option to YES to
 # enable parsing support.
@@ -378,8 +379,8 @@ CPP_CLI_SUPPORT        = NO
 # will parse them like normal C++ but will assume all classes use public instead
 # of private inheritance when no explicit protection keyword is present.
 # The default value is: NO.
-
-SIP_SUPPORT            = NO #care
+#care
+SIP_SUPPORT            = NO
 
 # For Microsoft's IDL there are propget and propput attributes to indicate
 # getter and setter methods for a property. Setting this option to YES will make
@@ -396,15 +397,15 @@ IDL_PROPERTY_SUPPORT   = YES
 # member in the group (if any) for the other members of the group. By default
 # all members of a group must be documented explicitly.
 # The default value is: NO.
-
-DISTRIBUTE_GROUP_DOC   = NO #care
+#care
+DISTRIBUTE_GROUP_DOC   = NO
 
 # If one adds a struct or class to a group and this option is enabled, then also
 # any nested class or struct is added to the same group. By default this option
 # is disabled and one has to add nested compounds explicitly via \ingroup.
 # The default value is: NO.
-
-GROUP_NESTED_COMPOUNDS = NO #care
+#care
+GROUP_NESTED_COMPOUNDS = NO
 
 # Set the SUBGROUPING tag to YES to allow class member groups of the same type
 # (for instance a group of public functions) to be put as a subgroup of that
@@ -412,8 +413,8 @@ GROUP_NESTED_COMPOUNDS = NO #care
 # subgrouping. Alternatively, this can be done per class using the
 # \nosubgrouping command.
 # The default value is: YES.
-
-SUBGROUPING            = YES #care
+#care
+SUBGROUPING            = YES
 
 # When the INLINE_GROUPED_CLASSES tag is set to YES, classes, structs and unions
 # are shown inside the group in which they are included (e.g. using \ingroup)
@@ -423,8 +424,8 @@ SUBGROUPING            = YES #care
 # Note that this feature does not work in combination with
 # SEPARATE_MEMBER_PAGES.
 # The default value is: NO.
-
-INLINE_GROUPED_CLASSES = NO #care
+#care
+INLINE_GROUPED_CLASSES = NO
 
 # When the INLINE_SIMPLE_STRUCTS tag is set to YES, structs, classes, and unions
 # with only public data fields or simple typedef fields will be shown inline in
@@ -433,8 +434,8 @@ INLINE_GROUPED_CLASSES = NO #care
 # to NO, structs, classes, and unions are shown on a separate page (for HTML and
 # Man pages) or section (for LaTeX and RTF).
 # The default value is: NO.
-
-INLINE_SIMPLE_STRUCTS  = YES #care
+#care
+INLINE_SIMPLE_STRUCTS  = YES
 
 # When TYPEDEF_HIDES_STRUCT tag is enabled, a typedef of a struct, union, or
 # enum is documented as struct, union, or enum with the name of the typedef. So
@@ -444,8 +445,8 @@ INLINE_SIMPLE_STRUCTS  = YES #care
 # useful for C code in case the coding convention dictates that all compound
 # types are typedef'ed and only the typedef is referenced, never the tag name.
 # The default value is: NO.
-
-TYPEDEF_HIDES_STRUCT   = NO #care
+#care
+TYPEDEF_HIDES_STRUCT   = NO
 
 # The size of the symbol lookup cache can be set using LOOKUP_CACHE_SIZE. This
 # cache is used to resolve symbols given their name and scope. Since this can be
@@ -457,8 +458,8 @@ TYPEDEF_HIDES_STRUCT   = NO #care
 # symbols. At the end of a run doxygen will report the cache usage and suggest
 # the optimal cache size from a speed point of view.
 # Minimum value: 0, maximum value: 9, default value: 0.
-
-LOOKUP_CACHE_SIZE      = 4 #care
+#care
+LOOKUP_CACHE_SIZE      = 4
 
 # The NUM_PROC_THREADS specifies the number threads doxygen is allowed to use
 # during processing. When set to 0 doxygen will based this on the number of
@@ -470,8 +471,8 @@ LOOKUP_CACHE_SIZE      = 4 #care
 # encounter. Generating dot graphs in parallel is controlled by the
 # DOT_NUM_THREADS setting.
 # Minimum value: 0, maximum value: 32, default value: 1.
-
-NUM_PROC_THREADS       = 4 #care
+#care
+NUM_PROC_THREADS       = 4
 
 #---------------------------------------------------------------------------
 # Build related configuration options
@@ -484,48 +485,48 @@ NUM_PROC_THREADS       = 4 #care
 # Note: This will also disable the warnings about undocumented members that are
 # normally produced when WARNINGS is set to YES.
 # The default value is: NO.
-
-EXTRACT_ALL            = YES #care
+#care
+EXTRACT_ALL            = YES
 
 # If the EXTRACT_PRIVATE tag is set to YES, all private members of a class will
 # be included in the documentation.
 # The default value is: NO.
-
-EXTRACT_PRIVATE        = NO #care
+#care
+EXTRACT_PRIVATE        = NO
 
 # If the EXTRACT_PRIV_VIRTUAL tag is set to YES, documented private virtual
 # methods of a class will be included in the documentation.
 # The default value is: NO.
-
-EXTRACT_PRIV_VIRTUAL   = NO #care
+#care
+EXTRACT_PRIV_VIRTUAL   = NO
 
 # If the EXTRACT_PACKAGE tag is set to YES, all members with package or internal
 # scope will be included in the documentation.
 # The default value is: NO.
-
-EXTRACT_PACKAGE        = NO #care
+#care
+EXTRACT_PACKAGE        = NO
 
 # If the EXTRACT_STATIC tag is set to YES, all static members of a file will be
 # included in the documentation.
 # The default value is: NO.
-
-EXTRACT_STATIC         = YES #care
+#care
+EXTRACT_STATIC         = YES
 
 # If the EXTRACT_LOCAL_CLASSES tag is set to YES, classes (and structs) defined
 # locally in source files will be included in the documentation. If set to NO,
 # only classes defined in header files are included. Does not have any effect
 # for Java sources.
 # The default value is: YES.
-
-EXTRACT_LOCAL_CLASSES  = NO #care
+#care
+EXTRACT_LOCAL_CLASSES  = NO
 
 # This flag is only useful for Objective-C code. If set to YES, local methods,
 # which are defined in the implementation section but not in the interface are
 # included in the documentation. If set to NO, only methods in the interface are
 # included.
 # The default value is: NO.
-
-EXTRACT_LOCAL_METHODS  = NO #care
+#care
+EXTRACT_LOCAL_METHODS  = NO
 
 # If this flag is set to YES, the members of anonymous namespaces will be
 # extracted and appear in the documentation as a namespace called
@@ -533,52 +534,52 @@ EXTRACT_LOCAL_METHODS  = NO #care
 # the file that contains the anonymous namespace. By default anonymous namespace
 # are hidden.
 # The default value is: NO.
-
-EXTRACT_ANON_NSPACES   = NO #care
+#care
+EXTRACT_ANON_NSPACES   = NO
 
 # If this flag is set to YES, the name of an unnamed parameter in a declaration
 # will be determined by the corresponding definition. By default unnamed
 # parameters remain unnamed in the output.
 # The default value is: YES.
-
-RESOLVE_UNNAMED_PARAMS = YES #care
+#care
+RESOLVE_UNNAMED_PARAMS = YES
 
 # If the HIDE_UNDOC_MEMBERS tag is set to YES, doxygen will hide all
 # undocumented members inside documented classes or files. If set to NO these
 # members will be included in the various overviews, but no documentation
 # section is generated. This option has no effect if EXTRACT_ALL is enabled.
 # The default value is: NO.
-
-HIDE_UNDOC_MEMBERS     = NO #care
+#care
+HIDE_UNDOC_MEMBERS     = NO
 
 # If the HIDE_UNDOC_CLASSES tag is set to YES, doxygen will hide all
 # undocumented classes that are normally visible in the class hierarchy. If set
 # to NO, these classes will be included in the various overviews. This option
 # has no effect if EXTRACT_ALL is enabled.
 # The default value is: NO.
-
-HIDE_UNDOC_CLASSES     = NO #care
+#care
+HIDE_UNDOC_CLASSES     = NO
 
 # If the HIDE_FRIEND_COMPOUNDS tag is set to YES, doxygen will hide all friend
 # declarations. If set to NO, these declarations will be included in the
 # documentation.
 # The default value is: NO.
-
-HIDE_FRIEND_COMPOUNDS  = NO #care
+#care
+HIDE_FRIEND_COMPOUNDS  = NO
 
 # If the HIDE_IN_BODY_DOCS tag is set to YES, doxygen will hide any
 # documentation blocks found inside the body of a function. If set to NO, these
 # blocks will be appended to the function's detailed documentation block.
 # The default value is: NO.
-
-HIDE_IN_BODY_DOCS      = NO #care
+#care
+HIDE_IN_BODY_DOCS      = NO
 
 # The INTERNAL_DOCS tag determines if documentation that is typed after a
 # \internal command is included. If the tag is set to NO then the documentation
 # will be excluded. Set it to YES to include the internal documentation.
 # The default value is: NO.
-
-INTERNAL_DOCS          = NO #care
+#care
+INTERNAL_DOCS          = NO
 
 # With the correct setting of option CASE_SENSE_NAMES doxygen will better be
 # able to match the capabilities of the underlying filesystem. In case the
@@ -600,28 +601,28 @@ CASE_SENSE_NAMES       = YES
 # their full class and namespace scopes in the documentation. If set to YES, the
 # scope will be hidden.
 # The default value is: NO.
-
-HIDE_SCOPE_NAMES       = NO #care
+#care
+HIDE_SCOPE_NAMES       = NO
 
 # If the HIDE_COMPOUND_REFERENCE tag is set to NO (default) then doxygen will
 # append additional text to a page's title, such as Class Reference. If set to
 # YES the compound reference will be hidden.
 # The default value is: NO.
-
-HIDE_COMPOUND_REFERENCE= NO #care
+#care
+HIDE_COMPOUND_REFERENCE= NO
 
 # If the SHOW_INCLUDE_FILES tag is set to YES then doxygen will put a list of
 # the files that are included by a file in the documentation of that file.
 # The default value is: YES.
-
-SHOW_INCLUDE_FILES     = NO #care
+#care
+SHOW_INCLUDE_FILES     = NO
 
 # If the SHOW_GROUPED_MEMB_INC tag is set to YES then Doxygen will add for each
 # grouped member an include statement to the documentation, telling the reader
 # which file to include in order to use the member.
 # The default value is: NO.
-
-SHOW_GROUPED_MEMB_INC  = NO #care
+#care
+SHOW_GROUPED_MEMB_INC  = NO
 
 # If the FORCE_LOCAL_INCLUDES tag is set to YES then doxygen will list include
 # files with double quotes in the documentation rather than with sharp brackets.
@@ -632,23 +633,23 @@ FORCE_LOCAL_INCLUDES   = NO
 # If the INLINE_INFO tag is set to YES then a tag [inline] is inserted in the
 # documentation for inline members.
 # The default value is: YES.
-
-INLINE_INFO            = YES #care
+#care
+INLINE_INFO            = YES
 
 # If the SORT_MEMBER_DOCS tag is set to YES then doxygen will sort the
 # (detailed) documentation of file and class members alphabetically by member
 # name. If set to NO, the members will appear in declaration order.
 # The default value is: YES.
-
-SORT_MEMBER_DOCS       = NO #care
+#care
+SORT_MEMBER_DOCS       = NO
 
 # If the SORT_BRIEF_DOCS tag is set to YES then doxygen will sort the brief
 # descriptions of file, namespace and class members alphabetically by member
 # name. If set to NO, the members will appear in declaration order. Note that
 # this will also influence the order of the classes in the class list.
 # The default value is: NO.
-
-SORT_BRIEF_DOCS        = NO #care
+#care
+SORT_BRIEF_DOCS        = NO
 
 # If the SORT_MEMBERS_CTORS_1ST tag is set to YES then doxygen will sort the
 # (brief and detailed) documentation of class members so that constructors and
@@ -659,15 +660,15 @@ SORT_BRIEF_DOCS        = NO #care
 # Note: If SORT_MEMBER_DOCS is set to NO this option is ignored for sorting
 # detailed member documentation.
 # The default value is: NO.
-
-SORT_MEMBERS_CTORS_1ST = YES #care
+#care
+SORT_MEMBERS_CTORS_1ST = YES
 
 # If the SORT_GROUP_NAMES tag is set to YES then doxygen will sort the hierarchy
 # of group names into alphabetical order. If set to NO the group names will
 # appear in their defined order.
 # The default value is: NO.
-
-SORT_GROUP_NAMES       = YES #care
+#care
+SORT_GROUP_NAMES       = YES
 
 # If the SORT_BY_SCOPE_NAME tag is set to YES, the class list will be sorted by
 # fully-qualified names, including namespaces. If set to NO, the class list will
@@ -676,8 +677,8 @@ SORT_GROUP_NAMES       = YES #care
 # Note: This option applies only to the class list, not to the alphabetical
 # list.
 # The default value is: NO.
-
-SORT_BY_SCOPE_NAME     = YES #care
+#care
+SORT_BY_SCOPE_NAME     = YES
 
 # If the STRICT_PROTO_MATCHING option is enabled and doxygen fails to do proper
 # type resolution of all parameters of a function it will reject a match between
@@ -686,39 +687,39 @@ SORT_BY_SCOPE_NAME     = YES #care
 # simple string match. By disabling STRICT_PROTO_MATCHING doxygen will still
 # accept a match between prototype and implementation in such cases.
 # The default value is: NO.
-
-STRICT_PROTO_MATCHING  = NO #care
+#care
+STRICT_PROTO_MATCHING  = NO
 
 # The GENERATE_TODOLIST tag can be used to enable (YES) or disable (NO) the todo
 # list. This list is created by putting \todo commands in the documentation.
 # The default value is: YES.
-
-GENERATE_TODOLIST      = YES #care
+#care
+GENERATE_TODOLIST      = YES
 
 # The GENERATE_TESTLIST tag can be used to enable (YES) or disable (NO) the test
 # list. This list is created by putting \test commands in the documentation.
 # The default value is: YES.
-
-GENERATE_TESTLIST      = NO #care
+#care
+GENERATE_TESTLIST      = NO
 
 # The GENERATE_BUGLIST tag can be used to enable (YES) or disable (NO) the bug
 # list. This list is created by putting \bug commands in the documentation.
 # The default value is: YES.
-
-GENERATE_BUGLIST       = YES #care
+#care
+GENERATE_BUGLIST       = YES
 
 # The GENERATE_DEPRECATEDLIST tag can be used to enable (YES) or disable (NO)
 # the deprecated list. This list is created by putting \deprecated commands in
 # the documentation.
 # The default value is: YES.
-
-GENERATE_DEPRECATEDLIST= YES #care
+#care
+GENERATE_DEPRECATEDLIST= YES
 
 # The ENABLED_SECTIONS tag can be used to enable conditional documentation
 # sections, marked by \if <section_label> ... \endif and \cond <section_label>
 # ... \endcond blocks.
-
-ENABLED_SECTIONS       = #care
+#care
+ENABLED_SECTIONS       =
 
 # The MAX_INITIALIZER_LINES tag determines the maximum number of lines that the
 # initial value of a variable or macro / define can have for it to appear in the
@@ -728,29 +729,29 @@ ENABLED_SECTIONS       = #care
 # controlled using \showinitializer or \hideinitializer command in the
 # documentation regardless of this setting.
 # Minimum value: 0, maximum value: 10000, default value: 30.
-
-MAX_INITIALIZER_LINES  = 50 #care
+#care
+MAX_INITIALIZER_LINES  = 50
 
 # Set the SHOW_USED_FILES tag to NO to disable the list of files generated at
 # the bottom of the documentation of classes and structs. If set to YES, the
 # list will mention the files that were used to generate the documentation.
 # The default value is: YES.
-
-SHOW_USED_FILES        = YES #care
+#care
+SHOW_USED_FILES        = YES
 
 # Set the SHOW_FILES tag to NO to disable the generation of the Files page. This
 # will remove the Files entry from the Quick Index and from the Folder Tree View
 # (if specified).
 # The default value is: YES.
-
-SHOW_FILES             = NO #care
+#care
+SHOW_FILES             = NO
 
 # Set the SHOW_NAMESPACES tag to NO to disable the generation of the Namespaces
 # page. This will remove the Namespaces entry from the Quick Index and from the
 # Folder Tree View (if specified).
 # The default value is: YES.
-
-SHOW_NAMESPACES        = YES #care
+#care
+SHOW_NAMESPACES        = YES
 
 # The FILE_VERSION_FILTER tag can be used to specify a program or script that
 # doxygen should invoke to get the current version for each file (typically from
@@ -826,8 +827,8 @@ WARN_IF_DOC_ERROR      = YES
 # parameter documentation, but not about the absence of documentation. If
 # EXTRACT_ALL is set to YES then this flag will automatically be disabled.
 # The default value is: NO.
-
-WARN_NO_PARAMDOC       = NO #care
+#care
+WARN_NO_PARAMDOC       = NO
 
 # If the WARN_AS_ERROR tag is set to YES then doxygen will immediately stop when
 # a warning is encountered. If the WARN_AS_ERROR tag is set to FAIL_ON_WARNINGS
@@ -835,8 +836,8 @@ WARN_NO_PARAMDOC       = NO #care
 # at the end of the doxygen process doxygen will return with a non-zero status.
 # Possible values are: NO, YES and FAIL_ON_WARNINGS.
 # The default value is: NO.
-
-WARN_AS_ERROR          = NO #care
+#care
+WARN_AS_ERROR          = NO
 
 # The WARN_FORMAT tag determines the format of the warning messages that doxygen
 # can produce. The string should contain the $file, $line, and $text tags, which
@@ -851,8 +852,8 @@ WARN_FORMAT            = "$file:$line: $text"
 # The WARN_LOGFILE tag can be used to specify a file to which warning and error
 # messages should be written. If left blank the output is written to standard
 # error (stderr).
-
-WARN_LOGFILE           = #care
+#care
+WARN_LOGFILE           =
 
 #---------------------------------------------------------------------------
 # Configuration options related to the input files
@@ -942,8 +943,8 @@ FILE_PATTERNS          = *.c \
 # The RECURSIVE tag can be used to specify whether or not subdirectories should
 # be searched for input files as well.
 # The default value is: NO.
-
-RECURSIVE              = NO #care
+#care
+RECURSIVE              = NO
 
 # The EXCLUDE tag can be used to specify files and/or directories that should be
 # excluded from the INPUT source files. This way you can easily exclude a
@@ -951,8 +952,8 @@ RECURSIVE              = NO #care
 #
 # Note that relative paths are relative to the directory from which doxygen is
 # run.
-
-EXCLUDE                = #care
+#care
+EXCLUDE                =
 
 # The EXCLUDE_SYMLINKS tag can be used to select whether or not files or
 # directories that are symbolic links (a Unix file system feature) are excluded
@@ -984,8 +985,8 @@ EXCLUDE_SYMBOLS        =
 # The EXAMPLE_PATH tag can be used to specify one or more files or directories
 # that contain example code fragments that are included (see the \include
 # command).
-
-EXAMPLE_PATH           = #care
+#care
+EXAMPLE_PATH           =
 
 # If the value of the EXAMPLE_PATH tag contains directories, you can use the
 # EXAMPLE_PATTERNS tag to specify one or more wildcard pattern (like *.cpp and
@@ -998,14 +999,14 @@ EXAMPLE_PATTERNS       = *
 # searched for input files to be used with the \include or \dontinclude commands
 # irrespective of the value of the RECURSIVE tag.
 # The default value is: NO.
-
-EXAMPLE_RECURSIVE      = NO #care
+#care
+EXAMPLE_RECURSIVE      = NO
 
 # The IMAGE_PATH tag can be used to specify one or more files or directories
 # that contain images that are to be included in the documentation (see the
 # \image command).
-
-IMAGE_PATH             = #care
+#care
+IMAGE_PATH             =
 
 # The INPUT_FILTER tag can be used to specify a program that doxygen should
 # invoke to filter for each input file. Doxygen will invoke the filter program
@@ -1073,14 +1074,14 @@ USE_MDFILE_AS_MAINPAGE =
 # Note: To get rid of all source code in the generated output, make sure that
 # also VERBATIM_HEADERS is set to NO.
 # The default value is: NO.
-
-SOURCE_BROWSER         = YES #care
+#care
+SOURCE_BROWSER         = YES
 
 # Setting the INLINE_SOURCES tag to YES will include the body of functions,
 # classes and enums directly into the documentation.
 # The default value is: NO.
-
-INLINE_SOURCES         = YES #care
+#care
+INLINE_SOURCES         = YES
 
 # Setting the STRIP_CODE_COMMENTS tag to YES will instruct doxygen to hide any
 # special comment blocks from generated source code fragments. Normal C, C++ and
@@ -1092,22 +1093,22 @@ STRIP_CODE_COMMENTS    = YES
 # If the REFERENCED_BY_RELATION tag is set to YES then for each documented
 # entity all documented functions referencing it will be listed.
 # The default value is: NO.
-
-REFERENCED_BY_RELATION = YES #care
+#care
+REFERENCED_BY_RELATION = YES
 
 # If the REFERENCES_RELATION tag is set to YES then for each documented function
 # all documented entities called/used by that function will be listed.
 # The default value is: NO.
-
-REFERENCES_RELATION    = YES #care
+#care
+REFERENCES_RELATION    = YES
 
 # If the REFERENCES_LINK_SOURCE tag is set to YES and SOURCE_BROWSER tag is set
 # to YES then the hyperlinks from functions in REFERENCES_RELATION and
 # REFERENCED_BY_RELATION lists will link to the source code. Otherwise they will
 # link to the documentation.
 # The default value is: YES.
-
-REFERENCES_LINK_SOURCE = YES #care
+#care
+REFERENCES_LINK_SOURCE = YES
 
 # If SOURCE_TOOLTIPS is enabled (the default) then hovering a hyperlink in the
 # source code will show a tooltip with additional information such as prototype,
@@ -1116,8 +1117,8 @@ REFERENCES_LINK_SOURCE = YES #care
 # can opt to disable this feature.
 # The default value is: YES.
 # This tag requires that the tag SOURCE_BROWSER is set to YES.
-
-SOURCE_TOOLTIPS        = YES #care
+#care
+SOURCE_TOOLTIPS        = YES
 
 # If the USE_HTAGS tag is set to YES then the references to source code will
 # point to the HTML generated by the htags(1) tool instead of doxygen built-in
@@ -1146,8 +1147,8 @@ USE_HTAGS              = NO
 # specified. Set to NO to disable this.
 # See also: Section \class.
 # The default value is: YES.
-
-VERBATIM_HEADERS       = YES #care
+#care
+VERBATIM_HEADERS       = YES
 
 # If the CLANG_ASSISTED_PARSING tag is set to YES then doxygen will use the
 # clang parser (see:
@@ -1157,22 +1158,22 @@ VERBATIM_HEADERS       = YES #care
 # Note: The availability of this option depends on whether or not doxygen was
 # generated with the -Duse_libclang=ON option for CMake.
 # The default value is: NO.
-
-CLANG_ASSISTED_PARSING = NO #care
+#care
+CLANG_ASSISTED_PARSING = NO
 
 # If clang assisted parsing is enabled and the CLANG_ADD_INC_PATHS tag is set to
 # YES then doxygen will add the directory of each input to the include path.
 # The default value is: YES.
-
-CLANG_ADD_INC_PATHS    = YES #care
+#care
+CLANG_ADD_INC_PATHS    = YES
 
 # If clang assisted parsing is enabled you can provide the compiler with command
 # line options that you would normally use when invoking the compiler. Note that
 # the include paths will already be set by doxygen for the files and directories
 # specified with INPUT and INCLUDE_PATH.
 # This tag requires that the tag CLANG_ASSISTED_PARSING is set to YES.
-
-CLANG_OPTIONS          = #care
+#care
+CLANG_OPTIONS          =
 
 # If clang assisted parsing is enabled you can provide the clang parser with the
 # path to the directory containing a file called compile_commands.json. This
@@ -2208,8 +2209,8 @@ PERLMOD_MAKEVAR_PREFIX =
 # If the ENABLE_PREPROCESSING tag is set to YES, doxygen will evaluate all
 # C-preprocessor directives found in the sources and include files.
 # The default value is: YES.
-
-ENABLE_PREPROCESSING   = YES #care
+#care
+ENABLE_PREPROCESSING   = YES
 
 # If the MACRO_EXPANSION tag is set to YES, doxygen will expand all macro names
 # in the source code. If set to NO, only conditional compilation will be
@@ -2217,16 +2218,16 @@ ENABLE_PREPROCESSING   = YES #care
 # EXPAND_ONLY_PREDEF to YES.
 # The default value is: NO.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
-
-MACRO_EXPANSION        = NO #care
+#care
+MACRO_EXPANSION        = NO
 
 # If the EXPAND_ONLY_PREDEF and MACRO_EXPANSION tags are both set to YES then
 # the macro expansion is limited to the macros specified with the PREDEFINED and
 # EXPAND_AS_DEFINED tags.
 # The default value is: NO.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
-
-EXPAND_ONLY_PREDEF     = NO #care
+#care
+EXPAND_ONLY_PREDEF     = NO
 
 # If the SEARCH_INCLUDES tag is set to YES, the include files in the
 # INCLUDE_PATH will be searched if a #include is found.
@@ -2239,16 +2240,16 @@ SEARCH_INCLUDES        = YES
 # contain include files that are not input files but should be processed by the
 # preprocessor.
 # This tag requires that the tag SEARCH_INCLUDES is set to YES.
-
-INCLUDE_PATH           = #care
+#care
+INCLUDE_PATH           =
 
 # You can use the INCLUDE_FILE_PATTERNS tag to specify one or more wildcard
 # patterns (like *.h and *.hpp) to filter out the header-files in the
 # directories. If left blank, the patterns specified with FILE_PATTERNS will be
 # used.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
-
-INCLUDE_FILE_PATTERNS  = #care
+#care
+INCLUDE_FILE_PATTERNS  =
 
 # The PREDEFINED tag can be used to specify one or more macro names that are
 # defined before the preprocessor is started (similar to the -D option of e.g.
@@ -2257,8 +2258,8 @@ INCLUDE_FILE_PATTERNS  = #care
 # is assumed. To prevent a macro definition from being undefined via #undef or
 # recursively expanded use the := operator instead of the = operator.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
-
-PREDEFINED             = #care
+#care
+PREDEFINED             =
 
 # If the MACRO_EXPANSION and EXPAND_ONLY_PREDEF tags are set to YES then this
 # tag can be used to specify a list of macro names that should be expanded. The
@@ -2276,8 +2277,8 @@ EXPAND_AS_DEFINED      =
 # removed.
 # The default value is: YES.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
-
-SKIP_FUNCTION_MACROS   = YES #care
+#care
+SKIP_FUNCTION_MACROS   = YES
 
 #---------------------------------------------------------------------------
 # Configuration options related to external references
@@ -2367,8 +2368,8 @@ HAVE_DOT               = YES
 # speed.
 # Minimum value: 0, maximum value: 32, default value: 0.
 # This tag requires that the tag HAVE_DOT is set to YES.
-
-DOT_NUM_THREADS        = 4 #care
+#care
+DOT_NUM_THREADS        = 4
 
 # When you want a differently looking font in the dot files that doxygen
 # generates you can specify the font name using DOT_FONTNAME. You need to make
@@ -2423,8 +2424,8 @@ GROUP_GRAPHS           = YES
 # Language.
 # The default value is: NO.
 # This tag requires that the tag HAVE_DOT is set to YES.
-
-UML_LOOK               = YES #care
+#care
+UML_LOOK               = YES
 
 # If the UML_LOOK tag is enabled, the fields and methods are shown inside the
 # class node. If there are many fields or methods and many nodes the graph may
@@ -2449,8 +2450,8 @@ UML_LIMIT_NUM_FIELDS   = 10
 # Possible values are: NO, YES and NONE.
 # The default value is: NO.
 # This tag requires that the tag UML_LOOK is set to YES.
-
-DOT_UML_DETAILS        = YES #care
+#care
+DOT_UML_DETAILS        = YES
 
 # The DOT_WRAP_THRESHOLD tag can be used to set the maximum number of characters
 # to display on a single line. If the actual line length exceeds this threshold
@@ -2466,8 +2467,8 @@ DOT_WRAP_THRESHOLD     = 17
 # instances.
 # The default value is: NO.
 # This tag requires that the tag HAVE_DOT is set to YES.
-
-TEMPLATE_RELATIONS     = YES #care
+#care
+TEMPLATE_RELATIONS     = YES
 
 # If the INCLUDE_GRAPH, ENABLE_PREPROCESSING and SEARCH_INCLUDES tags are set to
 # YES then doxygen will generate a graph for each documented file showing the
@@ -2496,8 +2497,8 @@ INCLUDED_BY_GRAPH      = YES
 # accomplished by means of the command \hidecallgraph.
 # The default value is: NO.
 # This tag requires that the tag HAVE_DOT is set to YES.
-
-CALL_GRAPH             = YES #care
+#care
+CALL_GRAPH             = YES
 
 # If the CALLER_GRAPH tag is set to YES then doxygen will generate a caller
 # dependency graph for every global function or class method.
@@ -2508,8 +2509,8 @@ CALL_GRAPH             = YES #care
 # accomplished by means of the command \hidecallergraph.
 # The default value is: NO.
 # This tag requires that the tag HAVE_DOT is set to YES.
-
-CALLER_GRAPH           = YES #care
+#care
+CALLER_GRAPH           = YES
 
 # If the GRAPHICAL_HIERARCHY tag is set to YES then doxygen will graphical
 # hierarchy of all classes instead of a textual one.
@@ -2608,8 +2609,8 @@ PLANTUML_INCLUDE_PATH  =
 # the size of a graph can be further restricted by MAX_DOT_GRAPH_DEPTH.
 # Minimum value: 0, maximum value: 10000, default value: 50.
 # This tag requires that the tag HAVE_DOT is set to YES.
-
-DOT_GRAPH_MAX_NODES    = 100 #care
+#care
+DOT_GRAPH_MAX_NODES    = 100
 
 # The MAX_DOT_GRAPH_DEPTH tag can be used to set the maximum depth of the graphs
 # generated by dot. A depth value of 3 means that only nodes reachable from the
@@ -2620,8 +2621,8 @@ DOT_GRAPH_MAX_NODES    = 100 #care
 # DOT_GRAPH_MAX_NODES. Using a depth of 0 means no depth restriction.
 # Minimum value: 0, maximum value: 1000, default value: 0.
 # This tag requires that the tag HAVE_DOT is set to YES.
-
-MAX_DOT_GRAPH_DEPTH    = 0 #care
+#care
+MAX_DOT_GRAPH_DEPTH    = 0
 
 # Set the DOT_TRANSPARENT tag to YES to generate images with a transparent
 # background. This is disabled by default, because dot on Windows does not seem
