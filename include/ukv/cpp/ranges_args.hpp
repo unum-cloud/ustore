@@ -218,86 +218,119 @@ auto edges(tuples_at&& tuples) noexcept {
     return result_t(ptr, ptr + count);
 }
 
-inline bool same_collections_are_named(strided_iterator_gt<ukv_collection_t const> collections_begin) {
+inline bool same_collections_are_named(strided_iterator_gt<ukv_collection_t const> collections_begin) noexcept {
     return collections_begin && collections_begin[0] != ukv_collection_main_k;
+}
+
+template <typename enum_at, typename allowed_mask_at>
+inline bool enum_is_subset(enum_at enum_value, allowed_mask_at allowed) noexcept {
+    return (enum_value & ~allowed) == 0;
 }
 
 inline void validate_write(ukv_transaction_t const c_txn,
                            places_arg_t const& places,
                            contents_arg_t const& contents,
                            ukv_options_t const c_options,
-                           ukv_error_t* c_error) {
+                           ukv_error_t* c_error) noexcept {
 
-    return_if_error(places.keys_begin, c_error, 0, "No keys were provided!");
+    auto allowed_options =                    //
+        ukv_option_transaction_dont_watch_k | //
+        ukv_option_dont_discard_memory_k |    //
+        ukv_option_write_flush_k;
+    return_if_error(enum_is_subset(c_options, allowed_options), c_error, args_wrong_k, "Invalid options!");
+
+    return_if_error(places.keys_begin, c_error, args_wrong_k, "No keys were provided!");
+
     bool const remove_all = !contents.contents_begin;
     if (remove_all)
-        return_if_error(!contents.lengths_begin && !contents.offsets_begin, c_error, 0, "Can't address NULLs!");
-
-    return_if_error(!(c_options & ukv_option_transaction_snapshot_k),
-                    c_error,
-                    0,
-                    "Writes are not supported on snapshots!");
+        return_if_error(!contents.lengths_begin && !contents.offsets_begin,
+                        c_error,
+                        args_wrong_k,
+                        "Can't address NULLs!");
 
     if (!places.same_collection() || same_collections_are_named(places.collections_begin))
-        return_if_error(ukv_supports_named_collections_k, c_error, 0, "Current engine does not support collections!");
+        return_if_error(ukv_supports_named_collections_k,
+                        c_error,
+                        args_wrong_k,
+                        "Current engine does not support named collections!");
 
     if (c_txn)
-        return_if_error(ukv_supports_transactions_k, c_error, 0, "Current engine does not support transactions!");
+        return_if_error(ukv_supports_transactions_k,
+                        c_error,
+                        args_wrong_k,
+                        "Current engine does not support transactions!");
 }
 
 inline void validate_read(ukv_transaction_t const c_txn,
                           places_arg_t const& places,
                           ukv_options_t const c_options,
-                          ukv_error_t* c_error) {
+                          ukv_error_t* c_error) noexcept {
 
-    return_if_error(places.keys_begin, c_error, 0, "No keys were provided!");
-    return_if_error(!(c_options & ukv_option_write_flush_k), c_error, 0, "Can't flush reads!");
+    auto allowed_options =                    //
+        ukv_option_transaction_dont_watch_k | //
+        ukv_option_dont_discard_memory_k |    //
+        ukv_option_read_shared_memory_k;
+    return_if_error(enum_is_subset(c_options, allowed_options), c_error, args_wrong_k, "Invalid options!");
+
+    return_if_error(places.keys_begin, c_error, args_wrong_k, "No keys were provided!");
 
     if (!places.same_collection() || same_collections_are_named(places.collections_begin))
-        return_if_error(ukv_supports_named_collections_k, c_error, 0, "Current engine does not support collections!");
+        return_if_error(ukv_supports_named_collections_k,
+                        c_error,
+                        args_wrong_k,
+                        "Current engine does not support named collections!");
 
     if (c_txn)
-        return_if_error(ukv_supports_transactions_k, c_error, 0, "Current engine does not support transactions!");
+        return_if_error(ukv_supports_transactions_k,
+                        c_error,
+                        args_wrong_k,
+                        "Current engine does not support transactions!");
 }
 
 inline void validate_scan(ukv_transaction_t const c_txn,
                           scans_arg_t const& args,
                           ukv_options_t const c_options,
-                          ukv_error_t* c_error) {
+                          ukv_error_t* c_error) noexcept {
 
-    return_if_error((bool(args.count) | bool(args.start_keys) | bool(args.limits)) ==
-                        (bool(args.count) & bool(args.start_keys) & bool(args.limits)),
-                    c_error,
-                    0,
-                    "Invalid Arguments!");
+    auto allowed_options =                    //
+        ukv_option_transaction_dont_watch_k | //
+        ukv_option_dont_discard_memory_k |    //
+        ukv_option_read_shared_memory_k |     //
+        ukv_option_scan_bulk_k;
+    return_if_error(enum_is_subset(c_options, allowed_options), c_error, args_wrong_k, "Invalid options!");
+
+    return_if_error(args.limits, c_error, args_wrong_k, "Full scans aren't supported - paginate!");
 
     if (!args.same_collection() || same_collections_are_named(args.collections))
-        return_if_error(ukv_supports_named_collections_k, c_error, 0, "Current engine does not support collections!");
+        return_if_error(ukv_supports_named_collections_k,
+                        c_error,
+                        args_wrong_k,
+                        "Current engine does not support named collections!");
 
     if (c_txn)
-        return_if_error(ukv_supports_transactions_k, c_error, 0, "Current engine does not support transactions!");
-}
-
-inline void validate_transaction_commit(ukv_transaction_t const c_txn,
-                                        ukv_options_t const c_options,
-                                        ukv_error_t* c_error) {
-
-    return_if_error(c_txn, c_error, 0, "Transaction is uninitialized");
-    return_if_error(!(c_options & (ukv_option_transaction_snapshot_k | ukv_option_dont_discard_memory_k)),
-                    c_error,
-                    0,
-                    "Invalid options!");
+        return_if_error(ukv_supports_transactions_k,
+                        c_error,
+                        args_wrong_k,
+                        "Current engine does not support transactions!");
 }
 
 inline void validate_transaction_begin(ukv_transaction_t const c_txn,
                                        ukv_options_t const c_options,
-                                       ukv_error_t* c_error) {
+                                       ukv_error_t* c_error) noexcept {
 
-    return_if_error(c_txn, c_error, 0, "Transaction is uninitialized");
-    return_if_error(!(c_options & (ukv_option_write_flush_k | ukv_option_dont_discard_memory_k)),
+    return_if_error(c_txn, c_error, args_wrong_k, "Transaction is uninitialized");
+    return_if_error(enum_is_subset(c_options, ukv_option_transaction_dont_watch_k),
                     c_error,
-                    0,
+                    args_wrong_k,
                     "Invalid options!");
+}
+
+inline void validate_transaction_commit(ukv_transaction_t const c_txn,
+                                        ukv_options_t const c_options,
+                                        ukv_error_t* c_error) noexcept {
+
+    return_if_error(c_txn, c_error, args_wrong_k, "Transaction is uninitialized");
+    return_if_error(enum_is_subset(c_options, ukv_option_write_flush_k), c_error, args_wrong_k, "Invalid options!");
 }
 
 } // namespace unum::ukv

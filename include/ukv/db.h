@@ -278,7 +278,6 @@ typedef enum {
      * detection on separate parts of transactional reads and writes.
      */
     ukv_option_transaction_dont_watch_k = 1 << 2,
-
     /**
      * @brief This flag is intended for internal use.
      * When passed to `make_stl_arena`, old_arena is not released,
@@ -1419,7 +1418,6 @@ void ukv_arena_free(ukv_arena_t);
 
 /**
  * @brief Resets the transaction and deallocates the underlying memory.
- * If snapshot was created via `ukv_option_transaction_snapshot_k`, it will be released.
  * Passing NULLs is safe.
  */
 void ukv_transaction_free(ukv_transaction_t);

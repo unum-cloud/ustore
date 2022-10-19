@@ -134,6 +134,7 @@ typedef struct ukv_docs_write_t {
 
     ukv_size_t tasks_count = 1;
     ukv_doc_field_type_t type = ukv_doc_field_default_k;
+    ukv_doc_modification_t modification = ukv_doc_modify_upsert_k;
 
     ukv_collection_t const* collections = NULL;
     ukv_size_t collections_stride = 0;
@@ -246,6 +247,7 @@ typedef struct ukv_docs_gist_t {
     /// @{
 
     ukv_size_t docs_count = 1;
+
     ukv_collection_t const* collections = NULL;
     ukv_size_t collections_stride = 0;
 
