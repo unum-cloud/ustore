@@ -335,9 +335,9 @@ static void docs_sample_table(bm::State& state) {
 
 /**
  * @brief Two-step benchmark, that samples documents and constructs a graph between:
- * > Tweets and their Authors.
- * > Tweets and their Retweets.
- * > Authors and Retweeters labeled by Retweet IDs.
+ * - Tweets and their Authors.
+ * - Tweets and their Retweets.
+ * - Authors and Retweeters labeled by Retweet IDs.
  *
  * Evaluates:
  * 1. Speed of documents Batch-Selections.

@@ -2,6 +2,8 @@
  * @file paths.h
  * @author Ashot Vardanian
  * @date 23 Sep 2022
+ * @addtogroup C
+ *
  * @brief C bindings for paths ~ variable length string keys collections.
  *
  * It is a bad practice to use strings as key, but if your application depends

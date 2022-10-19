@@ -133,7 +133,7 @@ class EmptyResultStream : public arf::ResultStream {
 
 /**
  * @brief Wraps a single scalar into a Arrow-compatible `ResultStream`.
- * @section Critique
+ * ## Critique
  * This function marks the pinnacle of ugliness of most modern C++ interfaces.
  * Wrapping an `int` causes 2x `unique_ptr` and a `shared_ptr` allocation!
  */
@@ -205,7 +205,7 @@ struct session_id_hash_t {
 };
 
 /**
- * @section Critique
+ * ## Critique
  * Using `shared_ptr`s inside is not the best design decision,
  * but it boils down to having a good LRU-cache implementation
  * with copy-less lookup possibilities. Neither Boost, nor other
@@ -483,17 +483,17 @@ ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) n
  * Document and Graph logic to work properly with most of encoding/decoding
  * shifted to client side.
  *
- * @section Endpoints
+ * ## Endpoints
  *
- * > write?col=x&txn=y&lengths&watch&shared (DoPut)
- * > read?col=x&txn=y&flush (DoExchange)
- * > collection_upsert?col=x (DoAction): Returns collection ID
+ * - write?col=x&txn=y&lengths&watch&shared (DoPut)
+ * - read?col=x&txn=y&flush (DoExchange)
+ * - collection_upsert?col=x (DoAction): Returns collection ID
  *   Payload buffer: Collection opening config.
- * > collection_remove?col=x (DoAction): Drops a collection
- * > txn_begin?txn=y (DoAction): Starts a transaction with a potentially custom ID
- * > txn_commit?txn=y (DoAction): Commits a transaction with a given ID
+ * - collection_remove?col=x (DoAction): Drops a collection
+ * - txn_begin?txn=y (DoAction): Starts a transaction with a potentially custom ID
+ * - txn_commit?txn=y (DoAction): Commits a transaction with a given ID
  *
- * @section Concurrency
+ * ## Concurrency
  *
  * Flight RPC allows concurrent calls from the same client.
  * In our implementation things are trickier, as transactions are not thread-safe.

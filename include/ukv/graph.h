@@ -2,6 +2,7 @@
  * @file graph.h
  * @author Ashot Vardanian
  * @date 27 Jun 2022
+ * @addtogroup C
  *
  * @brief C bindings Graph/Network collections.
  *

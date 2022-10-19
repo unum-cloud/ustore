@@ -5,10 +5,11 @@
  * @brief Embedded In-Memory Key-Value Store implementation using only @b STL.
  * This is not the fastest, not the smartest possible solution for @b ACID KVS,
  * but is a good reference design for educational purposes.
+ *
  * Deficiencies:
- * > Global Lock.
- * > No support for range queries.
- * > Keeps watch of all the deleted keys throughout the history.
+ * - Global Lock.
+ * - No support for range queries.
+ * - Keeps watch of all the deleted keys throughout the history.
  */
 
 #include <string_view>

@@ -3,13 +3,13 @@
  * @author Ashot Vardanian
  *
  * @brief Graph implementation using fast integer compression.
- * Sits on top of any @see "ukv.h"-compatible system.
+ * Sits on top of any see "ukv.h"-compatible system.
  *
  * For every vertex this implementation stores:
- * * inbound degree
- * * output degree
- * * inbound neighborships: neighbor ID + edge ID
- * * outbound neighborships: neighbor ID + edge ID
+ * - inbound degree
+ * - output degree
+ * - inbound neighborships: neighbor ID + edge ID
+ * - outbound neighborships: neighbor ID + edge ID
  */
 
 #include <numeric>  // `std::accumulate`
