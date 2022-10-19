@@ -2,7 +2,7 @@
  * @file paths.h
  * @author Ashot Vardanian
  * @date 23 Sep 2022
- * @ingroup C
+ * @addtogroup C
  *
  * @brief C bindings for paths ~ variable length string keys collections.
  *

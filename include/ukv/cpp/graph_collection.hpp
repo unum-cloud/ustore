@@ -2,7 +2,7 @@
  * @file graph_collection.hpp
  * @author Ashot Vardanian
  * @date 30 Jun 2022
- * @ingroup Cpp
+ * @addtogroup Cpp
  *
  * @brief C++ bindings for "ukv/graph.h".
  */

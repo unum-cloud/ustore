@@ -2,7 +2,7 @@
  * @file db.h
  * @author Ashot Vardanian
  * @date 12 Jun 2022
- * @ingroup C
+ * @addtogroup C
  *
  * @brief C bindings for Key-Value Stores and binary collections.
  *

@@ -2,7 +2,7 @@
  * @file table_ref.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
- * @ingroup Cpp
+ * @addtogroup Cpp
  *
  * @brief C++ bindings for "ukv/docs.h".
  *

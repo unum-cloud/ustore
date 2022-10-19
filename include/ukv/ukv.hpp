@@ -2,7 +2,7 @@
  * @file ukv.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @ingroup Cpp
+ * @addtogroup Cpp
  *
  * @brief C++ bindings for any "ukv.h" implementation, providing:
  * - @b RAII controls for non-trivial & potentially heavy objects.

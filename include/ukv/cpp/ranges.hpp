@@ -2,7 +2,7 @@
  * @file ranges.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
- * @ingroup Cpp
+ * @addtogroup Cpp
  *
  * @brief Smart Pointers, Monads and Range-like templates for C++ bindings.
  *
