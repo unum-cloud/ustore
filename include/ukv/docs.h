@@ -347,7 +347,7 @@ typedef struct ukv_docs_gather_t {
     ukv_size_t fields_stride = 0;
 
     ukv_doc_field_type_t const* types = NULL;
-    ukv_size_t const types_stride = 0;
+    ukv_size_t types_stride = 0;
 
     /// @}
     /// @name Outputs
