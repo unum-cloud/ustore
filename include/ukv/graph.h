@@ -3,7 +3,7 @@
  * @author Ashot Vardanian
  * @date 27 Jun 2022
  *
- * @brief C bindings collections of relations.
+ * @brief C bindings Graph/Network collections.
  *
  * It essentially extends "ukv.h", to store @b Graphs.
  * Unlike raw values and docs collections, this is an index
@@ -29,16 +29,18 @@
  * It's impossible to foresee every higher-level usage pattern, so certain
  * things are left for users to decide. Generally, if you would have graphs
  * with a lot of metadata, one could structure them as a set of following collections:
- *      * objs.docs
- *      * objs.graph
+ *  - objs.docs
+ *  - objs.graph
+ *
  * Or if it's a bipartite graph of `person_t` and `movie_t`, like in
  * recommendation systems, one could imagine:
- *      * people.docs
- *      * movies.docs
- *      * people->movies.digraph
+ *  - people.docs
+ *  - movies.docs
+ *  - people->movies.digraph
+ *
  * Which means that in every edge the first ID will be a person and target
  * will be a movie. If you want to keep edge directed in an opposite way, add:
- *      * movies->people.digraph
+ *  - movies->people.digraph
  *
  * ## Hyper-Graphs
  *
@@ -97,7 +99,7 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
  * to minimize memory copies and colocate the relevant data in the
  * global address space.
  *
- * Every edge will be represented by three @c `ukv_key_t`s:
+ * Every edge will be represented by @b three `ukv_key_t`s:
  * source, target and edge IDs respectively. It's not very
  * space-efficient, but will simplify the iteration over the
  * data in higher-level functions.
@@ -109,18 +111,18 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
  *
  * When only source or target roles are requested, a subsequence of edges
  * related to the same input vertex ID will be sorted by the neighbor ID.
- * When both are requested, first outgoing edges will arrive, sorted by targets.
- * Then the incoming edges, sorted by the source.
+ * When both are requested:
+ *
+ * - First outgoing edges will arrive, sorted by targets.
+ * - Then the incoming edges, sorted by the source.
  *
  * ## Checking Entity Existence
  *
  * To check if a node or edge is present - a simpler query is possible.
- * The `ukv_read(..., ukv_option_read_lengths_k...)` call will retrieve
- * the length of the entry and if a node is present, it will never be equal
- * to `ukv_vertex_degree_missing_k`. For edges, you will have to check the
+ * The `ukv_read` on these same `collections` will return the presence
+ * indicators for verticies. For edges, you will have to check the
  * collection that stores the metadata of the edges.
  */
-
 typedef struct ukv_graph_find_edges_t {
 
     /// @name Context
@@ -141,8 +143,8 @@ typedef struct ukv_graph_find_edges_t {
     /// @name Inputs
     /// @{
 
-    ukv_size_t const tasks_count = 1;
-    
+    ukv_size_t tasks_count = 1;
+
     ukv_collection_t const* collections = NULL;
     ukv_size_t collections_stride = 0;
 
@@ -175,7 +177,7 @@ void ukv_graph_find_edges(ukv_graph_find_edges_t*);
  * @brief Inserts edges between provided vertices.
  * @see `ukv_graph_upsert_edges`.
  */
-typedef struct ukv_graph_upsert_edges_t { 
+typedef struct ukv_graph_upsert_edges_t {
 
     /// @name Context
     /// @{
@@ -188,13 +190,13 @@ typedef struct ukv_graph_upsert_edges_t {
     ukv_transaction_t transaction = NULL;
     /** @brief Reusable memory handle. */
     ukv_arena_t* arena = NULL;
-    /** @brief Read options. @see `ukv_read_t`. */
+    /** @brief Read and Write options. @see `ukv_read_t`, `ukv_write_t`. */
     ukv_options_t options = ukv_options_default_k;
 
     /// @}
     /// @name Inputs
     /// @{
-    ukv_size_t const tasks_count = 1;
+    ukv_size_t tasks_count = 1;
 
     ukv_collection_t const* collections = NULL;
     ukv_size_t collections_stride = 0;
@@ -235,14 +237,14 @@ typedef struct ukv_graph_remove_edges_t { //
     ukv_transaction_t transaction = NULL;
     /** @brief Reusable memory handle. */
     ukv_arena_t* arena = NULL;
-    /** @brief Read options. @see `ukv_read_t`. */
+    /** @brief Read and Write options. @see `ukv_read_t`, `ukv_write_t`. */
     ukv_options_t options = ukv_options_default_k;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t const tasks_count = 1;
+    ukv_size_t tasks_count = 1;
 
     ukv_collection_t const* collections = NULL;
     ukv_size_t collections_stride = 0;
@@ -283,14 +285,14 @@ typedef struct ukv_graph_remove_vertices_t { //
     ukv_transaction_t transaction = NULL;
     /** @brief Reusable memory handle. */
     ukv_arena_t* arena = NULL;
-    /** @brief Read options. @see `ukv_read_t`. */
+    /** @brief Read and Write options. @see `ukv_read_t`, `ukv_write_t`. */
     ukv_options_t options = ukv_options_default_k;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t const tasks_count = 1;
+    ukv_size_t tasks_count = 1;
 
     ukv_collection_t const* collections = NULL;
     ukv_size_t collections_stride = 0;
