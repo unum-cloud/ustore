@@ -2,7 +2,7 @@
  * @file db.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @ingroup Cpp
+ * @addtogroup Cpp
  *
  * @brief C++ bindings for "ukv/db.h".
  */

@@ -2,7 +2,7 @@
  * @file ukv.h
  * @author Ashot Vardanian
  * @date 12 Jun 2022
- * @ingroup C
+ * @addtogroup C
  *
  * @brief C bindings for Universal Key-Value Stores, that provide:
  * - @b ABI stability for the essential CRUD operations,

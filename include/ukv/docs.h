@@ -2,7 +2,7 @@
  * @file docs.h
  * @author Ashot Vardanian
  * @date 27 Jun 2022
- * @ingroup C
+ * @addtogroup C
  *
  * @brief C bindings for collections of JSON-like @b Documents.
  *
