@@ -647,8 +647,7 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = **reinterpret_cast<rocks_txn_t**>(c.transaction);
     rocksdb::OptimisticTransactionOptions txn_options;
-    if (c.options & ukv_option_transaction_snapshot_k)
-        txn_options.set_snapshot = true;
+    txn_options.set_snapshot = !(c.options & ukv_option_transaction_dont_watch_k);
     rocksdb::WriteOptions options;
     options.sync = safe;
     options.disableWAL = !safe;

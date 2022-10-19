@@ -447,7 +447,6 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.collection_drop_mode = param_value(params, kParamDropMode);
     result.read_part = param_value(params, kParamReadPart);
 
-    result.opt_snapshot = param_value(params, kParamFlagSnapshotTxn);
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
     result.opt_dont_watch = param_value(params, kParamFlagDontWatch);
     result.opt_shared_memory = param_value(params, kParamFlagSharedMemRead);
@@ -459,8 +458,6 @@ ukv_options_t ukv_options(session_params_t const& params) noexcept {
     ukv_options_t result = ukv_options_default_k;
     if (params.opt_dont_watch)
         result = ukv_options_t(result | ukv_option_transaction_dont_watch_k);
-    if (params.opt_snapshot)
-        result = ukv_options_t(result | ukv_option_transaction_snapshot_k);
     if (params.opt_flush)
         result = ukv_options_t(result | ukv_option_write_flush_k);
     if (params.opt_shared_memory)

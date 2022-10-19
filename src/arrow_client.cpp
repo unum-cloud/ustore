@@ -1285,8 +1285,8 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
     fmt::format_to(std::back_inserter(action.type), "{}?", kFlightTxnBegin);
     if (txn_id != 0)
         fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, txn_id);
-    if (c.options & ukv_option_transaction_snapshot_k)
-        fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
+    if (c.options & ukv_option_transaction_dont_watch_k)
+        fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagDontWatch);
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
     {
