@@ -38,7 +38,7 @@ jobs:
         uses: actions/upload-pages-artifact@v1
         with:
           # Upload entire repository
-          path: 'doxygen_docs/html/'
+          path: './doxygen_docs/html/'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1
