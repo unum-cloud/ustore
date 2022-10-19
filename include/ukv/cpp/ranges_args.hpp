@@ -2,6 +2,7 @@
  * @file ranges_args.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
+ * @ingroup Cpp
  *
  * @brief Range-like argument resolvers for UKV.
  */

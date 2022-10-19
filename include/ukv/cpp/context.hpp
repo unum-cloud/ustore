@@ -2,7 +2,9 @@
  * @file bins_collections.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings for @see "ukv/db.h".
+ * @ingroup Cpp
+ *
+ * @brief C++ bindings for "ukv/db.h".
  */
 
 #pragma once

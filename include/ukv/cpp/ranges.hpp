@@ -2,13 +2,15 @@
  * @file ranges.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
+ * @ingroup Cpp
  *
  * @brief Smart Pointers, Monads and Range-like templates for C++ bindings.
- * > "Strided": defines the number of bytes to jump until next entry, instead of `sizeof`.
- * > "Joined": Indexes variable-length objects using just base pointer and N+1 offsets,
- *      assuming the next entry starts right after the previous one without gaps.
- * > "Embedded": Extends "Joined" ranges to objects with lengths.
- *      In that case order of elements is irrelevant and we need just N offsets & lengths.
+ *
+ * - "Strided": defines the number of bytes to jump until next entry, instead of `sizeof`.
+ * - "Joined": Indexes variable-length objects using just base pointer and N+1 offsets,
+ *   assuming the next entry starts right after the previous one without gaps.
+ * - "Embedded": Extends "Joined" ranges to objects with lengths.
+ *   In that case order of elements is irrelevant and we need just N offsets & lengths.
  */
 
 #pragma once

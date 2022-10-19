@@ -14,18 +14,18 @@ namespace unum::ukv::pyb {
 
 /**
  * May view:
- * > NumPy (strided) column of `ukv_key_t` scalars.
- * > Apache Arrow array of `ukv_key_t` scalars.
- * > Apache Arrow table with "keys" column of `ukv_key_t` scalars
+ * - NumPy (strided) column of `ukv_key_t` scalars.
+ * - Apache Arrow array of `ukv_key_t` scalars.
+ * - Apache Arrow table with "keys" column of `ukv_key_t` scalars
  *   and, optionally, "collections" column of IDs.
- * > Buffer-protocol 1D implementation with `ukv_key_t` scalars.
+ * - Buffer-protocol 1D implementation with `ukv_key_t` scalars.
  *
  * May be copied from:
- * > list of any integer-convertible PyObjects.
- * > tuple of any integer-convertible PyObjects.
- * > iterable of any integer-convertible PyObjects.
- * > NumPy column of alternative integral type.
- * > Apache Arrow array of alternative integral type.
+ * - list of any integer-convertible PyObjects.
+ * - tuple of any integer-convertible PyObjects.
+ * - iterable of any integer-convertible PyObjects.
+ * - NumPy column of alternative integral type.
+ * - Apache Arrow array of alternative integral type.
  *
  * No support for nested fields just yet.
  */
@@ -179,15 +179,15 @@ struct parsed_places_t {
 
 /**
  * May view:
- * > Apache Arrow array of binary or UTF8 strings.
- * > Apache Arrow table with "vals" column of binary or UTF8 strings.
+ * - Apache Arrow array of binary or UTF8 strings.
+ * - Apache Arrow table with "vals" column of binary or UTF8 strings.
  *
  * May allocate an array of `value_view_t` to reference:
- * > list of `bytes`-like PyObjects.
- * > tuple of `bytes`-like PyObjects.
- * > iterable of `bytes`-like PyObjects.
- * > Apache Arrow array of any objects.
- * > Apache Arrow array with "vals" column of any objects.
+ * - list of `bytes`-like PyObjects.
+ * - tuple of `bytes`-like PyObjects.
+ * - iterable of `bytes`-like PyObjects.
+ * - Apache Arrow array of any objects.
+ * - Apache Arrow array with "vals" column of any objects.
  */
 struct parsed_contents_t {
     using viewed_t = contents_arg_t;
@@ -261,14 +261,14 @@ struct parsed_contents_t {
 
 /**
  * May view:
- * > NumPy (strided) column of `ukv_key_t` scalars.
- * > 3x Apache Arrow array of `ukv_key_t` scalars.
- * > Apache Arrow table with "source", "target", (optional) "edge" `ukv_key_t` columns.
- * > Buffer-protocol 2D implementation with 3x columns of `ukv_key_t` scalars.
+ * - NumPy (strided) column of `ukv_key_t` scalars.
+ * - 3x Apache Arrow array of `ukv_key_t` scalars.
+ * - Apache Arrow table with "source", "target", (optional) "edge" `ukv_key_t` columns.
+ * - Buffer-protocol 2D implementation with 3x columns of `ukv_key_t` scalars.
  *
  * May be copied from:
- * > list/tuple of lists/tuples of any integer-convertible PyObjects.
- * > iterable of lists/tuples of any integer-convertible PyObjects.
+ * - list/tuple of lists/tuples of any integer-convertible PyObjects.
+ * - iterable of lists/tuples of any integer-convertible PyObjects.
  *
  * No support for nested fields just yet.
  */

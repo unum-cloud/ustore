@@ -2,7 +2,9 @@
  * @file db.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings for @see "ukv/db.h".
+ * @ingroup Cpp
+ *
+ * @brief C++ bindings for "ukv/db.h".
  */
 
 #pragma once
@@ -28,14 +30,15 @@ struct collections_list_t {
  * May be used not only as a consistency warrant, but also a performance
  * optimization, as batched writes will be stored in a DB-optimal way
  * until being commited, which reduces the preprocessing overhead for DB.
- * For details, @see ACID: https://en.wikipedia.org/wiki/ACID
  *
- * @section Class Specs
- * > Concurrency: Thread-safe, for @b unique arenas.
+ * @see ACID: https://en.wikipedia.org/wiki/ACID
+ *
+ * ## Class Specs
+ * - Concurrency: Thread-safe, for @b unique arenas.
  *   For details, @see `bins_ref_gt` @section "Memory Management"
- * > Lifetime: Doesn't commit on destruction. @see `txn_guard_t`.
- * > Copyable: No.
- * > Exceptions: Never.
+ * - Lifetime: Doesn't commit on destruction. @see `txn_guard_t`.
+ * - Copyable: No.
+ * - Exceptions: Never.
  */
 class context_t : public std::enable_shared_from_this<context_t> {
   protected:
@@ -233,11 +236,11 @@ using transaction_t = context_t;
  * essentially a transactional @b `map<string,map<id,string>>`.
  * Or in Python terms: @b `dict[str,dict[int,str]]`.
  *
- * @section Class Specs
- * > Concurrency: @b Thread-Safe, except for `open`, `close`.
- * > Lifetime: @b Must live longer then last collection referencing it.
- * > Copyable: No.
- * > Exceptions: Never.
+ * ## Class Specs
+ * - Concurrency: @b Thread-Safe, except for `open`, `close`.
+ * - Lifetime: @b Must live longer then last collection referencing it.
+ * - Copyable: No.
+ * - Exceptions: Never.
  */
 class database_t : public std::enable_shared_from_this<database_t> {
     ukv_database_t db_ = nullptr;

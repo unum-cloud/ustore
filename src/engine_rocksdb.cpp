@@ -9,7 +9,7 @@
  * choice for various Relational Database, built on top of it.
  * Examples: Yugabyte, TiDB, and, optionally: Mongo, MySQL, Cassandra, MariaDB.
  *
- * @section @b `PlainTable` vs `BlockBasedTable` Format
+ * ## @b `PlainTable` vs `BlockBasedTable` Format
  * We use fixed-length integer keys, which are natively supported by `PlainTable`.
  * It, however, doesn't support @b non-prefix-based-`Seek()` in scans.
  * Moreover, not being the default variant, its significantly less optimized,

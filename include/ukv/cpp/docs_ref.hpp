@@ -2,7 +2,9 @@
  * @file bins_ref.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings for @see "ukv/db.h".
+ * @ingroup Cpp
+ *
+ * @brief C++ bindings for "ukv/db.h".
  */
 
 #pragma once
@@ -22,29 +24,31 @@ class docs_ref_gt;
  * with `[]` and assignment operators for a batch of keys
  * and @b sub-keys/fields across different documents.
  * Following assignment combinations are possible:
- * > one value to many keys
- * > many values to many keys
- * > one value to one key
+ * - one value to many keys
+ * - many values to many keys
+ * - one value to one key
  * The only impossible combination is assigning many values to one key.
  *
  * @tparam locations_at Type describing the address of a value in DBMS.
- * > (ukv_collection_t?, ukv_key_t, ukv_field_t?): Single KV-pair location.
- * > (ukv_collection_t*, ukv_key_t*, ukv_field_t*): Externally owned range of keys.
- * > (ukv_collection_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
+ * - (ukv_collection_t?, ukv_key_t, ukv_field_t?): Single KV-pair location.
+ * - (ukv_collection_t*, ukv_key_t*, ukv_field_t*): Externally owned range of keys.
+ * - (ukv_collection_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
  *
- * @section Memory Management
+ * ## Memory Management
+ *
  * Every "container" that overloads the @b [] operator has an internal "arena",
  * that is shared between all the `docs_ref_gt`s produced from it. That will
  * work great, unless:
- * > multiple threads are working with same collection handle or transaction.
- * > reading responses interleaves with new requests, which gobbles temporary memory.
+ * - multiple threads are working with same collection handle or transaction.
+ * - reading responses interleaves with new requests, which gobbles temporary memory.
  * For those cases, you can create a separate `arena_t` and pass it to `.on(...)`
  * member function. In such HPC environments we would recommend to @b reuse one such
  * are on every thread.
  *
- * @section Class Specs
- * > Copyable: Yes.
- * > Exceptions: Never.
+ * ## Class Specs
+ *
+ * - Copyable: Yes.
+ * - Exceptions: Never.
  */
 template <typename locations_at>
 class docs_ref_gt {

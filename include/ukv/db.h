@@ -2,6 +2,8 @@
  * @file db.h
  * @author Ashot Vardanian
  * @date 12 Jun 2022
+ * @ingroup C
+ *
  * @brief C bindings for Key-Value Stores and binary collections.
  *
  * ## Usage Recommendations
@@ -17,8 +19,7 @@
  *
  * In the underlying layer, using offsets to adds no additional overhead,
  * but what is the point of using them, if we can immediately pass adjusted
- * pointers?
- * It serves two primary purposes:
+ * pointers? It serves two primary purposes:
  *
  * - Supporting input tapes (values_stride = 0, offsets_stride != 0).
  * - List-oriented wrappers (values_stride != 0, offsets_stride = 0).
