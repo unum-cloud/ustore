@@ -32,7 +32,6 @@
 	"remoteUser": "vscode",
 	"features": {
 		"git": "os-provided",
-		"git-lfs": "latest",
-		"python": "latest"
+		"git-lfs": "latest"
 	}
 }
