@@ -12,7 +12,7 @@
  * batch-level performance with singular operations is impossible. Especially, with
  * a client-server setup. Regardless of IO layer, a lot of synchronization and locks
  * must be issued to provide consistency.
- * 
+ *
  * ## Why use offsets?
  *
  * In the underlying layer, using offsets to adds no additional overhead,
@@ -73,7 +73,7 @@ extern "C" {
  * ## Concurrency
  *
  * In embedded setup this handle manages the lifetime of the database.
- * In that case user must guarantee, that concurrent processes won't be 
+ * In that case user must guarantee, that concurrent processes won't be
  * opening the same database (generally same directory).
  *
  * In standalone "client-server" setup, manages the lifetime of the "client".
@@ -129,16 +129,31 @@ typedef void* ukv_database_t;
  * Consistency is implemented in the strictest possible form - ["Strict Serializability"][ss]
  * meaning that:
  * - reads are ["Serializable"][s],
- * - writes are ["Linearizable"][l]. 
+ * - writes are ["Linearizable"][l].
  * The default behaviour, however, can be tweaked at the level of specific operations.
  * For that the `ukv_option_transaction_dont_watch_k` can be passed to `ukv_transaction_init`
- * or any transactional read/write operation, to control the consistency checks during staging.  
+ * or any transactional read/write operation, to control the consistency checks during staging.
+ *
+ *  |                               |     Reads     |     Writes    |
+ *  |:------------------------------|:-------------:|:-------------:|
+ *  | Head                          | Strict Serial | Strict Serial |
+ *  | Transactions over Snapshots   |     Serial    | Strict Serial |
+ *  | Transactions w/out Snapshots  | Strict Serial | Strict Serial |
+ *  | Transactions w/out Watches    | Strict Serial |  Sequential   |
+ *
+ * If this topic is new to you, please check out the [Jepsen.io][jepsen] blog on consistency.
  *
  * [ss]: https://jepsen.io/consistency/models/strict-serializable
  * [s]: https://jepsen.io/consistency/models/serializable
  * [l]: https://jepsen.io/consistency/models/linearizable
+ * [jepsen]: https://jepsen.io/consistency
  *
  * ### I: Isolation !
+ *
+ *  |                               |     Reads     |     Writes    |
+ *  |:------------------------------|:-------------:|:-------------:|
+ *  | Transactions over Snapshots   |       ✓       |       ✓       |
+ *  | Transactions w/out Snapshots  |       ✗       |       ✓       |
  *
  * ### D: Durability ?
  *
@@ -174,7 +189,7 @@ typedef uint64_t ukv_collection_t;
  * problem twice - for both keys and values.
  *
  * The recommended approach to dealing with string keys is:
- * 
+ *
  * 1. Choose a mechanism to generate unique integer keys (UID). Ex: monotonically increasing values.
  * 2. Use "paths" modality to build-up a persistent hash-map of strings to UIDs.
  * 3. Use those UIDs to address the rest of the data in binary, document and graph modalities.
@@ -263,13 +278,7 @@ typedef enum {
      * detection on separate parts of transactional reads and writes.
      */
     ukv_option_transaction_dont_watch_k = 1 << 2,
-    /**
-     * @brief When a transaction is started with this flag, a persistent
-     * snapshot is created. It guarantees that the global state of all the
-     * keys in the DB will be unchanged during the entire lifetime of the
-     * transaction. Will not affect the writes in any way.
-     */
-    ukv_option_transaction_snapshot_k = 1 << 3,
+
     /**
      * @brief This flag is intended for internal use.
      * When passed to `make_stl_arena`, old_arena is not released,
@@ -291,11 +300,6 @@ typedef enum {
      * following `ukv_read`. Generally used for Machine Learning applications.
      */
     ukv_option_scan_bulk_k = 0, // TODO
-    /**
-     * @brief When set, the matching scan range will be randomly sampled
-     * as close to the uniform distribution, as possible.
-     */
-    ukv_option_scan_sample_k = 0, // TODO
 
 } ukv_options_t;
 
@@ -311,7 +315,7 @@ typedef enum {
     ukv_drop_keys_vals_handle_k = 2,
 } ukv_drop_mode_t;
 
-/** 
+/**
  * @brief The handle to the default nameless collection.
  * It exists from start, doesn't have to be created and can't be fully dropped.
  * Only `ukv_drop_keys_vals_k` and `ukv_drop_vals_k` apply to it.
@@ -469,10 +473,7 @@ typedef struct ukv_write_t {
     /// @name Context
     /// @{
 
-    /**
-     * @brief Already open database instance.
-     * @see `ukv_database_init`, `ukv_database_free`.
-     */
+    /** @brief Already open database instance. */
     ukv_database_t db;
     /**
      * @brief Pointer to exported error message.
@@ -639,10 +640,7 @@ struct ukv_read_t {
     /// @name Context
     /// @{
 
-    /**
-     * @brief Already open database instance.
-     * @see `ukv_database_init`, `ukv_database_free`.
-     */
+    /** @brief Already open database instance. */
     ukv_database_t db;
     /**
      * @brief Pointer to exported error message.
@@ -654,6 +652,7 @@ struct ukv_read_t {
      * @see `ukv_transaction_init`, `ukv_transaction_commit`, `ukv_transaction_free`.
      */
     ukv_transaction_t transaction = NULL;
+    ukv_transaction_t snapshot = NULL;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free`.
@@ -795,10 +794,7 @@ typedef struct ukv_scan_t {
     /// @name Context
     /// @{
 
-    /**
-     * @brief Already open database instance.
-     * @see `ukv_database_init`, `ukv_database_free`.
-     */
+    /** @brief Already open database instance. */
     ukv_database_t db;
     /**
      * @brief Pointer to exported error message.
@@ -940,10 +936,7 @@ typedef struct ukv_sample_t {
     /// @name Context
     /// @{
 
-    /**
-     * @brief Already open database instance.
-     * @see `ukv_database_init`, `ukv_database_free`.
-     */
+    /** @brief Already open database instance. */
     ukv_database_t db;
     /**
      * @brief Pointer to exported error message.
@@ -1029,7 +1022,6 @@ typedef struct ukv_sample_t {
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
     ukv_length_t** offsets = NULL;
-
     /**
      * @brief Output number of found entries for each scan.
      *
@@ -1039,7 +1031,6 @@ typedef struct ukv_sample_t {
      * Is @b optional.
      */
     ukv_length_t** counts;
-
     /**
      * @brief Output keys tape.
      *
@@ -1068,10 +1059,7 @@ typedef struct ukv_measure_t {
     /// @name Context
     /// @{
 
-    /**
-     * @brief Already open database instance.
-     * @see `ukv_database_init`, `ukv_database_free`.
-     */
+    /** @brief Already open database instance. */
     ukv_database_t db;
     /**
      * @brief Pointer to exported error message.
@@ -1198,10 +1186,7 @@ typedef struct ukv_collection_list_t {
     /// @name Context
     /// @{
 
-    /**
-     * @brief Already open database instance.
-     * @see `ukv_database_init`, `ukv_database_free`.
-     */
+    /** @brief Already open database instance. */
     ukv_database_t db;
     /**
      * @brief Pointer to exported error message.
