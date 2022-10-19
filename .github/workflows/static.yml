@@ -33,7 +33,7 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v2
       - name: Build Documentation
-        run: apt update && apt install -y doxygen graphviz dia && doxygen doxygen_docs/awesome/main.mk
+        run: sudo apt update && sudo apt install -y doxygen graphviz dia && doxygen doxygen_docs/awesome/main.mk
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
