@@ -32,8 +32,12 @@ jobs:
         uses: actions/checkout@v3
       - name: Setup Pages
         uses: actions/configure-pages@v2
+      - name: Install Deps
+        run: sudo apt update && sudo apt install -y doxygen graphviz dia git
+      - name: Get Styles
+        run: git clone https://github.com/jothepro/doxygen-awesome-css && cd doxygen-awesome-css && git checkout v2.1.0
       - name: Build Documentation
-        run: sudo apt update && sudo apt install -y doxygen graphviz dia && doxygen doxygen_docs/awesome/main.mk
+        run: doxygen doxygen_docs/awesome/main.mk
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
