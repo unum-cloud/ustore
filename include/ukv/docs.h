@@ -51,8 +51,8 @@ extern "C" {
  * Most types mimic what's present in Apache Arrow. Others, describe
  * hierarchical documents, like JSON, BSON and MessagePack.
  *
- * For Business Intelligence and Analytics mostly the `ukv_doc_field_i64_k`
- * and `ukv_doc_field_f64_k` are used.
+ * For Business Intelligence and Analytics mostly the @ref `ukv_doc_field_i64_k`
+ * and @ref `ukv_doc_field_f64_k` are used.
  */
 typedef enum {
 
@@ -86,7 +86,7 @@ typedef enum {
 } ukv_doc_field_type_t;
 
 /**
- * @brief Kind of document modification to be applied on `ukv_docs_write`.
+ * @brief Kind of document modification to be applied on `ukv_docs_write()`.
  */
 typedef enum {
     ukv_doc_modify_upsert_k = 0,
@@ -101,13 +101,13 @@ typedef enum {
 /*********************************************************/
 
 /**
- * @brief The primary "setter" interface for (sub-)document-level data.
- * Can be seen as a generalization of `ukv_write_t` to structured values.
- * @see `ukv_docs_write`, `ukv_write_t`, `ukv_write`.
+ * @brief Main "setter" interface for (sub-)document-level data.
+ * Generalization of @c `ukv_write_t` to structured values.
+ * @see `ukv_docs_write()`, `ukv_write_t`, `ukv_write()`.
  *
  * ## Inferring Document IDs
  *
- * In other interfaces it's necessary to explicitly provide the `ukv_key_t` keys.
+ * In other interfaces it's necessary to explicitly provide the @c `ukv_key_t` keys.
  * With documents, you can skip the `keys` and pass just `fields`, which will be
  * used to dynamically extract the keys. To make it compatible with MongoDB and
  * ElasticSearch you can pass @b "_id" into `fields`.
@@ -161,16 +161,16 @@ typedef struct ukv_docs_write_t {
 } ukv_docs_write_t;
 
 /**
- * @brief The primary "setter" interface for (sub-)document-level data.
- * Can be seen as a generalization of `ukv_write_t` to structured values.
- * @see `ukv_docs_write_t`, `ukv_write_t`, `ukv_write`.
+ * @brief Main "setter" interface for (sub-)document-level data.
+ * Generalization of @c `ukv_write_t` to structured values.
+ * @see `ukv_docs_write_t`, `ukv_write_t`, `ukv_write()`.
  */
 void ukv_docs_write(ukv_docs_write_t*);
 
 /**
- * @brief The primary "getter" interface for (sub-)document-level data.
- * Can be seen as a generalization of `ukv_read_t` to structured values.
- * @see `ukv_docs_read`, `ukv_read_t`, `ukv_read`.
+ * @brief Main "getter" interface for (sub-)document-level data.
+ * Generalization of @c `ukv_read_t` to structured values.
+ * @see `ukv_docs_read()`, `ukv_read_t`, `ukv_read()`.
  */
 typedef struct ukv_docs_read_t {
 
@@ -217,15 +217,15 @@ typedef struct ukv_docs_read_t {
 } ukv_docs_read_t;
 
 /**
- * @brief The primary "getter" interface for (sub-)document-level data.
- * Can be seen as a generalization of `ukv_read_t` to structured values.
- * @see `ukv_docs_read_t`, `ukv_read_t`, `ukv_read`.
+ * @brief Main "getter" interface for (sub-)document-level data.
+ * Generalization of @c `ukv_read_t` to structured values.
+ * @see `ukv_docs_read_t`, `ukv_read_t`, `ukv_read()`.
  */
 void ukv_docs_read(ukv_docs_read_t*);
 
 /**
  * @brief Lists fields & paths present in wanted documents or entire collections.
- * @see `ukv_docs_gist`.
+ * @see `ukv_docs_gist()`.
  */
 typedef struct ukv_docs_gist_t {
 
@@ -274,9 +274,8 @@ typedef struct ukv_docs_gist_t {
 void ukv_docs_gist(ukv_docs_gist_t*);
 
 /**
- * @brief Vectorized "gather" interface, that collects, type-checks and
- * casts `N*M` values matching `M` fields from `N` docs into a @b columnar form.
- * @see `ukv_docs_gather`.
+ * @brief Gathers `N*M` values matching `M` fields from `N` docs in @b columnar form.
+ * @see `ukv_docs_gather()`.
  *
  * ## Validity Columns
  *
@@ -307,8 +306,8 @@ void ukv_docs_gist(ukv_docs_gist_t*);
  *
  * ## Strings Layout
  *
- * Texts requested with `ukv_doc_field_str_k` will be appended with a null-termination
- * character. Binary strings requested with `ukv_doc_field_bin_k` - will not.
+ * Texts requested with @ref `ukv_doc_field_str_k` will be appended with a null-termination
+ * character. Binary strings requested with @ref `ukv_doc_field_bin_k` - will not.
  * Offsets and lengths will be organized in a @b column-major layout with `docs_count`
  * entries in every column, but the contents of the joined string will be organized
  * in a @b row-major order. It will make the data easier to pass into bulk text-search

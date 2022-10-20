@@ -68,7 +68,7 @@ extern ukv_key_t ukv_default_edge_id_k;
  * @brief Every vertex can be either a source or a target in a Directed Graph.
  *
  * When working with undirected graphs, this argument is irrelevant and
- * should be set to `ukv_vertex_role_any_k`. With directed graphs, where
+ * should be set to @ref `ukv_vertex_role_any_k`. With directed graphs, where
  * source and target can belong to different collections its @b crucial
  * that members of each collection are fixed to be either only sources
  * or only edges.
@@ -92,21 +92,21 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
 
 /**
  * @brief Finds all the edges, connected to given vertices.
- * @see `ukv_graph_find_edges`.
+ * @see `ukv_graph_find_edges()`.
  *
  * ## Output Form
  *
- * Similar to `ukv_read`, this function exports a tape-like data
+ * Similar to `ukv_read()`, this function exports a tape-like data
  * to minimize memory copies and colocate the relevant data in the
  * global address space.
  *
- * Every edge will be represented by @b three `ukv_key_t`s:
+ * Every edge will be represented by @b three @c `ukv_key_t`s:
  * source, target and edge IDs respectively. It's not very
  * space-efficient, but will simplify the iteration over the
  * data in higher-level functions.
  *
  * Missing nodes will be exported with a "degree" set
- * to `ukv_vertex_degree_missing_k`.
+ * to @ref `ukv_vertex_degree_missing_k`.
  *
  * ## Output Order
  *
@@ -120,7 +120,7 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
  * ## Checking Entity Existence
  *
  * To check if a node or edge is present - a simpler query is possible.
- * The `ukv_read` on these same `collections` will return the presence
+ * The `ukv_read()` on these same `collections` will return the presence
  * indicators for verticies. For edges, you will have to check the
  * collection that stores the metadata of the edges.
  */
@@ -176,7 +176,7 @@ void ukv_graph_find_edges(ukv_graph_find_edges_t*);
 
 /**
  * @brief Inserts edges between provided vertices.
- * @see `ukv_graph_upsert_edges`.
+ * @see `ukv_graph_upsert_edges()`.
  */
 typedef struct ukv_graph_upsert_edges_t {
 
@@ -223,7 +223,7 @@ void ukv_graph_upsert_edges(ukv_graph_upsert_edges_t*);
 
 /**
  * @brief Removed edges between provided vertices.
- * @see `ukv_graph_remove_edges`.
+ * @see `ukv_graph_remove_edges()`.
  */
 typedef struct ukv_graph_remove_edges_t { //
 
@@ -271,7 +271,7 @@ void ukv_graph_remove_edges(ukv_graph_remove_edges_t*);
 
 /**
  * @brief Removes vertices and all related edges from the graph.
- * @see `ukv_graph_remove_vertices`.
+ * @see `ukv_graph_remove_vertices()`.
  */
 typedef struct ukv_graph_remove_vertices_t { //
 
