@@ -35,8 +35,8 @@ struct collections_list_t {
  *
  * ## Class Specs
  * - Concurrency: Thread-safe, for @b unique arenas.
- *   For details, @see `bins_ref_gt` @section "Memory Management"
- * - Lifetime: Doesn't commit on destruction. @see `txn_guard_t`.
+ *   For details, @see @c `bins_ref_gt` @section "Memory Management"
+ * - Lifetime: Doesn't commit on destruction. @c `txn_guard_t`.
  * - Copyable: No.
  * - Exceptions: Never.
  */
@@ -165,7 +165,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
 
     /**
      * @brief Provides a view of a single collection synchronized with the transaction.
-     * @tparam collection_at Can be a `bins_collection_t`, `docs_collection_t`, `graph_collection_t`.
+     * @tparam collection_at Can be a @c `bins_collection_t`, @c `docs_collection_t`, @c `graph_collection_t`.
      */
     template <typename collection_at = bins_collection_t>
     expected_gt<collection_at> collection(std::string_view name = {}) noexcept {

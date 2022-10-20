@@ -74,7 +74,7 @@ struct neighborhood_t {
 
     /**
      * @brief Parses the a single `value_view_t` chunk
-     * from the output of `ukv_graph_find_edges`.
+     * from the output of `ukv_graph_find_edges()`.
      */
     inline neighborhood_t(ukv_key_t center_vertex, value_view_t bytes) noexcept {
         center = center_vertex;

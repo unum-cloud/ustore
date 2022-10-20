@@ -185,7 +185,7 @@ inline ukv_octet_t* convert_lengths_into_bitmap(ukv_length_t* lengths, ukv_size_
 }
 
 /**
- * @brief Replaces "lengths" with `ukv_length_missing_k` if matching NULL indicator is set.
+ * @brief Replaces "lengths" with @ref `ukv_length_missing_k` if matching NULL indicator is set.
  */
 template <typename scalar_at>
 inline scalar_at* arrow_replace_missing_scalars(ukv_octet_t const* slots,

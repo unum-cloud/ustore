@@ -107,7 +107,7 @@ struct scan_t {
 };
 
 /**
- * @brief Arguments of `ukv_scan` aggregated into a Structure-of-Arrays.
+ * @brief Arguments of `ukv_scan()` aggregated into a Structure-of-Arrays.
  * Is used to validate various combinations of arguments, strides, NULLs, etc.
  */
 struct scans_arg_t {
