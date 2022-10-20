@@ -1,4 +1,3 @@
-
 #include <fcntl.h>    // `open` files
 #include <sys/stat.h> // `stat` to obtain file metadata
 #include <sys/mman.h> // `mmap` to read datasets faster
@@ -21,35 +20,23 @@ using namespace unum::ukv;
 using uniform_idx_t = std::uniform_int_distribution<std::size_t>;
 
 constexpr std::size_t id_str_max_length_k = 24;
-constexpr std::size_t copies_per_tweet_k = 100;
+constexpr std::size_t copies_per_tweet_k = 10;
+constexpr std::size_t tweets_per_batch_k = 10;
+
 constexpr std::size_t tweet_file_size_k = 1; // GB
+constexpr std::size_t tweets_batch_size_k = tweets_per_batch_k * copies_per_tweet_k;
 
 constexpr std::size_t primes_k[copies_per_tweet_k] = {
-    12569589282558108893ull, 10373281427301508897ull, 10008795057561858269ull, 7948791514834664467ull,
-    3838954299457218127ull,  3120785516547182557ull,  4393300032555048899ull,  7004376283452977123ull,
-    9223372036854777211ull,  14223002033854726039ull, 9223372036854777293ull,  14223002033854726067ull,
-    2400445992553322941ull,  7610199643906768511ull,  1057293803246848247ull,  2038660339199745551ull,
-    8361297840661149799ull,  5868535710016424509ull,  6027311394490700579ull,  5943660934723204943ull,
-    2094115702880657593ull,  3140666882080323017ull,  7760430618278960933ull,  6873072972236380241ull,
-    9223372036854777341ull,  14223002033854726081ull, 9223372036854777343ull,  14223002033854726111ull,
-    6795671851311995789ull,  1351473000834705907ull,  2268507068162180357ull,  5644432768880692667ull,
-    5138321953585775243ull,  9093228448182973739ull,  8361721925721877541ull,  4026045413825251741ull,
-    7656187714642488053ull,  4784429641543729987ull,  4318730088657872861ull,  6914886887575787999ull,
-    8173209983052349799ull,  5305425057627062821ull,  6087027882323524897ull,  8766152961033445163ull,
-    10418630437308180299ull, 14075865680893402591ull, 10163156291297837117ull, 18077780250763319701ull,
-    6137167220161520359ull,  5573097357874852957ull,  2177473509970310161ull,  7017271200647874559ull,
-    2605171251953385517ull,  4624197988349522207ull,  5600005528373969639ull,  3467147448838520857ull,
-    4659395790226376879ull,  3747345793616544157ull,  3571553057936507177ull,  5951561671725137389ull,
-    2512903254975431057ull,  3784831916450787899ull,  9939651098248888697ull,  3559489787587522993ull,
-    8862473820545766469ull,  1592758508155117249ull,  6562663209751260211ull,  5328603983932857451ull,
-    10086415893179756723ull, 11865224483816137289ull, 15953537372516590507ull, 12263243032781001451ull,
-    4584969444095621069ull,  3900124486756399469ull,  9024661002745317511ull,  7196994623644519289ull,
-    7658610878204970317ull,  7863158793182220391ull,  8617876949595084013ull,  7948869872106641419ull,
-    6673555355008989617ull,  9485947537665069839ull,  5143840846497713699ull,  3339354536417374873ull,
-    3953417099769745759ull,  4168758563627460947ull,  1602550336683279341ull,  3352622256776997709ull,
-    8169658195990788769ull,  8288953878290018909ull,  4673431322226133517ull,  2501537406610420733ull,
-    9223372036854777353ull,  14223002033854726163ull, 10739949005710698439ull, 15618974819613138553ull,
-    4930670520436784183ull,  1646044952356259251ull,  1276965327440183483ull,  9345165794939122411ull,
+    7610199643906768511ull,
+    5868535710016424509ull,
+    10008795057561858269ull,
+    2038660339199745551ull,
+    6873072972236380241ull,
+    8766152961033445163ull,
+    3467147448838520857ull,
+    9223372036854777211ull,
+    14223002033854726039ull,
+    12569589282558108893ull,
 };
 
 struct tweet_t {
@@ -110,6 +97,9 @@ class tweets_iterator_t {
         return *this;
     }
     tweet_t const& operator*() const noexcept { return tweets_per_path[file_idx][internal_tweet_idx]; }
+    bool operator==(tweets_iterator_t other) const noexcept {
+        return file_idx == other.file_idx && internal_tweet_idx == other.internal_tweet_idx;
+    }
 };
 
 static void docs_upsert(bm::State& state) {
@@ -119,45 +109,59 @@ static void docs_upsert(bm::State& state) {
     // Locate the portion of tweets in a disjoint array.
     std::size_t const tweets_per_thread = tweet_count / thread_count;
     std::size_t const first_tweet_idx = state.thread_index() * tweets_per_thread;
+
     tweets_iterator_t tweets_iterator {first_tweet_idx};
+    tweets_iterator_t tweets_iterator_begin {first_tweet_idx};
+    tweets_iterator_t tweets_iterator_end {first_tweet_idx + tweets_per_thread};
+
+    std::array<ukv_key_t, tweets_batch_size_k> tweets_keys;
+    std::array<ukv_length_t, tweets_batch_size_k> tweets_lengths;
+    std::array<ukv_bytes_cptr_t, tweets_batch_size_k> tweets_values;
 
     std::size_t tweets_bytes = 0;
     for (auto _ : state) {
-        // TODO: Implement another way to select the batch size. Now it's equal copies_per_tweet_k
-        // Generate multiple IDs for each tweet, to augment the dataset.
-        auto const& tweet = *tweets_iterator;
-        auto const tweet_hash = hash(tweet);
-        std::array<ukv_key_t, copies_per_tweet_k> ids_tweets;
-        for (std::size_t copy_idx = 0; copy_idx != copies_per_tweet_k; ++copy_idx)
-            ids_tweets[copy_idx] = static_cast<ukv_key_t>(tweet_hash * primes_k[copy_idx]);
+        state.PauseTiming();
+        for (std::size_t tweet_number = 0; tweet_number < tweets_per_batch_k; ++tweet_number, ++tweets_iterator) {
+            if (tweets_iterator == tweets_iterator_end)
+                tweets_iterator = tweets_iterator_begin;
+
+            auto const& tweet = *tweets_iterator;
+            auto const tweet_hash = hash(tweet);
+
+            // Generate multiple IDs for each tweet, to augment the dataset.
+            for (std::size_t copy_idx = 0; copy_idx != copies_per_tweet_k; ++copy_idx) {
+                std::size_t tweet_idx = tweet_number * copies_per_tweet_k + copy_idx;
+                tweets_keys[tweet_idx] = static_cast<ukv_key_t>(tweet_hash * primes_k[copy_idx]);
+                tweets_values[tweet_idx] = reinterpret_cast<ukv_bytes_cptr_t>(tweet.body.data());
+                tweets_lengths[tweet_idx] = static_cast<ukv_length_t>(tweet.body.size());
+            }
+            tweets_bytes += tweet.body.size();
+        }
+        state.ResumeTiming();
 
         // Finally, import the data.
-        ukv_bytes_cptr_t body = reinterpret_cast<ukv_bytes_cptr_t>(tweet.body.data());
-        ukv_length_t length = static_cast<ukv_length_t>(tweet.body.size());
-
         ukv_docs_write_t docs_write {
             .db = db,
             .error = status.member_ptr(),
             .arena = arena.member_ptr(),
-            .tasks_count = copies_per_tweet_k,
+            .tasks_count = tweets_batch_size_k,
             .type = ukv_doc_field_json_k,
             .modification = ukv_doc_modify_upsert_k,
             .collections = &collection_docs_k,
-            .keys = ids_tweets.data(),
+            .keys = tweets_keys.data(),
             .keys_stride = sizeof(ukv_key_t),
-            .lengths = &length,
-            .values = &body,
+            .lengths = tweets_lengths.data(),
+            .lengths_stride = sizeof(ukv_length_t),
+            .values = tweets_values.data(),
+            .values_stride = sizeof(ukv_bytes_cptr_t),
         };
 
         ukv_docs_write(&docs_write);
         status.throw_unhandled();
-
-        ++tweets_iterator;
-        tweets_bytes += tweet.body.size();
     }
 
-    state.counters["docs/s"] = bm::Counter(tweets_per_thread * copies_per_tweet_k, bm::Counter::kIsRate);
-    state.counters["batches/s"] = bm::Counter(tweets_per_thread, bm::Counter::kIsRate);
+    state.counters["docs/s"] = bm::Counter(tweets_per_thread * tweets_batch_size_k, bm::Counter::kIsRate);
+    state.counters["batches/s"] = bm::Counter(tweets_per_thread / tweets_per_batch_k, bm::Counter::kIsRate);
     state.counters["bytes/s"] = bm::Counter(tweets_bytes * copies_per_tweet_k, bm::Counter::kIsRate);
 }
 
@@ -174,7 +178,8 @@ void sample_tweet_id_batches(bm::State& state, callback_at callback) {
 
     std::size_t iterations = 0;
     for (auto _ : state) {
-        for (std::size_t key_idx = 0; key_idx != batch_size; ++key_idx) {
+        // state.PauseTiming();
+        for (std::size_t idx = 0; idx != batch_size; ++idx) {
             std::size_t const file_idx = choose_file(gen);
             auto const& tweets = tweets_per_path[file_idx];
             uniform_idx_t choose_tweet(0, tweets.size() - 1);
@@ -182,8 +187,9 @@ void sample_tweet_id_batches(bm::State& state, callback_at callback) {
             std::size_t const tweet_idx = choose_tweet(gen);
             auto const& tweet = tweets[tweet_idx];
             auto const tweet_hash = hash(tweet);
-            batch_keys[key_idx] = static_cast<ukv_key_t>(tweet_hash * primes_k[hash_idx]);
+            batch_keys[idx] = static_cast<ukv_key_t>(tweet_hash * primes_k[hash_idx]);
         }
+        // state.ResumeTiming();
         callback(batch_keys.data(), batch_size);
         iterations++;
     }
@@ -586,7 +592,7 @@ static void index_file(std::string_view mapped_contents, std::vector<tweet_t>& t
 int main(int argc, char** argv) {
     bm::Initialize(&argc, argv);
 
-    std::size_t db_volume = 1000; // GB
+    std::size_t db_volume = 100; // GB
     thread_count = std::thread::hardware_concurrency() / 8;
 
     // 1. Find the dataset parts
@@ -604,7 +610,7 @@ int main(int argc, char** argv) {
         sizes.push_back(dir_entry.file_size());
     }
     std::printf("- found %i files\n", static_cast<int>(paths.size()));
-    paths.resize(db_volume / (tweet_file_size_k * copies_per_tweet_k));
+    paths.resize(db_volume / (tweet_file_size_k * tweets_batch_size_k));
     std::printf("- kept only %i files\n", static_cast<int>(paths.size()));
     tweets_per_path.resize(paths.size());
     mapped_contents.resize(paths.size());
@@ -639,7 +645,7 @@ int main(int argc, char** argv) {
         tweet_count += tweets.size();
     std::printf("- indexed %zu tweets\n", static_cast<size_t>(tweet_count));
 
-// 4. Run the actual benchmarks
+    // 4. Run the actual benchmarks
 #if defined(UKV_ENGINE_IS_LEVELDB)
     db.open("/mnt/md0/Twitter/LevelDB").throw_unhandled();
 #elif defined(UKV_ENGINE_IS_ROCKSDB)
