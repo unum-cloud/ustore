@@ -475,19 +475,18 @@ struct keys_range_t {
         status_t status;
         ukv_length_t c_count = static_cast<ukv_length_t>(count);
         ukv_collection_t c_collection = members.collection();
-        ukv_scan_t scan {
+        ukv_sample_t sample {
             .db = members.db(),
             .error = status.member_ptr(),
             .transaction = members.txn(),
             .arena = arena.member_ptr(),
-            .options = ukv_option_scan_sample_k,
             .collections = &c_collection,
             .count_limits = &c_count,
             .counts = &found_counts,
             .keys = &found_keys,
         };
 
-        ukv_scan(&scan);
+        ukv_sample(&sample);
 
         if (!status)
             return std::move(status);
