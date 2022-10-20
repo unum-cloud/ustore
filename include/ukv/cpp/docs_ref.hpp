@@ -267,7 +267,7 @@ class docs_ref_gt {
 };
 
 static_assert(docs_ref_gt<ukv_key_t>::is_one_k);
-static_assert(std::is_same_v<docs_ref_gt<ukv_key_t>::value_t, value_view_t>);
+static_assert(std::is_same<docs_ref_gt<ukv_key_t>::value_t, value_view_t>());
 static_assert(docs_ref_gt<ukv_key_t>::is_one_k);
 static_assert(!docs_ref_gt<places_arg_t>::is_one_k);
 
@@ -280,9 +280,9 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t
     ukv_length_t* found_lengths = nullptr;
     ukv_bytes_ptr_t found_values = nullptr;
     ukv_octet_t* found_presences = nullptr;
-    constexpr bool wants_value = std::is_same_v<value_t, expected_at>;
-    constexpr bool wants_length = std::is_same_v<length_t, expected_at>;
-    constexpr bool wants_present = std::is_same_v<present_t, expected_at>;
+    constexpr bool wants_value = std::is_same<value_t, expected_at>();
+    constexpr bool wants_length = std::is_same<length_t, expected_at>();
+    constexpr bool wants_present = std::is_same<present_t, expected_at>();
 
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
@@ -291,25 +291,24 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t
     auto fields = keys_extractor_t {}.fields(locs);
     auto has_fields = fields && (!fields.repeats() || *fields);
 
-    ukv_docs_read_t docs_read {
-        .db = db_,
-        .error = status.member_ptr(),
-        .transaction = transaction_,
-        .arena = arena_,
-        .type = type,
-        .options = options,
-        .tasks_count = count,
-        .collections = collections.get(),
-        .collections_stride = collections.stride(),
-        .keys = keys.get(),
-        .keys_stride = keys.stride(),
-        .fields = fields.get(),
-        .fields_stride = fields.stride(),
-        .presences = wants_present ? &found_presences : nullptr,
-        .offsets = wants_value ? &found_offsets : nullptr,
-        .lengths = wants_value || wants_length ? &found_lengths : nullptr,
-        .values = wants_value ? &found_values : nullptr,
-    };
+    ukv_docs_read_t docs_read;
+    docs_read.db = db_;
+    docs_read.error = status.member_ptr();
+    docs_read.transaction = transaction_;
+    docs_read.arena = arena_;
+    docs_read.options = options;
+    docs_read.type = type;
+    docs_read.tasks_count = count;
+    docs_read.collections = collections.get();
+    docs_read.collections_stride = collections.stride();
+    docs_read.keys = keys.get();
+    docs_read.keys_stride = keys.stride();
+    docs_read.fields = fields.get();
+    docs_read.fields_stride = fields.stride();
+    docs_read.presences = wants_present ? &found_presences : nullptr;
+    docs_read.offsets = wants_value ? &found_offsets : nullptr;
+    docs_read.lengths = wants_value || wants_length ? &found_lengths : nullptr;
+    docs_read.values = wants_value ? &found_values : nullptr;
 
     ukv_docs_read(&docs_read);
 
@@ -359,28 +358,27 @@ status_t docs_ref_gt<locations_at>::any_write(contents_arg_at&& vals_ref,
     auto offsets = value_extractor_t {}.offsets(vals);
     auto lengths = value_extractor_t {}.lengths(vals);
 
-    ukv_docs_write_t docs_write {
-        .db = db_,
-        .error = status.member_ptr(),
-        .modification = modification,
-        .transaction = transaction_,
-        .arena = arena_,
-        .type = type,
-        .options = options,
-        .tasks_count = count,
-        .collections = collections.get(),
-        .collections_stride = collections.stride(),
-        .keys = keys.get(),
-        .keys_stride = keys.stride(),
-        .fields = fields.get(),
-        .fields_stride = fields.stride(),
-        .offsets = offsets.get(),
-        .offsets_stride = offsets.stride(),
-        .lengths = lengths.get(),
-        .lengths_stride = lengths.stride(),
-        .values = contents.get(),
-        .values_stride = contents.stride(),
-    };
+    ukv_docs_write_t docs_write;
+    docs_write.db = db_;
+    docs_write.error = status.member_ptr();
+    docs_write.transaction = transaction_;
+    docs_write.arena = arena_;
+    docs_write.options = options;
+    docs_write.type = type;
+    docs_write.modification = modification;
+    docs_write.tasks_count = count;
+    docs_write.collections = collections.get();
+    docs_write.collections_stride = collections.stride();
+    docs_write.keys = keys.get();
+    docs_write.keys_stride = keys.stride();
+    docs_write.fields = fields.get();
+    docs_write.fields_stride = fields.stride();
+    docs_write.offsets = offsets.get();
+    docs_write.offsets_stride = offsets.stride();
+    docs_write.lengths = lengths.get();
+    docs_write.lengths_stride = lengths.stride();
+    docs_write.values = contents.get();
+    docs_write.values_stride = contents.stride();
 
     ukv_docs_write(&docs_write);
 
@@ -401,21 +399,20 @@ expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool watch) noexcept 
     auto keys = keys_extractor_t {}.keys(locs);
     auto collections = keys_extractor_t {}.collections(locs);
 
-    ukv_docs_gist_t docs_gist {
-        .db = db_,
-        .error = status.member_ptr(),
-        .transaction = transaction_,
-        .arena = arena_,
-        .options = options,
-        .docs_count = count,
-        .collections = collections.get(),
-        .collections_stride = collections.stride(),
-        .keys = keys.get(),
-        .keys_stride = keys.stride(),
-        .fields_count = &found_count,
-        .offsets = &found_offsets,
-        .fields = &found_strings,
-    };
+    ukv_docs_gist_t docs_gist;
+    docs_gist.db = db_;
+    docs_gist.error = status.member_ptr();
+    docs_gist.transaction = transaction_;
+    docs_gist.arena = arena_;
+    docs_gist.options = options;
+    docs_gist.docs_count = count;
+    docs_gist.collections = collections.get();
+    docs_gist.collections_stride = collections.stride();
+    docs_gist.keys = keys.get();
+    docs_gist.keys_stride = keys.stride();
+    docs_gist.fields_count = &found_count;
+    docs_gist.offsets = &found_offsets;
+    docs_gist.fields = &found_strings;
 
     ukv_docs_gist(&docs_gist);
 
@@ -442,30 +439,29 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layou
         layout.types().begin().get(),
     };
 
-    ukv_docs_gather_t docs_gather {
-        .db = db_,
-        .error = status.member_ptr(),
-        .transaction = transaction_,
-        .arena = arena_,
-        .options = options,
-        .docs_count = count,
-        .fields_count = layout.fields().size(),
-        .collections = collections.get(),
-        .collections_stride = collections.stride(),
-        .keys = keys.get(),
-        .keys_stride = keys.stride(),
-        .fields = layout.fields().begin().get(),
-        .fields_stride = layout.fields().stride(),
-        .types = layout.types().begin().get(),
-        .types_stride = layout.types().stride(),
-        .columns_validities = view.member_validities(),
-        .columns_conversions = view.member_conversions(),
-        .columns_collisions = view.member_collisions(),
-        .columns_scalars = view.member_scalars(),
-        .columns_offsets = view.member_offsets(),
-        .columns_lengths = view.member_lengths(),
-        .joined_strings = view.member_tape(),
-    };
+    ukv_docs_gather_t docs_gather;
+    docs_gather.db = db_;
+    docs_gather.error = status.member_ptr();
+    docs_gather.transaction = transaction_;
+    docs_gather.arena = arena_;
+    docs_gather.options = options;
+    docs_gather.docs_count = count;
+    docs_gather.fields_count = layout.fields().size();
+    docs_gather.collections = collections.get();
+    docs_gather.collections_stride = collections.stride();
+    docs_gather.keys = keys.get();
+    docs_gather.keys_stride = keys.stride();
+    docs_gather.fields = layout.fields().begin().get();
+    docs_gather.fields_stride = layout.fields().stride();
+    docs_gather.types = layout.types().begin().get();
+    docs_gather.types_stride = layout.types().stride();
+    docs_gather.columns_validities = view.member_validities();
+    docs_gather.columns_conversions = view.member_conversions();
+    docs_gather.columns_collisions = view.member_collisions();
+    docs_gather.columns_scalars = view.member_scalars();
+    docs_gather.columns_offsets = view.member_offsets();
+    docs_gather.columns_lengths = view.member_lengths();
+    docs_gather.joined_strings = view.member_tape();
 
     ukv_docs_gather(&docs_gather);
 
