@@ -11,7 +11,7 @@ Imagine having a standardized cross-lingual interface for all your things "Data"
 * Storing binary blobs
 * Building up graphs & indexes
 * Querying structured documents
-* [ACID](https://en.wikipedia.org/wiki/ACID) transactions across tables, docs & graphs
+* [ACID](https://en.wikipedia.org/wiki/ACID) transactions across tables, docs & graphs via one API!
 * [Apache Arrow](https://arrow.apache.org/) interop and [Flight RPC](https://arrow.apache.org/docs/format/Flight.html)
 * Familiar high-level [drivers](#frontends) for tabular & graph analytics
 * Handling JSON, [BSON](https://www.mongodb.com/json-and-bson), [MsgPack](https://msgpack.org/index.html)
@@ -102,135 +102,41 @@ Currently, at Proof-of-Concept stage, we support only the essential functionalit
 * ²: Missing, to be implemented.
 * ³: Supports tabular Arrow exports.
 
-### Python
+## Modalities
 
-Current implementation relies on [PyBind11](https://github.com/pybind/pybind11).
-It's feature-rich, but not very performant, supporting:
+We came from humble beginnings.
+We just wanted to standardize binary Key-Value operations.
+Integer keys, variable length values.
+That's it.
 
-* Named Collections
-* ACID Transactions
-* Single & Batch Operations
-* Tensors support via [Buffer Protocol](https://docs.python.org/3/c-api/buffer.html)
-* [NetworkX](https://networkx.org)-like interface for Graphs
-* [Pandas](https://pandas.pydata.org)-like interface for Document collections ~~in-progress~~
+You can also think of such a KVS as a memory-allocator:
 
-Using it can be as easy as:
+* The key is a 64-bit integer, just like a pointer on most modern systems.
+* The value is the variable length block, addressed by it.
 
-```python
-import ukv.ram as ukv
-# import ukv.level as ukv
-# import ukv.rocks as ukv
-# import ukv.unum as ukv
+Once you have a good enough shared interface, it is relatively easy to build on top of it, adding support for:
 
-db = ukv.DataBase()
-db[42] = 'purpose of life'.encode()
-db['sub-collection'][0] = db[42]
-del db[42]
-assert len(db['sub-collection'][0]) == 15
-```
+* Documents, 
+* Graphs,
+* Vectors, and
+* Paths.
 
-All familiar Pythonic stuff!
+But why even bother mixing all of it in one DBMS?
 
-### Java
+There are too extremes these days: consistency and scalability, especially when working with heavily linked flexible schema data.
+The consistent camp would take a tabular/relational DBMS and add a JSON column and additional columns for every relationship they want to maintain.
+The others would take 2 different DBMS solutions - one for large collections of entries and one for the links between them, often - MongoDB and Neo4J.
+In that case, every DBMS will have a custom modality-specific scaling, sharding, and replication strategy, but synchronizing them would be impossible in mutable conditions.
+This makes it hard for the developers to choose a future-proof solution for their projects.
+By putting different modality collections in one DBMS, we allow operation-level consistency controls giving the users all the flexibility one can get.
 
-These bindings are implemented via [Java Native Interface](https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/jniTOC.html).
-This interface is more performant than Python, but is not feature complete yet.
-It mimics native `HashMap` and `Dictionary` classes, but has no support for batch operations yet.
-
-```java
-DataBase db = new DataBase("");
-db.put(42, "purpose of life".getBytes());
-assert db.get(42) == "purpose of life".getBytes() : "Big surprise";
-db.close();
-```
-
-All `get` requests cause memory allocations in Java Runtime and export data into native Java types.
-Most `set` requests will simply cast and forward values without additional copies.
-Aside from opening and closing this class is **thread-safe** for higher interop with other Java-based tools.
-
-Implementation follows the ["best practices" defined by IBM](https://developer.ibm.com/articles/j-jni/).
-
-### GoLang
-
-GoLang bindings are implemented using [cGo](https://pkg.go.dev/cmd/cgo).
-The language lacks operator and function overloads, so we can't mimic native collections.
-Instead we mimic the interfaces of most commonly used ORMs.
-
-```go
-db := DataBase{}
-db.Reconnect()
-db.Set(42, &[]byte{4, 2})
-db.Get(42)
-```
-
-Implementation-wise, GoLang variant performs `memcpy`s on essentially every call.
-As GoLang has no exceptions in the classical OOP sense, most functions return multiple values, error being the last one in each pack.
-Batch lookup operations are implemented via channels sending slices, to avoid reallocations.
-
-<details>
-<summary>JavaScript</summary>
-
-* Node.js
-* V8
-* Deno
-* [`bun:ffi`](https://twitter.com/jarredsumner/status/1521527222514774017)
-</details>
-
-<details>
-<summary>Rust</summary>
-
-Rust implementation is designed to support:
-
-* Named Collections
-* ACID Transactions
-* Single & Batch Operations
-* [Apache DataFusion](https://arrow.apache.org/datafusion/) `TableProvider` for SQL
-
-Using it should be, again, familiar, as it mimics [`std::collections`](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html):
-
-```rust
-let mut db = DataBase::new();
-if db.contains_key(&42) {
-    db.remove(&42);
-    db.insert(43, "New Meaning".to_string());
-}
-for (key, value) in &db {
-    println!("{key}: \"{value}\"");
-}
-db.clear();
-```
-</details>
-
-<details>
-<summary>RESTful API & Clients</summary>
-
-We implement a REST server using `Boost.Beast` and the underlying `Boost.Asio`, as the go-to Web-Dev libraries in C++.
-To test the REST API, `./src/run_rest.sh` and then cURL into it:
-
-```sh
-curl -X PUT \
-  -H "Accept: Application/json" \
-  -H "Content-Type: application/octet-stream" \
-  0.0.0.0/8080/one/42?col=sub \
-  -d 'purpose of life'
-
-curl -i \
-  -H "Accept: application/octet-stream" \
-  0.0.0.0/8080/one/42?col=sub
-```
-
-The [`OneAPI` specification](/openapi.yaml) documentation is in-development.
-</details>
-
-## Installation
+## Installation & Deployment
 
 * For Python: `pip install ukv`
 * For Conan: `conan install ukv`
 * For Docker image: `docker run --rm --name test_ukv -p 38709:38709 unum/ukv`
 
-## Development
-
-To build the whole project:
+To build from source:
 
 ```sh
 cmake \
@@ -241,7 +147,8 @@ cmake \
     make -j16
 ```
 
-For Flight RPC, Apache Arrow must be preinstalled.
+For Flight RPC, Apache Arrow must be pre-installed.
+
 To build language bindings:
 
 ```sh
@@ -261,6 +168,13 @@ Building Conan package, without installing it:
 ```sh
 conan create . ukv/testing --build=missing
 ```
+
+* To see a usage examples, check the [C][c-example] API and the [C++ API](cpp-example) tests.
+* To read the documentation, [check unum.cloud/ukv](https://unum.cloud/UKV).
+* To contribute to the development, [check the `src/`](https://github.com/unum-cloud/UKV/blob/main/src).
+
+[c-example]: https://github.com/unum-cloud/UKV/blob/main/tests/compilation.cpp
+[cpp-example]: https://github.com/unum-cloud/UKV/blob/main/tests/compilation.cpp
 
 ## Similar Projects
 
@@ -295,14 +209,3 @@ conan create . ukv/testing --build=missing
 * Transactions are ACI(D) by-default. [What does it mean?](ukv_transaction_t)
 * Why not use LevelDB or RocksDB interface? [](ukv.h)
 * Why not use SQL, MQL or Cypher? [](ukv.h)
-
-<details>
-<summary>Why mix Docs and Graphs in one DBMS?</summary>
-
-There are too extremes these days: consistency and scalability, especially when working with heavily linked flexible schema data.
-The consistent camp would take a tabular/relational DBMS and add a JSON column and additional columns for every relationship they want to maintain.
-The others would take 2 different DBMS solutions - one for large collections of entries and one for the links between them, often - MongoDB and Neo4J.
-In that case, every DBMS will have a custom modality-specific scaling, sharding, and replication strategy, but synchronizing them would be impossible in mutable conditions.
-This makes it hard for the developers to choose a future-proof solution for their projects.
-By putting different modality collections in one DBMS, we allow operation-level consistency controls giving the users all the flexibility one can get.
-</details>
