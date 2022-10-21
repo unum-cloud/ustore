@@ -360,10 +360,9 @@ void log_operations( //
 }
 
 template <std::size_t max_batch_size_ak>
-bool add_updated_keys( //
-    std::array<operation_t, max_batch_size_ak> const& operations,
-    std::size_t operations_count,
-    std::unordered_map<ukv_key_t, bool>& updated_keys) {
+void add_updated_keys(std::array<operation_t, max_batch_size_ak> const& operations,
+                      std::size_t operations_count,
+                      std::unordered_map<ukv_key_t, bool>& updated_keys) {
 
     for (std::size_t idx = 0; idx != operations_count; ++idx) {
         if (operations[idx].type == operation_code_t::remove_k || operations[idx].type == operation_code_t::insert_k)
