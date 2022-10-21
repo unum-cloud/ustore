@@ -414,7 +414,7 @@ void ukv_database_init(ukv_database_init_t*);
  *      ukv_write(&write);
  * ```
  *
- * Similarly, sumbitting a batch may look like:
+ * Similarly, submitting a batch may look like:
  *
  * ```c
  *      ukv_key_t keys[2] = { 42, 43 };
@@ -556,7 +556,6 @@ typedef struct ukv_write_t {
      * Is @b optional.
      */
     ukv_octet_t const* presences = NULL;
-
     /**
      * @brief The pointer to the offset (in bytes) of the first content within
      * the first chunk of @ref `values`.
@@ -575,7 +574,6 @@ typedef struct ukv_write_t {
      * Is @b optional.
      */
     ukv_size_t offsets_stride = 0;
-
     /**
      * @brief The pointer to the offset (in bytes) of the first content within
      * the first chunk of @ref `values`. Zero-length entries are allowed.
@@ -593,7 +591,6 @@ typedef struct ukv_write_t {
      * Is @b optional.
      */
     ukv_size_t lengths_stride = 0;
-
     /**
      * @brief An array of pointers to data chunks.
      * If `NULL`, will simply delete all the @ref `keys` from respective @ref `collections`.
@@ -865,7 +862,6 @@ typedef struct ukv_scan_t {
      * Is @b optional.
      */
     ukv_size_t start_keys_stride = 0;
-
     /**
      * @brief Number of consecutive entries to read in each request.
      *
@@ -897,7 +893,6 @@ typedef struct ukv_scan_t {
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
     ukv_length_t** offsets = NULL;
-
     /**
      * @brief Output number of found entries for each scan.
      *
@@ -907,7 +902,6 @@ typedef struct ukv_scan_t {
      * Is @b optional.
      */
     ukv_length_t** counts;
-
     /**
      * @brief Output keys tape.
      *
