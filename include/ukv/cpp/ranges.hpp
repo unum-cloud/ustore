@@ -531,7 +531,7 @@ using embedded_bins_t = embedded_chunks_gt<value_view_t>;
 /**
  * @brief Iterates through a predetermined number of NULL-delimited
  * strings joined one after another in continuous memory.
- * Can be used for `ukv_docs_gist` or `ukv_collection_list`.
+ * Can be used for `ukv_docs_gist()` or `ukv_collection_list()`.
  */
 class strings_tape_iterator_t {
     ukv_size_t remaining_count_ = 0;

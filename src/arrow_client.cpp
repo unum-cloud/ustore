@@ -16,7 +16,7 @@
 
 #include "ukv/db.h"
 #include "ukv/arrow.h"
-#include "ukv/cpp/types.hpp" // `ukv_doc_field`
+#include "ukv/cpp/types.hpp" // `ukv_doc_field()`
 #include "helpers/arrow.hpp"
 
 /*********************************************************/
