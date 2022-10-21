@@ -111,7 +111,7 @@ typedef void* ukv_database_t;
  * - updating users metadata in a documents collection to reference new avatar.
  * - introducing links between the user and other in a graph collection...
  * and all of the operations here either succeed or fail together. DBMS will
- * do the synchronization heavylifting, so you don't have to.
+ * do the synchronization heavy-lifting, so you don't have to.
  *
  * Properties:
  * - Thread safety: None.
@@ -948,13 +948,12 @@ typedef struct ukv_sample_t {
      */
     ukv_arena_t* arena = NULL;
     /**
-     * @brief Scan options.
+     * @brief Sampling options.
      *
      * Possible values:
-     * - @ref `ukv_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
-     * - @ref `ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
-     * - @ref `ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
-     * - @ref `ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
+     * - `ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
+     * - `ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
     ukv_options_t options = ukv_options_default_k;
 
@@ -986,7 +985,7 @@ typedef struct ukv_sample_t {
      */
     ukv_size_t collections_stride = 0;
     /**
-     * @brief Number of samples to be gatherd for each request.
+     * @brief Number of samples to be gathered for each request.
      *
      * Contains the pointer to the first of `tasks_count` starting points.
      * If multiple samples are requested, the step between them is defined by `count_limits_stride`.
@@ -1215,7 +1214,7 @@ typedef struct ukv_collection_list_t {
     ukv_collection_t** ids;
     /** @brief Offsets of separate strings in the `names` tape. */
     ukv_length_t** offsets;
-    /** @brief NULL-termainted collection names tape in same order as `ids`. */
+    /** @brief NULL-terminated collection names tape in same order as `ids`. */
     ukv_char_t** names;
     /// @}
 
