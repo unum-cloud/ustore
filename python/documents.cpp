@@ -308,8 +308,7 @@ void ukv::wrap_document(py::module& m) {
     py_docs_collection.def("__getitem__", &read_doc);
     py_docs_collection.def("__contains__", &has_doc);
 
-    py_docs_collection.def("clear",
-                           [](py_collection_gt < docs_collection_t & collection) { collection.binary.native.clear(); });
+    py_docs_collection.def("clear", [](py_collection_gt<docs_collection_t>& collection) { collection.native.clear(); });
 
     py_docs_collection.def("merge", &merge);
     py_docs_collection.def("patch", &patch);
