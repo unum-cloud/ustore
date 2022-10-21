@@ -222,8 +222,8 @@ struct string_less_t : public std::less<std::string_view> {
 struct database_t {
     /**
      * @brief Rarely-used mutex for global reorganizations, like:
-     * > Removing existing collections or adding new ones.
-     * > Listing present collections.
+     * - Removing existing collections or adding new ones.
+     * - Listing present collections.
      */
     std::shared_mutex restructuring_mutex;
 

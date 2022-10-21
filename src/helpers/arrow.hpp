@@ -64,7 +64,6 @@ inline static std::string const kParamCollectionName = "collection_name";
 inline static std::string const kParamTransactionID = "transaction_id";
 inline static std::string const kParamReadPart = "part";
 inline static std::string const kParamDropMode = "mode";
-inline static std::string const kParamFlagSnapshotTxn = "snapshot";
 inline static std::string const kParamFlagFlushWrite = "flush";
 inline static std::string const kParamFlagDontWatch = "dont_watch";
 inline static std::string const kParamFlagSharedMemRead = "shared";
@@ -186,7 +185,7 @@ inline ukv_octet_t* convert_lengths_into_bitmap(ukv_length_t* lengths, ukv_size_
 }
 
 /**
- * @brief Replaces "lengths" with `ukv_length_missing_k` if matching NULL indicator is set.
+ * @brief Replaces "lengths" with @ref `ukv_length_missing_k` if matching NULL indicator is set.
  */
 template <typename scalar_at>
 inline scalar_at* arrow_replace_missing_scalars(ukv_octet_t const* slots,

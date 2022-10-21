@@ -10,11 +10,14 @@
 namespace unum::ukv {
 
 /**
- * @brief Extension of Boosts LRU cache. Changes:
- * > Adds support for non-copyable values.
- * > Exposes eviction function.
- * > Allows popping key-value pairs.
- * > Uses `unordered_map` for faster lookups and preallocation.
+ * @brief Extension of Boosts LRU cache.
+ *
+ * Changes:
+ * - Adds support for non-copyable values.
+ * - Exposes eviction function.
+ * - Allows popping key-value pairs.
+ * - Uses `unordered_map` for faster lookups and preallocation.
+ *
  * https://www.boost.org/doc/libs/1_67_0/boost/compute/detail/lru_cache.hpp
  */
 template <typename key_at, typename value_at>

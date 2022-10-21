@@ -2,13 +2,15 @@
  * @file table_ref.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
- * @brief C++ bindings for @see "ukv/docs.h".
+ * @addtogroup Cpp
+ *
+ * @brief C++ bindings for "ukv/docs.h".
  *
  * Most field-level operations are still accessible through normal @c `member_refs_t`.
  * This interface mostly helps with tabular and SoA <-> AoS operations involving:
- * > ukv_docs_gist(...)
- * > ukv_docs_gather_scalars(...)
- * > ukv_docs_gather_strings(...)
+ * - ::ukv_docs_gist
+ * - ::ukv_docs_gather_scalars
+ * - ::ukv_docs_gather_strings
  */
 
 #pragma once

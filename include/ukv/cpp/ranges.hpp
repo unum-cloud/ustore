@@ -2,13 +2,15 @@
  * @file ranges.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
+ * @addtogroup Cpp
  *
  * @brief Smart Pointers, Monads and Range-like templates for C++ bindings.
- * > "Strided": defines the number of bytes to jump until next entry, instead of `sizeof`.
- * > "Joined": Indexes variable-length objects using just base pointer and N+1 offsets,
- *      assuming the next entry starts right after the previous one without gaps.
- * > "Embedded": Extends "Joined" ranges to objects with lengths.
- *      In that case order of elements is irrelevant and we need just N offsets & lengths.
+ *
+ * - "Strided": defines the number of bytes to jump until next entry, instead of `sizeof`.
+ * - "Joined": Indexes variable-length objects using just base pointer and N+1 offsets,
+ *   assuming the next entry starts right after the previous one without gaps.
+ * - "Embedded": Extends "Joined" ranges to objects with lengths.
+ *   In that case order of elements is irrelevant and we need just N offsets & lengths.
  */
 
 #pragma once
@@ -529,7 +531,7 @@ using embedded_bins_t = embedded_chunks_gt<value_view_t>;
 /**
  * @brief Iterates through a predetermined number of NULL-delimited
  * strings joined one after another in continuous memory.
- * Can be used for `ukv_docs_gist` or `ukv_collection_list`.
+ * Can be used for `ukv_docs_gist()` or `ukv_collection_list()`.
  */
 class strings_tape_iterator_t {
     ukv_size_t remaining_count_ = 0;

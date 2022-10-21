@@ -335,9 +335,9 @@ static void docs_sample_table(bm::State& state) {
 
 /**
  * @brief Two-step benchmark, that samples documents and constructs a graph between:
- * > Tweets and their Authors.
- * > Tweets and their Retweets.
- * > Authors and Retweeters labeled by Retweet IDs.
+ * - Tweets and their Authors.
+ * - Tweets and their Retweets.
+ * - Authors and Retweeters labeled by Retweet IDs.
  *
  * Evaluates:
  * 1. Speed of documents Batch-Selections.
@@ -456,7 +456,7 @@ static void graph_traverse_two_hops(bm::State& state) {
             .arena = arena.member_ptr(),
             .tasks_count = count,
             .collections = &collection_graph_k,
-            .vertices_ids = ids_tweets,
+            .vertices = ids_tweets,
             .vertices_stride = sizeof(ukv_key_t),
             .roles = &role,
             .degrees_per_vertex = &degrees,
@@ -480,7 +480,7 @@ static void graph_traverse_two_hops(bm::State& state) {
             .options = ukv_option_dont_discard_memory_k,
             .tasks_count = unique_ids,
             .collections = &collection_graph_k,
-            .vertices_ids = ids_in_edges,
+            .vertices = ids_in_edges,
             .vertices_stride = sizeof(ukv_key_t),
             .roles = &role,
             .degrees_per_vertex = &degrees,
