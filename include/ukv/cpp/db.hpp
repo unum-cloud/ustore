@@ -156,9 +156,8 @@ class context_t : public std::enable_shared_from_this<context_t> {
         auto name_it = cols.names;
         auto id_it = cols.ids.begin();
         for (; id_it != cols.ids.end(); ++id_it, ++name_it) {
-            if (*name_it != name)
-                continue;
-            return ukv_collection_t(*id_it);
+            if (name.compare(*name_it) == 0)
+                return ukv_collection_t(*id_it);
         }
         return status_t {"Collection not found."};
     }
