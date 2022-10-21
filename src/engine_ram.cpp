@@ -163,7 +163,7 @@ consistent_set_status_t scan_and_watch(set_or_transaction_at& set_or_transaction
         return watch_status;
 
     while (match_idx != range_limit && !reached_end) {
-        find_status = set_or_transaction.find_next(previous, callback_pair, [&] { reached_end = true; });
+        find_status = set_or_transaction.upper_bound(previous, callback_pair, [&] { reached_end = true; });
         if (!find_status)
             return find_status;
         if (!watch_status)
@@ -188,7 +188,7 @@ consistent_set_status_t scan_full(set_or_transaction_at& set_or_transaction, cal
             reached_end = true;
         };
 
-        auto status = set_or_transaction.find_next(previous, callback_pair, callback_nothing);
+        auto status = set_or_transaction.upper_bound(previous, callback_pair, callback_nothing);
         if (reached_end)
             break;
         if (!status)
@@ -608,6 +608,59 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     offsets[scans.count] = keys_output - *c.keys;
 }
 
+void ukv_sample(ukv_sample_t* c_ptr) {
+
+    ukv_sample_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
+        return;
+
+    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    return_on_error(c.error);
+
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
+    strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
+    sample_args_t samples {collections, lens, c.tasks_count};
+
+    // validate_sample(c.transaction, samples, c.options, c.error);
+    // return_on_error(c.error);
+
+    // 1. Allocate a tape for all the values to be fetched
+    auto offsets = arena.alloc_or_dummy(samples.count + 1, c.error, c.offsets);
+    return_on_error(c.error);
+    auto counts = arena.alloc_or_dummy(samples.count, c.error, c.counts);
+    return_on_error(c.error);
+
+    auto total_keys = reduce_n(samples.limits, samples.count, 0ul);
+    auto keys_output = *c.keys = arena.alloc<ukv_key_t>(total_keys, c.error).begin();
+    return_on_error(c.error);
+
+    // 2. Fetch the data
+    for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
+        sample_arg_t sample = samples[task_idx];
+        offsets[task_idx] = keys_output - *c.keys;
+
+        ukv_length_t matched_pairs_count = 0;
+        auto found_pair = [&](pair_t const& pair) noexcept {
+            *keys_output = pair.collection_key.key;
+            ++keys_output;
+            ++matched_pairs_count;
+        };
+
+        auto previous_key = collection_key_t {sample.collection, sample.min_key};
+        // auto status = c.transaction //
+        //                   ? sample_and_watch(txn, previous_key, sample.limit, c.options, found_pair)
+        //                   : sample_and_watch(db.pairs, previous_key, sample.limit, c.options, found_pair);
+        // if (!status)
+        //     return export_error_code(status, c.error);
+
+        counts[task_idx] = matched_pairs_count;
+    }
+    offsets[samples.count] = keys_output - *c.keys;
+}
+
 void ukv_measure(ukv_measure_t* c_ptr) {
 
     ukv_measure_t& c = *c_ptr;
@@ -672,7 +725,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     std::unique_lock _ {db.restructuring_mutex};
 
     if (c.mode == ukv_drop_keys_vals_handle_k) {
-        auto status = db.pairs.erase_interval(c.id);
+        auto status = db.pairs.erase(c.id, c.id, no_op_t {});
         if (!status)
             return export_error_code(status, c.error);
 
@@ -685,12 +738,12 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     }
 
     else if (c.mode == ukv_drop_keys_vals_k) {
-        auto status = db.pairs.erase_interval(c.id);
+        auto status = db.pairs.erase(c.id, c.id, no_op_t {});
         return export_error_code(status, c.error);
     }
 
     else if (c.mode == ukv_drop_vals_k) {
-        auto status = db.pairs.find_interval(c.id, [&](pair_t& pair) {
+        auto status = db.pairs.equal_range(c.id, [&](pair_t& pair) {
             pair = pair_t {pair.collection_key, {}, nullptr};
         });
         return export_error_code(status, c.error);
