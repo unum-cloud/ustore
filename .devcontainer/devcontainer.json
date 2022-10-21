@@ -18,6 +18,7 @@
 			"extensions": [
 				"ms-vscode.cpptools",
 				"ms-vscode.cmake-tools",
+				"benjamin-simmonds.pythoncpp-debug",
 				"xaver.clang-format",
 				"mhutchie.git-graph",
 				"mutantdino.resourcemonitor"
