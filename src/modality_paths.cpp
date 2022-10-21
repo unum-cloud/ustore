@@ -6,20 +6,20 @@
  * Sits on top of any @see "ukv.h"-compatible system.
  *
  * For every string key hash we store:
- * * N: number of entries (1 if no collisions appeared)
- * * N key offsets
- * * N value lengths
- * * N concatenated keys
- * * N concatenated values
+ * - N = number of entries (1 if no collisions appeared)
+ * - N key offsets
+ * - N value lengths
+ * - N concatenated keys
+ * - N concatenated values
  *
- * @section Mirror "Directory" Entries for Nested Paths
+ * ## Mirror "Directory" Entries for Nested Paths
  *
  * Furthermore, we need to store mirror entries, that will
  * store the directory tree. In other words, for an input
  * like @b home/user/media/name we would keep:
- * > home/: @b home/user
- * > home/user/: @b home/user/media
- * > home/user/media/: @b home/user/media/name
+ * - home/: @b home/user
+ * - home/user/: @b home/user/media
+ * - home/user/media/: @b home/user/media/name
  *
  * The mirror "directory" entries can have negative IDs.
  * Their values would be structured differently.
@@ -434,9 +434,9 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
 }
 
 /**
- * > Same collection
- * > One scan request
- * > May have previous results
+ * - Same collection
+ * - One scan request
+ * - May have previous results
  */
 template <typename predicate_at>
 void scan_predicate( //

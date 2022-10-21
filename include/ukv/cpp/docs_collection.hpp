@@ -2,7 +2,9 @@
  * @file docs_collections.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings for @see "ukv/db.h".
+ * @addtogroup Cpp
+ *
+ * @brief C++ bindings for "ukv/db.h".
  */
 
 #pragma once
@@ -18,19 +20,21 @@ namespace unum::ukv {
  * Generally cheap to construct. Can address @b both collections
  * "HEAD" state, as well as some "snapshot"/"transaction" view.
  *
- * @section Class Specs
- * > Concurrency: Thread-safe, for @b unique arenas.
- *   For details, @see `docs_ref_gt` @section "Memory Management"
- * > Lifetime: @b Must live shorter then the DB it belongs to.
- * > Exceptions: Only the `size` method.
- * > Copyable: Will create a new empty arena.
+ * ## Class Specs
+ *
+ * - Concurrency: Thread-safe, for @b unique arenas.
+ *   For details, see @ref @c `docs_ref_gt` section on "Memory Management"
+ * - Lifetime: @b Must live shorter then the DB it belongs to.
+ * - Exceptions: Only the `size` method.
+ * - Copyable: Will create a new empty arena.
  *   Will remain attached to same transaction context, if any was set.
  *
- * @section types
- * types @b loosely describe the data stored in the collection
+ * ## Types
+ *
+ * Types @b loosely describe the data stored in the collection
  * and @b exactly define the communication through this exact handle.
  * Example: Same collection can accept similar types, such
- * as `ukv_type_json_k` and `ukv_type_msgpack_k`. Both will be
+ * as @ref `ukv_type_json_k` and @ref `ukv_type_msgpack_k`. Both will be
  * converted into some internal hierarchical representation
  * in "Document Collections", and can later be queried with
  * any "Document type".

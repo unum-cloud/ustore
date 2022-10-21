@@ -2,7 +2,9 @@
  * @file db.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings for @see "ukv/db.h".
+ * @addtogroup Cpp
+ *
+ * @brief C++ bindings for "ukv/db.h".
  */
 
 #pragma once
@@ -28,14 +30,15 @@ struct collections_list_t {
  * May be used not only as a consistency warrant, but also a performance
  * optimization, as batched writes will be stored in a DB-optimal way
  * until being commited, which reduces the preprocessing overhead for DB.
- * For details, @see ACID: https://en.wikipedia.org/wiki/ACID
  *
- * @section Class Specs
- * > Concurrency: Thread-safe, for @b unique arenas.
- *   For details, @see `bins_ref_gt` @section "Memory Management"
- * > Lifetime: Doesn't commit on destruction. @see `txn_guard_t`.
- * > Copyable: No.
- * > Exceptions: Never.
+ * @see ACID: https://en.wikipedia.org/wiki/ACID
+ *
+ * ## Class Specs
+ * - Concurrency: Thread-safe, for @b unique arenas.
+ *   For details, @see @c `bins_ref_gt` @section "Memory Management"
+ * - Lifetime: Doesn't commit on destruction. @c `txn_guard_t`.
+ * - Copyable: No.
+ * - Exceptions: Never.
  */
 class context_t : public std::enable_shared_from_this<context_t> {
   protected:
@@ -162,7 +165,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
 
     /**
      * @brief Provides a view of a single collection synchronized with the transaction.
-     * @tparam collection_at Can be a `bins_collection_t`, `docs_collection_t`, `graph_collection_t`.
+     * @tparam collection_at Can be a @c `bins_collection_t`, @c `docs_collection_t`, @c `graph_collection_t`.
      */
     template <typename collection_at = bins_collection_t>
     expected_gt<collection_at> collection(std::string_view name = {}) noexcept {
@@ -194,9 +197,9 @@ class context_t : public std::enable_shared_from_this<context_t> {
      *                 long-running analytical tasks with strong consistency
      *                 requirements.
      */
-    status_t reset(bool snapshot = false) noexcept {
+    status_t reset(bool snapshot = true) noexcept {
         status_t status;
-        auto options = snapshot ? ukv_option_transaction_snapshot_k : ukv_options_default_k;
+        auto options = snapshot ? ukv_options_default_k : ukv_option_transaction_dont_watch_k;
         ukv_transaction_init_t txn_init {
             .db = db_,
             .error = status.member_ptr(),
@@ -233,11 +236,11 @@ using transaction_t = context_t;
  * essentially a transactional @b `map<string,map<id,string>>`.
  * Or in Python terms: @b `dict[str,dict[int,str]]`.
  *
- * @section Class Specs
- * > Concurrency: @b Thread-Safe, except for `open`, `close`.
- * > Lifetime: @b Must live longer then last collection referencing it.
- * > Copyable: No.
- * > Exceptions: Never.
+ * ## Class Specs
+ * - Concurrency: @b Thread-Safe, except for `open`, `close`.
+ * - Lifetime: @b Must live longer then last collection referencing it.
+ * - Copyable: No.
+ * - Exceptions: Never.
  */
 class database_t : public std::enable_shared_from_this<database_t> {
     ukv_database_t db_ = nullptr;
@@ -317,13 +320,13 @@ class database_t : public std::enable_shared_from_this<database_t> {
         return status;
     }
 
-    expected_gt<context_t> transact(bool snapshot = false) noexcept {
+    expected_gt<context_t> transact(bool snapshot = true) noexcept {
         status_t status;
         ukv_transaction_t raw = nullptr;
         ukv_transaction_init_t txn_init {
             .db = db_,
             .error = status.member_ptr(),
-            .options = snapshot ? ukv_option_transaction_snapshot_k : ukv_options_default_k,
+            .options = snapshot ? ukv_options_default_k : ukv_option_transaction_dont_watch_k,
             .transaction = &raw,
         };
 

@@ -186,11 +186,11 @@ struct py_table_collection_t : public std::enable_shared_from_this<py_table_coll
 };
 
 /**
- * @brief Proxy-object for binary `py_collection_t` collections that adds:
- * > serialization & deserialization of Python objects.
- * > field-level lookups.
- * > patching & merging: `.patch(...)` & `.merge(...)`.
- * > DataFrame exports (out of this single collection).
+ * @brief Proxy-object for binary @c `py_collection_t` collections that adds:
+ * - serialization & deserialization of Python objects.
+ * - field-level lookups.
+ * - patching & merging: `.patch(...)` & `.merge(...)`.
+ * - DataFrame exports (out of this single collection).
  */
 struct py_docs_collection_t {
     py_collection_t binary;
@@ -210,38 +210,38 @@ struct py_stream_with_ending_gt {
 /**
  * @brief Binds DBMS to Python, as if it was `dict[str, dict[int, bytes]]`.
  *
- * @section Interface
+ * ## Interface
  *
  * DataBase Methods:
- *      * main ~ Accesses the default collection
- *      * __getitem__(collection: str) ~ Accesses a named collection
- *      * clear() ~ Clears all the data from DB
- *      * transact() - Starts a new transaction (supports context managers)
+ *      - main ~ Accesses the default collection
+ *      - __getitem__(collection: str) ~ Accesses a named collection
+ *      - clear() ~ Clears all the data from DB
+ *      - transact() - Starts a new transaction (supports context managers)
  *
  * Collection Methods:
- *      * __in__(key), has_key(...) ~ Single & Batch Contains
- *      * __getitem__(key: int), get(...) ~ Value Lookup
- *      * __setitem__(key: int, value), set(...) ~ Value Upserts
- *      * __delitem__(key), pop(...) ~ Removes a key
+ *      - __in__(key), has_key(...) ~ Single & Batch Contains
+ *      - __getitem__(key: int), get(...) ~ Value Lookup
+ *      - __setitem__(key: int, value), set(...) ~ Value Upserts
+ *      - __delitem__(key), pop(...) ~ Removes a key
  * All those CRUD operations can be submitted in batches in forms of
  * Python `tuple`s, `list`s, NumPy arrays, or anything that supports buffer
  * protocol. Remaining collection methods include:
- *      * update(mapping: dict) ~ Batch Insert/Put
- *      * clear() ~ Removes all items in collection
- *      * get_column(keys) ~ Will extract/receive binary values as Apache Arrow collections
- *      * get_matrix(keys, max_length: int, padding: byte)
+ *      - update(mapping: dict) ~ Batch Insert/Put
+ *      - clear() ~ Removes all items in collection
+ *      - get_column(keys) ~ Will extract/receive binary values as Apache Arrow collections
+ *      - get_matrix(keys, max_length: int, padding: byte)
  *
  * All in all, collections mimic Python @c `dict` API, but some funcs were skipped:
- *      * __len__() ~ It's hard to consistently estimate the collection.
- *      * popitem() ~ We can't guarantee Last-In First-Out semantics.
- *      * setdefault(key[, default]) ~ As default values are useless in DBs.
+ *      - __len__() ~ It's hard to consistently estimate the collection.
+ *      - popitem() ~ We can't guarantee Last-In First-Out semantics.
+ *      - setdefault(key[, default]) ~ As default values are useless in DBs.
  * To access typed collections following computable properties are provided:
- *      * docs  ~ Unpack objects into `dict`/`list`s and supports field-level ops
- *      * table ~ Accesses Docs in a Pandas-like fashion
- *      * graph ~ Accesses relations/links in NetworkX fashion
- *      * media ~ Unpacks and converts to Tensors on lookups
+ *      - docs  ~ Unpack objects into `dict`/`list`s and supports field-level ops
+ *      - table ~ Accesses Docs in a Pandas-like fashion
+ *      - graph ~ Accesses relations/links in NetworkX fashion
+ *      - media ~ Unpacks and converts to Tensors on lookups
  *
- * @section Python classes vs Arrow Arrays
+ * ## Python classes vs Arrow Arrays
  *
  * Both kinds of arguments/results are supported with these bindings.
  * By default, we export native Python objects in single-entry operations,
@@ -254,12 +254,13 @@ void wrap_database(py::module&);
 
 /**
  * @brief Python bindings for a Graph index, that mimics NetworkX.
- * Unlike C++ `graph_collection_t` this may include as many as 4 collections
+ * Unlike C++ @c `graph_collection_t` this may include as many as 4 collections
  * seen as one heavily attributed relational index.
  * Is similar in it's purpose to a pure-Python project - NetworkXum:
  * https://github.com/unum-cloud/NetworkXum
  *
- * @section Supported Graph Types
+ * ## Supported Graph Types
+ *
  * We support all the NetworkX graph kinds and more:
  * https://networkx.org/documentation/stable/reference/classes/index.html#which-graph-class-should-i-use
  *
@@ -274,36 +275,37 @@ void wrap_database(py::module&);
  * attrs in source/target vertices or edges.
  * Beyond that, source and target vertices can belong to different collections.
  * To sum up, we differentiate following graph types:
- * > U: Undirected
- * > D: Directed
- * > J: Joining
+ * - U: Undirected
+ * - D: Directed
+ * - J: Joining
  *
  * Example for simple non-attributed undirected graphs:
- * > relations_name: ".graph"
- * > attrs_name: ""
- * > sources_name: ""
- * > targets_name: ""
+ * - relations_name: ".graph"
+ * - attrs_name: ""
+ * - sources_name: ""
+ * - targets_name: ""
  *
  * Example for recommender systems
- * > relations_name: "views.graph"
- * > attrs_name: "views.docs"
- * > sources_name: "people.docs"
- * > targets_name: "movies.docs"
+ * - relations_name: "views.graph"
+ * - attrs_name: "views.docs"
+ * - sources_name: "people.docs"
+ * - targets_name: "movies.docs"
  *
- * @section Interface
+ * ## Interface
+ *
  * Primary single element methods:
- *      * add_edge(first, second, key?, attrs?)
- *      * remove_edge(first, second, key?, attrs?)
+ *      - add_edge(first, second, key?, attrs?)
+ *      - remove_edge(first, second, key?, attrs?)
  * Additional batch methods:
- *      * add_edges_from(firsts, seconds, keys?, attrs?)
- *      * remove_edges_from(firsts, seconds, keys?, attrs?)
+ *      - add_edges_from(firsts, seconds, keys?, attrs?)
+ *      - remove_edges_from(firsts, seconds, keys?, attrs?)
  * Intentionally not implemented:
- *      * __len__() ~ It's hard to consistently estimate the collection size.
+ *      - __len__() ~ It's hard to consistently estimate the collection size.
  *
  * TODO:
- * > Implement basic algorithms: PageRank, Louvain, WCC and Force-based Layout
- * > Implement subgraph selection
- * > Implement attributes
+ * - Implement basic algorithms: PageRank, Louvain, WCC and Force-based Layout
+ * - Implement subgraph selection
+ * - Implement attributes
  */
 void wrap_networkx(py::module&);
 
@@ -311,26 +313,27 @@ void wrap_networkx(py::module&);
  * @brief Python bindings for a Document Store, that mimics Pandas.
  * Is designed to export results in the form of Apache Arrow Tables.
  *
- * @section Usage
+ * ## Usage
  *
- * > Take first 5 rows starting with ID #100:
+ * - Take first 5 rows starting with ID #100:
  *   db.main.table.astype('int32').loc[100:].head(5).df
  *   Note that contrary to usual python slices, both the start and the stop are included
- * > Take rows with IDs #100, #101:
+ * - Take rows with IDs #100, #101:
  *   db.main.table.loc[[100, 101]].astype('float').df
- * > Take specific columns from a rows range:
+ * - Take specific columns from a rows range:
  *   db.main.table.loc[100:101].astype({'age':'float', 'name':'str'}).df
  *
- * @section Interface
+ * ## Interface
+ *
  * Choosing subsample of rows:
- *      * tbl.loc[100:] ~ Starting from a certain ID
- *      * tbl.loc[[...]] ~ Specific list of IDs
- *      * tbl.head(5) ~ First rows of the table
- *      * tbl.tail(5) ~ Last rows of the table
+ *      - tbl.loc[100:] ~ Starting from a certain ID
+ *      - tbl.loc[[...]] ~ Specific list of IDs
+ *      - tbl.head(5) ~ First rows of the table
+ *      - tbl.tail(5) ~ Last rows of the table
  * Defining columns:
- *      * tbl.astype('int32') ~ All columns
- *      * tbl[names].astype('int32') ~ Specific columns
- *      * tbl.astype({'age':'float', 'name':'str'})
+ *      - tbl.astype('int32') ~ All columns
+ *      - tbl[names].astype('int32') ~ Specific columns
+ *      - tbl.astype({'age':'float', 'name':'str'})
  *
  * In worst-case scenario, the lookup will contain 3 steps:
  *      1. iteration, to collect the IDs of documents forming a range.
