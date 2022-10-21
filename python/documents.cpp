@@ -161,104 +161,138 @@ class py_docs_kvrange_t {
     }
 };
 
-static void write_one_doc(py_docs_collection_t& collection,
-                          PyObject* key_py,
-                          PyObject* val_py /*, ukv_doc_field_type_t format*/) {
-    json_t json = to_json(val_py);
+static void write_one_doc(py_collection_gt<docs_collection_t>& py_collection, PyObject* key_py, PyObject* val_py) {
+    std::string json_str;
+    to_string(val_py, json_str);
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
-    collection.binary.native[key] = json.dump().c_str();
+    py_collection.native[key].assign(json_str.c_str()).throw_unhandled();
 }
 
-static void write_many_docs(py_docs_collection_t& collection,
-                            PyObject* keys_py,
-                            PyObject* vals_py /*,
-                            ukv_doc_field_type_t format */) {
-    std::vector<ukv_key_t> keys;
-    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
-    std::vector<json_t> vals;
-    py_transform_n(vals_py, &to_json, std::back_inserter(vals));
-    if (keys.size() != vals.size())
-        throw std::invalid_argument("Keys count must match values count");
-    // TODO: Fix: This must be a single batch read operation!
-    for (size_t i = 0; i < keys.size(); ++i)
-        collection.binary.native[keys[i]] = vals[i].dump().c_str();
+struct dummy_iterator_t {
+    dummy_iterator_t operator*() { return *this; };
+    void operator++() {}
+};
+
+static void write_many_docs(py_collection_gt<docs_collection_t>& py_collection, PyObject* keys_py, PyObject* vals_py) {
+    if (!PySequence_Check(keys_py) || !PySequence_Check(vals_py))
+        throw std::invalid_argument("Keys And Vals Must Be Sequence");
+    std::size_t keys_count = PySequence_Size(keys_py);
+    if (keys_count != PySequence_Size(vals_py))
+        throw std::invalid_argument("Keys Count Must Match Values Count");
+
+    std::vector<ukv_key_t> keys(keys_count);
+    std::vector<ukv_length_t> lens(keys_count);
+    std::vector<ukv_length_t> offs(keys_count);
+    std::string jsons;
+    size_t idx = 0;
+
+    auto generate_values = [&](py::handle const& obj) {
+        offs[idx] = jsons.size();
+        to_string(obj.ptr(), jsons);
+        lens[idx] = jsons.size() - offs[idx];
+        ++idx;
+        return dummy_iterator_t {};
+    };
+
+    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, keys.begin());
+    py_transform_n(vals_py, generate_values, dummy_iterator_t {});
+
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(jsons.data());
+    contents_arg_t values {
+        .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
+        .lengths_begin = {lens.data(), sizeof(ukv_length_t)},
+        .contents_begin = {&vals_begin, 0},
+        .count = keys_count,
+    };
+
+    auto ref = py_collection.native[keys];
+    ref.assign(values).throw_unhandled();
 }
 
-static void write_same_doc(py_docs_collection_t& collection,
-                           PyObject* keys_py,
-                           PyObject* val_py /*, ukv_doc_field_type_t format*/) {
-    std::vector<ukv_key_t> keys;
-    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
-    auto json = to_json(val_py).dump();
-    // TODO: Fix: This must be a single batch write operation!
-    for (size_t i = 0; i < keys.size(); ++i)
-        collection.binary.native[keys[i]] = json.c_str();
+static void write_same_doc(py_collection_gt<docs_collection_t>& py_collection, PyObject* keys_py, PyObject* val_py) {
+    if (!PySequence_Check(keys_py))
+        throw std::invalid_argument("Keys Must Be Sequence");
+    std::vector<ukv_key_t> keys(PySequence_Size(keys_py));
+    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, keys.begin());
+    std::string json_str;
+    to_string(val_py, json_str);
+    py_collection.native[keys].assign(json_str.c_str()).throw_unhandled();
 }
 
-static void write_doc(py_docs_collection_t& collection,
-                      py::object key_py,
-                      py::object val_py /*, ukv_doc_field_type_t format*/) {
+static void write_doc(py_collection_gt<docs_collection_t>& py_collection, py::object key_py, py::object val_py) {
     auto is_single_key = PyLong_Check(key_py.ptr());
     auto func = !is_single_key ? &write_many_docs : &write_one_doc;
-    return func(collection, key_py.ptr(), val_py.ptr());
+    return func(py_collection, key_py.ptr(), val_py.ptr());
 }
 
-static void broadcast_doc(py_docs_collection_t& collection,
-                          py::object key_py,
-                          py::object val_py /*, ukv_doc_field_type_t format*/) {
-    return write_same_doc(collection, key_py.ptr(), val_py.ptr());
+static void broadcast_doc(py_collection_gt<docs_collection_t>& py_collection, py::object key_py, py::object val_py) {
+    return write_same_doc(py_collection, key_py.ptr(), val_py.ptr());
 }
 
-static py::object read_one_doc(py_docs_collection_t& collection, PyObject* key_py /*, ukv_doc_field_type_t format*/) {
+static py::object read_one_doc(py_collection_gt<docs_collection_t>& py_collection, PyObject* key_py) {
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
-    auto json = json_t::parse(collection.binary.native[key].value()->c_str());
-    return from_json(json);
+    auto value = py_collection.native[key].value();
+    return value->empty() ? py::none {} : py::reinterpret_steal<py::object>(from_json(json_t::parse(value->c_str())));
 }
 
-static py::object read_many_docs(py_docs_collection_t& collection,
-                                 PyObject* keys_py /*, ukv_doc_field_type_t format*/) {
-    std::vector<ukv_key_t> keys;
-    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, std::back_inserter(keys));
+static py::object read_many_docs(py_collection_gt<docs_collection_t>& py_collection, PyObject* keys_py) {
+    if (!PySequence_Check(keys_py))
+        throw std::invalid_argument("Keys Must Be Sequence");
+    std::vector<ukv_key_t> keys(PySequence_Size(keys_py));
+    py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, keys.begin());
     py::list values(keys.size());
-    // TODO: Fix: This must be a single batch read operation!
-    for (size_t i = 0; i < keys.size(); ++i)
-        values[i] = from_json(json_t::parse(collection.binary.native[keys[i]].value()->c_str()));
+
+    auto maybe_retrieved = py_collection.native[keys].value();
+    auto const& retrieved = maybe_retrieved.throw_or_ref();
+    auto it = retrieved.begin();
+    for (std::size_t i = 0; i != retrieved.size(); ++i) {
+        values[i] = it[i].empty() ? py::none {}
+                                  : py::reinterpret_steal<py::object>(
+                                        from_json(json_t::parse(it[i].c_str(), it[i].c_str() + it[i].size())));
+    }
     return values;
 }
 
-static py::object read_doc(py_docs_collection_t& collection, py::object key_py /*, ukv_doc_field_type_t format*/) {
+static py::object read_doc(py_collection_gt<docs_collection_t>& py_collection, py::object key_py) {
     auto is_single = PyLong_Check(key_py.ptr());
     auto func = is_single ? &read_one_doc : &read_many_docs;
-    return func(collection, key_py.ptr());
+    return func(py_collection, key_py.ptr());
 }
 
-static void remove_doc(py_docs_collection_t& collection, py::object key_py) {
+static void remove_doc(py_collection_gt<docs_collection_t>& py_collection, py::object key_py) {
     auto is_single = PyLong_Check(key_py.ptr());
-    auto func = is_single ? &write_one_binary : &write_many_binaries;
-    return func(collection.binary, key_py.ptr(), Py_None);
+    auto func = is_single ? &write_one_binary<docs_collection_t> : &write_many_binaries<docs_collection_t>;
+    return func(py_collection, key_py.ptr(), Py_None);
 }
 
-static py::object has_doc(py_docs_collection_t& collection, py::object key_py) {
-    return has_binary(collection.binary, key_py);
+static py::object has_doc(py_collection_gt<docs_collection_t>& py_collection, py::object key_py) {
+    return has_binary(py_collection, key_py);
 }
 
-static py::object scan_doc(py_docs_collection_t& collection, ukv_key_t min_key, ukv_size_t count_limit) {
-    return scan_binary(collection.binary, min_key, count_limit);
+static py::object scan_doc(py_collection_gt<docs_collection_t>& py_collection,
+                           ukv_key_t min_key,
+                           ukv_size_t count_limit) {
+    return scan_binary(py_collection, min_key, count_limit);
 }
 
-static void merge_patch(py_docs_collection_t& collection,
-                        py::object key_py,
-                        py::object val_py,
-                        ukv_doc_modification_t format) {
-    // collection.binary.native.as(format);
-    write_one_doc(collection, key_py.ptr(), val_py.ptr());
-    // collection.binary.native.as(ukv_doc_field_default_k);
+static void merge(py_collection_gt<docs_collection_t>& py_collection, py::object key_py, py::object val_py) {
+    ukv_key_t key = py_to_scalar<ukv_key_t>(key_py.ptr());
+    std::string json_str;
+    to_string(val_py.ptr(), json_str);
+    py_collection.native[key].merge(json_str.c_str());
+}
+
+static void patch(py_collection_gt<docs_collection_t>& py_collection, py::object key_py, py::object val_py) {
+    ukv_key_t key = py_to_scalar<ukv_key_t>(key_py.ptr());
+    std::string json_str;
+    to_string(val_py.ptr(), json_str);
+    py_collection.native[key].patch(json_str.c_str());
 }
 
 void ukv::wrap_document(py::module& m) {
     using py_docs_kvstream_t = py_stream_with_ending_gt<docs_pairs_stream_t>;
 
-    auto py_docs_collection = py::class_<py_docs_collection_t>(m, "DocsCollection", py::module_local());
+    auto py_docs_collection = py::class_<py_collection_gt<docs_collection_t>>(m, "DocsCollection", py::module_local());
     auto py_docs_kvrange = py::class_<py_docs_kvrange_t>(m, "DocsKVRange", py::module_local());
     auto py_docs_kvstream = py::class_<py_docs_kvstream_t>(m, "DocsKVStream", py::module_local());
 
@@ -274,31 +308,24 @@ void ukv::wrap_document(py::module& m) {
     py_docs_collection.def("__getitem__", &read_doc);
     py_docs_collection.def("__contains__", &has_doc);
 
-    py_docs_collection.def("clear", [](py_docs_collection_t& collection) {
-        py_db_t& py_db = *collection.binary.py_db_ptr.lock().get();
+    py_docs_collection.def("clear", [](py_collection_gt<docs_collection_t>& py_collection) {
+        py_db_t& py_db = *py_collection.py_db_ptr.lock().get();
         database_t& db = py_db.native;
-        db.drop(collection.binary.name.c_str()).throw_unhandled();
-        collection.binary.native = db.collection(collection.binary.name.c_str()).throw_or_release();
+        db.drop(py_collection.name.c_str()).throw_unhandled();
+        py_collection.native = db.collection<docs_collection_t>(py_collection.name.c_str()).throw_or_release();
     });
 
-    py_docs_collection.def("patch", [](py_docs_collection_t& collection, py::object key_py, py::object val_py) {
-        merge_patch(collection, key_py, val_py, ukv_doc_modify_patch_k);
-    });
+    py_docs_collection.def("merge", &merge);
+    py_docs_collection.def("patch", &patch);
 
-    py_docs_collection.def("merge", [](py_docs_collection_t& collection, py::object key_py, py::object val_py) {
-        merge_patch(collection, key_py, val_py, ukv_doc_modify_merge_k);
-    });
-
-    py_docs_collection.def_property_readonly("keys", [](py_docs_collection_t& collection) {
-        bins_range_t members(collection.binary.db(), collection.binary.txn(), *collection.binary.member_collection());
+    py_docs_collection.def_property_readonly("keys", [](py_collection_gt<docs_collection_t>& py_collection) {
+        bins_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
         keys_range_t range {members};
         return py::cast(std::make_unique<keys_range_t>(range));
     });
 
-    py_docs_collection.def_property_readonly("items", [](py_docs_collection_t& py_collection) {
-        py_docs_kvrange_t range(py_collection.binary.db(),
-                                py_collection.binary.txn(),
-                                *py_collection.binary.member_collection());
+    py_docs_collection.def_property_readonly("items", [](py_collection_gt<docs_collection_t>& py_collection) {
+        py_docs_kvrange_t range(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
         return py::cast(std::make_unique<py_docs_kvrange_t>(range));
     });
 
@@ -317,8 +344,9 @@ void ukv::wrap_document(py::module& m) {
             throw py::stop_iteration();
         kvstream.stop = kvstream.terminal == key;
         value_view_t value_view = kvstream.native.value();
-        auto json = json_t::parse(value_view.c_str());
         ++kvstream.native;
-        return py::make_tuple(key, from_json(json));
+        return py::make_tuple(key,
+                              py::reinterpret_steal<py::object>(from_json(
+                                  json_t::parse(value_view.c_str(), value_view.c_str() + value_view.size()))));
     });
 }
