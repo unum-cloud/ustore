@@ -106,43 +106,70 @@ static void docs_upsert(bm::State& state) {
     std::size_t const first_tweet_idx = state.thread_index() * tweets_per_thread;
     tweets_iterator_t tweets_iterator {first_tweet_idx};
 
+    // Define the shape of the tasks
+    std::array<ukv_key_t, copies_per_tweet_k> ids_tweets;
+    ukv_docs_write_t docs_write;
+    docs_write.db = db;
+    docs_write.error = status.member_ptr();
+    docs_write.modification = ukv_doc_modify_upsert_k;
+    docs_write.arena = arena.member_ptr();
+    docs_write.type = ukv_doc_field_json_k;
+    docs_write.tasks_count = copies_per_tweet_k;
+    docs_write.collections = &collection_docs_k;
+    docs_write.keys = ids_tweets.data();
+    docs_write.keys_stride = sizeof(ukv_key_t);
+
+    // All the upserts must be transactional
+    ukv_transaction_t transaction = nullptr;
+    ukv_transaction_init_t transaction_init;
+    transaction_init.db = db;
+    transaction_init.error = status.member_ptr();
+    transaction_init.transaction = &transaction;
+    ukv_transaction_commit_t transaction_commit;
+    transaction_commit.db = db;
+    transaction_commit.error = status.member_ptr();
+
+    // Run the benchmark
     std::size_t tweets_bytes = 0;
+    std::size_t tweets_success = 0;
+    std::size_t batches_success = 0;
     for (auto _ : state) {
-        // TODO: Implement another way to select the batch size. Now it's equal copies_per_tweet_k
+
+        // Start a new transaction
+        ukv_transaction_init(&transaction_init);
+        status.throw_unhandled();
+
         // Generate multiple IDs for each tweet, to augment the dataset.
         auto const& tweet = *tweets_iterator;
         auto const tweet_hash = hash(tweet);
-        std::array<ukv_key_t, copies_per_tweet_k> ids_tweets;
         for (std::size_t copy_idx = 0; copy_idx != copies_per_tweet_k; ++copy_idx)
             ids_tweets[copy_idx] = static_cast<ukv_key_t>(tweet_hash * primes_k[copy_idx]);
 
         // Finally, import the data.
         ukv_bytes_cptr_t body = reinterpret_cast<ukv_bytes_cptr_t>(tweet.body.data());
         ukv_length_t length = static_cast<ukv_length_t>(tweet.body.size());
-
-        ukv_docs_write_t docs_write;
-        docs_write.db = db;
-        docs_write.error = status.member_ptr();
-        docs_write.modification = ukv_doc_modify_upsert_k;
-        docs_write.arena = arena.member_ptr();
-        docs_write.type = ukv_doc_field_json_k;
-        docs_write.tasks_count = copies_per_tweet_k;
-        docs_write.collections = &collection_docs_k;
-        docs_write.keys = ids_tweets.data();
-        docs_write.keys_stride = sizeof(ukv_key_t);
         docs_write.lengths = &length;
         docs_write.values = &body;
-
+        docs_write.transaction = transaction;
         ukv_docs_write(&docs_write);
         status.throw_unhandled();
 
+        transaction_commit.transaction = transaction;
+        ukv_transaction_commit(&transaction_commit);
+        if (status) {
+            tweets_bytes += tweet.body.size() * copies_per_tweet_k;
+            tweets_success += copies_per_tweet_k;
+            batches_success += 1;
+        }
+        else
+            status.release_exception();
+
         ++tweets_iterator;
-        tweets_bytes += tweet.body.size();
     }
 
-    state.counters["docs/s"] = bm::Counter(tweets_per_thread * copies_per_tweet_k, bm::Counter::kIsRate);
-    state.counters["batches/s"] = bm::Counter(tweets_per_thread, bm::Counter::kIsRate);
-    state.counters["bytes/s"] = bm::Counter(tweets_bytes * copies_per_tweet_k, bm::Counter::kIsRate);
+    state.counters["docs/s"] = bm::Counter(tweets_success, bm::Counter::kIsRate);
+    state.counters["batches/s"] = bm::Counter(batches_success, bm::Counter::kIsRate);
+    state.counters["bytes/s"] = bm::Counter(tweets_bytes, bm::Counter::kIsRate);
 }
 
 template <typename callback_at>

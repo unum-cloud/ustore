@@ -76,7 +76,7 @@
         },
         {
             "label": "Build Native: Debug Twitter STL Benchmark",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=1 . && make ukv_stl_twitter_benchmark",
+            "command": "cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUKV_BUILD_BENCHMARKS=1 . && make ukv_stl_twitter_benchmark",
             "args": [],
             "type": "shell"
         },
