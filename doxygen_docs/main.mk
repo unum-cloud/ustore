@@ -865,7 +865,15 @@ WARN_LOGFILE           =
 # spaces. See also FILE_PATTERNS and EXTENSION_MAPPING
 # Note: If this tag is empty the current directory is searched.
 
-INPUT                  = include/ukv include/ukv/cpp README.md
+INPUT                  =    include/ukv \
+                            include/ukv/cpp \
+                            README.md \
+                            src/README.md \
+                            python/README.md \
+                            java/README.md \
+                            golang/README.md \
+                            javascript/README.md \
+                            rust/README.md \
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
