@@ -223,7 +223,6 @@ TEST(db, validation) {
     // Wrong Write Options
     std::vector<ukv_options_t> wrong_write_options {
         ukv_option_transaction_dont_watch_k,
-        ukv_option_transaction_snapshot_k,
     };
 
     ukv_write_t write_wrong_options {
@@ -288,16 +287,10 @@ TEST(db, validation) {
 
     EXPECT_TRUE(status);
 
-    read.options = ukv_option_transaction_snapshot_k;
-    ukv_read(&read);
-
-    EXPECT_TRUE(status);
-
     // Wrong Read Options
     std::vector<ukv_options_t> wrong_read_options {
         ukv_option_write_flush_k,
         ukv_option_transaction_dont_watch_k,
-        ukv_option_transaction_snapshot_k,
     };
 
     for (auto& option : wrong_read_options) {
@@ -341,7 +334,6 @@ TEST(db, validation) {
 
     // Wrong Transaction Commit Options
     std::vector<ukv_options_t> wrong_txn_commit_options {
-        ukv_option_transaction_snapshot_k,
         ukv_option_dont_discard_memory_k,
     };
 
