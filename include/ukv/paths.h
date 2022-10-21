@@ -19,7 +19,7 @@
  *
  * ## Allowed Characters
  *
- * String keys can contain any characters, but if you plan to use `ukv_paths_match`
+ * String keys can contain any characters, but if you plan to use `ukv_paths_match()`
  * for both RegEx and prefix matches it is recommended to avoid RegEx special characters
  * in names: ., +, *, ?, ^, $, (, ), [, ], {, }, |, \.
  * The other punctuation marks like: /, :, @, -, _, #, ~, comma.
@@ -35,8 +35,8 @@ extern "C" {
 
 /**
  * @brief Maps string paths to binary values.
- * Can be seen as a generalization of `ukv_write_t` to variable-length key.
- * @see `ukv_paths_write`, `ukv_write_t`, `ukv_write`.
+ * Generalization of @c `ukv_write_t` to variable-length key.
+ * @see `ukv_paths_write()`, `ukv_write_t`, `ukv_write()`.
  */
 typedef struct ukv_paths_write_t {
 
@@ -96,15 +96,15 @@ typedef struct ukv_paths_write_t {
 
 /**
  * @brief Maps string paths to binary values.
- * Can be seen as a generalization of `ukv_write_t` to variable-length key.
- * @see `ukv_paths_write_t`, `ukv_write_t`, `ukv_write`.
+ * Generalization of @c `ukv_write_t` to variable-length key.
+ * @see `ukv_paths_write_t`, `ukv_write_t`, `ukv_write()`.
  */
 void ukv_paths_write(ukv_paths_write_t*);
 
 /**
  * @brief Retrieves binary values given string paths.
- * Can be seen as a generalization of `ukv_read_t` to variable-length key.
- * @see `ukv_paths_read`, `ukv_read_t`, `ukv_read`.
+ * Generalization of @c `ukv_read_t` to variable-length key.
+ * @see `ukv_paths_read()`, `ukv_read_t`, `ukv_read()`.
  */
 typedef struct ukv_paths_read_t {
 
@@ -157,14 +157,14 @@ typedef struct ukv_paths_read_t {
 
 /**
  * @brief Retrieves binary values given string paths.
- * Can be seen as a generalization of `ukv_read_t` to variable-length key.
- * @see `ukv_paths_read_t`, `ukv_read_t`, `ukv_read`.
+ * Generalization of @c `ukv_read_t` to variable-length key.
+ * @see `ukv_paths_read_t`, `ukv_read_t`, `ukv_read()`.
  */
 void ukv_paths_read(ukv_paths_read_t*);
 
 /**
  * @brief Vectorized "Prefix" and RegEx "Pattern Matching" for paths.
- * @see `ukv_paths_match`.
+ * @see `ukv_paths_match()`.
  *
  * If a "pattern" contains RegEx special symbols, than it is
  * treated as a RegEx pattern: ., +, *, ?, ^, $, (, ), [, ], {, }, |, \.
