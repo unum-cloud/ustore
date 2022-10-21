@@ -21,7 +21,8 @@
 				"benjamin-simmonds.pythoncpp-debug",
 				"xaver.clang-format",
 				"mhutchie.git-graph",
-				"mutantdino.resourcemonitor"
+				"mutantdino.resourcemonitor",
+				"eamodio.gitlens"
 			]
 		}
 	},
