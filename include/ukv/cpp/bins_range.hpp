@@ -2,7 +2,9 @@
  * @file bins_range.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings for @see "ukv/db.h".
+ * @addtogroup Cpp
+ *
+ * @brief C++ bindings for "ukv/db.h".
  */
 
 #pragma once
@@ -20,18 +22,18 @@ struct size_estimates_t;
 
 /**
  * @brief Iterator (almost) over the keys in a single collection.
+ *
  * Manages it's own memory and may be expressive to construct.
  * Prefer to `seek`, instead of re-creating such a stream.
  * Unlike classical iterators, keeps an internal state,
  * which makes it @b non copy-constructible!
  *
- * @section Class Specs
- * > Concurrency: Must be used from a single thread!
- * > Lifetime: @b Must live shorter then the collection it belongs to.
- * > Copyable: No.
- * > Exceptions: Never.
+ * ## Class Specs
+ * - Concurrency: Must be used from a single thread!
+ * - Lifetime: @b Must live shorter then the collection it belongs to.
+ * - Copyable: No.
+ * - Exceptions: Never.
  */
-
 class keys_stream_t {
 
     ukv_database_t db_ = nullptr;
@@ -350,11 +352,11 @@ struct size_estimates_t {
  * Supports C++ range-based loops: `for (auto key : @b collection.items())`
  * It can also be use for @b loose cardinality and disk-usage estimates.
  *
- * @section Class Specs
- * > Concurrency: Thread-safe.
- * > Lifetime: @b Must live shorter then the collection it belongs to.
- * > Copyable: Yes.
- * > Exceptions: Possible on `begin()`, `end()` calls.
+ * ## Class Specs
+ * - Concurrency: Thread-safe.
+ * - Lifetime: @b Must live shorter then the collection it belongs to.
+ * - Copyable: Yes.
+ * - Exceptions: Possible on `begin()`, `end()` calls.
  *   That interface, however, may through exceptions.
  *   For exception-less interface use `keys_begin()`, `keys_end()`.
  */
@@ -473,19 +475,18 @@ struct keys_range_t {
         status_t status;
         ukv_length_t c_count = static_cast<ukv_length_t>(count);
         ukv_collection_t c_collection = members.collection();
-        ukv_scan_t scan {
+        ukv_sample_t sample {
             .db = members.db(),
             .error = status.member_ptr(),
             .transaction = members.txn(),
             .arena = arena.member_ptr(),
-            .options = ukv_option_scan_sample_k,
             .collections = &c_collection,
             .count_limits = &c_count,
             .counts = &found_counts,
             .keys = &found_keys,
         };
 
-        ukv_scan(&scan);
+        ukv_sample(&sample);
 
         if (!status)
             return std::move(status);

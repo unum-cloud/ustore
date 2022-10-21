@@ -165,10 +165,6 @@ void ukv_write(ukv_write_t* c_ptr) {
 
     ukv_write_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_if_error(!(c.options & ukv_option_transaction_snapshot_k),
-                    c.error,
-                    uninitialized_state_k,
-                    "Snapshot doesn't support in write mode");
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
@@ -444,14 +440,15 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
     ukv_transaction_init_t& c = *c_ptr;
-    if (!c_ptr)
+    if (!c.transaction)
         safe_section("Allocating transaction handle", c.error, [&] { *c.transaction = new level_txn_t(); });
     return_on_error(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
 
-    if (c.options & ukv_option_transaction_snapshot_k) {
+    auto wants_just_snapshot = !(c.options & ukv_option_transaction_dont_watch_k);
+    if (wants_just_snapshot) {
         txn.snapshot = db.GetSnapshot();
         txn.db = &db;
         if (!txn.snapshot)

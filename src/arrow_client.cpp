@@ -16,7 +16,7 @@
 
 #include "ukv/db.h"
 #include "ukv/arrow.h"
-#include "ukv/cpp/types.hpp" // `ukv_doc_field`
+#include "ukv/cpp/types.hpp" // `ukv_doc_field()`
 #include "helpers/arrow.hpp"
 
 /*********************************************************/
@@ -967,7 +967,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
             auto lens = *c.lengths = arena.alloc<ukv_length_t>(places.count, c.error).begin();
             return_on_error(c.error);
             if (presences_ptr) {
-                auto presences = strided_iterator_gt<ukv_octet_t const>(presences_ptr, sizeof(ukv_octet_t));
+                auto presences = bits_view_t(presences_ptr);
                 for (std::size_t i = 0; i != places.count; ++i)
                     lens[i] = presences[i] ? (offs_ptr[i + 1] - offs_ptr[i]) : ukv_length_missing_k;
             }
@@ -1285,8 +1285,8 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
     fmt::format_to(std::back_inserter(action.type), "{}?", kFlightTxnBegin);
     if (txn_id != 0)
         fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, txn_id);
-    if (c.options & ukv_option_transaction_snapshot_k)
-        fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
+    if (c.options & ukv_option_transaction_dont_watch_k)
+        fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagDontWatch);
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
     {

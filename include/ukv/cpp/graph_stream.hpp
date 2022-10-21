@@ -2,7 +2,9 @@
  * @file graph_stream.hpp
  * @author Ashot Vardanian
  * @date 30 Jun 2022
- * @brief C++ bindings for @see "ukv/graph.h".
+ * @addtogroup Cpp
+ *
+ * @brief C++ bindings for "ukv/graph.h".
  */
 
 #pragma once
@@ -44,7 +46,7 @@ class graph_stream_t {
             .arena = arena_.member_ptr(),
             .tasks_count = vertices.count(),
             .collections = &collection_,
-            .vertices_ids = vertices.begin().get(),
+            .vertices = vertices.begin().get(),
             .vertices_stride = vertices.stride(),
             .roles = &role,
             .degrees_per_vertex = &degrees_per_vertex,

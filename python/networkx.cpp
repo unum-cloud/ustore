@@ -104,15 +104,15 @@ void ukv::wrap_networkx(py::module& m) {
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#counting-nodes-edges-and-neighbors
     g.def(
         "order",
-        [](py_graph_t& g, ukv_key_t v) { return g.index.size(); },
+        [](py_graph_t& g) { return g.index.size(); },
         "Returns the number of nodes in the graph.");
     g.def(
         "number_of_nodes",
-        [](py_graph_t& g, ukv_key_t v) { return g.index.size(); },
+        [](py_graph_t& g) { return g.index.size(); },
         "Returns the number of nodes in the graph.");
     g.def(
         "__len__",
-        [](py_graph_t& g, ukv_key_t v) { return g.index.size(); },
+        [](py_graph_t& g) { return g.index.size(); },
         "Returns the number of nodes in the graph.");
     g.def_property_readonly(
         "degree",

@@ -7,33 +7,34 @@
  * UKV implementation using pre-release draft of C++23 Networking TS,
  * through the means of @b Boost.Beast, @b Boost.ASIO and @b NLohmann.JSON.
  *
- * @section Supported Endpoints
+ * ## Supported Endpoints
  *
  * Modifying single entries:
- * > PUT /one/id?col=str&txn=int&field=str:     Upserts data.
- * > POST /one/id?col=str&txn=int&field=str:    Inserts data.
- * > GET /one/id?col=str&txn=int&field=str:     Retrieves data.
- * > HEAD /one/id?col=str&txn=int&field=str:    Retrieves data length.
- * > DELETE /one/id?col=str&txn=int&field=str:  Deletes data.
+ * - PUT /one/id?col=str&txn=int&field=str:     Upserts data.
+ * - POST /one/id?col=str&txn=int&field=str:    Inserts data.
+ * - GET /one/id?col=str&txn=int&field=str:     Retrieves data.
+ * - HEAD /one/id?col=str&txn=int&field=str:    Retrieves data length.
+ * - DELETE /one/id?col=str&txn=int&field=str:  Deletes data.
+ *
  * This API drastically differs from batch APIs, as we can always provide
  * just a single collection name and a single key. In batch APIs we can't
  * properly pass that inside the query URI.
  *
  * Modifying collections:
- * > PUT /col/name:     Upserts a collection.
- * > DELETE /col/name:  Drops the entire collection.
- * > DELETE /col:       Clears the main collection.
+ * - PUT /col/name:     Upserts a collection.
+ * - DELETE /col/name:  Drops the entire collection.
+ * - DELETE /col:       Clears the main collection.
  *
  * Global operations:
- * > DELETE /all/:              Clears the entire DB.
- * > GET /all/meta?query=str:   Retrieves DB metadata.
+ * - DELETE /all/:              Clears the entire DB.
+ * - GET /all/meta?query=str:   Retrieves DB metadata.
  *
  * Supporting transactions:
- * > GET /txn/client:   Returns: {id?: int, error?: str}
- * > DELETE /txn/id:    Drops the transaction and it's contents.
- * > POST /txn/id:      Commits and drops the transaction.
+ * - GET /txn/client:   Returns: {id?: int, error?: str}
+ * - DELETE /txn/id:    Drops the transaction and it's contents.
+ * - POST /txn/id:      Commits and drops the transaction.
  *
- * @section Object Structure
+ * ## Object Structure
  *
  * Every Key-Value pair can be encapsulated in a dictionary-like
  * or @b JSON-object-like structure. In it's most degenerate form it can be:
@@ -56,15 +57,15 @@
  *
  * The final pruned object will be converted into MsgPack and serialized into the DB
  * as a binary value. On each export, the decoding will be done again for @b MIMEs:
- * > application/json:      https://datatracker.ietf.org/doc/html/rfc4627
- * > application/msgpack:   https://datatracker.ietf.org/doc/html/rfc6838
- * > application/cbor:      https://datatracker.ietf.org/doc/html/rfc7049
- * > application/bson:      https://bsonspec.org/
- * > application/ubjson
+ * - application/json:      https://datatracker.ietf.org/doc/html/rfc4627
+ * - application/msgpack:   https://datatracker.ietf.org/doc/html/rfc6838
+ * - application/cbor:      https://datatracker.ietf.org/doc/html/rfc7049
+ * - application/bson:      https://bsonspec.org/
+ * - application/ubjson
  * All of that is supported through the infamous "nlohmann/json" library with
  * native support for round-trip conversions between mentioned formats.
  *
- * @section Accessing Object Fields
+ * ## Accessing Object Fields
  *
  * We support the JSON Pointer (RFC 6901) to access nested document fields via
  * a simple string path. On batched requests we support the optional "fields"
@@ -76,74 +77,74 @@
  * So instead of using a custom proprietary protocol and query language, like in
  * MongoDB, one can perform standardized queries.
  *
- * @section Batched Operations
+ * ## Batched Operations
  *
  * Working with @b batched data in @b AOS:
- * > PUT /aos/:
+ * - PUT /aos/:
  *      Receives: {objs:[obj], txn?: int, collections?: [str]|str, keys?: [int]}
  *      Returns: {error?: str}
  *      If `keys` aren't given, they are being sampled as `[x['_id'] for x in objs]`.
  *      If `collections` aren't given, they are being sampled as `[x['_col'] for x in objs]`.
- * > PATCH /aos/:
+ * - PATCH /aos/:
  *      Receives: {collections?: [str]|str, keys?: [int], patch: obj, txn?: int}
  *      Returns: {error?: str}
  *      If `keys` aren't given, the whole collection(s) is being patched.
  *      If `collections` are also skipped, the entire DB is patched.
- * > GET /aos/:
+ * - GET /aos/:
  *      Receives: {collections?: [str]|str, keys?: [int], fields?: [str], txn?: int}
  *      Returns: {objs?: [obj], error?: str}
  *      If `keys` aren't given, the whole collection(s) is being retrieved.
  *      If `collections` are also skipped, the entire DB is retrieved.
- * > DELETE /aos/:
+ * - DELETE /aos/:
  *      Receives: {collections?: [str]|str, keys?: [int], fields?: [str], txn?: int}
  *      Returns: {error?: str}
- * > HEAD /aos/:
+ * - HEAD /aos/:
  *      Receives: {collections?: [str]|str, keys?: [int], fields?: [str], txn?: int}
  *      Returns: {len?: int, error?: str}
  * The optional payload members define how to parse the payload:
- * > col: Means we should put all into one collection, disregarding the `_col` fields.
- * > txn: Means we should do the operation from within a specified transaction context.
+ * - col: Means we should put all into one collection, disregarding the `_col` fields.
+ * - txn: Means we should do the operation from within a specified transaction context.
  *
- * @section Supported HTTP Headers
+ * ## Supported HTTP Headers
  * Most of the HTTP headers aren't supported by this web server, as it implements
  * a very specific set of CRUD operations. However, the following headers are at
  * least partially implemented:
  *
- * > Cache-Control: no-store
+ * - Cache-Control: no-store
  *      Means, that we should avoid caching the value in the DB on any request.
  *      https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
- * > If-Match: hash
+ * - If-Match: hash
  *      Performs conditional checks on the existing value before overwriting it.
  *      Those can be implemented by using Boosts CRC32 hash implementations for
  *      portability.
  *      https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Match
- * > If-Unmodified-Since: <day-name>, <day> <month> <year> <hour>:<minute>:<second> GMT
+ * - If-Unmodified-Since: <day-name>, <day> <month> <year> <hour>:<minute>:<second> GMT
  *      Performs conditional checks on operations, similar to transactions,
  *      but of preventive nature and on the scope of a single request.
  *      https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Unmodified-Since
- * > Transfer-Encoding: gzip|deflate
+ * - Transfer-Encoding: gzip|deflate
  *      Describes, how the payload is compressed. Is different from `Content-Encoding`,
  *      which controls the entire session.
  *      https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Transfer-Encoding
  *
- * @section Upcoming Endpoints
+ * ## Upcoming Endpoints
  *
  * Working with @b batched data in tape-like @b SOA:
- * > PUT /soa/:
+ * - PUT /soa/:
  *      Receives: {collections?: [str], keys: [int], txn?: int, lens: [int], tape: str}
  *      Returns: {error?: str}
- * > GET /soa/:
+ * - GET /soa/:
  *      Receives: {collections?: [str], keys: [int], fields?: [str], txn?: int}
  *      Returns: {lens?: [int], tape?: str, error?: str}
- * > DELETE /soa/:
+ * - DELETE /soa/:
  *      Receives: {collections?: [str], keys: [int], fields?: [str], txn?: int}
  *      Returns: {error?: str}
- * > HEAD /soa/:
+ * - HEAD /soa/:
  *      Receives: {col?: str, key: int, fields?: [str], txn?: int}
  *      Returns: {len?: int, error?: str}
  *
  * Working with @b batched data in @b Apache.Arrow format:
- * > GET /arrow/:
+ * - GET /arrow/:
  *      Receives: {collections?: [str], keys: [int], fields: [str], txn?: int}
  *      Returns: Apache Arrow buffers
  * The result object will have the "application/vnd.apache.arrow.stream" @b MIME.

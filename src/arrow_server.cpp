@@ -81,6 +81,7 @@ bool is_query(std::string_view uri, std::string_view name) {
 }
 
 bool validate_column_collections(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
+    // This is safe even in the form of a pointer comparison, doesn't have to be `std::strcmp`.
     if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<ukv_collection_t>()))
         return false;
     if (column_ptr->null_count != 0)
@@ -89,6 +90,7 @@ bool validate_column_collections(ArrowSchema* schema_ptr, ArrowArray* column_ptr
 }
 
 bool validate_column_keys(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
+    // This is safe even in the form of a pointer comparison, doesn't have to be `std::strcmp`.
     if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<ukv_key_t>()))
         return false;
     if (column_ptr->null_count != 0)
@@ -97,6 +99,7 @@ bool validate_column_keys(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
 }
 
 bool validate_column_vals(ArrowSchema* schema_ptr, ArrowArray* column_ptr) {
+    // This is safe even in the form of a pointer comparison, doesn't have to be `std::strcmp`.
     if (schema_ptr->format != ukv_doc_field_type_to_arrow_format(ukv_doc_field<value_view_t>()))
         return false;
     if (column_ptr->null_count != 0)
@@ -130,7 +133,7 @@ class EmptyResultStream : public arf::ResultStream {
 
 /**
  * @brief Wraps a single scalar into a Arrow-compatible `ResultStream`.
- * @section Critique
+ * ## Critique
  * This function marks the pinnacle of ugliness of most modern C++ interfaces.
  * Wrapping an `int` causes 2x `unique_ptr` and a `shared_ptr` allocation!
  */
@@ -202,7 +205,7 @@ struct session_id_hash_t {
 };
 
 /**
- * @section Critique
+ * ## Critique
  * Using `shared_ptr`s inside is not the best design decision,
  * but it boils down to having a good LRU-cache implementation
  * with copy-less lookup possibilities. Neither Boost, nor other
@@ -444,7 +447,6 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.collection_drop_mode = param_value(params, kParamDropMode);
     result.read_part = param_value(params, kParamReadPart);
 
-    result.opt_snapshot = param_value(params, kParamFlagSnapshotTxn);
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
     result.opt_dont_watch = param_value(params, kParamFlagDontWatch);
     result.opt_shared_memory = param_value(params, kParamFlagSharedMemRead);
@@ -456,8 +458,6 @@ ukv_options_t ukv_options(session_params_t const& params) noexcept {
     ukv_options_t result = ukv_options_default_k;
     if (params.opt_dont_watch)
         result = ukv_options_t(result | ukv_option_transaction_dont_watch_k);
-    if (params.opt_snapshot)
-        result = ukv_options_t(result | ukv_option_transaction_snapshot_k);
     if (params.opt_flush)
         result = ukv_options_t(result | ukv_option_write_flush_k);
     if (params.opt_shared_memory)
@@ -483,17 +483,17 @@ ukv_str_view_t get_null_terminated(std::shared_ptr<ar::Buffer> const& buf_ptr) n
  * Document and Graph logic to work properly with most of encoding/decoding
  * shifted to client side.
  *
- * @section Endpoints
+ * ## Endpoints
  *
- * > write?col=x&txn=y&lengths&watch&shared (DoPut)
- * > read?col=x&txn=y&flush (DoExchange)
- * > collection_upsert?col=x (DoAction): Returns collection ID
+ * - write?col=x&txn=y&lengths&watch&shared (DoPut)
+ * - read?col=x&txn=y&flush (DoExchange)
+ * - collection_upsert?col=x (DoAction): Returns collection ID
  *   Payload buffer: Collection opening config.
- * > collection_remove?col=x (DoAction): Drops a collection
- * > txn_begin?txn=y (DoAction): Starts a transaction with a potentially custom ID
- * > txn_commit?txn=y (DoAction): Commits a transaction with a given ID
+ * - collection_remove?col=x (DoAction): Drops a collection
+ * - txn_begin?txn=y (DoAction): Starts a transaction with a potentially custom ID
+ * - txn_commit?txn=y (DoAction): Commits a transaction with a given ID
  *
- * @section Concurrency
+ * ## Concurrency
  *
  * Flight RPC allows concurrent calls from the same client.
  * In our implementation things are trickier, as transactions are not thread-safe.

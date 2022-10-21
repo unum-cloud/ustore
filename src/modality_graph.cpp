@@ -3,13 +3,13 @@
  * @author Ashot Vardanian
  *
  * @brief Graph implementation using fast integer compression.
- * Sits on top of any @see "ukv.h"-compatible system.
+ * Sits on top of any see "ukv.h"-compatible system.
  *
  * For every vertex this implementation stores:
- * * inbound degree
- * * output degree
- * * inbound neighborships: neighbor ID + edge ID
- * * outbound neighborships: neighbor ID + edge ID
+ * - inbound degree
+ * - output degree
+ * - inbound neighborships: neighbor ID + edge ID
+ * - outbound neighborships: neighbor ID + edge ID
  */
 
 #include <numeric>  // `std::accumulate`
@@ -74,7 +74,7 @@ struct neighborhood_t {
 
     /**
      * @brief Parses the a single `value_view_t` chunk
-     * from the output of `ukv_graph_find_edges`.
+     * from the output of `ukv_graph_find_edges()`.
      */
     inline neighborhood_t(ukv_key_t center_vertex, value_view_t bytes) noexcept {
         center = center_vertex;
@@ -312,7 +312,7 @@ void export_edge_tuples( //
     ukv_collection_t const* c_collections,
     ukv_size_t const c_collections_stride,
 
-    ukv_key_t const* c_vertices_ids,
+    ukv_key_t const* c_vertices,
     ukv_size_t const c_vertices_stride,
 
     ukv_vertex_role_t const* c_roles,
@@ -343,7 +343,7 @@ void export_edge_tuples( //
         .tasks_count = c_vertices_count,
         .collections = c_collections,
         .collections_stride = c_collections_stride,
-        .keys = c_vertices_ids,
+        .keys = c_vertices,
         .keys_stride = c_vertices_stride,
         .offsets = &c_found_offsets,
         .values = &c_found_values,
@@ -354,11 +354,11 @@ void export_edge_tuples( //
 
     joined_bins_t values {c_vertices_count, c_found_offsets, c_found_values};
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
-    strided_range_gt<ukv_key_t const> vertices_ids {{c_vertices_ids, c_vertices_stride}, c_vertices_count};
+    strided_range_gt<ukv_key_t const> vertices {{c_vertices, c_vertices_stride}, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
     constexpr std::size_t tuple_size_k = export_center_ak + export_neighbor_ak + export_edge_ak;
 
-    find_edges_t find_edges {collections, vertices_ids.begin(), roles, c_vertices_count};
+    find_edges_t find_edges {collections, vertices.begin(), roles, c_vertices_count};
 
     // Estimate the amount of memory we will need for the arena
     std::size_t count_ids = 0;
@@ -608,7 +608,7 @@ void ukv_graph_find_edges(ukv_graph_find_edges_t* c_ptr) {
         c.tasks_count,
         c.collections,
         c.collections_stride,
-        c.vertices_ids,
+        c.vertices,
         c.vertices_stride,
         c.roles,
         c.roles_stride,
@@ -678,7 +678,7 @@ void ukv_graph_remove_vertices(ukv_graph_remove_vertices_t* c_ptr) {
     return_on_error(c.error);
 
     strided_iterator_gt<ukv_collection_t const> vertex_collections {c.collections, c.collections_stride};
-    strided_range_gt<ukv_key_t const> vertices_ids {{c.vertices_ids, c.vertices_stride}, c.tasks_count};
+    strided_range_gt<ukv_key_t const> vertices {{c.vertices, c.vertices_stride}, c.tasks_count};
     strided_iterator_gt<ukv_vertex_role_t const> vertex_roles {c.roles, c.roles_stride};
 
     // Initially, just retrieve the bare minimum information about the vertices
@@ -691,7 +691,7 @@ void ukv_graph_remove_vertices(ukv_graph_remove_vertices_t* c_ptr) {
         c.tasks_count,
         c.collections,
         c.collections_stride,
-        c.vertices_ids,
+        c.vertices,
         c.vertices_stride,
         c.roles,
         c.roles_stride,
@@ -715,7 +715,7 @@ void ukv_graph_remove_vertices(ukv_graph_remove_vertices_t* c_ptr) {
         auto planned_entries = unique_entries.begin();
         for (std::size_t i = 0; i != c.tasks_count; ++i) {
             auto collection = planned_entries->collection = vertex_collections[i];
-            planned_entries->key = vertices_ids[i];
+            planned_entries->key = vertices[i];
             ++planned_entries;
             for (std::size_t j = 0; j != degrees_per_vertex[i]; ++j, ++neighbors_per_vertex, ++planned_entries)
                 planned_entries->collection = collection, planned_entries->key = *neighbors_per_vertex;
@@ -733,7 +733,7 @@ void ukv_graph_remove_vertices(ukv_graph_remove_vertices_t* c_ptr) {
     // From every opposite end - remove a match, and only then - the content itself
     for (std::size_t i = 0; i != unique_strided.size(); ++i) {
         auto vertex_collection = vertex_collections[i];
-        auto vertex_id = vertices_ids[i];
+        auto vertex_id = vertices[i];
         auto vertex_role = vertex_roles[i];
 
         auto vertex_idx = offset_in_sorted(unique_entries, collection_key_t {vertex_collection, vertex_id});
