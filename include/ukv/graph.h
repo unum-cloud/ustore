@@ -100,7 +100,7 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
  * to minimize memory copies and colocate the relevant data in the
  * global address space.
  *
- * Every edge will be represented by @b three @c ukv_key_ts:
+ * Every edge will be represented by @b three @c ukv_key_t's:
  * source, target and edge IDs respectively. It's not very
  * space-efficient, but will simplify the iteration over the
  * data in higher-level functions.

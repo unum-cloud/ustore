@@ -887,7 +887,7 @@ typedef struct ukv_scan_t {
      * @brief Output number of exported entries before for each scan.
      *
      * Will contain a pointer to an array of `tasks_count` integer offsets.
-     * Each marks a response offset in number of @c ukv_key_t` keys starting from `*keys.
+     * Each marks a response offset in number of @c ukv_key_t keys starting from `*keys`.
      * To be fully compatible with Apache Arrow we append one more offset at
      * the end to allow inferring the length of the last entry without using `lengths`.
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
@@ -1010,7 +1010,7 @@ typedef struct ukv_sample_t {
      * @brief Output number of exported entries before for each scan.
      *
      * Will contain a pointer to an array of `tasks_count` integer offsets.
-     * Each marks a response offset in number of @c ukv_key_t` keys starting from `*keys.
+     * Each marks a response offset in number of @c ukv_key_t keys starting from `*keys`.
      * To be fully compatible with Apache Arrow we append one more offset at
      * the end to allow inferring the length of the last entry without using `lengths`.
      * Is @b optional, as you may only want to get `lengths` or check `presences`.

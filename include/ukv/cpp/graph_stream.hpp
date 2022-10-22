@@ -15,7 +15,7 @@
 namespace unum::ukv {
 
 /**
- * @brief A stream of all @c edge_ts in a graph.
+ * @brief A stream of all @c edge_t's in a graph.
  * No particular order is guaranteed.
  */
 class graph_stream_t {
