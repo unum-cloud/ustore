@@ -92,7 +92,7 @@ struct edge_t {
 
 /**
  * @brief An asymmetric slice of a bond/relation.
- * Every vertex stores a list of such @c `neighborship_t`s
+ * Every vertex stores a list of such @c neighborship_t's
  * in a sorted order.
  */
 struct neighborship_t {

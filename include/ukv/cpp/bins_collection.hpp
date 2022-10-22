@@ -24,7 +24,7 @@ namespace unum::ukv {
  * ## Class Specs
  *
  * - Concurrency: Thread-safe, for @b unique arenas.
- *   For details, see @c `bins_ref_gt` docs on "Memory Management"
+ *   For details, see @c bins_ref_gt docs on "Memory Management"
  * - Lifetime: @b Must live shorter then the DB it belongs to.
  * - Exceptions: Only the `size` method.
  * - Copyable: Will create a new empty arena.
@@ -35,7 +35,7 @@ namespace unum::ukv {
  * Formats @b loosely describe the data stored in the collection
  * and @b exactly define the communication through this exact handle.
  * Example: Same collection can accept similar formats, such
- * as @ref `ukv_field_json_k` and @ref `ukv_format_msgpack_k`. Both will be
+ * as `::ukv_doc_field_json_k` and `::ukv_doc_field_msgpack_k`. Both will be
  * converted into some internal hierarchical representation
  * in "Document Collections", and can later be queried with
  * any "Document Format".
