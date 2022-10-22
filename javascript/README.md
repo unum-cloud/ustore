@@ -1,3 +1,4 @@
+\page js_readme
 # UKV: JavaScript Bindings
 
 * Node.js

@@ -35,7 +35,7 @@ extern "C" {
 
 /**
  * @brief Maps string paths to binary values.
- * Generalization of @c `ukv_write_t` to variable-length key.
+ * Generalization of @c ukv_write_t to variable-length key.
  * @see `ukv_paths_write()`, `ukv_write_t`, `ukv_write()`.
  */
 typedef struct ukv_paths_write_t {
@@ -96,14 +96,14 @@ typedef struct ukv_paths_write_t {
 
 /**
  * @brief Maps string paths to binary values.
- * Generalization of @c `ukv_write_t` to variable-length key.
+ * Generalization of @c ukv_write_t to variable-length key.
  * @see `ukv_paths_write_t`, `ukv_write_t`, `ukv_write()`.
  */
 void ukv_paths_write(ukv_paths_write_t*);
 
 /**
  * @brief Retrieves binary values given string paths.
- * Generalization of @c `ukv_read_t` to variable-length key.
+ * Generalization of @c ukv_read_t to variable-length key.
  * @see `ukv_paths_read()`, `ukv_read_t`, `ukv_read()`.
  */
 typedef struct ukv_paths_read_t {
@@ -157,7 +157,7 @@ typedef struct ukv_paths_read_t {
 
 /**
  * @brief Retrieves binary values given string paths.
- * Generalization of @c `ukv_read_t` to variable-length key.
+ * Generalization of @c ukv_read_t to variable-length key.
  * @see `ukv_paths_read_t`, `ukv_read_t`, `ukv_read()`.
  */
 void ukv_paths_read(ukv_paths_read_t*);

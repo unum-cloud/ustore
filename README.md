@@ -1,3 +1,4 @@
+\mainpage
 # Universal Keys & Values
 
 ⚠️ Under active development! Not all APIs are stable!
