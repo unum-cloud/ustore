@@ -53,8 +53,8 @@ static constexpr char const* true_k = "true";
 static constexpr char const* false_k = "false";
 
 // Both the variant and the vector wouldn't have `noexcept` default constructors
-// if we didn't ingest @c `std::monostate` into the first and wrapped the second
-// into an @c `std::optional`.
+// if we didn't ingest @c std::monostate into the first and wrapped the second
+// into an @c std::optional.
 using heapy_field_t = std::variant<std::monostate, json_t::string_t, json_ptr_t>;
 using heapy_fields_t = std::optional<std::vector<heapy_field_t>>;
 
