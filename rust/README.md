@@ -1,3 +1,4 @@
+\page rust_readme
 # UKV: Rust Bindings
 
 Rust implementation is designed to support:

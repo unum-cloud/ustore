@@ -37,11 +37,11 @@ class docs_ref_gt;
  * ## Memory Management
  *
  * Every "container" that overloads the @b [] operator has an internal "arena",
- * that is shared between all the @c `docs_ref_gt`s produced from it. That will
+ * that is shared between all the @c docs_ref_gt's produced from it. That will
  * work great, unless:
  * - multiple threads are working with same collection handle or transaction.
  * - reading responses interleaves with new requests, which gobbles temporary memory.
- * For those cases, you can create a separate @c `arena_t` and pass it to `.on(...)`
+ * For those cases, you can create a separate @c arena_t and pass it to `.on(...)`
  * member function. In such HPC environments we would recommend to @b reuse one such
  * are on every thread.
  *
@@ -242,7 +242,7 @@ class docs_ref_gt {
 
     /**
      * @brief For N documents and M fields gather (N * M) responses.
-     * You put in a @c `table_layout_view_gt` and you receive a @c `docs_table_gt`.
+     * You put in a @c table_layout_view_gt and you receive a @c `docs_table_gt`.
      * Any column type annotation is optional.
      */
     expected_gt<docs_table_t> gather(table_header_t const& header, bool watch = true) noexcept {

@@ -193,7 +193,7 @@ struct database_t {
     /**
      * @brief A variable-size set of named collections.
      * It's cleaner to implement it with heterogenous lookups as
-     * an @c `std::unordered_mao`, but it requires GCC11 and C++20.
+     * an @c std::unordered_map, but it requires GCC11 and C++20.
      */
     std::map<std::string, ukv_collection_t, string_less_t> names;
     /**

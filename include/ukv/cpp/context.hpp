@@ -13,7 +13,7 @@
 namespace unum::ukv {
 
 /**
- * Abstraction over @c `ukv_database_t`, @c `ukv_transaction_t` and @c `ukv_arena_t`,
+ * Abstraction over @c ukv_database_t, @c ukv_transaction_t and @c ukv_arena_t,
  * needed for default-construction.
  */
 class null_context_t {
