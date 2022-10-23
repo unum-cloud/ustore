@@ -43,7 +43,7 @@ class pass_through_iterator_gt {
         }
         return *this;
     }
-    auto const& operator*() const noexcept { return array_of_arrays[top_idx][nested_idx]; }
+    decltype(auto) operator*() const noexcept { return array_of_arrays[top_idx][nested_idx]; }
 };
 
 template <typename array_of_arrays_at>
@@ -54,15 +54,17 @@ std::size_t pass_through_size(array_of_arrays_at& array) noexcept {
 }
 
 template <typename array_of_arrays_at>
-pass_through_iterator_gt<array_of_arrays_at> pass_through_iterator(array_of_arrays_at& array,
-                                                                   std::size_t offset = 0) noexcept {
+pass_through_iterator_gt<array_of_arrays_at> //
+pass_through_iterator(array_of_arrays_at& array, std::size_t offset = 0) noexcept {
     return {array, offset};
 }
 
-template <typename underlying_at>
+template <typename underlying_at, typename transform_at>
 class multyplying_iterator_gt {
     using underlying_t = underlying_at;
+    using transform_t = transform_at;
     underlying_t original_;
+    transform_t transform_;
     std::size_t copy_idx_ = 0;
     std::size_t multiple_ = 0;
 
@@ -73,8 +75,8 @@ class multyplying_iterator_gt {
     using reference = value_type&;
     using pointer = void;
 
-    multyplying_iterator_gt(underlying_at&& underlying, std::size_t multiple) noexcept
-        : original_(underlying), multiple_(multiple) {}
+    multyplying_iterator_gt(underlying_at&& underlying, std::size_t multiple, transform_t&& transform) noexcept
+        : original_(underlying), transform_(transform), multiple_(multiple) {}
 
     multyplying_iterator_gt& operator++() noexcept {
         copy_idx_++;
@@ -84,8 +86,14 @@ class multyplying_iterator_gt {
         }
         return *this;
     }
-    auto const& operator*() const noexcept { return *original_; }
+    decltype(auto) operator*() const noexcept { return transform_(*original_, copy_idx_); }
 };
+
+template <typename underlying_at, typename transform_at>
+multyplying_iterator_gt<underlying_at, transform_at> //
+multyplying_iterator(underlying_at&& array, std::size_t multiple, transform_at&& transform) noexcept {
+    return {array, multiple, transform};
+}
 
 namespace bm = benchmark;
 

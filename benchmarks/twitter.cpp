@@ -73,6 +73,16 @@ static ukv_collection_t collection_docs_k = ukv_collection_main_k;
 static ukv_collection_t collection_graph_k = ukv_collection_main_k;
 static ukv_collection_t collection_paths_k = ukv_collection_main_k;
 
+simdjson::ondemand::document& rewinded(simdjson::ondemand::document& doc) noexcept {
+    doc.rewind();
+    return doc;
+}
+
+simdjson::ondemand::object& rewinded(simdjson::ondemand::object& doc) noexcept {
+    doc.reset();
+    return doc;
+}
+
 static void index_file( //
     std::string_view mapped_contents,
     std::vector<doc_w_path_t>& docs_w_paths,
@@ -83,20 +93,24 @@ static void index_file( //
     simdjson::ondemand::parser parser;
     simdjson::ondemand::document_stream docs =
         parser.iterate_many(mapped_contents.data(), mapped_contents.size(), 1000000ul);
-    for (auto tweet : docs) {
-        ukv_key_t id = tweet["id"];
-        ukv_key_t user_id = tweet["user"]["id"];
-        std::string_view body = tweet.raw_json_token();
-        std::string_view user_body = tweet["user"].raw_json_token();
-        std::string_view id_str = tweet["id_str"].raw_json_token();
-        std::string_view user_screen_name = tweet["user"]["screen_name"].raw_json_token();
+    for (auto tweet_doc : docs) {
+        simdjson::ondemand::object tweet = tweet_doc.get_object().value();
+        simdjson::ondemand::object user = rewinded(tweet).find_field("user").get_object().value();
+        ukv_key_t id = rewinded(tweet)["id"];
+
+        ukv_key_t user_id = rewinded(user)["id"];
+        std::string_view body = rewinded(tweet).raw_json();
+        std::string_view user_body = rewinded(user).raw_json();
+        std::string_view id_str = rewinded(tweet)["id_str"].raw_json_token();
+        std::string_view user_screen_name = rewinded(user)["screen_name"].raw_json_token();
 
         ukv_key_t re_id;
         ukv_key_t re_user_id;
-        auto retweet = tweet.find_field("retweeted_status");
-        if (retweet.error() == simdjson::SUCCESS) {
-            re_id = retweet["id"];
-            re_user_id = retweet["user"]["id"];
+        auto maybe_retweet = rewinded(tweet)["retweeted_status"];
+        if (maybe_retweet.error() == simdjson::SUCCESS) {
+            auto retweet = maybe_retweet.get_object().value();
+            re_id = rewinded(retweet)["id"];
+            re_user_id = rewinded(retweet)["user"]["id"];
         }
 
         // Docs
@@ -111,15 +125,19 @@ static void index_file( //
 
         // Graph
         edges.push_back(edge_t {.source_id = id, .target_id = user_id});
-        if (retweet.error() == simdjson::SUCCESS) {
+        if (maybe_retweet.error() == simdjson::SUCCESS) {
             edges.push_back(edge_t {.source_id = id, .target_id = re_id});
             edges.push_back(edge_t {.source_id = user_id, .target_id = re_user_id, .id = re_id});
         }
 
-        auto mentions = tweet.find_field("entities").find_field("user_mentions");
-        if (mentions.error() == simdjson::SUCCESS) {
+        auto maybe_mentions = rewinded(tweet).find_field("entities").find_field("user_mentions");
+        if (maybe_mentions.error() == simdjson::SUCCESS &&
+            maybe_mentions.type() == simdjson::ondemand::json_type::array) {
+            auto mentions = maybe_mentions.get_array().value();
             for (auto mention : mentions) {
-                ukv_key_t mentioned_id = mention["id"];
+                auto mentioned_id = mention["id"];
+                if (mentioned_id.type() != simdjson::ondemand::json_type::number)
+                    continue;
                 edges.push_back(edge_t {.source_id = user_id, .target_id = mentioned_id, .id = id});
             }
         }
@@ -347,7 +365,13 @@ static void docs_sample_table(bm::State& state) {
             return false;
 
         // One column is just strings
-        received_bytes += std::accumulate(&lengths[0][0], &lengths[0][0] + count - 1, 0ul);
+        received_bytes += std::transform_reduce(&lengths[0][0],
+                                                &lengths[0][count],
+                                                0ul,
+                                                std::plus<std::size_t> {},
+                                                [](ukv_length_t length) -> std::size_t { //
+                                                    return length == ukv_length_missing_k ? 0u : length;
+                                                });
         // Others are scalars
         received_bytes += (fields_k - 1) * sizeof(std::uint32_t) * count;
         return true;
@@ -431,11 +455,15 @@ static void graph_traverse_two_hops(bm::State& state) {
 int main(int argc, char** argv) {
     bm::Initialize(&argc, argv);
 
-    std::size_t const max_input_files = 30;
-    std::size_t const thread_count = std::thread::hardware_concurrency() / 8;
-    std::size_t const min_seconds = 10;
-    std::size_t const small_batch_size = 32;
-    std::size_t const big_batch_size = 256;
+    std::size_t thread_count = std::thread::hardware_concurrency() / 8;
+    std::size_t max_input_files = 30;
+    std::size_t min_seconds = 10;
+    std::size_t small_batch_size = 32;
+    std::size_t big_batch_size = 256;
+#if defined(UKV_DEBUG)
+    max_input_files = 1;
+    thread_count = 1;
+#endif
 
     // 1. Find the dataset parts
     std::printf("Will search for .ndjson files...\n");
