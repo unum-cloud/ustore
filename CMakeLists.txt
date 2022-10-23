@@ -101,6 +101,9 @@ endif()
 include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
 
+# Benchmarks:
+include("${CMAKE_SOURCE_DIR}/cmake/simdjson.cmake")
+
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(${ARROW_DEPENDENCY} Boost-external)
 endif()
@@ -237,7 +240,7 @@ if(${UKV_BUILD_BENCHMARKS})
 
     string(CONCAT bench_name "ukv_" ${client_name} "_twitter_benchmark")
     add_executable(${bench_name} benchmarks/twitter.cpp)
-    target_link_libraries(${bench_name} benchmark ${target_name} ${target_LIBRARIES})
+    target_link_libraries(${bench_name} benchmark simdjson ${target_name} ${target_LIBRARIES})
 
     string(CONCAT bench_name "ukv_" ${client_name} "_tabular_graph_benchmark")
     add_executable(${bench_name} benchmarks/tabular_graph.cpp)
