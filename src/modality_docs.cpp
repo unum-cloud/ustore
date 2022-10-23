@@ -1032,6 +1032,7 @@ void read_modify_unique_docs( //
         };
 
         ukv_read(&read);
+        return_on_error(c_error);
 
         auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
         auto found_binary_it = found_binaries.begin();
@@ -1067,6 +1068,7 @@ void read_modify_unique_docs( //
             .presences = &found_presences,
         };
         ukv_read(&read);
+        return_on_error(c_error);
 
         bits_view_t presents {found_presences};
         for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx) {
