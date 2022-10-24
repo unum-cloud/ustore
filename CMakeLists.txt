@@ -240,8 +240,8 @@ if(${UKV_BUILD_BENCHMARKS})
     target_link_libraries(${bench_name} benchmark ${target_name} ${target_LIBRARIES})
 
     string(CONCAT bench_name "ukv_" ${client_name} "_tabular_graph_benchmark")
-    add_executable(${bench_name} benchmarks/tabular_graph.cpp)
-    target_link_libraries(${bench_name} leveldb benchmark ${target_name} ${target_LIBRARIES})
+    add_executable(${bench_name} benchmarks/tabular_graph.cpp tools/dataset.cpp)
+    target_link_libraries(${bench_name} leveldb arrow arrow_flight parquet benchmark ${target_name} ${target_LIBRARIES})
   endforeach()
 endif()
 
