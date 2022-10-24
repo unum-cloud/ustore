@@ -262,6 +262,24 @@
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
+        {
+            "name": "C++: Tabular Benchmark STL",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/ukv_stl_tabular_graph_benchmark",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug Tabular STL Benchmark",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        }
     ],
     "compounds": [
         {

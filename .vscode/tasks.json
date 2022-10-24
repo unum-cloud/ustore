@@ -81,6 +81,12 @@
             "type": "shell"
         },
         {
+            "label": "Build Native: Debug Tabular STL Benchmark",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=1 . && make -j 64 ukv_stl_tabular_graph_benchmark",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Build Native: Release",
             "command": "cmake -DCMAKE_BUILD_TYPE=Release . && make -j 6",
             "args": [],
