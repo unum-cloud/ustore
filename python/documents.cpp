@@ -181,15 +181,14 @@ static void write_many_docs(py_docs_collection_t& py_collection, PyObject* keys_
         throw std::invalid_argument("Keys Count Must Match Values Count");
 
     std::vector<ukv_key_t> keys(keys_count);
-    std::vector<ukv_length_t> lens(keys_count);
-    std::vector<ukv_length_t> offs(keys_count);
+    std::vector<ukv_length_t> offs(keys_count + 1);
     std::string jsons;
-    size_t idx = 0;
+    offs[0] = 0;
+    size_t idx = 1;
 
     auto generate_values = [&](py::handle const& obj) {
-        offs[idx] = jsons.size();
         to_string(obj.ptr(), jsons);
-        lens[idx] = jsons.size() - offs[idx];
+        offs[idx] = jsons.size();
         ++idx;
         return dummy_iterator_t {};
     };
@@ -200,7 +199,6 @@ static void write_many_docs(py_docs_collection_t& py_collection, PyObject* keys_
     auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(jsons.data());
     contents_arg_t values {
         .offsets_begin = {offs.data(), sizeof(ukv_length_t)},
-        .lengths_begin = {lens.data(), sizeof(ukv_length_t)},
         .contents_begin = {&vals_begin, 0},
         .count = keys_count,
     };
