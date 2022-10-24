@@ -165,7 +165,7 @@ static void write_one_doc(py_docs_collection_t& py_collection, PyObject* key_py,
     std::string json_str;
     to_string(val_py, json_str);
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
-    py_collection.native[key].assign(value_view_t((byte_t*)json_str.data(), json_str.size())).throw_unhandled();
+    py_collection.native[key].assign(value_view_t(json_str)).throw_unhandled();
 }
 
 struct dummy_iterator_t {
@@ -214,7 +214,7 @@ static void write_same_doc(py_docs_collection_t& py_collection, PyObject* keys_p
     py_transform_n(keys_py, &py_to_scalar<ukv_key_t>, keys.begin());
     std::string json_str;
     to_string(val_py, json_str);
-    py_collection.native[keys].assign(value_view_t((byte_t*)json_str.data(), json_str.size())).throw_unhandled();
+    py_collection.native[keys].assign(value_view_t(json_str)).throw_unhandled();
 }
 
 static void write_doc(py_docs_collection_t& py_collection, py::object key_py, py::object val_py) {
@@ -272,14 +272,14 @@ static void merge(py_docs_collection_t& py_collection, py::object key_py, py::ob
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py.ptr());
     std::string json_str;
     to_string(val_py.ptr(), json_str);
-    py_collection.native[key].merge(value_view_t((byte_t*)json_str.data(), json_str.size()));
+    py_collection.native[key].merge(value_view_t(json_str));
 }
 
 static void patch(py_docs_collection_t& py_collection, py::object key_py, py::object val_py) {
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py.ptr());
     std::string json_str;
     to_string(val_py.ptr(), json_str);
-    py_collection.native[key].patch(value_view_t((byte_t*)json_str.data(), json_str.size()));
+    py_collection.native[key].patch(value_view_t(json_str));
 }
 
 void ukv::wrap_document(py::module& m) {
