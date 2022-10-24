@@ -86,7 +86,7 @@ static void write_many_binaries(py_collection_gt<collection_at>& collection, PyO
     status.throw_unhandled();
 }
 
-static void broadcast_binary(py_collection_gt<bins_collection_t>& collection, PyObject* keys_py, PyObject* vals_py) {
+static void broadcast_binary(py_bins_collection_t& collection, PyObject* keys_py, PyObject* vals_py) {
 
     status_t status;
     parsed_places_t parsed_places {keys_py, collection.native};
@@ -151,7 +151,7 @@ static py::object has_one_binary(py_collection_gt<collection_at>& collection, Py
     return py::reinterpret_borrow<py::object>(obj_ptr);
 }
 
-static py::object read_one_binary(py_collection_gt<bins_collection_t>& collection, PyObject* key_py) {
+static py::object read_one_binary(py_bins_collection_t& collection, PyObject* key_py) {
 
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
@@ -224,7 +224,7 @@ static py::object has_many_binaries(py_collection_gt<collection_at>& collection,
     return py::reinterpret_steal<py::object>(tuple_ptr);
 }
 
-static py::object read_many_binaries(py_collection_gt<bins_collection_t>& collection, PyObject* keys_py) {
+static py::object read_many_binaries(py_bins_collection_t& collection, PyObject* keys_py) {
 
     status_t status;
     ukv_octet_t* found_presences = nullptr;
@@ -293,7 +293,7 @@ static py::object has_binary(py_collection_gt<collection_at>& collection, py::ob
     return func(collection, key_py.ptr());
 }
 
-static py::object read_binary(py_collection_gt<bins_collection_t>& collection, py::object key_py) {
+static py::object read_binary(py_bins_collection_t& collection, py::object key_py) {
     auto is_single = PyLong_Check(key_py.ptr());
     auto func = is_single ? &read_one_binary : &read_many_binaries;
     return func(collection, key_py.ptr());
@@ -313,7 +313,7 @@ static void remove_binary(py_collection_gt<collection_at>& collection, py::objec
     return func(collection, key_py.ptr(), Py_None);
 }
 
-static void update_binary(py_collection_gt<bins_collection_t>& collection, py::object dict_py) {
+static void update_binary(py_bins_collection_t& collection, py::object dict_py) {
     status_t status;
     ukv_size_t step = sizeof(py_bin_req_t);
 
