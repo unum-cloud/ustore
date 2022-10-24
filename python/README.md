@@ -1,4 +1,4 @@
-\page python_readme
+\page python
 # UKV: Python Bindings
 
 Current implementation relies on [PyBind11](https://github.com/pybind/pybind11).

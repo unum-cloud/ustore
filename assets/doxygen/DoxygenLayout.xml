@@ -4,44 +4,51 @@
   <navindex>
     <tab type="mainpage"/>
     <tab type="pages"/>
-    <tab type="modules"/>
-    <tab type="usergroup" url="[none]" title="Front Ends">
-      <tab type="user" title="C++" url="@ref cpp_readme"/>
-      <tab type="user" title="Python" url="@ref python_readme" />
-      <tab type="user" title="Java" url="@ref java_readme"/>
-      <tab type="user" title="Go" url="@ref go_readme"/>
-      <tab type="user" title="JavaScript" url="@ref js_readme"/>
-      <tab type="user" title="Rust" url="@ref rust_readme"/>
+    
+    <tab type="usergroup" url="[none]" title="Frontend APIs">
+      <tab type="user" title="C" url="@ref c"/>
+      <tab type="user" title="Python" url="@ref python" />
+      <tab type="user" title="Java" url="@ref java"/>
+      <tab type="user" title="Go" url="@ref go"/>
+      <tab type="user" title="JavaScript" url="@ref js"/>
+      <tab type="user" title="Rust" url="@ref rust"/>
     </tab>
-    <tab type="namespaces">
-      <tab type="namespacelist"/>
-      <tab type="namespacemembers"/>
+
+    <tab type="user" title="Reference Implementations" url="@ref src"/>
+
+    <tab type="usergroup" url="[none]" title="Documentation">
+      <tab type="modules"/>
+      <tab type="namespaces">
+        <tab type="namespacelist"/>
+        <tab type="namespacemembers"/>
+      </tab>
+      <tab type="interfaces">
+        <tab type="interfacelist"/>
+        <tab type="interfaceindex" visible="$ALPHABETICAL_INDEX"/> 
+        <tab type="interfacehierarchy"/>
+      </tab>
+      <tab type="classes">
+        <tab type="classlist"/>
+        <tab type="classindex" visible="$ALPHABETICAL_INDEX"/> 
+        <tab type="hierarchy"/>
+        <tab type="classmembers"/>
+      </tab>
+      <tab type="structs">
+        <tab type="structlist"/>
+        <tab type="structindex" visible="$ALPHABETICAL_INDEX"/> 
+      </tab>
+      <tab type="exceptions">
+        <tab type="exceptionlist"/>
+        <tab type="exceptionindex" visible="$ALPHABETICAL_INDEX"/> 
+        <tab type="exceptionhierarchy"/>
+      </tab>
+      <tab type="files">
+        <tab type="filelist"/>
+        <tab type="globals"/>
+      </tab>
+      <tab type="examples"/>  
     </tab>
-    <tab type="interfaces">
-      <tab type="interfacelist"/>
-      <tab type="interfaceindex" visible="$ALPHABETICAL_INDEX"/> 
-      <tab type="interfacehierarchy"/>
-    </tab>
-    <tab type="classes">
-      <tab type="classlist"/>
-      <tab type="classindex" visible="$ALPHABETICAL_INDEX"/> 
-      <tab type="hierarchy"/>
-      <tab type="classmembers"/>
-    </tab>
-    <tab type="structs">
-      <tab type="structlist"/>
-      <tab type="structindex" visible="$ALPHABETICAL_INDEX"/> 
-    </tab>
-    <tab type="exceptions">
-      <tab type="exceptionlist"/>
-      <tab type="exceptionindex" visible="$ALPHABETICAL_INDEX"/> 
-      <tab type="exceptionhierarchy"/>
-    </tab>
-    <tab type="files">
-      <tab type="filelist"/>
-      <tab type="globals"/>
-    </tab>
-    <tab type="examples"/>  
+
   </navindex>
 
   <!-- Layout definition for a class page -->

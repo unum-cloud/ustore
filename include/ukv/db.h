@@ -104,6 +104,7 @@ typedef void* ukv_database_t;
 /**
  * @brief Opaque Transaction handle.
  * @see `ukv_transaction_free()`.
+ * @see https://unum.cloud/ukv/c#transactions
  *
  * Allows ACID-ly grouping operations across different collections and even modalities.
  * This means, that the same transaction might be:
@@ -117,55 +118,6 @@ typedef void* ukv_database_t;
  * - Thread safety: None.
  * - Lifetime: Must be freed before the @c ukv_database_t is closed.
  * - Concurrency Control: Optimistic.
- *
- * ## ACI(D)-ity
- *
- * ### A: Atomicity !
- *
- * Atomicity is always guaranteed.
- * Even on non-transactional writes - either all updates pass or all fail.
- *
- * ### C: Consistency !
- *
- * Consistency is implemented in the strictest possible form - ["Strict Serializability"][ss]
- * meaning that:
- * - reads are ["Serializable"][s],
- * - writes are ["Linearizable"][l].
- * The default behaviour, however, can be tweaked at the level of specific operations.
- * For that the `::ukv_option_transaction_dont_watch_k` can be passed to `ukv_transaction_init()`
- * or any transactional read/write operation, to control the consistency checks during staging.
- *
- *  |                               |     Reads     |     Writes    |
- *  |:------------------------------|:-------------:|:-------------:|
- *  | Head                          | Strict Serial | Strict Serial |
- *  | Transactions over Snapshots   |     Serial    | Strict Serial |
- *  | Transactions w/out Snapshots  | Strict Serial | Strict Serial |
- *  | Transactions w/out Watches    | Strict Serial |  Sequential   |
- *
- * If this topic is new to you, please check out the [Jepsen.io][jepsen] blog on consistency.
- *
- * [ss]: https://jepsen.io/consistency/models/strict-serializable
- * [s]: https://jepsen.io/consistency/models/serializable
- * [l]: https://jepsen.io/consistency/models/linearizable
- * [jepsen]: https://jepsen.io/consistency
- *
- * ### I: Isolation !
- *
- *  |                               |     Reads     |     Writes    |
- *  |:------------------------------|:-------------:|:-------------:|
- *  | Transactions over Snapshots   |       ✓       |       ✓       |
- *  | Transactions w/out Snapshots  |       ✗       |       ✓       |
- *
- * ### D: Durability ?
- *
- * Durability doesn't apply to in-memory systems by definition.
- * In hybrid or persistent systems we prefer to disable it by default.
- * Almost every DBMS that builds on top of KVS prefers to implement its own durability mechanism.
- * Even more so in distributed databases, where three separate Write Ahead Logs may exist:
- * - in KVS,
- * - in DBMS,
- * - in Distributed Consensus implementation.
- * If you still need durability, flush writes or `ukv_transaction_commit()` with `::ukv_option_write_flush_k`.
  */
 typedef void* ukv_transaction_t;
 
@@ -361,6 +313,7 @@ void ukv_database_init(ukv_database_init_t*);
 /**
  * @brief Main "setter" or "scatter" interface.
  * @see `ukv_write()`.
+ * @see https://unum.cloud/ukv/c#writes
  *
  * ## Functionality
  *
@@ -386,87 +339,6 @@ void ukv_database_init(ukv_database_init_t*);
  * Instead of adding all three to the binary C interface, we focus on better ACID transactions,
  * which can be used to implement any advanced multi-step operations (often including conditionals),
  * like Compare-And-Swap, without losing atomicity.
- *
- * ## Understanding Contents Arguments
- *
- * Assuming `task_idx` is smaller than `tasks_count`, following approximates how the content chunks
- * are sliced.
- *
- * ```cpp
- *      std::size_t task_idx = ...;
- *      auto chunk_begin = values + values_stride * task_idx;
- *      auto offset_in_chunk = offsets + offsets_stride * task_idx;
- *      auto length = lengths + lengths_stride * task_idx;
- *      std::string_view content = { chunk_begin + offset_in_chunk, length };
- * ```
- *
- * It is not the simplest interface, but like Vulkan or BLAS, it gives you extreme flexibility.
- * Submitting a single write request can be as easy as:
- *
- * ```c
- *      ukv_key_t key { 42 };
- *      ukv_bytes_cptr_t value { "meaning of life" };
- *      ukv_write_t write {
- *          .db = &db,
- *          .keys = &key,
- *          .values = &value,
- *      };
- *      ukv_write(&write);
- * ```
- *
- * Similarly, submitting a batch may look like:
- *
- * ```c
- *      ukv_key_t keys[2] = { 42, 43 };
- *      ukv_bytes_cptr_t values[2] { "meaning of life", "is unknown" };
- *      ukv_write_t write {
- *          .db = &db,
- *          .tasks_count = 2,
- *          .keys = keys,
- *          .keys_stride = sizeof(ukv_key_t),
- *          .values = values,
- *          .values_stride = sizeof(ukv_bytes_cptr_t),
- *      };
- *      ukv_write(&write);
- * ```
- *
- * The beauty of strides is that your data may have an Array-of-Structures layout,
- * rather than Structure-of-Arrays. Like this:
- *
- * ```c
- *      struct pair_t {
- *          ukv_key_t key;
- *          ukv_bytes_cptr_t value;
- *      };
- *      pair_t pairs[2] = {
- *          { 42, "meaning of life" },
- *          { 43, "is unknown" },
- *      };
- *      ukv_write_t write {
- *          .db = &db,
- *          .tasks_count = 2,
- *          .keys = &pairs[0].key,
- *          .keys_stride = sizeof(pair_t),
- *          .values = &pairs[0].value,
- *          .values_stride = sizeof(pair_t),
- *      };
- *      ukv_write(&write);
- * ```
- *
- * To delete an entry, one can perform a similar trick:
- *
- * ```c
- *      ukv_key_t key { 42 };
- *      ukv_bytes_cptr_t value { NULL };
- *      ukv_write_t write {
- *          .db = &db,
- *          .keys = &key,
- *          .values = &value,
- *      };
- *      ukv_write(&write);
- * ```
- *
- * Or just pass `.values = NULL` all together.
  */
 typedef struct ukv_write_t {
 
@@ -619,6 +491,7 @@ void ukv_write(ukv_write_t*);
 /**
  * @brief Main "getter" or "gather" interface.
  * @see `ukv_read()`.
+ * @see https://unum.cloud/ukv/c#reads
  *
  * ## Functionality
  *
