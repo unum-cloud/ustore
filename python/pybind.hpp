@@ -159,7 +159,7 @@ struct py_table_keys_range_t {
  */
 struct py_table_collection_t : public std::enable_shared_from_this<py_table_collection_t> {
 
-    py_collection_gt<bins_collection_t> binary;
+    py_bins_collection_t binary;
     std::variant<std::monostate, std::vector<ukv_str_view_t>> columns_names;
     std::variant<std::monostate, ukv_doc_field_type_t, std::vector<ukv_doc_field_type_t>> columns_types;
     std::variant<std::monostate, py_table_keys_range_t, std::vector<ukv_key_t>> rows_keys;
