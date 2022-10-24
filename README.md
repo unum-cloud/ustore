@@ -1,26 +1,33 @@
 \mainpage
 # Universal Keys & Values
 
+* Open Standard for a Binary DBMS Interface
+* 100+ Reference Implementations for 
+  * RocksDB • LevelDB • UnumDB • RAM ⇌ 
+  * Docs • Graphs • Blobs ⇌ 
+  * Server • Embedded ⇌ 
+  * C • C++ • Python • Java • GoLang
+
 ⚠️ Under active development! Not all APIs are stable!
 
-## The BLAS of CRUD
+## The [BLAS][blas] of [CRUD][crud]
 
 ![Universal Key Values by Unum](assets/UKV.png)
 
-Imagine having a standardized cross-lingual interface for all your things "Data":
+Imagine having a standardized cross-lingual binary interface for all your things "Data":
 
 * Storing binary blobs
 * Building up graphs & indexes
 * Querying structured documents
-* [ACID](https://en.wikipedia.org/wiki/ACID) transactions across tables, docs & graphs via one API!
-* [Apache Arrow](https://arrow.apache.org/) interop and [Flight RPC](https://arrow.apache.org/docs/format/Flight.html)
+* [ACID][acid] transactions across tables, docs & graphs via one API!
+* [Apache Arrow][arrow] interop and [Flight RPC][flight]
 * Familiar high-level [drivers](#frontends) for tabular & graph analytics
-* Handling JSON, [BSON](https://www.mongodb.com/json-and-bson), [MsgPack](https://msgpack.org/index.html)
-* [JSON-Pointers](https://datatracker.ietf.org/doc/html/rfc6901) & [Field-level Patches](https://datatracker.ietf.org/doc/html/rfc6902), no custom Query Languages
-* Packing Tensors for [PyTorch](https://pytorch.org/) and [TensorFlow](tensorflow.org)
+* Handling JSON, [BSON][bson], [MsgPack][mpack]
+* [JSON-Pointers][pointer] & [Field-level Patches][patch], no custom Query Languages
+* Packing Tensors for [PyTorch][pytorch] and [TensorFlow][tensorflow]
 
-UKV does just that, abstracting away the implementation from the user.
-In under 20K LOC you get a reference implementation in C++, support for any classical backend, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
+UKV does just that, [*cheapely*](#performance) abstracting away the implementation from the user.
+In under 20K LOC you get a reference implementation in C++, support for any classical backend engine, and bindings for [Python](#python), [GoLang](#golang), [Java](#java).
 You can combine every [engine](#engines) with every modality, [frontend](#frontends) and distribution form:
 
 | Engine  | Modality | Distribution                    | Frontend                        |
@@ -31,19 +38,22 @@ You can combine every [engine](#engines) with every modality, [frontend](#fronte
 | RocksDB | Graphs   | Distributed <sup>*coming*</sup> | GoLang <sup>*in-progress*</sup> |
 | UnumKV  |          |                                 | Java <sup>*in-progress*</sup>   |
 
-This would produce hundreds of binaries for all kinds of use cases, like:
+## Usecases
 
-* Python, GoLang, Java and other high-level bindings for [RocksDB](rocksdb.org) and [LevelDB](https://github.com/google/leveldb).
-* Performant embedded store in the foundation of your in-house storage solution.
-* Document store, that is simpler and faster than putting JSONs in MongoDB or Postgres.
-* Graph database, with the feel of [NetworkX](https://networkx.org), ~~soon~~ speed of [GunRock](http://gunrock.github.io) and scale of [Hadoop](https://hadoop.apache.org).
-* Low-latency media storage for games, CDNs and ML/BI pipelines.
+Such standartization helps make the system more modular, more flexible.
+This single repo can have a hundred use-cases like:
+
+1. Serving [RocksDB][rocksdb] and [LevelDB][leveldb] as a standalone DBMS over RPC.
+2. Python, GoLang, Java and other high-level bindings for Terabyte and Petabyte-scale containers distributed across the entire datacenter.
+3. Document store, that is simpler and faster than putting JSONs in MongoDB or Postgres.
+4. Graph database, with the feel of [NetworkX][networkx], ~~soon~~ speed of [GunRock][gunrock] and scale of [Hadoop][hadoop].
+5. Performant ABI-stable embedded store in the foundation of your own DBMS, CDN or even BI pipeline!
 
 But more importantly, if you choose backends that support transactions and collections, you can get an all-in one solution:
 
-![UKV Monolithic Data-lake](assets/UKV_Combo.png)
+![UKV Data-lake](assets/UKV_Combo.png)
 
-It is normal to have a separate Postgres for your transactional data, a MongoDB for your large flexible-schema document collections, a Neo4J instance for your graphs, and an S3 storage bucket for your media data, all serving the different data needs of a single business.
+It is normal to have a separate Postgres for your transactional data, a MongoDB for your large flexible-schema document collections, a Neo4J instance for your graphs, and an [S3][s3] storage bucket for your media data, all serving the different data needs of a single business.
 
 > Example: a social network, storing passwords in Postgres, posts in MongoDB, user relations in Neo4J and post attachments in S3.
 
@@ -53,6 +63,77 @@ UKV provides something far more uniform, simple, and performant *with the right 
 When picking the UnumKV backend, we bring our entire IO stack, bypassing the Linux kernel for storage and networking operations.
 This yields speedups not just for small-ish OLTP and mid-size OLAP, but even streaming-out Gigabyte-sized videos.
 **One ~~ring~~ data-lake to rule them all.**
+
+[blas]: https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms
+[crud]: https://en.wikipedia.org/wiki/Create,_read,_update_and_delete
+[acid]: https://en.wikipedia.org/wiki/ACID
+[arrow]: https://arrow.apache.org/
+[patch]: https://datatracker.ietf.org/doc/html/rfc6902
+[mpack]: https://msgpack.org/index.html
+[flight]: https://arrow.apache.org/docs/format/Flight.html
+[pointer]: https://datatracker.ietf.org/doc/html/rfc6901
+[bson]: https://www.mongodb.com/json-and-bson
+[pytorch]: https://pytorch.org/
+[tensorflow]: https://tensorflow.org
+[rocksdb]: https://rocksdb.org
+[leveldb]: https://github.com/google/leveldb
+[hadoop]: https://hadoop.apache.org
+[networkx]: https://networkx.org
+[gunrock]: https://gunrock.github.io
+[s3]: https://aws.amazon.com/s3
+
+## Performance
+
+Over the years we broke speed limits on CPUs and GPUs using SIMD, branch-less computing and innovation in parallel algorithm design.
+You won't find `virtual`, `override` or `throw` even in our FOSS reference implementation.
+Dynamic allocations are minimized and generally happen within specialized small arenas.
+
+> Performance is a tricky topic, if you want more details, here is a sequence of blog posts:.
+
+What it means for you?
+
+### Benchmarking on Twitter JSONs
+
+Ingestion speed:
+
+* MongoDB: 2'000 tweets/s.
+* MongoDB with `mongoimport`: 10'000 tweets/s.
+* UKV: FOSS RocksDB + FOSS JSON modality: 11'000 tweets/s.
+* UKV: proprietary UnumKV + FOSS JSON modality: 42'000 tweets/s.
+* UKV: proprietary UnumKV + proprietary JSON modality: 60'000 tweets/s.
+
+All of UKV interfaces look same, but work different.
+It is a modular system you can assemble the way you like!
+
+Gathering Speeds:
+
+* MongoDB: 2'000 tweets/s.
+* MongoDB with `mongoimport`: 10'000 tweets/s.
+* UKV: FOSS RocksDB + FOSS JSON modality: 11'000 tweets/s.
+* UKV: proprietary UnumKV + FOSS JSON modality: 42'000 tweets/s.
+* UKV: proprietary UnumKV + proprietary JSON modality: 60'000 tweets/s.
+
+Aside from lookups and gathers, we support random sampling for Machine Learning applications.
+
+### Benchmarking on Bitcoin Graph
+
+Ingestion speed:
+
+* Neo4J:
+* ArangoDB:
+* TigerGraph:
+* UKV: FOSS RocksDB + FOSS Graph modality: 
+* UKV: proprietary UnumKV + FOSS Graph modality: 
+* UKV: proprietary UnumKV + proprietary Graph modality: 
+
+Gathering Speeds:
+
+* Neo4J:
+* ArangoDB:
+* TigerGraph:
+* UKV: FOSS RocksDB + FOSS Graph modality: 
+* UKV: proprietary UnumKV + FOSS Graph modality: 
+* UKV: proprietary UnumKV + proprietary Graph modality: 
 
 ## Engines
 
@@ -122,14 +203,8 @@ Once you have a good enough shared interface, it is relatively easy to build on 
 * Vectors, and
 * Paths.
 
-But why even bother mixing all of it in one DBMS?
-
-There are too extremes these days: consistency and scalability, especially when working with heavily linked flexible schema data.
-The consistent camp would take a tabular/relational DBMS and add a JSON column and additional columns for every relationship they want to maintain.
-The others would take 2 different DBMS solutions - one for large collections of entries and one for the links between them, often - MongoDB and Neo4J.
-In that case, every DBMS will have a custom modality-specific scaling, sharding, and replication strategy, but synchronizing them would be impossible in mutable conditions.
-This makes it hard for the developers to choose a future-proof solution for their projects.
-By putting different modality collections in one DBMS, we allow operation-level consistency controls giving the users all the flexibility one can get.
+Is there something else you need?
+Submit a feature request!
 
 ## Installation & Deployment
 

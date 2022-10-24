@@ -865,10 +865,21 @@ WARN_LOGFILE           =
 # spaces. See also FILE_PATTERNS and EXTENSION_MAPPING
 # Note: If this tag is empty the current directory is searched.
 
+# - README.md
+# - C API: Tutorial, Docs
+# - SDKs: Python, Java, GoLang, Rust, JS
+# - Implementations
+# - Testing
+# - Benchmarks
+
 INPUT                  =    include/ukv \
                             include/ukv/cpp \
                             README.md \
+                            include/README.md \
+                            include/cpp/README.md \
                             src/README.md \
+                            benchmarks/README.md \
+                            tests/README.md \
                             python/README.md \
                             java/README.md \
                             golang/README.md \
