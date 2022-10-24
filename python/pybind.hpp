@@ -112,6 +112,9 @@ struct py_collection_gt {
     }
 };
 
+using py_bins_collection_t = py_collection_gt<bins_collection_t>;
+using py_docs_collection_t = py_collection_gt<docs_collection_t>;
+
 struct py_buffer_memory_t {
     Py_buffer raw;
     /// The memory that `raw.shape` points to.
