@@ -218,7 +218,7 @@ static void write_same_doc(py_docs_collection_t& py_collection, PyObject* keys_p
 }
 
 static void write_doc(py_docs_collection_t& py_collection, py::object key_py, py::object val_py) {
-    auto is_single_key = PyLong_Check(key_py.ptr());
+    auto is_single_key = !PySequence_Check(key_py.ptr());
     auto func = !is_single_key ? &write_many_docs : &write_one_doc;
     return func(py_collection, key_py.ptr(), val_py.ptr());
 }
@@ -249,13 +249,13 @@ static py::object read_many_docs(py_docs_collection_t& py_collection, PyObject* 
 }
 
 static py::object read_doc(py_docs_collection_t& py_collection, py::object key_py) {
-    auto is_single = PyLong_Check(key_py.ptr());
+    auto is_single = !PySequence_Check(key_py.ptr());
     auto func = is_single ? &read_one_doc : &read_many_docs;
     return func(py_collection, key_py.ptr());
 }
 
 static void remove_doc(py_docs_collection_t& py_collection, py::object key_py) {
-    auto is_single = PyLong_Check(key_py.ptr());
+    auto is_single = !PySequence_Check(key_py.ptr());
     auto func = is_single ? &write_one_binary<docs_collection_t> : &write_many_binaries<docs_collection_t>;
     return func(py_collection, key_py.ptr(), Py_None);
 }

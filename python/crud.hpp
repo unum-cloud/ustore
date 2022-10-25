@@ -288,27 +288,27 @@ static py::object read_many_binaries(py_bins_collection_t& collection, PyObject*
 
 template <typename collection_at>
 static py::object has_binary(py_collection_gt<collection_at>& collection, py::object key_py) {
-    auto is_single = PyLong_Check(key_py.ptr());
+    auto is_single = !PySequence_Check(key_py.ptr());
     auto func = is_single ? &has_one_binary<collection_at> : &has_many_binaries<collection_at>;
     return func(collection, key_py.ptr());
 }
 
 static py::object read_binary(py_bins_collection_t& collection, py::object key_py) {
-    auto is_single = PyLong_Check(key_py.ptr());
+    auto is_single = !PySequence_Check(key_py.ptr());
     auto func = is_single ? &read_one_binary : &read_many_binaries;
     return func(collection, key_py.ptr());
 }
 
 template <typename collection_at>
 static void write_binary(py_collection_gt<collection_at>& collection, py::object key_py, py::object val_py) {
-    auto is_single = PyLong_Check(key_py.ptr());
+    auto is_single = !PySequence_Check(key_py.ptr());
     auto func = is_single ? &write_one_binary<collection_at> : &write_many_binaries<collection_at>;
     return func(collection, key_py.ptr(), val_py.ptr());
 }
 
 template <typename collection_at>
 static void remove_binary(py_collection_gt<collection_at>& collection, py::object key_py) {
-    auto is_single = PyLong_Check(key_py.ptr());
+    auto is_single = !PySequence_Check(key_py.ptr());
     auto func = is_single ? &write_one_binary<collection_at> : &write_many_binaries<collection_at>;
     return func(collection, key_py.ptr(), Py_None);
 }
