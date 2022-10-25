@@ -8,7 +8,7 @@ on:
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
-
+ 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
@@ -33,16 +33,16 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v2
       - name: Install Deps
-        run: sudo apt update && sudo apt install -y doxygen graphviz dia git
-      - name: Get Styles
-        run: git clone https://github.com/jothepro/doxygen-awesome-css && cd doxygen-awesome-css && git checkout v2.1.0
+        run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe furo sphinx_mdinclude
       - name: Build Documentation
-        run: VERSION=$(cat ./VERSION) && doxygen assets/doxygen/config.dox
+        run: cd assets/docs && doxygen config.dox && make html
+      - name: Copy assets
+        run: cp -r assets build/docs/html/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
           # Upload entire repository
-          path: "./doxygen_docs/html/"
+          path: "./build/docs/html/"
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1

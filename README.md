@@ -1,4 +1,3 @@
-\mainpage
 # Universal Keys & Values
 
 * Open Standard for a Binary DBMS Interface

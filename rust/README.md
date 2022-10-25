@@ -1,4 +1,3 @@
-\page rust
 # UKV: Rust Bindings
 
 Rust implementation is designed to support:

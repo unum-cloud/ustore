@@ -1,5 +1,5 @@
 /**
- * @file table_ref.hpp
+ * @file docs_table.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
  * @addtogroup Cpp
@@ -9,8 +9,7 @@
  * Most field-level operations are still accessible through normal @c member_refs_t.
  * This interface mostly helps with tabular and SoA <-> AoS operations involving:
  * - ::ukv_docs_gist
- * - ::ukv_docs_gather_scalars
- * - ::ukv_docs_gather_strings
+ * - ::ukv_docs_gather_t
  */
 
 #pragma once

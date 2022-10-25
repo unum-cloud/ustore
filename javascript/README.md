@@ -1,4 +1,3 @@
-\page js
 # UKV: JavaScript Bindings
 
 * Node.js
