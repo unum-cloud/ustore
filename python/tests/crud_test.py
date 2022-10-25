@@ -64,7 +64,6 @@ def only_overwrite(col):
 
 
 def batch_insert(col):
-    return
     col.clear()
     count_keys: int = 20
     keys: list[int] = list(range(1, count_keys + 1))
