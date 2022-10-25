@@ -43,3 +43,47 @@ The import too 3h 45m, averaging at:
 Comparing that with 
 
 ## Bitcoin Graph
+
+
+### Benchmarking on Twitter JSONs
+
+Ingestion speed:
+
+* MongoDB: 2'000 tweets/s.
+* MongoDB with `mongoimport`: 10'000 tweets/s.
+* UKV: FOSS RocksDB + FOSS JSON modality: 11'000 tweets/s.
+* UKV: proprietary UnumKV + FOSS JSON modality: 42'000 tweets/s.
+* UKV: proprietary UnumKV + proprietary JSON modality: 60'000 tweets/s.
+
+All of UKV interfaces look same, but work different.
+It is a modular system you can assemble the way you like!
+
+Gathering Speeds:
+
+* MongoDB: 2'000 tweets/s.
+* MongoDB with `mongoimport`: 10'000 tweets/s.
+* UKV: FOSS RocksDB + FOSS JSON modality: 11'000 tweets/s.
+* UKV: proprietary UnumKV + FOSS JSON modality: 42'000 tweets/s.
+* UKV: proprietary UnumKV + proprietary JSON modality: 60'000 tweets/s.
+
+Aside from lookups and gathers, we support random sampling for Machine Learning applications.
+
+### Benchmarking on Bitcoin Graph
+
+Ingestion speed:
+
+* Neo4J:
+* ArangoDB:
+* TigerGraph:
+* UKV: FOSS RocksDB + FOSS Graph modality: 
+* UKV: proprietary UnumKV + FOSS Graph modality: 
+* UKV: proprietary UnumKV + proprietary Graph modality: 
+
+Gathering Speeds:
+
+* Neo4J:
+* ArangoDB:
+* TigerGraph:
+* UKV: FOSS RocksDB + FOSS Graph modality: 
+* UKV: proprietary UnumKV + FOSS Graph modality: 
+* UKV: proprietary UnumKV + proprietary Graph modality: 
