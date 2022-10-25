@@ -17,3 +17,4 @@ Intro
    sdk/index
    tests/index
    benchmarks/index
+   genindex
