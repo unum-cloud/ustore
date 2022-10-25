@@ -183,6 +183,8 @@ void py_transform_n(PyObject* obj,
         for (std::size_t i = 0; i != max_count; ++i, ++output_iterator)
             *output_iterator = transform(PySequence_GetItem(obj, i));
     }
+    else if (obj != Py_None)
+        throw std::invalid_argument("Invalid Argument!");
 }
 
 /**
