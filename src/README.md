@@ -1,4 +1,3 @@
-\page src
 # UKV: Open Source Reference Implementation
 
 UKV is an open standard.

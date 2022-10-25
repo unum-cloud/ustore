@@ -232,8 +232,8 @@ using transaction_t = context_t;
 
 /**
  * @brief DataBase is a "collection of named collections",
- * essentially a transactional @b `map<string,map<id,string>>`.
- * Or in Python terms: @b `dict[str,dict[int,str]]`.
+ * essentially a transactional @b map<string,map<id,string>>.
+ * Or in Python terms: @b dict[str,dict[int,str]].
  *
  * ## Class Specs
  * - Concurrency: @b Thread-Safe, except for `open`, `close`.
