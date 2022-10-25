@@ -1,4 +1,3 @@
-\page go
 # UKV: GoLang Bindings
 
 GoLang bindings are implemented using [cGo](https://pkg.go.dev/cmd/cgo).

@@ -1,4 +1,3 @@
-\page java
 # UKV: Java Bindings
 
 These bindings are implemented via [Java Native Interface](https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/jniTOC.html).
