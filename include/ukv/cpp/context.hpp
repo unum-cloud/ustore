@@ -1,5 +1,5 @@
 /**
- * @file bins_collections.hpp
+ * @file context.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp

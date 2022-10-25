@@ -1,5 +1,5 @@
 /**
- * @file bins_collections.hpp
+ * @file bins_collection.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp
@@ -15,8 +15,8 @@ namespace unum::ukv {
 
 /**
  * @brief Collection is persistent associative container,
- * essentially a transactional @b `map<id,string>`.
- * Or in Python terms: @b `dict[int,bytes]`.
+ * essentially a transactional @b map<id,string>.
+ * Or in Python terms: @b dict[int,bytes].
  *
  * Generally cheap to construct. Can address @b both collections
  * "HEAD" state, as well as some "snapshot"/"transaction" view.

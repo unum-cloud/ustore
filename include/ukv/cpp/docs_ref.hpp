@@ -128,6 +128,7 @@ class docs_ref_gt {
 
     /**
      * @brief Pair-wise assigns values to keys located in this proxy objects.
+     * @param vals Values to be assigned.
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return status_t Non-NULL if only an error had occurred.
      */
