@@ -37,7 +37,7 @@ jobs:
       - name: Build Documentation
         run: cd assets/docs && doxygen config.dox && make html
       - name: Copy assets
-        run: cp assets build/docs/html/
+        run: cp -r assets build/docs/html/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
