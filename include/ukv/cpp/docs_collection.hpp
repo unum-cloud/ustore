@@ -1,5 +1,5 @@
 /**
- * @file docs_collections.hpp
+ * @file docs_collection.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp
@@ -14,8 +14,8 @@ namespace unum::ukv {
 
 /**
  * @brief Collection is persistent associative container,
- * essentially a transactional @b `map<id,std::map<..>>`.
- * Or in Python terms: @b `dict[int,dict]`.
+ * essentially a transactional @b map<id,std::map<..>>.
+ * Or in Python terms: @b dict[int,dict].
  *
  * Generally cheap to construct. Can address @b both collections
  * "HEAD" state, as well as some "snapshot"/"transaction" view.
