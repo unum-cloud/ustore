@@ -1,5 +1,5 @@
+============
+GO
+============
 
 .. mdinclude:: ../../../../golang/README.md
-
-.. toctree::
-   :hidden:
