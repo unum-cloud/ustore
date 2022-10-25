@@ -23,8 +23,10 @@ PyObject* from_json(nlohmann::json const& js) {
         return PyLong_FromLong(js.get<nlohmann::json::number_integer_t>());
     else if (js.is_number_float())
         return PyFloat_FromDouble(js.get<double>());
-    else if (js.is_string())
-        return PyUnicode_FromString(js.get<nlohmann::json::string_t>().c_str());
+    else if (js.is_string()) {
+        auto str = js.get<nlohmann::json::string_t>();
+        return PyUnicode_FromStringAndSize(str.c_str(), str.size());
+    }
     else if (js.is_array()) {
         PyObject* obj = PyTuple_New(js.size());
         for (size_t i = 0; i < js.size(); i++)
@@ -35,7 +37,7 @@ PyObject* from_json(nlohmann::json const& js) {
     {
         PyObject* obj = PyDict_New();
         for (nlohmann::json::const_iterator it = js.cbegin(); it != js.cend(); ++it)
-            PyDict_SetItem(obj, PyUnicode_FromString(it.key().c_str()), from_json(it.value()));
+            PyDict_SetItem(obj, PyUnicode_FromStringAndSize(it.key().c_str(), it.key().size()), from_json(it.value()));
         return obj;
     }
 }
@@ -46,11 +48,13 @@ inline void to_string(PyObject* obj, std::string& output) {
     else if (PyFloat_Check(obj))
         fmt::format_to(std::back_inserter(output), "{}", PyFloat_AsDouble(obj));
     else if (PyBytes_Check(obj)) {
+        output.reserve(output.size() + PyBytes_Size(obj) + 2);
         output += "\"";
         output += PyBytes_AsString(obj);
         output += "\"";
     }
     else if (PyUnicode_Check(obj)) {
+        output.reserve(output.size() + PyUnicode_GET_LENGTH(obj) + 2);
         output += "\"";
         output += PyBytes_AsString(PyUnicode_AsASCIIString(obj));
         output += "\"";
