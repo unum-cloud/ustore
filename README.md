@@ -14,6 +14,8 @@
 <a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/issues-closed-raw/unum-cloud/ukv?color=purple&style=flat-square"></a>
 &nbsp;&nbsp;
 <a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/stars/unum-cloud/ukv?color=purple&style=flat-square"></a>
+&nbsp;&nbsp;
+<a href="#"><img src="https://github.com/ishkhan42/UKV/actions/workflows/build.yml/badge.svg?branch=main"></a>
 </p>
 
 ## What is UKV?
