@@ -32,4 +32,4 @@ RUN apt update && apt install -y -V ca-certificates lsb-release wget && cd /tmp 
     doxygen graphviz dia python3.10 python3-pip python3-dbg
 
 # Pip installations
-RUN pip install pytest twine numpy pyarrow wheel gdb-tools
+RUN pip install pytest twine numpy pyarrow wheel gdb-tools sphinx breathe furo sphinx_mdinclude
