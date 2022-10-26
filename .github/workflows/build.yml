@@ -27,7 +27,7 @@ jobs:
            && sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
            && sudo apt update && sudo apt install -y -V libarrow-dev libarrow-dataset-dev libarrow-flight-dev \
            libarrow-python-dev libarrow-python-flight-dev libplasma-dev libgandiva-dev libparquet-dev \
-           doxygen graphviz dia python3.10 python3-pip python3-dbg
+           doxygen graphviz dia python3.9 python3-pip python3-dbg
 
     - name: pip dependencies
       run: pip install pytest numpy pyarrow cmake
