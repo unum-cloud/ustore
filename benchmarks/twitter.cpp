@@ -138,10 +138,10 @@ static void docs_upsert(bm::State& state) {
         ukv_docs_write_t docs_write {
             .db = db,
             .error = status.member_ptr(),
-            .modification = ukv_doc_modify_upsert_k,
             .arena = arena.member_ptr(),
-            .type = ukv_doc_field_json_k,
             .tasks_count = copies_per_tweet_k,
+            .type = ukv_doc_field_json_k,
+            .modification = ukv_doc_modify_upsert_k,
             .collections = &collection_docs_k,
             .keys = ids_tweets.data(),
             .keys_stride = sizeof(ukv_key_t),
