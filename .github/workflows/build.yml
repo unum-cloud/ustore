@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
@@ -18,30 +18,29 @@ jobs:
     runs-on: ubuntu-20.04
 
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: apt dependencies
-      run: |
-           sudo apt update && sudo apt install -y -V ca-certificates lsb-release wget && cd /tmp \
-           && wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
-           && sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
-           && sudo apt update && sudo apt install -y -V libarrow-dev libarrow-dataset-dev libarrow-flight-dev \
-           libarrow-python-dev libarrow-python-flight-dev libplasma-dev libgandiva-dev libparquet-dev \
-           doxygen graphviz dia python3.9 python3-pip python3-dbg
+      - uses: actions/checkout@v3
 
-    - name: pip dependencies
-      run: pip install pytest numpy pyarrow cmake
+      - name: apt dependencies
+        run: |
+          sudo apt update && sudo apt install -y -V ca-certificates lsb-release wget && cd /tmp \
+          && wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
+          && sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
+          && sudo apt update && sudo apt install -y -V libarrow-dev libarrow-dataset-dev libarrow-flight-dev \
+          libarrow-python-dev libarrow-python-flight-dev libplasma-dev libgandiva-dev libparquet-dev \
+          doxygen graphviz dia python3.9 python3-pip python3-dbg python3.9-dev
 
-    - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      run: cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} .
+      - name: pip dependencies
+        run: pip install pytest numpy pyarrow cmake
 
-    - name: Build
-      run: make -j16
+      - name: Configure CMake
+        # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+        # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+        run: cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} .
 
-    - name: Upload Binaries
-      uses: actions/upload-artifact@v3.1.1
-      with:
-        path: build/bin/*
+      - name: Build
+        run: make -j16
 
+      - name: Upload Binaries
+        uses: actions/upload-artifact@v3.1.1
+        with:
+          path: build/bin/*
