@@ -82,7 +82,7 @@
         },
         {
             "label": "Build Native: Release",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Release . && make -j 6",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_PYTHON=1 -DUKV_BUILD_FLIGHT_RPC=1 -DUKV_BUILD_TESTS=0 . && make -j 6",
             "args": [],
             "type": "shell"
         },
