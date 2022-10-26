@@ -43,8 +43,8 @@ using namespace unum;
 
 struct hash_t {
     ukv_key_t operator()(std::string_view key_str) const noexcept {
-        using stl_t = std::hash<std::string_view>;
-        auto result = stl_t {}(key_str);
+        using umemkv_t = std::hash<std::string_view>;
+        auto result = umemkv_t {}(key_str);
 #ifdef UKV_DEBUG
         result %= 10ul;
 #endif
@@ -71,7 +71,7 @@ consecutive_strs_iterator_t get_bucket_keys(value_view_t bucket, ukv_length_t si
     return {lengths + 1u, bucket.data() + bytes_in_header_k + bytes_for_counters};
 }
 
-consecutive_bins_iterator_t get_bucket_vals(value_view_t bucket, ukv_length_t size) noexcept {
+consecutive_blobs_iterator_t get_bucket_vals(value_view_t bucket, ukv_length_t size) noexcept {
     auto lengths = reinterpret_cast<ukv_length_t const*>(bucket.data());
     auto bytes_for_counters = size * 2u * counter_size_k;
     auto bytes_for_keys = std::accumulate(lengths + 1u, lengths + 1u + size, 0ul);
@@ -299,7 +299,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     ukv_read(&read);
     return_on_error(c.error);
 
-    joined_bins_t joined_buckets {unique_places.count, buckets_offsets, buckets_values};
+    joined_blobs_t joined_buckets {unique_places.count, buckets_offsets, buckets_values};
     uninitialized_vector_gt<value_view_t> updated_buckets(unique_places.count, arena, c.error);
     return_on_error(c.error);
     transform_n(joined_buckets.begin(), unique_places.count, updated_buckets.begin());
@@ -400,7 +400,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
 
     // Some of the entries will contain more then one key-value pair in case of collisions.
     ukv_length_t exported_volume = 0;
-    joined_bins_t buckets {c.tasks_count, buckets_offsets, buckets_values};
+    joined_blobs_t buckets {c.tasks_count, buckets_offsets, buckets_values};
     auto presences =
         arena.alloc_or_dummy(divide_round_up<std::size_t>(c.tasks_count, bits_in_byte_k), c.error, c.presences);
     auto lengths = arena.alloc_or_dummy(c.tasks_count, c.error, c.lengths);
@@ -502,7 +502,7 @@ void scan_predicate( //
         if (*c_error)
             break;
 
-        joined_bins_iterator_t found_buckets {found_buckets_offsets, found_buckets_data};
+        joined_blobs_iterator_t found_buckets {found_buckets_offsets, found_buckets_data};
         for (std::size_t i = 0; i != found_buckets_count[0]; ++i, ++found_buckets) {
             value_view_t bucket = *found_buckets;
             for_each_in_bucket(bucket, [&](bucket_member_t const& member) {

@@ -975,7 +975,7 @@ void read_unique_docs( //
 
     ukv_read(&read);
 
-    auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
+    auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
 
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
@@ -1034,7 +1034,7 @@ void read_modify_unique_docs( //
         ukv_read(&read);
         return_on_error(c_error);
 
-        auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
+        auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
         auto found_binary_it = found_binaries.begin();
 
         for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
@@ -1175,7 +1175,7 @@ void read_modify_docs( //
     initialized_range_gt<json_t> unique_docs_raii {unique_docs};
 
     // Parse all the unique documents
-    auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
+    auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
     for (ukv_size_t doc_idx = 0; doc_idx != unique_places.count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
@@ -1512,8 +1512,8 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
 
-    joined_bins_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
-    joined_bins_iterator_t found_binary_it = found_binaries.begin();
+    joined_blobs_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
+    joined_blobs_iterator_t found_binary_it = found_binaries.begin();
 
     // Export all the elements into a heap-allocated hash-set, keeping only unique entries
     field_path_buffer_t field_name = {0};
@@ -1655,8 +1655,8 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
     strided_iterator_gt<ukv_doc_field_type_t const> types {c.types, c.types_stride};
 
-    joined_bins_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
-    joined_bins_iterator_t found_binary_it = found_binaries.begin();
+    joined_blobs_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
+    joined_blobs_iterator_t found_binary_it = found_binaries.begin();
 
     // Estimate the amount of memory needed to store at least scalars and columns addresses
     // TODO: Align offsets of bitmaps to 64-byte boundaries for Arrow

@@ -1,5 +1,5 @@
 /**
- * @file bins_ref.hpp
+ * @file blobs_ref.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp
@@ -17,7 +17,7 @@
 namespace unum::ukv {
 
 template <typename locations_store_t>
-class bins_ref_gt;
+class blobs_ref_gt;
 
 /**
  * @brief A proxy object, that allows both lookups and writes
@@ -38,7 +38,7 @@ class bins_ref_gt;
  * ## Memory Management
  *
  * Every "container" that overloads the @b [] operator has an internal "arena",
- * that is shared between all the @c bins_ref_gt's produced from it. That will
+ * that is shared between all the @c blobs_ref_gt's produced from it. That will
  * work great, unless:
  * - multiple threads are working with same collection handle or transaction.
  * - reading responses interleaves with new requests, which gobbles temporary memory.
@@ -51,7 +51,7 @@ class bins_ref_gt;
  * - Exceptions: Never.
  */
 template <typename locations_at>
-class bins_ref_gt {
+class blobs_ref_gt {
   public:
     static_assert(!std::is_rvalue_reference_v<locations_at>, //
                   "The internal object can't be an R-value Reference");
@@ -61,7 +61,7 @@ class bins_ref_gt {
     using keys_extractor_t = places_arg_extractor_gt<locations_plain_t>;
     static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
-    using value_t = std::conditional_t<is_one_k, value_view_t, embedded_bins_t>;
+    using value_t = std::conditional_t<is_one_k, value_view_t, embedded_blobs_t>;
     using present_t = std::conditional_t<is_one_k, bool, bits_span_t>;
     using length_t = std::conditional_t<is_one_k, ukv_length_t, ptr_range_gt<ukv_length_t>>;
 
@@ -82,24 +82,24 @@ class bins_ref_gt {
     expected_gt<expected_at> any_gather(contents_arg_at&&, ukv_options_t) noexcept;
 
   public:
-    bins_ref_gt(ukv_database_t db,
-                ukv_transaction_t txn,
-                locations_store_t locations,
-                ukv_arena_t* arena,
-                ukv_doc_field_type_t format = ukv_doc_field_default_k) noexcept
+    blobs_ref_gt(ukv_database_t db,
+                 ukv_transaction_t txn,
+                 locations_store_t locations,
+                 ukv_arena_t* arena,
+                 ukv_doc_field_type_t format = ukv_doc_field_default_k) noexcept
         : db_(db), txn_(txn), arena_(arena), locations_(locations), format_(format) {}
 
-    bins_ref_gt(bins_ref_gt&&) = default;
-    bins_ref_gt& operator=(bins_ref_gt&&) = default;
-    bins_ref_gt(bins_ref_gt const&) = default;
-    bins_ref_gt& operator=(bins_ref_gt const&) = default;
+    blobs_ref_gt(blobs_ref_gt&&) = default;
+    blobs_ref_gt& operator=(blobs_ref_gt&&) = default;
+    blobs_ref_gt(blobs_ref_gt const&) = default;
+    blobs_ref_gt& operator=(blobs_ref_gt const&) = default;
 
-    bins_ref_gt& on(arena_t& arena) noexcept {
+    blobs_ref_gt& on(arena_t& arena) noexcept {
         arena_ = arena.member_ptr();
         return *this;
     }
 
-    bins_ref_gt& as(ukv_doc_field_type_t format) noexcept {
+    blobs_ref_gt& as(ukv_doc_field_type_t format) noexcept {
         format_ = format;
         return *this;
     }
@@ -161,13 +161,13 @@ class bins_ref_gt {
     }
 
     template <typename contents_arg_at>
-    bins_ref_gt& operator=(contents_arg_at&& vals) noexcept(false) {
+    blobs_ref_gt& operator=(contents_arg_at&& vals) noexcept(false) {
         auto status = assign(std::forward<contents_arg_at>(vals));
         status.throw_unhandled();
         return *this;
     }
 
-    bins_ref_gt& operator=(std::nullptr_t) noexcept(false) {
+    blobs_ref_gt& operator=(std::nullptr_t) noexcept(false) {
         auto status = erase();
         status.throw_unhandled();
         return *this;
@@ -177,14 +177,14 @@ class bins_ref_gt {
     locations_plain_t& locations() const noexcept { return locations_.ref(); }
 };
 
-static_assert(bins_ref_gt<ukv_key_t>::is_one_k);
-static_assert(std::is_same_v<bins_ref_gt<ukv_key_t>::value_t, value_view_t>);
-static_assert(bins_ref_gt<ukv_key_t>::is_one_k);
-static_assert(!bins_ref_gt<places_arg_t>::is_one_k);
+static_assert(blobs_ref_gt<ukv_key_t>::is_one_k);
+static_assert(std::is_same_v<blobs_ref_gt<ukv_key_t>::value_t, value_view_t>);
+static_assert(blobs_ref_gt<ukv_key_t>::is_one_k);
+static_assert(!blobs_ref_gt<places_arg_t>::is_one_k);
 
 template <typename locations_at>
 template <typename expected_at>
-expected_gt<expected_at> bins_ref_gt<locations_at>::any_get(ukv_options_t options) noexcept {
+expected_gt<expected_at> blobs_ref_gt<locations_at>::any_get(ukv_options_t options) noexcept {
 
     status_t status;
     ukv_length_t* found_offsets = nullptr;
@@ -236,7 +236,7 @@ expected_gt<expected_at> bins_ref_gt<locations_at>::any_get(ukv_options_t option
             return many;
     }
     else {
-        embedded_bins_t many {count, found_offsets, found_lengths, found_values};
+        embedded_blobs_t many {count, found_offsets, found_lengths, found_values};
         if constexpr (is_one_k)
             return many[0];
         else
@@ -246,7 +246,7 @@ expected_gt<expected_at> bins_ref_gt<locations_at>::any_get(ukv_options_t option
 
 template <typename locations_at>
 template <typename contents_arg_at>
-status_t bins_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, ukv_options_t options) noexcept {
+status_t blobs_ref_gt<locations_at>::any_assign(contents_arg_at&& vals_ref, ukv_options_t options) noexcept {
     status_t status;
     using value_extractor_t = contents_arg_extractor_gt<std::remove_reference_t<contents_arg_at>>;
 

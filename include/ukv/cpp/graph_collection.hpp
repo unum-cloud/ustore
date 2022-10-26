@@ -203,7 +203,7 @@ class graph_collection_t {
     }
 
     expected_gt<bool> contains(ukv_key_t vertex, bool watch = true) noexcept {
-        return bins_ref_gt<collection_key_field_t>(db_, transaction_, ckf(collection_, vertex), arena_).present(watch);
+        return blobs_ref_gt<collection_key_field_t>(db_, transaction_, ckf(collection_, vertex), arena_).present(watch);
     }
 
     /**
@@ -217,7 +217,7 @@ class graph_collection_t {
         arg.collections_begin = {&collection_, 0};
         arg.keys_begin = vertices.begin();
         arg.count = vertices.count();
-        return bins_ref_gt<places_arg_t>(db_, transaction_, arg, arena_).present(watch);
+        return blobs_ref_gt<places_arg_t>(db_, transaction_, arg, arena_).present(watch);
     }
 
     using adjacency_range_t = range_gt<graph_stream_t>;

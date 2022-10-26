@@ -87,7 +87,7 @@ class docs_collection_t {
     inline ukv_database_t db() const noexcept { return db_; }
     inline ukv_transaction_t txn() const noexcept { return txn_; }
 
-    inline bins_range_t members( //
+    inline blobs_range_t members( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
         ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
         return {db_, txn_, collection_, min_key, max_key};

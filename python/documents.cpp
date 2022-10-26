@@ -19,7 +19,7 @@ class docs_pairs_stream_t {
 
     ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
     ptr_range_gt<ukv_key_t> fetched_keys_;
-    embedded_bins_t values_view;
+    embedded_blobs_t values_view;
     std::size_t fetched_offset_ = 0;
 
     status_t prefetch() noexcept {
@@ -75,7 +75,7 @@ class docs_pairs_stream_t {
         if (!status)
             return status;
 
-        values_view = embedded_bins_t {count, found_offsets, found_lengths, found_values};
+        values_view = embedded_blobs_t {count, found_offsets, found_lengths, found_values};
         next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
@@ -307,7 +307,7 @@ void ukv::wrap_document(py::module& m) {
     py_docs_collection.def("patch", &patch);
 
     py_docs_collection.def_property_readonly("keys", [](py_docs_collection_t& py_collection) {
-        bins_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
+        blobs_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
         keys_range_t range {members};
         return py::cast(std::make_unique<keys_range_t>(range));
     });

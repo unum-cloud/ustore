@@ -66,7 +66,7 @@ struct py_transaction_t : public std::enable_shared_from_this<py_transaction_t> 
 };
 
 /**
- * @brief Wrapper for `ukv::bins_collection_t`.
+ * @brief Wrapper for `ukv::blobs_collection_t`.
  * We need to preserve the `name`, to upsert again, after removing it in `clear`.
  * We also keep the transaction pointer, to persist the context of operation.
  */
@@ -112,7 +112,7 @@ struct py_collection_gt {
     }
 };
 
-using py_bins_collection_t = py_collection_gt<bins_collection_t>;
+using py_blobs_collection_t = py_collection_gt<blobs_collection_t>;
 using py_docs_collection_t = py_collection_gt<docs_collection_t>;
 
 struct py_buffer_memory_t {
@@ -128,10 +128,10 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     std::weak_ptr<py_db_t> py_db_ptr;
     std::weak_ptr<py_transaction_t> py_txn_ptr;
 
-    bins_collection_t index;
-    bins_collection_t sources_attrs;
-    bins_collection_t targets_attrs;
-    bins_collection_t relations_attrs;
+    blobs_collection_t index;
+    blobs_collection_t sources_attrs;
+    blobs_collection_t targets_attrs;
+    blobs_collection_t relations_attrs;
 
     bool in_txn = false;
     bool is_directed = false;
@@ -159,7 +159,7 @@ struct py_table_keys_range_t {
  */
 struct py_table_collection_t : public std::enable_shared_from_this<py_table_collection_t> {
 
-    py_bins_collection_t binary;
+    py_blobs_collection_t binary;
     std::variant<std::monostate, std::vector<ukv_str_view_t>> columns_names;
     std::variant<std::monostate, ukv_doc_field_type_t, std::vector<ukv_doc_field_type_t>> columns_types;
     std::variant<std::monostate, py_table_keys_range_t, std::vector<ukv_key_t>> rows_keys;
