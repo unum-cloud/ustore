@@ -24,7 +24,7 @@ jobs:
         run: sudo apt update && sudo apt install -y -V ca-certificates wget python3.9 python3-pip python3-dbg python3.9-dev
 
       - name: pip dependencies
-        run: pip install pytest numpy pyarrow cmake
+        run: python3.9 -m pip install pytest numpy pyarrow cmake
 
       - name: Configure CMake
         # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
