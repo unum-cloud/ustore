@@ -274,12 +274,7 @@ void ukv::wrap_document(py::module& m) {
     py_docs_collection.def("__getitem__", &read_doc);
     py_docs_collection.def("__contains__", &has_doc);
 
-    py_docs_collection.def("clear", [](py_docs_collection_t& collection) {
-        py_db_t& py_db = *collection.binary.py_db_ptr.lock().get();
-        database_t& db = py_db.native;
-        db.drop(collection.binary.name.c_str()).throw_unhandled();
-        collection.binary.native = db.collection(collection.binary.name.c_str()).throw_or_release();
-    });
+    py_docs_collection.def("clear", [](py_docs_collection_t& collection) { collection.binary.native.clear(); });
 
     py_docs_collection.def("patch", [](py_docs_collection_t& collection, py::object key_py, py::object val_py) {
         merge_patch(collection, key_py, val_py, ukv_doc_modify_patch_k);

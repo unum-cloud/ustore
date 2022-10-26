@@ -38,11 +38,11 @@ class bins_ref_gt;
  * ## Memory Management
  *
  * Every "container" that overloads the @b [] operator has an internal "arena",
- * that is shared between all the @c `bins_ref_gt`s produced from it. That will
+ * that is shared between all the @c bins_ref_gt's produced from it. That will
  * work great, unless:
  * - multiple threads are working with same collection handle or transaction.
  * - reading responses interleaves with new requests, which gobbles temporary memory.
- * For those cases, you can create a separate @c `arena_t` and pass it to `.on(...)`
+ * For those cases, you can create a separate @c arena_t and pass it to `.on(...)`
  * member function. In such HPC environments we would recommend to @b reuse one such
  * are on every thread.
  *
@@ -124,6 +124,7 @@ class bins_ref_gt {
 
     /**
      * @brief Pair-wise assigns values to keys located in this proxy objects.
+     * @param vals values to be assigned.
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return status_t Non-NULL if only an error had occurred.
      */

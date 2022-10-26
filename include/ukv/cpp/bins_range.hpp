@@ -348,7 +348,7 @@ struct size_estimates_t {
 
 /**
  * @brief Slice of keys or key-value-pairs stored in a single collection.
- * In Python terms: @b `dict().items()` or @b `dict().keys()`.
+ * In Python terms: @b dict().items() or @b dict().keys().
  * Supports C++ range-based loops: `for (auto key : @b collection.items())`
  * It can also be use for @b loose cardinality and disk-usage estimates.
  *

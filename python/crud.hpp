@@ -393,9 +393,9 @@ static py::array_t<ukv_key_t> scan_binary( //
  *        The most performant batch-reading method, ideal for ML.
  *
  * Contrary to most data types exposed by the Python interpreter,
- * buffers are not @c `PyObject` pointers but rather simple C structures.
+ * buffers are not @c PyObject pointers but rather simple C structures.
  * This allows them to be created and copied very simply.
- * When a generic wrapper around a buffer is needed, a @c `memoryview`
+ * When a generic wrapper around a buffer is needed, a @c memoryview
  * object can be created.
  * https://docs.python.org/3/c-api/buffer.html#buffer-structure
  *
