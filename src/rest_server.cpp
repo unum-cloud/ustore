@@ -841,7 +841,7 @@ class web_db_session_t : public std::enable_shared_from_this<web_db_session_t> {
 
 /**
  * @brief Spins on sockets, listening for new connection requests.
- *        Once accepted, allocates and dispatches a new @c `web_db_session_t`.
+ *        Once accepted, allocates and dispatches a new @c web_db_session_t.
  */
 class listener_t : public std::enable_shared_from_this<listener_t> {
     net::io_context& io_context_;

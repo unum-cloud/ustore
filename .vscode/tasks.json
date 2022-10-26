@@ -85,6 +85,12 @@
             "command": "cmake -DCMAKE_BUILD_TYPE=Release . && make -j 6",
             "args": [],
             "type": "shell"
+        },
+        {
+            "label": "Count Lines of Code",
+            "command":"cloc $(git ls-files)",
+            "args": [],
+            "type": "shell"
         }
     ]
 }

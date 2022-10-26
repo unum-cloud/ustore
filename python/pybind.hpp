@@ -186,7 +186,7 @@ struct py_table_collection_t : public std::enable_shared_from_this<py_table_coll
 };
 
 /**
- * @brief Proxy-object for binary @c `py_collection_t` collections that adds:
+ * @brief Proxy-object for binary @c py_collection_t collections that adds:
  * - serialization & deserialization of Python objects.
  * - field-level lookups.
  * - patching & merging: `.patch(...)` & `.merge(...)`.
@@ -231,7 +231,7 @@ struct py_stream_with_ending_gt {
  *      - get_column(keys) ~ Will extract/receive binary values as Apache Arrow collections
  *      - get_matrix(keys, max_length: int, padding: byte)
  *
- * All in all, collections mimic Python @c `dict` API, but some funcs were skipped:
+ * All in all, collections mimic Python @c dict API, but some funcs were skipped:
  *      - __len__() ~ It's hard to consistently estimate the collection.
  *      - popitem() ~ We can't guarantee Last-In First-Out semantics.
  *      - setdefault(key[, default]) ~ As default values are useless in DBs.
@@ -254,7 +254,7 @@ void wrap_database(py::module&);
 
 /**
  * @brief Python bindings for a Graph index, that mimics NetworkX.
- * Unlike C++ @c `graph_collection_t` this may include as many as 4 collections
+ * Unlike C++ @c graph_collection_t this may include as many as 4 collections
  * seen as one heavily attributed relational index.
  * Is similar in it's purpose to a pure-Python project - NetworkXum:
  * https://github.com/unum-cloud/NetworkXum

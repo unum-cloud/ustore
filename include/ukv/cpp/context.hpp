@@ -1,5 +1,5 @@
 /**
- * @file bins_collections.hpp
+ * @file context.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp
@@ -13,7 +13,7 @@
 namespace unum::ukv {
 
 /**
- * Abstraction over @c `ukv_database_t`, @c `ukv_transaction_t` and @c `ukv_arena_t`,
+ * Abstraction over @c ukv_database_t, @c ukv_transaction_t and @c ukv_arena_t,
  * needed for default-construction.
  */
 class null_context_t {
