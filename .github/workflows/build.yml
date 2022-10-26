@@ -1,4 +1,4 @@
-name: Build and Test
+name: Build
 
 on:
   push:
@@ -39,6 +39,8 @@ jobs:
     - name: Build
       run: make -j16
 
-    - name: Test
-      run:  find ./build/bin/ -iname '*unit_test' -exec {} \;
-      
+    - name: Upload Binaries
+      uses: actions/upload-artifact@v3.1.1
+      with:
+        path: build/bin/*
+
