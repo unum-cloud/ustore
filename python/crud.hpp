@@ -26,7 +26,8 @@ struct py_bin_req_t {
  * @param key_py Must be a `PyLong`.
  * @param val_py Can be anything.
  */
-static void write_one_binary(py_collection_t& collection, PyObject* key_py, PyObject* val_py) {
+template <typename collection_at>
+static void write_one_binary(py_collection_gt<collection_at>& collection, PyObject* key_py, PyObject* val_py) {
 
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
@@ -50,7 +51,8 @@ static void write_one_binary(py_collection_t& collection, PyObject* key_py, PyOb
     status.throw_unhandled();
 }
 
-static void write_many_binaries(py_collection_t& collection, PyObject* keys_py, PyObject* vals_py) {
+template <typename collection_at>
+static void write_many_binaries(py_collection_gt<collection_at>& collection, PyObject* keys_py, PyObject* vals_py) {
 
     status_t status;
     parsed_places_t parsed_places {keys_py, collection.native};
@@ -84,7 +86,7 @@ static void write_many_binaries(py_collection_t& collection, PyObject* keys_py, 
     status.throw_unhandled();
 }
 
-static void broadcast_binary(py_collection_t& collection, PyObject* keys_py, PyObject* vals_py) {
+static void broadcast_binary(py_bins_collection_t& collection, PyObject* keys_py, PyObject* vals_py) {
 
     status_t status;
     parsed_places_t parsed_places {keys_py, collection.native};
@@ -114,7 +116,8 @@ static void broadcast_binary(py_collection_t& collection, PyObject* keys_py, PyO
 
 #pragma region Reads
 
-static py::object has_one_binary(py_collection_t& collection, PyObject* key_py) {
+template <typename collection_at>
+static py::object has_one_binary(py_collection_gt<collection_at>& collection, PyObject* key_py) {
 
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
@@ -148,7 +151,7 @@ static py::object has_one_binary(py_collection_t& collection, PyObject* key_py) 
     return py::reinterpret_borrow<py::object>(obj_ptr);
 }
 
-static py::object read_one_binary(py_collection_t& collection, PyObject* key_py) {
+static py::object read_one_binary(py_bins_collection_t& collection, PyObject* key_py) {
 
     status_t status;
     ukv_key_t key = py_to_scalar<ukv_key_t>(key_py);
@@ -184,7 +187,8 @@ static py::object read_one_binary(py_collection_t& collection, PyObject* key_py)
     return py::reinterpret_borrow<py::object>(obj_ptr);
 }
 
-static py::object has_many_binaries(py_collection_t& collection, PyObject* keys_py) {
+template <typename collection_at>
+static py::object has_many_binaries(py_collection_gt<collection_at>& collection, PyObject* keys_py) {
 
     status_t status;
     ukv_octet_t* found_presences = nullptr;
@@ -220,7 +224,7 @@ static py::object has_many_binaries(py_collection_t& collection, PyObject* keys_
     return py::reinterpret_steal<py::object>(tuple_ptr);
 }
 
-static py::object read_many_binaries(py_collection_t& collection, PyObject* keys_py) {
+static py::object read_many_binaries(py_bins_collection_t& collection, PyObject* keys_py) {
 
     status_t status;
     ukv_octet_t* found_presences = nullptr;
@@ -282,31 +286,34 @@ static py::object read_many_binaries(py_collection_t& collection, PyObject* keys
     }
 }
 
-static py::object has_binary(py_collection_t& collection, py::object key_py) {
-    auto is_single = PyLong_Check(key_py.ptr());
-    auto func = is_single ? &has_one_binary : &has_many_binaries;
+template <typename collection_at>
+static py::object has_binary(py_collection_gt<collection_at>& collection, py::object key_py) {
+    auto is_single = !PySequence_Check(key_py.ptr());
+    auto func = is_single ? &has_one_binary<collection_at> : &has_many_binaries<collection_at>;
     return func(collection, key_py.ptr());
 }
 
-static py::object read_binary(py_collection_t& collection, py::object key_py) {
-    auto is_single = PyLong_Check(key_py.ptr());
+static py::object read_binary(py_bins_collection_t& collection, py::object key_py) {
+    auto is_single = !PySequence_Check(key_py.ptr());
     auto func = is_single ? &read_one_binary : &read_many_binaries;
     return func(collection, key_py.ptr());
 }
 
-static void write_binary(py_collection_t& collection, py::object key_py, py::object val_py) {
-    auto is_single = PyLong_Check(key_py.ptr());
-    auto func = is_single ? &write_one_binary : &write_many_binaries;
+template <typename collection_at>
+static void write_binary(py_collection_gt<collection_at>& collection, py::object key_py, py::object val_py) {
+    auto is_single = !PySequence_Check(key_py.ptr());
+    auto func = is_single ? &write_one_binary<collection_at> : &write_many_binaries<collection_at>;
     return func(collection, key_py.ptr(), val_py.ptr());
 }
 
-static void remove_binary(py_collection_t& collection, py::object key_py) {
-    auto is_single = PyLong_Check(key_py.ptr());
-    auto func = is_single ? &write_one_binary : &write_many_binaries;
+template <typename collection_at>
+static void remove_binary(py_collection_gt<collection_at>& collection, py::object key_py) {
+    auto is_single = !PySequence_Check(key_py.ptr());
+    auto func = is_single ? &write_one_binary<collection_at> : &write_many_binaries<collection_at>;
     return func(collection, key_py.ptr(), Py_None);
 }
 
-static void update_binary(py_collection_t& collection, py::object dict_py) {
+static void update_binary(py_bins_collection_t& collection, py::object dict_py) {
     status_t status;
     ukv_size_t step = sizeof(py_bin_req_t);
 
@@ -347,8 +354,9 @@ static void update_binary(py_collection_t& collection, py::object dict_py) {
     status.throw_unhandled();
 }
 
+template <typename collection_at>
 static py::array_t<ukv_key_t> scan_binary( //
-    py_collection_t& collection,
+    py_collection_gt<collection_at>& collection,
     ukv_key_t min_key,
     ukv_length_t count_limit) {
 
