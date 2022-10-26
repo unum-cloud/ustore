@@ -440,7 +440,7 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
     ukv_transaction_init_t& c = *c_ptr;
-    if (!c_ptr)
+    if (!c.transaction)
         safe_section("Allocating transaction handle", c.error, [&] { *c.transaction = new level_txn_t(); });
     return_on_error(c.error);
 
