@@ -104,9 +104,9 @@ struct pair_compare_t {
 /*****************  Using Consistent Sets ****************/
 /*********************************************************/
 
-// using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>>;
 // using consistent_set_t = consistent_avl_gt<pair_t, pair_compare_t>;
-using consistent_set_t = partitioned_gt<consistent_set_gt<pair_t, pair_compare_t>>;
+// using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>, std::shared_mutex>;
+using consistent_set_t = partitioned_gt<consistent_set_gt<pair_t, pair_compare_t>, std::shared_mutex, 64>;
 using transaction_t = typename consistent_set_t::transaction_t;
 using generation_t = typename consistent_set_t::generation_t;
 
