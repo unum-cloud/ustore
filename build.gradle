@@ -36,7 +36,7 @@ dependencies {
 
 model {
     buildTypes{
-        stl
+        umemkv
         rocks
         level
     }
@@ -63,8 +63,8 @@ model {
                     cCompiler.args '-D_FILE_OFFSET_BITS=64'
                 }
 
-                if (buildType == buildTypes.stl) {
-                    linker.args '-L', "${projectDir}/build/lib", "-l", "ukv_stl", "-l", "c"
+                if (buildType == buildTypes.umemkv) {
+                    linker.args '-L', "${projectDir}/build/lib", "-l", "ukv_umemkv", "-l", "c"
                 } else if (buildType == buildTypes.rocks) {
                     linker.args '-L', "${projectDir}/build/lib", "-l", "ukv_rocksdb", "-l", "rocksdb", "-l", "c"
                 } else if (buildType == buildTypes.level) {
@@ -89,8 +89,8 @@ jar {
     dependsOn("ukvRocksSharedLibrary")
     dependsOn("ukvLevelSharedLibrary")
 
-    into("stl") {
-        from("$buildDir/libs/ukv/shared/stl/libukv.so")
+    into("umemkv") {
+        from("$buildDir/libs/ukv/shared/umemkv/libukv.so")
     }
 
     into("rocks") {

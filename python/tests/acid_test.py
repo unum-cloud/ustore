@@ -1,6 +1,6 @@
 
 import pytest
-import ukv.stl as ukv
+import ukv.umemkv as ukv
 
 
 def test_transaction_set():

@@ -1,7 +1,7 @@
 package ukv
 
 /*
-#cgo LDFLAGS: -L${SRCDIR}/../../lib -lukv_stl -lstdc++
+#cgo LDFLAGS: -L${SRCDIR}/../../lib -lukv_umemkv -lstdc++
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../../include
 
 #include "ukv/db.h"
@@ -12,11 +12,11 @@ import (
 	u "github.com/unum-cloud/UKV/golang/internal"
 )
 
-type STL struct {
+type UMemKV struct {
 	u.DataBase
 }
 
-func CreateDB() STL {
+func CreateDB() UMemKV {
 	backend := u.BackendInterface{
 		UKV_error_free:      C.ukv_error_free,
 		UKV_arena_free:      C.ukv_arena_free,
@@ -26,6 +26,6 @@ func CreateDB() STL {
 		UKV_write:           C.ukv_write,
 		UKV_val_len_missing: u.ukv_length_t(C.ukv_length_missing_k)}
 
-	db := STL{DataBase: u.DataBase{Backend: backend}}
+	db := UMemKV{DataBase: u.DataBase{Backend: backend}}
 	return db
 }

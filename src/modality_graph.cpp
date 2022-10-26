@@ -352,7 +352,7 @@ void export_edge_tuples( //
     ukv_read(&read);
     return_on_error(c_error);
 
-    joined_bins_t values {c_vertices_count, c_found_offsets, c_found_values};
+    joined_blobs_t values {c_vertices_count, c_found_offsets, c_found_values};
     strided_iterator_gt<ukv_collection_t const> collections {c_collections, c_collections_stride};
     strided_range_gt<ukv_key_t const> vertices {{c_vertices, c_vertices_stride}, c_vertices_count};
     strided_iterator_gt<ukv_vertex_role_t const> roles {c_roles, c_roles_stride};
@@ -363,7 +363,7 @@ void export_edge_tuples( //
     // Estimate the amount of memory we will need for the arena
     std::size_t count_ids = 0;
     if constexpr (tuple_size_k != 0) {
-        joined_bins_iterator_t values_it = values.begin();
+        joined_blobs_iterator_t values_it = values.begin();
         for (ukv_size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
             value_view_t value = *values_it;
             count_ids += neighbors(value, find_edges[i].role).size();
@@ -378,7 +378,7 @@ void export_edge_tuples( //
     return_on_error(c_error);
 
     std::size_t passed_ids = 0;
-    joined_bins_iterator_t values_it = values.begin();
+    joined_blobs_iterator_t values_it = values.begin();
     for (std::size_t i = 0; i != c_vertices_count; ++i, ++values_it) {
         value_view_t value = *values_it;
         find_edge_t find_edge = find_edges[i];
@@ -461,7 +461,7 @@ void pull_and_link_for_updates( //
     return_on_error(c_error);
 
     // Link the response buffer to `unique_entries`
-    joined_bins_t found_binaries {unique_count, found_binary_offs, found_binary_begin};
+    joined_blobs_t found_binaries {unique_count, found_binary_offs, found_binary_begin};
     for (std::size_t i = 0; i != unique_count; ++i) {
         auto found_binary = found_binaries[i];
         unique_entries[i].content = ukv_bytes_ptr_t(found_binary.data());

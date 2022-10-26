@@ -2,8 +2,8 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build Native: Debug STL Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_stl_unit_test",
+            "label": "Build Native: Debug UMemKV Test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_umemkv_unit_test",
             "args": [],
             "type": "shell"
         },
@@ -20,8 +20,8 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug STL Stress Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_stl_stress_test",
+            "label": "Build Native: Debug UMemKV Stress Test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_umemkv_stress_test",
             "args": [],
             "type": "shell"
         },
@@ -32,8 +32,8 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug STL Test API",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_stl_api_test",
+            "label": "Build Native: Debug UMemKV Test API",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_umemkv_api_test",
             "args": [],
             "type": "shell"
         },
@@ -58,19 +58,19 @@
         {
             "label": "Build Native: Debug Arrow Test",
             // Both must pass builds
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && make ukv_flight_client_unit_test ukv_stl_flight_server",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && make ukv_flight_client_unit_test ukv_umemkv_flight_server",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug Arrow",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && make ukv_stl_flight_server",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && make ukv_umemkv_flight_server",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug Twitter STL Benchmark",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_FLIGHT_RPC=0 -DUKV_BUILD_TESTS=0 . && make ukv_stl_twitter_benchmark",
+            "label": "Build Native: Debug Twitter UMemKV Benchmark",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_FLIGHT_RPC=0 -DUKV_BUILD_TESTS=0 . && make ukv_umemkv_twitter_benchmark",
             "args": [],
             "type": "shell"
         },
@@ -88,7 +88,7 @@
         },
         {
             "label": "Count Lines of Code",
-            "command":"cloc $(git ls-files)",
+            "command": "cloc $(git ls-files)",
             "args": [],
             "type": "shell"
         }

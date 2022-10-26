@@ -455,9 +455,9 @@ static void graph_traverse_two_hops(bm::State& state) {
 int main(int argc, char** argv) {
     bm::Initialize(&argc, argv);
 
-    std::size_t thread_count = std::thread::hardware_concurrency() / 8;
+    std::size_t thread_count = std::thread::hardware_concurrency() / 2;
     std::size_t max_input_files = 30;
-    std::size_t min_seconds = 10;
+    std::size_t min_seconds = 60;
     std::size_t small_batch_size = 32;
     std::size_t big_batch_size = 256;
 #if defined(UKV_DEBUG)

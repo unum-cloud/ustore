@@ -4,7 +4,9 @@
  * @date 12 Jun 2022
  * @addtogroup C
  *
- * @brief C bindings for Universal Key-Value Stores, that provide:
+ * @brief Binary Interface Standard for Multi-Modal Databases.
+ *
+ * Provides:
  * - @b ABI stability for the essential CRUD operations,
  * - @b Interoperability with higher-level languages.
  * - @b Flexibility in choosing the underlying engine.
@@ -68,6 +70,7 @@
 
 #pragma once
 #include "ukv/db.h"
+#include "ukv/blobs.h"
 #include "ukv/paths.h"
 #include "ukv/docs.h"
 #include "ukv/graph.h"
