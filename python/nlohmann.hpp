@@ -54,9 +54,11 @@ inline void to_string(PyObject* obj, std::string& output) {
         output += "\"";
     }
     else if (PyUnicode_Check(obj)) {
-        output.reserve(output.size() + PyUnicode_GET_LENGTH(obj) + 2);
+        Py_ssize_t size;
+        auto str = PyUnicode_AsUTF8AndSize(obj, &size);
+        output.reserve(output.size() + size + 2);
         output += "\"";
-        output += PyBytes_AsString(PyUnicode_AsASCIIString(obj));
+        output += str;
         output += "\"";
     }
     else if (PySequence_Check(obj)) {
