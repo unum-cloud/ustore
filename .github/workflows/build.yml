@@ -25,9 +25,7 @@ jobs:
            sudo apt update && sudo apt install -y -V ca-certificates lsb-release wget && cd /tmp \
            && wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
            && sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
-           && sudo apt update && sudo apt install -y -V libarrow-dev libarrow-dataset-dev libarrow-flight-dev \
-           libarrow-python-dev libarrow-python-flight-dev libplasma-dev libgandiva-dev libparquet-dev \
-           doxygen graphviz dia python3.9 python3-pip python3-dbg
+           && sudo apt update && sudo apt install -y -V doxygen graphviz dia python3.9 python3-pip python3-dbg
 
     - name: pip dependencies
       run: pip install pytest numpy pyarrow cmake
