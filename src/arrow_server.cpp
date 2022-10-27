@@ -944,7 +944,7 @@ class UKVService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            auto arena = make_stl_arena(&session.arena, ukv_options_default_k, status.member_ptr());
+            auto arena = linked_memory(&session.arena, ukv_options_default_k, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             ukv_size_t result_length = std::accumulate(found_counts, found_counts + tasks_count, 0);

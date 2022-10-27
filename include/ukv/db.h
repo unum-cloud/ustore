@@ -191,10 +191,9 @@ typedef enum {
      */
     ukv_option_transaction_dont_watch_k = 1 << 2,
     /**
-     * @brief This flag is intended for internal use.
-     * When passed to `make_stl_arena`, old_arena is not released,
-     * and rather a new one is casted and returned,
-     * if it existed in the first place, otherwise behaviour is unaffected.
+     * @brief On every API call, the arena is cleared for reuse.
+     * If the arguments of the function are results of another UKV call,
+     * you can use this flag to avoid discarding the memory.
      */
     ukv_option_dont_discard_memory_k = 1 << 4,
     /**

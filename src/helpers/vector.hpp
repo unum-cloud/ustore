@@ -5,7 +5,7 @@
  * @brief Replacing `std::vector` with non-throwing alternatives.
  */
 #pragma once
-#include "pmr.hpp" // `stl_arena_t`
+#include "pmr.hpp" // `linked_memory_lock_t`
 
 namespace unum::ukv {
 
@@ -25,7 +25,7 @@ class uninitialized_vector_gt {
     ptr_t ptr_ = nullptr;
     ukv_length_t length_ = 0;
     ukv_length_t cap_ = 0;
-    stl_arena_t* arena_ptr_ = nullptr;
+    linked_memory_lock_t* arena_ptr_ = nullptr;
 
   public:
     uninitialized_vector_gt(uninitialized_vector_gt const&) = delete;
@@ -42,8 +42,8 @@ class uninitialized_vector_gt {
         std::swap(v.arena_ptr_, arena_ptr_);
         return *this;
     }
-    uninitialized_vector_gt(stl_arena_t& arena) : arena_ptr_(&arena) {}
-    uninitialized_vector_gt(std::size_t size, stl_arena_t& arena, ukv_error_t* c_error) : arena_ptr_(&arena) {
+    uninitialized_vector_gt(linked_memory_lock_t& arena) : arena_ptr_(&arena) {}
+    uninitialized_vector_gt(std::size_t size, linked_memory_lock_t& arena, ukv_error_t* c_error) : arena_ptr_(&arena) {
         if (!size)
             return;
         auto tape = arena_ptr_->alloc<element_t>(size, c_error);
@@ -171,7 +171,8 @@ class growing_tape_t {
     uninitialized_vector_gt<byte_t> contents_;
 
   public:
-    growing_tape_t(stl_arena_t& arena) : presences_(arena), offsets_(arena), lengths_(arena), contents_(arena) {}
+    growing_tape_t(linked_memory_lock_t& arena)
+        : presences_(arena), offsets_(arena), lengths_(arena), contents_(arena) {}
 
     /**
      * @return Memory region occupied by the new copy.
