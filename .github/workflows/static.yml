@@ -1,9 +1,4 @@
-# Simple workflow for deploying static content to GitHub Pages
 name: Deploy static content to Pages
-
-concurrency: 
-  group: ${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
 
 on:
   # Runs on pushes targeting the default branch
