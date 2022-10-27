@@ -17,7 +17,7 @@
 #include <nlohmann/json.hpp>
 
 #include "ukv/media.h"        // `ukv_format_field_type_t`
-#include "helpers/pmr.hpp"    // `stl_arena_t`
+#include "helpers/pmr.hpp"    // `linked_memory_lock_t`
 #include "helpers/vector.hpp" // `uninitialized_vector_gt`
 
 /*********************************************************/
@@ -192,7 +192,7 @@ void dump_any( //
 
 struct serializing_tape_ref_t {
 
-    serializing_tape_ref_t(stl_arena_t& a, ukv_error_t* c_error) noexcept
+    serializing_tape_ref_t(linked_memory_lock_t& a, ukv_error_t* c_error) noexcept
         : arena_(a), single_doc_buffer_(a), growing_tape(arena_), c_error(c_error) {
         safe_section("Allocating doc exporter", c_error, [&] {
             using allocator_t = std::pmr::polymorphic_allocator<export_to_value_t>;
@@ -222,7 +222,7 @@ struct serializing_tape_ref_t {
     embedded_blobs_t view() noexcept { return growing_tape; }
 
   private:
-    stl_arena_t& arena_;
+    linked_memory_lock_t& arena_;
     std::shared_ptr<export_to_value_t> shared_exporter_;
     uninitialized_vector_gt<byte_t> single_doc_buffer_;
 
@@ -237,7 +237,7 @@ places_arg_t const& read_unique_docs( //
     ukv_transaction_t const c_txn,
     places_arg_t const& places,
     ukv_options_t const c.options,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
@@ -288,7 +288,7 @@ places_arg_t read_docs( //
     ukv_transaction_t const c_txn,
     places_arg_t const& places,
     ukv_options_t const c.options,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error,
     callback_at callback) {
 
@@ -386,7 +386,7 @@ void replace_docs( //
     contents_arg_t const& contents,
     ukv_options_t const c.options,
     ukv_doc_field_type_t const c.format,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) noexcept {
 
     serializing_tape_ref_t serializing_tape {arena, c_error};
@@ -442,7 +442,7 @@ void read_modify_write( //
     contents_arg_t const& contents,
     ukv_options_t const c.options,
     ukv_doc_field_type_t const c.format,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) noexcept {
 
     serializing_tape_ref_t serializing_tape {arena, c_error};
@@ -546,7 +546,7 @@ void parse_fields( //
 void ukv_docs_write(ukv_docs_write_t* c_ptr) {
 
     ukv_docs_write_t& c = *c_ptr;
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
     ukv_arena_t new_arena = &arena;
 
@@ -600,7 +600,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
 void ukv_docs_read(ukv_docs_read_t* c_ptr) {
 
     ukv_docs_read_t& c = *c_ptr;
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
     ukv_arena_t new_arena = &arena;
 
@@ -669,7 +669,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
 void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
 
     ukv_docs_gist_t& c = *c_ptr;
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
     ukv_arena_t new_arena = &arena;
 
@@ -1037,7 +1037,7 @@ void export_string_column(json_t const& value,
 void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
 
     ukv_docs_gather_t& c = *c_ptr;
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
     ukv_arena_t new_arena = &arena;
     // Validate the input arguments

@@ -29,7 +29,7 @@
 #include <pcre2.h>
 
 #include "ukv/paths.h"
-#include "helpers/pmr.hpp"         // `stl_arena_t`
+#include "helpers/pmr.hpp"         // `linked_memory_lock_t`
 #include "helpers/algorithm.hpp"   // `sort_and_deduplicate`
 #include "helpers/vector.hpp"      // `uninitialized_vector_gt`
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
@@ -187,7 +187,7 @@ void upsert_in_bucket( //
     value_view_t& bucket,
     std::string_view key,
     value_view_t val,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) noexcept {
 
     auto old_size = get_bucket_size(bucket);
@@ -245,7 +245,7 @@ void upsert_in_bucket( //
 void ukv_paths_write(ukv_paths_write_t* c_ptr) {
 
     ukv_paths_write_t& c = *c_ptr;
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     contents_arg_t keys_str_args;
@@ -271,7 +271,6 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     // > presences: zero length buckets are impossible here.
     // > lengths: value lengths are always smaller than buckets.
     // We can infer those and export differently.
-    ukv_arena_t buckets_arena = &arena;
     ukv_length_t* buckets_offsets = nullptr;
     ukv_byte_t* buckets_values = nullptr;
     places_arg_t unique_places;
@@ -285,7 +284,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
         .db = c.db,
         .error = c.error,
         .transaction = c.transaction,
-        .arena = &buckets_arena,
+        .arena = c.arena,
         .options = opts,
         .tasks_count = unique_places.count,
         .collections = unique_places.collections_begin.get(),
@@ -331,7 +330,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
         .db = c.db,
         .error = c.error,
         .transaction = c.transaction,
-        .arena = &buckets_arena,
+        .arena = arena,
         .options = opts,
         .tasks_count = unique_places.count,
         .collections = unique_places.collections_begin.get(),
@@ -351,7 +350,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
 void ukv_paths_read(ukv_paths_read_t* c_ptr) {
 
     ukv_paths_read_t& c = *c_ptr;
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     contents_arg_t keys_str_args;
@@ -377,14 +376,13 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     // > presences: zero length buckets are impossible here.
     // > lengths: value lengths are always smaller than buckets.
     // We can infer those and export differently.
-    ukv_arena_t buckets_arena = &arena;
     ukv_length_t* buckets_offsets = nullptr;
     ukv_byte_t* buckets_values = nullptr;
     ukv_read_t read {
         .db = c.db,
         .error = c.error,
         .transaction = c.transaction,
-        .arena = &buckets_arena,
+        .arena = arena,
         .options = c.options,
         .tasks_count = c.tasks_count,
         .collections = c.collections,
@@ -448,13 +446,12 @@ void scan_predicate( //
     ukv_options_t const c_options,
     ukv_length_t& count,
     growing_tape_t& paths,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error,
     predicate_at predicate) {
 
     hash_t hash;
     ukv_length_t found_paths = 0;
-    ukv_arena_t c_arena = &arena;
     bool has_reached_previous = previous_path.empty();
     ukv_key_t start_key = !previous_path.empty() ? hash(previous_path) : std::numeric_limits<ukv_key_t>::min();
     while (found_paths < c_count_limit && !*c_error) {
@@ -465,7 +462,7 @@ void scan_predicate( //
             .db = c_db,
             .error = c_error,
             .transaction = c_transaction,
-            .arena = &c_arena,
+            .arena = arena,
             .options = c_options,
             .collections = &c_collection,
             .start_keys = &start_key,
@@ -488,7 +485,7 @@ void scan_predicate( //
             .db = c_db,
             .error = c_error,
             .transaction = c_transaction,
-            .arena = &c_arena,
+            .arena = arena,
             .options = ukv_options_t(c_options | ukv_option_dont_discard_memory_k),
             .tasks_count = found_buckets_count[0],
             .collections = &c_collection,
@@ -547,7 +544,7 @@ void scan_prefix( //
     ukv_options_t const c_options,
     ukv_length_t& count,
     growing_tape_t& paths,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) {
 
     scan_predicate( //
@@ -565,7 +562,7 @@ void scan_prefix( //
 }
 
 struct pcre2_ctx_t {
-    stl_arena_t& arena;
+    linked_memory_lock_t& arena;
     ukv_error_t* c_error;
 };
 
@@ -588,7 +585,7 @@ void scan_regex( //
     ukv_options_t const c_options,
     ukv_length_t& count,
     growing_tape_t& paths,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) {
 
     pcre2_ctx_t ctx {arena, c_error};
@@ -651,7 +648,7 @@ void scan_regex( //
 void ukv_paths_match(ukv_paths_match_t* c_ptr) {
 
     ukv_paths_match_t const& c = *c_ptr;
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     contents_arg_t patterns_args;
