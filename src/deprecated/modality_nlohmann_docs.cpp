@@ -16,9 +16,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "ukv/media.h"        // `ukv_format_field_type_t`
-#include "helpers/pmr.hpp"    // `stl_arena_t`
-#include "helpers/vector.hpp" // `uninitialized_vector_gt`
+#include "ukv/media.h"               // `ukv_format_field_type_t`
+#include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
+#include "helpers/vector.hpp"        // `uninitialized_vector_gt`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -53,8 +53,8 @@ static constexpr char const* true_k = "true";
 static constexpr char const* false_k = "false";
 
 // Both the variant and the vector wouldn't have `noexcept` default constructors
-// if we didn't ingest @c `std::monostate` into the first and wrapped the second
-// into an @c `std::optional`.
+// if we didn't ingest @c std::monostate into the first and wrapped the second
+// into an @c std::optional.
 using heapy_field_t = std::variant<std::monostate, json_t::string_t, json_ptr_t>;
 using heapy_fields_t = std::optional<std::vector<heapy_field_t>>;
 
@@ -192,7 +192,7 @@ void dump_any( //
 
 struct serializing_tape_ref_t {
 
-    serializing_tape_ref_t(stl_arena_t& a, ukv_error_t* c_error) noexcept
+    serializing_tape_ref_t(linked_memory_lock_t& a, ukv_error_t* c_error) noexcept
         : arena_(a), single_doc_buffer_(a), growing_tape(arena_), c_error(c_error) {
         safe_section("Allocating doc exporter", c_error, [&] {
             using allocator_t = std::pmr::polymorphic_allocator<export_to_value_t>;
@@ -219,10 +219,10 @@ struct serializing_tape_ref_t {
         return_on_error(c_error);
     }
 
-    embedded_bins_t view() noexcept { return growing_tape; }
+    embedded_blobs_t view() noexcept { return growing_tape; }
 
   private:
-    stl_arena_t& arena_;
+    linked_memory_lock_t& arena_;
     std::shared_ptr<export_to_value_t> shared_exporter_;
     uninitialized_vector_gt<byte_t> single_doc_buffer_;
 
@@ -237,7 +237,7 @@ places_arg_t const& read_unique_docs( //
     ukv_transaction_t const c_txn,
     places_arg_t const& places,
     ukv_options_t const c.options,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
@@ -261,7 +261,7 @@ places_arg_t const& read_unique_docs( //
 
     ukv_read(&read);
 
-    auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
+    auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
 
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
@@ -288,7 +288,7 @@ places_arg_t read_docs( //
     ukv_transaction_t const c_txn,
     places_arg_t const& places,
     ukv_options_t const c.options,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error,
     callback_at callback) {
 
@@ -356,7 +356,7 @@ places_arg_t read_docs( //
     }
 
     // Parse all the unique documents
-    auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
+    auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
     for (ukv_size_t doc_idx = 0; doc_idx != unique_places_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
@@ -386,7 +386,7 @@ void replace_docs( //
     contents_arg_t const& contents,
     ukv_options_t const c.options,
     ukv_doc_field_type_t const c.format,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) noexcept {
 
     serializing_tape_ref_t serializing_tape {arena, c_error};
@@ -442,7 +442,7 @@ void read_modify_write( //
     contents_arg_t const& contents,
     ukv_options_t const c.options,
     ukv_doc_field_type_t const c.format,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) noexcept {
 
     serializing_tape_ref_t serializing_tape {arena, c_error};
@@ -546,7 +546,7 @@ void parse_fields( //
 void ukv_docs_write(ukv_docs_write_t* c_ptr) {
 
     ukv_docs_write_t& c = *c_ptr;
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
     ukv_arena_t new_arena = &arena;
 
@@ -600,7 +600,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
 void ukv_docs_read(ukv_docs_read_t* c_ptr) {
 
     ukv_docs_read_t& c = *c_ptr;
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
     ukv_arena_t new_arena = &arena;
 
@@ -669,7 +669,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
 void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
 
     ukv_docs_gist_t& c = *c_ptr;
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
     ukv_arena_t new_arena = &arena;
 
@@ -696,8 +696,8 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
 
-    joined_bins_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
-    joined_bins_iterator_t found_binary_it = found_binaries.begin();
+    joined_blobs_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
+    joined_blobs_iterator_t found_binary_it = found_binaries.begin();
 
     // Export all the elements into a heap-allocated hash-set, keeping only unique entries
     std::optional<std::unordered_set<std::string>> paths;
@@ -1037,7 +1037,7 @@ void export_string_column(json_t const& value,
 void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
 
     ukv_docs_gather_t& c = *c_ptr;
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
     ukv_arena_t new_arena = &arena;
     // Validate the input arguments
@@ -1068,8 +1068,8 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
     strided_iterator_gt<ukv_doc_field_type_t const> types {c.types, c.types_stride};
 
-    joined_bins_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
-    joined_bins_iterator_t found_binary_it = found_binaries.begin();
+    joined_blobs_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
+    joined_blobs_iterator_t found_binary_it = found_binaries.begin();
 
     // Parse all the field names
     heapy_fields_t heapy_fields(std::nullopt);

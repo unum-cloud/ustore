@@ -1,3 +1,5 @@
+include(FetchContent)
+
 # https://json.nlohmann.me/integration/cmake/#fetchcontent
 FetchContent_Declare(
     json

@@ -2,34 +2,9 @@
  * @file db.h
  * @author Ashot Vardanian
  * @date 12 Jun 2022
- * @brief C bindings for binary collections.
+ * @addtogroup C
  *
- * @section Why prefer batch APIs?
- * Using the batch APIs to issue a single read/write request
- * is trivial, but achieving batch-level performance with
- * singular operations is impossible. Regardless of IO layer,
- * a lot of synchronization and locks must be issued to provide
- * consistency.
- *
- * @section Iterators
- * Implementing consistent iterators over concurrent state is exceptionally
- * expensive, thus we plan to implement those via "Pagination".
- *
- * @section Interface Conventions
- * 1. We try to expose just opaque struct pointers and functions to
- * 	  clients. This allows us to change internal representations
- *    without forcing clients to recompile code, that uses shared lib.
- * 2. Errors are encoded into NULL-terminated C strings.
- * 3. Functions that accept `collections`, @b can receive 0, 1 or N such
- *    arguments, where N is the number of passed `keys`.
- * 4. Collections, Iterators and Transactions are referencing the DB,
- *    so the DB shouldn't die/close before those objects are freed.
- *    This also allows us to reduce the number of function arguments for
- *    interface functions.
- * 5. Strides! Higher level systems may pack groups of arguments into AoS
- *    instead of SoA. To minimize the need of copies and data re-layout,
- *    we use @b byte-length strides arguments, similar to BLAS libraries.
- *    Passing Zero as a "stride" means repeating the same value.
+ * @brief C bindings for Key-Value Stores and binary collections.
  */
 
 #pragma once
@@ -47,18 +22,92 @@ extern "C" {
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
+/**
+ * @brief Opaque multi-modal Database handle.
+ * @see `ukv_database_free()`.
+ *
+ * Properties:
+ * - Thread safety: Safe to use across threads after open and before free.
+ * - Lifetime: Must live longer than all the transactions.
+ *
+ * ## Concurrency
+ *
+ * In embedded setup this handle manages the lifetime of the database.
+ * In that case user must guarantee, that concurrent processes won't be
+ * opening the same database (generally same directory).
+ *
+ * In standalone "client-server" setup, manages the lifetime of the "client".
+ * Many concurrent clients can be connecting to the same server from the same
+ * process.
+ *
+ * ## Collections
+ *
+ * Every database always has at least one collection - the `::ukv_collection_main_k`.
+ * That one has no name and can't be deleted. Others are referenced by names.
+ * The same database can have many collections, of different modalities:
+ * - Binary Large Objects or BLOBs.
+ * - Hierarchical documents, like JSONs, BSONs, MessagePacks.
+ * - Discrete labeled and potentially directed Graphs.
+ * - Paths or collections of string keys.
+ *
+ * ## Choosing the Engine
+ *
+ * Dynamic dispatch of engines isn't yet supported.
+ *
+ * ## CAP Theorem
+ *
+ * Distributed engines are not yet supported.
+ */
 typedef void* ukv_database_t;
+
+/**
+ * @brief Opaque Transaction handle.
+ * @see `ukv_transaction_free()`.
+ * @see https://unum.cloud/ukv/c#transactions
+ *
+ * Allows ACID-ly grouping operations across different collections and even modalities.
+ * This means, that the same transaction might be:
+ * - inserting a blob of media data into a collection of images.
+ * - updating users metadata in a documents collection to reference new avatar.
+ * - introducing links between the user and other in a graph collection...
+ * and all of the operations here either succeed or fail together. DBMS will
+ * do the synchronization heavy-lifting, so you don't have to.
+ *
+ * Properties:
+ * - Thread safety: None.
+ * - Lifetime: Must be freed before the @c ukv_database_t is closed.
+ * - Concurrency Control: Optimistic.
+ */
 typedef void* ukv_transaction_t;
 
 /**
  * @brief Some unique integer identifier of a collection.
- * A `ukv_database_t` database can have many of those, but never with
- * repeating names or identifiers.
+ * A @c ukv_database_t database can have many of those,
+ * but never with repeating names or identifiers.
  */
 typedef uint64_t ukv_collection_t;
 
 /**
- * @brief The unique identifier of any value.
+ * @brief The unique identifier of any value within a single collection.
+ *
+ * ## On Variable Length Keys
+ *
+ * As of current version, 64-bit signed integers are used to allow unique
+ * keys in the range from `[0, 2^63)`. 128-bit builds with UUIDs can be
+ * considered, but variable length keys are highly discouraged.
+ *
+ * Using variable length keys forces numerous limitations on the design of a Key-Value store.
+ * Besides slow character-wise comparisons it means solving the "persistent space allocation"
+ * problem twice - for both keys and values.
+ *
+ * The recommended approach to dealing with string keys is:
+ *
+ * 1. Choose a mechanism to generate unique integer keys (UID). Ex: monotonically increasing values.
+ * 2. Use "paths" modality to build-up a persistent hash-map of strings to UIDs.
+ * 3. Use those UIDs to address the rest of the data in binary, document and graph modalities.
+ *
+ * This will result in a single conversion point from string to integer representations
+ * and will keep most of the system snappy and the interfaces simpler than what they could have been.
  */
 typedef int64_t ukv_key_t;
 
@@ -74,8 +123,20 @@ typedef char ukv_char_t;
 
 /**
  * @brief The length of any value in the DB.
+ *
+ * ## Why not use 64-bit lengths?
+ *
+ * Key-Value Stores are generally intended for high-frequency operations.
+ * Frequently (thousands of times each second) accessing and modifing 4 GB and larger files
+ * is impossible on modern hardware. So we stick to smaller length types, which also makes
+ * using Apache Arrow representation slightly easier and allows the KVs to compress indexes
+ * better.
  */
 typedef uint32_t ukv_length_t;
+
+/**
+ * @brief Pointer-sized integer type.
+ */
 typedef uint64_t ukv_size_t;
 
 /**
@@ -85,7 +146,7 @@ typedef uint8_t ukv_octet_t;
 
 /**
  * @brief Owning error message string.
- * If not null, must be deallocated via `ukv_error_free`.
+ * If not null, must be deallocated via `ukv_error_free()`.
  */
 typedef char const* ukv_error_t;
 
@@ -100,6 +161,8 @@ typedef char* ukv_str_span_t;
 /**
  * @brief Temporary memory handle, used mostly for read requests.
  * It's allocated, resized and deallocated only by UKV itself.
+ * Once done, must be deallocated with `ukv_arena_free()`.
+ * @see `ukv_arena_free()`.
  */
 typedef void* ukv_arena_t;
 
@@ -128,22 +191,13 @@ typedef enum {
      */
     ukv_option_transaction_dont_watch_k = 1 << 2,
     /**
-     * @brief When a transaction is started with this flag, a persistent
-     * snapshot is created. It guarantees that the global state of all the
-     * keys in the DB will be unchanged during the entire lifetime of the
-     * transaction. Will not affect the writes in any way.
-     */
-    ukv_option_transaction_snapshot_k = 1 << 3,
-    /**
-     * @brief This flag is intended for internal use.
-     * When passed to `make_stl_arena`, old_arena is not released,
-     * and rather a new one is casted and returned,
-     * if it existed in the first place, otherwise behaviour is unaffected.
+     * @brief On every API call, the arena is cleared for reuse.
+     * If the arguments of the function are results of another UKV call,
+     * you can use this flag to avoid discarding the memory.
      */
     ukv_option_dont_discard_memory_k = 1 << 4,
     /**
      * @brief Will output data into shared memory, not the one privately
-     * viewed by current process. That will allow any higher-level package
      * to do further transformations without any copies.
      * Is relevant for standalone distributions used with drivers supporting
      * Apache Arrow buffers or standardized Tensor representations.
@@ -152,24 +206,30 @@ typedef enum {
     /**
      * @brief When set, the underlying engine may avoid strict keys ordering
      * and may include irrelevant (deleted & duplicate) keys in order to maximize
-     * throughput. The purpose is not accelerating the `ukv_scan`, but the
-     * following `ukv_read`. Generally used for Machine Learning applications.
+     * throughput. The purpose is not accelerating the `ukv_scan()`, but the
+     * following `ukv_read()`. Generally used for Machine Learning applications.
      */
     ukv_option_scan_bulk_k = 0, // TODO
-    /**
-     * @brief When set, the matching scan range will be randomly sampled
-     * as close to the uniform distribution, as possible.
-     */
-    ukv_option_scan_sample_k = 0, // TODO
 
 } ukv_options_t;
 
+/**
+ * @brief The "mode" of collection removal.
+ */
 typedef enum {
+    /** @brief Clear the values, but keep the keys. */
     ukv_drop_vals_k = 0,
+    /** @brief Remove keys and values, but keep the collection. */
     ukv_drop_keys_vals_k = 1,
+    /** @brief Remove the handle and all of the contents. */
     ukv_drop_keys_vals_handle_k = 2,
 } ukv_drop_mode_t;
 
+/**
+ * @brief The handle to the default nameless collection.
+ * It exists from start, doesn't have to be created and can't be fully dropped.
+ * Only `::ukv_drop_keys_vals_k` and `::ukv_drop_vals_k` apply to it.
+ */
 extern ukv_collection_t const ukv_collection_main_k;
 extern ukv_length_t const ukv_length_missing_k;
 extern ukv_key_t const ukv_key_unknown_k;
@@ -183,463 +243,180 @@ extern bool const ukv_supports_snapshots_k;
 /*********************************************************/
 
 /**
- * @struct DataBase Init task descriptor.
+ * @brief Opens the underlying Key-Value Store.
+ * @see `ukv_database_init()`.
  *
- * @brief Opens the underlying Key-Value Store, which can be any of:
- * > embedded persistent transactional KVS
- * > embedded in-memory transactional KVS
- * > remote persistent transactional KVS
- * > remote in-memory transactional KVS
+ * Depending on the selected distribution can be any of:
  *
- * @param[in] config  A NULL-terminated @b JSON string with configuration specs.
- * @param[out] db     A pointer to the opened KVS, unless @param error is filled.
- * @param[out] error  The error message to be handled by callee.
+ * - embedded persistent transactional KVS
+ * - embedded in-memory transactional KVS
+ * - remote persistent transactional KVS
+ * - remote in-memory transactional KVS
  */
 typedef struct ukv_database_init_t {
+    /** @brief A NULL-terminated @b JSON string with configuration specs. */
     ukv_str_view_t config = NULL;
+    /** @brief A pointer to the opened KVS, unless `error` is filled. */
     ukv_database_t* db;
+    /** @brief Pointer to exported error message. */
     ukv_error_t* error;
 } ukv_database_init_t;
 
+/**
+ * @brief Opens the underlying Key-Value Store.
+ * @see `ukv_database_init()`.
+ */
 void ukv_database_init(ukv_database_init_t*);
-
-/**
- * @brief The primary "setter" interface.
- * Passing NULLs into @param values is identical to deleting entries.
- * If a fail had occurred, @param error will be set to non-NULL.
- *
- * @section Functionality Matrix
- * This is one of the two primary methods, that knots together various kinds of reads:
- * > Transactional and Heads
- * > Insertions and Deletions
- *
- * If lengths aren't provided, they are inferred from the passed values,
- * as the offset of the first NULL-termination (zero) symbol.
- *
- * @param[in] db             Already open database instance, @see `ukv_database_init`.
- * @param[in] transaction    Transaction, through which the operation must go.
- *                           Can be NULL.
- * @param[in] tasks_count    Number of elements in @param keys.
- *
- * @param[in] collections    Array of collections owning the @param keys.
- *                           If NULL is passed, the default collection is assumed.
- *                           If multiple collections are passed, the step between
- *                           them is equal to @param collections_stride @b bytes!
- *                           Zero stride would redirect all the keys to the same collection.
- * @param[in] keys           Array of keys in one or more collections.
- *                           If multiple keys are passed, the step between
- *                           them is equal to @param keys_stride @b bytes!
- *                           Zero stride is not allowed!
- *
- * @param[in] options        Write options.
- *
- * @param[in] values         Pointer to a tape of concatenated values to be imported.
- *                           A NULL `value` means that the key mist be deleted.
- *                           To clear the `value` without removing the key, just
- *                           pass a zero length.
- *                           If multiple values are passed, the step between their
- *                           begin pointers is equal to @param values_stride @b bytes!
- *                           Zero stride would map all the keys to the same value.
- *
- * @param[in] lengths        Pointer to lengths of chunks in packed into @param values.
- * @param[in] offsets        Pointer to offsets of relevant content within @param values chunks.
- * @param[in] presences      Pointer to bitset with at least @param values bits in it.
- *
- * @param[out] error         The error to be handled.
- * @param[inout] arena       Temporary memory region, that can be reused between operations.
- *
- * @section Upserts, Updates & Inserts
- * Higher-level interfaces may choose to implement any of those verbs:
- * 1. Insert: add if missing.
- * 2. Update: overwrite if present.
- * 3. Upsert: write.
- * Instead of adding all three to the binary  C interface, we focus on better ACID transactions,
- * which can be used to implement any advanced multi-step operations (often including conditionals),
- * like Compare-And-Swap, without losing atomicity.
- *
- * @section Why use offsets?
- *
- * In the underlying layer, using offsets to adds no additional overhead,
- * but what is the point of using them, if we can immediately pass adjusted
- * pointers?
- * It serves two primary purposes:
- * > Supporting input tapes (values_stride = 0, offsets_stride != 0).
- * > List-oriented wrappers (values_stride != 0, offsets_stride = 0).
- *
- * In the first case, we may have received a tape from `ukv_read`, which we
- * update in-place and write back, without changing the size of the original
- * entries.
- *
- * In the second case, we may be working with higher-level runtimes, like
- * CPython, where objects metadata (like its length) is stored in front of
- * the allocated region. In such cases, we may still need additional memory
- * to store the lengths of the objects, unless those are NULL-terminated
- * strings (lengths = NULL) or if all have the same length (length_stride = 0).
- *
- * Further reading on the implementation of strings and arrays of strings in
- * different languages:
- * > Python/CPython:
- *      https://docs.python.org/3/c-api/bytes.html
- * > JavaScript/V8:
- *      https://github.com/v8/v8/blob/main/include/v8-data.h
- *      https://github.com/v8/v8/blob/main/include/v8-array-buffer.h
- * > GoLang:
- *      https://boakye.yiadom.org/go/strings/
- *      https://github.com/golang/go/blob/master/src/runtime/string.go (`stringStruct`)
- *      https://github.com/golang/go/blob/master/src/runtime/slice.go (`slice`)
- *
- * @section Argument Resolution Order
- * As different combinations of "value" arguments are possible, we must define the resolution order.
- * 1. If @param values is NULL or key at index `i` is NULL, we will remote the entry from DB.
- * 2. If @param presences is not NULL and bit at index `i` is set, we will remote the entry from DB.
- * 3. If @param lengths is NULL, we expect `N+1` @param offsets (like Arrow) to determine entry length.
- * 4. If @param lengths and @param offsets are NULL, we expect NULL-terminated entries and will `std::strlen`.
- */
-typedef struct ukv_write_t {
-
-    ukv_database_t db;
-    ukv_error_t* error;
-    ukv_transaction_t transaction = NULL;
-    ukv_arena_t* arena = NULL;
-    ukv_options_t options = ukv_options_default_k;
-    ukv_size_t tasks_count = 1;
-
-    // Inputs: Keys
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
-
-    ukv_key_t const* keys = NULL;
-    ukv_size_t keys_stride = 0;
-
-    // Inputs: Values
-    ukv_octet_t const* presences = NULL;
-
-    ukv_length_t const* offsets = NULL;
-    ukv_size_t offsets_stride = 0;
-
-    ukv_length_t const* lengths = NULL;
-    ukv_size_t lengths_stride = 0;
-
-    ukv_bytes_cptr_t const* values = NULL;
-    ukv_size_t values_stride = 0;
-
-} ukv_write_t;
-
-void ukv_write(ukv_write_t*);
-
-/**
- * @brief The primary "getter" interface.
- * If a fail had occurred, @param error will be set to non-NULL.
- * Otherwise, the tape will be populated with @param tasks_count objects
- * of type `ukv_length_t`, describing the lengths of objects packed
- * right after the lengths themselves.
- * If a key wasn't found in target collection, the length will be zero.
- *
- * @section Functionality Matrix
- * This is one of the two primary methods, that knots together various kinds of reads:
- * > Transactional and Heads
- * > Single and Batch
- * > Size Estimates and Exports
- *
- * @param[in] db             Already open database instance, @see `ukv_database_init`.
- * @param[in] transaction    Transaction or the snapshot, through which the
- * @param[in] tasks_count    Number of elements in @param keys.
- *
- * @param[in] collections    Array of collections owning the @param keys.
- *                           If NULL is passed, the default collection is assumed.
- *                           If multiple collections are passed, the step between
- *                           them is equal to @param collections_stride @b bytes!
- *                           Zero stride would redirect all the keys to the same collection.
- * @param[in] keys           Array of keys in one or more collections.
- *                           If multiple keys are passed, the step between
- *                           them is equal to @param keys_stride @b bytes!
- *                           Zero stride is not allowed!
- *
- * @param[in] options        Read options:
- *                           > watch: Adds collision-detection on keys read through transaction.
- *                           > shared: Exports to shared memory to accelerate inter-process communication.
- *                           > bulk: Suggests that the list of keys was received from a bulk scan.
- *
- * @param[out] presences     Will contain a bitset with at least @param tasks_count bits.
- *                           Each set bit means that such key is missing in DB. Is @b optional.
- *
- * @param[out] offsets       Will contain a pointer to an array with @param tasks_count integers.
- *                           Each marks a response offset in bytes starting from @param values.
- *                           To be fully compatible with Apache Arrow we append one more offset at
- *                           at the end to allow inferring the length of the last entry without
- *                           using @param lengths.
- *                           Is @b optional, as you may only want @param lengths or @param presences.
- *
- * @param[out] lengths       Will contain a pointer to an array with @param tasks_count integers.
- *                           Each defines a response length in bytes. Is @b optional.
- *
- * @param[out] values        Will contain the "base pointer" for @param tasks_count concatenated values.
- *                           Instead of allocating every "string" separately, we join them into
- *                           a single "tape" structure, which later be exported into (often disjoint)
- *                           runtime- or library-specific implementations. To determine the range of each
- *                           chunk use @param offsets and @param lengths.
- *                           Is @b optional, as you may only want @param lengths or @param presences.
- *
- *
- * @param[out] error         The error message to be handled by callee.
- * @param[inout] arena       Temporary memory region, that can be reused between operations.
- */
-struct ukv_read_t {
-
-    ukv_database_t db;
-    ukv_error_t* error;
-    ukv_transaction_t transaction = NULL;
-    ukv_arena_t* arena = NULL;
-    ukv_options_t options = ukv_options_default_k;
-    ukv_size_t tasks_count = 1;
-
-    // Inputs:
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
-
-    ukv_key_t const* keys = NULL;
-    ukv_size_t keys_stride = 0;
-
-    // Outputs:
-    ukv_octet_t** presences = NULL;
-    ukv_length_t** offsets = NULL;
-    ukv_length_t** lengths = NULL;
-    ukv_byte_t** values = NULL;
-};
-
-void ukv_read(ukv_read_t*);
-
-/**
- * @brief Retrieves the following (upto) @param count_limits[i] keys starting
- * from @param start_key[i] or the smallest following key in each collection.
- * Values are not exported, for that - follow up with @see ukv_read.
- *
- * @param[in] db             Already open database instance, @see `ukv_database_init`.
- * @param[in] transaction    Transaction or the snapshot, through which the
- * @param[in] tasks_count    Number of elements in @param start_keys.
- *
- * @param[in] collections    Array of collections owning the @param start_keys.
- *                           If NULL is passed, the default collection is assumed.
- *                           If multiple collections are passed, the step between
- *                           them is equal to @param collections_stride @b bytes!
- *                           Zero stride would redirect all the keys to the same collection.
- *
- * @param[in] start_keys     Array of first keys of interest in one or more collections.
- *                           If multiple keys are passed, the step between
- *                           them is equal to @param start_keys_stride @b bytes!
- *                           Zero stride is not allowed!
- *
- * @param[in] end_keys       Array of termination keys for every scan. @b Optional.
- *                           If multiple keys are passed, the step between
- *                           them is equal to @param start_keys_stride @b bytes!
- *                           Zero stride is not allowed!
- *
- * @param[in] options        Read options:
- *                           > watch: Adds collision-detection on keys read through transaction.
- *                           > lengths: Will fetches lengths of values, after the keys.
- *                           > bulk: Skips keys ordering and relevance checks for speed.
- *
- * @param[out] offsets       Will contain the offset of each run in joined @param keys.
- *                           Will have @param tasks_count +1 outputs, to match Arrow format.
- * @param[out] counts        Will contain the height of each column (< count_limit).
- * @param[out] keys          Will contain columns of following keys for each task.
- *
- * @param[out] error         The error message to be handled by callee.
- * @param[inout] arena       Temporary memory region, that can be reused between operations.
- *
- * @section Why use "last keys" instead of "start keys"?
- *
- */
-typedef struct ukv_scan_t {
-
-    ukv_database_t db;
-    ukv_error_t* error;
-    ukv_transaction_t transaction = NULL;
-    ukv_arena_t* arena = NULL;
-    ukv_options_t options = ukv_options_default_k;
-    ukv_size_t tasks_count = 1;
-
-    // Inputs:
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
-
-    ukv_key_t const* start_keys = NULL;
-    ukv_size_t start_keys_stride = 0;
-
-    ukv_length_t const* count_limits;
-    ukv_size_t count_limits_stride = 0;
-
-    // Outputs:
-    ukv_length_t** offsets = NULL;
-    ukv_length_t** counts;
-    ukv_key_t** keys;
-
-} ukv_scan_t;
-
-void ukv_scan(ukv_scan_t*);
-
-/**
- * @brief Estimates the number of entries and memory usage for a range of keys.
- *
- * @param[in] db             Already open database instance, @see `ukv_database_init`.
- * @param[in] transaction    Transaction and/or snapshot in which to count.
- * @param[in] tasks_count    Number ranges to be introspected.
- *
- * @param[in] collections    Array of collections owning the @param keys.
- *                           If NULL is passed, the default collection is assumed.
- *                           If multiple collections are passed, the step between
- *                           them is equal to @param collections_stride @b bytes!
- *                           Zero stride would redirect all the keys to the same collection.
- * @param[in] start_keys     For every task contains the beginning of range-of-interest.
- * @param[in] end_keys       For every task contains the ending of range-of-interest.
- *
- * @param[out] estimates     For every task (range) will export @b six integers:
- *                           > min & max cardinality,
- *                           > min & max bytes in values,
- *                           > min & max (persistent) memory usage.
- *                           The memory must be allocated and provided by the user.
- *
- * @param[out] error         The error message to be handled by callee.
- * @param[inout] arena       Temporary memory region, that can be reused between operations.
- */
-typedef struct ukv_measure_t {
-
-    ukv_database_t db;
-    ukv_error_t* error;
-    ukv_transaction_t transaction = NULL;
-    ukv_arena_t* arena = NULL;
-    ukv_options_t options = ukv_options_default_k;
-    ukv_size_t tasks_count = 1;
-
-    // Inputs:
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
-
-    ukv_key_t const* start_keys = NULL;
-    ukv_size_t start_keys_stride = 0;
-
-    ukv_key_t const* end_keys = NULL;
-    ukv_size_t end_keys_stride = 0;
-
-    // Outputs
-    ukv_size_t** min_cardinalities;
-    ukv_size_t** max_cardinalities;
-    ukv_size_t** min_value_bytes;
-    ukv_size_t** max_value_bytes;
-    ukv_size_t** min_space_usages;
-    ukv_size_t** max_space_usages;
-
-} ukv_measure_t;
-
-void ukv_measure(ukv_measure_t*);
 
 /*********************************************************/
 /***************** Collection Management  ****************/
 /*********************************************************/
 
 /**
- * @brief Retrieves a list of collection IDs & names in a NULL-delimited form.
+ * @brief Lists all named collections in the DB.
+ * @see `ukv_collection_list()`.
+ *
+ * Retrieves a list of collection IDs & names in a NULL-delimited form.
  * The default nameless collection won't be described in any form, as its always
  * present. This is the only collection-management operation that can be performed
  * on a DB state snapshot, and not just on the HEAD state.
- *
- * @param[in] db            Already open database instance, @see `ukv_database_init`.
- * @param[in] transaction   A snapshot in which to enumerate collections.
- * @param[out] count        Will contain the number of found unique collections.
- * @param[out] names        A NULL-terminated output string with comma-delimited column names.
- * @param[out] error        The error message to be handled by callee.
  */
 typedef struct ukv_collection_list_t {
 
+    /// @name Context
+    /// @{
+
+    /** @brief Already open database instance. */
     ukv_database_t db;
+    /**
+     * @brief Pointer to exported error message.
+     * If not NULL, must be deallocated with `ukv_error_free()`.
+     */
     ukv_error_t* error;
+    /**
+     * @brief The snapshot in which the retrieval will be conducted.
+     * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
+     */
     ukv_transaction_t transaction = NULL;
+    /**
+     * @brief Reusable memory handle.
+     * @see `ukv_arena_free()`.
+     */
     ukv_arena_t* arena = NULL;
+    /**
+     * @brief Listing options.
+     *
+     * Possible values:
+     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     */
     ukv_options_t options = ukv_options_default_k;
 
+    /// @}
+    /// @name Contents
+    /// @{
+
+    /** @brief Number of present collections. */
     ukv_size_t* count;
+    /** @brief Handles of all the collections in same order as `names`. */
     ukv_collection_t** ids;
+    /** @brief Offsets of separate strings in the `names` tape. */
     ukv_length_t** offsets;
+    /** @brief NULL-terminated collection names tape in same order as `ids`. */
     ukv_char_t** names;
+    /// @}
 
 } ukv_collection_list_t;
 
+/**
+ * @brief Lists all named collections in the DB.
+ * @see `ukv_collection_list_t`.
+ */
 void ukv_collection_list(ukv_collection_list_t*);
 
 /**
- * @brief Inserts a new named collection into DB or opens existing one.
- * This function may never be called, as the default nameless collection
- * always exists and can be addressed via `ukv_collection_main_k`.
+ * @brief Creates a new uniquely named collection in the DB.
+ * @see `ukv_collection_create()`.
  *
- * @param[in] db           Already open database instance, @see `ukv_database_init`.
- * @param[in] name         A NULL-terminated collection name.
- * @param[in] config       A NULL-terminated configuration string.
- * @param[out] id          Address to which the collection ID will be exported.
- * @param[out] error       The error message to be handled by callee.
+ * This function may never be called, as the default nameless collection
+ * always exists and can be addressed via `::ukv_collection_main_k`.
+ * You can "re-create" an empty collection with a new config.
  */
 typedef struct ukv_collection_create_t {
+    /** @brief Already open database instance. */
     ukv_database_t db;
+    /** @brief Pointer to exported error message. */
     ukv_error_t* error;
-
-    // Inputs:
+    /** @brief Unique name for the new collection. */
     ukv_str_view_t name;
-    ukv_str_view_t config;
-
-    // Outputs:
+    /** @brief Optional configuration JSON string. */
+    ukv_str_view_t config = NULL;
+    /** @brief Output for the collection handle. */
     ukv_collection_t* id;
 } ukv_collection_create_t;
 
+/**
+ * @brief Creates a new uniquely named collection in the DB.
+ * @see `ukv_collection_create_t`.
+ */
 void ukv_collection_create(ukv_collection_create_t*);
 
 /**
- * @brief Removes a collection or its contents depending on @param mode.
- * The default nameless collection can't be removed, only cleared.
+ * @brief Removes or clears an existing collection.
+ * @see `ukv_collection_drop()`.
  *
- * @param[in] db      Already open database instance, @see `ukv_database_init`.
- * @param[in] id      If the name wasn't provided, we will match a collection by ID.
- * @param[in] name    An optional NULL-terminated collection name.
- * @param[out] error  The error message to be handled by callee.
+ * Removes a collection or its contents depending on `mode`.
+ * The default nameless collection can't be removed, only cleared.
  */
 typedef struct ukv_collection_drop_t {
+    /** @brief Already open database instance. */
     ukv_database_t db;
+    /** @brief Pointer to exported error message. */
     ukv_error_t* error;
-
-    // Inputs:
+    /** @brief Existing collection handle. */
     ukv_collection_t id;
+    /** @brief Controls if values, pairs or the whole collection must be dropped. */
     ukv_drop_mode_t mode = ukv_drop_keys_vals_handle_k;
 } ukv_collection_drop_t;
 
+/**
+ * @brief Removes or clears an existing collection.
+ * @see `ukv_collection_drop_t`.
+ */
 void ukv_collection_drop(ukv_collection_drop_t*);
 
 /**
- * @brief Performs free-form queries on the DB, that may not necessarily
+ * @brief Free-form communication tunnel with the underlying engine.
+ * @see `ukv_database_control()`.
+ *
+ * Performs free-form queries on the DB, that may not necessarily
  * have a stable API and a fixed format output. Generally, those requests
  * are very expensive and shouldn't be executed in most applications.
  * This is the "kitchen-sink" of UKV interface, similar to `fcntl` & `ioctl`.
  *
- * @param[in] db        Already open database instance, @see `ukv_database_init`.
- * @param[in] request   Textual representation of the command.
- * @param[out] response Output text of the request.
- * @param[out] error    The error message to be handled by callee.
- *
- * @section Available Commands
- * > "clear":   Removes all the data from DB, while keeping collection names.
- * > "reset":   Removes all the data from DB, including collection names.
- * > "compact": Flushes and compacts all the data in LSM-tree implementations.
- * > "info":    Metadata about the current software version, used for debugging.
- * > "usage":   Metadata about approximate collection sizes, RAM and disk usage.
+ * ## Possible Commands
+ * - "clear":   Removes all the data from DB, while keeping collection names.
+ * - "reset":   Removes all the data from DB, including collection names.
+ * - "compact": Flushes and compacts all the data in LSM-tree implementations.
+ * - "info":    Metadata about the current software version, used for debugging.
+ * - "usage":   Metadata about approximate collection sizes, RAM and disk usage.
  */
 typedef struct ukv_database_control_t {
+    /** @brief Already open database instance. */
     ukv_database_t db;
+    /** @brief Reusable memory handle. */
+    ukv_arena_t* arena = NULL;
+    /** @brief Pointer to exported error message. */
     ukv_error_t* error;
-
-    // Inputs:
+    /** @brief The input command as a NULL-terminated string. */
     ukv_str_view_t request;
-
-    // Outputs:
+    /** @brief The output response as a NULL-terminated string. */
     ukv_str_view_t* response;
 } ukv_database_control_t;
 
+/**
+ * @brief Free-form communication tunnel with the underlying engine.
+ * @see `ukv_database_control()`.
+ */
 void ukv_database_control(ukv_database_control_t*);
 
 /*********************************************************/
@@ -648,37 +425,86 @@ void ukv_database_control(ukv_database_control_t*);
 
 /**
  * @brief Begins a new ACID transaction or resets an existing one.
- *
- * @param db[in]                Already open database instance, @see `ukv_database_init`.
- * @param transaction[inout]    When points to existing handle, resets and reuses its memory.
- * @param error[out]            The error message to be handled by callee.
+ * @see `ukv_transaction_init()`.
  */
 typedef struct ukv_transaction_init_t {
 
+    /** @brief Already open database instance. */
     ukv_database_t db;
+    /** @brief Pointer to exported error message. */
     ukv_error_t* error;
+
+    /**
+     * @brief Transaction options.
+     *
+     * Possible values:
+     * - `::ukv_option_transaction_dont_watch_k`
+     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     */
     ukv_options_t options = ukv_options_default_k;
 
+    /** @brief In-out transaction handle. */
     ukv_transaction_t* transaction;
 } ukv_transaction_init_t;
 
+/**
+ * @brief Begins a new ACID transaction or resets an existing one.
+ * @see `ukv_transaction_init_t`.
+ */
 void ukv_transaction_init(ukv_transaction_init_t*);
 
 /**
- * @brief Commits an ACID transaction.
+ * @brief Stages an ACID transaction for Two Phase Commits.
+ * @see `ukv_transaction_stage()`.
+ *
  * Regardless of result, the content is preserved to allow further
  * logging, serialization or retries. The underlying memory can be
- * cleaned and reused by consecutive `ukv_transaction_init` call.
+ * cleaned and reused by consecutive `ukv_transaction_init()` call.
+ */
+typedef struct ukv_transaction_stage_t {
+
+    /** @brief Already open database instance. */
+    ukv_database_t db;
+    /** @brief Pointer to exported error message. */
+    ukv_error_t* error;
+    /** @brief Initialized transaction handle. */
+    ukv_transaction_t transaction;
+    /** @brief Staging options. */
+    ukv_options_t options = ukv_options_default_k;
+
+} ukv_transaction_stage_t;
+
+/**
+ * @brief Stages an ACID transaction for Two Phase Commits.
+ * @see `ukv_transaction_stage_t`.
+ */
+void ukv_transaction_stage(ukv_transaction_stage_t*);
+
+/**
+ * @brief Commits an ACID transaction.
+ * @see `ukv_transaction_commit()`.
+ *
+ * Regardless of result, the content is preserved to allow further
+ * logging, serialization or retries. The underlying memory can be
+ * cleaned and reused by consecutive `ukv_transaction_init()` call.
  */
 typedef struct ukv_transaction_commit_t {
 
+    /** @brief Already open database instance. */
     ukv_database_t db;
+    /** @brief Pointer to exported error message. */
     ukv_error_t* error;
+    /** @brief Initialized transaction handle. */
     ukv_transaction_t transaction;
+    /** @brief Staging options. */
     ukv_options_t options = ukv_options_default_k;
 
 } ukv_transaction_commit_t;
 
+/**
+ * @brief Commits an ACID transaction.
+ * @see `ukv_transaction_commit_t`.
+ */
 void ukv_transaction_commit(ukv_transaction_commit_t*);
 
 /*********************************************************/
@@ -686,31 +512,26 @@ void ukv_transaction_commit(ukv_transaction_commit_t*);
 /*********************************************************/
 
 /**
- * @brief A function to be used after `ukv_read` to
- * deallocate and return memory to the OS.
+ * @brief Deallocates reusable memory arenas.
  * Passing NULLs is safe.
  */
 void ukv_arena_free(ukv_arena_t);
 
 /**
- * @brief Deallocates memory used by transaction.
- * If snapshot was created via `ukv_option_transaction_snapshot_k`,
- * it will be released.
+ * @brief Resets the transaction and deallocates the underlying memory.
  * Passing NULLs is safe.
  */
 void ukv_transaction_free(ukv_transaction_t);
 
 /**
- * @brief Closes the DB and deallocates the state.
+ * @brief Closes the DB and deallocates used memory.
  * The database would still persist on disk.
  * Passing NULLs is safe.
  */
 void ukv_database_free(ukv_database_t);
 
 /**
- * @brief A function to be called after any function failure,
- * that resulted in a non-NULL `ukv_error_t`, even `ukv_database_init`.
- * That's why, unlike other `...free` methods, doesn't need `db`.
+ * @brief Deallocates error messages.
  * Passing NULLs is safe.
  */
 void ukv_error_free(ukv_error_t);

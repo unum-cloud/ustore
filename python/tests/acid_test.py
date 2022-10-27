@@ -1,6 +1,6 @@
 
 import pytest
-import ukv.stl as ukv
+import ukv.umem as ukv
 
 
 def test_transaction_set():
@@ -150,26 +150,18 @@ def test_transaction_with_multiple_collections():
 
 
 def test_conflict():
-    # Set with db before get
-    db1 = ukv.DataBase()
-    txn = ukv.Transaction(db1)
-    db1.main.set(0, 'value'.encode())
-    with pytest.raises(Exception):
-        txn.main.get(0)
-
-    # Set with transaction before get
-    db2 = ukv.DataBase()
-    txn1 = ukv.Transaction(db2)
-    with ukv.Transaction(db2) as txn2:
+    db = ukv.DataBase()
+    txn1 = ukv.Transaction(db)
+    txn1.main.get(0)
+    with ukv.Transaction(db) as txn2:
         txn2.main.set(0, 'value'.encode())
     with pytest.raises(Exception):
-        txn1.main.get(0)
+        txn1.commit()
 
 
-def test_watch():
+def test_dont_watch():
     db = ukv.DataBase()
-    txn = ukv.Transaction(db, watch=True)
+    txn = ukv.Transaction(db, watch=False)
     txn.main.get(0)
     db.main.set(0, 'value'.encode())
-    with pytest.raises(Exception):
-        txn.commit()
+    txn.commit()

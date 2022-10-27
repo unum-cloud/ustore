@@ -20,7 +20,7 @@
 #include <arrow/c/bridge.h>
 #pragma GCC diagnostic pop
 
-#include "pmr.hpp"                 // `stl_arena_t`
+#include "linked_memory.hpp"       // `linked_memory_lock_t`
 #include "ukv/cpp/ranges_args.hpp" // `contents_arg_t`
 
 namespace unum::ukv {
@@ -64,7 +64,6 @@ inline static std::string const kParamCollectionName = "collection_name";
 inline static std::string const kParamTransactionID = "transaction_id";
 inline static std::string const kParamReadPart = "part";
 inline static std::string const kParamDropMode = "mode";
-inline static std::string const kParamFlagSnapshotTxn = "snapshot";
 inline static std::string const kParamFlagFlushWrite = "flush";
 inline static std::string const kParamFlagDontWatch = "dont_watch";
 inline static std::string const kParamFlagSharedMemRead = "shared";
@@ -80,7 +79,7 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
     monotonic_resource_t resource_;
 
   public:
-    arrow_mem_pool_t(stl_arena_t& arena) : resource_(&arena.resource_) {}
+    arrow_mem_pool_t(linked_memory_lock_t& arena) : resource_(&arena.resource_) {}
     ~arrow_mem_pool_t() {}
 
     ar::Status Allocate(int64_t size, uint8_t** ptr) override {
@@ -186,7 +185,7 @@ inline ukv_octet_t* convert_lengths_into_bitmap(ukv_length_t* lengths, ukv_size_
 }
 
 /**
- * @brief Replaces "lengths" with `ukv_length_missing_k` if matching NULL indicator is set.
+ * @brief Replaces "lengths" with `::ukv_length_missing_k` if matching NULL indicator is set.
  */
 template <typename scalar_at>
 inline scalar_at* arrow_replace_missing_scalars(ukv_octet_t const* slots,
@@ -280,7 +279,7 @@ void ukv_to_continous_bin( //
     size_t c_tasks_count,
     ukv_bytes_cptr_t* continous_bin,
     ptr_range_gt<ukv_length_t> continous_bin_offs,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) {
 
     // Check if the paths are continuous and are already in an Arrow-compatible form

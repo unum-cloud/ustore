@@ -5,10 +5,26 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "C++: Test STL",
+            "name": "(GDB) Attach Python",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "/usr/bin/python3",
+            "processId": "${command:pickProcess}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "Python C++ Debug Current File",
+            "type": "pythoncpp",
+            "request": "launch",
+            "pythonConfig": "default",
+            "cppAttachName": "(GDB) Attach Python",
+        },
+        {
+            "name": "C++: Test UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_stl_unit_test",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_unit_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -18,12 +34,16 @@
                 {
                     "name": "ASAN_OPTIONS",
                     "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                },
+                {
+                    "name": "UKV_TEST_PATH",
+                    "value": ""
                 }
             ],
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug STL Test",
+            "preLaunchTask": "Build Native: Debug UMem Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -64,10 +84,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Test STL",
+            "name": "C++: Stress Test UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_stl_stress_test",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_stress_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -77,12 +97,16 @@
                 {
                     "name": "ASAN_OPTIONS",
                     "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                },
+                {
+                    "name": "UKV_TEST_PATH",
+                    "value": ""
                 }
             ],
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug STL Stress Test",
+            "preLaunchTask": "Build Native: Debug UMem Stress Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -110,20 +134,25 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Test STL API",
+            "name": "C++: Test UMem API",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_stl_api_test",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_api_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
             ],
             "cwd": "${workspaceFolder}",
-            "environment": [],
+            "environment": [
+                {
+                    "name": "UKV_TEST_PATH",
+                    "value": ""
+                }
+            ],
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug STL Test API",
+            "preLaunchTask": "Build Native: Debug UMem Test API",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -203,7 +232,7 @@
             "name": "C++: Test Arrow Server",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_stl_flight_server",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_flight_server",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -245,20 +274,25 @@
             "cwd": "${workspaceFolder}/java"
         },
         {
-            "name": "C++: Twitter Benchmark STL",
+            "name": "C++: Twitter Benchmark UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_stl_twitter_benchmark",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_twitter_benchmark",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
             ],
             "cwd": "${workspaceFolder}",
-            "environment": [],
+            "environment": [
+                {
+                    "name": "UKV_TEST_PATH",
+                    "value": ""
+                }
+            ],
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug Twitter STL Benchmark",
+            "preLaunchTask": "Build Native: Debug Twitter UMem Benchmark",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },

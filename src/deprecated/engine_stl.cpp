@@ -5,10 +5,11 @@
  * @brief Embedded In-Memory Key-Value Store implementation using only @b STL.
  * This is not the fastest, not the smartest possible solution for @b ACID KVS,
  * but is a good reference design for educational purposes.
+ *
  * Deficiencies:
- * > Global Lock.
- * > No support for range queries.
- * > Keeps watch of all the deleted keys throughout the history.
+ * - Global Lock.
+ * - No support for range queries.
+ * - Keeps watch of all the deleted keys throughout the history.
  */
 
 #include <string_view>
@@ -27,9 +28,9 @@
 #include <fmt/core.h>
 
 #include "ukv/db.h"
-#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
-#include "helpers/pmr.hpp"         // `stl_arena_t`
-#include "helpers/file.hpp"        // `file_handle_t`
+#include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
+#include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
+#include "helpers/file.hpp"          // `file_handle_t`
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -192,7 +193,7 @@ struct database_t {
     /**
      * @brief A variable-size set of named collections.
      * It's cleaner to implement it with heterogenous lookups as
-     * an @c `std::unordered_mao`, but it requires GCC11 and C++20.
+     * an @c std::unordered_map, but it requires GCC11 and C++20.
      */
     std::map<std::string, ukv_collection_t, string_less_t> names;
     /**
@@ -515,7 +516,7 @@ void scan( //
     ukv_length_t** c_found_offsets,
     ukv_length_t** c_found_counts,
     ukv_key_t** c_found_keys,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) noexcept {
 
     std::shared_lock _ {db.mutex};
@@ -565,7 +566,7 @@ void scan( //
     ukv_length_t** c_found_offsets,
     ukv_length_t** c_found_counts,
     ukv_key_t** c_found_keys,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) noexcept {
 
     database_t& db = *txn.db_ptr;
@@ -661,7 +662,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
@@ -725,7 +726,7 @@ void ukv_write(ukv_write_t* c_ptr) {
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values, c.values_stride};
     strided_iterator_gt<ukv_length_t const> offs {c.offsets, c.offsets_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.lengths, c.lengths_stride};
-    strided_iterator_gt<ukv_octet_t const> presences {c.presences, sizeof(ukv_octet_t)};
+    bits_view_t presences {c.presences};
 
     places_arg_t places {collections, keys, {}, c.tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
@@ -745,7 +746,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
@@ -770,7 +771,7 @@ void ukv_measure(ukv_measure_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     auto min_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_cardinalities);
@@ -894,7 +895,7 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_if_error(c.count && c.names, c.error, args_combo_k, "Need names and outputs!");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
@@ -1008,7 +1009,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 void ukv_arena_free(ukv_arena_t c_arena) {
     if (!c_arena)
         return;
-    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
+    linked_memory_lock_t& arena = *reinterpret_cast<linked_memory_lock_t*>(c_arena);
     delete &arena;
 }
 

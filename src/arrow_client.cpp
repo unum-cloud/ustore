@@ -16,7 +16,7 @@
 
 #include "ukv/db.h"
 #include "ukv/arrow.h"
-#include "ukv/cpp/types.hpp" // `ukv_doc_field`
+#include "ukv/cpp/types.hpp" // `ukv_doc_field()`
 #include "helpers/arrow.hpp"
 
 /*********************************************************/
@@ -39,7 +39,7 @@ using namespace unum;
 
 struct rpc_client_t {
     std::unique_ptr<arf::FlightClient> flight;
-    stl_arena_t arena;
+    linked_memory_t arena;
     std::mutex arena_lock;
 };
 
@@ -74,7 +74,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         auto maybe_flight_ptr = arf::FlightClient::Connect(*maybe_location);
         return_if_error(maybe_flight_ptr.ok(), c.error, network_k, "Flight Client Connection");
 
-        make_stl_arena(reinterpret_cast<ukv_arena_t*>(&db_ptr->arena), ukv_option_dont_discard_memory_k, c.error);
+        linked_memory(reinterpret_cast<ukv_arena_t*>(&db_ptr->arena), ukv_option_dont_discard_memory_k, c.error);
         return_if_error(maybe_location.ok(), c.error, args_wrong_k, "Failed to allocate default arena.");
         db_ptr->flight = maybe_flight_ptr.MoveValueUnsafe();
         *c.db = db_ptr;
@@ -86,7 +86,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     ukv_read_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -259,7 +259,7 @@ void ukv_write(ukv_write_t* c_ptr) {
     ukv_write_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -445,7 +445,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     ukv_paths_write_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -595,7 +595,7 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     ukv_paths_match_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -799,7 +799,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     ukv_paths_read_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -967,7 +967,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
             auto lens = *c.lengths = arena.alloc<ukv_length_t>(places.count, c.error).begin();
             return_on_error(c.error);
             if (presences_ptr) {
-                auto presences = strided_iterator_gt<ukv_octet_t const>(presences_ptr, sizeof(ukv_octet_t));
+                auto presences = bits_view_t(presences_ptr);
                 for (std::size_t i = 0; i != places.count; ++i)
                     lens[i] = presences[i] ? (offs_ptr[i + 1] - offs_ptr[i]) : ukv_length_missing_k;
             }
@@ -984,7 +984,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     ukv_scan_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -1141,7 +1141,7 @@ void ukv_measure(ukv_measure_t* c_ptr) {
     ukv_measure_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 }
 
@@ -1218,7 +1218,7 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
     ukv_collection_list_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     ar::Status ar_status;
@@ -1285,8 +1285,8 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
     fmt::format_to(std::back_inserter(action.type), "{}?", kFlightTxnBegin);
     if (txn_id != 0)
         fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, txn_id);
-    if (c.options & ukv_option_transaction_snapshot_k)
-        fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagSnapshotTxn);
+    if (c.options & ukv_option_transaction_dont_watch_k)
+        fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagDontWatch);
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
     {
@@ -1334,10 +1334,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 /*********************************************************/
 
 void ukv_arena_free(ukv_arena_t c_arena) {
-    if (!c_arena)
-        return;
-    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
-    delete &arena;
+    clear_linked_memory(c_arena);
 }
 
 void ukv_transaction_free(ukv_transaction_t const c_transaction) {

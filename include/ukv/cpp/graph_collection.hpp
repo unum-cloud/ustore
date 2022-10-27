@@ -2,7 +2,9 @@
  * @file graph_collection.hpp
  * @author Ashot Vardanian
  * @date 30 Jun 2022
- * @brief C++ bindings for @see "ukv/graph.h".
+ * @addtogroup Cpp
+ *
+ * @brief C++ bindings for "ukv/graph.h".
  */
 
 #pragma once
@@ -110,7 +112,7 @@ class graph_collection_t {
             .options = options,
             .tasks_count = vertices.count(),
             .collections = &collection_,
-            .vertices_ids = vertices.begin().get(),
+            .vertices = vertices.begin().get(),
             .vertices_stride = vertices.stride(),
             .roles = roles.begin().get(),
             .roles_stride = roles.stride(),
@@ -185,7 +187,7 @@ class graph_collection_t {
             .options = options,
             .tasks_count = vertices.count(),
             .collections = &collection_,
-            .vertices_ids = vertices.begin().get(),
+            .vertices = vertices.begin().get(),
             .vertices_stride = vertices.stride(),
             .roles = roles.begin().get(),
             .roles_stride = roles.stride(),
@@ -201,7 +203,7 @@ class graph_collection_t {
     }
 
     expected_gt<bool> contains(ukv_key_t vertex, bool watch = true) noexcept {
-        return bins_ref_gt<collection_key_field_t>(db_, transaction_, ckf(collection_, vertex), arena_).present(watch);
+        return blobs_ref_gt<collection_key_field_t>(db_, transaction_, ckf(collection_, vertex), arena_).present(watch);
     }
 
     /**
@@ -215,7 +217,7 @@ class graph_collection_t {
         arg.collections_begin = {&collection_, 0};
         arg.keys_begin = vertices.begin();
         arg.count = vertices.count();
-        return bins_ref_gt<places_arg_t>(db_, transaction_, arg, arena_).present(watch);
+        return blobs_ref_gt<places_arg_t>(db_, transaction_, arg, arena_).present(watch);
     }
 
     using adjacency_range_t = range_gt<graph_stream_t>;
@@ -253,7 +255,7 @@ class graph_collection_t {
             .options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k,
             .tasks_count = 1,
             .collections = &collection_,
-            .vertices_ids = &vertex,
+            .vertices = &vertex,
             .roles = &role,
             .degrees_per_vertex = &degrees_per_vertex,
             .edges_per_vertex = &edges_per_vertex,
@@ -308,7 +310,7 @@ class graph_collection_t {
             .options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k,
             .tasks_count = vertices.count(),
             .collections = &collection_,
-            .vertices_ids = vertices.begin().get(),
+            .vertices = vertices.begin().get(),
             .vertices_stride = vertices.stride(),
             .roles = roles.begin().get(),
             .roles_stride = roles.stride(),

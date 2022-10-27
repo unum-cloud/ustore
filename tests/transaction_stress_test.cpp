@@ -70,13 +70,13 @@ void insert_atomic_isolated(std::size_t count_batches) {
     for (std::size_t i = 0; i < threads_count_ak; ++i)
         threads[i].join();
 
-    bins_collection_t collection = db.collection().throw_or_release();
+    blobs_collection_t collection = db.collection().throw_or_release();
 
     for (std::size_t idx_batch = 0; idx_batch != count_batches; ++idx_batch) {
         ukv_key_t const first_key_in_batch = idx_batch * batch_size_ak;
         std::iota(keys.begin(), keys.end(), first_key_in_batch);
 
-        embedded_bins_t retrieved = collection[keys].value().throw_or_release();
+        embedded_blobs_t retrieved = collection[keys].value().throw_or_release();
         for (std::size_t idx_in_batch = 1; idx_in_batch != batch_size_ak; ++idx_in_batch)
             EXPECT_EQ(retrieved[0], retrieved[idx_in_batch]);
     }
@@ -258,7 +258,7 @@ void serializable_transactions(std::size_t iteration_count) {
     EXPECT_TRUE(db_simulation.open(second_db_path.c_str()));
     EXPECT_TRUE(db_simulation.clear());
 
-    bins_collection_t collection_simulation = db_simulation.collection().throw_or_release();
+    blobs_collection_t collection_simulation = db_simulation.collection().throw_or_release();
     for (auto& time_and_operation : operations) {
         auto operation = time_and_operation.second;
         auto ref = collection_simulation[strided_range(operation.keys).subspan(0u, operation.count)];
@@ -297,7 +297,7 @@ void serializable_transactions(std::size_t iteration_count) {
         }
     }
 
-    bins_collection_t collection = db.collection().throw_or_release();
+    blobs_collection_t collection = db.collection().throw_or_release();
     keys_range_t present_keys = collection.keys();
     keys_stream_t present_it = present_keys.begin();
     keys_range_t present_keys_simulation = collection_simulation.keys();
@@ -360,10 +360,9 @@ void log_operations( //
 }
 
 template <std::size_t max_batch_size_ak>
-bool add_updated_keys( //
-    std::array<operation_t, max_batch_size_ak> const& operations,
-    std::size_t operations_count,
-    std::unordered_map<ukv_key_t, bool>& updated_keys) {
+void add_updated_keys(std::array<operation_t, max_batch_size_ak> const& operations,
+                      std::size_t operations_count,
+                      std::unordered_map<ukv_key_t, bool>& updated_keys) {
 
     for (std::size_t idx = 0; idx != operations_count; ++idx) {
         if (operations[idx].type == operation_code_t::remove_k || operations[idx].type == operation_code_t::insert_k)
@@ -404,12 +403,39 @@ void transactions_consistency(std::size_t transaction_count) {
 
         for (std::size_t batch_idx = 0; batch_idx != tasks[iter_idx].operation_count; ++batch_idx) {
             auto type = choose_operation_type(random_generator);
-            auto key = choose_key(random_generator);
-            auto watch = choose_watch(random_generator);
-            if (type == static_cast<int>(operation_code_t::insert_k))
-                collection[key].assign("value", watch);
-            else if (type == static_cast<int>(operation_code_t::remove_k))
-                collection[key].erase(watch);
+            ukv_key_t key = choose_key(random_generator);
+            bool watch = choose_watch(random_generator);
+            if (type == static_cast<int>(operation_code_t::insert_k)) {
+                status_t status;
+                value_view_t value("value");
+                ukv_length_t length = value.size();
+                ukv_write_t write {
+                    .db = db,
+                    .error = status.member_ptr(),
+                    .transaction = tasks[iter_idx].txn,
+                    .arena = collection.member_arena(),
+                    .options = watch ? ukv_options_default_k : ukv_option_transaction_dont_watch_k,
+                    .collections = collection.member_ptr(),
+                    .keys = &key,
+                    .lengths = &length,
+                    .values = value.member_ptr(),
+                };
+                ukv_write(&write);
+            }
+            else if (type == static_cast<int>(operation_code_t::remove_k)) {
+                status_t status;
+                ukv_write_t write {
+                    .db = db,
+                    .error = status.member_ptr(),
+                    .transaction = tasks[iter_idx].txn,
+                    .arena = collection.member_arena(),
+                    .options = watch ? ukv_options_default_k : ukv_option_transaction_dont_watch_k,
+                    .collections = collection.member_ptr(),
+                    .keys = &key,
+                    .values = nullptr,
+                };
+                ukv_write(&write);
+            }
             else if (type == static_cast<int>(operation_code_t::select_k))
                 auto _ = collection[key].value(watch);
 

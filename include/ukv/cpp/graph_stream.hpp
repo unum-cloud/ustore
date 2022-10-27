@@ -2,18 +2,20 @@
  * @file graph_stream.hpp
  * @author Ashot Vardanian
  * @date 30 Jun 2022
- * @brief C++ bindings for @see "ukv/graph.h".
+ * @addtogroup Cpp
+ *
+ * @brief C++ bindings for "ukv/graph.h".
  */
 
 #pragma once
 #include "ukv/graph.h"
-#include "ukv/cpp/ranges.hpp"     // `edges_span_t`
-#include "ukv/cpp/bins_range.hpp" // `keys_stream_t`
+#include "ukv/cpp/ranges.hpp"      // `edges_span_t`
+#include "ukv/cpp/blobs_range.hpp" // `keys_stream_t`
 
 namespace unum::ukv {
 
 /**
- * @brief A stream of all @c `edge_t`s in a graph.
+ * @brief A stream of all @c edge_t's in a graph.
  * No particular order is guaranteed.
  */
 class graph_stream_t {
@@ -44,7 +46,7 @@ class graph_stream_t {
             .arena = arena_.member_ptr(),
             .tasks_count = vertices.count(),
             .collections = &collection_,
-            .vertices_ids = vertices.begin().get(),
+            .vertices = vertices.begin().get(),
             .vertices_stride = vertices.stride(),
             .roles = &role,
             .degrees_per_vertex = &degrees_per_vertex,
