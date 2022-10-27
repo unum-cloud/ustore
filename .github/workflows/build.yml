@@ -1,6 +1,6 @@
 name: Build
 
-concurrency: 
+concurrency:
   group: ${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
@@ -49,3 +49,17 @@ jobs:
         with:
           name: ubuntu_binaries
           path: build/bin/*
+
+  test:
+    runs-on: ubuntu-20.04
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download a Build Artifact
+        uses: actions/download-artifact@v3.0.1
+        with:
+          name: ubuntu_binaries
+
+      - name: Run tests
+        run: find ./build/bin/ -iname '*unit_test' -exec {} \;
