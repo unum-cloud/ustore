@@ -219,7 +219,7 @@ struct serializing_tape_ref_t {
         return_on_error(c_error);
     }
 
-    embedded_bins_t view() noexcept { return growing_tape; }
+    embedded_blobs_t view() noexcept { return growing_tape; }
 
   private:
     stl_arena_t& arena_;
@@ -261,7 +261,7 @@ places_arg_t const& read_unique_docs( //
 
     ukv_read(&read);
 
-    auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
+    auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
 
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
@@ -356,7 +356,7 @@ places_arg_t read_docs( //
     }
 
     // Parse all the unique documents
-    auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
+    auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
     for (ukv_size_t doc_idx = 0; doc_idx != unique_places_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
@@ -696,8 +696,8 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
 
-    joined_bins_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
-    joined_bins_iterator_t found_binary_it = found_binaries.begin();
+    joined_blobs_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
+    joined_blobs_iterator_t found_binary_it = found_binaries.begin();
 
     // Export all the elements into a heap-allocated hash-set, keeping only unique entries
     std::optional<std::unordered_set<std::string>> paths;
@@ -1068,8 +1068,8 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
     strided_iterator_gt<ukv_doc_field_type_t const> types {c.types, c.types_stride};
 
-    joined_bins_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
-    joined_bins_iterator_t found_binary_it = found_binaries.begin();
+    joined_blobs_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
+    joined_blobs_iterator_t found_binary_it = found_binaries.begin();
 
     // Parse all the field names
     heapy_fields_t heapy_fields(std::nullopt);

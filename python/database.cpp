@@ -18,19 +18,20 @@ static void commit_txn(py_transaction_t& py_txn) {
     py_txn.native.commit().throw_unhandled();
 }
 
-static std::unique_ptr<py_collection_t> punned_collection( //
+template <typename collection_at>
+static std::unique_ptr<py_collection_gt<collection_at>> punned_collection( //
     std::shared_ptr<py_db_t> py_db_ptr,
     std::shared_ptr<py_transaction_t> py_txn_ptr,
     std::string const& name) {
 
-    ukv_collection_t collection = py_db_ptr->native.find<bins_collection_t>(name, true);
+    ukv_collection_t collection = py_db_ptr->native.find<collection_at>(name, true);
 
-    auto py_collection = std::make_unique<py_collection_t>();
+    auto py_collection = std::make_unique<py_collection_gt<collection_at>>();
     py_collection->name = name;
     py_collection->py_db_ptr = py_db_ptr;
     py_collection->py_txn_ptr = py_txn_ptr;
     py_collection->in_txn = py_txn_ptr != nullptr;
-    py_collection->native = bins_collection_t {
+    py_collection->native = collection_at {
         py_db_ptr->native,
         collection,
         py_txn_ptr //
@@ -40,12 +41,13 @@ static std::unique_ptr<py_collection_t> punned_collection( //
     return py_collection;
 }
 
-static std::unique_ptr<py_collection_t> punned_db_collection(py_db_t& db, std::string const& collection) {
-    return punned_collection(db.shared_from_this(), nullptr, collection);
+static std::unique_ptr<py_blobs_collection_t> punned_db_collection(py_db_t& db, std::string const& collection) {
+    return punned_collection<blobs_collection_t>(db.shared_from_this(), nullptr, collection);
 }
 
-static std::unique_ptr<py_collection_t> punned_txn_collection(py_transaction_t& txn, std::string const& collection) {
-    return punned_collection(txn.py_db_ptr.lock(), txn.shared_from_this(), collection);
+static std::unique_ptr<py_blobs_collection_t> punned_txn_collection(py_transaction_t& txn,
+                                                                    std::string const& collection) {
+    return punned_collection<blobs_collection_t>(txn.py_db_ptr.lock(), txn.shared_from_this(), collection);
 }
 
 template <typename range_at>
@@ -73,7 +75,7 @@ void ukv::wrap_database(py::module& m) {
     // Define our primary classes: `DataBase`, `Collection`, `Transaction`
     auto py_db = py::class_<py_db_t, std::shared_ptr<py_db_t>>(m, "DataBase", py::module_local());
     auto py_txn = py::class_<py_transaction_t, std::shared_ptr<py_transaction_t>>(m, "Transaction", py::module_local());
-    auto py_collection = py::class_<py_collection_t>(m, "Collection", py::module_local());
+    auto py_collection = py::class_<py_blobs_collection_t>(m, "Collection", py::module_local());
 
     using py_kstream_t = py_stream_with_ending_gt<keys_stream_t>;
     using py_kvstream_t = py_stream_with_ending_gt<pairs_stream_t>;
@@ -100,27 +102,30 @@ void ukv::wrap_database(py::module& m) {
 
     // Python tasks are generally called for a single collection.
     // That greatly simplifies the implementation.
-    py_collection.def("set", &write_binary);
-    py_collection.def("pop", &remove_binary);  // Unlike Python, won't return the result
-    py_collection.def("has_key", &has_binary); // Similar to Python 2
+    py_collection.def("set", &write_binary<blobs_collection_t>);
+    py_collection.def("pop", &remove_binary<blobs_collection_t>);  // Unlike Python, won't return the result
+    py_collection.def("has_key", &has_binary<blobs_collection_t>); // Similar to Python 2
     py_collection.def("get", &read_binary);
     py_collection.def("update", &update_binary);
     py_collection.def("broadcast", &broadcast_binary);
-    py_collection.def("scan", &scan_binary);
-    py_collection.def("__setitem__", &write_binary);
-    py_collection.def("__delitem__", &remove_binary);
-    py_collection.def("__contains__", &has_binary);
+    py_collection.def("scan", &scan_binary<blobs_collection_t>);
+    py_collection.def("__setitem__", &write_binary<blobs_collection_t>);
+    py_collection.def("__delitem__", &remove_binary<blobs_collection_t>);
+    py_collection.def("__contains__", &has_binary<blobs_collection_t>);
     py_collection.def("__getitem__", &read_binary);
 
-    py_collection.def("clear", [](py_collection_t& py_collection) { py_collection.native.clear().throw_unhandled(); });
-    py_collection.def("remove", [](py_collection_t& py_collection) { py_collection.native.drop().throw_unhandled(); });
+    py_collection.def("clear",
+                      [](py_blobs_collection_t& py_collection) { py_collection.native.clear().throw_unhandled(); });
+    py_collection.def("remove",
+                      [](py_blobs_collection_t& py_collection) { py_collection.native.drop().throw_unhandled(); });
 
     // ML-oriented procedures for zero-copy variants exporting
     // Apache Arrow shared memory handles:
     py_collection.def(
         "get_matrix",
-        [](py_collection_t& py_collection, py::object keys, std::size_t truncation, char padding) { return 0; });
-    py_collection.def("set_matrix", [](py_collection_t& py_collection, py::object keys, py::object vals) { return 0; });
+        [](py_blobs_collection_t& py_collection, py::object keys, std::size_t truncation, char padding) { return 0; });
+    py_collection.def("set_matrix",
+                      [](py_blobs_collection_t& py_collection, py::object keys, py::object vals) { return 0; });
 
 #pragma region Transactions and Lifetime
 
@@ -201,7 +206,7 @@ void ukv::wrap_database(py::module& m) {
         [](py_db_t& py_db, std::string const& name) { py_db.native.drop(name.c_str()).throw_unhandled(); },
         py::arg("collection"));
 
-    py_collection.def_property_readonly("graph", [](py_collection_t& py_collection) {
+    py_collection.def_property_readonly("graph", [](py_blobs_collection_t& py_collection) {
         auto py_graph = std::make_shared<py_graph_t>();
         py_graph->py_db_ptr = py_collection.py_db_ptr;
         py_graph->py_txn_ptr = py_collection.py_txn_ptr;
@@ -209,12 +214,12 @@ void ukv::wrap_database(py::module& m) {
         py_graph->index = py_collection.native;
         return py::cast(py_graph);
     });
-    py_collection.def_property_readonly("docs", [](py_collection_t& py_collection) {
-        auto py_docs = std::make_unique<py_docs_collection_t>();
-        py_docs->binary = py_collection;
-        return py_docs;
+    py_collection.def_property_readonly("docs", [](py_blobs_collection_t& py_collection) {
+        return punned_collection<docs_collection_t>(py_collection.py_db_ptr.lock(),
+                                                    py_collection.py_txn_ptr.lock(),
+                                                    py_collection.name);
     });
-    py_collection.def_property_readonly("media", [](py_collection_t& py_collection) { return 0; });
+    py_collection.def_property_readonly("media", [](py_blobs_collection_t& py_collection) { return 0; });
 
 #pragma region Streams and Ranges
 
@@ -261,13 +266,13 @@ void ukv::wrap_database(py::module& m) {
         return py::make_tuple(key, py::reinterpret_borrow<py::object>(value_ptr));
     });
 
-    py_collection.def_property_readonly("keys", [](py_collection_t& py_collection) {
-        bins_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
+    py_collection.def_property_readonly("keys", [](py_blobs_collection_t& py_collection) {
+        blobs_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
         keys_range_t range {members};
         return py::cast(std::make_unique<keys_range_t>(range));
     });
-    py_collection.def_property_readonly("items", [](py_collection_t& py_collection) {
-        bins_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
+    py_collection.def_property_readonly("items", [](py_blobs_collection_t& py_collection) {
+        blobs_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
         pairs_range_t range {members};
         return py::cast(std::make_unique<pairs_range_t>(range));
     });

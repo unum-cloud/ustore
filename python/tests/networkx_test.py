@@ -1,4 +1,4 @@
-import ukv.stl as ukv
+import ukv.umemkv as ukv
 import numpy as np
 
 
@@ -67,7 +67,8 @@ def triangle_batch(net):
 
 def test():
     db = ukv.DataBase()
-    net = ukv.Network(db, '.graph')
+    main = db.main
+    net = main.graph
     line(net)
     triangle(net)
     triangle_batch(net)

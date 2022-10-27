@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
 
     // Try getting the main collection
     _ = db.collection();
-    bins_collection_t main = *db.collection();
+    blobs_collection_t main = *db.collection();
 
     // Single-element access
     main[42] = "purpose of life";
@@ -50,14 +50,14 @@ int main(int argc, char** argv) {
         (void)value;
 
     // Accessing named collections
-    bins_collection_t prefixes = *db.collection("prefixes");
+    blobs_collection_t prefixes = *db.collection("prefixes");
     prefixes.at(42) = "purpose";
     db["articles"]->at(42) = "of";
     db["suffixes"]->at(42) = "life";
 
     // Reusable memory
     // This interface not just more performant, but also provides nicer interface:
-    //  expected_gt<joined_bins_t> tapes = main[{100, 101}].on(arena);
+    //  expected_gt<joined_blobs_t> tapes = main[{100, 101}].on(arena);
     arena_t arena(db);
     _ = main[{43, 44}].on(arena).clear();
     _ = main[{43, 44}].on(arena).erase();
