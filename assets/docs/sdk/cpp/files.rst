@@ -12,24 +12,24 @@ ukv
 .. doxygenfile:: ukv.hpp
 
 ===============
-bins_collection
+blobs_collection
 ===============
-.. doxygenfile:: bins_collection.hpp
+.. doxygenfile:: blobs_collection.hpp
 
 ===============
-bins_join
+blobs_join
 ===============
-.. doxygenfile:: bins_join.hpp
+.. doxygenfile:: blobs_join.hpp
 
 ===============
-bins_range
+blobs_range
 ===============
-.. doxygenfile:: bins_range.hpp
+.. doxygenfile:: blobs_range.hpp
 
 ===============
-bins_ref
+blobs_ref
 ===============
-.. doxygenfile:: bins_ref.hpp
+.. doxygenfile:: blobs_ref.hpp
 
 ===============
 context

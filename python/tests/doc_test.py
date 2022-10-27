@@ -1,6 +1,6 @@
 import json
 
-import ukv.stl as ukv
+import ukv.umemkv as ukv
 
 
 def only_json(col):

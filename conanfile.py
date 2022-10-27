@@ -70,7 +70,7 @@ class ConanUKV(ConanFile):
         # https://docs.conan.io/en/1.26/creating_packages/package_information.html#using-components
         self.cpp_info.name = 'UKV'
         self.cpp_info.includedirs = ['include/']
-        self.cpp_info.components['stl'].libs = ['libukv_stl']
+        self.cpp_info.components['umemkv'].libs = ['libukv_umemkv']
         self.cpp_info.components['leveldb'].libs = ['libukv_leveldb']
         self.cpp_info.components['rocksdb'].libs = ['libukv_rocksdb']
         if self.options['with_arrow']:

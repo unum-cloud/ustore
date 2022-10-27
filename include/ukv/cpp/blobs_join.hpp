@@ -1,5 +1,5 @@
 /**
- * @file bins_join.hpp
+ * @file blobs_join.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp

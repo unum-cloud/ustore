@@ -1,5 +1,5 @@
 /**
- * @file bins_collection.hpp
+ * @file blobs_collection.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp
@@ -8,8 +8,8 @@
  */
 
 #pragma once
-#include "ukv/cpp/bins_ref.hpp"
-#include "ukv/cpp/bins_range.hpp"
+#include "ukv/cpp/blobs_ref.hpp"
+#include "ukv/cpp/blobs_range.hpp"
 
 namespace unum::ukv {
 
@@ -24,7 +24,7 @@ namespace unum::ukv {
  * ## Class Specs
  *
  * - Concurrency: Thread-safe, for @b unique arenas.
- *   For details, see @c bins_ref_gt docs on "Memory Management"
+ *   For details, see @c blobs_ref_gt docs on "Memory Management"
  * - Lifetime: @b Must live shorter then the DB it belongs to.
  * - Exceptions: Only the `size` method.
  * - Copyable: Will create a new empty arena.
@@ -40,25 +40,25 @@ namespace unum::ukv {
  * in "Document Collections", and can later be queried with
  * any "Document Format".
  */
-class bins_collection_t {
+class blobs_collection_t {
     ukv_database_t db_ = nullptr;
     ukv_collection_t collection_ = ukv_collection_main_k;
     ukv_transaction_t txn_ = nullptr;
     any_arena_t arena_;
 
   public:
-    inline bins_collection_t() noexcept : arena_(nullptr) {}
-    inline bins_collection_t(ukv_database_t db_ptr,
-                             ukv_collection_t collection = ukv_collection_main_k,
-                             ukv_transaction_t txn = nullptr,
-                             ukv_arena_t* arena = nullptr) noexcept
+    inline blobs_collection_t() noexcept : arena_(nullptr) {}
+    inline blobs_collection_t(ukv_database_t db_ptr,
+                              ukv_collection_t collection = ukv_collection_main_k,
+                              ukv_transaction_t txn = nullptr,
+                              ukv_arena_t* arena = nullptr) noexcept
         : db_(db_ptr), collection_(collection), txn_(txn), arena_(db_, arena) {}
 
-    inline bins_collection_t(bins_collection_t&& other) noexcept
+    inline blobs_collection_t(blobs_collection_t&& other) noexcept
         : db_(other.db_), collection_(std::exchange(other.collection_, ukv_collection_main_k)),
           txn_(std::exchange(other.txn_, nullptr)), arena_(std::exchange(other.arena_, {nullptr})) {}
 
-    inline bins_collection_t& operator=(bins_collection_t&& other) noexcept {
+    inline blobs_collection_t& operator=(blobs_collection_t&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(collection_, other.collection_);
         std::swap(txn_, other.txn_);
@@ -66,10 +66,10 @@ class bins_collection_t {
         return *this;
     }
 
-    inline bins_collection_t(bins_collection_t const& other) noexcept
+    inline blobs_collection_t(blobs_collection_t const& other) noexcept
         : db_(other.db_), collection_(other.collection_), txn_(other.txn_), arena_(other.db_) {}
 
-    inline bins_collection_t& operator=(bins_collection_t const& other) noexcept {
+    inline blobs_collection_t& operator=(blobs_collection_t const& other) noexcept {
         db_ = other.db_;
         collection_ = other.collection_;
         txn_ = other.txn_;
@@ -83,7 +83,7 @@ class bins_collection_t {
     inline ukv_database_t db() const noexcept { return db_; }
     inline ukv_transaction_t txn() const noexcept { return txn_; }
 
-    inline bins_range_t members( //
+    inline blobs_range_t members( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
         ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
         return {db_, txn_, collection_, min_key, max_key};
@@ -97,7 +97,7 @@ class bins_collection_t {
     inline pairs_range_t items( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
         ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
-        return {bins_range_t {db_, txn_, collection_, min_key, max_key}};
+        return {blobs_range_t {db_, txn_, collection_, min_key, max_key}};
     }
 
     inline expected_gt<size_range_t> size_range() const noexcept {
@@ -147,13 +147,13 @@ class bins_collection_t {
         return status;
     }
 
-    inline bins_ref_gt<places_arg_t> operator[](std::initializer_list<ukv_key_t> keys) noexcept { return at(keys); }
-    inline bins_ref_gt<places_arg_t> at(std::initializer_list<ukv_key_t> keys) noexcept { //
+    inline blobs_ref_gt<places_arg_t> operator[](std::initializer_list<ukv_key_t> keys) noexcept { return at(keys); }
+    inline blobs_ref_gt<places_arg_t> at(std::initializer_list<ukv_key_t> keys) noexcept { //
         return at(strided_range(keys));
     }
 
-    inline bins_ref_gt<places_arg_t> operator[](keys_view_t keys) noexcept { return at(keys); }
-    inline bins_ref_gt<places_arg_t> at(keys_view_t keys) noexcept {
+    inline blobs_ref_gt<places_arg_t> operator[](keys_view_t keys) noexcept { return at(keys); }
+    inline blobs_ref_gt<places_arg_t> at(keys_view_t keys) noexcept {
         places_arg_t arg;
         arg.collections_begin = &collection_;
         arg.keys_begin = keys.begin();
@@ -170,7 +170,7 @@ class bins_collection_t {
     auto at(keys_arg_at&& keys) noexcept { //
         constexpr bool is_one_k = is_one<keys_arg_at>();
         if constexpr (is_one_k) {
-            using result_t = bins_ref_gt<collection_key_field_t>;
+            using result_t = blobs_ref_gt<collection_key_field_t>;
             using plain_t = std::remove_reference_t<keys_arg_at>;
             // ? We may want to warn the users, that the collection property will be shadowed:
             // static_assert(!sfinae_has_collection_gt<plain_t>::value, "Overwriting existing collection!");
@@ -187,7 +187,7 @@ class bins_collection_t {
         }
         else {
             using locations_t = locations_in_collection_gt<keys_arg_at>;
-            using result_t = bins_ref_gt<locations_t>;
+            using result_t = blobs_ref_gt<locations_t>;
             return result_t {db_, txn_, locations_t {std::forward<keys_arg_at>(keys), collection_}, arena_};
         }
     }

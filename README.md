@@ -1,7 +1,7 @@
 <h1 align="center">UKV</h1>
 <h3 align="center">Universal Binary Interface</h3>
 <h3 align="center">For The Fastest DBMS Ever Built</h3>
-<h5 align="center">RocksDB • LevelDB • UnumDB • RAM</h5>
+<h5 align="center">RocksDB • LevelDB • UDiskKV • UMemKV</h5>
 <h5 align="center">Blobs • Documents • Graphs • Vectors</h5>
 <h5 align="center">C • C++ • Python • Java • GoLang</h5>
 <br/>
@@ -45,23 +45,25 @@ Today, Intel, Nvidia, AMD, GraphCore, Cerebras and many others ship optimized im
 Our reference implementation aims to be faster and more scalable, than established DBs, like MongoDB, Neo4J, Redis, ETCD and Postgres.
 You can compose your own "X" DBMS killer from any combination of components.
 
-| Engine  | Modality |          Distribution           |            Frontend             |
-| :-----: | :------: | :-----------------------------: | :-----------------------------: |
-|         |          |                                 |                                 |
-|   RAM   |  Blobs   |            Embedded             |            C and C++            |
-| LevelDB |   Docs   |        Client-Server RPC        |             Python              |
-| RocksDB |  Graphs  |     Arrow Flight RPC Server     | GoLang <sup>*in-progress*</sup> |
-| UnumKV  | Vectors  | Distributed <sup>*coming*</sup> |  Java <sup>*in-progress*</sup>  |
+| Engine  | Modality  |          Distribution           |            Frontend             |
+| :-----: | :-------: | :-----------------------------: | :-----------------------------: |
+|         |           |                                 |                                 |
+| LevelDB |   Blobs   |            Embedded             |            C and C++            |
+| RocksDB |  Graphs   |        Client-Server RPC        |             Python              |
+| UMemKV  | Documents |     Arrow Flight RPC Server     | GoLang <sup>*in-progress*</sup> |
+| UDiskKV |  Vectors  | Distributed <sup>*coming*</sup> |  Java <sup>*in-progress*</sup>  |
 
 Run `cloc $(git ls-files)` and you will see, that UKV fits into just around 20'000 Lines fo Code.
-Compare this to bulky 1'491'985 LOC in Postgres and 4'466'967 LOC for MySQL. [*HN*][dbms-cloc].
+Compare this to bulky 1.5 Million LOC in Postgres and 4.5 Million LOC for MySQL ([*source*][dbms-cloc]).
 They target just the tabular workloads.
 After standardizing the API, we can make the system a lot reacher in features!
 
-<h5 align="center">ACID transactions across many collections • Snapshots  • Operation-level WATCHes</h4>
-<h5 align="center">BSON, JSON, MessagePack documents support • JSON Patches & Merrge-Patches • JSON Pointers Addressing</h4>
-<h5 align="center">Native Apache Arrow format support in all APIs • Arrow Flight RPC Server • Bulk Scans • Random Samping</h4>
-<h5 align="center">Pandas Tabular API • NetworkX Graph API • PyTorch & TensorFlow Data-Loaders</h4>
+<h5 align="center">
+ACID transactions across many collections • Snapshots  • Operation-level WATCHes • 
+BSON, JSON, MessagePack documents support • JSON Patches & Merrge-Patches • JSON Pointers Addressing • 
+Native Apache Arrow format support in all APIs • Arrow Flight RPC Server • Bulk Scans • Random Samping • 
+Pandas Tabular API • NetworkX Graph API • PyTorch & TensorFlow Data-Loaders
+</h5>
 
 ---
 
@@ -72,7 +74,7 @@ Let's start with the simplest and work our way up.
 1. Getting a Python, GoLang, Java wrapper for vanilla RocksDB or LevelDB.
 2. Serving them over a network via Apache Arrow Flight RPC.
 3. Embedded Document and GraphDB, that will avoid networking overheads.
-4. Semlessly Tiering Multi-Modal DBMS between RAM and persistent backends. 
+4. Semlessly Tiering Multi-Modal DBMS between UMemKV and persistent backends. 
 
 Even with just a single node, in a 2U chassis today we can easily get 24x 16 TB of NVMe storage connected to 2x CPU sockets, totalling at 384 TB of space, capable of yielding ~120 GB/s of read throughput, out of which, ~70 GB/s our in-house engine can already sustain.
 Combining it with numerous features above and GPU acceleration, once can get an all-one Data-Lake with the feel of Pandas, speed of Rapids, scale of [Hadoop][hadoop] and consistency of Postgres.
@@ -99,7 +101,7 @@ Needless to say, every system has a different API, different guarantees, and run
 
 Over the years we broke speed limits on CPUs and GPUs using SIMD, branch-less computing and innovation in parallel algorithm design.
 We deliberately minimize the dynamic allocations in all modality implementations.
-Our engine implementations - "RAM" and "KV" follow the same tradition, but in "LevelDB" and "RocksDB" we are forced to re-allocate, as the library authors didn't design a proper binary interface.
+Our engine implementations - "UMemKV" and "UDiskKV" follow the same tradition, but in "LevelDB" and "RocksDB" we are forced to re-allocate, as the library authors didn't design a proper binary interface.
 The one they provide heavily depends on C++ Standard Templates Library and the use fo standard allocators.
 
 Our interface is very fast, has no dynamic polymorphism and throws no exceptions, to match the speed and the quality of fast underlying engines and work for months uninterrupted!
@@ -110,18 +112,18 @@ We have numerous detailed blog posts on performance:
 Backends differ in their functionality and purposes.
 The underlying embedded key value stores include:
 
-| Name     |  Speed   |       OS        | Transact | Collections | Persistent | [Snapshots][snap] | [Watches][watch] |
-| :------- | :------: | :-------------: | :------: | :---------: | :--------: | :---------------: | :--------------: |
-| LevelDB  |   0.5x   | POSIX + Windows |    ❌     |      ❌      |     ✅      |         ❌         |        ❌         |
-| RocksDB  |    1x    | POSIX + Windows |    ✅     |      ✅      |     ✅      |         ✅         |        ✅         |
-| Unum RAM | **10x**  | POSIX + Windows |    ✅     |      ✅      |     ❌      |         ❌         |        ✅         |
-| Unum KV  | **3-5x** |      Linux      |    ✅     |      ✅      |     ✅      |         ✅         |        ✅         |
+| Name    |  Speed   |       OS        | Transact | Collections | Persistent | [Snapshots][snap] | [Watches][watch] |
+| :------ | :------: | :-------------: | :------: | :---------: | :--------: | :---------------: | :--------------: |
+| LevelDB |   0.5x   | POSIX + Windows |    ❌     |      ❌      |     ✅      |         ❌         |        ❌         |
+| RocksDB |    1x    | POSIX + Windows |    ✅     |      ✅      |     ✅      |         ✅         |        ✅         |
+| UMemKV  | **10x**  | POSIX + Windows |    ✅     |      ✅      |     ❌      |         ❌         |        ✅         |
+| UDiskKV | **3-5x** |      Linux      |    ✅     |      ✅      |     ✅      |         ✅         |        ✅         |
 
 
-* RAM in-memory backend originally served educational purposes. Then it was superseeded by the [`consistent_set`][consistent_set] and can now be considered the fastest in-memory Key-Value Store, superior to Redis, MemCached or ETCD.
+* UMemKV in-memory backend originally served educational purposes. Then it was superseeded by the [`consistent_set`][consistent_set] and can now be considered the fastest in-memory Key-Value Store, superior to Redis, MemCached or ETCD.
 * LevelDB was originally designed at Google and extensively used across the industry, thanks to its simplicity.
 * RocksDB improves over LevelDB, extending its functionality with transactions, named collections, and higher performance.
-* UnumKV is our proprietary in-house implementation with superior concurrency-control mechnisms and Linux kernel-bypass techniques, as well as, GPU acceleration. The first of its kind.
+* UDiskKV is our **proprietary** in-house implementation with superior concurrency-control mechnisms and Linux kernel-bypass techniques, as well as, GPU acceleration. The first of its kind.
 
 All of those backends were [benchmarked for weeks](https://unum.cloud/ucsb) using [UCSB](https://github.com/unum-cloud/ucsb), so you can choose the best stack for you specific use case.
 
@@ -167,7 +169,7 @@ You can also think of such a KVS as a memory-allocator:
 
 Once you have a good enough shared interface, it is relatively easy to build on top of it, adding support for:
 
-* Documents, 
+* Documents,
 * Graphs,
 * Vectors, and
 * Paths.
@@ -190,6 +192,28 @@ cmake \
     -DUKV_BUILD_BENCHMARKS=1 \
     -DUKV_BUILD_FLIGHT_RPC=1 . && \
     make -j16
+```
+
+To add to your CMake project:
+
+```cmake
+cmake_minimum_required(VERSION 3.11)
+project(ekv_example)
+
+include(FetchContent)
+
+FetchContent_Declare(
+    ukv
+    GIT_REPOSITORY https://github.com/unum-cloud/UKV.git
+    GIT_SHALLOW TRUE
+    GIT_TAG v0.3.0
+)
+FetchContent_MakeAvailable(ukv)
+set(ukv_INCLUDE_DIR ${ukv_SOURCE_DIR}/include)
+include_directories(${ukv_INCLUDE_DIR})
+
+add_executable(ekv_example_test main.cpp)
+target_link_libraries(ekv_example_test ukv)
 ```
 
 For Flight RPC, Apache Arrow must be pre-installed.

@@ -73,7 +73,7 @@ static char const* path() {
 #pragma region Binary Collections
 
 template <typename locations_at>
-void check_length(bins_ref_gt<locations_at>& ref, ukv_length_t expected_length) {
+void check_length(blobs_ref_gt<locations_at>& ref, ukv_length_t expected_length) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
 
@@ -108,7 +108,7 @@ void check_length(bins_ref_gt<locations_at>& ref, ukv_length_t expected_length) 
 }
 
 template <typename locations_at>
-void check_equalities(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
+void check_equalities(blobs_ref_gt<locations_at>& ref, contents_arg_t values) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
     using extractor_t = places_arg_extractor_gt<locations_at>;
@@ -131,7 +131,7 @@ void check_equalities(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
 }
 
 template <typename locations_at>
-void round_trip(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
+void round_trip(blobs_ref_gt<locations_at>& ref, contents_arg_t values) {
     EXPECT_TRUE(ref.assign(values)) << "Failed to assign";
     check_equalities(ref, values);
 }
@@ -177,7 +177,7 @@ struct triplet_t {
     }
 };
 
-void check_binary_collection(bins_collection_t& collection) {
+void check_binary_collection(blobs_collection_t& collection) {
 
     triplet_t triplet;
     auto ref = collection[triplet.keys];
@@ -219,7 +219,7 @@ TEST(db, basic) {
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
-    bins_collection_t collection = *db.collection();
+    blobs_collection_t collection = *db.collection();
     check_binary_collection(collection);
     EXPECT_TRUE(db.clear());
 }
@@ -234,7 +234,7 @@ TEST(db, persistency) {
 
     triplet_t triplet;
 
-    bins_collection_t collection = *db.collection();
+    blobs_collection_t collection = *db.collection();
     auto collection_ref = collection[triplet.keys];
     check_length(collection_ref, ukv_length_missing_k);
     round_trip(collection_ref, triplet.contents_arrow());
@@ -244,7 +244,7 @@ TEST(db, persistency) {
     db.close();
 
     EXPECT_TRUE(db.open(path()));
-    bins_collection_t collection2 = *db.collection();
+    blobs_collection_t collection2 = *db.collection();
     auto collection_ref2 = collection2[triplet.keys];
 
     check_equalities(collection_ref2, triplet.contents_arrow());
@@ -267,9 +267,9 @@ TEST(db, named) {
     EXPECT_TRUE(db["col2"]);
 
     EXPECT_FALSE(db.collection_create("col1"));
-    bins_collection_t col1 = *db["col1"];
+    blobs_collection_t col1 = *db["col1"];
     EXPECT_FALSE(db.collection_create("col2"));
-    bins_collection_t col2 = *db["col2"];
+    blobs_collection_t col2 = *db["col2"];
 
     check_binary_collection(col1);
     check_binary_collection(col2);
@@ -297,10 +297,10 @@ TEST(db, collection_list) {
         return;
     }
     else {
-        bins_collection_t col1 = *db.collection_create("col1");
-        bins_collection_t col2 = *db.collection_create("col2");
-        bins_collection_t col3 = *db.collection_create("col3");
-        bins_collection_t col4 = *db.collection_create("col4");
+        blobs_collection_t col1 = *db.collection_create("col1");
+        blobs_collection_t col2 = *db.collection_create("col2");
+        blobs_collection_t col3 = *db.collection_create("col3");
+        blobs_collection_t col4 = *db.collection_create("col4");
 
         EXPECT_TRUE(*db.contains("col1"));
         EXPECT_TRUE(*db.contains("col2"));
@@ -572,7 +572,7 @@ TEST(db, unnamed_and_named) {
 
         auto maybe_collection = db.collection_create(name);
         EXPECT_TRUE(maybe_collection);
-        bins_collection_t collection = std::move(maybe_collection).throw_or_release();
+        blobs_collection_t collection = std::move(maybe_collection).throw_or_release();
         auto collection_ref = collection[triplet.keys];
         check_length(collection_ref, ukv_length_missing_k);
         round_trip(collection_ref, triplet.contents_arrow());
@@ -601,7 +601,7 @@ TEST(db, txn) {
     round_trip(txn_ref, triplet.contents_full());
 
     EXPECT_TRUE(db.collection());
-    bins_collection_t collection = *db.collection();
+    blobs_collection_t collection = *db.collection();
     auto collection_ref = collection[triplet.keys];
 
     // Check for missing values before commit
@@ -629,7 +629,7 @@ TEST(db, snapshots) {
     triplet_same_v.vals = {'A', 'A', 'A'};
 
     EXPECT_TRUE(db.collection());
-    bins_collection_t collection = *db.collection();
+    blobs_collection_t collection = *db.collection();
     auto collection_ref = collection[triplet.keys];
 
     check_length(collection_ref, ukv_length_missing_k);
@@ -687,7 +687,7 @@ TEST(db, txn_named) {
     // Transaction with named collection
     EXPECT_FALSE(db.collection("named_col"));
     EXPECT_TRUE(db.collection("named_col", true));
-    bins_collection_t named_collection = *db.collection("named_col");
+    blobs_collection_t named_collection = *db.collection("named_col");
     std::vector<collection_key_t> sub_keys {
         {named_collection, triplet.keys[0]},
         {named_collection, triplet.keys[1]},
@@ -732,7 +732,7 @@ TEST(db, txn_unnamed_then_named) {
     round_trip(txn_ref, triplet.contents_full());
 
     EXPECT_TRUE(db.collection());
-    bins_collection_t collection = *db.collection();
+    blobs_collection_t collection = *db.collection();
     auto collection_ref = collection[triplet.keys];
 
     // Check for missing values before commit
@@ -747,7 +747,7 @@ TEST(db, txn_unnamed_then_named) {
 
     // Transaction with named collection
     EXPECT_TRUE(db.collection_create("named_col"));
-    bins_collection_t named_collection = *db.collection("named_col");
+    blobs_collection_t named_collection = *db.collection("named_col");
     std::vector<collection_key_t> sub_keys {
         {named_collection, triplet.keys[0]},
         {named_collection, triplet.keys[1]},
@@ -1219,7 +1219,7 @@ TEST(db, graph_triangle_batch_api) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    bins_collection_t main = *db.collection();
+    blobs_collection_t main = *db.collection();
     graph_collection_t net = *db.collection<graph_collection_t>();
 
     std::vector<edge_t> triangle {

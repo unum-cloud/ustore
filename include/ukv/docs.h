@@ -4,7 +4,7 @@
  * @date 27 Jun 2022
  * @addtogroup C
  *
- * @brief C bindings for collections of JSON-like @b Documents.
+ * @brief Binary Interface Standard for JSON-like @b Documents collections.
  *
  * It extends the basic "ukv.h" towards values storing hierarchical documents.
  * Examples: JSONs, MsgPacks, BSONs and a number of other similar formats.
@@ -51,7 +51,7 @@ extern "C" {
  * Most types mimic what's present in Apache Arrow. Others, describe
  * hierarchical documents, like JSON, BSON and MessagePack.
  *
- * For Business Intelligence and Analytics mostly the `::ukv_doc_field_i64_k`
+ * For Business Intelligence and Analytics moumemkvy the `::ukv_doc_field_i64_k`
  * and `::ukv_doc_field_f64_k` are used.
  */
 typedef enum {

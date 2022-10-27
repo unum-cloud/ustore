@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-import ukv.stl as ukv
+import ukv.umemkv as ukv
 
 
 def only_explicit(col):
@@ -64,7 +64,6 @@ def only_overwrite(col):
 
 
 def batch_insert(col):
-    return
     col.clear()
     count_keys: int = 20
     keys: list[int] = list(range(1, count_keys + 1))

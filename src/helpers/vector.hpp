@@ -230,9 +230,9 @@ class growing_tape_t {
     }
     strided_range_gt<byte_t> contents() noexcept { return strided_range<byte_t>(contents_.begin(), contents_.end()); }
 
-    operator joined_bins_t() noexcept { return {lengths_.size(), offsets_.data(), ukv_bytes_ptr_t(contents_.data())}; }
+    operator joined_blobs_t() noexcept { return {lengths_.size(), offsets_.data(), ukv_bytes_ptr_t(contents_.data())}; }
 
-    operator embedded_bins_t() noexcept {
+    operator embedded_blobs_t() noexcept {
         return {lengths_.size(), offsets_.data(), lengths_.data(), ukv_bytes_ptr_t(contents_.data())};
     }
 };
