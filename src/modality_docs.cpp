@@ -539,10 +539,10 @@ static bool bson_visit_binary(bson_iter_t const*,
                               char const*,
                               bson_subtype_t v_subtype,
                               size_t v_binary_len,
-                              const uint8_t* v_binary,
+                              uint8_t const* v_binary,
                               void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    char* b64 = reinterpret_cast<char*>(const_cast<uint8_t*>(v_binary));
+    char* b64 = (char*)(v_binary);
 
     bson_to_json_string(state.json_str, "{ \"$binary\" : { \"base64\" : \"", state.c_error);
     bson_to_json_string(state.json_str, b64, state.c_error);
@@ -756,29 +756,25 @@ void modify_field( //
             return_if_error(yyjson_mut_arr_replace(val, idx, merge_result), c_error, 0, "Failed To Merge!");
         }
         else if (c_modification == doc_modification_t::insert_k) {
-            if (is_idx) {
-                return_if_error(yyjson_mut_arr_insert(val, modifier, idx), c_error, 0, "Failed To Insert!");
-            }
-            else {
-                return_if_error(yyjson_mut_arr_add_val(val, modifier), c_error, 0, "Failed To Insert!");
-            }
+            auto result = is_idx //
+                              ? yyjson_mut_arr_insert(val, modifier, idx)
+                              : yyjson_mut_arr_add_val(val, modifier);
+            return_if_error(result, c_error, 0, "Failed To Insert!");
         }
         else if (c_modification == doc_modification_t::remove_k) {
-            return_if_error(yyjson_mut_arr_remove(val, idx), c_error, 0, "Failed To Insert!");
+            return_if_error(yyjson_mut_arr_remove(val, idx), c_error, 0, "Failed To Remove!");
         }
         else if (c_modification == doc_modification_t::update_k) {
             return_if_error(yyjson_mut_arr_replace(val, idx, modifier), c_error, 0, "Failed To Update!");
         }
         else if (c_modification == doc_modification_t::upsert_k) {
-            if (yyjson_mut_arr_get(val, idx)) {
-                return_if_error(yyjson_mut_arr_replace(val, idx, modifier), c_error, 0, "Failed To Update!");
-            }
-            else {
-                return_if_error(yyjson_mut_arr_append(val, modifier), c_error, 0, "Failed To Update!");
-            }
+            auto result = yyjson_mut_arr_get(val, idx) //
+                              ? yyjson_mut_arr_replace(val, idx, modifier)
+                              : yyjson_mut_arr_append(val, modifier);
+            return_if_error(result, c_error, 0, "Failed To Upsert!");
         }
         else {
-            return_error(c_error, "Invalid Modification Mod!");
+            return_error(c_error, "Invalid Modification Mode!");
         }
     }
     else if (yyjson_mut_is_obj(val)) {
