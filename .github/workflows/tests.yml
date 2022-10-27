@@ -24,7 +24,6 @@ jobs:
         uses: actions/download-artifact@v3.0.1
         with:
           name: ubuntu_binaries
-          path: build/bin/*
 
       - name: Run tests
         run: find ./build/bin/ -iname '*unit_test' -exec {} \;
