@@ -20,7 +20,7 @@
 #include <arrow/c/bridge.h>
 #pragma GCC diagnostic pop
 
-#include "pmr.hpp"                 // `linked_memory_lock_t`
+#include "linked_memory.hpp"       // `linked_memory_lock_t`
 #include "ukv/cpp/ranges_args.hpp" // `contents_arg_t`
 
 namespace unum::ukv {

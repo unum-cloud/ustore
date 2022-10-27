@@ -21,10 +21,10 @@
             "cppAttachName": "(GDB) Attach Python",
         },
         {
-            "name": "C++: Test UMemKV",
+            "name": "C++: Test UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_umemkv_unit_test",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_unit_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -43,7 +43,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UMemKV Test",
+            "preLaunchTask": "Build Native: Debug UMem Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -84,10 +84,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Test UMemKV",
+            "name": "C++: Stress Test UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_umemkv_stress_test",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_stress_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -106,7 +106,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UMemKV Stress Test",
+            "preLaunchTask": "Build Native: Debug UMem Stress Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -134,10 +134,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Test UMemKV API",
+            "name": "C++: Test UMem API",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_umemkv_api_test",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_api_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -152,7 +152,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UMemKV Test API",
+            "preLaunchTask": "Build Native: Debug UMem Test API",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -232,7 +232,7 @@
             "name": "C++: Test Arrow Server",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_umemkv_flight_server",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_flight_server",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -274,10 +274,10 @@
             "cwd": "${workspaceFolder}/java"
         },
         {
-            "name": "C++: Twitter Benchmark UMemKV",
+            "name": "C++: Twitter Benchmark UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_umemkv_twitter_benchmark",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_twitter_benchmark",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -292,7 +292,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug Twitter UMemKV Benchmark",
+            "preLaunchTask": "Build Native: Debug Twitter UMem Benchmark",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },

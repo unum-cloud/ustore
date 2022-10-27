@@ -51,7 +51,7 @@ extern "C" {
  * Most types mimic what's present in Apache Arrow. Others, describe
  * hierarchical documents, like JSON, BSON and MessagePack.
  *
- * For Business Intelligence and Analytics moumemkvy the `::ukv_doc_field_i64_k`
+ * For Business Intelligence and Analytics mostly the `::ukv_doc_field_i64_k`
  * and `::ukv_doc_field_f64_k` are used.
  */
 typedef enum {

@@ -7,7 +7,7 @@
  * @brief C++ bindings for "ukv/docs.h".
  *
  * Most field-level operations are still accessible through normal @c member_refs_t.
- * This interface moumemkvy helps with tabular and SoA <-> AoS operations involving:
+ * This interface mostly helps with tabular and SoA <-> AoS operations involving:
  * - ::ukv_docs_gist
  * - ::ukv_docs_gather_t
  */

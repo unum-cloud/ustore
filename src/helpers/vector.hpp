@@ -5,7 +5,7 @@
  * @brief Replacing `std::vector` with non-throwing alternatives.
  */
 #pragma once
-#include "pmr.hpp" // `linked_memory_lock_t`
+#include "linked_memory.hpp" // `linked_memory_lock_t`
 
 namespace unum::ukv {
 

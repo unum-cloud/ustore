@@ -28,9 +28,9 @@
 #include <fmt/core.h>
 
 #include "ukv/db.h"
-#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
-#include "helpers/pmr.hpp"         // `linked_memory_lock_t`
-#include "helpers/file.hpp"        // `file_handle_t`
+#include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
+#include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
+#include "helpers/file.hpp"          // `file_handle_t`
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/

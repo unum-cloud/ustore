@@ -29,10 +29,10 @@
 #include <pcre2.h>
 
 #include "ukv/paths.h"
-#include "helpers/pmr.hpp"         // `linked_memory_lock_t`
-#include "helpers/algorithm.hpp"   // `sort_and_deduplicate`
-#include "helpers/vector.hpp"      // `uninitialized_vector_gt`
-#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
+#include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
+#include "helpers/algorithm.hpp"     // `sort_and_deduplicate`
+#include "helpers/vector.hpp"        // `uninitialized_vector_gt`
+#include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -43,8 +43,8 @@ using namespace unum;
 
 struct hash_t {
     ukv_key_t operator()(std::string_view key_str) const noexcept {
-        using umemkv_t = std::hash<std::string_view>;
-        auto result = umemkv_t {}(key_str);
+        using umem_t = std::hash<std::string_view>;
+        auto result = umem_t {}(key_str);
 #ifdef UKV_DEBUG
         result %= 10ul;
 #endif
