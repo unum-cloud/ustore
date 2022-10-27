@@ -16,9 +16,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "ukv/media.h"        // `ukv_format_field_type_t`
-#include "helpers/pmr.hpp"    // `linked_memory_lock_t`
-#include "helpers/vector.hpp" // `uninitialized_vector_gt`
+#include "ukv/media.h"               // `ukv_format_field_type_t`
+#include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
+#include "helpers/vector.hpp"        // `uninitialized_vector_gt`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/

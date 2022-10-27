@@ -119,10 +119,10 @@ link_directories($ENV{CONDA_PREFIX}/lib)
 message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
-add_library(ukv_umemkv src/engine_umemkv.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp)
-target_link_libraries(ukv_umemkv pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
-target_compile_definitions(ukv_umemkv INTERFACE UKV_VERSION="${_VERSION_}")
-target_compile_definitions(ukv_umemkv INTERFACE UKV_ENGINE_NAME=umemkv)
+add_library(ukv_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp)
+target_link_libraries(ukv_umem pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
+target_compile_definitions(ukv_umem INTERFACE UKV_VERSION="${_VERSION_}")
+target_compile_definitions(ukv_umem INTERFACE UKV_ENGINE_NAME=umem)
 
 add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp)
 target_link_libraries(ukv_rocksdb rocksdb pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
@@ -136,14 +136,14 @@ target_compile_definitions(ukv_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
 
 if((NOT APPLE) AND((DEFINED ${JEMALLOC_DEPENDENCY}) OR(DEFINED {ARROW_DEPENDENCY})))
-  add_dependencies(ukv_umemkv ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
+  add_dependencies(ukv_umem ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
   add_dependencies(ukv_rocksdb ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
   add_dependencies(ukv_leveldb ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
 endif()
 
 # The rest of CMake will apply to all client libraries
-set(UKV_ENGINE_NAMES "umemkv" "leveldb" "rocksdb")
-set(UKV_CLIENT_NAMES "umemkv" "leveldb" "rocksdb")
+set(UKV_ENGINE_NAMES "umem" "leveldb" "rocksdb")
+set(UKV_CLIENT_NAMES "umem" "leveldb" "rocksdb")
 
 if(EXISTS ${UKV_BUILD_UNUMDB})
   add_library(unumdb STATIC IMPORTED)

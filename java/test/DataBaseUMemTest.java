@@ -1,20 +1,20 @@
 
-import com.unum.ukv.DataBaseUMemKV;
+import com.unum.ukv.DataBaseUMem;
 import org.junit.Test;
 
 import java.util.Arrays;
 
-public class DataBaseUMemKVTest {
+public class DataBaseUMemTest {
     static {
-        DataBaseUMemKV.init();
+        DataBaseUMem.init();
     }
     @Test
     public void test() {
-        DataBaseUMemKV.Context ctx = new DataBaseUMemKV.Context("");
+        DataBaseUMem.Context ctx = new DataBaseUMem.Context("");
         ctx.put(42, "hey".getBytes());
         assert Arrays.equals(ctx.get(42), "hey".getBytes()) : "Received wrong value";
 
-        DataBaseUMemKV.Transaction txn = ctx.transaction();
+        DataBaseUMem.Transaction txn = ctx.transaction();
         txn.put("any", 42, "meaning of life".getBytes());
         assert Arrays.equals(txn.get("any", 42), "meaning of life".getBytes()) : "Wrong philosophy";
         txn.commit();

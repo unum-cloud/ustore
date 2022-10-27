@@ -17,10 +17,10 @@
 #include <bson.h>   // Converting from/to BSON
 
 #include "ukv/docs.h"
-#include "helpers/pmr.hpp"         // `linked_memory_lock_t`
-#include "helpers/vector.hpp"      // `growing_tape_t`
-#include "helpers/algorithm.hpp"   // `transform_n`
-#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
+#include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
+#include "helpers/vector.hpp"        // `growing_tape_t`
+#include "helpers/algorithm.hpp"     // `transform_n`
+#include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/

@@ -159,7 +159,7 @@ typedef char const* ukv_str_view_t;
 typedef char* ukv_str_span_t;
 
 /**
- * @brief Temporary memory handle, used moumemkvy for read requests.
+ * @brief Temporary memory handle, used mostly for read requests.
  * It's allocated, resized and deallocated only by UKV itself.
  * Once done, must be deallocated with `ukv_arena_free()`.
  * @see `ukv_arena_free()`.

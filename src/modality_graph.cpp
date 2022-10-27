@@ -17,8 +17,8 @@
 #include <limits>   // `std::numeric_limits`
 
 #include "ukv/ukv.hpp"
-#include "helpers/pmr.hpp"       // `linked_memory_lock_t`
-#include "helpers/algorithm.hpp" // `equal_subrange`
+#include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
+#include "helpers/algorithm.hpp"     // `equal_subrange`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/

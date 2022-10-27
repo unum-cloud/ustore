@@ -1,6 +1,6 @@
 
 import pytest
-import ukv.umemkv as ukv
+import ukv.umem as ukv
 
 
 def test_transaction_set():

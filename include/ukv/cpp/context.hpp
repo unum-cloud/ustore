@@ -55,7 +55,7 @@ class owned_transactional_context_t {
 
 /**
  * @brief Allows any operations without any "transactional compositioning"
- * on the memory owned by this context. Moumemkvy used for testing, addition
+ * on the memory owned by this context. Mostly used for testing, addition
  * and removal of collections and bulk entry removals.
  */
 class owned_context_t {
