@@ -1,7 +1,8 @@
 /**
- * @file utility.hpp
+ * @file types.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
+ * @addtogroup Cpp
  *
  * @brief Smart Pointers, Monads and Range-like abstractions for C++ bindings.
  */
@@ -91,7 +92,7 @@ struct edge_t {
 
 /**
  * @brief An asymmetric slice of a bond/relation.
- * Every vertex stores a list of such @c `neighborship_t`s
+ * Every vertex stores a list of such @c neighborship_t's
  * in a sorted order.
  */
 struct neighborship_t {
@@ -156,9 +157,15 @@ class value_view_t {
     inline value_view_t(char const* c_str) noexcept
         : ptr_(ukv_bytes_cptr_t(c_str)), length_(static_cast<ukv_length_t>(std::strlen(c_str))) {}
 
+    inline value_view_t(char const* c_str, std::size_t n) noexcept
+        : ptr_(ukv_bytes_cptr_t(c_str)), length_(static_cast<ukv_length_t>(n)) {}
+
     template <typename char_at, typename traits_at>
     inline value_view_t(std::basic_string_view<char_at, traits_at> view) noexcept
         : ptr_(ukv_bytes_cptr_t(view.data())), length_(static_cast<ukv_length_t>(view.size() * sizeof(char_at))) {}
+
+    inline value_view_t(std::string_view view) noexcept
+        : ptr_(ukv_bytes_cptr_t(view.data())), length_(static_cast<ukv_length_t>(view.size())) {}
 
     inline operator bool() const noexcept { return length_ != ukv_length_missing_k; }
     inline std::size_t size() const noexcept { return length_ == ukv_length_missing_k ? 0 : length_; }

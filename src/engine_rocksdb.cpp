@@ -9,7 +9,7 @@
  * choice for various Relational Database, built on top of it.
  * Examples: Yugabyte, TiDB, and, optionally: Mongo, MySQL, Cassandra, MariaDB.
  *
- * @section @b `PlainTable` vs `BlockBasedTable` Format
+ * ## @b PlainTable vs `BlockBasedTable` Format
  * We use fixed-length integer keys, which are natively supported by `PlainTable`.
  * It, however, doesn't support @b non-prefix-based-`Seek()` in scans.
  * Moreover, not being the default variant, its significantly less optimized,
@@ -347,7 +347,7 @@ void ukv_read(ukv_read_t* c_ptr) {
 
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
@@ -393,7 +393,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     ukv_scan_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
@@ -454,7 +454,7 @@ void ukv_measure(ukv_measure_t* c_ptr) {
     ukv_measure_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     auto min_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_cardinalities);
@@ -595,7 +595,7 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_if_error(c.count && c.names, c.error, args_combo_k, "Need names and outputs!");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
@@ -647,8 +647,7 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = **reinterpret_cast<rocks_txn_t**>(c.transaction);
     rocksdb::OptimisticTransactionOptions txn_options;
-    if (c.options & ukv_option_transaction_snapshot_k)
-        txn_options.set_snapshot = true;
+    txn_options.set_snapshot = !(c.options & ukv_option_transaction_dont_watch_k);
     rocksdb::WriteOptions options;
     options.sync = safe;
     options.disableWAL = !safe;
@@ -670,10 +669,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 }
 
 void ukv_arena_free(ukv_arena_t c_arena) {
-    if (!c_arena)
-        return;
-    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
-    delete &arena;
+    clear_linked_memory(c_arena);
 }
 
 void ukv_transaction_free(ukv_transaction_t c_transaction) {

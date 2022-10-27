@@ -1,8 +1,10 @@
 /**
- * @file bins_collections.hpp
+ * @file context.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings for @see "ukv/db.h".
+ * @addtogroup Cpp
+ *
+ * @brief C++ bindings for "ukv/db.h".
  */
 
 #pragma once
@@ -11,7 +13,7 @@
 namespace unum::ukv {
 
 /**
- * Abstraction over `ukv_database_t`, `ukv_transaction_t` and `ukv_arena_t`,
+ * Abstraction over @c ukv_database_t, @c ukv_transaction_t and @c ukv_arena_t,
  * needed for default-construction.
  */
 class null_context_t {

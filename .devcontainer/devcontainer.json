@@ -18,9 +18,11 @@
 			"extensions": [
 				"ms-vscode.cpptools",
 				"ms-vscode.cmake-tools",
+				"benjamin-simmonds.pythoncpp-debug",
 				"xaver.clang-format",
 				"mhutchie.git-graph",
-				"mutantdino.resourcemonitor"
+				"mutantdino.resourcemonitor",
+				"eamodio.gitlens"
 			]
 		}
 	},
@@ -32,7 +34,6 @@
 	"remoteUser": "vscode",
 	"features": {
 		"git": "os-provided",
-		"git-lfs": "latest",
-		"python": "latest"
+		"git-lfs": "latest"
 	}
 }

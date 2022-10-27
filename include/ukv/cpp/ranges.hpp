@@ -2,13 +2,15 @@
  * @file ranges.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
+ * @addtogroup Cpp
  *
  * @brief Smart Pointers, Monads and Range-like templates for C++ bindings.
- * > "Strided": defines the number of bytes to jump until next entry, instead of `sizeof`.
- * > "Joined": Indexes variable-length objects using just base pointer and N+1 offsets,
- *      assuming the next entry starts right after the previous one without gaps.
- * > "Embedded": Extends "Joined" ranges to objects with lengths.
- *      In that case order of elements is irrelevant and we need just N offsets & lengths.
+ *
+ * - "Strided": defines the number of bytes to jump until next entry, instead of `sizeof`.
+ * - "Joined": Indexes variable-length objects using just base pointer and N+1 offsets,
+ *   assuming the next entry starts right after the previous one without gaps.
+ * - "Embedded": Extends "Joined" ranges to objects with lengths.
+ *   In that case order of elements is irrelevant and we need just N offsets & lengths.
  */
 
 #pragma once
@@ -361,7 +363,7 @@ class consecutive_chunks_iterator_gt {
 };
 
 using consecutive_strs_iterator_t = consecutive_chunks_iterator_gt<std::string_view>;
-using consecutive_bins_iterator_t = consecutive_chunks_iterator_gt<value_view_t>;
+using consecutive_blobs_iterator_t = consecutive_chunks_iterator_gt<value_view_t>;
 
 /**
  * @brief A read-only iterator for values packed into a
@@ -407,7 +409,7 @@ class joined_chunks_iterator_gt {
 };
 
 using joined_strs_iterator_t = joined_chunks_iterator_gt<std::string_view>;
-using joined_bins_iterator_t = joined_chunks_iterator_gt<value_view_t>;
+using joined_blobs_iterator_t = joined_chunks_iterator_gt<value_view_t>;
 
 template <typename chunk_at>
 class joined_chunks_gt {
@@ -442,7 +444,7 @@ class joined_chunks_gt {
 };
 
 using joined_strs_t = joined_chunks_gt<std::string_view>;
-using joined_bins_t = joined_chunks_gt<value_view_t>;
+using joined_blobs_t = joined_chunks_gt<value_view_t>;
 
 /**
  * @brief A read-only iterator for values packed into a
@@ -487,7 +489,7 @@ class embedded_chunks_iterator_gt {
 };
 
 using embedded_strs_iterator_t = embedded_chunks_iterator_gt<std::string_view>;
-using embedded_bins_iterator_t = embedded_chunks_iterator_gt<value_view_t>;
+using embedded_blobs_iterator_t = embedded_chunks_iterator_gt<value_view_t>;
 
 template <typename chunk_at>
 class embedded_chunks_gt {
@@ -524,12 +526,12 @@ class embedded_chunks_gt {
 };
 
 using embedded_strs_t = embedded_chunks_gt<std::string_view>;
-using embedded_bins_t = embedded_chunks_gt<value_view_t>;
+using embedded_blobs_t = embedded_chunks_gt<value_view_t>;
 
 /**
  * @brief Iterates through a predetermined number of NULL-delimited
  * strings joined one after another in continuous memory.
- * Can be used for `ukv_docs_gist` or `ukv_collection_list`.
+ * Can be used for `ukv_docs_gist()` or `ukv_collection_list()`.
  */
 class strings_tape_iterator_t {
     ukv_size_t remaining_count_ = 0;

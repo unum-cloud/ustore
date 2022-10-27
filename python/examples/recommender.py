@@ -6,7 +6,7 @@ import json
 import networkx as nx
 import numpy as np
 
-import ukv.stl as ukv
+import ukv.umem as ukv
 
 
 def flatten(l):

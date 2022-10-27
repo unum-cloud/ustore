@@ -1,5 +1,5 @@
 /**
- * @file engine_ram.cpp
+ * @file engine_umem.cpp
  * @author Ashot Vardanian
  *
  * @brief Embedded In-Memory Key-Value Store built on @b AVL trees or STL.
@@ -21,11 +21,12 @@
 #include <stdio.h>    // Saving/reading from disk
 
 #include <consistent_set/consistent_set.hpp> // `av::consistent_set_gt`
+#include <consistent_set/consistent_avl.hpp> // `av::consistent_avl_gt`
 #include <consistent_set/locked.hpp>         // `av::locked_gt`
 #include <consistent_set/partitioned.hpp>    // `av::partitioned_gt`
 
 #include "ukv/db.h"
-#include "helpers/pmr.hpp"
+#include "helpers/linked_memory.hpp"
 #include "helpers/file.hpp"
 #include "helpers/vector.hpp"      // `unintialized_vector_gt`
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
@@ -103,8 +104,13 @@ struct pair_compare_t {
 /*****************  Using Consistent Sets ****************/
 /*********************************************************/
 
-using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>>;
-// using consistent_set_t = consistent_set_gt<pair_t, pair_compare_t>;
+// using consistent_set_t = consistent_avl_gt<pair_t, pair_compare_t>;
+// using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>, std::shared_mutex>;
+using consistent_set_t = partitioned_gt< //
+    consistent_set_gt<pair_t, pair_compare_t>,
+    std::hash<collection_key_t>,
+    std::shared_mutex,
+    64>;
 using transaction_t = typename consistent_set_t::transaction_t;
 using generation_t = typename consistent_set_t::generation_t;
 
@@ -139,7 +145,7 @@ consistent_set_status_t scan_and_watch(set_or_transaction_at& set_or_transaction
     collection_key_t previous = start;
     bool reached_end = false;
     auto watch_status = consistent_set_status_t();
-    auto callback_pair = [&](pair_t const& pair) {
+    auto callback_pair = [&](pair_t const& pair) noexcept {
         reached_end = pair.collection_key.collection != previous.collection;
         if (reached_end)
             return;
@@ -156,14 +162,14 @@ consistent_set_status_t scan_and_watch(set_or_transaction_at& set_or_transaction
         ++match_idx;
     };
 
-    auto find_status = set_or_transaction.find(start, callback_pair, [] {});
+    auto find_status = set_or_transaction.find(start, callback_pair, {});
     if (!find_status)
         return find_status;
     if (!watch_status)
         return watch_status;
 
     while (match_idx != range_limit && !reached_end) {
-        find_status = set_or_transaction.find_next(previous, callback_pair, [&] { reached_end = true; });
+        find_status = set_or_transaction.upper_bound(previous, callback_pair, [&]() noexcept { reached_end = true; });
         if (!find_status)
             return find_status;
         if (!watch_status)
@@ -176,19 +182,22 @@ consistent_set_status_t scan_and_watch(set_or_transaction_at& set_or_transaction
 template <typename set_or_transaction_at, typename callback_at>
 consistent_set_status_t scan_full(set_or_transaction_at& set_or_transaction, callback_at&& callback) noexcept {
 
-    collection_key_t previous {ukv_collection_main_k, ukv_key_unknown_k};
+    collection_key_t previous {
+        std::numeric_limits<ukv_collection_t>::min(),
+        std::numeric_limits<ukv_key_t>::min(),
+    };
     while (true) {
-        auto callback_pair = [&](pair_t const& pair) {
+        auto callback_pair = [&](pair_t const& pair) noexcept {
             callback(pair);
             previous = pair.collection_key;
         };
 
         auto reached_end = false;
-        auto callback_nothing = [&] {
+        auto callback_nothing = [&]() noexcept {
             reached_end = true;
         };
 
-        auto status = set_or_transaction.find_next(previous, callback_pair, callback_nothing);
+        auto status = set_or_transaction.upper_bound(previous, callback_pair, callback_nothing);
         if (reached_end)
             break;
         if (!status)
@@ -222,8 +231,8 @@ struct string_less_t : public std::less<std::string_view> {
 struct database_t {
     /**
      * @brief Rarely-used mutex for global reorganizations, like:
-     * > Removing existing collections or adding new ones.
-     * > Listing present collections.
+     * - Removing existing collections or adding new ones.
+     * - Listing present collections.
      */
     std::shared_mutex restructuring_mutex;
 
@@ -235,7 +244,7 @@ struct database_t {
     /**
      * @brief A variable-size set of named collections.
      * It's cleaner to implement it with heterogenous lookups as
-     * an @c `std::unordered_map`, but it requires GCC11 and C++20.
+     * an @c std::unordered_map, but it requires GCC11 and C++20.
      */
     std::map<std::string, ukv_collection_t, string_less_t> names;
 
@@ -275,7 +284,7 @@ void export_error_code(consistent_set_status_t code, ukv_error_t* c_error) noexc
 /*****************	 Writing to Disk	  ****************/
 /*********************************************************/
 
-void write_pair(file_handle_t const& handle, pair_t const& pair, ukv_error_t* c_error) {
+void write_pair(file_handle_t const& handle, pair_t const& pair, ukv_error_t* c_error) noexcept {
 
     if (!pair.range)
         return;
@@ -295,7 +304,7 @@ void write_pair(file_handle_t const& handle, pair_t const& pair, ukv_error_t* c_
     return_if_error(saved_len == buf.size(), c_error, 0, "Write partially failed on value.");
 }
 
-void read_pair(file_handle_t const& handle, pair_t& pair, bool should_continue, ukv_error_t* c_error) {
+void read_pair(file_handle_t const& handle, pair_t& pair, bool should_continue, ukv_error_t* c_error) noexcept {
 
     // An empty row may contain no content
     auto read_len = std::fread(&pair.collection_key.collection, sizeof(ukv_collection_t), 1, handle);
@@ -319,7 +328,7 @@ void read_pair(file_handle_t const& handle, pair_t& pair, bool should_continue, 
     return_if_error(read_len == buf_len, c_error, 0, "Read partially failed on value.");
 }
 
-void write(database_t const& db, std::string const& path, ukv_error_t* c_error) {
+void write(database_t const& db, std::string const& path, ukv_error_t* c_error) noexcept {
     // Using the classical C++ IO mechanisms is a bad tone in the modern world.
     // They are ugly and, more importantly, painfully slow.
     // https://www.reddit.com/r/cpp_questions/comments/e2xia9/performance_comparison_of_various_ways_of_reading/
@@ -344,14 +353,14 @@ void write(database_t const& db, std::string const& path, ukv_error_t* c_error) 
     std::fprintf(handle, "\n");
 
     // Save the pairs
-    scan_full(db.pairs, [&](pair_t const& pair) { write_pair(handle, pair, c_error); });
+    scan_full(db.pairs, [&](pair_t const& pair) noexcept { write_pair(handle, pair, c_error); });
     return_on_error(c_error);
 
     // Close the file
     log_error(c_error, 0, handle.close().release_error());
 }
 
-void read(database_t& db, std::string const& path, ukv_error_t* c_error) {
+void read(database_t& db, std::string const& path, ukv_error_t* c_error) noexcept {
     db.names.clear();
     auto status = db.pairs.clear();
     if (!status)
@@ -431,7 +440,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
@@ -479,7 +488,7 @@ void ukv_write(ukv_write_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
@@ -561,7 +570,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
@@ -608,6 +617,59 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     offsets[scans.count] = keys_output - *c.keys;
 }
 
+void ukv_sample(ukv_sample_t* c_ptr) {
+
+    ukv_sample_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
+        return;
+
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+    return_on_error(c.error);
+
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
+    transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
+    strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
+    sample_args_t samples {collections, lens, c.tasks_count};
+
+    // validate_sample(c.transaction, samples, c.options, c.error);
+    // return_on_error(c.error);
+
+    // 1. Allocate a tape for all the values to be fetched
+    auto offsets = arena.alloc_or_dummy(samples.count + 1, c.error, c.offsets);
+    return_on_error(c.error);
+    auto counts = arena.alloc_or_dummy(samples.count, c.error, c.counts);
+    return_on_error(c.error);
+
+    auto total_keys = reduce_n(samples.limits, samples.count, 0ul);
+    auto keys_output = *c.keys = arena.alloc<ukv_key_t>(total_keys, c.error).begin();
+    return_on_error(c.error);
+
+    // 2. Fetch the data
+    for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
+        sample_arg_t sample = samples[task_idx];
+        offsets[task_idx] = keys_output - *c.keys;
+
+        ukv_length_t matched_pairs_count = 0;
+        auto found_pair = [&](pair_t const& pair) noexcept {
+            *keys_output = pair.collection_key.key;
+            ++keys_output;
+            ++matched_pairs_count;
+        };
+
+        auto previous_key = collection_key_t {sample.collection, sample.min_key};
+        // auto status = c.transaction //
+        //                   ? sample_and_watch(txn, previous_key, sample.limit, c.options, found_pair)
+        //                   : sample_and_watch(db.pairs, previous_key, sample.limit, c.options, found_pair);
+        // if (!status)
+        //     return export_error_code(status, c.error);
+
+        counts[task_idx] = matched_pairs_count;
+    }
+    offsets[samples.count] = keys_output - *c.keys;
+}
+
 void ukv_measure(ukv_measure_t* c_ptr) {
 
     ukv_measure_t& c = *c_ptr;
@@ -615,7 +677,7 @@ void ukv_measure(ukv_measure_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     auto min_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_cardinalities);
@@ -672,7 +734,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     std::unique_lock _ {db.restructuring_mutex};
 
     if (c.mode == ukv_drop_keys_vals_handle_k) {
-        auto status = db.pairs.erase_interval(c.id);
+        auto status = db.pairs.erase_range(c.id, c.id, no_op_t {});
         if (!status)
             return export_error_code(status, c.error);
 
@@ -685,12 +747,12 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     }
 
     else if (c.mode == ukv_drop_keys_vals_k) {
-        auto status = db.pairs.erase_interval(c.id);
+        auto status = db.pairs.erase_range(c.id, c.id, no_op_t {});
         return export_error_code(status, c.error);
     }
 
     else if (c.mode == ukv_drop_vals_k) {
-        auto status = db.pairs.find_interval(c.id, [&](pair_t& pair) {
+        auto status = db.pairs.range(c.id, c.id, [&](pair_t& pair) noexcept {
             pair = pair_t {pair.collection_key, {}, nullptr};
         });
         return export_error_code(status, c.error);
@@ -703,7 +765,7 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_if_error(c.count && c.names, c.error, args_combo_k, "Need names and outputs!");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
@@ -801,10 +863,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 /*********************************************************/
 
 void ukv_arena_free(ukv_arena_t c_arena) {
-    if (!c_arena)
-        return;
-    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
-    delete &arena;
+    clear_linked_memory(c_arena);
 }
 
 void ukv_transaction_free(ukv_transaction_t const c_transaction) {

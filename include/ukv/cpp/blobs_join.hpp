@@ -1,8 +1,10 @@
 /**
- * @file keys_join_stream.hpp
+ * @file blobs_join.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings for @see "ukv/db.h".
+ * @addtogroup Cpp
+ *
+ * @brief C++ bindings for "ukv/db.h".
  */
 
 #pragma once

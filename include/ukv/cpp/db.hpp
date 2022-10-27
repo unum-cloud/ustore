@@ -2,7 +2,9 @@
  * @file db.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
- * @brief C++ bindings for @see "ukv/db.h".
+ * @addtogroup Cpp
+ *
+ * @brief C++ bindings for "ukv/db.h".
  */
 
 #pragma once
@@ -11,7 +13,7 @@
 #include <memory>  // `std::enable_shared_from_this`
 
 #include "ukv/ukv.h"
-#include "ukv/cpp/bins_collection.hpp"
+#include "ukv/cpp/blobs_collection.hpp"
 #include "ukv/cpp/docs_collection.hpp"
 #include "ukv/cpp/graph_collection.hpp"
 
@@ -28,14 +30,15 @@ struct collections_list_t {
  * May be used not only as a consistency warrant, but also a performance
  * optimization, as batched writes will be stored in a DB-optimal way
  * until being commited, which reduces the preprocessing overhead for DB.
- * For details, @see ACID: https://en.wikipedia.org/wiki/ACID
  *
- * @section Class Specs
- * > Concurrency: Thread-safe, for @b unique arenas.
- *   For details, @see `bins_ref_gt` @section "Memory Management"
- * > Lifetime: Doesn't commit on destruction. @see `txn_guard_t`.
- * > Copyable: No.
- * > Exceptions: Never.
+ * @see ACID: https://en.wikipedia.org/wiki/ACID
+ *
+ * ## Class Specs
+ * - Concurrency: Thread-safe, for @b unique arenas.
+ *   For details, "Memory Management" section @c blobs_ref_gt
+ * - Lifetime: Doesn't commit on destruction. @c txn_guard_t.
+ * - Copyable: No.
+ * - Exceptions: Never.
  */
 class context_t : public std::enable_shared_from_this<context_t> {
   protected:
@@ -66,7 +69,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
     inline ukv_transaction_t txn() const noexcept { return txn_; }
     inline operator ukv_transaction_t() const noexcept { return txn_; }
 
-    bins_ref_gt<places_arg_t> operator[](strided_range_gt<collection_key_t const> collections_and_keys) noexcept {
+    blobs_ref_gt<places_arg_t> operator[](strided_range_gt<collection_key_t const> collections_and_keys) noexcept {
         places_arg_t arg;
         arg.collections_begin = collections_and_keys.members(&collection_key_t::collection).begin();
         arg.keys_begin = collections_and_keys.members(&collection_key_t::key).begin();
@@ -74,7 +77,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
         return {db_, txn_, std::move(arg), arena_};
     }
 
-    bins_ref_gt<places_arg_t> operator[](strided_range_gt<collection_key_field_t const> collections_and_keys) noexcept {
+    blobs_ref_gt<places_arg_t> operator[](strided_range_gt<collection_key_field_t const> collections_and_keys) noexcept {
         places_arg_t arg;
         arg.collections_begin = collections_and_keys.members(&collection_key_field_t::collection).begin();
         arg.keys_begin = collections_and_keys.members(&collection_key_field_t::key).begin();
@@ -83,7 +86,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
         return {db_, txn_, std::move(arg), arena_};
     }
 
-    bins_ref_gt<places_arg_t> operator[](keys_view_t keys) noexcept { //
+    blobs_ref_gt<places_arg_t> operator[](keys_view_t keys) noexcept { //
         places_arg_t arg;
         arg.keys_begin = keys.begin();
         arg.count = keys.size();
@@ -91,12 +94,12 @@ class context_t : public std::enable_shared_from_this<context_t> {
     }
 
     template <typename keys_arg_at>
-    bins_ref_gt<keys_arg_at> operator[](keys_arg_at keys) noexcept { //
+    blobs_ref_gt<keys_arg_at> operator[](keys_arg_at keys) noexcept { //
         return {db_, txn_, std::move(keys), arena_};
     }
 
-    expected_gt<bins_collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
-    operator expected_gt<bins_collection_t>() noexcept { return collection(); }
+    expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
+    operator expected_gt<blobs_collection_t>() noexcept { return collection(); }
 
     expected_gt<collections_list_t> collections() noexcept {
         ukv_size_t count = 0;
@@ -153,18 +156,17 @@ class context_t : public std::enable_shared_from_this<context_t> {
         auto name_it = cols.names;
         auto id_it = cols.ids.begin();
         for (; id_it != cols.ids.end(); ++id_it, ++name_it) {
-            if (*name_it != name)
-                continue;
-            return ukv_collection_t(*id_it);
+            if (name.compare(*name_it) == 0)
+                return ukv_collection_t(*id_it);
         }
         return status_t {"Collection not found."};
     }
 
     /**
      * @brief Provides a view of a single collection synchronized with the transaction.
-     * @tparam collection_at Can be a `bins_collection_t`, `docs_collection_t`, `graph_collection_t`.
+     * @tparam collection_at Can be a @c blobs_collection_t, @c docs_collection_t, @c graph_collection_t.
      */
-    template <typename collection_at = bins_collection_t>
+    template <typename collection_at = blobs_collection_t>
     expected_gt<collection_at> collection(std::string_view name = {}) noexcept {
 
         if (name.empty())
@@ -194,9 +196,9 @@ class context_t : public std::enable_shared_from_this<context_t> {
      *                 long-running analytical tasks with strong consistency
      *                 requirements.
      */
-    status_t reset(bool snapshot = false) noexcept {
+    status_t reset(bool snapshot = true) noexcept {
         status_t status;
-        auto options = snapshot ? ukv_option_transaction_snapshot_k : ukv_options_default_k;
+        auto options = snapshot ? ukv_options_default_k : ukv_option_transaction_dont_watch_k;
         ukv_transaction_init_t txn_init {
             .db = db_,
             .error = status.member_ptr(),
@@ -230,14 +232,14 @@ using transaction_t = context_t;
 
 /**
  * @brief DataBase is a "collection of named collections",
- * essentially a transactional @b `map<string,map<id,string>>`.
- * Or in Python terms: @b `dict[str,dict[int,str]]`.
+ * essentially a transactional @b map<string,map<id,string>>.
+ * Or in Python terms: @b dict[str,dict[int,str]].
  *
- * @section Class Specs
- * > Concurrency: @b Thread-Safe, except for `open`, `close`.
- * > Lifetime: @b Must live longer then last collection referencing it.
- * > Copyable: No.
- * > Exceptions: Never.
+ * ## Class Specs
+ * - Concurrency: @b Thread-Safe, except for `open`, `close`.
+ * - Lifetime: @b Must live longer then last collection referencing it.
+ * - Copyable: No.
+ * - Exceptions: Never.
  */
 class database_t : public std::enable_shared_from_this<database_t> {
     ukv_database_t db_ = nullptr;
@@ -269,7 +271,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
             close();
     }
 
-    template <typename collection_at = bins_collection_t>
+    template <typename collection_at = blobs_collection_t>
     expected_gt<collection_at> collection_create(ukv_str_view_t name, ukv_str_view_t config = "") noexcept {
         status_t status;
         ukv_collection_t collection = ukv_collection_main_k;
@@ -317,13 +319,13 @@ class database_t : public std::enable_shared_from_this<database_t> {
         return status;
     }
 
-    expected_gt<context_t> transact(bool snapshot = false) noexcept {
+    expected_gt<context_t> transact(bool snapshot = true) noexcept {
         status_t status;
         ukv_transaction_t raw = nullptr;
         ukv_transaction_init_t txn_init {
             .db = db_,
             .error = status.member_ptr(),
-            .options = snapshot ? ukv_option_transaction_snapshot_k : ukv_options_default_k,
+            .options = snapshot ? ukv_options_default_k : ukv_option_transaction_dont_watch_k,
             .transaction = &raw,
         };
 
@@ -334,9 +336,9 @@ class database_t : public std::enable_shared_from_this<database_t> {
             return context_t {db_, raw};
     }
 
-    expected_gt<bins_collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name, true); }
-    operator expected_gt<bins_collection_t>() noexcept { return collection(); }
-    template <typename collection_at = bins_collection_t>
+    expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name, true); }
+    operator expected_gt<blobs_collection_t>() noexcept { return collection(); }
+    template <typename collection_at = blobs_collection_t>
     expected_gt<ukv_collection_t> find(std::string_view name, bool make = false) noexcept {
         auto collection_id = context_t {db_, nullptr}.find(name);
         if (!collection_id && make) {
@@ -353,7 +355,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
         return maybe_collection->drop();
     }
 
-    template <typename collection_at = bins_collection_t>
+    template <typename collection_at = blobs_collection_t>
     expected_gt<collection_at> collection(std::string_view name = {}, bool make = false) noexcept {
         auto maybe_id = find<collection_at>(name, make);
         if (!maybe_id)
