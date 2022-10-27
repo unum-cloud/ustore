@@ -13,6 +13,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+    
+      - name: Wait for the build to be successful
+        uses: ahmadnassri/action-workflow-run-wait@v1.4.2
+        with:
+          # 1 hour
+          timeout: 3600000 
 
       - name: Download a Build Artifact
         uses: actions/download-artifact@v3.0.1
