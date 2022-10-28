@@ -483,7 +483,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     if (has_contents_column) {
         auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c.error);
         return_on_error(c.error);
-        ukv_to_continous_bin(contents, places.size(), c.tasks_count, &joined_vals_begin, joined_offs, arena, c.error);
+        ukv_to_continuous_bin(contents, places.size(), c.tasks_count, &joined_vals_begin, joined_offs, arena, c.error);
         offs = {joined_offs.begin(), sizeof(ukv_length_t)};
     }
 
@@ -491,13 +491,13 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     if (has_paths_column) {
         auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c.error);
         return_on_error(c.error);
-        ukv_to_continous_bin(path_contents,
-                             places.size(),
-                             c.tasks_count,
-                             &joined_paths_begin,
-                             joined_offs,
-                             arena,
-                             c.error);
+        ukv_to_continuous_bin(path_contents,
+                              places.size(),
+                              c.tasks_count,
+                              &joined_paths_begin,
+                              joined_offs,
+                              arena,
+                              c.error);
         path_offs = {joined_offs.begin(), sizeof(ukv_length_t)};
     }
 
@@ -668,13 +668,13 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     ukv_bytes_cptr_t joined_patrns_begin = patterns[0];
     auto joined_patrns_offs = arena.alloc<ukv_length_t>(places.size() + 1, c.error);
     return_on_error(c.error);
-    ukv_to_continous_bin(pattern_contents,
-                         places.size(),
-                         c.tasks_count,
-                         &joined_patrns_begin,
-                         joined_patrns_offs,
-                         arena,
-                         c.error);
+    ukv_to_continuous_bin(pattern_contents,
+                          places.size(),
+                          c.tasks_count,
+                          &joined_patrns_begin,
+                          joined_patrns_offs,
+                          arena,
+                          c.error);
     pattern_offs = {joined_patrns_offs.begin(), sizeof(ukv_length_t)};
 
     ukv_bytes_cptr_t joined_prevs_begin;
@@ -682,13 +682,13 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
         joined_prevs_begin = previous[0];
         auto joined_prevs_offs = arena.alloc<ukv_length_t>(places.size() + 1, c.error);
         return_on_error(c.error);
-        ukv_to_continous_bin(previous_contents,
-                             places.size(),
-                             c.tasks_count,
-                             &joined_prevs_begin,
-                             joined_prevs_offs,
-                             arena,
-                             c.error);
+        ukv_to_continuous_bin(previous_contents,
+                              places.size(),
+                              c.tasks_count,
+                              &joined_prevs_begin,
+                              joined_prevs_offs,
+                              arena,
+                              c.error);
         previous_offs = {joined_prevs_offs.begin(), sizeof(ukv_length_t)};
     }
 
@@ -861,13 +861,13 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     if (has_paths_column) {
         auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c.error);
         return_on_error(c.error);
-        ukv_to_continous_bin(path_contents,
-                             places.size(),
-                             c.tasks_count,
-                             &joined_paths_begin,
-                             joined_offs,
-                             arena,
-                             c.error);
+        ukv_to_continuous_bin(path_contents,
+                              places.size(),
+                              c.tasks_count,
+                              &joined_paths_begin,
+                              joined_offs,
+                              arena,
+                              c.error);
         path_offs = {joined_offs.begin(), sizeof(ukv_length_t)};
     }
 

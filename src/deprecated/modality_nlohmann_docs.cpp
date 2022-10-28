@@ -18,7 +18,7 @@
 
 #include "ukv/media.h"               // `ukv_format_field_type_t`
 #include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
-#include "helpers/vector.hpp"        // `uninitialized_vector_gt`
+#include "helpers/linked_array.hpp"  // `uninitialized_array_gt`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -69,11 +69,11 @@ value_view_t to_view(char const* str, std::size_t len) noexcept {
 
 struct export_to_value_t final : public nlohmann::detail::output_adapter_protocol<char>,
                                  public std::enable_shared_from_this<export_to_value_t> {
-    uninitialized_vector_gt<byte_t>* value_ptr = nullptr;
+    uninitialized_array_gt<byte_t>* value_ptr = nullptr;
     ukv_error_t* c_error = nullptr;
 
     export_to_value_t() = default;
-    export_to_value_t(uninitialized_vector_gt<byte_t>& value) noexcept : value_ptr(&value) {}
+    export_to_value_t(uninitialized_array_gt<byte_t>& value) noexcept : value_ptr(&value) {}
     void write_character(char c) override { value_ptr->push_back(static_cast<byte_t>(c), c_error); }
     void write_characters(char const* s, std::size_t length) override {
         auto ptr = reinterpret_cast<byte_t const*>(s);
@@ -224,7 +224,7 @@ struct serializing_tape_ref_t {
   private:
     linked_memory_lock_t& arena_;
     std::shared_ptr<export_to_value_t> shared_exporter_;
-    uninitialized_vector_gt<byte_t> single_doc_buffer_;
+    uninitialized_array_gt<byte_t> single_doc_buffer_;
 
   public:
     growing_tape_t growing_tape;

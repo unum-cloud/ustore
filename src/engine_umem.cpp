@@ -28,8 +28,8 @@
 #include "ukv/db.h"
 #include "helpers/linked_memory.hpp"
 #include "helpers/file.hpp"
-#include "helpers/vector.hpp"      // `unintialized_vector_gt`
-#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
+#include "helpers/linked_array.hpp" // `unintialized_vector_gt`
+#include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -532,7 +532,7 @@ void ukv_write(ukv_write_t* c_ptr) {
     // Non-transactional but atomic batch-write operation.
     // It requires producing a copy of input data.
     else if (c.tasks_count > 1) {
-        uninitialized_vector_gt<pair_t> copies(places.count, arena, c.error);
+        uninitialized_array_gt<pair_t> copies(places.count, arena, c.error);
         return_on_error(c.error);
         initialized_range_gt<pair_t> copies_constructed(copies);
 
