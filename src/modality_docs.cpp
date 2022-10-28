@@ -769,7 +769,7 @@ void modify_field( //
         }
         else if (c_modification == doc_modification_t::upsert_k) {
             auto result = yyjson_mut_arr_get(val, idx) //
-                              ? yyjson_mut_arr_replace(val, idx, modifier)
+                              ? yyjson_mut_arr_replace(val, idx, modifier) != nullptr
                               : yyjson_mut_arr_append(val, modifier);
             return_if_error(result, c_error, 0, "Failed To Upsert!");
         }
