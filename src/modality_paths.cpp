@@ -301,7 +301,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     return_on_error(c.error);
 
     joined_blobs_t joined_buckets {unique_places.count, buckets_offsets, buckets_values};
-    uninitialized_vector_gt<value_view_t> updated_buckets(unique_places.count, arena, c.error);
+    uninitialized_array_gt<value_view_t> updated_buckets(unique_places.count, arena, c.error);
     return_on_error(c.error);
     transform_n(joined_buckets.begin(), unique_places.count, updated_buckets.begin());
 
