@@ -32,8 +32,8 @@
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
 #include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
+#include "helpers/linked_array.hpp"  // `uninitialized_array_gt`
 #include "helpers/algorithm.hpp"     // `sort_and_deduplicate`
-#include "helpers/vector.hpp"        // `uninitialized_vector_gt`
 #include "helpers/full_scan.hpp"     // `full_scan_collection`
 
 /*********************************************************/

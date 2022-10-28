@@ -11,8 +11,7 @@
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
 
 #include "helpers/linked_memory.hpp"          // `linked_memory_lock_t`
-#include "helpers/algorithm.hpp"              // `sort_and_deduplicate`
-#include "helpers/vector.hpp"                 // `uninitialized_vector_gt`
+#include "helpers/algorithm.hpp"              // `transform_n`
 #include "helpers/full_scan.hpp"              // `full_scan_collection`
 #include "helpers/limited_priority_queue.hpp" // `limited_priority_queue_gt`
 
