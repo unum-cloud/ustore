@@ -56,10 +56,9 @@ static json_t json_parse(char const* begin, char const* end) {
     EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 
 static char const* path() {
-    return nullptr;
     char* path = std::getenv("UKV_TEST_PATH");
     if (path)
-        return path;
+        return std::strlen(path) ? path : nullptr;
 
 #if defined(UKV_FLIGHT_CLIENT)
     return nullptr;

@@ -4,7 +4,7 @@
  * @date 12 Jun 2022
  * @addtogroup C
  *
- * @brief Binary Interface Standard for trivial Binary collections.
+ * @brief Binary Interface Standard for trivial @b BLOB collections.
  *
  * ## Usage Recommendations
  *

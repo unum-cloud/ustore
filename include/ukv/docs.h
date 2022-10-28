@@ -51,10 +51,10 @@ extern "C" {
  * Most types mimic what's present in Apache Arrow. Others, describe
  * hierarchical documents, like JSON, BSON and MessagePack.
  *
- * For Business Intelligence and Analytics moumemkvy the `::ukv_doc_field_i64_k`
+ * For Business Intelligence and Analytics mostly the `::ukv_doc_field_i64_k`
  * and `::ukv_doc_field_f64_k` are used.
  */
-typedef enum {
+typedef enum ukv_doc_field_type_t {
 
     ukv_doc_field_null_k = 0,
     ukv_doc_field_bool_k = 1,
@@ -88,7 +88,7 @@ typedef enum {
 /**
  * @brief Kind of document modification to be applied on `ukv_docs_write()`.
  */
-typedef enum {
+typedef enum ukv_doc_modification_t {
     ukv_doc_modify_upsert_k = 0,
     ukv_doc_modify_update_k = 1,
     ukv_doc_modify_insert_k = 2,
@@ -194,6 +194,7 @@ typedef struct ukv_docs_read_t {
 
     ukv_doc_field_type_t type = ukv_doc_field_default_k;
     ukv_size_t tasks_count = 1;
+
     ukv_collection_t const* collections = NULL;
     ukv_size_t collections_stride = 0;
 
