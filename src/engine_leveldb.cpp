@@ -374,8 +374,8 @@ void ukv_measure(ukv_measure_t* c_ptr) {
 void ukv_collection_create(ukv_collection_create_t* c_ptr) {
 
     ukv_collection_create_t& c = *c_ptr;
-    if (c.name && std::strlen(c.name))
-        *c.error = "Collections not supported by LevelDB!";
+    auto name_len = c.name ? std::strlen(c.name) : 0;
+    return_if_error(name_len, c.error, args_wrong_k, "Collections not supported by LevelDB!");
 }
 
 void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
