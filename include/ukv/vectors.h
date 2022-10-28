@@ -69,7 +69,7 @@ typedef struct ukv_vectors_write_t {
     ukv_collection_t const* collections = NULL;
     ukv_size_t collections_stride = 0;
 
-    ukv_key_t const* keys = NULL;
+    ukv_key_t const* keys;
     ukv_size_t keys_stride = 0;
 
     ukv_bytes_cptr_t const* vectors_starts;

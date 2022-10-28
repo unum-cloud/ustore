@@ -74,3 +74,4 @@
 #include "ukv/paths.h"
 #include "ukv/docs.h"
 #include "ukv/graph.h"
+#include "ukv/vectors.h"
