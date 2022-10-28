@@ -666,7 +666,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
     rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
     rocks_status_t status = txn.Commit();
 
-    // TODO: Set sequence number
+    // TODO: Export sequence number
     *c.seq_number = 0;
 
     export_error(status, c.error);
