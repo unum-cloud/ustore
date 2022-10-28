@@ -4,7 +4,7 @@
  * @date 12 Jun 2022
  * @addtogroup C
  *
- * @brief C bindings for Key-Value Stores and binary collections.
+ * @brief Binary Interface Standard for Transactional @b Key-Value Stores.
  */
 
 #pragma once
@@ -115,6 +115,11 @@ typedef int64_t ukv_key_t;
  * @brief The elementary binary piece of any value.
  */
 typedef uint8_t ukv_byte_t;
+
+/**
+ * @brief Single-precisions floating-point number.
+ */
+typedef float ukv_float_t;
 
 /**
  * @brief The elementary piece of any string, like collection name.

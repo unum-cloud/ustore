@@ -11,8 +11,8 @@
 #include <leveldb/write_batch.h>
 
 #include "ukv/db.h"
-#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
-#include "helpers/vector.hpp"      // `uninitialized_vector_gt`
+#include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
+#include "helpers/linked_array.hpp" // `uninitialized_array_gt`
 
 using namespace unum::ukv;
 using namespace unum;
@@ -242,7 +242,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     return_on_error(c.error);
     bool const needs_export = c.values != nullptr;
 
-    uninitialized_vector_gt<byte_t> contents(arena);
+    uninitialized_array_gt<byte_t> contents(arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
