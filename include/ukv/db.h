@@ -483,7 +483,7 @@ typedef struct ukv_transaction_stage_t {
     /** @brief Staging options. */
     ukv_options_t options = ukv_options_default_k;
     /** @brief Output for the transaction stage sequence number. */
-    ukv_sequence_number_t* seq_number;
+    ukv_sequence_number_t* sequence_number;
 
 } ukv_transaction_stage_t;
 
@@ -512,7 +512,7 @@ typedef struct ukv_transaction_commit_t {
     /** @brief Staging options. */
     ukv_options_t options = ukv_options_default_k;
     /** @brief Output for the transaction commit sequence number. */
-    ukv_sequence_number_t* seq_number;
+    ukv_sequence_number_t* sequence_number;
 
 } ukv_transaction_commit_t;
 

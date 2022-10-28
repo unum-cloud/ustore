@@ -140,7 +140,7 @@ void docs_upsert( //
 
     // All the upserts must be transactional
     ukv_transaction_t transaction = nullptr;
-    ukv_sequence_number_t seq_number = 0;
+    ukv_sequence_number_t sequence_number = 0;
     ukv_transaction_init_t transaction_init;
     transaction_init.db = db;
     transaction_init.error = status.member_ptr();
@@ -148,7 +148,7 @@ void docs_upsert( //
     ukv_transaction_commit_t transaction_commit;
     transaction_commit.db = db;
     transaction_commit.error = status.member_ptr();
-    transaction_commit.seq_number = &seq_number;
+    transaction_commit.sequence_number = &sequence_number;
 
     // Run the benchmark
     std::size_t docs_bytes = 0;
@@ -232,7 +232,7 @@ void edges_upsert( //
 
     // All the upserts must be transactional
     ukv_transaction_t transaction = nullptr;
-    ukv_sequence_number_t seq_number = 0;
+    ukv_sequence_number_t sequence_number = 0;
     ukv_transaction_init_t transaction_init;
     transaction_init.db = db;
     transaction_init.error = status.member_ptr();
@@ -240,7 +240,7 @@ void edges_upsert( //
     ukv_transaction_commit_t transaction_commit;
     transaction_commit.db = db;
     transaction_commit.error = status.member_ptr();
-    transaction_commit.seq_number = &seq_number;
+    transaction_commit.sequence_number = &sequence_number;
 
     // Run the benchmark
     std::size_t edges_bytes = 0;
@@ -322,7 +322,7 @@ void paths_upsert( //
 
     // All the upserts must be transactional
     ukv_transaction_t transaction = nullptr;
-    ukv_sequence_number_t seq_number = 0;
+    ukv_sequence_number_t sequence_number = 0;
     ukv_transaction_init_t transaction_init;
     transaction_init.db = db;
     transaction_init.error = status.member_ptr();
@@ -330,7 +330,7 @@ void paths_upsert( //
     ukv_transaction_commit_t transaction_commit;
     transaction_commit.db = db;
     transaction_commit.error = status.member_ptr();
-    transaction_commit.seq_number = &seq_number;
+    transaction_commit.sequence_number = &sequence_number;
 
     // Run the benchmark
     std::size_t pairs_bytes = 0;
