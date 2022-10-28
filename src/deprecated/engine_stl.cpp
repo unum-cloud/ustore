@@ -1002,7 +1002,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
     if (c.options & ukv_option_write_flush_k)
         write(db, db.persisted_path, c.error);
 
-    // TODO: Set sequence number
+    // TODO: Export sequence number
     *c.seq_number = 0;
 }
 
