@@ -1310,6 +1310,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 
     ukv_transaction_commit_t& c = *c_ptr;
     return_if_error(c.transaction, c.error, uninitialized_state_k, "Transaction is uninitialized");
+    return_if_error(c.seq_number, c.error, args_combo_k, "Need outputs!");
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
@@ -1326,6 +1327,10 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
     arrow_mem_pool_t pool(db.arena);
     arf::FlightCallOptions options = arrow_call_options(pool);
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
+
+    // TODO: Set sequence number
+    *c.seq_number = 0;
+
     return_if_error(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
 }
 
