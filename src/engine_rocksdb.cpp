@@ -241,6 +241,8 @@ void ukv_write(ukv_write_t* c_ptr) {
 
     ukv_write_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
+        return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
@@ -253,6 +255,9 @@ void ukv_write(ukv_write_t* c_ptr) {
 
     places_arg_t places {collections, keys, {}, c.tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
+
+    validate_write(c.transaction, places, contents, c.options, c.error);
+    return_on_error(c.error);
 
     safe_section("Writing into RocksDB", c.error, [&] {
         auto func = c.tasks_count == 1 ? &write_one : &write_many;
@@ -346,6 +351,8 @@ void ukv_read(ukv_read_t* c_ptr) {
     ukv_read_t& c = *c_ptr;
 
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
+        return;
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
@@ -356,6 +363,8 @@ void ukv_read(ukv_read_t* c_ptr) {
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
     places_arg_t places {collections, keys, {}, c.tasks_count};
+    validate_read(c.transaction, places, c.options, c.error);
+    return_on_error(c.error);
 
     // 1. Allocate a tape for all the values to be pulled
     auto offs = arena.alloc_or_dummy(places.count + 1, c.error, c.offsets);
@@ -402,6 +411,9 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
     scans_arg_t tasks {collections, start_keys, limits, c.tasks_count};
+
+    validate_scan(c.transaction, tasks, c.options, c.error);
+    return_on_error(c.error);
 
     // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy(tasks.count + 1, c.error, c.offsets);
@@ -509,8 +521,6 @@ void ukv_collection_create(ukv_collection_create_t* c_ptr) {
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-
-    std::string_view collection_name {c.name, name_len};
 
     for (auto handle : db.columns) {
         if (handle)
@@ -642,6 +652,10 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
     ukv_transaction_init_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    validate_transaction_begin(c.transaction, c.options, c.error);
+    return_on_error(c.error);
+
     bool const safe = c.options & ukv_option_write_flush_k;
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = **reinterpret_cast<rocks_txn_t**>(c.transaction);
@@ -658,10 +672,13 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 }
 
 void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
-
     ukv_transaction_commit_t& c = *c_ptr;
     if (!c.transaction)
         return;
+
+    validate_transaction_commit(c.transaction, c.options, c.error);
+    return_on_error(c.error);
+
     rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
     rocks_status_t status = txn.Commit();
     export_error(status, c.error);

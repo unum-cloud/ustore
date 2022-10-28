@@ -177,6 +177,9 @@ void ukv_write(ukv_write_t* c_ptr) {
     places_arg_t places {collections, keys, {}, c.tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
 
+    validate_write(c.transaction, places, contents, c.options, c.error);
+    return_on_error(c.error);
+
     leveldb::WriteOptions options;
     if (c.options & ukv_option_write_flush_k)
         options.sync = true;
@@ -227,6 +230,9 @@ void ukv_read(ukv_read_t* c_ptr) {
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
     places_arg_t places {{}, keys, {}, c.tasks_count};
 
+    validate_read(c.transaction, places, c.options, c.error);
+    return_on_error(c.error);
+
     // 1. Allocate a tape for all the values to be pulled
     auto offs = arena.alloc_or_dummy(places.count + 1, c.error, c.offsets);
     return_on_error(c.error);
@@ -275,15 +281,18 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
-    scans_arg_t tasks {{}, start_keys, limits, c.tasks_count};
+    scans_arg_t scans {{}, start_keys, limits, c.tasks_count};
+
+    validate_scan(c.transaction, scans, c.options, c.error);
+    return_on_error(c.error);
 
     // 1. Allocate a tape for all the values to be fetched
-    auto offsets = arena.alloc_or_dummy(tasks.count + 1, c.error, c.offsets);
+    auto offsets = arena.alloc_or_dummy(scans.count + 1, c.error, c.offsets);
     return_on_error(c.error);
-    auto counts = arena.alloc_or_dummy(tasks.count, c.error, c.counts);
+    auto counts = arena.alloc_or_dummy(scans.count, c.error, c.counts);
     return_on_error(c.error);
 
-    auto total_keys = reduce_n(tasks.limits, tasks.count, 0ul);
+    auto total_keys = reduce_n(scans.limits, scans.count, 0ul);
     auto keys_output = *c.keys = arena.alloc<ukv_key_t>(total_keys, c.error).begin();
     return_on_error(c.error);
 
@@ -303,7 +312,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
         return;
     }
     for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
-        scan_t task = tasks[i];
+        scan_t task = scans[i];
         it->Seek(to_slice(task.min_key));
         offsets[i] = keys_output - *c.keys;
 
@@ -318,7 +327,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
         counts[i] = j;
     }
 
-    offsets[tasks.size()] = keys_output - *c.keys;
+    offsets[scans.size()] = keys_output - *c.keys;
 }
 
 void ukv_measure(ukv_measure_t* c_ptr) {
@@ -440,8 +449,12 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
     ukv_transaction_init_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     if (!c.transaction)
         safe_section("Allocating transaction handle", c.error, [&] { *c.transaction = new level_txn_t(); });
+    return_on_error(c.error);
+
+    validate_transaction_begin(c.transaction, c.options, c.error);
     return_on_error(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
