@@ -28,6 +28,7 @@ typedef enum {
     ukv_vector_scalar_f32_k = 0,
     ukv_vector_scalar_f16_k = 1,
     ukv_vector_scalar_i8_k = 2,
+    ukv_vector_scalar_f64_k = 3,
 
 } ukv_vector_scalar_t;
 
@@ -35,6 +36,11 @@ typedef enum {
  * @brief Maps keys to High-Dimensional Vectors.
  * Generalization of @c ukv_write_t to numerical vectors.
  * @see `ukv_vectors_write()`, `ukv_write_t`, `ukv_write()`.
+ *
+ * Assuming all the vectors within the operation will have the
+ * same dimensionality and their scalar components would form
+ * continuous chunks, we need less arguments for this call,
+ * than some binary methods.
  */
 typedef struct ukv_vectors_write_t {
 
@@ -57,7 +63,7 @@ typedef struct ukv_vectors_write_t {
     /// @{
 
     ukv_size_t tasks_count = 1;
-    ukv_length_t dimension;
+    ukv_length_t dimensions;
     ukv_vector_scalar_t scalar_type = ukv_vector_scalar_f32_k;
 
     ukv_collection_t const* collections = NULL;
@@ -66,12 +72,12 @@ typedef struct ukv_vectors_write_t {
     ukv_key_t const* keys = NULL;
     ukv_size_t keys_stride = 0;
 
-    ukv_length_t const* vectors_offsets = NULL;
-    ukv_size_t vectors_offsets_stride = 0;
-
-    ukv_bytes_cptr_t const* vectors_starts = NULL;
+    ukv_bytes_cptr_t const* vectors_starts;
     ukv_size_t vectors_starts_stride = 0;
     ukv_size_t vectors_stride = 0;
+
+    ukv_length_t const* offsets = NULL;
+    ukv_size_t offsets_stride = 0;
 
     // @}
 
@@ -85,7 +91,7 @@ typedef struct ukv_vectors_write_t {
 void ukv_vectors_write(ukv_vectors_write_t*);
 
 /**
- * @brief Retrieves binary represenataions of vectors.
+ * @brief Retrieves binary representations of vectors.
  * Generalization of @c ukv_read_t to numerical vectors.
  * Packs everything into a @b row-major dense matrix.
  * @see `ukv_vectors_read()`, `ukv_read_t`, `ukv_read()`.
@@ -111,7 +117,7 @@ typedef struct ukv_vectors_read_t {
     /// @{
 
     ukv_size_t tasks_count = 1;
-    ukv_length_t dimension;
+    ukv_length_t dimensions;
     ukv_vector_scalar_t scalar_type = ukv_vector_scalar_f32_k;
 
     ukv_collection_t const* collections = NULL;
@@ -127,8 +133,7 @@ typedef struct ukv_vectors_read_t {
     /// @{
     ukv_octet_t** presences = NULL;
     ukv_length_t** offsets = NULL;
-    ukv_length_t** lengths = NULL;
-    ukv_byte_t** values = NULL;
+    ukv_byte_t** vectors = NULL;
     /// @}
 
 } ukv_vectors_read_t;
@@ -165,24 +170,23 @@ typedef struct ukv_vectors_search_t {
     /// @{
 
     ukv_size_t tasks_count = 1;
-    ukv_length_t dimension;
+    ukv_length_t dimensions;
     ukv_vector_scalar_t scalar_type = ukv_vector_scalar_f32_k;
+    ukv_vector_metric_t metric = ukv_vector_metric_cos_k;
+    ukv_float_t metric_threshold = 0;
 
     ukv_collection_t const* collections = NULL;
     ukv_size_t collections_stride = 0;
 
-    ukv_length_t const* queries_offsets = NULL;
-    ukv_size_t queries_offsets_stride = 0;
+    ukv_length_t const* match_counts_limits;
+    ukv_size_t match_counts_limits_stride = 0;
 
-    ukv_bytes_cptr_t const* queries_starts = NULL;
+    ukv_bytes_cptr_t const* queries_starts;
     ukv_size_t queries_starts_stride = 0;
     ukv_size_t queries_stride = 0;
 
-    /// @name Previous Matches Used for Pagination
-    /// @{
-    ukv_key_t const* previous = NULL;
-    ukv_size_t previous_stride = 0;
-    /// @}
+    ukv_length_t const* queries_offsets = NULL;
+    ukv_size_t queries_offsets_stride = 0;
 
     /// @}
     /// @name Outputs
@@ -190,7 +194,7 @@ typedef struct ukv_vectors_search_t {
     ukv_length_t** match_counts = NULL;
     ukv_length_t** match_offsets = NULL;
     ukv_key_t** match_keys = NULL;
-    ukv_float_t** match_distances = NULL;
+    ukv_float_t** match_metrics = NULL;
     /// @}
 
 } ukv_vectors_search_t;
