@@ -35,5 +35,8 @@
 	"features": {
 		"git": "os-provided",
 		"git-lfs": "latest"
-	}
+	},
+	"mounts": [
+		"source=/home/sftp/Datasets/,target=/home/vscode/Datasets,type=bind,consistency=ro"
+	]
 }
