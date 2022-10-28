@@ -23,8 +23,8 @@
 #include <rocksdb/utilities/optimistic_transaction_db.h>
 
 #include "ukv/db.h"
-#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
-#include "helpers/vector.hpp"      // `uninitialized_vector_gt`
+#include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
+#include "helpers/linked_array.hpp" // `uninitialized_array_gt`
 
 using namespace unum::ukv;
 using namespace unum;
@@ -373,7 +373,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     return_on_error(c.error);
     auto presences = arena.alloc_or_dummy(places.count, c.error, c.presences);
     return_on_error(c.error);
-    uninitialized_vector_gt<byte_t> contents(arena);
+    uninitialized_array_gt<byte_t> contents(arena);
 
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     bool const needs_export = c.values != nullptr;

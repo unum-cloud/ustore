@@ -31,7 +31,7 @@
 #include "ukv/paths.h"
 #include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
 #include "helpers/algorithm.hpp"     // `sort_and_deduplicate`
-#include "helpers/vector.hpp"        // `uninitialized_vector_gt`
+#include "helpers/linked_array.hpp"  // `uninitialized_array_gt`
 #include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
 
 /*********************************************************/
@@ -299,7 +299,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     return_on_error(c.error);
 
     joined_blobs_t joined_buckets {unique_places.count, buckets_offsets, buckets_values};
-    uninitialized_vector_gt<value_view_t> updated_buckets(unique_places.count, arena, c.error);
+    uninitialized_array_gt<value_view_t> updated_buckets(unique_places.count, arena, c.error);
     return_on_error(c.error);
     transform_n(joined_buckets.begin(), unique_places.count, updated_buckets.begin());
 

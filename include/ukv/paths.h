@@ -4,7 +4,7 @@
  * @date 23 Sep 2022
  * @addtogroup C
  *
- * @brief C bindings for paths ~ variable length string keys collections.
+ * @brief Binary Interface Standard for @b BLOB collections with @b variable-length keys.
  *
  * It is a bad practice to use strings as key, but if your application depends
  * on them, use "paths collections" to map such strings into Unique IDs and

@@ -273,12 +273,12 @@ inline contents_arg_t get_contents( //
     return result;
 }
 
-void ukv_to_continous_bin( //
+void ukv_to_continuous_bin( //
     contents_arg_t& contents,
     size_t places_count,
     size_t c_tasks_count,
-    ukv_bytes_cptr_t* continous_bin,
-    ptr_range_gt<ukv_length_t> continous_bin_offs,
+    ukv_bytes_cptr_t* continuous_bin,
+    ptr_range_gt<ukv_length_t> continuous_bin_offs,
     linked_memory_lock_t& arena,
     ukv_error_t* c_error) {
 
@@ -293,13 +293,13 @@ void ukv_to_continous_bin( //
         ukv_length_t exported_bytes = 0;
         for (std::size_t i = 0; i != c_tasks_count; ++i) {
             auto path = contents[i];
-            continous_bin_offs[i] = exported_bytes;
+            continuous_bin_offs[i] = exported_bytes;
             std::memcpy(joined_paths.begin() + exported_bytes, path.begin(), path.size());
             exported_bytes += path.size();
         }
-        continous_bin_offs[places_count] = exported_bytes;
+        continuous_bin_offs[places_count] = exported_bytes;
 
-        *continous_bin = (ukv_bytes_cptr_t)joined_paths.begin();
+        *continuous_bin = (ukv_bytes_cptr_t)joined_paths.begin();
     }
     // It may be the case, that we only have `c_tasks_count` offsets instead of `c_tasks_count+1`,
     // which won't be enough for Arrow.
@@ -310,10 +310,10 @@ void ukv_to_continous_bin( //
         ukv_length_t exported_bytes = 0;
         for (std::size_t i = 0; i != c_tasks_count; ++i) {
             auto path = contents[i];
-            continous_bin_offs[i] = exported_bytes;
+            continuous_bin_offs[i] = exported_bytes;
             exported_bytes += path.size();
         }
-        continous_bin_offs[places_count] = exported_bytes;
+        continuous_bin_offs[places_count] = exported_bytes;
     }
 }
 } // namespace unum::ukv
