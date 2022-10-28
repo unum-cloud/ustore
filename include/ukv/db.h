@@ -4,7 +4,7 @@
  * @date 12 Jun 2022
  * @addtogroup C
  *
- * @brief C bindings for Key-Value Stores and binary collections.
+ * @brief Binary Interface Standard for Transactional @b Key-Value Stores.
  */
 
 #pragma once
@@ -117,6 +117,11 @@ typedef int64_t ukv_key_t;
 typedef uint8_t ukv_byte_t;
 
 /**
+ * @brief Single-precisions floating-point number.
+ */
+typedef float ukv_float_t;
+
+/**
  * @brief The elementary piece of any string, like collection name.
  */
 typedef char ukv_char_t;
@@ -159,7 +164,7 @@ typedef char const* ukv_str_view_t;
 typedef char* ukv_str_span_t;
 
 /**
- * @brief Temporary memory handle, used moumemkvy for read requests.
+ * @brief Temporary memory handle, used mostly for read requests.
  * It's allocated, resized and deallocated only by UKV itself.
  * Once done, must be deallocated with `ukv_arena_free()`.
  * @see `ukv_arena_free()`.
@@ -191,10 +196,9 @@ typedef enum {
      */
     ukv_option_transaction_dont_watch_k = 1 << 2,
     /**
-     * @brief This flag is intended for internal use.
-     * When passed to `make_stl_arena`, old_arena is not released,
-     * and rather a new one is casted and returned,
-     * if it existed in the first place, otherwise behaviour is unaffected.
+     * @brief On every API call, the arena is cleared for reuse.
+     * If the arguments of the function are results of another UKV call,
+     * you can use this flag to avoid discarding the memory.
      */
     ukv_option_dont_discard_memory_k = 1 << 4,
     /**

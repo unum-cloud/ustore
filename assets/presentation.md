@@ -181,7 +181,7 @@ with ukv.Transaction(db) as txn:
 ## What we want to reach? Backend-Invariance
 
 ```python
-db = ukv.DataBase('umemkv')
+db = ukv.DataBase('umem')
 db = ukv.DataBase('rocksdb')
 db = ukv.DataBase('leveldb')
 db = ukv.DataBase('leveldb://0.0.0.0:8080')
@@ -440,7 +440,7 @@ package ukv
 
 /*
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../include
-#cgo LDFLAGS: -L${SRCDIR}/../build/lib -lukv_umemkv -lstdc++
+#cgo LDFLAGS: -L${SRCDIR}/../build/lib -lukv_umem -lstdc++
 #include "ukv/ukv.h"
 #include <stdlib.h>
 */

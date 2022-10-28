@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	utest "github.com/unum-cloud/UKV/golang/internal/testing"
-	ukv "github.com/unum-cloud/UKV/golang/umemkv"
+	ukv "github.com/unum-cloud/UKV/golang/umem"
 )
 
 func TestDataBaseSimple(t *testing.T) {

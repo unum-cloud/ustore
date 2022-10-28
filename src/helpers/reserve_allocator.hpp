@@ -1,5 +1,5 @@
 /**
- * @file reserve.hpp
+ * @file helpers/reserve_allocator.hpp
  * @author Ashot Vardanian
  *
  * @brief Replacing `std::vector` with non-throwing alternatives.

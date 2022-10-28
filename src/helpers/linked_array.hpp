@@ -1,11 +1,11 @@
 /**
- * @file vector.hpp
+ * @file helpers/linked_array.hpp
  * @author Ashot Vardanian
  *
  * @brief Replacing `std::vector` with non-throwing alternatives.
  */
 #pragma once
-#include "pmr.hpp" // `stl_arena_t`
+#include "linked_memory.hpp" // `linked_memory_lock_t`
 
 namespace unum::ukv {
 
@@ -15,7 +15,7 @@ namespace unum::ukv {
  * and must be trivially copy-constructible.
  */
 template <typename element_at>
-class uninitialized_vector_gt {
+class uninitialized_array_gt {
     using element_t = element_at;
     using elementc_t = element_t const;
     using ptrc_t = elementc_t*;
@@ -25,25 +25,25 @@ class uninitialized_vector_gt {
     ptr_t ptr_ = nullptr;
     ukv_length_t length_ = 0;
     ukv_length_t cap_ = 0;
-    stl_arena_t* arena_ptr_ = nullptr;
+    linked_memory_lock_t* arena_ptr_ = nullptr;
 
   public:
-    uninitialized_vector_gt(uninitialized_vector_gt const&) = delete;
-    uninitialized_vector_gt& operator=(uninitialized_vector_gt const&) = delete;
+    uninitialized_array_gt(uninitialized_array_gt const&) = delete;
+    uninitialized_array_gt& operator=(uninitialized_array_gt const&) = delete;
 
-    uninitialized_vector_gt(uninitialized_vector_gt&& v) noexcept
+    uninitialized_array_gt(uninitialized_array_gt&& v) noexcept
         : ptr_(std::exchange(v.ptr_, nullptr)), length_(std::exchange(v.length_, 0)), cap_(std::exchange(v.cap_, 0)),
           arena_ptr_(std::exchange(v.arena_ptr_, nullptr)) {}
 
-    uninitialized_vector_gt& operator=(uninitialized_vector_gt&& v) noexcept {
+    uninitialized_array_gt& operator=(uninitialized_array_gt&& v) noexcept {
         std::swap(v.ptr_, ptr_);
         std::swap(v.length_, length_);
         std::swap(v.cap_, cap_);
         std::swap(v.arena_ptr_, arena_ptr_);
         return *this;
     }
-    uninitialized_vector_gt(stl_arena_t& arena) : arena_ptr_(&arena) {}
-    uninitialized_vector_gt(std::size_t size, stl_arena_t& arena, ukv_error_t* c_error) : arena_ptr_(&arena) {
+    uninitialized_array_gt(linked_memory_lock_t& arena) : arena_ptr_(&arena) {}
+    uninitialized_array_gt(std::size_t size, linked_memory_lock_t& arena, ukv_error_t* c_error) : arena_ptr_(&arena) {
         if (!size)
             return;
         auto tape = arena_ptr_->alloc<element_t>(size, c_error);
@@ -51,10 +51,10 @@ class uninitialized_vector_gt {
         cap_ = length_ = static_cast<ukv_length_t>(size);
     }
 
-    uninitialized_vector_gt(value_view_t view) : uninitialized_vector_gt(view.size()) {
+    uninitialized_array_gt(value_view_t view) : uninitialized_array_gt(view.size()) {
         std::memcpy(ptr_, view.begin(), view.size());
     }
-    ~uninitialized_vector_gt() { reset(); }
+    ~uninitialized_array_gt() { reset(); }
 
     void reset() {
         ptr_ = nullptr;
@@ -146,7 +146,7 @@ class uninitialized_vector_gt {
 template <typename element_at>
 class initialized_range_gt {
     using element_t = element_at;
-    using vector_t = uninitialized_vector_gt<element_t>;
+    using vector_t = uninitialized_array_gt<element_t>;
     vector_t const& owner_;
 
   public:
@@ -165,13 +165,14 @@ class initialized_range_gt {
  * Is suited for data preparation before passing to the C API.
  */
 class growing_tape_t {
-    uninitialized_vector_gt<ukv_octet_t> presences_;
-    uninitialized_vector_gt<ukv_length_t> offsets_;
-    uninitialized_vector_gt<ukv_length_t> lengths_;
-    uninitialized_vector_gt<byte_t> contents_;
+    uninitialized_array_gt<ukv_octet_t> presences_;
+    uninitialized_array_gt<ukv_length_t> offsets_;
+    uninitialized_array_gt<ukv_length_t> lengths_;
+    uninitialized_array_gt<byte_t> contents_;
 
   public:
-    growing_tape_t(stl_arena_t& arena) : presences_(arena), offsets_(arena), lengths_(arena), contents_(arena) {}
+    growing_tape_t(linked_memory_lock_t& arena)
+        : presences_(arena), offsets_(arena), lengths_(arena), contents_(arena) {}
 
     /**
      * @return Memory region occupied by the new copy.
