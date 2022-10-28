@@ -114,14 +114,14 @@ static void index_file( //
         }
 
         // Docs
-        docs_w_ids.push_back(doc_w_key_t {.key = id, .body = body});
-        docs_w_ids.push_back(doc_w_key_t {.key = user_id, .body = body});
+        docs_w_ids.push_back(doc_w_key_t {id, body});
+        docs_w_ids.push_back(doc_w_key_t {user_id, body});
 
         // Paths
         if (!id_str.empty())
-            docs_w_paths.push_back(doc_w_path_t {.path = id_str, .body = body});
+            docs_w_paths.push_back(doc_w_path_t {id_str, body});
         if (!user_screen_name.empty())
-            docs_w_paths.push_back(doc_w_path_t {.path = user_screen_name, .body = user_body});
+            docs_w_paths.push_back(doc_w_path_t {user_screen_name, user_body});
 
         // Graph
         edges.push_back(edge_t {.source_id = id, .target_id = user_id});
