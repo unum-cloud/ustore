@@ -504,18 +504,17 @@ void ukv_measure(ukv_measure_t* c_ptr) {
 void ukv_collection_create(ukv_collection_create_t* c_ptr) {
 
     ukv_collection_create_t& c = *c_ptr;
+    auto name_len = c.name ? std::strlen(c.name) : 0;
+    return_if_error(name_len, c.error, args_wrong_k, "Default collection is always present");
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    if (!c.name || (c.name && !std::strlen(c.name))) {
-        *c.id = reinterpret_cast<ukv_collection_t>(db.native->DefaultColumnFamily());
-        return;
-    }
+
+    std::string_view collection_name {c.name, name_len};
 
     for (auto handle : db.columns) {
-        if (handle && handle->GetName() == c.name) {
-            *c.id = reinterpret_cast<ukv_collection_t>(handle);
-            return;
-        }
+        if (handle)
+            return_if_error(handle->GetName() != c.name, c.error, args_wrong_k, "Such collection already exists!");
     }
 
     rocks_collection_t* collection = nullptr;
