@@ -841,7 +841,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 
     ukv_transaction_commit_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_if_error(c.seq_number, c.error, args_combo_k, "Need and outputs!");
+    return_if_error(c.sequence_number, c.error, args_combo_k, "Need and outputs!");
     database_t& db = *reinterpret_cast<database_t*>(c.db);
 
     validate_transaction_commit(c.transaction, c.options, c.error);
@@ -859,7 +859,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
         write(db, db.persisted_path, c.error);
 
     // TODO: Export sequence number
-    *c.seq_number = 0;
+    *c.sequence_number = 0;
 }
 
 /*********************************************************/

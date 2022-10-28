@@ -661,13 +661,13 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 
     ukv_transaction_commit_t& c = *c_ptr;
-    return_if_error(c.transaction && c.seq_number, c.error, args_combo_k, "Need transaction and outputs!");
+    return_if_error(c.transaction && c.sequence_number, c.error, args_combo_k, "Need transaction and outputs!");
 
     rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
     rocks_status_t status = txn.Commit();
 
     // TODO: Export sequence number
-    *c.seq_number = 0;
+    *c.sequence_number = 0;
 
     export_error(status, c.error);
 }
