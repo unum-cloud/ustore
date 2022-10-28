@@ -47,10 +47,32 @@ struct entry_t {
 
 void quantize_f32(float* original, std::int8_t* quant, std::size_t dims) noexcept {
     for (std::size_t i = 0; i != dims; ++i)
-        quant[i] = original[i];
+        quant[i] = static_cast<std::int8_t>(original[i]*float_scaling_k);
 }
 
-struct vectors_arg_t {};
+std::size_t size_bytes(ukv_vector_scalar_t scalar_type) noexcept {
+    switch (scalar_type) {
+        
+    }
+}
+
+struct vectors_arg_t {
+    strided_iterator_gt<ukv_bytes_cptr_t const> contents;
+    strided_iterator_gt<ukv_length_t const> offsets;
+    ukv_size_t vectors_stride;
+    ukv_vector_scalar_t scalar_type;
+    ukv_length_t dimension;
+    ukv_size_t tasks_count = 1;
+
+    value_view_t operator [] (std::size_t i) const noexcept {
+        if (!contents)
+        return {};
+        ukv_bytes_cptr_t begin = contents[i];
+        begin += offsets ? offsets[i] : 0;
+        begin += vectors_stride * i;
+        return {begin, dimension + i * };
+    }
+};
 
 void ukv_vectors_write(ukv_vectors_write_t* c_ptr) {
 
@@ -90,9 +112,12 @@ void ukv_vectors_write(ukv_vectors_write_t* c_ptr) {
         entry.collection_key.collection = places[task_idx].collection;
         entry.collection_key.key = -places[task_idx].key;
         entry.value = value_view_t {quantized_begin, c.dimension};
+    }
 
-        for (std::size_t i = 0; i != c.dimensions; ++i) {
-        }
+    // Quantize the original vectors into new buckets
+    for (std::size_t task_idx = 0; task_idx != c.tasks_count; ++task_idx) {
+        auto original_begin = 
+        auto quantized_begin = quantized_vecs.begin() + task_idx * c.dimension;
     }
 
     entry_t& first = quantized_entries.front();
