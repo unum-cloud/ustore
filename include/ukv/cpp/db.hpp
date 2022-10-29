@@ -217,14 +217,12 @@ class context_t : public std::enable_shared_from_this<context_t> {
      */
     status_t commit(bool flush = false) noexcept {
         status_t status;
-        ukv_sequence_number_t sequence_number = 0;
         auto options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
         ukv_transaction_commit_t txn_commit {
             .db = db_,
             .error = status.member_ptr(),
             .transaction = txn_,
             .options = options,
-            .sequence_number = &sequence_number,
         };
         ukv_transaction_commit(&txn_commit);
         return status;

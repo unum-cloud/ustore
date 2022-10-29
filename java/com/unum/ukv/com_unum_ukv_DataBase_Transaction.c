@@ -248,13 +248,11 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_commit( /
 
     ukv_options_t options_c = ukv_options_default_k;
     ukv_error_t error_c = NULL;
-    ukv_sequence_number_t sequence_number = 0;
     ukv_transaction_commit_t txn_commit {
         .db = db_ptr_c,
         .error = &error_c,
         .transaction txn_ptr_c,
         .options = options_c,
-        .sequence_number = &sequence_number,
     };
 
     ukv_transaction_commit(&txn_commit);
