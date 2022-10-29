@@ -341,7 +341,6 @@ TEST(db, validation) {
         .db = db,
         .error = status.member_ptr(),
         .transaction = txn,
-        .options = ukv_options_default_k,
     };
 
     for (auto& option : wrong_txn_commit_options) {

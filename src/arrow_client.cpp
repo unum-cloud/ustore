@@ -1326,7 +1326,6 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
     arrow_mem_pool_t pool(db.arena);
     arf::FlightCallOptions options = arrow_call_options(pool);
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
-
     return_if_error(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
 }
 
