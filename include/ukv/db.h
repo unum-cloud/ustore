@@ -150,8 +150,7 @@ typedef uint64_t ukv_size_t;
 typedef uint8_t ukv_octet_t;
 
 /**
- * @brief Sequential integer identifier to identify objects/events in a progress.
- * The number is always increases
+ * @brief Monotonically increasing unique identifier that reflects the order of applied transactions
  */
 typedef uint64_t ukv_sequence_number_t;
 
@@ -482,8 +481,8 @@ typedef struct ukv_transaction_stage_t {
     ukv_transaction_t transaction;
     /** @brief Staging options. */
     ukv_options_t options = ukv_options_default_k;
-    /** @brief Output for the transaction stage sequence number. */
-    ukv_sequence_number_t* sequence_number;
+    /** @brief Optional output for the transaction stage sequence number. */
+    ukv_sequence_number_t* sequence_number = NULL;
 
 } ukv_transaction_stage_t;
 
@@ -511,8 +510,8 @@ typedef struct ukv_transaction_commit_t {
     ukv_transaction_t transaction;
     /** @brief Staging options. */
     ukv_options_t options = ukv_options_default_k;
-    /** @brief Output for the transaction commit sequence number. */
-    ukv_sequence_number_t* sequence_number;
+    /** @brief Optional output for the transaction commit sequence number. */
+    ukv_sequence_number_t* sequence_number = NULL;
 
 } ukv_transaction_commit_t;
 

@@ -41,7 +41,6 @@ TEST(db, validation) {
 
     status_t status;
     std::vector<ukv_options_t> options {ukv_options_default_k, ukv_option_write_flush_k};
-    ukv_sequence_number_t sequence_number = 0;
 
     ukv_write_t write_options {
         .db = db,
@@ -343,7 +342,6 @@ TEST(db, validation) {
         .error = status.member_ptr(),
         .transaction = txn,
         .options = ukv_options_default_k,
-        .sequence_number = &sequence_number,
     };
 
     for (auto& option : wrong_txn_commit_options) {

@@ -544,7 +544,6 @@ class UKVService : public arf::FlightServerBase {
         ar::Status ar_status;
         session_params_t params = session_params(server_call, action.type);
         status_t status;
-        ukv_sequence_number_t sequence_number = 0;
 
         // Locating the collection ID
         if (is_query(action.type, kActionColOpen.type)) {
@@ -651,7 +650,6 @@ class UKVService : public arf::FlightServerBase {
             txn_commit.error = status.member_ptr();
             txn_commit.transaction = session.txn;
             txn_commit.options = ukv_options(params);
-            txn_commit.sequence_number = &sequence_number;
 
             ukv_transaction_commit(&txn_commit);
             if (!status) {
