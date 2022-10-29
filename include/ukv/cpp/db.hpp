@@ -35,8 +35,8 @@ struct collections_list_t {
  *
  * ## Class Specs
  * - Concurrency: Thread-safe, for @b unique arenas.
- *   For details, @see @c `bins_ref_gt` @section "Memory Management"
- * - Lifetime: Doesn't commit on destruction. @c `txn_guard_t`.
+ *   For details, "Memory Management" section @c bins_ref_gt
+ * - Lifetime: Doesn't commit on destruction. @c txn_guard_t.
  * - Copyable: No.
  * - Exceptions: Never.
  */
@@ -156,16 +156,15 @@ class context_t : public std::enable_shared_from_this<context_t> {
         auto name_it = cols.names;
         auto id_it = cols.ids.begin();
         for (; id_it != cols.ids.end(); ++id_it, ++name_it) {
-            if (*name_it != name)
-                continue;
-            return ukv_collection_t(*id_it);
+            if (name.compare(*name_it) == 0)
+                return ukv_collection_t(*id_it);
         }
         return status_t {"Collection not found."};
     }
 
     /**
      * @brief Provides a view of a single collection synchronized with the transaction.
-     * @tparam collection_at Can be a @c `bins_collection_t`, @c `docs_collection_t`, @c `graph_collection_t`.
+     * @tparam collection_at Can be a @c bins_collection_t, @c docs_collection_t, @c graph_collection_t.
      */
     template <typename collection_at = bins_collection_t>
     expected_gt<collection_at> collection(std::string_view name = {}) noexcept {
@@ -233,8 +232,8 @@ using transaction_t = context_t;
 
 /**
  * @brief DataBase is a "collection of named collections",
- * essentially a transactional @b `map<string,map<id,string>>`.
- * Or in Python terms: @b `dict[str,dict[int,str]]`.
+ * essentially a transactional @b map<string,map<id,string>>.
+ * Or in Python terms: @b dict[str,dict[int,str]].
  *
  * ## Class Specs
  * - Concurrency: @b Thread-Safe, except for `open`, `close`.

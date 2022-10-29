@@ -83,7 +83,7 @@ extern "C" {
  *
  * ## Collections
  *
- * Every database always has at least one collection - the @ref `ukv_collection_main_k`.
+ * Every database always has at least one collection - the `::ukv_collection_main_k`.
  * That one has no name and can't be deleted. Others are referenced by names.
  * The same database can have many collections, of different modalities:
  * - Binary Large Objects or BLOBs.
@@ -104,6 +104,7 @@ typedef void* ukv_database_t;
 /**
  * @brief Opaque Transaction handle.
  * @see `ukv_transaction_free()`.
+ * @see https://unum.cloud/ukv/c#transactions
  *
  * Allows ACID-ly grouping operations across different collections and even modalities.
  * This means, that the same transaction might be:
@@ -111,67 +112,18 @@ typedef void* ukv_database_t;
  * - updating users metadata in a documents collection to reference new avatar.
  * - introducing links between the user and other in a graph collection...
  * and all of the operations here either succeed or fail together. DBMS will
- * do the synchronization heavylifting, so you don't have to.
+ * do the synchronization heavy-lifting, so you don't have to.
  *
  * Properties:
  * - Thread safety: None.
- * - Lifetime: Must be freed before the @c `ukv_database_t` is closed.
+ * - Lifetime: Must be freed before the @c ukv_database_t is closed.
  * - Concurrency Control: Optimistic.
- *
- * ## ACI(D)-ity
- *
- * ### A: Atomicity !
- *
- * Atomicity is always guaranteed.
- * Even on non-transactional writes - either all updates pass or all fail.
- *
- * ### C: Consistency !
- *
- * Consistency is implemented in the strictest possible form - ["Strict Serializability"][ss]
- * meaning that:
- * - reads are ["Serializable"][s],
- * - writes are ["Linearizable"][l].
- * The default behaviour, however, can be tweaked at the level of specific operations.
- * For that the @ref `ukv_option_transaction_dont_watch_k` can be passed to `ukv_transaction_init()`
- * or any transactional read/write operation, to control the consistency checks during staging.
- *
- *  |                               |     Reads     |     Writes    |
- *  |:------------------------------|:-------------:|:-------------:|
- *  | Head                          | Strict Serial | Strict Serial |
- *  | Transactions over Snapshots   |     Serial    | Strict Serial |
- *  | Transactions w/out Snapshots  | Strict Serial | Strict Serial |
- *  | Transactions w/out Watches    | Strict Serial |  Sequential   |
- *
- * If this topic is new to you, please check out the [Jepsen.io][jepsen] blog on consistency.
- *
- * [ss]: https://jepsen.io/consistency/models/strict-serializable
- * [s]: https://jepsen.io/consistency/models/serializable
- * [l]: https://jepsen.io/consistency/models/linearizable
- * [jepsen]: https://jepsen.io/consistency
- *
- * ### I: Isolation !
- *
- *  |                               |     Reads     |     Writes    |
- *  |:------------------------------|:-------------:|:-------------:|
- *  | Transactions over Snapshots   |       ✓       |       ✓       |
- *  | Transactions w/out Snapshots  |       ✗       |       ✓       |
- *
- * ### D: Durability ?
- *
- * Durability doesn't apply to in-memory systems by definition.
- * In hybrid or persistent systems we prefer to disable it by default.
- * Almost every DBMS that builds on top of KVS prefers to implement its own durability mechanism.
- * Even more so in distributed databases, where three separate Write Ahead Logs may exist:
- * - in KVS,
- * - in DBMS,
- * - in Distributed Consensus implementation.
- * If you still need durability, flush writes or `ukv_transaction_commit()` with @ref `ukv_option_write_flush_k`.
  */
 typedef void* ukv_transaction_t;
 
 /**
  * @brief Some unique integer identifier of a collection.
- * A @c `ukv_database_t` database can have many of those,
+ * A @c ukv_database_t database can have many of those,
  * but never with repeating names or identifiers.
  */
 typedef uint64_t ukv_collection_t;
@@ -318,7 +270,7 @@ typedef enum {
 /**
  * @brief The handle to the default nameless collection.
  * It exists from start, doesn't have to be created and can't be fully dropped.
- * Only @ref `ukv_drop_keys_vals_k` and @ref `ukv_drop_vals_k` apply to it.
+ * Only `::ukv_drop_keys_vals_k` and `::ukv_drop_vals_k` apply to it.
  */
 extern ukv_collection_t const ukv_collection_main_k;
 extern ukv_length_t const ukv_length_missing_k;
@@ -361,6 +313,7 @@ void ukv_database_init(ukv_database_init_t*);
 /**
  * @brief Main "setter" or "scatter" interface.
  * @see `ukv_write()`.
+ * @see https://unum.cloud/ukv/c#writes
  *
  * ## Functionality
  *
@@ -386,87 +339,6 @@ void ukv_database_init(ukv_database_init_t*);
  * Instead of adding all three to the binary C interface, we focus on better ACID transactions,
  * which can be used to implement any advanced multi-step operations (often including conditionals),
  * like Compare-And-Swap, without losing atomicity.
- *
- * ## Understanding Contents Arguments
- *
- * Assuming `task_idx` is smaller than @ref `tasks_count`, following approximates how the content chunks
- * are sliced.
- *
- * ```cpp
- *      std::size_t task_idx = ...;
- *      auto chunk_begin = values + values_stride * task_idx;
- *      auto offset_in_chunk = offsets + offsets_stride * task_idx;
- *      auto length = lengths + lengths_stride * task_idx;
- *      std::string_view content = { chunk_begin + offset_in_chunk, length };
- * ```
- *
- * It is not the simplest interface, but like Vulkan or BLAS, it gives you extreme flexibility.
- * Submitting a single write request can be as easy as:
- *
- * ```c
- *      ukv_key_t key { 42 };
- *      ukv_bytes_cptr_t value { "meaning of life" };
- *      ukv_write_t write {
- *          .db = &db,
- *          .keys = &key,
- *          .values = &value,
- *      };
- *      ukv_write(&write);
- * ```
- *
- * Similarly, sumbitting a batch may look like:
- *
- * ```c
- *      ukv_key_t keys[2] = { 42, 43 };
- *      ukv_bytes_cptr_t values[2] { "meaning of life", "is unknown" };
- *      ukv_write_t write {
- *          .db = &db,
- *          .tasks_count = 2,
- *          .keys = keys,
- *          .keys_stride = sizeof(ukv_key_t),
- *          .values = values,
- *          .values_stride = sizeof(ukv_bytes_cptr_t),
- *      };
- *      ukv_write(&write);
- * ```
- *
- * The beauty of strides is that your data may have an Array-of-Structures layout,
- * rather than Structure-of-Arrays. Like this:
- *
- * ```c
- *      struct pair_t {
- *          ukv_key_t key;
- *          ukv_bytes_cptr_t value;
- *      };
- *      pair_t pairs[2] = {
- *          { 42, "meaning of life" },
- *          { 43, "is unknown" },
- *      };
- *      ukv_write_t write {
- *          .db = &db,
- *          .tasks_count = 2,
- *          .keys = &pairs[0].key,
- *          .keys_stride = sizeof(pair_t),
- *          .values = &pairs[0].value,
- *          .values_stride = sizeof(pair_t),
- *      };
- *      ukv_write(&write);
- * ```
- *
- * To delete an entry, one can perform a similar trick:
- *
- * ```c
- *      ukv_key_t key { 42 };
- *      ukv_bytes_cptr_t value { NULL };
- *      ukv_write_t write {
- *          .db = &db,
- *          .keys = &key,
- *          .values = &value,
- *      };
- *      ukv_write(&write);
- * ```
- *
- * Or just pass `.values = NULL` all together.
  */
 typedef struct ukv_write_t {
 
@@ -494,9 +366,9 @@ typedef struct ukv_write_t {
      * @brief Write options.
      *
      * Possible values:
-     * - @ref `ukv_option_write_flush_k`: Forces to persist non-transactional writes on disk before returning.
-     * - @ref `ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional writes.
-     * - @ref `ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ukv_option_write_flush_k`: Forces to persist non-transactional writes on disk before returning.
+     * - `::ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional writes.
+     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
     ukv_options_t options = ukv_options_default_k;
 
@@ -506,22 +378,22 @@ typedef struct ukv_write_t {
 
     /**
      * @brief Number of separate operations packed in this read.
-     * Always equal to the number of provided @ref `keys`.
+     * Always equal to the number of provided `keys`.
      */
     ukv_size_t tasks_count = 1;
     /**
-     * @brief Sequence of collections owning the @ref `keys`.
+     * @brief Sequence of collections owning the `keys`.
      *
      * If `NULL` is passed, the default collection is assumed.
-     * If multiple collections are passed, the step between them is defined by @ref `collections_stride`.
+     * If multiple collections are passed, the step between them is defined by `collections_stride`.
      * Use `ukv_collection_create()` or `ukv_collection_list()` to obtain collection IDs for string names.
      * Is @b optional.
      */
     ukv_collection_t const* collections = NULL;
     /**
-     * @brief Step between @ref `collections`.
+     * @brief Step between `collections`.
      *
-     * Contains the number of bytes separating entries in the @ref `collections` array.
+     * Contains the number of bytes separating entries in the `collections` array.
      * Zero stride would reuse the same address for all tasks.
      * You can use it to retrieve different keys from the same collection in one call.
      * Is @b optional.
@@ -530,14 +402,14 @@ typedef struct ukv_write_t {
     /**
      * @brief Sequence of keys to update.
      *
-     * Contains the pointer to the first of `tasks_count` keys to be collected from @ref `collections`.
-     * If multiple keys are passed, the step between them is defined by @ref `keys_stride`.
+     * Contains the pointer to the first of `tasks_count` keys to be collected from `collections`.
+     * If multiple keys are passed, the step between them is defined by `keys_stride`.
      */
     ukv_key_t const* keys;
     /**
-     * @brief Step between @ref `keys`.
+     * @brief Step between `keys`.
      *
-     * The number of bytes separating entries in the @ref `keys` array.
+     * The number of bytes separating entries in the `keys` array.
      * Zero stride would reuse the same address for all tasks.
      * You can use it to retrieve the same key from different collections in one call.
      * Is @b optional.
@@ -549,61 +421,58 @@ typedef struct ukv_write_t {
     /// @{
 
     /**
-     * @brief Bitmask of "presence" indicators with at least @ref `tasks_count` bits.
+     * @brief Bitmask of "presence" indicators with at least `tasks_count` bits.
      *
      * Each set bit means that the respective content chunk isn't `NULL`.
      * Is addressed the same way as in Apache Arrow.
      * Is @b optional.
      */
     ukv_octet_t const* presences = NULL;
-
     /**
      * @brief The pointer to the offset (in bytes) of the first content within
-     * the first chunk of @ref `values`.
+     * the first chunk of `values`.
      *
      * If tasks are executing, the step between offsets is defined by `offsets_stride`.
      * Not only it allows addressing different parts of a concatenated tape,
-     * but also allows to skip some structure header, like the @c `PyObject_HEAD`
+     * but also allows to skip some structure header, like the @c PyObject_HEAD
      * in every CPython runtime object.
      */
     ukv_length_t const* offsets = NULL;
     /**
-     * @brief Step between @ref `offsets`.
+     * @brief Step between `offsets`.
      *
-     * The number of bytes separating entries in the @ref `offsets` array.
+     * The number of bytes separating entries in the `offsets` array.
      * Zero stride would reuse the same address for all tasks.
      * Is @b optional.
      */
     ukv_size_t offsets_stride = 0;
-
     /**
      * @brief The pointer to the offset (in bytes) of the first content within
-     * the first chunk of @ref `values`. Zero-length entries are allowed.
+     * the first chunk of `values`. Zero-length entries are allowed.
      *
      * Is @b optional, as lengths can be inferred from consecutive offsets.
-     * If neither @ref `offsets` nor @ref `lengths` are passed, we assume values
-     * to be `NULL`-terminated and infer the length from @ref `values` themselves.
+     * If neither `offsets` nor `lengths` are passed, we assume values
+     * to be `NULL`-terminated and infer the length from `values` themselves.
      */
     ukv_length_t const* lengths = NULL;
     /**
-     * @brief Step between @ref `keys`.
+     * @brief Step between `keys`.
      *
-     * The number of bytes separating entries in the @ref `keys` array.
+     * The number of bytes separating entries in the `keys` array.
      * Zero stride would reuse the same address for all tasks.
      * Is @b optional.
      */
     ukv_size_t lengths_stride = 0;
-
     /**
      * @brief An array of pointers to data chunks.
-     * If `NULL`, will simply delete all the @ref `keys` from respective @ref `collections`.
+     * If `NULL`, will simply delete all the `keys` from respective `collections`.
      *
      * Generally, we expect each chunk to be identical to the content we want to write,
-     * but we can specify subspans by using @ref `offsets` and @ref `lengths`.
+     * but we can specify subspans by using `offsets` and `lengths`.
      */
     ukv_bytes_cptr_t const* values;
     /**
-     * @brief The number of bytes separating entries in the @ref `values` array.
+     * @brief The number of bytes separating entries in the `values` array.
      * Zero stride would reuse the same address for all tasks.
      * Is @b optional.
      */
@@ -622,6 +491,7 @@ void ukv_write(ukv_write_t*);
 /**
  * @brief Main "getter" or "gather" interface.
  * @see `ukv_read()`.
+ * @see https://unum.cloud/ukv/c#reads
  *
  * ## Functionality
  *
@@ -662,10 +532,10 @@ struct ukv_read_t {
      * @brief Read options.
      *
      * Possible values:
-     * - @ref `ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
-     * - @ref `ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
-     * - @ref `ukv_option_scan_bulk_k`: Suggests that the list of keys was received from a bulk scan.
-     * - @ref `ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
+     * - `::ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
+     * - `::ukv_option_scan_bulk_k`: Suggests that the list of keys was received from a bulk scan.
+     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
     ukv_options_t options = ukv_options_default_k;
 
@@ -758,7 +628,7 @@ struct ukv_read_t {
      *   The last offset will be used to determine the length of the last entry.
      *   Zero-length and Missing entries will be indistinguishable unless you also check `presences`.
      * - If only `lengths` are exported, entries are concatenated in-order without any gaps.
-     *   Missing entries will have a length equal to @ref `ukv_length_missing_k`.
+     *   Missing entries will have a length equal to `::ukv_length_missing_k`.
      *
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
@@ -815,10 +685,10 @@ typedef struct ukv_scan_t {
      * @brief Scan options.
      *
      * Possible values:
-     * - @ref `ukv_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
-     * - @ref `ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
-     * - @ref `ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
-     * - @ref `ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ukv_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
+     * - `::ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
+     * - `::ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
+     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
     ukv_options_t options = ukv_options_default_k;
 
@@ -865,7 +735,6 @@ typedef struct ukv_scan_t {
      * Is @b optional.
      */
     ukv_size_t start_keys_stride = 0;
-
     /**
      * @brief Number of consecutive entries to read in each request.
      *
@@ -891,13 +760,12 @@ typedef struct ukv_scan_t {
      * @brief Output number of exported entries before for each scan.
      *
      * Will contain a pointer to an array of `tasks_count` integer offsets.
-     * Each marks a response offset in number of @c `ukv_key_t` keys starting from `*keys`.
+     * Each marks a response offset in number of @c ukv_key_t keys starting from `*keys`.
      * To be fully compatible with Apache Arrow we append one more offset at
      * the end to allow inferring the length of the last entry without using `lengths`.
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
     ukv_length_t** offsets = NULL;
-
     /**
      * @brief Output number of found entries for each scan.
      *
@@ -907,7 +775,6 @@ typedef struct ukv_scan_t {
      * Is @b optional.
      */
     ukv_length_t** counts;
-
     /**
      * @brief Output keys tape.
      *
@@ -954,13 +821,13 @@ typedef struct ukv_sample_t {
      */
     ukv_arena_t* arena = NULL;
     /**
-     * @brief Scan options.
+     * @brief Sampling options.
      *
      * Possible values:
-     * - @ref `ukv_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
-     * - @ref `ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
-     * - @ref `ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
-     * - @ref `ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ukv_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
+     * - `::ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
+     * - `::ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
+     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
     ukv_options_t options = ukv_options_default_k;
 
@@ -992,7 +859,7 @@ typedef struct ukv_sample_t {
      */
     ukv_size_t collections_stride = 0;
     /**
-     * @brief Number of samples to be gatherd for each request.
+     * @brief Number of samples to be gathered for each request.
      *
      * Contains the pointer to the first of `tasks_count` starting points.
      * If multiple samples are requested, the step between them is defined by `count_limits_stride`.
@@ -1016,7 +883,7 @@ typedef struct ukv_sample_t {
      * @brief Output number of exported entries before for each scan.
      *
      * Will contain a pointer to an array of `tasks_count` integer offsets.
-     * Each marks a response offset in number of @c `ukv_key_t` keys starting from `*keys`.
+     * Each marks a response offset in number of @c ukv_key_t keys starting from `*keys`.
      * To be fully compatible with Apache Arrow we append one more offset at
      * the end to allow inferring the length of the last entry without using `lengths`.
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
@@ -1080,10 +947,10 @@ typedef struct ukv_measure_t {
      * @brief Scan options.
      *
      * Possible values:
-     * - @ref `ukv_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
-     * - @ref `ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
-     * - @ref `ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
-     * - @ref `ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ukv_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
+     * - `::ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
+     * - `::ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
+     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
     ukv_options_t options = ukv_options_default_k;
 
@@ -1207,7 +1074,7 @@ typedef struct ukv_collection_list_t {
      * @brief Listing options.
      *
      * Possible values:
-     * - @ref `ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
     ukv_options_t options = ukv_options_default_k;
 
@@ -1221,7 +1088,7 @@ typedef struct ukv_collection_list_t {
     ukv_collection_t** ids;
     /** @brief Offsets of separate strings in the `names` tape. */
     ukv_length_t** offsets;
-    /** @brief NULL-termainted collection names tape in same order as `ids`. */
+    /** @brief NULL-terminated collection names tape in same order as `ids`. */
     ukv_char_t** names;
     /// @}
 
@@ -1238,7 +1105,7 @@ void ukv_collection_list(ukv_collection_list_t*);
  * @see `ukv_collection_create()`.
  *
  * This function may never be called, as the default nameless collection
- * always exists and can be addressed via @ref `ukv_collection_main_k`.
+ * always exists and can be addressed via `::ukv_collection_main_k`.
  * You can "re-create" an empty collection with a new config.
  */
 typedef struct ukv_collection_create_t {
@@ -1338,8 +1205,8 @@ typedef struct ukv_transaction_init_t {
      * @brief Transaction options.
      *
      * Possible values:
-     * - @ref `ukv_option_transaction_dont_watch_k`
-     * - @ref `ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ukv_option_transaction_dont_watch_k`
+     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
     ukv_options_t options = ukv_options_default_k;
 

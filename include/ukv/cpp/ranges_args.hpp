@@ -130,6 +130,34 @@ struct scans_arg_t {
     }
 };
 
+struct sample_arg_t {
+    ukv_collection_t collection;
+    ukv_key_t min_key;
+    ukv_length_t limit;
+};
+
+/**
+ * @brief Arguments of `ukv_sample` aggregated into a Structure-of-Arrays.
+ * Is used to validate various combinations of arguments, strides, NULLs, etc.
+ */
+struct sample_args_t {
+    strided_iterator_gt<ukv_collection_t const> collections;
+    strided_iterator_gt<ukv_length_t const> limits;
+    ukv_size_t count = 0;
+
+    inline std::size_t size() const noexcept { return count; }
+    inline sample_arg_t operator[](std::size_t i) const noexcept {
+        ukv_collection_t collection = collections ? collections[i] : ukv_collection_main_k;
+        ukv_length_t limit = limits[i];
+        return {collection, limit};
+    }
+
+    bool same_collection() const noexcept {
+        strided_range_gt<ukv_collection_t const> range(collections, count);
+        return range.same_elements();
+    }
+};
+
 struct find_edge_t {
     ukv_collection_t collection;
     ukv_key_t const& vertex_id;

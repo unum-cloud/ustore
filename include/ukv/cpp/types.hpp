@@ -1,5 +1,5 @@
 /**
- * @file utility.hpp
+ * @file types.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
  * @addtogroup Cpp
@@ -92,7 +92,7 @@ struct edge_t {
 
 /**
  * @brief An asymmetric slice of a bond/relation.
- * Every vertex stores a list of such @c `neighborship_t`s
+ * Every vertex stores a list of such @c neighborship_t's
  * in a sorted order.
  */
 struct neighborship_t {

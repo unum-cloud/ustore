@@ -69,14 +69,14 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make -j 6",
+            "label": "Build Native: Debug Twitter STL Benchmark",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_FLIGHT_RPC=0 -DUKV_BUILD_TESTS=0 . && make ukv_stl_twitter_benchmark",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug Twitter STL Benchmark",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=1 . && make ukv_stl_twitter_benchmark",
+            "label": "Build Native: Debug",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make -j 6",
             "args": [],
             "type": "shell"
         },
@@ -89,6 +89,12 @@
         {
             "label": "Build Native: Release",
             "command": "cmake -DCMAKE_BUILD_TYPE=Release . && make -j 6",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Count Lines of Code",
+            "command":"cloc $(git ls-files)",
             "args": [],
             "type": "shell"
         }

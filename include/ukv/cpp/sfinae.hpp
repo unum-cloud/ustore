@@ -1,5 +1,5 @@
 /**
- * @file utility.hpp
+ * @file sfinae.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
  * @addtogroup Cpp
