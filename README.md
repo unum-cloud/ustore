@@ -1,9 +1,14 @@
 <h1 align="center">UKV</h1>
-<h3 align="center">Universal Binary Interface</h3>
-<h3 align="center">For The Fastest DBMS Ever Built</h3>
-<h5 align="center">RocksDB • LevelDB • UDisk • UMem</h5>
-<h5 align="center">Blobs • Documents • Graphs • Vectors</h5>
-<h5 align="center">C • C++ • Python • Java • GoLang</h5>
+<h3 align="center">
+Universal Binary Interface<br/>
+For The Fastest DBMS Ever Built
+</h3>
+
+<h5 align="center">
+RocksDB • LevelDB • UDisk • UMem<br/>
+Blobs • Documents • Graphs • Texts • Vectors<br/>
+C • C++ • Python • Java • GoLang • Apache Arrow
+</h5>
 <br/>
 
 <p align="center">
@@ -20,256 +25,250 @@
 
 ## What is UKV?
 
-UKV is an open C-layer binary standard for "Create, Read, Update, Delete" operations, or CRUD for short.
+UKV is an **open** C-layer binary standard for "Create, Read, Update, Delete" operations, or CRUD for short.
 Many databases exist today, providing similar functionality and performance under different interfaces.
-We approach the problem from a different angle.
+It is a problem for DBMS users, introducing vendor locks and additional friction for adopting newer and better technologies.
+
 If databases do similar things, let's standardize the interface and compete for the best implementation.
-That way migrations are easier and the system can be modularized into different parts, to give users the absolute flexibility in choosing between different [Data Forms ~ Modalities](#modalities) and [Key-Value Store ~ Engines](#engines) implementations, as well as different Distribution forms and [Client SDKs](#frontends).
+That way, migrations are more manageable, and the system can be modularized into parts, giving users absolute flexibility in choosing between different:
+
+* Forms of data, or [Modalities](#modalities),
+* Key-Value Store implementations, or [Engines](#engines),
+* Distribution forms, or Packaging,
+* Client SDKs, or [Frontends](#frontends) for higher-level languages.
+
+---
 
 ## The [BLAS][blas] of [CRUD][crud]
 
-Such generic standard exists in computing since 1979.
-It is called [BLAS][blas] and was the locomotive of Numerical Methods across all disciplines in the past 50 years.
-Every deep-learning you use relies of BLAS.
-What is the standard that your DBMS can rely on?
+Such generic standards have existed in computing since 1979.
+BLAS was the locomotive of Numerical Methods across all disciplines in the past 50 years. 
+Every deep-learning you use relies on BLAS.
+What is the standard that your DBMS can be built around?
 
-![Universal Key Values by Unum](assets/UKV.png)
+![UKV: Small Map](assets/UKV.png)
 
-We haven't passed the test of time, like BLAS, but we can go beyond them in modularity and a great reference implementation.
-Today, Intel, Nvidia, AMD, GraphCore, Cerebras and many others ship optimized implementations of BLAS for their hardware, but people rarely use the open-source reference design.
+We have yet to pass the test of time, like BLAS, but we can surpass them in modularity and provide a better reference implementation.
+Today, Intel, Nvidia, AMD, GraphCore, Cerebras, and many others ship optimized implementations of BLAS for their hardware.
+Similarly, we ship proprietary [heavily-tested]() and [extensively-benchmarked]() implementations of UKV to our customers, but even the provided FOSS reference design should be better than whatever OLTP DBMS you are using today.
+
+> Why not use LevelDB or RocksDB interface directly? [link]()
 
 ---
 
 ## Modularity
 
-Our reference implementation aims to be faster and more scalable, than established DBs, like MongoDB, Neo4J, Redis, ETCD and Postgres.
-You can compose your own "X" DBMS killer from any combination of components.
+The C Standard is just [a few header files][c-standard].
+The rest of the project implements it using some of the best FOSS solutions, resulting in this vast map of possible combinations.
 
-| Engine  | Modality  |          Distribution           |            Frontend             |
-| :-----: | :-------: | :-----------------------------: | :-----------------------------: |
-|         |           |                                 |                                 |
-| LevelDB |   Blobs   |            Embedded             |            C and C++            |
-| RocksDB |  Graphs   |        Client-Server RPC        |             Python              |
-|  UMem   | Documents |     Arrow Flight RPC Server     | GoLang <sup>*in-progress*</sup> |
-|  UDisk  |  Vectors  | Distributed <sup>*coming*</sup> |  Java <sup>*in-progress*</sup>  |
+![UKV: Full Map](assets/UKV.png)
 
-Run `cloc $(git ls-files)` and you will see, that UKV fits into just around 20'000 Lines fo Code.
-Compare this to bulky 1.5 Million LOC in Postgres and 4.5 Million LOC for MySQL ([*source*][dbms-cloc]).
-They target just the tabular workloads.
-After standardizing the API, we can make the system a lot reacher in features!
-
-<h6 align="center">
-ACID transactions across many collections • Snapshots  • Operation-level WATCHes • 
-BSON, JSON, MessagePack documents support • JSON Patches & Merrge-Patches • JSON Pointers Addressing • 
-Native Apache Arrow format support in all APIs • Arrow Flight RPC Server • Bulk Scans • Random Samping • 
-Pandas Tabular API • NetworkX Graph API • PyTorch & TensorFlow Data-Loaders
-</h6>
+<p align="center">
+ACID transactions across many collections • Snapshots • Operation-level WATCHes • BSON, JSON, MessagePack documents support • RFC JSON Patches & Merge-Patches • JSON Pointers Addressing • Native Apache Arrow format support in all APIs • Apache Arrow Flight RPC Server • Bulk Scans • Random Samping • Pandas Tabular API • NetworkX Graph API • PyTorch & TensorFlow Data-Loaders
+</p>
 
 ---
 
-## Usecases
+## One Data Lake to Serve Them All
 
-Let's start with the simplest and work our way up.
+Before going into the specifics of every Frontend, Backend, Modality, or Distribution, let's imagine a few immediate use cases.
 
-1. Getting a Python, GoLang, Java wrapper for vanilla RocksDB or LevelDB.
-2. Serving them over a network via Apache Arrow Flight RPC.
-3. Embedded Document and GraphDB, that will avoid networking overheads.
-4. Semlessly Tiering Multi-Modal DBMS between UMem and persistent backends. 
+1. Getting a Python, GoLang, or Java wrapper for vanilla RocksDB or LevelDB.
+2. Serving them over a network via Apache Arrow Flight RPC to Spark, Kafka, or PyTorch.
+3. Embedded Document and GraphDB that will avoid networking overheads.
+4. Seamlessly Tiering Multi-Modal DBMS between UMem and persistent backends.
 
-Even with just a single node, in a 2U chassis today we can easily get 24x 16 TB of NVMe storage connected to 2x CPU sockets, totalling at 384 TB of space, capable of yielding ~120 GB/s of read throughput, out of which, ~70 GB/s our in-house engine can already sustain.
-Combining it with numerous features above and GPU acceleration, once can get an all-one Data-Lake with the feel of Pandas, speed of Rapids, scale of [Hadoop][hadoop] and consistency of Postgres.
-
-![UKV Data-lake](assets/UKV_Combo.png)
-
-<h3 align="left"><s>One ring to rule them all.</s></h3>
-<h3 align="left">One lake to server them all.</h3>
+Even with just a single node, in a 2U chassis in 2022, we can quickly get 24x 16 TB of NVMe storage connected to 2x CPU sockets, totaling 384 TB of space, capable of yielding ~120 GB/s of read throughput, out of which, ~70 GB/s our in-house engine can already sustain.
+With NVMe-oF, this can scale horizontally to Petabytes of low-latency storage served through 200 GBit/s Mellanox Infiniband fibers!
+Combining it with the numerous features above and GPU acceleration, one can get an all-one Data Lake with the feel of Pandas, Rapids speed, Hadoop scale, and Postgres consistency.
 
 ---
 
-## The Simplicity of Consistency
+## OLAP + OLTP = HTAP: 🐦🐦 + 🪨 = ☠️☠️
 
-It is normal to have a separate Postgres for your transactional data, a MongoDB for your large flexible-schema document collections, a Neo4J instance for your graphs, and an [S3][s3] storage bucket for your media data, all serving the different data needs of a single business.
+It is normal these days to have hundreds of Databases for one project.
+At least one for every kind of workload.
 
-> Example: a social network, storing passwords in Postgres, posts in MongoDB, user relations in Neo4J and post attachments in S3.
+1. A Postgres for transactional data.
+2. A MongoDB for collections of flexible-schema documents.
+3. A Neo4J for graphs.
+4. An S3 storage bucket for BLOBs.
 
-So when the data is updated, you have to apply changes across all those instances, manually rolling them back if one of the parts failed.
-Needless to say, every system has a different API, different guarantees, and runtime constraints.
+If you were to build a Social Network, you would put the passwords in first, the user-generated content in second, relevant interactions in third, and media attachments in fourth.
+
+So when the data is updated, you have to apply changes across all those instances, manually rolling them back if one of the parts fails.
+Every system has a different API, different guarantees, and runtime constraints.
+Already sounds like too many wasted engineering hours.
+
+![UKV: HTAP](assets/UKV.png)
+
+As it is not one store, different teams work on different versions of data.
+Some of those datasets can quickly become irrelevant, especially in:
+
+* Fraud Detection, where parties constantly adapt,
+* Recommender Systems, if new products and content appear every day,
+* Real-Time Pricing, where market conditions dictate the cost of services.
+
+By the time row-major OLTP data is exported into the column-major OLAP store, it might be too late.
+Every data scientist knows - "Garbage In, Means Garbage Out".
+Outdated input will give you an obsolete result, and the business will lose money.
+
+But if you have just 1 Hybrid Store, the pain is gone.
+And the engineering teams can spend time doing something productive rather than packaging and versioning endless Parquet files around your system.
 
 ---
 
-## Binary = Performance
+## Backend = Engine + Modality
 
-Over the years we broke speed limits on CPUs and GPUs using SIMD, branch-less computing and innovation in parallel algorithm design.
-We deliberately minimize the dynamic allocations in all modality implementations.
-Our engine implementations - "UMem" and "UDisk" follow the same tradition, but in "LevelDB" and "RocksDB" we are forced to re-allocate, as the library authors didn't design a proper binary interface.
-The one they provide heavily depends on C++ Standard Templates Library and the use fo standard allocators.
+A backend is a composition of just 2 parts.
+An Engine: key-value store for the serialized representation.
+Modalities: an implementation of various serialization and indexing approaches for structured data.
 
-Our interface is very fast, has no dynamic polymorphism and throws no exceptions, to match the speed and the quality of fast underlying engines and work for months uninterrupted!
-We have numerous detailed blog posts on performance:
+![UKV: Backend](assets/UKV.png)
 
-## Engines
+### Engines
 
-Backends differ in their functionality and purposes.
-The underlying embedded key value stores include:
+Following engines can be used almost interchangably.
 
-| Name    |  Speed   |       OS        | Transact | Collections | Persistent | [Snapshots][snap] | [Watches][watch] |
-| :------ | :------: | :-------------: | :------: | :---------: | :--------: | :---------------: | :--------------: |
-| LevelDB |   0.5x   | POSIX + Windows |    ❌     |      ❌      |     ✅      |         ❌         |        ❌         |
-| RocksDB |    1x    | POSIX + Windows |    ✅     |      ✅      |     ✅      |         ✅         |        ✅         |
-| UMem    | **10x**  | POSIX + Windows |    ✅     |      ✅      |     ❌      |         ❌         |        ✅         |
-| UDisk   | **3-5x** |      Linux      |    ✅     |      ✅      |     ✅      |         ✅         |        ✅         |
+|                   | LevelDB | RocksDB  |  UDisk  |  UMem   |
+| :---------------- | :-----: | :------: | :-----: | :-----: |
+| **Speed**         |   1x    |    2x    | **10x** | **30x** |
+| **Persistent**    |    ✅    |    ✅     |    ✅    |    ❌    |
+| **Transactional** |    ❌    |    ✅     |    ✅    |    ✅    |
+| [Watches][watch]  |    ❌    |    ✅     |    ✅    |    ✅    |
+| [Snapshots][snap] |    ✅    |    ✅     |    ✅    |    ❌    |
+| Named Collections |    ❌    |    ✅     |    ✅    |    ✅    |
+| Random Sampling   |    ❌    |    ❌     |    ✅    |    ✅    |
+| Bulk Enumeration  |    ❌    |    ❌     |    ✅    |    ✅    |
+| Encryption        |    ❌    |    ❌     |    ✅    |    ❌    |
+| Open-Source       |    ✅    |    ✅     |    ❌    |    ✅    |
+| Compatibility     |   Any   |   Any    |  Linux  |   Any   |
+| Maintainer        | Google  | Facebook |  Unum   |  Unum   |
 
+Historically, LevelDB was the first one.
+RocksDB then improved on functionality and performance.
+Now it serves as the foundation for half of the DBMS startups.
 
-* UMem in-memory backend originally served educational purposes. Then it was superseeded by the [`consistent_set`][consistent_set] and can now be considered the fastest in-memory Key-Value Store, superior to Redis, MemCached or ETCD.
-* LevelDB was originally designed at Google and extensively used across the industry, thanks to its simplicity.
-* RocksDB improves over LevelDB, extending its functionality with transactions, named collections, and higher performance.
-* UDisk is our **proprietary** in-house implementation with superior concurrency-control mechnisms and Linux kernel-bypass techniques, as well as, GPU acceleration. The first of its kind.
+UMem and UDisk are both designed and maintained by Unum from scratch.
+Both are feature-complete, but the most crucial feature our infrastructure provides is performance.
+Being fast in memory is easy.
+The core logic of UMem can be found in the templated header-only [`consistent_set`][consistent_set] library.
 
-All of those backends were [benchmarked for weeks](https://unum.cloud/ucsb) using [UCSB](https://github.com/unum-cloud/ucsb), so you can choose the best stack for you specific use case.
+Designing UDisk was much more challenging and required partial kernel bypass with `io_uring`, complete bypass with `SPDK`, and GPU acceleration. 
+**UDisk is the first engine to be designed with parallel architectures in mind**.
 
 ![UCSB 10 TB Results](https://unum.cloud/assets/post/2022-09-13-ucsb-10tb/ucsb-10tb-duration.png)
 
+All of those backends were [benchmarked for weeks](https://unum.cloud/ucsb) using [UCSB](https://github.com/unum-cloud/ucsb), so you can choose the best stack for you specific use case.
 We have published the results for BLOB-layer abstractions for [10 TB][ucsb-10], and, previously, [1 TB][ucsb-1] collections.
 Above binary layer, in logic, those numbers are further multiplied.
 Where MongoDB does 2'000 operations/s, our Community Edition does 10'000 ops/s and the Pro Version yields 50'000 ops/s.
 
-## Frontends
+> Read more about benchmarks [here](#benchmarks).
 
-Currently, at Proof-of-Concept stage, we support only the essential functionality in select programming languages.
+### Modalities
 
-| Name        | Transact | Collections | Batches | Docs  | Graphs | Copies |
-| :---------- | :------: | :---------: | :-----: | :---: | :----: | :----: |
-| C ³         |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
-| C++ ³       |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
-| Python ¹ ³  |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  0-1   |
-| Arrow RPC ³ |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  0-2   |
-| GoLang      |    ✅     |      ✅      |    ✅    |   ❌   |   ❌    |   1    |
-| Java        |    ✅     |      ✅      |    ❌    |   ❌   |   ❌    |   1    |
-|             |          |             |         |       |        |        |
-| C# ²        |    ❌     |      ❌      |    ❌    |   ❌   |   ❌    |        |
-| REST API ²  |    ❌     |      ❌      |    ❌    |   ❌   |   ❌    |        |
-| Wolfram ¹ ² |    ❌     |      ❌      |    ❌    |   ❌   |   ❌    |        |
+The same DBMS can contain multiple collections.
+Each collection can store BLOBs or any modality of structured data.
+Data of different modalities can't be stored in the same collection.
+ACID transactions across modalities are supported.
 
-* Copies: Number of re-allocations/conversions per byte.
-* ¹: Support tensor lookups and media data.
-* ²: Missing, to be implemented.
-* ³: Supports tabular Arrow exports.
+|                           |                     Documents                      |                 Graphs                 |                       Vectors                        |
+| :------------------------ | :------------------------------------------------: | :------------------------------------: | :--------------------------------------------------: |
+| Values                    |           JSON-like Hierarchical Objects           |       Labeled Directed Relations       |             High-Dimensional Embeddings              |
+| Specialized Functionality | JSON ⇔ BSON ⇔ MessagePack, Sub-Document Operations | Gather Neighbors, Count Vertex Degrees | Quantization, K-Approximate Nearest-Neighbors Search |
+| Examples                  |                      MongoDB                       |                 Neo4J                  |                       Pinecone                       |
 
-## Modalities
+One of our core objectives was to select the minimal core set of functions for each modality.
+In that case, implementing them can be easy for any passionate developer.
+If the low-level interfaces are flexible, making the high-level interfaces rich is easy.
 
-We came from humble beginnings.
-We just wanted to standardize binary Key-Value operations.
-Integer keys, variable length values.
-That's it.
+## Frontend = SDK ∨ API
 
-You can also think of such a KVS as a memory-allocator:
+UKV for Python and for C++ look very different.
+Our Python SDK mimics other Python libraries - Pandas and NetworkX.
+Similarly, C++ library provides the interface C++ developers expect.
 
-* The key is a 64-bit integer, just like a pointer on most modern systems.
-* The value is the variable length block, addressed by it.
+![UKV: Frontends](assets/UKV.png)
 
-Once you have a good enough shared interface, it is relatively easy to build on top of it, adding support for:
+As we know people use different languages for different purposes.
+Some C-level functionality isn't implementented for some languages.
+Either because there was no demand for it, or as we haven't gottent to it yet.
 
-* Documents,
-* Graphs,
-* Vectors, and
-* Paths.
 
-Is there something else you need?
-Submit a feature request!
+| Name      | Transact | Collections | Batches | Docs  | Graphs | Copies |
+| :-------- | :------: | :---------: | :-----: | :---: | :----: | :----: |
+| C         |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
+| C++       |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
+| Python    |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  0-1   |
+| GoLang    |    ✅     |      ✅      |    ✅    |   ❌   |   ❌    |   1    |
+| Java      |    ✅     |      ✅      |    ❌    |   ❌   |   ❌    |   1    |
+| Arrow RPC |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  1-2   |
 
-## Installation & Deployment
+Some APIs here by themself are a gem and give you essentially unlimited compatibility with all kinds of tools and languages.
 
-* For Python: `pip install ukv`
-* For Conan: `conan install ukv`
-* For Docker image: `docker run --rm --name test_ukv -p 38709:38709 unum/ukv`
+![UKV: Frontends](assets/UKV.png)
 
-To build from source:
+Arrow, for instance, brings an entire ecosystem with support for  C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
+
+---
+
+## Documentation
+
+For guidance on installation, development, deployment, and administration, see our [documentation](https://unum.cloud/UKV).
+
+## Installation
+
+The entire DBMS fits into a sub 100 MB Docker image.
+Run the following script to pull and run the container, exposing Apache Arrow Flight RPC server on the port `38709`.
+Client SDKs will also communicate through that same port.
 
 ```sh
-cmake \
-    -DUKV_BUILD_PYTHON=1 \
-    -DUKV_BUILD_TESTS=1 \
-    -DUKV_BUILD_BENCHMARKS=1 \
-    -DUKV_BUILD_FLIGHT_RPC=1 . && \
-    make -j16
+docker run --rm --name TestUKV -p 38709:38709 unum/ukv
 ```
 
-To add to your CMake project:
+For C/C++ clients and for the embedded distribution of UKV, CMake is the default form of installation.
+It may require installing Arrow separately.
 
 ```cmake
-cmake_minimum_required(VERSION 3.11)
-project(ukv_example)
-
-include(FetchContent)
-
 FetchContent_Declare(
     ukv
     GIT_REPOSITORY https://github.com/unum-cloud/UKV.git
     GIT_SHALLOW TRUE
-    GIT_TAG v0.3.0
 )
 FetchContent_MakeAvailable(ukv)
 set(ukv_INCLUDE_DIR ${ukv_SOURCE_DIR}/include)
 include_directories(${ukv_INCLUDE_DIR})
-
-add_executable(ukv_example_test main.cpp)
-target_link_libraries(ukv_example_test ukv)
 ```
 
-For Flight RPC, Apache Arrow must be pre-installed.
-
-To build language bindings:
+For Conan users a shorter alternative for C/C++ is available:
 
 ```sh
-./python/run.sh
-./java/run.sh
-./golang/run.sh
+conan install ukv
 ```
 
-Building Flight RPC Docker Image:
+For Python users, it is the classical:
 
 ```sh
-docker build -t ukv .
+pip install ukv
 ```
 
-Building Conan package, without installing it:
+## Getting Started
 
-```sh
-conan create . ukv/testing --build=missing
-```
+* Using C SDK
+* Using C++ SDK
+* Using Python SDK
+* Using Java SDK
+* Using GoLang SDK
+* Using Arrow Flight RPC API
 
-* To see a usage examples, check the [C][c-example] API and the [C++ API](cpp-example) tests.
-* To read the documentation, [check unum.cloud/ukv](https://unum.cloud/UKV).
-* To contribute to the development, [check the `src/`](https://github.com/unum-cloud/UKV/blob/main/src).
+## Testing
 
-[c-example]: https://github.com/unum-cloud/UKV/blob/main/tests/compilation.cpp
-[cpp-example]: https://github.com/unum-cloud/UKV/blob/main/tests/compilation.cpp
+## Benchmarks
 
-## Similar Projects
 
-* [EJDB](https://github.com/Softmotions/ejdb) is a pure C embeddable JSON database engine.
-  * **Pros**:
-    * C11 API.
-    * Many bindings, including JS and *currently* better Java support.
-    * MacOS and Windows support, that we *currently* don't prioritize.
-  * **Cons**:
-    * Very slow.
-    * No ACID transactions.
-    * No way to swap the backend "engine".
-    * No support for non-document modalities, like Graphs.
-    * No support for batch operations.
-    * Bindings are just string exchange interfaces.
-* [SurrealDB](https://github.com/surrealdb/surrealdb) is a scalable, distributed, collaborative, document-graph database, for the realtime web.
-  * **Pros**:
-    * Many bindings, including JS.
-    * MacOS and Windows support, that we *currently* don't prioritize.
-    * User permissions management functionality.
-  * **Cons**:
-    * Very slow.
-    * No way to swap the backend "engine".
-    * Custom string-based query language.
-    * Bindings are just string exchange interfaces.
-    * No C API [yet](https://surrealdb.com/docs/integration/libraries/c).
+
+## Tooling
 
 ## Presets, Limitations and FAQ
 
@@ -278,6 +277,8 @@ conan create . ukv/testing --build=missing
 * Transactions are ACI(D) by-default. [What does it mean?](ukv_transaction_t)
 * Why not use LevelDB or RocksDB interface? [](ukv.h)
 * Why not use SQL, MQL or Cypher? [](ukv.h)
+
+## Licensing
 
 
 [blas]: https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms
@@ -304,3 +305,4 @@ conan create . ukv/testing --build=missing
 [snap]: https://github.com/facebook/rocksdb/wiki/Snapshot
 [acid]: https://en.wikipedia.org/wiki/ACID
 [consistent_set]: https://github.com/ashvardanian/consistent_set
+[c-standard]: https://github.com/unum-cloud/UKV/tree/main/include/ukv
