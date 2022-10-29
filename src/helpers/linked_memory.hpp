@@ -86,6 +86,20 @@ struct linked_memory_t {
     bool lock_release_calls() noexcept { return std::exchange(first_ref().can_release_memory, false); }
     void unlock_release_calls() noexcept { first_ref().can_release_memory = true; }
 
+    bool cheap_extend(void* ptr, size_t additional_size, size_t alignment) const noexcept {
+        arena_header_t* current = first_ptr_;
+        while (current != nullptr) {
+            bool is_continuation = ptr == (void*)((uint8_t*)current + current->used);
+            bool can_fit = (current->capacity - current->used) >= additional_size;
+            if (is_continuation && can_fit) {
+                current->alloc_internally(additional_size, alignment);
+                return true;
+            }
+            current = current->next;
+        }
+        return false;
+    }
+
     void* alloc(std::size_t length, std::size_t alignment) noexcept {
 
         if (!length)
@@ -179,7 +193,10 @@ struct linked_memory_lock_t {
         if (!additional_size)
             return span;
 
-        auto new_size = span.size() + additional_size;
+        size_t new_size = span.size() + additional_size;
+        if (memory.cheap_extend(span.end(), sizeof(at) * additional_size, alignment))
+            return {span.begin(), new_size};
+
         void* result = memory.alloc(sizeof(at) * new_size, alignment);
         if (result)
             std::memcpy(result, span.begin(), span.size_bytes());
