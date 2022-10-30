@@ -46,7 +46,7 @@ BLAS was the locomotive of Numerical Methods across all disciplines in the past 
 Every deep-learning you use relies on BLAS.
 What is the standard that your DBMS can be built around?
 
-![UKV: Small Map](assets/UKV.png)
+![UKV: Small Map](assets/Intro.png)
 
 We have yet to pass the test of time, like BLAS, but we can surpass them in modularity and provide a better reference implementation.
 Today, Intel, Nvidia, AMD, GraphCore, Cerebras, and many others ship optimized implementations of BLAS for their hardware.
@@ -100,7 +100,7 @@ So when the data is updated, you have to apply changes across all those instance
 Every system has a different API, different guarantees, and runtime constraints.
 Already sounds like too many wasted engineering hours.
 
-![UKV: HTAP](assets/UKV.png)
+![UKV: HTAP](assets/HTAP.png)
 
 As it is not one store, different teams work on different versions of data.
 Some of those datasets can quickly become irrelevant, especially in:
@@ -118,17 +118,18 @@ And the engineering teams can spend time doing something productive rather than 
 
 ---
 
-## Backend = Engine + Modality
+## Backend = Modalities + Engine + Distribution
 
-A backend is a composition of just 2 parts.
-An Engine: key-value store for the serialized representation.
-Modalities: an implementation of various serialization and indexing approaches for structured data.
+A backend is a composition of just 2-3 parts.
+An Engine, being a key-value store for the serialized representation.
+An implementation of Modalities, being various serialization and indexing approaches for structured data.
+And a Distribution form, such as the implementation of some web-protocol for communication with the outside world.
 
-![UKV: Backend](assets/UKV.png)
+![UKV: Backend](assets/Backend.png)
 
 ### Engines
 
-Following engines can be used almost interchangably.
+Following engines can be used almost interchangeably.
 
 |                   | LevelDB | RocksDB  |  UDisk  |  UMem   |
 | :---------------- | :-----: | :------: | :-----: | :-----: |
@@ -189,10 +190,10 @@ UKV for Python and for C++ look very different.
 Our Python SDK mimics other Python libraries - Pandas and NetworkX.
 Similarly, C++ library provides the interface C++ developers expect.
 
-![UKV: Frontends](assets/UKV.png)
+![UKV: Frontends](assets/Frontend.png)
 
 As we know people use different languages for different purposes.
-Some C-level functionality isn't implementented for some languages.
+Some C-level functionality isn't implemented for some languages.
 Either because there was no demand for it, or as we haven't gottent to it yet.
 
 
@@ -264,11 +265,50 @@ pip install ukv
 
 ## Testing
 
+We split tests into 4 categories:
+
+1. Compilation: Validate meta-programming.
+2. API: Prevent passing incompatible function arguments.
+3. Unit: Short and cover most of the functionality.
+4. **Stress**: Very long and multithreaded.
+
+The latter can run for days and simulate millions of concurrent transactions, ensuring the data remains intact.
+
+All unit tests are packed into a single executable to simplify running it during development.
+Every backend produces one such executable.
+The in-memory embedded variant is generally used for debugging any non-engine level logic.
+
+We have a [separate Documentation page here](htts://unum.cloud/UKV/tests/) covering the implemented tests.
+Any additions, especially to the stress tests, will be highly welcomed!
+
 ## Benchmarks
 
+It is always best to implement an application-specific benchmark, as every use case is different.
+Still, for the binary layer logic, we have built a dedicated project to evaluate persistent data structures - [UCSB][ucsb].
+It doesn't depend on UKV and uses native interfaces of all the engines to put everyone in the same shoes.
 
+For more advanced modality-specific workloads, we have the following benchmarks provided in this repo:
+
+* **Twitter**. It takes the `.ndjson` dump of their [`GET statuses/sample` API][twitter-samples] and imports it into the Documents collection. We then measure random-gathers' speed at document-level, field-level, and multi-field tabular exports. We also construct a graph from the same data in a separate collection. And evaluate Graph construction time and traversals from random starting points.
+* **Tabular**. Similar to the previous benchmark, but generalizes it to arbitrary datasets with some additional context. It supports Parquet and CSV input files.
+* **Vector**. Given a memory-mapped file with a big matrix, builds an Approximate Nearest Neighbors Search index from the rows of that matrix. Evaluates both construction and query time.
+
+We are working hard to prepare a comprehensive overview of different parts of UKV compared to industry-standard tools.
+On both our hardware and most common instances across public clouds.
+All of them are forming a [separate Documentation page here](htts://unum.cloud/UKV/benchmarks/).
 
 ## Tooling
+
+We are preparing additional tools to simplify the DBMS management:
+
+* Bulk dataset imports and exports.
+* Backups and replication.
+* Visualization tools and dashboards.
+
+The development of those tools will be covered on a [separate Documentation page here](htts://unum.cloud/UKV/tools/).
+
+## Development & Licensing
+
 
 ## Presets, Limitations and FAQ
 
@@ -277,8 +317,6 @@ pip install ukv
 * Transactions are ACI(D) by-default. [What does it mean?](ukv_transaction_t)
 * Why not use LevelDB or RocksDB interface? [](ukv.h)
 * Why not use SQL, MQL or Cypher? [](ukv.h)
-
-## Licensing
 
 
 [blas]: https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms
@@ -306,3 +344,4 @@ pip install ukv
 [acid]: https://en.wikipedia.org/wiki/ACID
 [consistent_set]: https://github.com/ashvardanian/consistent_set
 [c-standard]: https://github.com/unum-cloud/UKV/tree/main/include/ukv
+[twitter-samples]: https://developer.twitter.com/en/docs/twitter-api/v1/tweets/sample-realtime/overview
