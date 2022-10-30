@@ -46,7 +46,7 @@ BLAS was the locomotive of Numerical Methods across all disciplines in the past 
 Every deep-learning you use relies on BLAS.
 What is the standard that your DBMS can be built around?
 
-![UKV: Small Map](assets/Intro.png)
+![UKV: Small Map](assets/charts/Intro.png)
 
 We have yet to pass the test of time, like BLAS, but we can surpass them in modularity and provide a better reference implementation.
 Today, Intel, Nvidia, AMD, GraphCore, Cerebras, and many others ship optimized implementations of BLAS for their hardware.
@@ -61,7 +61,7 @@ Similarly, we ship proprietary [heavily-tested]() and [extensively-benchmarked](
 The C Standard is just [a few header files][c-standard].
 The rest of the project implements it using some of the best FOSS solutions, resulting in this vast map of possible combinations.
 
-![UKV: Full Map](assets/UKV.png)
+![UKV: Full Map](assets/charts/Modularity.png)
 
 <p align="center">
 ACID transactions across many collections • Snapshots • Operation-level WATCHes • BSON, JSON, MessagePack documents support • RFC JSON Patches & Merge-Patches • JSON Pointers Addressing • Native Apache Arrow format support in all APIs • Apache Arrow Flight RPC Server • Bulk Scans • Random Samping • Pandas Tabular API • NetworkX Graph API • PyTorch & TensorFlow Data-Loaders
@@ -100,7 +100,7 @@ So when the data is updated, you have to apply changes across all those instance
 Every system has a different API, different guarantees, and runtime constraints.
 Already sounds like too many wasted engineering hours.
 
-![UKV: HTAP](assets/HTAP.png)
+![UKV: HTAP](assets/charts/HTAP.png)
 
 As it is not one store, different teams work on different versions of data.
 Some of those datasets can quickly become irrelevant, especially in:
@@ -125,7 +125,7 @@ An Engine, being a key-value store for the serialized representation.
 An implementation of Modalities, being various serialization and indexing approaches for structured data.
 And a Distribution form, such as the implementation of some web-protocol for communication with the outside world.
 
-![UKV: Backend](assets/Backend.png)
+![UKV: Backend](assets/charts/Backend.png)
 
 ### Engines
 
@@ -190,7 +190,7 @@ UKV for Python and for C++ look very different.
 Our Python SDK mimics other Python libraries - Pandas and NetworkX.
 Similarly, C++ library provides the interface C++ developers expect.
 
-![UKV: Frontends](assets/Frontend.png)
+![UKV: Frontends](assets/charts/Frontend.png)
 
 As we know people use different languages for different purposes.
 Some C-level functionality isn't implemented for some languages.
@@ -208,7 +208,7 @@ Either because there was no demand for it, or as we haven't gottent to it yet.
 
 Some APIs here by themself are a gem and give you essentially unlimited compatibility with all kinds of tools and languages.
 
-![UKV: Frontends](assets/UKV.png)
+![UKV: Frontends](assets/charts/Arrow.png)
 
 Arrow, for instance, brings an entire ecosystem with support for  C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
 
