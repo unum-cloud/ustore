@@ -6,6 +6,7 @@
  * Sits on top of any @see "ukv.h"-compatible system.
  * Prefers integer quantized representations for faster compute.
  */
+#include <cmath> // `std::sqrt`
 
 #include "ukv/vectors.h"
 #include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
@@ -22,24 +23,61 @@
 using namespace unum::ukv;
 using namespace unum;
 
-static constexpr std::int8_t float_scaling_k = 100;
+using float_t = float;
+using quant_t = std::int8_t;
+using quant_product_t = std::int16_t;
+static constexpr quant_t float_scaling_k = 100;
+static constexpr quant_product_t product_scaling_k = float_scaling_k * float_scaling_k;
+
+template <typename number_at>
+number_at square(number_at n) noexcept {
+    return n * n;
+}
 
 struct metric_dot_t {
-    float operator()(std::int8_t const* a, std::int8_t const* b, std::size_t dims) const noexcept {
-        constexpr std::int64_t component_normalizer_k = float_scaling_k * float_scaling_k;
+    float_t operator()(quant_t const* a, quant_t const* b, std::size_t dims) const noexcept {
         std::int64_t sum = 0;
-        for (std::size_t i = 0; i != dims; ++i)
-            sum += std::int16_t(a[i]) * std::int16_t(b[i]);
-        return float(sum) / component_normalizer_k;
+        for (std::size_t i = 0; i != dims; ++i) {
+            quant_product_t ai = a[i];
+            quant_product_t bi = b[i];
+            sum += ai * bi;
+        }
+        return float_t(sum) / product_scaling_k;
     }
 };
 
 struct metric_cos_t {
-    float operator()(std::int8_t const* a, std::int8_t const* b, std::size_t dims) const noexcept { return 0; }
+    float_t operator()(quant_t const* a, quant_t const* b, std::size_t dims) const noexcept {
+        std::int64_t sum = 0, a_norm = 0, b_norm = 0;
+        for (std::size_t i = 0; i != dims; ++i) {
+            quant_product_t ai = a[i];
+            quant_product_t bi = b[i];
+            sum += ai * bi;
+            a_norm += square(ai);
+            b_norm += square(bi);
+        }
+        auto nominator = float_t(sum) / product_scaling_k;
+        auto denominator = std::sqrt(float_t(a_norm) / product_scaling_k) * //
+                           std::sqrt(float_t(b_norm) / product_scaling_k);
+        return nominator / denominator;
+    }
 };
 
 struct metric_l2_t {
-    float operator()(std::int8_t const* a, std::int8_t const* b, std::size_t dims) const noexcept { return 0; }
+
+    float_t operator()(quant_t const* a, std::size_t dims) const noexcept {
+        std::int64_t sum = 0;
+        for (std::size_t i = 0; i != dims; ++i)
+            sum += square<quant_product_t>(a[i]);
+        return std::sqrt(float_t(sum) / product_scaling_k);
+    }
+
+    float_t operator()(quant_t const* a, quant_t const* b, std::size_t dims) const noexcept {
+        std::int64_t sum = 0;
+        for (std::size_t i = 0; i != dims; ++i)
+            sum += square<quant_product_t>(a[i] - b[i]);
+        return std::sqrt(float_t(sum) / product_scaling_k);
+    }
 };
 
 struct entry_t {
@@ -47,18 +85,37 @@ struct entry_t {
     value_view_t value;
 };
 
-template <typename float_at = float>
-void quantize(float_at const* original, std::int8_t* quant, std::size_t dims) noexcept {
+template <typename float_at = float_t>
+void quantize(float_at const* originals, std::size_t dims, quant_t* quants) noexcept {
     for (std::size_t i = 0; i != dims; ++i)
-        quant[i] = static_cast<std::int8_t>(original[i] * float_scaling_k);
+        quants[i] = static_cast<quant_t>(originals[i] * float_scaling_k);
+}
+
+void quantize(byte_t const* bytes, ukv_vector_scalar_t scalar_type, std::size_t dims, quant_t* quants) noexcept {
+    switch (scalar_type) {
+    case ukv_vector_scalar_f32_k: return quantize((float_t const*)bytes, dims, quants);
+    case ukv_vector_scalar_f64_k: return quantize((double const*)bytes, dims, quants);
+    case ukv_vector_scalar_f16_k: return quantize((std::int16_t const*)bytes, dims, quants);
+    case ukv_vector_scalar_i8_k: return quantize((quant_t const*)bytes, dims, quants);
+    }
+}
+
+float_t metric(quant_t const* a, quant_t const* b, std::size_t dims, ukv_vector_metric_t kind) noexcept {
+    switch (kind) {
+    case ukv_vector_metric_dot_k: return metric_dot_t {}(a, b, dims);
+    case ukv_vector_metric_cos_k: return metric_cos_t {}(a, b, dims);
+    case ukv_vector_metric_l2_k: return metric_l2_t {}(a, b, dims);
+    default: return 0;
+    }
 }
 
 ukv_length_t size_bytes(ukv_vector_scalar_t scalar_type) noexcept {
     switch (scalar_type) {
-    case ukv_vector_scalar_f32_k: return sizeof(float);
+    case ukv_vector_scalar_f32_k: return sizeof(float_t);
     case ukv_vector_scalar_f64_k: return sizeof(double);
     case ukv_vector_scalar_f16_k: return sizeof(std::int16_t);
-    case ukv_vector_scalar_i8_k: return sizeof(std::int8_t);
+    case ukv_vector_scalar_i8_k: return sizeof(quant_t);
+    default: return 0;
     }
 }
 
@@ -98,7 +155,7 @@ void ukv_vectors_write(ukv_vectors_write_t* c_ptr) {
     auto quantized_entries = arena.alloc<entry_t>(c.tasks_count * 2u, c.error);
     return_on_error(c.error);
 
-    auto quantized_vectors = arena.alloc<std::int8_t>(c.tasks_count * c.dimensions, c.error);
+    auto quantized_vectors = arena.alloc<quant_t>(c.tasks_count * c.dimensions, c.error);
     return_on_error(c.error);
 
     // Add the original entries
@@ -111,24 +168,13 @@ void ukv_vectors_write(ukv_vectors_write_t* c_ptr) {
 
     // Add the mirror tasks for quantized copies
     for (std::size_t task_idx = 0; task_idx != c.tasks_count; ++task_idx) {
+        auto original_begin = vectors_args[task_idx].begin();
         auto quantized_begin = quantized_vectors.begin() + task_idx * c.dimensions;
-        entry_t& entry = quantized_entries[task_idx];
+        entry_t& entry = quantized_entries[c.tasks_count + task_idx];
         entry.collection_key.collection = places_args[task_idx].collection;
         entry.collection_key.key = -places_args[task_idx].key;
         entry.value = value_view_t {(ukv_bytes_cptr_t)quantized_begin, c.dimensions};
-    }
-
-    // Quantize the original vectors into new buckets
-    for (std::size_t task_idx = 0; task_idx != c.tasks_count; ++task_idx) {
-        auto original_begin = vectors_args[task_idx].begin();
-        auto quantized_begin = quantized_vectors.begin() + task_idx * c.dimensions;
-
-        switch (c.scalar_type) {
-        case ukv_vector_scalar_f32_k: quantize((float const*)original_begin, quantized_begin, c.dimensions);
-        case ukv_vector_scalar_f64_k: quantize((double const*)original_begin, quantized_begin, c.dimensions);
-        case ukv_vector_scalar_f16_k: quantize((std::int16_t const*)original_begin, quantized_begin, c.dimensions);
-        case ukv_vector_scalar_i8_k: quantize((std::int8_t const*)original_begin, quantized_begin, c.dimensions);
-        }
+        quantize(original_begin, c.scalar_type, c.dimensions, quantized_begin);
     }
 
     // Submit both original and quantized entries
@@ -214,15 +260,18 @@ void ukv_vectors_search(ukv_vectors_search_t* c_ptr) {
         return l;
     });
 
-    auto found_counts = arena.alloc<ukv_length_t>(c.tasks_count, c.error);
+    auto found_counts = arena.alloc_or_dummy(c.tasks_count, c.error, c.match_counts);
     return_on_error(c.error);
-    auto found_offsets = arena.alloc<ukv_length_t>(c.tasks_count, c.error);
+    auto found_offsets = arena.alloc_or_dummy(c.tasks_count, c.error, c.match_offsets);
     return_on_error(c.error);
-    auto found_keys = arena.alloc<ukv_key_t>(count_limits_sum, c.error);
+    auto found_keys = arena.alloc_or_dummy(count_limits_sum, c.error, c.match_keys);
     return_on_error(c.error);
-    auto found_metrics = arena.alloc<ukv_float_t>(count_limits_sum, c.error);
+    auto found_metrics = arena.alloc_or_dummy(count_limits_sum, c.error, c.match_metrics);
     return_on_error(c.error);
+
     auto temp_matches = arena.alloc<match_t>(count_limits_max, c.error);
+    return_on_error(c.error);
+    auto quant_query = arena.alloc<quant_t>(c.dimensions, c.error);
     return_on_error(c.error);
 
     ukv_length_t total_exported_matches = 0;
@@ -230,14 +279,17 @@ void ukv_vectors_search(ukv_vectors_search_t* c_ptr) {
         auto col = collections ? collections[i] : ukv_collection_main_k;
         auto query = queries_args[i];
         auto limit = count_limits[i];
+        quantize(query.begin(), c.scalar_type, c.dimensions, quant_query.begin());
 
         using pq_t = limited_priority_queue_gt<match_t, lower_similarity_t>;
         pq_t pq {temp_matches.begin(), temp_matches.begin() + limit};
+
         auto callback = [&](ukv_key_t key, value_view_t vector) noexcept {
-            metric_dot_t metric;
+            if (key >= 0)
+                return false;
             match_t match;
             match.key = key;
-            match.metric = metric((std::int8_t*)query.data(), (std::int8_t*)vector.data(), c.dimensions);
+            match.metric = metric(quant_query.begin(), (quant_t const*)vector.data(), c.dimensions, c.metric);
             if (match.metric < c.metric_threshold)
                 return true;
 
@@ -253,7 +305,7 @@ void ukv_vectors_search(ukv_vectors_search_t* c_ptr) {
         found_offsets[i] = total_exported_matches;
 
         for (std::size_t j = 0; j != count; ++j)
-            found_keys[total_exported_matches + j] = temp_matches[j].key, //
+            found_keys[total_exported_matches + j] = std::abs(temp_matches[j].key), //
                 found_metrics[total_exported_matches + j] = temp_matches[j].metric;
 
         total_exported_matches += count;
