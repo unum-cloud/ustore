@@ -11,6 +11,7 @@
 #include <arrow/array.h>
 #include <arrow/table.h>
 #include <arrow/status.h>
+#include <arrow/csv/api.h>
 #include <arrow/io/file.h>
 #include <arrow/memory_pool.h>
 #include <parquet/arrow/reader.h>
@@ -25,7 +26,7 @@
 
 using namespace unum::ukv;
 
-// Parsing with Apache Arrow
+////////// Parsing with Apache Arrow //////////
 
 void fill_array( //
     std::vector<edge_t>& array,
@@ -89,7 +90,37 @@ void import_parquet( //
     fill_array(array, table, source_id, target_id, edge_id, error);
 }
 
-// Parsing with SIMDJSON
+void import_csv( //
+    ukv_str_view_t path,
+    std::vector<edge_t>& array,
+    ukv_str_view_t source_id,
+    ukv_str_view_t target_id,
+    ukv_str_view_t edge_id,
+    ukv_error_t* error) {
+
+    arrow::io::IOContext io_context = arrow::io::default_io_context();
+    auto maybe_input = arrow::io::ReadableFile::Open(path);
+    return_if_error(maybe_input.ok(), error, 0, "Can't open file");
+    std::shared_ptr<arrow::io::InputStream> input = *maybe_input;
+
+    auto read_options = arrow::csv::ReadOptions::Defaults();
+    auto parse_options = arrow::csv::ParseOptions::Defaults();
+    auto convert_options = arrow::csv::ConvertOptions::Defaults();
+
+    // Instantiate TableReader from input stream and options
+    auto maybe_reader = arrow::csv::TableReader::Make(io_context, input, read_options, parse_options, convert_options);
+    return_if_error(maybe_reader.ok(), error, 0, "Can't instatinate reader");
+    std::shared_ptr<arrow::csv::TableReader> reader = *maybe_reader;
+
+    // Read table from CSV file
+    auto maybe_table = reader->Read();
+    return_if_error(maybe_table.ok(), error, 0, "Can't read file");
+    std::shared_ptr<arrow::Table> table = *maybe_table;
+
+    fill_array(array, table, source_id, target_id, edge_id, error);
+}
+
+////////// Parsing with SIMDJSON //////////
 
 simdjson::ondemand::document& rewinded(simdjson::ondemand::document& doc) noexcept {
     doc.rewind();
@@ -145,22 +176,32 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
 
     auto ext = std::filesystem::path(c.paths_pattern).extension();
     if (ext == ".ndjson") {
-        import_json(c.paths_pattern,
-                    c.paths_length,
-                    edges_array,
-                    c.source_id_field,
-                    c.target_id_field,
-                    c.edge_id_field,
-                    c.error);
+        import_json( //
+            c.paths_pattern,
+            c.paths_length,
+            edges_array,
+            c.source_id_field,
+            c.target_id_field,
+            c.edge_id_field,
+            c.error);
     }
-    else {
-        if (ext == ".parquet")
-            import_parquet(c.paths_pattern,
-                           edges_array,
-                           c.source_id_field,
-                           c.target_id_field,
-                           c.edge_id_field,
-                           c.error);
+    if (ext == ".parquet") {
+        import_parquet( //
+            c.paths_pattern,
+            edges_array,
+            c.source_id_field,
+            c.target_id_field,
+            c.edge_id_field,
+            c.error);
+    }
+    if (ext == ".csv") {
+        import_csv( //
+            c.paths_pattern,
+            edges_array,
+            c.source_id_field,
+            c.target_id_field,
+            c.edge_id_field,
+            c.error);
     }
 
     auto strided = edges(edges_array);
