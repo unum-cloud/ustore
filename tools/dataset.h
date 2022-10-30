@@ -7,22 +7,16 @@ extern "C" {
 
 #include <ukv/db.h>
 
-enum ukv_format_t {
-    ukv_parquet_k,
-    ukv_ndjson_k,
-    ukv_csv_k,
-};
-
 typedef struct ukv_graph_import_t {
 
     ukv_database_t db;
     ukv_error_t* error;
-    ukv_format_t format;
     ukv_arena_t* arena = NULL;
     ukv_options_t options = ukv_options_default_k;
 
     ukv_collection_t collection = ukv_collection_main_k;
     ukv_str_view_t paths_pattern = ".*\\.(csv|ndjson|parquet)";
+    ukv_size_t paths_length = 0;
     ukv_size_t max_batch_size = 1024ul * 1024ul * 1024ul;
     ukv_callback_t callback = NULL;
     ukv_callback_payload_t callback_payload = NULL;
@@ -39,7 +33,6 @@ typedef struct ukv_graph_export_t {
 
     ukv_database_t db;
     ukv_error_t* error;
-    ukv_format_t format;
     ukv_arena_t* arena = NULL;
     ukv_options_t options = ukv_options_default_k;
 
@@ -61,7 +54,6 @@ typedef struct ukv_docs_import_t {
 
     ukv_database_t db;
     ukv_error_t* error;
-    ukv_format_t format;
     ukv_arena_t* arena = NULL;
     ukv_options_t options = ukv_options_default_k;
 
@@ -86,7 +78,6 @@ typedef struct ukv_docs_export_t {
 
     ukv_database_t db;
     ukv_error_t* error;
-    ukv_format_t format;
     ukv_arena_t* arena = NULL;
     ukv_options_t options = ukv_options_default_k;
 
