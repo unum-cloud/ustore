@@ -1,7 +1,8 @@
 name: Build all
 
 on:
-  workflow_call:    
+  schedule:
+    - cron: '0 0 * * 1'
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}
