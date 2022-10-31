@@ -64,4 +64,4 @@ jobs:
       - name: Change Permissions
         run: chmod +x /home/runner/work/UKV/UKV/*
       - name: Run tests
-        run: find /home/runner/work/UKV/UKV/ -iname '*unit_test' -exec {} \;
+        run: set -e; find /home/runner/work/UKV/UKV/ -iname '*unit_test' -exec {} \;
