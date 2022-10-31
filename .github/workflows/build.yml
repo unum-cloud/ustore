@@ -42,7 +42,7 @@ jobs:
         run: cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} .
 
       - name: Build
-        run: make -j4
+        run: make -j4 ukv_umem ukv_umem ukv_umem_twitter_benchmark ukv_umem_tabular_graph_benchmark ukv_umem_api_test ukv_umem_compilation_test ukv_umem_stress_test
 
       - name: Upload Binaries
         uses: actions/upload-artifact@v3.1.1
