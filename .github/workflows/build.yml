@@ -62,4 +62,4 @@ jobs:
           name: ubuntu_binaries
 
       - name: Run tests
-        run: find ./build/bin/ -iname '*unit_test' -exec {} \;
+        run: find /home/runner/work/UKV/UKV/build/bin/ -iname '*unit_test' -exec {} \;
