@@ -41,31 +41,6 @@
  *   and strides. The majority of those are optional. This makes it impossible
  *   to remember the exact order. Using `struct`, the order becomes irrelevant.
  *   All arguments get names and default values can be skipped.
- *
- * ### Why not use LevelDB or RocksDB interface?
- *
- * In no particular order:
- * - Dynamic polymorphism and multiple inheritance is a mess.
- * - Dependance on Standard Templates Library containers, can't bring your strings or trees.
- * - No support for **custom allocators**, inclusing statefull allocators and arenas.
- * - Almost every function call can through exceptions.
- * - All keys are strings.
- * These and other problems mean that interface can't be portable, ABI-safe or performant.
- *
- * ### Why not adapt SQL, MQL or Cypher?
- *
- * Those interfaces imply a lot of higher-level logic, that might not need to
- * be concern of the Key-Value Store. Furthermore, using text-based protocols
- * is error-prone and highly inefficient from serialization and parsing standpoint.
- * It might be fine for OLAP requsts being called once a second, but if the function
- * is called every microsecond, the interface must be binary.
- *
- * For those few places where such functionality can be implemented efficiently we follow
- * standardized community-drived RFCs, rather than proprietary languages. As suc, for
- * sub-document level gathers and updates we use:
- * - JSON Pointer: RFC 6901
- * - JSON Patch: RFC 6902
- * - JSON MergePatch: RFC 7386
  */
 
 #pragma once
