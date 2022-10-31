@@ -1595,6 +1595,60 @@ TEST(db, graph_degrees) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, vectors) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    constexpr std::size_t dims_k = 3;
+    ukv_key_t keys[3] = {'a', 'b', 'c'};
+    float vectors[3][dims_k] = {
+        {0.3, 0.1, 0.2},
+        {0.35, 0.1, 0.2},
+        {-0.1, 0.2, 0.5},
+    };
+
+    arena_t arena(db);
+    status_t status;
+
+    float* vector_first_begin = &vectors[0][0];
+    ukv_vectors_write_t write;
+    write.db = db;
+    write.arena = arena.member_ptr();
+    write.error = status.member_ptr();
+    write.dimensions = dims_k;
+    write.keys = keys;
+    write.keys_stride = sizeof(ukv_key_t);
+    write.vectors_starts = (ukv_bytes_cptr_t*)&vector_first_begin;
+    write.vectors_stride = sizeof(float) * dims_k;
+    write.tasks_count = 3;
+    ukv_vectors_write(&write);
+    EXPECT_TRUE(status);
+
+    ukv_length_t max_results = 2;
+    ukv_length_t* found_results = nullptr;
+    ukv_key_t* found_keys = nullptr;
+    ukv_float_t* found_distances = nullptr;
+    ukv_vectors_search_t search;
+    search.db = db;
+    search.arena = arena.member_ptr();
+    search.error = status.member_ptr();
+    search.dimensions = dims_k;
+    search.match_counts_limits = &max_results;
+    search.queries_starts = (ukv_bytes_cptr_t*)&vector_first_begin;
+    search.queries_stride = sizeof(float) * dims_k;
+    search.match_counts = &found_results;
+    search.match_keys = &found_keys;
+    search.match_metrics = &found_distances;
+    search.metric = ukv_vector_metric_cos_k;
+    ukv_vectors_search(&search);
+    EXPECT_TRUE(status);
+
+    EXPECT_EQ(found_results[0], max_results);
+    EXPECT_EQ(found_keys[0], ukv_key_t('a'));
+    EXPECT_EQ(found_keys[1], ukv_key_t('b'));
+    EXPECT_TRUE(db.clear());
+}
+
 int main(int argc, char** argv) {
     std::filesystem::create_directory("./tmp");
     ::testing::InitGoogleTest(&argc, argv);
