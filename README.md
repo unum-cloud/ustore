@@ -7,13 +7,15 @@
 <br/>
 
 <p align="center">
-<a href="https://twitter.com/unum_cloud"><img src="https://img.shields.io/badge/twitter-follow_us-1d9bf0.svg?color=purple&style=flat-square"></a>
+<a href="https://twitter.com/unum_cloud"><img src="https://img.shields.io/badge/twitter-follow_us-1d9bf0.svg?color=purple&style=flat-square"/></a>
 &nbsp;&nbsp;
-<a href="https://www.linkedin.com/company/unum-cloud/"><img src="https://img.shields.io/badge/linkedin-connect_with_us-0a66c2.svg?color=purple&style=flat-square"></a>
+<a href="https://www.linkedin.com/company/unum-cloud/"><img src="https://img.shields.io/badge/linkedin-connect_with_us-0a66c2.svg?color=purple&style=flat-square"/></a>
 &nbsp;&nbsp;
-<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/issues-closed-raw/unum-cloud/ukv?color=purple&style=flat-square"></a>
+<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/issues-closed-raw/unum-cloud/ukv?color=purple&style=flat-square"/></a>
 &nbsp;&nbsp;
-<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/stars/unum-cloud/ukv?color=purple&style=flat-square"></a>
+<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/stars/unum-cloud/ukv?color=purple&style=flat-square"/></a>
+&nbsp;&nbsp;
+<a href="#"><img src="https://img.shields.io/github/workflow/status/unum-cloud/ukv/Build?color=purple&style=flat-square"/></a>
 </p>
 
 ## What is UKV?
