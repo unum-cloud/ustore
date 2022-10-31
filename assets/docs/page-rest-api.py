@@ -1,3 +1,7 @@
+"""
+    Serves a REST server in a sub-process and connects to its 8080 port to test basic REST API calls.
+"""
+
 from multiprocessing import Process
 from typing import Optional
 import os
