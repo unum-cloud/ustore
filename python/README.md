@@ -84,22 +84,18 @@ One thing to note, the `.main` collection can't be removed, only cleared.
 Similar to Python ORM tools, transactions scope can be controlled manually, or with context managers.
 
 ```python
-
+with ukv.Transaction(db) as txn:
+    txn.main[42] = binary_string # Not the same as `db.main[42]`
 ```
 
-At construction time, you can provide addition settings for the transaction.
+You can configure teh transaction behaviour with additional arguments.
 
 ```python
-
+txn = ukv.Transaction(db, begin=True, watch=True, flush_writes=False, snapshot=False)
 ```
 
-Transactions that conflict with each other, will fail, raising an exception:
-
-```python
-
-```
-
-For a more fine-grained control over snapshots and consistency of updates and reads - refer to the this manual.
+Transactions that conflict with each other, will fail, raising an exception.
+For a more fine-grained control over snapshots and consistency of updates and reads - refer to this manual.
 
 ## Batch Operations
 
@@ -119,12 +115,14 @@ Aside from native Python classes, we also support NumPy Array.
 Best of all, we support PyArrow representations.
 
 ```python
-
+import pyarrow as pa
+keys = pa.array([1000, 2000], type=pa.int64())
+strings: pa.StringArray = pa.array(['some', 'text'])
+main_collection[keys] = strings
 ```
 
-If you are exchanging representations like this between UKV and any other runtime, we will avoid copying data alltogether.
+If you are exchanging representations like this between UKV and any other runtime, we will entirely avoid copying data.
 This method is recommended for higher performance.
-
 
 ## Converting Collections
 
@@ -221,7 +219,6 @@ For ML on Graphs it may look like this:
 vertices_batch = main_collection.sample(1_000)
 subgraphs_batch = [main_collection.subgraph(v).matrix() for v in vertices_batch]
 ```
-
 
 ## Performance
 

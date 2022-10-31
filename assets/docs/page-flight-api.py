@@ -17,7 +17,7 @@ while continue_ddos_attack:
 
         connection: pf.FlightClient = pf.connect('grpc://0.0.0.0:38709')
 
-        keys = pa.array([1000, 2000], type=pa.uint64())
+        keys = pa.array([1000, 2000], type=pa.int64())
         strings: pa.StringArray = pa.array(['some', 'text'])
         descriptor = pf.FlightDescriptor.for_command('write')
         data = pa.record_batch([keys, strings], names=['keys', 'vals'])
