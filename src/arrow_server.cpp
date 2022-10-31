@@ -29,7 +29,7 @@ using namespace unum;
 using sys_clock_t = std::chrono::system_clock;
 using sys_time_t = std::chrono::time_point<sys_clock_t>;
 
-inline static arf::ActionType const kActionColOpen {kFlightColOpen, "Find a collection descriptor by name."};
+inline static arf::ActionType const kActionColOpen {kFlightColCreate, "Find a collection descriptor by name."};
 inline static arf::ActionType const kActionColDrop {kFlightColDrop, "Delete a named collection."};
 inline static arf::ActionType const kActionTxnBegin {kFlightTxnBegin, "Starts an ACID transaction and returns its ID."};
 inline static arf::ActionType const kActionTxnCommit {kFlightTxnCommit, "Commit a previously started transaction."};
