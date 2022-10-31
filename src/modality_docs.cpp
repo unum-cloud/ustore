@@ -18,7 +18,7 @@
 
 #include "ukv/docs.h"
 #include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
-#include "helpers/vector.hpp"        // `growing_tape_t`
+#include "helpers/linked_array.hpp"  // `growing_tape_t`
 #include "helpers/algorithm.hpp"     // `transform_n`
 #include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
 
@@ -414,7 +414,7 @@ std::string_view json_to_string(yyjson_val* value,
 /*****************	 Format Conversions	  ****************/
 /*********************************************************/
 
-using string_t = uninitialized_vector_gt<char>;
+using string_t = uninitialized_array_gt<char>;
 struct json_state_t {
     string_t& json_str;
     ukv_error_t* c_error;
@@ -769,7 +769,7 @@ void modify_field( //
         }
         else if (c_modification == doc_modification_t::upsert_k) {
             auto result = yyjson_mut_arr_get(val, idx) //
-                              ? yyjson_mut_arr_replace(val, idx, modifier)
+                              ? yyjson_mut_arr_replace(val, idx, modifier) != nullptr
                               : yyjson_mut_arr_append(val, modifier);
             return_if_error(result, c_error, 0, "Failed To Upsert!");
         }
@@ -953,7 +953,7 @@ void read_unique_docs( //
     ukv_options_t const c_options,
     linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_vector_gt<json_t>& unique_docs,
+    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
@@ -1002,7 +1002,7 @@ void read_modify_unique_docs( //
     doc_modification_t const c_modification,
     linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_vector_gt<json_t>& unique_docs,
+    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
@@ -1095,7 +1095,7 @@ void read_modify_docs( //
     doc_modification_t const c_modification,
     linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_vector_gt<json_t>& unique_docs,
+    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) {
 
@@ -1235,7 +1235,7 @@ void read_modify_write( //
     };
 
     places_arg_t unique_places;
-    uninitialized_vector_gt<json_t> unique_docs(arena);
+    uninitialized_array_gt<json_t> unique_docs(arena);
     auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
     read_modify_docs(c_db,
                      c_txn,
@@ -1382,7 +1382,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
         return_on_error(c.error);
     };
     places_arg_t unique_places;
-    uninitialized_vector_gt<json_t> unique_docs(arena);
+    uninitialized_array_gt<json_t> unique_docs(arena);
     read_modify_docs(c.db,
                      c.transaction,
                      places,
@@ -1408,7 +1408,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
 
 void gist_recursively(yyjson_val* node,
                       field_path_buffer_t& path,
-                      uninitialized_vector_gt<std::string_view>& sorted_paths,
+                      uninitialized_array_gt<std::string_view>& sorted_paths,
                       growing_tape_t& exported_paths,
                       ukv_error_t* c_error) {
 
@@ -1512,7 +1512,7 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
 
     // Export all the elements into a heap-allocated hash-set, keeping only unique entries
     field_path_buffer_t field_name = {0};
-    uninitialized_vector_gt<std::string_view> sorted_paths(arena);
+    uninitialized_array_gt<std::string_view> sorted_paths(arena);
     growing_tape_t exported_paths(arena);
     for (ukv_size_t doc_idx = 0; doc_idx != c.docs_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
