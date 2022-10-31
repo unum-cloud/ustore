@@ -61,5 +61,7 @@ jobs:
         with:
           name: ubuntu_binaries
 
+      - name: Change Permissions
+        run: chmod +x /home/runner/work/UKV/UKV/*
       - name: Run tests
-        run: find /home/runner/work/UKV/UKV/ -iname '*unit_test' -exec {} \;
+        run: for test in $(ls /home/runner/work/UKV/UKV/*unit_test); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
