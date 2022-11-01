@@ -444,10 +444,10 @@ void ukv_scan(ukv_scan_t* c_ptr) {
         });
         return_on_error(c.error);
 
-        ukv_size_t j = 0;
-        it->Seek(to_slice(task.min_key));
         offsets[i] = keys_output - *c.keys;
 
+        ukv_size_t j = 0;
+        task.min_key == std::numeric_limits<ukv_key_t>::min() ? it->SeekToFirst() : it->Seek(to_slice(task.min_key));
         while (it->Valid() && j != task.limit) {
             std::memcpy(keys_output, it->key().data(), sizeof(ukv_key_t));
             ++keys_output;
