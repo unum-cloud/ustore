@@ -13,14 +13,14 @@ Overview
    self
 .. toctree:: 
    :hidden:
-   :caption: ──────────────────
+   :caption: �
 
    install
    c/index
 
 .. toctree:: 
    :hidden:
-   :caption: ──────────────────
+   :caption: �
 
    cpp/index
    python/index
@@ -29,14 +29,14 @@ Overview
 
 .. toctree:: 
    :hidden:
-   :caption: ──────────────────
+   :caption: �
 
    flight/index
    rest/index
 
 .. toctree:: 
    :hidden:
-   :caption: ──────────────────
+   :caption: �
 
    tests/index
    benchmarks/index
@@ -44,7 +44,7 @@ Overview
 
 .. toctree:: 
    :hidden:
-   :caption: ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+   :caption: �
 
    page-related
    genindex
