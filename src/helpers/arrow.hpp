@@ -32,7 +32,7 @@ namespace arf = arrow::flight;
 namespace ar = arrow;
 
 inline static std::string const kFlightListCols = "list_collections"; /// `DoGet`
-inline static std::string const kFlightColOpen = "open_collection";   /// `DoAction`
+inline static std::string const kFlightColCreate = "create_collection";   /// `DoAction`
 inline static std::string const kFlightColDrop = "remove_collection"; /// `DoAction`
 
 inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
@@ -44,7 +44,7 @@ inline static std::string const kFlightWritePath = "write_path"; /// `DoPut`
 inline static std::string const kFlightMatchPath = "match_path"; /// `DoExchange`
 inline static std::string const kFlightReadPath = "read_path";   /// `DoExchange`
 inline static std::string const kFlightScan = "scan";            /// `DoExchange`
-inline static std::string const kFlightSize = "size";            /// `DoExchange`
+inline static std::string const kFlightMeasure = "measure";            /// `DoExchange`
 
 inline static std::string const kArgCols = "collections";
 inline static std::string const kArgKeys = "keys";

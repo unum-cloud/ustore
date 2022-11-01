@@ -23,8 +23,12 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_logo = '../black.png'
+html_logo = '../icons/logo.png'
 html_theme = 'furo'
+html_static_path = ['_static']
+html_css_files = [
+    'custom.css'
+]
 
 
 breathe_projects = {"UKV": "../../build/xml"}
