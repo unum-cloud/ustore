@@ -1,4 +1,4 @@
-<h1 align="center">Unum * UKV</h1>
+<h1 align="center">Unum • UKV</h1>
 <h3 align="center">
 Universal Binary Interface<br/>
 For The Fastest DBMS Ever Built
@@ -61,7 +61,7 @@ Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-bench
 The C Standard is just [a few header files][ukv-c-sources].
 The rest of the project implements it using some of the best FOSS solutions, resulting in this vast map of possible combinations.
 
-![UKV: Full Map](assets/charts/Modularity.png)
+<!-- ![UKV: Full Map](assets/charts/Modularity.png) -->
 
 <p align="center">
 ACID transactions across many collections • Snapshots • Operation-level WATCHes • BSON, JSON, MessagePack documents support • RFC JSON Patches & Merge-Patches • JSON Pointers Addressing • Native Apache Arrow format support in all APIs • Apache Arrow Flight RPC Server • Bulk Scans • Random Samping • Pandas Tabular API • NetworkX Graph API • PyTorch & TensorFlow Data-Loaders
@@ -76,16 +76,16 @@ Before going into the specifics of every Frontend, Backend, Modality, or Distrib
 
 ---
 
-## OLAP + OLTP = HTAP: 🐦🐦 + 🪨 -> ☠️☠️
+## OLAP + OLTP = HTAP: 🐦🐦 + 🪨 → ☠️☠️
 
 It is normal these days to have hundreds of Databases for one project.
 At least one for every kind of workload.
 So if you are building an online marketplace, it may look like this:
 
-|||
-| :-: | :-: |
+|                                           |                                               |
+| :---------------------------------------: | :-------------------------------------------: |
 | Postgres for account details and payments | MongoDB for products descriptions and reviews |
-| Neo4J to link related products | AWS S3 to store product pictures and videos |
+|      Neo4J to link related products       |  AWS S3 to store product pictures and videos  |
 
 When the data is updated, you have to apply changes across all those instances, manually rolling them back if one of the parts fails.
 Every system has a different API, different guarantees, and runtime constraints.
@@ -158,7 +158,7 @@ Both are feature-complete, but the most crucial feature our infrastructure provi
 Being fast in memory is easy.
 The core logic of UMem can be found in the templated header-only [`consistent_set`][consistent_set] library.
 
-![UCSB 10 TB Results](https://unum.cloud/assets/post/2022-09-13-ucsb-10tb/ucsb-10tb-duration.png)
+![UCSB 10 TB Results](assets/charts/Performance.png)
 
 Designing UDisk was a much more challenging 7-year long endeavour.
 It included inventing new tree-like structures, implemting partial kernel bypass with `io_uring`, complete bypass with `SPDK`, GPU acceleration, and even a custom internal filesystem.
