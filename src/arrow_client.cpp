@@ -1162,7 +1162,7 @@ void ukv_collection_create(ukv_collection_create_t* c_ptr) {
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
     arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightColOpen, kParamCollectionName, c.name);
+    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightColCreate, kParamCollectionName, c.name);
     if (c.config)
         action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c.config});
 
