@@ -1,11 +1,12 @@
 ============
-Python
+Java SDK
 ============
 
-.. mdinclude:: ../../../../python/README.md
+.. mdinclude:: ../../../java/README.md
+
 
 .. toctree::
    :hidden:
    
-   files
+   reference
    examples
