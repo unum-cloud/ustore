@@ -1315,14 +1315,14 @@ TEST(db, graph_transaction_watch) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
     graph_collection_t net = *db.collection<graph_collection_t>();
-    transaction_t txn = *db.transact();
-    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
 
     edge_t edge1 {1, 2, 1};
     edge_t edge2 {3, 1, 2};
-
     EXPECT_TRUE(net.upsert(edge1));
     EXPECT_TRUE(net.upsert(edge2));
+
+    transaction_t txn = *db.transact();
+    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
     EXPECT_TRUE(txn_net.degree(1));
     EXPECT_TRUE(txn.commit());
 
