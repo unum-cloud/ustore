@@ -625,7 +625,7 @@ TEST(db, snapshots) {
 
     triplet_t triplet;
     triplet_t triplet_same_v;
-    triplet_same_v.vals = {'A', 'A', 'A'};
+    triplet_same_v.vals = {'D', 'D', 'D'};
 
     EXPECT_TRUE(db.collection());
     blobs_collection_t collection = *db.collection();
@@ -658,7 +658,9 @@ TEST(db, snapshots) {
         value_view_t retrieved_view = *it;
         value_view_t expected_view(expected_begin, expected_begin + expected_len);
         EXPECT_EQ(retrieved_view.size(), expected_view.size());
+        bool b = (retrieved_view != expected_view);
         EXPECT_NE(retrieved_view, expected_view);
+        bool k = (retrieved_view == expected_view);
     }
 
     txn = *db.transact(true);
@@ -767,6 +769,7 @@ TEST(db, txn_unnamed_then_named) {
     check_equalities(named_collection_ref, triplet.contents_arrow());
     check_equalities(named_collection_ref, triplet.contents_lengths());
     check_equalities(named_collection_ref, triplet.contents_full());
+
     EXPECT_TRUE(db.clear());
 }
 
