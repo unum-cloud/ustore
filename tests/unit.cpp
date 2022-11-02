@@ -56,10 +56,9 @@ static json_t json_parse(char const* begin, char const* end) {
     EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 
 static char const* path() {
-    return nullptr;
     char* path = std::getenv("UKV_TEST_PATH");
     if (path)
-        return path;
+        return std::strlen(path) ? path : nullptr;
 
 #if defined(UKV_FLIGHT_CLIENT)
     return nullptr;
@@ -73,7 +72,7 @@ static char const* path() {
 #pragma region Binary Collections
 
 template <typename locations_at>
-void check_length(bins_ref_gt<locations_at>& ref, ukv_length_t expected_length) {
+void check_length(blobs_ref_gt<locations_at>& ref, ukv_length_t expected_length) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch missing keys";
 
@@ -108,7 +107,7 @@ void check_length(bins_ref_gt<locations_at>& ref, ukv_length_t expected_length) 
 }
 
 template <typename locations_at>
-void check_equalities(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
+void check_equalities(blobs_ref_gt<locations_at>& ref, contents_arg_t values) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
     using extractor_t = places_arg_extractor_gt<locations_at>;
@@ -131,7 +130,7 @@ void check_equalities(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
 }
 
 template <typename locations_at>
-void round_trip(bins_ref_gt<locations_at>& ref, contents_arg_t values) {
+void round_trip(blobs_ref_gt<locations_at>& ref, contents_arg_t values) {
     EXPECT_TRUE(ref.assign(values)) << "Failed to assign";
     check_equalities(ref, values);
 }
@@ -177,7 +176,7 @@ struct triplet_t {
     }
 };
 
-void check_binary_collection(bins_collection_t& collection) {
+void check_binary_collection(blobs_collection_t& collection) {
 
     triplet_t triplet;
     auto ref = collection[triplet.keys];
@@ -219,7 +218,7 @@ TEST(db, basic) {
 
     // Try getting the main collection
     EXPECT_TRUE(db.collection());
-    bins_collection_t collection = *db.collection();
+    blobs_collection_t collection = *db.collection();
     check_binary_collection(collection);
     EXPECT_TRUE(db.clear());
 }
@@ -234,7 +233,7 @@ TEST(db, persistency) {
 
     triplet_t triplet;
 
-    bins_collection_t collection = *db.collection();
+    blobs_collection_t collection = *db.collection();
     auto collection_ref = collection[triplet.keys];
     check_length(collection_ref, ukv_length_missing_k);
     round_trip(collection_ref, triplet.contents_arrow());
@@ -244,7 +243,7 @@ TEST(db, persistency) {
     db.close();
 
     EXPECT_TRUE(db.open(path()));
-    bins_collection_t collection2 = *db.collection();
+    blobs_collection_t collection2 = *db.collection();
     auto collection_ref2 = collection2[triplet.keys];
 
     check_equalities(collection_ref2, triplet.contents_arrow());
@@ -267,9 +266,9 @@ TEST(db, named) {
     EXPECT_TRUE(db["col2"]);
 
     EXPECT_FALSE(db.collection_create("col1"));
-    bins_collection_t col1 = *db["col1"];
+    blobs_collection_t col1 = *db["col1"];
     EXPECT_FALSE(db.collection_create("col2"));
-    bins_collection_t col2 = *db["col2"];
+    blobs_collection_t col2 = *db["col2"];
 
     check_binary_collection(col1);
     check_binary_collection(col2);
@@ -297,10 +296,10 @@ TEST(db, collection_list) {
         return;
     }
     else {
-        bins_collection_t col1 = *db.collection_create("col1");
-        bins_collection_t col2 = *db.collection_create("col2");
-        bins_collection_t col3 = *db.collection_create("col3");
-        bins_collection_t col4 = *db.collection_create("col4");
+        blobs_collection_t col1 = *db.collection_create("col1");
+        blobs_collection_t col2 = *db.collection_create("col2");
+        blobs_collection_t col3 = *db.collection_create("col3");
+        blobs_collection_t col4 = *db.collection_create("col4");
 
         EXPECT_TRUE(*db.contains("col1"));
         EXPECT_TRUE(*db.contains("col2"));
@@ -572,7 +571,7 @@ TEST(db, unnamed_and_named) {
 
         auto maybe_collection = db.collection_create(name);
         EXPECT_TRUE(maybe_collection);
-        bins_collection_t collection = std::move(maybe_collection).throw_or_release();
+        blobs_collection_t collection = std::move(maybe_collection).throw_or_release();
         auto collection_ref = collection[triplet.keys];
         check_length(collection_ref, ukv_length_missing_k);
         round_trip(collection_ref, triplet.contents_arrow());
@@ -601,7 +600,7 @@ TEST(db, txn) {
     round_trip(txn_ref, triplet.contents_full());
 
     EXPECT_TRUE(db.collection());
-    bins_collection_t collection = *db.collection();
+    blobs_collection_t collection = *db.collection();
     auto collection_ref = collection[triplet.keys];
 
     // Check for missing values before commit
@@ -629,7 +628,7 @@ TEST(db, snapshots) {
     triplet_same_v.vals = {'A', 'A', 'A'};
 
     EXPECT_TRUE(db.collection());
-    bins_collection_t collection = *db.collection();
+    blobs_collection_t collection = *db.collection();
     auto collection_ref = collection[triplet.keys];
 
     check_length(collection_ref, ukv_length_missing_k);
@@ -687,7 +686,7 @@ TEST(db, txn_named) {
     // Transaction with named collection
     EXPECT_FALSE(db.collection("named_col"));
     EXPECT_TRUE(db.collection("named_col", true));
-    bins_collection_t named_collection = *db.collection("named_col");
+    blobs_collection_t named_collection = *db.collection("named_col");
     std::vector<collection_key_t> sub_keys {
         {named_collection, triplet.keys[0]},
         {named_collection, triplet.keys[1]},
@@ -732,7 +731,7 @@ TEST(db, txn_unnamed_then_named) {
     round_trip(txn_ref, triplet.contents_full());
 
     EXPECT_TRUE(db.collection());
-    bins_collection_t collection = *db.collection();
+    blobs_collection_t collection = *db.collection();
     auto collection_ref = collection[triplet.keys];
 
     // Check for missing values before commit
@@ -747,7 +746,7 @@ TEST(db, txn_unnamed_then_named) {
 
     // Transaction with named collection
     EXPECT_TRUE(db.collection_create("named_col"));
-    bins_collection_t named_collection = *db.collection("named_col");
+    blobs_collection_t named_collection = *db.collection("named_col");
     std::vector<collection_key_t> sub_keys {
         {named_collection, triplet.keys[0]},
         {named_collection, triplet.keys[1]},
@@ -1219,7 +1218,7 @@ TEST(db, graph_triangle_batch_api) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    bins_collection_t main = *db.collection();
+    blobs_collection_t main = *db.collection();
     graph_collection_t net = *db.collection<graph_collection_t>();
 
     std::vector<edge_t> triangle {
@@ -1593,6 +1592,60 @@ TEST(db, graph_degrees) {
     auto degrees = *graph.degrees({{vertices.data(), sizeof(ukv_key_t)}, vertices.size()});
     EXPECT_EQ(degrees.size(), vertices_count);
 
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, vectors) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    constexpr std::size_t dims_k = 3;
+    ukv_key_t keys[3] = {'a', 'b', 'c'};
+    float vectors[3][dims_k] = {
+        {0.3, 0.1, 0.2},
+        {0.35, 0.1, 0.2},
+        {-0.1, 0.2, 0.5},
+    };
+
+    arena_t arena(db);
+    status_t status;
+
+    float* vector_first_begin = &vectors[0][0];
+    ukv_vectors_write_t write;
+    write.db = db;
+    write.arena = arena.member_ptr();
+    write.error = status.member_ptr();
+    write.dimensions = dims_k;
+    write.keys = keys;
+    write.keys_stride = sizeof(ukv_key_t);
+    write.vectors_starts = (ukv_bytes_cptr_t*)&vector_first_begin;
+    write.vectors_stride = sizeof(float) * dims_k;
+    write.tasks_count = 3;
+    ukv_vectors_write(&write);
+    EXPECT_TRUE(status);
+
+    ukv_length_t max_results = 2;
+    ukv_length_t* found_results = nullptr;
+    ukv_key_t* found_keys = nullptr;
+    ukv_float_t* found_distances = nullptr;
+    ukv_vectors_search_t search;
+    search.db = db;
+    search.arena = arena.member_ptr();
+    search.error = status.member_ptr();
+    search.dimensions = dims_k;
+    search.match_counts_limits = &max_results;
+    search.queries_starts = (ukv_bytes_cptr_t*)&vector_first_begin;
+    search.queries_stride = sizeof(float) * dims_k;
+    search.match_counts = &found_results;
+    search.match_keys = &found_keys;
+    search.match_metrics = &found_distances;
+    search.metric = ukv_vector_metric_cos_k;
+    ukv_vectors_search(&search);
+    EXPECT_TRUE(status);
+
+    EXPECT_EQ(found_results[0], max_results);
+    EXPECT_EQ(found_keys[0], ukv_key_t('a'));
+    EXPECT_EQ(found_keys[1], ukv_key_t('b'));
     EXPECT_TRUE(db.clear());
 }
 

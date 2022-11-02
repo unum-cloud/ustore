@@ -156,8 +156,6 @@ static py::object materialize(py_table_collection_t& df) {
 
 void ukv::wrap_pandas(py::module& m) {
 
-    arrow::py::import_pyarrow();
-
     auto df =
         py::class_<py_table_collection_t, std::shared_ptr<py_table_collection_t>>(m, "DataFrame", py::module_local());
     df.def(py::init([](py::handle dtype) {

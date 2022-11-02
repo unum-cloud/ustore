@@ -4,7 +4,7 @@
  * @date 27 Jun 2022
  * @addtogroup C
  *
- * @brief C bindings Graph/Network collections.
+ * @brief Binary Interface Standard for @b Graph collections.
  *
  * It essentially extends "ukv.h", to store @b Graphs.
  * Unlike raw values and docs collections, this is an index
