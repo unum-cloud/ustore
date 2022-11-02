@@ -9,8 +9,8 @@
 
 #pragma once
 #include "ukv/graph.h"
-#include "ukv/cpp/ranges.hpp"     // `edges_span_t`
-#include "ukv/cpp/bins_range.hpp" // `keys_stream_t`
+#include "ukv/cpp/ranges.hpp"      // `edges_span_t`
+#include "ukv/cpp/blobs_range.hpp" // `keys_stream_t`
 
 namespace unum::ukv {
 

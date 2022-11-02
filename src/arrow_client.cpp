@@ -39,7 +39,7 @@ using namespace unum;
 
 struct rpc_client_t {
     std::unique_ptr<arf::FlightClient> flight;
-    stl_arena_t arena;
+    linked_memory_t arena;
     std::mutex arena_lock;
 };
 
@@ -74,7 +74,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         auto maybe_flight_ptr = arf::FlightClient::Connect(*maybe_location);
         return_if_error(maybe_flight_ptr.ok(), c.error, network_k, "Flight Client Connection");
 
-        make_stl_arena(reinterpret_cast<ukv_arena_t*>(&db_ptr->arena), ukv_option_dont_discard_memory_k, c.error);
+        linked_memory(reinterpret_cast<ukv_arena_t*>(&db_ptr->arena), ukv_option_dont_discard_memory_k, c.error);
         return_if_error(maybe_location.ok(), c.error, args_wrong_k, "Failed to allocate default arena.");
         db_ptr->flight = maybe_flight_ptr.MoveValueUnsafe();
         *c.db = db_ptr;
@@ -86,7 +86,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     ukv_read_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -259,7 +259,7 @@ void ukv_write(ukv_write_t* c_ptr) {
     ukv_write_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -445,7 +445,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     ukv_paths_write_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -483,7 +483,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     if (has_contents_column) {
         auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c.error);
         return_on_error(c.error);
-        ukv_to_continous_bin(contents, places.size(), c.tasks_count, &joined_vals_begin, joined_offs, arena, c.error);
+        ukv_to_continuous_bin(contents, places.size(), c.tasks_count, &joined_vals_begin, joined_offs, arena, c.error);
         offs = {joined_offs.begin(), sizeof(ukv_length_t)};
     }
 
@@ -491,13 +491,13 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     if (has_paths_column) {
         auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c.error);
         return_on_error(c.error);
-        ukv_to_continous_bin(path_contents,
-                             places.size(),
-                             c.tasks_count,
-                             &joined_paths_begin,
-                             joined_offs,
-                             arena,
-                             c.error);
+        ukv_to_continuous_bin(path_contents,
+                              places.size(),
+                              c.tasks_count,
+                              &joined_paths_begin,
+                              joined_offs,
+                              arena,
+                              c.error);
         path_offs = {joined_offs.begin(), sizeof(ukv_length_t)};
     }
 
@@ -595,7 +595,7 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     ukv_paths_match_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -668,13 +668,13 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     ukv_bytes_cptr_t joined_patrns_begin = patterns[0];
     auto joined_patrns_offs = arena.alloc<ukv_length_t>(places.size() + 1, c.error);
     return_on_error(c.error);
-    ukv_to_continous_bin(pattern_contents,
-                         places.size(),
-                         c.tasks_count,
-                         &joined_patrns_begin,
-                         joined_patrns_offs,
-                         arena,
-                         c.error);
+    ukv_to_continuous_bin(pattern_contents,
+                          places.size(),
+                          c.tasks_count,
+                          &joined_patrns_begin,
+                          joined_patrns_offs,
+                          arena,
+                          c.error);
     pattern_offs = {joined_patrns_offs.begin(), sizeof(ukv_length_t)};
 
     ukv_bytes_cptr_t joined_prevs_begin;
@@ -682,13 +682,13 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
         joined_prevs_begin = previous[0];
         auto joined_prevs_offs = arena.alloc<ukv_length_t>(places.size() + 1, c.error);
         return_on_error(c.error);
-        ukv_to_continous_bin(previous_contents,
-                             places.size(),
-                             c.tasks_count,
-                             &joined_prevs_begin,
-                             joined_prevs_offs,
-                             arena,
-                             c.error);
+        ukv_to_continuous_bin(previous_contents,
+                              places.size(),
+                              c.tasks_count,
+                              &joined_prevs_begin,
+                              joined_prevs_offs,
+                              arena,
+                              c.error);
         previous_offs = {joined_prevs_offs.begin(), sizeof(ukv_length_t)};
     }
 
@@ -799,7 +799,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     ukv_paths_read_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -861,13 +861,13 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     if (has_paths_column) {
         auto joined_offs = arena.alloc<ukv_length_t>(places.size() + 1, c.error);
         return_on_error(c.error);
-        ukv_to_continous_bin(path_contents,
-                             places.size(),
-                             c.tasks_count,
-                             &joined_paths_begin,
-                             joined_offs,
-                             arena,
-                             c.error);
+        ukv_to_continuous_bin(path_contents,
+                              places.size(),
+                              c.tasks_count,
+                              &joined_paths_begin,
+                              joined_offs,
+                              arena,
+                              c.error);
         path_offs = {joined_offs.begin(), sizeof(ukv_length_t)};
     }
 
@@ -984,7 +984,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     ukv_scan_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
@@ -1141,7 +1141,7 @@ void ukv_measure(ukv_measure_t* c_ptr) {
     ukv_measure_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 }
 
@@ -1162,7 +1162,7 @@ void ukv_collection_create(ukv_collection_create_t* c_ptr) {
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
     arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightColOpen, kParamCollectionName, c.name);
+    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightColCreate, kParamCollectionName, c.name);
     if (c.config)
         action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c.config});
 
@@ -1218,7 +1218,7 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
     ukv_collection_list_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
     ar::Status ar_status;
@@ -1334,10 +1334,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 /*********************************************************/
 
 void ukv_arena_free(ukv_arena_t c_arena) {
-    if (!c_arena)
-        return;
-    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(c_arena);
-    delete &arena;
+    clear_linked_memory(c_arena);
 }
 
 void ukv_transaction_free(ukv_transaction_t const c_transaction) {
