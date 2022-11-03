@@ -177,7 +177,7 @@ Now it serves as the foundation for half of the DBMS startups.
 UMem and UDisk are both designed and maintained by Unum from scratch.
 Both are feature-complete, but the most crucial feature our infrastructure provides is performance.
 Being fast in memory is easy.
-The core logic of UMem can be found in the templated header-only [consistent_set][consistent_set] library.
+The core logic of UMem can be found in the templated header-only <code class="docutils literal notranslate"><a href="https://github.com/ashvardanian/consistent_set" class="pre">consistent_set</a></code> library.
 
 ![UCSB 10 TB Results](assets/charts/Performance.png)
 
@@ -318,7 +318,7 @@ We have already published the results for BLOB-layer abstractions for [10 TB][uc
 
 For more advanced modality-specific workloads, we have the following benchmarks provided in this repo:
 
-* **Twitter**. It takes the `.ndjson` dump of their [GET statuses/sample API][twitter-samples] and imports it into the Documents collection. We then measure random-gathers' speed at document-level, field-level, and multi-field tabular exports. We also construct a graph from the same data in a separate collection. And evaluate Graph construction time and traversals from random starting points.
+* **Twitter**. It takes the `.ndjson` dump of their <code class="docutils literal notranslate"><a href="https://developer.twitter.com/en/docs/twitter-api/v1/tweets/sample-realtime/overview" class="pre">GET statuses/sample API</a></code> and imports it into the Documents collection. We then measure random-gathers' speed at document-level, field-level, and multi-field tabular exports. We also construct a graph from the same data in a separate collection. And evaluate Graph construction time and traversals from random starting points.
 * **Tabular**. Similar to the previous benchmark, but generalizes it to arbitrary datasets with some additional context. It supports Parquet and CSV input files.
 * **Vector**. Given a memory-mapped file with a big matrix, builds an Approximate Nearest Neighbors Search index from the rows of that matrix. Evaluates both construction and query time.
 
