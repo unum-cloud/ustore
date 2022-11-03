@@ -658,7 +658,6 @@ TEST(db, snapshots) {
         value_view_t retrieved_view = *it;
         value_view_t expected_view(expected_begin, expected_begin + expected_len);
         EXPECT_EQ(retrieved_view.size(), expected_view.size());
-        bool b = (retrieved_view != expected_view);
         EXPECT_NE(retrieved_view, expected_view);
         bool k = (retrieved_view == expected_view);
     }
