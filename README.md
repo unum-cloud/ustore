@@ -42,7 +42,7 @@ That way, migrations are more manageable, and the system can be modularized into
 ## The [BLAS][blas] of [CRUD][crud]
 
 Such generic standards have existed in computing since 1979.
-BLAS was the locomotive of Numerical Methods across all disciplines in the past 50 years. 
+It is called **BLAS** and was the locomotive of Numerical Methods across all disciplines in the past 50 years. 
 Every deep-learning you use relies on BLAS.
 What is the standard that your DBMS can be built around?
 
@@ -50,33 +50,53 @@ What is the standard that your DBMS can be built around?
 
 We have yet to pass the test of time, like BLAS, but we can surpass them in modularity and provide a better reference implementation.
 Today, Intel, Nvidia, AMD, GraphCore, Cerebras, and many others ship optimized implementations of BLAS for their hardware.
-Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-benchmarked](#benchmarks) implementations of UKV to our customers, but even the provided FOSS reference design should be better than whatever OLTP DBMS you are using today.
+Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-benchmarked](#benchmarks) implementations of UKV to our customers, but even the provided FOSS reference design aims to be better than whatever OLTP DBMS you are using today.
 
 > [Why not use LevelDB or RocksDB interface directly?][ukv-vs-rocks]
 
 ---
 
-## Modularity
+## Features
 
-The C Standard is just [a few header files][ukv-c-sources].
-The rest of the project implements it using some of the best FOSS solutions, resulting in this vast map of possible combinations.
+<table>
+<tr>
+<td>
 
-<!-- ![UKV: Full Map](assets/charts/Modularity.png) -->
+* **ACID Transactions** across collections 
+* Persistent **Snapshots**
+* Operation-level **WATCH**-es 
+* **BSON, JSON, MessagePack** documents support 
+* **JSON Patches** & Merge-Patches 
+* **JSON Pointers** Addressing 
 
-<p align="center">
-ACID transactions across many collections • Snapshots • Operation-level WATCHes • BSON, JSON, MessagePack documents support • RFC JSON Patches & Merge-Patches • JSON Pointers Addressing • Native Apache Arrow format support in all APIs • Apache Arrow Flight RPC Server • Bulk Scans • Random Samping • Pandas Tabular API • NetworkX Graph API • PyTorch & TensorFlow Data-Loaders
-</p>
+</td>
+<td>
 
-Before going into the specifics of every Frontend, Backend, Modality, or Distribution, let's imagine how this bulk of features covers a few immediate use cases.
+* Native Apache **Arrow** format support
+* Apache **Arrow Flight** server implementation
+* **Bulk Scans**, Random **Samping**
+* **Pandas** Tabular interace 
+* **NetworkX** Graph interace 
+* **PyTorch** & **TensorFlow** Data-Loaders
+
+</td>
+</tr>
+</table>
+
+## [HTAP][htap]: [OLAP][olap] + [OLTP][oltp]
+
+Thanks to modular architecture, you can take the pieces you need.
+The most apparent combinations would cover the most immediate use cases like:
 
 1. Getting a Python, GoLang, or Java wrapper for vanilla RocksDB or LevelDB.
 2. Serving them via Apache Arrow Flight RPC to Spark, Kafka, or PyTorch.
 3. Embedded Document and GraphDB that will avoid networking overheads.
 4. Tiering DBMS deployment between UMem and persistent memory.
 
----
+But that is just the peak of the iceberg.
+Let's dive under the surface of our data lake.
 
-## OLAP + OLTP = HTAP: 🐦🐦 + 🪨 → ☠️☠️
+### **🐦🐦 + 🪨 → ☠️☠️**
 
 It is normal these days to have hundreds of Databases for one project.
 At least one for every kind of workload.
@@ -107,11 +127,11 @@ Outdated input will give you an obsolete result, and the business will lose mone
 But if you have just 1 Hybrid Store, the pain is gone.
 And the engineering teams can spend time doing something productive rather than packaging and versioning endless Parquet files around your system.
 
-## One Data Lake to Serve Them All
+### **One Data Lake to Serve Them All**
 
 ---
 
-## Backend = Modalities + Engine + Distribution
+## Backend
 
 A backend is a composition of just 2-3 parts.
 An Engine, being a key-value store for the serialized representation.
@@ -186,7 +206,7 @@ If the low-level interfaces are flexible, making the high-level interfaces rich 
 ## Frontend = SDK ∨ API
 
 UKV for Python and for C++ look very different.
-Our Python SDK mimics other Python libraries - Pandas and NetworkX.
+Our Python SDK mimics other Python libraries - [Pandas][pandas] and [NetworkX][networkx].
 Similarly, C++ library provides the interface C++ developers expect.
 
 ![UKV: Frontends](assets/charts/Frontend.png)
@@ -196,20 +216,21 @@ Some C-level functionality isn't implemented for some languages.
 Either because there was no demand for it, or as we haven't gottent to it yet.
 
 
-| Name      | Transact | Collections | Batches | Docs  | Graphs | Copies |
-| :-------- | :------: | :---------: | :-----: | :---: | :----: | :----: |
-| C         |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
-| C++       |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
-| Python    |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  0-1   |
-| GoLang    |    ✅     |      ✅      |    ✅    |   ❌   |   ❌    |   1    |
-| Java      |    ✅     |      ✅      |    ❌    |   ❌   |   ❌    |   1    |
-| Arrow RPC |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  1-2   |
+| Name             | Transact | Collections | Batches | Docs  | Graphs | Copies |
+| :--------------- | :------: | :---------: | :-----: | :---: | :----: | :----: |
+| C Standard       |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
+|                  |          |             |         |       |        |        |
+| C++ SDK          |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
+| Python SDK       |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  0-1   |
+| GoLang SDK       |    ✅     |      ✅      |    ✅    |   ❌   |   ❌    |   1    |
+| Java SDK         |    ✅     |      ✅      |    ❌    |   ❌   |   ❌    |   1    |
+|                  |          |             |         |       |        |        |
+| Arrow Flight API |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  1-2   |
 
-Some APIs here by themself are a gem and give you essentially unlimited compatibility with all kinds of tools and languages.
+Some frontends here have entire ecosystems around them!
+Apache Arrow Flight API, for instance, has its own bindings for  C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
 
 ![UKV: Frontends](assets/charts/Arrow.png)
-
-Arrow, for instance, brings an entire ecosystem with support for  C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
 
 ---
 
@@ -381,4 +402,7 @@ Licensing depends on which parts you are using.
 [watch]: https://redis.io/commands/watch/
 [snap]: https://github.com/facebook/rocksdb/wiki/Snapshot
 [acid]: https://en.wikipedia.org/wiki/ACID
+[olap]: https://en.wikipedia.org/wiki/Online_analytical_processing
+[oltp]: https://en.wikipedia.org/wiki/Online_transaction_processing
+[htap]: https://en.wikipedia.org/wiki/Hybrid_transactional/analytical_processing
 [twitter-samples]: https://developer.twitter.com/en/docs/twitter-api/v1/tweets/sample-realtime/overview
