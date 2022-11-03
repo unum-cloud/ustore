@@ -14,10 +14,10 @@ release = open('../../VERSION', 'r').read()
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ['breathe', 'sphinx_mdinclude']
+extensions = ['breathe', 'm2r2']
 
 templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '*.md']
 
 
 # -- Options for HTML output -------------------------------------------------
