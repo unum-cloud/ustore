@@ -1,4 +1,4 @@
-# UKV: C Bindings
+# UKV: C Standard
 
 The world of C can be tricky.
 It is the lingua-france of computing, so we wanted to make the bindings as flexible as possible, for all other runtimes to be built on top of it with minimal type-casting costs.
@@ -154,10 +154,10 @@ In Apache Arrow, as in similar systems, for `N` items `N+1` offsets will be expo
 
 ## Snapshots
 
-Snapshots are related to the topic of [Transactions](#transactions).
+Snapshots are related to the topic of [Transactions](#acid).
 They are a versioning mechanism for read operations, giving you ability to reference a certain state within the history of the database.
 
-## Transactions
+## ACID Transactions
 
 Writing a batch of values is always atomic in UKV.
 If one operation in the batch fails - all do.
@@ -226,3 +226,43 @@ Even more so in distributed databases, where three separate Write Ahead Logs may
 
 If you still need durability, flush writes on `ukv_transaction_commit()` with `::ukv_option_write_flush_k`.
 
+## Documents
+
+Document collections are meant to replace DBs like MongoDB.
+The standard doesn't force the implementation to stick to any internal implementation, but it has to be able to import and export JSONs, BSONs and MessagePacks, as the most commonly used document serialization forms.
+
+Following functions are provided:
+
+* `ukv_docs_write()`: Adding data.
+* `ukv_docs_read()`: Retrieving data.
+* `ukv_docs_gist()`: Introspecting docs structure.
+* `ukv_docs_gather()`: Exporting tables.
+
+## Graphs
+
+Graph collections are meant to replace DBs like Neo4J.
+Graph interfaces is extremely short:
+
+* `ukv_graph_find_edges()`: The only lookup function you need.
+* `ukv_graph_upsert_edges()`: Adding edges, upserting nodes.
+* `ukv_graph_remove_edges()`: Removing edges, but keeping nodes.
+* `ukv_graph_remove_vertices()`: Removing vertices and related edges.
+
+If you understand the BLOB interface, this requres no additional explanation.
+
+## Paths
+
+Paths are the same BLOB collections, except keys can strings.
+
+* `ukv_paths_write()`: Adding data.
+* `ukv_paths_read()`: Retrieving data.
+* `ukv_paths_match()`: Prefix or RegEx matching across keys.
+
+Current FOSS implementation of last function has linear complexity.
+
+## Vectors
+
+* add
+* query.
+
+Current FOSS implementation of last function has linear complexity.

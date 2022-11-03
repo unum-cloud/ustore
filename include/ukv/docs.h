@@ -295,7 +295,6 @@ void ukv_docs_gist(ukv_docs_gist_t*);
  * - `bool` to `int` or `float` isn't a downcast.
  * - `int`, `bool`, `str` to `bool` is a downcast.
  *
- *
  * ## Columns Layout
  *
  * All of `columns_validities`, `columns_conversions`, `columns_collisions`,
