@@ -59,28 +59,29 @@ Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-bench
 ## Features
 
 <table>
-<tr>
 <td>
 
-* **ACID Transactions** across collections 
-* Persistent **Snapshots**
-* Operation-level **WATCH**-es 
-* **BSON, JSON, MessagePack** documents support 
-* **JSON Patches** & Merge-Patches 
-* **JSON Pointers** Addressing 
+<ul>
+<li> <b>ACID Transactions</b> across collections  </li>
+<li> Persistent <b>Snapshots</b> </li>
+<li> Operation-level <b>WATCH</b>-es  </li>
+<li> <b>BSON, JSON, MessagePack</b> documents support  </li>
+<li> <b>JSON Patches</b> & Merge-Patches  </li>
+<li> <b>JSON Pointers</b> Addressing  </li>
+</ul>
 
 </td>
 <td>
 
-* Native Apache **Arrow** format support
-* Apache **Arrow Flight** server implementation
-* **Bulk Scans**, Random **Samping**
-* **Pandas** Tabular interace 
-* **NetworkX** Graph interace 
-* **PyTorch** & **TensorFlow** Data-Loaders
-
+<ul>
+<li> Native Apache <b>Arrow</b> format support </li>
+<li> Apache <b>Arrow Flight</b> server implementation </li>
+<li> <b>Bulk Scans</b>, Random <b>Samping</b> </li>
+<li> <b>Pandas</b> Tabular interace  </li>
+<li> <b>NetworkX</b> Graph interace  </li>
+<li> <b>PyTorch</b> & <b>TensorFlow</b> Data-Loaders </li>
+</ul>
 </td>
-</tr>
 </table>
 
 ## [HTAP][htap]: [OLAP][olap] + [OLTP][oltp]
