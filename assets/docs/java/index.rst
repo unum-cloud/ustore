@@ -9,4 +9,3 @@ Java SDK
    :hidden:
    
    reference
-   examples
