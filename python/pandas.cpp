@@ -1,3 +1,5 @@
+#include <fmt/format.h>
+
 #include <arrow/c/bridge.h>
 #include <arrow/python/pyarrow.h>
 
@@ -154,6 +156,27 @@ static py::object materialize(py_table_collection_t& df) {
     return py::reinterpret_steal<py::object>(table_python);
 }
 
+template <typename array_type_at>
+void add_key_value( //
+    std::shared_ptr<arrow::Array> array,
+    std::string& jsons,
+    std::string_view column_name,
+    std::size_t row_idx) {
+    auto numeric_array = std::static_pointer_cast<array_type_at>(array);
+    jsons += fmt::format("\"{}\":{},", column_name.data(), numeric_array->Value(row_idx));
+}
+
+template <>
+void add_key_value<arrow::BinaryArray>( //
+    std::shared_ptr<arrow::Array> array,
+    std::string& jsons,
+    std::string_view column_name,
+    std::size_t row_idx) {
+    auto binary_array = std::static_pointer_cast<arrow::BinaryArray>(array);
+    auto value = binary_array->Value(row_idx);
+    jsons += fmt::format("\"{}\":\"{}\",", column_name.data(), std::string_view(value.data(), value.size()));
+}
+
 void ukv::wrap_pandas(py::module& m) {
 
     auto df =
@@ -186,7 +209,7 @@ void ukv::wrap_pandas(py::module& m) {
         }
         // One type definition for all the columns
         // https://stackoverflow.com/a/45063514/2766161
-        else if (PyBytes_Check(dtype_py.ptr())) {
+        else if (PyUnicode_Check(dtype_py.ptr())) {
             df.columns_types = ukv_doc_field_from_str(py_to_str(dtype_py.ptr()));
         }
         return df.shared_from_this();
@@ -244,7 +267,76 @@ void ukv::wrap_pandas(py::module& m) {
 
     // Assigns or inserts elements from another DataFrame, passed in the Arrow form.
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.update.html
-    df.def("update", [](py_table_collection_t& df, py::handle mat, std::string_view index_column_name) {});
+    df.def("update", [](py_table_collection_t& df, py::object obj) {
+        if (!arrow::py::is_table(obj.ptr()))
+            throw std::invalid_argument("Expected Arrow Table!");
+
+        if (std::holds_alternative<std::monostate>(df.rows_keys)) {
+            auto keys_range = df.binary.native.keys();
+            std::vector<ukv_key_t> keys_found;
+            for (auto const& key : keys_range)
+                keys_found.push_back(key);
+            df.rows_keys = keys_found;
+        }
+        auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
+        auto collection = docs_collection_t(df.binary.native.db(), df.binary.native, df.binary.native.txn());
+
+        arrow::Result<std::shared_ptr<arrow::Table>> maybe_table = arrow::py::unwrap_table(obj.ptr());
+        std::shared_ptr<arrow::Table> table = maybe_table.ValueOrDie();
+        if (table->num_rows() != keys.size())
+            throw std::invalid_argument("Table Rows Count Must Match Keys Count");
+
+        std::size_t column_names_length = 0;
+        for (size_t column_idx = 0; column_idx != table->num_columns(); ++column_idx)
+            column_names_length += std::strlen(table->field(column_idx)->name().c_str());
+
+        std::string jsons_to_merge;
+        jsons_to_merge.reserve(table->num_rows() * (column_names_length + (table->num_columns() * 3) + 2));
+        std::vector<ukv_length_t> offsets(keys.size() + 1);
+
+        size_t chunk_idx = 0;
+        for (size_t row_idx = 0; row_idx != table->num_rows(); ++row_idx) {
+
+            offsets[row_idx] = jsons_to_merge.size();
+            jsons_to_merge += "{";
+            for (size_t column_idx = 0; column_idx != table->num_columns(); ++column_idx) {
+                std::shared_ptr<arrow::Array> array = table->column(column_idx)->chunk(chunk_idx);
+                if (row_idx == array->length() - 1 && column_idx == table->num_columns() - 1)
+                    chunk_idx++;
+
+                auto& name = table->schema()->field(column_idx)->name();
+                using type = arrow::Type;
+                switch (array->type_id()) {
+                case type::HALF_FLOAT:
+                    add_key_value<arrow::HalfFloatArray>(array, jsons_to_merge, name, row_idx);
+                    break;
+                case type::FLOAT: add_key_value<arrow::FloatArray>(array, jsons_to_merge, name, row_idx); break;
+                case type::DOUBLE: add_key_value<arrow::DoubleArray>(array, jsons_to_merge, name, row_idx); break;
+                case type::BOOL: add_key_value<arrow::BooleanArray>(array, jsons_to_merge, name, row_idx); break;
+                case type::UINT8: add_key_value<arrow::UInt8Array>(array, jsons_to_merge, name, row_idx); break;
+                case type::INT8: add_key_value<arrow::Int8Array>(array, jsons_to_merge, name, row_idx); break;
+                case type::UINT16: add_key_value<arrow::UInt16Array>(array, jsons_to_merge, name, row_idx); break;
+                case type::INT16: add_key_value<arrow::Int16Array>(array, jsons_to_merge, name, row_idx); break;
+                case type::UINT32: add_key_value<arrow::UInt32Array>(array, jsons_to_merge, name, row_idx); break;
+                case type::INT32: add_key_value<arrow::Int32Array>(array, jsons_to_merge, name, row_idx); break;
+                case type::UINT64: add_key_value<arrow::UInt64Array>(array, jsons_to_merge, name, row_idx); break;
+                case type::INT64: add_key_value<arrow::Int64Array>(array, jsons_to_merge, name, row_idx); break;
+                case type::STRING:
+                case type::BINARY: add_key_value<arrow::BinaryArray>(array, jsons_to_merge, name, row_idx); break;
+                }
+            }
+            jsons_to_merge.back() = '}';
+        }
+
+        offsets.back() = jsons_to_merge.size();
+        auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(jsons_to_merge.data());
+        contents_arg_t values {
+            .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
+            .contents_begin = {&vals_begin, 0},
+        };
+
+        collection[keys].merge(values);
+    });
 
     // Primary batch export functions, that output Arrow Tables.
     // Addresses may be: specific IDs or a slice.
