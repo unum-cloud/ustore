@@ -47,9 +47,9 @@ docs_table
 ===============
 .. doxygenfile:: docs_table.hpp
 
-===============
+================
 graph_collection
-===============
+================
 .. doxygenfile:: graph_collection.hpp
 
 ===============
