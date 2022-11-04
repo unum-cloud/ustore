@@ -128,8 +128,14 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 
         std::string path = c.config; // TODO: take the path from config!
         rocks_status_t status = rocksdb::LoadLatestOptions(config_options, path, &options, &column_descriptors);
+        auto cf_options = rocksdb::ColumnFamilyOptions();
+        cf_options.comparator = &key_comparator_k;
         if (column_descriptors.empty())
-            column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
+            column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, std::move(cf_options)});
+        else {
+            for (auto& column_descriptor : column_descriptors)
+                column_descriptor.options.comparator = &key_comparator_k;
+        }
 
         return_if_error(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
         if (status.IsNotFound())
@@ -528,7 +534,9 @@ void ukv_collection_create(ukv_collection_create_t* c_ptr) {
     }
 
     rocks_collection_t* collection = nullptr;
-    rocks_status_t status = db.native->CreateColumnFamily(rocksdb::ColumnFamilyOptions(), c.name, &collection);
+    auto cf_options = rocksdb::ColumnFamilyOptions();
+    cf_options.comparator = &key_comparator_k;
+    rocks_status_t status = db.native->CreateColumnFamily(std::move(cf_options), c.name, &collection);
     if (!export_error(status, c.error)) {
         db.columns.push_back(collection);
         *c.id = reinterpret_cast<ukv_collection_t>(collection);
