@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: apt dependencies
-        run: ./cmake/arrow.sh
+        run: chmod +x cmake/arrow.sh && ./cmake/arrow.sh
 
       - name: pip dependencies
         run: python3.9 -m pip install --force-reinstall pytest numpy pyarrow cmake
