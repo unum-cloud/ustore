@@ -8,3 +8,7 @@ p.caption {
 article>section>h1:nth-child(1) {
     display: none;
 }
+
+.sidebar-brand-text {
+    cursor: initial;
+}
