@@ -1,14 +1,12 @@
-name: Build
+name: Build all
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
-
-on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
@@ -20,6 +18,9 @@ jobs:
     # You can convert this to a matrix build if you need cross-platform coverage.
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
     runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        backend: [umem, rocksdb, leveldb]
 
     steps:
       - uses: actions/checkout@v3
@@ -36,7 +37,7 @@ jobs:
         run: cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} .
 
       - name: Build
-        run: make -j4 ukv_umem ukv_umem_unit_test ukv_umem_twitter_benchmark ukv_umem_tabular_graph_benchmark ukv_umem_api_test ukv_umem_compilation_test ukv_umem_stress_test
+        run: make -j4 ukv_${{ matrix.backend }} ukv_${{ matrix.backend }}_unit_test ukv_${{ matrix.backend }}_twitter_benchmark ukv_${{ matrix.backend }}_tabular_graph_benchmark ukv_${{ matrix.backend }}_api_test ukv_${{ matrix.backend }}_compilation_test ukv_${{ matrix.backend }}_stress_test
 
       - name: Upload Binaries
         uses: actions/upload-artifact@v3.1.1
