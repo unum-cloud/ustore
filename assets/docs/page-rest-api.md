@@ -62,9 +62,11 @@ Furthermore, a document may not have `_bin`, in which case the entire body of th
 The final pruned object may be converted into Message-Pack and serialized into the DB as a binary value.
 On each export, the decoding will be done again for @b MIMEs:
 
-* `application/json`: [RFC Spec](https://datatracker.ietf.org/doc/html/rfc4627)
-* `application/msgpack`: [RFC Spec](https://datatracker.ietf.org/doc/html/rfc6838)
-* `application/bson`: [Spec](https://bsonspec.org/)
+<ul>
+<li><code class="docutils literal notranslate"><span class="pre">application/json</span></code>: <a href="https://datatracker.ietf.org/doc/html/rfc4627">RFC Spec</a></li>
+<li><code class="docutils literal notranslate"><span class="pre">application/msgpack</span></code>: <a href="https://datatracker.ietf.org/doc/html/rfc6838">RFC Spec</a></li>
+<li><code class="docutils literal notranslate"><span class="pre">application/bson</span></code>: <a href="https://bsonspec.org/">Spec</a></li>
+</ul>
 
 ## Accessing Object Fields
 
