@@ -1,4 +1,4 @@
-<h1 align="center">Unum • UKV</h1>
+<h1 align="center">UKV by Unum</h1>
 <h3 align="center">
 Universal Binary Interface<br/>
 For The Fastest DBMS Ever Built
@@ -203,7 +203,7 @@ One of our core objectives was to select the minimal core set of functions for e
 In that case, implementing them can be easy for any passionate developer.
 If the low-level interfaces are flexible, making the high-level interfaces rich is easy.
 
-## Frontend = SDK ∨ API
+## Frontend: SDK ∨ API
 
 UKV for Python and for C++ look very different.
 Our Python SDK mimics other Python libraries - [Pandas][pandas] and [NetworkX][networkx].
@@ -228,7 +228,7 @@ Either because there was no demand for it, or as we haven't gottent to it yet.
 | Arrow Flight API |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  1-2   |
 
 Some frontends here have entire ecosystems around them!
-Apache Arrow Flight API, for instance, has its own bindings for  C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
+[Apache Arrow Flight][flight] API, for instance, has its own bindings for  C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
 
 ![UKV: Frontends](assets/charts/Arrow.png)
 
@@ -241,7 +241,7 @@ For guidance on installation, development, deployment, and administration, see o
 ## Installation
 
 The entire DBMS fits into a sub 100 MB Docker image.
-Run the following script to pull and run the container, exposing Apache Arrow Flight RPC server on the port `38709`.
+Run the following script to pull and run the container, exposing [Apache Arrow Flight][flight] API server on the port `38709`.
 Client SDKs will also communicate through that same port.
 
 ```sh
@@ -396,6 +396,7 @@ Licensing depends on which parts you are using.
 [leveldb]: https://github.com/google/leveldb
 [hadoop]: https://hadoop.apache.org
 [networkx]: https://networkx.org
+[pandas]: https://pandas.pydata.org
 [gunrock]: https://gunrock.github.io
 [s3]: https://aws.amazon.com/s3
 [dbms-cloc]: https://news.ycombinator.com/item?id=24813239
@@ -405,4 +406,5 @@ Licensing depends on which parts you are using.
 [olap]: https://en.wikipedia.org/wiki/Online_analytical_processing
 [oltp]: https://en.wikipedia.org/wiki/Online_transaction_processing
 [htap]: https://en.wikipedia.org/wiki/Hybrid_transactional/analytical_processing
+[flight]: https://arrow.apache.org/docs/format/Flight.html
 [twitter-samples]: https://developer.twitter.com/en/docs/twitter-api/v1/tweets/sample-realtime/overview
