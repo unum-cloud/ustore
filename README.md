@@ -20,7 +20,7 @@ C • C++ • Python • Java • GoLang • Apache Arrow
 &nbsp;&nbsp;
 <a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/stars/unum-cloud/ukv?color=purple&style=flat-square"/></a>
 &nbsp;&nbsp;
-<a href="#"><img src="https://img.shields.io/github/workflow/status/unum-cloud/ukv/Build?color=purple&style=flat-square"/></a>
+<a href="#"><img src="https://img.shields.io/github/workflow/status/unum-cloud/ukv/Build?color=purple&style=flat-square&label=build+and+test"/></a>
 </p>
 
 ## What is UKV?
