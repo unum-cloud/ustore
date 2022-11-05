@@ -154,25 +154,24 @@ Combining it with the numerous features above and GPU acceleration, one can get 
 ### Engines
 
 Following engines can be used almost interchangeably.
+Historically, LevelDB was the first one.
+RocksDB then improved on functionality and performance.
+Now it serves as the foundation for half of the DBMS startups.
 
 |                   | LevelDB | RocksDB  |  UDisk  |  UMem   |
 | :---------------- | :-----: | :------: | :-----: | :-----: |
 | **Speed**         |   1x    |    2x    | **10x** | **30x** |
-| **Persistent**    |    ✅    |    ✅     |    ✅    |    ❌    |
-| **Transactional** |    ❌    |    ✅     |    ✅    |    ✅    |
-| [Watches][watch]  |    ❌    |    ✅     |    ✅    |    ✅    |
-| [Snapshots][snap] |    ✅    |    ✅     |    ✅    |    ❌    |
-| Named Collections |    ❌    |    ✅     |    ✅    |    ✅    |
-| Random Sampling   |    ❌    |    ❌     |    ✅    |    ✅    |
-| Bulk Enumeration  |    ❌    |    ❌     |    ✅    |    ✅    |
-| Encryption        |    ❌    |    ❌     |    ✅    |    ❌    |
-| Open-Source       |    ✅    |    ✅     |    ❌    |    ✅    |
+| **Persistent**    |    ✓    |    ✓     |    ✓    |    ✗    |
+| **Transactional** |    ✗    |    ✓     |    ✓    |    ✓    |
+| [Watches][watch]  |    ✗    |    ✓     |    ✓    |    ✓    |
+| [Snapshots][snap] |    ✓    |    ✓     |    ✓    |    ✗    |
+| Named Collections |    ✗    |    ✓     |    ✓    |    ✓    |
+| Random Sampling   |    ✗    |    ✗     |    ✓    |    ✓    |
+| Bulk Enumeration  |    ✗    |    ✗     |    ✓    |    ✓    |
+| Encryption        |    ✗    |    ✗     |    ✓    |    ✗    |
+| Open-Source       |    ✓    |    ✓     |    ✗    |    ✓    |
 | Compatibility     |   Any   |   Any    |  Linux  |   Any   |
 | Maintainer        | Google  | Facebook |  Unum   |  Unum   |
-
-Historically, LevelDB was the first one.
-RocksDB then improved on functionality and performance.
-Now it serves as the foundation for half of the DBMS startups.
 
 UMem and UDisk are both designed and maintained by Unum from scratch.
 Both are feature-complete, but the most crucial feature our infrastructure provides is performance.
@@ -219,14 +218,14 @@ Either because there was no demand for it, or as we haven't gottent to it yet.
 
 | Name             | Transact | Collections | Batches | Docs  | Graphs | Copies |
 | :--------------- | :------: | :---------: | :-----: | :---: | :----: | :----: |
-| C Standard       |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
+| C Standard       |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |   0    |
 |                  |          |             |         |       |        |        |
-| C++ SDK          |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |   0    |
-| Python SDK       |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  0-1   |
-| GoLang SDK       |    ✅     |      ✅      |    ✅    |   ❌   |   ❌    |   1    |
-| Java SDK         |    ✅     |      ✅      |    ❌    |   ❌   |   ❌    |   1    |
+| C++ SDK          |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |   0    |
+| Python SDK       |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |  0-1   |
+| GoLang SDK       |    ✓     |      ✓      |    ✓    |   ✗   |   ✗    |   1    |
+| Java SDK         |    ✓     |      ✓      |    ✗    |   ✗   |   ✗    |   1    |
 |                  |          |             |         |       |        |        |
-| Arrow Flight API |    ✅     |      ✅      |    ✅    |   ✅   |   ✅    |  1-2   |
+| Arrow Flight API |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |  1-2   |
 
 Some frontends here have entire ecosystems around them!
 [Apache Arrow Flight][flight] API, for instance, has its own bindings for  C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
