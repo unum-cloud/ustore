@@ -59,28 +59,29 @@ Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-bench
 ## Features
 
 <table>
-<tr>
 <td>
 
-* **ACID Transactions** across collections 
-* Persistent **Snapshots**
-* Operation-level **WATCH**-es 
-* **BSON, JSON, MessagePack** documents support 
-* **JSON Patches** & Merge-Patches 
-* **JSON Pointers** Addressing 
+<ul>
+<li> <b>ACID Transactions</b> across collections  </li>
+<li> Persistent <b>Snapshots</b> </li>
+<li> Operation-level <b>WATCH</b>-es  </li>
+<li> <b>BSON, JSON, MessagePack</b> documents support  </li>
+<li> <b>JSON Patches</b> & Merge-Patches  </li>
+<li> <b>JSON Pointers</b> Addressing  </li>
+</ul>
 
 </td>
 <td>
 
-* Native Apache **Arrow** format support
-* Apache **Arrow Flight** server implementation
-* **Bulk Scans**, Random **Samping**
-* **Pandas** Tabular interace 
-* **NetworkX** Graph interace 
-* **PyTorch** & **TensorFlow** Data-Loaders
-
+<ul>
+<li> Native Apache <b>Arrow</b> format support </li>
+<li> Apache <b>Arrow Flight</b> server implementation </li>
+<li> <b>Bulk Scans</b>, Random <b>Samping</b> </li>
+<li> <b>Pandas</b> Tabular interace  </li>
+<li> <b>NetworkX</b> Graph interace  </li>
+<li> <b>PyTorch</b> & <b>TensorFlow</b> Data-Loaders </li>
+</ul>
 </td>
-</tr>
 </table>
 
 ## [HTAP][htap]: [OLAP][olap] + [OLTP][oltp]
@@ -176,7 +177,7 @@ Now it serves as the foundation for half of the DBMS startups.
 UMem and UDisk are both designed and maintained by Unum from scratch.
 Both are feature-complete, but the most crucial feature our infrastructure provides is performance.
 Being fast in memory is easy.
-The core logic of UMem can be found in the templated header-only [consistent_set][consistent_set] library.
+The core logic of UMem can be found in the templated header-only <code class="docutils literal notranslate"><a href="https://github.com/ashvardanian/consistent_set" class="pre">consistent_set</a></code> library.
 
 ![UCSB 10 TB Results](assets/charts/Performance.png)
 
@@ -317,7 +318,7 @@ We have already published the results for BLOB-layer abstractions for [10 TB][uc
 
 For more advanced modality-specific workloads, we have the following benchmarks provided in this repo:
 
-* **Twitter**. It takes the `.ndjson` dump of their [GET statuses/sample API][twitter-samples] and imports it into the Documents collection. We then measure random-gathers' speed at document-level, field-level, and multi-field tabular exports. We also construct a graph from the same data in a separate collection. And evaluate Graph construction time and traversals from random starting points.
+* **Twitter**. It takes the `.ndjson` dump of their <code class="docutils literal notranslate"><a href="https://developer.twitter.com/en/docs/twitter-api/v1/tweets/sample-realtime/overview" class="pre">GET statuses/sample API</a></code> and imports it into the Documents collection. We then measure random-gathers' speed at document-level, field-level, and multi-field tabular exports. We also construct a graph from the same data in a separate collection. And evaluate Graph construction time and traversals from random starting points.
 * **Tabular**. Similar to the previous benchmark, but generalizes it to arbitrary datasets with some additional context. It supports Parquet and CSV input files.
 * **Vector**. Given a memory-mapped file with a big matrix, builds an Approximate Nearest Neighbors Search index from the rows of that matrix. Evaluates both construction and query time.
 

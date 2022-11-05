@@ -3,7 +3,7 @@
 Apache Arrow wraps a huge ecosystem of projects, just like UKV.
 With standardized Arrow columnar in-memory representations any content can be exported into analytics engine of your choosing.
 
-![UKV: Arrow](assets/charts/Arrow.png)
+![UKV: Arrow](../../assets/charts/Arrow.png)
 
 The Flight API pushes this interoperability to the next level.
 Think of it as a binary analytics alternative to REST.
