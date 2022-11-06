@@ -1,10 +1,13 @@
-#include <fcntl.h>    // `open` files
-#include <sys/stat.h> // `stat` to obtain file metadata
-#include <sys/mman.h> // `mmap` to read datasets faster
+#include <fcntl.h>     // `open` files
+#include <sys/stat.h>  // `stat` to obtain file metadata
+#include <sys/mman.h>  // `mmap` to read datasets faster
+#include <uuid/uuid.h> // `uuid` to make file name
 
 #include <vector>
-#include <filesystem>
+#include <cstring>
+#include <numeric>
 #include <algorithm>
+#include <filesystem>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wall"
@@ -16,6 +19,7 @@
 #include <arrow/io/file.h>
 #include <arrow/memory_pool.h>
 #include <parquet/arrow/reader.h>
+#include <parquet/stream_writer.h>
 #pragma GCC diagnostic pop
 
 #include <simdjson.h>
@@ -24,8 +28,19 @@
 #include <ukv/ukv.hpp>
 
 #include "dataset.h"
+#include <ukv/cpp/ranges.hpp>     // `sort_and_deduplicate`
+#include "ukv/cpp/bins_range.hpp" // `keys_stream_t`
 
 using namespace unum::ukv;
+
+constexpr std::size_t uuid_length = 36;
+
+void make_uuid(char* out) {
+    uuid_t uuid;
+    uuid_generate(uuid);
+    uuid_unparse(uuid, out);
+    out[uuid_length - 1] = '\0'; // end of string
+}
 
 void upsert_one_batch(ukv_graph_import_t& c, std::vector<edge_t> const& array) {
 
@@ -35,6 +50,7 @@ void upsert_one_batch(ukv_graph_import_t& c, std::vector<edge_t> const& array) {
         .error = c.error,
         .arena = c.arena,
         .options = c.options,
+        .tasks_count = array.size(),
         .collections = &c.collection,
         .edges_ids = strided.edge_ids.begin().get(),
         .edges_stride = strided.edge_ids.stride(),
@@ -58,7 +74,7 @@ void fill_array(ukv_graph_import_t& c, ukv_size_t max_batch_size, std::shared_pt
     auto targets = table->GetColumnByName(c.target_id_field);
     return_if_error(targets, c.error, 0, fmt::format("{} is not exist", c.target_id_field).c_str());
     auto edges = table->GetColumnByName(c.edge_id_field);
-    int count = sources->num_chunks();
+    size_t count = sources->num_chunks();
     array.reserve(std::min(ukv_size_t(sources->chunk(0)->length()), max_batch_size));
 
     for (size_t chunk_idx = 0; chunk_idx != count; ++chunk_idx) {
@@ -107,6 +123,59 @@ void import_parquet(ukv_graph_import_t& c, ukv_size_t max_batch_size) {
     fill_array(c, max_batch_size, table);
 }
 
+void export_parquet(ukv_graph_export_t& c, ukv_size_t max_batch_size, ukv_key_t const* data, ukv_size_t length) {
+
+    bool edge_state = std::strcmp(c.edge_id_field, "edge");
+
+    parquet::schema::NodeVector fields;
+    fields.push_back(                         //
+        parquet::schema::PrimitiveNode::Make( //
+            c.source_id_field,
+            parquet::Repetition::REQUIRED,
+            parquet::Type::INT64,
+            parquet::ConvertedType::INT_64));
+
+    fields.push_back(                         //
+        parquet::schema::PrimitiveNode::Make( //
+            c.target_id_field,
+            parquet::Repetition::REQUIRED,
+            parquet::Type::INT64,
+            parquet::ConvertedType::INT_64));
+
+    if (edge_state)
+        fields.push_back(                         //
+            parquet::schema::PrimitiveNode::Make( //
+                c.edge_id_field,
+                parquet::Repetition::REQUIRED,
+                parquet::Type::INT64,
+                parquet::ConvertedType::INT_64));
+
+    std::shared_ptr<parquet::schema::GroupNode> schema = std::static_pointer_cast<parquet::schema::GroupNode>(
+        parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, fields));
+
+    char file_name[uuid_length];
+    make_uuid(file_name);
+
+    auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
+    return_if_error(maybe_outfile.ok(), c.error, 0, "Can't open file");
+    auto outfile = *maybe_outfile;
+
+    parquet::WriterProperties::Builder builder;
+    builder.memory_pool(arrow::default_memory_pool());
+    builder.write_batch_size(max_batch_size);
+
+    parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
+
+    for (size_t idx = 0; idx < length; idx += 3) {
+        os << *(data + idx) << *(data + idx + 1);
+        if (edge_state) 
+            os << *(data + idx + 2);
+
+        auto dat = os.current_row();
+        os << parquet::EndRow;
+    }
+}
+
 void import_csv(ukv_graph_import_t& c, ukv_size_t max_batch_size) {
 
     arrow::io::IOContext io_context = arrow::io::default_io_context();
@@ -146,7 +215,7 @@ simdjson::ondemand::object& rewinded(simdjson::ondemand::object& doc) noexcept {
 void import_json(ukv_graph_import_t& c, ukv_size_t max_batch_size) {
 
     std::vector<edge_t> array;
-    bool edge_state = (c.edge_id_field != "edge");
+    bool edge_state = std::strcmp(c.edge_id_field, "edge");
 
     auto handle = open(c.paths_pattern, O_RDONLY);
     return_if_error(handle != -1, c.error, 0, "Can't open file");
@@ -196,4 +265,63 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
         import_parquet(c, max_batch_size);
     else if (ext == ".csv")
         import_csv(c, max_batch_size);
+}
+
+void ukv_graph_export(ukv_graph_export_t* c_ptr) {
+
+    ukv_graph_export_t& c = *c_ptr;
+
+    auto export_method = &export_parquet;
+
+    ////// Choosing a method will look like this //////
+    //
+    // auto ext = c.paths_extension;
+    // auto export_method = ext == ".parquet" //
+    //                          ? &export_parquet
+    //                          : ext == ".json" //
+    //                                ? &export_json
+    //                                : ext == ".csv" //
+    //                                      ? &export_csv
+    //                                      : nullptr;
+    //
+    // return_if_error(export_method, c.error, 0, "Not supported format");
+
+    std::plus plus;
+
+    ukv_key_t* ids_in_edges = nullptr;
+    ukv_vertex_degree_t* degrees = nullptr;
+    ukv_vertex_role_t const role = ukv_vertex_role_any_k;
+
+    ukv_size_t count = 0;
+    ukv_size_t total_ids = 0;
+    ukv_size_t max_batch_size = c.max_batch_size / sizeof(edge_t);
+
+    keys_stream_t stream(c.db, c.collection, max_batch_size, nullptr);
+    stream.seek_to_first().throw_unhandled();
+
+    while (!stream.is_end()) {
+        ukv_graph_find_edges_t graph_find {
+            .db = c.db,
+            .error = c.error,
+            .arena = c.arena,
+            .options = c.options,
+            .tasks_count = max_batch_size,
+            .collections = &c.collection,
+            .vertices = stream.keys_batch().begin(),
+            .vertices_stride = sizeof(ukv_key_t),
+            .roles = &role,
+            .degrees_per_vertex = &degrees,
+            .edges_per_vertex = &ids_in_edges,
+        };
+        ukv_graph_find_edges(&graph_find);
+
+        count = stream.keys_batch().size();
+        total_ids = std::transform_reduce(degrees, degrees + count, 0ul, plus, [](ukv_vertex_degree_t d) {
+            return d != ukv_vertex_degree_missing_k ? d : 0;
+        });
+        total_ids *= 3;
+
+        export_method(c, max_batch_size, ids_in_edges, total_ids);
+        stream.seek_to_next_batch().throw_unhandled();
+    }
 }
