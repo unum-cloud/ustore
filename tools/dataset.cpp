@@ -307,16 +307,11 @@ void import_json(ukv_graph_import_t& c, ukv_size_t max_batch_size) {
         mapped_content.size(),
         1000000ul);
 
-    ukv_key_t source = 0;
-    ukv_key_t target = 0;
-    ukv_key_t edge = 0;
-
     for (auto doc : docs) {
         simdjson::ondemand::object data = doc.get_object().value();
-        source = rewinded(data)[c.source_id_field];
-        target = rewinded(data)[c.target_id_field];
-        edge = edge_state ? rewinded(data)[c.edge_id_field] : 0;
-        array.push_back(edge_t {.source_id = source, .target_id = target, .id = edge});
+        array.push_back(edge_t {.source_id = rewinded(data)[c.source_id_field],
+                                .target_id = rewinded(data)[c.target_id_field],
+                                .id = edge_state ? rewinded(data)[c.edge_id_field] : 0});
         if (array.size() == max_batch_size) {
             upsert_one_batch(c, array);
             array.clear();
