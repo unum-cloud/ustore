@@ -369,7 +369,8 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
     ukv_size_t max_batch_size = c.max_batch_size / sizeof(edge_t);
 
     keys_stream_t stream(c.db, c.collection, max_batch_size, nullptr);
-    stream.seek_to_first().throw_unhandled();
+    auto status = stream.seek_to_first();
+    return_if_error(status, c.error, 0, "No batches in stream");
 
     while (!stream.is_end()) {
         ukv_graph_find_edges_t graph_find {
@@ -394,6 +395,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
         total_ids *= 3;
 
         export_method(c, ids_in_edges, total_ids);
-        stream.seek_to_next_batch().throw_unhandled();
+        status = stream.seek_to_next_batch();
+        return_if_error(status, c.error, 0, "Invalid batch");
     }
 }
