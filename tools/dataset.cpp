@@ -12,14 +12,19 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wall"
 #pragma GCC diagnostic ignored "-Wextra"
+#include <arrow/api.h>
 #include <arrow/array.h>
 #include <arrow/table.h>
+#include <arrow/result.h>
 #include <arrow/status.h>
+#include <arrow/io/api.h>
 #include <arrow/csv/api.h>
 #include <arrow/io/file.h>
+#include <arrow/csv/writer.h>
 #include <arrow/memory_pool.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/stream_writer.h>
+#include <arrow/compute/api_aggregate.h>
 #pragma GCC diagnostic pop
 
 #include <simdjson.h>
@@ -35,6 +40,10 @@
 using namespace unum::ukv;
 
 constexpr std::size_t uuid_length = 36;
+
+bool strcmp_(const char* lhs, const char* rhs) {
+    return std::strcmp(lhs, rhs) == 0;
+}
 
 void make_uuid(char* out) {
     uuid_t uuid;
@@ -114,7 +123,7 @@ void import_parquet(ukv_graph_import_t& c, ukv_size_t max_batch_size) {
 
     std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
     status = parquet::arrow::OpenFile(input, pool, &arrow_reader);
-    return_if_error(status.ok(), c.error, 0, "Can't open file");
+    return_if_error(status.ok(), c.error, 0, "Can't instatinate reader");
 
     // Read File into table
     std::shared_ptr<arrow::Table> table;
@@ -124,9 +133,9 @@ void import_parquet(ukv_graph_import_t& c, ukv_size_t max_batch_size) {
     fill_array(c, max_batch_size, table);
 }
 
-void export_parquet(ukv_graph_export_t& c, ukv_size_t max_batch_size, ukv_key_t const* data, ukv_size_t length) {
+void export_parquet(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t length) {
 
-    bool edge_state = std::strcmp(c.edge_id_field, "edge");
+    bool edge_state = strcmp_(c.edge_id_field, "edge");
 
     parquet::schema::NodeVector fields;
     fields.push_back(                         //
@@ -143,7 +152,7 @@ void export_parquet(ukv_graph_export_t& c, ukv_size_t max_batch_size, ukv_key_t 
             parquet::Type::INT64,
             parquet::ConvertedType::INT_64));
 
-    if (edge_state)
+    if (!edge_state)
         fields.push_back(                         //
             parquet::schema::PrimitiveNode::Make( //
                 c.edge_id_field,
@@ -163,13 +172,13 @@ void export_parquet(ukv_graph_export_t& c, ukv_size_t max_batch_size, ukv_key_t 
 
     parquet::WriterProperties::Builder builder;
     builder.memory_pool(arrow::default_memory_pool());
-    builder.write_batch_size(max_batch_size);
+    builder.write_batch_size(length);
 
     parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
 
     for (size_t idx = 0; idx < length; idx += 3) {
         os << *(data + idx) << *(data + idx + 1);
-        if (edge_state) 
+        if (!edge_state)
             os << *(data + idx + 2);
 
         auto dat = os.current_row();
@@ -199,6 +208,72 @@ void import_csv(ukv_graph_import_t& c, ukv_size_t max_batch_size) {
     std::shared_ptr<arrow::Table> table = *maybe_table;
 
     fill_array(c, max_batch_size, table);
+}
+
+void export_csv(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t length) {
+
+    bool edge_state = strcmp_(c.edge_id_field, "edge");
+    arrow::Status status;
+
+    arrow::NumericBuilder<arrow::Int64Type> builder;
+    status = builder.Resize(length / 3);
+    return_if_error(status.ok(), c.error, 0, "Can't instatinate builder");
+
+    std::shared_ptr<arrow::Array> sources_array;
+    std::shared_ptr<arrow::Array> targets_array;
+    std::shared_ptr<arrow::Array> edges_array;
+    std::vector<ukv_key_t> values(length / 3);
+
+    auto func = [&](size_t offset) {
+        for (size_t idx_in_data = offset, idx = 0; idx_in_data < length; idx_in_data += 3, ++idx) {
+            values[idx] = *(data + idx_in_data);
+        }
+    };
+
+    func(0);
+    status = builder.AppendValues(values);
+    return_if_error(status.ok(), c.error, 0, "Can't append values(sources)");
+    status = builder.Finish(&sources_array);
+    return_if_error(status.ok(), c.error, 0, "Can't finish array(sources)");
+
+    func(1);
+    status = builder.AppendValues(values);
+    return_if_error(status.ok(), c.error, 0, "Can't append values(targets)");
+    status = builder.Finish(&targets_array);
+    return_if_error(status.ok(), c.error, 0, "Can't finish array(targets)");
+
+    if (!edge_state) {
+        func(2);
+        status = builder.AppendValues(values);
+        return_if_error(status.ok(), c.error, 0, "Can't append values(edges)");
+        status = builder.Finish(&edges_array);
+        return_if_error(status.ok(), c.error, 0, "Can't finish array(edges)");
+    }
+
+    arrow::FieldVector fields;
+
+    fields.push_back(arrow::field(c.source_id_field, arrow::int64()));
+    fields.push_back(arrow::field(c.target_id_field, arrow::int64()));
+    if (!edge_state)
+        fields.push_back(arrow::field(c.edge_id_field, arrow::int64()));
+
+    std::shared_ptr<arrow::Schema> schema = std::make_shared<arrow::Schema>(fields);
+    std::shared_ptr<arrow::Table> table;
+
+    if (!edge_state)
+        table = arrow::Table::Make(schema, {sources_array, targets_array, edges_array});
+    else
+        table = arrow::Table::Make(schema, {sources_array, targets_array});
+
+    char file_name[uuid_length];
+    make_uuid(file_name);
+
+    auto maybe_outstream = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
+    return_if_error(maybe_outstream.ok(), c.error, 0, "Can't open file");
+    std::shared_ptr<arrow::io::FileOutputStream> outstream = *maybe_outstream;
+
+    status = arrow::csv::WriteCSV(*table, arrow::csv::WriteOptions::Defaults(), outstream.get());
+    return_if_error(status.ok(), c.error, 0, "Can't write in file");
 }
 
 ////////// Parsing with SIMDJSON //////////
@@ -253,6 +328,9 @@ void import_json(ukv_graph_import_t& c, ukv_size_t max_batch_size) {
     munmap((void*)mapped_content.data(), mapped_content.size());
 }
 
+void export_json(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t length) {
+}
+
 void ukv_graph_import(ukv_graph_import_t* c_ptr) {
 
     ukv_graph_import_t& c = *c_ptr;
@@ -272,20 +350,18 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
 
     ukv_graph_export_t& c = *c_ptr;
 
-    auto export_method = &export_parquet;
+    ////// Choosing a method  //////
 
-    ////// Choosing a method will look like this //////
-    //
-    // auto ext = c.paths_extension;
-    // auto export_method = ext == ".parquet" //
-    //                          ? &export_parquet
-    //                          : ext == ".json" //
-    //                                ? &export_json
-    //                                : ext == ".csv" //
-    //                                      ? &export_csv
-    //                                      : nullptr;
-    //
-    // return_if_error(export_method, c.error, 0, "Not supported format");
+    auto ext = c.paths_extension;
+    auto export_method = strcmp_(ext, ".parquet") //
+                             ? &export_parquet
+                             : strcmp_(ext, ".json") //
+                                   ? &export_json
+                                   : strcmp_(ext, ".csv") //
+                                         ? &export_csv
+                                         : nullptr;
+
+    return_if_error(export_method, c.error, 0, "Not supported format");
 
     std::plus plus;
 
@@ -322,7 +398,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
         });
         total_ids *= 3;
 
-        export_method(c, max_batch_size, ids_in_edges, total_ids);
+        export_method(c, ids_in_edges, total_ids);
         stream.seek_to_next_batch().throw_unhandled();
     }
 }
