@@ -10,7 +10,7 @@ cmake -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Release
 ```
 
 Our baseline will be MongoDB.
-The [`mongoimport`](https://www.mongodb.com/docs/database-tools/mongoimport/) official tool supports both `.csv` and `.ndjson` imports and typical performance will be as follows:
+The <code class="docutils literal notranslate"><a href="https://www.mongodb.com/docs/database-tools/mongoimport/" class="pre">mongoimport</a></code> official tool supports both `.csv` and `.ndjson` imports and typical performance will be as follows:
 
 |         | Tweets    | Imports                     |        Retrieval        | Sampling |
 | ------- | --------- | --------------------------- | :---------------------: | :------: |
@@ -19,7 +19,7 @@ The [`mongoimport`](https://www.mongodb.com/docs/database-tools/mongoimport/) of
 | UMem    | 1'048'576 | 157 K docs/s ~ **850 MB/s** |                         |          |
 | LevelDB | 1'048'576 |                             |                         |          |
 | RocksDB | 1'048'576 | 15 K docs/s ~ **80 MB/s**   | 140 K docs/s ~ 750 MB/s |          |
-| UnumDB  | 1'048'576 |                             |
+| UnumDB  | 1'048'576 |                             |                         |          |
 
 
 Even with provided tooling it generally performs around 10'000 insertions per second and won't surpass 100 MB/s.

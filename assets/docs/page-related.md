@@ -28,11 +28,11 @@ These and other problems mean that interface can't be portable, ABI-safe or perf
 
 ## How is this different from X?
 
-|                       | [EJDB][ejdb] | [SurrealDB][surreal] | [ArangoDB][arango] |  UKV  | Explanation                                                                                                        |
-| :-------------------- | :----------: | :------------------: | :----------------: | :---: | :----------------------------------------------------------------------------------------------------------------- |
+|                       | [EJDB][ejdb] | [SurrealDB][surreal] | [ArangoDB][arango] |  UKV  | Explanation                                                                                                         |
+| :-------------------- | :----------: | :------------------: | :----------------: | :---: | :-----------------------------------------------------------------------------------------------------------------  |
 | Multi-Modal           |      ?       |          ?           |         ?          |   ✅   | Capable of storing Docs, Graphs and more in a single DBMS                                                          |
 | Has a C Layer         |      ?       |          ?           |         ?          |   ✅   | Essential for compatibility                                                                                        |
-| Is Fast               |      ?       |          ?           |         ?          |   ✅   |
+| Is Fast               |      ?       |          ?           |         ?          |   ✅   |                                                                                                                    |
 | High-level bindings   |      ?       |          ?           |         ?          |   ✅   | Can you call it from Python, JS, Java, GoLang or some other high-level language?                                   |
 | Structured bindings   |      ?       |          ?           |         ?          |   ✅   | Are bindings capable of anything beyond passing strings to the server?                                             |
 | Modular backends      |      ?       |          ?           |         ?          |   ✅   | Can you replace the DBMS without rewriting the application code?                                                   |
