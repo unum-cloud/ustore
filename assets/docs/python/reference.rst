@@ -1,5 +1,10 @@
 API Referance
 ==============
 
+=========
+UMEM
+=========
 
-Soon to be...
+.. automodule:: ukv.umem
+    :members:
+    :undoc-members:
