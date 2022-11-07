@@ -11,9 +11,9 @@ ukv
 ===============
 .. doxygenfile:: ukv.hpp
 
-===============
+================
 blobs_collection
-===============
+================
 .. doxygenfile:: blobs_collection.hpp
 
 ===============
