@@ -32,7 +32,9 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v2
       - name: Install Deps
-        run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe furo sphinx_mdinclude
+        run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe furo m2r2
+      - name: Install ukv from pip
+        run: pip install --extra-index-url  https://test.pypi.org/simple/  ukv
       - name: Build Documentation
         run: cd assets/docs && doxygen config.dox && make html
       - name: Copy assets

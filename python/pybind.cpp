@@ -38,15 +38,21 @@ using namespace unum;
 
 PYBIND11_MODULE(UKV_PYTHON_MODULE_NAME, m) {
     m.attr("__name__") = "ukv." stringify_value_m(UKV_PYTHON_MODULE_NAME);
-    m.doc() =
-        "Python bindings for Universal Key Value store library.\n"
-        "Supports:\n"
-        "> Collection-level CRUD operations, like `dict`.\n"
-        "> Batch operations & ACID transactions.\n"
-        "> Graph collections, mimicking `networkx`.\n"
-        "> Tabular views, mimicking `pandas`.\n"
-        "> Apache Arrow exports for inter-process communication.\n"
-        "---------------------------------------------\n";
+
+    m.doc() = R"doc(
+    ======================================================
+    Python bindings for Universal Key Value store library.
+    ======================================================
+    
+    Supports:
+    **********
+    * Collection-level CRUD operations, like `dict`.
+    * Batch operations & ACID transactions.
+    * Graph collections, mimicking `networkx`.
+    * Tabular views, mimicking `pandas`.
+    * Apache Arrow exports for inter-process communication.
+    
+    )doc";
 
     if (arrow::py::import_pyarrow())
         throw std::runtime_error("Failed to initialize PyArrow");
