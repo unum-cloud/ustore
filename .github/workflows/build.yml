@@ -59,22 +59,3 @@ jobs:
         run: chmod +x /home/runner/work/UKV/UKV/*
       - name: Run tests
         run: for test in $(ls /home/runner/work/UKV/UKV/*unit_test); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
-
-
-  publish_python:
-    runs-on: ubuntu-20.04
-    needs: build
-
-    steps:
-      - uses: actions/checkout@v3
-      - name: apt dependencies
-        run: chmod +x cmake/arrow.sh && ./cmake/arrow.sh
-
-      - name: pip dependencies
-        run: python3.9 -m pip install --force-reinstall pytest numpy pyarrow cmake
-
-      - name: build python shared lib
-        run: chmod +x python/pack.sh && bash python/pack.sh
-
-      - name: publish to test-pypi
-      - run: chmod +x python/publish.sh && bash python/publish.sh __token__ ${{ secrets.TWINE_API }}
