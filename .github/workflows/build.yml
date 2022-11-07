@@ -66,6 +66,7 @@ jobs:
     needs: build
 
     steps:
+      - uses: actions/checkout@v3
       - name: apt dependencies
         run: chmod +x cmake/arrow.sh && ./cmake/arrow.sh
 
