@@ -150,6 +150,11 @@ typedef uint64_t ukv_size_t;
 typedef uint8_t ukv_octet_t;
 
 /**
+ * @brief Monotonically increasing unique identifier that reflects the order of applied transactions
+ */
+typedef uint64_t ukv_sequence_number_t;
+
+/**
  * @brief Owning error message string.
  * If not null, must be deallocated via `ukv_error_free()`.
  */
@@ -476,6 +481,8 @@ typedef struct ukv_transaction_stage_t {
     ukv_transaction_t transaction;
     /** @brief Staging options. */
     ukv_options_t options = ukv_options_default_k;
+    /** @brief Optional output for the transaction stage sequence number. */
+    ukv_sequence_number_t* sequence_number = NULL;
 
 } ukv_transaction_stage_t;
 
@@ -503,6 +510,8 @@ typedef struct ukv_transaction_commit_t {
     ukv_transaction_t transaction;
     /** @brief Staging options. */
     ukv_options_t options = ukv_options_default_k;
+    /** @brief Optional output for the transaction commit sequence number. */
+    ukv_sequence_number_t* sequence_number = NULL;
 
 } ukv_transaction_commit_t;
 
