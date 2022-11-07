@@ -4,6 +4,7 @@
 #include <uuid/uuid.h> // `uuid` to make file name
 
 #include <vector>
+#include <fstream>
 #include <cstring>
 #include <numeric>
 #include <algorithm>
@@ -324,6 +325,35 @@ void import_json(ukv_graph_import_t& c, ukv_size_t max_batch_size) {
 }
 
 void export_json(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t length) {
+
+    char file_name[uuid_length];
+    make_uuid(file_name);
+    std::ofstream output(fmt::format("{}{}", file_name, c.paths_extension));
+
+    if (strcmp_(c.edge_id_field, "edge")) {
+        for (size_t idx = 0; idx < length; idx += 3) {
+            output << fmt::format( //
+                          "{{\"{}\":{},\"{}\":{}}}",
+                          c.source_id_field,
+                          *(data + idx),
+                          c.target_id_field,
+                          *(data + idx + 1))
+                   << std::endl;
+        }
+    }
+    else {
+        for (size_t idx = 0; idx < length; idx += 3) {
+            output << fmt::format( //
+                          "{{\"{}\":{},\"{}\":{},\"{}\":{}}}",
+                          c.source_id_field,
+                          *(data + idx),
+                          c.target_id_field,
+                          *(data + idx + 1),
+                          c.edge_id_field,
+                          *(data + idx + 2))
+                   << std::endl;
+        }
+    }
 }
 
 void ukv_graph_import(ukv_graph_import_t* c_ptr) {
@@ -350,7 +380,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
     auto ext = c.paths_extension;
     auto export_method = strcmp_(ext, ".parquet") //
                              ? &export_parquet
-                             : strcmp_(ext, ".json") //
+                             : strcmp_(ext, ".ndjson") //
                                    ? &export_json
                                    : strcmp_(ext, ".csv") //
                                          ? &export_csv
