@@ -24,7 +24,7 @@ mkdir build_release && \
 ```
 
 This will only produce 1 library for each embedded backend.
-Building Flight API and REST API may require [additional steps])(#partial).
+Building Flight API and REST API may require [additional steps](#partial).
 
 ### Adding UKV to Your CMake Project
 
