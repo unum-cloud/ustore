@@ -659,7 +659,6 @@ TEST(db, snapshots) {
         value_view_t expected_view(expected_begin, expected_begin + expected_len);
         EXPECT_EQ(retrieved_view.size(), expected_view.size());
         EXPECT_NE(retrieved_view, expected_view);
-        bool k = (retrieved_view == expected_view);
     }
 
     txn = *db.transact(true);
