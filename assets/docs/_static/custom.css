@@ -12,3 +12,11 @@ article>section>h1:nth-child(1) {
 .sidebar-brand-text {
     cursor: initial;
 }
+
+table>tbody>tr>td {
+    text-align: center;
+}
+
+table>tbody>tr>td:first-child {
+    text-align: left;
+}
