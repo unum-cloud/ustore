@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 set(CMAKE_CACHEFILE_DIR "${CMAKE_SOURCE_DIR}/build")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/lib")
@@ -85,28 +85,28 @@ else()
 endif()
 
 # Engines:
-include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/consistent_set.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocksdb.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/consistent_set.cmake")
 
 # Modalities:
-include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/json.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/bson.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/yyjson.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/fmt.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/json.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/bson.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/yyjson.cmake")
 
 include("${CMAKE_SOURCE_DIR}/cmake/pcre2.cmake")
 
 if(${UKV_USE_JEMALLOC})
-  include("${CMAKE_SOURCE_DIR}/cmake/jemalloc.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
 endif()
 
 # Distributions:
-include("${CMAKE_SOURCE_DIR}/cmake/arrow.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/boost.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/boost.cmake")
 
 # Benchmarks:
-include("${CMAKE_SOURCE_DIR}/cmake/simdjson.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/simdjson.cmake")
 
 if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
   add_dependencies(${ARROW_DEPENDENCY} Boost-external)
@@ -204,7 +204,7 @@ endforeach()
 # We build them with the original sources (instead of linking with already compiled libraries)
 # to maximize the number of exposed symbols and make debugging easier.
 if(${UKV_BUILD_TESTS})
-  include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
 
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
@@ -235,8 +235,8 @@ endif()
 
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
-  include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
-  include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gbench.cmake")
 
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
@@ -255,7 +255,7 @@ endif()
 # Build Python bindings linking to precompiled client SDKs
 if(${UKV_BUILD_PYTHON})
   find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
-  include("${CMAKE_SOURCE_DIR}/cmake/pybind11.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pybind11.cmake")
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
