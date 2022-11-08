@@ -223,6 +223,20 @@ TEST(db, basic) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, basic_clear) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    blobs_collection_t collection = *db.collection();
+    triplet_t triplet;
+    auto ref = collection[triplet.keys];
+    round_trip(ref, triplet.contents_arrow());
+
+    // Overwrite with empty values, but check for existence
+    EXPECT_TRUE(db.clear());
+    check_length(ref, ukv_length_missing_k);
+}
 TEST(db, persistency) {
 
     if (!path())
