@@ -237,6 +237,38 @@ TEST(db, basic_clear) {
     EXPECT_TRUE(db.clear());
     check_length(ref, ukv_length_missing_k);
 }
+
+TEST(db, ordered) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.clear());
+
+    // Try getting the main collection
+    EXPECT_TRUE(db.collection());
+    blobs_collection_t collection = *db.collection();
+
+    // Monotonically increasing
+    for (ukv_key_t k = 1000; k != 1100; ++k)
+        collection[k] = "some";
+    for (ukv_key_t k = 1000; k != 1100; ++k)
+        EXPECT_EQ(*collection[k].value(), "some");
+
+    // Monotonically decreasing
+    for (ukv_key_t k = 900; k != 800; --k)
+        collection[k] = "other";
+    for (ukv_key_t k = 900; k != 800; --k)
+        EXPECT_EQ(*collection[k].value(), "other");
+
+    // Overwrites
+    for (ukv_key_t k = 800; k != 1100; k += 2)
+        collection[k] = "third";
+    for (ukv_key_t k = 800; k != 1100; k += 2)
+        EXPECT_EQ(*collection[k].value(), "third");
+
+    EXPECT_TRUE(db.clear());
+}
+
 TEST(db, persistency) {
 
     if (!path())
