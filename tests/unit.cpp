@@ -625,7 +625,7 @@ TEST(db, snapshots) {
 
     triplet_t triplet;
     triplet_t triplet_same_v;
-    triplet_same_v.vals = {'A', 'A', 'A'};
+    triplet_same_v.vals = {'D', 'D', 'D'};
 
     EXPECT_TRUE(db.collection());
     blobs_collection_t collection = *db.collection();
@@ -767,6 +767,7 @@ TEST(db, txn_unnamed_then_named) {
     check_equalities(named_collection_ref, triplet.contents_arrow());
     check_equalities(named_collection_ref, triplet.contents_lengths());
     check_equalities(named_collection_ref, triplet.contents_full());
+
     EXPECT_TRUE(db.clear());
 }
 
@@ -1315,14 +1316,14 @@ TEST(db, graph_transaction_watch) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
     graph_collection_t net = *db.collection<graph_collection_t>();
-    transaction_t txn = *db.transact();
-    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
 
     edge_t edge1 {1, 2, 1};
     edge_t edge2 {3, 1, 2};
-
     EXPECT_TRUE(net.upsert(edge1));
     EXPECT_TRUE(net.upsert(edge2));
+
+    transaction_t txn = *db.transact();
+    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
     EXPECT_TRUE(txn_net.degree(1));
     EXPECT_TRUE(txn.commit());
 
