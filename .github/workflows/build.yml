@@ -70,7 +70,7 @@ jobs:
         run: chmod +x cmake/arrow.sh && ./cmake/arrow.sh
 
       - name: pip dependencies
-        run: python3.9 -m pip install --force-reinstall pytest numpy pyarrow cmake
+        run: python3.9 -m pip install --force-reinstall pytest numpy pyarrow cmake twine
 
       - name: build python shared lib
         run: cmake . -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_PYTHON=1 && make -j 4 py_umem
