@@ -19,11 +19,14 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
-    'sphinx.ext.napoleon']
+    'sphinx.ext.napoleon',
+    'sphinxcontrib.googleanalytics']
 
-templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '*.md']
 
+
+googleanalytics_id = "ANALITICS_ID"
+googleanalytics_enabled = True
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
