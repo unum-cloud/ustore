@@ -77,7 +77,8 @@ class context_t : public std::enable_shared_from_this<context_t> {
         return {db_, txn_, std::move(arg), arena_};
     }
 
-    blobs_ref_gt<places_arg_t> operator[](strided_range_gt<collection_key_field_t const> collections_and_keys) noexcept {
+    blobs_ref_gt<places_arg_t> operator[](
+        strided_range_gt<collection_key_field_t const> collections_and_keys) noexcept {
         places_arg_t arg;
         arg.collections_begin = collections_and_keys.members(&collection_key_field_t::collection).begin();
         arg.keys_begin = collections_and_keys.members(&collection_key_field_t::key).begin();
