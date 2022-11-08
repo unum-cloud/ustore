@@ -154,7 +154,7 @@ if(EXISTS ${UKV_BUILD_UDISK})
 
   add_library(ukv_udisk src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
 
-  if(NOT APPLE)
+  if((NOT APPLE) AND DEFINED ${JEMALLOC_DEPENDENCY})
     add_dependencies(ukv_udisk jemalloc)
   endif()
 
