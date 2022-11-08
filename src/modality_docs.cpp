@@ -1596,6 +1596,8 @@ struct column_begin_t {
                         yyjson_val* value,
                         printed_number_buffer_t& print_buffer,
                         string_t& output,
+                        bool with_separator,
+                        bool is_last,
                         ukv_error_t* c_error) noexcept {
 
         ukv_octet_t mask = static_cast<ukv_octet_t>(1 << (doc_idx % CHAR_BIT));
@@ -1610,7 +1612,10 @@ struct column_begin_t {
         len = static_cast<ukv_length_t>(str.size());
         output.insert(output.size(), str.begin(), str.end(), c_error);
         return_on_error(c_error);
-        output.push_back('\0', c_error);
+        if (with_separator)
+            output.push_back('\0', c_error);
+        if (is_last)
+            str_offsets[doc_idx + 1] = static_cast<ukv_length_t>(output.size());
     }
 };
 
@@ -1663,7 +1668,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     std::size_t count_bitmaps = 1ul + wants_conversions + wants_collisions;
     std::size_t bytes_per_bitmap = sizeof(ukv_octet_t) * slots_per_bitmap;
     std::size_t bytes_per_addresses_row = sizeof(void*) * c.fields_count;
-    std::size_t bytes_for_addresses = bytes_per_addresses_row * 6;
+    std::size_t bytes_for_addresses = bytes_per_addresses_row * 6 + sizeof(ukv_length_t);
     std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps * c.fields_count * c.fields_count;
     std::size_t bytes_per_scalars_row = transform_reduce_n(types, c.fields_count, 0ul, &doc_field_size_bytes);
     std::size_t bytes_for_scalars = bytes_per_scalars_row * c.docs_count;
@@ -1743,7 +1748,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
             case ukv_doc_field_str_k:
             case ukv_doc_field_bin_k:
                 addresses_offs[field_idx] = reinterpret_cast<ukv_length_t*>(scalars_tape);
-                addresses_lens[field_idx] = addresses_offs[field_idx] + c.docs_count;
+                addresses_lens[field_idx] = addresses_offs[field_idx] + c.docs_count + 1;
                 addresses_scalars[field_idx] = nullptr;
                 break;
             default:
@@ -1752,7 +1757,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
                 addresses_scalars[field_idx] = reinterpret_cast<ukv_byte_t*>(scalars_tape);
                 break;
             }
-            scalars_tape += doc_field_size_bytes(type) * c.docs_count;
+            scalars_tape += doc_field_size_bytes(type) * c.docs_count + sizeof(ukv_length_t);
         }
     }
 
@@ -1783,6 +1788,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
                 .str_lengths = addresses_lens[field_idx],
             };
 
+            bool is_last = doc_idx == c.docs_count - 1;
             // Export the types
             switch (type) {
 
@@ -1801,8 +1807,12 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
             case ukv_doc_field_f32_k: column.set<float>(doc_idx, found_value); break;
             case ukv_doc_field_f64_k: column.set<double>(doc_idx, found_value); break;
 
-            case ukv_doc_field_str_k: column.set_str(doc_idx, found_value, print_buffer, string_tape, c.error); break;
-            case ukv_doc_field_bin_k: column.set_str(doc_idx, found_value, print_buffer, string_tape, c.error); break;
+            case ukv_doc_field_str_k:
+                column.set_str(doc_idx, found_value, print_buffer, string_tape, true, is_last, c.error);
+                break;
+            case ukv_doc_field_bin_k:
+                column.set_str(doc_idx, found_value, print_buffer, string_tape, false, is_last, c.error);
+                break;
 
             default: break;
             }
