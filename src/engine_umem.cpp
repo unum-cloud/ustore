@@ -104,10 +104,11 @@ struct pair_compare_t {
 /*****************  Using Consistent Sets ****************/
 /*********************************************************/
 
+// using consistent_set_t = consistent_set_gt<pair_t, pair_compare_t>;
 // using consistent_set_t = consistent_avl_gt<pair_t, pair_compare_t>;
 // using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>, std::shared_mutex>;
 using consistent_set_t = partitioned_gt< //
-    consistent_set_gt<pair_t, pair_compare_t>,
+    consistent_avl_gt<pair_t, pair_compare_t>,
     std::hash<collection_key_t>,
     std::shared_mutex,
     64>;
@@ -734,7 +735,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     std::unique_lock _ {db.restructuring_mutex};
 
     if (c.mode == ukv_drop_keys_vals_handle_k) {
-        auto status = db.pairs.erase_range(c.id, c.id, no_op_t {});
+        auto status = db.pairs.erase_range(c.id, c.id + 1, no_op_t {});
         if (!status)
             return export_error_code(status, c.error);
 
@@ -747,12 +748,12 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     }
 
     else if (c.mode == ukv_drop_keys_vals_k) {
-        auto status = db.pairs.erase_range(c.id, c.id, no_op_t {});
+        auto status = db.pairs.erase_range(c.id, c.id + 1, no_op_t {});
         return export_error_code(status, c.error);
     }
 
     else if (c.mode == ukv_drop_vals_k) {
-        auto status = db.pairs.range(c.id, c.id, [&](pair_t& pair) noexcept {
+        auto status = db.pairs.range(c.id, c.id + 1, [&](pair_t& pair) noexcept {
             pair = pair_t {pair.collection_key, {}, nullptr};
         });
         return export_error_code(status, c.error);
