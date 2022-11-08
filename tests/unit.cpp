@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -67,6 +68,10 @@ static char const* path() {
 #else
     return nullptr;
 #endif
+}
+
+inline std::ostream& operator<<(std::ostream& os, collection_key_t obj) {
+    return os << obj.collection << obj.key;
 }
 
 #pragma region Binary Collections
