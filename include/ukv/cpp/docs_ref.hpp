@@ -436,8 +436,8 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layou
         layout.fields().size(),
         collections,
         keys,
-        layout.fields().begin().get(),
-        layout.types().begin().get(),
+        layout.fields().begin(),
+        layout.types().begin(),
     };
 
     ukv_docs_gather_t docs_gather;
