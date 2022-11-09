@@ -20,7 +20,7 @@
 #include <arrow/c/bridge.h>
 #pragma GCC diagnostic pop
 
-#include "pmr.hpp"                 // `stl_arena_t`
+#include "linked_memory.hpp"       // `linked_memory_lock_t`
 #include "ukv/cpp/ranges_args.hpp" // `contents_arg_t`
 
 namespace unum::ukv {
@@ -32,7 +32,7 @@ namespace arf = arrow::flight;
 namespace ar = arrow;
 
 inline static std::string const kFlightListCols = "list_collections"; /// `DoGet`
-inline static std::string const kFlightColOpen = "open_collection";   /// `DoAction`
+inline static std::string const kFlightColCreate = "create_collection";   /// `DoAction`
 inline static std::string const kFlightColDrop = "remove_collection"; /// `DoAction`
 
 inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
@@ -44,7 +44,7 @@ inline static std::string const kFlightWritePath = "write_path"; /// `DoPut`
 inline static std::string const kFlightMatchPath = "match_path"; /// `DoExchange`
 inline static std::string const kFlightReadPath = "read_path";   /// `DoExchange`
 inline static std::string const kFlightScan = "scan";            /// `DoExchange`
-inline static std::string const kFlightSize = "size";            /// `DoExchange`
+inline static std::string const kFlightMeasure = "measure";            /// `DoExchange`
 
 inline static std::string const kArgCols = "collections";
 inline static std::string const kArgKeys = "keys";
@@ -79,7 +79,7 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
     monotonic_resource_t resource_;
 
   public:
-    arrow_mem_pool_t(stl_arena_t& arena) : resource_(&arena.resource_) {}
+    arrow_mem_pool_t(linked_memory_lock_t& arena) : resource_(&arena.resource_) {}
     ~arrow_mem_pool_t() {}
 
     ar::Status Allocate(int64_t size, uint8_t** ptr) override {
@@ -185,7 +185,7 @@ inline ukv_octet_t* convert_lengths_into_bitmap(ukv_length_t* lengths, ukv_size_
 }
 
 /**
- * @brief Replaces "lengths" with @ref `ukv_length_missing_k` if matching NULL indicator is set.
+ * @brief Replaces "lengths" with `::ukv_length_missing_k` if matching NULL indicator is set.
  */
 template <typename scalar_at>
 inline scalar_at* arrow_replace_missing_scalars(ukv_octet_t const* slots,
@@ -273,13 +273,13 @@ inline contents_arg_t get_contents( //
     return result;
 }
 
-void ukv_to_continous_bin( //
+void ukv_to_continuous_bin( //
     contents_arg_t& contents,
     size_t places_count,
     size_t c_tasks_count,
-    ukv_bytes_cptr_t* continous_bin,
-    ptr_range_gt<ukv_length_t> continous_bin_offs,
-    stl_arena_t& arena,
+    ukv_bytes_cptr_t* continuous_bin,
+    ptr_range_gt<ukv_length_t> continuous_bin_offs,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) {
 
     // Check if the paths are continuous and are already in an Arrow-compatible form
@@ -293,13 +293,13 @@ void ukv_to_continous_bin( //
         ukv_length_t exported_bytes = 0;
         for (std::size_t i = 0; i != c_tasks_count; ++i) {
             auto path = contents[i];
-            continous_bin_offs[i] = exported_bytes;
+            continuous_bin_offs[i] = exported_bytes;
             std::memcpy(joined_paths.begin() + exported_bytes, path.begin(), path.size());
             exported_bytes += path.size();
         }
-        continous_bin_offs[places_count] = exported_bytes;
+        continuous_bin_offs[places_count] = exported_bytes;
 
-        *continous_bin = (ukv_bytes_cptr_t)joined_paths.begin();
+        *continuous_bin = (ukv_bytes_cptr_t)joined_paths.begin();
     }
     // It may be the case, that we only have `c_tasks_count` offsets instead of `c_tasks_count+1`,
     // which won't be enough for Arrow.
@@ -310,10 +310,10 @@ void ukv_to_continous_bin( //
         ukv_length_t exported_bytes = 0;
         for (std::size_t i = 0; i != c_tasks_count; ++i) {
             auto path = contents[i];
-            continous_bin_offs[i] = exported_bytes;
+            continuous_bin_offs[i] = exported_bytes;
             exported_bytes += path.size();
         }
-        continous_bin_offs[places_count] = exported_bytes;
+        continuous_bin_offs[places_count] = exported_bytes;
     }
 }
 } // namespace unum::ukv

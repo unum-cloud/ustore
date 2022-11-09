@@ -44,7 +44,6 @@ setup(
     ],
     install_requires=[
         'numpy>=1.16',
-        'pyarrow>=9'
     ],
     py_modules=['ukv'],
     extras_require={'test': 'pytest'},

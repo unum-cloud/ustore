@@ -4,7 +4,7 @@
  * @date 27 Jun 2022
  * @addtogroup C
  *
- * @brief C bindings Graph/Network collections.
+ * @brief Binary Interface Standard for @b Graph collections.
  *
  * It essentially extends "ukv.h", to store @b Graphs.
  * Unlike raw values and docs collections, this is an index
@@ -68,7 +68,7 @@ extern ukv_key_t ukv_default_edge_id_k;
  * @brief Every vertex can be either a source or a target in a Directed Graph.
  *
  * When working with undirected graphs, this argument is irrelevant and
- * should be set to @ref `ukv_vertex_role_any_k`. With directed graphs, where
+ * should be set to `::ukv_vertex_role_any_k`. With directed graphs, where
  * source and target can belong to different collections its @b crucial
  * that members of each collection are fixed to be either only sources
  * or only edges.
@@ -100,13 +100,13 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
  * to minimize memory copies and colocate the relevant data in the
  * global address space.
  *
- * Every edge will be represented by @b three @c `ukv_key_t`s:
+ * Every edge will be represented by @b three @c ukv_key_t's:
  * source, target and edge IDs respectively. It's not very
  * space-efficient, but will simplify the iteration over the
  * data in higher-level functions.
  *
  * Missing nodes will be exported with a "degree" set
- * to @ref `ukv_vertex_degree_missing_k`.
+ * to `::ukv_vertex_degree_missing_k`.
  *
  * ## Output Order
  *

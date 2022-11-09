@@ -1,16 +1,15 @@
 /**
- * @file table_ref.hpp
+ * @file docs_table.hpp
  * @author Ashot Vardanian
  * @date 4 Jul 2022
  * @addtogroup Cpp
  *
  * @brief C++ bindings for "ukv/docs.h".
  *
- * Most field-level operations are still accessible through normal @c `member_refs_t`.
+ * Most field-level operations are still accessible through normal @c member_refs_t.
  * This interface mostly helps with tabular and SoA <-> AoS operations involving:
  * - ::ukv_docs_gist
- * - ::ukv_docs_gather_scalars
- * - ::ukv_docs_gather_strings
+ * - ::ukv_docs_gather_t
  */
 
 #pragma once
@@ -238,6 +237,7 @@ class column_view_t {
 
     ukv_octet_t* validities() const noexcept { return validities_; }
     ukv_length_t* offsets() const noexcept { return offsets_; }
+    ukv_length_t* lengths() const noexcept { return lengths_; }
     ukv_byte_t* contents() const noexcept { return scalars_ ?: tape_; }
 };
 

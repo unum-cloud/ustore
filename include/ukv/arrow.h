@@ -75,7 +75,7 @@ struct ArrowArrayStream {
 #endif // ARROW_C_STREAM_INTERFACE
 
 /**
- * @brief Converts @c `ukv_doc_field_type_t` to a "format" string supported by Apache Arrow.
+ * @brief Converts @c ukv_doc_field_type_t to a "format" string supported by Apache Arrow.
  */
 static char const* ukv_doc_field_type_to_arrow_format(ukv_doc_field_type_t const field_type) {
     // Export the right format string and number of buffers to be managed by Arrow.
