@@ -23,11 +23,7 @@ using namespace unum::ukv;
 using uniform_idx_t = std::uniform_int_distribution<std::size_t>;
 
 constexpr std::size_t id_str_max_length_k = 24;
-constexpr std::size_t copies_per_tweet_k = 10;
-constexpr std::size_t tweets_per_batch_k = 10;
-
-constexpr std::size_t tweet_file_size_k = 1; // GB
-constexpr std::size_t tweets_batch_size_k = tweets_per_batch_k * copies_per_tweet_k;
+constexpr std::size_t copies_per_tweet_k = 1;
 
 constexpr std::size_t primes_k[10] = {
     1ul,
@@ -200,7 +196,6 @@ void sample_tweet_id_batches(bm::State& state, callback_at callback) {
     std::size_t iterations = 0;
     std::size_t successes = 0;
     for (auto _ : state) {
-        // state.PauseTiming();
         for (std::size_t idx = 0; idx != batch_size; ++idx) {
             std::size_t const file_idx = choose_file(gen);
             auto const& tweets = dataset_docs[file_idx];
@@ -214,7 +209,7 @@ void sample_tweet_id_batches(bm::State& state, callback_at callback) {
                 tweet_key *= primes_k[hash_idx];
             }
 
-            batch_keys[key_idx] = tweet_key;
+            batch_keys[idx] = tweet_key;
         }
         successes += callback(batch_keys.data(), batch_size);
         iterations++;
@@ -537,7 +532,7 @@ int main(int argc, char** argv) {
     std::printf("- indexed %zu relations\n", pass_through_size(dataset_graph));
     std::printf("- indexed %zu paths\n", pass_through_size(dataset_paths));
 
-    // 4. Run the actual benchmarks
+// 4. Run the actual benchmarks
 #if defined(UKV_ENGINE_IS_LEVELDB)
     db.open("/mnt/md0/Twitter/LevelDB").throw_unhandled();
 #elif defined(UKV_ENGINE_IS_ROCKSDB)
