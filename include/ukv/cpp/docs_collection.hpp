@@ -69,13 +69,25 @@ class docs_collection_t {
         return *this;
     }
 
+    inline docs_collection_t(docs_collection_t const& other) noexcept
+        : db_(other.db_), collection_(other.collection_), txn_(other.txn_), arena_(other.db_), type_(other.type_) {}
+
+    inline docs_collection_t& operator=(docs_collection_t const& other) noexcept {
+        db_ = other.db_;
+        collection_ = other.collection_;
+        txn_ = other.txn_;
+        arena_ = any_arena_t(other.db_);
+        type_ = other.type_;
+        return *this;
+    }
+
     inline operator ukv_collection_t() const noexcept { return collection_; }
     inline ukv_collection_t* member_ptr() noexcept { return &collection_; }
     inline ukv_arena_t* member_arena() noexcept { return arena_.member_ptr(); }
     inline ukv_database_t db() const noexcept { return db_; }
     inline ukv_transaction_t txn() const noexcept { return txn_; }
 
-    inline bins_range_t members( //
+    inline blobs_range_t members( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
         ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
         return {db_, txn_, collection_, min_key, max_key};

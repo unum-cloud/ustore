@@ -363,7 +363,7 @@ class consecutive_chunks_iterator_gt {
 };
 
 using consecutive_strs_iterator_t = consecutive_chunks_iterator_gt<std::string_view>;
-using consecutive_bins_iterator_t = consecutive_chunks_iterator_gt<value_view_t>;
+using consecutive_blobs_iterator_t = consecutive_chunks_iterator_gt<value_view_t>;
 
 /**
  * @brief A read-only iterator for values packed into a
@@ -409,7 +409,7 @@ class joined_chunks_iterator_gt {
 };
 
 using joined_strs_iterator_t = joined_chunks_iterator_gt<std::string_view>;
-using joined_bins_iterator_t = joined_chunks_iterator_gt<value_view_t>;
+using joined_blobs_iterator_t = joined_chunks_iterator_gt<value_view_t>;
 
 template <typename chunk_at>
 class joined_chunks_gt {
@@ -444,7 +444,7 @@ class joined_chunks_gt {
 };
 
 using joined_strs_t = joined_chunks_gt<std::string_view>;
-using joined_bins_t = joined_chunks_gt<value_view_t>;
+using joined_blobs_t = joined_chunks_gt<value_view_t>;
 
 /**
  * @brief A read-only iterator for values packed into a
@@ -489,7 +489,7 @@ class embedded_chunks_iterator_gt {
 };
 
 using embedded_strs_iterator_t = embedded_chunks_iterator_gt<std::string_view>;
-using embedded_bins_iterator_t = embedded_chunks_iterator_gt<value_view_t>;
+using embedded_blobs_iterator_t = embedded_chunks_iterator_gt<value_view_t>;
 
 template <typename chunk_at>
 class embedded_chunks_gt {
@@ -526,7 +526,7 @@ class embedded_chunks_gt {
 };
 
 using embedded_strs_t = embedded_chunks_gt<std::string_view>;
-using embedded_bins_t = embedded_chunks_gt<value_view_t>;
+using embedded_blobs_t = embedded_chunks_gt<value_view_t>;
 
 /**
  * @brief Iterates through a predetermined number of NULL-delimited

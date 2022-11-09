@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Script is incomplete
-# TODO manylinux version.
-python setup.py bdist_wheel &&
-twine upload --repository-url=https://test.pypi.org/legacy/ dist/* --verbose 
+
+python setup.py bdist_wheel --universal --build-number=$(date -d now '+%s') &&
+twine upload --repository-url=https://test.pypi.org/legacy/ dist/* -u $1 -p $2 --verbose 

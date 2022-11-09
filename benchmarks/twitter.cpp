@@ -216,7 +216,7 @@ void sample_tweet_id_batches(bm::State& state, callback_at callback) {
         iterations++;
     }
 
-    state.counters["docs/s"] = bm::Counter(iterations * batch_size, bm::Counter::kIsRate);
+    state.counters["items/s"] = bm::Counter(iterations * batch_size, bm::Counter::kIsRate);
     state.counters["batches/s"] = bm::Counter(iterations, bm::Counter::kIsRate);
     state.counters["fails,%"] = bm::Counter((iterations - successes) * 100.0, bm::Counter::kAvgThreads);
 }
@@ -251,6 +251,7 @@ static void docs_sample_blobs(bm::State& state) {
     });
 
     state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
+    state.counters["bytes/it"] = bm::Counter(received_bytes, bm::Counter::kAvgIterations);
 }
 
 static void docs_sample_objects(bm::State& state) {
@@ -284,6 +285,7 @@ static void docs_sample_objects(bm::State& state) {
         return true;
     });
     state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
+    state.counters["bytes/it"] = bm::Counter(received_bytes, bm::Counter::kAvgIterations);
 }
 
 static void docs_sample_field(bm::State& state) {
@@ -318,6 +320,7 @@ static void docs_sample_field(bm::State& state) {
         return true;
     });
     state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
+    state.counters["bytes/it"] = bm::Counter(received_bytes, bm::Counter::kAvgIterations);
 }
 
 static void docs_sample_table(bm::State& state) {
@@ -377,6 +380,7 @@ static void docs_sample_table(bm::State& state) {
         return true;
     });
     state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
+    state.counters["bytes/it"] = bm::Counter(received_bytes, bm::Counter::kAvgIterations);
 }
 
 /**
@@ -449,17 +453,19 @@ static void graph_traverse_two_hops(bm::State& state) {
         return true;
     });
     state.counters["bytes/s"] = bm::Counter(received_bytes, bm::Counter::kIsRate);
+    state.counters["bytes/it"] = bm::Counter(received_bytes, bm::Counter::kAvgIterations);
     state.counters["edges/s"] = bm::Counter(received_edges, bm::Counter::kIsRate);
 }
 
 int main(int argc, char** argv) {
     bm::Initialize(&argc, argv);
 
-    std::size_t thread_count = std::thread::hardware_concurrency() / 8;
-    std::size_t max_input_files = 30;
+    std::size_t thread_count = std::thread::hardware_concurrency() / 2;
+    std::size_t max_input_files = 1000;
     std::size_t min_seconds = 10;
     std::size_t small_batch_size = 32;
-    std::size_t big_batch_size = 256;
+    std::size_t mid_batch_size = 64;
+    std::size_t big_batch_size = 128;
 #if defined(UKV_DEBUG)
     max_input_files = 1;
     thread_count = 1;
@@ -593,6 +599,7 @@ int main(int argc, char** argv) {
             ->UseRealTime()
             ->Threads(thread_count)
             ->Arg(small_batch_size)
+            ->Arg(mid_batch_size)
             ->Arg(big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_objects", &docs_sample_objects) //
@@ -600,6 +607,7 @@ int main(int argc, char** argv) {
         ->UseRealTime()
         ->Threads(thread_count)
         ->Arg(small_batch_size)
+        ->Arg(mid_batch_size)
         ->Arg(big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_field", &docs_sample_field) //
@@ -607,6 +615,7 @@ int main(int argc, char** argv) {
         ->UseRealTime()
         ->Threads(thread_count)
         ->Arg(small_batch_size)
+        ->Arg(mid_batch_size)
         ->Arg(big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_table", &docs_sample_table) //
@@ -614,6 +623,7 @@ int main(int argc, char** argv) {
         ->UseRealTime()
         ->Threads(thread_count)
         ->Arg(small_batch_size)
+        ->Arg(mid_batch_size)
         ->Arg(big_batch_size);
 
     if (can_build_graph)
@@ -621,6 +631,7 @@ int main(int argc, char** argv) {
             ->MinTime(min_seconds)
             ->Threads(thread_count)
             ->Arg(small_batch_size)
+            ->Arg(mid_batch_size)
             ->Arg(big_batch_size);
 
     bm::RunSpecifiedBenchmarks();

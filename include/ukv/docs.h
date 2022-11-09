@@ -4,7 +4,7 @@
  * @date 27 Jun 2022
  * @addtogroup C
  *
- * @brief C bindings for collections of JSON-like @b Documents.
+ * @brief Binary Interface Standard for JSON-like @b Documents collections.
  *
  * It extends the basic "ukv.h" towards values storing hierarchical documents.
  * Examples: JSONs, MsgPacks, BSONs and a number of other similar formats.
@@ -54,7 +54,7 @@ extern "C" {
  * For Business Intelligence and Analytics mostly the `::ukv_doc_field_i64_k`
  * and `::ukv_doc_field_f64_k` are used.
  */
-typedef enum {
+typedef enum ukv_doc_field_type_t {
 
     ukv_doc_field_null_k = 0,
     ukv_doc_field_bool_k = 1,
@@ -88,7 +88,7 @@ typedef enum {
 /**
  * @brief Kind of document modification to be applied on `ukv_docs_write()`.
  */
-typedef enum {
+typedef enum ukv_doc_modification_t {
     ukv_doc_modify_upsert_k = 0,
     ukv_doc_modify_update_k = 1,
     ukv_doc_modify_insert_k = 2,
@@ -194,6 +194,7 @@ typedef struct ukv_docs_read_t {
 
     ukv_doc_field_type_t type = ukv_doc_field_default_k;
     ukv_size_t tasks_count = 1;
+
     ukv_collection_t const* collections = NULL;
     ukv_size_t collections_stride = 0;
 
@@ -293,7 +294,6 @@ void ukv_docs_gist(ukv_docs_gist_t*);
  *
  * - `bool` to `int` or `float` isn't a downcast.
  * - `int`, `bool`, `str` to `bool` is a downcast.
- *
  *
  * ## Columns Layout
  *

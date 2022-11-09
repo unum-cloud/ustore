@@ -1,5 +1,5 @@
 /**
- * @file bins_ref.hpp
+ * @file blobs_ref.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp
@@ -61,7 +61,7 @@ class docs_ref_gt {
     using keys_extractor_t = places_arg_extractor_gt<locations_plain_t>;
     static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
-    using value_t = std::conditional_t<is_one_k, value_view_t, embedded_bins_t>;
+    using value_t = std::conditional_t<is_one_k, value_view_t, embedded_blobs_t>;
     using present_t = std::conditional_t<is_one_k, bool, bits_span_t>;
     using length_t = std::conditional_t<is_one_k, ukv_length_t, ptr_range_gt<ukv_length_t>>;
 
@@ -331,7 +331,7 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t
             return many;
     }
     else {
-        embedded_bins_t many {count, found_offsets, found_lengths, found_values};
+        embedded_blobs_t many {count, found_offsets, found_lengths, found_values};
         if constexpr (is_one_k)
             return many[0];
         else
@@ -436,8 +436,8 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layou
         layout.fields().size(),
         collections,
         keys,
-        layout.fields().begin().get(),
-        layout.types().begin().get(),
+        layout.fields().begin(),
+        layout.types().begin(),
     };
 
     ukv_docs_gather_t docs_gather;
