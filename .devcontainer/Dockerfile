@@ -24,12 +24,12 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 
 
 # Install Arrow and Documentation Tools
-RUN apt update && apt install -y -V ca-certificates lsb-release wget && cd /tmp \
+RUN arrow_version=9.0.0-1 && sudo apt update && sudo apt install -y -V ca-certificates lsb-release wget && cd /tmp \
     && wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
-    && apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
-    && apt update && apt install -y -V libarrow-dev libarrow-dataset-dev libarrow-flight-dev \
-    libarrow-python-dev libarrow-python-flight-dev libplasma-dev libgandiva-dev libparquet-dev \
-    doxygen graphviz dia python3.10 python3-pip
+    && sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb \
+    && sudo apt update && sudo apt install -y -V libarrow-dev=${arrow_version} libarrow-dataset-dev=${arrow_version} libarrow-flight-dev=${arrow_version} \
+    libarrow-python-dev=${arrow_version} libarrow-python-flight-dev=${arrow_version} libgandiva-dev=${arrow_version} libparquet-dev=${arrow_version} \
+    python3.10 python3-pip python3-dbg python3.10-dev
 
 # Pip installations
-RUN pip install pytest twine numpy pyarrow wheel
+RUN pip install pytest twine numpy pyarrow wheel gdb-tools sphinx breathe furo sphinx_mdinclude

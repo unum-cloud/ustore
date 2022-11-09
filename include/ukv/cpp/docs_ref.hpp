@@ -1,5 +1,5 @@
 /**
- * @file bins_ref.hpp
+ * @file blobs_ref.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp
@@ -37,11 +37,11 @@ class docs_ref_gt;
  * ## Memory Management
  *
  * Every "container" that overloads the @b [] operator has an internal "arena",
- * that is shared between all the @c `docs_ref_gt`s produced from it. That will
+ * that is shared between all the @c docs_ref_gt's produced from it. That will
  * work great, unless:
  * - multiple threads are working with same collection handle or transaction.
  * - reading responses interleaves with new requests, which gobbles temporary memory.
- * For those cases, you can create a separate @c `arena_t` and pass it to `.on(...)`
+ * For those cases, you can create a separate @c arena_t and pass it to `.on(...)`
  * member function. In such HPC environments we would recommend to @b reuse one such
  * are on every thread.
  *
@@ -61,7 +61,7 @@ class docs_ref_gt {
     using keys_extractor_t = places_arg_extractor_gt<locations_plain_t>;
     static constexpr bool is_one_k = keys_extractor_t::is_one_k;
 
-    using value_t = std::conditional_t<is_one_k, value_view_t, embedded_bins_t>;
+    using value_t = std::conditional_t<is_one_k, value_view_t, embedded_blobs_t>;
     using present_t = std::conditional_t<is_one_k, bool, bits_span_t>;
     using length_t = std::conditional_t<is_one_k, ukv_length_t, ptr_range_gt<ukv_length_t>>;
 
@@ -128,6 +128,7 @@ class docs_ref_gt {
 
     /**
      * @brief Pair-wise assigns values to keys located in this proxy objects.
+     * @param vals Values to be assigned.
      * @param flush Pass true, if you need the data to be persisted before returning.
      * @return status_t Non-NULL if only an error had occurred.
      */
@@ -242,7 +243,7 @@ class docs_ref_gt {
 
     /**
      * @brief For N documents and M fields gather (N * M) responses.
-     * You put in a @c `table_layout_view_gt` and you receive a @c `docs_table_gt`.
+     * You put in a @c table_layout_view_gt and you receive a @c `docs_table_gt`.
      * Any column type annotation is optional.
      */
     expected_gt<docs_table_t> gather(table_header_t const& header, bool watch = true) noexcept {
@@ -330,7 +331,7 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t
             return many;
     }
     else {
-        embedded_bins_t many {count, found_offsets, found_lengths, found_values};
+        embedded_blobs_t many {count, found_offsets, found_lengths, found_values};
         if constexpr (is_one_k)
             return many[0];
         else
@@ -435,8 +436,8 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layou
         layout.fields().size(),
         collections,
         keys,
-        layout.fields().begin().get(),
-        layout.types().begin().get(),
+        layout.fields().begin(),
+        layout.types().begin(),
     };
 
     ukv_docs_gather_t docs_gather;

@@ -18,9 +18,11 @@
 			"extensions": [
 				"ms-vscode.cpptools",
 				"ms-vscode.cmake-tools",
+				"benjamin-simmonds.pythoncpp-debug",
 				"xaver.clang-format",
 				"mhutchie.git-graph",
-				"mutantdino.resourcemonitor"
+				"mutantdino.resourcemonitor",
+				"eamodio.gitlens"
 			]
 		}
 	},
@@ -33,5 +35,8 @@
 	"features": {
 		"git": "os-provided",
 		"git-lfs": "latest"
-	}
+	},
+	"mounts": [
+		"source=/home/sftp/Datasets/,target=/home/vscode/Datasets,type=bind,consistency=ro"
+	]
 }

@@ -70,13 +70,13 @@ void insert_atomic_isolated(std::size_t count_batches) {
     for (std::size_t i = 0; i < threads_count_ak; ++i)
         threads[i].join();
 
-    bins_collection_t collection = db.collection().throw_or_release();
+    blobs_collection_t collection = db.collection().throw_or_release();
 
     for (std::size_t idx_batch = 0; idx_batch != count_batches; ++idx_batch) {
         ukv_key_t const first_key_in_batch = idx_batch * batch_size_ak;
         std::iota(keys.begin(), keys.end(), first_key_in_batch);
 
-        embedded_bins_t retrieved = collection[keys].value().throw_or_release();
+        embedded_blobs_t retrieved = collection[keys].value().throw_or_release();
         for (std::size_t idx_in_batch = 1; idx_in_batch != batch_size_ak; ++idx_in_batch)
             EXPECT_EQ(retrieved[0], retrieved[idx_in_batch]);
     }
@@ -258,7 +258,7 @@ void serializable_transactions(std::size_t iteration_count) {
     EXPECT_TRUE(db_simulation.open(second_db_path.c_str()));
     EXPECT_TRUE(db_simulation.clear());
 
-    bins_collection_t collection_simulation = db_simulation.collection().throw_or_release();
+    blobs_collection_t collection_simulation = db_simulation.collection().throw_or_release();
     for (auto& time_and_operation : operations) {
         auto operation = time_and_operation.second;
         auto ref = collection_simulation[strided_range(operation.keys).subspan(0u, operation.count)];
@@ -297,7 +297,7 @@ void serializable_transactions(std::size_t iteration_count) {
         }
     }
 
-    bins_collection_t collection = db.collection().throw_or_release();
+    blobs_collection_t collection = db.collection().throw_or_release();
     keys_range_t present_keys = collection.keys();
     keys_stream_t present_it = present_keys.begin();
     keys_range_t present_keys_simulation = collection_simulation.keys();
@@ -360,10 +360,9 @@ void log_operations( //
 }
 
 template <std::size_t max_batch_size_ak>
-bool add_updated_keys( //
-    std::array<operation_t, max_batch_size_ak> const& operations,
-    std::size_t operations_count,
-    std::unordered_map<ukv_key_t, bool>& updated_keys) {
+void add_updated_keys(std::array<operation_t, max_batch_size_ak> const& operations,
+                      std::size_t operations_count,
+                      std::unordered_map<ukv_key_t, bool>& updated_keys) {
 
     for (std::size_t idx = 0; idx != operations_count; ++idx) {
         if (operations[idx].type == operation_code_t::remove_k || operations[idx].type == operation_code_t::insert_k)

@@ -94,14 +94,20 @@ strided_matrix_gt<scalar_at> py_strided_matrix(py_buffer_t const& buf) {
 template <typename scalar_at>
 scalar_at py_to_scalar(PyObject* obj) {
     if constexpr (std::is_integral_v<scalar_at>) {
-        if (!PyLong_Check(obj))
-            throw std::invalid_argument("Expects integer");
-        return static_cast<scalar_at>(PyLong_AsUnsignedLong(obj));
+        if (PyLong_Check(obj))
+            return static_cast<scalar_at>(PyLong_AsUnsignedLong(obj));
+        else if (PyNumber_Check(obj))
+            return static_cast<scalar_at>(PyNumber_AsSsize_t(obj, NULL));
+
+        throw std::invalid_argument("Expects integer");
+        return 0;
     }
     else {
-        if (!PyFloat_Check(obj))
-            throw std::invalid_argument("Expects float");
-        return static_cast<scalar_at>(PyFloat_AsDouble(obj));
+        if (PyFloat_Check(obj))
+            return static_cast<scalar_at>(PyFloat_AsDouble(obj));
+
+        throw std::invalid_argument("Expects float");
+        return 0;
     }
 }
 
@@ -172,6 +178,13 @@ void py_transform_n(PyObject* obj,
             ++output_iterator;
         }
     }
+    else if (PySequence_Check(obj)) {
+        max_count = std::min<std::size_t>(PySequence_Size(obj), max_count);
+        for (std::size_t i = 0; i != max_count; ++i, ++output_iterator)
+            *output_iterator = transform(PySequence_GetItem(obj, i));
+    }
+    else if (obj != Py_None)
+        throw std::invalid_argument("Invalid Argument!");
 }
 
 /**

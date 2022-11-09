@@ -17,10 +17,10 @@
 #include <bson.h>   // Converting from/to BSON
 
 #include "ukv/docs.h"
-#include "helpers/pmr.hpp"         // `stl_arena_t`
-#include "helpers/vector.hpp"      // `growing_tape_t`
-#include "helpers/algorithm.hpp"   // `transform_n`
-#include "ukv/cpp/ranges_args.hpp" // `places_arg_t`
+#include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
+#include "helpers/linked_array.hpp"  // `growing_tape_t`
+#include "helpers/algorithm.hpp"     // `transform_n`
+#include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -161,7 +161,7 @@ struct json_branch_t {
 
 static void* json_yy_malloc(void* ctx, size_t length) noexcept {
     ukv_error_t error = nullptr;
-    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(ctx);
+    linked_memory_lock_t& arena = *reinterpret_cast<linked_memory_lock_t*>(ctx);
     auto result = arena.alloc<byte_t>(length + sizeof(length), &error).begin();
     if (!result)
         return result;
@@ -171,7 +171,7 @@ static void* json_yy_malloc(void* ctx, size_t length) noexcept {
 
 static void* json_yy_realloc(void* ctx, void* ptr, size_t length) noexcept {
     ukv_error_t error = nullptr;
-    stl_arena_t& arena = *reinterpret_cast<stl_arena_t*>(ctx);
+    linked_memory_lock_t& arena = *reinterpret_cast<linked_memory_lock_t*>(ctx);
     auto bytes = reinterpret_cast<byte_t*>(ptr) - sizeof(length);
     auto old_length = *reinterpret_cast<size_t*>(bytes);
     auto old_size = old_length + sizeof(length);
@@ -186,7 +186,7 @@ static void* json_yy_realloc(void* ctx, void* ptr, size_t length) noexcept {
 static void json_yy_free(void*, void* ptr) noexcept {
 }
 
-yyjson_alc wrap_allocator(stl_arena_t& arena) {
+yyjson_alc wrap_allocator(linked_memory_lock_t& arena) {
     yyjson_alc allocator;
     allocator.malloc = json_yy_malloc;
     allocator.realloc = json_yy_realloc;
@@ -213,7 +213,7 @@ yyjson_mut_val* json_lookupn(yyjson_mut_val* json, ukv_str_view_t field, size_t 
                              : yyjson_mut_obj_getn(json, field, len);
 }
 
-json_t json_parse(value_view_t bytes, stl_arena_t& arena, ukv_error_t* c_error) noexcept {
+json_t json_parse(value_view_t bytes, linked_memory_lock_t& arena, ukv_error_t* c_error) noexcept {
 
     if (bytes.empty())
         return {};
@@ -227,7 +227,10 @@ json_t json_parse(value_view_t bytes, stl_arena_t& arena, ukv_error_t* c_error) 
     return result;
 }
 
-value_view_t json_dump(json_branch_t json, stl_arena_t& arena, growing_tape_t& output, ukv_error_t* c_error) noexcept {
+value_view_t json_dump(json_branch_t json,
+                       linked_memory_lock_t& arena,
+                       growing_tape_t& output,
+                       ukv_error_t* c_error) noexcept {
 
     if (!json)
         return output.push_back(value_view_t {}, c_error);
@@ -411,7 +414,7 @@ std::string_view json_to_string(yyjson_val* value,
 /*****************	 Format Conversions	  ****************/
 /*********************************************************/
 
-using string_t = uninitialized_vector_gt<char>;
+using string_t = uninitialized_array_gt<char>;
 struct json_state_t {
     string_t& json_str;
     ukv_error_t* c_error;
@@ -536,10 +539,10 @@ static bool bson_visit_binary(bson_iter_t const*,
                               char const*,
                               bson_subtype_t v_subtype,
                               size_t v_binary_len,
-                              const uint8_t* v_binary,
+                              uint8_t const* v_binary,
                               void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    char* b64 = reinterpret_cast<char*>(const_cast<uint8_t*>(v_binary));
+    char* b64 = (char*)(v_binary);
 
     bson_to_json_string(state.json_str, "{ \"$binary\" : { \"base64\" : \"", state.c_error);
     bson_to_json_string(state.json_str, b64, state.c_error);
@@ -645,7 +648,7 @@ static bool bson_visit_decimal128(bson_iter_t const*, char const*, bson_decimal1
 
 json_t any_parse(value_view_t bytes,
                  ukv_doc_field_type_t const field_type,
-                 stl_arena_t& arena,
+                 linked_memory_lock_t& arena,
                  ukv_error_t* c_error) noexcept {
 
     if (field_type == ukv_doc_field_bson_k) {
@@ -702,7 +705,7 @@ json_t any_parse(value_view_t bytes,
 
 value_view_t any_dump(json_branch_t json,
                       ukv_doc_field_type_t const field_type,
-                      stl_arena_t& arena,
+                      linked_memory_lock_t& arena,
                       growing_tape_t& output,
                       ukv_error_t* c_error) noexcept {
 
@@ -753,29 +756,25 @@ void modify_field( //
             return_if_error(yyjson_mut_arr_replace(val, idx, merge_result), c_error, 0, "Failed To Merge!");
         }
         else if (c_modification == doc_modification_t::insert_k) {
-            if (is_idx) {
-                return_if_error(yyjson_mut_arr_insert(val, modifier, idx), c_error, 0, "Failed To Insert!");
-            }
-            else {
-                return_if_error(yyjson_mut_arr_add_val(val, modifier), c_error, 0, "Failed To Insert!");
-            }
+            auto result = is_idx //
+                              ? yyjson_mut_arr_insert(val, modifier, idx)
+                              : yyjson_mut_arr_add_val(val, modifier);
+            return_if_error(result, c_error, 0, "Failed To Insert!");
         }
         else if (c_modification == doc_modification_t::remove_k) {
-            return_if_error(yyjson_mut_arr_remove(val, idx), c_error, 0, "Failed To Insert!");
+            return_if_error(yyjson_mut_arr_remove(val, idx), c_error, 0, "Failed To Remove!");
         }
         else if (c_modification == doc_modification_t::update_k) {
             return_if_error(yyjson_mut_arr_replace(val, idx, modifier), c_error, 0, "Failed To Update!");
         }
         else if (c_modification == doc_modification_t::upsert_k) {
-            if (yyjson_mut_arr_get(val, idx)) {
-                return_if_error(yyjson_mut_arr_replace(val, idx, modifier), c_error, 0, "Failed To Update!");
-            }
-            else {
-                return_if_error(yyjson_mut_arr_append(val, modifier), c_error, 0, "Failed To Update!");
-            }
+            auto result = yyjson_mut_arr_get(val, idx) //
+                              ? yyjson_mut_arr_replace(val, idx, modifier) != nullptr
+                              : yyjson_mut_arr_append(val, modifier);
+            return_if_error(result, c_error, 0, "Failed To Upsert!");
         }
         else {
-            return_error(c_error, "Invalid Modification Mod!");
+            return_error(c_error, "Invalid Modification Mode!");
         }
     }
     else if (yyjson_mut_is_obj(val)) {
@@ -813,7 +812,10 @@ void modify_field( //
     }
 }
 
-ukv_str_view_t field_concat(ukv_str_view_t field, ukv_str_view_t suffix, stl_arena_t& arena, ukv_error_t* c_error) {
+ukv_str_view_t field_concat(ukv_str_view_t field,
+                            ukv_str_view_t suffix,
+                            linked_memory_lock_t& arena,
+                            ukv_error_t* c_error) {
     auto field_len = field ? std::strlen(field) : 0;
     auto suffix_len = suffix ? std::strlen(suffix) : 0;
 
@@ -835,7 +837,7 @@ void patch( //
     yyjson_mut_doc* original_doc,
     yyjson_mut_val* patch_doc,
     ukv_str_view_t field,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) {
 
     return_if_error(yyjson_mut_is_arr(patch_doc), c_error, 0, "Invalid Patch Doc!");
@@ -916,7 +918,7 @@ void modify( //
     yyjson_mut_val* modifier,
     ukv_str_view_t field,
     doc_modification_t const c_modification,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) {
 
     if (!original.mut_handle) {
@@ -949,20 +951,19 @@ void read_unique_docs( //
     ukv_transaction_t const c_txn,
     places_arg_t const& places,
     ukv_options_t const c_options,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_vector_gt<json_t>& unique_docs,
+    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
-    ukv_arena_t arena_ptr = &arena;
     ukv_byte_t* found_binary_begin = nullptr;
     ukv_length_t* found_binary_offs = nullptr;
     ukv_read_t read {
         .db = c_db,
         .error = c_error,
         .transaction = c_txn,
-        .arena = &arena_ptr,
+        .arena = arena,
         .options = c_options,
         .tasks_count = places.count,
         .collections = places.collections_begin.get(),
@@ -975,7 +976,7 @@ void read_unique_docs( //
 
     ukv_read(&read);
 
-    auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
+    auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
 
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
@@ -999,16 +1000,15 @@ void read_modify_unique_docs( //
     places_arg_t const& places,
     ukv_options_t const c_options,
     doc_modification_t const c_modification,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_vector_gt<json_t>& unique_docs,
+    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
     if (c_modification == doc_modification_t::nothing_k)
         read_unique_docs(c_db, c_txn, places, c_options, arena, unique_places, unique_docs, c_error, callback);
 
-    ukv_arena_t arena_ptr = &arena;
     auto has_fields = places.fields_begin && (!places.fields_begin.repeats() || *places.fields_begin);
     bool need_values =
         has_fields || c_modification == doc_modification_t::patch_k || c_modification == doc_modification_t::merge_k;
@@ -1020,7 +1020,7 @@ void read_modify_unique_docs( //
             .db = c_db,
             .error = c_error,
             .transaction = c_txn,
-            .arena = &arena_ptr,
+            .arena = arena,
             .options = c_options,
             .tasks_count = places.count,
             .collections = places.collections_begin.get(),
@@ -1032,8 +1032,9 @@ void read_modify_unique_docs( //
         };
 
         ukv_read(&read);
+        return_on_error(c_error);
 
-        auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
+        auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
         auto found_binary_it = found_binaries.begin();
 
         for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
@@ -1057,7 +1058,7 @@ void read_modify_unique_docs( //
             .db = c_db,
             .error = c_error,
             .transaction = c_txn,
-            .arena = &arena_ptr,
+            .arena = arena,
             .options = c_options,
             .tasks_count = places.count,
             .collections = places.collections_begin.get(),
@@ -1067,6 +1068,7 @@ void read_modify_unique_docs( //
             .presences = &found_presences,
         };
         ukv_read(&read);
+        return_on_error(c_error);
 
         bits_view_t presents {found_presences};
         for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx) {
@@ -1091,9 +1093,9 @@ void read_modify_docs( //
     places_arg_t const& places,
     ukv_options_t const c_options,
     doc_modification_t const c_modification,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_vector_gt<json_t>& unique_docs,
+    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) {
 
@@ -1137,7 +1139,6 @@ void read_modify_docs( //
 
     // Otherwise, let's retrieve the sublist of unique docs,
     // which may be in a very different order from original.
-    ukv_arena_t arena_ptr = &arena;
     ukv_byte_t* found_binary_begin = nullptr;
     ukv_length_t* found_binary_offs = nullptr;
     auto unique_col_keys_strided = strided_range(unique_col_keys.begin(), unique_col_keys.end()).immutable();
@@ -1149,7 +1150,7 @@ void read_modify_docs( //
         .db = c_db,
         .error = c_error,
         .transaction = c_txn,
-        .arena = &arena_ptr,
+        .arena = arena,
         .options = c_options,
         .tasks_count = unique_places.count,
         .collections = unique_places.collections_begin.get(),
@@ -1173,7 +1174,7 @@ void read_modify_docs( //
     initialized_range_gt<json_t> unique_docs_raii {unique_docs};
 
     // Parse all the unique documents
-    auto found_binaries = joined_bins_t(places.count, found_binary_offs, found_binary_begin);
+    auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
     for (ukv_size_t doc_idx = 0; doc_idx != unique_places.count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
@@ -1212,7 +1213,7 @@ void read_modify_write( //
     ukv_options_t const c_options,
     doc_modification_t const c_modification,
     ukv_doc_field_type_t const c_type,
-    stl_arena_t& arena,
+    linked_memory_lock_t& arena,
     ukv_error_t* c_error) noexcept {
 
     growing_tape_t growing_tape {arena};
@@ -1234,7 +1235,7 @@ void read_modify_write( //
     };
 
     places_arg_t unique_places;
-    uninitialized_vector_gt<json_t> unique_docs(arena);
+    uninitialized_array_gt<json_t> unique_docs(arena);
     auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
     read_modify_docs(c_db,
                      c_txn,
@@ -1250,12 +1251,11 @@ void read_modify_write( //
 
     // By now, the tape contains concatenated updates docs:
     ukv_byte_t* tape_begin = reinterpret_cast<ukv_byte_t*>(growing_tape.contents().begin().get());
-    ukv_arena_t arena_ptr = &arena;
     ukv_write_t write {
         .db = c_db,
         .error = c_error,
         .transaction = c_txn,
-        .arena = &arena_ptr,
+        .arena = arena,
         .options = c_options,
         .tasks_count = unique_places.count,
         .collections = unique_places.collections_begin.get(),
@@ -1278,9 +1278,8 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
-    ukv_arena_t new_arena = &arena;
 
     // If user wants the entire doc in the same format, as the one we use internally,
     // this request can be passed entirely to the underlying Key-Value store.
@@ -1291,7 +1290,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
             .db = c.db,
             .error = c.error,
             .transaction = c.transaction,
-            .arena = &new_arena,
+            .arena = arena,
             .options = c.options,
             .tasks_count = c.tasks_count,
             .collections = c.collections,
@@ -1337,9 +1336,8 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
-    ukv_arena_t new_arena = &arena;
 
     // If user wants the entire doc in the same format, as the one we use internally,
     // this request can be passed entirely to the underlying Key-Value store.
@@ -1350,7 +1348,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
             .db = c.db,
             .error = c.error,
             .transaction = c.transaction,
-            .arena = &new_arena,
+            .arena = arena,
             .options = c.options,
             .tasks_count = c.tasks_count,
             .collections = c.collections,
@@ -1384,7 +1382,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
         return_on_error(c.error);
     };
     places_arg_t unique_places;
-    uninitialized_vector_gt<json_t> unique_docs(arena);
+    uninitialized_array_gt<json_t> unique_docs(arena);
     read_modify_docs(c.db,
                      c.transaction,
                      places,
@@ -1410,7 +1408,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
 
 void gist_recursively(yyjson_val* node,
                       field_path_buffer_t& path,
-                      uninitialized_vector_gt<std::string_view>& sorted_paths,
+                      uninitialized_array_gt<std::string_view>& sorted_paths,
                       growing_tape_t& exported_paths,
                       ukv_error_t* c_error) {
 
@@ -1481,9 +1479,8 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
     if (!c.docs_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
-    ukv_arena_t new_arena = &arena;
 
     ukv_byte_t* found_binary_begin = nullptr;
     ukv_length_t* found_binary_offs = nullptr;
@@ -1491,7 +1488,7 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
         .db = c.db,
         .error = c.error,
         .transaction = c.transaction,
-        .arena = &new_arena,
+        .arena = arena,
         .options = c.options,
         .tasks_count = c.docs_count,
         .collections = c.collections,
@@ -1510,12 +1507,12 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
 
-    joined_bins_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
-    joined_bins_iterator_t found_binary_it = found_binaries.begin();
+    joined_blobs_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
+    joined_blobs_iterator_t found_binary_it = found_binaries.begin();
 
     // Export all the elements into a heap-allocated hash-set, keeping only unique entries
     field_path_buffer_t field_name = {0};
-    uninitialized_vector_gt<std::string_view> sorted_paths(arena);
+    uninitialized_array_gt<std::string_view> sorted_paths(arena);
     growing_tape_t exported_paths(arena);
     for (ukv_size_t doc_idx = 0; doc_idx != c.docs_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
@@ -1599,6 +1596,8 @@ struct column_begin_t {
                         yyjson_val* value,
                         printed_number_buffer_t& print_buffer,
                         string_t& output,
+                        bool with_separator,
+                        bool is_last,
                         ukv_error_t* c_error) noexcept {
 
         ukv_octet_t mask = static_cast<ukv_octet_t>(1 << (doc_idx % CHAR_BIT));
@@ -1613,7 +1612,10 @@ struct column_begin_t {
         len = static_cast<ukv_length_t>(str.size());
         output.insert(output.size(), str.begin(), str.end(), c_error);
         return_on_error(c_error);
-        output.push_back('\0', c_error);
+        if (with_separator)
+            output.push_back('\0', c_error);
+        if (is_last)
+            str_offsets[doc_idx + 1] = static_cast<ukv_length_t>(output.size());
     }
 };
 
@@ -1623,9 +1625,8 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     if (!c.docs_count || !c.fields_count)
         return;
 
-    stl_arena_t arena = make_stl_arena(c.arena, c.options, c.error);
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
-    ukv_arena_t new_arena = &arena;
 
     // Retrieve the entire documents before we can sample internal fields
     ukv_byte_t* found_binary_begin = nullptr;
@@ -1634,7 +1635,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
         .db = c.db,
         .error = c.error,
         .transaction = c.transaction,
-        .arena = &new_arena,
+        .arena = arena,
         .options = c.options,
         .tasks_count = c.docs_count,
         .collections = c.collections,
@@ -1653,8 +1654,8 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
     strided_iterator_gt<ukv_doc_field_type_t const> types {c.types, c.types_stride};
 
-    joined_bins_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
-    joined_bins_iterator_t found_binary_it = found_binaries.begin();
+    joined_blobs_t found_binaries {c.docs_count, found_binary_offs, found_binary_begin};
+    joined_blobs_iterator_t found_binary_it = found_binaries.begin();
 
     // Estimate the amount of memory needed to store at least scalars and columns addresses
     // TODO: Align offsets of bitmaps to 64-byte boundaries for Arrow
@@ -1667,7 +1668,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     std::size_t count_bitmaps = 1ul + wants_conversions + wants_collisions;
     std::size_t bytes_per_bitmap = sizeof(ukv_octet_t) * slots_per_bitmap;
     std::size_t bytes_per_addresses_row = sizeof(void*) * c.fields_count;
-    std::size_t bytes_for_addresses = bytes_per_addresses_row * 6;
+    std::size_t bytes_for_addresses = bytes_per_addresses_row * 6 + sizeof(ukv_length_t);
     std::size_t bytes_for_bitmaps = bytes_per_bitmap * count_bitmaps * c.fields_count * c.fields_count;
     std::size_t bytes_per_scalars_row = transform_reduce_n(types, c.fields_count, 0ul, &doc_field_size_bytes);
     std::size_t bytes_for_scalars = bytes_per_scalars_row * c.docs_count;
@@ -1747,7 +1748,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
             case ukv_doc_field_str_k:
             case ukv_doc_field_bin_k:
                 addresses_offs[field_idx] = reinterpret_cast<ukv_length_t*>(scalars_tape);
-                addresses_lens[field_idx] = addresses_offs[field_idx] + c.docs_count;
+                addresses_lens[field_idx] = addresses_offs[field_idx] + c.docs_count + 1;
                 addresses_scalars[field_idx] = nullptr;
                 break;
             default:
@@ -1756,7 +1757,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
                 addresses_scalars[field_idx] = reinterpret_cast<ukv_byte_t*>(scalars_tape);
                 break;
             }
-            scalars_tape += doc_field_size_bytes(type) * c.docs_count;
+            scalars_tape += doc_field_size_bytes(type) * c.docs_count + sizeof(ukv_length_t);
         }
     }
 
@@ -1787,6 +1788,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
                 .str_lengths = addresses_lens[field_idx],
             };
 
+            bool is_last = doc_idx == c.docs_count - 1;
             // Export the types
             switch (type) {
 
@@ -1805,8 +1807,12 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
             case ukv_doc_field_f32_k: column.set<float>(doc_idx, found_value); break;
             case ukv_doc_field_f64_k: column.set<double>(doc_idx, found_value); break;
 
-            case ukv_doc_field_str_k: column.set_str(doc_idx, found_value, print_buffer, string_tape, c.error); break;
-            case ukv_doc_field_bin_k: column.set_str(doc_idx, found_value, print_buffer, string_tape, c.error); break;
+            case ukv_doc_field_str_k:
+                column.set_str(doc_idx, found_value, print_buffer, string_tape, true, is_last, c.error);
+                break;
+            case ukv_doc_field_bin_k:
+                column.set_str(doc_idx, found_value, print_buffer, string_tape, false, is_last, c.error);
+                break;
 
             default: break;
             }
