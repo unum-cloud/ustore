@@ -210,7 +210,7 @@ void sample_tweet_id_batches(bm::State& state, callback_at callback) {
                 tweet_key *= primes_k[hash_idx];
             }
 
-            batch_keys[key_idx] = tweet_key;
+            batch_keys[idx] = tweet_key;
         }
         successes += callback(batch_keys.data(), batch_size);
         iterations++;
