@@ -72,7 +72,7 @@ def test_table():
 
     modifier = pa.RecordBatch.from_arrays([tweets, names], names=column_names)
 
-    table.update(modifier)
+    table.loc(slice(1, 3)).update(modifier)
     assert docs[1] == {'name': 'Jack', 'lastname': 'Fridman', 'tweets': 2}
     assert docs[2] == {'name': 'Charls', 'lastname': 'Huberman', 'tweets': 4}
     assert docs[3] == {'name': 'Sam', 'lastname': 'Rogan', 'tweets': 5}
