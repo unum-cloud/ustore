@@ -384,6 +384,28 @@ TEST(db, collection_list) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, collection_drop_values) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    triplet_t triplet;
+
+    blobs_collection_t col = *db.collection();
+    auto collection_ref = col[triplet.keys];
+
+    check_length(collection_ref, ukv_length_missing_k);
+
+    round_trip(collection_ref, triplet.contents_arrow());
+    round_trip(collection_ref, triplet.contents_lengths());
+    round_trip(collection_ref, triplet.contents_full());
+    check_length(collection_ref, triplet_t::val_size_k);
+
+    EXPECT_TRUE(col.clear_values());
+    check_length(collection_ref, ukv_length_missing_k);
+
+    EXPECT_TRUE(db.clear());
+}
+
 TEST(db, paths) {
 
     database_t db;
