@@ -401,7 +401,7 @@ TEST(db, collection_drop_values) {
     check_length(collection_ref, triplet_t::val_size_k);
 
     EXPECT_TRUE(col.clear_values());
-    check_length(collection_ref, ukv_length_missing_k);
+    check_length(collection_ref, 0);
 
     EXPECT_TRUE(db.clear());
 }
