@@ -121,17 +121,17 @@ message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
 add_library(ukv_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_umem pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_umem pthread yyjson bson pcre2 simdjson ${jemalloc_LIBRARIES})
 target_compile_definitions(ukv_umem INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_umem INTERFACE UKV_ENGINE_NAME=umem)
 
 add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_rocksdb rocksdb pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_rocksdb rocksdb pthread yyjson bson pcre2 simdjson ${jemalloc_LIBRARIES})
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_ENGINE_NAME=rocksdb)
 
 add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_leveldb leveldb pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_leveldb leveldb pthread yyjson bson pcre2 simdjson ${jemalloc_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 target_compile_definitions(ukv_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
@@ -158,7 +158,7 @@ if(EXISTS ${UKV_BUILD_UDISK})
     add_dependencies(ukv_udisk jemalloc)
   endif()
 
-  target_link_libraries(ukv_udisk udisk pthread yyjson bson pcre2 nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+  target_link_libraries(ukv_udisk udisk pthread yyjson bson pcre2 simdjson nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
   target_compile_definitions(ukv_udisk INTERFACE UKV_VERSION="${_VERSION_}")
   target_compile_definitions(ukv_udisk INTERFACE UKV_ENGINE_NAME=udisk)
 
@@ -169,7 +169,7 @@ endif()
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT_RPC})
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ukv_flight_client pthread yyjson bson pcre2 fmt::fmt arrow arrow_flight ${jemalloc_LIBRARIES})
+  target_link_libraries(ukv_flight_client pthread yyjson bson pcre2 simdjson fmt::fmt arrow arrow_flight ${jemalloc_LIBRARIES})
   list(APPEND UKV_CLIENT_NAMES "flight_client")
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
 
