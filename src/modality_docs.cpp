@@ -1308,6 +1308,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
 
             keys_vec[idx] = result;
         }
+        c.keys_stride = sizeof(ukv_key_t);
     }
 
     // If user wants the entire doc in the same format, as the one we use internally,
