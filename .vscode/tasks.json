@@ -56,15 +56,47 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug Arrow Test",
+            "label": "Build Native: Debug UnumDB Benchmark",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_unumdb_twitter_benchmark -j 16",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Native: Debug UMem Benchmark",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_umem_twitter_benchmark -j 16",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Native: Debug RocksDB Benchmark",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_rocksdb_twitter_benchmark -j 16",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Native: Debug Arrow Client",
             // Both must pass builds
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && make ukv_flight_client_unit_test ukv_umem_flight_server",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && make ukv_flight_client_unit_test -j 16",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Native: Debug Arrow Server",
+            // Both must pass builds
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && make ukv_umem_flight_server -j 16",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug Arrow",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && make ukv_umem_flight_server",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && ukv_flight_client_unit_test make ukv_umem_flight_server",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Native: Debug Arrow Test",
+            // Both must pass builds
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 . && make ukv_flight_client_unit_test ukv_umem_flight_server",
             "args": [],
             "type": "shell"
         },

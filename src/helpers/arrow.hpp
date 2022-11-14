@@ -76,34 +76,39 @@ inline static std::string const kParamDropModeContents = "contents";
 inline static std::string const kParamDropModeCollection = "collection";
 
 class arrow_mem_pool_t final : public ar::MemoryPool {
-    monotonic_resource_t resource_;
+    linked_memory_t resource_;
+    int64_t bytes_allocated_ = 0;
 
   public:
-    arrow_mem_pool_t(linked_memory_lock_t& arena) : resource_(&arena.resource_) {}
+    arrow_mem_pool_t(linked_memory_t& arena) : resource_(arena) {}
+    arrow_mem_pool_t(linked_memory_lock_t& arena) : resource_(arena.memory) {}
     ~arrow_mem_pool_t() {}
 
     ar::Status Allocate(int64_t size, uint8_t** ptr) override {
-        auto new_ptr = resource_.allocate(size);
+        auto new_ptr = malloc(size);
         if (!new_ptr)
             return ar::Status::OutOfMemory("");
 
         *ptr = reinterpret_cast<uint8_t*>(new_ptr);
+        bytes_allocated_ += size;
         return ar::Status::OK();
     }
     ar::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr) override {
-        auto new_ptr = resource_.allocate(new_size);
+        auto new_ptr = malloc(new_size);
         if (!new_ptr)
             return ar::Status::OutOfMemory("");
 
         std::memcpy(new_ptr, *ptr, old_size);
-        resource_.deallocate(*ptr, old_size);
+        // resource_.deallocate(*ptr, old_size);
+        free(*ptr);
         *ptr = reinterpret_cast<uint8_t*>(new_ptr);
+        bytes_allocated_ += new_size - old_size;
         return ar::Status::OK();
     }
-    void Free(uint8_t* buffer, int64_t size) override { resource_.deallocate(buffer, size); }
+    void Free(uint8_t* buffer, int64_t size) override { free(buffer); bytes_allocated_ -= size;/*resource_.deallocate(buffer, size);*/ }
     void ReleaseUnused() override {}
-    int64_t bytes_allocated() const override { return static_cast<int64_t>(resource_.used()); }
-    int64_t max_memory() const override { return static_cast<int64_t>(resource_.capacity()); }
+    int64_t bytes_allocated() const override { return bytes_allocated_; }
+    int64_t max_memory() const override { return INT64_MAX; }
     std::string backend_name() const { return "ukv"; }
 };
 
