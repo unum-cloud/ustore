@@ -167,7 +167,7 @@ class value_view_t {
     inline value_view_t(std::string_view view) noexcept
         : ptr_(ukv_bytes_cptr_t(view.data())), length_(static_cast<ukv_length_t>(view.size())) {}
 
-    inline static value_view_t empty() noexcept { return value_view_t {nullptr, nullptr}; }
+    inline static value_view_t empty_view() noexcept { return value_view_t {nullptr, nullptr}; }
 
     inline operator bool() const noexcept { return length_ != ukv_length_missing_k; }
     inline std::size_t size() const noexcept { return length_ == ukv_length_missing_k ? 0 : length_; }
