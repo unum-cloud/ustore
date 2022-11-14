@@ -1,4 +1,4 @@
-# UKV: GoLang Bindings
+# UKV GoLang SDK
 
 GoLang bindings are implemented using [cGo](https://pkg.go.dev/cmd/cgo).
 The language lacks operator and function overloads, so we can't mimic native collections.

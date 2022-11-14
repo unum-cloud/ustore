@@ -1,4 +1,4 @@
-# UKV: C Standard
+# UKV C Standard
 
 The world of C can be tricky.
 It is the lingua-france of computing, so we wanted to make the bindings as flexible as possible, for all other runtimes to be built on top of it with minimal type-casting costs.
@@ -266,3 +266,35 @@ Current FOSS implementation of last function has linear complexity.
 * query.
 
 Current FOSS implementation of last function has linear complexity.
+
+## FAQ
+
+### Integer Keys
+
+As of the current version, 64-bit signed integers are used.
+It allows unique keys in the range from `[0, 2^63)`.
+128-bit builds with UUIDs can be considered, but variable-length keys are highly discouraged. 
+Why so?
+
+Using variable length keys forces numerous limitations on the design of a Key-Value store. 
+Firstly, it implies slow character-wise comparisons — a performance killer on modern hyperscalar CPUs.
+Secondly, it forces keys and values to be joined on a disk to minimize the needed metadata for navigation.
+Lastly, it violates our simple logical view of KVS as a "persistent memory allocator", putting a lot more responsibility on it.
+
+---
+
+The recommended approach to dealing with string keys is:
+
+1. Choose a mechanism to generate unique integer keys (UID). Ex: monotonically increasing values.
+2. Use ["paths"](#paths) modality build up a persistent hash map of strings to UIDs.
+3. Use those UIDs to address the rest of the data in binary, document and graph modalities.
+
+This will result in a single conversion point from string to integer representations and will keep most of the system snappy and the C-level interfaces simpler than they could have been.
+
+### Smallish Values
+
+We can only address 4 GB values or smaller as of the current version.
+Why?
+Key-Value Stores are generally intended for high-frequency operations.
+Frequently (thousands of times each second), accessing and modifying 4 GB and larger files is impossible on modern hardware.
+So we stick to smaller length types, making using Apache Arrow representation slightly easier and allowing the KVS to compress indexes better.
