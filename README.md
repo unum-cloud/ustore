@@ -367,16 +367,16 @@ Licensing depends on which parts you are using.
 [ukv-tests]: https://unum.cloud/UKV/tests
 [ukv-benchmarks]: https://unum.cloud/UKV/benchmarks
 [ukv-tools]: https://unum.cloud/UKV/tools
-[ukv-install]: https://unum.cloud/UKV/installation
-[ukv-contrib]: https://unum.cloud/UKV/contribute
-[ukv-keys-size]: https://unum.cloud/UKV/c/#keys
-[ukv-values-size]: https://unum.cloud/UKV/c/#values
-[ukv-acid]: https://unum.cloud/UKV/c/#acid
-[ukv-vs-rocks]: https://unum.cloud/UKV/c/#rocks
-[ukv-vs-sql]: https://unum.cloud/UKV/c/#sql
+[ukv-install]: https://unum.cloud/UKV/install
+[ukv-contrib]: https://unum.cloud/UKV/details
+[ukv-keys-size]: https://unum.cloud/UKV/c/#integer-keys
+[ukv-values-size]: https://unum.cloud/UKV/c/#smallish-values
+[ukv-acid]: https://unum.cloud/UKV/c/#acid-transactions
+[ukv-vs-rocks]: https://unum.cloud/UKV/related/#leveldb-rocksdb
+[ukv-vs-sql]: https://unum.cloud/UKV/related/#sql-mql-cypher
 
-[ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb/
-[ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb/
+[ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
+[ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
 [ucsb]: https://github.com/unum-cloud/ucsb
 [consistent_set]: https://github.com/ashvardanian/consistent_set
 [ukv-c-sources]: https://github.com/unum-cloud/UKV/tree/main/include/ukv
