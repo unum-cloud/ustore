@@ -1,13 +1,16 @@
 # UKV Benchmarks
 
-## UCSB
+## [UCSB][ucsb]
 
 For low-level binary workloads, we have a separate project called UCSB.
 It covers LMDB, LevelDB, RocksDB, WiredTiger, Redis, MongoDB, and our Key-Value Stores.
 
+* [Results][ucsb-1] for 1 TB collections.
+* [Results][ucsb-10] for 10 TB collections.
+
 ## Twitter
 
-Twitter benchmark operated on real-world sample of Tweets obtained via Twitter Stream API.
+Twitter benchmark operated on real-world sample of Tweets obtained via [Twitter Stream API][twitter-samples].
 It is frequently used across the industry, but the current "User Agreement" bans publicly sharing such datasets.
 
 We took over 1 TB of tweets packed consecutively into `.ndjson` files and simulated constructing collections of Documents, Graphs, and Paths.
@@ -23,22 +26,22 @@ The following results should be taken with the grain of salt and aren't as accur
 
 For document-like workloads:
 
-|          | Insertion   |  Retrieval  |
-| -------- | ----------- | :---------: |
-| MongoDB  | 18 K ops/s  | 210 K ops/s |
-| Yugabyte | 2 K ops/s   | 82 K ops/s  |
-|          |             |             |
-| UMem     | 157 K ops/s |  2 M ops/s  |
-| RocksDB  | 15 K ops/s  | 140 K ops/s |
-| UDisk    | 42 K ops/s  |  1 M ops/s  |
+|                |  Insertion  |  Retrieval  |
+| :------------- | :---------: | :---------: |
+| MongoDB        | 18 K ops/s  | 210 K ops/s |
+| Yugabyte       |  2 K ops/s  | 82 K ops/s  |
+|                |             |             |
+| UKV on RocksDB | 15 K ops/s  | 140 K ops/s |
+| UKV on UDisk   | 42 K ops/s  |  1 M ops/s  |
+| UKV on UMem    | 157 K ops/s |  2 M ops/s  |
 
 For graphs:
 
-|       | Insertion  | Two-hop Retrieval |
-| ----- | ---------- | :---------------: |
-| Neo4J | 2 K ops/s  |    1.5 K ops/s    |
-|       |            |                   |
-| UDisk | 37 K ops/s |    52 K ops/s     |
+|              | Insertion  | Two-hop Retrieval |
+| :----------- | :--------: | :---------------: |
+| Neo4J        | 2 K ops/s  |    1.5 K ops/s    |
+|              |            |                   |
+| UKV on UDisk | 37 K ops/s |    52 K ops/s     |
 
 For MongoDB, we also tried the official <code class="docutils literal notranslate"><a href="https://www.mongodb.com/docs/database-tools/mongoimport/" class="pre">mongoimport</a></code> tool, which supports both `.csv` and `.ndjson`.
 The results are mixed compared to a multi-process setup.
@@ -64,7 +67,6 @@ Below are the results.
 
 ### Reconstructing the Bitcoin Graph
 
-
 ### Friendster Adjacency List
 
 We take a real-world graph dataset, distributed in `.csv` form - the "Friendster" social network.
@@ -78,3 +80,8 @@ With Neo4J, imports took 3h 45m, averaging at:
 
 * 136'449 edges/s.
 * 5.3 MB/s.
+
+[ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
+[ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
+[ucsb]: https://github.com/unum-cloud/ucsb
+[twitter-samples]: https://developer.twitter.com/en/docs/twitter-api/v1/tweets/sample-realtime/overview
