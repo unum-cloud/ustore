@@ -59,7 +59,7 @@ void scan_rows(py_table_collection_t& df) {
         keys_found.insert(keys_found.end(), keys_stream.keys_batch().begin(), keys_stream.keys_batch().end());
         keys_stream.seek_to_next_batch();
     }
-    df.rows_keys = keys_found;
+    df.rows_keys = std::move(keys_found);
 }
 
 void scan_rows_range(py_table_collection_t& df) {
@@ -75,7 +75,7 @@ void scan_rows_range(py_table_collection_t& df) {
             break;
         keys_stream.seek_to_next_batch();
     }
-    df.rows_keys = keys_found;
+    df.rows_keys = std::move(keys_found);
 }
 
 void correct_table(docs_table_t& table) {
