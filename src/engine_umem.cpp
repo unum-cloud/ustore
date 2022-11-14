@@ -754,7 +754,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
 
     else if (c.mode == ukv_drop_vals_k) {
         auto status = db.pairs.range(c.id, c.id + 1, [&](pair_t& pair) noexcept {
-            pair = pair_t {pair.collection_key, value_view_t::empty(), nullptr};
+            pair = pair_t {pair.collection_key, value_view_t::empty_view(), nullptr};
         });
         return export_error_code(status, c.error);
     }
