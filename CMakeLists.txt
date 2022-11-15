@@ -51,7 +51,11 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
-endif()
+
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
+
+ endif()
 
 # Optimizations for common x86 CPUs.
 # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
