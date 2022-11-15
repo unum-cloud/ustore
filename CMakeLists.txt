@@ -1,5 +1,27 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.22)
 project(UKV)
+
+option(UKV_BUILD_TESTS "Building C/C++ native tests" ON)
+option(UKV_BUILD_PYTHON "Building Python bidings for all SDKs")
+option(UKV_BUILD_BENCHMARKS "Building C/C++ native benchmarks")
+option(UKV_BUILD_FLIGHT_API "Building Apache Arrow Flight RPC server for all backends")
+option(UKV_BUILD_REST_API "Building REST API server for all backends")
+option(UKV_USE_JEMALLOC "A faster allocator, that requires autoconf to be installed")
+option(UKV_USE_ONEAPI "Faster concurrency primitives from Intel")
+
+option(UKV_REBUILD_JEMALLOC "Enable to attempt to source and build JeMalloc locally")
+option(UKV_REBUILD_ONEAPI "Enable to attempt to source and build Intel OneAPI locally")
+option(UKV_REBUILD_BOOST "Enable to attempt to source and build Boost locally")
+option(UKV_REBUILD_ARROW "Enable to attempt to source and build Apache Arrow locally")
+option(UKV_REBUILD_TURBOPFOR "Enable to attempt to source and build TurboPFOR locally")
+set(UKV_UDISK_PATH "" CACHE STRING "Pass a path to UDisk binary to produce a full range of bindings")
+
+# Some settings are mutually dependant
+include(CMakeDependentOption)
+cmake_dependent_option(UKV_REBUILD_JEMALLOC "" ON "UKV_USE_JEMALLOC" OFF)
+cmake_dependent_option(UKV_REBUILD_ONEAPI "" ON "UKV_USE_ONEAPI" OFF)
+cmake_dependent_option(UKV_REBUILD_BOOST "" ON "UKV_BUILD_REST_API" OFF)
+cmake_dependent_option(UKV_REBUILD_ARROW "" ON "UKV_BUILD_PYTHON OR UKV_BUILD_FLIGHT_API" OFF)
 
 file(READ "VERSION" _VERSION_)
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
@@ -61,27 +83,19 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DUKV_DEBUG -g")
 find_package(Threads REQUIRED)
 set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 
-# Install 3rd Party Packages
-include(FetchContent)
-set(FETCHCONTENT_QUIET OFF)
-set(UKV_PREINSTALLED_BOOST ON CACHE BOOL "True, if a pre-installed external version of Boost should be used")
-set(UKV_USE_JEMALLOC OFF CACHE BOOL "A faster allocator, that requires autoconf to be installed")
-set(UKV_PREINSTALLED_ARROW ON CACHE BOOL "True, if a pre-installed external version of Apache Arrow should be used")
-set(UKV_PREINSTALLED_TURBOPFOR ON CACHE BOOL "True, if a pre-installed external version of TurboPFOR should be used")
-set(UKV_BUILD_TESTS ON CACHE BOOL "Building C/C++ native tests")
-set(UKV_BUILD_PYTHON OFF CACHE BOOL "Building Python bidings for all SDKs")
-set(UKV_BUILD_BENCHMARKS OFF CACHE BOOL "Building C/C++ native benchmarks")
-set(UKV_BUILD_FLIGHT_RPC OFF CACHE BOOL "Building Apache Arrow Flight RPC server for all backends")
-set(UKV_BUILD_REST_API OFF CACHE BOOL "Building Apache Arrow Flight RPC server for all backends")
-set(UKV_BUILD_UDISK "" CACHE STRING "Pass a path to UDisk copy to produce a full range of bindings")
-
-if(${UKV_BUILD_PYTHON})
-  set(UKV_PREINSTALLED_ARROW OFF)
-  set(UKV_USE_JEMALLOC OFF)
-else()
+if(NOT ${UKV_BUILD_PYTHON})
   set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
   set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
+endif()
+
+# Install 3rd Party Packages
+include(FetchContent)
+
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+set(FETCHCONTENT_QUIET OFF)
+else()
+set(FETCHCONTENT_QUIET ON)
 endif()
 
 # Engines:
@@ -102,15 +116,15 @@ if(${UKV_USE_JEMALLOC})
 endif()
 
 # Distributions:
+if(${UKV_BUILD_PYTHON} OR ${UKV_BUILD_FLIGHT_API})
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
+endif()
+if(${UKV_BUILD_REST_API})
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/boost.cmake")
+endif()
 
 # Benchmarks:
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/simdjson.cmake")
-
-if(NOT ${UKV_PREINSTALLED_BOOST} AND NOT ${UKV_PREINSTALLED_ARROW})
-  add_dependencies(${ARROW_DEPENDENCY} Boost-external)
-endif()
 
 include_directories(include/)
 
@@ -121,17 +135,17 @@ message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
 add_library(ukv_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_umem pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_umem pthread yyjson bson pcre2 ${JEMALLOC_LIBRARIES})
 target_compile_definitions(ukv_umem INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_umem INTERFACE UKV_ENGINE_NAME=umem)
 
 add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_rocksdb rocksdb pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_rocksdb rocksdb pthread yyjson bson pcre2 ${JEMALLOC_LIBRARIES})
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_ENGINE_NAME=rocksdb)
 
 add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_leveldb leveldb pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_leveldb leveldb pthread yyjson bson pcre2 ${JEMALLOC_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 target_compile_definitions(ukv_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
@@ -146,10 +160,10 @@ endif()
 set(UKV_ENGINE_NAMES "umem" "leveldb" "rocksdb")
 set(UKV_CLIENT_NAMES "umem" "leveldb" "rocksdb")
 
-if(EXISTS ${UKV_BUILD_UDISK})
+if(EXISTS ${UKV_UDISK_PATH})
   add_library(udisk STATIC IMPORTED)
   target_link_libraries(udisk INTERFACE dl pthread explain uring numa)
-  set_property(TARGET udisk PROPERTY IMPORTED_LOCATION ${UKV_BUILD_UDISK})
+  set_property(TARGET udisk PROPERTY IMPORTED_LOCATION ${UKV_UDISK_PATH})
   set_property(TARGET udisk PROPERTY LINK_LIBRARIES "")
 
   add_library(ukv_udisk src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
@@ -158,7 +172,7 @@ if(EXISTS ${UKV_BUILD_UDISK})
     add_dependencies(ukv_udisk jemalloc)
   endif()
 
-  target_link_libraries(ukv_udisk udisk pthread yyjson bson pcre2 nlohmann_json::nlohmann_json ${jemalloc_LIBRARIES})
+  target_link_libraries(ukv_udisk udisk pthread yyjson bson pcre2 nlohmann_json::nlohmann_json ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ukv_udisk INTERFACE UKV_VERSION="${_VERSION_}")
   target_compile_definitions(ukv_udisk INTERFACE UKV_ENGINE_NAME=udisk)
 
@@ -167,9 +181,9 @@ if(EXISTS ${UKV_BUILD_UDISK})
 endif()
 
 # Generate Apache Arrow Flight RPC backends
-if(${UKV_BUILD_FLIGHT_RPC})
+if(${UKV_BUILD_FLIGHT_API})
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ukv_flight_client pthread yyjson bson pcre2 fmt::fmt arrow arrow_flight ${jemalloc_LIBRARIES})
+  target_link_libraries(ukv_flight_client pthread yyjson bson pcre2 fmt::fmt arrow arrow_flight ${JEMALLOC_LIBRARIES})
   list(APPEND UKV_CLIENT_NAMES "flight_client")
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
 
