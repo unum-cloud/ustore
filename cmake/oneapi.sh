@@ -6,3 +6,5 @@ wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCT
 echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
 
 sudo apt-get update && sudo apt-get install intel-basekit intel-hpckit intel-dlfdkit intel-aikit
+
+source /opt/intel/oneapi/setvars.sh intel64
