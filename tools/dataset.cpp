@@ -96,6 +96,105 @@ class arrow_visitor {
         json = fmt::format("{}{},", json, arr.Value(idx));
         return arrow::Status::OK();
     }
+    arrow::Status Visit(arrow::StringArray const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx).data());
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::BinaryArray const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx).data());
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::LargeStringArray const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx).data());
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::LargeBinaryArray const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx).data());
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::FixedSizeBinaryArray const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::Date32Array const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::Date64Array const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::Time32Array const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::Time64Array const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::TimestampArray const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::DayTimeIntervalArray const& arr) {
+        auto ds = arr.Value(idx);
+        json = fmt::format("{}{{\"days\":{},\"ms-s\":{}}},", json, ds.days, ds.milliseconds);
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::MonthDayNanoIntervalArray const& arr) {
+        auto mdn = arr.Value(idx);
+        json = fmt::format("{}{{\"months\":{},\"days\":{},\"us-s\":{}}},", json, mdn.months, mdn.days, mdn.nanoseconds);
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::MonthIntervalArray const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::DurationArray const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::Decimal128Array const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::Decimal256Array const& arr) {
+        json = fmt::format("{}{},", json, arr.Value(idx));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::ListArray const& arr) {
+        arrow::VisitArrayInline(*arr.values().get(), this);
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::LargeListArray const& arr) {
+        arrow::VisitArrayInline(*arr.values().get(), this);
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::MapArray const& arr) {
+        arrow::VisitArrayInline(*arr.values().get(), this);
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::FixedSizeListArray const& arr) {
+        arrow::VisitArrayInline(*arr.values().get(), this);
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::DictionaryArray const& arr) {
+        json = fmt::format("{}{},", json, arr.GetValueIndex(idx));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::ExtensionArray const& arr) {
+        arrow::VisitArrayInline(*arr.storage().get(), this);
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::StructArray const& arr) {
+        return arrow::Status(arrow::StatusCode::TypeError, "Not supported type");
+    }
+    arrow::Status Visit(arrow::SparseUnionArray const& arr) {
+        return arrow::Status(arrow::StatusCode::TypeError, "Not supported type");
+    }
+    arrow::Status Visit(arrow::DenseUnionArray const& arr) {
+        return arrow::Status(arrow::StatusCode::TypeError, "Not supported type");
+    }
 
     std::string& json;
     size_t idx = 0;
