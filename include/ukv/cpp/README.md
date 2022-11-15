@@ -1,4 +1,4 @@
-# UKV: C++ SDK
+# UKV C++ SDK
 
 Most of UKV is implemented in C++, but the C++ implementation is isolated from the C++ interface.
 That is the "Hour-Glass" pattern.

@@ -1303,6 +1303,11 @@ TEST(db, graph_triangle) {
     EXPECT_TRUE(net.upsert(edge2));
     EXPECT_TRUE(net.upsert(edge3));
 
+    auto neighbors = net.neighbors(1).throw_or_release();
+    EXPECT_EQ(neighbors.size(), 2);
+    EXPECT_EQ(neighbors[0], 2);
+    EXPECT_EQ(neighbors[1], 3);
+
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_FALSE(*net.contains(9));
