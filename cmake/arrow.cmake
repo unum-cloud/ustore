@@ -1,6 +1,10 @@
 # Installation scripts can be take from here:
 # https://arrow.apache.org/install/
 if(NOT ${UKV_REBUILD_ARROW})
+    # Apache Arrow might be coming from Anaconda
+    # include_directories($ENV{CONDA_PREFIX}/include)
+    # link_directories($ENV{CONDA_PREFIX}/lib)
+    # message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
     find_package(Arrow CONFIG)
 else()
     include(ExternalProject)
@@ -86,7 +90,6 @@ else()
     add_library(arrow::python STATIC IMPORTED)
     set_property(TARGET arrow::python PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_python.a)
     add_dependencies(arrow::python Arrow-external)
-
 
     add_library(arrow::dataset STATIC IMPORTED)
     set_property(TARGET arrow::dataset PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_dataset.a)

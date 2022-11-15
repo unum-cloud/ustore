@@ -51,11 +51,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
-
- endif()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
+endif()
 
 # Optimizations for common x86 CPUs.
 # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
@@ -95,11 +96,12 @@ endif()
 
 # Install 3rd Party Packages
 include(FetchContent)
+include_directories(include/)
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
-set(FETCHCONTENT_QUIET OFF)
+  set(FETCHCONTENT_QUIET OFF)
 else()
-set(FETCHCONTENT_QUIET ON)
+  set(FETCHCONTENT_QUIET ON)
 endif()
 
 # Engines:
@@ -112,34 +114,38 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/fmt.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/json.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/bson.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/yyjson.cmake")
-
-include("${CMAKE_SOURCE_DIR}/cmake/pcre2.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/simdjson.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pcre2.cmake")
 
 if(${UKV_USE_JEMALLOC})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
 endif()
 
+if(${UKV_USE_ONEAPI})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/oneapi.cmake")
+endif()
+
 # Distributions:
 if(${UKV_BUILD_PYTHON} OR ${UKV_BUILD_FLIGHT_API})
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
+
 if(${UKV_BUILD_REST_API})
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/boost.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/boost.cmake")
 endif()
 
-# Benchmarks:
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/simdjson.cmake")
+if(${UKV_BUILD_TESTS})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
+endif()
 
-include_directories(include/)
-
-# Apache Arrow might be coming from Anaconda
-include_directories($ENV{CONDA_PREFIX}/include)
-link_directories($ENV{CONDA_PREFIX}/lib)
-message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
+if(${UKV_BUILD_BENCHMARKS})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gbench.cmake")
+endif()
 
 # Define the libraries we will need to build
 add_library(ukv_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_umem pthread yyjson bson pcre2 ${JEMALLOC_LIBRARIES})
+target_link_libraries(ukv_umem pthread yyjson bson pcre2 ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
 target_compile_definitions(ukv_umem INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_umem INTERFACE UKV_ENGINE_NAME=umem)
 
@@ -222,8 +228,6 @@ endforeach()
 # We build them with the original sources (instead of linking with already compiled libraries)
 # to maximize the number of exposed symbols and make debugging easier.
 if(${UKV_BUILD_TESTS})
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
-
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
@@ -253,9 +257,6 @@ endif()
 
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gbench.cmake")
-
   foreach(client_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT target_name "ukv_" ${client_name})
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
