@@ -66,8 +66,6 @@ class arrow_visitor {
     }
     arrow::Status Visit(arrow::Int64Array const& arr) {
         json = fmt::format("{}{},", json, arr.Value(idx));
-        if (state)
-            keys.push_back(arr.Value(idx));
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::UInt8Array const& arr) {
@@ -571,7 +569,6 @@ void fill_array(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table
         for (size_t value_idx = 0; value_idx != columns[0]->chunk(chunk_idx)->length(); ++value_idx) {
 
             g_idx = 0;
-            visitor.state = true;
             for (auto it = fields; g_idx < clmn_count; ++g_idx, ++it) {
                 json = fmt::format("{}\"{}\":", json, *it);
                 visitor.idx = value_idx;
