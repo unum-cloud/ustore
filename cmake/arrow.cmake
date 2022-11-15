@@ -1,6 +1,6 @@
 # Installation scripts can be take from here:
 # https://arrow.apache.org/install/
-if(${UKV_PREINSTALLED_ARROW})
+if(NOT ${UKV_REBUILD_ARROW})
     find_package(Arrow CONFIG)
 else()
     include(ExternalProject)
