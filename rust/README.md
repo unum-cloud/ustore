@@ -1,4 +1,4 @@
-# UKV: Rust Bindings
+# UKV Rust SDK
 
 Rust implementation is designed to support:
 
