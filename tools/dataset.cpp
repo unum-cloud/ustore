@@ -47,7 +47,9 @@ constexpr std::size_t uuid_length = 36;
 class arrow_visitor {
   public:
     arrow_visitor(std::string& json) : json(json) {}
-    arrow::Status Visit(arrow::NullArray const& arr) { return arrow::Status::OK(); }
+    arrow::Status Visit(arrow::NullArray const& arr) {
+        return arrow::Status(arrow::StatusCode::TypeError, "Not supported type");
+    }
     arrow::Status Visit(arrow::BooleanArray const& arr) {
         json = fmt::format("{}{},", json, arr.Value(idx));
         return arrow::Status::OK();
@@ -697,9 +699,93 @@ void fill_array(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table
 
 ///////// Parsing with SIMDJSON /////////
 
-void import_ndjson_d(ukv_docs_import_t& c) {
+void whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
 
     std::vector<value_view_t> values;
+    size_t used_mem = 0;
+
+    for (auto doc : docs) {
+        simdjson::ondemand::object data = doc.get_object().value();
+        values.push_back(rewinded(data).raw_json().value());
+        used_mem += values.back().size();
+        if (used_mem >= c.max_batch_size) {
+            upsert_docs(c, values);
+            values.clear();
+        }
+    }
+    if (values.size() != 0)
+        upsert_docs(c, values);
+}
+
+void sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
+
+    strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
+    std::vector<value_view_t> values;
+    std::string json = "{";
+    char* u_json = nullptr;
+    size_t used_mem = 0;
+
+    auto format = [&](simdjson::ondemand::object& data, ukv_str_view_t field) {
+        switch (rewinded(data)[field].type()) {
+        case simdjson::ondemand::json_type::array:
+            json = fmt::format( //
+                "{}\"{}\":{},",
+                json,
+                field,
+                rewinded(data)[field].get_array().value().raw_json().value());
+            break;
+        case simdjson::ondemand::json_type::object:
+            json = fmt::format( //
+                "{}\"{}\":{},",
+                json,
+                field,
+                rewinded(data)[field].get_object().value().raw_json().value());
+            break;
+        case simdjson::ondemand::json_type::number:
+            json = fmt::format( //
+                "{}\"{}\":{},",
+                json,
+                field,
+                std::string_view(rewinded(data)[field].raw_json_token().value()));
+            break;
+        case simdjson::ondemand::json_type::string:
+            json = fmt::format( //
+                "{}\"{}\":{},",
+                json,
+                field,
+                std::string_view(rewinded(data)[field].raw_json_token().value()));
+            break;
+        case simdjson::ondemand::json_type::boolean:
+            json = fmt::format("{}\"{}\":{},", json, field, std::string_view(rewinded(data)[field].value()));
+            break;
+        case simdjson::ondemand::json_type::null: return_if_error(false, c.error, 0, "Null json"); break;
+        }
+    };
+
+    for (auto doc : docs) {
+        simdjson::ondemand::object data = doc.get_object().value();
+
+        for (size_t idx = 0; idx < c.fields_count; ++idx)
+            format(data, *(fields + idx));
+
+        json[json.size() - 1] = '}';
+        u_json = (char*)malloc(json.size() + 1);
+        std::memcpy(u_json, json.data(), json.size() + 1);
+
+        values.push_back(u_json);
+        used_mem += json.size();
+        json = "{";
+
+        if (used_mem >= c.max_batch_size) {
+            upsert_docs(c, values);
+            values.clear();
+        }
+    }
+    if (values.size() != 0)
+        upsert_docs(c, values);
+}
+
+void import_ndjson_d(ukv_docs_import_t& c) {
 
     auto handle = open(c.paths_pattern, O_RDONLY);
     return_if_error(handle != -1, c.error, 0, "Can't open file");
@@ -714,20 +800,10 @@ void import_ndjson_d(ukv_docs_import_t& c) {
         mapped_content.size(),
         1000000ul);
 
-    auto obj = *docs.begin();
-    size_t used_mem = 0;
-
-    for (auto doc : docs) {
-        simdjson::ondemand::object data = doc.get_object().value();
-        values.push_back(std::string_view(rewinded(data).raw_json()));
-        used_mem += values.back().size();
-        if (used_mem >= c.max_batch_size) {
-            upsert_docs(c, values);
-            values.clear();
-        }
-    }
-    if (values.size() != 0)
-        upsert_docs(c, values);
+    if (!c.fields)
+        whole_ndjson(c, docs);
+    else
+        sub_ndjson(c, docs);
 
     munmap((void*)mapped_content.data(), mapped_content.size());
 }
