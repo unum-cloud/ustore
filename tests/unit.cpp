@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
+#include <bson.h>
 
 #include "ukv/ukv.hpp"
 
@@ -947,6 +948,17 @@ TEST(db, docs) {
     // Binary
     auto maybe_person = collection[ckf(1, "person")].value(ukv_doc_field_str_k);
     EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
+
+#if 0
+    // BSON
+    bson_error_t error;
+
+    bson_t* b = bson_new_from_json((uint8_t*)json.c_str(), -1, &error);
+    const uint8_t* buffer = bson_get_data(b);
+
+    auto view = value_view_t(buffer, b->len);
+    collection.at(1, ukv_doc_field_bson_k) = view;
+#endif
 
 #if 0
     // MsgPack
