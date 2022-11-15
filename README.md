@@ -347,12 +347,11 @@ For example, `simdjson` is used for document validation and sampling, while `yyj
 A full list of dependencies is available at the link below, together with detailed descriptions of reference implementations.
 Licensing depends on which parts you are using.
 
-> [Read full development and contribution guide in our docs here][ukv-contrib].
+> [Read full development and contribution guide in our docs here][ukv-details].
 
 ## Presets, Limitations and FAQ
 
-* Keys are 64-bit integers. [Why?][ukv-keys-size]
-    * Use "paths" modality for string keys.
+* Keys are 64-bit integers, by default. [Why?][ukv-keys-size]
 * Values are binary strings under 4 GB long. [Why?][ukv-values-size]
 * Transactions are ACI(D) by-default. [What does it mean?][ukv-acid]
 * Why not use LevelDB or RocksDB interface? [Answered][ukv-vs-rocks]
@@ -367,16 +366,16 @@ Licensing depends on which parts you are using.
 [ukv-tests]: https://unum.cloud/UKV/tests
 [ukv-benchmarks]: https://unum.cloud/UKV/benchmarks
 [ukv-tools]: https://unum.cloud/UKV/tools
-[ukv-install]: https://unum.cloud/UKV/installation
-[ukv-contrib]: https://unum.cloud/UKV/contribute
-[ukv-keys-size]: https://unum.cloud/UKV/c/#keys
-[ukv-values-size]: https://unum.cloud/UKV/c/#values
-[ukv-acid]: https://unum.cloud/UKV/c/#acid
-[ukv-vs-rocks]: https://unum.cloud/UKV/c/#rocks
-[ukv-vs-sql]: https://unum.cloud/UKV/c/#sql
+[ukv-install]: https://unum.cloud/UKV/install
+[ukv-details]: https://unum.cloud/UKV/details
+[ukv-keys-size]: https://unum.cloud/UKV/c#integer-keys
+[ukv-values-size]: https://unum.cloud/UKV/c#smallish-values
+[ukv-acid]: https://unum.cloud/UKV/c#acid-transactions
+[ukv-vs-rocks]: https://unum.cloud/UKV/related#leveldb-rocksdb
+[ukv-vs-sql]: https://unum.cloud/UKV/related#sql-mql-cypher
 
-[ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb/
-[ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb/
+[ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
+[ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
 [ucsb]: https://github.com/unum-cloud/ucsb
 [consistent_set]: https://github.com/ashvardanian/consistent_set
 [ukv-c-sources]: https://github.com/unum-cloud/UKV/tree/main/include/ukv
@@ -406,5 +405,3 @@ Licensing depends on which parts you are using.
 [olap]: https://en.wikipedia.org/wiki/Online_analytical_processing
 [oltp]: https://en.wikipedia.org/wiki/Online_transaction_processing
 [htap]: https://en.wikipedia.org/wiki/Hybrid_transactional/analytical_processing
-[flight]: https://arrow.apache.org/docs/format/Flight.html
-[twitter-samples]: https://developer.twitter.com/en/docs/twitter-api/v1/tweets/sample-realtime/overview

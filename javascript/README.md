@@ -1,4 +1,4 @@
-# UKV: JavaScript Bindings
+# UKV JavaScript SDK
 
 * Node.js
 * V8
