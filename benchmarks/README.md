@@ -17,7 +17,7 @@ We took over 1 TB of tweets packed consecutively into `.ndjson` files and simula
 You can obtain results for your hardware and your sample of Tweets using the following command.
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Release . && make ukv_umem_twitter_benchmark && ./build/bin/ukv_umem_twitter_benchmark
+cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=1 .. && make ukv_umem_twitter_benchmark && ./build/bin/ukv_umem_twitter_benchmark
 ```
 
 We manually repeated this same benchmark for a few other DBMS brands.
@@ -53,7 +53,7 @@ Generalizing the Twitter benchmark, we wrote a Python and a C++ benchmark for ta
 Unlike the previous benchmark, the schema must be fixed, but you can input `.json`, `.csv`, and `.parquet` files.
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Release . && make ukv_umem_tabular_graph_benchmark && ./build/bin/ukv_umem_tabular_graph_benchmark
+cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=1 .. && make ukv_umem_tabular_graph_benchmark && ./build/bin/ukv_umem_tabular_graph_benchmark
 ```
 
 For Python:
