@@ -41,10 +41,10 @@ Overview
    tests/index
    benchmarks/index
    details/index
+   related
 
 .. toctree:: 
    :hidden:
    :caption: �
 
-   page-related
    genindex
