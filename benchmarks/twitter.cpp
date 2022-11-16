@@ -94,8 +94,15 @@ static void index_file( //
     simdjson::ondemand::document_stream docs =
         parser.iterate_many(mapped_contents.data(), mapped_contents.size(), 1000000ul);
     for (auto tweet_doc : docs) {
-        simdjson::ondemand::object tweet = tweet_doc.get_object().value();
-        simdjson::ondemand::object user = rewinded(tweet).find_field("user").get_object().value();
+        auto maybe_tweet = tweet_doc.get_object();
+        if (maybe_tweet.error() != simdjson::SUCCESS)
+            continue;
+        simdjson::ondemand::object tweet = maybe_tweet.value();
+
+        auto maybe_user = rewinded(tweet).find_field("user").get_object();
+        if (maybe_user.error() != simdjson::SUCCESS)
+            continue;
+        simdjson::ondemand::object user = maybe_user.value();
         ukv_key_t id = rewinded(tweet)["id"];
 
         ukv_key_t user_id = rewinded(user)["id"];
