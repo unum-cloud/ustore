@@ -380,7 +380,8 @@ void export_parquet(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t len
     }
 }
 
-void import_csv(ukv_graph_import_t& c, std::shared_ptr<arrow::Table>& table) {
+template <typename import_t>
+void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
 
     arrow::io::IOContext io_context = arrow::io::default_io_context();
     auto maybe_input = arrow::io::ReadableFile::Open(c.paths_pattern);
@@ -547,14 +548,11 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
         import_ndjson_g(c, task_count);
     else {
         std::shared_ptr<arrow::Table> table;
-        if (ext == ".parquet") {
+        if (ext == ".parquet")
             import_parquet(c, table);
-            fill_array(c, task_count, table);
-        }
-        else if (ext == ".csv") {
+        else if (ext == ".csv")
             import_csv(c, table);
-            fill_array(c, task_count, table);
-        }
+        fill_array(c, task_count, table);
     }
 }
 
@@ -818,14 +816,11 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
         import_ndjson_d(c);
     else {
         std::shared_ptr<arrow::Table> table;
-        if (ext == ".parquet") {
+        if (ext == ".parquet")
             import_parquet(c, table);
-            fill_array(c, table);
-        }
-    //     else if (ext == ".csv") {
-    //         import_csv(c, table);
-    //         // upsert csv
-    //     }
+        else if (ext == ".csv")
+            import_csv(c, table);
+        fill_array(c, table);
     }
 }
 
