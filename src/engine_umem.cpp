@@ -108,7 +108,7 @@ struct pair_compare_t {
 // using consistent_set_t = consistent_avl_gt<pair_t, pair_compare_t>;
 // using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>, std::shared_mutex>;
 using consistent_set_t = partitioned_gt< //
-    consistent_avl_gt<pair_t, pair_compare_t>,
+    consistent_set_gt<pair_t, pair_compare_t>,
     std::hash<collection_key_t>,
     std::shared_mutex,
     64>;
