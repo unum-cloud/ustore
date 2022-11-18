@@ -15,6 +15,7 @@
 
 #include <yyjson.h> // Primary internal JSON representation
 #include <bson.h>   // Converting from/to BSON
+#include <simdjson.h>
 
 #include "ukv/docs.h"
 #include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
@@ -28,6 +29,7 @@
 
 using namespace unum::ukv;
 using namespace unum;
+namespace sj = simdjson;
 
 constexpr ukv_doc_field_type_t internal_format_k = ukv_doc_field_json_k;
 
@@ -408,6 +410,46 @@ std::string_view json_to_string(yyjson_val* value,
     }
 
     return result;
+}
+
+template <typename value_at>
+std::string_view get_value( //
+    value_at& value,
+    ukv_doc_field_type_t field_type,
+    printed_number_buffer_t& print_buffer) noexcept {
+
+    if (field_type == ukv_doc_field_json_k) {
+        if (value.type().value() == sj::ondemand::json_type::object)
+            return value.get_object().value().raw_json();
+        else if (value.type().value() == sj::ondemand::json_type::array)
+            return value.get_array().value().raw_json();
+        else
+            return value.raw_json_token();
+    }
+    else if (field_type == ukv_doc_field_str_k) {
+        auto type = value.type().value();
+        switch (type) {
+        case sj::ondemand::json_type::null: return {};
+        case sj::ondemand::json_type::object: return value.get_object().value().raw_json();
+        case sj::ondemand::json_type::array: return value.get_object().value().raw_json();
+        case sj::ondemand::json_type::boolean:
+            return value.get_bool() ? std::string_view(true_k, 5) : std::string_view(false_k, 6);
+        case sj::ondemand::json_type::string: return value.get_string();
+        case sj::ondemand::json_type::number: {
+            auto number_type = value.get_number_type().value();
+            switch (number_type) {
+            case sj::ondemand::number_type::signed_integer:
+                return print_number(print_buffer,
+                                    print_buffer + printed_number_length_limit_k,
+                                    value.get_int64().value());
+            case sj::ondemand::number_type::unsigned_integer:
+                return print_number(print_buffer,
+                                    print_buffer + printed_number_length_limit_k,
+                                    value.get_uint64().value());
+            }
+        }
+        }
+    }
 }
 
 /*********************************************************/
@@ -953,7 +995,6 @@ void read_unique_docs( //
     ukv_options_t const c_options,
     linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
@@ -997,12 +1038,11 @@ void read_modify_unique_docs( //
     doc_modification_t const c_modification,
     linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
     if (c_modification == doc_modification_t::nothing_k)
-        read_unique_docs(c_db, c_txn, places, c_options, arena, unique_places, unique_docs, c_error, callback);
+        return read_unique_docs(c_db, c_txn, places, c_options, arena, unique_places, c_error, callback);
 
     auto has_fields = places.fields_begin && (!places.fields_begin.repeats() || *places.fields_begin);
     bool need_values =
@@ -1040,11 +1080,7 @@ void read_modify_unique_docs( //
                             "Key Already Exists!");
             ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
             value_view_t binary_doc = *found_binary_it;
-            json_t parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
-
-            // This error is extremely unlikely, as we have previously accepted the data into the store.
-            return_on_error(c_error);
-            callback(task_idx, field, parsed);
+            callback(task_idx, field, binary_doc);
         }
     }
     else {
@@ -1067,14 +1103,13 @@ void read_modify_unique_docs( //
 
         bits_view_t presents {found_presences};
         for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx) {
-            json_t parsed;
             ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
             return_if_error(presents[task_idx] || !has_fields, c_error, 0, "Key Not Exists!");
             return_if_error(!presents[task_idx] || c_modification != doc_modification_t::insert_k,
                             c_error,
                             0,
                             "Invalid Arguments!");
-            callback(task_idx, field, parsed);
+            callback(task_idx, field, value_view_t::make_empty());
         }
     }
 
@@ -1090,7 +1125,6 @@ void read_modify_docs( //
     doc_modification_t const c_modification,
     linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) {
 
@@ -1105,7 +1139,6 @@ void read_modify_docs( //
                                        c_modification,
                                        arena,
                                        unique_places,
-                                       unique_docs,
                                        c_error,
                                        callback);
 
@@ -1128,7 +1161,6 @@ void read_modify_docs( //
                                        c_modification,
                                        arena,
                                        unique_places,
-                                       unique_docs,
                                        c_error,
                                        callback);
 
@@ -1164,9 +1196,6 @@ void read_modify_docs( //
     // Once we transform to inclusive sums, it will be O(1).
     //      inplace_inclusive_prefix_sum(found_binary_lens, found_binary_lens + found_binary_count);
     // Alternatively we can compensate it with additional memory:
-    unique_docs.resize(unique_places.count, c_error);
-    return_on_error(c_error);
-    initialized_range_gt<json_t> unique_docs_raii {unique_docs};
 
     // Parse all the unique documents
     auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
@@ -1176,11 +1205,8 @@ void read_modify_docs( //
         auto place = places[task_idx];
         auto parsed_idx = offset_in_sorted(unique_col_keys, place.collection_key());
 
-        json_t& binary_doc = found_binaries[parsed_idx];
-        {
-            parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
-            callback(task_idx, place.field, parsed);
-        }
+        value_view_t binary_doc = found_binaries[parsed_idx];
+        callback(task_idx, place.field, binary_doc);
     }
 }
 
@@ -1200,7 +1226,11 @@ void read_modify_write( //
     return_on_error(c_error);
 
     yyjson_alc allocator = wrap_allocator(arena);
-    auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, json_t& parsed) {
+    auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, value_view_t binary_doc) {
+        json_t parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
+
+        // This error is extremely unlikely, as we have previously accepted the data into the store.
+        return_on_error(c_error);
         if (!parsed.mut_handle)
             parsed.mut_handle = yyjson_doc_mut_copy(parsed.handle, &allocator);
 
@@ -1214,18 +1244,8 @@ void read_modify_write( //
     };
 
     places_arg_t unique_places;
-    uninitialized_array_gt<json_t> unique_docs(arena);
     auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
-    read_modify_docs(c_db,
-                     c_txn,
-                     places,
-                     opts,
-                     c_modification,
-                     arena,
-                     unique_places,
-                     unique_docs,
-                     c_error,
-                     safe_callback);
+    read_modify_docs(c_db, c_txn, places, opts, c_modification, arena, unique_places, c_error, safe_callback);
     return_on_error(c_error);
 
     // By now, the tape contains concatenated updates docs:
@@ -1354,14 +1374,28 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
     growing_tape.reserve(places.size(), c.error);
     return_on_error(c.error);
 
-    auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, json_t const& doc) {
-        yyjson_val* root = yyjson_doc_get_root(doc.handle);
-        yyjson_val* branch = json_lookup(root, field);
-        any_dump({.handle = branch}, c.type, arena, growing_tape, c.error);
+    auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, value_view_t binary_doc) {
+        sj::ondemand::parser parser;
+        sj::ondemand::document doc = parser.iterate((const uint8_t*)binary_doc.data(),
+                                                    binary_doc.size(),
+                                                    binary_doc.size() + sj::SIMDJSON_PADDING);
+        std::string_view result;
+        printed_number_buffer_t print_buffer;
+        if (doc.is_scalar())
+            result = get_value(doc, c.type, print_buffer);
+        else {
+            auto parsed = doc.get_value();
+            auto maybe_field = !field ? parsed : field[0] == '/' ? parsed.at_pointer(field) : parsed[field];
+            return_if_error(maybe_field.error() == sj::SUCCESS, c.error, 0, "Fail To Read!");
+            sj::ondemand::value field_value = maybe_field.value();
+            result = get_value(field_value, c.type, print_buffer);
+        }
+        growing_tape.push_back(result, c.error);
+        growing_tape.add_terminator(byte_t {0}, c.error);
         return_on_error(c.error);
     };
+
     places_arg_t unique_places;
-    uninitialized_array_gt<json_t> unique_docs(arena);
     read_modify_docs(c.db,
                      c.transaction,
                      places,
@@ -1369,7 +1403,6 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
                      doc_modification_t::nothing_k,
                      arena,
                      unique_places,
-                     unique_docs,
                      c.error,
                      safe_callback);
 
