@@ -111,8 +111,8 @@ void check_length(blobs_ref_gt<locations_at>& ref, ukv_length_t expected_length)
     }
 }
 
-template <typename locations_at>
-void check_equalities(blobs_ref_gt<locations_at>& ref, contents_arg_t values) {
+template <template <typename locations_at> class ref_at, typename locations_at>
+void check_equalities(ref_at<locations_at>& ref, contents_arg_t values) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
     using extractor_t = places_arg_extractor_gt<locations_at>;
@@ -863,6 +863,9 @@ TEST(db, docs) {
     auto maybe_person = collection[ckf(1, "person")].value(ukv_doc_field_str_k);
     EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
 
+    auto maybe_age = collection[ckf(1, "age")].value(ukv_doc_field_str_k);
+    EXPECT_EQ(std::string_view(maybe_age->c_str(), maybe_age->size()), std::string_view("24"));
+
 #if 0
     // MsgPack
     collection.as(ukv_format_msgpack_k);
@@ -875,6 +878,66 @@ TEST(db, docs) {
 #endif
 
     EXPECT_TRUE(db.clear());
+}
+
+TEST(db, docs_batch) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    docs_collection_t collection = *db.collection<docs_collection_t>();
+
+    auto json1 = R"({"person": {"name":"Carl", "age": 24}} )"_json.dump();
+    auto json2 = R"({"person": [{"name":"Joe", "age": 25}]} )"_json.dump();
+    auto json3 = R"({"person": "Charls", "age": 26} )"_json.dump();
+    std::string jsons = json1 + json2 + json3;
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(jsons.data());
+    std::array<ukv_length_t, 4> offsets = {
+        0,
+        json1.size(),
+        json1.size() + json2.size(),
+        json1.size() + json2.size() + json3.size(),
+    };
+    contents_arg_t values {
+        .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
+        .contents_begin = {&vals_begin, 0},
+    };
+
+    std::array<ukv_key_t, 3> keys = {1, 2, 3};
+    auto ref = collection[keys];
+    ref.assign(values);
+
+    // Read One By One
+    M_EXPECT_EQ_JSON(*collection[1].value(), json1);
+    M_EXPECT_EQ_JSON(*collection[2].value(), json2);
+    M_EXPECT_EQ_JSON(*collection[3].value(), json3);
+
+    auto expected = R"({"name":"Carl", "age": 24})"_json.dump();
+    M_EXPECT_EQ_JSON(*collection[ckf(1, "person")].value(), expected);
+
+    expected = R"([{"name":"Joe", "age": 25}])"_json.dump();
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), expected);
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "/person/0/name")].value(), "\"Joe\"");
+
+    // Read sorted keys
+    check_equalities(ref, values);
+
+    // Read not sorted keys
+    std::array<ukv_key_t, 3> not_sorted_keys = {1, 3, 2};
+    auto not_sorted_ref = collection[not_sorted_keys];
+    std::string not_sorted_jsons = json1 + json3 + json2;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(not_sorted_jsons.data());
+    offsets[2] = json1.size() + json3.size();
+    offsets[3] = json1.size() + json3.size() + json2.size();
+    check_equalities(not_sorted_ref, values);
+
+    // Read duplicate keys
+    std::array<ukv_key_t, 3> duplicate_keys = {1, 2, 1};
+    auto duplicate_ref = collection[duplicate_keys];
+    std::string duplicate_jsons = json1 + json2 + json1;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(duplicate_jsons.data());
+    offsets[2] = json1.size() + json2.size();
+    offsets[3] = json1.size() + json2.size() + json1.size();
+    check_equalities(duplicate_ref, values);
 }
 
 TEST(db, docs_modify) {
