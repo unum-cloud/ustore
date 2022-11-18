@@ -929,7 +929,6 @@ TEST(db, txn_unnamed_then_named) {
 
     EXPECT_TRUE(db.clear());
 }
-#endif
 
 #pragma region Document Collections
 
@@ -949,7 +948,7 @@ TEST(db, docs) {
     // Binary
     auto maybe_person = collection[ckf(1, "person")].value(ukv_doc_field_str_k);
     EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
-#if 0
+
     // BSON
     bson_error_t error;
 
@@ -961,7 +960,6 @@ TEST(db, docs) {
     M_EXPECT_EQ_JSON(*collection[2].value(), json);
     M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), "\"Carl\"");
     M_EXPECT_EQ_JSON(*collection[ckf(2, "age")].value(), "24");
-#endif
 
 #if 0
     // MsgPack
