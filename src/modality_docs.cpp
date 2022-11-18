@@ -981,13 +981,8 @@ void read_unique_docs( //
 
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
-        json_t parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
-
-        // This error is extremely unlikely, as we have previously accepted the data into the store.
-        return_on_error(c_error);
-
         ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
-        callback(task_idx, field, parsed);
+        callback(task_idx, field, binary_doc);
     }
 
     unique_places = places;
@@ -1175,34 +1170,18 @@ void read_modify_docs( //
 
     // Parse all the unique documents
     auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
-    auto found_binary_it = found_binaries.begin();
-    for (ukv_size_t doc_idx = 0; doc_idx != unique_places.count; ++doc_idx, ++found_binary_it) {
-        value_view_t binary_doc = *found_binary_it;
-        json_t& parsed = unique_docs[doc_idx];
-        parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
-
-        // This error is extremely unlikely, as we have previously accepted the data into the store.
-        return_on_error(c_error);
-    }
 
     // Join docs and fields with binary search
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx) {
         auto place = places[task_idx];
         auto parsed_idx = offset_in_sorted(unique_col_keys, place.collection_key());
-        json_t& parsed = unique_docs[parsed_idx];
-        callback(task_idx, place.field, parsed);
-    }
 
-    read_modify_unique_docs(c_db,
-                            c_txn,
-                            places,
-                            c_options,
-                            c_modification,
-                            arena,
-                            unique_places,
-                            unique_docs,
-                            c_error,
-                            callback);
+        json_t& binary_doc = found_binaries[parsed_idx];
+        {
+            parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
+            callback(task_idx, place.field, parsed);
+        }
+    }
 }
 
 void read_modify_write( //
