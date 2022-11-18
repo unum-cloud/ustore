@@ -418,13 +418,14 @@ using string_t = uninitialized_array_gt<char>;
 struct json_state_t {
     string_t& json_str;
     ukv_error_t* c_error;
+
+    ssize_t* err_offset;
     uint32_t count;
     bool keys;
 };
 
 void bson_to_json_string(string_t& json_str, char const* str, ukv_error_t* c_error) {
     json_str.insert(json_str.size(), str, str + std::strlen(str), c_error);
-    json_str.push_back('\0', c_error);
 }
 
 template <typename at>
@@ -463,7 +464,9 @@ static bool bson_visit_before(bson_iter_t const*, char const* key, void* data) {
 static bool bson_visit_after(bson_iter_t const*, char const*, void*) {
     return false;
 }
-static void bson_visit_corrupt(bson_iter_t const*, void*) {
+static void bson_visit_corrupt(bson_iter_t const* iter, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    *state.err_offset = iter->off;
 }
 static bool bson_visit_double(bson_iter_t const*, char const*, double v_double, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
@@ -499,7 +502,7 @@ static bool bson_visit_utf8(bson_iter_t const*, char const*, size_t v_utf8_len, 
         return false;
     }
 
-    return false;
+    return true;
 }
 static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v_document, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
@@ -636,8 +639,9 @@ static bool bson_visit_minkey(bson_iter_t const*, char const*, void* data) {
     bson_to_json_string(state.json_str, "{ \"$minKey\" : 1 }", state.c_error);
     return false;
 }
-static void bson_visit_unsupported_type(bson_iter_t const*, char const*, uint32_t, void* data) {
+static void bson_visit_unsupported_type(bson_iter_t const* iter, char const*, uint32_t, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    //*state.err_offset = iter->off; //TODO
     return_error(state.c_error, "BSON unsupported type");
 }
 static bool bson_visit_decimal128(bson_iter_t const*, char const*, bson_decimal128_t const*, void* data) {
@@ -645,6 +649,14 @@ static bool bson_visit_decimal128(bson_iter_t const*, char const*, bson_decimal1
     log_error(state.c_error, 0, "Unsupported type");
     return false;
 }
+
+static const bson_visitor_t bson_visitor = {
+    bson_visit_before,   bson_visit_after,     bson_visit_corrupt,    bson_visit_double,    bson_visit_utf8,
+    bson_visit_document, bson_visit_array,     bson_visit_binary,     bson_visit_undefined, bson_visit_oid,
+    bson_visit_bool,     bson_visit_date_time, bson_visit_null,       bson_visit_regex,     bson_visit_dbpointer,
+    bson_visit_code,     bson_visit_symbol,    bson_visit_codewscope, bson_visit_int32,     bson_visit_timestamp,
+    bson_visit_int64,    bson_visit_maxkey,    bson_visit_minkey,
+};
 
 json_t any_parse(value_view_t bytes,
                  ukv_doc_field_type_t const field_type,
@@ -655,21 +667,28 @@ json_t any_parse(value_view_t bytes,
         bson_t bson;
         bool success = bson_init_static(&bson, reinterpret_cast<uint8_t const*>(bytes.data()), bytes.size());
         // Using `bson_as_canonical_extended_json` is a bad idea, as it allocates dynamically.
-        // Instead we will manually iterate over the document, using the "visitor" pattern.
-        bson_visitor_t visitor = {0};
+        // Instead we will manually iterate over the document, using the "visitor" pattern
         bson_iter_t iter;
+        ssize_t err_offset = -1;
         string_t json(arena);
-        json_state_t state = {json, c_error, 0, false};
+        json_state_t state = {json, c_error, &err_offset, 0, true};
+
+        char const* str_open = "{ ";
+        char const* str_close = " }";
 
         if (!bson_iter_init(&iter, &bson)) {
             *c_error = "Failed to parse the BSON document!";
             return {};
         }
 
-        if (!bson_iter_visit_all(&iter, &visitor, &state)) {
+        bson_to_json_string(json, str_open, c_error);
+        if (bson_iter_visit_all(&iter, &bson_visitor, &state) || err_offset != -1) {
             *c_error = "Failed to iterate the BSON document!";
             return {};
         }
+        bson_to_json_string(json, str_close, c_error);
+
+        return json_parse({json.data(), json.size()}, arena, c_error);
     }
 
     if (field_type == ukv_doc_field_json_k)
