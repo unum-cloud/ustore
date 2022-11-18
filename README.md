@@ -1,7 +1,8 @@
-<h1 align="center">UKV by Unum</h1>
+<h1 align="center">UKV</h1>
 <h3 align="center">
 Universal Binary Interface<br/>
-For The Fastest DBMS Ever Built
+For the Fastest Databases in Existance<br/>
+From <a href="https://unum.cloud">Unum</a> with ❤️
 </h3>
 
 <h5 align="center">
@@ -26,6 +27,7 @@ C • C++ • Python • Java • GoLang • Apache Arrow
 ## What is UKV?
 
 **UKV is an open C-layer binary standard** for "Create, Read, Update, Delete" operations, or CRUD for short.
+
 Many databases exist today, providing similar functionality and performance under different interfaces.
 It is a problem for DBMS users, introducing vendor locks and additional friction for adopting newer and better technologies.
 
@@ -41,8 +43,8 @@ That way, migrations are more manageable, and the system can be modularized into
 
 ## The [BLAS][blas] of [CRUD][crud]
 
-Such generic standards have existed in computing since 1979.
-It is called **BLAS** and was the locomotive of Numerical Methods across all disciplines in the past 50 years. 
+Generic standards have existed in computing since 1979.
+The best one is called **BLAS** and was the locomotive of Numerical Methods across all disciplines in the past 50 years. 
 Every deep-learning you use relies on BLAS.
 What is the standard that your DBMS can be built around?
 
@@ -58,8 +60,12 @@ Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-bench
 
 ## Features
 
+We love to think about UKV as a "Transactional <sup>1</sup> Zoned <sup>2</sup> Memory Allocator <sup>3</sup>" that can abstract both persistent and volatile memory.
+This abstraction every DBMS needs.
+But UKV has more to offer!
+
 <table>
-<td>
+<td style="text-align: center">
 
 <ul>
 <li> <b>ACID Transactions</b> across collections  </li>
@@ -71,7 +77,7 @@ Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-bench
 </ul>
 
 </td>
-<td>
+<td style="text-align: center">
 
 <ul>
 <li> Native Apache <b>Arrow</b> format support </li>
@@ -83,6 +89,10 @@ Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-bench
 </ul>
 </td>
 </table>
+
+> 1: For [ACID][acid].
+> 2: For having named collections.
+> 3: Because keys are integers, like `uintptr_t`, and values are virtually continuous memory blocks of variable length.
 
 ## [HTAP][htap]: [OLAP][olap] + [OLTP][oltp]
 
@@ -401,7 +411,6 @@ Licensing depends on which parts you are using.
 [dbms-cloc]: https://news.ycombinator.com/item?id=24813239
 [watch]: https://redis.io/commands/watch/
 [snap]: https://github.com/facebook/rocksdb/wiki/Snapshot
-[acid]: https://en.wikipedia.org/wiki/ACID
 [olap]: https://en.wikipedia.org/wiki/Online_analytical_processing
 [oltp]: https://en.wikipedia.org/wiki/Online_transaction_processing
 [htap]: https://en.wikipedia.org/wiki/Hybrid_transactional/analytical_processing
