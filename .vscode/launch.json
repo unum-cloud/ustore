@@ -296,7 +296,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug Arrow Server",
+            "preLaunchTask": "Build Native: Debug Arrow",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
