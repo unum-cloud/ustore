@@ -12,3 +12,4 @@ FetchContent_Declare(
     GIT_TAG v1.7.0
 )
 FetchContent_MakeAvailable(benchmark)
+include_directories(${benchmark_SOURCE_DIR}/include)
