@@ -1,4 +1,4 @@
-# UKV: Open Source Reference Implementation
+# Reference Implementation Details
 
 UKV is an open standard.
 Anyone can contribute to the interface, or suggest an implementation.
@@ -84,3 +84,4 @@ curl -i \
   0.0.0.0/8080/one/42?col=sub
 ```
 
+## Contributing
