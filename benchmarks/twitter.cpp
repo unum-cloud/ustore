@@ -156,10 +156,10 @@ void construct_docs(bm::State& state) {
 }
 
 /**
- * @brief Constructs a graph between Twitter enities:
+ * @brief Constructs a graph between Twitter entities:
  * - Tweets and their Authors.
  * - Tweets and their Retweets.
- * - Authors and Retweeters labeled by Retweet IDs.
+ * - Authors and Retweets labeled by Retweet IDs.
  */
 static void construct_graph(bm::State& state) {
     return edges_upsert(state,

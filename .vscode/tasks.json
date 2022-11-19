@@ -63,7 +63,7 @@
         },
         {
             "label": "Build Native: Debug UMem Benchmark",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_umem_twitter_benchmark -j 16",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_umem_twitter_benchmark -j 16",
             "args": [],
             "type": "shell"
         },
