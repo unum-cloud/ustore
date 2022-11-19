@@ -85,6 +85,12 @@ To build the Conan package localy, without installing it:
 conan create . ukv/testing --build=missing
 ```
 
+To fetch the most recent Python bindings:
+
+```sh
+pip install --extra-index-url https://test.pypi.org/simple/ --force-reinstall ukv
+```
+
 ## Cloud Deployments
 
 UKV is coming to the clouds across the globe!
@@ -100,6 +106,7 @@ For that, try us on your favourite marketplace:
 * Amazon Web Services.
 * Microsoft Azure.
 * Google Cloud Platform.
+* Alibaba Cloud.
 
 ## Open Shift Integration
 
