@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
+#include <bson.h>
 
 #include "ukv/ukv.hpp"
 
@@ -404,6 +405,91 @@ TEST(db, collection_drop_values) {
     check_length(collection_ref, 0);
 
     EXPECT_TRUE(db.clear());
+}
+
+TEST(db, multiple_collection) {
+    if (!ukv_supports_named_collections_k)
+        return;
+
+    database_t db;
+
+    EXPECT_TRUE(db.open(path()));
+
+    blobs_collection_t col1 = *db.collection_create("col1");
+    blobs_collection_t col2 = *db.collection_create("col2");
+    blobs_collection_t col3 = *db.collection_create("col3");
+    blobs_collection_t col4 = *db.collection_create("col4");
+    blobs_collection_t col5 = *db.collection_create("col5");
+
+    triplet_t triplet;
+
+    auto col1_ref = col1[triplet.keys];
+    auto col2_ref = col2[triplet.keys];
+    auto col3_ref = col3[triplet.keys];
+    auto col4_ref = col4[triplet.keys];
+    auto col5_ref = col5[triplet.keys];
+
+    check_length(col1_ref, ukv_length_missing_k);
+    check_length(col2_ref, ukv_length_missing_k);
+    check_length(col3_ref, ukv_length_missing_k);
+    check_length(col4_ref, ukv_length_missing_k);
+    check_length(col5_ref, ukv_length_missing_k);
+
+    round_trip(col1_ref, triplet.contents_arrow());
+    round_trip(col1_ref, triplet.contents_lengths());
+    round_trip(col1_ref, triplet.contents_full());
+    check_length(col1_ref, triplet_t::val_size_k);
+
+    round_trip(col2_ref, triplet.contents_arrow());
+    round_trip(col2_ref, triplet.contents_lengths());
+    round_trip(col2_ref, triplet.contents_full());
+    check_length(col2_ref, triplet_t::val_size_k);
+
+    round_trip(col3_ref, triplet.contents_arrow());
+    round_trip(col3_ref, triplet.contents_lengths());
+    round_trip(col3_ref, triplet.contents_full());
+    check_length(col3_ref, triplet_t::val_size_k);
+
+    round_trip(col4_ref, triplet.contents_arrow());
+    round_trip(col4_ref, triplet.contents_lengths());
+    round_trip(col4_ref, triplet.contents_full());
+    check_length(col4_ref, triplet_t::val_size_k);
+
+    round_trip(col5_ref, triplet.contents_arrow());
+    round_trip(col5_ref, triplet.contents_lengths());
+    round_trip(col5_ref, triplet.contents_full());
+    check_length(col5_ref, triplet_t::val_size_k);
+
+    EXPECT_TRUE(*db.contains("col1"));
+    EXPECT_TRUE(col1.clear_values());
+    check_length(col1_ref, 0);
+    EXPECT_TRUE(*db.contains("col1"));
+
+    EXPECT_TRUE(*db.contains("col2"));
+    EXPECT_TRUE(col2.clear_values());
+    check_length(col2_ref, 0);
+    EXPECT_TRUE(*db.contains("col2"));
+
+    EXPECT_TRUE(db.drop("col2"));
+    EXPECT_FALSE(*db.contains("col2"));
+
+    EXPECT_TRUE(*db.contains("col3"));
+    EXPECT_TRUE(*db.contains("col4"));
+    EXPECT_TRUE(*db.contains("col5"));
+
+    EXPECT_TRUE(db.drop("col4"));
+    EXPECT_FALSE(*db.contains("col4"));
+
+    check_length(col3_ref, triplet_t::val_size_k);
+    check_length(col5_ref, triplet_t::val_size_k);
+
+    EXPECT_TRUE(db.clear());
+
+    EXPECT_FALSE(*db.contains("col1"));
+    EXPECT_FALSE(*db.contains("col2"));
+    EXPECT_FALSE(*db.contains("col3"));
+    EXPECT_FALSE(*db.contains("col4"));
+    EXPECT_FALSE(*db.contains("col5"));
 }
 
 TEST(db, paths) {
@@ -862,6 +948,18 @@ TEST(db, docs) {
     // Binary
     auto maybe_person = collection[ckf(1, "person")].value(ukv_doc_field_str_k);
     EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
+
+    // BSON
+    bson_error_t error;
+
+    bson_t* b = bson_new_from_json((uint8_t*)json.c_str(), -1, &error);
+    const uint8_t* buffer = bson_get_data(b);
+
+    auto view = value_view_t(buffer, b->len);
+    collection.at(2, ukv_doc_field_bson_k) = view;
+    M_EXPECT_EQ_JSON(*collection[2].value(), json);
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), "\"Carl\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "age")].value(), "24");
 
 #if 0
     // MsgPack
