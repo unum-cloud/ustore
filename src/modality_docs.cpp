@@ -405,8 +405,10 @@ std::string_view json_to_string(yyjson_val* value,
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
             break;
+        default: break;
         }
     }
+    default: break;
     }
 
     return result;
@@ -418,38 +420,43 @@ std::string_view get_value( //
     ukv_doc_field_type_t field_type,
     printed_number_buffer_t& print_buffer) noexcept {
 
+    std::string_view result;
+
     if (field_type == ukv_doc_field_json_k) {
         if (value.type().value() == sj::ondemand::json_type::object)
-            return value.get_object().value().raw_json();
+            result = value.get_object().value().raw_json();
         else if (value.type().value() == sj::ondemand::json_type::array)
-            return value.get_array().value().raw_json();
+            result = value.get_array().value().raw_json();
         else
-            return value.raw_json_token();
+            result = value.raw_json_token();
     }
     else if (field_type == ukv_doc_field_str_k) {
         auto type = value.type().value();
         switch (type) {
-        case sj::ondemand::json_type::null: return {};
-        case sj::ondemand::json_type::object: return value.get_object().value().raw_json();
-        case sj::ondemand::json_type::array: return value.get_object().value().raw_json();
+        case sj::ondemand::json_type::null: break;
+        case sj::ondemand::json_type::object: result = value.get_object().value().raw_json();
+        case sj::ondemand::json_type::array: result = value.get_object().value().raw_json();
         case sj::ondemand::json_type::boolean:
-            return value.get_bool() ? std::string_view(true_k, 5) : std::string_view(false_k, 6);
-        case sj::ondemand::json_type::string: return value.get_string();
+            result = value.get_bool() ? std::string_view(true_k, 5) : std::string_view(false_k, 6);
+        case sj::ondemand::json_type::string: result = value.get_string();
         case sj::ondemand::json_type::number: {
             auto number_type = value.get_number_type().value();
             switch (number_type) {
             case sj::ondemand::number_type::signed_integer:
-                return print_number(print_buffer,
-                                    print_buffer + printed_number_length_limit_k,
-                                    value.get_int64().value());
+                result =
+                    print_number(print_buffer, print_buffer + printed_number_length_limit_k, value.get_int64().value());
             case sj::ondemand::number_type::unsigned_integer:
-                return print_number(print_buffer,
-                                    print_buffer + printed_number_length_limit_k,
-                                    value.get_uint64().value());
+                result = print_number(print_buffer,
+                                      print_buffer + printed_number_length_limit_k,
+                                      value.get_uint64().value());
+            default: break;
             }
         }
+        default: break;
         }
     }
+
+    return result;
 }
 
 /*********************************************************/
