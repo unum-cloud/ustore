@@ -76,10 +76,10 @@ jobs:
         run: cmake . -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_PYTHON=1 && make -j 4 py_umem
 
       - name: install ukv
-        run: pip install --upgrade --force-reinstall .
+        run: python3.9 -m pip install --upgrade --force-reinstall .
 
       - name: test lib
-        run: python -c "import ukv.umem"
+        run: python3.9 -c "import ukv.umem"
 
       - name: publish to test-pypi
         run: chmod +x python/publish.sh && bash python/publish.sh __token__ ${{ secrets.TWINE_API }}
