@@ -421,7 +421,7 @@ struct json_state_t {
 
     uint32_t count;
     bool keys;
-    ssize_t* error_offset;
+    ssize_t error_offset;
 };
 
 template <std::size_t count_ak>
@@ -466,7 +466,7 @@ static bool bson_visit_after(bson_iter_t const*, char const*, void*) {
 }
 static void bson_visit_corrupt(bson_iter_t const* iter, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    *state.error_offset = *iter->off;
+    state.error_offset = iter->off;
 }
 static bool bson_visit_double(bson_iter_t const*, char const*, double v_double, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
@@ -636,7 +636,7 @@ static bool bson_visit_minkey(bson_iter_t const*, char const*, void* data) {
 }
 static void bson_visit_unsupported_type(bson_iter_t const* iter, char const*, uint32_t, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    //*state.error_offset = iter->off; //TODO
+    // state.error_offset = iter->off; //TODO
     return_error(state.c_error, "BSON unsupported type");
 }
 static bool bson_visit_decimal128(bson_iter_t const*, char const*, bson_decimal128_t const*, void* data) {
@@ -664,9 +664,8 @@ json_t any_parse(value_view_t bytes,
         // Using `bson_as_canonical_extended_json` is a bad idea, as it allocates dynamically.
         // Instead we will manually iterate over the document, using the "visitor" pattern
         bson_iter_t iter;
-        ssize_t error_offset = -1;
         string_t json(arena);
-        json_state_t state = {json, c_error, &error_offset, 0, true};
+        json_state_t state {json, c_error, 0, true, -1};
 
         char const* str_open = "{ ";
         char const* str_close = " }";
@@ -677,7 +676,7 @@ json_t any_parse(value_view_t bytes,
         }
 
         bson_to_json_string(json, str_open, c_error);
-        if (bson_iter_visit_all(&iter, &bson_visitor, &state) || error_offset != -1) {
+        if (bson_iter_visit_all(&iter, &bson_visitor, &state) || state.error_offset != -1) {
             *c_error = "Failed to iterate the BSON document!";
             return {};
         }
