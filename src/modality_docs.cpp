@@ -1417,19 +1417,19 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
 
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, value_view_t binary_doc) {
         sj::ondemand::parser parser;
-        sj::ondemand::document doc = parser.iterate((const uint8_t*)binary_doc.data(),
-                                                    binary_doc.size(),
-                                                    binary_doc.size() + sj::SIMDJSON_PADDING);
+        auto maybe_doc = parser.iterate((const uint8_t*)binary_doc.data(),
+                                        binary_doc.size(),
+                                        binary_doc.size() + sj::SIMDJSON_PADDING);
+        return_if_error(maybe_doc.error() == sj::SUCCESS, c.error, 0, "Fail To Parse Document!");
         std::string_view result;
         printed_number_buffer_t print_buffer;
-        if (doc.is_scalar())
-            result = get_value(doc, c.type, print_buffer);
+        if (maybe_doc.value().is_scalar())
+            result = get_value(maybe_doc.value(), c.type, print_buffer);
         else {
-            auto parsed = doc.get_value();
+            auto parsed = maybe_doc.value().get_value();
             auto maybe_field = !field ? parsed : field[0] == '/' ? parsed.at_pointer(field) : parsed[field];
             return_if_error(maybe_field.error() == sj::SUCCESS, c.error, 0, "Fail To Read!");
-            sj::ondemand::value field_value = maybe_field.value();
-            result = get_value(field_value, c.type, print_buffer);
+            result = get_value(maybe_field.value(), c.type, print_buffer);
         }
         growing_tape.push_back(result, c.error);
         growing_tape.add_terminator(byte_t {0}, c.error);
