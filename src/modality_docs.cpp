@@ -434,10 +434,11 @@ std::string_view get_value( //
         auto type = value.type().value();
         switch (type) {
         case sj::ondemand::json_type::null: break;
-        case sj::ondemand::json_type::object: result = value.get_object().value().raw_json();
-        case sj::ondemand::json_type::array: result = value.get_object().value().raw_json();
+        case sj::ondemand::json_type::object: result = value.get_object().value().raw_json(); break;
+        case sj::ondemand::json_type::array: result = value.get_object().value().raw_json(); break;
         case sj::ondemand::json_type::boolean:
             result = value.get_bool() ? std::string_view(true_k, 5) : std::string_view(false_k, 6);
+            break;
         case sj::ondemand::json_type::string: result = value.get_string();
         case sj::ondemand::json_type::number: {
             auto number_type = value.get_number_type().value();
@@ -445,10 +446,12 @@ std::string_view get_value( //
             case sj::ondemand::number_type::signed_integer:
                 result =
                     print_number(print_buffer, print_buffer + printed_number_length_limit_k, value.get_int64().value());
+                break;
             case sj::ondemand::number_type::unsigned_integer:
                 result = print_number(print_buffer,
                                       print_buffer + printed_number_length_limit_k,
                                       value.get_uint64().value());
+                break;
             default: break;
             }
         }
