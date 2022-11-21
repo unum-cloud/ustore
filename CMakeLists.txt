@@ -121,17 +121,17 @@ message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
 add_library(ukv_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_umem pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_umem pthread yyjson simdjson bson pcre2 ${jemalloc_LIBRARIES})
 target_compile_definitions(ukv_umem INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_umem INTERFACE UKV_ENGINE_NAME=umem)
 
 add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_rocksdb rocksdb pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_rocksdb rocksdb pthread yyjson simdjson bson pcre2 ${jemalloc_LIBRARIES})
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_ENGINE_NAME=rocksdb)
 
 add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_leveldb leveldb pthread yyjson bson pcre2 ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_leveldb leveldb pthread yyjson simdjson bson pcre2 ${jemalloc_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 target_compile_definitions(ukv_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
