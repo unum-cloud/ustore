@@ -1054,26 +1054,15 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
         }
 
+        arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_table;
         if (is_empty_values) {
-            auto maybe_table = arrow::RecordBatch::MakeEmpty(&output_schema_c);
-
-            auto table = maybe_table.ValueUnsafe();
-            ar_status = table->ValidateFull();
-            if (!ar_status.ok())
-                return ar_status;
-
-            ar_status = response.Begin(table->schema());
-            if (!ar_status.ok())
-                return ar_status;
-
-            ar_status = response.WriteRecordBatch(*table);
-            if (!ar_status.ok())
-                return ar_status;
-
-            return response.Close();
+            auto ar_sch = arrow::ImportSchema(&output_schema_c).ValueUnsafe();
+            maybe_table = arrow::RecordBatch::MakeEmpty(ar_sch);
+        }
+        else {
+            maybe_table = ar::ImportRecordBatch(&output_batch_c, &output_schema_c);
         }
 
-        auto maybe_table = ar::ImportRecordBatch(&output_batch_c, &output_schema_c);
         if (!maybe_table.ok())
             return maybe_table.status();
 
