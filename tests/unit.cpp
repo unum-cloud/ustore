@@ -1032,6 +1032,21 @@ TEST(db, docs_batch) {
     offsets[2] = json1.size() + json2.size();
     offsets[3] = json1.size() + json2.size() + json1.size();
     check_equalities(duplicate_ref, values);
+
+    // Read with feilds
+    std::array<collection_key_field_t, 3> keys_with_fields = {ckf(1, "person"),
+                                                              ckf(2, "/person/0/name"),
+                                                              ckf(3, "age")};
+    auto ref_with_fields = collection[keys_with_fields];
+    auto field1 = R"({"name":"Carl", "age": 24} )"_json.dump();
+    auto field2 = R"("Joe")"_json.dump();
+    auto field3 = R"(26)"_json.dump();
+    std::string fields = field1 + field2 + field3;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(fields.data());
+    offsets[1] = field1.size();
+    offsets[2] = field1.size() + field2.size();
+    offsets[3] = field1.size() + field2.size() + field3.size();
+    check_equalities(ref_with_fields, values);
 }
 
 TEST(db, docs_modify) {
