@@ -238,7 +238,7 @@ void ukv_read(ukv_read_t* c_ptr) {
         if (c.values)
             *c.values = data_ptr;
 
-        if (/*is_not_empty_array*/ && c.lengths) {
+        if (c.lengths) {
             auto lens = *c.lengths = arena.alloc<ukv_length_t>(places.count, c.error).begin();
             return_on_error(c.error);
             if (presences_ptr) {
