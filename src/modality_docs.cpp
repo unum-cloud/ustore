@@ -445,6 +445,9 @@ void bson_to_json_number(string_t& json_str, at scalar, ukv_error_t* c_error) {
     json_str.insert(json_str.size(), result.data(), result.data() + result.size(), c_error);
 }
 
+static bool bson_visit_array(const bson_iter_t*, const char*, const bson_t*, void*);
+static bool bson_visit_document(const bson_iter_t*, const char*, const bson_t*, void*);
+
 static bool bson_visit_before(bson_iter_t const*, char const* key, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
 
@@ -513,40 +516,6 @@ static bool bson_visit_utf8(bson_iter_t const*, char const*, size_t v_utf8_len, 
     }
 
     return true;
-}
-static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v_document, void* data) {
-    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    json_state_t child_state = {state.json_str, state.c_error, state.err_offset, 0, true};
-    bson_iter_t child;
-
-    if (bson_iter_init(&child, v_document)) {
-        bson_to_json_string(child_state.json_str, open_k, state.c_error);
-
-        bson_visitor_t visitor = {0};
-        if (bson_iter_visit_all(&child, &visitor, &child_state))
-            log_error(state.c_error, 0, "Failed to iterate the BSON document!");
-
-        bson_to_json_string(child_state.json_str, colse_k, state.c_error);
-    }
-
-    return false;
-}
-static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_array, void* data) {
-    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    json_state_t child_state = {state.json_str, state.c_error, state.err_offset, 0, true};
-    bson_iter_t child;
-
-    if (bson_iter_init(&child, v_array)) {
-        bson_to_json_string(child_state.json_str, open_arr_k, state.c_error);
-
-        bson_visitor_t visitor = {0};
-        if (bson_iter_visit_all(&child, &visitor, &child_state))
-            log_error(state.c_error, 0, "Failed to iterate the BSON array!");
-
-        bson_to_json_string(child_state.json_str, close_arr_k, state.c_error);
-    }
-
-    return false;
 }
 static bool bson_visit_binary(bson_iter_t const*,
                               char const*,
@@ -667,6 +636,37 @@ static const bson_visitor_t bson_visitor = {
     bson_visit_code,     bson_visit_symbol,    bson_visit_codewscope, bson_visit_int32,     bson_visit_timestamp,
     bson_visit_int64,    bson_visit_maxkey,    bson_visit_minkey,
 };
+
+static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_array, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    json_state_t child_state = {state.json_str, state.c_error, state.err_offset, 0, true};
+    bson_iter_t child;
+
+    if (bson_iter_init(&child, v_array)) {
+        bson_to_json_string(child_state.json_str, open_arr_k, state.c_error);
+
+        if (bson_iter_visit_all(&child, &bson_visitor, &child_state))
+            log_error(state.c_error, 0, "Failed to iterate the BSON array!");
+
+        bson_to_json_string(child_state.json_str, close_arr_k, state.c_error);
+    }
+    return false;
+}
+static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v_document, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    json_state_t child_state = {state.json_str, state.c_error, state.err_offset, 0, true};
+    bson_iter_t child;
+
+    if (bson_iter_init(&child, v_document)) {
+        bson_to_json_string(child_state.json_str, open_k, state.c_error);
+
+        if (bson_iter_visit_all(&child, &bson_visitor, &child_state))
+            log_error(state.c_error, 0, "Failed to iterate the BSON document!");
+
+        bson_to_json_string(child_state.json_str, close_k, state.c_error);
+    }
+    return false;
+}
 
 json_t any_parse(value_view_t bytes,
                  ukv_doc_field_type_t const field_type,
