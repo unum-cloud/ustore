@@ -736,7 +736,7 @@ class UKVService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            is_empty_values = found_values == nullptr;
+            is_empty_values = request_content && (found_values == nullptr);
 
             ukv_size_t result_length =
                 request_only_presences ? divide_round_up<ukv_size_t>(tasks_count, CHAR_BIT) : tasks_count;
