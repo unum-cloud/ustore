@@ -1041,6 +1041,7 @@ void read_unique_docs( //
 
     ukv_byte_t* found_binary_begin = nullptr;
     ukv_length_t* found_binary_offs = nullptr;
+    ukv_length_t* found_binary_lens = nullptr;
     ukv_read_t read {
         .db = c_db,
         .error = c_error,
@@ -1053,6 +1054,7 @@ void read_unique_docs( //
         .keys = places.keys_begin.get(),
         .keys_stride = places.keys_begin.stride(),
         .offsets = &found_binary_offs,
+        .lengths = &found_binary_lens,
         .values = &found_binary_begin,
     };
 
@@ -1061,10 +1063,16 @@ void read_unique_docs( //
     auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
 
+    ukv_length_t max_length = *std::max_element(found_binary_lens, found_binary_lens + places.count);
+    auto document = arena.alloc<byte_t>(max_length + sj::SIMDJSON_PADDING, c_error);
+    return_on_error(c_error);
+
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
+        std::memcpy(document.begin(), binary_doc.data(), binary_doc.size());
+        std::memset(document.begin() + binary_doc.size(), 0, sj::SIMDJSON_PADDING);
         ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
-        callback(task_idx, field, binary_doc);
+        callback(task_idx, field, value_view_t(document.begin(), binary_doc.size()));
     }
 
     unique_places = places;
@@ -1414,9 +1422,9 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
     growing_tape_t growing_tape {arena};
     growing_tape.reserve(places.size(), c.error);
     return_on_error(c.error);
+    sj::ondemand::parser parser;
 
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, value_view_t binary_doc) {
-        sj::ondemand::parser parser;
         auto maybe_doc = parser.iterate((const uint8_t*)binary_doc.data(),
                                         binary_doc.size(),
                                         binary_doc.size() + sj::SIMDJSON_PADDING);
