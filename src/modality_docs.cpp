@@ -197,6 +197,10 @@ yyjson_alc wrap_allocator(linked_memory_lock_t& arena) {
     return allocator;
 }
 
+auto simdjson_lookup(sj::ondemand::value& json, ukv_str_view_t field) noexcept {
+    return !field ? json : field[0] == '/' ? json.at_pointer(field) : json[field];
+}
+
 yyjson_val* json_lookup(yyjson_val* json, ukv_str_view_t field) noexcept {
     return !field ? json : field[0] == '/' ? yyjson_get_pointer(json, field) : yyjson_obj_get(json, field);
 }
@@ -1435,9 +1439,8 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
             result = get_value(maybe_doc.value(), c.type, print_buffer);
         else {
             auto parsed = maybe_doc.value().get_value();
-            auto maybe_field = !field ? parsed : field[0] == '/' ? parsed.at_pointer(field) : parsed[field];
-            return_if_error(maybe_field.error() == sj::SUCCESS, c.error, 0, "Fail To Read!");
-            result = get_value(maybe_field.value(), c.type, print_buffer);
+            auto branch = simdjson_lookup(parsed.value(), field);
+            result = get_value(branch, c.type, print_buffer);
         }
         growing_tape.push_back(result, c.error);
         growing_tape.add_terminator(byte_t {0}, c.error);
