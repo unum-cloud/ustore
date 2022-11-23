@@ -126,12 +126,21 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         rocksdb::Options options;
         rocksdb::ConfigOptions config_options;
 
-        std::string path = c.config; // TODO: take the path from config!
-        // rocks_status_t status = rocksdb::LoadLatestOptions(config_options, path, &options, &column_descriptors);
-        rocks_status_t status = rocksdb::LoadOptionsFromFile("./benchmarks/configs/rocksdb.cfg",
-                                                             rocksdb::Env::Default(),
-                                                             &options,
-                                                             &column_descriptors);
+        std::string path = c.config;
+        rocks_status_t status = rocksdb::LoadLatestOptions(config_options, path, &options, &column_descriptors);
+        return_if_error(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
+
+        if (status.IsNotFound()) {
+            // TODO: Take the config path from c.config!
+            status = rocksdb::LoadOptionsFromFile("./benchmarks/configs/rocksdb.cfg",
+                                                  rocksdb::Env::Default(),
+                                                  &options,
+                                                  &column_descriptors);
+            return_if_error(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
+            if (status.IsNotFound())
+                options.compression = rocksdb::kNoCompression;
+        }
+
         auto cf_options = rocksdb::ColumnFamilyOptions();
         cf_options.comparator = &key_comparator_k;
         if (column_descriptors.empty())
@@ -141,9 +150,6 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
                 column_descriptor.options.comparator = &key_comparator_k;
         }
 
-        return_if_error(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
-        if (status.IsNotFound())
-            options.compression = rocksdb::kNoCompression;
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
 
