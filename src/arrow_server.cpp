@@ -557,22 +557,24 @@ class UKVService : public arf::FlightServerBase {
             c_collection_name[params.collection_name->size()] = 0;
 
             // Upsert and fetch collection ID
+            ukv_collection_t collection_id = 0;
             auto maybe_collection = db_.collection(c_collection_name);
-            if (!maybe_collection)
-                return ar::Status::ExecutionError(maybe_collection.release_status().message());
+            if (maybe_collection)
+                collection_id = maybe_collection.throw_or_ref();
+            else {
+                ukv_str_view_t collection_config = get_null_terminated(action.body);
+                ukv_collection_create_t collection_init;
+                collection_init.db = db_;
+                collection_init.error = status.member_ptr();
+                collection_init.name = params.collection_name->begin();
+                collection_init.config = collection_config;
+                collection_init.id = &collection_id;
 
-            ukv_collection_t collection_id = maybe_collection.throw_or_ref();
-            ukv_str_view_t collection_config = get_null_terminated(action.body);
-            ukv_collection_create_t collection_init;
-            collection_init.db = db_;
-            collection_init.error = status.member_ptr();
-            collection_init.name = params.collection_name->begin();
-            collection_init.config = collection_config;
-            collection_init.id = &collection_id;
+                ukv_collection_create(&collection_init);
+                if (!status)
+                    return ar::Status::ExecutionError(status.message());
+            }
 
-            ukv_collection_create(&collection_init);
-            if (!status)
-                return ar::Status::ExecutionError(status.message());
             *results_ptr = return_scalar<ukv_collection_t>(collection_id);
             return ar::Status::OK();
         }
@@ -1014,7 +1016,6 @@ class UKVService : public arf::FlightServerBase {
             // we don't need the lengths, just the NULL indicators
             ukv_length_t* found_offsets = nullptr;
             ukv_length_t* found_lengths = nullptr;
-            ukv_length_t* found_counts = nullptr;
             ukv_key_t* found_keys = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
             ukv_scan_t scan;
@@ -1032,7 +1033,6 @@ class UKVService : public arf::FlightServerBase {
             scan.count_limits_stride = input_lengths.stride();
             scan.offsets = &found_offsets;
             scan.keys = &found_keys;
-            scan.counts = &found_counts;
 
             ukv_scan(&scan);
             if (!status)
