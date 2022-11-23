@@ -497,10 +497,15 @@ struct json_state_t {
     string_t& json_str;
     ukv_error_t* c_error;
 
-    ssize_t* err_offset;
     uint32_t count;
     bool keys;
+    ssize_t error_offset;
 };
+
+template <std::size_t count_ak>
+void bson_to_json_string(string_t& json_str, char (&str)[count_ak], ukv_error_t* c_error) {
+    json_str.insert(json_str.size(), str, str + count_ak, c_error);
+}
 
 void bson_to_json_string(string_t& json_str, char const* str, ukv_error_t* c_error) {
     json_str.insert(json_str.size(), str, str + std::strlen(str), c_error);
@@ -519,27 +524,22 @@ static bool bson_visit_document(const bson_iter_t*, const char*, const bson_t*, 
 static bool bson_visit_before(bson_iter_t const*, char const* key, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
 
-    char* escaped;
-
     if (state.count)
         bson_to_json_string(state.json_str, ", ", state.c_error);
 
     if (state.keys) {
-        escaped = bson_utf8_escape_for_json(key, -1);
+        char* escaped = bson_utf8_escape_for_json(key, -1);
         if (escaped) {
             bson_to_json_string(state.json_str, "\"", state.c_error);
             bson_to_json_string(state.json_str, escaped, state.c_error);
             bson_to_json_string(state.json_str, "\" : ", state.c_error);
-
             bson_free(escaped);
         }
-        else {
+        else
             return true;
-        }
     }
 
     state.count++;
-
     return false;
 }
 static bool bson_visit_after(bson_iter_t const*, char const*, void*) {
@@ -547,23 +547,18 @@ static bool bson_visit_after(bson_iter_t const*, char const*, void*) {
 }
 static void bson_visit_corrupt(bson_iter_t const* iter, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    *state.err_offset = iter->off;
+    state.error_offset = iter->off;
 }
 static bool bson_visit_double(bson_iter_t const*, char const*, double v_double, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
     bson_to_json_string(state.json_str, "{ \"$numberDouble\" : \"", state.c_error);
 
-    if (v_double != v_double) {
+    if (v_double != v_double)
         bson_to_json_string(state.json_str, "NaN", state.c_error);
-    }
-    else if (v_double * 0 != 0) {
-        if (v_double > 0) {
-            bson_to_json_string(state.json_str, "Infinity", state.c_error);
-        }
-        else {
-            bson_to_json_string(state.json_str, "-Infinity", state.c_error);
-        }
-    }
+
+    else if (v_double * 0 != 0)
+        bson_to_json_string(state.json_str, v_double > 0 ? "Infinity" : "-Infinity", state.c_error);
+
     else
         bson_to_json_number(state.json_str, v_double, state.c_error);
 
@@ -688,7 +683,7 @@ static bool bson_visit_minkey(bson_iter_t const*, char const*, void* data) {
 }
 static void bson_visit_unsupported_type(bson_iter_t const* iter, char const*, uint32_t, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    //*state.err_offset = iter->off; //TODO
+    // state.error_offset = iter->off; //TODO
     return_error(state.c_error, "BSON unsupported type");
 }
 static bool bson_visit_decimal128(bson_iter_t const*, char const*, bson_decimal128_t const*, void* data) {
@@ -697,7 +692,7 @@ static bool bson_visit_decimal128(bson_iter_t const*, char const*, bson_decimal1
     return false;
 }
 
-static const bson_visitor_t bson_visitor = {
+static bson_visitor_t const bson_visitor = {
     bson_visit_before,   bson_visit_after,     bson_visit_corrupt,    bson_visit_double,    bson_visit_utf8,
     bson_visit_document, bson_visit_array,     bson_visit_binary,     bson_visit_undefined, bson_visit_oid,
     bson_visit_bool,     bson_visit_date_time, bson_visit_null,       bson_visit_regex,     bson_visit_dbpointer,
@@ -747,17 +742,16 @@ json_t any_parse(value_view_t bytes,
         // Using `bson_as_canonical_extended_json` is a bad idea, as it allocates dynamically.
         // Instead we will manually iterate over the document, using the "visitor" pattern
         bson_iter_t iter;
-        ssize_t err_offset = -1;
         string_t json(arena);
-        json_state_t state = {json, c_error, &err_offset, 0, true};
+        json_state_t state {json, c_error, 0, true, -1};
 
         if (!bson_iter_init(&iter, &bson)) {
             *c_error = "Failed to parse the BSON document!";
             return {};
         }
 
-        bson_to_json_string(json, open_k, c_error);
-        if (bson_iter_visit_all(&iter, &bson_visitor, &state) || err_offset != -1) {
+        bson_to_json_string(json, str_open, c_error);
+        if (bson_iter_visit_all(&iter, &bson_visitor, &state) || state.error_offset != -1) {
             *c_error = "Failed to iterate the BSON document!";
             return {};
         }

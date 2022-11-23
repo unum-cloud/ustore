@@ -5,7 +5,7 @@ if (${UKV_BUILD_PYTHON})
     set(JEMALLOC_DISABLE_TLS --disable-initial-exec-tls)
 endif()
 
-if(NOT APPLE)
+if(${UKV_REBUILD_JEMALLOC})
     set(JEMALLOC_PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps/jemalloc)
     set(JEMALLOC_SRC_DIR ${JEMALLOC_PREFIX_DIR}/src/jemalloc)
     set(JEMALLOC_INSTALL_DIR ${JEMALLOC_PREFIX_DIR}/install)
@@ -43,8 +43,38 @@ if(NOT APPLE)
     link_libraries(dl ${libjemalloc_pic})
 
     # Export the include directory path.
-    set(jemalloc_SOURCE_DIR ${JEMALLOC_INSTALL_DIR})
-    set(jemalloc_LIBRARIES ${JEMALLOC_INSTALL_DIR}/lib/libjemalloc_pic.a ${JEMALLOC_INSTALL_DIR}/lib/libjemalloc.a)
+    set(JEMALLOC_SOURCE_DIR ${JEMALLOC_INSTALL_DIR})
+    set(JEMALLOC_LIBRARIES ${JEMALLOC_INSTALL_DIR}/lib/libjemalloc_pic.a ${JEMALLOC_INSTALL_DIR}/lib/libjemalloc.a)
 
-    include_directories(${jemalloc_SOURCE_DIR}/include)
+    include_directories(${JEMALLOC_SOURCE_DIR}/include)
+
+else()
+
+find_path(JEMALLOC_ROOT_DIR
+    NAMES include/jemalloc/jemalloc.h
+)
+
+find_library(JEMALLOC_LIBRARIES
+    NAMES jemalloc
+    HINTS ${JEMALLOC_ROOT_DIR}/lib
+)
+
+find_path(JEMALLOC_INCLUDE_DIR
+    NAMES jemalloc/jemalloc.h
+    HINTS ${JEMALLOC_ROOT_DIR}/include
+)
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(JeMalloc DEFAULT_MSG
+    JEMALLOC_LIBRARIES
+    JEMALLOC_INCLUDE_DIR
+)
+
+mark_as_advanced(
+    JEMALLOC_ROOT_DIR
+    JEMALLOC_LIBRARIES
+    JEMALLOC_INCLUDE_DIR
+)
 endif()
+
+message("JEMALLOC_LIBRARIES:" ${JEMALLOC_LIBRARIES})
