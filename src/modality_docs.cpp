@@ -31,8 +31,18 @@ using namespace unum;
 
 constexpr ukv_doc_field_type_t internal_format_k = ukv_doc_field_json_k;
 
+static constexpr char const* null_k = "null";
+
 static constexpr char const* true_k = "true";
 static constexpr char const* false_k = "false";
+
+static constexpr const char* open_k = "{";
+static constexpr const char* close_k = "}";
+
+static constexpr const char* open_arr_k = "[";
+static constexpr const char* close_arr_k = "]";
+
+static constexpr const char* separator_k = ",";
 
 enum class doc_modification_t {
     nothing_k = -1,
@@ -424,16 +434,19 @@ struct json_state_t {
     bool keys;
 };
 
-void bson_to_json_string(string_t& json_str, char const* str, ukv_error_t* c_error) {
+void to_json_string(string_t& json_str, char const* str, ukv_error_t* c_error) {
     json_str.insert(json_str.size(), str, str + std::strlen(str), c_error);
 }
 
 template <typename at>
-void bson_to_json_number(string_t& json_str, at scalar, ukv_error_t* c_error) {
+void to_json_number(string_t& json_str, at scalar, ukv_error_t* c_error) {
     printed_number_buffer_t print_buffer;
     auto result = print_number(print_buffer, print_buffer + printed_number_length_limit_k, scalar);
     json_str.insert(json_str.size(), result.data(), result.data() + result.size(), c_error);
 }
+
+static bool bson_visit_array(const bson_iter_t*, const char*, const bson_t*, void*);
+static bool bson_visit_document(const bson_iter_t*, const char*, const bson_t*, void*);
 
 static bool bson_visit_before(bson_iter_t const*, char const* key, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
@@ -441,14 +454,14 @@ static bool bson_visit_before(bson_iter_t const*, char const* key, void* data) {
     char* escaped;
 
     if (state.count)
-        bson_to_json_string(state.json_str, ", ", state.c_error);
+        to_json_string(state.json_str, ", ", state.c_error);
 
     if (state.keys) {
         escaped = bson_utf8_escape_for_json(key, -1);
         if (escaped) {
-            bson_to_json_string(state.json_str, "\"", state.c_error);
-            bson_to_json_string(state.json_str, escaped, state.c_error);
-            bson_to_json_string(state.json_str, "\" : ", state.c_error);
+            to_json_string(state.json_str, "\"", state.c_error);
+            to_json_string(state.json_str, escaped, state.c_error);
+            to_json_string(state.json_str, "\" : ", state.c_error);
 
             bson_free(escaped);
         }
@@ -470,23 +483,23 @@ static void bson_visit_corrupt(bson_iter_t const* iter, void* data) {
 }
 static bool bson_visit_double(bson_iter_t const*, char const*, double v_double, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    bson_to_json_string(state.json_str, "{ \"$numberDouble\" : \"", state.c_error);
+    to_json_string(state.json_str, "{ \"$numberDouble\" : \"", state.c_error);
 
     if (v_double != v_double) {
-        bson_to_json_string(state.json_str, "NaN", state.c_error);
+        to_json_string(state.json_str, "NaN", state.c_error);
     }
     else if (v_double * 0 != 0) {
         if (v_double > 0) {
-            bson_to_json_string(state.json_str, "Infinity", state.c_error);
+            to_json_string(state.json_str, "Infinity", state.c_error);
         }
         else {
-            bson_to_json_string(state.json_str, "-Infinity", state.c_error);
+            to_json_string(state.json_str, "-Infinity", state.c_error);
         }
     }
     else
-        bson_to_json_number(state.json_str, v_double, state.c_error);
+        to_json_number(state.json_str, v_double, state.c_error);
 
-    bson_to_json_string(state.json_str, "\" }", state.c_error);
+    to_json_string(state.json_str, "\" }", state.c_error);
 
     return false;
 }
@@ -495,48 +508,14 @@ static bool bson_visit_utf8(bson_iter_t const*, char const*, size_t v_utf8_len, 
     char* escaped = bson_utf8_escape_for_json(v_utf8, v_utf8_len); // TODO
 
     if (escaped) {
-        bson_to_json_string(state.json_str, "\"", state.c_error);
-        bson_to_json_string(state.json_str, escaped, state.c_error);
-        bson_to_json_string(state.json_str, "\"", state.c_error);
+        to_json_string(state.json_str, "\"", state.c_error);
+        to_json_string(state.json_str, escaped, state.c_error);
+        to_json_string(state.json_str, "\"", state.c_error);
         bson_free(escaped);
         return false;
     }
 
     return true;
-}
-static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v_document, void* data) {
-    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    json_state_t child_state = {state.json_str, state.c_error, state.err_offset, 0, true};
-    bson_iter_t child;
-
-    if (bson_iter_init(&child, v_document)) {
-        bson_to_json_string(child_state.json_str, "{ ", state.c_error);
-
-        bson_visitor_t visitor = {0};
-        if (bson_iter_visit_all(&child, &visitor, &child_state))
-            log_error(state.c_error, 0, "Failed to iterate the BSON document!");
-
-        bson_to_json_string(child_state.json_str, " }", state.c_error);
-    }
-
-    return false;
-}
-static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_array, void* data) {
-    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    json_state_t child_state = {state.json_str, state.c_error, state.err_offset, 0, true};
-    bson_iter_t child;
-
-    if (bson_iter_init(&child, v_array)) {
-        bson_to_json_string(child_state.json_str, "[ ", state.c_error);
-
-        bson_visitor_t visitor = {0};
-        if (bson_iter_visit_all(&child, &visitor, &child_state))
-            log_error(state.c_error, 0, "Failed to iterate the BSON array!");
-
-        bson_to_json_string(child_state.json_str, " ]", state.c_error);
-    }
-
-    return false;
 }
 static bool bson_visit_binary(bson_iter_t const*,
                               char const*,
@@ -547,17 +526,17 @@ static bool bson_visit_binary(bson_iter_t const*,
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
     char* b64 = (char*)(v_binary);
 
-    bson_to_json_string(state.json_str, "{ \"$binary\" : { \"base64\" : \"", state.c_error);
-    bson_to_json_string(state.json_str, b64, state.c_error);
-    bson_to_json_string(state.json_str, "\", \"subType\" : \"", state.c_error);
-    bson_to_json_number(state.json_str, static_cast<int>(v_subtype), state.c_error);
-    bson_to_json_string(state.json_str, "\" } }", state.c_error);
+    to_json_string(state.json_str, "{ \"$binary\" : { \"base64\" : \"", state.c_error);
+    to_json_string(state.json_str, b64, state.c_error);
+    to_json_string(state.json_str, "\", \"subType\" : \"", state.c_error);
+    to_json_number(state.json_str, static_cast<int>(v_subtype), state.c_error);
+    to_json_string(state.json_str, "\" } }", state.c_error);
 
     return false;
 }
 static bool bson_visit_undefined(bson_iter_t const*, char const*, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    bson_to_json_string(state.json_str, "{ \"$undefined\" : true }", state.c_error);
+    to_json_string(state.json_str, "{ \"$undefined\" : true }", state.c_error);
     return false;
 }
 static bool bson_visit_oid(bson_iter_t const*, char const*, const bson_oid_t*, void* data) {
@@ -567,19 +546,19 @@ static bool bson_visit_oid(bson_iter_t const*, char const*, const bson_oid_t*, v
 }
 static bool bson_visit_bool(bson_iter_t const*, char const*, bool v_bool, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    bson_to_json_string(state.json_str, v_bool ? "true" : "false", state.c_error);
+    to_json_string(state.json_str, v_bool ? true_k : false_k, state.c_error);
     return false;
 }
 static bool bson_visit_date_time(bson_iter_t const*, char const*, int64_t msec_since_epoch, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    bson_to_json_string(state.json_str, "{ \"$date\" : { \"$numberLong\" : \"", state.c_error);
-    bson_to_json_number(state.json_str, msec_since_epoch, state.c_error);
-    bson_to_json_string(state.json_str, "\" } }", state.c_error);
+    to_json_string(state.json_str, "{ \"$date\" : { \"$numberLong\" : \"", state.c_error);
+    to_json_number(state.json_str, msec_since_epoch, state.c_error);
+    to_json_string(state.json_str, "\" } }", state.c_error);
     return false;
 }
 static bool bson_visit_null(bson_iter_t const*, char const*, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    bson_to_json_string(state.json_str, "null", state.c_error);
+    to_json_string(state.json_str, null_k, state.c_error);
     return false;
 }
 static bool bson_visit_regex(bson_iter_t const*, char const*, char const*, char const*, void* data) {
@@ -609,34 +588,34 @@ static bool bson_visit_codewscope(bson_iter_t const*, char const*, size_t, char 
 }
 static bool bson_visit_int32(bson_iter_t const*, char const*, int32_t v_int32, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    bson_to_json_number(state.json_str, v_int32, state.c_error);
+    to_json_number(state.json_str, v_int32, state.c_error);
     return false;
 }
 static bool bson_visit_timestamp(
     bson_iter_t const*, char const*, uint32_t v_timestamp, uint32_t v_increment, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
 
-    bson_to_json_string(state.json_str, "{ \"$timestamp\" : { \"t\" : ", state.c_error);
-    bson_to_json_number(state.json_str, v_timestamp, state.c_error);
-    bson_to_json_string(state.json_str, ", \"i\" : ", state.c_error);
-    bson_to_json_number(state.json_str, v_increment, state.c_error);
-    bson_to_json_string(state.json_str, " } }", state.c_error);
+    to_json_string(state.json_str, "{ \"$timestamp\" : { \"t\" : ", state.c_error);
+    to_json_number(state.json_str, v_timestamp, state.c_error);
+    to_json_string(state.json_str, ", \"i\" : ", state.c_error);
+    to_json_number(state.json_str, v_increment, state.c_error);
+    to_json_string(state.json_str, " } }", state.c_error);
 
     return false;
 }
 static bool bson_visit_int64(bson_iter_t const*, char const*, int64_t v_int64, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    bson_to_json_number(state.json_str, v_int64, state.c_error);
+    to_json_number(state.json_str, v_int64, state.c_error);
     return false;
 }
 static bool bson_visit_maxkey(bson_iter_t const*, char const*, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    bson_to_json_string(state.json_str, "{ \"$maxKey\" : 1 }", state.c_error);
+    to_json_string(state.json_str, "{ \"$maxKey\" : 1 }", state.c_error);
     return false;
 }
 static bool bson_visit_minkey(bson_iter_t const*, char const*, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    bson_to_json_string(state.json_str, "{ \"$minKey\" : 1 }", state.c_error);
+    to_json_string(state.json_str, "{ \"$minKey\" : 1 }", state.c_error);
     return false;
 }
 static void bson_visit_unsupported_type(bson_iter_t const* iter, char const*, uint32_t, void* data) {
@@ -658,6 +637,138 @@ static const bson_visitor_t bson_visitor = {
     bson_visit_int64,    bson_visit_maxkey,    bson_visit_minkey,
 };
 
+static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_array, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    json_state_t child_state = {state.json_str, state.c_error, state.err_offset, 0, true};
+    bson_iter_t child;
+
+    if (bson_iter_init(&child, v_array)) {
+        to_json_string(child_state.json_str, open_arr_k, state.c_error);
+
+        if (bson_iter_visit_all(&child, &bson_visitor, &child_state))
+            log_error(state.c_error, 0, "Failed to iterate the BSON array!");
+
+        to_json_string(child_state.json_str, close_arr_k, state.c_error);
+    }
+    return false;
+}
+static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v_document, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    json_state_t child_state = {state.json_str, state.c_error, state.err_offset, 0, true};
+    bson_iter_t child;
+
+    if (bson_iter_init(&child, v_document)) {
+        to_json_string(child_state.json_str, open_k, state.c_error);
+
+        if (bson_iter_visit_all(&child, &bson_visitor, &child_state))
+            log_error(state.c_error, 0, "Failed to iterate the BSON document!");
+
+        to_json_string(child_state.json_str, close_k, state.c_error);
+    }
+    return false;
+}
+
+// MsgPack
+void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_error) {
+    if (mpack_reader_error(&reader) != mpack_ok) [[unlikely]]
+        return;
+
+    mpack_tag_t tag = mpack_read_tag(&reader);
+
+    switch (mpack_tag_type(&tag)) {
+    case mpack_type_nil: {
+        to_json_string(builder, null_k, c_error);
+        break;
+    }
+    case mpack_type_bool: {
+        bool v_bool = mpack_tag_bool_value(&tag);
+        to_json_string(builder, v_bool ? true_k : false_k, c_error);
+        break;
+    }
+    case mpack_type_int: {
+        to_json_number(builder, mpack_tag_int_value(&tag), c_error);
+    }
+    case mpack_type_uint: {
+        to_json_number(builder, mpack_tag_uint_value(&tag), c_error);
+        break;
+    }
+    case mpack_type_float: {
+        to_json_number(builder, mpack_tag_float_value(&tag), c_error);
+        break;
+    }
+    case mpack_type_double: {
+        to_json_number(builder, mpack_tag_double_value(&tag), c_error);
+        break;
+    }
+    case mpack_type_str: {
+        size_t length = mpack_tag_str_length(&tag);
+        char const* data = mpack_read_bytes_inplace(&reader, length);
+        to_json_string(builder, data, c_error);
+        mpack_done_str(&reader);
+        break;
+    }
+    case mpack_type_bin: {
+        size_t length = mpack_tag_bin_length(&tag);
+        byte_t const* data = reinterpret_cast<byte_t const*>(mpack_read_bytes_inplace(&reader, length));
+        to_json_string(builder, data, c_error);
+        break;
+    }
+    case mpack_type_array: {
+        to_json_string(builder, open_arr_k, c_error);
+
+        u32_t count = mpack_tag_array_count(&tag);
+        // Recursively call for kids.
+        for (u32_t i = 0; i != count; ++i) {
+            object_reading(reader, builder, c_error);
+
+            if (mpack_reader_error(&reader) != mpack_ok) // critical check!
+                break;
+        }
+        mpack_done_array(&reader);
+
+        to_json_string(builder, close_arr_k, c_error);
+        break;
+    }
+    case mpack_type_map: {
+        to_json_string(builder, open_k, c_error);
+
+        u32_t count = mpack_tag_map_count(&tag);
+        for (u32_t i = 0; i != count; ++i) {
+            mpack_tag_t tag = mpack_read_tag(&reader);
+            u32_t length = mpack_tag_str_length(&tag);
+            const char* key = mpack_read_bytes_inplace(&reader, length);
+            // Write key into json string
+            to_json_string(state.json_str, "\"", state.c_error);
+            to_json_string(state.json_str, escaped, state.c_error);
+            to_json_string(state.json_str, "\" : ", state.c_error);
+
+            object_reading(reader, builder, c_error);
+            if (mpack_reader_error(&reader) != mpack_ok) // critical check!
+                break;
+        }
+
+        mpack_done_map(&reader);
+
+        to_json_string(builder, close_k, c_error);
+        break;
+    }
+    default: mpack_reader_flag_error(&reader, mpack_error_unsupported); break;
+    }
+}
+bool iterate_over_mpack_data(value_view_t data, string_t& json_str, ukv_error_t* c_error) {
+    mpack_reader_t reader;
+    mpack_reader_init_data(&reader, data.data(), data.size());
+
+    // Export all the content without any allocations
+    while (reader.data != reader.end)
+        object_reading(reader, json_str, c_error);
+
+    // Cleanup the state
+    mpack_reader_destroy(&reader);
+
+    return true;
+}
+
 json_t any_parse(value_view_t bytes,
                  ukv_doc_field_type_t const field_type,
                  linked_memory_lock_t& arena,
@@ -673,21 +784,27 @@ json_t any_parse(value_view_t bytes,
         string_t json(arena);
         json_state_t state = {json, c_error, &err_offset, 0, true};
 
-        char const* str_open = "{ ";
-        char const* str_close = " }";
-
         if (!bson_iter_init(&iter, &bson)) {
             *c_error = "Failed to parse the BSON document!";
             return {};
         }
 
-        bson_to_json_string(json, str_open, c_error);
+        to_json_string(json, open_k, c_error);
         if (bson_iter_visit_all(&iter, &bson_visitor, &state) || err_offset != -1) {
             *c_error = "Failed to iterate the BSON document!";
             return {};
         }
-        bson_to_json_string(json, str_close, c_error);
+        to_json_string(json, close_k, c_error);
 
+        return json_parse({json.data(), json.size()}, arena, c_error);
+    }
+
+    if (field_type == ukv_doc_field_msgpack_k) {
+        string_t json(arena);
+        if (!iterate_over_mpack_data(bytes, json, c_error)) {
+            *c_error = "Failed to parse the MsgPack document!";
+            return {};
+        }
         return json_parse({json.data(), json.size()}, arena, c_error);
     }
 
