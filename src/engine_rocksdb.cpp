@@ -128,7 +128,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 
         std::string path = c.config; // TODO: take the path from config!
         // rocks_status_t status = rocksdb::LoadLatestOptions(config_options, path, &options, &column_descriptors);
-        rocks_status_t status = rocksdb::LoadOptionsFromFile("./configs/rocksdb.cfg",
+        rocks_status_t status = rocksdb::LoadOptionsFromFile("./benchmarks/configs/rocksdb.cfg",
                                                              rocksdb::Env::Default(),
                                                              &options,
                                                              &column_descriptors);
