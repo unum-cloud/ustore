@@ -50,14 +50,14 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug UnumDB Test",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug .. && make ukv_unumdb_unit_test -j8",
+            "label": "Build Native: Debug UDisk Test",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug .. && make ukv_udisk_unit_test -j8",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug UnumDB Benchmark",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug .. && make ukv_unumdb_twitter_benchmark -j8",
+            "label": "Build Native: Debug UDisk Benchmark",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug .. && make ukv_udisk_twitter_benchmark -j8",
             "args": [],
             "type": "shell"
         },
