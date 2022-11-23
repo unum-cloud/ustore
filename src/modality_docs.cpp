@@ -465,9 +465,8 @@ static bool bson_visit_before(bson_iter_t const*, char const* key, void* data) {
 
             bson_free(escaped);
         }
-        else {
+        else
             return true;
-        }
     }
 
     state.count++;
@@ -485,16 +484,13 @@ static bool bson_visit_double(bson_iter_t const*, char const*, double v_double, 
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
     to_json_string(state.json_str, "{ \"$numberDouble\" : \"", state.c_error);
 
-    if (v_double != v_double) {
+    if (v_double != v_double)
         to_json_string(state.json_str, "NaN", state.c_error);
-    }
     else if (v_double * 0 != 0) {
-        if (v_double > 0) {
+        if (v_double > 0)
             to_json_string(state.json_str, "Infinity", state.c_error);
-        }
-        else {
+        else
             to_json_string(state.json_str, "-Infinity", state.c_error);
-        }
     }
     else
         to_json_number(state.json_str, v_double, state.c_error);
@@ -739,14 +735,13 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
             const char* key = mpack_read_bytes_inplace(&reader, length);
             // Write key into json string
             to_json_string(state.json_str, "\"", state.c_error);
-            to_json_string(state.json_str, escaped, state.c_error);
+            to_json_string(state.json_str, key, state.c_error);
             to_json_string(state.json_str, "\" : ", state.c_error);
 
             object_reading(reader, builder, c_error);
             if (mpack_reader_error(&reader) != mpack_ok) // critical check!
                 break;
         }
-
         mpack_done_map(&reader);
 
         to_json_string(builder, close_k, c_error);
