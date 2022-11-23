@@ -208,7 +208,7 @@ ACID transactions across modalities are supported.
 | :------------------------ | :------------------------------------------------: | :------------------------------------: | :--------------------------------------------------: |
 | Values                    |           JSON-like Hierarchical Objects           |       Labeled Directed Relations       |             High-Dimensional Embeddings              |
 | Specialized Functionality | JSON ⇔ BSON ⇔ MessagePack, Sub-Document Operations | Gather Neighbors, Count Vertex Degrees | Quantization, K-Approximate Nearest-Neighbors Search |
-| Examples                  |                      MongoDB                       |                 Neo4J                  |                       Pinecone                       |
+| Examples                  |             MongoDB, Postgres, MySQL               |            Neo4J, TigerGraph           |               Elastic Search, Pinecone               |
 
 One of our core objectives was to select the minimal core set of functions for each modality.
 In that case, implementing them can be easy for any passionate developer.
