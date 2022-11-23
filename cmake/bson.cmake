@@ -6,7 +6,7 @@ ExternalProject_Add(
     GIT_REPOSITORY https://github.com/mongodb/mongo-c-driver.git
     GIT_TAG 1.23.0
     GIT_SHALLOW 1
-    GIT_PROGRESS 1
+    GIT_PROGRESS 0
 
     PREFIX "_deps"
     DOWNLOAD_DIR "_deps/mongo_c_driver-src"
@@ -17,12 +17,12 @@ ExternalProject_Add(
     INSTALL_DIR "_deps/mongo_c_driver-install"
     BINARY_DIR "_deps/mongo_c_driver-build"
 
-    BUILD_ALWAYS 1
+    BUILD_ALWAYS 0
     UPDATE_COMMAND ""
 
     CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}/_deps/mongo_c_driver-install
-    -DCMAKE_BUILD_TYPE:STRING=Release
+    -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
     -DENABLE_STATIC:STRING=ON
     -DENABLE_BSON:BOOL=ON
     -DENABLE_SSL:BOOL=OFF

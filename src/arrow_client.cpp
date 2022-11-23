@@ -58,11 +58,7 @@ arf::FlightCallOptions arrow_call_options(arrow_mem_pool_t& pool) {
 void ukv_database_init(ukv_database_init_t* c_ptr) {
 
     ukv_database_init_t& c = *c_ptr;
-#ifdef UKV_DEBUG
-    using namespace std::chrono_literals;
-    std::this_thread::sleep_for(5s);
-#endif
-
+    
     safe_section("Starting client", c.error, [&] {
         if (!c.config || !std::strlen(c.config))
             c.config = "grpc://0.0.0.0:38709";
