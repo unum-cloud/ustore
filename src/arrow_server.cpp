@@ -1016,6 +1016,7 @@ class UKVService : public arf::FlightServerBase {
             // we don't need the lengths, just the NULL indicators
             ukv_length_t* found_offsets = nullptr;
             ukv_length_t* found_lengths = nullptr;
+            ukv_length_t* found_counts = nullptr;
             ukv_key_t* found_keys = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
             ukv_scan_t scan;
@@ -1033,6 +1034,7 @@ class UKVService : public arf::FlightServerBase {
             scan.count_limits_stride = input_lengths.stride();
             scan.offsets = &found_offsets;
             scan.keys = &found_keys;
+            scan.counts = &found_counts;
 
             ukv_scan(&scan);
             if (!status)
