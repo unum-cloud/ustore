@@ -197,6 +197,10 @@ yyjson_alc wrap_allocator(linked_memory_lock_t& arena) {
     return allocator;
 }
 
+auto simdjson_lookup(sj::ondemand::value& json, ukv_str_view_t field) noexcept {
+    return !field ? json : field[0] == '/' ? json.at_pointer(field) : json[field];
+}
+
 yyjson_val* json_lookup(yyjson_val* json, ukv_str_view_t field) noexcept {
     return !field ? json : field[0] == '/' ? yyjson_get_pointer(json, field) : yyjson_obj_get(json, field);
 }
@@ -434,24 +438,36 @@ std::string_view get_value( //
         auto type = value.type().value();
         switch (type) {
         case sj::ondemand::json_type::null: break;
-        case sj::ondemand::json_type::object: result = value.get_object().value().raw_json(); break;
-        case sj::ondemand::json_type::array: result = value.get_object().value().raw_json(); break;
-        case sj::ondemand::json_type::boolean:
+        case sj::ondemand::json_type::object: {
+            result = value.get_object().value().raw_json();
+            break;
+        }
+        case sj::ondemand::json_type::array: {
+            result = value.get_object().value().raw_json();
+            break;
+        }
+        case sj::ondemand::json_type::boolean: {
             result = value.get_bool() ? std::string_view(true_k, 5) : std::string_view(false_k, 6);
             break;
-        case sj::ondemand::json_type::string: result = value.get_string();
+        }
+        case sj::ondemand::json_type::string: {
+            result = value.get_string();
+            break;
+        }
         case sj::ondemand::json_type::number: {
             auto number_type = value.get_number_type().value();
             switch (number_type) {
-            case sj::ondemand::number_type::signed_integer:
+            case sj::ondemand::number_type::signed_integer: {
                 result =
                     print_number(print_buffer, print_buffer + printed_number_length_limit_k, value.get_int64().value());
                 break;
-            case sj::ondemand::number_type::unsigned_integer:
+            }
+            case sj::ondemand::number_type::unsigned_integer: {
                 result = print_number(print_buffer,
                                       print_buffer + printed_number_length_limit_k,
                                       value.get_uint64().value());
                 break;
+            }
             default: break;
             }
         }
@@ -1029,6 +1045,7 @@ void read_unique_docs( //
 
     ukv_byte_t* found_binary_begin = nullptr;
     ukv_length_t* found_binary_offs = nullptr;
+    ukv_length_t* found_binary_lens = nullptr;
     ukv_read_t read {
         .db = c_db,
         .error = c_error,
@@ -1041,6 +1058,7 @@ void read_unique_docs( //
         .keys = places.keys_begin.get(),
         .keys_stride = places.keys_begin.stride(),
         .offsets = &found_binary_offs,
+        .lengths = &found_binary_lens,
         .values = &found_binary_begin,
     };
 
@@ -1049,10 +1067,16 @@ void read_unique_docs( //
     auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
 
+    ukv_length_t max_length = *std::max_element(found_binary_lens, found_binary_lens + places.count);
+    auto document = arena.alloc<byte_t>(max_length + sj::SIMDJSON_PADDING, c_error);
+    return_on_error(c_error);
+
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
+        std::memcpy(document.begin(), binary_doc.data(), binary_doc.size());
+        std::memset(document.begin() + binary_doc.size(), 0, sj::SIMDJSON_PADDING);
         ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
-        callback(task_idx, field, binary_doc);
+        callback(task_idx, field, value_view_t(document.begin(), binary_doc.size()));
     }
 
     unique_places = places;
@@ -1402,22 +1426,21 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
     growing_tape_t growing_tape {arena};
     growing_tape.reserve(places.size(), c.error);
     return_on_error(c.error);
+    sj::ondemand::parser parser;
 
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, value_view_t binary_doc) {
-        sj::ondemand::parser parser;
-        sj::ondemand::document doc = parser.iterate((const uint8_t*)binary_doc.data(),
-                                                    binary_doc.size(),
-                                                    binary_doc.size() + sj::SIMDJSON_PADDING);
+        auto maybe_doc = parser.iterate((const uint8_t*)binary_doc.data(),
+                                        binary_doc.size(),
+                                        binary_doc.size() + sj::SIMDJSON_PADDING);
+        return_if_error(maybe_doc.error() == sj::SUCCESS, c.error, 0, "Fail To Parse Document!");
         std::string_view result;
         printed_number_buffer_t print_buffer;
-        if (doc.is_scalar())
-            result = get_value(doc, c.type, print_buffer);
+        if (maybe_doc.value().is_scalar())
+            result = get_value(maybe_doc.value(), c.type, print_buffer);
         else {
-            auto parsed = doc.get_value();
-            auto maybe_field = !field ? parsed : field[0] == '/' ? parsed.at_pointer(field) : parsed[field];
-            return_if_error(maybe_field.error() == sj::SUCCESS, c.error, 0, "Fail To Read!");
-            sj::ondemand::value field_value = maybe_field.value();
-            result = get_value(field_value, c.type, print_buffer);
+            auto parsed = maybe_doc.value().get_value();
+            auto branch = simdjson_lookup(parsed.value(), field);
+            result = get_value(branch, c.type, print_buffer);
         }
         growing_tape.push_back(result, c.error);
         growing_tape.add_terminator(byte_t {0}, c.error);
