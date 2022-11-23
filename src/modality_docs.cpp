@@ -13,8 +13,9 @@
 #include <charconv>    // `std::to_chars`
 #include <string_view> // `std::string_view`
 
-#include <yyjson.h> // Primary internal JSON representation
-#include <bson.h>   // Converting from/to BSON
+#include <simdjson.h> // 
+#include <yyjson.h>   // Primary internal JSON representation
+#include <bson.h>     // Converting from/to BSON
 
 #include "ukv/docs.h"
 #include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
@@ -702,7 +703,7 @@ static bson_visitor_t const bson_visitor = {
 
 static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_array, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    json_state_t child_state = {state.json_str, state.c_error, state.err_offset, 0, true};
+    json_state_t child_state = {state.json_str, state.c_error, state.error_offset, 0, true};
     bson_iter_t child;
 
     if (bson_iter_init(&child, v_array)) {
@@ -717,7 +718,7 @@ static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_ar
 }
 static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v_document, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    json_state_t child_state = {state.json_str, state.c_error, state.err_offset, 0, true};
+    json_state_t child_state = {state.json_str, state.c_error, state.error_offset, 0, true};
     bson_iter_t child;
 
     if (bson_iter_init(&child, v_document)) {
@@ -750,7 +751,7 @@ json_t any_parse(value_view_t bytes,
             return {};
         }
 
-        bson_to_json_string(json, str_open, c_error);
+        bson_to_json_string(json, open_k, c_error);
         if (bson_iter_visit_all(&iter, &bson_visitor, &state) || state.error_offset != -1) {
             *c_error = "Failed to iterate the BSON document!";
             return {};
