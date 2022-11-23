@@ -57,19 +57,19 @@
         },
         {
             "label": "Build Native: Debug UnumDB Benchmark",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_unumdb_twitter_benchmark -j 8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug .. && make ukv_unumdb_twitter_benchmark -j 8",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug UMem Benchmark",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 . && make ukv_umem_twitter_benchmark -j 8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 .. && make ukv_umem_twitter_benchmark -j 8",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug RocksDB Benchmark",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug . && make ukv_rocksdb_twitter_benchmark -j 8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug .. && make ukv_rocksdb_twitter_benchmark -j 8",
             "args": [],
             "type": "shell"
         },
