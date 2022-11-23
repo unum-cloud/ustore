@@ -13,7 +13,7 @@
 #include <charconv>    // `std::to_chars`
 #include <string_view> // `std::string_view`
 
-#include <simdjson.h> // 
+#include <simdjson.h> //
 #include <yyjson.h>   // Primary internal JSON representation
 #include <bson.h>     // Converting from/to BSON
 
@@ -1069,7 +1069,17 @@ void read_unique_docs( //
     auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
 
-    ukv_length_t max_length = *std::max_element(found_binary_lens, found_binary_lens + places.count);
+    ukv_length_t max_length =
+        *std::max_element(found_binary_lens, found_binary_lens + places.count, [](ukv_length_t a, ukv_length_t b) {
+            return a < b && a != ukv_length_missing_k && b != ukv_length_missing_k;
+        });
+
+    if (max_length == ukv_length_missing_k) {
+        for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it)
+            callback(task_idx, {}, value_view_t::make_empty());
+        return;
+    }
+
     auto document = arena.alloc<byte_t>(max_length + sj::SIMDJSON_PADDING, c_error);
     return_on_error(c_error);
 
@@ -1431,6 +1441,10 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
     sj::ondemand::parser parser;
 
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, value_view_t binary_doc) {
+        if (binary_doc.empty()) {
+            growing_tape.push_back(binary_doc, c.error);
+            return;
+        }
         auto maybe_doc = parser.iterate((const uint8_t*)binary_doc.data(),
                                         binary_doc.size(),
                                         binary_doc.size() + sj::SIMDJSON_PADDING);
@@ -1448,7 +1462,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
         growing_tape.add_terminator(byte_t {0}, c.error);
         return_on_error(c.error);
     };
-    
+
     places_arg_t unique_places;
     read_modify_docs(c.db,
                      c.transaction,
