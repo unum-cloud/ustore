@@ -87,8 +87,6 @@ endif()
 # Engines:
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
-
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/tbb.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/consistent_set.cmake")
 
 # Modalities:
@@ -121,7 +119,7 @@ message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
 
 # Define the libraries we will need to build
 add_library(ukv_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_umem pthread yyjson simdjson bson pcre2 tbb ${jemalloc_LIBRARIES})
+target_link_libraries(ukv_umem pthread yyjson simdjson bson pcre2 ${jemalloc_LIBRARIES})
 # target_link_libraries(ukv_umem pthread yyjson simdjson bson pcre2 ${jemalloc_LIBRARIES})
 target_compile_definitions(ukv_umem INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_umem INTERFACE UKV_ENGINE_NAME=umem)
