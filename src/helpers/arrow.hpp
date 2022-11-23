@@ -31,9 +31,9 @@ constexpr std::size_t arrow_bytes_alignment_k = 64;
 namespace arf = arrow::flight;
 namespace ar = arrow;
 
-inline static std::string const kFlightListCols = "list_collections"; /// `DoGet`
-inline static std::string const kFlightColCreate = "create_collection";   /// `DoAction`
-inline static std::string const kFlightColDrop = "remove_collection"; /// `DoAction`
+inline static std::string const kFlightListCols = "list_collections";   /// `DoGet`
+inline static std::string const kFlightColCreate = "create_collection"; /// `DoAction`
+inline static std::string const kFlightColDrop = "remove_collection";   /// `DoAction`
 
 inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
 inline static std::string const kFlightTxnCommit = "commit_transaction"; /// `DoAction`
@@ -44,7 +44,7 @@ inline static std::string const kFlightWritePath = "write_path"; /// `DoPut`
 inline static std::string const kFlightMatchPath = "match_path"; /// `DoExchange`
 inline static std::string const kFlightReadPath = "read_path";   /// `DoExchange`
 inline static std::string const kFlightScan = "scan";            /// `DoExchange`
-inline static std::string const kFlightMeasure = "measure";            /// `DoExchange`
+inline static std::string const kFlightMeasure = "measure";      /// `DoExchange`
 
 inline static std::string const kArgCols = "collections";
 inline static std::string const kArgKeys = "keys";
@@ -78,6 +78,7 @@ inline static std::string const kParamDropModeCollection = "collection";
 class arrow_mem_pool_t final : public ar::MemoryPool {
     linked_memory_t resource_;
     int64_t bytes_allocated_ = 0;
+    size_t alignment_ = 64;
 
   public:
     arrow_mem_pool_t(linked_memory_t& arena) : resource_(arena) {}
@@ -85,7 +86,7 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
     ~arrow_mem_pool_t() {}
 
     ar::Status Allocate(int64_t size, uint8_t** ptr) override {
-        auto new_ptr = malloc(size);
+        auto new_ptr = resource_.alloc(size, alignment_);
         if (!new_ptr)
             return ar::Status::OutOfMemory("");
 
@@ -94,18 +95,20 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
         return ar::Status::OK();
     }
     ar::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr) override {
-        auto new_ptr = malloc(new_size);
+        auto new_ptr = resource_.alloc(new_size, alignment_);
         if (!new_ptr)
             return ar::Status::OutOfMemory("");
 
         std::memcpy(new_ptr, *ptr, old_size);
-        // resource_.deallocate(*ptr, old_size);
-        free(*ptr);
+        // resource_.deallocate(buffer, size); // deallocation is no-op
         *ptr = reinterpret_cast<uint8_t*>(new_ptr);
         bytes_allocated_ += new_size - old_size;
         return ar::Status::OK();
     }
-    void Free(uint8_t* buffer, int64_t size) override { free(buffer); bytes_allocated_ -= size;/*resource_.deallocate(buffer, size);*/ }
+    void Free(uint8_t* buffer, int64_t size) override {
+        // resource_.deallocate(buffer, size); // deallocation is no-op
+        bytes_allocated_ -= size;
+    }
     void ReleaseUnused() override {}
     int64_t bytes_allocated() const override { return bytes_allocated_; }
     int64_t max_memory() const override { return INT64_MAX; }
