@@ -15,6 +15,7 @@
 
 #include <yyjson.h> // Primary internal JSON representation
 #include <bson.h>   // Converting from/to BSON
+#include <mpack.h>
 
 #include "ukv/docs.h"
 #include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
@@ -698,23 +699,23 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
     }
     case mpack_type_str: {
         size_t length = mpack_tag_str_length(&tag);
-        char const* data = mpack_read_bytes_inplace(&reader, length);
+        auto data = mpack_read_bytes_inplace(&reader, length);
         to_json_string(builder, data, c_error);
         mpack_done_str(&reader);
         break;
     }
     case mpack_type_bin: {
         size_t length = mpack_tag_bin_length(&tag);
-        byte_t const* data = reinterpret_cast<byte_t const*>(mpack_read_bytes_inplace(&reader, length));
+        auto data = mpack_read_bytes_inplace(&reader, length);
         to_json_string(builder, data, c_error);
         break;
     }
     case mpack_type_array: {
         to_json_string(builder, open_arr_k, c_error);
 
-        u32_t count = mpack_tag_array_count(&tag);
+        uint32_t count = mpack_tag_array_count(&tag);
         // Recursively call for kids.
-        for (u32_t i = 0; i != count; ++i) {
+        for (uint32_t i = 0; i != count; ++i) {
             object_reading(reader, builder, c_error);
 
             if (mpack_reader_error(&reader) != mpack_ok) // critical check!
@@ -728,15 +729,15 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
     case mpack_type_map: {
         to_json_string(builder, open_k, c_error);
 
-        u32_t count = mpack_tag_map_count(&tag);
-        for (u32_t i = 0; i != count; ++i) {
+        uint32_t count = mpack_tag_map_count(&tag);
+        for (uint32_t i = 0; i != count; ++i) {
             mpack_tag_t tag = mpack_read_tag(&reader);
-            u32_t length = mpack_tag_str_length(&tag);
+            uint32_t length = mpack_tag_str_length(&tag);
             const char* key = mpack_read_bytes_inplace(&reader, length);
             // Write key into json string
-            to_json_string(state.json_str, "\"", state.c_error);
-            to_json_string(state.json_str, key, state.c_error);
-            to_json_string(state.json_str, "\" : ", state.c_error);
+            to_json_string(builder, "\"", c_error);
+            to_json_string(builder, key, c_error);
+            to_json_string(builder, "\" : ", c_error);
 
             object_reading(reader, builder, c_error);
             if (mpack_reader_error(&reader) != mpack_ok) // critical check!
@@ -752,7 +753,7 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
 }
 bool iterate_over_mpack_data(value_view_t data, string_t& json_str, ukv_error_t* c_error) {
     mpack_reader_t reader;
-    mpack_reader_init_data(&reader, data.data(), data.size());
+    mpack_reader_init_data(&reader, data.c_str(), data.size());
 
     // Export all the content without any allocations
     while (reader.data != reader.end)
