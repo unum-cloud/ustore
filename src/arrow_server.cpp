@@ -556,24 +556,18 @@ class UKVService : public arf::FlightServerBase {
             c_collection_name = (ukv_str_span_t)params.collection_name->begin();
             c_collection_name[params.collection_name->size()] = 0;
 
-            // Upsert and fetch collection ID
             ukv_collection_t collection_id = 0;
-            auto maybe_collection = db_.collection(c_collection_name);
-            if (maybe_collection)
-                collection_id = maybe_collection.throw_or_ref();
-            else {
-                ukv_str_view_t collection_config = get_null_terminated(action.body);
-                ukv_collection_create_t collection_init;
-                collection_init.db = db_;
-                collection_init.error = status.member_ptr();
-                collection_init.name = params.collection_name->begin();
-                collection_init.config = collection_config;
-                collection_init.id = &collection_id;
+            ukv_str_view_t collection_config = get_null_terminated(action.body);
+            ukv_collection_create_t collection_init;
+            collection_init.db = db_;
+            collection_init.error = status.member_ptr();
+            collection_init.name = params.collection_name->begin();
+            collection_init.config = collection_config;
+            collection_init.id = &collection_id;
 
-                ukv_collection_create(&collection_init);
-                if (!status)
-                    return ar::Status::ExecutionError(status.message());
-            }
+            ukv_collection_create(&collection_init);
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
 
             *results_ptr = return_scalar<ukv_collection_t>(collection_id);
             return ar::Status::OK();
