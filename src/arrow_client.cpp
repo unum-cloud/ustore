@@ -58,7 +58,7 @@ arf::FlightCallOptions arrow_call_options(arrow_mem_pool_t& pool) {
 void ukv_database_init(ukv_database_init_t* c_ptr) {
 
     ukv_database_init_t& c = *c_ptr;
-    
+
     safe_section("Starting client", c.error, [&] {
         if (!c.config || !std::strlen(c.config))
             c.config = "grpc://0.0.0.0:38709";
@@ -108,6 +108,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     bool const read_shared = c.options & ukv_option_read_shared_memory_k;
     bool const dont_watch = c.options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
+    descriptor.type = arf::FlightDescriptor::UNKNOWN;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightRead);
     if (c.transaction)
         fmt::format_to(std::back_inserter(descriptor.cmd),
@@ -400,6 +401,7 @@ void ukv_write(ukv_write_t* c_ptr) {
 
     // Configure the `cmd` descriptor
     arf::FlightDescriptor descriptor;
+    descriptor.type = arf::FlightDescriptor::UNKNOWN;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightWrite);
     if (c.transaction)
         fmt::format_to(std::back_inserter(descriptor.cmd),
@@ -550,6 +552,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
 
     // Configure the `cmd` descriptor
     arf::FlightDescriptor descriptor;
+    descriptor.type = arf::FlightDescriptor::UNKNOWN;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightWritePath);
     if (c.transaction)
         fmt::format_to(std::back_inserter(descriptor.cmd),
@@ -627,6 +630,7 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     bool const read_shared = c.options & ukv_option_read_shared_memory_k;
     bool const dont_watch = c.options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
+    descriptor.type = arf::FlightDescriptor::UNKNOWN;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightMatchPath);
     if (c.transaction)
         fmt::format_to(std::back_inserter(descriptor.cmd),
@@ -826,6 +830,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     bool const read_shared = c.options & ukv_option_read_shared_memory_k;
     bool const dont_watch = c.options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
+    descriptor.type = arf::FlightDescriptor::UNKNOWN;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightReadPath);
     if (c.transaction)
         fmt::format_to(std::back_inserter(descriptor.cmd),
@@ -1073,6 +1078,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     bool const read_shared = c.options & ukv_option_read_shared_memory_k;
     bool const dont_watch = c.options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
+    descriptor.type = arf::FlightDescriptor::UNKNOWN;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightScan);
     if (c.transaction)
         fmt::format_to(std::back_inserter(descriptor.cmd),
