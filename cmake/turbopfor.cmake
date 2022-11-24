@@ -14,9 +14,7 @@
 
 include(ExternalProject)
 
-if(${UKV_PREINSTALLED_TURBOPFOR})
-#
-else()
+if(${UKV_REBUILD_TURBOPFOR})
     include(ExternalProject)
     find_package(Git REQUIRED)
     find_program(MAKE_EXE NAMES gmake nmake make)

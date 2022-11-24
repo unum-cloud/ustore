@@ -5,18 +5,18 @@
  * @brief Document storage using "YYJSON" lib.
  * Sits on top of any @see "ukv.h"-compatible system.
  */
-
-#include <fmt/format.h> // `fmt::format_int`
-
 #include <cstdio>      // `std::snprintf`
 #include <cctype>      // `std::isdigit`
 #include <charconv>    // `std::to_chars`
 #include <string_view> // `std::string_view`
 
-#include <yyjson.h> // Primary internal JSON representation
-#include <bson.h>   // Converting from/to BSON
+#include <fmt/format.h> // `fmt::format_int`
 
-#include "ukv/docs.h"
+#include <simdjson.h> // Secondary internal JSON representation
+#include <yyjson.h>   // Primary internal JSON representation
+#include <bson.h>     // Converting from/to BSON
+
+#include "ukv/docs.h"                //
 #include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
 #include "helpers/linked_array.hpp"  // `growing_tape_t`
 #include "helpers/algorithm.hpp"     // `transform_n`
@@ -28,6 +28,8 @@
 
 using namespace unum::ukv;
 using namespace unum;
+
+namespace sj = simdjson;
 
 constexpr ukv_doc_field_type_t internal_format_k = ukv_doc_field_json_k;
 
@@ -203,6 +205,10 @@ yyjson_alc wrap_allocator(linked_memory_lock_t& arena) {
     allocator.free = json_yy_free;
     allocator.ctx = &arena;
     return allocator;
+}
+
+auto simdjson_lookup(sj::ondemand::value& json, ukv_str_view_t field) noexcept {
+    return !field ? json : field[0] == '/' ? json.at_pointer(field) : json[field];
 }
 
 yyjson_val* json_lookup(yyjson_val* json, ukv_str_view_t field) noexcept {
@@ -413,8 +419,70 @@ std::string_view json_to_string(yyjson_val* value,
             collide = !result.empty() ? (collide & ~mask) : (collide | mask);
             valid = result.empty() ? (valid & ~mask) : (valid | mask);
             break;
+        default: break;
         }
     }
+    default: break;
+    }
+
+    return result;
+}
+
+template <typename value_at>
+std::string_view get_value( //
+    value_at& value,
+    ukv_doc_field_type_t field_type,
+    printed_number_buffer_t& print_buffer) noexcept {
+
+    std::string_view result;
+
+    if (field_type == ukv_doc_field_json_k) {
+        if (value.type().value() == sj::ondemand::json_type::object)
+            result = value.get_object().value().raw_json();
+        else if (value.type().value() == sj::ondemand::json_type::array)
+            result = value.get_array().value().raw_json();
+        else
+            result = value.raw_json_token();
+    }
+    else if (field_type == ukv_doc_field_str_k) {
+        auto type = value.type().value();
+        switch (type) {
+        case sj::ondemand::json_type::null: break;
+        case sj::ondemand::json_type::object: {
+            result = value.get_object().value().raw_json();
+            break;
+        }
+        case sj::ondemand::json_type::array: {
+            result = value.get_object().value().raw_json();
+            break;
+        }
+        case sj::ondemand::json_type::boolean: {
+            result = value.get_bool() ? std::string_view(true_k, 5) : std::string_view(false_k, 6);
+            break;
+        }
+        case sj::ondemand::json_type::string: {
+            result = value.get_string();
+            break;
+        }
+        case sj::ondemand::json_type::number: {
+            auto number_type = value.get_number_type().value();
+            switch (number_type) {
+            case sj::ondemand::number_type::signed_integer: {
+                result =
+                    print_number(print_buffer, print_buffer + printed_number_length_limit_k, value.get_int64().value());
+                break;
+            }
+            case sj::ondemand::number_type::unsigned_integer: {
+                result = print_number(print_buffer,
+                                      print_buffer + printed_number_length_limit_k,
+                                      value.get_uint64().value());
+                break;
+            }
+            default: break;
+            }
+        }
+        default: break;
+        }
     }
 
     return result;
@@ -429,10 +497,15 @@ struct json_state_t {
     string_t& json_str;
     ukv_error_t* c_error;
 
-    ssize_t* err_offset;
     uint32_t count;
     bool keys;
+    ssize_t error_offset;
 };
+
+template <std::size_t count_ak>
+void bson_to_json_string(string_t& json_str, char (&str)[count_ak], ukv_error_t* c_error) {
+    json_str.insert(json_str.size(), str, str + count_ak, c_error);
+}
 
 void bson_to_json_string(string_t& json_str, char const* str, ukv_error_t* c_error) {
     json_str.insert(json_str.size(), str, str + std::strlen(str), c_error);
@@ -448,30 +521,28 @@ void bson_to_json_number(string_t& json_str, at scalar, ukv_error_t* c_error) {
 static bool bson_visit_array(const bson_iter_t*, const char*, const bson_t*, void*);
 static bool bson_visit_document(const bson_iter_t*, const char*, const bson_t*, void*);
 
+static bool bson_visit_array(const bson_iter_t*, const char*, const bson_t*, void*);
+static bool bson_visit_document(const bson_iter_t*, const char*, const bson_t*, void*);
+
 static bool bson_visit_before(bson_iter_t const*, char const* key, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-
-    char* escaped;
 
     if (state.count)
         bson_to_json_string(state.json_str, ", ", state.c_error);
 
     if (state.keys) {
-        escaped = bson_utf8_escape_for_json(key, -1);
+        char* escaped = bson_utf8_escape_for_json(key, -1);
         if (escaped) {
             bson_to_json_string(state.json_str, "\"", state.c_error);
             bson_to_json_string(state.json_str, escaped, state.c_error);
             bson_to_json_string(state.json_str, "\" : ", state.c_error);
-
             bson_free(escaped);
         }
-        else {
+        else
             return true;
-        }
     }
 
     state.count++;
-
     return false;
 }
 static bool bson_visit_after(bson_iter_t const*, char const*, void*) {
@@ -479,23 +550,18 @@ static bool bson_visit_after(bson_iter_t const*, char const*, void*) {
 }
 static void bson_visit_corrupt(bson_iter_t const* iter, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    *state.err_offset = iter->off;
+    state.error_offset = iter->off;
 }
 static bool bson_visit_double(bson_iter_t const*, char const*, double v_double, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
     bson_to_json_string(state.json_str, "{ \"$numberDouble\" : \"", state.c_error);
 
-    if (v_double != v_double) {
+    if (v_double != v_double)
         bson_to_json_string(state.json_str, "NaN", state.c_error);
-    }
-    else if (v_double * 0 != 0) {
-        if (v_double > 0) {
-            bson_to_json_string(state.json_str, "Infinity", state.c_error);
-        }
-        else {
-            bson_to_json_string(state.json_str, "-Infinity", state.c_error);
-        }
-    }
+
+    else if (v_double * 0 != 0)
+        bson_to_json_string(state.json_str, v_double > 0 ? "Infinity" : "-Infinity", state.c_error);
+
     else
         bson_to_json_number(state.json_str, v_double, state.c_error);
 
@@ -547,6 +613,7 @@ static bool bson_visit_oid(bson_iter_t const*, char const*, const bson_oid_t*, v
 static bool bson_visit_bool(bson_iter_t const*, char const*, bool v_bool, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
     bson_to_json_string(state.json_str, v_bool ? true_k : false_k, state.c_error);
+    bson_to_json_string(state.json_str, v_bool ? true_k : false_k, state.c_error);
     return false;
 }
 static bool bson_visit_date_time(bson_iter_t const*, char const*, int64_t msec_since_epoch, void* data) {
@@ -558,6 +625,7 @@ static bool bson_visit_date_time(bson_iter_t const*, char const*, int64_t msec_s
 }
 static bool bson_visit_null(bson_iter_t const*, char const*, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    bson_to_json_string(state.json_str, null_k, state.c_error);
     bson_to_json_string(state.json_str, null_k, state.c_error);
     return false;
 }
@@ -620,7 +688,7 @@ static bool bson_visit_minkey(bson_iter_t const*, char const*, void* data) {
 }
 static void bson_visit_unsupported_type(bson_iter_t const* iter, char const*, uint32_t, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    //*state.err_offset = iter->off; //TODO
+    // state.error_offset = iter->off; //TODO
     return_error(state.c_error, "BSON unsupported type");
 }
 static bool bson_visit_decimal128(bson_iter_t const*, char const*, bson_decimal128_t const*, void* data) {
@@ -629,13 +697,44 @@ static bool bson_visit_decimal128(bson_iter_t const*, char const*, bson_decimal1
     return false;
 }
 
-static const bson_visitor_t bson_visitor = {
+static bson_visitor_t const bson_visitor = {
     bson_visit_before,   bson_visit_after,     bson_visit_corrupt,    bson_visit_double,    bson_visit_utf8,
     bson_visit_document, bson_visit_array,     bson_visit_binary,     bson_visit_undefined, bson_visit_oid,
     bson_visit_bool,     bson_visit_date_time, bson_visit_null,       bson_visit_regex,     bson_visit_dbpointer,
     bson_visit_code,     bson_visit_symbol,    bson_visit_codewscope, bson_visit_int32,     bson_visit_timestamp,
     bson_visit_int64,    bson_visit_maxkey,    bson_visit_minkey,
 };
+
+static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_array, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    json_state_t child_state = {state.json_str, state.c_error, state.error_offset, 0, true};
+    bson_iter_t child;
+
+    if (bson_iter_init(&child, v_array)) {
+        bson_to_json_string(child_state.json_str, open_arr_k, state.c_error);
+
+        if (bson_iter_visit_all(&child, &bson_visitor, &child_state))
+            log_error(state.c_error, 0, "Failed to iterate the BSON array!");
+
+        bson_to_json_string(child_state.json_str, close_arr_k, state.c_error);
+    }
+    return false;
+}
+static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v_document, void* data) {
+    json_state_t& state = *reinterpret_cast<json_state_t*>(data);
+    json_state_t child_state = {state.json_str, state.c_error, state.error_offset, 0, true};
+    bson_iter_t child;
+
+    if (bson_iter_init(&child, v_document)) {
+        bson_to_json_string(child_state.json_str, open_k, state.c_error);
+
+        if (bson_iter_visit_all(&child, &bson_visitor, &child_state))
+            log_error(state.c_error, 0, "Failed to iterate the BSON document!");
+
+        bson_to_json_string(child_state.json_str, close_k, state.c_error);
+    }
+    return false;
+}
 
 static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_array, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
@@ -679,9 +778,8 @@ json_t any_parse(value_view_t bytes,
         // Using `bson_as_canonical_extended_json` is a bad idea, as it allocates dynamically.
         // Instead we will manually iterate over the document, using the "visitor" pattern
         bson_iter_t iter;
-        ssize_t err_offset = -1;
         string_t json(arena);
-        json_state_t state = {json, c_error, &err_offset, 0, true};
+        json_state_t state {json, c_error, 0, true, -1};
 
         if (!bson_iter_init(&iter, &bson)) {
             *c_error = "Failed to parse the BSON document!";
@@ -689,7 +787,7 @@ json_t any_parse(value_view_t bytes,
         }
 
         bson_to_json_string(json, open_k, c_error);
-        if (bson_iter_visit_all(&iter, &bson_visitor, &state) || err_offset != -1) {
+        if (bson_iter_visit_all(&iter, &bson_visitor, &state) || state.error_offset != -1) {
             *c_error = "Failed to iterate the BSON document!";
             return {};
         }
@@ -979,12 +1077,12 @@ void read_unique_docs( //
     ukv_options_t const c_options,
     linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
     ukv_byte_t* found_binary_begin = nullptr;
     ukv_length_t* found_binary_offs = nullptr;
+    ukv_length_t* found_binary_lens = nullptr;
     ukv_read_t read {
         .db = c_db,
         .error = c_error,
@@ -997,6 +1095,7 @@ void read_unique_docs( //
         .keys = places.keys_begin.get(),
         .keys_stride = places.keys_begin.stride(),
         .offsets = &found_binary_offs,
+        .lengths = &found_binary_lens,
         .values = &found_binary_begin,
     };
 
@@ -1005,15 +1104,26 @@ void read_unique_docs( //
     auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
     auto found_binary_it = found_binaries.begin();
 
+    ukv_length_t max_length =
+        *std::max_element(found_binary_lens, found_binary_lens + places.count, [](ukv_length_t lhs, ukv_length_t rhs) {
+            return (lhs < rhs) && (lhs != ukv_length_missing_k) && rhs != ukv_length_missing_k;
+        });
+
+    if (max_length == ukv_length_missing_k) {
+        for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it)
+            callback(task_idx, {}, value_view_t::make_empty());
+        return;
+    }
+
+    auto document = arena.alloc<byte_t>(max_length + sj::SIMDJSON_PADDING, c_error);
+    return_on_error(c_error);
+
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
-        json_t parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
-
-        // This error is extremely unlikely, as we have previously accepted the data into the store.
-        return_on_error(c_error);
-
+        std::memcpy(document.begin(), binary_doc.data(), binary_doc.size());
+        std::memset(document.begin() + binary_doc.size(), 0, sj::SIMDJSON_PADDING);
         ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
-        callback(task_idx, field, parsed);
+        callback(task_idx, field, value_view_t(document.begin(), binary_doc.size()));
     }
 
     unique_places = places;
@@ -1028,12 +1138,11 @@ void read_modify_unique_docs( //
     doc_modification_t const c_modification,
     linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) noexcept {
 
     if (c_modification == doc_modification_t::nothing_k)
-        read_unique_docs(c_db, c_txn, places, c_options, arena, unique_places, unique_docs, c_error, callback);
+        return read_unique_docs(c_db, c_txn, places, c_options, arena, unique_places, c_error, callback);
 
     auto has_fields = places.fields_begin && (!places.fields_begin.repeats() || *places.fields_begin);
     bool need_values =
@@ -1071,11 +1180,7 @@ void read_modify_unique_docs( //
                             "Key Already Exists!");
             ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
             value_view_t binary_doc = *found_binary_it;
-            json_t parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
-
-            // This error is extremely unlikely, as we have previously accepted the data into the store.
-            return_on_error(c_error);
-            callback(task_idx, field, parsed);
+            callback(task_idx, field, binary_doc);
         }
     }
     else {
@@ -1098,14 +1203,13 @@ void read_modify_unique_docs( //
 
         bits_view_t presents {found_presences};
         for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx) {
-            json_t parsed;
             ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
             return_if_error(presents[task_idx] || !has_fields, c_error, 0, "Key Not Exists!");
             return_if_error(!presents[task_idx] || c_modification != doc_modification_t::insert_k,
                             c_error,
                             0,
                             "Invalid Arguments!");
-            callback(task_idx, field, parsed);
+            callback(task_idx, field, value_view_t::make_empty());
         }
     }
 
@@ -1121,7 +1225,6 @@ void read_modify_docs( //
     doc_modification_t const c_modification,
     linked_memory_lock_t& arena,
     places_arg_t& unique_places,
-    uninitialized_array_gt<json_t>& unique_docs,
     ukv_error_t* c_error,
     callback_at callback) {
 
@@ -1136,7 +1239,6 @@ void read_modify_docs( //
                                        c_modification,
                                        arena,
                                        unique_places,
-                                       unique_docs,
                                        c_error,
                                        callback);
 
@@ -1159,7 +1261,6 @@ void read_modify_docs( //
                                        c_modification,
                                        arena,
                                        unique_places,
-                                       unique_docs,
                                        c_error,
                                        callback);
 
@@ -1195,40 +1296,18 @@ void read_modify_docs( //
     // Once we transform to inclusive sums, it will be O(1).
     //      inplace_inclusive_prefix_sum(found_binary_lens, found_binary_lens + found_binary_count);
     // Alternatively we can compensate it with additional memory:
-    unique_docs.resize(unique_places.count, c_error);
-    return_on_error(c_error);
-    initialized_range_gt<json_t> unique_docs_raii {unique_docs};
 
     // Parse all the unique documents
     auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
-    auto found_binary_it = found_binaries.begin();
-    for (ukv_size_t doc_idx = 0; doc_idx != unique_places.count; ++doc_idx, ++found_binary_it) {
-        value_view_t binary_doc = *found_binary_it;
-        json_t& parsed = unique_docs[doc_idx];
-        parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
-
-        // This error is extremely unlikely, as we have previously accepted the data into the store.
-        return_on_error(c_error);
-    }
 
     // Join docs and fields with binary search
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx) {
         auto place = places[task_idx];
         auto parsed_idx = offset_in_sorted(unique_col_keys, place.collection_key());
-        json_t& parsed = unique_docs[parsed_idx];
-        callback(task_idx, place.field, parsed);
-    }
 
-    read_modify_unique_docs(c_db,
-                            c_txn,
-                            places,
-                            c_options,
-                            c_modification,
-                            arena,
-                            unique_places,
-                            unique_docs,
-                            c_error,
-                            callback);
+        value_view_t binary_doc = found_binaries[parsed_idx];
+        callback(task_idx, place.field, binary_doc);
+    }
 }
 
 void read_modify_write( //
@@ -1247,7 +1326,11 @@ void read_modify_write( //
     return_on_error(c_error);
 
     yyjson_alc allocator = wrap_allocator(arena);
-    auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, json_t& parsed) {
+    auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, value_view_t binary_doc) {
+        json_t parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
+
+        // This error is extremely unlikely, as we have previously accepted the data into the store.
+        return_on_error(c_error);
         if (!parsed.mut_handle)
             parsed.mut_handle = yyjson_doc_mut_copy(parsed.handle, &allocator);
 
@@ -1261,18 +1344,8 @@ void read_modify_write( //
     };
 
     places_arg_t unique_places;
-    uninitialized_array_gt<json_t> unique_docs(arena);
     auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
-    read_modify_docs(c_db,
-                     c_txn,
-                     places,
-                     opts,
-                     c_modification,
-                     arena,
-                     unique_places,
-                     unique_docs,
-                     c_error,
-                     safe_callback);
+    read_modify_docs(c_db, c_txn, places, opts, c_modification, arena, unique_places, c_error, safe_callback);
     return_on_error(c_error);
 
     // By now, the tape contains concatenated updates docs:
@@ -1400,15 +1473,32 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
     growing_tape_t growing_tape {arena};
     growing_tape.reserve(places.size(), c.error);
     return_on_error(c.error);
+    sj::ondemand::parser parser;
 
-    auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, json_t const& doc) {
-        yyjson_val* root = yyjson_doc_get_root(doc.handle);
-        yyjson_val* branch = json_lookup(root, field);
-        any_dump({.handle = branch}, c.type, arena, growing_tape, c.error);
+    auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, value_view_t binary_doc) {
+        if (binary_doc.empty()) {
+            growing_tape.push_back(binary_doc, c.error);
+            return;
+        }
+        auto padded_doc =
+            sj::padded_string_view(binary_doc.c_str(), binary_doc.size(), binary_doc.size() + sj::SIMDJSON_PADDING);
+        auto maybe_doc = parser.iterate(padded_doc);
+        return_if_error(maybe_doc.error() == sj::SUCCESS, c.error, 0, "Fail To Parse Document!");
+        std::string_view result;
+        printed_number_buffer_t print_buffer;
+        if (maybe_doc.value().is_scalar())
+            result = get_value(maybe_doc.value(), c.type, print_buffer);
+        else {
+            auto parsed = maybe_doc.value().get_value();
+            auto branch = simdjson_lookup(parsed.value(), field);
+            result = get_value(branch, c.type, print_buffer);
+        }
+        growing_tape.push_back(result, c.error);
+        growing_tape.add_terminator(byte_t {0}, c.error);
         return_on_error(c.error);
     };
+
     places_arg_t unique_places;
-    uninitialized_array_gt<json_t> unique_docs(arena);
     read_modify_docs(c.db,
                      c.transaction,
                      places,
@@ -1416,7 +1506,6 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
                      doc_modification_t::nothing_k,
                      arena,
                      unique_places,
-                     unique_docs,
                      c.error,
                      safe_callback);
 

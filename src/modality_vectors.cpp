@@ -23,7 +23,7 @@
 using namespace unum::ukv;
 using namespace unum;
 
-using float_t = float;
+using real_t = float;
 using quant_t = std::int8_t;
 using quant_product_t = std::int16_t;
 static constexpr quant_t float_scaling_k = 100;
@@ -35,19 +35,19 @@ number_at square(number_at n) noexcept {
 }
 
 struct metric_dot_t {
-    float_t operator()(quant_t const* a, quant_t const* b, std::size_t dims) const noexcept {
+    real_t operator()(quant_t const* a, quant_t const* b, std::size_t dims) const noexcept {
         std::int64_t sum = 0;
         for (std::size_t i = 0; i != dims; ++i) {
             quant_product_t ai = a[i];
             quant_product_t bi = b[i];
             sum += ai * bi;
         }
-        return float_t(sum) / product_scaling_k;
+        return real_t(sum) / product_scaling_k;
     }
 };
 
 struct metric_cos_t {
-    float_t operator()(quant_t const* a, quant_t const* b, std::size_t dims) const noexcept {
+    real_t operator()(quant_t const* a, quant_t const* b, std::size_t dims) const noexcept {
         std::int64_t sum = 0, a_norm = 0, b_norm = 0;
         for (std::size_t i = 0; i != dims; ++i) {
             quant_product_t ai = a[i];
@@ -56,27 +56,27 @@ struct metric_cos_t {
             a_norm += square(ai);
             b_norm += square(bi);
         }
-        auto nominator = float_t(sum) / product_scaling_k;
-        auto denominator = std::sqrt(float_t(a_norm) / product_scaling_k) * //
-                           std::sqrt(float_t(b_norm) / product_scaling_k);
+        auto nominator = real_t(sum) / product_scaling_k;
+        auto denominator = std::sqrt(real_t(a_norm) / product_scaling_k) * //
+                           std::sqrt(real_t(b_norm) / product_scaling_k);
         return nominator / denominator;
     }
 };
 
 struct metric_l2_t {
 
-    float_t operator()(quant_t const* a, std::size_t dims) const noexcept {
+    real_t operator()(quant_t const* a, std::size_t dims) const noexcept {
         std::int64_t sum = 0;
         for (std::size_t i = 0; i != dims; ++i)
             sum += square<quant_product_t>(a[i]);
-        return std::sqrt(float_t(sum) / product_scaling_k);
+        return std::sqrt(real_t(sum) / product_scaling_k);
     }
 
-    float_t operator()(quant_t const* a, quant_t const* b, std::size_t dims) const noexcept {
+    real_t operator()(quant_t const* a, quant_t const* b, std::size_t dims) const noexcept {
         std::int64_t sum = 0;
         for (std::size_t i = 0; i != dims; ++i)
             sum += square<quant_product_t>(a[i] - b[i]);
-        return std::sqrt(float_t(sum) / product_scaling_k);
+        return std::sqrt(real_t(sum) / product_scaling_k);
     }
 };
 
@@ -85,7 +85,7 @@ struct entry_t {
     value_view_t value;
 };
 
-template <typename float_at = float_t>
+template <typename float_at = real_t>
 void quantize(float_at const* originals, std::size_t dims, quant_t* quants) noexcept {
     for (std::size_t i = 0; i != dims; ++i)
         quants[i] = static_cast<quant_t>(originals[i] * float_scaling_k);
@@ -93,14 +93,14 @@ void quantize(float_at const* originals, std::size_t dims, quant_t* quants) noex
 
 void quantize(byte_t const* bytes, ukv_vector_scalar_t scalar_type, std::size_t dims, quant_t* quants) noexcept {
     switch (scalar_type) {
-    case ukv_vector_scalar_f32_k: return quantize((float_t const*)bytes, dims, quants);
+    case ukv_vector_scalar_f32_k: return quantize((real_t const*)bytes, dims, quants);
     case ukv_vector_scalar_f64_k: return quantize((double const*)bytes, dims, quants);
     case ukv_vector_scalar_f16_k: return quantize((std::int16_t const*)bytes, dims, quants);
     case ukv_vector_scalar_i8_k: return quantize((quant_t const*)bytes, dims, quants);
     }
 }
 
-float_t metric(quant_t const* a, quant_t const* b, std::size_t dims, ukv_vector_metric_t kind) noexcept {
+real_t metric(quant_t const* a, quant_t const* b, std::size_t dims, ukv_vector_metric_t kind) noexcept {
     switch (kind) {
     case ukv_vector_metric_dot_k: return metric_dot_t {}(a, b, dims);
     case ukv_vector_metric_cos_k: return metric_cos_t {}(a, b, dims);
@@ -111,7 +111,7 @@ float_t metric(quant_t const* a, quant_t const* b, std::size_t dims, ukv_vector_
 
 ukv_length_t size_bytes(ukv_vector_scalar_t scalar_type) noexcept {
     switch (scalar_type) {
-    case ukv_vector_scalar_f32_k: return sizeof(float_t);
+    case ukv_vector_scalar_f32_k: return sizeof(real_t);
     case ukv_vector_scalar_f64_k: return sizeof(double);
     case ukv_vector_scalar_f16_k: return sizeof(std::int16_t);
     case ukv_vector_scalar_i8_k: return sizeof(quant_t);
