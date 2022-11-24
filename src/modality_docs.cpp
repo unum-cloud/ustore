@@ -5,19 +5,18 @@
  * @brief Document storage using "YYJSON" lib.
  * Sits on top of any @see "ukv.h"-compatible system.
  */
-
-#include <fmt/format.h> // `fmt::format_int`
-
 #include <cstdio>      // `std::snprintf`
 #include <cctype>      // `std::isdigit`
 #include <charconv>    // `std::to_chars`
 #include <string_view> // `std::string_view`
 
-#include <simdjson.h> //
+#include <fmt/format.h> // `fmt::format_int`
+
+#include <simdjson.h> // Secondary internal JSON representation
 #include <yyjson.h>   // Primary internal JSON representation
 #include <bson.h>     // Converting from/to BSON
 
-#include "ukv/docs.h"
+#include "ukv/docs.h"                //
 #include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
 #include "helpers/linked_array.hpp"  // `growing_tape_t`
 #include "helpers/algorithm.hpp"     // `transform_n`
@@ -1070,8 +1069,8 @@ void read_unique_docs( //
     auto found_binary_it = found_binaries.begin();
 
     ukv_length_t max_length =
-        *std::max_element(found_binary_lens, found_binary_lens + places.count, [](ukv_length_t a, ukv_length_t b) {
-            return a < b && a != ukv_length_missing_k && b != ukv_length_missing_k;
+        *std::max_element(found_binary_lens, found_binary_lens + places.count, [](ukv_length_t lhs, ukv_length_t rhs) {
+            return (lhs < rhs) && (lhs != ukv_length_missing_k) && rhs != ukv_length_missing_k;
         });
 
     if (max_length == ukv_length_missing_k) {
