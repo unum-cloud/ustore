@@ -1444,9 +1444,9 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
             growing_tape.push_back(binary_doc, c.error);
             return;
         }
-        auto maybe_doc = parser.iterate((const uint8_t*)binary_doc.data(),
-                                        binary_doc.size(),
-                                        binary_doc.size() + sj::SIMDJSON_PADDING);
+        auto padded_doc =
+            sj::padded_string_view(binary_doc.c_str(), binary_doc.size(), binary_doc.size() + sj::SIMDJSON_PADDING);
+        auto maybe_doc = parser.iterate(padded_doc);
         return_if_error(maybe_doc.error() == sj::SUCCESS, c.error, 0, "Fail To Parse Document!");
         std::string_view result;
         printed_number_buffer_t print_buffer;
