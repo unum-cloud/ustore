@@ -704,7 +704,7 @@ static bson_visitor_t const bson_visitor = {
 
 static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_array, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    json_state_t child_state = {state.json_str, state.c_error, state.error_offset, 0, true};
+    json_state_t child_state = {state.json_str, state.c_error, 0, true, state.error_offset};
     bson_iter_t child;
 
     if (bson_iter_init(&child, v_array)) {
@@ -719,7 +719,7 @@ static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_ar
 }
 static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v_document, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    json_state_t child_state = {state.json_str, state.c_error, state.error_offset, 0, true};
+    json_state_t child_state = {state.json_str, state.c_error, 0, true, state.error_offset};
     bson_iter_t child;
 
     if (bson_iter_init(&child, v_document)) {
