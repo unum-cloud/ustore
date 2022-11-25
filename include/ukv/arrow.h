@@ -1,8 +1,13 @@
 /**
+ * @file arrow.h
+ * @author Ashot Vardanian
+ * @date 08 Jun 2022
+ * @addtogroup C
+ * 
  * @brief Implements bindings for the Apache Arrow.
  *
  * Internally replicates the bare-minimum defintions required
- * for Arrow to be ABI-compatiable.
+ * for Arrow to be ABI-compatible.
  *
  * https://arrow.apache.org/docs/format/CDataInterface.html#structure-definitions
  * https://arrow.apache.org/docs/format/CDataInterface.html#example-use-case

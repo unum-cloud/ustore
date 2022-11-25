@@ -21,6 +21,65 @@
             "cppAttachName": "(GDB) Attach Python",
         },
         {
+            "name": "C++: Test UMem API",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/ukv_umem_api_test",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "UKV_TEST_PATH",
+                    "value": ""
+                }
+            ],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug UMem Test API",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "C++: Test LevelDB API",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/ukv_leveldb_api_test",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug LevelDB Test API",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "C++: Test RocksDB API",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/ukv_rocksdb_api_test",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug RocksDB Test API",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
             "name": "C++: Test UMem",
             "type": "cppdbg",
             "request": "launch",
@@ -48,6 +107,24 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
+            "name": "C++: Test LevelDB",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/ukv_leveldb_unit_test",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug LevelDB Test",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
             "name": "C++: Test RocksDB",
             "type": "cppdbg",
             "request": "launch",
@@ -66,10 +143,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Test LevelDB",
+            "name": "C++: Test UDisk",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_leveldb_unit_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/ukv_udisk_unit_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -79,7 +156,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug LevelDB Test",
+            "preLaunchTask": "Build Native: Debug UDisk Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -134,101 +211,6 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Test UMem API",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_umem_api_test",
-            "args": [
-                "--gtest_break_on_failure",
-                "--gtest_catch_exceptions=0"
-            ],
-            "cwd": "${workspaceFolder}",
-            "environment": [
-                {
-                    "name": "UKV_TEST_PATH",
-                    "value": ""
-                }
-            ],
-            "showDisplayString": true,
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UMem Test API",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb"
-        },
-        {
-            "name": "C++: Test RocksDB API",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_rocksdb_api_test",
-            "args": [
-                "--gtest_break_on_failure",
-                "--gtest_catch_exceptions=0"
-            ],
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "showDisplayString": true,
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug RocksDB Test API",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb"
-        },
-        {
-            "name": "C++: Test LevelDB API",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_leveldb_api_test",
-            "args": [
-                "--gtest_break_on_failure",
-                "--gtest_catch_exceptions=0"
-            ],
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "showDisplayString": true,
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug LevelDB Test API",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb"
-        },
-        {
-            "name": "C++: Test UDisk",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_udisk_unit_test",
-            "args": [
-                "--gtest_break_on_failure",
-                "--gtest_catch_exceptions=0"
-            ],
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "showDisplayString": true,
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UDisk Test",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb"
-        },
-        {
-            "name": "C++: Benchmark UDisk",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_udisk_twitter_benchmark",
-            "args": [
-                "--gtest_break_on_failure",
-                "--gtest_catch_exceptions=0"
-            ],
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "showDisplayString": true,
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UDisk Benchmark",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb"
-        },
-        {
             "name": "C++: Benchmark UMem",
             "type": "cppdbg",
             "request": "launch",
@@ -261,6 +243,24 @@
             "stopAtEntry": false,
             "externalConsole": false,
             "preLaunchTask": "Build Native: Debug RocksDB Benchmark",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "C++: Test UDisk",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/ukv_udisk_unit_test",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug UDisk Benchmark",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -326,29 +326,6 @@
             "mainClass": "${file}",
             "vmArgs": "-Djava.library.path=${fileDirname} -Xcheck:jni",
             "cwd": "${workspaceFolder}/java"
-        },
-        {
-            "name": "C++: Twitter Benchmark UMem",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_umem_twitter_benchmark",
-            "args": [
-                "--gtest_break_on_failure",
-                "--gtest_catch_exceptions=0"
-            ],
-            "cwd": "${workspaceFolder}",
-            "environment": [
-                {
-                    "name": "UKV_TEST_PATH",
-                    "value": ""
-                }
-            ],
-            "showDisplayString": true,
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug Twitter UMem Benchmark",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb"
         },
     ],
     "compounds": [
