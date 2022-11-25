@@ -247,7 +247,7 @@ void ukv_write(ukv_write_t*);
  * - Single reads and Batches.
  * - On Head state or a Snapshot.
  * - Transparent or Watching through Transactions.
- * - Reading the entire values or just checking existance or lengths.
+ * - Reading the entire values or just checking existence or lengths.
  *
  * Check docs below to see how different variants can be invoked.
  */

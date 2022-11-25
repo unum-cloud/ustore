@@ -27,7 +27,7 @@ RUN cmake \
     -DUKV_BUILD_PYTHON=0 \
     -DUKV_BUILD_TESTS=0 \
     -DUKV_BUILD_BENCHMARKS=0 \
-    -DUKV_BUILD_FLIGHT_RPC=1 . && \
+    -DUKV_BUILD_FLIGHT_API=1 . && \
     make -j16 \
     ukv_umem_flight_server \
     ukv_leveldb_flight_server \
