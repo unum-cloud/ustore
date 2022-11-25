@@ -53,7 +53,7 @@ class ConanUKV(ConanFile):
             'UKV_BUILD_PYTHON': 0,
             'UKV_BUILD_TESTS': 0,
             'UKV_BUILD_BENCHMARKS': 0,
-            'UKV_BUILD_FLIGHT_RPC': self.options['with_arrow'],
+            'UKV_BUILD_FLIGHT_API': self.options['with_arrow'],
         })
         cmake.build()
 

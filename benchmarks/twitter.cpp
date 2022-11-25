@@ -1,4 +1,3 @@
-
 #include <fcntl.h>    // `open` files
 #include <sys/stat.h> // `stat` to obtain file metadata
 #include <sys/mman.h> // `mmap` to read datasets faster
@@ -164,7 +163,7 @@ void construct_docs(bm::State& state) {
 }
 
 /**
- * @brief Constructs a graph between Twitter enities:
+ * @brief Constructs a graph between Twitter entities:
  * - Tweets and their Authors.
  * - Tweets and their Retweets.
  * - Authors and Retweeters labeled by Retweet IDs.
@@ -204,7 +203,7 @@ void sample_tweet_id_batches(bm::State& state, callback_at callback) {
     std::size_t iterations = 0;
     std::size_t successes = 0;
     for (auto _ : state) {
-        for (std::size_t key_idx = 0; key_idx != batch_size; ++key_idx) {
+        for (std::size_t idx = 0; idx != batch_size; ++idx) {
             std::size_t const file_idx = choose_file(gen);
             auto const& tweets = dataset_docs[file_idx];
             uniform_idx_t choose_tweet(0, tweets.size() - 1);
@@ -217,7 +216,7 @@ void sample_tweet_id_batches(bm::State& state, callback_at callback) {
                 tweet_key *= primes_k[hash_idx];
             }
 
-            batch_keys[key_idx] = tweet_key;
+            batch_keys[idx] = tweet_key;
         }
         successes += callback(batch_keys.data(), batch_size);
         iterations++;
@@ -467,6 +466,8 @@ static void graph_traverse_two_hops(bm::State& state) {
 int main(int argc, char** argv) {
     bm::Initialize(&argc, argv);
 
+    // We divide by two, as most modern CPUs have
+    // hyper-threading with two threads per core.
     std::size_t thread_count = std::thread::hardware_concurrency() / 2;
     std::size_t max_input_files = 1000;
     std::size_t min_seconds = 10;

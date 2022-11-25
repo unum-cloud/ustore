@@ -556,12 +556,7 @@ class UKVService : public arf::FlightServerBase {
             c_collection_name = (ukv_str_span_t)params.collection_name->begin();
             c_collection_name[params.collection_name->size()] = 0;
 
-            // Upsert and fetch collection ID
-            auto maybe_collection = db_.collection(c_collection_name);
-            if (!maybe_collection)
-                return ar::Status::ExecutionError(maybe_collection.release_status().message());
-
-            ukv_collection_t collection_id = maybe_collection.throw_or_ref();
+            ukv_collection_t collection_id = 0;
             ukv_str_view_t collection_config = get_null_terminated(action.body);
             ukv_collection_create_t collection_init;
             collection_init.db = db_;
@@ -573,6 +568,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_collection_create(&collection_init);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
+
             *results_ptr = return_scalar<ukv_collection_t>(collection_id);
             return ar::Status::OK();
         }
@@ -682,6 +678,7 @@ class UKVService : public arf::FlightServerBase {
         if (ar_status = unpack_table(request.ToTable(), input_schema_c, input_batch_c); !ar_status.ok())
             return ar_status;
 
+        bool is_empty_values = false;
         if (is_query(desc.cmd, kFlightRead)) {
 
             /// @param `keys`
@@ -734,6 +731,8 @@ class UKVService : public arf::FlightServerBase {
             ukv_read(&read);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
+
+            is_empty_values = request_content && (found_values == nullptr);
 
             ukv_size_t result_length =
                 request_only_presences ? divide_round_up<ukv_size_t>(tasks_count, CHAR_BIT) : tasks_count;
@@ -1011,6 +1010,7 @@ class UKVService : public arf::FlightServerBase {
             // we don't need the lengths, just the NULL indicators
             ukv_length_t* found_offsets = nullptr;
             ukv_length_t* found_lengths = nullptr;
+            ukv_length_t* found_counts = nullptr;
             ukv_key_t* found_keys = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
             ukv_scan_t scan;
@@ -1028,6 +1028,7 @@ class UKVService : public arf::FlightServerBase {
             scan.count_limits_stride = input_lengths.stride();
             scan.offsets = &found_offsets;
             scan.keys = &found_keys;
+            scan.counts = &found_counts;
 
             ukv_scan(&scan);
             if (!status)
@@ -1051,7 +1052,15 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
         }
 
-        auto maybe_table = ar::ImportRecordBatch(&output_batch_c, &output_schema_c);
+        arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_table;
+        if (is_empty_values) {
+            auto ar_sch = arrow::ImportSchema(&output_schema_c).ValueUnsafe();
+            maybe_table = arrow::RecordBatch::MakeEmpty(ar_sch);
+        }
+        else {
+            maybe_table = ar::ImportRecordBatch(&output_batch_c, &output_schema_c);
+        }
+
         if (!maybe_table.ok())
             return maybe_table.status();
 
