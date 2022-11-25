@@ -247,10 +247,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Test UDisk",
+            "name": "C++: Benchmark UDisk",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_udisk_unit_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/ukv_udisk_twitter_benchmark",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
