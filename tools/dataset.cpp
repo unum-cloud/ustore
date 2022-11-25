@@ -41,6 +41,9 @@
 using namespace unum::ukv;
 
 constexpr std::size_t uuid_length = 36;
+using fields_t = strided_iterator_gt<ukv_str_view_t const>;
+using docs_t = std::vector<value_view_t>;
+using graph_t = std::vector<edge_t>;
 
 /////////  Helpers  /////////
 
@@ -99,19 +102,31 @@ class arrow_visitor {
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::StringArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx).data());
+        auto str = std::string(arr.Value(idx).data(), arr.Value(idx).size());
+        if (str.back() == '\n')
+            str.pop_back();
+        json = fmt::format("{}{},", json, str.data());
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::BinaryArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx).data());
+        auto str = std::string(arr.Value(idx).data(), arr.Value(idx).size());
+        if (str.back() == '\n')
+            str.pop_back();
+        json = fmt::format("{}{},", json, str.data());
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::LargeStringArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx).data());
+        auto str = std::string(arr.Value(idx).data(), arr.Value(idx).size());
+        if (str.back() == '\n')
+            str.pop_back();
+        json = fmt::format("{}{},", json, str.data());
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::LargeBinaryArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx).data());
+        auto str = std::string(arr.Value(idx).data(), arr.Value(idx).size());
+        if (str.back() == '\n')
+            str.pop_back();
+        json = fmt::format("{}{},", json, str.data());
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::FixedSizeBinaryArray const& arr) {
@@ -206,6 +221,14 @@ bool strcmp_(const char* lhs, const char* rhs) {
     return std::strcmp(lhs, rhs) == 0;
 }
 
+bool strncmp_(const char* lhs, const char* rhs, size_t sz) {
+    return std::strncmp(lhs, rhs, sz) == 0;
+}
+
+bool chrcmp_(const char lhs, const char rhs) {
+    return lhs == rhs;
+}
+
 void make_uuid(char* out) {
     uuid_t uuid;
     uuid_generate(uuid);
@@ -223,9 +246,165 @@ simdjson::ondemand::object& rewinded(simdjson::ondemand::object& doc) noexcept {
     return doc;
 }
 
+void format_(simdjson::ondemand::object& data, ukv_str_view_t field, std::string& json) {
+    switch (rewinded(data)[field].type()) {
+    case simdjson::ondemand::json_type::array:
+        json = fmt::format( //
+            "{}\"{}\":{},",
+            json,
+            field,
+            rewinded(data)[field].get_array().value().raw_json().value());
+        break;
+    case simdjson::ondemand::json_type::object:
+        json = fmt::format( //
+            "{}\"{}\":{},",
+            json,
+            field,
+            rewinded(data)[field].get_object().value().raw_json().value());
+        break;
+    case simdjson::ondemand::json_type::number:
+        json = fmt::format( //
+            "{}\"{}\":{},",
+            json,
+            field,
+            std::string_view(rewinded(data)[field].raw_json_token().value()));
+        break;
+    case simdjson::ondemand::json_type::string:
+        json = fmt::format( //
+            "{}\"{}\":{},",
+            json,
+            field,
+            std::string_view(rewinded(data)[field].raw_json_token().value()));
+        break;
+    case simdjson::ondemand::json_type::boolean:
+        json = fmt::format("{}\"{}\":{},", json, field, std::string_view(rewinded(data)[field].value()));
+        break;
+    case simdjson::ondemand::json_type::null: break;
+    }
+}
+
+std::string value_at_pointer(simdjson::ondemand::object& data, ukv_str_view_t field) {
+    switch (rewinded(data).at_pointer(field).type()) {
+    case simdjson::ondemand::json_type::array: {
+        auto str = rewinded(data).at_pointer(field).get_array().value().raw_json().value();
+        return std::string(str.data(), str.size());
+    }
+    case simdjson::ondemand::json_type::object: {
+        auto str = rewinded(data).at_pointer(field).get_object().value().raw_json().value();
+        return std::string(str.data(), str.size());
+    }
+    case simdjson::ondemand::json_type::string: {
+        auto str = rewinded(data).at_pointer(field).raw_json_token().value();
+        return std::string(str.data(), str.size()).data();
+    }
+    case simdjson::ondemand::json_type::number: {
+        auto str = rewinded(data).at_pointer(field).raw_json_token().value();
+        return std::string(str.data(), str.size());
+    }
+    case simdjson::ondemand::json_type::boolean:
+        return fmt::format("{}", bool(rewinded(data).at_pointer(field).value()));
+    case simdjson::ondemand::json_type::null: break;
+    }
+}
+
+void prepare_doc(simdjson::ondemand::object& object, std::vector<std::string> const& fields, std::string& json) {
+
+    std::vector<std::string> prefixes;
+
+    size_t pre_idx = 0;
+    size_t pos = 0;
+
+    bool fill_state = false;
+    bool state = true;
+
+    auto is_ptr = [&](size_t idx) {
+        return chrcmp_(fields[idx][0], '/');
+    };
+
+    auto close_obj = [&]() {
+        json.pop_back();
+        while (prefixes.size()) {
+            prefixes.pop_back();
+            json.push_back('}');
+        }
+    };
+
+    auto pref_check = [&](size_t idx) {
+        return strncmp_(prefixes.back().data(), fields[idx].data(), prefixes.back().size());
+    };
+
+    auto fill_prefixes = [&](size_t idx) {
+        while (pos != std::string::npos) {
+            prefixes.push_back(fields[idx].substr(0, pos + 1));
+            json = fmt::format("{}\"{}\":{{", json, fields[idx].substr(pre_idx, pos - pre_idx));
+            pre_idx = pos + 1;
+            pos = fields[idx].find('/', pre_idx);
+        }
+    };
+
+    for (size_t idx = 0; idx < fields.size();) {
+        if (is_ptr(idx)) {
+            pre_idx = 1;
+            state = true;
+
+            while (state) {
+                pos = fields[idx].find('/', pre_idx);
+                if (pos != std::string::npos) {
+                    fill_prefixes(idx);
+                    while (pref_check(idx)) {
+                        if (fill_state)
+                            fill_prefixes(idx);
+                        json = fmt::format("{}\"{}\":{},",
+                                           json,
+                                           fields[idx].substr(pre_idx),
+                                           value_at_pointer(object, fields[idx].data()));
+
+                        ++idx;
+                        if (idx == fields.size()) {
+                            close_obj();
+                            return;
+                        }
+
+                        if (!pref_check(idx)) {
+                            json.pop_back();
+                            while (prefixes.size() && !pref_check(idx)) {
+                                prefixes.pop_back();
+                                json.push_back('}');
+                            }
+                            json.push_back(',');
+                        }
+
+                        if (prefixes.size() == 0) {
+                            state = false;
+                            break;
+                        }
+                        else {
+                            continue;
+                        }
+                        pre_idx = prefixes.back().size();
+                        fill_state = true;
+                    }
+                }
+                else {
+                    json = fmt::format("{}\"{}\":{},",
+                                       json,
+                                       fields[idx].substr(pre_idx),
+                                       value_at_pointer(object, fields[idx].data()));
+                    break;
+                }
+            }
+        }
+        else {
+            format_(object, fields[idx].data(), json);
+            ++idx;
+        }
+    }
+    json[json.size() - 1] = '}';
+}
+
 /////////  Upserting  /////////
 
-void upsert_graph(ukv_graph_import_t& c, std::vector<edge_t> const& array) {
+void upsert_graph(ukv_graph_import_t& c, graph_t const& array) {
 
     auto strided = edges(array);
     ukv_graph_upsert_edges_t graph_upsert_edges {
@@ -246,7 +425,7 @@ void upsert_graph(ukv_graph_import_t& c, std::vector<edge_t> const& array) {
     ukv_graph_upsert_edges(&graph_upsert_edges);
 }
 
-void upsert_docs(ukv_docs_import_t& c, std::vector<value_view_t> const& array) {
+void upsert_docs(ukv_docs_import_t& c, docs_t const& array) {
 
     ukv_docs_write_t docs_write {
         .db = c.db,
@@ -273,7 +452,7 @@ void upsert_docs(ukv_docs_import_t& c, std::vector<value_view_t> const& array) {
 
 void fill_array(ukv_graph_import_t& c, ukv_size_t task_count, std::shared_ptr<arrow::Table> const& table) {
 
-    std::vector<edge_t> array;
+    graph_t array;
 
     auto sources = table->GetColumnByName(c.source_id_field);
     return_if_error(sources, c.error, 0, fmt::format("{} is not exist", c.source_id_field).c_str());
@@ -327,7 +506,7 @@ void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table) {
     return_if_error(status.ok(), c.error, 0, "Can't read file");
 }
 
-void export_parquet(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t length) {
+void export_parquet_g(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t length) {
 
     bool edge_state = strcmp_(c.edge_id_field, "edge");
 
@@ -374,8 +553,6 @@ void export_parquet(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t len
         os << *(data + idx) << *(data + idx + 1);
         if (!edge_state)
             os << *(data + idx + 2);
-
-        auto dat = os.current_row();
         os << parquet::EndRow;
     }
 }
@@ -403,7 +580,7 @@ void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
     table = *maybe_table;
 }
 
-void export_csv(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t length) {
+void export_csv_g(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t length) {
 
     bool edge_state = strcmp_(c.edge_id_field, "edge");
     arrow::Status status;
@@ -473,7 +650,7 @@ void export_csv(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t length)
 
 void import_ndjson_g(ukv_graph_import_t& c, ukv_size_t task_count) {
 
-    std::vector<edge_t> array;
+    graph_t array;
     bool edge_state = std::strcmp(c.edge_id_field, "edge");
 
     auto handle = open(c.paths_pattern, O_RDONLY);
@@ -505,7 +682,7 @@ void import_ndjson_g(ukv_graph_import_t& c, ukv_size_t task_count) {
     munmap((void*)mapped_content.data(), mapped_content.size());
 }
 
-void export_json(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t length) {
+void export_ndjson_g(ukv_graph_export_t& c, ukv_key_t const* data, ukv_size_t length) {
 
     char file_name[uuid_length];
     make_uuid(file_name);
@@ -564,11 +741,11 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
 
     auto ext = c.paths_extension;
     auto export_method = strcmp_(ext, ".parquet") //
-                             ? &export_parquet
+                             ? &export_parquet_g
                              : strcmp_(ext, ".ndjson") //
-                                   ? &export_json
+                                   ? &export_ndjson_g
                                    : strcmp_(ext, ".csv") //
-                                         ? &export_csv
+                                         ? &export_csv_g
                                          : nullptr;
 
     return_if_error(export_method, c.error, 0, "Not supported format");
@@ -623,33 +800,38 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
 
 void fill_array(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table) {
 
-    strided_iterator_gt<ukv_str_view_t const> fields;
-    size_t clmn_count = 0;
+    fields_t fields;
+    std::vector<ukv_str_view_t> names;
+    char* u_field = nullptr;
 
     if (!c.fields) {
         auto clmn_names = table->ColumnNames();
-        clmn_count = clmn_names.size();
-        ukv_str_view_t names[clmn_count];
+        c.fields_count = clmn_names.size();
+        names.resize(c.fields_count);
 
-        for (size_t idx = 0; idx < clmn_count; ++idx)
-            names[idx] = clmn_names[idx].c_str();
+        for (size_t idx = 0; idx < c.fields_count; ++idx) {
+            u_field = (char*)malloc(clmn_names[idx].size() + 1);
+            std::memcpy(u_field, clmn_names[idx].data(), clmn_names[idx].size() + 1);
+            names[idx] = u_field;
+        }
 
         c.fields_stride = sizeof(ukv_str_view_t);
-        fields = strided_iterator_gt<ukv_str_view_t const> {names, c.fields_stride};
+        fields = fields_t {names.data(), c.fields_stride};
     }
     else {
-        fields = strided_iterator_gt<ukv_str_view_t const> {c.fields, c.fields_stride};
-        clmn_count = c.fields_count;
+        fields = fields_t {c.fields, c.fields_stride};
+        c.fields_count = c.fields_count;
     }
-    std::vector<std::shared_ptr<arrow::ChunkedArray>> columns(clmn_count);
-    std::vector<std::shared_ptr<arrow::Array>> chunks(clmn_count);
-    std::vector<value_view_t> values;
+
+    std::vector<std::shared_ptr<arrow::ChunkedArray>> columns(c.fields_count);
+    std::vector<std::shared_ptr<arrow::Array>> chunks(c.fields_count);
+    docs_t values;
     char* u_json = nullptr;
     std::string json = "{";
     arrow_visitor visitor(json);
     size_t used_mem = 0;
     size_t g_idx = 0;
-    for (auto it = fields; g_idx < clmn_count; ++g_idx, ++it) {
+    for (auto it = fields; g_idx < c.fields_count; ++g_idx, ++it) {
         std::shared_ptr<arrow::ChunkedArray> column = table->GetColumnByName(*it);
         return_if_error(column, c.error, 0, fmt::format("{} is not exist", *it).c_str());
         columns[g_idx] = column;
@@ -665,16 +847,17 @@ void fill_array(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table
             ++g_idx;
         }
 
-        for (size_t value_idx = 0; value_idx != columns[0]->chunk(chunk_idx)->length(); ++value_idx) {
+        for (size_t value_idx = 0; value_idx <= columns[0]->chunk(chunk_idx)->length(); ++value_idx) {
 
             g_idx = 0;
-            for (auto it = fields; g_idx < clmn_count; ++g_idx, ++it) {
+            for (auto it = fields; g_idx < c.fields_count; ++g_idx, ++it) {
                 json = fmt::format("{}\"{}\":", json, *it);
                 visitor.idx = value_idx;
                 arrow::VisitArrayInline(*chunks[g_idx].get(), &visitor);
             }
 
             json[json.size() - 1] = '}';
+            json.push_back('\n');
             u_json = (char*)malloc(json.size() + 1);
             std::memcpy(u_json, json.data(), json.size() + 1);
 
@@ -697,9 +880,9 @@ void fill_array(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table
 
 ///////// Parsing with SIMDJSON /////////
 
-void whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
+void imp_whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
 
-    std::vector<value_view_t> values;
+    docs_t values;
     size_t used_mem = 0;
 
     for (auto doc : docs) {
@@ -715,56 +898,19 @@ void whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& doc
         upsert_docs(c, values);
 }
 
-void sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
+void imp_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
 
-    strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
-    std::vector<value_view_t> values;
+    fields_t fields {c.fields, c.fields_stride};
+    docs_t values;
     std::string json = "{";
     char* u_json = nullptr;
     size_t used_mem = 0;
-
-    auto format = [&](simdjson::ondemand::object& data, ukv_str_view_t field) {
-        switch (rewinded(data)[field].type()) {
-        case simdjson::ondemand::json_type::array:
-            json = fmt::format( //
-                "{}\"{}\":{},",
-                json,
-                field,
-                rewinded(data)[field].get_array().value().raw_json().value());
-            break;
-        case simdjson::ondemand::json_type::object:
-            json = fmt::format( //
-                "{}\"{}\":{},",
-                json,
-                field,
-                rewinded(data)[field].get_object().value().raw_json().value());
-            break;
-        case simdjson::ondemand::json_type::number:
-            json = fmt::format( //
-                "{}\"{}\":{},",
-                json,
-                field,
-                std::string_view(rewinded(data)[field].raw_json_token().value()));
-            break;
-        case simdjson::ondemand::json_type::string:
-            json = fmt::format( //
-                "{}\"{}\":{},",
-                json,
-                field,
-                std::string_view(rewinded(data)[field].raw_json_token().value()));
-            break;
-        case simdjson::ondemand::json_type::boolean:
-            json = fmt::format("{}\"{}\":{},", json, field, std::string_view(rewinded(data)[field].value()));
-            break;
-        case simdjson::ondemand::json_type::null: return_if_error(false, c.error, 0, "Null json"); break;
-        }
-    };
 
     for (auto doc : docs) {
         simdjson::ondemand::object data = doc.get_object().value();
 
         for (size_t idx = 0; idx < c.fields_count; ++idx)
-            format(data, *(fields + idx));
+            format_(data, *(fields + idx), json);
 
         json[json.size() - 1] = '}';
         u_json = (char*)malloc(json.size() + 1);
@@ -799,11 +945,140 @@ void import_ndjson_d(ukv_docs_import_t& c) {
         1000000ul);
 
     if (!c.fields)
-        whole_ndjson(c, docs);
+        imp_whole_ndjson(c, docs);
     else
-        sub_ndjson(c, docs);
+        imp_sub_ndjson(c, docs);
 
     munmap((void*)mapped_content.data(), mapped_content.size());
+}
+
+void exp_whole_parquet( //
+    ukv_docs_export_t& c,
+    ukv_bytes_ptr_t const& values,
+    ptr_range_gt<ukv_key_t const>& keys,
+    fields_t const& strided_fields,
+    ukv_size_t size_in_bytes) {
+
+    parquet::schema::NodeVector nodes;
+    nodes.push_back(                          //
+        parquet::schema::PrimitiveNode::Make( //
+            "id",
+            parquet::Repetition::REQUIRED,
+            parquet::Type::INT64,
+            parquet::ConvertedType::INT_64));
+
+    nodes.push_back(                          //
+        parquet::schema::PrimitiveNode::Make( //
+            "doc",
+            parquet::Repetition::REQUIRED,
+            parquet::Type::BYTE_ARRAY,
+            parquet::ConvertedType::UTF8));
+
+    std::shared_ptr<parquet::schema::GroupNode> schema = std::static_pointer_cast<parquet::schema::GroupNode>(
+        parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, nodes));
+
+    char file_name[uuid_length];
+    make_uuid(file_name);
+
+    auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
+    return_if_error(maybe_outfile.ok(), c.error, 0, "Can't open file");
+    auto outfile = *maybe_outfile;
+
+    parquet::WriterProperties::Builder builder;
+    builder.memory_pool(arrow::default_memory_pool());
+    builder.write_batch_size(size_in_bytes);
+
+    parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
+
+    simdjson::ondemand::parser parser;
+    simdjson::ondemand::document_stream docs = parser.iterate_many( //
+        values,
+        size_in_bytes,
+        1000000ul);
+
+    size_t idx = 0;
+    for (auto doc : docs) {
+        simdjson::ondemand::object obj = doc.get_object().value();
+        auto value = rewinded(obj).raw_json().value();
+        os << keys[idx] << std::string(value.data(), value.size()).data();
+        os << parquet::EndRow;
+        idx++;
+    }
+}
+
+void exp_sub_parquet( //
+    ukv_docs_export_t& c,
+    ukv_bytes_ptr_t const& values,
+    ptr_range_gt<ukv_key_t const>& keys,
+    fields_t const& strided_fields,
+    ukv_size_t size_in_bytes) {
+
+    std::vector<std::string> fields(c.fields_count);
+    for (size_t idx = 0; idx < c.fields_count; ++idx)
+        fields[idx] = strided_fields[idx];
+
+    parquet::schema::NodeVector nodes;
+    nodes.push_back(                          //
+        parquet::schema::PrimitiveNode::Make( //
+            "id",
+            parquet::Repetition::REQUIRED,
+            parquet::Type::INT64,
+            parquet::ConvertedType::INT_64));
+
+    nodes.push_back(                          //
+        parquet::schema::PrimitiveNode::Make( //
+            "doc",
+            parquet::Repetition::REQUIRED,
+            parquet::Type::BYTE_ARRAY,
+            parquet::ConvertedType::UTF8));
+
+    std::shared_ptr<parquet::schema::GroupNode> schema = std::static_pointer_cast<parquet::schema::GroupNode>(
+        parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, nodes));
+
+    char file_name[uuid_length];
+    make_uuid(file_name);
+
+    auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
+    return_if_error(maybe_outfile.ok(), c.error, 0, "Can't open file");
+    auto outfile = *maybe_outfile;
+
+    parquet::WriterProperties::Builder builder;
+    builder.memory_pool(arrow::default_memory_pool());
+    builder.write_batch_size(size_in_bytes);
+
+    parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
+
+    simdjson::ondemand::parser parser;
+    simdjson::ondemand::document_stream docs = parser.iterate_many( //
+        values,
+        size_in_bytes,
+        1000000ul);
+
+    size_t idx = 0;
+    std::string json = "{";
+    for (auto doc : docs) {
+        simdjson::ondemand::object obj = doc.get_object().value();
+        prepare_doc(obj, fields, json);
+        os << keys[idx] << json.data();
+        os << parquet::EndRow;
+        idx++;
+    }
+}
+
+void export_csv_d( //
+    ukv_docs_export_t& c,
+    ukv_bytes_ptr_t const& values,
+    ptr_range_gt<ukv_key_t const>& keys,
+    fields_t const& strided_fields,
+    ukv_size_t size_in_bytes) {
+}
+
+void export_ndjson_d( //
+    ukv_docs_export_t& c,
+    ukv_bytes_ptr_t const& values,
+    ptr_range_gt<ukv_key_t const>& keys,
+    fields_t const& strided_fields,
+    ukv_size_t size_in_bytes) {
 }
 
 void ukv_docs_import(ukv_docs_import_t* c_ptr) {
@@ -821,6 +1096,67 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
         else if (ext == ".csv")
             import_csv(c, table);
         fill_array(c, table);
+    }
+}
+
+void ukv_docs_export(ukv_docs_export_t* c_ptr) {
+
+    ukv_docs_export_t& c = *c_ptr;
+
+    ///////// Choosing a method /////////
+
+    auto ext = c.paths_extension;
+    auto export_method = strcmp_(ext, ".parquet") //
+                             ? c.fields ? &exp_sub_parquet : &exp_whole_parquet
+                             : strcmp_(ext, ".ndjson") //
+                                   ? &export_ndjson_d
+                                   : strcmp_(ext, ".csv") //
+                                         ? &export_csv_d
+                                         : nullptr;
+
+    return_if_error(export_method, c.error, 0, "Not supported format");
+
+    std::plus plus;
+
+    ptr_range_gt<ukv_key_t const> keys;
+    ukv_length_t* offsets = nullptr;
+    ukv_length_t* lengths = nullptr;
+    ukv_size_t task_count = 1024ull;
+    ukv_bytes_ptr_t values = nullptr;
+
+    keys_stream_t stream(c.db, c.collection, task_count);
+    fields_t strided_fields {c.fields, c.fields_stride};
+
+    auto status = stream.seek_to_first();
+    return_if_error(status, c.error, 0, "No batches in stream");
+
+    while (!stream.is_end()) {
+        keys = stream.keys_batch();
+        ukv_docs_read_t docs_read {
+            .db = c.db,
+            .error = c.error,
+            .arena = c.arena,
+            .options = c.options,
+            .tasks_count = task_count,
+            .collections = &c.collection,
+            .keys = stream.keys_batch().begin(),
+            .keys_stride = sizeof(ukv_key_t),
+            .offsets = &offsets,
+            .lengths = &lengths,
+            .values = &values,
+        };
+        ukv_docs_read(&docs_read);
+
+        ukv_size_t size_in_bytes = *(offsets + (task_count - 1)) + *(lengths + (task_count - 1));
+        export_method( //
+            c,
+            values,
+            keys,
+            strided_fields,
+            size_in_bytes);
+
+        status = stream.seek_to_next_batch();
+        return_if_error(status, c.error, 0, "Invalid batch");
     }
 }
 
