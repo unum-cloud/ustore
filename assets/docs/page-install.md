@@ -19,7 +19,7 @@ mkdir build_release && \
         -DUKV_BUILD_BENCHMARKS=0 \
         -DUKV_BUILD_PYTHON=0 \
         -DUKV_BUILD_REST_API=0 \
-        -DUKV_BUILD_FLIGHT_RPC=0 .. && \
+        -DUKV_BUILD_FLIGHT_API=0 .. && \
     make -j16
 ```
 

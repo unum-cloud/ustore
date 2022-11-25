@@ -140,8 +140,8 @@ ukv_read_t read {
 ukv_read(&read);
 ```
 
-Similarly, we can request `presenses` boolean presense indicators or `offsets` within the exported `values` tape.
-The `lengths` and `offsets` provide similar amount of information and can be used interchangibly.
+Similarly, we can request `presences` boolean presence indicators or `offsets` within the exported `values` tape.
+The `lengths` and `offsets` provide similar amount of information and can be used interchangeably.
 
 ### Offsets, Lengths and Tapes
 
@@ -188,7 +188,7 @@ Consistency is implemented in the strictest possible form - ["Strict Serializabi
 - reads are ["Serializable"][s],
 - writes are ["Linearizable"][l].
 
-The default behaviour, however, can be tweaked at the level of specific operations.
+The default behavior, however, can be tweaked at the level of specific operations.
 For that the `::ukv_option_transaction_dont_watch_k` can be passed to `ukv_transaction_init()` or any transactional read/write operation, to control the consistency checks during staging.
 
 |                                      |     Reads     |    Writes     |
@@ -248,7 +248,7 @@ Graph interfaces is extremely short:
 * `ukv_graph_remove_edges()`: Removing edges, but keeping nodes.
 * `ukv_graph_remove_vertices()`: Removing vertices and related edges.
 
-If you understand the BLOB interface, this requres no additional explanation.
+If you understand the BLOB interface, this requires no additional explanation.
 
 ## Paths
 
