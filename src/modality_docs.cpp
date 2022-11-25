@@ -586,7 +586,6 @@ static bool bson_visit_utf8(bson_iter_t const*, char const*, size_t v_utf8_len, 
 
     return true;
 }
-
 static bool bson_visit_binary(bson_iter_t const*,
                               char const*,
                               bson_subtype_t v_subtype,
