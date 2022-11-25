@@ -121,7 +121,7 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
  *
  * To check if a node or edge is present - a simpler query is possible.
  * The `ukv_read()` on these same `collections` will return the presence
- * indicators for verticies. For edges, you will have to check the
+ * indicators for vertices. For edges, you will have to check the
  * collection that stores the metadata of the edges.
  */
 typedef struct ukv_graph_find_edges_t {
