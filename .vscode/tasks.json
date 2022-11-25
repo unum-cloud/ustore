@@ -75,13 +75,13 @@
         },
         {
             "label": "Build Native: Debug Arrow Client",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 .. && make ukv_flight_client_unit_test -j8 && sleep 5",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_API=1 .. && make ukv_flight_client_unit_test -j8 && sleep 5",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug Arrow Server",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_RPC=1 .. && make ukv_umem_flight_server -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_FLIGHT_API=1 .. && make ukv_umem_flight_server -j8",
             "args": [],
             "type": "shell"
         },
