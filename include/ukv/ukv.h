@@ -20,7 +20,7 @@
  * is essentially impossible in todays reality.
  *
  * That is why the "hourglass" pattern is used. The implementation is in
- * C++, the heavily templated convinient wrappers are in C++, but the
+ * C++, the heavily templated convenient wrappers are in C++, but the
  * intermediate layer is C99 to maintain ABI stability and allow rolling
  * minor updates without recompilation of the user code.
  *
