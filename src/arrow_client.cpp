@@ -1155,11 +1155,8 @@ void ukv_collection_create(ukv_collection_create_t* c_ptr) {
 
     ukv_collection_create_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-
-    if (!c.name || !std::strlen(c.name)) {
-        *c.id = ukv_collection_main_k;
-        return;
-    }
+    auto name_len = c.name ? std::strlen(c.name) : 0;
+    return_if_error(name_len, c.error, args_wrong_k, "Default collection is always present");
 
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
