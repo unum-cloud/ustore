@@ -81,5 +81,8 @@ jobs:
       - name: test lib
         run: python3.9 -c "import ukv.umem"
 
+      - name: test lib
+        run: python -c "import ukv.umem"
+
       - name: publish to test-pypi
         run: chmod +x python/publish.sh && bash python/publish.sh __token__ ${{ secrets.TWINE_API }}
