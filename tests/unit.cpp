@@ -244,6 +244,39 @@ TEST(db, basic_clear) {
     check_length(ref, ukv_length_missing_k);
 }
 
+TEST(db, batch_scan) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.collection());
+    blobs_collection_t collection = *db.collection();
+
+    std::array<ukv_key_t, 512> keys;
+    std::iota(std::begin(keys), std::end(keys), 0);
+    auto ref = collection[keys];
+    value_view_t value("value");
+    EXPECT_TRUE(ref.assign(value));
+
+    keys_range_t present_keys = collection.keys();
+    keys_stream_t stream(db, collection, 256);
+    stream.seek_to_first();
+    auto batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 256);
+    EXPECT_FALSE(stream.is_end());
+
+    stream.seek_to_next_batch();
+    batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 256);
+    EXPECT_FALSE(stream.is_end());
+
+    stream.seek_to_next_batch();
+    batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 0);
+    EXPECT_TRUE(stream.is_end());
+
+    EXPECT_TRUE(db.clear());
+}
+
 TEST(db, ordered) {
 
     database_t db;
@@ -1048,7 +1081,7 @@ TEST(db, docs_batch) {
     offsets[3] = field1.size() + field2.size() + field3.size();
     check_equalities(ref_with_fields, values);
 
-    db.clear();
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, docs_modify) {
