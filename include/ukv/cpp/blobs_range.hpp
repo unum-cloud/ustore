@@ -76,7 +76,7 @@ class keys_stream_t {
         fetched_offset_ = 0;
 
         auto count = static_cast<ukv_length_t>(fetched_keys_.size());
-        next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
+        next_min_key_ = count < read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
 
