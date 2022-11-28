@@ -168,22 +168,23 @@ Historically, LevelDB was the first one.
 RocksDB then improved on functionality and performance.
 Now it serves as the foundation for half of the DBMS startups.
 
-|                   | LevelDB | RocksDB  |  UDisk  |  UMem   |
-| :---------------- | :-----: | :------: | :-----: | :-----: |
-| **Speed**         |   1x    |    2x    | **10x** | **30x** |
-| **Persistent**    |    ✓    |    ✓     |    ✓    |    ✗    |
-| **Transactional** |    ✗    |    ✓     |    ✓    |    ✓    |
-| [Watches][watch]  |    ✗    |    ✓     |    ✓    |    ✓    |
-| [Snapshots][snap] |    ✓    |    ✓     |    ✓    |    ✗    |
-| Named Collections |    ✗    |    ✓     |    ✓    |    ✓    |
-| Random Sampling   |    ✗    |    ✗     |    ✓    |    ✓    |
-| Bulk Enumeration  |    ✗    |    ✗     |    ✓    |    ✓    |
-| Encryption        |    ✗    |    ✗     |    ✓    |    ✗    |
-| Open-Source       |    ✓    |    ✓     |    ✗    |    ✓    |
-| Compatibility     |   Any   |   Any    |  Linux  |   Any   |
-| Maintainer        | Google  | Facebook |  Unum   |  Unum   |
+|                          | LevelDB | RocksDB  |  UDisk  |  UMem   |
+| :----------------------- | :-----: | :------: | :-----: | :-----: |
+| **Speed**                |   1x    |    2x    | **10x** | **30x** |
+| **Persistent**           |    ✓    |    ✓     |    ✓    |    ✗    |
+| **Transactional**        |    ✗    |    ✓     |    ✓    |    ✓    |
+| **Block Device Support** |    ✗    |    ✗     |    ✓    |    ✗    |
+| Encryption               |    ✗    |    ✗     |    ✓    |    ✗    |
+| [Watches][watch]         |    ✗    |    ✓     |    ✓    |    ✓    |
+| [Snapshots][snap]        |    ✓    |    ✓     |    ✓    |    ✗    |
+| Random Sampling          |    ✗    |    ✗     |    ✓    |    ✓    |
+| Bulk Enumeration         |    ✗    |    ✗     |    ✓    |    ✓    |
+| Named Collections        |    ✗    |    ✓     |    ✓    |    ✓    |
+| Open-Source              |    ✓    |    ✓     |    ✗    |    ✓    |
+| Compatibility            |   Any   |   Any    |  Linux  |   Any   |
+| Maintainer               | Google  | Facebook |  Unum   |  Unum   |
 
-UMem and UDisk are both designed and maintained by Unum from scratch.
+UMem and UDisk are both designed and maintained by Unum.
 Both are feature-complete, but the most crucial feature our infrastructure provides is performance.
 Being fast in memory is easy.
 The core logic of UMem can be found in the templated header-only <code class="docutils literal notranslate"><a href="https://github.com/ashvardanian/consistent_set" class="pre">consistent_set</a></code> library.
@@ -192,7 +193,7 @@ The core logic of UMem can be found in the templated header-only <code class="do
 
 Designing UDisk was a much more challenging 7-year long endeavour.
 It included inventing new tree-like structures, implemting partial kernel bypass with `io_uring`, complete bypass with `SPDK`, GPU acceleration, and even a custom internal filesystem.
-**UDisk is the first engine to be designed from scratch with parallel architectures in mind**.
+**UDisk is the first engine to be designed from scratch with parallel architectures and kernel-bypass in mind**.
 
 > [Jump to Benchmarks](#benchmarks).
 
@@ -207,7 +208,7 @@ ACID transactions across modalities are supported.
 | :------------------------ | :------------------------------------------------: | :------------------------------------: | :--------------------------------------------------: |
 | Values                    |           JSON-like Hierarchical Objects           |       Labeled Directed Relations       |             High-Dimensional Embeddings              |
 | Specialized Functionality | JSON ⇔ BSON ⇔ MessagePack, Sub-Document Operations | Gather Neighbors, Count Vertex Degrees | Quantization, K-Approximate Nearest-Neighbors Search |
-| Examples                  |                      MongoDB                       |                 Neo4J                  |                       Pinecone                       |
+| Examples                  |             MongoDB, Postgres, MySQL               |            Neo4J, TigerGraph           |               Elastic Search, Pinecone               |
 
 One of our core objectives was to select the minimal core set of functions for each modality.
 In that case, implementing them can be easy for any passionate developer.
