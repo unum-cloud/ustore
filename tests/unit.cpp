@@ -1047,6 +1047,8 @@ TEST(db, docs_batch) {
     offsets[2] = field1.size() + field2.size();
     offsets[3] = field1.size() + field2.size() + field3.size();
     check_equalities(ref_with_fields, values);
+
+    db.clear();
 }
 
 TEST(db, docs_modify) {
