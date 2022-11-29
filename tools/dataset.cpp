@@ -1021,7 +1021,7 @@ void whole_content( //
                 docs_vec.push_back(str);
             }
             else
-                output << fmt::format("{{\"id\":{},\"doc\":{}}}", *iter, str.data());
+                output << fmt::format("{{\"id\":{},\"doc\":{}}}\n", *iter, str.data());
 
             ++iter;
         }
@@ -1065,7 +1065,7 @@ void sub_content( //
                 docs_vec.push_back(json);
             }
             else
-                output << fmt::format("{{\"id\":{},\"doc\":{}}}", *iter, json.data());
+                output << fmt::format("{{\"id\":{},\"doc\":{}}}\n", *iter, json.data());
             json = "{";
             ++iter;
         }
@@ -1195,6 +1195,20 @@ void export_ndjson_d( //
     fields_t const& strided_fields,
     ukv_size_t size_in_bytes,
     vals_t const& values) {
+
+    char file_name[uuid_length];
+    make_uuid(file_name);
+    std::ofstream output(fmt::format("{}{}", file_name, c.paths_extension));
+
+    if (c.fields) {
+        std::vector<std::string> fields(c.fields_count);
+        for (size_t idx = 0; idx < c.fields_count; ++idx)
+            fields[idx] = strided_fields[idx];
+
+        sub_content(values, keys, fields, nullptr, nullptr, nullptr, &output, 2);
+    }
+    else
+        whole_content(values, keys, nullptr, nullptr, nullptr, &output, 2);
 }
 
 void ukv_docs_import(ukv_docs_import_t* c_ptr) {
