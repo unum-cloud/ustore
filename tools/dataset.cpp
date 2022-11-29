@@ -676,6 +676,10 @@ void import_ndjson_g(ukv_graph_import_t& c, ukv_size_t task_count) {
     std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), c.file_size);
     madvise(begin, c.file_size, MADV_SEQUENTIAL);
 
+    auto get_data = [&](simdjson::ondemand::object& data, ukv_str_view_t field) {
+        return chrcmp_(field[0], '/') ? rewinded(data).at_pointer(field) : rewinded(data)[field];
+    };
+
     simdjson::ondemand::parser parser;
     simdjson::ondemand::document_stream docs = parser.iterate_many( //
         mapped_content.data(),
@@ -686,9 +690,9 @@ void import_ndjson_g(ukv_graph_import_t& c, ukv_size_t task_count) {
     for (auto doc : docs) {
         simdjson::ondemand::object data = doc.get_object().value();
         if (edge_state)
-            edge = rewinded(data)[c.edge_id_field];
-        array.push_back(edge_t {.source_id = rewinded(data)[c.source_id_field],
-                                .target_id = rewinded(data)[c.target_id_field],
+            edge = get_data(data, c.edge_id_field);
+        array.push_back(edge_t {.source_id = get_data(data, c.source_id_field),
+                                .target_id = get_data(data, c.target_id_field),
                                 .id = edge});
         if (array.size() == task_count) {
             upsert_graph(c, array);
