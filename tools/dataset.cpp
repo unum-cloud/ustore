@@ -50,6 +50,7 @@ using fields_t = strided_iterator_gt<ukv_str_view_t const>;
 
 using ids_t = std::vector<std::pair<ukv_key_t*, ukv_size_t>>;
 using vals_t = std::vector<std::pair<ukv_bytes_ptr_t, ukv_size_t>>;
+
 /////////  Helpers  /////////
 
 class arrow_visitor {
@@ -982,45 +983,22 @@ void import_ndjson_d(ukv_docs_import_t& c) {
     munmap((void*)mapped_content.data(), mapped_content.size());
 }
 
-void exp_whole_parquet( //
-    ukv_docs_export_t& c,
+void whole_content( //
+    vals_t const& values,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
-    fields_t const& strided_fields,
-    ukv_size_t size_in_bytes,
-    vals_t const& values) {
-
-    parquet::schema::NodeVector nodes;
-    nodes.push_back(                          //
-        parquet::schema::PrimitiveNode::Make( //
-            "id",
-            parquet::Repetition::REQUIRED,
-            parquet::Type::INT64,
-            parquet::ConvertedType::INT_64));
-
-    nodes.push_back(                          //
-        parquet::schema::PrimitiveNode::Make( //
-            "doc",
-            parquet::Repetition::REQUIRED,
-            parquet::Type::BYTE_ARRAY,
-            parquet::ConvertedType::UTF8));
-
-    std::shared_ptr<parquet::schema::GroupNode> schema = std::static_pointer_cast<parquet::schema::GroupNode>(
-        parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, nodes));
-
-    char file_name[uuid_length];
-    make_uuid(file_name);
-
-    auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
-    return_if_error(maybe_outfile.ok(), c.error, 0, "Can't open file");
-    auto outfile = *maybe_outfile;
-
-    parquet::WriterProperties::Builder builder;
-    builder.memory_pool(arrow::default_memory_pool());
-    builder.write_batch_size(size_in_bytes);
-
-    parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
+    std::vector<std::string>* docs_ptr,
+    std::vector<ukv_key_t>* keys_ptr,
+    parquet::StreamWriter* os_ptr,
+    std::ofstream* output_ptr,
+    int flag) {
 
     auto iter = pass_through_iterator(keys);
+
+    std::vector<std::string>& docs_vec = *docs_ptr;
+    std::vector<ukv_key_t>& keys_vec = *keys_ptr;
+    parquet::StreamWriter& os = *os_ptr;
+    std::ofstream& output = *output_ptr;
+
     for (auto value : values) {
         simdjson::ondemand::parser parser;
         simdjson::ondemand::document_stream docs = parser.iterate_many( //
@@ -1031,23 +1009,75 @@ void exp_whole_parquet( //
         for (auto doc : docs) {
             simdjson::ondemand::object obj = doc.get_object().value();
             auto value = rewinded(obj).raw_json().value();
-            os << *iter << std::string(value.data(), value.size()).data();
-            os << parquet::EndRow;
+            auto str = std::string(value.data(), value.size());
+            str.pop_back();
+
+            if (flag == 0) {
+                os << *iter << str.data();
+                os << parquet::EndRow;
+            }
+            else if (flag == 1) {
+                keys_vec.push_back(*iter);
+                docs_vec.push_back(str);
+            }
+            else
+                output << fmt::format("{{\"id\":{},\"doc\":{}}}", *iter, str.data());
+
             ++iter;
         }
     }
 }
 
-void exp_sub_parquet( //
+void sub_content( //
+    vals_t const& values,
+    std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
+    std::vector<std::string> const& fields,
+    std::vector<std::string>* docs_ptr,
+    std::vector<ukv_key_t>* keys_ptr,
+    parquet::StreamWriter* os_ptr,
+    std::ofstream* output_ptr,
+    int flag) {
+
+    auto iter = pass_through_iterator(keys);
+    std::string json = "{";
+
+    std::vector<std::string>& docs_vec = *docs_ptr;
+    std::vector<ukv_key_t>& keys_vec = *keys_ptr;
+    parquet::StreamWriter& os = *os_ptr;
+    std::ofstream& output = *output_ptr;
+
+    for (auto value : values) {
+        simdjson::ondemand::parser parser;
+        simdjson::ondemand::document_stream docs = parser.iterate_many( //
+            value.first,
+            value.second,
+            1000000ul);
+
+        for (auto doc : docs) {
+            simdjson::ondemand::object obj = doc.get_object().value();
+            prepare_doc(obj, fields, json);
+            if (flag == 0) {
+                os << *iter << json.data();
+                os << parquet::EndRow;
+            }
+            else if (flag == 1) {
+                keys_vec.push_back(*iter);
+                docs_vec.push_back(json);
+            }
+            else
+                output << fmt::format("{{\"id\":{},\"doc\":{}}}", *iter, json.data());
+            json = "{";
+            ++iter;
+        }
+    }
+}
+
+void export_parquet_d( //
     ukv_docs_export_t& c,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
     fields_t const& strided_fields,
     ukv_size_t size_in_bytes,
     vals_t const& values) {
-
-    std::vector<std::string> fields(c.fields_count);
-    for (size_t idx = 0; idx < c.fields_count; ++idx)
-        fields[idx] = strided_fields[idx];
 
     parquet::schema::NodeVector nodes;
     nodes.push_back(                          //
@@ -1080,25 +1110,15 @@ void exp_sub_parquet( //
 
     parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
 
-    auto iter = pass_through_iterator(keys);
-    std::string json = "{";
+    if (c.fields) {
+        std::vector<std::string> fields(c.fields_count);
+        for (size_t idx = 0; idx < c.fields_count; ++idx)
+            fields[idx] = strided_fields[idx];
 
-    for (auto value : values) {
-        simdjson::ondemand::parser parser;
-        simdjson::ondemand::document_stream docs = parser.iterate_many( //
-            value.first,
-            value.second,
-            1000000ul);
-
-        for (auto doc : docs) {
-            simdjson::ondemand::object obj = doc.get_object().value();
-            prepare_doc(obj, fields, json);
-            os << *iter << json.data();
-            os << parquet::EndRow;
-            json = "{";
-            ++iter;
-        }
+        sub_content(values, keys, fields, nullptr, nullptr, &os, nullptr, 0);
     }
+    else
+        whole_content(values, keys, nullptr, nullptr, &os, nullptr, 0);
 }
 
 void export_csv_d( //
@@ -1107,6 +1127,66 @@ void export_csv_d( //
     fields_t const& strided_fields,
     ukv_size_t size_in_bytes,
     vals_t const& values) {
+
+    ukv_size_t size = 0;
+    arrow::Status status;
+
+    for (auto _ : keys)
+        size += _.size();
+
+    arrow::NumericBuilder<arrow::Int64Type> int_builder;
+    arrow::StringBuilder str_builder;
+
+    status = int_builder.Resize(size);
+    return_if_error(status.ok(), c.error, 0, "Can't instatinate builder");
+    status = str_builder.Resize(size);
+    return_if_error(status.ok(), c.error, 0, "Can't instatinate builder");
+
+    std::shared_ptr<arrow::Array> keys_array;
+    std::shared_ptr<arrow::Array> docs_array;
+    std::vector<ukv_key_t> keys_vec;
+    std::vector<std::string> docs_vec;
+
+    keys_vec.reserve(size);
+    docs_vec.reserve(size);
+
+    if (c.fields) {
+        std::vector<std::string> fields(c.fields_count);
+        for (size_t idx = 0; idx < c.fields_count; ++idx)
+            fields[idx] = strided_fields[idx];
+
+        sub_content(values, keys, fields, &docs_vec, &keys_vec, nullptr, nullptr, 1);
+    }
+    else
+        whole_content(values, keys, &docs_vec, &keys_vec, nullptr, nullptr, 1);
+
+    status = int_builder.AppendValues(keys_vec);
+    return_if_error(status.ok(), c.error, 0, "Can't append keys");
+    status = int_builder.Finish(&keys_array);
+    return_if_error(status.ok(), c.error, 0, "Can't finish array(keys)");
+
+    status = str_builder.AppendValues(docs_vec);
+    return_if_error(status.ok(), c.error, 0, "Can't append docs");
+    status = str_builder.Finish(&docs_array);
+    return_if_error(status.ok(), c.error, 0, "Can't finish array(docs)");
+
+    arrow::FieldVector fields;
+    fields.push_back(arrow::field("id", arrow::int64()));
+    fields.push_back(arrow::field("doc", arrow::int64()));
+    std::shared_ptr<arrow::Schema> schema = std::make_shared<arrow::Schema>(fields);
+
+    std::shared_ptr<arrow::Table> table;
+    table = arrow::Table::Make(schema, {keys_array, docs_array});
+
+    char file_name[uuid_length];
+    make_uuid(file_name);
+
+    auto maybe_outstream = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
+    return_if_error(maybe_outstream.ok(), c.error, 0, "Can't open file");
+    std::shared_ptr<arrow::io::FileOutputStream> outstream = *maybe_outstream;
+
+    status = arrow::csv::WriteCSV(*table, arrow::csv::WriteOptions::Defaults(), outstream.get());
+    return_if_error(status.ok(), c.error, 0, "Can't write in file");
 }
 
 void export_ndjson_d( //
@@ -1143,7 +1223,7 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
 
     auto ext = c.paths_extension;
     auto export_method = strcmp_(ext, ".parquet") //
-                             ? c.fields ? &exp_sub_parquet : &exp_whole_parquet
+                             ? &export_parquet_d
                              : strcmp_(ext, ".ndjson") //
                                    ? &export_ndjson_d
                                    : strcmp_(ext, ".csv") //
@@ -1186,8 +1266,9 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
         };
         ukv_docs_read(&docs_read);
 
-        size_in_bytes += offsets[task_count - 1] + lengths[task_count - 1];
-        values.back().second = offsets[task_count - 1] + lengths[task_count - 1];
+        size_t count = stream.keys_batch().size();
+        size_in_bytes += offsets[count - 1] + lengths[count - 1];
+        values.back().second = offsets[count - 1] + lengths[count - 1];
 
         status = stream.seek_to_next_batch();
         return_if_error(status, c.error, 0, "Invalid batch");
