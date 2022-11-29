@@ -937,13 +937,15 @@ void imp_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& d
     char* u_json = nullptr;
     size_t used_mem = 0;
 
+    std::vector<std::string> str_fields(c.fields_count);
+    for (size_t idx = 0; idx < c.fields_count; ++idx)
+        str_fields[idx] = fields[idx];
+
     for (auto doc : docs) {
         simdjson::ondemand::object data = doc.get_object().value();
 
-        for (size_t idx = 0; idx < c.fields_count; ++idx)
-            format_(data, *(fields + idx), json);
-
-        json[json.size() - 1] = '}';
+        prepare_doc(data, str_fields, json);
+        json.push_back('\n');
         u_json = (char*)malloc(json.size() + 1);
         std::memcpy(u_json, json.data(), json.size() + 1);
 
