@@ -737,7 +737,7 @@ static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v
     return false;
 }
 
-// MsgPack
+// MsgPack to Json
 void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_error) {
     if (mpack_reader_error(&reader) != mpack_ok) [[unlikely]]
         return;
@@ -835,6 +835,88 @@ bool iterate_over_mpack_data(value_view_t data, string_t& json_str, ukv_error_t*
     mpack_reader_destroy(&reader);
 
     return true;
+}
+
+// Json to MsgPack
+sample_leafs(mpack_writer_t& writer, sj::simdjson_result<document> value) {
+    auto type = value.type().value();
+    switch (type) {
+    case sj::ondemand::json_type::object: {
+        mpack_build_map(&writer);
+        auto object = value.get_object().value();
+        auto begin = object.begin().value();
+        auto end = object.end().value();
+        while (begin != end) {
+            auto field = *begin.value();
+            mpack_write_str(&writer, field.key().raw(), field.key().size());
+            sample_leafs(writer, field.value())
+        }
+        mpack_complete_map(&writer);
+        break;
+    }
+    case sj::ondemand::json_type::array: {
+        mpack_build_array(&writer);
+        auto array = value.get_array().value();
+        auto begin = array.begin().value();
+        auto end = object.end().value();
+        while (begin != end) {
+            auto field = *begin.value();
+            sample_leafs(writer, field.value())
+        }
+        mpack_complete_array(&writer);
+        break;
+    }
+    case sj::ondemand::json_type::null: {
+        mpack_write_nil(&writer);
+        break;
+    }
+    case sj::ondemand::json_type::boolean: {
+        mpack_write_bool(&writer, value.get_bool().value());
+        break;
+    }
+    case sj::ondemand::json_type::string: {
+        mpack_write_str(&writer, value.get_string().value().data(), value.get_string().value().size());
+        break;
+    }
+    case sj::ondemand::json_type::number: {
+        auto number_type = value.get_number_type().value();
+        switch (type) {
+        case sj::ondemand::number_type::floating_point_number: {
+            mpack_write_double(&writer, value.get_double().value());
+            break;
+        }
+        case sj::ondemand::number_type::signed_integer: {
+            mpack_write_i64(&writer, value.get_int64().value());
+            break;
+        }
+        case sj::ondemand::number_type::unsigned_integer: {
+            mpack_write_u64(&writer, value.get_uint64().value());
+            break;
+        }
+        }
+        break;
+    }
+    default: break;
+    }
+}
+
+void json_to_mpack(sj::padded_string_view doc, string_t& output) {
+    sj::ondemand::parser parser;
+    auto result = parser.iterate(doc);
+
+    mpack_writer_t writer;
+    mpack_writer_init(&writer, output.data(), doc.size());
+
+    sample_leafs(result);
+
+    auto end_ptr = writer.position;
+    size_t new_size = end_ptr - writer.buffer;
+
+    // Finalize the output buffers.
+    throw_m(new_size < arena_limit + 1, "Out of bounds!");
+    output.resize(new_size);
+
+    mpack_writer_destroy(&writer);
 }
 
 json_t any_parse(value_view_t bytes,
