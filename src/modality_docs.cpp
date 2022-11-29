@@ -838,7 +838,7 @@ bool iterate_over_mpack_data(value_view_t data, string_t& json_str, ukv_error_t*
 }
 
 // Json to MsgPack
-sample_leafs(mpack_writer_t& writer, sj::simdjson_result<document> value) {
+void sample_leafs(mpack_writer_t& writer, sj::simdjson_result<sj::ondemand::document> value) {
     auto type = value.type().value();
     switch (type) {
     case sj::ondemand::json_type::object: {
@@ -847,9 +847,10 @@ sample_leafs(mpack_writer_t& writer, sj::simdjson_result<document> value) {
         auto begin = object.begin().value();
         auto end = object.end().value();
         while (begin != end) {
-            auto field = *begin.value();
-            mpack_write_str(&writer, field.key().raw(), field.key().size());
-            sample_leafs(writer, field.value())
+            auto field = *begin;
+            value_view_t key(field.key().raw());
+            mpack_write_str(&writer, key.c_str(), key.size());
+            // sample_leafs(writer, field.value().value())
         }
         mpack_complete_map(&writer);
         break;
@@ -858,10 +859,10 @@ sample_leafs(mpack_writer_t& writer, sj::simdjson_result<document> value) {
         mpack_build_array(&writer);
         auto array = value.get_array().value();
         auto begin = array.begin().value();
-        auto end = object.end().value();
+        auto end = array.end().value();
         while (begin != end) {
-            auto field = *begin.value();
-            sample_leafs(writer, field.value())
+            auto field = *begin;
+            // sample_leafs(writer, field.value())
         }
         mpack_complete_array(&writer);
         break;
@@ -880,7 +881,7 @@ sample_leafs(mpack_writer_t& writer, sj::simdjson_result<document> value) {
     }
     case sj::ondemand::json_type::number: {
         auto number_type = value.get_number_type().value();
-        switch (type) {
+        switch (number_type) {
         case sj::ondemand::number_type::floating_point_number: {
             mpack_write_double(&writer, value.get_double().value());
             break;
@@ -902,18 +903,16 @@ sample_leafs(mpack_writer_t& writer, sj::simdjson_result<document> value) {
 
 void json_to_mpack(sj::padded_string_view doc, string_t& output) {
     sj::ondemand::parser parser;
-    auto result = parser.iterate(doc);
 
     mpack_writer_t writer;
     mpack_writer_init(&writer, output.data(), doc.size());
 
-    sample_leafs(result);
+    auto result = parser.iterate(doc);
+    sample_leafs(writer, result);
 
     auto end_ptr = writer.position;
     size_t new_size = end_ptr - writer.buffer;
 
-    // Finalize the output buffers.
-    throw_m(new_size < arena_limit + 1, "Out of bounds!");
     output.resize(new_size);
 
     mpack_writer_destroy(&writer);
