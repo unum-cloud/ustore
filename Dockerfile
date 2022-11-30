@@ -7,8 +7,13 @@ RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selectio
 # 3. Boost, if you need the REST server, which we don't :)
 RUN apt update && apt install -y sudo git
 
-COPY cmake/arrow.sh arrow.sh
-RUN chmod +x arrow.sh && ./arrow.sh
+ENV arrow_version=9.0.0-1
+RUN apt update && apt install -y -V ca-certificates lsb-release wget && \
+    cd /tmp && wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt update && apt install -y -V libarrow-dev=${arrow_version} libarrow-dataset-dev=${arrow_version} libarrow-flight-dev=${arrow_version} \
+    libarrow-python-dev=${arrow_version} libarrow-python-flight-dev=${arrow_version} libgandiva-dev=${arrow_version} libparquet-dev=${arrow_version} \
+    python3 python3-pip
 RUN pip install cmake
 
 COPY . /usr/src/ukv
@@ -28,11 +33,9 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND="noninteractive" TZ="Europe/London"
 
 WORKDIR /root/
-COPY cmake/arrow.sh arrow.sh
 RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
-RUN apt update && apt install -y sudo build-essential
-RUN chmod +x arrow.sh && DEBIAN_FRONTEND=noninteractive ./arrow.sh
 COPY --from=builder /usr/src/ukv/build/bin/ukv_umem_flight_server ./
+COPY --from=builder /usr/lib/ /usr/lib/
 # COPY --from=builder /usr/src/ukv/build/bin/ukv_leveldb_flight_server ./
 # COPY --from=builder /usr/src/ukv/build/bin/ukv_rocksdb_flight_server ./
 EXPOSE 38709
