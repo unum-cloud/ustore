@@ -24,9 +24,9 @@ RUN cmake \
     -DUKV_BUILD_BENCHMARKS=0 \
     -DUKV_BUILD_FLIGHT_API=1 . && \
     make -j32 \
-    ukv_umem_flight_server
-    # ukv_leveldb_flight_server \
-    # ukv_rocksdb_flight_server
+    ukv_umem_flight_server \
+    ukv_leveldb_flight_server \
+    ukv_rocksdb_flight_server
 
 ## TODO: Optimize: https://github.com/docker-slim/docker-slim
 FROM ubuntu:20.04
@@ -36,7 +36,7 @@ WORKDIR /root/
 RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 COPY --from=builder /usr/src/ukv/build/bin/ukv_umem_flight_server ./
 COPY --from=builder /usr/lib/ /usr/lib/
-# COPY --from=builder /usr/src/ukv/build/bin/ukv_leveldb_flight_server ./
-# COPY --from=builder /usr/src/ukv/build/bin/ukv_rocksdb_flight_server ./
+COPY --from=builder /usr/src/ukv/build/bin/ukv_leveldb_flight_server ./
+COPY --from=builder /usr/src/ukv/build/bin/ukv_rocksdb_flight_server ./
 EXPOSE 38709
 CMD ["./ukv_umem_flight_server"]
