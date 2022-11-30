@@ -9,19 +9,14 @@ option(UKV_BUILD_REST_API "Building REST API server for all backends")
 option(UKV_USE_JEMALLOC "A faster allocator, that requires autoconf to be installed")
 option(UKV_USE_ONEAPI "Faster concurrency primitives from Intel")
 
-option(UKV_REBUILD_JEMALLOC "Enable to attempt to source and build JeMalloc locally")
-option(UKV_REBUILD_ONEAPI "Enable to attempt to source and build Intel OneAPI locally")
-option(UKV_REBUILD_BOOST "Enable to attempt to source and build Boost locally")
-option(UKV_REBUILD_ARROW "Enable to attempt to source and build Apache Arrow locally")
-option(UKV_REBUILD_TURBOPFOR "Enable to attempt to source and build TurboPFOR locally")
 set(UKV_UDISK_PATH "" CACHE STRING "Pass a path to UDisk binary to produce a full range of bindings")
 
 # Some settings are mutually dependant
 include(CMakeDependentOption)
-cmake_dependent_option(UKV_REBUILD_JEMALLOC "" ON "UKV_USE_JEMALLOC" OFF)
-cmake_dependent_option(UKV_REBUILD_ONEAPI "" ON "UKV_USE_ONEAPI" OFF)
-cmake_dependent_option(UKV_REBUILD_BOOST "" ON "UKV_BUILD_REST_API" OFF)
-cmake_dependent_option(UKV_REBUILD_ARROW "" ON "UKV_BUILD_PYTHON OR UKV_BUILD_FLIGHT_API" OFF)
+cmake_dependent_option(UKV_REBUILD_JEMALLOC "Enable to attempt to source and build JeMalloc locally" ON "UKV_USE_JEMALLOC" OFF)
+cmake_dependent_option(UKV_REBUILD_ONEAPI "Enable to attempt to source and build Intel OneAPI locally" ON "UKV_USE_ONEAPI" OFF)
+cmake_dependent_option(UKV_REBUILD_BOOST "Enable to attempt to source and build Boost locally" ON "UKV_BUILD_REST_API" OFF)
+cmake_dependent_option(UKV_REBUILD_ARROW "Enable to attempt to source and build Apache Arrow locally" ON "UKV_BUILD_PYTHON OR UKV_BUILD_FLIGHT_API" OFF)
 
 file(READ "VERSION" _VERSION_)
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
