@@ -75,6 +75,11 @@ jobs:
       - name: build python shared lib
         run: cmake . -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_PYTHON=1 && make -j 4 py_umem
 
+      - name: Fix test
+        run: apt-get --reinstall install python-apt && \
+              apt-get --reinstall install apt-transport-https && \
+              apt-get install build-essential libssl-dev libffi-dev python-dev
+
       - name: install ukv
         run: python3.9 -m pip install .
 
