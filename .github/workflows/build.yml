@@ -67,19 +67,25 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: apt dependencies
-        run: chmod +x cmake/arrow.sh && ./cmake/arrow.sh
+        run: chmod +x cmake/arrow.sh && ./cmake/arrow.sh && apt install python3.9-venv
+        
+      - name: make python env
+        run: python3.9 -m venv /venv
+        
+      - name: activate python env
+        run: export PATH=/venv/bin:$PATH
 
       - name: pip dependencies
-        run: python3.9 -m pip install --force-reinstall pytest numpy pyarrow cmake twine pyOpenSSL
+        run: pip install --force-reinstall pytest numpy pyarrow cmake twine pyOpenSSL
 
       - name: build python shared lib
         run: cmake . -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_PYTHON=1 && make -j 4 py_umem
 
       - name: install ukv
-        run: python3.9 -m pip install .
+        run: pip install .
 
       - name: test lib
-        run: python3.9 -c "import ukv.umem"
+        run: python -c "import ukv.umem"
 
       - name: publish to test-pypi
         run: chmod +x python/publish.sh && bash python/publish.sh __token__ ${{ secrets.TWINE_API }}
