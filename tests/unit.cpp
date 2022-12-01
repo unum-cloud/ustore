@@ -951,7 +951,6 @@ TEST(db, docs) {
 
     // BSON
     bson_error_t error;
-
     bson_t* b = bson_new_from_json((uint8_t*)json.c_str(), -1, &error);
     const uint8_t* buffer = bson_get_data(b);
 
