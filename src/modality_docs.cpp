@@ -838,7 +838,7 @@ bool iterate_over_mpack_data(value_view_t data, string_t& json_str, ukv_error_t*
 }
 
 // Json to MsgPack
-void sample_leafs(mpack_writer_t& writer, sj::simdjson_result<sj::ondemand::document> value) {
+void sample_leafs(mpack_writer_t& writer, sj::simdjson_result<sj::ondemand::value> value) {
     auto type = value.type().value();
     switch (type) {
     case sj::ondemand::json_type::object: {
@@ -908,7 +908,15 @@ void json_to_mpack(sj::padded_string_view doc, string_t& output) {
     mpack_writer_init(&writer, output.data(), doc.size());
 
     auto result = parser.iterate(doc);
-    sample_leafs(writer, result);
+    mpack_build_map(&writer);
+    auto object = result.get_object().value();
+    auto begin = object.begin().value();
+    auto end = object.end().value();
+    while (begin != end) {
+        auto field = *begin;
+        sample_leafs(writer, field.value().value());
+    }
+    mpack_complete_map(&writer);
 
     auto end_ptr = writer.position;
     size_t new_size = end_ptr - writer.buffer;
