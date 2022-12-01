@@ -43,6 +43,8 @@ using namespace unum::ukv::bench;
 using namespace unum::ukv;
 
 constexpr std::size_t uuid_length = 36;
+constexpr ukv_str_view_t prefix = "{";
+constexpr ukv_str_view_t csv_prefix = "\"{";
 
 using graph_t = std::vector<edge_t>;
 using docs_t = std::vector<value_view_t>;
@@ -989,6 +991,15 @@ void import_ndjson_d(ukv_docs_import_t& c) {
     munmap((void*)mapped_content.data(), mapped_content.size());
 }
 
+void prepare_for_csv(std::string& str, size_t pos = 0) {
+    pos = str.find('\"', pos);
+    while (pos != std::string::npos) {
+        str.insert(pos, 1, '\"');
+        pos += 2;
+        pos = str.find('\"', pos);
+    }
+}
+
 void whole_content( //
     vals_t const& values,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
@@ -1023,6 +1034,9 @@ void whole_content( //
                 os << parquet::EndRow;
             }
             else if (flag == 1) {
+                prepare_for_csv(str);
+                str.insert(0, 1, '\"');
+                str.push_back('\"');
                 keys_vec.push_back(*iter);
                 docs_vec.push_back(str);
             }
@@ -1045,7 +1059,7 @@ void sub_content( //
     int flag) {
 
     auto iter = pass_through_iterator(keys);
-    std::string json = "{";
+    std::string json = flag == 1 ? csv_prefix : prefix;
 
     std::vector<std::string>& docs_vec = *docs_ptr;
     std::vector<ukv_key_t>& keys_vec = *keys_ptr;
@@ -1067,12 +1081,14 @@ void sub_content( //
                 os << parquet::EndRow;
             }
             else if (flag == 1) {
+                prepare_for_csv(json, 1);
+                json.push_back('\"');
                 keys_vec.push_back(*iter);
                 docs_vec.push_back(json);
             }
             else
                 output << fmt::format("{{\"id\":{},\"doc\":{}}}\n", *iter, json.data());
-            json = "{";
+            json = flag == 1 ? csv_prefix : prefix;
             ++iter;
         }
     }
