@@ -31,11 +31,16 @@ RUN cmake \
 ## TODO: Optimize: https://github.com/docker-slim/docker-slim
 FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND="noninteractive" TZ="Europe/London"
+RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+
+ENV arrow_version=9.0.0-1
+RUN apt update && apt install -y -V ca-certificates lsb-release wget && \
+    cd /tmp && wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt update && apt install -y -V libarrow-dev=${arrow_version} libarrow-flight-dev=${arrow_version}
 
 WORKDIR /root/
-RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 COPY --from=builder /usr/src/ukv/build/bin/ukv_umem_flight_server ./
-COPY --from=builder /usr/lib/ /usr/lib/
 COPY --from=builder /usr/src/ukv/build/bin/ukv_leveldb_flight_server ./
 COPY --from=builder /usr/src/ukv/build/bin/ukv_rocksdb_flight_server ./
 EXPOSE 38709
