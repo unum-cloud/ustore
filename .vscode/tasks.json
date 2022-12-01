@@ -104,6 +104,12 @@
             "type": "shell"
         },
         {
+            "label": "Clear Build",
+            "command": "rm -rf ./build ./build_* ./bin ./build_version.cc ./.pytest_cache ./tmp/* ./Makefile ./CMakeCache* ./CMakeFiles ./cmake_install.cmake",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Count Lines of Code",
             "command": "cloc $(git ls-files)",
             "args": [],
