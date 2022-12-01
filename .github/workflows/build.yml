@@ -70,13 +70,10 @@ jobs:
         run: chmod +x cmake/arrow.sh && ./cmake/arrow.sh
 
       - name: pip dependencies
-        run: python3.9 -m pip install --force-reinstall pytest numpy pyarrow cmake twine
+        run: python3.9 -m pip install --force-reinstall pytest numpy pyarrow cmake twine pyOpenSSL
 
       - name: build python shared lib
         run: cmake . -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_PYTHON=1 && make -j 4 py_umem
-
-      - name: Fix test
-        run: sudo apt --reinstall install python-apt && sudo apt --reinstall install apt-transport-https && sudo apt install build-essential libssl-dev libffi-dev python-dev && python3.9 -m pip install pyOpenSSL --upgrade
 
       - name: install ukv
         run: python3.9 -m pip install .
