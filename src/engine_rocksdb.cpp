@@ -17,6 +17,8 @@
  * https://github.com/facebook/rocksdb/wiki/PlainTable-Format
  */
 
+#include <mutex>
+
 #include <rocksdb/db.h>
 #include <rocksdb/utilities/options_util.h>
 #include <rocksdb/utilities/transaction.h>
@@ -70,6 +72,7 @@ static key_comparator_t key_comparator_k = {};
 struct rocks_db_t {
     std::vector<rocks_collection_t*> columns;
     std::unique_ptr<rocks_native_t> native;
+    std::mutex mutex;
 };
 
 inline rocksdb::Slice to_slice(ukv_key_t const& key) noexcept {
@@ -695,9 +698,18 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
     validate_transaction_commit(c.transaction, c.options, c.error);
     return_on_error(c.error);
 
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
+
+    if (c.sequence_number)
+        db.mutex.lock();
     rocks_status_t status = txn.Commit();
     export_error(status, c.error);
+    if (c.sequence_number) {
+        if (status.ok())
+            *c.sequence_number = db.native->GetLatestSequenceNumber();
+        db.mutex.unlock();
+    }
 }
 
 void ukv_arena_free(ukv_arena_t c_arena) {
