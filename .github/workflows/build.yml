@@ -70,10 +70,10 @@ jobs:
         run: chmod +x cmake/arrow.sh && ./cmake/arrow.sh && sudo apt install python3.9-venv
         
       - name: make python env
-        run: python3.9 -m venv /venv
+        run: python3.9 -m venv /tmp/venv
         
       - name: activate python env
-        run: export PATH=/venv/bin:$PATH
+        run: export PATH=/tmp/venv/bin:$PATH
 
       - name: pip dependencies
         run: pip install --force-reinstall pytest numpy pyarrow cmake twine pyOpenSSL
