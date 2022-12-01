@@ -6,12 +6,12 @@
  * Sits on top of any @see "ukv.h"-compatible system.
  */
 
-#include <fmt/format.h> // `fmt::format_int`
-
 #include <cstdio>      // `std::snprintf`
 #include <cctype>      // `std::isdigit`
 #include <charconv>    // `std::to_chars`
 #include <string_view> // `std::string_view`
+
+#include <fmt/format.h> // `fmt::format_int`
 
 #include <yyjson.h> // Primary internal JSON representation
 #include <bson.h>   // Converting from/to BSON
@@ -756,6 +756,7 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
     }
     case mpack_type_int: {
         to_json_number(builder, mpack_tag_int_value(&tag), c_error);
+        break;
     }
     case mpack_type_uint: {
         to_json_number(builder, mpack_tag_uint_value(&tag), c_error);
