@@ -67,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: apt dependencies
-        run: chmod +x cmake/arrow.sh && ./cmake/arrow.sh && apt install python3.9-venv
+        run: chmod +x cmake/arrow.sh && ./cmake/arrow.sh && sudo apt install python3.9-venv
         
       - name: make python env
         run: python3.9 -m venv /venv
