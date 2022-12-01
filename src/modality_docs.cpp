@@ -850,19 +850,21 @@ void sample_leafs(mpack_writer_t& writer, sj::simdjson_result<sj::ondemand::valu
             auto field = *begin;
             value_view_t key(field.key().raw());
             mpack_write_str(&writer, key.c_str(), key.size());
-            // sample_leafs(writer, field.value().value())
+            sample_leafs(writer, field.value().value());
+            ++begin;
         }
         mpack_complete_map(&writer);
         break;
     }
     case sj::ondemand::json_type::array: {
         mpack_build_array(&writer);
-        auto array = value.get_array().value();
+        auto array = value.get_array();
         auto begin = array.begin().value();
         auto end = array.end().value();
         while (begin != end) {
-            auto field = *begin;
-            // sample_leafs(writer, field.value())
+            auto value = *begin;
+            sample_leafs(writer, value);
+            ++begin;
         }
         mpack_complete_array(&writer);
         break;
@@ -901,7 +903,7 @@ void sample_leafs(mpack_writer_t& writer, sj::simdjson_result<sj::ondemand::valu
     }
 }
 
-void json_to_mpack(sj::padded_string_view doc, string_t& output) {
+void json_to_mpack(sj::padded_string_view doc, string_t& output, ukv_error_t* c_error) {
     sj::ondemand::parser parser;
 
     mpack_writer_t writer;
@@ -915,13 +917,14 @@ void json_to_mpack(sj::padded_string_view doc, string_t& output) {
     while (begin != end) {
         auto field = *begin;
         sample_leafs(writer, field.value().value());
+        ++begin;
     }
     mpack_complete_map(&writer);
 
     auto end_ptr = writer.position;
     size_t new_size = end_ptr - writer.buffer;
 
-    output.resize(new_size);
+    output.resize(new_size, c_error);
 
     mpack_writer_destroy(&writer);
 }
