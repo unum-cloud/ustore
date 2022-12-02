@@ -5,16 +5,12 @@
  * @brief Document storage using "YYJSON" lib.
  * Sits on top of any @see "ukv.h"-compatible system.
  */
-
 #include <cstdio>      // `std::snprintf`
 #include <cctype>      // `std::isdigit`
 #include <charconv>    // `std::to_chars`
 #include <string_view> // `std::string_view`
 
 #include <fmt/format.h> // `fmt::format_int`
-
-#include <yyjson.h> // Primary internal JSON representation
-#include <bson.h>   // Converting from/to BSON
 
 #include <simdjson.h> // Secondary internal JSON representation
 #include <yyjson.h>   // Primary internal JSON representation
@@ -507,6 +503,11 @@ struct json_state_t {
     ssize_t error_offset;
 };
 
+template <std::size_t count_ak>
+void to_json_string(string_t& json_str, char (&str)[count_ak], ukv_error_t* c_error) {
+    json_str.insert(json_str.size(), str, str + count_ak, c_error);
+}
+
 void to_json_string(string_t& json_str, char const* str, ukv_error_t* c_error) {
     json_str.insert(json_str.size(), str, str + std::strlen(str), c_error);
 }
@@ -552,19 +553,10 @@ static void bson_visit_corrupt(bson_iter_t const* iter, void* data) {
 }
 static bool bson_visit_double(bson_iter_t const*, char const*, double v_double, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    to_json_string(state.json_str, "{ \"$numberDouble\" : \"", state.c_error);
-
-    if (v_double != v_double) {
+    if (v_double != v_double)
         to_json_string(state.json_str, "NaN", state.c_error);
-    }
-    else if (v_double * 0 != 0) {
-        if (v_double > 0) {
-            to_json_string(state.json_str, "Infinity", state.c_error);
-        }
-        else {
-            to_json_string(state.json_str, "-Infinity", state.c_error);
-        }
-    }
+    else if (v_double * 0 != 0)
+        to_json_string(state.json_str, v_double > 0 ? "Infinity" : "-Infinity", state.c_error);
     else
         to_json_number(state.json_str, v_double, state.c_error);
 
