@@ -8,6 +8,12 @@
             "type": "shell"
         },
         {
+            "label": "Build Native: Debug UMem ImpExp Test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_umem_imp_exp_test -j 12",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Build Native: Debug RocksDB Test",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_rocksdb_unit_test -j 12",
             "args": [],
@@ -81,8 +87,8 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug Tabular STL Benchmark",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=1 . && make ukv_stl_tabular_graph_benchmark",
+            "label": "Build Native: Debug Tabular UMem Benchmark",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=1 . && make ukv_umem_tabular_graph_benchmark",
             "args": [],
             "type": "shell"
         },
