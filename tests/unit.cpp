@@ -75,7 +75,7 @@ inline std::ostream& operator<<(std::ostream& os, collection_key_t obj) {
     return os << obj.collection << obj.key;
 }
 
-#pragma region Binary Collections
+#pragma region Binary Modality
 
 template <typename locations_at>
 void check_length(blobs_ref_gt<locations_at>& ref, ukv_length_t expected_length) {
@@ -216,7 +216,11 @@ void check_binary_collection(blobs_collection_t& collection) {
     check_length(ref, ukv_length_missing_k);
 }
 
-TEST(db, basic) {
+/**
+ * Try opening a DB, clearing it, accessing the main collection.
+ * Write some data into that main collection, and test retrieving it.
+ */
+TEST(db, open_clear_close) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -229,7 +233,12 @@ TEST(db, basic) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, basic_clear) {
+/**
+ * Insert data into main collection.
+ * Clear the whole DBMS.
+ * Make sure the main collection is empty.
+ */
+TEST(db, clear_collection_by_clearing_db) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -244,7 +253,11 @@ TEST(db, basic_clear) {
     check_length(ref, ukv_length_missing_k);
 }
 
-TEST(db, ordered) {
+/**
+ * Fill the main collection with some keys from 1000 to 1100 and from 900 to 800.
+ * Overwrite some of those with larger values, checking consistency.
+ */
+TEST(db, overwrite_with_step) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -275,6 +288,9 @@ TEST(db, ordered) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Populate the main collection, close the DBMS, reopen it, check consistency.
+ */
 TEST(db, persistency) {
 
     if (!path())
@@ -284,29 +300,70 @@ TEST(db, persistency) {
     EXPECT_TRUE(db.open(path()));
 
     triplet_t triplet;
-
-    blobs_collection_t collection = *db.collection();
-    auto collection_ref = collection[triplet.keys];
-    check_length(collection_ref, ukv_length_missing_k);
-    round_trip(collection_ref, triplet.contents_arrow());
-    round_trip(collection_ref, triplet.contents_lengths());
-    round_trip(collection_ref, triplet.contents_full());
-    check_length(collection_ref, triplet_t::val_size_k);
+    {
+        blobs_collection_t collection = *db.collection();
+        auto collection_ref = collection[triplet.keys];
+        check_length(collection_ref, ukv_length_missing_k);
+        round_trip(collection_ref, triplet.contents_arrow());
+        round_trip(collection_ref, triplet.contents_lengths());
+        round_trip(collection_ref, triplet.contents_full());
+        check_length(collection_ref, triplet_t::val_size_k);
+    }
     db.close();
-
-    EXPECT_TRUE(db.open(path()));
-    blobs_collection_t collection2 = *db.collection();
-    auto collection_ref2 = collection2[triplet.keys];
-
-    check_equalities(collection_ref2, triplet.contents_arrow());
-    check_equalities(collection_ref2, triplet.contents_lengths());
-    check_equalities(collection_ref2, triplet.contents_full());
-    check_length(collection_ref2, triplet_t::val_size_k);
-
+    {
+        EXPECT_TRUE(db.open(path()));
+        blobs_collection_t collection = *db.collection();
+        auto collection_ref = collection[triplet.keys];
+        check_equalities(collection_ref, triplet.contents_arrow());
+        check_equalities(collection_ref, triplet.contents_lengths());
+        check_equalities(collection_ref, triplet.contents_full());
+        check_length(collection_ref, triplet_t::val_size_k);
+    }
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, named) {
+/**
+ * Creates news collections under unique names.
+ * Tests collection lookup by name, dropping/clearing existing collections.
+ */
+TEST(db, named_collections) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    // We can't drop a missing collection, or the main one.
+    EXPECT_FALSE(*db.contains("unknown"));
+    EXPECT_FALSE(db.drop("unknown"));
+    EXPECT_FALSE(db.drop(""));
+
+    if (ukv_supports_named_collections_k) {
+
+        EXPECT_TRUE(db["col1"]);
+        EXPECT_TRUE(db["col2"]);
+
+        EXPECT_FALSE(db.collection_create("col1"));
+        blobs_collection_t col1 = *db["col1"];
+        EXPECT_FALSE(db.collection_create("col2"));
+        blobs_collection_t col2 = *db["col2"];
+
+        check_binary_collection(col1);
+        check_binary_collection(col2);
+
+        EXPECT_TRUE(db.drop("col1"));
+        EXPECT_TRUE(db.drop("col2"));
+        EXPECT_TRUE(*db.contains(""));
+        EXPECT_FALSE(*db.contains("col1"));
+        EXPECT_FALSE(*db.contains("col2"));
+    }
+
+    EXPECT_TRUE(db.clear());
+    EXPECT_TRUE(*db.contains(""));
+}
+
+/**
+ * Tests listing the names of present collections.
+ */
+TEST(db, named_collections_list) {
 
     if (!ukv_supports_named_collections_k)
         return;
@@ -314,78 +371,46 @@ TEST(db, named) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    EXPECT_TRUE(db["col1"]);
-    EXPECT_TRUE(db["col2"]);
+    blobs_collection_t col1 = *db.collection_create("col1");
+    blobs_collection_t col2 = *db.collection_create("col2");
+    blobs_collection_t col3 = *db.collection_create("col3");
+    blobs_collection_t col4 = *db.collection_create("col4");
 
-    EXPECT_FALSE(db.collection_create("col1"));
-    blobs_collection_t col1 = *db["col1"];
-    EXPECT_FALSE(db.collection_create("col2"));
-    blobs_collection_t col2 = *db["col2"];
+    EXPECT_TRUE(*db.contains("col1"));
+    EXPECT_TRUE(*db.contains("col2"));
 
-    check_binary_collection(col1);
-    check_binary_collection(col2);
+    auto maybe_txn = db.transact();
+    EXPECT_TRUE(maybe_txn);
+    auto maybe_cols = maybe_txn->collections();
+    EXPECT_TRUE(maybe_cols);
+
+    size_t count = 0;
+    std::vector<std::string> collections;
+    auto cols = *maybe_cols;
+    while (!cols.names.is_end()) {
+        collections.push_back(std::string(*cols.names));
+        ++cols.names;
+        ++count;
+    }
+    EXPECT_EQ(count, 4);
+    std::sort(collections.begin(), collections.end());
+    EXPECT_EQ(collections[0], "col1");
+    EXPECT_EQ(collections[1], "col2");
+    EXPECT_EQ(collections[2], "col3");
+    EXPECT_EQ(collections[3], "col4");
 
     EXPECT_TRUE(db.drop("col1"));
-    EXPECT_TRUE(db.drop("col2"));
-    EXPECT_TRUE(*db.contains(""));
     EXPECT_FALSE(*db.contains("col1"));
-    EXPECT_FALSE(*db.contains("col2"));
-    EXPECT_TRUE(db.clear());
-    EXPECT_TRUE(*db.contains(""));
-}
-
-TEST(db, collection_list) {
-
-    database_t db;
-
-    EXPECT_TRUE(db.open(path()));
-
-    if (!ukv_supports_named_collections_k) {
-        EXPECT_FALSE(*db.contains("name"));
-        EXPECT_FALSE(db.drop("name"));
-        EXPECT_FALSE(db.drop(""));
-        EXPECT_TRUE(db.collection()->clear());
-        return;
-    }
-    else {
-        blobs_collection_t col1 = *db.collection_create("col1");
-        blobs_collection_t col2 = *db.collection_create("col2");
-        blobs_collection_t col3 = *db.collection_create("col3");
-        blobs_collection_t col4 = *db.collection_create("col4");
-
-        EXPECT_TRUE(*db.contains("col1"));
-        EXPECT_TRUE(*db.contains("col2"));
-        EXPECT_FALSE(*db.contains("unknown_col"));
-
-        auto maybe_txn = db.transact();
-        EXPECT_TRUE(maybe_txn);
-        auto maybe_cols = maybe_txn->collections();
-        EXPECT_TRUE(maybe_cols);
-
-        size_t count = 0;
-        std::vector<std::string> collections;
-        auto cols = *maybe_cols;
-        while (!cols.names.is_end()) {
-            collections.push_back(std::string(*cols.names));
-            ++cols.names;
-            ++count;
-        }
-        EXPECT_EQ(count, 4);
-        std::sort(collections.begin(), collections.end());
-        EXPECT_EQ(collections[0], "col1");
-        EXPECT_EQ(collections[1], "col2");
-        EXPECT_EQ(collections[2], "col3");
-        EXPECT_EQ(collections[3], "col4");
-
-        EXPECT_TRUE(db.drop("col1"));
-        EXPECT_FALSE(*db.contains("col1"));
-        EXPECT_FALSE(db.drop(""));
-        EXPECT_TRUE(db.collection()->clear());
-    }
+    EXPECT_FALSE(db.drop(""));
+    EXPECT_TRUE(db.collection()->clear());
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, collection_drop_values) {
+/**
+ * Tests clearing values in a collection, which would preserve the keys,
+ * but empty the binary strings.
+ */
+TEST(db, clear_values) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -407,6 +432,7 @@ TEST(db, collection_drop_values) {
     EXPECT_TRUE(db.clear());
 }
 
+// TODO: Unit tests must be minimal.
 TEST(db, multiple_collection) {
     if (!ukv_supports_named_collections_k)
         return;
@@ -492,226 +518,7 @@ TEST(db, multiple_collection) {
     EXPECT_FALSE(*db.contains("col5"));
 }
 
-TEST(db, paths) {
-
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-
-    char const* keys[] {"Facebook", "Apple", "Amazon", "Netflix", "Google", "Nvidia", "Adobe"};
-    char const* vals[] {"F", "A", "A", "N", "G", "N", "A"};
-    std::size_t keys_count = sizeof(keys) / sizeof(keys[0]);
-    ukv_char_t separator = '\0';
-
-    arena_t arena(db);
-    status_t status;
-    ukv_paths_write_t paths_write {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .tasks_count = keys_count,
-        .path_separator = separator,
-        .paths = keys,
-        .paths_stride = sizeof(char const*),
-        .values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(vals),
-        .values_bytes_stride = sizeof(char const*),
-    };
-    ukv_paths_write(&paths_write);
-    char* vals_recovered = nullptr;
-    ukv_paths_read_t paths_read {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .tasks_count = keys_count,
-        .path_separator = separator,
-        .paths = keys,
-        .paths_stride = sizeof(char const*),
-        .values = reinterpret_cast<ukv_bytes_ptr_t*>(&vals_recovered),
-    };
-    ukv_paths_read(&paths_read);
-    EXPECT_TRUE(status);
-    EXPECT_EQ(std::string_view(vals_recovered, keys_count * 2),
-              std::string_view("F\0A\0A\0N\0G\0N\0A\0", keys_count * 2));
-
-    // Try getting either "Netflix" or "Nvidia" as one of the keys with "N" prefix
-    ukv_str_view_t prefix = "N";
-    ukv_length_t max_count = 1;
-    ukv_length_t* results_counts = nullptr;
-    ukv_length_t* tape_offsets = nullptr;
-    ukv_char_t* tape_begin = nullptr;
-    ukv_paths_match_t paths_match {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .match_counts_limits = &max_count,
-        .patterns = &prefix,
-        .match_counts = &results_counts,
-        .paths_offsets = &tape_offsets,
-        .paths_strings = &tape_begin,
-    };
-    ukv_paths_match(&paths_match);
-    auto first_match_for_a = std::string_view(tape_begin);
-    EXPECT_EQ(results_counts[0], 1);
-    EXPECT_TRUE(first_match_for_a == "Netflix" || first_match_for_a == "Nvidia");
-
-    // Try getting the remaining results, which is the other one from that same pair
-    max_count = 10;
-    paths_match.previous = &tape_begin;
-    ukv_paths_match(&paths_match);
-    auto second_match_for_a = std::string_view(tape_begin);
-    EXPECT_EQ(results_counts[0], 1);
-    EXPECT_TRUE(second_match_for_a == "Netflix" || second_match_for_a == "Nvidia");
-    EXPECT_NE(first_match_for_a, second_match_for_a);
-
-    // Try performing parallel queries in the same collection
-    ukv_str_view_t prefixes[2] = {"A", "N"};
-    std::size_t prefixes_count = sizeof(prefixes) / sizeof(prefixes[0]);
-    max_count = 10;
-    paths_match.tasks_count = prefixes_count;
-    paths_match.patterns = prefixes;
-    paths_match.patterns_stride = sizeof(ukv_str_view_t);
-    paths_match.previous = nullptr;
-    ukv_paths_match(&paths_match);
-    auto total_count = std::accumulate(results_counts, results_counts + prefixes_count, 0ul);
-    strings_tape_iterator_t tape_iterator {total_count, tape_begin};
-    std::set<std::string> tape_parts;
-    while (!tape_iterator.is_end()) {
-        tape_parts.insert(*tape_iterator);
-        ++tape_iterator;
-    }
-    EXPECT_EQ(results_counts[0], 3);
-    EXPECT_EQ(results_counts[1], 2);
-    EXPECT_NE(tape_parts.find("Netflix"), tape_parts.end());
-    EXPECT_NE(tape_parts.find("Adobe"), tape_parts.end());
-
-    // Now try matching a Regular Expression
-    prefix = "Netflix|Google";
-    max_count = 20;
-    paths_match.tasks_count = 1;
-    paths_match.patterns = &prefix;
-    ukv_paths_match(&paths_match);
-    first_match_for_a = std::string_view(tape_begin);
-    second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
-    EXPECT_EQ(results_counts[0], 2);
-    EXPECT_TRUE(first_match_for_a == "Netflix" || first_match_for_a == "Google");
-    EXPECT_TRUE(second_match_for_a == "Netflix" || second_match_for_a == "Google");
-
-    // Try a more complex regular expression
-    prefix = "A.*e";
-    max_count = 20;
-    ukv_paths_match(&paths_match);
-    first_match_for_a = std::string_view(tape_begin);
-    second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
-    EXPECT_EQ(results_counts[0], 2);
-    EXPECT_TRUE(first_match_for_a == "Apple" || first_match_for_a == "Adobe");
-    EXPECT_TRUE(second_match_for_a == "Apple" || second_match_for_a == "Adobe");
-
-    EXPECT_TRUE(db.clear());
-}
-
-TEST(db, paths_linked_list) {
-
-    constexpr std::size_t count = 100;
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-
-    arena_t arena(db);
-    ukv_char_t separator = '\0';
-    status_t status;
-
-    ukv_paths_write_t paths_write {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .path_separator = separator,
-    };
-
-    ukv_paths_read_t paths_read {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .path_separator = separator,
-    };
-
-    // Generate some random strings for our tests
-    constexpr auto alphabet = "abcdefghijklmnop";
-    auto make_random_str = []() {
-        auto str = std::string();
-        auto len = static_cast<std::size_t>(std::rand() % 100) + 8;
-        for (std::size_t i = 0; i != len; ++i)
-            str.push_back(alphabet[std::rand() % 16]);
-        return str;
-    };
-    std::set<std::string> unique;
-    while (unique.size() != count)
-        unique.insert(make_random_str());
-
-    // Lets form a linked list, where every key maps into the the next key.
-    // Then we will traverse the linked list from start to end.
-    // Then we will re-link it in reverse order and traverse again.
-    std::vector<ukv_str_view_t> begins(unique.size());
-    std::transform(unique.begin(), unique.end(), begins.begin(), [](std::string const& str) { return str.c_str(); });
-
-    // Link forward
-    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
-        ukv_str_view_t smaller = begins[i];
-        ukv_str_view_t bigger = begins[i + 1];
-        paths_write.paths = &smaller;
-        paths_write.values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(&bigger);
-        ukv_paths_write(&paths_write);
-        EXPECT_TRUE(status);
-
-        // Check if it was successfully written:
-        ukv_str_span_t bigger_received = nullptr;
-        paths_read.paths = &smaller;
-        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received);
-        ukv_paths_read(&paths_read);
-        EXPECT_TRUE(status);
-        EXPECT_EQ(std::string_view(bigger), std::string_view(bigger_received));
-    }
-
-    // Traverse forward, counting the entries and checking the order
-    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
-        ukv_str_view_t smaller = begins[i];
-        ukv_str_view_t bigger = begins[i + 1];
-        ukv_str_span_t bigger_received = nullptr;
-        paths_read.paths = &smaller;
-        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received);
-        ukv_paths_read(&paths_read);
-        EXPECT_TRUE(status);
-        EXPECT_EQ(std::string_view(bigger), std::string_view(bigger_received));
-    }
-
-    // Re-link in reverse order
-    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
-        ukv_str_view_t smaller = begins[i];
-        ukv_str_view_t bigger = begins[i + 1];
-        paths_write.paths = &bigger;
-        paths_write.values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(&smaller);
-        ukv_paths_write(&paths_write);
-        EXPECT_TRUE(status);
-
-        // Check if it was successfully over-written:
-        ukv_str_span_t smaller_received = nullptr;
-        paths_read.paths = &bigger;
-        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received);
-        ukv_paths_read(&paths_read);
-        EXPECT_TRUE(status);
-        EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
-    }
-
-    // Traverse backwards, counting the entries and checking the order
-    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
-        ukv_str_view_t smaller = begins[i];
-        ukv_str_view_t bigger = begins[i + 1];
-        ukv_str_span_t smaller_received = nullptr;
-        paths_read.paths = &bigger;
-        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received);
-        ukv_paths_read(&paths_read);
-        EXPECT_TRUE(status);
-        EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
-    }
-}
-
+// TODO: What is this?
 TEST(db, unnamed_and_named) {
 
     if (!ukv_supports_named_collections_k)
@@ -741,7 +548,12 @@ TEST(db, unnamed_and_named) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, txn) {
+/**
+ * Checks the "Read Commited" consistency guarantees of transactions.
+ * Readers can't see the contents of pending (not committed) transactions.
+ * https://jepsen.io/consistency/models/read-committed
+ */
+TEST(db, transaction_read_commited) {
 
     if (!ukv_supports_transactions_k)
         return;
@@ -774,7 +586,16 @@ TEST(db, txn) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, snapshots) {
+/**
+ * Checks the "Snapshot Isolation" consistency guarantees of transactions.
+ * If needed, readers can initiate snapshot-backed transactions.
+ * All the reads, directed to that snapshot will not see newer operations,
+ * affecting the HEAD state. From a consistency standpoint, it is a downgrade
+ * from "Strictly Serializable" ACID transactions, but it is extremely usefull
+ * for numerous Business Intelligence applications.
+ * https://jepsen.io/consistency/models/snapshot-isolation
+ */
+TEST(db, transaction_snapshot_isolation) {
 
     if (!ukv_supports_snapshots_k)
         return;
@@ -930,9 +751,260 @@ TEST(db, txn_unnamed_then_named) {
     EXPECT_TRUE(db.clear());
 }
 
-#pragma region Document Collections
+#pragma region Paths Modality
 
-TEST(db, docs) {
+/**
+ * Tests "Paths" Modality, with variable length keys.
+ * Reads, writes, prefix matching and pattern matching.
+ */
+TEST(db, paths) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    char const* keys[] {"Facebook", "Apple", "Amazon", "Netflix", "Google", "Nvidia", "Adobe"};
+    char const* vals[] {"F", "A", "A", "N", "G", "N", "A"};
+    std::size_t keys_count = sizeof(keys) / sizeof(keys[0]);
+    ukv_char_t separator = '\0';
+
+    arena_t arena(db);
+    status_t status;
+    ukv_paths_write_t paths_write {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .tasks_count = keys_count,
+        .path_separator = separator,
+        .paths = keys,
+        .paths_stride = sizeof(char const*),
+        .values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(vals),
+        .values_bytes_stride = sizeof(char const*),
+    };
+    ukv_paths_write(&paths_write);
+    char* vals_recovered = nullptr;
+    ukv_paths_read_t paths_read {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .tasks_count = keys_count,
+        .path_separator = separator,
+        .paths = keys,
+        .paths_stride = sizeof(char const*),
+        .values = reinterpret_cast<ukv_bytes_ptr_t*>(&vals_recovered),
+    };
+    ukv_paths_read(&paths_read);
+    EXPECT_TRUE(status);
+    EXPECT_EQ(std::string_view(vals_recovered, keys_count * 2),
+              std::string_view("F\0A\0A\0N\0G\0N\0A\0", keys_count * 2));
+
+    // Try getting either "Netflix" or "Nvidia" as one of the keys with "N" prefix
+    ukv_str_view_t prefix = "N";
+    ukv_length_t max_count = 1;
+    ukv_length_t* results_counts = nullptr;
+    ukv_length_t* tape_offsets = nullptr;
+    ukv_char_t* tape_begin = nullptr;
+    ukv_paths_match_t paths_match {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .match_counts_limits = &max_count,
+        .patterns = &prefix,
+        .match_counts = &results_counts,
+        .paths_offsets = &tape_offsets,
+        .paths_strings = &tape_begin,
+    };
+    ukv_paths_match(&paths_match);
+    auto first_match_for_a = std::string_view(tape_begin);
+    EXPECT_EQ(results_counts[0], 1);
+    EXPECT_TRUE(first_match_for_a == "Netflix" || first_match_for_a == "Nvidia");
+
+    // Try getting the remaining results, which is the other one from that same pair
+    max_count = 10;
+    paths_match.previous = &tape_begin;
+    ukv_paths_match(&paths_match);
+    auto second_match_for_a = std::string_view(tape_begin);
+    EXPECT_EQ(results_counts[0], 1);
+    EXPECT_TRUE(second_match_for_a == "Netflix" || second_match_for_a == "Nvidia");
+    EXPECT_NE(first_match_for_a, second_match_for_a);
+
+    // Try performing parallel queries in the same collection
+    ukv_str_view_t prefixes[2] = {"A", "N"};
+    std::size_t prefixes_count = sizeof(prefixes) / sizeof(prefixes[0]);
+    max_count = 10;
+    paths_match.tasks_count = prefixes_count;
+    paths_match.patterns = prefixes;
+    paths_match.patterns_stride = sizeof(ukv_str_view_t);
+    paths_match.previous = nullptr;
+    ukv_paths_match(&paths_match);
+    auto total_count = std::accumulate(results_counts, results_counts + prefixes_count, 0ul);
+    strings_tape_iterator_t tape_iterator {total_count, tape_begin};
+    std::set<std::string> tape_parts;
+    while (!tape_iterator.is_end()) {
+        tape_parts.insert(*tape_iterator);
+        ++tape_iterator;
+    }
+    EXPECT_EQ(results_counts[0], 3);
+    EXPECT_EQ(results_counts[1], 2);
+    EXPECT_NE(tape_parts.find("Netflix"), tape_parts.end());
+    EXPECT_NE(tape_parts.find("Adobe"), tape_parts.end());
+
+    // Now try matching a Regular Expression
+    prefix = "Netflix|Google";
+    max_count = 20;
+    paths_match.tasks_count = 1;
+    paths_match.patterns = &prefix;
+    ukv_paths_match(&paths_match);
+    first_match_for_a = std::string_view(tape_begin);
+    second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
+    EXPECT_EQ(results_counts[0], 2);
+    EXPECT_TRUE(first_match_for_a == "Netflix" || first_match_for_a == "Google");
+    EXPECT_TRUE(second_match_for_a == "Netflix" || second_match_for_a == "Google");
+
+    // Try a more complex regular expression
+    prefix = "A.*e";
+    max_count = 20;
+    ukv_paths_match(&paths_match);
+    first_match_for_a = std::string_view(tape_begin);
+    second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
+    EXPECT_EQ(results_counts[0], 2);
+    EXPECT_TRUE(first_match_for_a == "Apple" || first_match_for_a == "Adobe");
+    EXPECT_TRUE(second_match_for_a == "Apple" || second_match_for_a == "Adobe");
+
+    EXPECT_TRUE(db.clear());
+}
+
+/**
+ * Tests "Paths" Modality, by forming bidirectional linked lists from string-to-string mappings.
+ * Uses different-length unique strings. As the underlying modality may be implemented as a bucketed hash-map,
+ * this test helps catch problems in bucket reorganization.
+ */
+TEST(db, paths_linked_list) {
+
+    constexpr std::size_t count = 100;
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    arena_t arena(db);
+    ukv_char_t separator = '\0';
+    status_t status;
+
+    ukv_paths_write_t paths_write {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .path_separator = separator,
+    };
+
+    ukv_paths_read_t paths_read {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .path_separator = separator,
+    };
+
+    // Generate some random strings for our tests
+    constexpr auto alphabet = "abcdefghijklmnop";
+    auto make_random_str = []() {
+        auto str = std::string();
+        auto len = static_cast<std::size_t>(std::rand() % 100) + 8;
+        for (std::size_t i = 0; i != len; ++i)
+            str.push_back(alphabet[std::rand() % 16]);
+        return str;
+    };
+    std::set<std::string> unique;
+    while (unique.size() != count)
+        unique.insert(make_random_str());
+
+    // Lets form a linked list, where every key maps into the the next key.
+    // Then we will traverse the linked list from start to end.
+    // Then we will re-link it in reverse order and traverse again.
+    std::vector<ukv_str_view_t> begins(unique.size());
+    std::transform(unique.begin(), unique.end(), begins.begin(), [](std::string const& str) { return str.c_str(); });
+
+    // Link forward
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        paths_write.paths = &smaller;
+        paths_write.values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(&bigger);
+        ukv_paths_write(&paths_write);
+        EXPECT_TRUE(status);
+
+        // Check if it was successfully written:
+        ukv_str_span_t bigger_received = nullptr;
+        paths_read.paths = &smaller;
+        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received);
+        ukv_paths_read(&paths_read);
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(bigger), std::string_view(bigger_received));
+    }
+
+    // Traverse forward, counting the entries and checking the order
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        ukv_str_span_t bigger_received = nullptr;
+        paths_read.paths = &smaller;
+        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&bigger_received);
+        ukv_paths_read(&paths_read);
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(bigger), std::string_view(bigger_received));
+    }
+
+    // Re-link in reverse order
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        paths_write.paths = &bigger;
+        paths_write.values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(&smaller);
+        ukv_paths_write(&paths_write);
+        EXPECT_TRUE(status);
+
+        // Check if it was successfully over-written:
+        ukv_str_span_t smaller_received = nullptr;
+        paths_read.paths = &bigger;
+        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received);
+        ukv_paths_read(&paths_read);
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
+    }
+
+    // Traverse backwards, counting the entries and checking the order
+    for (std::size_t i = 0; i + 1 != begins.size(); ++i) {
+        ukv_str_view_t smaller = begins[i];
+        ukv_str_view_t bigger = begins[i + 1];
+        ukv_str_span_t smaller_received = nullptr;
+        paths_read.paths = &bigger;
+        paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&smaller_received);
+        ukv_paths_read(&paths_read);
+        EXPECT_TRUE(status);
+        EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
+    }
+}
+
+#pragma region Documents Modality
+
+// TODO: Use those structures
+std::vector<std::string> make_three_flat_docs() {
+    auto json1 = R"( {"person": "Alice", "age": 24} )"_json.dump();
+    auto json2 = R"( {"person": "Bob", "age": 25} )"_json.dump();
+    auto json3 = R"( {"person": "Carl", "age": 26} )"_json.dump();
+    return {json1, json2, json3};
+}
+
+std::vector<std::string> make_three_nested_docs() {
+    auto json1 = R"( {"person": {"name":"Alice", "age": 24}} )"_json.dump();
+    auto json2 = R"( {"person": [{"name":"Bob", "age": 25}]} )"_json.dump();
+    auto json3 = R"( {"person": "Carl", "age": 26} )"_json.dump();
+    return {json1, json2, json3};
+}
+
+/**
+ * Tests "Documents" Modality, mapping integers to structured hierarchical documents.
+ * Takes a basic flat JSON document, and checks if it can be imported in JSON, BSON
+ * and MessagePack forms, and later be properly accessed at field-level.
+ */
+TEST(db, docs_flat) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -954,6 +1026,7 @@ TEST(db, docs) {
 
     bson_t* b = bson_new_from_json((uint8_t*)json.c_str(), -1, &error);
     const uint8_t* buffer = bson_get_data(b);
+    // TODO: Deallocate
 
     auto view = value_view_t(buffer, b->len);
     collection.at(2, ukv_doc_field_bson_k) = view;
@@ -974,7 +1047,11 @@ TEST(db, docs) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, docs_batch) {
+/**
+ * Tryies adding 3 simple nseted JSONs, using JSON-Pointers
+ * to retrieve specific fields across multiple keys.
+ */
+TEST(db, docs_nested_batch) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1033,10 +1110,12 @@ TEST(db, docs_batch) {
     offsets[3] = json1.size() + json2.size() + json1.size();
     check_equalities(duplicate_ref, values);
 
-    // Read with feilds
-    std::array<collection_key_field_t, 3> keys_with_fields = {ckf(1, "person"),
-                                                              ckf(2, "/person/0/name"),
-                                                              ckf(3, "age")};
+    // Read with fields
+    std::array<collection_key_field_t, 3> keys_with_fields = {
+        ckf(1, "person"),
+        ckf(2, "/person/0/name"),
+        ckf(3, "age"),
+    };
     auto ref_with_fields = collection[keys_with_fields];
     auto field1 = R"({"name":"Carl", "age": 24} )"_json.dump();
     auto field2 = R"("Joe")"_json.dump();
@@ -1047,8 +1126,12 @@ TEST(db, docs_batch) {
     offsets[2] = field1.size() + field2.size();
     offsets[3] = field1.size() + field2.size() + field3.size();
     check_equalities(ref_with_fields, values);
+
+    EXPECT_TRUE(db.clear());
 }
 
+// TODO: Use understandable and rememberable keys.
+// Split into smaller parts.
 TEST(db, docs_modify) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1175,6 +1258,10 @@ TEST(db, docs_modify) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Uses a well-known repository of JSON-Patches and JSON-MergePatches,
+ * to validate that document modifications work adequately in corner cases.
+ */
 TEST(db, docs_merge_and_patch) {
     using json_t = nlohmann::json;
     database_t db;
@@ -1206,6 +1293,11 @@ TEST(db, docs_merge_and_patch) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Fills document collection with info about Alice, Bob and Carl,
+ * sampling it later in a form of a table, using both low-level APIs,
+ * and higher-level compile-time C++ meta-programming abstractions.
+ */
 TEST(db, docs_table) {
 
     using json_t = nlohmann::json;
@@ -1360,8 +1452,31 @@ TEST(db, docs_table) {
     EXPECT_TRUE(db.clear());
 }
 
-#pragma region Graph Collections
+#pragma region Graph Modality
 
+edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
+    return {v1, v2, edge_id};
+}
+
+std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_connect = 1) {
+    std::vector<edge_t> es;
+    ukv_key_t edge_id = 0;
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        ukv_key_t connect_with = vertex_id + next_connect;
+        while (connect_with < vertices_count) {
+            edge_id++;
+            es.push_back(make_edge(edge_id, vertex_id, connect_with));
+            connect_with = connect_with + next_connect;
+        }
+    }
+    return es;
+}
+
+/**
+ * Tests "Graphs" Modality, with on of the simplest network designs - a triangle.
+ * Three vertices, three connections between them, forming 3 undirected, or 6 directed edges.
+ * Tests edge upserts, existence checks, degree computation, vertex removals.
+ */
 TEST(db, graph_triangle) {
 
     database_t db;
@@ -1461,10 +1576,17 @@ TEST(db, graph_triangle) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, graph_triangle_batch_api) {
+/**
+ * Further complicates the `graph_triangle` test by performaing all of the updates
+ * and lookups in batches. This detects inconsistencies in concurrent updates to
+ * the underlying binary representation, triggered from a single high-level
+ * graph operation.
+ */
+TEST(db, graph_triangle_batch) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1558,6 +1680,11 @@ TEST(db, graph_triangle_batch_api) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Tries to make a transaction on a graph, that must fail to `commit`.
+ * Creates a "wedge": A-B-C. If a transaction changes the B-C edge,
+ * while A-B is updated externally, the commit will fail.
+ */
 TEST(db, graph_transaction_watch) {
 
     if (!ukv_supports_transactions_k)
@@ -1567,52 +1694,24 @@ TEST(db, graph_transaction_watch) {
     EXPECT_TRUE(db.open(path()));
     graph_collection_t net = *db.collection<graph_collection_t>();
 
-    edge_t edge1 {1, 2, 1};
-    edge_t edge2 {3, 1, 2};
-    EXPECT_TRUE(net.upsert(edge1));
-    EXPECT_TRUE(net.upsert(edge2));
+    edge_t edge_ab {'A', 'B', 19};
+    edge_t edge_bc {'B', 'C', 31};
+    EXPECT_TRUE(net.upsert(edge_ab));
+    EXPECT_TRUE(net.upsert(edge_bc));
 
     transaction_t txn = *db.transact();
     graph_collection_t txn_net = *txn.collection<graph_collection_t>();
-    EXPECT_TRUE(txn_net.degree(1));
-    EXPECT_TRUE(txn.commit());
+    EXPECT_EQ(txn_net.degree('B'), 2);
+    EXPECT_TRUE(txn_net.remove(edge_bc));
+    EXPECT_TRUE(net.remove(edge_ab));
 
-    EXPECT_TRUE(txn.reset());
-    EXPECT_TRUE(txn_net.degree(1));
-    EXPECT_TRUE(txn.commit());
-
-    EXPECT_TRUE(txn_net.degree(1));
-    EXPECT_TRUE(net.remove(edge1));
-    EXPECT_TRUE(net.remove(edge2));
     EXPECT_FALSE(txn.commit());
-    EXPECT_TRUE(txn.reset());
-
-    EXPECT_TRUE(txn_net.degree(1, ukv_vertex_role_any_k, false));
-    EXPECT_TRUE(net.upsert(edge1));
-    EXPECT_TRUE(net.upsert(edge2));
-    EXPECT_TRUE(txn.commit());
-
     EXPECT_TRUE(db.clear());
 }
 
-edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
-    return {v1, v2, edge_id};
-}
-
-std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_connect = 1) {
-    std::vector<edge_t> es;
-    ukv_key_t edge_id = 0;
-    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
-        ukv_key_t connect_with = vertex_id + next_connect;
-        while (connect_with < vertices_count) {
-            edge_id++;
-            es.push_back(make_edge(edge_id, vertex_id, connect_with));
-            connect_with = connect_with + next_connect;
-        }
-    }
-    return es;
-}
-
+/**
+ * Constructs a larger graph, validating the degrees in a resulting network afterward.
+ */
 TEST(db, graph_random_fill) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1631,6 +1730,7 @@ TEST(db, graph_random_fill) {
     EXPECT_TRUE(db.clear());
 }
 
+// TODO: What is this?
 TEST(db, graph_conflicting_transactions) {
 
     if (!ukv_supports_transactions_k)
@@ -1684,7 +1784,11 @@ TEST(db, graph_conflicting_transactions) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, graph_upsert_edges) {
+/**
+ * Takes a single Graph Store and populates it with various 5-vertex shapes:
+ * a star, a pentagon, and five self-loops.
+ */
+TEST(db, graph_layering_shapes) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1698,6 +1802,7 @@ TEST(db, graph_upsert_edges) {
         }
     };
 
+    // Before insertions, the graph is empty.
     over_the_vertices(false, 0);
 
     std::vector<edge_t> star {
@@ -1707,9 +1812,6 @@ TEST(db, graph_upsert_edges) {
         {2, 5, 4},
         {3, 5, 5},
     };
-    EXPECT_TRUE(graph.upsert(edges(star)));
-    over_the_vertices(true, 2u);
-
     std::vector<edge_t> pentagon {
         {1, 2, 6},
         {2, 3, 7},
@@ -1717,22 +1819,7 @@ TEST(db, graph_upsert_edges) {
         {4, 5, 9},
         {5, 1, 10},
     };
-    EXPECT_TRUE(graph.upsert(edges(pentagon)));
-    over_the_vertices(true, 4u);
-
-    EXPECT_TRUE(graph.remove(edges(star)));
-    over_the_vertices(true, 2u);
-
-    EXPECT_TRUE(graph.upsert(edges(star)));
-    over_the_vertices(true, 4u);
-
-    EXPECT_TRUE(graph.remove(edges(pentagon)));
-    over_the_vertices(true, 2u);
-
-    EXPECT_TRUE(graph.upsert(edges(pentagon)));
-    over_the_vertices(true, 4u);
-
-    std::vector<edge_t> itself {
+    std::vector<edge_t> self_loops {
         {1, 1, 11},
         {2, 2, 12},
         {3, 3, 13},
@@ -1740,23 +1827,33 @@ TEST(db, graph_upsert_edges) {
         {5, 5, 15},
     };
 
-    EXPECT_TRUE(graph.upsert(edges(itself)));
+    EXPECT_TRUE(graph.upsert(edges(star)));
+    over_the_vertices(true, 2u);
+    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    over_the_vertices(true, 4u);
+    EXPECT_TRUE(graph.remove(edges(star)));
+    over_the_vertices(true, 2u);
+    EXPECT_TRUE(graph.upsert(edges(star)));
+    over_the_vertices(true, 4u);
+    EXPECT_TRUE(graph.remove(edges(pentagon)));
+    over_the_vertices(true, 2u);
+    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    over_the_vertices(true, 4u);
+    EXPECT_TRUE(graph.upsert(edges(self_loops)));
     over_the_vertices(true, 6u);
-
     EXPECT_TRUE(graph.remove(edges(star)));
     EXPECT_TRUE(graph.remove(edges(pentagon)));
-
     over_the_vertices(true, 2u);
-
-    EXPECT_TRUE(graph.remove(edges(itself)));
-
+    EXPECT_TRUE(graph.remove(edges(self_loops)));
     over_the_vertices(true, 0);
-
     EXPECT_TRUE(db.clear());
-
     over_the_vertices(false, 0);
 }
 
+/**
+ * Tests vertex removals, which are the hardest operations on Graphs,
+ * as they trigger updates in all nodes connected to the removed one.
+ */
 TEST(db, graph_remove_vertices) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1778,6 +1875,10 @@ TEST(db, graph_remove_vertices) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Removes just the known list of edges, checking that vertices remain
+ * in the graph, even though entirely disconnected.
+ */
 TEST(db, graph_remove_edges_keep_vertices) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1797,6 +1898,7 @@ TEST(db, graph_remove_edges_keep_vertices) {
     EXPECT_TRUE(db.clear());
 }
 
+// TODO: Why do we need this?
 TEST(db, graph_get_edges) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1814,17 +1916,19 @@ TEST(db, graph_get_edges) {
         for (size_t i = 0; i != es.size(); ++i)
             received_edges.push_back(es[i]);
     }
-
     EXPECT_TRUE(graph.remove(edges(received_edges)));
+
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
-        auto es = *graph.edges(vertex_id);
-        EXPECT_EQ(es.size(), 0);
+        EXPECT_EQ(graph.edges(vertex_id)->size(), 0);
     }
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Getting the degrees of multiple vertices simultaneously.
+ */
 TEST(db, graph_degrees) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1833,19 +1937,23 @@ TEST(db, graph_degrees) {
 
     constexpr std::size_t vertices_count = 1000;
     std::vector<ukv_key_t> vertices(vertices_count);
-    vertices.resize(vertices_count);
-    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id)
-        vertices[vertex_id] = vertex_id;
+    std::iota(vertices.begin(), vertices.end(), 0);
 
     auto edges_vec = make_edges(vertices_count, 100);
     EXPECT_TRUE(graph.upsert(edges(edges_vec)));
 
-    auto degrees = *graph.degrees({{vertices.data(), sizeof(ukv_key_t)}, vertices.size()});
+    auto degrees = *graph.degrees(vertices);
     EXPECT_EQ(degrees.size(), vertices_count);
 
     EXPECT_TRUE(db.clear());
 }
 
+#pragma region Vectors Modality
+
+/**
+ * Tests "Vector Modality", including both CRUD and more analytical approximate search
+ * operations with just three distinctly different vectors in R3 space with Cosine metric.
+ */
 TEST(db, vectors) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
