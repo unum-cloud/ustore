@@ -432,6 +432,42 @@ TEST(db, clear_values) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Ordered batched scan over the main collection.
+ */
+TEST(db, batch_scan) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.collection());
+    blobs_collection_t collection = *db.collection();
+
+    std::array<ukv_key_t, 512> keys;
+    std::iota(std::begin(keys), std::end(keys), 0);
+    auto ref = collection[keys];
+    value_view_t value("value");
+    EXPECT_TRUE(ref.assign(value));
+
+    keys_range_t present_keys = collection.keys();
+    keys_stream_t stream(db, collection, 256);
+    stream.seek_to_first();
+    auto batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 256);
+    EXPECT_FALSE(stream.is_end());
+
+    stream.seek_to_next_batch();
+    batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 256);
+    EXPECT_FALSE(stream.is_end());
+
+    stream.seek_to_next_batch();
+    batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 0);
+    EXPECT_TRUE(stream.is_end());
+
+    EXPECT_TRUE(db.clear());
+}
+
 // TODO: Unit tests must be minimal.
 TEST(db, multiple_collection) {
     if (!ukv_supports_named_collections_k)
