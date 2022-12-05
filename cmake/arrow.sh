@@ -5,7 +5,7 @@
 # conda install arrow-cpp=9.0.0=py39h811ffd7_0_cpu -c fastchan
 
 export arrow_version=9.0.0-1 &&
-    sudo apt update && sudo apt install -y -V ca-certificates lsb-release wget && 
+    sudo apt update && sudo apt install -y -V ca-certificates lsb-release wget &&
     cd /tmp && wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb &&
     sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb &&
     sudo apt update && sudo apt install -y -V libarrow-dev=${arrow_version} libarrow-dataset-dev=${arrow_version} libarrow-flight-dev=${arrow_version} \
