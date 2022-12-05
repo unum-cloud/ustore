@@ -182,21 +182,30 @@ struct triplet_t {
     }
 };
 
+template <typename locations_at>
+void round_trip(blobs_ref_gt<locations_at>& ref, triplet_t const& triplet) {
+    round_trip(ref, triplet.contents_arrow());
+    round_trip(ref, triplet.contents_lengths());
+    round_trip(ref, triplet.contents_full());
+}
+
+template <template <typename locations_at> class ref_at, typename locations_at>
+void check_equalities(ref_at<locations_at>& ref, triplet_t const& triplet) {
+    check_equalities(ref, triplet.contents_arrow());
+    check_equalities(ref, triplet.contents_lengths());
+    check_equalities(ref, triplet.contents_full());
+}
+
 void check_binary_collection(blobs_collection_t& collection) {
 
     triplet_t triplet;
     auto ref = collection[triplet.keys];
-
-    round_trip(ref, triplet.contents_arrow());
-    round_trip(ref, triplet.contents_lengths());
-    round_trip(ref, triplet.contents_full());
+    round_trip(ref, triplet);
 
     // Overwrite those values with same size integers and try again
     for (auto& val : triplet.vals)
         val += 7;
-    round_trip(ref, triplet.contents_arrow());
-    round_trip(ref, triplet.contents_lengths());
-    round_trip(ref, triplet.contents_full());
+    round_trip(ref, triplet);
 
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(ref.clear());
@@ -304,9 +313,7 @@ TEST(db, persistency) {
         blobs_collection_t collection = *db.collection();
         auto collection_ref = collection[triplet.keys];
         check_length(collection_ref, ukv_length_missing_k);
-        round_trip(collection_ref, triplet.contents_arrow());
-        round_trip(collection_ref, triplet.contents_lengths());
-        round_trip(collection_ref, triplet.contents_full());
+        round_trip(collection_ref, triplet);
         check_length(collection_ref, triplet_t::val_size_k);
     }
     db.close();
@@ -314,9 +321,7 @@ TEST(db, persistency) {
         EXPECT_TRUE(db.open(path()));
         blobs_collection_t collection = *db.collection();
         auto collection_ref = collection[triplet.keys];
-        check_equalities(collection_ref, triplet.contents_arrow());
-        check_equalities(collection_ref, triplet.contents_lengths());
-        check_equalities(collection_ref, triplet.contents_full());
+        check_equalities(collection_ref, triplet);
         check_length(collection_ref, triplet_t::val_size_k);
     }
     EXPECT_TRUE(db.clear());
@@ -420,10 +425,7 @@ TEST(db, clear_values) {
     auto collection_ref = col[triplet.keys];
 
     check_length(collection_ref, ukv_length_missing_k);
-
-    round_trip(collection_ref, triplet.contents_arrow());
-    round_trip(collection_ref, triplet.contents_lengths());
-    round_trip(collection_ref, triplet.contents_full());
+    round_trip(collection_ref, triplet);
     check_length(collection_ref, triplet_t::val_size_k);
 
     EXPECT_TRUE(col.clear_values());
@@ -497,29 +499,19 @@ TEST(db, multiple_collection) {
     check_length(col4_ref, ukv_length_missing_k);
     check_length(col5_ref, ukv_length_missing_k);
 
-    round_trip(col1_ref, triplet.contents_arrow());
-    round_trip(col1_ref, triplet.contents_lengths());
-    round_trip(col1_ref, triplet.contents_full());
+    round_trip(col1_ref, triplet);
     check_length(col1_ref, triplet_t::val_size_k);
 
-    round_trip(col2_ref, triplet.contents_arrow());
-    round_trip(col2_ref, triplet.contents_lengths());
-    round_trip(col2_ref, triplet.contents_full());
+    round_trip(col2_ref, triplet);
     check_length(col2_ref, triplet_t::val_size_k);
 
-    round_trip(col3_ref, triplet.contents_arrow());
-    round_trip(col3_ref, triplet.contents_lengths());
-    round_trip(col3_ref, triplet.contents_full());
+    round_trip(col3_ref, triplet);
     check_length(col3_ref, triplet_t::val_size_k);
 
-    round_trip(col4_ref, triplet.contents_arrow());
-    round_trip(col4_ref, triplet.contents_lengths());
-    round_trip(col4_ref, triplet.contents_full());
+    round_trip(col4_ref, triplet);
     check_length(col4_ref, triplet_t::val_size_k);
 
-    round_trip(col5_ref, triplet.contents_arrow());
-    round_trip(col5_ref, triplet.contents_lengths());
-    round_trip(col5_ref, triplet.contents_full());
+    round_trip(col5_ref, triplet);
     check_length(col5_ref, triplet_t::val_size_k);
 
     EXPECT_TRUE(*db.contains("col1"));
@@ -576,9 +568,7 @@ TEST(db, unnamed_and_named) {
         blobs_collection_t collection = std::move(maybe_collection).throw_or_release();
         auto collection_ref = collection[triplet.keys];
         check_length(collection_ref, ukv_length_missing_k);
-        round_trip(collection_ref, triplet.contents_arrow());
-        round_trip(collection_ref, triplet.contents_lengths());
-        round_trip(collection_ref, triplet.contents_full());
+        round_trip(collection_ref, triplet);
         check_length(collection_ref, triplet_t::val_size_k);
     }
     EXPECT_TRUE(db.clear());
@@ -602,9 +592,7 @@ TEST(db, transaction_read_commited) {
     triplet_t triplet;
 
     auto txn_ref = txn[triplet.keys];
-    round_trip(txn_ref, triplet.contents_arrow());
-    round_trip(txn_ref, triplet.contents_lengths());
-    round_trip(txn_ref, triplet.contents_full());
+    round_trip(txn_ref, triplet);
 
     EXPECT_TRUE(db.collection());
     blobs_collection_t collection = *db.collection();
@@ -616,9 +604,7 @@ TEST(db, transaction_read_commited) {
     EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
-    check_equalities(collection_ref, triplet.contents_arrow());
-    check_equalities(collection_ref, triplet.contents_lengths());
-    check_equalities(collection_ref, triplet.contents_full());
+    check_equalities(collection_ref, triplet);
     EXPECT_TRUE(db.clear());
 }
 
@@ -648,19 +634,12 @@ TEST(db, transaction_snapshot_isolation) {
     auto collection_ref = collection[triplet.keys];
 
     check_length(collection_ref, ukv_length_missing_k);
-    round_trip(collection_ref, triplet.contents());
-    round_trip(collection_ref, triplet.contents_lengths());
-    round_trip(collection_ref, triplet.contents_full());
+    round_trip(collection_ref, triplet);
 
     transaction_t txn = *db.transact(true);
     auto txn_ref = txn[triplet.keys];
-    check_equalities(txn_ref, triplet.contents());
-    check_equalities(txn_ref, triplet.contents_lengths());
-    check_equalities(txn_ref, triplet.contents_full());
-
-    round_trip(collection_ref, triplet_same_v.contents());
-    round_trip(collection_ref, triplet_same_v.contents_lengths());
-    round_trip(collection_ref, triplet_same_v.contents_full());
+    check_equalities(txn_ref, triplet);
+    round_trip(collection_ref, triplet_same_v);
 
     // Validate that values match
     auto maybe_retrieved = txn_ref.value();
@@ -679,9 +658,7 @@ TEST(db, transaction_snapshot_isolation) {
 
     txn = *db.transact(true);
     auto ref = txn[triplet_same_v.keys];
-    round_trip(ref, triplet_same_v.contents());
-    round_trip(ref, triplet_same_v.contents_lengths());
-    round_trip(ref, triplet_same_v.contents_full());
+    round_trip(ref, triplet_same_v);
 
     EXPECT_TRUE(db.clear());
 }
@@ -709,9 +686,7 @@ TEST(db, txn_named) {
         {named_collection, triplet.keys[2]},
     };
     auto txn_named_collection_ref = txn[sub_keys];
-    round_trip(txn_named_collection_ref, triplet.contents_arrow());
-    round_trip(txn_named_collection_ref, triplet.contents_lengths());
-    round_trip(txn_named_collection_ref, triplet.contents_full());
+    round_trip(txn_named_collection_ref, triplet);
 
     // Check for missing values before commit
     auto named_collection_ref = named_collection[triplet.keys];
@@ -720,9 +695,7 @@ TEST(db, txn_named) {
     EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
-    check_equalities(named_collection_ref, triplet.contents_arrow());
-    check_equalities(named_collection_ref, triplet.contents_lengths());
-    check_equalities(named_collection_ref, triplet.contents_full());
+    check_equalities(named_collection_ref, triplet);
     EXPECT_TRUE(db.clear());
 }
 
@@ -742,9 +715,7 @@ TEST(db, txn_unnamed_then_named) {
     triplet_t triplet;
 
     auto txn_ref = txn[triplet.keys];
-    round_trip(txn_ref, triplet.contents_arrow());
-    round_trip(txn_ref, triplet.contents_lengths());
-    round_trip(txn_ref, triplet.contents_full());
+    round_trip(txn_ref, triplet);
 
     EXPECT_TRUE(db.collection());
     blobs_collection_t collection = *db.collection();
@@ -756,9 +727,7 @@ TEST(db, txn_unnamed_then_named) {
     EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
-    check_equalities(collection_ref, triplet.contents_arrow());
-    check_equalities(collection_ref, triplet.contents_lengths());
-    check_equalities(collection_ref, triplet.contents_full());
+    check_equalities(collection_ref, triplet);
 
     // Transaction with named collection
     EXPECT_TRUE(db.collection_create("named_col"));
@@ -769,9 +738,7 @@ TEST(db, txn_unnamed_then_named) {
         {named_collection, triplet.keys[2]},
     };
     auto txn_named_collection_ref = txn[sub_keys];
-    round_trip(txn_named_collection_ref, triplet.contents_arrow());
-    round_trip(txn_named_collection_ref, triplet.contents_lengths());
-    round_trip(txn_named_collection_ref, triplet.contents_full());
+    round_trip(txn_named_collection_ref, triplet);
 
     // Check for missing values before commit
     auto named_collection_ref = named_collection[triplet.keys];
@@ -780,10 +747,7 @@ TEST(db, txn_unnamed_then_named) {
     EXPECT_TRUE(txn.reset());
 
     // Validate that values match after commit
-    check_equalities(named_collection_ref, triplet.contents_arrow());
-    check_equalities(named_collection_ref, triplet.contents_lengths());
-    check_equalities(named_collection_ref, triplet.contents_full());
-
+    check_equalities(named_collection_ref, triplet);
     EXPECT_TRUE(db.clear());
 }
 
