@@ -613,7 +613,7 @@ TEST(db, transaction_read_commited) {
  * If needed, readers can initiate snapshot-backed transactions.
  * All the reads, directed to that snapshot will not see newer operations,
  * affecting the HEAD state. From a consistency standpoint, it is a downgrade
- * from "Strictly Serializable" ACID transactions, but it is extremely usefull
+ * from "Strictly Serializable" ACID transactions, but it is extremely useful
  * for numerous Business Intelligence applications.
  * https://jepsen.io/consistency/models/snapshot-isolation
  */
@@ -1046,7 +1046,7 @@ TEST(db, docs_flat) {
 }
 
 /**
- * Tryies adding 3 simple nseted JSONs, using JSON-Pointers
+ * Tries adding 3 simple nested JSONs, using JSON-Pointers
  * to retrieve specific fields across multiple keys.
  */
 TEST(db, docs_nested_batch) {
@@ -1579,7 +1579,7 @@ TEST(db, graph_triangle) {
 }
 
 /**
- * Further complicates the `graph_triangle` test by performaing all of the updates
+ * Further complicates the `graph_triangle` test by performing all of the updates
  * and lookups in batches. This detects inconsistencies in concurrent updates to
  * the underlying binary representation, triggered from a single high-level
  * graph operation.
