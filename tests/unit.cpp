@@ -1059,16 +1059,14 @@ TEST(db, docs_flat) {
 
     // BSON
     bson_error_t error;
-
     bson_t* b = bson_new_from_json((uint8_t*)json.c_str(), -1, &error);
     const uint8_t* buffer = bson_get_data(b);
-    // TODO: Deallocate
-
     auto view = value_view_t(buffer, b->len);
     collection.at(2, ukv_doc_field_bson_k) = view;
     M_EXPECT_EQ_JSON(*collection[2].value(), json);
     M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), "\"Carl\"");
     M_EXPECT_EQ_JSON(*collection[ckf(2, "age")].value(), "24");
+    bson_clear(&b);
 
 #if 0
     // MsgPack
@@ -1978,7 +1976,7 @@ TEST(db, graph_degrees) {
     auto edges_vec = make_edges(vertices_count, 100);
     EXPECT_TRUE(graph.upsert(edges(edges_vec)));
 
-    auto degrees = *graph.degrees(vertices);
+    auto degrees = *graph.degrees(strided_range(vertices).immutable());
     EXPECT_EQ(degrees.size(), vertices_count);
 
     EXPECT_TRUE(db.clear());
