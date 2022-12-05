@@ -20,7 +20,7 @@ class [[nodiscard]] status_t {
     bool is_view_ = false;
 
   public:
-    static status_t status_view(char const* msg) {
+    static status_t status_view(char const* msg) noexcept {
         status_t st(msg);
         st.is_view_ = true;
         return st;
@@ -39,7 +39,7 @@ class [[nodiscard]] status_t {
         std::swap(is_view_, other.is_view_);
         return *this;
     }
-    ~status_t() {
+    ~status_t() noexcept {
         if (raw_ && !is_view_)
             ukv_error_free(raw_);
         raw_ = nullptr;
@@ -73,8 +73,8 @@ class [[nodiscard]] expected_gt {
 
   public:
     expected_gt() = default;
-    expected_gt(object_at&& object) : object_(std::move(object)) {}
-    expected_gt(status_t&& status, object_at&& default_object = object_at {})
+    expected_gt(object_at&& object) noexcept : object_(std::move(object)) {}
+    expected_gt(status_t&& status, object_at&& default_object = object_at {}) noexcept
         : status_(std::move(status)), object_(std::move(default_object)) {}
 
     expected_gt(expected_gt&& other) noexcept : status_(std::move(other.status_)), object_(std::move(other.object_)) {}
@@ -90,12 +90,12 @@ class [[nodiscard]] expected_gt {
     object_at const& operator*() const& noexcept { return object_; }
     object_at* operator->() noexcept { return &object_; }
     object_at const* operator->() const noexcept { return &object_; }
-    operator std::optional<object_at>() && {
+    operator std::optional<object_at>() && noexcept {
         return !status_ ? std::nullopt : std::optional<object_at> {std::move(object_)};
     }
 
     void throw_unhandled() { return status_.throw_unhandled(); }
-    status_t release_status() { return std::exchange(status_, status_t {}); }
+    status_t release_status() noexcept { return std::exchange(status_, status_t {}); }
     object_at& throw_or_ref() & {
         status_.throw_unhandled();
         return object_;
