@@ -160,7 +160,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
             if (name.compare(*name_it) == 0)
                 return ukv_collection_t(*id_it);
         }
-        return status_t {"Collection not found."};
+        return status_t::status_view("Collection not found.");
     }
 
     /**
@@ -185,7 +185,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
                 continue;
             return collection_at {db_, *id_it, txn_, arena_.member_ptr()};
         }
-        return status_t {"No such collection is present"};
+        return status_t::status_view("No such collection is present");
     }
 
     /**

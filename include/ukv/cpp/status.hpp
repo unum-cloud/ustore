@@ -20,7 +20,7 @@ class [[nodiscard]] status_t {
     bool is_view_ = false;
 
   public:
-    static status_t status_view(const char* msg) {
+    static status_t status_view(char const* msg) {
         status_t st(msg);
         st.is_view_ = true;
         return st;
@@ -32,9 +32,11 @@ class [[nodiscard]] status_t {
     status_t(status_t const&) = delete;
     status_t& operator=(status_t const&) = delete;
 
-    status_t(status_t&& other) noexcept { raw_ = std::exchange(other.raw_, nullptr); }
+    status_t(status_t&& other) noexcept
+        : raw_(std::exchange(other.raw_, nullptr)), is_view_(std::exchange(other.is_view_, false)) {}
     status_t& operator=(status_t&& other) noexcept {
         std::swap(raw_, other.raw_);
+        std::swap(is_view_, other.is_view_);
         return *this;
     }
     ~status_t() {
@@ -45,7 +47,8 @@ class [[nodiscard]] status_t {
 
     std::runtime_error release_exception() {
         std::runtime_error result(raw_);
-        ukv_error_free(std::exchange(raw_, nullptr));
+        if (!is_view_)
+            ukv_error_free(std::exchange(raw_, nullptr));
         return result;
     }
 
