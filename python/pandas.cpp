@@ -51,6 +51,33 @@ static ukv_doc_field_type_t ukv_doc_field_from_str(ukv_str_view_t type_name) {
     return ukv_doc_field_json_k;
 }
 
+void scan_rows(py_table_collection_t& df) {
+    auto keys_range = df.binary.native.keys();
+    auto keys_stream = keys_range.begin();
+    std::vector<ukv_key_t> keys_found;
+    while (!keys_stream.is_end()) {
+        keys_found.insert(keys_found.end(), keys_stream.keys_batch().begin(), keys_stream.keys_batch().end());
+        keys_stream.seek_to_next_batch();
+    }
+    df.rows_keys = std::move(keys_found);
+}
+
+void scan_rows_range(py_table_collection_t& df) {
+    auto& range = std::get<py_table_keys_range_t>(df.rows_keys);
+    auto keys_range = df.binary.native.keys(range.min);
+    auto keys_stream = keys_range.begin();
+    std::vector<ukv_key_t> keys_found;
+    while (!keys_stream.is_end()) {
+        auto max_key_pos =
+            std::upper_bound(keys_stream.keys_batch().begin(), keys_stream.keys_batch().end(), range.max);
+        keys_found.insert(keys_found.end(), keys_stream.keys_batch().begin(), max_key_pos);
+        if (max_key_pos != keys_stream.keys_batch().end())
+            break;
+        keys_stream.seek_to_next_batch();
+    }
+    df.rows_keys = std::move(keys_found);
+}
+
 void correct_table(docs_table_t& table) {
 
     std::vector<std::size_t> binary_column_indexes;
@@ -107,13 +134,8 @@ static py::object materialize(py_table_collection_t& df) {
     if (std::holds_alternative<std::monostate>(df.rows_keys))
         throw std::invalid_argument("Full collection table materialization is not allowed");
 
-    if (std::holds_alternative<py_table_keys_range_t>(df.rows_keys)) {
-        auto keys_range = df.binary.native.keys();
-        std::vector<ukv_key_t> keys_found;
-        for (auto const& key : keys_range)
-            keys_found.push_back(key);
-        df.rows_keys = keys_found;
-    }
+    if (std::holds_alternative<py_table_keys_range_t>(df.rows_keys))
+        scan_rows_range(df);
 
     // Slice the keys using `head` and `tail`
     auto& keys_found = std::get<std::vector<ukv_key_t>>(df.rows_keys);
@@ -238,16 +260,10 @@ void update(py_table_collection_t& df, py::object obj) {
     if (!arrow::py::is_batch(obj.ptr()))
         throw std::invalid_argument("Expected Arrow Table!");
 
-    if (std::holds_alternative<std::monostate>(df.rows_keys)) {
-        auto keys_range = df.binary.native.keys();
-        auto keys_stream = keys_range.begin();
-        std::vector<ukv_key_t> keys_found;
-        while (!keys_stream.is_end()) {
-            keys_found.insert(keys_found.end(), keys_stream.keys_batch().begin(), keys_stream.keys_batch().end());
-            keys_stream.seek_to_next_batch();
-        }
-        df.rows_keys = keys_found;
-    }
+    if (std::holds_alternative<std::monostate>(df.rows_keys))
+        scan_rows(df);
+    else if (std::holds_alternative<py_table_keys_range_t>(df.rows_keys))
+        scan_rows_range(df);
 
     auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
     auto collection = docs_collection_t(df.binary.native.db(), df.binary.native, df.binary.native.txn());

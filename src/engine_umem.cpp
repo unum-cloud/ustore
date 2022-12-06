@@ -108,7 +108,7 @@ struct pair_compare_t {
 // using consistent_set_t = consistent_avl_gt<pair_t, pair_compare_t>;
 // using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>, std::shared_mutex>;
 using consistent_set_t = partitioned_gt< //
-    consistent_avl_gt<pair_t, pair_compare_t>,
+    consistent_set_gt<pair_t, pair_compare_t>,
     std::hash<collection_key_t>,
     std::shared_mutex,
     64>;
@@ -754,7 +754,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
 
     else if (c.mode == ukv_drop_vals_k) {
         auto status = db.pairs.range(c.id, c.id + 1, [&](pair_t& pair) noexcept {
-            pair = pair_t {pair.collection_key, {}, nullptr};
+            pair = pair_t {pair.collection_key, value_view_t::make_empty(), nullptr};
         });
         return export_error_code(status, c.error);
     }

@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
+#include <bson.h>
 
 #include "ukv/ukv.hpp"
 
@@ -111,8 +112,8 @@ void check_length(blobs_ref_gt<locations_at>& ref, ukv_length_t expected_length)
     }
 }
 
-template <typename locations_at>
-void check_equalities(blobs_ref_gt<locations_at>& ref, contents_arg_t values) {
+template <template <typename locations_at> class ref_at, typename locations_at>
+void check_equalities(ref_at<locations_at>& ref, contents_arg_t values) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
     using extractor_t = places_arg_extractor_gt<locations_at>;
@@ -241,6 +242,39 @@ TEST(db, basic_clear) {
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(db.clear());
     check_length(ref, ukv_length_missing_k);
+}
+
+TEST(db, batch_scan) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.collection());
+    blobs_collection_t collection = *db.collection();
+
+    std::array<ukv_key_t, 512> keys;
+    std::iota(std::begin(keys), std::end(keys), 0);
+    auto ref = collection[keys];
+    value_view_t value("value");
+    EXPECT_TRUE(ref.assign(value));
+
+    keys_range_t present_keys = collection.keys();
+    keys_stream_t stream(db, collection, 256);
+    stream.seek_to_first();
+    auto batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 256);
+    EXPECT_FALSE(stream.is_end());
+
+    stream.seek_to_next_batch();
+    batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 256);
+    EXPECT_FALSE(stream.is_end());
+
+    stream.seek_to_next_batch();
+    batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 0);
+    EXPECT_TRUE(stream.is_end());
+
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, ordered) {
@@ -382,6 +416,113 @@ TEST(db, collection_list) {
         EXPECT_TRUE(db.collection()->clear());
     }
     EXPECT_TRUE(db.clear());
+}
+
+TEST(db, collection_drop_values) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    triplet_t triplet;
+
+    blobs_collection_t col = *db.collection();
+    auto collection_ref = col[triplet.keys];
+
+    check_length(collection_ref, ukv_length_missing_k);
+
+    round_trip(collection_ref, triplet.contents_arrow());
+    round_trip(collection_ref, triplet.contents_lengths());
+    round_trip(collection_ref, triplet.contents_full());
+    check_length(collection_ref, triplet_t::val_size_k);
+
+    EXPECT_TRUE(col.clear_values());
+    check_length(collection_ref, 0);
+
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, multiple_collection) {
+    if (!ukv_supports_named_collections_k)
+        return;
+
+    database_t db;
+
+    EXPECT_TRUE(db.open(path()));
+
+    blobs_collection_t col1 = *db.collection_create("col1");
+    blobs_collection_t col2 = *db.collection_create("col2");
+    blobs_collection_t col3 = *db.collection_create("col3");
+    blobs_collection_t col4 = *db.collection_create("col4");
+    blobs_collection_t col5 = *db.collection_create("col5");
+
+    triplet_t triplet;
+
+    auto col1_ref = col1[triplet.keys];
+    auto col2_ref = col2[triplet.keys];
+    auto col3_ref = col3[triplet.keys];
+    auto col4_ref = col4[triplet.keys];
+    auto col5_ref = col5[triplet.keys];
+
+    check_length(col1_ref, ukv_length_missing_k);
+    check_length(col2_ref, ukv_length_missing_k);
+    check_length(col3_ref, ukv_length_missing_k);
+    check_length(col4_ref, ukv_length_missing_k);
+    check_length(col5_ref, ukv_length_missing_k);
+
+    round_trip(col1_ref, triplet.contents_arrow());
+    round_trip(col1_ref, triplet.contents_lengths());
+    round_trip(col1_ref, triplet.contents_full());
+    check_length(col1_ref, triplet_t::val_size_k);
+
+    round_trip(col2_ref, triplet.contents_arrow());
+    round_trip(col2_ref, triplet.contents_lengths());
+    round_trip(col2_ref, triplet.contents_full());
+    check_length(col2_ref, triplet_t::val_size_k);
+
+    round_trip(col3_ref, triplet.contents_arrow());
+    round_trip(col3_ref, triplet.contents_lengths());
+    round_trip(col3_ref, triplet.contents_full());
+    check_length(col3_ref, triplet_t::val_size_k);
+
+    round_trip(col4_ref, triplet.contents_arrow());
+    round_trip(col4_ref, triplet.contents_lengths());
+    round_trip(col4_ref, triplet.contents_full());
+    check_length(col4_ref, triplet_t::val_size_k);
+
+    round_trip(col5_ref, triplet.contents_arrow());
+    round_trip(col5_ref, triplet.contents_lengths());
+    round_trip(col5_ref, triplet.contents_full());
+    check_length(col5_ref, triplet_t::val_size_k);
+
+    EXPECT_TRUE(*db.contains("col1"));
+    EXPECT_TRUE(col1.clear_values());
+    check_length(col1_ref, 0);
+    EXPECT_TRUE(*db.contains("col1"));
+
+    EXPECT_TRUE(*db.contains("col2"));
+    EXPECT_TRUE(col2.clear_values());
+    check_length(col2_ref, 0);
+    EXPECT_TRUE(*db.contains("col2"));
+
+    EXPECT_TRUE(db.drop("col2"));
+    EXPECT_FALSE(*db.contains("col2"));
+
+    EXPECT_TRUE(*db.contains("col3"));
+    EXPECT_TRUE(*db.contains("col4"));
+    EXPECT_TRUE(*db.contains("col5"));
+
+    EXPECT_TRUE(db.drop("col4"));
+    EXPECT_FALSE(*db.contains("col4"));
+
+    check_length(col3_ref, triplet_t::val_size_k);
+    check_length(col5_ref, triplet_t::val_size_k);
+
+    EXPECT_TRUE(db.clear());
+
+    EXPECT_FALSE(*db.contains("col1"));
+    EXPECT_FALSE(*db.contains("col2"));
+    EXPECT_FALSE(*db.contains("col3"));
+    EXPECT_FALSE(*db.contains("col4"));
+    EXPECT_FALSE(*db.contains("col5"));
 }
 
 TEST(db, paths) {
@@ -841,16 +982,104 @@ TEST(db, docs) {
     auto maybe_person = collection[ckf(1, "person")].value(ukv_doc_field_str_k);
     EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
 
+    // BSON
+    bson_error_t error;
+
+    bson_t* b = bson_new_from_json((uint8_t*)json.c_str(), -1, &error);
+    const uint8_t* buffer = bson_get_data(b);
+
+    auto view = value_view_t(buffer, b->len);
+    collection.at(2, ukv_doc_field_bson_k) = view;
+    M_EXPECT_EQ_JSON(*collection[2].value(), json);
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), "\"Carl\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "age")].value(), "24");
+
 #if 0
     // MsgPack
     collection.as(ukv_format_msgpack_k);
-    value_view_t val = *collection[1].value();
     M_EXPECT_EQ_MSG(val, json.c_str());
     val = *collection[ckf(1, "person")].value();
     M_EXPECT_EQ_MSG(val, "\"Carl\"");
     val = *collection[ckf(1, "age")].value();
     M_EXPECT_EQ_MSG(val, "24");
 #endif
+
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, docs_batch) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    docs_collection_t collection = *db.collection<docs_collection_t>();
+
+    auto json1 = R"({"person": {"name":"Carl", "age": 24}} )"_json.dump();
+    auto json2 = R"({"person": [{"name":"Joe", "age": 25}]} )"_json.dump();
+    auto json3 = R"({"person": "Charls", "age": 26} )"_json.dump();
+    std::string jsons = json1 + json2 + json3;
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(jsons.data());
+    std::array<ukv_length_t, 4> offsets = {
+        0,
+        json1.size(),
+        json1.size() + json2.size(),
+        json1.size() + json2.size() + json3.size(),
+    };
+    contents_arg_t values {
+        .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
+        .contents_begin = {&vals_begin, 0},
+    };
+
+    std::array<ukv_key_t, 3> keys = {1, 2, 3};
+    auto ref = collection[keys];
+    ref.assign(values);
+
+    // Read One By One
+    M_EXPECT_EQ_JSON(*collection[1].value(), json1);
+    M_EXPECT_EQ_JSON(*collection[2].value(), json2);
+    M_EXPECT_EQ_JSON(*collection[3].value(), json3);
+
+    auto expected = R"({"name":"Carl", "age": 24})"_json.dump();
+    M_EXPECT_EQ_JSON(*collection[ckf(1, "person")].value(), expected);
+
+    expected = R"([{"name":"Joe", "age": 25}])"_json.dump();
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), expected);
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "/person/0/name")].value(), "\"Joe\"");
+
+    // Read sorted keys
+    check_equalities(ref, values);
+
+    // Read not sorted keys
+    std::array<ukv_key_t, 3> not_sorted_keys = {1, 3, 2};
+    auto not_sorted_ref = collection[not_sorted_keys];
+    std::string not_sorted_jsons = json1 + json3 + json2;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(not_sorted_jsons.data());
+    offsets[2] = json1.size() + json3.size();
+    offsets[3] = json1.size() + json3.size() + json2.size();
+    check_equalities(not_sorted_ref, values);
+
+    // Read duplicate keys
+    std::array<ukv_key_t, 3> duplicate_keys = {1, 2, 1};
+    auto duplicate_ref = collection[duplicate_keys];
+    std::string duplicate_jsons = json1 + json2 + json1;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(duplicate_jsons.data());
+    offsets[2] = json1.size() + json2.size();
+    offsets[3] = json1.size() + json2.size() + json1.size();
+    check_equalities(duplicate_ref, values);
+
+    // Read with feilds
+    std::array<collection_key_field_t, 3> keys_with_fields = {ckf(1, "person"),
+                                                              ckf(2, "/person/0/name"),
+                                                              ckf(3, "age")};
+    auto ref_with_fields = collection[keys_with_fields];
+    auto field1 = R"({"name":"Carl", "age": 24} )"_json.dump();
+    auto field2 = R"("Joe")"_json.dump();
+    auto field3 = R"(26)"_json.dump();
+    std::string fields = field1 + field2 + field3;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(fields.data());
+    offsets[1] = field1.size();
+    offsets[2] = field1.size() + field2.size();
+    offsets[3] = field1.size() + field2.size() + field3.size();
+    check_equalities(ref_with_fields, values);
 
     EXPECT_TRUE(db.clear());
 }
@@ -1183,6 +1412,11 @@ TEST(db, graph_triangle) {
     EXPECT_TRUE(net.upsert(edge1));
     EXPECT_TRUE(net.upsert(edge2));
     EXPECT_TRUE(net.upsert(edge3));
+
+    auto neighbors = net.neighbors(1).throw_or_release();
+    EXPECT_EQ(neighbors.size(), 2);
+    EXPECT_EQ(neighbors[0], 2);
+    EXPECT_EQ(neighbors[1], 3);
 
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));

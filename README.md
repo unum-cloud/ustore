@@ -1,7 +1,8 @@
-<h1 align="center">UKV by Unum</h1>
+<h1 align="center">UKV</h1>
 <h3 align="center">
 Universal Binary Interface<br/>
-For The Fastest DBMS Ever Built
+For the Fastest Databases in Existance<br/>
+From <a href="https://unum.cloud">Unum</a> with ❤️
 </h3>
 
 <h5 align="center">
@@ -26,6 +27,7 @@ C • C++ • Python • Java • GoLang • Apache Arrow
 ## What is UKV?
 
 **UKV is an open C-layer binary standard** for "Create, Read, Update, Delete" operations, or CRUD for short.
+
 Many databases exist today, providing similar functionality and performance under different interfaces.
 It is a problem for DBMS users, introducing vendor locks and additional friction for adopting newer and better technologies.
 
@@ -41,8 +43,8 @@ That way, migrations are more manageable, and the system can be modularized into
 
 ## The [BLAS][blas] of [CRUD][crud]
 
-Such generic standards have existed in computing since 1979.
-It is called **BLAS** and was the locomotive of Numerical Methods across all disciplines in the past 50 years. 
+Generic standards have existed in computing since 1979.
+The best one is called **BLAS** and was the locomotive of Numerical Methods across all disciplines in the past 50 years. 
 Every deep-learning you use relies on BLAS.
 What is the standard that your DBMS can be built around?
 
@@ -58,8 +60,12 @@ Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-bench
 
 ## Features
 
+We love to think about UKV as a "Transactional <sup>1</sup> Zoned <sup>2</sup> Memory Allocator <sup>3</sup>" that can abstract both persistent and volatile memory.
+This abstraction every DBMS needs.
+But UKV has more to offer!
+
 <table>
-<td>
+<td style="text-align: center">
 
 <ul>
 <li> <b>ACID Transactions</b> across collections  </li>
@@ -71,7 +77,7 @@ Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-bench
 </ul>
 
 </td>
-<td>
+<td style="text-align: center">
 
 <ul>
 <li> Native Apache <b>Arrow</b> format support </li>
@@ -83,6 +89,10 @@ Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-bench
 </ul>
 </td>
 </table>
+
+> 1: For [ACID][acid].
+> 2: For having named collections.
+> 3: Because keys are integers, like `uintptr_t`, and values are virtually continuous memory blocks of variable length.
 
 ## [HTAP][htap]: [OLAP][olap] + [OLTP][oltp]
 
@@ -158,22 +168,23 @@ Historically, LevelDB was the first one.
 RocksDB then improved on functionality and performance.
 Now it serves as the foundation for half of the DBMS startups.
 
-|                   | LevelDB | RocksDB  |  UDisk  |  UMem   |
-| :---------------- | :-----: | :------: | :-----: | :-----: |
-| **Speed**         |   1x    |    2x    | **10x** | **30x** |
-| **Persistent**    |    ✓    |    ✓     |    ✓    |    ✗    |
-| **Transactional** |    ✗    |    ✓     |    ✓    |    ✓    |
-| [Watches][watch]  |    ✗    |    ✓     |    ✓    |    ✓    |
-| [Snapshots][snap] |    ✓    |    ✓     |    ✓    |    ✗    |
-| Named Collections |    ✗    |    ✓     |    ✓    |    ✓    |
-| Random Sampling   |    ✗    |    ✗     |    ✓    |    ✓    |
-| Bulk Enumeration  |    ✗    |    ✗     |    ✓    |    ✓    |
-| Encryption        |    ✗    |    ✗     |    ✓    |    ✗    |
-| Open-Source       |    ✓    |    ✓     |    ✗    |    ✓    |
-| Compatibility     |   Any   |   Any    |  Linux  |   Any   |
-| Maintainer        | Google  | Facebook |  Unum   |  Unum   |
+|                          | LevelDB | RocksDB  |  UDisk  |  UMem   |
+| :----------------------- | :-----: | :------: | :-----: | :-----: |
+| **Speed**                |   1x    |    2x    | **10x** | **30x** |
+| **Persistent**           |    ✓    |    ✓     |    ✓    |    ✗    |
+| **Transactional**        |    ✗    |    ✓     |    ✓    |    ✓    |
+| **Block Device Support** |    ✗    |    ✗     |    ✓    |    ✗    |
+| Encryption               |    ✗    |    ✗     |    ✓    |    ✗    |
+| [Watches][watch]         |    ✗    |    ✓     |    ✓    |    ✓    |
+| [Snapshots][snap]        |    ✓    |    ✓     |    ✓    |    ✗    |
+| Random Sampling          |    ✗    |    ✗     |    ✓    |    ✓    |
+| Bulk Enumeration         |    ✗    |    ✗     |    ✓    |    ✓    |
+| Named Collections        |    ✗    |    ✓     |    ✓    |    ✓    |
+| Open-Source              |    ✓    |    ✓     |    ✗    |    ✓    |
+| Compatibility            |   Any   |   Any    |  Linux  |   Any   |
+| Maintainer               | Google  | Facebook |  Unum   |  Unum   |
 
-UMem and UDisk are both designed and maintained by Unum from scratch.
+UMem and UDisk are both designed and maintained by Unum.
 Both are feature-complete, but the most crucial feature our infrastructure provides is performance.
 Being fast in memory is easy.
 The core logic of UMem can be found in the templated header-only <code class="docutils literal notranslate"><a href="https://github.com/ashvardanian/consistent_set" class="pre">consistent_set</a></code> library.
@@ -182,7 +193,7 @@ The core logic of UMem can be found in the templated header-only <code class="do
 
 Designing UDisk was a much more challenging 7-year long endeavour.
 It included inventing new tree-like structures, implemting partial kernel bypass with `io_uring`, complete bypass with `SPDK`, GPU acceleration, and even a custom internal filesystem.
-**UDisk is the first engine to be designed from scratch with parallel architectures in mind**.
+**UDisk is the first engine to be designed from scratch with parallel architectures and kernel-bypass in mind**.
 
 > [Jump to Benchmarks](#benchmarks).
 
@@ -197,7 +208,7 @@ ACID transactions across modalities are supported.
 | :------------------------ | :------------------------------------------------: | :------------------------------------: | :--------------------------------------------------: |
 | Values                    |           JSON-like Hierarchical Objects           |       Labeled Directed Relations       |             High-Dimensional Embeddings              |
 | Specialized Functionality | JSON ⇔ BSON ⇔ MessagePack, Sub-Document Operations | Gather Neighbors, Count Vertex Degrees | Quantization, K-Approximate Nearest-Neighbors Search |
-| Examples                  |                      MongoDB                       |                 Neo4J                  |                       Pinecone                       |
+| Examples                  |             MongoDB, Postgres, MySQL               |            Neo4J, TigerGraph           |               Elastic Search, Pinecone               |
 
 One of our core objectives was to select the minimal core set of functions for each modality.
 In that case, implementing them can be easy for any passionate developer.
@@ -347,12 +358,11 @@ For example, `simdjson` is used for document validation and sampling, while `yyj
 A full list of dependencies is available at the link below, together with detailed descriptions of reference implementations.
 Licensing depends on which parts you are using.
 
-> [Read full development and contribution guide in our docs here][ukv-contrib].
+> [Read full development and contribution guide in our docs here][ukv-details].
 
 ## Presets, Limitations and FAQ
 
-* Keys are 64-bit integers. [Why?][ukv-keys-size]
-    * Use "paths" modality for string keys.
+* Keys are 64-bit integers, by default. [Why?][ukv-keys-size]
 * Values are binary strings under 4 GB long. [Why?][ukv-values-size]
 * Transactions are ACI(D) by-default. [What does it mean?][ukv-acid]
 * Why not use LevelDB or RocksDB interface? [Answered][ukv-vs-rocks]
@@ -367,16 +377,16 @@ Licensing depends on which parts you are using.
 [ukv-tests]: https://unum.cloud/UKV/tests
 [ukv-benchmarks]: https://unum.cloud/UKV/benchmarks
 [ukv-tools]: https://unum.cloud/UKV/tools
-[ukv-install]: https://unum.cloud/UKV/installation
-[ukv-contrib]: https://unum.cloud/UKV/contribute
-[ukv-keys-size]: https://unum.cloud/UKV/c/#keys
-[ukv-values-size]: https://unum.cloud/UKV/c/#values
-[ukv-acid]: https://unum.cloud/UKV/c/#acid
-[ukv-vs-rocks]: https://unum.cloud/UKV/c/#rocks
-[ukv-vs-sql]: https://unum.cloud/UKV/c/#sql
+[ukv-install]: https://unum.cloud/UKV/install
+[ukv-details]: https://unum.cloud/UKV/details
+[ukv-keys-size]: https://unum.cloud/UKV/c#integer-keys
+[ukv-values-size]: https://unum.cloud/UKV/c#smallish-values
+[ukv-acid]: https://unum.cloud/UKV/c#acid-transactions
+[ukv-vs-rocks]: https://unum.cloud/UKV/related#leveldb-rocksdb
+[ukv-vs-sql]: https://unum.cloud/UKV/related#sql-mql-cypher
 
-[ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb/
-[ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb/
+[ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
+[ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
 [ucsb]: https://github.com/unum-cloud/ucsb
 [consistent_set]: https://github.com/ashvardanian/consistent_set
 [ukv-c-sources]: https://github.com/unum-cloud/UKV/tree/main/include/ukv
@@ -402,9 +412,6 @@ Licensing depends on which parts you are using.
 [dbms-cloc]: https://news.ycombinator.com/item?id=24813239
 [watch]: https://redis.io/commands/watch/
 [snap]: https://github.com/facebook/rocksdb/wiki/Snapshot
-[acid]: https://en.wikipedia.org/wiki/ACID
 [olap]: https://en.wikipedia.org/wiki/Online_analytical_processing
 [oltp]: https://en.wikipedia.org/wiki/Online_transaction_processing
 [htap]: https://en.wikipedia.org/wiki/Hybrid_transactional/analytical_processing
-[flight]: https://arrow.apache.org/docs/format/Flight.html
-[twitter-samples]: https://developer.twitter.com/en/docs/twitter-api/v1/tweets/sample-realtime/overview

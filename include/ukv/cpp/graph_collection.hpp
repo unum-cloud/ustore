@@ -360,7 +360,7 @@ class graph_collection_t {
         for (std::size_t i = 0; i != count; ++i) {
             ukv_key_t& u = es.source_ids[i];
             ukv_key_t& v = es.target_ids[i];
-            if (u == vertex)
+            if (v == vertex)
                 std::swap(u, v);
         }
 

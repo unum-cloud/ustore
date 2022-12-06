@@ -15,6 +15,7 @@
 
 #include <ukv/ukv.hpp>
 #include <ukv/cpp/ranges.hpp> // `sort_and_deduplicate`
+
 #include "mixed.hpp"
 
 namespace bm = benchmark;
@@ -72,12 +73,12 @@ static ukv_collection_t collection_docs_k = ukv_collection_main_k;
 static ukv_collection_t collection_graph_k = ukv_collection_main_k;
 static ukv_collection_t collection_paths_k = ukv_collection_main_k;
 
-simdjson::ondemand::document& rewinded(simdjson::ondemand::document& doc) noexcept {
+simdjson::ondemand::document& rewound(simdjson::ondemand::document& doc) noexcept {
     doc.rewind();
     return doc;
 }
 
-simdjson::ondemand::object& rewinded(simdjson::ondemand::object& doc) noexcept {
+simdjson::ondemand::object& rewound(simdjson::ondemand::object& doc) noexcept {
     doc.reset();
     return doc;
 }
@@ -93,23 +94,30 @@ static void index_file( //
     simdjson::ondemand::document_stream docs =
         parser.iterate_many(mapped_contents.data(), mapped_contents.size(), 1000000ul);
     for (auto tweet_doc : docs) {
-        simdjson::ondemand::object tweet = tweet_doc.get_object().value();
-        simdjson::ondemand::object user = rewinded(tweet).find_field("user").get_object().value();
-        ukv_key_t id = rewinded(tweet)["id"];
+        auto maybe_tweet = tweet_doc.get_object();
+        if (maybe_tweet.error() != simdjson::SUCCESS)
+            continue;
+        simdjson::ondemand::object tweet = maybe_tweet.value();
 
-        ukv_key_t user_id = rewinded(user)["id"];
-        std::string_view body = rewinded(tweet).raw_json();
-        std::string_view user_body = rewinded(user).raw_json();
-        std::string_view id_str = rewinded(tweet)["id_str"].raw_json_token();
-        std::string_view user_screen_name = rewinded(user)["screen_name"].raw_json_token();
+        auto maybe_user = rewound(tweet).find_field("user").get_object();
+        if (maybe_user.error() != simdjson::SUCCESS)
+            continue;
+        simdjson::ondemand::object user = maybe_user.value();
+        ukv_key_t id = rewound(tweet)["id"];
+
+        ukv_key_t user_id = rewound(user)["id"];
+        std::string_view body = rewound(tweet).raw_json();
+        std::string_view user_body = rewound(user).raw_json();
+        std::string_view id_str = rewound(tweet)["id_str"].raw_json_token();
+        std::string_view user_screen_name = rewound(user)["screen_name"].raw_json_token();
 
         ukv_key_t re_id;
         ukv_key_t re_user_id;
-        auto maybe_retweet = rewinded(tweet)["retweeted_status"];
+        auto maybe_retweet = rewound(tweet)["retweeted_status"];
         if (maybe_retweet.error() == simdjson::SUCCESS) {
             auto retweet = maybe_retweet.get_object().value();
-            re_id = rewinded(retweet)["id"];
-            re_user_id = rewinded(retweet)["user"]["id"];
+            re_id = rewound(retweet)["id"];
+            re_user_id = rewound(retweet)["user"]["id"];
         }
 
         // Docs
@@ -129,7 +137,7 @@ static void index_file( //
             edges.push_back(edge_t {.source_id = user_id, .target_id = re_user_id, .id = re_id});
         }
 
-        auto maybe_mentions = rewinded(tweet).find_field("entities").find_field("user_mentions");
+        auto maybe_mentions = rewound(tweet).find_field("entities").find_field("user_mentions");
         if (maybe_mentions.error() == simdjson::SUCCESS &&
             maybe_mentions.type() == simdjson::ondemand::json_type::array) {
             auto mentions = maybe_mentions.get_array().value();
@@ -156,7 +164,7 @@ void construct_docs(bm::State& state) {
 }
 
 /**
- * @brief Constructs a graph between Twitter enities:
+ * @brief Constructs a graph between Twitter entities:
  * - Tweets and their Authors.
  * - Tweets and their Retweets.
  * - Authors and Retweeters labeled by Retweet IDs.
@@ -196,7 +204,6 @@ void sample_tweet_id_batches(bm::State& state, callback_at callback) {
     std::size_t iterations = 0;
     std::size_t successes = 0;
     for (auto _ : state) {
-        // state.PauseTiming();
         for (std::size_t idx = 0; idx != batch_size; ++idx) {
             std::size_t const file_idx = choose_file(gen);
             auto const& tweets = dataset_docs[file_idx];
@@ -460,6 +467,8 @@ static void graph_traverse_two_hops(bm::State& state) {
 int main(int argc, char** argv) {
     bm::Initialize(&argc, argv);
 
+    // We divide by two, as most modern CPUs have
+    // hyper-threading with two threads per core.
     std::size_t thread_count = std::thread::hardware_concurrency() / 2;
     std::size_t max_input_files = 1000;
     std::size_t min_seconds = 10;
@@ -533,7 +542,7 @@ int main(int argc, char** argv) {
     std::printf("- indexed %zu relations\n", pass_through_size(dataset_graph));
     std::printf("- indexed %zu paths\n", pass_through_size(dataset_paths));
 
-    // 4. Run the actual benchmarks
+// 4. Run the actual benchmarks
 #if defined(UKV_ENGINE_IS_LEVELDB)
     db.open("/mnt/md0/Twitter/LevelDB").throw_unhandled();
 #elif defined(UKV_ENGINE_IS_ROCKSDB)
