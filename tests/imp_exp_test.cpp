@@ -36,9 +36,9 @@ using graph_t = std::vector<edge_t>;
 
 namespace fs = std::filesystem;
 
-constexpr ukv_str_view_t parquet_k = "sample.parquet";
-constexpr ukv_str_view_t ndjson_k = "sample.ndjson";
-constexpr ukv_str_view_t csv_k = "sample.csv";
+constexpr ukv_str_view_t parquet_k = "assets/sample.parquet";
+constexpr ukv_str_view_t ndjson_k = "assets/sample.ndjson";
+constexpr ukv_str_view_t csv_k = "assets/sample.csv";
 
 static constexpr ukv_str_view_t ext_parquet_k = ".parquet";
 static constexpr ukv_str_view_t ext_ndjson_k = ".ndjson";

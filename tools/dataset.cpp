@@ -2,6 +2,7 @@
 #include <sys/stat.h>  // `stat` to obtain file metadata
 #include <sys/mman.h>  // `mmap` to read datasets faster
 #include <uuid/uuid.h> // `uuid` to make file name
+#include <unistd.h>
 
 #include <vector>
 #include <fstream>
@@ -55,138 +56,69 @@ using vals_t = std::vector<std::pair<ukv_bytes_ptr_t, ukv_size_t>>;
 
 /////////  Helpers  /////////
 
-class arrow_visitor {
+class arrow_visitor_t {
+  private:
+    template <class cont_t>
+    arrow::Status format(cont_t const& cont, size_t idx) {
+        fmt::format_to(std::back_inserter(json), "{},", cont.Value(idx));
+        return arrow::Status::OK();
+    }
+
+    template <class cont_t>
+    arrow::Status format_bs(cont_t const& cont, size_t idx) {
+        auto str = std::string(cont.Value(idx).data(), cont.Value(idx).size());
+        if (str.back() == '\n')
+            str.pop_back();
+        fmt::format_to(std::back_inserter(json), "{},", str.data());
+        return arrow::Status::OK();
+    }
+
   public:
-    arrow_visitor(std::string& json) : json(json) {}
+    arrow_visitor_t(std::string& json) : json(json) {}
     arrow::Status Visit(arrow::NullArray const& arr) {
         return arrow::Status(arrow::StatusCode::TypeError, "Not supported type");
     }
-    arrow::Status Visit(arrow::BooleanArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::Int8Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::Int16Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::Int32Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::Int64Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::UInt8Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::UInt16Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::UInt32Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::UInt64Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::HalfFloatArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::FloatArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::DoubleArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::StringArray const& arr) {
-        auto str = std::string(arr.Value(idx).data(), arr.Value(idx).size());
-        if (str.back() == '\n')
-            str.pop_back();
-        json = fmt::format("{}{},", json, str.data());
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::BinaryArray const& arr) {
-        auto str = std::string(arr.Value(idx).data(), arr.Value(idx).size());
-        if (str.back() == '\n')
-            str.pop_back();
-        json = fmt::format("{}{},", json, str.data());
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::LargeStringArray const& arr) {
-        auto str = std::string(arr.Value(idx).data(), arr.Value(idx).size());
-        if (str.back() == '\n')
-            str.pop_back();
-        json = fmt::format("{}{},", json, str.data());
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::LargeBinaryArray const& arr) {
-        auto str = std::string(arr.Value(idx).data(), arr.Value(idx).size());
-        if (str.back() == '\n')
-            str.pop_back();
-        json = fmt::format("{}{},", json, str.data());
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::FixedSizeBinaryArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::Date32Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::Date64Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::Time32Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::Time64Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::TimestampArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
+    arrow::Status Visit(arrow::BooleanArray const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::Int8Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::Int16Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::Int32Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::Int64Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::UInt8Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::UInt16Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::UInt32Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::UInt64Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::HalfFloatArray const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::FloatArray const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::DoubleArray const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::StringArray const& arr) { return format_bs(arr, idx); }
+    arrow::Status Visit(arrow::BinaryArray const& arr) { return format_bs(arr, idx); }
+    arrow::Status Visit(arrow::LargeStringArray const& arr) { return format_bs(arr, idx); }
+    arrow::Status Visit(arrow::LargeBinaryArray const& arr) { return format_bs(arr, idx); }
+    arrow::Status Visit(arrow::FixedSizeBinaryArray const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::Date32Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::Date64Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::Time32Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::Time64Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::TimestampArray const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::DayTimeIntervalArray const& arr) {
         auto ds = arr.Value(idx);
-        json = fmt::format("{}{{\"days\":{},\"ms-s\":{}}},", json, ds.days, ds.milliseconds);
+        fmt::format_to(json.data(), "{}{{\"days\":{},\"ms-s\":{}}},", json, ds.days, ds.milliseconds);
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::MonthDayNanoIntervalArray const& arr) {
         auto mdn = arr.Value(idx);
-        json = fmt::format("{}{{\"months\":{},\"days\":{},\"us-s\":{}}},", json, mdn.months, mdn.days, mdn.nanoseconds);
+        fmt::format_to(json.data(),
+                       "{}{{\"months\":{},\"days\":{},\"us-s\":{}}},",
+                       json,
+                       mdn.months,
+                       mdn.days,
+                       mdn.nanoseconds);
         return arrow::Status::OK();
     }
-    arrow::Status Visit(arrow::MonthIntervalArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::DurationArray const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::Decimal128Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
-    arrow::Status Visit(arrow::Decimal256Array const& arr) {
-        json = fmt::format("{}{},", json, arr.Value(idx));
-        return arrow::Status::OK();
-    }
+    arrow::Status Visit(arrow::MonthIntervalArray const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::DurationArray const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::Decimal128Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::Decimal256Array const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::ListArray const& arr) {
         arrow::VisitArrayInline(*arr.values().get(), this);
         return arrow::Status::OK();
@@ -225,11 +157,11 @@ class arrow_visitor {
     size_t idx = 0;
 };
 
-bool strcmp_(const char* lhs, const char* rhs) {
+bool strcmp_(char const* lhs, char const* rhs) {
     return std::strcmp(lhs, rhs) == 0;
 }
 
-bool strncmp_(const char* lhs, const char* rhs, size_t sz) {
+bool strncmp_(char const* lhs, char const* rhs, size_t sz) {
     return std::strncmp(lhs, rhs, sz) == 0;
 }
 
@@ -242,6 +174,15 @@ void make_uuid(char* out) {
     uuid_generate(uuid);
     uuid_unparse(uuid, out);
     out[uuid_length - 1] = '\0'; // end of string
+}
+
+void prepare_for_csv(std::string& str, size_t pos = 0) {
+    pos = str.find('\"', pos);
+    while (pos != std::string::npos) {
+        str.insert(pos, 1, '\"');
+        pos += 2;
+        pos = str.find('\"', pos);
+    }
 }
 
 simdjson::ondemand::document& rewinded(simdjson::ondemand::document& doc) noexcept {
@@ -482,7 +423,7 @@ void fill_array(ukv_graph_import_t& c, ukv_size_t task_count, std::shared_ptr<ar
             edge_t edge {
                 .source_id = source_array->Value(value_idx),
                 .target_id = target_array->Value(value_idx),
-                .id = edges ? edge_array->Value(value_idx) : ukv_key_t {},
+                .id = edges ? edge_array->Value(value_idx) : ukv_default_edge_id_k,
             };
             array.push_back(edge);
             if (array.size() == task_count) {
@@ -669,6 +610,7 @@ void export_csv_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t lengt
 void import_ndjson_g(ukv_graph_import_t& c, ukv_size_t task_count) {
 
     graph_t array;
+    array.reserve(task_count);
     bool edge_state = !strcmp_(c.edge_id_field, "edge");
 
     auto handle = open(c.paths_pattern, O_RDONLY);
@@ -688,7 +630,7 @@ void import_ndjson_g(ukv_graph_import_t& c, ukv_size_t task_count) {
         mapped_content.size(),
         1000000ul);
 
-    ukv_key_t edge = 0;
+    ukv_key_t edge = ukv_default_edge_id_k;
     for (auto doc : docs) {
         simdjson::ondemand::object data = doc.get_object().value();
         if (edge_state)
@@ -705,6 +647,7 @@ void import_ndjson_g(ukv_graph_import_t& c, ukv_size_t task_count) {
         upsert_graph(c, array);
 
     munmap((void*)mapped_content.data(), mapped_content.size());
+    close(handle);
 }
 
 void export_ndjson_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t length) {
@@ -712,19 +655,19 @@ void export_ndjson_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t le
     ukv_key_t* data = nullptr;
     char file_name[uuid_length];
     make_uuid(file_name);
-    std::ofstream output(fmt::format("{}{}", file_name, c.paths_extension));
+    auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
     if (strcmp_(c.edge_id_field, "edge")) {
         for (auto arr : arr_2d) {
             data = arr.first;
             for (size_t idx = 0; idx < arr.second; idx += 3) {
-                output << fmt::format( //
-                              "{{\"{}\":{},\"{}\":{}}}",
-                              c.source_id_field,
-                              data[idx],
-                              c.target_id_field,
-                              data[idx + 1])
-                       << std::endl;
+                auto str = fmt::format( //
+                    "{{\"{}\":{},\"{}\":{}}}\n",
+                    c.source_id_field,
+                    data[idx],
+                    c.target_id_field,
+                    data[idx + 1]);
+                write(handle, str.data(), str.size());
             }
         }
     }
@@ -732,18 +675,19 @@ void export_ndjson_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t le
         for (auto arr : arr_2d) {
             data = arr.first;
             for (size_t idx = 0; idx < arr.second; idx += 3) {
-                output << fmt::format( //
-                              "{{\"{}\":{},\"{}\":{},\"{}\":{}}}",
-                              c.source_id_field,
-                              data[idx],
-                              c.target_id_field,
-                              data[idx + 1],
-                              c.edge_id_field,
-                              data[idx + 2])
-                       << std::endl;
+                auto str = fmt::format( //
+                    "{{\"{}\":{},\"{}\":{},\"{}\":{}}}\n",
+                    c.source_id_field,
+                    data[idx],
+                    c.target_id_field,
+                    data[idx + 1],
+                    c.edge_id_field,
+                    data[idx + 2]);
+                write(handle, str.data(), str.size());
             }
         }
     }
+    close(handle);
 }
 
 void ukv_graph_import(ukv_graph_import_t* c_ptr) {
@@ -865,7 +809,7 @@ void fill_array(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table
     docs_t values;
     char* u_json = nullptr;
     std::string json = "{";
-    arrow_visitor visitor(json);
+    arrow_visitor_t visitor(json);
     size_t used_mem = 0;
     size_t g_idx = 0;
     for (auto it = fields; g_idx < c.fields_count; ++g_idx, ++it) {
@@ -989,15 +933,7 @@ void import_ndjson_d(ukv_docs_import_t& c) {
         imp_sub_ndjson(c, docs);
 
     munmap((void*)mapped_content.data(), mapped_content.size());
-}
-
-void prepare_for_csv(std::string& str, size_t pos = 0) {
-    pos = str.find('\"', pos);
-    while (pos != std::string::npos) {
-        str.insert(pos, 1, '\"');
-        pos += 2;
-        pos = str.find('\"', pos);
-    }
+    close(handle);
 }
 
 void whole_content( //
@@ -1006,7 +942,7 @@ void whole_content( //
     std::vector<std::string>* docs_ptr,
     std::vector<ukv_key_t>* keys_ptr,
     parquet::StreamWriter* os_ptr,
-    std::ofstream* output_ptr,
+    int handle,
     int flag) {
 
     auto iter = pass_through_iterator(keys);
@@ -1014,7 +950,6 @@ void whole_content( //
     std::vector<std::string>& docs_vec = *docs_ptr;
     std::vector<ukv_key_t>& keys_vec = *keys_ptr;
     parquet::StreamWriter& os = *os_ptr;
-    std::ofstream& output = *output_ptr;
 
     for (auto value : values) {
         simdjson::ondemand::parser parser;
@@ -1026,23 +961,25 @@ void whole_content( //
         for (auto doc : docs) {
             simdjson::ondemand::object obj = doc.get_object().value();
             auto value = rewinded(obj).raw_json().value();
-            auto str = std::string(value.data(), value.size());
-            str.pop_back();
+            auto json = std::string(value.data(), value.size());
+            json.pop_back();
 
             if (flag == 0) {
-                os << *iter << str.data();
+                auto val = *iter;
+                os << *iter << json.data();
                 os << parquet::EndRow;
             }
             else if (flag == 1) {
-                prepare_for_csv(str);
-                str.insert(0, 1, '\"');
-                str.push_back('\"');
+                prepare_for_csv(json);
+                json.insert(0, 1, '\"');
+                json.push_back('\"');
                 keys_vec.push_back(*iter);
-                docs_vec.push_back(str);
+                docs_vec.push_back(json);
             }
-            else
-                output << fmt::format("{{\"id\":{},\"doc\":{}}}\n", *iter, str.data());
-
+            else {
+                auto str = fmt::format("{{\"id\":{},\"doc\":{}}}\n", *iter, json.data());
+                write(handle, str.data(), str.size());
+            }
             ++iter;
         }
     }
@@ -1055,7 +992,7 @@ void sub_content( //
     std::vector<std::string>* docs_ptr,
     std::vector<ukv_key_t>* keys_ptr,
     parquet::StreamWriter* os_ptr,
-    std::ofstream* output_ptr,
+    int handle,
     int flag) {
 
     auto iter = pass_through_iterator(keys);
@@ -1064,7 +1001,6 @@ void sub_content( //
     std::vector<std::string>& docs_vec = *docs_ptr;
     std::vector<ukv_key_t>& keys_vec = *keys_ptr;
     parquet::StreamWriter& os = *os_ptr;
-    std::ofstream& output = *output_ptr;
 
     for (auto value : values) {
         simdjson::ondemand::parser parser;
@@ -1086,8 +1022,10 @@ void sub_content( //
                 keys_vec.push_back(*iter);
                 docs_vec.push_back(json);
             }
-            else
-                output << fmt::format("{{\"id\":{},\"doc\":{}}}\n", *iter, json.data());
+            else {
+                auto str = fmt::format("{{\"id\":{},\"doc\":{}}}\n", *iter, json.data());
+                write(handle, str.data(), str.size());
+            }
             json = flag == 1 ? csv_prefix : prefix;
             ++iter;
         }
@@ -1137,10 +1075,10 @@ void export_parquet_d( //
         for (size_t idx = 0; idx < c.fields_count; ++idx)
             fields[idx] = strided_fields[idx];
 
-        sub_content(values, keys, fields, nullptr, nullptr, &os, nullptr, 0);
+        sub_content(values, keys, fields, nullptr, nullptr, &os, 0, 0);
     }
     else
-        whole_content(values, keys, nullptr, nullptr, &os, nullptr, 0);
+        whole_content(values, keys, nullptr, nullptr, &os, 0, 0);
 }
 
 void export_csv_d( //
@@ -1177,10 +1115,10 @@ void export_csv_d( //
         for (size_t idx = 0; idx < c.fields_count; ++idx)
             fields[idx] = strided_fields[idx];
 
-        sub_content(values, keys, fields, &docs_vec, &keys_vec, nullptr, nullptr, 1);
+        sub_content(values, keys, fields, &docs_vec, &keys_vec, nullptr, 0, 1);
     }
     else
-        whole_content(values, keys, &docs_vec, &keys_vec, nullptr, nullptr, 1);
+        whole_content(values, keys, &docs_vec, &keys_vec, nullptr, 0, 1);
 
     status = int_builder.AppendValues(keys_vec);
     return_if_error(status.ok(), c.error, 0, "Can't append keys");
@@ -1220,17 +1158,19 @@ void export_ndjson_d( //
 
     char file_name[uuid_length];
     make_uuid(file_name);
-    std::ofstream output(fmt::format("{}{}", file_name, c.paths_extension));
+    auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
     if (c.fields) {
         std::vector<std::string> fields(c.fields_count);
         for (size_t idx = 0; idx < c.fields_count; ++idx)
             fields[idx] = strided_fields[idx];
 
-        sub_content(values, keys, fields, nullptr, nullptr, nullptr, &output, 2);
+        sub_content(values, keys, fields, nullptr, nullptr, nullptr, handle, 2);
     }
     else
-        whole_content(values, keys, nullptr, nullptr, nullptr, &output, 2);
+        whole_content(values, keys, nullptr, nullptr, nullptr, handle, 2);
+
+    close(handle);
 }
 
 void ukv_docs_import(ukv_docs_import_t* c_ptr) {
