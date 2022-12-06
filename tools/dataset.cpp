@@ -977,7 +977,7 @@ void whole_content( //
                 docs_vec.push_back(json);
             }
             else {
-                auto str = fmt::format("{{\"id\":{},\"doc\":{}}}\n", *iter, json.data());
+                auto str = fmt::format("{{\"_id\":{},\"doc\":{}}}\n", *iter, json.data());
                 write(handle, str.data(), str.size());
             }
             ++iter;
@@ -1023,7 +1023,7 @@ void sub_content( //
                 docs_vec.push_back(json);
             }
             else {
-                auto str = fmt::format("{{\"id\":{},\"doc\":{}}}\n", *iter, json.data());
+                auto str = fmt::format("{{\"_id\":{},\"doc\":{}}}\n", *iter, json.data());
                 write(handle, str.data(), str.size());
             }
             json = flag == 1 ? csv_prefix : prefix;
@@ -1042,7 +1042,7 @@ void export_parquet_d( //
     parquet::schema::NodeVector nodes;
     nodes.push_back(                          //
         parquet::schema::PrimitiveNode::Make( //
-            "id",
+            "_id",
             parquet::Repetition::REQUIRED,
             parquet::Type::INT64,
             parquet::ConvertedType::INT_64));
@@ -1131,7 +1131,7 @@ void export_csv_d( //
     return_if_error(status.ok(), c.error, 0, "Can't finish array(docs)");
 
     arrow::FieldVector fields;
-    fields.push_back(arrow::field("id", arrow::int64()));
+    fields.push_back(arrow::field("_id", arrow::int64()));
     fields.push_back(arrow::field("doc", arrow::int64()));
     std::shared_ptr<arrow::Schema> schema = std::make_shared<arrow::Schema>(fields);
 

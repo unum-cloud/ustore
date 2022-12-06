@@ -48,7 +48,7 @@ static constexpr ukv_str_view_t source_k = "number";
 static constexpr ukv_str_view_t target_k = "difficulty";
 static constexpr ukv_str_view_t edge_k = "size";
 static constexpr ukv_str_view_t doc_k = "doc";
-static constexpr ukv_str_view_t id_k = "id";
+static constexpr ukv_str_view_t id_k = "_id";
 
 static constexpr ukv_str_view_t path = "./";
 
