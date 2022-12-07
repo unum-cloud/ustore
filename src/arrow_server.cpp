@@ -1056,6 +1056,21 @@ class UKVService : public arf::FlightServerBase {
         if (is_empty_values) {
             auto ar_sch = arrow::ImportSchema(&output_schema_c).ValueUnsafe();
             maybe_table = arrow::RecordBatch::MakeEmpty(ar_sch);
+            if (!maybe_table.ok())
+                return maybe_table.status();
+
+            ArrowArray array;
+            ArrowSchema schema;
+            auto table = maybe_table.ValueUnsafe();
+            ar_status = ar::ExportRecordBatch(*table, &array, &schema);
+            if (!ar_status.ok())
+                return ar_status;
+
+            array.length = output_batch_c.length;
+            array.children[0]->length = output_batch_c.children[0]->length;
+            array.children[0]->buffers[1] = output_batch_c.children[0]->buffers[1];
+
+            maybe_table = ar::ImportRecordBatch(&array, &schema);
         }
         else {
             maybe_table = ar::ImportRecordBatch(&output_batch_c, &output_schema_c);
