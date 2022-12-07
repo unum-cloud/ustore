@@ -116,6 +116,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/bson.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/yyjson.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/simdjson.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pcre2.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mpack.cmake")
 
 if(${UKV_USE_JEMALLOC})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
@@ -145,17 +146,17 @@ endif()
 
 # Define the libraries we will need to build
 add_library(ukv_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_umem pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
+target_link_libraries(ukv_umem pthread yyjson simdjson bson mpack pcre2 ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
 target_compile_definitions(ukv_umem INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_umem INTERFACE UKV_ENGINE_NAME=umem)
 
 add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_rocksdb rocksdb pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES})
+target_link_libraries(ukv_rocksdb rocksdb pthread yyjson simdjson bson mpack pcre2 ${JEMALLOC_LIBRARIES})
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_rocksdb INTERFACE UKV_ENGINE_NAME=rocksdb)
 
 add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_leveldb leveldb pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES})
+target_link_libraries(ukv_leveldb leveldb pthread yyjson simdjson bson mpack pcre2 ${JEMALLOC_LIBRARIES})
 set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 target_compile_definitions(ukv_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
 target_compile_definitions(ukv_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
