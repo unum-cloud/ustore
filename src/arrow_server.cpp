@@ -29,6 +29,8 @@ using namespace unum;
 using sys_clock_t = std::chrono::system_clock;
 using sys_time_t = std::chrono::time_point<sys_clock_t>;
 
+static int64_t zero_size_data[1];
+
 inline static arf::ActionType const kActionColOpen {kFlightColCreate, "Find a collection descriptor by name."};
 inline static arf::ActionType const kActionColDrop {kFlightColDrop, "Delete a named collection."};
 inline static arf::ActionType const kActionTxnBegin {kFlightTxnBegin, "Starts an ACID transaction and returns its ID."};
@@ -1052,29 +1054,10 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
         }
 
-        arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_table;
-        if (is_empty_values) {
-            auto ar_sch = arrow::ImportSchema(&output_schema_c).ValueUnsafe();
-            maybe_table = arrow::RecordBatch::MakeEmpty(ar_sch);
-            if (!maybe_table.ok())
-                return maybe_table.status();
-
-            ArrowArray array;
-            ArrowSchema schema;
-            auto table = maybe_table.ValueUnsafe();
-            ar_status = ar::ExportRecordBatch(*table, &array, &schema);
-            if (!ar_status.ok())
-                return ar_status;
-
-            array.length = output_batch_c.length;
-            array.children[0]->length = output_batch_c.children[0]->length;
-            array.children[0]->buffers[1] = output_batch_c.children[0]->buffers[1];
-
-            maybe_table = ar::ImportRecordBatch(&array, &schema);
-        }
-        else {
-            maybe_table = ar::ImportRecordBatch(&output_batch_c, &output_schema_c);
-        }
+        if (is_empty_values)
+            output_batch_c.children[0]->buffers[2] = &zero_size_data;
+        arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_table =
+            ar::ImportRecordBatch(&output_batch_c, &output_schema_c);
 
         if (!maybe_table.ok())
             return maybe_table.status();
