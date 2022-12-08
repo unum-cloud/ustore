@@ -160,7 +160,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
             if (name.compare(*name_it) == 0)
                 return ukv_collection_t(*id_it);
         }
-        return status_t {"Collection not found."};
+        return status_t::status_view("Collection not found.");
     }
 
     /**
@@ -185,7 +185,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
                 continue;
             return collection_at {db_, *id_it, txn_, arena_.member_ptr()};
         }
-        return status_t {"No such collection is present"};
+        return status_t::status_view("No such collection is present");
     }
 
     /**
@@ -226,6 +226,21 @@ class context_t : public std::enable_shared_from_this<context_t> {
         };
         ukv_transaction_commit(&txn_commit);
         return status;
+    }
+
+    expected_gt<ukv_sequence_number_t> sequenced_commit(bool flush = false) noexcept {
+        status_t status;
+        auto options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
+        ukv_sequence_number_t sequence_number = std::numeric_limits<ukv_sequence_number_t>::max();
+        ukv_transaction_commit_t txn_commit {
+            .db = db_,
+            .error = status.member_ptr(),
+            .transaction = txn_,
+            .options = options,
+            .sequence_number = &sequence_number,
+        };
+        ukv_transaction_commit(&txn_commit);
+        return {std::move(status), std::move(sequence_number)};
     }
 };
 

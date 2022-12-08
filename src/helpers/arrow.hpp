@@ -165,7 +165,7 @@ inline expected_gt<std::size_t> column_idx(ArrowSchema const& schema_c, std::str
         return std::string_view {column_schema->name} == name;
     });
     if (it == end)
-        return status_t {"Column not found!"};
+        return status_t::status_view("Column not found!");
     return static_cast<std::size_t>(it - begin);
 }
 

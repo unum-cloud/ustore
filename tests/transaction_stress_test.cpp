@@ -86,9 +86,9 @@ void insert_atomic_isolated(std::size_t count_batches) {
 }
 
 enum class operation_code_t {
-    select_k,
     insert_k,
     remove_k,
+    select_k,
 };
 
 template <std::size_t array_size_ak>
@@ -136,14 +136,13 @@ void serializable_transactions(std::size_t iteration_count) {
     EXPECT_TRUE(db.clear());
     std::mutex mutex;
 
-    using time_point_t = std::uint64_t;
     using operation_t = operation_gt<max_batch_size_ak>;
 
-    std::vector<std::pair<time_point_t, operation_t>> operations;
+    std::vector<std::pair<ukv_sequence_number_t, operation_t>> operations;
     constexpr ukv_length_t value_length = sizeof(std::uint64_t);
-    std::array<ukv_length_t, max_batch_size_ak> value_offsets;
-    for (std::size_t i = 0; i != max_batch_size_ak; ++i)
-        value_offsets[i] = i * value_length;
+    std::array<ukv_length_t, max_batch_size_ak + 1> value_offsets;
+    for (std::size_t offset_idx = 0; offset_idx != max_batch_size_ak + 1; ++offset_idx)
+        value_offsets[offset_idx] = offset_idx * value_length;
 
     std::uniform_int_distribution<> choose_batch_size(1, max_batch_size_ak);
     auto biggest_key = static_cast<ukv_key_t>(iteration_count * max_batch_size_ak / 4);
@@ -151,8 +150,6 @@ void serializable_transactions(std::size_t iteration_count) {
     auto task_insert = [&]() {
         contents_arg_t contents {
             .offsets_begin = {value_offsets.data(), sizeof(ukv_length_t)},
-            .lengths_begin = {&value_length, 0},
-            .count = max_batch_size_ak,
         };
 
         for (std::size_t iteration_idx = 0; iteration_idx != iteration_count; ++iteration_idx) {
@@ -169,13 +166,12 @@ void serializable_transactions(std::size_t iteration_count) {
             status_t status = txn[batch_keys].assign(contents);
             if (!status)
                 continue;
-            status = txn.commit();
-            time_point_t time = now();
-            if (!status)
+            auto maybe_sequence_number = txn.sequenced_commit();
+            if (!maybe_sequence_number)
                 continue;
 
             mutex.lock();
-            operations.emplace_back(time, std::move(operation));
+            operations.emplace_back(*maybe_sequence_number, std::move(operation));
             mutex.unlock();
         }
     };
@@ -191,13 +187,12 @@ void serializable_transactions(std::size_t iteration_count) {
             status_t status = txn[batch_keys].erase();
             if (!status)
                 continue;
-            status = txn.commit();
-            time_point_t time = now();
-            if (!status)
+            auto maybe_sequence_number = txn.sequenced_commit();
+            if (!maybe_sequence_number)
                 continue;
 
             mutex.lock();
-            operations.emplace_back(time, std::move(operation));
+            operations.emplace_back(*maybe_sequence_number, std::move(operation));
             mutex.unlock();
         }
     };
@@ -211,9 +206,8 @@ void serializable_transactions(std::size_t iteration_count) {
 
             transaction_t txn = db.transact().throw_or_release();
             auto const& retrieved = txn[batch_keys].value().throw_or_release();
-            status_t status = txn.commit();
-            time_point_t time = now();
-            if (!status)
+            auto maybe_sequence_number = txn.sequenced_commit();
+            if (!maybe_sequence_number)
                 continue;
 
             auto it = retrieved.begin();
@@ -226,7 +220,7 @@ void serializable_transactions(std::size_t iteration_count) {
             }
 
             mutex.lock();
-            operations.emplace_back(time, std::move(operation));
+            operations.emplace_back(*maybe_sequence_number, std::move(operation));
             mutex.unlock();
         }
     };
@@ -243,7 +237,9 @@ void serializable_transactions(std::size_t iteration_count) {
         threads[i].join();
 
     // Recover absolute order
-    std::sort(operations.begin(), operations.end(), [](auto& left, auto& right) { return left.first < right.first; });
+    std::sort(operations.begin(), operations.end(), [](auto& left, auto& right) {
+        return left.first < right.first || left.first == right.first && left.second.type < right.second.type;
+    });
 
     // Make a new
     std::filesystem::path second_db_path(path());
@@ -264,8 +260,6 @@ void serializable_transactions(std::size_t iteration_count) {
         auto ref = collection_simulation[strided_range(operation.keys).subspan(0u, operation.count)];
         contents_arg_t contents {
             .offsets_begin = {value_offsets.data(), sizeof(ukv_length_t)},
-            .lengths_begin = {&value_length, 0},
-            .count = operation.count,
         };
 
         if (operation.type == operation_code_t::remove_k)
@@ -287,7 +281,7 @@ void serializable_transactions(std::size_t iteration_count) {
                     continue;
                 }
 
-                auto expected_len = static_cast<std::size_t>(contents.lengths_begin[i]);
+                auto expected_len = static_cast<std::size_t>(value_length);
                 auto expected_begin =
                     reinterpret_cast<byte_t const*>(contents.contents_begin[i]) + contents.offsets_begin[i];
                 value_view_t expected_view(expected_begin, expected_begin + expected_len);
