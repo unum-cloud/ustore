@@ -268,7 +268,8 @@ endif()
 
 # Build Python bindings linking to precompiled client SDKs
 if(${UKV_BUILD_PYTHON})
-  find_package(Python 3.9 COMPONENTS Interpreter Development REQUIRED)
+  # find_package(Python 3.9 REQUIRED COMPONENTS Interpreter Development.module)
+  set(PYARROW_DIR "" CACHE PATH "Path to pyarrow install dir")
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pybind11.cmake")
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 
@@ -279,9 +280,10 @@ if(${UKV_BUILD_PYTHON})
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)
 
     pybind11_add_module(${wrap_lib_name} MODULE python/pybind.cpp python/database.cpp python/networkx.cpp python/documents.cpp python/pandas.cpp)
-    target_include_directories(${wrap_lib_name} PUBLIC python/)
-    target_link_libraries(${wrap_lib_name} PRIVATE pthread arrow::arrow arrow::dataset arrow::flight arrow::bundled arrow::python fmt::fmt ${target_name} ${target_LIBRARIES})
+    target_include_directories(${wrap_lib_name} PUBLIC python/ ${PYARROW_DIR}/include)
+    target_link_directories(${wrap_lib_name} PUBLIC ${PYARROW_DIR})
+    target_link_libraries(${wrap_lib_name} PRIVATE pthread arrow::arrow arrow::dataset arrow::flight arrow::bundled fmt::fmt ${target_name} ${target_LIBRARIES})
     target_compile_definitions(${wrap_lib_name} PRIVATE UKV_VERSION="${_VERSION_}" UKV_PYTHON_MODULE_NAME=${client_name})
-    set_target_properties(${wrap_lib_name} PROPERTIES OUTPUT_NAME ukv/${client_name})
+    # set_target_properties(${wrap_lib_name} PROPERTIES OUTPUT_NAME ukv/${client_name})
   endforeach()
 endif()

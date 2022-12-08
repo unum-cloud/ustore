@@ -31,7 +31,11 @@ ExternalProject_Add(
 )
 
 set(pcre2_INCLUDE_DIR ${CMAKE_BINARY_DIR}/_deps/pcre2-install/include/)
-set(pcre2_LIBRARY_PATH ${CMAKE_BINARY_DIR}/_deps/pcre2-install/lib/libpcre2-8.a)
+if (EXISTS ${CMAKE_BINARY_DIR}/_deps/pcre2-install/lib/)
+    set(pcre2_LIBRARY_PATH ${CMAKE_BINARY_DIR}/_deps/pcre2-install/lib/libpcre2-8.a)
+else()
+    set(pcre2_LIBRARY_PATH ${CMAKE_BINARY_DIR}/_deps/pcre2-install/lib64/libpcre2-8.a)
+endif()
 file(MAKE_DIRECTORY ${pcre2_INCLUDE_DIR})
 add_library(pcre2 STATIC IMPORTED)
 

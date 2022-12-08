@@ -1,0 +1,36 @@
+[build-system]
+requires = [
+    "setuptools>=42",
+    "wheel",
+    "ninja",
+    "cmake>=3.22",
+]
+build-backend = "setuptools.build_meta"
+
+
+[tool.cibuildwheel]
+build-verbosity = 3
+before-all = [
+    "yum install -y openssl-devel bzip2-devel libffi-devel zlib-devel wget python3-devel",
+    # "yum install -y epel-release || yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1).noarch.rpm",
+    # "yum install -y https://apache.jfrog.io/artifactory/arrow/centos/$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)/apache-arrow-release-latest.rpm",
+    # "yum install -y --enablerepo=epel arrow-devel arrow-glib-devel arrow-dataset-devel arrow-dataset-glib-devel parquet-devel parquet-glib-devel",
+    # "python3.9 -m pip install numpy cmake",
+    # "python3.11 -m pip install numpy",
+    # "cmake . -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_PYTHON=1 && make -j 32 py_umem",
+]
+
+environment = "CMAKE_ARGS_F=/tmp/cmake_args"
+before-build = [
+    "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
+    "pip install pyarrow==9.0.0",
+    "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
+    "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
+    "mkdir -p build/ukv"
+    # "cmake .  && make -j 32 py_umem",
+]
+
+skip = ["*musllinux*", "cp36-*", "cp37-*", "cp38-*"]
+
+[tool.cibuildwheel.linux]
+repair-wheel-command = "auditwheel repair --lib-sdir . -w {dest_dir} {wheel}"
