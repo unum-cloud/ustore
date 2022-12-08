@@ -15,7 +15,12 @@
 #include <simdjson.h> // Secondary internal JSON representation
 #include <yyjson.h>   // Primary internal JSON representation
 #include <bson.h>     // Converting from/to BSON
-#include <mpack.h>    // Converting from/to MsgPack
+// #include <mpack.h>    // Converting from/to MsgPack
+#include <mpack-common.c>
+#include <mpack-writer.c>
+#include <mpack-reader.c>
+#include <mpack-expect.c>
+#include <mpack-node.c>
 
 #include "ukv/docs.h"                //
 #include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
