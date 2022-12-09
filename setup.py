@@ -2,7 +2,7 @@ import os
 import re
 import subprocess
 import sys
-from setuptools import setup, Extension,find_packages
+from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
 __version__ = open('VERSION', 'r').read()
@@ -37,6 +37,7 @@ class CMakeBuild(build_ext):
         # from Python.
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
+            f"-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY={extdir}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
             "-DUKV_BUILD_PYTHON=1"
         ]
@@ -68,7 +69,6 @@ class CMakeBuild(build_ext):
 
         subprocess.check_call(["cmake", ext.sourcedir] + cmake_args)
         subprocess.check_call(["cmake", "--build", ".", "--target py_umem"] + build_args)
-        print("#############", find_packages())
 
 
 setup(
@@ -100,14 +100,13 @@ setup(
         # 'Framework :: Apache Airflow :: Provider',
         # 'Framework :: IPython',
     ],
-    ext_modules=[CMakeExtension("py_umem")],
+    ext_modules=[CMakeExtension("ukv.umem")],
     cmdclass={"build_ext": CMakeBuild},
     zip_safe=False,
     install_requires=[
         'numpy>=1.16',
         'pyarrow==9.0.0'
     ],
-    py_modules=['ukv'],
     extras_require={'test': 'pytest'},
     python_requires='>=3.6',
 )

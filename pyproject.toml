@@ -2,10 +2,16 @@
 requires = [
     "setuptools>=42",
     "wheel",
-    "ninja",
-    "cmake>=3.22",
+    "cmake>=3.22"
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = ["error"]
+testpaths = ["python/tests"]
 
 
 [tool.cibuildwheel]
@@ -25,12 +31,15 @@ before-build = [
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
     "pip install pyarrow==9.0.0",
     "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
+    "ln -s $PYST/pyarrow/libarrow_python.so.900 $PYST/pyarrow/libarrow_python.so",
     "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
     "mkdir -p build/ukv"
-    # "cmake .  && make -j 32 py_umem",
 ]
 
-skip = ["*musllinux*", "cp36-*", "cp37-*", "cp38-*"]
+skip = ["*musllinux*", "cp36-*", "cp37-*", "cp38-*", "cp310-*", "cp311-*"]
+test-command = "pytest {project}/python/tests/"
+test-requires = ["pandas"]
+test-extras = ["test"]
 
 [tool.cibuildwheel.linux]
 repair-wheel-command = "auditwheel repair --lib-sdir . -w {dest_dir} {wheel}"
