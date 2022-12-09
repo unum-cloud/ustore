@@ -94,6 +94,23 @@ class limited_priority_queue_gt {
             return true;
         }
     }
+
+    constexpr static std::size_t implicit_memory_usage(std::size_t capacity) noexcept {
+        return sizeof(std::size_t) * 3 + sizeof(element_t) * capacity;
+    }
+
+    static limited_priority_queue_gt& implicit(void* begin) noexcept {
+        auto& pq = reinterpret_cast<limited_priority_queue_gt*>(begin);
+        pq.ptr_ = reinterpret_cast<char*>(begin) + sizeof(std::size_t) * 3;
+        return pq;
+    }
+
+    static limited_priority_queue_gt& implicit_init(void* begin, std::size_t capacity) noexcept {
+        auto& pq = implicit(begin);
+        pq.capacity_ = capacity;
+        pq.length_ = 0;
+        return pq;
+    }
 };
 
 } // namespace unum::ukv
