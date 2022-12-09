@@ -6,7 +6,7 @@ import time
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
-__version__ = open('VERSION', 'r').read() + "-" + str(time.time_ns())
+__version__ = open('VERSION', 'r').read() + "." + str(time.time_ns())
 __libname__ = 'ukv'
 
 
@@ -109,5 +109,5 @@ setup(
         'pyarrow==9.0.0'
     ],
     extras_require={'test': 'pytest'},
-    python_requires='>=3.6',
+    python_requires='>=3.7',
 )
