@@ -1,33 +1,74 @@
 # UKV Benchmarks
 
+## [UCSB][ucsb]
+
+For low-level binary workloads, we have a separate project called UCSB.
+It covers LMDB, LevelDB, RocksDB, WiredTiger, Redis, MongoDB, and our Key-Value Stores.
+
+* [Results][ucsb-1] for 1 TB collections.
+* [Results][ucsb-10] for 10 TB collections.
+
 ## Twitter
 
-Operates on collections of `.ndjson` files gathered from Twitter Stream API.
-Those were conducted on 1.2 TB collected of Tweets augmented to form a 10 TB dataset.
+Twitter benchmark operated on real-world sample of Tweets obtained via [Twitter Stream API][twitter-samples].
+It is frequently used across the industry, but the current "User Agreement" bans publicly sharing such datasets.
+
+We took over 1 TB of tweets packed consecutively into `.ndjson` files and simulated constructing collections of Documents, Graphs, and Paths.
+You can obtain results for your hardware and your sample of Tweets using the following command.
 
 ```sh
-cmake -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Release . && make ukv_umem_twitter_benchmark && ./build/bin/ukv_umem_twitter_benchmark
+cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=1 .. && make ukv_umem_twitter_benchmark && ./build/bin/ukv_umem_twitter_benchmark
 ```
 
-Our baseline will be MongoDB.
-The <code class="docutils literal notranslate"><a href="https://www.mongodb.com/docs/database-tools/mongoimport/" class="pre">mongoimport</a></code> official tool supports both `.csv` and `.ndjson` imports and typical performance will be as follows:
+We manually repeated this same benchmark for a few other DBMS brands.
+We tried to keep the RAM usage identical and limited the number of clients to 16 processes on the same machine on which the server was running.
+The following results should be taken with the grain of salt and aren't as accurate as [UCSB](#ucsb) but they might be relevant for general perception.
 
-|         | Tweets    | Imports                     |        Retrieval        | Sampling |
-| ------- | --------- | --------------------------- | :---------------------: | :------: |
-| MongoDB | 1'048'576 | 9 K docs/s ~ **32 MB/s**    |                         |          |
-|         |           |                             |                         |          |
-| UMem    | 1'048'576 | 157 K docs/s ~ **850 MB/s** |                         |          |
-| LevelDB | 1'048'576 |                             |                         |          |
-| RocksDB | 1'048'576 | 15 K docs/s ~ **80 MB/s**   | 140 K docs/s ~ 750 MB/s |          |
-| UnumDB  | 1'048'576 |                             |                         |          |
+For document-like workloads:
 
+|                |  Insertion  |  Retrieval  |
+| :------------- | :---------: | :---------: |
+| MongoDB        | 18 K ops/s  | 210 K ops/s |
+| Yugabyte       |  2 K ops/s  | 82 K ops/s  |
+|                |             |             |
+| UKV on RocksDB | 15 K ops/s  | 140 K ops/s |
+| UKV on UDisk   | 42 K ops/s  |  1 M ops/s  |
+| UKV on UMem    | 157 K ops/s |  2 M ops/s  |
 
-Even with provided tooling it generally performs around 10'000 insertions per second and won't surpass 100 MB/s.
+For graphs:
 
+|              | Insertion  | Two-hop Retrieval |
+| :----------- | :--------: | :---------------: |
+| Neo4J        | 2 K ops/s  |    1.5 K ops/s    |
+|              |            |                   |
+| UKV on UDisk | 37 K ops/s |    52 K ops/s     |
 
-## Adjacency List
+For MongoDB, we also tried the official <code class="docutils literal notranslate"><a href="https://www.mongodb.com/docs/database-tools/mongoimport/" class="pre">mongoimport</a></code> tool, which supports both `.csv` and `.ndjson`.
+The results are mixed compared to a multi-process setup.
+For Neo4J, significantly better results are possible if you are doing initialization with a pre-processed `.csv` file, but the same applies to our solutions.
 
-Here we start with Neo4J, which also has an official tool for `.csv` import.
+## Tables and Graphs
+
+Generalizing the Twitter benchmark, we wrote a Python and a C++ benchmark for tabular datasets.
+Unlike the previous benchmark, the schema must be fixed, but you can input `.json`, `.csv`, and `.parquet` files.
+
+```sh
+cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=1 .. && make ukv_umem_tabular_graph_benchmark && ./build/bin/ukv_umem_tabular_graph_benchmark
+```
+
+For Python:
+
+```sh
+python benchmarks/tabular_graph_benchmark.py
+```
+
+We manually repeated this same benchmark for several other DBMS brands and multiple publicly available datasets.
+Below are the results.
+
+### Reconstructing the Bitcoin Graph
+
+### Friendster Adjacency List
+
 We take a real-world graph dataset, distributed in `.csv` form - the "Friendster" social network.
 It contains:
 
@@ -35,55 +76,12 @@ It contains:
 * 1'847'117'371 edges.
 * ~225 edges per vertex.
 
-The import too 3h 45m, averaging at:
+With Neo4J, imports took 3h 45m, averaging at:
 
 * 136'449 edges/s.
 * 5.3 MB/s.
 
-Comparing that with 
-
-## Bitcoin Graph
-
-
-### Benchmarking on Twitter JSONs
-
-Ingestion speed:
-
-* MongoDB: 2'000 tweets/s.
-* MongoDB with `mongoimport`: 10'000 tweets/s.
-* UKV: FOSS RocksDB + FOSS JSON modality: 11'000 tweets/s.
-* UKV: proprietary UnumKV + FOSS JSON modality: 42'000 tweets/s.
-* UKV: proprietary UnumKV + proprietary JSON modality: 60'000 tweets/s.
-
-All of UKV interfaces look same, but work different.
-It is a modular system you can assemble the way you like!
-
-Gathering Speeds:
-
-* MongoDB: 2'000 tweets/s.
-* MongoDB with `mongoimport`: 10'000 tweets/s.
-* UKV: FOSS RocksDB + FOSS JSON modality: 11'000 tweets/s.
-* UKV: proprietary UnumKV + FOSS JSON modality: 42'000 tweets/s.
-* UKV: proprietary UnumKV + proprietary JSON modality: 60'000 tweets/s.
-
-Aside from lookups and gathers, we support random sampling for Machine Learning applications.
-
-### Benchmarking on Bitcoin Graph
-
-Ingestion speed:
-
-* Neo4J:
-* ArangoDB:
-* TigerGraph:
-* UKV: FOSS RocksDB + FOSS Graph modality: 
-* UKV: proprietary UnumKV + FOSS Graph modality: 
-* UKV: proprietary UnumKV + proprietary Graph modality: 
-
-Gathering Speeds:
-
-* Neo4J:
-* ArangoDB:
-* TigerGraph:
-* UKV: FOSS RocksDB + FOSS Graph modality: 
-* UKV: proprietary UnumKV + FOSS Graph modality: 
-* UKV: proprietary UnumKV + proprietary Graph modality: 
+[ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
+[ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
+[ucsb]: https://github.com/unum-cloud/ucsb
+[twitter-samples]: https://developer.twitter.com/en/docs/twitter-api/v1/tweets/sample-realtime/overview

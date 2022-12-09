@@ -10,9 +10,11 @@
 #include <unordered_set>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
+#include <bson.h>
 
 #include "ukv/ukv.hpp"
 
@@ -69,7 +71,11 @@ static char const* path() {
 #endif
 }
 
-#pragma region Binary Collections
+inline std::ostream& operator<<(std::ostream& os, collection_key_t obj) {
+    return os << obj.collection << obj.key;
+}
+
+#pragma region Binary Modality
 
 template <typename locations_at>
 void check_length(blobs_ref_gt<locations_at>& ref, ukv_length_t expected_length) {
@@ -106,8 +112,8 @@ void check_length(blobs_ref_gt<locations_at>& ref, ukv_length_t expected_length)
     }
 }
 
-template <typename locations_at>
-void check_equalities(blobs_ref_gt<locations_at>& ref, contents_arg_t values) {
+template <template <typename locations_at> class ref_at, typename locations_at>
+void check_equalities(ref_at<locations_at>& ref, contents_arg_t values) {
 
     EXPECT_TRUE(ref.value()) << "Failed to fetch present keys";
     using extractor_t = places_arg_extractor_gt<locations_at>;
@@ -176,21 +182,30 @@ struct triplet_t {
     }
 };
 
+template <typename locations_at>
+void round_trip(blobs_ref_gt<locations_at>& ref, triplet_t const& triplet) {
+    round_trip(ref, triplet.contents_arrow());
+    round_trip(ref, triplet.contents_lengths());
+    round_trip(ref, triplet.contents_full());
+}
+
+template <template <typename locations_at> class ref_at, typename locations_at>
+void check_equalities(ref_at<locations_at>& ref, triplet_t const& triplet) {
+    check_equalities(ref, triplet.contents_arrow());
+    check_equalities(ref, triplet.contents_lengths());
+    check_equalities(ref, triplet.contents_full());
+}
+
 void check_binary_collection(blobs_collection_t& collection) {
 
     triplet_t triplet;
     auto ref = collection[triplet.keys];
-
-    round_trip(ref, triplet.contents_arrow());
-    round_trip(ref, triplet.contents_lengths());
-    round_trip(ref, triplet.contents_full());
+    round_trip(ref, triplet);
 
     // Overwrite those values with same size integers and try again
     for (auto& val : triplet.vals)
         val += 7;
-    round_trip(ref, triplet.contents_arrow());
-    round_trip(ref, triplet.contents_lengths());
-    round_trip(ref, triplet.contents_full());
+    round_trip(ref, triplet);
 
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(ref.clear());
@@ -210,7 +225,11 @@ void check_binary_collection(blobs_collection_t& collection) {
     check_length(ref, ukv_length_missing_k);
 }
 
-TEST(db, basic) {
+/**
+ * Try opening a DB, clearing it, accessing the main collection.
+ * Write some data into that main collection, and test retrieving it.
+ */
+TEST(db, open_clear_close) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -223,6 +242,64 @@ TEST(db, basic) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Insert data into main collection.
+ * Clear the whole DBMS.
+ * Make sure the main collection is empty.
+ */
+TEST(db, clear_collection_by_clearing_db) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    blobs_collection_t collection = *db.collection();
+    triplet_t triplet;
+    auto ref = collection[triplet.keys];
+    round_trip(ref, triplet.contents_arrow());
+
+    // Overwrite with empty values, but check for existence
+    EXPECT_TRUE(db.clear());
+    check_length(ref, ukv_length_missing_k);
+}
+
+/**
+ * Fill the main collection with some keys from 1000 to 1100 and from 900 to 800.
+ * Overwrite some of those with larger values, checking consistency.
+ */
+TEST(db, overwrite_with_step) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.clear());
+
+    // Try getting the main collection
+    EXPECT_TRUE(db.collection());
+    blobs_collection_t collection = *db.collection();
+
+    // Monotonically increasing
+    for (ukv_key_t k = 1000; k != 1100; ++k)
+        collection[k] = "some";
+    for (ukv_key_t k = 1000; k != 1100; ++k)
+        EXPECT_EQ(*collection[k].value(), "some");
+
+    // Monotonically decreasing
+    for (ukv_key_t k = 900; k != 800; --k)
+        collection[k] = "other";
+    for (ukv_key_t k = 900; k != 800; --k)
+        EXPECT_EQ(*collection[k].value(), "other");
+
+    // Overwrites
+    for (ukv_key_t k = 800; k != 1100; k += 2)
+        collection[k] = "third";
+    for (ukv_key_t k = 800; k != 1100; k += 2)
+        EXPECT_EQ(*collection[k].value(), "third");
+
+    EXPECT_TRUE(db.clear());
+}
+
+/**
+ * Populate the main collection, close the DBMS, reopen it, check consistency.
+ */
 TEST(db, persistency) {
 
     if (!path())
@@ -232,29 +309,66 @@ TEST(db, persistency) {
     EXPECT_TRUE(db.open(path()));
 
     triplet_t triplet;
-
-    blobs_collection_t collection = *db.collection();
-    auto collection_ref = collection[triplet.keys];
-    check_length(collection_ref, ukv_length_missing_k);
-    round_trip(collection_ref, triplet.contents_arrow());
-    round_trip(collection_ref, triplet.contents_lengths());
-    round_trip(collection_ref, triplet.contents_full());
-    check_length(collection_ref, triplet_t::val_size_k);
+    {
+        blobs_collection_t collection = *db.collection();
+        auto collection_ref = collection[triplet.keys];
+        check_length(collection_ref, ukv_length_missing_k);
+        round_trip(collection_ref, triplet);
+        check_length(collection_ref, triplet_t::val_size_k);
+    }
     db.close();
-
-    EXPECT_TRUE(db.open(path()));
-    blobs_collection_t collection2 = *db.collection();
-    auto collection_ref2 = collection2[triplet.keys];
-
-    check_equalities(collection_ref2, triplet.contents_arrow());
-    check_equalities(collection_ref2, triplet.contents_lengths());
-    check_equalities(collection_ref2, triplet.contents_full());
-    check_length(collection_ref2, triplet_t::val_size_k);
-
+    {
+        EXPECT_TRUE(db.open(path()));
+        blobs_collection_t collection = *db.collection();
+        auto collection_ref = collection[triplet.keys];
+        check_equalities(collection_ref, triplet);
+        check_length(collection_ref, triplet_t::val_size_k);
+    }
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, named) {
+/**
+ * Creates news collections under unique names.
+ * Tests collection lookup by name, dropping/clearing existing collections.
+ */
+TEST(db, named_collections) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    // We can't drop a missing collection, or the main one.
+    EXPECT_FALSE(*db.contains("unknown"));
+    EXPECT_FALSE(db.drop("unknown"));
+    EXPECT_FALSE(db.drop(""));
+
+    if (ukv_supports_named_collections_k) {
+
+        EXPECT_TRUE(db["col1"]);
+        EXPECT_TRUE(db["col2"]);
+
+        EXPECT_FALSE(db.collection_create("col1"));
+        blobs_collection_t col1 = *db["col1"];
+        EXPECT_FALSE(db.collection_create("col2"));
+        blobs_collection_t col2 = *db["col2"];
+
+        check_binary_collection(col1);
+        check_binary_collection(col2);
+
+        EXPECT_TRUE(db.drop("col1"));
+        EXPECT_TRUE(db.drop("col2"));
+        EXPECT_TRUE(*db.contains(""));
+        EXPECT_FALSE(*db.contains("col1"));
+        EXPECT_FALSE(*db.contains("col2"));
+    }
+
+    EXPECT_TRUE(db.clear());
+    EXPECT_TRUE(*db.contains(""));
+}
+
+/**
+ * Tests listing the names of present collections.
+ */
+TEST(db, named_collections_list) {
 
     if (!ukv_supports_named_collections_k)
         return;
@@ -262,77 +376,387 @@ TEST(db, named) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    EXPECT_TRUE(db["col1"]);
-    EXPECT_TRUE(db["col2"]);
+    blobs_collection_t col1 = *db.collection_create("col1");
+    blobs_collection_t col2 = *db.collection_create("col2");
+    blobs_collection_t col3 = *db.collection_create("col3");
+    blobs_collection_t col4 = *db.collection_create("col4");
 
-    EXPECT_FALSE(db.collection_create("col1"));
-    blobs_collection_t col1 = *db["col1"];
-    EXPECT_FALSE(db.collection_create("col2"));
-    blobs_collection_t col2 = *db["col2"];
+    EXPECT_TRUE(*db.contains("col1"));
+    EXPECT_TRUE(*db.contains("col2"));
 
-    check_binary_collection(col1);
-    check_binary_collection(col2);
+    auto maybe_txn = db.transact();
+    EXPECT_TRUE(maybe_txn);
+    auto maybe_cols = maybe_txn->collections();
+    EXPECT_TRUE(maybe_cols);
+
+    size_t count = 0;
+    std::vector<std::string> collections;
+    auto cols = *maybe_cols;
+    while (!cols.names.is_end()) {
+        collections.push_back(std::string(*cols.names));
+        ++cols.names;
+        ++count;
+    }
+    EXPECT_EQ(count, 4);
+    std::sort(collections.begin(), collections.end());
+    EXPECT_EQ(collections[0], "col1");
+    EXPECT_EQ(collections[1], "col2");
+    EXPECT_EQ(collections[2], "col3");
+    EXPECT_EQ(collections[3], "col4");
 
     EXPECT_TRUE(db.drop("col1"));
-    EXPECT_TRUE(db.drop("col2"));
-    EXPECT_TRUE(*db.contains(""));
     EXPECT_FALSE(*db.contains("col1"));
-    EXPECT_FALSE(*db.contains("col2"));
+    EXPECT_FALSE(db.drop(""));
+    EXPECT_TRUE(db.collection()->clear());
     EXPECT_TRUE(db.clear());
-    EXPECT_TRUE(*db.contains(""));
 }
 
-TEST(db, collection_list) {
+/**
+ * Tests clearing values in a collection, which would preserve the keys,
+ * but empty the binary strings.
+ */
+TEST(db, clear_values) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    triplet_t triplet;
+
+    blobs_collection_t col = *db.collection();
+    auto collection_ref = col[triplet.keys];
+
+    check_length(collection_ref, ukv_length_missing_k);
+    round_trip(collection_ref, triplet);
+    check_length(collection_ref, triplet_t::val_size_k);
+
+    EXPECT_TRUE(col.clear_values());
+    check_length(collection_ref, 0);
+
+    EXPECT_TRUE(db.clear());
+}
+
+/**
+ * Ordered batched scan over the main collection.
+ */
+TEST(db, batch_scan) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.collection());
+    blobs_collection_t collection = *db.collection();
+
+    std::array<ukv_key_t, 512> keys;
+    std::iota(std::begin(keys), std::end(keys), 0);
+    auto ref = collection[keys];
+    value_view_t value("value");
+    EXPECT_TRUE(ref.assign(value));
+
+    keys_range_t present_keys = collection.keys();
+    keys_stream_t stream(db, collection, 256);
+    stream.seek_to_first();
+    auto batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 256);
+    EXPECT_FALSE(stream.is_end());
+
+    stream.seek_to_next_batch();
+    batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 256);
+    EXPECT_FALSE(stream.is_end());
+
+    stream.seek_to_next_batch();
+    batch = stream.keys_batch();
+    EXPECT_EQ(batch.size(), 0);
+    EXPECT_TRUE(stream.is_end());
+
+    EXPECT_TRUE(db.clear());
+}
+
+// TODO: Unit tests must be minimal.
+TEST(db, multiple_collection) {
+    if (!ukv_supports_named_collections_k)
+        return;
 
     database_t db;
 
     EXPECT_TRUE(db.open(path()));
 
-    if (!ukv_supports_named_collections_k) {
-        EXPECT_FALSE(*db.contains("name"));
-        EXPECT_FALSE(db.drop("name"));
-        EXPECT_FALSE(db.drop(""));
-        EXPECT_TRUE(db.collection()->clear());
+    blobs_collection_t col1 = *db.collection_create("col1");
+    blobs_collection_t col2 = *db.collection_create("col2");
+    blobs_collection_t col3 = *db.collection_create("col3");
+    blobs_collection_t col4 = *db.collection_create("col4");
+    blobs_collection_t col5 = *db.collection_create("col5");
+
+    triplet_t triplet;
+
+    auto col1_ref = col1[triplet.keys];
+    auto col2_ref = col2[triplet.keys];
+    auto col3_ref = col3[triplet.keys];
+    auto col4_ref = col4[triplet.keys];
+    auto col5_ref = col5[triplet.keys];
+
+    check_length(col1_ref, ukv_length_missing_k);
+    check_length(col2_ref, ukv_length_missing_k);
+    check_length(col3_ref, ukv_length_missing_k);
+    check_length(col4_ref, ukv_length_missing_k);
+    check_length(col5_ref, ukv_length_missing_k);
+
+    round_trip(col1_ref, triplet);
+    check_length(col1_ref, triplet_t::val_size_k);
+
+    round_trip(col2_ref, triplet);
+    check_length(col2_ref, triplet_t::val_size_k);
+
+    round_trip(col3_ref, triplet);
+    check_length(col3_ref, triplet_t::val_size_k);
+
+    round_trip(col4_ref, triplet);
+    check_length(col4_ref, triplet_t::val_size_k);
+
+    round_trip(col5_ref, triplet);
+    check_length(col5_ref, triplet_t::val_size_k);
+
+    EXPECT_TRUE(*db.contains("col1"));
+    EXPECT_TRUE(col1.clear_values());
+    check_length(col1_ref, 0);
+    EXPECT_TRUE(*db.contains("col1"));
+
+    EXPECT_TRUE(*db.contains("col2"));
+    EXPECT_TRUE(col2.clear_values());
+    check_length(col2_ref, 0);
+    EXPECT_TRUE(*db.contains("col2"));
+
+    EXPECT_TRUE(db.drop("col2"));
+    EXPECT_FALSE(*db.contains("col2"));
+
+    EXPECT_TRUE(*db.contains("col3"));
+    EXPECT_TRUE(*db.contains("col4"));
+    EXPECT_TRUE(*db.contains("col5"));
+
+    EXPECT_TRUE(db.drop("col4"));
+    EXPECT_FALSE(*db.contains("col4"));
+
+    check_length(col3_ref, triplet_t::val_size_k);
+    check_length(col5_ref, triplet_t::val_size_k);
+
+    EXPECT_TRUE(db.clear());
+
+    EXPECT_FALSE(*db.contains("col1"));
+    EXPECT_FALSE(*db.contains("col2"));
+    EXPECT_FALSE(*db.contains("col3"));
+    EXPECT_FALSE(*db.contains("col4"));
+    EXPECT_FALSE(*db.contains("col5"));
+}
+
+// TODO: What is this?
+TEST(db, unnamed_and_named) {
+
+    if (!ukv_supports_named_collections_k)
         return;
-    }
-    else {
-        blobs_collection_t col1 = *db.collection_create("col1");
-        blobs_collection_t col2 = *db.collection_create("col2");
-        blobs_collection_t col3 = *db.collection_create("col3");
-        blobs_collection_t col4 = *db.collection_create("col4");
 
-        EXPECT_TRUE(*db.contains("col1"));
-        EXPECT_TRUE(*db.contains("col2"));
-        EXPECT_FALSE(*db.contains("unknown_col"));
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
 
-        auto maybe_txn = db.transact();
-        EXPECT_TRUE(maybe_txn);
-        auto maybe_cols = maybe_txn->collections();
-        EXPECT_TRUE(maybe_cols);
+    triplet_t triplet;
 
-        size_t count = 0;
-        std::vector<std::string> collections;
-        auto cols = *maybe_cols;
-        while (!cols.names.is_end()) {
-            collections.push_back(std::string(*cols.names));
-            ++cols.names;
-            ++count;
-        }
-        EXPECT_EQ(count, 4);
-        std::sort(collections.begin(), collections.end());
-        EXPECT_EQ(collections[0], "col1");
-        EXPECT_EQ(collections[1], "col2");
-        EXPECT_EQ(collections[2], "col3");
-        EXPECT_EQ(collections[3], "col4");
+    EXPECT_FALSE(db.collection_create(""));
 
-        EXPECT_TRUE(db.drop("col1"));
-        EXPECT_FALSE(*db.contains("col1"));
-        EXPECT_FALSE(db.drop(""));
-        EXPECT_TRUE(db.collection()->clear());
+    for (auto&& name : {"one", "three"}) {
+        for (auto& val : triplet.vals)
+            val += 7;
+
+        auto maybe_collection = db.collection_create(name);
+        EXPECT_TRUE(maybe_collection);
+        blobs_collection_t collection = std::move(maybe_collection).throw_or_release();
+        auto collection_ref = collection[triplet.keys];
+        check_length(collection_ref, ukv_length_missing_k);
+        round_trip(collection_ref, triplet);
+        check_length(collection_ref, triplet_t::val_size_k);
     }
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Checks the "Read Commited" consistency guarantees of transactions.
+ * Readers can't see the contents of pending (not committed) transactions.
+ * https://jepsen.io/consistency/models/read-committed
+ */
+TEST(db, transaction_read_commited) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.transact());
+    transaction_t txn = *db.transact();
+
+    triplet_t triplet;
+
+    auto txn_ref = txn[triplet.keys];
+    round_trip(txn_ref, triplet);
+
+    EXPECT_TRUE(db.collection());
+    blobs_collection_t collection = *db.collection();
+    auto collection_ref = collection[triplet.keys];
+
+    // Check for missing values before commit
+    check_length(collection_ref, ukv_length_missing_k);
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
+
+    // Validate that values match after commit
+    check_equalities(collection_ref, triplet);
+    EXPECT_TRUE(db.clear());
+}
+
+/**
+ * Checks the "Snapshot Isolation" consistency guarantees of transactions.
+ * If needed, readers can initiate snapshot-backed transactions.
+ * All the reads, directed to that snapshot will not see newer operations,
+ * affecting the HEAD state. From a consistency standpoint, it is a downgrade
+ * from "Strictly Serializable" ACID transactions, but it is extremely useful
+ * for numerous Business Intelligence applications.
+ * https://jepsen.io/consistency/models/snapshot-isolation
+ */
+TEST(db, transaction_snapshot_isolation) {
+
+    if (!ukv_supports_snapshots_k)
+        return;
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    triplet_t triplet;
+    triplet_t triplet_same_v;
+    triplet_same_v.vals = {'D', 'D', 'D'};
+
+    EXPECT_TRUE(db.collection());
+    blobs_collection_t collection = *db.collection();
+    auto collection_ref = collection[triplet.keys];
+
+    check_length(collection_ref, ukv_length_missing_k);
+    round_trip(collection_ref, triplet);
+
+    transaction_t txn = *db.transact(true);
+    auto txn_ref = txn[triplet.keys];
+    check_equalities(txn_ref, triplet);
+    round_trip(collection_ref, triplet_same_v);
+
+    // Validate that values match
+    auto maybe_retrieved = txn_ref.value();
+    auto const& retrieved = *maybe_retrieved;
+    auto it = retrieved.begin();
+    auto cont = triplet_same_v.contents_full();
+    for (std::size_t i = 0; i != cont.size(); ++i, ++it) {
+        auto expected_len = cont[i].size();
+        auto expected_begin = cont[i].begin();
+
+        value_view_t retrieved_view = *it;
+        value_view_t expected_view(expected_begin, expected_begin + expected_len);
+        EXPECT_EQ(retrieved_view.size(), expected_view.size());
+        EXPECT_NE(retrieved_view, expected_view);
+    }
+
+    txn = *db.transact(true);
+    auto ref = txn[triplet_same_v.keys];
+    round_trip(ref, triplet_same_v);
+
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, txn_named) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+    if (!ukv_supports_named_collections_k)
+        return;
+
+    database_t db;
+    triplet_t triplet;
+    EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.transact());
+    transaction_t txn = *db.transact();
+
+    // Transaction with named collection
+    EXPECT_FALSE(db.collection("named_col"));
+    EXPECT_TRUE(db.collection("named_col", true));
+    blobs_collection_t named_collection = *db.collection("named_col");
+    std::vector<collection_key_t> sub_keys {
+        {named_collection, triplet.keys[0]},
+        {named_collection, triplet.keys[1]},
+        {named_collection, triplet.keys[2]},
+    };
+    auto txn_named_collection_ref = txn[sub_keys];
+    round_trip(txn_named_collection_ref, triplet);
+
+    // Check for missing values before commit
+    auto named_collection_ref = named_collection[triplet.keys];
+    check_length(named_collection_ref, ukv_length_missing_k);
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
+
+    // Validate that values match after commit
+    check_equalities(named_collection_ref, triplet);
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, txn_unnamed_then_named) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+    if (!ukv_supports_named_collections_k)
+        return;
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    EXPECT_TRUE(db.transact());
+    transaction_t txn = *db.transact();
+
+    triplet_t triplet;
+
+    auto txn_ref = txn[triplet.keys];
+    round_trip(txn_ref, triplet);
+
+    EXPECT_TRUE(db.collection());
+    blobs_collection_t collection = *db.collection();
+    auto collection_ref = collection[triplet.keys];
+
+    // Check for missing values before commit
+    check_length(collection_ref, ukv_length_missing_k);
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
+
+    // Validate that values match after commit
+    check_equalities(collection_ref, triplet);
+
+    // Transaction with named collection
+    EXPECT_TRUE(db.collection_create("named_col"));
+    blobs_collection_t named_collection = *db.collection("named_col");
+    std::vector<collection_key_t> sub_keys {
+        {named_collection, triplet.keys[0]},
+        {named_collection, triplet.keys[1]},
+        {named_collection, triplet.keys[2]},
+    };
+    auto txn_named_collection_ref = txn[sub_keys];
+    round_trip(txn_named_collection_ref, triplet);
+
+    // Check for missing values before commit
+    auto named_collection_ref = named_collection[triplet.keys];
+    check_length(named_collection_ref, ukv_length_missing_k);
+    EXPECT_TRUE(txn.commit());
+    EXPECT_TRUE(txn.reset());
+
+    // Validate that values match after commit
+    check_equalities(named_collection_ref, triplet);
+    EXPECT_TRUE(db.clear());
+}
+
+#pragma region Paths Modality
+
+/**
+ * Tests "Paths" Modality, with variable length keys.
+ * Reads, writes, prefix matching and pattern matching.
+ */
 TEST(db, paths) {
 
     database_t db;
@@ -449,6 +873,11 @@ TEST(db, paths) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Tests "Paths" Modality, by forming bidirectional linked lists from string-to-string mappings.
+ * Uses different-length unique strings. As the underlying modality may be implemented as a bucketed hash-map,
+ * this test helps catch problems in bucket reorganization.
+ */
 TEST(db, paths_linked_list) {
 
     constexpr std::size_t count = 100;
@@ -553,226 +982,29 @@ TEST(db, paths_linked_list) {
     }
 }
 
-TEST(db, unnamed_and_named) {
+#pragma region Documents Modality
 
-    if (!ukv_supports_named_collections_k)
-        return;
-
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-
-    triplet_t triplet;
-
-    EXPECT_FALSE(db.collection_create(""));
-
-    for (auto&& name : {"one", "three"}) {
-        for (auto& val : triplet.vals)
-            val += 7;
-
-        auto maybe_collection = db.collection_create(name);
-        EXPECT_TRUE(maybe_collection);
-        blobs_collection_t collection = std::move(maybe_collection).throw_or_release();
-        auto collection_ref = collection[triplet.keys];
-        check_length(collection_ref, ukv_length_missing_k);
-        round_trip(collection_ref, triplet.contents_arrow());
-        round_trip(collection_ref, triplet.contents_lengths());
-        round_trip(collection_ref, triplet.contents_full());
-        check_length(collection_ref, triplet_t::val_size_k);
-    }
-    EXPECT_TRUE(db.clear());
+// TODO: Use those structures
+std::vector<std::string> make_three_flat_docs() {
+    auto json1 = R"( {"person": "Alice", "age": 24} )"_json.dump();
+    auto json2 = R"( {"person": "Bob", "age": 25} )"_json.dump();
+    auto json3 = R"( {"person": "Carl", "age": 26} )"_json.dump();
+    return {json1, json2, json3};
 }
 
-TEST(db, txn) {
-
-    if (!ukv_supports_transactions_k)
-        return;
-
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-    EXPECT_TRUE(db.transact());
-    transaction_t txn = *db.transact();
-
-    triplet_t triplet;
-
-    auto txn_ref = txn[triplet.keys];
-    round_trip(txn_ref, triplet.contents_arrow());
-    round_trip(txn_ref, triplet.contents_lengths());
-    round_trip(txn_ref, triplet.contents_full());
-
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
-    auto collection_ref = collection[triplet.keys];
-
-    // Check for missing values before commit
-    check_length(collection_ref, ukv_length_missing_k);
-    EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn.reset());
-
-    // Validate that values match after commit
-    check_equalities(collection_ref, triplet.contents_arrow());
-    check_equalities(collection_ref, triplet.contents_lengths());
-    check_equalities(collection_ref, triplet.contents_full());
-    EXPECT_TRUE(db.clear());
+std::vector<std::string> make_three_nested_docs() {
+    auto json1 = R"( {"person": {"name":"Alice", "age": 24}} )"_json.dump();
+    auto json2 = R"( {"person": [{"name":"Bob", "age": 25}]} )"_json.dump();
+    auto json3 = R"( {"person": "Carl", "age": 26} )"_json.dump();
+    return {json1, json2, json3};
 }
 
-TEST(db, snapshots) {
-
-    if (!ukv_supports_snapshots_k)
-        return;
-
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-
-    triplet_t triplet;
-    triplet_t triplet_same_v;
-    triplet_same_v.vals = {'A', 'A', 'A'};
-
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
-    auto collection_ref = collection[triplet.keys];
-
-    check_length(collection_ref, ukv_length_missing_k);
-    round_trip(collection_ref, triplet.contents());
-    round_trip(collection_ref, triplet.contents_lengths());
-    round_trip(collection_ref, triplet.contents_full());
-
-    transaction_t txn = *db.transact(true);
-    auto txn_ref = txn[triplet.keys];
-    check_equalities(txn_ref, triplet.contents());
-    check_equalities(txn_ref, triplet.contents_lengths());
-    check_equalities(txn_ref, triplet.contents_full());
-
-    round_trip(collection_ref, triplet_same_v.contents());
-    round_trip(collection_ref, triplet_same_v.contents_lengths());
-    round_trip(collection_ref, triplet_same_v.contents_full());
-
-    // Validate that values match
-    auto maybe_retrieved = txn_ref.value();
-    auto const& retrieved = *maybe_retrieved;
-    auto it = retrieved.begin();
-    auto cont = triplet_same_v.contents_full();
-    for (std::size_t i = 0; i != cont.size(); ++i, ++it) {
-        auto expected_len = cont[i].size();
-        auto expected_begin = cont[i].begin();
-
-        value_view_t retrieved_view = *it;
-        value_view_t expected_view(expected_begin, expected_begin + expected_len);
-        EXPECT_EQ(retrieved_view.size(), expected_view.size());
-        EXPECT_NE(retrieved_view, expected_view);
-    }
-
-    txn = *db.transact(true);
-    auto ref = txn[triplet_same_v.keys];
-    round_trip(ref, triplet_same_v.contents());
-    round_trip(ref, triplet_same_v.contents_lengths());
-    round_trip(ref, triplet_same_v.contents_full());
-
-    EXPECT_TRUE(db.clear());
-}
-
-TEST(db, txn_named) {
-
-    if (!ukv_supports_transactions_k)
-        return;
-    if (!ukv_supports_named_collections_k)
-        return;
-
-    database_t db;
-    triplet_t triplet;
-    EXPECT_TRUE(db.open(path()));
-    EXPECT_TRUE(db.transact());
-    transaction_t txn = *db.transact();
-
-    // Transaction with named collection
-    EXPECT_FALSE(db.collection("named_col"));
-    EXPECT_TRUE(db.collection("named_col", true));
-    blobs_collection_t named_collection = *db.collection("named_col");
-    std::vector<collection_key_t> sub_keys {
-        {named_collection, triplet.keys[0]},
-        {named_collection, triplet.keys[1]},
-        {named_collection, triplet.keys[2]},
-    };
-    auto txn_named_collection_ref = txn[sub_keys];
-    round_trip(txn_named_collection_ref, triplet.contents_arrow());
-    round_trip(txn_named_collection_ref, triplet.contents_lengths());
-    round_trip(txn_named_collection_ref, triplet.contents_full());
-
-    // Check for missing values before commit
-    auto named_collection_ref = named_collection[triplet.keys];
-    check_length(named_collection_ref, ukv_length_missing_k);
-    EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn.reset());
-
-    // Validate that values match after commit
-    check_equalities(named_collection_ref, triplet.contents_arrow());
-    check_equalities(named_collection_ref, triplet.contents_lengths());
-    check_equalities(named_collection_ref, triplet.contents_full());
-    EXPECT_TRUE(db.clear());
-}
-
-TEST(db, txn_unnamed_then_named) {
-
-    if (!ukv_supports_transactions_k)
-        return;
-    if (!ukv_supports_named_collections_k)
-        return;
-
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-
-    EXPECT_TRUE(db.transact());
-    transaction_t txn = *db.transact();
-
-    triplet_t triplet;
-
-    auto txn_ref = txn[triplet.keys];
-    round_trip(txn_ref, triplet.contents_arrow());
-    round_trip(txn_ref, triplet.contents_lengths());
-    round_trip(txn_ref, triplet.contents_full());
-
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
-    auto collection_ref = collection[triplet.keys];
-
-    // Check for missing values before commit
-    check_length(collection_ref, ukv_length_missing_k);
-    EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn.reset());
-
-    // Validate that values match after commit
-    check_equalities(collection_ref, triplet.contents_arrow());
-    check_equalities(collection_ref, triplet.contents_lengths());
-    check_equalities(collection_ref, triplet.contents_full());
-
-    // Transaction with named collection
-    EXPECT_TRUE(db.collection_create("named_col"));
-    blobs_collection_t named_collection = *db.collection("named_col");
-    std::vector<collection_key_t> sub_keys {
-        {named_collection, triplet.keys[0]},
-        {named_collection, triplet.keys[1]},
-        {named_collection, triplet.keys[2]},
-    };
-    auto txn_named_collection_ref = txn[sub_keys];
-    round_trip(txn_named_collection_ref, triplet.contents_arrow());
-    round_trip(txn_named_collection_ref, triplet.contents_lengths());
-    round_trip(txn_named_collection_ref, triplet.contents_full());
-
-    // Check for missing values before commit
-    auto named_collection_ref = named_collection[triplet.keys];
-    check_length(named_collection_ref, ukv_length_missing_k);
-    EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn.reset());
-
-    // Validate that values match after commit
-    check_equalities(named_collection_ref, triplet.contents_arrow());
-    check_equalities(named_collection_ref, triplet.contents_lengths());
-    check_equalities(named_collection_ref, triplet.contents_full());
-    EXPECT_TRUE(db.clear());
-}
-
-#pragma region Document Collections
-
-TEST(db, docs) {
+/**
+ * Tests "Documents" Modality, mapping integers to structured hierarchical documents.
+ * Takes a basic flat JSON document, and checks if it can be imported in JSON, BSON
+ * and MessagePack forms, and later be properly accessed at field-level.
+ */
+TEST(db, docs_flat) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -789,10 +1021,20 @@ TEST(db, docs) {
     auto maybe_person = collection[ckf(1, "person")].value(ukv_doc_field_str_k);
     EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
 
+    // BSON
+    bson_error_t error;
+    bson_t* b = bson_new_from_json((uint8_t*)json.c_str(), -1, &error);
+    const uint8_t* buffer = bson_get_data(b);
+    auto view = value_view_t(buffer, b->len);
+    collection.at(2, ukv_doc_field_bson_k) = view;
+    M_EXPECT_EQ_JSON(*collection[2].value(), json);
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), "\"Carl\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "age")].value(), "24");
+    bson_clear(&b);
+
 #if 0
     // MsgPack
     collection.as(ukv_format_msgpack_k);
-    value_view_t val = *collection[1].value();
     M_EXPECT_EQ_MSG(val, json.c_str());
     val = *collection[ckf(1, "person")].value();
     M_EXPECT_EQ_MSG(val, "\"Carl\"");
@@ -803,6 +1045,91 @@ TEST(db, docs) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Tries adding 3 simple nested JSONs, using JSON-Pointers
+ * to retrieve specific fields across multiple keys.
+ */
+TEST(db, docs_nested_batch) {
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    docs_collection_t collection = *db.collection<docs_collection_t>();
+
+    auto json1 = R"({"person": {"name":"Carl", "age": 24}} )"_json.dump();
+    auto json2 = R"({"person": [{"name":"Joe", "age": 25}]} )"_json.dump();
+    auto json3 = R"({"person": "Charls", "age": 26} )"_json.dump();
+    std::string jsons = json1 + json2 + json3;
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(jsons.data());
+    std::array<ukv_length_t, 4> offsets = {
+        0,
+        json1.size(),
+        json1.size() + json2.size(),
+        json1.size() + json2.size() + json3.size(),
+    };
+    contents_arg_t values {
+        .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
+        .contents_begin = {&vals_begin, 0},
+    };
+
+    std::array<ukv_key_t, 3> keys = {1, 2, 3};
+    auto ref = collection[keys];
+    ref.assign(values);
+
+    // Read One By One
+    M_EXPECT_EQ_JSON(*collection[1].value(), json1);
+    M_EXPECT_EQ_JSON(*collection[2].value(), json2);
+    M_EXPECT_EQ_JSON(*collection[3].value(), json3);
+
+    auto expected = R"({"name":"Carl", "age": 24})"_json.dump();
+    M_EXPECT_EQ_JSON(*collection[ckf(1, "person")].value(), expected);
+
+    expected = R"([{"name":"Joe", "age": 25}])"_json.dump();
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), expected);
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "/person/0/name")].value(), "\"Joe\"");
+
+    // Read sorted keys
+    check_equalities(ref, values);
+
+    // Read not sorted keys
+    std::array<ukv_key_t, 3> not_sorted_keys = {1, 3, 2};
+    auto not_sorted_ref = collection[not_sorted_keys];
+    std::string not_sorted_jsons = json1 + json3 + json2;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(not_sorted_jsons.data());
+    offsets[2] = json1.size() + json3.size();
+    offsets[3] = json1.size() + json3.size() + json2.size();
+    check_equalities(not_sorted_ref, values);
+
+    // Read duplicate keys
+    std::array<ukv_key_t, 3> duplicate_keys = {1, 2, 1};
+    auto duplicate_ref = collection[duplicate_keys];
+    std::string duplicate_jsons = json1 + json2 + json1;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(duplicate_jsons.data());
+    offsets[2] = json1.size() + json2.size();
+    offsets[3] = json1.size() + json2.size() + json1.size();
+    check_equalities(duplicate_ref, values);
+
+    // Read with fields
+    std::array<collection_key_field_t, 3> keys_with_fields = {
+        ckf(1, "person"),
+        ckf(2, "/person/0/name"),
+        ckf(3, "age"),
+    };
+    auto ref_with_fields = collection[keys_with_fields];
+    auto field1 = R"({"name":"Carl", "age": 24} )"_json.dump();
+    auto field2 = R"("Joe")"_json.dump();
+    auto field3 = R"(26)"_json.dump();
+    std::string fields = field1 + field2 + field3;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(fields.data());
+    offsets[1] = field1.size();
+    offsets[2] = field1.size() + field2.size();
+    offsets[3] = field1.size() + field2.size() + field3.size();
+    check_equalities(ref_with_fields, values);
+
+    EXPECT_TRUE(db.clear());
+}
+
+// TODO: Use understandable and rememberable keys.
+// Split into smaller parts.
 TEST(db, docs_modify) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -929,6 +1256,10 @@ TEST(db, docs_modify) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Uses a well-known repository of JSON-Patches and JSON-MergePatches,
+ * to validate that document modifications work adequately in corner cases.
+ */
 TEST(db, docs_merge_and_patch) {
     using json_t = nlohmann::json;
     database_t db;
@@ -960,6 +1291,11 @@ TEST(db, docs_merge_and_patch) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Fills document collection with info about Alice, Bob and Carl,
+ * sampling it later in a form of a table, using both low-level APIs,
+ * and higher-level compile-time C++ meta-programming abstractions.
+ */
 TEST(db, docs_table) {
 
     using json_t = nlohmann::json;
@@ -1114,8 +1450,31 @@ TEST(db, docs_table) {
     EXPECT_TRUE(db.clear());
 }
 
-#pragma region Graph Collections
+#pragma region Graph Modality
 
+edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
+    return {v1, v2, edge_id};
+}
+
+std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_connect = 1) {
+    std::vector<edge_t> es;
+    ukv_key_t edge_id = 0;
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        ukv_key_t connect_with = vertex_id + next_connect;
+        while (connect_with < vertices_count) {
+            edge_id++;
+            es.push_back(make_edge(edge_id, vertex_id, connect_with));
+            connect_with = connect_with + next_connect;
+        }
+    }
+    return es;
+}
+
+/**
+ * Tests "Graphs" Modality, with on of the simplest network designs - a triangle.
+ * Three vertices, three connections between them, forming 3 undirected, or 6 directed edges.
+ * Tests edge upserts, existence checks, degree computation, vertex removals.
+ */
 TEST(db, graph_triangle) {
 
     database_t db;
@@ -1131,6 +1490,11 @@ TEST(db, graph_triangle) {
     EXPECT_TRUE(net.upsert(edge1));
     EXPECT_TRUE(net.upsert(edge2));
     EXPECT_TRUE(net.upsert(edge3));
+
+    auto neighbors = net.neighbors(1).throw_or_release();
+    EXPECT_EQ(neighbors.size(), 2);
+    EXPECT_EQ(neighbors[0], 2);
+    EXPECT_EQ(neighbors[1], 3);
 
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
@@ -1210,10 +1574,17 @@ TEST(db, graph_triangle) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, graph_triangle_batch_api) {
+/**
+ * Further complicates the `graph_triangle` test by performing all of the updates
+ * and lookups in batches. This detects inconsistencies in concurrent updates to
+ * the underlying binary representation, triggered from a single high-level
+ * graph operation.
+ */
+TEST(db, graph_triangle_batch) {
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1307,6 +1678,11 @@ TEST(db, graph_triangle_batch_api) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Tries to make a transaction on a graph, that must fail to `commit`.
+ * Creates a "wedge": A-B-C. If a transaction changes the B-C edge,
+ * while A-B is updated externally, the commit will fail.
+ */
 TEST(db, graph_transaction_watch) {
 
     if (!ukv_supports_transactions_k)
@@ -1315,53 +1691,25 @@ TEST(db, graph_transaction_watch) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
     graph_collection_t net = *db.collection<graph_collection_t>();
+
+    edge_t edge_ab {'A', 'B', 19};
+    edge_t edge_bc {'B', 'C', 31};
+    EXPECT_TRUE(net.upsert(edge_ab));
+    EXPECT_TRUE(net.upsert(edge_bc));
+
     transaction_t txn = *db.transact();
     graph_collection_t txn_net = *txn.collection<graph_collection_t>();
+    EXPECT_EQ(txn_net.degree('B'), 2);
+    EXPECT_TRUE(txn_net.remove(edge_bc));
+    EXPECT_TRUE(net.remove(edge_ab));
 
-    edge_t edge1 {1, 2, 1};
-    edge_t edge2 {3, 1, 2};
-
-    EXPECT_TRUE(net.upsert(edge1));
-    EXPECT_TRUE(net.upsert(edge2));
-    EXPECT_TRUE(txn_net.degree(1));
-    EXPECT_TRUE(txn.commit());
-
-    EXPECT_TRUE(txn.reset());
-    EXPECT_TRUE(txn_net.degree(1));
-    EXPECT_TRUE(txn.commit());
-
-    EXPECT_TRUE(txn_net.degree(1));
-    EXPECT_TRUE(net.remove(edge1));
-    EXPECT_TRUE(net.remove(edge2));
     EXPECT_FALSE(txn.commit());
-    EXPECT_TRUE(txn.reset());
-
-    EXPECT_TRUE(txn_net.degree(1, ukv_vertex_role_any_k, false));
-    EXPECT_TRUE(net.upsert(edge1));
-    EXPECT_TRUE(net.upsert(edge2));
-    EXPECT_TRUE(txn.commit());
-
     EXPECT_TRUE(db.clear());
 }
 
-edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
-    return {v1, v2, edge_id};
-}
-
-std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_connect = 1) {
-    std::vector<edge_t> es;
-    ukv_key_t edge_id = 0;
-    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
-        ukv_key_t connect_with = vertex_id + next_connect;
-        while (connect_with < vertices_count) {
-            edge_id++;
-            es.push_back(make_edge(edge_id, vertex_id, connect_with));
-            connect_with = connect_with + next_connect;
-        }
-    }
-    return es;
-}
-
+/**
+ * Constructs a larger graph, validating the degrees in a resulting network afterward.
+ */
 TEST(db, graph_random_fill) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1380,6 +1728,7 @@ TEST(db, graph_random_fill) {
     EXPECT_TRUE(db.clear());
 }
 
+// TODO: What is this?
 TEST(db, graph_conflicting_transactions) {
 
     if (!ukv_supports_transactions_k)
@@ -1433,7 +1782,11 @@ TEST(db, graph_conflicting_transactions) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, graph_upsert_edges) {
+/**
+ * Takes a single Graph Store and populates it with various 5-vertex shapes:
+ * a star, a pentagon, and five self-loops.
+ */
+TEST(db, graph_layering_shapes) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1447,6 +1800,7 @@ TEST(db, graph_upsert_edges) {
         }
     };
 
+    // Before insertions, the graph is empty.
     over_the_vertices(false, 0);
 
     std::vector<edge_t> star {
@@ -1456,9 +1810,6 @@ TEST(db, graph_upsert_edges) {
         {2, 5, 4},
         {3, 5, 5},
     };
-    EXPECT_TRUE(graph.upsert(edges(star)));
-    over_the_vertices(true, 2u);
-
     std::vector<edge_t> pentagon {
         {1, 2, 6},
         {2, 3, 7},
@@ -1466,22 +1817,7 @@ TEST(db, graph_upsert_edges) {
         {4, 5, 9},
         {5, 1, 10},
     };
-    EXPECT_TRUE(graph.upsert(edges(pentagon)));
-    over_the_vertices(true, 4u);
-
-    EXPECT_TRUE(graph.remove(edges(star)));
-    over_the_vertices(true, 2u);
-
-    EXPECT_TRUE(graph.upsert(edges(star)));
-    over_the_vertices(true, 4u);
-
-    EXPECT_TRUE(graph.remove(edges(pentagon)));
-    over_the_vertices(true, 2u);
-
-    EXPECT_TRUE(graph.upsert(edges(pentagon)));
-    over_the_vertices(true, 4u);
-
-    std::vector<edge_t> itself {
+    std::vector<edge_t> self_loops {
         {1, 1, 11},
         {2, 2, 12},
         {3, 3, 13},
@@ -1489,23 +1825,33 @@ TEST(db, graph_upsert_edges) {
         {5, 5, 15},
     };
 
-    EXPECT_TRUE(graph.upsert(edges(itself)));
+    EXPECT_TRUE(graph.upsert(edges(star)));
+    over_the_vertices(true, 2u);
+    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    over_the_vertices(true, 4u);
+    EXPECT_TRUE(graph.remove(edges(star)));
+    over_the_vertices(true, 2u);
+    EXPECT_TRUE(graph.upsert(edges(star)));
+    over_the_vertices(true, 4u);
+    EXPECT_TRUE(graph.remove(edges(pentagon)));
+    over_the_vertices(true, 2u);
+    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    over_the_vertices(true, 4u);
+    EXPECT_TRUE(graph.upsert(edges(self_loops)));
     over_the_vertices(true, 6u);
-
     EXPECT_TRUE(graph.remove(edges(star)));
     EXPECT_TRUE(graph.remove(edges(pentagon)));
-
     over_the_vertices(true, 2u);
-
-    EXPECT_TRUE(graph.remove(edges(itself)));
-
+    EXPECT_TRUE(graph.remove(edges(self_loops)));
     over_the_vertices(true, 0);
-
     EXPECT_TRUE(db.clear());
-
     over_the_vertices(false, 0);
 }
 
+/**
+ * Tests vertex removals, which are the hardest operations on Graphs,
+ * as they trigger updates in all nodes connected to the removed one.
+ */
 TEST(db, graph_remove_vertices) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1527,6 +1873,10 @@ TEST(db, graph_remove_vertices) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Removes just the known list of edges, checking that vertices remain
+ * in the graph, even though entirely disconnected.
+ */
 TEST(db, graph_remove_edges_keep_vertices) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1546,6 +1896,7 @@ TEST(db, graph_remove_edges_keep_vertices) {
     EXPECT_TRUE(db.clear());
 }
 
+// TODO: Why do we need this?
 TEST(db, graph_get_edges) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1563,17 +1914,19 @@ TEST(db, graph_get_edges) {
         for (size_t i = 0; i != es.size(); ++i)
             received_edges.push_back(es[i]);
     }
-
     EXPECT_TRUE(graph.remove(edges(received_edges)));
+
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
-        auto es = *graph.edges(vertex_id);
-        EXPECT_EQ(es.size(), 0);
+        EXPECT_EQ(graph.edges(vertex_id)->size(), 0);
     }
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Getting the degrees of multiple vertices simultaneously.
+ */
 TEST(db, graph_degrees) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -1582,19 +1935,23 @@ TEST(db, graph_degrees) {
 
     constexpr std::size_t vertices_count = 1000;
     std::vector<ukv_key_t> vertices(vertices_count);
-    vertices.resize(vertices_count);
-    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id)
-        vertices[vertex_id] = vertex_id;
+    std::iota(vertices.begin(), vertices.end(), 0);
 
     auto edges_vec = make_edges(vertices_count, 100);
     EXPECT_TRUE(graph.upsert(edges(edges_vec)));
 
-    auto degrees = *graph.degrees({{vertices.data(), sizeof(ukv_key_t)}, vertices.size()});
+    auto degrees = *graph.degrees(strided_range(vertices).immutable());
     EXPECT_EQ(degrees.size(), vertices_count);
 
     EXPECT_TRUE(db.clear());
 }
 
+#pragma region Vectors Modality
+
+/**
+ * Tests "Vector Modality", including both CRUD and more analytical approximate search
+ * operations with just three distinctly different vectors in R3 space with Cosine metric.
+ */
 TEST(db, vectors) {
     database_t db;
     EXPECT_TRUE(db.open(path()));

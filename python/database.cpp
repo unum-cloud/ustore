@@ -214,6 +214,11 @@ void ukv::wrap_database(py::module& m) {
         py_graph->index = py_collection.native;
         return py::cast(py_graph);
     });
+    py_collection.def_property_readonly("table", [](py_blobs_collection_t& py_collection) {
+        auto py_table = std::make_shared<py_table_collection_t>();
+        py_table->binary = py_collection;
+        return py::cast(py_table);
+    });
     py_collection.def_property_readonly("docs", [](py_blobs_collection_t& py_collection) {
         return punned_collection<docs_collection_t>(py_collection.py_db_ptr.lock(),
                                                     py_collection.py_txn_ptr.lock(),

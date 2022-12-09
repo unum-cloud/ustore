@@ -17,6 +17,8 @@
  * https://github.com/facebook/rocksdb/wiki/PlainTable-Format
  */
 
+#include <mutex>
+
 #include <rocksdb/db.h>
 #include <rocksdb/utilities/options_util.h>
 #include <rocksdb/utilities/transaction.h>
@@ -70,6 +72,7 @@ static key_comparator_t key_comparator_k = {};
 struct rocks_db_t {
     std::vector<rocks_collection_t*> columns;
     std::unique_ptr<rocks_native_t> native;
+    std::mutex mutex;
 };
 
 inline rocksdb::Slice to_slice(ukv_key_t const& key) noexcept {
@@ -126,14 +129,28 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         rocksdb::Options options;
         rocksdb::ConfigOptions config_options;
 
-        std::string path = c.config; // TODO: take the path from config!
+        std::string path = c.config;
         rocks_status_t status = rocksdb::LoadLatestOptions(config_options, path, &options, &column_descriptors);
-        if (column_descriptors.empty())
-            column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()});
-
         return_if_error(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
-        if (status.IsNotFound())
-            options.compression = rocksdb::kNoCompression;
+
+        if (status.IsNotFound()) {
+            // TODO: Take the config path from c.config!
+            std::string config_path = "./assets/rocksdb.cfg";
+            status = rocksdb::LoadOptionsFromFile(config_path, rocksdb::Env::Default(), &options, &column_descriptors);
+            return_if_error(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
+            if (status.IsNotFound())
+                options.compression = rocksdb::kNoCompression;
+        }
+
+        auto cf_options = rocksdb::ColumnFamilyOptions();
+        cf_options.comparator = &key_comparator_k;
+        if (column_descriptors.empty())
+            column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, std::move(cf_options)});
+        else {
+            for (auto& column_descriptor : column_descriptors)
+                column_descriptor.options.comparator = &key_comparator_k;
+        }
+
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
 
@@ -149,7 +166,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 
 void write_one( //
     rocks_db_t& db,
-    rocks_txn_t& txn,
+    rocks_txn_t* txn_ptr,
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
@@ -168,15 +185,15 @@ void write_one( //
     auto key = to_slice(place.key);
     rocks_status_t status;
 
-    if (&txn)
+    if (txn_ptr)
         status =        //
             !content    //
                 ? watch //
-                      ? txn.SingleDelete(collection, key)
-                      : txn.DeleteUntracked(collection, key)
+                      ? txn_ptr->SingleDelete(collection, key)
+                      : txn_ptr->DeleteUntracked(collection, key)
                 : watch //
-                      ? txn.Put(collection, key, to_slice(content))
-                      : txn.PutUntracked(collection, key, to_slice(content));
+                      ? txn_ptr->Put(collection, key, to_slice(content))
+                      : txn_ptr->PutUntracked(collection, key, to_slice(content));
     else
         status =     //
             !content //
@@ -188,7 +205,7 @@ void write_one( //
 
 void write_many( //
     rocks_db_t& db,
-    rocks_txn_t& txn,
+    rocks_txn_t* txn_ptr,
     places_arg_t const& places,
     contents_arg_t const& contents,
     ukv_options_t const c_options,
@@ -201,7 +218,7 @@ void write_many( //
     options.sync = safe;
     options.disableWAL = !safe;
 
-    if (&txn) {
+    if (txn_ptr) {
         for (std::size_t i = 0; i != places.size(); ++i) {
             auto place = places[i];
             auto content = contents[i];
@@ -210,11 +227,11 @@ void write_many( //
             auto status =   //
                 !content    //
                     ? watch //
-                          ? txn.SingleDelete(collection, key)
-                          : txn.DeleteUntracked(collection, key)
+                          ? txn_ptr->SingleDelete(collection, key)
+                          : txn_ptr->DeleteUntracked(collection, key)
                     : watch //
-                          ? txn.Put(collection, key, to_slice(content))
-                          : txn.PutUntracked(collection, key, to_slice(content));
+                          ? txn_ptr->Put(collection, key, to_slice(content))
+                          : txn_ptr->PutUntracked(collection, key, to_slice(content));
             export_error(status, c_error);
             return_on_error(c_error);
         }
@@ -241,6 +258,8 @@ void ukv_write(ukv_write_t* c_ptr) {
 
     ukv_write_t& c = *c_ptr;
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
+        return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
@@ -254,24 +273,27 @@ void ukv_write(ukv_write_t* c_ptr) {
     places_arg_t places {collections, keys, {}, c.tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
 
+    validate_write(c.transaction, places, contents, c.options, c.error);
+    return_on_error(c.error);
+
     safe_section("Writing into RocksDB", c.error, [&] {
         auto func = c.tasks_count == 1 ? &write_one : &write_many;
-        func(db, txn, places, contents, c.options, c.error);
+        func(db, &txn, places, contents, c.options, c.error);
     });
 }
 
 template <typename value_enumerator_at>
 void read_one( //
     rocks_db_t& db,
-    rocks_txn_t& txn,
+    rocks_txn_t* txn_ptr,
     places_arg_t places,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
     ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
-    if (&txn)
-        options.snapshot = txn.GetSnapshot();
+    if (txn_ptr)
+        options.snapshot = txn_ptr->GetSnapshot();
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
 
@@ -283,10 +305,10 @@ void read_one( //
 
     rocks_value_t& value = *value_uptr.get();
     rocks_status_t status = //
-        &txn                //
+        txn_ptr             //
             ? watch         //
-                  ? txn.GetForUpdate(options, col, key, &value)
-                  : txn.Get(options, col, key, &value)
+                  ? txn_ptr->GetForUpdate(options, col, key, &value)
+                  : txn_ptr->Get(options, col, key, &value)
             : db.native->Get(options, col, key, &value);
     if (!status.IsNotFound()) {
         if (export_error(status, c_error))
@@ -302,15 +324,15 @@ void read_one( //
 template <typename value_enumerator_at>
 void read_many( //
     rocks_db_t& db,
-    rocks_txn_t& txn,
+    rocks_txn_t* txn_ptr,
     places_arg_t places,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
     ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
-    if (&txn)
-        options.snapshot = txn.GetSnapshot();
+    if (txn_ptr)
+        options.snapshot = txn_ptr->GetSnapshot();
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
     std::vector<rocks_collection_t*> cols(places.count);
@@ -323,10 +345,10 @@ void read_many( //
     }
 
     std::vector<rocks_status_t> statuses = //
-        &txn                               //
+        txn_ptr                            //
             ? watch                        //
-                  ? txn.MultiGetForUpdate(options, cols, keys, &vals)
-                  : txn.MultiGet(options, cols, keys, &vals)
+                  ? txn_ptr->MultiGetForUpdate(options, cols, keys, &vals)
+                  : txn_ptr->MultiGet(options, cols, keys, &vals)
             : db.native->MultiGet(options, cols, keys, &vals);
     for (std::size_t i = 0; i != places.size(); ++i) {
         if (!statuses[i].IsNotFound()) {
@@ -346,6 +368,8 @@ void ukv_read(ukv_read_t* c_ptr) {
     ukv_read_t& c = *c_ptr;
 
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
+        return;
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
@@ -356,6 +380,8 @@ void ukv_read(ukv_read_t* c_ptr) {
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
     places_arg_t places {collections, keys, {}, c.tasks_count};
+    validate_read(c.transaction, places, c.options, c.error);
+    return_on_error(c.error);
 
     // 1. Allocate a tape for all the values to be pulled
     auto offs = arena.alloc_or_dummy(places.count + 1, c.error, c.offsets);
@@ -379,8 +405,8 @@ void ukv_read(ukv_read_t* c_ptr) {
 
     safe_section("Reading from RocksDB", c.error, [&] {
         c.tasks_count == 1 //
-            ? read_one(db, txn, places, c.options, data_enumerator, c.error)
-            : read_many(db, txn, places, c.options, data_enumerator, c.error);
+            ? read_one(db, &txn, places, c.options, data_enumerator, c.error)
+            : read_many(db, &txn, places, c.options, data_enumerator, c.error);
         offs[places.count] = contents.size();
 
         if (needs_export)
@@ -402,6 +428,9 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
     scans_arg_t tasks {collections, start_keys, limits, c.tasks_count};
+
+    validate_scan(c.transaction, tasks, c.options, c.error);
+    return_on_error(c.error);
 
     // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy(tasks.count + 1, c.error, c.offsets);
@@ -432,10 +461,10 @@ void ukv_scan(ukv_scan_t* c_ptr) {
         });
         return_on_error(c.error);
 
-        ukv_size_t j = 0;
-        it->Seek(to_slice(task.min_key));
         offsets[i] = keys_output - *c.keys;
 
+        ukv_size_t j = 0;
+        it->Seek(to_slice(task.min_key));
         while (it->Valid() && j != task.limit) {
             std::memcpy(keys_output, it->key().data(), sizeof(ukv_key_t));
             ++keys_output;
@@ -504,22 +533,21 @@ void ukv_measure(ukv_measure_t* c_ptr) {
 void ukv_collection_create(ukv_collection_create_t* c_ptr) {
 
     ukv_collection_create_t& c = *c_ptr;
+    auto name_len = c.name ? std::strlen(c.name) : 0;
+    return_if_error(name_len, c.error, args_wrong_k, "Default collection is always present");
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    if (!c.name || (c.name && !std::strlen(c.name))) {
-        *c.id = reinterpret_cast<ukv_collection_t>(db.native->DefaultColumnFamily());
-        return;
-    }
 
     for (auto handle : db.columns) {
-        if (handle && handle->GetName() == c.name) {
-            *c.id = reinterpret_cast<ukv_collection_t>(handle);
-            return;
-        }
+        if (handle)
+            return_if_error(handle->GetName() != c.name, c.error, args_wrong_k, "Such collection already exists!");
     }
 
     rocks_collection_t* collection = nullptr;
-    rocks_status_t status = db.native->CreateColumnFamily(rocksdb::ColumnFamilyOptions(), c.name, &collection);
+    auto cf_options = rocksdb::ColumnFamilyOptions();
+    cf_options.comparator = &key_comparator_k;
+    rocks_status_t status = db.native->CreateColumnFamily(std::move(cf_options), c.name, &collection);
     if (!export_error(status, c.error)) {
         db.columns.push_back(collection);
         *c.id = reinterpret_cast<ukv_collection_t>(collection);
@@ -643,6 +671,10 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
     ukv_transaction_init_t& c = *c_ptr;
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    validate_transaction_begin(c.transaction, c.options, c.error);
+    return_on_error(c.error);
+
     bool const safe = c.options & ukv_option_write_flush_k;
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = **reinterpret_cast<rocks_txn_t**>(c.transaction);
@@ -659,13 +691,25 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 }
 
 void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
-
     ukv_transaction_commit_t& c = *c_ptr;
     if (!c.transaction)
         return;
+
+    validate_transaction_commit(c.transaction, c.options, c.error);
+    return_on_error(c.error);
+
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
+
+    if (c.sequence_number)
+        db.mutex.lock();
     rocks_status_t status = txn.Commit();
     export_error(status, c.error);
+    if (c.sequence_number) {
+        if (status.ok())
+            *c.sequence_number = db.native->GetLatestSequenceNumber();
+        db.mutex.unlock();
+    }
 }
 
 void ukv_arena_free(ukv_arena_t c_arena) {

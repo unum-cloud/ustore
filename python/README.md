@@ -1,4 +1,4 @@
-# UKV: Python Bindings
+# UKV Python SDK
 
 Current implementation relies on [PyBind11](https://github.com/pybind/pybind11).
 It's feature-rich, but not very performant, supporting:

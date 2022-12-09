@@ -89,25 +89,6 @@ typedef uint64_t ukv_collection_t;
 
 /**
  * @brief The unique identifier of any value within a single collection.
- *
- * ## On Variable Length Keys
- *
- * As of current version, 64-bit signed integers are used to allow unique
- * keys in the range from `[0, 2^63)`. 128-bit builds with UUIDs can be
- * considered, but variable length keys are highly discouraged.
- *
- * Using variable length keys forces numerous limitations on the design of a Key-Value store.
- * Besides slow character-wise comparisons it means solving the "persistent space allocation"
- * problem twice - for both keys and values.
- *
- * The recommended approach to dealing with string keys is:
- *
- * 1. Choose a mechanism to generate unique integer keys (UID). Ex: monotonically increasing values.
- * 2. Use "paths" modality to build-up a persistent hash-map of strings to UIDs.
- * 3. Use those UIDs to address the rest of the data in binary, document and graph modalities.
- *
- * This will result in a single conversion point from string to integer representations
- * and will keep most of the system snappy and the interfaces simpler than what they could have been.
  */
 typedef int64_t ukv_key_t;
 
@@ -128,14 +109,6 @@ typedef char ukv_char_t;
 
 /**
  * @brief The length of any value in the DB.
- *
- * ## Why not use 64-bit lengths?
- *
- * Key-Value Stores are generally intended for high-frequency operations.
- * Frequently (thousands of times each second) accessing and modifing 4 GB and larger files
- * is impossible on modern hardware. So we stick to smaller length types, which also makes
- * using Apache Arrow representation slightly easier and allows the KVs to compress indexes
- * better.
  */
 typedef uint32_t ukv_length_t;
 
@@ -148,6 +121,11 @@ typedef uint64_t ukv_size_t;
  * @brief The smallest possible "bitset" type, storing eight zeros or ones.
  */
 typedef uint8_t ukv_octet_t;
+
+/**
+ * @brief Monotonically increasing unique identifier that reflects the order of applied transactions
+ */
+typedef uint64_t ukv_sequence_number_t;
 
 /**
  * @brief Owning error message string.
@@ -476,6 +454,8 @@ typedef struct ukv_transaction_stage_t {
     ukv_transaction_t transaction;
     /** @brief Staging options. */
     ukv_options_t options = ukv_options_default_k;
+    /** @brief Optional output for the transaction stage sequence number. */
+    ukv_sequence_number_t* sequence_number = NULL;
 
 } ukv_transaction_stage_t;
 
@@ -503,6 +483,8 @@ typedef struct ukv_transaction_commit_t {
     ukv_transaction_t transaction;
     /** @brief Staging options. */
     ukv_options_t options = ukv_options_default_k;
+    /** @brief Optional output for the transaction commit sequence number. */
+    ukv_sequence_number_t* sequence_number = NULL;
 
 } ukv_transaction_commit_t;
 

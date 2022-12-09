@@ -6,7 +6,7 @@ ExternalProject_Add(
     GIT_REPOSITORY https://github.com/PCRE2Project/pcre2.git
     GIT_TAG pcre2-10.40
     GIT_SHALLOW 1
-    GIT_PROGRESS 1
+    GIT_PROGRESS 0
 
     PREFIX "_deps"
     DOWNLOAD_DIR "_deps/pcre2-src"
@@ -17,12 +17,14 @@ ExternalProject_Add(
     INSTALL_DIR "_deps/pcre2-install"
     BINARY_DIR "_deps/pcre2-build"
 
-    BUILD_ALWAYS 1
+    BUILD_ALWAYS 0
     UPDATE_COMMAND ""
 
     CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}/_deps/pcre2-install
-    -DCMAKE_BUILD_TYPE:STRING=Release
+    -DCMAKE_INSTALL_LIBDIR=lib
+    -DCMAKE_INSTALL_RPATH:PATH=<INSTALL_DIR>/lib
+    -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
     -DPCRE2_STATIC_PIC:BOOL=ON
     -DPCRE2_SUPPORT_JIT:BOOL=ON
     -DPCRE2GREP_SUPPORT_JIT:BOOL=OFF
@@ -32,6 +34,7 @@ ExternalProject_Add(
 
 set(pcre2_INCLUDE_DIR ${CMAKE_BINARY_DIR}/_deps/pcre2-install/include/)
 set(pcre2_LIBRARY_PATH ${CMAKE_BINARY_DIR}/_deps/pcre2-install/lib/libpcre2-8.a)
+
 file(MAKE_DIRECTORY ${pcre2_INCLUDE_DIR})
 add_library(pcre2 STATIC IMPORTED)
 

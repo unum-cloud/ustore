@@ -1,6 +1,10 @@
 # Installation scripts can be take from here:
 # https://arrow.apache.org/install/
-if(${UKV_PREINSTALLED_ARROW})
+if(NOT ${UKV_REBUILD_ARROW})
+    # Apache Arrow might be coming from Anaconda
+    # include_directories($ENV{CONDA_PREFIX}/include)
+    # link_directories($ENV{CONDA_PREFIX}/lib)
+    # message("CONDA_PREFIX:" $ENV{CONDA_PREFIX})
     find_package(Arrow CONFIG)
 else()
     include(ExternalProject)
@@ -45,7 +49,7 @@ else()
         -DARROW_COMPUTE=OFF
         -DARROW_JEMALLOC=OFF
 
-        -DARROW_PYTHON=ON
+        -DARROW_PYTHON=OFF
         -DARROW_FLIGHT=ON
         -DARROW_JSON=OFF
         -DARROW_CSV=OFF
@@ -83,10 +87,9 @@ else()
     set_property(TARGET arrow::cuda PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_cuda.a)
     add_dependencies(arrow::cuda Arrow-external)
 
-    add_library(arrow::python STATIC IMPORTED)
-    set_property(TARGET arrow::python PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_python.a)
-    add_dependencies(arrow::python Arrow-external)
-
+    # add_library(arrow::python STATIC IMPORTED)
+    # set_property(TARGET arrow::python PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_python.a)
+    # add_dependencies(arrow::python Arrow-external)
 
     add_library(arrow::dataset STATIC IMPORTED)
     set_property(TARGET arrow::dataset PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_dataset.a)
