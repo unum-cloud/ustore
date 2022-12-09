@@ -67,7 +67,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
-      - uses: pypa/cibuildwheel@v2.10.2
-
+      - uses: pypa/cibuildwheel@v2.11.3
+        with:
+          output-dir: dist
+          
       - name: publish to test-pypi
-        run: chmod +x python/publish.sh && bash python/publish.sh __token__ ${{ secrets.TWINE_API }}
+        uses: pypa/gh-action-pypi-publish@v1.6.4
+        with:
+            user: __token__
+            password: ${{ secrets.TWINE_API }}
+            repository_url: https://test.pypi.org/legacy/
+            verbose: true
+            print_hash: true
