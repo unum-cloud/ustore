@@ -80,6 +80,7 @@ struct linked_memory_t {
             return true;
 
         first_ptr_ = alloc_arena(initial_size_k, kind);
+        first_ptr_->can_release_memory = true;
         return first_ptr_;
     }
 
@@ -165,8 +166,8 @@ struct linked_memory_lock_t {
     linked_memory_lock_t(linked_memory_t& memory, linked_memory_t::kind_t kind, bool keep_old_data = false) noexcept
         : memory(memory) {
         if (memory.start_if_null(kind))
-            if (memory.lock_release_calls() && !keep_old_data)
-                memory.release_supplementary(), owns_the_lock = true;
+            if ((owns_the_lock = memory.lock_release_calls()) && !keep_old_data)
+                memory.release_supplementary();
     }
 
     ~linked_memory_lock_t() noexcept {
