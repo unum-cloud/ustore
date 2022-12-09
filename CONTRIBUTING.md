@@ -12,7 +12,7 @@ To create an effective and high quality ticket, try to add the following informa
 
 Here is a template:
 
-```
+```txt
 Title, like "UKV crashes when I do X"
 
 The X consists of multiple steps...
@@ -44,7 +44,7 @@ I am using the default config.
 
 A nice commit message can be:
 
-```
+```txt
 Add: Support for shared memory exports
 
 This feature minimizes the amount of data we need to transmit
@@ -66,7 +66,7 @@ We agree on a short list of leading active verbs for the subject line:
 * Refactor = A code change that MUST be just a refactoring.
 * Form = Refactor of formatting, e.g. omit whitespace.
 * Perf = Refactor of performance, e.g. speed up code.
-* Docs = Refactor of documentation, e.g. help files.
+* Docs = Refactor of documentation or spelling, e.g. help files.
 
 Which is a well known and widely adopted set.
 
