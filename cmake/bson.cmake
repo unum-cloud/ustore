@@ -22,6 +22,8 @@ ExternalProject_Add(
 
     CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}/_deps/mongo_c_driver-install
+    -DCMAKE_INSTALL_LIBDIR=lib
+    -DCMAKE_INSTALL_RPATH:PATH=<INSTALL_DIR>/lib
     -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
     -DENABLE_STATIC:STRING=ON
     -DENABLE_BSON:BOOL=ON
@@ -42,7 +44,9 @@ ExternalProject_Add(
 )
 
 set(bson_INCLUDE_DIR ${CMAKE_BINARY_DIR}/_deps/mongo_c_driver-install/include/libbson-1.0)
+
 set(bson_LIBRARY_PATH ${CMAKE_BINARY_DIR}/_deps/mongo_c_driver-install/lib/libbson-static-1.0.a)
+
 file(MAKE_DIRECTORY ${bson_INCLUDE_DIR})
 add_library(bson STATIC IMPORTED)
 

@@ -15,6 +15,7 @@
 
 #include <ukv/ukv.hpp>
 #include <ukv/cpp/ranges.hpp> // `sort_and_deduplicate`
+
 #include "mixed.hpp"
 
 namespace bm = benchmark;
@@ -72,12 +73,12 @@ static ukv_collection_t collection_docs_k = ukv_collection_main_k;
 static ukv_collection_t collection_graph_k = ukv_collection_main_k;
 static ukv_collection_t collection_paths_k = ukv_collection_main_k;
 
-simdjson::ondemand::document& rewinded(simdjson::ondemand::document& doc) noexcept {
+simdjson::ondemand::document& rewound(simdjson::ondemand::document& doc) noexcept {
     doc.rewind();
     return doc;
 }
 
-simdjson::ondemand::object& rewinded(simdjson::ondemand::object& doc) noexcept {
+simdjson::ondemand::object& rewound(simdjson::ondemand::object& doc) noexcept {
     doc.reset();
     return doc;
 }
@@ -98,25 +99,25 @@ static void index_file( //
             continue;
         simdjson::ondemand::object tweet = maybe_tweet.value();
 
-        auto maybe_user = rewinded(tweet).find_field("user").get_object();
+        auto maybe_user = rewound(tweet).find_field("user").get_object();
         if (maybe_user.error() != simdjson::SUCCESS)
             continue;
         simdjson::ondemand::object user = maybe_user.value();
-        ukv_key_t id = rewinded(tweet)["id"];
+        ukv_key_t id = rewound(tweet)["id"];
 
-        ukv_key_t user_id = rewinded(user)["id"];
-        std::string_view body = rewinded(tweet).raw_json();
-        std::string_view user_body = rewinded(user).raw_json();
-        std::string_view id_str = rewinded(tweet)["id_str"].raw_json_token();
-        std::string_view user_screen_name = rewinded(user)["screen_name"].raw_json_token();
+        ukv_key_t user_id = rewound(user)["id"];
+        std::string_view body = rewound(tweet).raw_json();
+        std::string_view user_body = rewound(user).raw_json();
+        std::string_view id_str = rewound(tweet)["id_str"].raw_json_token();
+        std::string_view user_screen_name = rewound(user)["screen_name"].raw_json_token();
 
         ukv_key_t re_id;
         ukv_key_t re_user_id;
-        auto maybe_retweet = rewinded(tweet)["retweeted_status"];
+        auto maybe_retweet = rewound(tweet)["retweeted_status"];
         if (maybe_retweet.error() == simdjson::SUCCESS) {
             auto retweet = maybe_retweet.get_object().value();
-            re_id = rewinded(retweet)["id"];
-            re_user_id = rewinded(retweet)["user"]["id"];
+            re_id = rewound(retweet)["id"];
+            re_user_id = rewound(retweet)["user"]["id"];
         }
 
         // Docs
@@ -136,7 +137,7 @@ static void index_file( //
             edges.push_back(edge_t {.source_id = user_id, .target_id = re_user_id, .id = re_id});
         }
 
-        auto maybe_mentions = rewinded(tweet).find_field("entities").find_field("user_mentions");
+        auto maybe_mentions = rewound(tweet).find_field("entities").find_field("user_mentions");
         if (maybe_mentions.error() == simdjson::SUCCESS &&
             maybe_mentions.type() == simdjson::ondemand::json_type::array) {
             auto mentions = maybe_mentions.get_array().value();

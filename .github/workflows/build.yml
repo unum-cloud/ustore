@@ -66,20 +66,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - name: apt dependencies
-        run: chmod +x cmake/arrow.sh && ./cmake/arrow.sh
-
-      - name: pip dependencies
-        run: python3.9 -m pip install pytest numpy pyarrow cmake twine
-
-      - name: build python shared lib
-        run: cmake . -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_PYTHON=1 && make -j 4 py_umem
-
-      - name: install ukv
-        run: pip install --upgrade --force-reinstall .
-
-      - name: test lib
-        run: python -c "import ukv.umem"
-
+      
+      - uses: pypa/cibuildwheel@v2.11.3
+        with:
+          output-dir: dist
+          
       - name: publish to test-pypi
-        run: chmod +x python/publish.sh && bash python/publish.sh __token__ ${{ secrets.TWINE_API }}
+        uses: pypa/gh-action-pypi-publish@v1.6.4
+        with:
+            user: __token__
+            password: ${{ secrets.TWINE_API }}
+            repository_url: https://test.pypi.org/legacy/
+            verbose: true
+            print_hash: true
