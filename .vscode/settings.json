@@ -136,12 +136,19 @@
         "build/lib/**/*.jar"
     ],
     "cSpell.words": [
-        "txns",
-        "upsert",
+        "bson",
+        "hyperscalar",
+        "Linearizable",
+        "monoid",
+        "msgpack",
         "neighborship",
         "neighborships",
-        "bson",
-        "msgpack",
-        "yyjson",
+        "NUMA",
+        "runtimes",
+        "Serializability",
+        "txns",
+        "upsert",
+        "upserting",
+        "yyjson"
     ]
 }

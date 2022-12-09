@@ -21,12 +21,12 @@ import ukv.umem as ukv
 
 db = ukv.DataBase()
 main_collection = db.main
-archieve_collection = db['archieve']
+archive_collection = db['archive']
 
 main_collection[42] = 'purpose of life'.encode()
-archieve_collection[0] = db[42]
+archive_collection[0] = db[42]
 del main_collection[42]
-assert len(archieve_collection[0]) == 15
+assert len(archive_collection[0]) == 15
 ```
 
 All familiar Pythonic stuff!
@@ -55,25 +55,25 @@ main_collection[42]
 main_collection.get(42)
 ```
 
-Or check existance:
+Or check existence:
 
 ```python
 42 in main_collection
 main_collection.has_key(42)
 ```
 
-As you may have noticed, all function names are idential to `dict` methods.
+As you may have noticed, all function names are identical to `dict` methods.
 Even those which were removed in Python 3.
 Resemblance doesn't stop there.
 All of these functions are valid:
 
 ```python
-len(archieve_collection)
-iter(archieve_collection)
-archieve_collection.keys
-archieve_collection.items
-archieve_collection.clear()
-archieve_collection.remove()
+len(archive_collection)
+iter(archive_collection)
+archive_collection.keys
+archive_collection.items
+archive_collection.clear()
+archive_collection.remove()
 ```
 
 Those methods seem self-explanatory.
@@ -88,7 +88,7 @@ with ukv.Transaction(db) as txn:
     txn.main[42] = binary_string # Not the same as `db.main[42]`
 ```
 
-You can configure teh transaction behaviour with additional arguments.
+You can configure teh transaction behavior with additional arguments.
 
 ```python
 txn = ukv.Transaction(db, begin=True, watch=True, flush_writes=False, snapshot=False)
@@ -102,7 +102,7 @@ For a more fine-grained control over snapshots and consistency of updates and re
 If you want to update or read multiple entries at once, you need to pack multiple keys and multiple values into a container.
 Most Python API, like Pandas, expect arguments to be Python lists.
 We support those, but recommend using `tuple`-s instead, as it minimizes the number of memory allocations and accelerates traversals.
-Following lines will produce identical behaviour:
+Following lines will produce identical behavior:
 
 ```python
 main_collection[[42, 43, 44]] = ['a'.encode(), 'b'.encode(), 'c'.encode()]
@@ -154,7 +154,7 @@ But if NetworkX hardly scales beyond a thousand nodes, our Graph engine is desig
 * `.subgraph()`, `.edge_subgraph()`
 * `.write_adjlist()`
 
-We are now briding UKV with [CuGraph]() for GPU acceleration.
+We are now bridging UKV with [CuGraph][cugraph] for GPU acceleration.
 
 ### Tables: Pandas
 
@@ -179,7 +179,7 @@ Pass it to Pandas, Modin, Arrow, Spark, CuDF, Dask, Ray or any other package of 
 
 > [Comprehensive overview of tabular processing tools in Python](https://unum.cloud/post/).
 
-We are now briding UKV with [CuDF]() for GPU acceleration.
+We are now bridging UKV with [CuDF][cudf] for GPU acceleration.
 
 ### Vectors: FAISS
 
@@ -222,10 +222,12 @@ subgraphs_batch = [main_collection.subgraph(v).matrix() for v in vertices_batch]
 
 ## Performance
 
-A number of faster alernatives to PyBind11 exist.
+A number of faster alternatives to PyBind11 exist.
 In the future bindings might be reimplemented with the slimmer NanoBind or natively as CPython modules.
 We are not considering Swig or Boost.Python.
 
 [networkx]: https://networkx.org
 [pandas]: https://pandas.pydata.org
 [faiss]: https://faiss.org
+[cudf]: https://github.com/rapidsai/cudf
+[cugraph]: https://github.com/rapidsai/cugraph
