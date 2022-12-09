@@ -135,8 +135,8 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 
         if (status.IsNotFound()) {
             // TODO: Take the config path from c.config!
-            path = "./assets/rocksdb.cfg";
-            status = rocksdb::LoadOptionsFromFile(path, rocksdb::Env::Default(), &options, &column_descriptors);
+            std::string config_path = "./assets/rocksdb.cfg";
+            status = rocksdb::LoadOptionsFromFile(config_path, rocksdb::Env::Default(), &options, &column_descriptors);
             return_if_error(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
             if (status.IsNotFound())
                 options.compression = rocksdb::kNoCompression;

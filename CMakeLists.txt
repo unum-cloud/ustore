@@ -111,6 +111,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/bson.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/yyjson.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/simdjson.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pcre2.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mpack.cmake")
 
 if(${UKV_USE_JEMALLOC})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
