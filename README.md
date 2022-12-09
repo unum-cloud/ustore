@@ -1,7 +1,7 @@
 <h1 align="center">UKV</h1>
 <h3 align="center">
 Universal Binary Interface<br/>
-For the Fastest Databases in Existance<br/>
+For the Fastest Databases in Existence<br/>
 From <a href="https://unum.cloud">Unum</a> with ❤️
 </h3>
 
@@ -83,8 +83,8 @@ But UKV has more to offer!
 <li> Native Apache <b>Arrow</b> format support </li>
 <li> Apache <b>Arrow Flight</b> server implementation </li>
 <li> <b>Bulk Scans</b>, Random <b>Samping</b> </li>
-<li> <b>Pandas</b> Tabular interace  </li>
-<li> <b>NetworkX</b> Graph interace  </li>
+<li> <b>Pandas</b> Tabular interface  </li>
+<li> <b>NetworkX</b> Graph interface  </li>
 <li> <b>PyTorch</b> & <b>TensorFlow</b> Data-Loaders </li>
 </ul>
 </td>
@@ -192,7 +192,7 @@ The core logic of UMem can be found in the templated header-only <code class="do
 ![UCSB 10 TB Results](assets/charts/Performance.png)
 
 Designing UDisk was a much more challenging 7-year long endeavour.
-It included inventing new tree-like structures, implemting partial kernel bypass with `io_uring`, complete bypass with `SPDK`, GPU acceleration, and even a custom internal filesystem.
+It included inventing new tree-like structures, implementing partial kernel bypass with `io_uring`, complete bypass with `SPDK`, GPU acceleration, and even a custom internal filesystem.
 **UDisk is the first engine to be designed from scratch with parallel architectures and kernel-bypass in mind**.
 
 > [Jump to Benchmarks](#benchmarks).
@@ -208,7 +208,7 @@ ACID transactions across modalities are supported.
 | :------------------------ | :------------------------------------------------: | :------------------------------------: | :--------------------------------------------------: |
 | Values                    |           JSON-like Hierarchical Objects           |       Labeled Directed Relations       |             High-Dimensional Embeddings              |
 | Specialized Functionality | JSON ⇔ BSON ⇔ MessagePack, Sub-Document Operations | Gather Neighbors, Count Vertex Degrees | Quantization, K-Approximate Nearest-Neighbors Search |
-| Examples                  |             MongoDB, Postgres, MySQL               |            Neo4J, TigerGraph           |               Elastic Search, Pinecone               |
+| Examples                  |              MongoDB, Postgres, MySQL              |           Neo4J, TigerGraph            |               Elastic Search, Pinecone               |
 
 One of our core objectives was to select the minimal core set of functions for each modality.
 In that case, implementing them can be easy for any passionate developer.
@@ -224,7 +224,7 @@ Similarly, C++ library provides the interface C++ developers expect.
 
 As we know people use different languages for different purposes.
 Some C-level functionality isn't implemented for some languages.
-Either because there was no demand for it, or as we haven't gottent to it yet.
+Either because there was no demand for it, or as we haven't gotten to it yet.
 
 
 | Name             | Transact | Collections | Batches | Docs  | Graphs | Copies |
@@ -290,9 +290,9 @@ pip install ukv
 ## Getting Started
 
 * [Using the C Standard Directly][ukv-c-tutor]
-    * Most Flexible!
-    * Most Performant!
-    * Comparatively verbose.
+  * Most Flexible!
+  * Most Performant!
+  * Comparatively verbose.
 * [Using C++ SDK][ukv-cpp-tutor]
 * [Using Python SDK][ukv-python-tutor]
 * [Using Java SDK][ukv-java-tutor]

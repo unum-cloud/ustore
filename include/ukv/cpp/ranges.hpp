@@ -79,7 +79,7 @@ class strided_iterator_gt {
     /**
      * ! Calling this function with "stride" different from zero or
      * ! non-zero `sizeof(element_t)` multiple will cause Undefined
-     * ! Behaviour.
+     * ! behavior.
      */
     std::ptrdiff_t operator-(strided_iterator_gt other) const noexcept {
         return stride_ ? (raw_ - other.raw_) * sizeof(element_t) / stride_ : 0;
