@@ -2,7 +2,7 @@
 
 Most of UKV is implemented in C++, but the C++ implementation is isolated from the C++ interface.
 That is the "Hour-Glass" pattern.
-C layer provides stabilty and the top C++ layer brings back the syntactic sugar we all love.
+C layer provides stability and the top C++ layer brings back the syntactic sugar we all love.
 
 ## Zero Cost
 
@@ -15,7 +15,7 @@ db.main[42] = 'Purpose of Life'.encode()
 
 If you are writing something like this in Python, you don't care about performance much.
 You don't care that `42` will be heap allocated, same way as the value your are assigning to that key.
-If it fails, an exception will be raised and the stack will be unwinded.
+If it fails, an exception will be raised and the stack will be unwound.
 
 ```cpp
 database_t db;
@@ -34,7 +34,7 @@ All of them are marked `noexcept`.
 Dereferencing the `expected_gt<wanted_t>` gives you the `wanted_t`.
 Self-explanatory, I guess.
 
-Assuming `_` substitues for some randomly named `auto`, following code is valid:
+Assuming `_` substitutes for some randomly named `auto`, following code is valid:
 
 ```cpp
 database_t db;

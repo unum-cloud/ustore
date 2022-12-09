@@ -1,9 +1,16 @@
 """
-Example of using UKV binary storage layer for building an application-specific DBMS.
+Example of building an application-specific OLAP DBMS on top of binary collections of UKV.
 
 Imagine owning a big bank with thousands of ATMs all across the US.
-You are aggregating the withdrawls and, once it happens, count the number of 
+You are aggregating the withdrawals and, once it happens, count the number of 
 people in front of the embedded camera. You also count those at other times.
+
+## Usage
+
+Use The provided `banks_atm_olap.yml` file for the Conda environment configuration.
+It will bring all the needed NVidia libraries: `conda env create -f python/examples/banks_atm_olap.yml`.
+
+## Links
 
 Row to Columnar Conversion in Arrow: 
 https://arrow.apache.org/docs/cpp/examples/row_columnar_conversion.html
@@ -20,9 +27,13 @@ import pandas as pd
 import cudf
 import cuxfilter as cux
 from cuxfilter import charts
+from bokeh.server.server import Server
+from bokeh.document.document import Document
 
 # import ukv.umem as ukv
 
+MAPBOX_API_KEY = 'pk.eyJ1IjoiYXRob3J2ZSIsImEiOiJjazBmcmlhYzAwYXc2M25wMnE3bGttbzczIn0.JCDQliLc-XTU52iKa8L8-Q'
+GEOJSON_URL = 'https://raw.githubusercontent.com/rapidsai/cuxfilter/GTC-2018-mortgage-visualization/javascript/demos/GTC%20demo/public/data/zip3-ms-rhs-lessprops.json'
 
 Measurement = Tuple[
     int,  # ids - ignored when packaging
@@ -33,12 +44,11 @@ Measurement = Tuple[
     int,  # humans
     int,  # zips
 ]
-measurement_format = 'Qfffii'
+measurement_format: str = 'Qfffii'
 
-zip_codes_geojson_url = 'https://raw.githubusercontent.com/rapidsai/cuxfilter/GTC-2018-mortgage-visualization/javascript/demos/GTC%20demo/public/data/zip3-ms-rhs-lessprops.json'
-zip_codes_geojson = geojson.loads(requests.get(zip_codes_geojson_url).text)
-zip_codes = [int(x['properties']['ZIP3'])
-             for x in zip_codes_geojson['features']]
+zip_codes_geojson: str = geojson.loads(requests.get(GEOJSON_URL).text)
+zip_codes: list[int] = [int(x['properties']['ZIP3'])
+                        for x in zip_codes_geojson['features']]
 
 
 def generate_rows(
@@ -125,23 +135,13 @@ def rolling_mean_tempretures(amounts, window_size=20):
         window=window_size).mean().iloc[window_size-1:].values
 
 
-if __name__ == '__main__':
-    tmp = generate_measurements(100)
-    arrow_array = dump_rows(tmp)
-    recovered = parse_rows(arrow_array)
-    assert tmp['timestamps'].equals(recovered['timestamps'])
-    assert tmp['latitudes'].equals(recovered['latitudes'])
-    assert tmp['longitudes'].equals(recovered['longitudes'])
-    assert tmp['amounts'].equals(recovered['amounts'])
+def make_dashboard(doc: Document):
 
-    # Using persistent store will be identical to using this
-    # db = ukv.DataBase()
-    # measurements = db.main
-    measurements: dict[int, bytes] = {}
-    cudf_df = cudf.from_pandas(recovered)
+    # Preprocess for visualizations
+    df: pd.DataFrame = generate_rows(100)
+    df['time'] = pd.to_datetime(df['timestamps'], unit='s')
+    cudf_df = cudf.from_pandas(df)
     cux_df = cux.DataFrame.from_dataframe(cudf_df)
-
-    MAPBOX_API_KEY = "pk.eyJ1IjoiYXRob3J2ZSIsImEiOiJjazBmcmlhYzAwYXc2M25wMnE3bGttbzczIn0.JCDQliLc-XTU52iKa8L8-Q"
 
     chart_map = charts.choropleth(
         x='zips',
@@ -180,4 +180,36 @@ if __name__ == '__main__':
         title='Map of ATMs',
     )
 
-    d.app()
+    # run the dashboard as a webapp:
+    d._dashboard.generate_dashboard(
+        d.title, d._charts, d._theme
+    ).server_doc(doc)
+
+
+if __name__ == '__main__':
+
+    tmp = generate_rows(100)
+    arrow_array = dump_rows(tmp)
+    recovered = parse_rows(arrow_array)
+
+    # Validate the serialization procedure
+    assert tmp['timestamps'].equals(recovered['timestamps'])
+    assert tmp['latitudes'].equals(recovered['latitudes'])
+    assert tmp['longitudes'].equals(recovered['longitudes'])
+    assert tmp['amounts'].equals(recovered['amounts'])
+
+    # Using persistent store will be identical to using this
+    # db = ukv.DataBase()
+    # measurements = db.main
+    measurements: dict[int, bytes] = {}
+
+    server = Server(
+        make_dashboard,
+        num_procs=1,
+        allow_websocket_origin=['*'],
+        check_unused_sessions_milliseconds=500,
+    )
+    server.start()
+
+    print(f'running server on port {80}')
+    server.io_loop.start()

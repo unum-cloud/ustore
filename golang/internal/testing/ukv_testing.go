@@ -27,7 +27,7 @@ func DataBaseSimpleTest(db dataBase, t *testing.T) {
 	}
 
 	if _, err := db.Contains(42); err != nil {
-		t.Fatalf("Couldn't check value existance: %s", err)
+		t.Fatalf("Couldn't check value existence: %s", err)
 	}
 }
 
@@ -62,6 +62,6 @@ func DataBaseBatchInsertTest(db dataBase, t *testing.T) {
 	}
 
 	if _, err := db.Contains(42); err != nil {
-		t.Fatalf("Couldn't check value existance: %s", err)
+		t.Fatalf("Couldn't check value existence: %s", err)
 	}
 }

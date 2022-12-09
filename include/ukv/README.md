@@ -154,7 +154,7 @@ In Apache Arrow, as in similar systems, for `N` items `N+1` offsets will be expo
 
 ## Snapshots
 
-Snapshots are related to the topic of [Transactions](#acid).
+Snapshots are related to the topic of [Transactions](#acid-transactions).
 They are a versioning mechanism for read operations, giving you ability to reference a certain state within the history of the database.
 
 ## ACID Transactions
@@ -176,17 +176,17 @@ ukv_transaction_init(&transaction_init);
 
 Now let's understand what ACI(D)-ity means and what "Transactions" can do fo us.
 
-### A: Atomicity !
+### A: Atomicity
 
 Atomicity is always guaranteed.
 Even on non-transactional writes - either all updates pass or all fail.
 
-### C: Consistency !
+### C: Consistency
 
 Consistency is implemented in the strictest possible form - ["Strict Serializability"][ss] meaning that:
 
-- reads are ["Serializable"][s],
-- writes are ["Linearizable"][l].
+* reads are ["Serializable"][s],
+* writes are ["Linearizable"][l].
 
 The default behavior, however, can be tweaked at the level of specific operations.
 For that the `::ukv_option_transaction_dont_watch_k` can be passed to `ukv_transaction_init()` or any transactional read/write operation, to control the consistency checks during staging.
@@ -206,23 +206,23 @@ If this topic is new to you, please check out the [Jepsen.io][jepsen] blog on co
 [jepsen]: https://jepsen.io/consistency
 [snap]: #snapshots
 
-### I: Isolation !
+### I: Isolation
 
 |                                      | Reads | Writes |
 | :----------------------------------- | :---: | :----: |
 | Transactions over [Snapshots][snap]  |   ✓   |   ✓    |
 | Transactions w/out [Snapshots][snap] |   ✗   |   ✓    |
 
-### D: Durability ?
+### D: Durability
 
 Durability doesn't apply to in-memory systems by definition.
 In hybrid or persistent systems we prefer to disable it by default.
 Almost every DBMS that builds on top of KVS prefers to implement its own durability mechanism.
 Even more so in distributed databases, where three separate Write Ahead Logs may exist:
 
-- in KVS,
-- in DBMS,
-- in Distributed Consensus implementation.
+* in KVS,
+* in DBMS,
+* in Distributed Consensus implementation.
 
 If you still need durability, flush writes on `ukv_transaction_commit()` with `::ukv_option_write_flush_k`.
 
@@ -273,10 +273,10 @@ Current FOSS implementation of last function has linear complexity.
 
 As of the current version, 64-bit signed integers are used.
 It allows unique keys in the range from `[0, 2^63)`.
-128-bit builds with UUIDs can be considered, but variable-length keys are highly discouraged. 
+128-bit builds with UUIDs can be considered, but variable-length keys are highly discouraged.
 Why so?
 
-Using variable length keys forces numerous limitations on the design of a Key-Value store. 
+Using variable length keys forces numerous limitations on the design of a Key-Value store.
 Firstly, it implies slow character-wise comparisons — a performance killer on modern hyperscalar CPUs.
 Secondly, it forces keys and values to be joined on a disk to minimize the needed metadata for navigation.
 Lastly, it violates our simple logical view of KVS as a "persistent memory allocator", putting a lot more responsibility on it.
