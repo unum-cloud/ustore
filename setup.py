@@ -2,10 +2,11 @@ import os
 import re
 import subprocess
 import sys
+import time
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
-__version__ = open('VERSION', 'r').read()
+__version__ = open('VERSION', 'r').read() + "-" + str(time.time_ns())
 __libname__ = 'ukv'
 
 

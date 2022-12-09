@@ -18,12 +18,6 @@ testpaths = ["python/tests"]
 build-verbosity = 3
 before-all = [
     "yum install -y openssl-devel bzip2-devel libffi-devel zlib-devel wget python3-devel",
-    # "yum install -y epel-release || yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1).noarch.rpm",
-    # "yum install -y https://apache.jfrog.io/artifactory/arrow/centos/$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)/apache-arrow-release-latest.rpm",
-    # "yum install -y --enablerepo=epel arrow-devel arrow-glib-devel arrow-dataset-devel arrow-dataset-glib-devel parquet-devel parquet-glib-devel",
-    # "python3.9 -m pip install numpy cmake",
-    # "python3.11 -m pip install numpy",
-    # "cmake . -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_PYTHON=1 && make -j 32 py_umem",
 ]
 
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
@@ -36,10 +30,12 @@ before-build = [
     "mkdir -p build/ukv"
 ]
 
-skip = ["*musllinux*", "cp36-*", "cp37-*", "cp38-*", "cp310-*", "cp311-*"]
-test-command = "pytest {project}/python/tests/"
-test-requires = ["pandas"]
-test-extras = ["test"]
+skip = ["*musllinux*", "*i686*", "pp*", "cp36-*", "cp311-*"]
+
+# Add Tests later
+# test-command = "pytest {project}/python/tests/" 
+# test-requires = ["pandas"]
+# test-extras = ["test"]
 
 [tool.cibuildwheel.linux]
 repair-wheel-command = "auditwheel repair --lib-sdir . -w {dest_dir} {wheel}"
