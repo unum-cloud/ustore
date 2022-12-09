@@ -4,7 +4,11 @@
  *
  * @brief Vectors compatibility layer.
  * Sits on top of any @see "ukv.h"-compatible system.
- * Prefers integer quantized representations for faster compute.
+ *
+ * Internally quantizes often f32/f16 vectors into i8 representations,
+ * later constructing a Navigable Small World Graph on those vectors.
+ * During search relies on an algorithm resembling A*, adding a
+ * stochastic component.
  */
 #include <cmath> // `std::sqrt`
 
@@ -26,6 +30,18 @@ using namespace unum;
 using real_t = float;
 using quant_t = std::int8_t;
 using quant_product_t = std::int16_t;
+
+struct match_t {
+    ukv_key_t key;
+    ukv_float_t metric;
+};
+
+struct lower_similarity_t {
+    bool operator()(match_t const& a, match_t const& b) const noexcept { return a.metric < b.metric; }
+};
+
+using pq_t = limited_priority_queue_gt<match_t, lower_similarity_t>;
+
 static constexpr quant_t float_scaling_k = 100;
 static constexpr quant_product_t product_scaling_k = float_scaling_k * float_scaling_k;
 
@@ -177,6 +193,67 @@ void ukv_vectors_write(ukv_vectors_write_t* c_ptr) {
         quantize(original_begin, c.scalar_type, c.dimensions, quantized_begin);
     }
 
+#if 0 // Future Complex Index Logic
+
+    // Search greedily for closest entries to the provided vectors.
+    ukv_length_t starting_samples_limit = 128;
+    std::size_t max_search_rounds = 10;
+    std::size_t max_neighbors = 4;
+
+    // First, we need to random sample some starting points.
+    ukv_length_t* starting_samples_offsets = NULL;
+    ukv_length_t* starting_samples_counts = NULL;
+    ukv_key_t* starting_samples_keys = NULL;
+    ukv_sample_t sample;
+    sample.db = c.db;
+    sample.error = c.error;
+    sample.transaction = c.transaction;
+    sample.arena = c.arena;
+    sample.options = c.options;
+    sample.collections = &first.collection_key.collection;
+    sample.collections_stride = sizeof(entry_t);
+    sample.count_limits = &starting_samples_limit;
+    sample.count_limits_stride = 0;
+    sample.offsets = &starting_samples_offsets;
+    sample.counts = &starting_samples_counts;
+    sample.keys = &starting_samples_keys;
+    ukv_sample(&sample);
+    return_on_error(c.error);
+
+    // Allocate two priority queues per request.
+    // One will be used for top candidates, the other one for top results.
+    std::size_t bytes_per_queue = pq_t::implicit_memory_usage(max_neighbors);
+    std::size_t bytes_for_queues = c.tasks_count * 2ul * bytes_per_queue;
+    auto buffer_for_queues = arena.alloc<byte_t>(bytes_for_queues, c.error);
+    for (std::size_t task_idx = 0; task_idx != c.tasks_count; ++task_idx) {
+        implicit_init(buffer_for_queues + bytes_per_queue * (task_idx * 2ul), max_neighbors);
+        implicit_init(buffer_for_queues + bytes_per_queue * (task_idx * 2ul + 1ul), max_neighbors);
+    }
+
+    // First organize connections between the vectors in
+    // the current batch mapping into the same space.
+    // ! This is a quadratic complexity step.
+    for (std::size_t a_idx = 0; a_idx != c.tasks_count; ++a_idx) {
+        auto a_place = places_args[a_idx];
+        auto a_quants = quantized_vectors.begin() + a_idx * c.dimensions;
+        for (std::size_t b_idx = 0; b_idx != c.tasks_count; ++b_idx) {
+            auto b_place = places_args[b_idx];
+            auto b_quants = quantized_vectors.begin() + b_idx * c.dimensions;
+            if (a_place.collection != b_place.collection)
+                continue;
+
+            match_t match;
+            match.key = key;
+            match.metric = metric(a_quants, b_quants, c.dimensions, c.metric);
+            pq.push(match);
+        }
+    }
+
+    // Greedily search for multiple rounds.
+
+    // Introduce bidirectional links.
+#endif
+
     // Submit both original and quantized entries
     entry_t& first = quantized_entries[0];
     ukv_write_t write;
@@ -231,15 +308,6 @@ void ukv_vectors_read(ukv_vectors_read_t* c_ptr) {
     // we must compact the range:
 }
 
-struct match_t {
-    ukv_key_t key;
-    ukv_float_t metric;
-};
-
-struct lower_similarity_t {
-    bool operator()(match_t const& a, match_t const& b) const noexcept { return a.metric < b.metric; }
-};
-
 void ukv_vectors_search(ukv_vectors_search_t* c_ptr) {
 
     ukv_vectors_search_t const& c = *c_ptr;
@@ -281,7 +349,6 @@ void ukv_vectors_search(ukv_vectors_search_t* c_ptr) {
         auto limit = count_limits[i];
         quantize(query.begin(), c.scalar_type, c.dimensions, quant_query.begin());
 
-        using pq_t = limited_priority_queue_gt<match_t, lower_similarity_t>;
         pq_t pq {temp_matches.begin(), temp_matches.begin() + limit};
 
         auto callback = [&](ukv_key_t key, value_view_t vector) noexcept {
