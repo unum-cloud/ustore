@@ -33,3 +33,5 @@ RUN arrow_version=9.0.0-1 && sudo apt update && sudo apt install -y -V ca-certif
 
 # Pip installations
 RUN pip install pytest twine numpy pyarrow wheel gdb-tools sphinx breathe furo sphinx_mdinclude
+
+RUN sudo apt-get install -y uuid-dev

@@ -230,6 +230,11 @@ yyjson_mut_val* json_lookupn(yyjson_mut_val* json, ukv_str_view_t field, size_t 
                              : yyjson_mut_obj_getn(json, field, len);
 }
 
+simdjson::ondemand::object& reset(simdjson::ondemand::object& doc) noexcept {
+    doc.reset();
+    return doc;
+}
+
 json_t json_parse(value_view_t bytes, linked_memory_lock_t& arena, ukv_error_t* c_error) noexcept {
 
     if (bytes.empty())
@@ -1544,6 +1549,29 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_on_error(c.error);
 
+    ptr_range_gt<ukv_key_t> tape;
+    if (!c.keys) {
+        return_if_error(c.values, c.error, uninitialized_state_k, "Keys and values is uninitialized");
+
+        tape = arena.alloc<ukv_key_t>(c.tasks_count, c.error);
+        strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values, c.values_stride};
+        strided_iterator_gt<ukv_length_t const> lens {c.lengths, c.lengths_stride};
+
+        simdjson::ondemand::parser parser;
+        for (size_t idx = 0; idx < c.tasks_count; ++idx, ++vals, ++lens) {
+            simdjson::ondemand::document doc = parser.iterate(*vals, *lens, 1000000ul);
+            simdjson::ondemand::object data = doc.get_object().value();
+
+            auto result = reset(data)[c.id_field];
+            return_if_error((simdjson::SUCCESS == result.error()),
+                            c.error,
+                            uninitialized_state_k,
+                            "Keys and values is uninitialized");
+
+            tape[idx] = result;
+        }
+        c.keys_stride = sizeof(ukv_key_t);
+    }
     // If user wants the entire doc in the same format, as the one we use internally,
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
@@ -1558,7 +1586,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
             .tasks_count = c.tasks_count,
             .collections = c.collections,
             .collections_stride = c.collections_stride,
-            .keys = c.keys,
+            .keys = c.keys ? c.keys : tape.begin(),
             .keys_stride = c.keys_stride,
             .presences = c.presences,
             .offsets = c.offsets,
@@ -1570,16 +1598,14 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
         };
         return ukv_write(&write);
     }
-
     return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
-    strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c.keys ? c.keys : tape.begin(), c.keys_stride};
     bits_view_t presences {c.presences};
     strided_iterator_gt<ukv_length_t const> offs {c.offsets, c.offsets_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.lengths, c.lengths_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values, c.values_stride};
-
     places_arg_t places {collections, keys, fields, c.tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
     read_modify_write(c.db,

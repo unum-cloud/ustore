@@ -125,38 +125,29 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Test RocksDB",
+            "name": "C++: ImpExp Test UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_rocksdb_unit_test",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_imp_exp_test",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
             ],
             "cwd": "${workspaceFolder}",
-            "environment": [],
-            "showDisplayString": true,
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug RocksDB Test",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb"
-        },
-        {
-            "name": "C++: Test UDisk",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_udisk_unit_test",
-            "args": [
-                "--gtest_break_on_failure",
-                "--gtest_catch_exceptions=0"
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                },
+                {
+                    "name": "UKV_TEST_PATH",
+                    "value": ""
+                }
             ],
-            "cwd": "${workspaceFolder}",
-            "environment": [],
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UDisk Test",
+            "preLaunchTask": "Build Native: Debug UMem ImpExp Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -345,6 +336,24 @@
             "vmArgs": "-Djava.library.path=${fileDirname} -Xcheck:jni",
             "cwd": "${workspaceFolder}/java"
         },
+        {
+            "name": "C++: Tabular Benchmark UMem",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/ukv_umem_tabular_graph_benchmark",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug Tabular UMem Benchmark",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        }
     ],
     "compounds": [
         {

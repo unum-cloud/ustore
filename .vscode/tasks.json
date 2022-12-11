@@ -8,6 +8,18 @@
             "type": "shell"
         },
         {
+            "label": "Build Native: Debug UMem ImpExp Test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_PYTHON=0 -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_FLIGHT_RPC=0 . && make ukv_umem_imp_exp_test -j 12",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Native: Debug Tabular UMem Benchmark",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=1 . && make ukv_umem_tabular_graph_benchmark",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Build Native: Release",
             "command": "mkdir -p build_release && cd build_release && cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_TESTS=0 .. && make -j 12",
             "args": [],

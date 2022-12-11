@@ -239,6 +239,11 @@ if(${UKV_BUILD_TESTS})
     target_compile_definitions(${test_name} PUBLIC UKV_TEST_PATH="tmp/${client_name}")
     add_test(NAME "${client_name}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_name}")
 
+    string(CONCAT test_name "ukv_" ${client_name} "_imp_exp_test")
+    add_executable(${test_name} tests/imp_exp_test.cpp tools/dataset.cpp)
+    target_link_libraries(${test_name} gtest arrow arrow_flight parquet simdjson benchmark fmt::fmt uuid  ${target_name} ${target_LIBRARIES})
+    target_compile_definitions(${test_name} PUBLIC UKV_TEST_PATH="tmp/${client_name}/")
+
     string(CONCAT test_name "ukv_" ${client_name} "_stress_test")
     add_executable(${test_name} tests/transaction_stress_test.cpp)
     target_link_libraries(${test_name} gtest ${target_name} ${target_LIBRARIES})
@@ -262,8 +267,8 @@ if(${UKV_BUILD_BENCHMARKS})
     target_link_libraries(${bench_name} benchmark ${target_name} ${target_LIBRARIES})
 
     string(CONCAT bench_name "ukv_" ${client_name} "_tabular_graph_benchmark")
-    add_executable(${bench_name} benchmarks/tabular_graph.cpp)
-    target_link_libraries(${bench_name} leveldb benchmark ${target_name} ${target_LIBRARIES})
+    add_executable(${bench_name} benchmarks/tabular_graph.cpp tools/dataset.cpp)
+    target_link_libraries(${bench_name} arrow arrow_flight parquet simdjson fmt::fmt benchmark uuid ${target_name} ${target_LIBRARIES})
   endforeach()
 endif()
 
