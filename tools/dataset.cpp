@@ -45,6 +45,7 @@
 using namespace unum::ukv::bench;
 using namespace unum::ukv;
 
+constexpr std::size_t vertices_edge_k = 3;
 constexpr std::size_t symbols_count_k = 4;
 constexpr std::size_t uuid_length_k = 36;
 constexpr ukv_str_view_t prefix_k = "{";
@@ -58,7 +59,7 @@ using fields_t = strided_iterator_gt<ukv_str_view_t const>;
 using ids_t = std::vector<std::pair<ukv_key_t*, ukv_size_t>>;
 using vals_t = std::vector<std::pair<ukv_bytes_ptr_t, ukv_size_t>>;
 
-/////////  Helpers  /////////
+#pragma region - Helpers
 
 class arrow_visitor_t {
   public:
@@ -78,10 +79,10 @@ class arrow_visitor_t {
     arrow::Status Visit(arrow::HalfFloatArray const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::FloatArray const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::DoubleArray const& arr) { return format(arr, idx); }
-    arrow::Status Visit(arrow::StringArray const& arr) { return format_bs(arr, idx); }
-    arrow::Status Visit(arrow::BinaryArray const& arr) { return format_bs(arr, idx); }
-    arrow::Status Visit(arrow::LargeStringArray const& arr) { return format_bs(arr, idx); }
-    arrow::Status Visit(arrow::LargeBinaryArray const& arr) { return format_bs(arr, idx); }
+    arrow::Status Visit(arrow::StringArray const& arr) { return format_bin_str(arr, idx); }
+    arrow::Status Visit(arrow::BinaryArray const& arr) { return format_bin_str(arr, idx); }
+    arrow::Status Visit(arrow::LargeStringArray const& arr) { return format_bin_str(arr, idx); }
+    arrow::Status Visit(arrow::LargeBinaryArray const& arr) { return format_bin_str(arr, idx); }
     arrow::Status Visit(arrow::FixedSizeBinaryArray const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::Date32Array const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::Date64Array const& arr) { return format(arr, idx); }
@@ -145,14 +146,14 @@ class arrow_visitor_t {
     size_t idx = 0;
 
   private:
-    template <class cont_t>
-    arrow::Status format(cont_t const& cont, size_t idx) {
+    template <typename cont_at>
+    arrow::Status format(cont_at const& cont, size_t idx) {
         fmt::format_to(std::back_inserter(json), "{},", cont.Value(idx));
         return arrow::Status::OK();
     }
 
-    template <class cont_t>
-    arrow::Status format_bs(cont_t const& cont, size_t idx) {
+    template <typename cont_at>
+    arrow::Status format_bin_str(cont_at const& cont, size_t idx) {
         auto str = std::string(cont.Value(idx).data(), cont.Value(idx).size());
         if (str.back() == '\n')
             str.pop_back();
@@ -212,11 +213,6 @@ void prepare_for_csv(std::string& str, size_t pos = 0) {
     }
 }
 
-simdjson::ondemand::document& rewinded(simdjson::ondemand::document& doc) noexcept {
-    doc.rewind();
-    return doc;
-}
-
 simdjson::ondemand::object& rewinded(simdjson::ondemand::object& doc) noexcept {
     doc.reset();
     return doc;
@@ -272,7 +268,7 @@ void get_value( //
     }
 }
 
-void prepare_doc( //
+void simdjson_object_parser( //
     simdjson::ondemand::object& object,
     std::vector<size_t> const& counts,
     fields_t const& fields,
@@ -315,7 +311,7 @@ void prepare_doc( //
     json.back() = '}';
 }
 
-void prepare_tape( //
+void fields_parser( //
     std::vector<size_t>& counts,
     fields_t const& strided_fields,
     size_t fields_count,
@@ -404,17 +400,17 @@ void prepare_tape( //
     }
 }
 
-/////////  Upserting  /////////
+#pragma region - Upserting
 
-void upsert_graph(ukv_graph_import_t& c, edges_t const& array) {
+void upsert_graph(ukv_graph_import_t& c, edges_t const& edges_src) {
 
-    auto strided = edges(array);
+    auto strided = edges(edges_src);
     ukv_graph_upsert_edges_t graph_upsert_edges {
         .db = c.db,
         .error = c.error,
         .arena = c.arena,
         .options = c.options,
-        .tasks_count = array.size(),
+        .tasks_count = edges_src.size(),
         .collections = &c.collection,
         .edges_ids = strided.edge_ids.begin().get(),
         .edges_stride = strided.edge_ids.stride(),
@@ -427,20 +423,20 @@ void upsert_graph(ukv_graph_import_t& c, edges_t const& array) {
     ukv_graph_upsert_edges(&graph_upsert_edges);
 }
 
-void upsert_docs(ukv_docs_import_t& c, docs_t const& array) {
+void upsert_docs(ukv_docs_import_t& c, docs_t const& docs) {
 
     ukv_docs_write_t docs_write {
         .db = c.db,
         .error = c.error,
         .arena = c.arena,
         .options = c.options,
-        .tasks_count = array.size(),
+        .tasks_count = docs.size(),
         .type = ukv_doc_field_json_k,
         .modification = ukv_doc_modify_upsert_k,
         .collections = &c.collection,
-        .lengths = array.front().member_length(),
+        .lengths = docs.front().member_length(),
         .lengths_stride = sizeof(value_view_t),
-        .values = array.front().member_ptr(),
+        .values = docs.front().member_ptr(),
         .values_stride = sizeof(value_view_t),
         .id_field = c.id_field,
     };
@@ -448,13 +444,12 @@ void upsert_docs(ukv_docs_import_t& c, docs_t const& array) {
     ukv_docs_write(&docs_write);
 }
 
-///////// Graph Begin /////////
+#pragma region - Graph Begin
+#pragma region - Parsing with Apache Arrow
 
-///////// Parsing with Apache Arrow /////////
+void parse_arrow_table(ukv_graph_import_t& c, ukv_size_t task_count, std::shared_ptr<arrow::Table> const& table) {
 
-void fill_array(ukv_graph_import_t& c, ukv_size_t task_count, std::shared_ptr<arrow::Table> const& table) {
-
-    edges_t array;
+    edges_t vertices_edges;
 
     auto sources = table->GetColumnByName(c.source_id_field);
     return_if_error(sources, c.error, 0, fmt::format("{} is not exist", c.source_id_field).c_str());
@@ -462,7 +457,7 @@ void fill_array(ukv_graph_import_t& c, ukv_size_t task_count, std::shared_ptr<ar
     return_if_error(targets, c.error, 0, fmt::format("{} is not exist", c.target_id_field).c_str());
     auto edges = table->GetColumnByName(c.edge_id_field);
     size_t count = sources->num_chunks();
-    array.reserve(std::min(ukv_size_t(sources->chunk(0)->length()), task_count));
+    vertices_edges.reserve(std::min(ukv_size_t(sources->chunk(0)->length()), task_count));
 
     for (size_t chunk_idx = 0; chunk_idx != count; ++chunk_idx) {
         auto source_chunk = sources->chunk(chunk_idx);
@@ -477,15 +472,15 @@ void fill_array(ukv_graph_import_t& c, ukv_size_t task_count, std::shared_ptr<ar
                 .target_id = target_array->Value(value_idx),
                 .id = edges ? edge_array->Value(value_idx) : ukv_default_edge_id_k,
             };
-            array.push_back(edge);
-            if (array.size() == task_count) {
-                upsert_graph(c, array);
-                array.clear();
+            vertices_edges.push_back(edge);
+            if (vertices_edges.size() == task_count) {
+                upsert_graph(c, vertices_edges);
+                vertices_edges.clear();
             }
         }
     }
-    if (array.size() != 0)
-        upsert_graph(c, array);
+    if (vertices_edges.size() != 0)
+        upsert_graph(c, vertices_edges);
 }
 
 template <typename import_t>
@@ -508,32 +503,29 @@ void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table) {
     return_if_error(status.ok(), c.error, 0, "Can't read file");
 }
 
-void export_parquet_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t length) {
+void export_parquet_graph(ukv_graph_export_t& c, ids_t const& ids, ukv_length_t length) {
 
     bool edge_state = strcmp_(c.edge_id_field, "edge");
 
     parquet::schema::NodeVector fields;
-    fields.push_back(                         //
-        parquet::schema::PrimitiveNode::Make( //
-            c.source_id_field,
-            parquet::Repetition::REQUIRED,
-            parquet::Type::INT64,
-            parquet::ConvertedType::INT_64));
+    fields.push_back(parquet::schema::PrimitiveNode::Make( //
+        c.source_id_field,
+        parquet::Repetition::REQUIRED,
+        parquet::Type::INT64,
+        parquet::ConvertedType::INT_64));
 
-    fields.push_back(                         //
-        parquet::schema::PrimitiveNode::Make( //
-            c.target_id_field,
-            parquet::Repetition::REQUIRED,
-            parquet::Type::INT64,
-            parquet::ConvertedType::INT_64));
+    fields.push_back(parquet::schema::PrimitiveNode::Make( //
+        c.target_id_field,
+        parquet::Repetition::REQUIRED,
+        parquet::Type::INT64,
+        parquet::ConvertedType::INT_64));
 
     if (!edge_state)
-        fields.push_back(                         //
-            parquet::schema::PrimitiveNode::Make( //
-                c.edge_id_field,
-                parquet::Repetition::REQUIRED,
-                parquet::Type::INT64,
-                parquet::ConvertedType::INT_64));
+        fields.push_back(parquet::schema::PrimitiveNode::Make( //
+            c.edge_id_field,
+            parquet::Repetition::REQUIRED,
+            parquet::Type::INT64,
+            parquet::ConvertedType::INT_64));
 
     std::shared_ptr<parquet::schema::GroupNode> schema = std::static_pointer_cast<parquet::schema::GroupNode>(
         parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, fields));
@@ -553,9 +545,9 @@ void export_parquet_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t l
 
     ukv_key_t* data = nullptr;
 
-    for (auto arr : arr_2d) {
-        data = arr.first;
-        for (size_t idx = 0; idx < arr.second; idx += 3) {
+    for (auto id : ids) {
+        data = id.first;
+        for (size_t idx = 0; idx < id.second; idx += 3) {
             os << data[idx] << data[idx + 1];
             if (!edge_state)
                 os << data[idx + 2];
@@ -587,7 +579,7 @@ void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
     table = *maybe_table;
 }
 
-void export_csv_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t length) {
+void export_csv_graph(ukv_graph_export_t& c, ids_t const& ids, ukv_length_t length) {
 
     bool edge_state = strcmp_(c.edge_id_field, "edge");
     arrow::Status status;
@@ -601,30 +593,29 @@ void export_csv_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t lengt
     std::shared_ptr<arrow::Array> edges_array;
     std::vector<ukv_key_t> values(length / 3);
 
-    auto func = [&](size_t offset) {
+    auto fill_values = [&](size_t offset) {
         ukv_key_t* data = nullptr;
-        for (auto arr : arr_2d) {
-            data = arr.first;
-            for (size_t idx_in_data = offset, idx = 0; idx_in_data < arr.second; idx_in_data += 3, ++idx) {
+        for (auto id : ids) {
+            data = id.first;
+            for (size_t idx_in_data = offset, idx = 0; idx_in_data < id.second; idx_in_data += 3, ++idx)
                 values[idx] = data[idx_in_data];
-            }
         }
     };
 
-    func(0);
+    fill_values(0);
     status = builder.AppendValues(values);
     return_if_error(status.ok(), c.error, 0, "Can't append values(sources)");
     status = builder.Finish(&sources_array);
     return_if_error(status.ok(), c.error, 0, "Can't finish array(sources)");
 
-    func(1);
+    fill_values(1);
     status = builder.AppendValues(values);
     return_if_error(status.ok(), c.error, 0, "Can't append values(targets)");
     status = builder.Finish(&targets_array);
     return_if_error(status.ok(), c.error, 0, "Can't finish array(targets)");
 
     if (!edge_state) {
-        func(2);
+        fill_values(2);
         status = builder.AppendValues(values);
         return_if_error(status.ok(), c.error, 0, "Can't append values(edges)");
         status = builder.Finish(&edges_array);
@@ -657,12 +648,12 @@ void export_csv_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t lengt
     return_if_error(status.ok(), c.error, 0, "Can't write in file");
 }
 
-///////// Parsing with SIMDJSON /////////
+#pragma region - Parsing with SIMDJSON
 
-void import_ndjson_g(ukv_graph_import_t& c, ukv_size_t task_count) {
+void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) {
 
-    edges_t array;
-    array.reserve(task_count);
+    edges_t edges;
+    edges.reserve(task_count);
     bool edge_state = !strcmp_(c.edge_id_field, "edge");
 
     auto handle = open(c.paths_pattern, O_RDONLY);
@@ -687,22 +678,22 @@ void import_ndjson_g(ukv_graph_import_t& c, ukv_size_t task_count) {
         simdjson::ondemand::object data = doc.get_object().value();
         if (edge_state)
             edge = get_data(data, c.edge_id_field);
-        array.push_back(edge_t {.source_id = get_data(data, c.source_id_field),
+        edges.push_back(edge_t {.source_id = get_data(data, c.source_id_field),
                                 .target_id = get_data(data, c.target_id_field),
                                 .id = edge});
-        if (array.size() == task_count) {
-            upsert_graph(c, array);
-            array.clear();
+        if (edges.size() == task_count) {
+            upsert_graph(c, edges);
+            edges.clear();
         }
     }
-    if (array.size() != 0)
-        upsert_graph(c, array);
+    if (edges.size() != 0)
+        upsert_graph(c, edges);
 
     munmap((void*)mapped_content.data(), mapped_content.size());
     close(handle);
 }
 
-void export_ndjson_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t length) {
+void export_ndjson_graph(ukv_graph_export_t& c, ids_t const& ids, ukv_length_t length) {
 
     ukv_key_t* data = nullptr;
     char file_name[uuid_length_k];
@@ -710,9 +701,9 @@ void export_ndjson_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t le
     auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
     if (strcmp_(c.edge_id_field, "edge")) {
-        for (auto arr : arr_2d) {
-            data = arr.first;
-            for (size_t idx = 0; idx < arr.second; idx += 3) {
+        for (auto id : ids) {
+            data = id.first;
+            for (size_t idx = 0; idx < id.second; idx += 3) {
                 auto str = fmt::format( //
                     "{{\"{}\":{},\"{}\":{}}}\n",
                     c.source_id_field,
@@ -724,9 +715,9 @@ void export_ndjson_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t le
         }
     }
     else {
-        for (auto arr : arr_2d) {
-            data = arr.first;
-            for (size_t idx = 0; idx < arr.second; idx += 3) {
+        for (auto id : ids) {
+            data = id.first;
+            for (size_t idx = 0; idx < id.second; idx += 3) {
                 auto str = fmt::format( //
                     "{{\"{}\":{},\"{}\":{},\"{}\":{}}}\n",
                     c.source_id_field,
@@ -742,6 +733,8 @@ void export_ndjson_g(ukv_graph_export_t& c, ids_t const& arr_2d, ukv_length_t le
     close(handle);
 }
 
+#pragma region - Main Functions(Graph)
+
 void ukv_graph_import(ukv_graph_import_t* c_ptr) {
 
     ukv_graph_import_t& c = *c_ptr;
@@ -750,14 +743,14 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
     auto ext = std::filesystem::path(c.paths_pattern).extension();
 
     if (ext == ".ndjson")
-        import_ndjson_g(c, task_count);
+        import_ndjson_graph(c, task_count);
     else {
         std::shared_ptr<arrow::Table> table;
         if (ext == ".parquet")
             import_parquet(c, table);
         else if (ext == ".csv")
             import_csv(c, table);
-        fill_array(c, task_count, table);
+        parse_arrow_table(c, task_count, table);
     }
 }
 
@@ -769,11 +762,11 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
 
     auto ext = c.paths_extension;
     auto export_method = strcmp_(ext, ".parquet") //
-                             ? &export_parquet_g
+                             ? &export_parquet_graph
                              : strcmp_(ext, ".ndjson") //
-                                   ? &export_ndjson_g
+                                   ? &export_ndjson_graph
                                    : strcmp_(ext, ".csv") //
-                                         ? &export_csv_g
+                                         ? &export_csv_graph
                                          : nullptr;
 
     return_if_error(export_method, c.error, 0, "Not supported format");
@@ -815,7 +808,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
         batch_ids = std::transform_reduce(degrees, degrees + count, 0ul, plus, [](ukv_vertex_degree_t d) {
             return d != ukv_vertex_degree_missing_k ? d : 0;
         });
-        batch_ids *= 3;
+        batch_ids *= vertices_edge_k;
         total_ids += batch_ids;
         ids_in_edges.back().second = batch_ids;
 
@@ -825,17 +818,16 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
     export_method(c, ids_in_edges, total_ids);
 }
 
-///////// Graph End /////////
+#pragma region - Graph End
 
-///////// Docs Begin /////////
+#pragma region - Docs Begin
+#pragma region - Parsing with Apache Arrow
 
-///////// Parsing with Apache Arrow /////////
-
-void fill_array(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table) {
+void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table) {
 
     fields_t fields;
+    char* field = nullptr;
     std::vector<ukv_str_view_t> names;
-    char* u_field = nullptr;
 
     if (!c.fields) {
         auto clmn_names = table->ColumnNames();
@@ -843,9 +835,9 @@ void fill_array(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table
         names.resize(c.fields_count);
 
         for (size_t idx = 0; idx < c.fields_count; ++idx) {
-            u_field = (char*)malloc(clmn_names[idx].size() + 1);
-            std::memcpy(u_field, clmn_names[idx].data(), clmn_names[idx].size() + 1);
-            names[idx] = u_field;
+            field = (char*)malloc(clmn_names[idx].size() + 1);
+            std::memcpy(field, clmn_names[idx].data(), clmn_names[idx].size() + 1);
+            names[idx] = field;
         }
 
         c.fields_stride = sizeof(ukv_str_view_t);
@@ -863,18 +855,17 @@ void fill_array(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table
     std::string json = "{";
     arrow_visitor_t visitor(json);
     size_t used_mem = 0;
-    size_t g_idx = 0;
-    for (auto it = fields; g_idx < c.fields_count; ++g_idx, ++it) {
-        std::shared_ptr<arrow::ChunkedArray> column = table->GetColumnByName(*it);
-        return_if_error(column, c.error, 0, fmt::format("{} is not exist", *it).c_str());
-        columns[g_idx] = column;
+    for (size_t idx = 0; idx < c.fields_count; ++idx) {
+        std::shared_ptr<arrow::ChunkedArray> column = table->GetColumnByName(fields[idx]);
+        return_if_error(column, c.error, 0, fmt::format("{} is not exist", fields[idx]).c_str());
+        columns[idx] = column;
     }
 
     size_t count = columns[0]->num_chunks();
     values.reserve(ukv_size_t(columns[0]->chunk(0)->length()));
 
-    for (size_t chunk_idx = 0; chunk_idx != count; ++chunk_idx) {
-        g_idx = 0;
+    for (size_t chunk_idx = 0, g_idx = 0; chunk_idx != count; ++chunk_idx, g_idx = 0) {
+
         for (auto column : columns) {
             chunks[g_idx] = column->chunk(chunk_idx);
             ++g_idx;
@@ -911,9 +902,9 @@ void fill_array(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table
     }
 }
 
-///////// Parsing with SIMDJSON /////////
+#pragma region - Parsing with SIMDJSON
 
-void imp_whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
+void import_whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
 
     docs_t values;
     size_t used_mem = 0;
@@ -931,7 +922,7 @@ void imp_whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream&
         upsert_docs(c, values);
 }
 
-void imp_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
+void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
 
     fields_t fields {c.fields, c.fields_stride};
     size_t max_size = c.fields_count * symbols_count_k;
@@ -941,7 +932,7 @@ void imp_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& d
     std::vector<size_t> counts;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     auto tape = arena.alloc<char>(max_size, c.error);
-    prepare_tape(counts, fields, c.fields_count, tape);
+    fields_parser(counts, fields, c.fields_count, tape);
 
     std::string json = "{";
     char* u_json = nullptr;
@@ -951,7 +942,7 @@ void imp_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& d
     for (auto doc : docs) {
         simdjson::ondemand::object object = doc.get_object().value();
 
-        prepare_doc(object, counts, fields, c.fields_count, tape, json);
+        simdjson_object_parser(object, counts, fields, c.fields_count, tape, json);
         json.push_back('\n');
         u_json = (char*)malloc(json.size() + 1);
         std::memcpy(u_json, json.data(), json.size() + 1);
@@ -969,7 +960,7 @@ void imp_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& d
         upsert_docs(c, values);
 }
 
-void import_ndjson_d(ukv_docs_import_t& c) {
+void import_ndjson_docs(ukv_docs_import_t& c) {
 
     auto handle = open(c.paths_pattern, O_RDONLY);
     return_if_error(handle != -1, c.error, 0, "Can't open file");
@@ -985,15 +976,15 @@ void import_ndjson_d(ukv_docs_import_t& c) {
         1000000ul);
 
     if (!c.fields)
-        imp_whole_ndjson(c, docs);
+        import_whole_ndjson(c, docs);
     else
-        imp_sub_ndjson(c, docs);
+        import_sub_ndjson(c, docs);
 
     munmap((void*)mapped_content.data(), mapped_content.size());
     close(handle);
 }
 
-void exp_whole_docs( //
+void export_whole_docs( //
     vals_t const& values,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
     std::vector<std::string>* docs_ptr,
@@ -1042,7 +1033,7 @@ void exp_whole_docs( //
     }
 }
 
-void exp_sub_docs( //
+void export_sub_docs( //
     ukv_docs_export_t& c,
     vals_t const& values,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
@@ -1067,7 +1058,7 @@ void exp_sub_docs( //
     std::vector<size_t> counts;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     auto tape = arena.alloc<char>(max_size, c.error);
-    prepare_tape(counts, fields, c.fields_count, tape);
+    fields_parser(counts, fields, c.fields_count, tape);
 
     for (auto value : values) {
         simdjson::ondemand::parser parser;
@@ -1078,7 +1069,7 @@ void exp_sub_docs( //
 
         for (auto doc : docs) {
             simdjson::ondemand::object obj = doc.get_object().value();
-            prepare_doc(obj, counts, fields, c.fields_count, tape, json);
+            simdjson_object_parser(obj, counts, fields, c.fields_count, tape, json);
             if (flag == 0) {
                 os << *iter << json.data();
                 os << parquet::EndRow;
@@ -1099,26 +1090,24 @@ void exp_sub_docs( //
     }
 }
 
-void export_parquet_d( //
+void export_parquet_docs( //
     ukv_docs_export_t& c,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
     ukv_size_t size_in_bytes,
     vals_t const& values) {
 
     parquet::schema::NodeVector nodes;
-    nodes.push_back(                          //
-        parquet::schema::PrimitiveNode::Make( //
-            "_id",
-            parquet::Repetition::REQUIRED,
-            parquet::Type::INT64,
-            parquet::ConvertedType::INT_64));
+    nodes.push_back(parquet::schema::PrimitiveNode::Make( //
+        "_id",
+        parquet::Repetition::REQUIRED,
+        parquet::Type::INT64,
+        parquet::ConvertedType::INT_64));
 
-    nodes.push_back(                          //
-        parquet::schema::PrimitiveNode::Make( //
-            "doc",
-            parquet::Repetition::REQUIRED,
-            parquet::Type::BYTE_ARRAY,
-            parquet::ConvertedType::UTF8));
+    nodes.push_back(parquet::schema::PrimitiveNode::Make( //
+        "doc",
+        parquet::Repetition::REQUIRED,
+        parquet::Type::BYTE_ARRAY,
+        parquet::ConvertedType::UTF8));
 
     std::shared_ptr<parquet::schema::GroupNode> schema = std::static_pointer_cast<parquet::schema::GroupNode>(
         parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, nodes));
@@ -1137,12 +1126,12 @@ void export_parquet_d( //
     parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
 
     if (c.fields)
-        exp_sub_docs(c, values, keys, nullptr, nullptr, &os, 0, 0);
+        export_sub_docs(c, values, keys, nullptr, nullptr, &os, 0, 0);
     else
-        exp_whole_docs(values, keys, nullptr, nullptr, &os, 0, 0);
+        export_whole_docs(values, keys, nullptr, nullptr, &os, 0, 0);
 }
 
-void export_csv_d( //
+void export_csv_docs( //
     ukv_docs_export_t& c,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
     ukv_size_t size_in_bytes,
@@ -1171,9 +1160,9 @@ void export_csv_d( //
     docs_vec.reserve(size);
 
     if (c.fields)
-        exp_sub_docs(c, values, keys, &docs_vec, &keys_vec, nullptr, 0, 1);
+        export_sub_docs(c, values, keys, &docs_vec, &keys_vec, nullptr, 0, 1);
     else
-        exp_whole_docs(values, keys, &docs_vec, &keys_vec, nullptr, 0, 1);
+        export_whole_docs(values, keys, &docs_vec, &keys_vec, nullptr, 0, 1);
 
     status = int_builder.AppendValues(keys_vec);
     return_if_error(status.ok(), c.error, 0, "Can't append keys");
@@ -1204,7 +1193,7 @@ void export_csv_d( //
     return_if_error(status.ok(), c.error, 0, "Can't write in file");
 }
 
-void export_ndjson_d( //
+void export_ndjson_docs( //
     ukv_docs_export_t& c,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
     ukv_size_t size_in_bytes,
@@ -1215,12 +1204,14 @@ void export_ndjson_d( //
     auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
     if (c.fields)
-        exp_sub_docs(c, values, keys, nullptr, nullptr, nullptr, handle, 2);
+        export_sub_docs(c, values, keys, nullptr, nullptr, nullptr, handle, 2);
     else
-        exp_whole_docs(values, keys, nullptr, nullptr, nullptr, handle, 2);
+        export_whole_docs(values, keys, nullptr, nullptr, nullptr, handle, 2);
 
     close(handle);
 }
+
+#pragma region - Main Functions(Docs)
 
 void ukv_docs_import(ukv_docs_import_t* c_ptr) {
 
@@ -1228,14 +1219,14 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
     auto ext = std::filesystem::path(c.paths_pattern).extension();
 
     if (ext == ".ndjson")
-        import_ndjson_d(c);
+        import_ndjson_docs(c);
     else {
         std::shared_ptr<arrow::Table> table;
         if (ext == ".parquet")
             import_parquet(c, table);
         else if (ext == ".csv")
             import_csv(c, table);
-        fill_array(c, table);
+        parse_arrow_table(c, table);
     }
 }
 
@@ -1247,11 +1238,11 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
 
     auto ext = c.paths_extension;
     auto export_method = strcmp_(ext, ".parquet") //
-                             ? &export_parquet_d
+                             ? &export_parquet_docs
                              : strcmp_(ext, ".ndjson") //
-                                   ? &export_ndjson_d
+                                   ? &export_ndjson_docs
                                    : strcmp_(ext, ".csv") //
-                                         ? &export_csv_d
+                                         ? &export_csv_docs
                                          : nullptr;
 
     return_if_error(export_method, c.error, 0, "Not supported format");
@@ -1260,7 +1251,7 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     ukv_length_t* lengths = nullptr;
 
     ukv_size_t size_in_bytes = 0;
-    ukv_size_t task_count = 1024ull;
+    ukv_size_t task_count = 1024;
 
     keys_stream_t stream(c.db, c.collection, task_count);
     std::vector<ptr_range_gt<ukv_key_t const>> keys;
@@ -1303,4 +1294,4 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
         values);
 }
 
-///////// Docs End /////////
+#pragma region - Docs End
