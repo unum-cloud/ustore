@@ -850,7 +850,6 @@ TEST(db, paths) {
 
     // Now try matching a Regular Expression
     prefix = "Netflix|Google";
-    max_count = 20;
     paths_match.tasks_count = 1;
     paths_match.patterns = &prefix;
     ukv_paths_match(&paths_match);
@@ -862,7 +861,6 @@ TEST(db, paths) {
 
     // Try a more complex regular expression
     prefix = "A.*e";
-    max_count = 20;
     ukv_paths_match(&paths_match);
     first_match_for_a = std::string_view(tape_begin);
     second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
@@ -870,7 +868,46 @@ TEST(db, paths) {
     EXPECT_TRUE(first_match_for_a == "Apple" || first_match_for_a == "Adobe");
     EXPECT_TRUE(second_match_for_a == "Apple" || second_match_for_a == "Adobe");
 
+    // Existing single letter prefix
+    prefix = "A";
+    ukv_paths_match(&paths_match);
+    first_match_for_a = std::string_view(tape_begin);
+    second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
+    EXPECT_EQ(results_counts[0], 3);
+    EXPECT_TRUE(first_match_for_a == "Apple" || first_match_for_a == "Adobe" || first_match_for_a == "Amazon");
+    EXPECT_TRUE(second_match_for_a == "Apple" || second_match_for_a == "Adobe" || second_match_for_a == "Amazon");
+
+    // Missing single letter prefix
+    prefix = "X";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
+    // Missing pattern
+    prefix = "X.*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
+    // Try a more complex regular expression
+    prefix = "oo:18:\\*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
+    // Try an even more complex regular expression
+    prefix = "oo:18:\\\\*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
     EXPECT_TRUE(db.clear());
+
+    // Try an even more complex regular expression on empty DB
+    prefix = "oo:18:\\\\*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
 }
 
 /**
