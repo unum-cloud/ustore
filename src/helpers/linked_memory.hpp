@@ -180,7 +180,7 @@ struct linked_memory_lock_t {
         if (!size)
             return {};
         void* result = memory.alloc(sizeof(at) * size, alignment);
-        log_error_if_m(result, c_error, out_of_memory_k, "");
+        log_error_if_m(result, c_error, out_of_memory_k, "Couldn't allocate new sub-arena");
         return {reinterpret_cast<at*>(result), size};
     }
 
@@ -202,7 +202,7 @@ struct linked_memory_lock_t {
         if (result)
             std::memcpy(result, span.begin(), span.size_bytes());
         else
-            log_error_m(c_error, out_of_memory_k, "");
+            log_error_m(c_error, out_of_memory_k, "Couldn't grow a memory buffer");
         return {reinterpret_cast<at*>(result), new_size};
     }
 
