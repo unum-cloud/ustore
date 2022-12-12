@@ -157,7 +157,7 @@ void ukv_vectors_write(ukv_vectors_write_t* c_ptr) {
 
     ukv_vectors_write_t& c = *c_ptr;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
@@ -169,10 +169,10 @@ void ukv_vectors_write(ukv_vectors_write_t* c_ptr) {
 
     // For each input key we must get its
     auto quantized_entries = arena.alloc<entry_t>(c.tasks_count * 2u, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     auto quantized_vectors = arena.alloc<quant_t>(c.tasks_count * c.dimensions, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // Add the original entries
     for (std::size_t task_idx = 0; task_idx != c.tasks_count; ++task_idx) {
@@ -218,7 +218,7 @@ void ukv_vectors_write(ukv_vectors_write_t* c_ptr) {
     sample.counts = &starting_samples_counts;
     sample.keys = &starting_samples_keys;
     ukv_sample(&sample);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // Allocate two priority queues per request.
     // One will be used for top candidates, the other one for top results.
@@ -278,7 +278,7 @@ void ukv_vectors_read(ukv_vectors_read_t* c_ptr) {
 
     ukv_vectors_read_t& c = *c_ptr;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
@@ -302,7 +302,7 @@ void ukv_vectors_read(ukv_vectors_read_t* c_ptr) {
     read.presences = c.presences;
     read.values = c.vectors;
     ukv_read(&read);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // From here on, if we have the offsets don't form identical-length chunks,
     // we must compact the range:
@@ -312,7 +312,7 @@ void ukv_vectors_search(ukv_vectors_search_t* c_ptr) {
 
     ukv_vectors_search_t const& c = *c_ptr;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     strided_iterator_gt<ukv_bytes_cptr_t const> starts {c.queries_starts, c.queries_starts_stride};
     strided_iterator_gt<ukv_length_t const> offs {c.queries_offsets, c.queries_offsets_stride};
@@ -329,18 +329,18 @@ void ukv_vectors_search(ukv_vectors_search_t* c_ptr) {
     });
 
     auto found_counts = arena.alloc_or_dummy(c.tasks_count, c.error, c.match_counts);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     auto found_offsets = arena.alloc_or_dummy(c.tasks_count, c.error, c.match_offsets);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     auto found_keys = arena.alloc_or_dummy(count_limits_sum, c.error, c.match_keys);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     auto found_metrics = arena.alloc_or_dummy(count_limits_sum, c.error, c.match_metrics);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     auto temp_matches = arena.alloc<match_t>(count_limits_max, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     auto quant_query = arena.alloc<quant_t>(c.dimensions, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     ukv_length_t total_exported_matches = 0;
     for (std::size_t i = 0; i != c.tasks_count && !*c.error; ++i) {

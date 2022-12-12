@@ -180,7 +180,7 @@ struct linked_memory_lock_t {
         if (!size)
             return {};
         void* result = memory.alloc(sizeof(at) * size, alignment);
-        log_if_error(result, c_error, out_of_memory_k, "");
+        log_error_if_m(result, c_error, out_of_memory_k, "");
         return {reinterpret_cast<at*>(result), size};
     }
 
@@ -202,7 +202,7 @@ struct linked_memory_lock_t {
         if (result)
             std::memcpy(result, span.begin(), span.size_bytes());
         else
-            log_error(c_error, out_of_memory_k, "");
+            log_error_m(c_error, out_of_memory_k, "");
         return {reinterpret_cast<at*>(result), new_size};
     }
 
@@ -260,10 +260,10 @@ void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dang
         dangerous();
     }
     catch (std::bad_alloc const&) {
-        log_error(c_error, out_of_memory_k, name);
+        log_error_m(c_error, out_of_memory_k, name);
     }
     catch (...) {
-        log_error(c_error, error_unknown_k, name);
+        log_error_m(c_error, error_unknown_k, name);
     }
 }
 

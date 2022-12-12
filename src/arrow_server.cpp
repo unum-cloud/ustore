@@ -268,7 +268,7 @@ class sessions_t {
 
         auto age = std::chrono::duration_cast<std::chrono::milliseconds>(it->second.last_access - sys_clock_t::now());
         if (age.count() < milliseconds_timeout || it->second.executing) {
-            log_error(c_error, error_unknown_k, "Too many concurrent sessions");
+            log_error_m(c_error, error_unknown_k, "Too many concurrent sessions");
             return {};
         }
 
@@ -301,13 +301,13 @@ class sessions_t {
 
         auto it = client_to_txn_.find(session_id);
         if (it == client_to_txn_.end()) {
-            log_error(c_error, args_wrong_k, "Transaction was terminated, start a new one");
+            log_error_m(c_error, args_wrong_k, "Transaction was terminated, start a new one");
             return {};
         }
 
         running_txn_t& running = it->second;
         if (running.executing) {
-            log_error(c_error, args_wrong_k, "Transaction can't be modified concurrently.");
+            log_error_m(c_error, args_wrong_k, "Transaction can't be modified concurrently.");
             return {};
         }
 
@@ -324,7 +324,7 @@ class sessions_t {
 
         auto it = client_to_txn_.find(session_id);
         if (it != client_to_txn_.end()) {
-            log_error(c_error, args_wrong_k, "Such transaction is already running, just continue using it.");
+            log_error_m(c_error, args_wrong_k, "Such transaction is already running, just continue using it.");
             return {};
         }
 
