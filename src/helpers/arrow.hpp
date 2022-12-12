@@ -294,7 +294,7 @@ void ukv_to_continuous_bin( //
     if (!contents.is_continuous()) {
         size_t total = transform_reduce_n(contents, places_count, 0ul, std::mem_fn(&value_view_t::size));
         auto joined_paths = arena.alloc<byte_t>(total, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
         size_t slots_count = divide_round_up<std::size_t>(places_count, CHAR_BIT);
 
         // Exports into the Arrow-compatible form

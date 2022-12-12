@@ -126,7 +126,7 @@ json_t parse_any( //
             result = json_t::binary({reinterpret_cast<std::int8_t const*>(bytes.begin()),
                                      reinterpret_cast<std::int8_t const*>(bytes.end())});
             break;
-        default: log_error(c_error, missing_feature_k, "Unsupported document format");
+        default: log_error_m(c_error, missing_feature_k, "Unsupported document format");
         }
     });
     return result;
@@ -162,10 +162,10 @@ void dump_any( //
             case json_t::value_t::null: break;
             case json_t::value_t::discarded: break;
             case json_t::value_t::object:
-                log_error(c_error, 0, "Can't export a nested dictionary in binary form!");
+                log_error_m(c_error, 0, "Can't export a nested dictionary in binary form!");
                 break;
             case json_t::value_t::array:
-                log_error(c_error, 0, "Can't export a nested dictionary in binary form!");
+                log_error_m(c_error, 0, "Can't export a nested dictionary in binary form!");
                 break;
             case json_t::value_t::binary: {
                 json_t::binary_t const& str = json.get_ref<json_t::binary_t const&>();
@@ -181,11 +181,11 @@ void dump_any( //
             case json_t::value_t::number_integer: value->write_scalar(json.get<json_t::number_integer_t>()); break;
             case json_t::value_t::number_unsigned: value->write_scalar(json.get<json_t::number_unsigned_t>()); break;
             case json_t::value_t::number_float: value->write_scalar(json.get<json_t::number_float_t>()); break;
-            default: log_error(c_error, 0, "Unsupported member type"); break;
+            default: log_error_m(c_error, 0, "Unsupported member type"); break;
             }
             return;
         }
-        default: log_error(c_error, 0, "Unsupported output format"); return;
+        default: log_error_m(c_error, 0, "Unsupported output format"); return;
         }
     });
 }
@@ -206,17 +206,17 @@ struct serializing_tape_ref_t {
 
         single_doc_buffer_.clear();
         dump_any(doc, c.format, shared_exporter_, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
 
         if ((c.format == ukv_field_json_k) |        //
             (c.format == ukv_format_json_patch_k) | //
             (c.format == ukv_format_json_merge_patch_k)) {
             single_doc_buffer_.push_back(byte_t {0}, c_error);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
         }
 
         growing_tape.push_back(single_doc_buffer_, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
     }
 
     embedded_blobs_t view() noexcept { return growing_tape; }
@@ -390,16 +390,16 @@ void replace_docs( //
     ukv_error_t* c_error) noexcept {
 
     serializing_tape_ref_t serializing_tape {arena, c_error};
-    return_on_error(c_error);
+    return_if_error_m(c_error);
     auto& growing_tape = serializing_tape.growing_tape;
     growing_tape.reserve(places.count, c_error);
-    return_on_error(c_error);
+    return_if_error_m(c_error);
 
     for (std::size_t doc_idx = 0; doc_idx != places.size(); ++doc_idx) {
         auto place = places[doc_idx];
         auto content = contents[doc_idx];
         auto parsed = parse_any(content, c.format, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
 
         if (parsed.is_discarded()) {
             *c_error = "Couldn't parse inputs";
@@ -407,7 +407,7 @@ void replace_docs( //
         }
 
         serializing_tape.push_back(parsed, internal_format_k);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
     }
 
     auto tape_begin = growing_tape.contents().begin().get();
@@ -449,7 +449,7 @@ void read_modify_write( //
     auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, json_t& parsed) {
         try {
             json_t parsed_task = parse_any(contents[task_idx], c.format, c_error);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
 
             // Apply the patch
             json_t null_object;
@@ -470,7 +470,7 @@ void read_modify_write( //
 
             // Save onto output tape
             serializing_tape.push_back(parsed_part, internal_format_k);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
         }
         catch (std::bad_alloc const&) {
             *c_error = "Out of memory!";
@@ -536,10 +536,10 @@ void parse_fields( //
         }
     }
     catch (nlohmann::json::parse_error const&) {
-        log_error(c_error, args_wrong_k, "Inappropriate field path!");
+        log_error_m(c_error, args_wrong_k, "Inappropriate field path!");
     }
     catch (std::bad_alloc const&) {
-        log_error(c_error, out_of_memory_k, "");
+        log_error_m(c_error, out_of_memory_k, "");
     }
 }
 
@@ -547,7 +547,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
 
     ukv_docs_write_t& c = *c_ptr;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     ukv_arena_t new_arena = &arena;
 
     // If user wants the entire doc in the same format, as the one we use internally,
@@ -578,7 +578,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
         return ukv_write(&write);
     }
 
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
@@ -601,7 +601,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
 
     ukv_docs_read_t& c = *c_ptr;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     ukv_arena_t new_arena = &arena;
 
     // If user wants the entire doc in the same format, as the one we use internally,
@@ -628,7 +628,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
         return ukv_read(&read);
     }
 
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
@@ -638,14 +638,14 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
     // Potentially sampling certain sub-fields again along the way.
     serializing_tape_ref_t serializing_tape {arena, c.error};
     serializing_tape.growing_tape.reserve(c.tasks_count, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     json_t null_object;
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, json_t& parsed) {
         try {
             json_t& parsed_part = lookup_field(parsed, field, null_object);
             serializing_tape.push_back(parsed_part, c.format);
-            return_on_error(c.error);
+            return_if_error_m(c.error);
         }
         catch (std::bad_alloc const&) {
             *c.error = "Out of memory!";
@@ -670,7 +670,7 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
 
     ukv_docs_gist_t& c = *c_ptr;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     ukv_arena_t new_arena = &arena;
 
     ukv_byte_t* found_binary_begin = nullptr;
@@ -691,7 +691,7 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
     };
 
     ukv_read(&read);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
@@ -706,7 +706,7 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
         for (ukv_size_t doc_idx = 0; doc_idx != c.docs_count; ++doc_idx, ++found_binary_it) {
             value_view_t binary_doc = *found_binary_it;
             json_t parsed = parse_any(binary_doc, internal_format_k, c.error);
-            return_on_error(c.error);
+            return_if_error_m(c.error);
 
             json_t parsed_flat = parsed.flatten();
             paths->reserve(paths->size() + parsed_flat.size());
@@ -721,7 +721,7 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
 
     // Estimate the final memory consumption on-tape and export offsets
     auto offs = arena.alloc<ukv_length_t>(paths->size() + 1, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     std::size_t path_idx = 0;
     ukv_length_t total_length = 0;
@@ -734,7 +734,7 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
 
     // Reserve memory
     auto tape = arena.alloc<byte_t>(total_length, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // Export on to the tape
     byte_t* tape_ptr = tape.begin();
@@ -1038,7 +1038,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
 
     ukv_docs_gather_t& c = *c_ptr;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     ukv_arena_t new_arena = &arena;
     // Validate the input arguments
 
@@ -1061,7 +1061,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     };
 
     ukv_read(&read);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
@@ -1074,7 +1074,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     // Parse all the field names
     heapy_fields_t heapy_fields(std::nullopt);
     parse_fields(fields, c.fields_count, heapy_fields, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // Estimate the amount of memory needed to store at least scalars and columns addresses
     // TODO: Align offsets of bitmaps to 64-byte boundaries for Arrow
@@ -1175,7 +1175,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     for (ukv_size_t doc_idx = 0; doc_idx != c.docs_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
         json_t parsed = parse_any(binary_doc, internal_format_k, c.error);
-        return_on_error(c.error);
+        return_if_error_m(c.error);
 
         for (ukv_size_t field_idx = 0; field_idx != c.fields_count; ++field_idx) {
 

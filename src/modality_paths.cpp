@@ -208,7 +208,7 @@ void upsert_in_bucket( //
     auto new_bytes = bytes_in_header_k + new_bytes_for_counters + new_bytes_for_keys + new_bytes_for_vals;
 
     auto new_begin = arena.alloc<byte_t>(new_bytes, c_error).begin();
-    return_on_error(c_error);
+    return_if_error_m(c_error);
     auto new_lengths = reinterpret_cast<ukv_length_t*>(new_begin);
     new_lengths[0] = new_size;
     auto new_keys_lengths = new_lengths + 1ul;
@@ -248,7 +248,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
 
     ukv_paths_write_t& c = *c_ptr;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     contents_arg_t keys_str_args;
     keys_str_args.offsets_begin = {c.paths_offsets, c.paths_offsets_stride};
@@ -257,7 +257,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     keys_str_args.count = c.tasks_count;
 
     auto unique_col_keys = arena.alloc<collection_key_t>(c.tasks_count, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // Parse and hash input string unique_col_keys
     hash_t hash;
@@ -298,11 +298,11 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
     };
 
     ukv_read(&read);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     joined_blobs_t joined_buckets {unique_places.count, buckets_offsets, buckets_values};
     uninitialized_array_gt<value_view_t> updated_buckets(unique_places.count, arena, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     transform_n(joined_buckets.begin(), unique_places.count, updated_buckets.begin());
 
     bits_view_t presences {c.values_presences};
@@ -322,7 +322,7 @@ void ukv_paths_write(ukv_paths_write_t* c_ptr) {
 
         if (new_val) {
             upsert_in_bucket(bucket, key_str, new_val, arena, c.error);
-            return_on_error(c.error);
+            return_if_error_m(c.error);
         }
         else
             remove_from_bucket(bucket, key_str);
@@ -353,7 +353,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
 
     ukv_paths_read_t& c = *c_ptr;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     contents_arg_t keys_str_args;
     keys_str_args.offsets_begin = {c.paths_offsets, c.paths_offsets_stride};
@@ -366,7 +366,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     // deduplicating the IDs will cost more overall, than a repeated
     // read every once in a while.
     auto buckets_keys = arena.alloc<ukv_key_t>(c.tasks_count, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // Parse and hash input string buckets_keys
     hash_t hash;
@@ -396,7 +396,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     };
 
     ukv_read(&read);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // Some of the entries will contain more then one key-value pair in case of collisions.
     ukv_length_t exported_volume = 0;
@@ -476,9 +476,9 @@ void full_scan_collection_w_predicate( //
 
             // All the matches in this section should be exported
             paths.push_back(member.key, c_error);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
             paths.add_terminator(byte_t {0}, c_error);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
             ++paths_count;
         });
 
@@ -611,7 +611,7 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
 
     ukv_paths_match_t const& c = *c_ptr;
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     contents_arg_t patterns_args;
     patterns_args.offsets_begin = {c.patterns_offsets, c.patterns_offsets_stride};
@@ -633,7 +633,7 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     auto found_counts = arena.alloc<ukv_length_t>(c.tasks_count, c.error);
     auto found_paths = growing_tape_t(arena);
     found_paths.reserve(count_limits_sum, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     for (std::size_t i = 0; i != c.tasks_count && !*c.error; ++i) {
         auto col = collections ? collections[i] : ukv_collection_main_k;

@@ -164,7 +164,7 @@ void write_many( //
 void ukv_write(ukv_write_t* c_ptr) {
 
     ukv_write_t& c = *c_ptr;
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
@@ -178,7 +178,7 @@ void ukv_write(ukv_write_t* c_ptr) {
     contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
 
     validate_write(c.transaction, places, contents, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     leveldb::WriteOptions options;
     if (c.options & ukv_option_write_flush_k)
@@ -220,10 +220,10 @@ void read_enumerate( //
 void ukv_read(ukv_read_t* c_ptr) {
 
     ukv_read_t& c = *c_ptr;
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
@@ -231,15 +231,15 @@ void ukv_read(ukv_read_t* c_ptr) {
     places_arg_t places {{}, keys, {}, c.tasks_count};
 
     validate_read(c.transaction, places, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // 1. Allocate a tape for all the values to be pulled
     auto offs = arena.alloc_or_dummy(places.count + 1, c.error, c.offsets);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     auto lens = arena.alloc_or_dummy(places.count, c.error, c.lengths);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     auto presences = arena.alloc_or_dummy(places.count, c.error, c.presences);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     bool const needs_export = c.values != nullptr;
 
     uninitialized_array_gt<byte_t> contents(arena);
@@ -272,10 +272,10 @@ void ukv_read(ukv_read_t* c_ptr) {
 void ukv_scan(ukv_scan_t* c_ptr) {
 
     ukv_scan_t& c = *c_ptr;
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
@@ -284,17 +284,17 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     scans_arg_t scans {{}, start_keys, limits, c.tasks_count};
 
     validate_scan(c.transaction, scans, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy(scans.count + 1, c.error, c.offsets);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     auto counts = arena.alloc_or_dummy(scans.count, c.error, c.counts);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     auto total_keys = reduce_n(scans.limits, scans.count, 0ul);
     auto keys_output = *c.keys = arena.alloc<ukv_key_t>(total_keys, c.error).begin();
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // 2. Fetch the data
     leveldb::ReadOptions options;
@@ -333,10 +333,10 @@ void ukv_scan(ukv_scan_t* c_ptr) {
 void ukv_measure(ukv_measure_t* c_ptr) {
 
     ukv_measure_t& c = *c_ptr;
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     auto min_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_cardinalities);
     auto max_cardinalities = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_cardinalities);
@@ -344,7 +344,7 @@ void ukv_measure(ukv_measure_t* c_ptr) {
     auto max_value_bytes = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_value_bytes);
     auto min_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.min_space_usages);
     auto max_space_usages = arena.alloc_or_dummy(c.tasks_count, c.error, c.max_space_usages);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
@@ -384,15 +384,15 @@ void ukv_collection_create(ukv_collection_create_t* c_ptr) {
 
     ukv_collection_create_t& c = *c_ptr;
     auto name_len = c.name ? std::strlen(c.name) : 0;
-    return_if_error(name_len, c.error, args_wrong_k, "Collections not supported by LevelDB!");
+    return_error_if_m(name_len, c.error, args_wrong_k, "Collections not supported by LevelDB!");
 }
 
 void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
 
     ukv_collection_drop_t& c = *c_ptr;
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     bool invalidate = c.mode == ukv_drop_keys_vals_handle_k;
-    return_if_error(c.id == ukv_collection_main_k && !invalidate,
+    return_error_if_m(c.id == ukv_collection_main_k && !invalidate,
                     c.error,
                     args_combo_k,
                     "Collections not supported by LevelDB!");
@@ -433,7 +433,7 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
 void ukv_database_control(ukv_database_control_t* c_ptr) {
 
     ukv_database_control_t& c = *c_ptr;
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     if (!c.request && (*c.error = "Request is NULL!"))
         return;
@@ -449,12 +449,12 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
     ukv_transaction_init_t& c = *c_ptr;
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     validate_transaction_begin(c.transaction, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     if (!*c.transaction)
         safe_section("Allocating transaction handle", c.error, [&] { *c.transaction = new level_txn_t(); });
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_txn_t& txn = **reinterpret_cast<level_txn_t**>(c.transaction);
