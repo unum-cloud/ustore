@@ -7,7 +7,7 @@ import multiprocessing
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
-__version__ = open('VERSION', 'r').read() + "." + str(time.time_ns())
+__version__ = open('VERSION', 'r').read() + '.' + str(time.time_ns())
 __libname__ = 'ukv'
 
 
@@ -16,7 +16,7 @@ with open(os.path.join(this_directory, 'README.md')) as f:
     long_description = f.read()
 
 class CMakeExtension(Extension):
-    def __init__(self, name, sourcedir=""):
+    def __init__(self, name, sourcedir=''):
         Extension.__init__(self, name, sources=[])
         self.sourcedir = os.path.abspath(sourcedir)
 
@@ -31,38 +31,41 @@ class CMakeBuild(build_ext):
             extdir += os.path.sep
 
         cmake_args = [
-            f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
-            f"-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY={extdir}",
-            f"-DPYTHON_EXECUTABLE={sys.executable}",
-            "-DUKV_BUILD_PYTHON=1"
+            f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}',
+            f'-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY={extdir}',
+            f'-DPYTHON_EXECUTABLE={sys.executable}',
+            '-DUKV_BUILD_ENGINE_UMEM=1',
+            '-DUKV_BUILD_ENGINE_LEVELDB=1',
+            '-DUKV_BUILD_ENGINE_ROCKSDB=1',
+            '-DUKV_BUILD_SDK_PYTHON=1'
         ]
 
-        if ext.name == "ukv.flight_client":
-            cmake_args.append("-DUKV_BUILD_FLIGHT_API=1")
+        if ext.name == 'ukv.flight_client':
+            cmake_args.append('-DUKV_BUILD_API_FLIGHT=1')
         # Adding CMake arguments set as environment variable
         # (needed e.g. to build for ARM OSx on conda-forge)
-        if "CMAKE_ARGS" in os.environ:
-            cmake_args += [item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
-        elif "CMAKE_ARGS_F" in os.environ:
-            cmake_args += [item.strip() for item in open(os.environ["CMAKE_ARGS_F"]).read().split(" ") if item]
+        if 'CMAKE_ARGS' in os.environ:
+            cmake_args += [item for item in os.environ['CMAKE_ARGS'].split(' ') if item]
+        elif 'CMAKE_ARGS_F' in os.environ:
+            cmake_args += [item.strip() for item in open(os.environ['CMAKE_ARGS_F']).read().split(' ') if item]
 
-        if sys.platform.startswith("darwin"):
+        if sys.platform.startswith('darwin'):
             # Cross-compile support for macOS - respect ARCHFLAGS if set
-            archs = re.findall(r"-arch (\S+)", os.environ.get("ARCHFLAGS", ""))
+            archs = re.findall(r'-arch (\S+)', os.environ.get('ARCHFLAGS', ''))
             if archs:
-                cmake_args += ["-DCMAKE_OSX_ARCHITECTURES={}".format(";".join(archs))]
+                cmake_args += ['-DCMAKE_OSX_ARCHITECTURES={}'.format(';'.join(archs))]
 
         # Set CMAKE_BUILD_PARALLEL_LEVEL to control the parallel build level
         # across all generators.
         build_args = []
-        if "CMAKE_BUILD_PARALLEL_LEVEL" not in os.environ:
+        if 'CMAKE_BUILD_PARALLEL_LEVEL' not in os.environ:
             # self.parallel is a Python 3 only way to set parallel jobs by hand
             # using -j in the build_ext call, not supported by pip or PyPA-build.
-            if hasattr(self, "parallel") and self.parallel:
-                build_args += [f"-j{self.parallel}"]
+            if hasattr(self, 'parallel') and self.parallel:
+                build_args += [f'-j{self.parallel}']
 
-        subprocess.check_call(["cmake", ext.sourcedir] + cmake_args)
-        subprocess.check_call(["cmake", "--build", ".", "--target", ext.name.replace("ukv.","py_")] + build_args)
+        subprocess.check_call(['cmake', ext.sourcedir] + cmake_args)
+        subprocess.check_call(['cmake', '--build', '.', '--target', ext.name.replace('ukv.','py_')] + build_args)
 
 
 setup(
@@ -95,11 +98,11 @@ setup(
         # 'Framework :: IPython',
     ],
     ext_modules=[
-        CMakeExtension("ukv.umem"),
-        CMakeExtension("ukv.rocksdb"),
-        CMakeExtension("ukv.leveldb"),
-        CMakeExtension("ukv.flight_client")],
-    cmdclass={"build_ext": CMakeBuild},
+        CMakeExtension('ukv.umem'),
+        CMakeExtension('ukv.rocksdb'),
+        CMakeExtension('ukv.leveldb'),
+        CMakeExtension('ukv.flight_client')],
+    cmdclass={'build_ext': CMakeBuild},
     zip_safe=False,
     install_requires=[
         'numpy>=1.16',

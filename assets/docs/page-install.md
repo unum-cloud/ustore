@@ -17,9 +17,9 @@ mkdir build_release && \
     cmake \
         -DUKV_BUILD_TESTS=0 \
         -DUKV_BUILD_BENCHMARKS=0 \
-        -DUKV_BUILD_PYTHON=0 \
-        -DUKV_BUILD_REST_API=0 \
-        -DUKV_BUILD_FLIGHT_API=0 .. && \
+        -DUKV_BUILD_SDK_PYTHON=0 \
+        -DUKV_BUILD_API_REST=0 \
+        -DUKV_BUILD_API_FLIGHT=0 .. && \
     make -j16
 ```
 
@@ -60,9 +60,9 @@ The CMake options include:
 | :------------------- | :-----: | :------------------------------------------------------------------------------------------- |
 | UKV_BUILD_TESTS      |    1    |                                                                                              |
 | UKV_BUILD_BENCHMARKS |    0    | May require Arrow.                                                                           |
-| UKV_BUILD_PYTHON     |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
-| UKV_BUILD_FLIGHT_API |    0    | Apache Arrow: Flight.                                                                        |
-| UKV_BUILD_REST_API   |    0    | Boost: Beast and ASIO.                                                                       |
+| UKV_BUILD_SDK_PYTHON     |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
+| UKV_BUILD_API_FLIGHT |    0    | Apache Arrow: Flight.                                                                        |
+| UKV_BUILD_API_REST   |    0    | Boost: Beast and ASIO.                                                                       |
 | UKV_USE_JEMALLOC     |    0    | JeMalloc or AutoConf to be visible.                                                          |
 
 Following scripts are provided to help:

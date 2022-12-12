@@ -1,22 +1,28 @@
 cmake_minimum_required(VERSION 3.22)
 project(UKV)
 
+option(UKV_BUILD_ENGINE_UMEM "Building REST API server for all backends" ON)
+option(UKV_BUILD_ENGINE_LEVELDB "Building REST API server for all backends")
+option(UKV_BUILD_ENGINE_ROCKSDB "Building REST API server for all backends")
+
 option(UKV_BUILD_TESTS "Building C/C++ native tests" ON)
-option(UKV_BUILD_PYTHON "Building Python bidings for all SDKs")
 option(UKV_BUILD_BENCHMARKS "Building C/C++ native benchmarks")
-option(UKV_BUILD_FLIGHT_API "Building Apache Arrow Flight RPC server for all backends")
-option(UKV_BUILD_REST_API "Building REST API server for all backends")
+
+option(UKV_BUILD_SDK_PYTHON "Building Python bidings for all SDKs")
+option(UKV_BUILD_API_FLIGHT "Building Apache Arrow Flight RPC server for all backends")
+option(UKV_BUILD_API_REST "Building REST API server for all backends")
+
 option(UKV_USE_JEMALLOC "A faster allocator, that requires autoconf to be installed")
 option(UKV_USE_ONEAPI "Faster concurrency primitives from Intel")
 
-set(UKV_UDISK_PATH "" CACHE STRING "Pass a path to UDisk binary to produce a full range of bindings")
+set(UKV_ENGINE_UDISK_PATH "" CACHE STRING "Pass a path to UDisk binary to produce a full range of bindings")
 
 # Some settings are mutually dependant
 include(CMakeDependentOption)
 cmake_dependent_option(UKV_REBUILD_JEMALLOC "Enable to attempt to source and build JeMalloc locally" ON "UKV_USE_JEMALLOC" OFF)
 cmake_dependent_option(UKV_REBUILD_ONEAPI "Enable to attempt to source and build Intel OneAPI locally" ON "UKV_USE_ONEAPI" OFF)
-cmake_dependent_option(UKV_REBUILD_BOOST "Enable to attempt to source and build Boost locally" ON "UKV_BUILD_REST_API" OFF)
-cmake_dependent_option(UKV_REBUILD_ARROW "Enable to attempt to source and build Apache Arrow locally" ON "UKV_BUILD_PYTHON OR UKV_BUILD_FLIGHT_API" OFF)
+cmake_dependent_option(UKV_REBUILD_BOOST "Enable to attempt to source and build Boost locally" ON "UKV_BUILD_API_REST" OFF)
+cmake_dependent_option(UKV_REBUILD_ARROW "Enable to attempt to source and build Apache Arrow locally" ON "UKV_BUILD_SDK_PYTHON OR UKV_BUILD_API_FLIGHT" OFF)
 
 file(READ "VERSION" _VERSION_)
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
@@ -83,7 +89,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DUKV_DEBUG -g")
 find_package(Threads REQUIRED)
 set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 
-if(NOT ${UKV_BUILD_PYTHON})
+if(NOT ${UKV_BUILD_SDK_PYTHON})
   set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
   set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
@@ -100,9 +106,15 @@ else()
 endif()
 
 # Engines:
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocksdb.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/consistent_set.cmake")
+if(${UKV_BUILD_ENGINE_UMEM})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/consistent_set.cmake")
+endif()
+if(${UKV_BUILD_ENGINE_ROCKSDB})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocksdb.cmake")
+endif()
+if(${UKV_BUILD_ENGINE_LEVELDB})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
+endif()
 
 # Modalities:
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/fmt.cmake")
@@ -122,11 +134,11 @@ if(${UKV_USE_ONEAPI})
 endif()
 
 # Distributions:
-if(${UKV_BUILD_PYTHON} OR ${UKV_BUILD_FLIGHT_API})
+if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
 
-if(${UKV_BUILD_REST_API})
+if(${UKV_BUILD_API_REST})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/boost.cmake")
 endif()
 
@@ -139,63 +151,63 @@ if(${UKV_BUILD_BENCHMARKS})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gbench.cmake")
 endif()
 
-# Define the libraries we will need to build
-add_library(ukv_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_umem pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
-target_compile_definitions(ukv_umem INTERFACE UKV_VERSION="${_VERSION_}")
-target_compile_definitions(ukv_umem INTERFACE UKV_ENGINE_NAME=umem)
+set(UKV_ENGINE_NAMES)
+set(UKV_CLIENT_NAMES)
 
-add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_rocksdb rocksdb pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES})
-target_compile_definitions(ukv_rocksdb INTERFACE UKV_VERSION="${_VERSION_}")
-target_compile_definitions(ukv_rocksdb INTERFACE UKV_ENGINE_NAME=rocksdb)
-
-add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-target_link_libraries(ukv_leveldb leveldb pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES})
-set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
-target_compile_definitions(ukv_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
-target_compile_definitions(ukv_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
-
-if((NOT APPLE) AND((DEFINED ${JEMALLOC_DEPENDENCY}) OR(DEFINED {ARROW_DEPENDENCY})))
-  add_dependencies(ukv_umem ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
-  add_dependencies(ukv_rocksdb ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
-  add_dependencies(ukv_leveldb ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
+# Define the Engine libraries we will need to build
+if(${UKV_BUILD_ENGINE_UMEM})
+  add_library(ukv_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
+  target_link_libraries(ukv_umem pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
+  target_compile_definitions(ukv_umem INTERFACE UKV_VERSION="${_VERSION_}")
+  target_compile_definitions(ukv_umem INTERFACE UKV_ENGINE_NAME=umem)
+  # add_dependencies(ukv_umem ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
+  list(APPEND UKV_ENGINE_NAMES "umem")
+  list(APPEND UKV_CLIENT_NAMES "umem")
+endif()
+  
+if(${UKV_BUILD_ENGINE_ROCKSDB})
+  add_library(ukv_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
+  target_link_libraries(ukv_rocksdb rocksdb pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES})
+  target_compile_definitions(ukv_rocksdb INTERFACE UKV_VERSION="${_VERSION_}")
+  target_compile_definitions(ukv_rocksdb INTERFACE UKV_ENGINE_NAME=rocksdb)
+  # add_dependencies(ukv_rocksdb ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
+  list(APPEND UKV_ENGINE_NAMES "rocks")
+  list(APPEND UKV_CLIENT_NAMES "rocks")
 endif()
 
-# The rest of CMake will apply to all client libraries
-set(UKV_ENGINE_NAMES "umem" "leveldb" "rocksdb")
-set(UKV_CLIENT_NAMES "umem" "leveldb" "rocksdb")
+if(${UKV_BUILD_ENGINE_LEVELDB})
+  add_library(ukv_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
+  target_link_libraries(ukv_leveldb leveldb pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES})
+  set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
+  target_compile_definitions(ukv_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
+  target_compile_definitions(ukv_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
+  # add_dependencies(ukv_leveldb ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
+  list(APPEND UKV_ENGINE_NAMES "level")
+  list(APPEND UKV_CLIENT_NAMES "level")
+endif()
 
-if(EXISTS ${UKV_UDISK_PATH})
+if(EXISTS ${UKV_ENGINE_UDISK_PATH})
   add_library(udisk STATIC IMPORTED)
   target_link_libraries(udisk INTERFACE dl pthread explain uring numa)
-  set_property(TARGET udisk PROPERTY IMPORTED_LOCATION ${UKV_UDISK_PATH})
+  set_property(TARGET udisk PROPERTY IMPORTED_LOCATION ${UKV_ENGINE_UDISK_PATH})
   set_property(TARGET udisk PROPERTY LINK_LIBRARIES "")
-
   add_library(ukv_udisk src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-
-  if((NOT APPLE) AND DEFINED ${JEMALLOC_DEPENDENCY})
-    add_dependencies(ukv_udisk jemalloc)
-  endif()
-
   target_link_libraries(ukv_udisk udisk pthread yyjson simdjson bson pcre2 nlohmann_json::nlohmann_json ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ukv_udisk INTERFACE UKV_VERSION="${_VERSION_}")
   target_compile_definitions(ukv_udisk INTERFACE UKV_ENGINE_NAME=udisk)
-
+  # add_dependencies(ukv_udisk ${JEMALLOC_DEPENDENCY} ${ARROW_DEPENDENCY})
   list(APPEND UKV_ENGINE_NAMES "udisk")
   list(APPEND UKV_CLIENT_NAMES "udisk")
 endif()
 
+# The rest of CMake will apply to all client libraries
 # Generate Apache Arrow Flight RPC backends
-if(${UKV_BUILD_FLIGHT_API})
+if(${UKV_BUILD_API_FLIGHT})
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
   target_link_libraries(ukv_flight_client pthread yyjson simdjson bson pcre2 fmt::fmt arrow::arrow arrow::flight ssl crypto ${JEMALLOC_LIBRARIES})
   list(APPEND UKV_CLIENT_NAMES "flight_client")
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
-
-  if((NOT APPLE) AND DEFINED ${JEMALLOC_DEPENDENCY})
-    add_dependencies(ukv_flight_client ${JEMALLOC_DEPENDENCY})
-  endif()
+  # add_dependencies(ukv_flight_client ${JEMALLOC_DEPENDENCY})
 
   foreach(engine_name IN ITEMS ${UKV_ENGINE_NAMES})
     string(CONCAT target_name "ukv_" ${engine_name})
@@ -268,7 +280,7 @@ if(${UKV_BUILD_BENCHMARKS})
 endif()
 
 # Build Python bindings linking to precompiled client SDKs
-if(${UKV_BUILD_PYTHON})
+if(${UKV_BUILD_SDK_PYTHON})
   # find_package(Python 3.9 REQUIRED COMPONENTS Interpreter Development.module)
   set(PYARROW_DIR "" CACHE PATH "Path to pyarrow install dir")
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pybind11.cmake")
