@@ -3,6 +3,7 @@ import re
 import subprocess
 import sys
 import time
+import multiprocessing
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
@@ -22,26 +23,22 @@ class CMakeExtension(Extension):
 
 class CMakeBuild(build_ext):
     def build_extension(self, ext):
+        self.parallel = multiprocessing.cpu_count() // 2
         extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
 
         # required for auto-detection & inclusion of auxiliary "native" libs
         if not extdir.endswith(os.path.sep):
             extdir += os.path.sep
 
-        # CMake lets you override the generator - we need to check this.
-        # Can be set with Conda-Build, for example.
-        cmake_generator = "Unix Makefiles"
-
-        # Set Python_EXECUTABLE instead if you use PYBIND11_FINDPYTHON
-        # EXAMPLE_VERSION_INFO shows you how to pass a value into the C++ code
-        # from Python.
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
             f"-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY={extdir}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
             "-DUKV_BUILD_PYTHON=1"
         ]
-        build_args = []
+
+        if ext.name == "ukv.flight_client":
+            cmake_args.append("-DUKV_BUILD_FLIGHT_API=1")
         # Adding CMake arguments set as environment variable
         # (needed e.g. to build for ARM OSx on conda-forge)
         if "CMAKE_ARGS" in os.environ:
@@ -57,18 +54,15 @@ class CMakeBuild(build_ext):
 
         # Set CMAKE_BUILD_PARALLEL_LEVEL to control the parallel build level
         # across all generators.
+        build_args = []
         if "CMAKE_BUILD_PARALLEL_LEVEL" not in os.environ:
             # self.parallel is a Python 3 only way to set parallel jobs by hand
             # using -j in the build_ext call, not supported by pip or PyPA-build.
             if hasattr(self, "parallel") and self.parallel:
                 build_args += [f"-j{self.parallel}"]
 
-        build_temp = os.path.join(self.build_temp, ext.name)
-        if not os.path.exists(build_temp):
-            os.makedirs(build_temp)
-
         subprocess.check_call(["cmake", ext.sourcedir] + cmake_args)
-        subprocess.check_call(["cmake", "--build", ".", "--target py_umem"] + build_args)
+        subprocess.check_call(["cmake", "--build", ".", "--target", ext.name.replace("ukv.","py_")] + build_args)
 
 
 setup(
@@ -100,7 +94,11 @@ setup(
         # 'Framework :: Apache Airflow :: Provider',
         # 'Framework :: IPython',
     ],
-    ext_modules=[CMakeExtension("ukv.umem")],
+    ext_modules=[
+        CMakeExtension("ukv.umem"),
+        CMakeExtension("ukv.rocksdb"),
+        CMakeExtension("ukv.leveldb"),
+        CMakeExtension("ukv.flight_client")],
     cmdclass={"build_ext": CMakeBuild},
     zip_safe=False,
     install_requires=[

@@ -189,7 +189,7 @@ endif()
 # Generate Apache Arrow Flight RPC backends
 if(${UKV_BUILD_FLIGHT_API})
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ukv_flight_client pthread yyjson simdjson bson pcre2 fmt::fmt arrow arrow_flight ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ukv_flight_client pthread yyjson simdjson bson pcre2 fmt::fmt arrow::arrow arrow::flight ssl crypto ${JEMALLOC_LIBRARIES})
   list(APPEND UKV_CLIENT_NAMES "flight_client")
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
 
@@ -203,7 +203,7 @@ if(${UKV_BUILD_FLIGHT_API})
 
     string(CONCAT server_name "ukv_" ${engine_name} "_flight_server")
     add_executable(${server_name} src/arrow_server.cpp ${lib_SOURCES})
-    target_link_libraries(${server_name} pthread yyjson simdjson bson arrow arrow_flight ${target_name} ${target_LIBRARIES})
+    target_link_libraries(${server_name} pthread yyjson simdjson bson arrow::arrow arrow::flight ${target_name} ${target_LIBRARIES})
   endforeach()
 endif()
 

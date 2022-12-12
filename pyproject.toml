@@ -1,9 +1,5 @@
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel",
-    "cmake>=3.22"
-]
+requires = ["setuptools>=42", "wheel", "cmake>=3.22"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
@@ -27,15 +23,14 @@ before-build = [
     "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
     "ln -s $PYST/pyarrow/libarrow_python.so.900 $PYST/pyarrow/libarrow_python.so",
     "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
-    "mkdir -p build/ukv"
+    "mkdir -p build/ukv",
 ]
 
 skip = ["*musllinux*", "*i686*", "pp*", "cp36-*", "cp311-*"]
 
-# Add Tests later
-# test-command = "pytest {project}/python/tests/" 
-# test-requires = ["pandas"]
-# test-extras = ["test"]
+test-command = "pytest {project}/python/tests/"
+test-requires = ["pandas"]
+test-extras = ["test"]
 
 [tool.cibuildwheel.linux]
 repair-wheel-command = "auditwheel repair --lib-sdir . -w {dest_dir} {wheel}"

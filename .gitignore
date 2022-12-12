@@ -56,6 +56,7 @@ build_version.cc
 CPackConfig.cmake
 CPackSourceConfig.cmake
 doxygen_docs/html
+wheelhouse
 
 # Allow
 !gradle/wrapper/gradle-wrapper.jar
