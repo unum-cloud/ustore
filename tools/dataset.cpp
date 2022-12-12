@@ -125,7 +125,7 @@ class arrow_visitor_t {
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::DictionaryArray const& arr) {
-        json = fmt::format("{}{},", json, arr.GetValueIndex(idx));
+        fmt::format_to(std::back_inserter(json), "{},", arr.GetValueIndex(idx));
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::ExtensionArray const& arr) {
@@ -874,7 +874,7 @@ void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const
 
             g_idx = 0;
             for (auto it = fields; g_idx < c.fields_count; ++g_idx, ++it) {
-                json = fmt::format("{}\"{}\":", json, *it);
+                fmt::format_to(std::back_inserter(json), "{}\"{}\":", *it);
                 visitor.idx = value_idx;
                 arrow::VisitArrayInline(*chunks[g_idx].get(), &visitor);
             }
