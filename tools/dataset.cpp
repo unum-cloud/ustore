@@ -91,14 +91,13 @@ class arrow_visitor_t {
     arrow::Status Visit(arrow::TimestampArray const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::DayTimeIntervalArray const& arr) {
         auto ds = arr.Value(idx);
-        fmt::format_to(json.data(), "{}{{\"days\":{},\"ms-s\":{}}},", json, ds.days, ds.milliseconds);
+        fmt::format_to(std::back_inserter(json), "{{\"days\":{},\"ms-s\":{}}},", ds.days, ds.milliseconds);
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::MonthDayNanoIntervalArray const& arr) {
         auto mdn = arr.Value(idx);
-        fmt::format_to(json.data(),
-                       "{}{{\"months\":{},\"days\":{},\"us-s\":{}}},",
-                       json,
+        fmt::format_to(std::back_inserter(json),
+                       "{{\"months\":{},\"days\":{},\"us-s\":{}}},",
                        mdn.months,
                        mdn.days,
                        mdn.nanoseconds);
@@ -874,7 +873,7 @@ void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const
 
             g_idx = 0;
             for (auto it = fields; g_idx < c.fields_count; ++g_idx, ++it) {
-                fmt::format_to(std::back_inserter(json), "{}\"{}\":", *it);
+                fmt::format_to(std::back_inserter(json), "\"{}\":", *it);
                 visitor.idx = value_idx;
                 arrow::VisitArrayInline(*chunks[g_idx].get(), &visitor);
             }
