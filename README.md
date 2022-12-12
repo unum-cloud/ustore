@@ -52,7 +52,8 @@ What is the standard that your DBMS can be built around?
 
 We have yet to pass the test of time, like BLAS, but we can surpass them in modularity and provide a better reference implementation.
 Today, Intel, Nvidia, AMD, GraphCore, Cerebras, and many others ship optimized implementations of BLAS for their hardware.
-Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-benchmarked](#benchmarks) implementations of UKV to our customers, but even the provided FOSS reference design aims to be better than whatever OLTP DBMS you are using today.
+Similarly, we ship proprietary [heavily-tested](#testing) and [extensively-benchmarked](#benchmarks) implementations of UKV to our customers.
+Still, we want the Community Edition to be a major improvement over modern OLTP DBMS solutions of today.
 
 > [Why not use LevelDB or RocksDB interface directly?][ukv-vs-rocks]
 
@@ -117,10 +118,13 @@ So if you are building an online marketplace, it may look like this:
 | :---------------------------------------: | :-------------------------------------------: |
 | Postgres for account details and payments | MongoDB for products descriptions and reviews |
 |      Neo4J to link related products       |  AWS S3 to store product pictures and videos  |
+|       ClickHouse for activity logs        |      Redis for real-time sessions state       |
 
 When the data is updated, you have to apply changes across all those instances, manually rolling them back if one of the parts fails.
 Every system has a different API, different guarantees, and runtime constraints.
-Already sounds like too many **wasted engineering hours**.
+For us it sounded like too many **wasted engineering hours**.
+
+> ... So we have spent years fixing that 😅
 
 ![UKV: HTAP](assets/charts/HTAP.png)
 
@@ -158,8 +162,8 @@ More news to come.
 
 Our **vertical scaling**, however, **is the best in the industry**.
 Even with just a single node, in a 2U chassis in 2022, we can quickly get 24x 16 TB of NVMe storage connected to 2x CPU sockets, totaling 384 TB of space, capable of yielding ~120 GB/s of read throughput, out of which, ~70 GB/s our in-house engine can already sustain.
-With NVMe-oF, this can scale horizontally to Petabytes of low-latency storage served through 200 GBit/s Mellanox Infiniband fibers!
-Combining it with the numerous features above and GPU acceleration, one can get an all-one Data Lake with the feel of Pandas, Rapids speed, Hadoop scale, and Postgres consistency.
+With NVMe-oF, this can scale horizontally to Petabytes of low-latency storage served through 200 GBit/s [Mellanox][mellanox] InfiniBand fibers!
+Combining it with the numerous features above and GPU acceleration, one can get an all-one Data Lake with the feel of [Pandas][pandas], [Rapids][rapids] speed, [Hadoop][hadoop] scale, and [Postgres][postgres] consistency.
 
 ### Engines
 
@@ -253,7 +257,7 @@ For guidance on installation, development, deployment, and administration, see o
 
 The entire DBMS fits into a sub 100 MB Docker image.
 Run the following script to pull and run the container, exposing [Apache Arrow Flight][flight] API server on the port `38709`.
-Client SDKs will also communicate through that same port.
+Client SDKs will also communicate through that same port, by default.
 
 ```sh
 docker run --rm --name TestUKV -p 38709:38709 unum/ukv
@@ -273,17 +277,14 @@ include_directories(${ukv_SOURCE_DIR}/include)
 ```
 
 After that, you only need to choose linking target, such as `ukv_rocksdb`, `ukv_umem`, `ukv_flight_client`, or something else.
-For Conan users a shorter alternative for C/C++ is available:
-
-```sh
-conan install ukv
-```
 
 For Python users, it is the classical:
 
 ```sh
 pip install ukv
 ```
+
+Which will bring all the libraries packed into a single wheel: `ukv.umem`, `ukv.rocksdb`, `ukv.leveldb`, `ukv.flight_client`.
 
 > [Read full installation guide in our docs here][ukv-install].
 
@@ -415,3 +416,6 @@ Licensing depends on which parts you are using.
 [olap]: https://en.wikipedia.org/wiki/Online_analytical_processing
 [oltp]: https://en.wikipedia.org/wiki/Online_transaction_processing
 [htap]: https://en.wikipedia.org/wiki/Hybrid_transactional/analytical_processing
+[mellanox]: https://www.nvidia.com/en-us/networking/products/infiniband/
+[rapids]: https://rapids.ai/
+[postgres]: https://www.postgresql.org/
