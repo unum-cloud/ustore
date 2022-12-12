@@ -197,11 +197,11 @@ bool is_ptr(ukv_str_view_t field) {
     return chrcmp_(field[0], '/');
 }
 
-void make_uuid(char* out) {
+void make_uuid(char* out, size_t sz) {
     uuid_t uuid;
     uuid_generate(uuid);
     uuid_unparse(uuid, out);
-    out[uuid_length_k - 1] = '\0'; // end of string
+    out[sz - 1] = '\0'; // end of string
 }
 
 void prepare_for_csv(std::string& str, size_t pos = 0) {
@@ -457,6 +457,7 @@ void parse_arrow_table(ukv_graph_import_t& c, ukv_size_t task_count, std::shared
     return_if_error(targets, c.error, 0, fmt::format("{} is not exist", c.target_id_field).c_str());
     auto edges = table->GetColumnByName(c.edge_id_field);
     size_t count = sources->num_chunks();
+    return_if_error(count > 0, c.error, 0, "Empty Input");
     vertices_edges.reserve(std::min(ukv_size_t(sources->chunk(0)->length()), task_count));
 
     for (size_t chunk_idx = 0; chunk_idx != count; ++chunk_idx) {
@@ -531,7 +532,7 @@ void export_parquet_graph(ukv_graph_export_t& c, ids_t const& ids, ukv_length_t 
         parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, fields));
 
     char file_name[uuid_length_k];
-    make_uuid(file_name);
+    make_uuid(file_name, uuid_length_k);
 
     auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
     return_if_error(maybe_outfile.ok(), c.error, 0, "Can't open file");
@@ -638,7 +639,7 @@ void export_csv_graph(ukv_graph_export_t& c, ids_t const& ids, ukv_length_t leng
         table = arrow::Table::Make(schema, {sources_array, targets_array});
 
     char file_name[uuid_length_k];
-    make_uuid(file_name);
+    make_uuid(file_name, uuid_length_k);
 
     auto maybe_outstream = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
     return_if_error(maybe_outstream.ok(), c.error, 0, "Can't open file");
@@ -678,9 +679,7 @@ void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) {
         simdjson::ondemand::object data = doc.get_object().value();
         if (edge_state)
             edge = get_data(data, c.edge_id_field);
-        edges.push_back(edge_t {.source_id = get_data(data, c.source_id_field),
-                                .target_id = get_data(data, c.target_id_field),
-                                .id = edge});
+        edges.push_back(edge_t {get_data(data, c.source_id_field), get_data(data, c.target_id_field), edge});
         if (edges.size() == task_count) {
             upsert_graph(c, edges);
             edges.clear();
@@ -697,7 +696,7 @@ void export_ndjson_graph(ukv_graph_export_t& c, ids_t const& ids, ukv_length_t l
 
     ukv_key_t* data = nullptr;
     char file_name[uuid_length_k];
-    make_uuid(file_name);
+    make_uuid(file_name, uuid_length_k);
     auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
     if (strcmp_(c.edge_id_field, "edge")) {
@@ -1113,7 +1112,7 @@ void export_parquet_docs( //
         parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, nodes));
 
     char file_name[uuid_length_k];
-    make_uuid(file_name);
+    make_uuid(file_name, uuid_length_k);
 
     auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
     return_if_error(maybe_outfile.ok(), c.error, 0, "Can't open file");
@@ -1183,7 +1182,7 @@ void export_csv_docs( //
     table = arrow::Table::Make(schema, {keys_array, docs_array});
 
     char file_name[uuid_length_k];
-    make_uuid(file_name);
+    make_uuid(file_name, uuid_length_k);
 
     auto maybe_outstream = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
     return_if_error(maybe_outstream.ok(), c.error, 0, "Can't open file");
@@ -1200,7 +1199,7 @@ void export_ndjson_docs( //
     vals_t const& values) {
 
     char file_name[uuid_length_k];
-    make_uuid(file_name);
+    make_uuid(file_name, uuid_length_k);
     auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
     if (c.fields)
