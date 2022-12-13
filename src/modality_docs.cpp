@@ -899,8 +899,10 @@ void sample_leafs(mpack_writer_t& writer, sj::simdjson_result<sj::ondemand::valu
 void json_to_mpack(sj::padded_string_view doc, string_t& output, ukv_error_t* c_error) {
     sj::ondemand::parser parser;
 
-    mpack_writer_t writer;
     output.resize(doc.size(), c_error);
+    return_if_error_m(c.error);
+
+    mpack_writer_t writer;
     mpack_writer_init(&writer, output.data(), doc.size());
 
     auto result = parser.iterate(doc);
@@ -921,6 +923,7 @@ void json_to_mpack(sj::padded_string_view doc, string_t& output, ukv_error_t* c_
     size_t new_size = end_ptr - writer.buffer;
 
     output.resize(new_size, c_error);
+    return_if_error_m(c.error);
 
     mpack_writer_destroy(&writer);
 }
