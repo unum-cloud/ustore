@@ -841,8 +841,8 @@ void sample_leafs(mpack_writer_t& writer, sj::simdjson_result<sj::ondemand::valu
         auto end = object.end().value();
         while (begin != end) {
             auto field = *begin;
-            value_view_t key(field.key().raw());
-            mpack_write_str(&writer, key.c_str(), key.size());
+            std::string_view key = field.unescaped_key();
+            mpack_write_str(&writer, key.data(), key.size());
             sample_leafs(writer, field.value().value());
             ++begin;
         }
@@ -900,6 +900,7 @@ void json_to_mpack(sj::padded_string_view doc, string_t& output, ukv_error_t* c_
     sj::ondemand::parser parser;
 
     mpack_writer_t writer;
+    output.resize(doc.size(), c_error);
     mpack_writer_init(&writer, output.data(), doc.size());
 
     auto result = parser.iterate(doc);
@@ -909,6 +910,8 @@ void json_to_mpack(sj::padded_string_view doc, string_t& output, ukv_error_t* c_
     auto end = object.end().value();
     while (begin != end) {
         auto field = *begin;
+        std::string_view key = field.unescaped_key();
+        mpack_write_str(&writer, key.data(), key.size());
         sample_leafs(writer, field.value().value());
         ++begin;
     }
@@ -1339,9 +1342,9 @@ void read_modify_unique_docs( //
         for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
 
             return_error_if_m(has_fields || c_modification != doc_modification_t::insert_k,
-                            c_error,
-                            0,
-                            "Key Already Exists!");
+                              c_error,
+                              0,
+                              "Key Already Exists!");
             ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
             value_view_t binary_doc = *found_binary_it;
             callback(task_idx, field, binary_doc);
@@ -1370,9 +1373,9 @@ void read_modify_unique_docs( //
             ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
             return_error_if_m(presents[task_idx] || !has_fields, c_error, 0, "Key Not Exists!");
             return_error_if_m(!presents[task_idx] || c_modification != doc_modification_t::insert_k,
-                            c_error,
-                            0,
-                            "Invalid Arguments!");
+                              c_error,
+                              0,
+                              "Invalid Arguments!");
             callback(task_idx, field, value_view_t::make_empty());
         }
     }
