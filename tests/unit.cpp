@@ -763,9 +763,9 @@ TEST(db, txn_sequenced_commit) {
 
     EXPECT_TRUE(txn_ref.assign(triplet.contents()));
     auto maybe_sequence_number = txn.sequenced_commit();
+    EXPECT_TRUE(maybe_sequence_number);
     auto current_sequence_number = *maybe_sequence_number;
     EXPECT_GT(current_sequence_number, 0);
-    EXPECT_TRUE(maybe_sequence_number);
     EXPECT_TRUE(txn.reset());
 
     auto previous_sequence_number = current_sequence_number;
