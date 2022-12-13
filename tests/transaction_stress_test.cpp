@@ -86,7 +86,7 @@ void insert_atomic_isolated(std::size_t count_batches) {
     db.close();
 }
 
-enum class operation_code_t {
+enum class operation_code_t : std::uint8_t {
     insert_k,
     remove_k,
     select_k,
@@ -325,13 +325,13 @@ std::FILE* open_log_file() {
 }
 
 void log_updated_keys(std::FILE* stream, std::unordered_map<ukv_key_t, bool> const& updated_keys) {
-    std::fprintf(stream, "\nLater Updated Keys\n\n");
+    std::fprintf(stream, "Updated Keys\n\n");
     for (auto& key_and_presence : updated_keys) {
-        std::fprintf(stream, "%ld", key_and_presence.first);
-        if (key_and_presence.second)
-            std::fprintf(stream, " PRESENT");
-        std::fprintf(stream, "\n");
+        key_and_presence.second //
+            ? std::fprintf(stream, "PRESENT: %ld\n", key_and_presence.first)
+            : std::fprintf(stream, "MISSING: %ld\n", key_and_presence.first);
     }
+    std::fprintf(stream, "\n\n");
 }
 
 template <std::size_t max_batch_size_ak>
@@ -340,18 +340,18 @@ void log_operations( //
     std::array<operation_t, max_batch_size_ak> const& operations,
     std::size_t operations_count) {
 
-    std::fprintf(stream, "Operations In Transaction With Watch\n\n");
+    std::fprintf(stream, "Watched Transaction Contents\n\n");
     for (std::size_t idx = 0; idx != operations_count; ++idx) {
         if (!operations[idx].watch)
             continue;
 
         switch (operations[idx].type) {
-        case operation_code_t::insert_k: std::fprintf(stream, "INSERT - "); break;
-        case operation_code_t::remove_k: std::fprintf(stream, "REMOVE - "); break;
-        case operation_code_t::select_k: std::fprintf(stream, "SELECT - "); break;
+        case operation_code_t::insert_k: std::fprintf(stream, "INSERT: %ld\n", operations[idx].key); break;
+        case operation_code_t::remove_k: std::fprintf(stream, "REMOVE: %ld\n", operations[idx].key); break;
+        case operation_code_t::select_k: std::fprintf(stream, "SELECT: %ld\n", operations[idx].key); break;
         }
-        std::fprintf(stream, "%ld\n", operations[idx].key);
     }
+    std::fprintf(stream, "\n\n");
 }
 
 template <std::size_t max_batch_size_ak>
@@ -366,7 +366,7 @@ void add_updated_keys(std::array<operation_t, max_batch_size_ak> const& operatio
 }
 
 template <std::size_t max_batch_size_ak>
-bool will_success(std::array<operation_t, max_batch_size_ak> const& operations,
+bool will_succeed(std::array<operation_t, max_batch_size_ak> const& operations,
                   std::size_t operations_count,
                   std::unordered_map<ukv_key_t, bool> const& updated_keys) {
 
@@ -397,10 +397,11 @@ void transactions_consistency(std::size_t transaction_count) {
         auto collection = tasks[iter_idx].txn.collection().throw_or_release();
 
         for (std::size_t batch_idx = 0; batch_idx != tasks[iter_idx].operation_count; ++batch_idx) {
-            auto type = choose_operation_type(random_generator);
+            operation_code_t type {choose_operation_type(random_generator)};
             ukv_key_t key = choose_key(random_generator);
             bool watch = choose_watch(random_generator);
-            if (type == static_cast<int>(operation_code_t::insert_k)) {
+            switch (type) {
+            case operation_code_t::insert_k: {
                 status_t status;
                 value_view_t value("value");
                 ukv_length_t length = value.size();
@@ -416,8 +417,9 @@ void transactions_consistency(std::size_t transaction_count) {
                     .values = value.member_ptr(),
                 };
                 ukv_write(&write);
+                break;
             }
-            else if (type == static_cast<int>(operation_code_t::remove_k)) {
+            case operation_code_t::remove_k: {
                 status_t status;
                 ukv_write_t write {
                     .db = db,
@@ -430,11 +432,15 @@ void transactions_consistency(std::size_t transaction_count) {
                     .values = nullptr,
                 };
                 ukv_write(&write);
+                break;
             }
-            else if (type == static_cast<int>(operation_code_t::select_k))
+            case operation_code_t::select_k: {
                 auto _ = collection[key].value(watch);
+                break;
+            }
+            }
 
-            tasks[iter_idx].operations[batch_idx].type = static_cast<operation_code_t>(type);
+            tasks[iter_idx].operations[batch_idx].type = type;
             tasks[iter_idx].operations[batch_idx].key = key;
             tasks[iter_idx].operations[batch_idx].watch = watch;
         }
@@ -443,7 +449,7 @@ void transactions_consistency(std::size_t transaction_count) {
     std::unordered_map<ukv_key_t, bool> updated_keys;
     for (std::size_t task_idx = 0; task_idx != tasks.size(); ++task_idx) {
         auto status = tasks[task_idx].txn.commit();
-        if (will_success(tasks[task_idx].operations, tasks[task_idx].operation_count, updated_keys) != status) {
+        if (will_succeed(tasks[task_idx].operations, tasks[task_idx].operation_count, updated_keys) != status) {
             auto stream = open_log_file();
             log_operations(stream, tasks[task_idx].operations, tasks[task_idx].operation_count);
             log_updated_keys(stream, updated_keys);
