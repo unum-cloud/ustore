@@ -751,6 +751,41 @@ TEST(db, txn_unnamed_then_named) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, txn_sequenced_commit) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    EXPECT_TRUE(db.transact());
+    transaction_t txn = *db.transact();
+
+    triplet_t triplet;
+    auto txn_ref = txn[triplet.keys];
+
+    EXPECT_TRUE(txn_ref.assign(triplet.contents()));
+    auto maybe_sequence_number = txn.sequenced_commit();
+    auto current_sequence_number = *maybe_sequence_number;
+    EXPECT_GT(current_sequence_number, 0);
+    EXPECT_TRUE(maybe_sequence_number);
+    EXPECT_TRUE(txn.reset());
+
+    auto previous_sequence_number = current_sequence_number;
+    EXPECT_TRUE(txn_ref.value());
+    maybe_sequence_number = txn.sequenced_commit();
+    EXPECT_TRUE(maybe_sequence_number);
+    current_sequence_number = *maybe_sequence_number;
+    EXPECT_EQ(current_sequence_number, previous_sequence_number);
+    EXPECT_TRUE(txn.reset());
+
+    previous_sequence_number = current_sequence_number;
+    EXPECT_TRUE(txn_ref.assign(triplet.contents()));
+    maybe_sequence_number = txn.sequenced_commit();
+    EXPECT_TRUE(maybe_sequence_number);
+    current_sequence_number = *maybe_sequence_number;
+    EXPECT_GT(current_sequence_number, previous_sequence_number);
+
+    EXPECT_TRUE(db.clear());
+}
+
 #pragma region Paths Modality
 
 /**
