@@ -900,7 +900,7 @@ void json_to_mpack(sj::padded_string_view doc, string_t& output, ukv_error_t* c_
     sj::ondemand::parser parser;
 
     output.resize(doc.size(), c_error);
-    return_if_error_m(c.error);
+    return_if_error_m(c_error);
 
     mpack_writer_t writer;
     mpack_writer_init(&writer, output.data(), doc.size());
@@ -923,9 +923,8 @@ void json_to_mpack(sj::padded_string_view doc, string_t& output, ukv_error_t* c_
     size_t new_size = end_ptr - writer.buffer;
 
     output.resize(new_size, c_error);
-    return_if_error_m(c.error);
-
     mpack_writer_destroy(&writer);
+    return_if_error_m(c_error);
 }
 
 json_t any_parse(value_view_t bytes,
