@@ -86,6 +86,12 @@ def batch_insert(col):
     for i in keys[count_keys//2:]:
         assert col.get(i) == (f'{i}' * int(i-count_keys//2)).encode()
 
+    # Set same value to multiple keys
+    value = "value".encode()
+    col.broadcast(keys, value)
+    for i in keys:
+        assert col.get(i) == "value".encode()
+
 
 def scan(col):
     col.clear()
