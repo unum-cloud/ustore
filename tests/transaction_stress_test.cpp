@@ -43,13 +43,13 @@ void insert_atomic_isolated(std::size_t count_batches) {
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.clear());
 
-    std::array<ukv_key_t, batch_size_ak> keys;
-
     auto task = [&](size_t thread_idx) {
         for (std::size_t idx_batch = 0; idx_batch != count_batches; ++idx_batch) {
 
+            std::array<ukv_key_t, batch_size_ak> keys;
             ukv_key_t const first_key_in_batch = idx_batch * batch_size_ak;
             std::iota(keys.begin(), keys.end(), first_key_in_batch);
+
             std::uint64_t const num_value = idx_batch * threads_count_ak + thread_idx;
             value_view_t value((byte_t const*)&num_value, sizeof(num_value));
 
@@ -73,6 +73,7 @@ void insert_atomic_isolated(std::size_t count_batches) {
     blobs_collection_t collection = db.collection().throw_or_release();
 
     for (std::size_t idx_batch = 0; idx_batch != count_batches; ++idx_batch) {
+        std::array<ukv_key_t, batch_size_ak> keys;
         ukv_key_t const first_key_in_batch = idx_batch * batch_size_ak;
         std::iota(keys.begin(), keys.end(), first_key_in_batch);
 
