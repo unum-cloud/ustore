@@ -6,7 +6,6 @@
 #include <unistd.h>
 
 #include <vector>
-#include <fstream>
 #include <cstring>
 #include <numeric>
 #include <algorithm>
@@ -52,14 +51,67 @@ constexpr ukv_str_view_t prefix_k = "{";
 constexpr ukv_str_view_t csv_prefix_k = "\"{";
 
 using tape_t = ptr_range_gt<char>;
-using edges_t = std::vector<edge_t>;
-using docs_t = std::vector<value_view_t>;
 using fields_t = strided_iterator_gt<ukv_str_view_t const>;
-
-using ids_t = std::vector<std::pair<ukv_key_t*, ukv_size_t>>;
-using vals_t = std::vector<std::pair<ukv_bytes_ptr_t, ukv_size_t>>;
+using keys_length_t = std::pair<ukv_key_t*, ukv_size_t>;
+using val_t = std::pair<ukv_bytes_ptr_t, ukv_size_t>;
+template <typename allocator_at>
+using edges_t = std::vector<edge_t, allocator_at>;
+template <typename allocator_at>
+using docs_t = std::vector<value_view_t, allocator_at>;
+template <typename allocator_at>
+using keys_t = std::vector<keys_length_t, allocator_at>;
+template <typename allocator_at>
+using vals_t = std::vector<val_t, allocator_at>;
 
 #pragma region - Helpers
+
+template <typename type_at>
+class arena_allocator_gt {
+
+  public:
+    using value_type = type_at;
+    using pointer = value_type*;
+    using const_pointer = pointer const*;
+    using reference = value_type&;
+    using const_reference = value_type const&;
+    using size_type = std::size_t;
+    using difference_type = std::ptrdiff_t;
+
+  public:
+    template <typename type_ut>
+    struct rebind {
+        using other = arena_allocator_gt<type_ut>;
+    };
+
+  public:
+    inline explicit arena_allocator_gt() {}
+    inline ~arena_allocator_gt() {}
+    inline explicit arena_allocator_gt(arena_allocator_gt const& other) : arena_(other.arena_), error_(other.error_) {}
+
+    template <typename type_ut>
+    inline explicit arena_allocator_gt(arena_allocator_gt<type_ut> const& other)
+        : arena_(other.arena_), error_(other.error_) {}
+
+    inline explicit arena_allocator_gt(linked_memory_lock_t const& arena, ukv_error_t* error)
+        : arena_(arena), error_(error) {}
+
+    inline const_pointer address(const_reference r) { return &r; }
+    inline pointer address(reference r) { return &r; }
+
+    inline pointer allocate(size_type sz, typename std::allocator<void>::const_pointer = 0) {
+        return arena_.alloc<value_type>(sz, error_).begin();
+    }
+    inline void deallocate(pointer p, size_type) { p->~value_type(); }
+    inline size_type max_size() const { return std::numeric_limits<size_type>::max() / sizeof(value_type); }
+    inline void construct(pointer p, value_type const& t) { new (p) value_type(t); }
+    inline void destroy(pointer p) { p->~value_type(); }
+    inline bool operator==(arena_allocator_gt const&) { return true; }
+    inline bool operator!=(arena_allocator_gt const& a) { return !operator==(a); }
+
+  private:
+    linked_memory_lock_t arena_;
+    ukv_error_t* error_;
+};
 
 class arrow_visitor_t {
   public:
@@ -225,43 +277,45 @@ void get_value( //
 
     bool state = is_ptr(field);
 
-    switch (state ? rewinded(data).at_pointer(field).type() : rewinded(data)[field].type()) {
+    auto get_result = [&]() {
+        return state ? rewinded(data).at_pointer(field) : rewinded(data)[field];
+    };
+
+    switch (get_result().type()) {
     case simdjson::ondemand::json_type::array:
         fmt::format_to( //
             std::back_inserter(json),
             "{}{},",
             json_field,
-            (state ? rewinded(data).at_pointer(field) : rewinded(data)[field]).get_array().value().raw_json().value());
+            get_result().get_array().value().raw_json().value());
         break;
     case simdjson::ondemand::json_type::object:
         fmt::format_to( //
             std::back_inserter(json),
             "{}{},",
             json_field,
-            (state ? rewinded(data).at_pointer(field) : rewinded(data)[field]).get_object().value().raw_json().value());
+            get_result().get_object().value().raw_json().value());
         break;
     case simdjson::ondemand::json_type::number:
         fmt::format_to( //
             std::back_inserter(json),
             "{}{},",
             json_field,
-            std::string_view(
-                (state ? rewinded(data).at_pointer(field) : rewinded(data)[field]).raw_json_token().value()));
+            std::string_view(get_result().raw_json_token().value()));
         break;
     case simdjson::ondemand::json_type::string:
         fmt::format_to( //
             std::back_inserter(json),
             "{}{},",
             json_field,
-            std::string_view(
-                (state ? rewinded(data).at_pointer(field) : rewinded(data)[field]).raw_json_token().value()));
+            std::string_view(get_result().raw_json_token().value()));
         break;
     case simdjson::ondemand::json_type::boolean:
         fmt::format_to( //
             std::back_inserter(json),
             "{}{},",
             json_field,
-            std::string_view((state ? rewinded(data).at_pointer(field) : rewinded(data)[field]).value()));
+            std::string_view(get_result().value()));
         break;
     default: break;
     }
@@ -311,12 +365,14 @@ void simdjson_object_parser( //
 }
 
 void fields_parser( //
-    std::vector<size_t>& counts,
+    ukv_error_t* error,
+    linked_memory_lock_t& arena,
     fields_t const& strided_fields,
+    std::vector<size_t>& counts,
     size_t fields_count,
     tape_t& tape) {
 
-    std::vector<std::string> fields(fields_count);
+    auto fields = arena.alloc<std::string>(fields_count, error);
     std::vector<std::string> prefixes;
 
     size_t pre_idx = 0;
@@ -345,7 +401,6 @@ void fields_parser( //
     };
 
     for (size_t idx = 0; idx < fields_count;) {
-        fields[idx] = strided_fields[idx];
         if (is_ptr(fields[idx].data())) {
             pre_idx = 1;
 
@@ -401,7 +456,8 @@ void fields_parser( //
 
 #pragma region - Upserting
 
-void upsert_graph(ukv_graph_import_t& c, edges_t const& edges_src) {
+template <typename allocator_at>
+void upsert_graph(ukv_graph_import_t& c, edges_t<allocator_at> const& edges_src) {
 
     auto strided = edges(edges_src);
     ukv_graph_upsert_edges_t graph_upsert_edges {
@@ -422,7 +478,8 @@ void upsert_graph(ukv_graph_import_t& c, edges_t const& edges_src) {
     ukv_graph_upsert_edges(&graph_upsert_edges);
 }
 
-void upsert_docs(ukv_docs_import_t& c, docs_t const& docs) {
+template <typename allocator_at>
+void upsert_docs(ukv_docs_import_t& c, docs_t<allocator_at>& docs) {
 
     ukv_docs_write_t docs_write {
         .db = c.db,
@@ -448,12 +505,14 @@ void upsert_docs(ukv_docs_import_t& c, docs_t const& docs) {
 
 void parse_arrow_table(ukv_graph_import_t& c, ukv_size_t task_count, std::shared_ptr<arrow::Table> const& table) {
 
-    edges_t vertices_edges;
+    arena_t arena_(c.db);
+    auto arena = linked_memory(arena_.member_ptr(), c.options, c.error);
+    edges_t<arena_allocator_gt<edge_t>> vertices_edges(arena_allocator_gt<edge_t>(arena, c.error));
 
     auto sources = table->GetColumnByName(c.source_id_field);
-    return_if_error(sources, c.error, 0, fmt::format("{} is not exist", c.source_id_field).c_str());
+    return_if_error(sources, c.error, 0, "The source field does not exist");
     auto targets = table->GetColumnByName(c.target_id_field);
-    return_if_error(targets, c.error, 0, fmt::format("{} is not exist", c.target_id_field).c_str());
+    return_if_error(targets, c.error, 0, "The target field does not exist");
     auto edges = table->GetColumnByName(c.edge_id_field);
     size_t count = sources->num_chunks();
     return_if_error(count > 0, c.error, 0, "Empty Input");
@@ -503,7 +562,8 @@ void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table) {
     return_if_error(status.ok(), c.error, 0, "Can't read file");
 }
 
-void export_parquet_graph(ukv_graph_export_t& c, ids_t const& ids, ukv_length_t length) {
+template <typename allocator_at>
+void export_parquet_graph(ukv_graph_export_t& c, keys_t<allocator_at>& ids, ukv_length_t length) {
 
     bool edge_state = strcmp_(c.edge_id_field, "edge");
 
@@ -579,7 +639,8 @@ void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
     table = *maybe_table;
 }
 
-void export_csv_graph(ukv_graph_export_t& c, ids_t const& ids, ukv_length_t length) {
+template <typename allocator_at>
+void export_csv_graph(ukv_graph_export_t& c, keys_t<allocator_at>& ids, ukv_length_t length) {
 
     bool edge_state = strcmp_(c.edge_id_field, "edge");
     arrow::Status status;
@@ -652,7 +713,10 @@ void export_csv_graph(ukv_graph_export_t& c, ids_t const& ids, ukv_length_t leng
 
 void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) {
 
-    edges_t edges;
+    arena_t arena_(c.db);
+    auto arena = linked_memory(arena_.member_ptr(), c.options, c.error);
+    edges_t<arena_allocator_gt<edge_t>> edges(arena_allocator_gt<edge_t>(arena, c.error));
+
     edges.reserve(task_count);
     bool edge_state = !strcmp_(c.edge_id_field, "edge");
 
@@ -691,7 +755,8 @@ void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) {
     close(handle);
 }
 
-void export_ndjson_graph(ukv_graph_export_t& c, ids_t const& ids, ukv_length_t length) {
+template <typename allocator_at>
+void export_ndjson_graph(ukv_graph_export_t& c, keys_t<allocator_at>& ids, ukv_length_t length) {
 
     ukv_key_t* data = nullptr;
     char file_name[uuid_length_k];
@@ -760,18 +825,19 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
 
     auto ext = c.paths_extension;
     auto export_method = strcmp_(ext, ".parquet") //
-                             ? &export_parquet_graph
+                             ? &export_parquet_graph<arena_allocator_gt<keys_length_t>>
                              : strcmp_(ext, ".ndjson") //
-                                   ? &export_ndjson_graph
+                                   ? &export_ndjson_graph<arena_allocator_gt<keys_length_t>>
                                    : strcmp_(ext, ".csv") //
-                                         ? &export_csv_graph
+                                         ? &export_csv_graph<arena_allocator_gt<keys_length_t>>
                                          : nullptr;
 
     return_if_error(export_method, c.error, 0, "Not supported format");
 
     std::plus plus;
 
-    ids_t ids_in_edges;
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    keys_t<arena_allocator_gt<keys_length_t>> ids_in_edges(arena_allocator_gt<keys_length_t>(arena, c.error));
     ukv_vertex_degree_t* degrees = nullptr;
     ukv_vertex_role_t const role = ukv_vertex_role_any_k;
 
@@ -846,10 +912,13 @@ void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const
         c.fields_count = c.fields_count;
     }
 
+    arena_t arena_(c.db);
+    auto arena = linked_memory(arena_.member_ptr(), c.options, c.error);
+    docs_t<arena_allocator_gt<value_view_t>> values(arena_allocator_gt<value_view_t>(arena, c.error));
+
     std::vector<std::shared_ptr<arrow::ChunkedArray>> columns(c.fields_count);
     std::vector<std::shared_ptr<arrow::Array>> chunks(c.fields_count);
-    docs_t values;
-    char* u_json = nullptr;
+    char* json_cstr = nullptr;
     std::string json = "{";
     arrow_visitor_t visitor(json);
     size_t used_mem = 0;
@@ -880,10 +949,10 @@ void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const
 
             json[json.size() - 1] = '}';
             json.push_back('\n');
-            u_json = (char*)malloc(json.size() + 1);
-            std::memcpy(u_json, json.data(), json.size() + 1);
+            json_cstr = (char*)malloc(json.size() + 1);
+            std::memcpy(json_cstr, json.data(), json.size() + 1);
 
-            values.push_back(u_json);
+            values.push_back(json_cstr);
             used_mem += json.size();
             json = "{";
 
@@ -904,7 +973,10 @@ void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const
 
 void import_whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
 
-    docs_t values;
+    arena_t arena_(c.db);
+    auto arena = linked_memory(arena_.member_ptr(), c.options, c.error);
+    docs_t<arena_allocator_gt<value_view_t>> values(arena_allocator_gt<value_view_t>(arena, c.error));
+
     size_t used_mem = 0;
 
     for (auto doc : docs) {
@@ -927,25 +999,31 @@ void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream
     for (size_t idx = 0; idx < c.fields_count; ++idx)
         max_size += strlen(fields[idx]);
 
-    std::vector<size_t> counts;
-    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    auto tape = arena.alloc<char>(max_size, c.error);
-    fields_parser(counts, fields, c.fields_count, tape);
+    arena_t arena_(c.db);
+    auto arena = linked_memory(arena_.member_ptr(), c.options, c.error);
+    docs_t<arena_allocator_gt<value_view_t>> values(arena_allocator_gt<value_view_t>(arena, c.error));
 
-    std::string json = "{";
-    char* u_json = nullptr;
     size_t used_mem = 0;
-    docs_t values;
+    std::string json = "{";
+    char* json_cstr = nullptr;
+
+    std::vector<size_t> counts;
+    counts.reserve(c.fields_count);
+
+    linked_memory_lock_t arena_tape = linked_memory(c.arena, c.options, c.error);
+    auto tape = arena_tape.alloc<char>(max_size, c.error);
+
+    fields_parser(c.error, arena_tape, fields, counts, c.fields_count, tape);
 
     for (auto doc : docs) {
         simdjson::ondemand::object object = doc.get_object().value();
 
         simdjson_object_parser(object, counts, fields, c.fields_count, tape, json);
         json.push_back('\n');
-        u_json = (char*)malloc(json.size() + 1);
-        std::memcpy(u_json, json.data(), json.size() + 1);
+        json_cstr = arena_tape.alloc<char>(json.size() + 1, c.error).begin();
+        std::memcpy(json_cstr, json.data(), json.size() + 1);
 
-        values.push_back(u_json);
+        values.push_back(json_cstr);
         used_mem += json.size();
         json = "{";
 
@@ -982,8 +1060,9 @@ void import_ndjson_docs(ukv_docs_import_t& c) {
     close(handle);
 }
 
+template <typename allocator_at>
 void export_whole_docs( //
-    vals_t const& values,
+    vals_t<allocator_at>& values,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
     std::vector<std::string>* docs_ptr,
     std::vector<ukv_key_t>* keys_ptr,
@@ -1031,9 +1110,10 @@ void export_whole_docs( //
     }
 }
 
+template <typename allocator_at>
 void export_sub_docs( //
     ukv_docs_export_t& c,
-    vals_t const& values,
+    vals_t<allocator_at>& values,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
     std::vector<std::string>* docs_ptr,
     std::vector<ukv_key_t>* keys_ptr,
@@ -1054,9 +1134,10 @@ void export_sub_docs( //
         max_size += strlen(fields[idx]);
 
     std::vector<size_t> counts;
+    counts.reserve(c.fields_count);
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     auto tape = arena.alloc<char>(max_size, c.error);
-    fields_parser(counts, fields, c.fields_count, tape);
+    fields_parser(c.error, arena, fields, counts, c.fields_count, tape);
 
     for (auto value : values) {
         simdjson::ondemand::parser parser;
@@ -1088,11 +1169,12 @@ void export_sub_docs( //
     }
 }
 
+template <typename allocator_at>
 void export_parquet_docs( //
     ukv_docs_export_t& c,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
     ukv_size_t size_in_bytes,
-    vals_t const& values) {
+    vals_t<allocator_at>& values) {
 
     parquet::schema::NodeVector nodes;
     nodes.push_back(parquet::schema::PrimitiveNode::Make( //
@@ -1129,11 +1211,12 @@ void export_parquet_docs( //
         export_whole_docs(values, keys, nullptr, nullptr, &os, 0, 0);
 }
 
+template <typename allocator_at>
 void export_csv_docs( //
     ukv_docs_export_t& c,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
     ukv_size_t size_in_bytes,
-    vals_t const& values) {
+    vals_t<allocator_at>& values) {
 
     ukv_size_t size = 0;
     arrow::Status status;
@@ -1191,11 +1274,12 @@ void export_csv_docs( //
     return_if_error(status.ok(), c.error, 0, "Can't write in file");
 }
 
+template <typename allocator_at>
 void export_ndjson_docs( //
     ukv_docs_export_t& c,
     std::vector<ptr_range_gt<ukv_key_t const>> const& keys,
     ukv_size_t size_in_bytes,
-    vals_t const& values) {
+    vals_t<allocator_at>& values) {
 
     char file_name[uuid_length_k];
     make_uuid(file_name, uuid_length_k);
@@ -1236,11 +1320,11 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
 
     auto ext = c.paths_extension;
     auto export_method = strcmp_(ext, ".parquet") //
-                             ? &export_parquet_docs
+                             ? &export_parquet_docs<arena_allocator_gt<val_t>>
                              : strcmp_(ext, ".ndjson") //
-                                   ? &export_ndjson_docs
+                                   ? &export_ndjson_docs<arena_allocator_gt<val_t>>
                                    : strcmp_(ext, ".csv") //
-                                         ? &export_csv_docs
+                                         ? &export_csv_docs<arena_allocator_gt<val_t>>
                                          : nullptr;
 
     return_if_error(export_method, c.error, 0, "Not supported format");
@@ -1253,7 +1337,9 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
 
     keys_stream_t stream(c.db, c.collection, task_count);
     std::vector<ptr_range_gt<ukv_key_t const>> keys;
-    vals_t values;
+
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    vals_t<arena_allocator_gt<val_t>> values(arena_allocator_gt<val_t>(arena, c.error));
 
     auto status = stream.seek_to_first();
     return_if_error(status, c.error, 0, "No batches in stream");
