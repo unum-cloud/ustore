@@ -78,4 +78,12 @@ void full_scan_collection( //
     }
 }
 
+/**
+ * @brief Implements reservoir sampling for RocksDB or LevelDB collections.
+ * @see https://en.wikipedia.org/wiki/Reservoir_sampling
+ */
+template <typename level_or_rocks_iterator_at>
+void reservoir_sample_iterator(level_or_rocks_iterator_at&&, ptr_range_gt<ukv_key_t>, ukv_error_t* c_error) noexcept {
+}
+
 } // namespace unum::ukv

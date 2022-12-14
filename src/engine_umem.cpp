@@ -727,9 +727,9 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
 
     bool invalidate = c.mode == ukv_drop_keys_vals_handle_k;
     return_error_if_m(c.id != ukv_collection_main_k || !invalidate,
-                    c.error,
-                    args_combo_k,
-                    "Default collection can't be invalidated.");
+                      c.error,
+                      args_combo_k,
+                      "Default collection can't be invalidated.");
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
     std::unique_lock _ {db.restructuring_mutex};
@@ -853,6 +853,9 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
     status = txn.commit();
     if (!status)
         return export_error_code(status, c.error);
+
+    if (c.sequence_number)
+        *c.sequence_number = txn.generation();
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c.options & ukv_option_write_flush_k)
