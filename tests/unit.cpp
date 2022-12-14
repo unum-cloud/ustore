@@ -751,6 +751,41 @@ TEST(db, txn_unnamed_then_named) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, txn_sequenced_commit) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    EXPECT_TRUE(db.transact());
+    transaction_t txn = *db.transact();
+
+    triplet_t triplet;
+    auto txn_ref = txn[triplet.keys];
+
+    EXPECT_TRUE(txn_ref.assign(triplet.contents()));
+    auto maybe_sequence_number = txn.sequenced_commit();
+    EXPECT_TRUE(maybe_sequence_number);
+    auto current_sequence_number = *maybe_sequence_number;
+    EXPECT_GT(current_sequence_number, 0);
+    EXPECT_TRUE(txn.reset());
+
+    auto previous_sequence_number = current_sequence_number;
+    EXPECT_TRUE(txn_ref.value());
+    maybe_sequence_number = txn.sequenced_commit();
+    EXPECT_TRUE(maybe_sequence_number);
+    current_sequence_number = *maybe_sequence_number;
+    EXPECT_EQ(current_sequence_number, previous_sequence_number);
+    EXPECT_TRUE(txn.reset());
+
+    previous_sequence_number = current_sequence_number;
+    EXPECT_TRUE(txn_ref.assign(triplet.contents()));
+    maybe_sequence_number = txn.sequenced_commit();
+    EXPECT_TRUE(maybe_sequence_number);
+    current_sequence_number = *maybe_sequence_number;
+    EXPECT_GT(current_sequence_number, previous_sequence_number);
+
+    EXPECT_TRUE(db.clear());
+}
+
 #pragma region Paths Modality
 
 /**
@@ -850,7 +885,6 @@ TEST(db, paths) {
 
     // Now try matching a Regular Expression
     prefix = "Netflix|Google";
-    max_count = 20;
     paths_match.tasks_count = 1;
     paths_match.patterns = &prefix;
     ukv_paths_match(&paths_match);
@@ -862,7 +896,6 @@ TEST(db, paths) {
 
     // Try a more complex regular expression
     prefix = "A.*e";
-    max_count = 20;
     ukv_paths_match(&paths_match);
     first_match_for_a = std::string_view(tape_begin);
     second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
@@ -870,7 +903,46 @@ TEST(db, paths) {
     EXPECT_TRUE(first_match_for_a == "Apple" || first_match_for_a == "Adobe");
     EXPECT_TRUE(second_match_for_a == "Apple" || second_match_for_a == "Adobe");
 
+    // Existing single letter prefix
+    prefix = "A";
+    ukv_paths_match(&paths_match);
+    first_match_for_a = std::string_view(tape_begin);
+    second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
+    EXPECT_EQ(results_counts[0], 3);
+    EXPECT_TRUE(first_match_for_a == "Apple" || first_match_for_a == "Adobe" || first_match_for_a == "Amazon");
+    EXPECT_TRUE(second_match_for_a == "Apple" || second_match_for_a == "Adobe" || second_match_for_a == "Amazon");
+
+    // Missing single letter prefix
+    prefix = "X";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
+    // Missing pattern
+    prefix = "X.*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
+    // Try a more complex regular expression
+    prefix = "oo:18:\\*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
+    // Try an even more complex regular expression
+    prefix = "oo:18:\\\\*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
     EXPECT_TRUE(db.clear());
+
+    // Try an even more complex regular expression on empty DB
+    prefix = "oo:18:\\\\*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
 }
 
 /**
@@ -1011,25 +1083,27 @@ TEST(db, docs_flat) {
 
     // JSON
     docs_collection_t collection = *db.collection<docs_collection_t>();
-    auto json = R"( {"person": "Carl", "age": 24} )"_json.dump();
-    collection[1] = json.c_str();
-    M_EXPECT_EQ_JSON(*collection[1].value(), json);
-    M_EXPECT_EQ_JSON(*collection[ckf(1, "person")].value(), "\"Carl\"");
-    M_EXPECT_EQ_JSON(*collection[ckf(1, "age")].value(), "24");
+    auto jsons = make_three_flat_docs();
+    collection[1] = jsons[0].c_str();
+    collection[2] = jsons[1].c_str();
+    collection[3] = jsons[2].c_str();
+    M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), "\"Bob\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(3, "age")].value(), "26");
 
     // Binary
     auto maybe_person = collection[ckf(1, "person")].value(ukv_doc_field_str_k);
-    EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
+    EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Alice"));
 
     // BSON
     bson_error_t error;
-    bson_t* b = bson_new_from_json((uint8_t*)json.c_str(), -1, &error);
+    bson_t* b = bson_new_from_json((uint8_t*)jsons[0].c_str(), -1, &error);
     const uint8_t* buffer = bson_get_data(b);
     auto view = value_view_t(buffer, b->len);
-    collection.at(2, ukv_doc_field_bson_k) = view;
-    M_EXPECT_EQ_JSON(*collection[2].value(), json);
-    M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), "\"Carl\"");
-    M_EXPECT_EQ_JSON(*collection[ckf(2, "age")].value(), "24");
+    collection.at(4, ukv_doc_field_bson_k) = view;
+    M_EXPECT_EQ_JSON(*collection[4].value(), jsons[0]);
+    M_EXPECT_EQ_JSON(*collection[ckf(4, "person")].value(), "\"Alice\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(4, "age")].value(), "24");
     bson_clear(&b);
 
 #if 0
@@ -1055,16 +1129,14 @@ TEST(db, docs_nested_batch) {
     EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
 
-    auto json1 = R"({"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    auto json2 = R"({"person": [{"name":"Joe", "age": 25}]} )"_json.dump();
-    auto json3 = R"({"person": "Charls", "age": 26} )"_json.dump();
-    std::string jsons = json1 + json2 + json3;
-    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(jsons.data());
+    auto jsons = make_three_nested_docs();
+    std::string continuous_jsons = jsons[0] + jsons[1] + jsons[2];
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(continuous_jsons.data());
     std::array<ukv_length_t, 4> offsets = {
         0,
-        json1.size(),
-        json1.size() + json2.size(),
-        json1.size() + json2.size() + json3.size(),
+        jsons[0].size(),
+        jsons[0].size() + jsons[1].size(),
+        jsons[0].size() + jsons[1].size() + jsons[2].size(),
     };
     contents_arg_t values {
         .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
@@ -1076,16 +1148,16 @@ TEST(db, docs_nested_batch) {
     ref.assign(values);
 
     // Read One By One
-    M_EXPECT_EQ_JSON(*collection[1].value(), json1);
-    M_EXPECT_EQ_JSON(*collection[2].value(), json2);
-    M_EXPECT_EQ_JSON(*collection[3].value(), json3);
+    M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
+    M_EXPECT_EQ_JSON(*collection[2].value(), jsons[1]);
+    M_EXPECT_EQ_JSON(*collection[3].value(), jsons[2]);
 
-    auto expected = R"({"name":"Carl", "age": 24})"_json.dump();
+    auto expected = R"({"name":"Alice", "age": 24})"_json.dump();
     M_EXPECT_EQ_JSON(*collection[ckf(1, "person")].value(), expected);
 
-    expected = R"([{"name":"Joe", "age": 25}])"_json.dump();
+    expected = R"([{"name":"Bob", "age": 25}])"_json.dump();
     M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), expected);
-    M_EXPECT_EQ_JSON(*collection[ckf(2, "/person/0/name")].value(), "\"Joe\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "/person/0/name")].value(), "\"Bob\"");
 
     // Read sorted keys
     check_equalities(ref, values);
@@ -1093,19 +1165,19 @@ TEST(db, docs_nested_batch) {
     // Read not sorted keys
     std::array<ukv_key_t, 3> not_sorted_keys = {1, 3, 2};
     auto not_sorted_ref = collection[not_sorted_keys];
-    std::string not_sorted_jsons = json1 + json3 + json2;
+    std::string not_sorted_jsons = jsons[0] + jsons[2] + jsons[1];
     vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(not_sorted_jsons.data());
-    offsets[2] = json1.size() + json3.size();
-    offsets[3] = json1.size() + json3.size() + json2.size();
+    offsets[2] = jsons[0].size() + jsons[2].size();
+    offsets[3] = jsons[0].size() + jsons[2].size() + jsons[1].size();
     check_equalities(not_sorted_ref, values);
 
     // Read duplicate keys
     std::array<ukv_key_t, 3> duplicate_keys = {1, 2, 1};
     auto duplicate_ref = collection[duplicate_keys];
-    std::string duplicate_jsons = json1 + json2 + json1;
+    std::string duplicate_jsons = jsons[0] + jsons[1] + jsons[0];
     vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(duplicate_jsons.data());
-    offsets[2] = json1.size() + json2.size();
-    offsets[3] = json1.size() + json2.size() + json1.size();
+    offsets[2] = jsons[0].size() + jsons[1].size();
+    offsets[3] = jsons[0].size() + jsons[1].size() + jsons[0].size();
     check_equalities(duplicate_ref, values);
 
     // Read with fields
@@ -1115,14 +1187,14 @@ TEST(db, docs_nested_batch) {
         ckf(3, "age"),
     };
     auto ref_with_fields = collection[keys_with_fields];
-    auto field1 = R"({"name":"Carl", "age": 24} )"_json.dump();
-    auto field2 = R"("Joe")"_json.dump();
-    auto field3 = R"(26)"_json.dump();
-    std::string fields = field1 + field2 + field3;
-    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(fields.data());
-    offsets[1] = field1.size();
-    offsets[2] = field1.size() + field2.size();
-    offsets[3] = field1.size() + field2.size() + field3.size();
+    auto field_value1 = R"({"name":"Alice", "age": 24})"_json.dump();
+    auto field_value2 = R"("Bob")"_json.dump();
+    auto field_value3 = R"(26)"_json.dump();
+    std::string field_values = field_value1 + field_value2 + field_value3;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(field_values.data());
+    offsets[1] = field_value1.size();
+    offsets[2] = field_value1.size() + field_value2.size();
+    offsets[3] = field_value1.size() + field_value2.size() + field_value3.size();
     check_equalities(ref_with_fields, values);
 
     EXPECT_TRUE(db.clear());
@@ -1134,122 +1206,50 @@ TEST(db, docs_modify) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
+    auto jsons = make_three_nested_docs();
+    collection[1] = jsons[0].c_str();
+    M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
 
-    auto json = R"( { 
-        "a": {
-            "b": "c",
-            "0": { 
-                "b": [
-                    {"1":"2"},
-                    {"3":"4"},
-                    {"5":"6"},
-                    {"7":"8"},
-                    {"9":"10"}
-                ]
-            }
-        }
-    })"_json.dump();
-    collection[1] = json.c_str();
-    M_EXPECT_EQ_JSON(*collection[1].value(), json);
-
-    // Merge
-    auto modifier =
-        R"( { "a": {"b": "c","0":{"b":[{"1":"2"},{"3":"14"},{"5":"6"},{"7":"8"},{"9":"10"},{"11":"12"}]} } })"_json
-            .dump();
-    EXPECT_TRUE(collection[1].merge(modifier.c_str()));
+    // Update
+    auto modifier = R"( {"person": {"name":"Charls", "age": 28}} )"_json.dump();
+    EXPECT_TRUE(collection[1].update(modifier.c_str()));
     auto result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
-    // Merge by field
-    modifier = R"({"9": "11"})"_json.dump();
-    auto expected =
-        R"( { "a": {"b": "c","0":{"b":[{"1":"2"},{"3":"14"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"}]} } })"_json
-            .dump();
-    EXPECT_TRUE(collection[ckf(1, "/a/0/b/4")].merge(modifier.c_str()));
-    result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
-
-    // Patch
-    modifier = R"([ 
-        { "op": "add", "path": "/a/key", "value": "value" },
-        { "op": "replace", "path": "/a/0/b/0", "value": {"1":"3"} },
-        { "op": "copy", "path": "/a/another_key", "from": "/a/key" },
-        { "op": "move", "path": "/a/0/b/5", "from": "/a/0/b/1" },
-        { "op": "remove", "path": "/a/b" }
-    ])"_json.dump();
-    expected = R"( { 
-        "a": {
-            "key" : "value",
-            "another_key" : "value",
-            "0": {
-                "b":[
-                    {"1":"3"},
-                    {"5":"6"},
-                    {"7":"8"},
-                    {"9":"11"},
-                    {"11":"12"},
-                    {"3":"14"}
-                ]
-            } 
-        } 
-    })"_json.dump();
-    EXPECT_TRUE(collection[1].patch(modifier.c_str()));
-    result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
-
-    // Patch By Field
-    modifier = R"([ { "op": "add", "path": "/6", "value": {"15":"16"} } ])"_json.dump();
-    expected =
-        R"( { "a": {"key" : "value","another_key" :
-        "value","0":{"b":[{"1":"3"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"},{"3":"14"},{"15":"16"}]} } })"_json
-            .dump();
-    EXPECT_TRUE(collection[ckf(1, "/a/0/b")].patch(modifier.c_str()));
-    result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
-
-    // Update
-    modifier = R"( {"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    EXPECT_TRUE(collection[1].update(modifier.c_str()));
-    result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
-
     // Update By Field
-    modifier = R"( {"name": "Jack", "age": 28} )"_json.dump();
-    expected = R"( {"person": {"name":"Jack", "age": 28}} )"_json.dump();
+    modifier = R"( {"name": "Alice", "age": 24} )"_json.dump();
     EXPECT_TRUE(collection[ckf(1, "/person")].update(modifier.c_str()));
     result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
+    M_EXPECT_EQ_JSON(result->c_str(), jsons[0].c_str());
 
     // Insert
-    modifier = R"( {"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    EXPECT_FALSE(collection[1].insert(modifier.c_str()));
-    EXPECT_TRUE(collection[2].insert(modifier.c_str()));
+    EXPECT_FALSE(collection[1].insert(jsons[1].c_str()));
+    EXPECT_TRUE(collection[2].insert(jsons[1].c_str()));
     result = collection[2].value();
-    M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
+    M_EXPECT_EQ_JSON(result->c_str(), jsons[1].c_str());
 
     // Insert By Field
     modifier = R"("Doe" )"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Doe"}} )"_json.dump();
-    EXPECT_TRUE(collection[ckf(2, "/person/surname")].insert(modifier.c_str()));
+    auto expected = R"({"person": [{"name":"Bob", "age": 25, "surname" : "Doe"}]})"_json.dump();
+    EXPECT_TRUE(collection[ckf(2, "/person/0/surname")].insert(modifier.c_str()));
     result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Upsert
-    modifier = R"( {"person": {"name":"Jack", "age": 28}} )"_json.dump();
-    EXPECT_TRUE(collection[1].upsert(modifier.c_str()));
+    EXPECT_TRUE(collection[1].upsert(jsons[2].c_str()));
     result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
+    M_EXPECT_EQ_JSON(result->c_str(), jsons[2].c_str());
 
     // Upsert By Field
-    modifier = R"("Carl")"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 28}} )"_json.dump();
-    EXPECT_TRUE(collection[ckf(1, "/person/name")].upsert(modifier.c_str()));
+    modifier = R"("Charls")"_json.dump();
+    expected = R"( {"person": "Charls", "age": 26} )"_json.dump();
+    EXPECT_TRUE(collection[ckf(1, "/person")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
-    modifier = R"("Doe")"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 28, "surname" : "Doe"}} )"_json.dump();
-    EXPECT_TRUE(collection[ckf(1, "/person/surname")].upsert(modifier.c_str()));
+    modifier = R"(70)"_json.dump();
+    expected = R"( {"person": "Charls", "age": 26, "weight" : 70} )"_json.dump();
+    EXPECT_TRUE(collection[ckf(1, "/weight")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 

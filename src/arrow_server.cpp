@@ -641,7 +641,7 @@ class UKVService : public arf::FlightServerBase {
 
             running_txn_t session = sessions_.continue_txn(params.session_id, status.member_ptr());
             if (!status) {
-                sessions_.hold_txn(params.session_id, session);
+                sessions_.release_txn(params.session_id);
                 return ar::Status::ExecutionError(status.message());
             }
 
@@ -653,7 +653,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_transaction_commit(&txn_commit);
             if (!status) {
-                sessions_.hold_txn(params.session_id, session);
+                sessions_.release_txn(params.session_id);
                 return ar::Status::ExecutionError(status.message());
             }
 

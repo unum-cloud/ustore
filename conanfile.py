@@ -50,10 +50,10 @@ class ConanUKV(ConanFile):
         # https://docs.conan.io/en/1.50/reference/build_helpers/cmake.html#constructor
         cmake = CMake(self)
         cmake.configure(variables={
-            'UKV_BUILD_PYTHON': 0,
+            'UKV_BUILD_SDK_PYTHON': 0,
             'UKV_BUILD_TESTS': 0,
             'UKV_BUILD_BENCHMARKS': 0,
-            'UKV_BUILD_FLIGHT_API': self.options['with_arrow'],
+            'UKV_BUILD_API_FLIGHT': self.options['with_arrow'],
         })
         cmake.build()
 

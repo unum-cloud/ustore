@@ -86,12 +86,12 @@ static void write_many_binaries(py_collection_gt<collection_at>& collection, PyO
     status.throw_unhandled();
 }
 
-static void broadcast_binary(py_blobs_collection_t& collection, PyObject* keys_py, PyObject* vals_py) {
+static void broadcast_binary(py_blobs_collection_t& collection, py::object keys_py, py::object val_py) {
 
     status_t status;
-    parsed_places_t parsed_places {keys_py, collection.native};
+    parsed_places_t parsed_places {keys_py.ptr(), collection.native};
     places_arg_t places = parsed_places;
-    value_view_t val = py_to_bytes(vals_py);
+    value_view_t val = py_to_bytes(val_py.ptr());
 
     [[maybe_unused]] py::gil_scoped_release release;
 

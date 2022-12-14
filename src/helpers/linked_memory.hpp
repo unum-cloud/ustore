@@ -80,6 +80,7 @@ struct linked_memory_t {
             return true;
 
         first_ptr_ = alloc_arena(initial_size_k, kind);
+        first_ptr_->can_release_memory = true;
         return first_ptr_;
     }
 
@@ -165,8 +166,8 @@ struct linked_memory_lock_t {
     linked_memory_lock_t(linked_memory_t& memory, linked_memory_t::kind_t kind, bool keep_old_data = false) noexcept
         : memory(memory) {
         if (memory.start_if_null(kind))
-            if (memory.lock_release_calls() && !keep_old_data)
-                memory.release_supplementary(), owns_the_lock = true;
+            if ((owns_the_lock = memory.lock_release_calls()) && !keep_old_data)
+                memory.release_supplementary();
     }
 
     ~linked_memory_lock_t() noexcept {
@@ -179,7 +180,7 @@ struct linked_memory_lock_t {
         if (!size)
             return {};
         void* result = memory.alloc(sizeof(at) * size, alignment);
-        log_error_if_m(result, c_error, out_of_memory_k, "");
+        log_error_if_m(result, c_error, out_of_memory_k, "Couldn't allocate new sub-arena");
         return {reinterpret_cast<at*>(result), size};
     }
 
@@ -201,7 +202,7 @@ struct linked_memory_lock_t {
         if (result)
             std::memcpy(result, span.begin(), span.size_bytes());
         else
-            log_error_m(c_error, out_of_memory_k, "");
+            log_error_m(c_error, out_of_memory_k, "Couldn't grow a memory buffer");
         return {reinterpret_cast<at*>(result), new_size};
     }
 

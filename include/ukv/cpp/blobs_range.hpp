@@ -231,7 +231,7 @@ class pairs_stream_t {
             return status;
 
         values_view = joined_blobs_t {count, found_offs, found_vals};
-        next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
+        next_min_key_ = count < read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
 
@@ -264,7 +264,7 @@ class pairs_stream_t {
 
     status_t advance() noexcept {
 
-        if (fetched_offset_ >= fetched_keys_.size())
+        if (fetched_offset_ + 1 >= fetched_keys_.size())
             return prefetch();
 
         ++fetched_offset_;
@@ -315,7 +315,7 @@ class pairs_stream_t {
     }
 
     bool is_end() const noexcept {
-        return next_min_key_ == ukv_key_unknown_k && fetched_offset_ >= fetched_keys_.size();
+        return next_min_key_ == ukv_key_unknown_k && fetched_offset_ + 1 >= fetched_keys_.size();
     }
 
     bool operator==(pairs_stream_t const& other) const noexcept {

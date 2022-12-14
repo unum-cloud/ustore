@@ -19,10 +19,13 @@ RUN pip install cmake
 COPY . /usr/src/ukv
 WORKDIR /usr/src/ukv
 RUN cmake \
-    -DUKV_BUILD_PYTHON=0 \
+    -DUKV_BUILD_SDK_PYTHON=0 \
     -DUKV_BUILD_TESTS=0 \
     -DUKV_BUILD_BENCHMARKS=0 \
-    -DUKV_BUILD_FLIGHT_API=1 . && \
+    -DUKV_BUILD_ENGINE_UMEM=1 \
+    -DUKV_BUILD_ENGINE_LEVELDB=1 \
+    -DUKV_BUILD_ENGINE_ROCKSDB=1 \
+    -DUKV_BUILD_API_FLIGHT=1 . && \
     make -j32 \
     ukv_umem_flight_server \
     ukv_leveldb_flight_server \
