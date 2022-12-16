@@ -998,6 +998,10 @@ json_t any_parse(value_view_t bytes,
     case ukv_doc_field_f32_k: root = yyjson_mut_real(doc, *reinterpret_cast<float const*>(bytes.data())); break;
     case ukv_doc_field_f64_k: root = yyjson_mut_real(doc, *reinterpret_cast<double const*>(bytes.data())); break;
     case ukv_doc_field_bool_k: root = yyjson_mut_bool(doc, *reinterpret_cast<bool const*>(bytes.data())); break;
+
+    case ukv_doc_field_bson_k:
+    case ukv_doc_field_json_k:
+    case ukv_doc_field_msgpack_k: break;
     }
     yyjson_mut_doc_set_root(doc, root);
     json_t result;
@@ -1976,7 +1980,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     // https://arrow.apache.org/docs/format/Columnar.html#buffer-alignment-and-padding
     bool wants_conversions = c.columns_conversions;
     bool wants_collisions = c.columns_collisions;
-    std::size_t slots_per_bitmap = divide_round_up(c.docs_count, bits_in_byte_k);
+    std::size_t slots_per_bitmap = divide_round_up<std::size_t>(c.docs_count, bits_in_byte_k);
     std::size_t count_bitmaps = 1ul + wants_conversions + wants_collisions;
     std::size_t bytes_per_bitmap = sizeof(ukv_octet_t) * slots_per_bitmap;
     std::size_t bytes_per_addresses_row = sizeof(void*) * c.fields_count;

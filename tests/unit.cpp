@@ -452,17 +452,17 @@ TEST(db, batch_scan) {
 
     keys_range_t present_keys = collection.keys();
     keys_stream_t stream(db, collection, 256);
-    stream.seek_to_first();
+    EXPECT_TRUE(stream.seek_to_first());
     auto batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
 
-    stream.seek_to_next_batch();
+    EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
 
-    stream.seek_to_next_batch();
+    EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 0);
     EXPECT_TRUE(stream.is_end());
@@ -1145,9 +1145,9 @@ TEST(db, docs_nested_batch) {
     auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(continuous_jsons.data());
     std::array<ukv_length_t, 4> offsets = {
         0,
-        jsons[0].size(),
-        jsons[0].size() + jsons[1].size(),
-        jsons[0].size() + jsons[1].size() + jsons[2].size(),
+        static_cast<ukv_length_t>(jsons[0].size()),
+        static_cast<ukv_length_t>(jsons[0].size() + jsons[1].size()),
+        static_cast<ukv_length_t>(jsons[0].size() + jsons[1].size() + jsons[2].size()),
     };
     contents_arg_t values {
         .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
