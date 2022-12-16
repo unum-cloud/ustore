@@ -508,6 +508,10 @@ void to_json_string(string_t& json_str, char (&str)[count_ak], ukv_error_t* c_er
     json_str.insert(json_str.size(), str, str + count_ak, c_error);
 }
 
+void to_json_string(string_t& json_str, char const* str, size_t count, ukv_error_t* c_error) {
+    json_str.insert(json_str.size(), str, str + count, c_error);
+}
+
 void to_json_string(string_t& json_str, char const* str, ukv_error_t* c_error) {
     json_str.insert(json_str.size(), str, str + std::strlen(str), c_error);
 }
@@ -803,7 +807,7 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
             const char* key = mpack_read_bytes_inplace(&reader, length);
             // Write key into json string
             to_json_string(builder, "\"", c_error);
-            to_json_string(builder, key, c_error);
+            to_json_string(builder, key, length, c_error);
             to_json_string(builder, "\" : ", c_error);
 
             object_reading(reader, builder, c_error);
