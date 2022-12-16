@@ -1110,6 +1110,13 @@ TEST(db, docs_flat) {
     M_EXPECT_EQ_JSON(*collection[ckf(4, "age")].value(), "24");
     bson_clear(&b);
 
+    // MsgPack
+    auto mpack = *collection[1].value(ukv_doc_field_msgpack_k);
+    collection.at(5, ukv_doc_field_msgpack_k) = mpack;
+    M_EXPECT_EQ_JSON(*collection[5].value(), jsons[0]);
+    M_EXPECT_EQ_JSON(*collection[ckf(5, "person")].value(), "\"Alice\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(5, "age")].value(), "24");
+
 #if 0
     // MsgPack
     collection.as(ukv_format_msgpack_k);
