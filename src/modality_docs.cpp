@@ -1651,18 +1651,37 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
             growing_tape.push_back(binary_doc, c.error);
             return;
         }
+
+        std::string_view result;
         auto padded_doc =
             sj::padded_string_view(binary_doc.c_str(), binary_doc.size(), binary_doc.size() + sj::SIMDJSON_PADDING);
-        auto maybe_doc = parser.iterate(padded_doc);
-        return_error_if_m(maybe_doc.error() == sj::SUCCESS, c.error, 0, "Fail To Parse Document!");
-        std::string_view result;
-        printed_number_buffer_t print_buffer;
-        if (maybe_doc.value().is_scalar())
-            result = get_value(maybe_doc.value(), c.type, print_buffer);
+
+        string_t output {arena};
+        if (c.type == ukv_doc_field_msgpack_k) {
+            json_to_mpack(padded_doc, output, c.error);
+            result = {output.data(), output.size()};
+        }
+        else if (c.type == ukv_doc_field_bson_k) {
+            bson_error_t error;
+            bson_t* b = bson_new_from_json((uint8_t*)binary_doc.c_str(), -1, &error);
+            result = {(const char*)bson_get_data(b), b->len};
+            growing_tape.push_back(result, c.error);
+            growing_tape.add_terminator(byte_t {0}, c.error);
+            return_if_error_m(c.error);
+            bson_clear(&b);
+            return;
+        }
         else {
-            auto parsed = maybe_doc.value().get_value();
-            auto branch = simdjson_lookup(parsed.value(), field);
-            result = get_value(branch, c.type, print_buffer);
+            auto maybe_doc = parser.iterate(padded_doc);
+            return_error_if_m(maybe_doc.error() == sj::SUCCESS, c.error, 0, "Fail To Parse Document!");
+            printed_number_buffer_t print_buffer;
+            if (maybe_doc.value().is_scalar())
+                result = get_value(maybe_doc.value(), c.type, print_buffer);
+            else {
+                auto parsed = maybe_doc.value().get_value();
+                auto branch = simdjson_lookup(parsed.value(), field);
+                result = get_value(branch, c.type, print_buffer);
+            }
         }
         growing_tape.push_back(result, c.error);
         growing_tape.add_terminator(byte_t {0}, c.error);
