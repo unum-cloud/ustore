@@ -751,7 +751,11 @@ TEST(db, txn_unnamed_then_named) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, txn_sequenced_commit) {
+TEST(db, transaction_sequenced_commit) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
