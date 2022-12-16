@@ -765,7 +765,9 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
     case mpack_type_str: {
         size_t length = mpack_tag_str_length(&tag);
         auto data = mpack_read_bytes_inplace(&reader, length);
+        to_json_string(builder, "\"", c_error);
         to_json_string(builder, data, c_error);
+        to_json_string(builder, "\"", c_error);
         mpack_done_str(&reader);
         break;
     }
