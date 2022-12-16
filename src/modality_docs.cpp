@@ -735,7 +735,7 @@ static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v
 
 // MsgPack to Json
 void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_error) {
-    if (mpack_reader_error(&reader) != mpack_ok) [[unlikely]]
+    if (mpack_reader_error(&reader) != mpack_ok) // C++20: [[unlikely]]
         return;
 
     mpack_tag_t tag = mpack_read_tag(&reader);
@@ -2097,8 +2097,8 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
 
             column_begin_t column {
                 .validities = (*c.columns_validities)[field_idx],
-                .conversions = (*(c.columns_conversions ?: c.columns_validities))[field_idx],
-                .collisions = (*(c.columns_collisions ?: c.columns_validities))[field_idx],
+                .conversions = (*(c.columns_conversions ? c.columns_conversions : c.columns_validities))[field_idx],
+                .collisions = (*(c.columns_collisions ? c.columns_collisions : c.columns_validities))[field_idx],
                 .scalars = addresses_scalars[field_idx],
                 .str_offsets = addresses_offs[field_idx],
                 .str_lengths = addresses_lens[field_idx],
