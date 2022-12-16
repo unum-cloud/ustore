@@ -802,13 +802,16 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
 
         uint32_t count = mpack_tag_map_count(&tag);
         for (uint32_t i = 0; i != count; ++i) {
+            if (i != 0)
+                to_json_string(builder, ",", c_error);
+
             mpack_tag_t tag = mpack_read_tag(&reader);
             uint32_t length = mpack_tag_str_length(&tag);
             const char* key = mpack_read_bytes_inplace(&reader, length);
             // Write key into json string
             to_json_string(builder, "\"", c_error);
             to_json_string(builder, key, length, c_error);
-            to_json_string(builder, "\" : ", c_error);
+            to_json_string(builder, "\":", c_error);
 
             object_reading(reader, builder, c_error);
             if (mpack_reader_error(&reader) != mpack_ok) // critical check!
