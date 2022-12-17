@@ -1156,7 +1156,7 @@ TEST(db, docs_nested_batch) {
 
     std::array<ukv_key_t, 3> keys = {1, 2, 3};
     auto ref = collection[keys];
-    ref.assign(values);
+    EXPECT_TRUE(ref.assign(values));
 
     // Read One By One
     M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
