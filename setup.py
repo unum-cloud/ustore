@@ -41,7 +41,7 @@ class CMakeBuild(build_ext):
         ]
 
         if ext.name == 'ukv.flight_client':
-            cmake_args.append('-DUKV_BUILD_API_FLIGHT=1')
+            cmake_args.append('-DUKV_BUILD_API_FLIGHT_CLIENT=1')
         # Adding CMake arguments set as environment variable
         # (needed e.g. to build for ARM OSx on conda-forge)
         if 'CMAKE_ARGS' in os.environ:
