@@ -236,6 +236,30 @@ class string_iterator_t {
     size_t length_;
 };
 
+template <typename imp_exp_at>
+bool validate_graph_fields(imp_exp_at& c) {
+    return (c.source_id_field || c.target_id_field || c.edge_id_field) ? true : false;
+}
+
+template <typename imp_exp_at>
+bool validate_docs_fields(imp_exp_at& c) {
+    if (c.fields_count == 0 && c.fields == NULL)
+        return true;
+    else if (c.fields_count == 0 && c.fields != NULL)
+        return false;
+    else if (c.fields_count != 0 && c.fields == NULL)
+        return false;
+    else if (c.fields_count != 0 && c.fields != NULL && c.fields_stride == 0)
+        return false;
+
+    fields_t fields {c.fields, c.fields_stride};
+    for (size_t idx = 0; idx < c.fields_count; ++idx) {
+        if (fields[idx] == NULL)
+            return false;
+    }
+    return true;
+}
+
 bool strcmp_(char const* lhs, char const* rhs) {
     return std::strcmp(lhs, rhs) == 0;
 }
@@ -376,7 +400,7 @@ void fields_parser( //
     size_t fields_count,
     tape_t& tape) {
 
-    auto fields = arena.alloc<std::string>(fields_count, error);
+    stl_vector_t<std::string> fields(fields_count, alloc_t<std::string>(arena, error));
     stl_vector_t<std::string> prefixes(alloc_t<std::string>(arena, error));
 
     size_t pre_idx = 0;
@@ -516,6 +540,7 @@ void parse_arrow_table(ukv_graph_import_t& c, ukv_size_t task_count, std::shared
     auto targets = table->GetColumnByName(c.target_id_field);
     return_if_error(targets, c.error, 0, "The target field does not exist");
     auto edges = table->GetColumnByName(c.edge_id_field);
+    return_if_error(edges && !strcmp_(c.edge_id_field, "edge"), c.error, 0, "The edge field does not exist");
     size_t count = sources->num_chunks();
     return_if_error(count > 0, c.error, 0, "Empty Input");
     vertices_edges.reserve(std::min(ukv_size_t(sources->chunk(0)->length()), task_count));
@@ -557,7 +582,7 @@ void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table) {
 
     std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
     status = parquet::arrow::OpenFile(input, pool, &arrow_reader);
-    return_if_error(status.ok(), c.error, 0, "Can't instatinate reader");
+    return_if_error(status.ok(), c.error, 0, "Can't instantiate reader");
 
     // Read File into table
     status = arrow_reader->ReadTable(&table);
@@ -631,7 +656,7 @@ void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
 
     // Instantiate TableReader from input stream and options
     auto maybe_reader = arrow::csv::TableReader::Make(io_context, input, read_options, parse_options, convert_options);
-    return_if_error(maybe_reader.ok(), c.error, 0, "Can't instatinate reader");
+    return_if_error(maybe_reader.ok(), c.error, 0, "Can't instantiate reader");
     std::shared_ptr<arrow::csv::TableReader> reader = *maybe_reader;
 
     // Read table from CSV file
@@ -647,7 +672,7 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
 
     arrow::NumericBuilder<arrow::Int64Type> builder;
     status = builder.Resize(length / 3);
-    return_if_error(status.ok(), c.error, 0, "Can't instatinate builder");
+    return_if_error(status.ok(), c.error, 0, "Can't instantiate builder");
 
     array_t sources_array;
     array_t targets_array;
@@ -693,12 +718,13 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
         fields.push_back(arrow::field(c.edge_id_field, arrow::int64()));
 
     std::shared_ptr<arrow::Schema> schema = std::make_shared<arrow::Schema>(fields);
-    std::shared_ptr<arrow::Table> table;
+    std::shared_ptr<arrow::Table> table = nullptr;
 
     if (!edge_state)
         table = arrow::Table::Make(schema, {sources_array, targets_array, edges_array});
     else
         table = arrow::Table::Make(schema, {sources_array, targets_array});
+    return_if_error(table, c.error, 0, "Can't make schema");
 
     char file_name[uuid_length_k];
     make_uuid(file_name, uuid_length_k);
@@ -713,7 +739,7 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
 
 #pragma region - Parsing with SIMDJSON
 
-void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) {
+void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) noexcept {
 
     arena_t arena_(c.db);
     auto arena = linked_memory(arena_.member_ptr(), c.options, c.error);
@@ -742,9 +768,16 @@ void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) {
     ukv_key_t edge = ukv_default_edge_id_k;
     for (auto doc : docs) {
         simdjson::ondemand::object data = doc.get_object().value();
-        if (edge_state)
-            edge = get_data(data, c.edge_id_field);
-        edges.push_back(edge_t {get_data(data, c.source_id_field), get_data(data, c.target_id_field), edge});
+        try {
+            if (edge_state)
+                edge = get_data(data, c.edge_id_field);
+            edges.push_back(edge_t {get_data(data, c.source_id_field), get_data(data, c.target_id_field), edge});
+        }
+        catch (simdjson::simdjson_error const& ex) {
+            *c.error = ex.what();
+            return_on_error(c.error);
+        }
+
         if (edges.size() == task_count) {
             upsert_graph(c, edges);
             edges.clear();
@@ -802,10 +835,14 @@ void export_ndjson_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length
 void ukv_graph_import(ukv_graph_import_t* c_ptr) {
 
     ukv_graph_import_t& c = *c_ptr;
-
-    ukv_size_t task_count = c.max_batch_size / sizeof(edge_t);
     auto ext = std::filesystem::path(c.paths_pattern).extension();
 
+    return_if_error(validate_graph_fields(c), c.error, 0, "Invalid fields");
+    return_if_error(c.paths_pattern, c.error, 0, "Invalid paths pattern");
+    if (strcmp_(ext.c_str(), ".ndjson"))
+        return_if_error(c.file_size != 0, c.error, 0, "File size not entered");
+
+    ukv_size_t task_count = c.max_batch_size / sizeof(edge_t);
     if (ext == ".ndjson")
         import_ndjson_graph(c, task_count);
     else {
@@ -821,7 +858,8 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
 void ukv_graph_export(ukv_graph_export_t* c_ptr) {
 
     ukv_graph_export_t& c = *c_ptr;
-
+    return_if_error(validate_graph_fields(c), c.error, 0, "Invalid fields");
+    return_if_error(c.paths_extension, c.error, 0, "Invalid paths extension");
     ///////// Choosing a method /////////
 
     auto ext = c.paths_extension;
@@ -991,7 +1029,7 @@ void import_whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stre
         upsert_docs(c, values);
 }
 
-void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
+void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) noexcept {
 
     fields_t fields {c.fields, c.fields_stride};
     size_t max_size = c.fields_count * symbols_count_k;
@@ -1017,7 +1055,14 @@ void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream
     for (auto doc : docs) {
         simdjson::ondemand::object object = doc.get_object().value();
 
-        simdjson_object_parser(object, counts, fields, c.fields_count, tape, json);
+        try {
+            simdjson_object_parser(object, counts, fields, c.fields_count, tape, json);
+        }
+        catch (simdjson::simdjson_error const& ex) {
+            *c.error = ex.what();
+            return_on_error(c.error);
+        }
+
         json.push_back('\n');
         json_cstr = arena_tape.alloc<char>(json.size() + 1, c.error).begin();
         std::memcpy(json_cstr, json.data(), json.size() + 1);
@@ -1101,7 +1146,7 @@ void export_whole_docs( //
                 json.push_back('\"');
                 keys_vec[idx] = *iter;
                 docs_vec[idx] = arena.alloc<char>(json.size() + 1, error).begin();
-                memcpy(docs_vec[idx], json.data(), json.size() + 1);
+                std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
                 ++idx;
             }
             else {
@@ -1151,7 +1196,13 @@ void export_sub_docs( //
 
         for (auto doc : docs) {
             simdjson::ondemand::object obj = doc.get_object().value();
-            simdjson_object_parser(obj, counts, fields, c.fields_count, tape, json);
+            try {
+                simdjson_object_parser(obj, counts, fields, c.fields_count, tape, json);
+            }
+            catch (simdjson::simdjson_error const& ex) {
+                *c.error = ex.what();
+                return_on_error(c.error);
+            }
             if (flag == 0) {
                 os << *iter << json.data();
                 os << parquet::EndRow;
@@ -1161,7 +1212,7 @@ void export_sub_docs( //
                 json.push_back('\"');
                 keys_vec[idx] = *iter;
                 docs_vec[idx] = arena.alloc<char>(json.size() + 1, c.error).begin();
-                memcpy(docs_vec[idx], json.data(), json.size() + 1);
+                std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
                 ++idx;
             }
             else {
@@ -1232,9 +1283,9 @@ void export_csv_docs( //
     arrow::StringBuilder str_builder;
 
     status = int_builder.Resize(size);
-    return_if_error(status.ok(), c.error, 0, "Can't instatinate builder");
+    return_if_error(status.ok(), c.error, 0, "Can't instantiate builder");
     status = str_builder.Resize(size);
-    return_if_error(status.ok(), c.error, 0, "Can't instatinate builder");
+    return_if_error(status.ok(), c.error, 0, "Can't instantiate builder");
 
     array_t keys_array;
     array_t docs_array;
@@ -1302,6 +1353,12 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
     ukv_docs_import_t& c = *c_ptr;
     auto ext = std::filesystem::path(c.paths_pattern).extension();
 
+    return_if_error(validate_docs_fields(c), c.error, 0, "Invalid fields");
+    return_if_error(c.paths_pattern, c.error, 0, "Invalid paths pattern");
+    if (strcmp_(ext.c_str(), ".ndjson"))
+        return_if_error(c.file_size != 0, c.error, 0, "File size not entered");
+    return_if_error(c.id_field, c.error, 0, "id_field must be initialized");
+
     if (ext == ".ndjson")
         import_ndjson_docs(c);
     else {
@@ -1318,6 +1375,8 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
 
     ukv_docs_export_t& c = *c_ptr;
     using alloc_keys_t = alloc_t<ptr_range_gt<ukv_key_t const>>;
+    return_if_error(validate_docs_fields(c), c.error, 0, "Invalid fields");
+    return_if_error(c.paths_extension, c.error, 0, "Invalid paths extension");
 
     ///////// Choosing a method /////////
     auto ext = c.paths_extension;
