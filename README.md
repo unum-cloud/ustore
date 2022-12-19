@@ -4,28 +4,69 @@ Binary Interface Standard for Database Management<br/>
 With an Ecosystem of Open-Source and Proprietary Implementations<br/>
 </h3>
 
-<h5 align="center">
-<b>built on</b>: RocksDB • LevelDB • UDisk • UMem<br/>
-<b>to store</b>: Blobs • Documents • Graphs • Texts 🔜 • Vectors<br/>
-<b>accessible from</b>: C • C++ • Python • Java 🔜 • GoLang 🔜 • Apache Arrow<br/>
-<b>available on</b>: PyPI • Conan 🔜 • Maven 🔜 • Docker Hub
-</h5>
+<div align="center">
+<b>built on</b>:
+<a href="https://github.com/facebook/rocksdb">RocksDB</a>
+•
+<a href="https://github.com/google/leveldb">LevelDB</a>
+•
+UDisk
+•
+<a href="https://github.com/ashvardanian/consistent_set">UMem</a>
 <br/>
+<b>to store</b>:
+Blobs
+•
+Documents
+•
+Graphs
+•
+Vectors
+•
+Texts
+<br/>
+<b>accessible from</b>:
+C
+•
+C++
+•
+Python
+•
+Java
+•
+GoLang
+•
+<a href="https://arrow.apache.org/">Apache Arrow</a>
+<br/>
+<b>available on</b>:
+<a href="https://pypi.org/project/ukv/">PyPI</a>
+•
+Conan
+•
+Maven
+•
+<a href="https://hub.docker.com/repository/docker/unum/ukv">Docker Hub</a>
+</div>
 
 ---
 
-**UKV is an open standard** for "Create, Read, Update, Delete" operations interface, or CRUD for short.
-It is implemented as a collections of C headers, with numerous backend [**engines**](#engines), supporting various data [**modalities**](#modalities), and an ecosystem of [**frontends**](#frontends) to access the data.
+**UKV is an open standard** for a NoSQL binary database interface, focusing on "Create, Read, Update, Delete" operations, or CRUD for short.
+It is defined as a [few isolated C headers][ukv-c-headers], and comes with numerous backend [**engines**](#engines), supporting various data [**modalities**](#modalities), and an ecosystem of [**frontends**](#frontends) to access the data.
 
 ![UKV: Small Map](assets/charts/Intro.png)
 
-It can easily be expanded to support alternative underlying Key-Value Stores, embedded, standalone, or sharded, such as Redis.
+It can easily be expanded to support alternative underlying Key-Value Stores (KVS), embedded, standalone, or sharded, such as [Redis][redis].
 In the same way, you can add SDKs for other high-level languages or support for data types specific to your application that we haven't considered.
 This gives you the flexibility to iterate on different parts of this modular data lake without changing the business logic of your application, decoupling it from the underlying storage technology.
 
 ![UCSB 10 TB Results](assets/charts/Performance.png)
 
-Flexibility is essential, but so is performance. Even our open-source baseline implementations of Document and Graph modalities often outperform classical commercial DBMS products. The proprietary version obliterates them. Modern persistent IO on high-end servers can exceed 120 GB/s per socket when built on userspace drivers like SPDK. To harness that power, unlike LevelDB and RocksDB, we had to design an interface that avoids dynamic polymorphism and has no constraints on memory allocation strategies and used containers. That is how UKV began.
+**Flexibility is essential, but so is performance**.
+Even our open-source baseline implementations of Document and Graph modalities often outperform classical commercial DBMS products.
+The proprietary version obliterates them.
+Modern persistent IO on high-end servers can exceed 120 GB/s per socket when built on user-space drivers like [SPDK][spdk].
+To harness that power, unlike LevelDB and RocksDB, we had to design an interface that avoids dynamic polymorphism and has no constraints on memory allocation strategies and used containers.
+That is how UKV began.
 
 Half of the modern data storage systems are built on RocksDB.
 If they were built on UKV, they could have become 5x faster by changing a single config file.
@@ -63,7 +104,10 @@ If they were built on UKV, they could have become 5x faster by changing a single
 
 ## Features
 
-A Key Value Store is generally an associative container with sub-linear search time. If we strip the last part away and assume keys to be integers, it becomes a "Transactional <sup>1</sup> Zoned <sup>2</sup> Memory Allocator <sup>3</sup>" that can abstract both persistent and volatile memory. Every DBMS uses such abstractions for primary keys in each collection and index. But UKV has more to offer. Especially to Machine Learning practitioners.
+A Key Value Store is generally an associative container with sub-linear search time.
+Every DBMS uses such abstractions for primary keys in each collection and indexes.
+But UKV has more to offer.
+Especially to Machine Learning practitioners.
 
 <table>
 <td style="text-align: center">
@@ -91,16 +135,25 @@ A Key Value Store is generally an associative container with sub-linear search t
 </td>
 </table>
 
-> 1: For [ACID][acid].
-> 2: For having named collections.
-> 3: Because keys are integers, like `uintptr_t`, and values are virtually continuous memory blocks of variable length.
-
 ## Basic Use Cases
 
 1. Getting a Python, GoLang, or Java wrapper for vanilla RocksDB or LevelDB.
 2. Serving them via Apache Arrow Flight RPC to Spark, Kafka, or PyTorch.
 3. Embedded Document and Graph DB that will avoid networking overheads.
 4. Tiering DBMS between in-memory and persistent backends under one API.
+
+Already excited?
+Give it a try.
+It is as easy as using `dict` in Python.
+
+```python
+$ pip install ukv
+$ python
+
+>>> import ukv.umem as embedded
+>>> db = embedded.DataBase()
+>>> db.main[42] = 'Hi'
+```
 
 ## Available Backends
 
@@ -197,7 +250,7 @@ For guidance on installation, development, deployment, and administration, see o
 ## Installation
 
 The entire DBMS fits into a sub 100 MB Docker image.
-Run the following script to pull and run the container, exposing [Apache Arrow Flight][flight] API server on the port `38709`.
+Run the following script to pull and run the container, exposing [Apache Arrow Flight][flight] server on the port `38709`.
 Client SDKs will also communicate through that same port, by default.
 
 ```sh
@@ -205,7 +258,7 @@ docker run --rm --name TestUKV -p 38709:38709 unum/ukv
 ```
 
 For C/C++ clients and for the embedded distribution of UKV, CMake is the default form of installation.
-It may require installing Arrow separately.
+It may require installing Arrow separately, if you want client-server communication.
 
 ```cmake
 FetchContent_Declare(
@@ -217,7 +270,7 @@ FetchContent_MakeAvailable(ukv)
 include_directories(${ukv_SOURCE_DIR}/include)
 ```
 
-After that, you only need to choose linking target, such as `ukv_rocksdb`, `ukv_umem`, `ukv_flight_client`, or something else.
+After that, you only need to choose linking target, such as `ukv_embedded_rocksdb`, `ukv_embedded_umem`, `ukv_flight_client`, or something else.
 
 For Python users, it is the classical:
 
@@ -271,8 +324,8 @@ We have already published the results for BLOB-layer abstractions for [10 TB][uc
 For more advanced modality-specific workloads, we have the following benchmarks provided in this repo:
 
 - **Twitter**. It takes the `.ndjson` dump of their <code class="docutils literal notranslate"><a href="https://developer.twitter.com/en/docs/twitter-api/v1/tweets/sample-realtime/overview" class="pre">GET statuses/sample</a></code> API and imports it into the Documents collection. We then measure random-gathers' speed at document-level, field-level, and multi-field tabular exports. We also construct a graph from the same data in a separate collection. And evaluate Graph construction time and traversals from random starting points.
-- **Tabular**. Similar to the previous benchmark, but generalizes it to arbitrary datasets with some additional context. It supports Parquet and CSV input files.
-- **Vector**. Given a memory-mapped file with a big matrix, builds an Approximate Nearest Neighbors Search index from the rows of that matrix. Evaluates both construction and query time.
+- **Tabular**. Similar to the previous benchmark, but generalizes it to arbitrary datasets with some additional context. It supports Parquet and CSV input files. 🔜
+- **Vector**. Given a memory-mapped file with a big matrix, builds an Approximate Nearest Neighbors Search index from the rows of that matrix. Evaluates both construction and query time. 🔜
 
 We are working hard to prepare a comprehensive overview of different parts of UKV compared to industry-standard tools.
 On both our hardware and most common instances across public clouds.
@@ -285,9 +338,9 @@ Tools are built on top of the UKV interface and aren't familiar with the underly
 They are meant to simplify DevOps and DBMS management.
 Following tools are currently in the works.
 
-- Bulk dataset imports and exports for industry-standard Parquet, NDJSON and CSV files.
-- Rolling backups and replication.
-- Visualization tools and dashboards.
+- Bulk dataset imports and exports for industry-standard Parquet, NDJSON and CSV files. 🔜
+- Rolling backups and replication. 🔜
+- Visualization tools and dashboards. 🔜
 
 > [Read full tooling guide in our docs here][ukv-tools].
 
@@ -326,6 +379,7 @@ Licensing depends on which parts you are using.
 [ukv-acid]: https://unum.cloud/UKV/c#acid-transactions
 [ukv-vs-rocks]: https://unum.cloud/UKV/related#leveldb-rocksdb
 [ukv-vs-sql]: https://unum.cloud/UKV/related#sql-mql-cypher
+[ukv-c-headers]: https://github.com/unum-cloud/UKV/tree/main/include/ukv
 
 [ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
 [ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
@@ -337,4 +391,5 @@ Licensing depends on which parts you are using.
 [pandas]: https://pandas.pydata.org
 [watch]: https://redis.io/commands/watch/
 [snap]: https://github.com/facebook/rocksdb/wiki/Snapshot
-
+[spdk]: https://spdk.io
+[redis]: https://redis.com
