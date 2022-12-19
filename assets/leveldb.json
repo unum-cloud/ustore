@@ -1,0 +1,7 @@
+{
+    "write_buffer_size": 268435456,
+    "max_file_size": 268435456,
+    "max_open_files": -1,
+    "compression": "none",
+    "cache_size": 200000
+}

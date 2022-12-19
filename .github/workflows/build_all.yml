@@ -2,7 +2,7 @@ name: Build all
 
 on:
   schedule:
-    - cron: '0 0 * * 1'
+    - cron: "0 0 * * 1"
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}
@@ -37,7 +37,7 @@ jobs:
         run: cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} .
 
       - name: Build
-        run: make -j4 ukv_${{ matrix.backend }} ukv_${{ matrix.backend }}_unit_test ukv_${{ matrix.backend }}_twitter_benchmark ukv_${{ matrix.backend }}_tabular_graph_benchmark ukv_${{ matrix.backend }}_api_test ukv_${{ matrix.backend }}_compilation_test ukv_${{ matrix.backend }}_stress_test
+        run: make -j4 ukv_${{ matrix.backend }} test_units_ukv_embedded_${{ matrix.backend }}
 
       - name: Upload Binaries
         uses: actions/upload-artifact@v3.1.1

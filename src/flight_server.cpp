@@ -1,5 +1,5 @@
 /**
- * @file arrow_server.cpp
+ * @file flight_server.cpp
  * @author Ashot Vardanian
  * @date 2022-07-18
  *

@@ -15,19 +15,19 @@
         },
         {
             "label": "Build Native: Debug UMem Test",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 .. && make ukv_umem_unit_test -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 .. && make test_units_ukv_embedded_umem -j8",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug LevelDB Test",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_LEVELDB=1 .. && make ukv_leveldb_unit_test -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_LEVELDB=1 .. && make test_units_ukv_embedded_leveldb -j8",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug RocksDB Test",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 .. && make ukv_rocksdb_unit_test -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 .. && make test_units_ukv_embedded_rocksdb -j8",
             "args": [],
             "type": "shell"
         },
@@ -39,13 +39,13 @@
         },
         {
             "label": "Build Native: Debug UMem Stress Test",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 .. && make ukv_umem_stress_test -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 .. && make stress_insert_atomic_isolated_ukv_embedded_umem -j8",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug RocksDB Stress Test",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 .. && make ukv_rocksdb_stress_test -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 .. && make stress_insert_atomic_isolated_ukv_rocembedded_ksdb -j8",
             "args": [],
             "type": "shell"
         },
@@ -69,13 +69,13 @@
         },
         {
             "label": "Build Native: Debug UMem Benchmark",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 .. && make ukv_umem_twitter_benchmark -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 .. && make benchmark_twitter_ukv_umem -j8",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug RocksDB Benchmark",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 .. && make ukv_rocksdb_twitter_benchmark -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 .. && make benchmark_twitter_ukv_rocksdb -j8",
             "args": [],
             "type": "shell"
         },
@@ -93,13 +93,13 @@
         },
         {
             "label": "Build Native: Debug Arrow Client",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_CLIENT=1 .. && make ukv_flight_client_unit_test -j8 && sleep 5",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_CLIENT=1 .. && make ukv_flight_client_test_units -j8 && sleep 5",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug Arrow Server",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_SERVER=1 .. && make ukv_umem_flight_server -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_SERVER=1 .. && make ukv_flight_server_umem -j8",
             "args": [],
             "type": "shell"
         },

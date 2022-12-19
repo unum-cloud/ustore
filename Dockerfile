@@ -28,9 +28,9 @@ RUN cmake \
     -DUKV_BUILD_API_FLIGHT_CLIENT=0 \
     -DUKV_BUILD_API_FLIGHT_SERVER=1 . && \
     make -j32 \
-    ukv_umem_flight_server \
-    ukv_leveldb_flight_server \
-    ukv_rocksdb_flight_server
+    ukv_flight_server_umem \
+    ukv_flight_server_leveldb \
+    ukv_flight_server_rocksdb
 
 ## TODO: Optimize: https://github.com/docker-slim/docker-slim
 FROM ubuntu:20.04
@@ -44,8 +44,8 @@ RUN apt update && apt install -y -V ca-certificates lsb-release wget && \
     apt update && apt install -y -V libarrow-dev=${arrow_version} libarrow-flight-dev=${arrow_version}
 
 WORKDIR /root/
-COPY --from=builder /usr/src/ukv/build/bin/ukv_umem_flight_server ./
-COPY --from=builder /usr/src/ukv/build/bin/ukv_leveldb_flight_server ./
-COPY --from=builder /usr/src/ukv/build/bin/ukv_rocksdb_flight_server ./
+COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_umem ./umem
+COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_leveldb ./leveldb
+COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_rocksdb ./rocksdb
 EXPOSE 38709
-CMD ["./ukv_umem_flight_server"]
+CMD ["./umem"]

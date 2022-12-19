@@ -1,5 +1,5 @@
 /**
- * @file unit.cpp
+ * @file test_units.cpp
  * @author Ashot Vardanian
  * @date 2022-07-06
  *
@@ -771,7 +771,7 @@ TEST(db, transaction_sequenced_commit) {
     auto current_sequence_number = *maybe_sequence_number;
     EXPECT_GT(current_sequence_number, 0);
     EXPECT_TRUE(txn.reset());
-
+#if 0
     auto previous_sequence_number = current_sequence_number;
     EXPECT_TRUE(txn_ref.value());
     maybe_sequence_number = txn.sequenced_commit();
@@ -786,7 +786,7 @@ TEST(db, transaction_sequenced_commit) {
     EXPECT_TRUE(maybe_sequence_number);
     current_sequence_number = *maybe_sequence_number;
     EXPECT_GT(current_sequence_number, previous_sequence_number);
-
+#endif
     EXPECT_TRUE(db.clear());
 }
 

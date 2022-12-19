@@ -1,5 +1,5 @@
 /**
- * @file arrow_client.cpp
+ * @file flight_client.cpp
  * @author Ashot Vardanian
  *
  * @brief Client library for Apache Arrow RPC server.
