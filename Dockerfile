@@ -44,8 +44,8 @@ RUN apt update && apt install -y -V ca-certificates lsb-release wget && \
     apt update && apt install -y -V libarrow-dev=${arrow_version} libarrow-flight-dev=${arrow_version}
 
 WORKDIR /root/
-COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_umem ./umem
-COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_leveldb ./leveldb
-COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_rocksdb ./rocksdb
+COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_umem ./umem_server
+COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_leveldb ./leveldb_server
+COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_rocksdb ./rocksdb_server
 EXPOSE 38709
-CMD ["./umem"]
+CMD ["./umem_server"]
