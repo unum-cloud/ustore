@@ -683,6 +683,22 @@ class UKVService : public arf::FlightServerBase {
             return ar_status;
 
         bool is_empty_values = false;
+
+        /// @param `collections`
+        ukv_collection_t c_collection_id = ukv_collection_main_k;
+        strided_iterator_gt<ukv_collection_t> input_collections;
+        if (params.collection_id) {
+            c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
+            input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
+        }
+        else
+            input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
+
+        // Reserve resources for the execution of this request
+        auto session = sessions_.lock(params.session_id, status.member_ptr());
+        if (!status)
+            return ar::Status::ExecutionError(status.message());
+
         if (is_query(desc.cmd, kFlightRead)) {
 
             /// @param `keys`
@@ -690,22 +706,10 @@ class UKVService : public arf::FlightServerBase {
             if (!input_keys)
                 return ar::Status::Invalid("Keys must have been provided for reads");
 
-            /// @param `collections`
-            ukv_collection_t c_collection_id = ukv_collection_main_k;
-            strided_iterator_gt<ukv_collection_t> input_collections;
-            if (params.collection_id) {
-                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
-            }
-            else
-                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
-
             bool const request_only_presences = params.read_part == kParamReadPartPresences;
             bool const request_only_lengths = params.read_part == kParamReadPartLengths;
             bool const request_content = !request_only_lengths && !request_only_presences;
 
-            // Reserve resources for the execution of this request
-            auto session = sessions_.lock(params.session_id, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -787,24 +791,9 @@ class UKVService : public arf::FlightServerBase {
             if (!input_paths.contents_begin)
                 return ar::Status::Invalid("Keys must have been provided for reads");
 
-            /// @param `collections`
-            ukv_collection_t c_collection_id = ukv_collection_main_k;
-            strided_iterator_gt<ukv_collection_t> input_collections;
-            if (params.collection_id) {
-                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
-            }
-            else
-                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
-
             bool const request_only_presences = params.read_part == kParamReadPartPresences;
             bool const request_only_lengths = params.read_part == kParamReadPartLengths;
             bool const request_content = !request_only_lengths && !request_only_presences;
-
-            // Reserve resources for the execution of this request
-            auto session = sessions_.lock(params.session_id, status.member_ptr());
-            if (!status)
-                return ar::Status::ExecutionError(status.message());
 
             // As we are immediately exporting in the Arrow format,
             // we don't need the lengths, just the NULL indicators
@@ -891,23 +880,8 @@ class UKVService : public arf::FlightServerBase {
             /// @param `limits`
             auto input_limits = get_lengths(input_schema_c, input_batch_c, kArgCountLimits);
 
-            /// @param `collections`
-            ukv_collection_t c_collection_id = ukv_collection_main_k;
-            strided_iterator_gt<ukv_collection_t> input_collections;
-            if (params.collection_id) {
-                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
-            }
-            else
-                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
-
             bool const request_only_counts = params.read_part == kParamReadPartLengths;
             bool const request_content = !request_only_counts;
-
-            // Reserve resources for the execution of this request
-            auto session = sessions_.lock(params.session_id, status.member_ptr());
-            if (!status)
-                return ar::Status::ExecutionError(status.message());
 
             // As we are immediately exporting in the Arrow format,
             // we don't need the lengths, just the NULL indicators
@@ -992,23 +966,9 @@ class UKVService : public arf::FlightServerBase {
             auto input_start_keys = get_keys(input_schema_c, input_batch_c, kArgScanStarts);
             /// @param `lengths`
             auto input_lengths = get_lengths(input_schema_c, input_batch_c, kArgCountLimits);
-            /// @param `collections`
-            ukv_collection_t c_collection_id = ukv_collection_main_k;
-            strided_iterator_gt<ukv_collection_t> input_collections;
-            if (params.collection_id) {
-                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
-            }
-            else
-                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
 
             if (!input_start_keys || !input_lengths)
                 return ar::Status::Invalid("Keys and lengths must have been provided for scans");
-
-            // Reserve resources for the execution of this request
-            auto session = sessions_.lock(params.session_id, status.member_ptr());
-            if (!status)
-                return ar::Status::ExecutionError(status.message());
 
             // As we are immediately exporting in the Arrow format,
             // we don't need the lengths, just the NULL indicators
