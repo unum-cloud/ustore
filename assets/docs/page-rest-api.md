@@ -163,3 +163,18 @@ Working with batched data in the Apache Arrow format:
 
 The result object will have the "application/vnd.apache.arrow.stream" MIME.
 
+---
+
+To test the REST API, `./src/run_rest.sh` and then cURL into it:
+
+```sh
+curl -X PUT \
+  -H "Accept: Application/json" \
+  -H "Content-Type: application/octet-stream" \
+  0.0.0.0/8080/one/42?col=sub \
+  -d 'purpose of life'
+
+curl -i \
+  -H "Accept: application/octet-stream" \
+  0.0.0.0/8080/one/42?col=sub
+```

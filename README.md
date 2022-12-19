@@ -1,7 +1,7 @@
 <h1 align="center">Universal Keys & Values</h1>
 <h3 align="center">
 Binary Interface Standard for Database Management<br/>
-With an Ecosystem of Open-Source and Proprietary Implementations<br/>
+Backed by Open-Source and Proprietary Implementations<br/>
 </h3>
 
 <div align="center">

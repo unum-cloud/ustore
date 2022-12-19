@@ -49,7 +49,7 @@ set(ukv_INCLUDE_DIR ${ukv_SOURCE_DIR}/include)
 include_directories(${ukv_INCLUDE_DIR})
 
 add_executable(ukv_example_test main.cpp)
-target_link_libraries(ukv_example_test ukv::ukv_umem)
+target_link_libraries(ukv_example_test ukv::ukv_embedded_umem)
 ```
 
 ### Partial & Customized Builds
@@ -62,9 +62,10 @@ The CMake options include:
 | :-------------------------- | :-----: | :------------------------------------------------------------------------------------------- |
 | UKV_BUILD_TESTS             |    1    |                                                                                              |
 | UKV_BUILD_BENCHMARKS        |    0    | May require Arrow.                                                                           |
-| UKV_BUILD_SDK_PYTHON        |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
 | UKV_BUILD_API_FLIGHT_CLIENT |    0    | Apache Arrow: Flight.                                                                        |
+| UKV_BUILD_API_FLIGHT_SERVER |    0    | Apache Arrow: Flight.                                                                        |
 | UKV_BUILD_API_REST          |    0    | Boost: Beast and ASIO.                                                                       |
+| UKV_BUILD_SDK_PYTHON        |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
 | UKV_USE_JEMALLOC            |    0    | JeMalloc or AutoConf to be visible.                                                          |
 
 Following scripts are provided to help:

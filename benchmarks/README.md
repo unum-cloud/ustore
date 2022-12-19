@@ -53,13 +53,13 @@ Generalizing the Twitter benchmark, we wrote a Python and a C++ benchmark for ta
 Unlike the previous benchmark, the schema must be fixed, but you can input `.json`, `.csv`, and `.parquet` files.
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=1 .. && make ukv_umem_tabular_graph_benchmark && ./build/bin/ukv_umem_tabular_graph_benchmark
+cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=1 .. && make benchmark_tabular_graph_ukv_embedded_umem && ./build/bin/benchmark_tabular_graph_ukv_embedded_umem
 ```
 
 For Python:
 
 ```sh
-python benchmarks/tabular_graph_benchmark.py
+python benchmarks/tabular_graph.py
 ```
 
 We manually repeated this same benchmark for several other DBMS brands and multiple publicly available datasets.

@@ -38,8 +38,14 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug UMem Stress Test",
+            "label": "Build Native: Stress Isolated Inserts UMem",
             "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 .. && make stress_insert_atomic_isolated_ukv_embedded_umem -j8",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Native: Stress Serializable Transactions UMem",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 .. && make stress_serializable_transactions_ukv_embedded_umem -j8",
             "args": [],
             "type": "shell"
         },
@@ -51,19 +57,19 @@
         },
         {
             "label": "Build Native: Debug UMem Test API",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -Dtest_api_ukv_embedded_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 .. && make ukv_umem -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 .. && make ukv_embedded_umem -j8",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug LevelDB Test API",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -Dtest_api_ukv_embedded_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_LEVELDB=1 .. && make ukv_leveldb -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_LEVELDB=1 .. && make ukv_embedded_leveldb -j8",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug RocksDB Test API",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -Dtest_api_ukv_embedded_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 .. && make ukv_rocksdb -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 .. && make ukv_embedded_rocksdb -j8",
             "args": [],
             "type": "shell"
         },

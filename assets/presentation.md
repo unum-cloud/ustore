@@ -440,7 +440,7 @@ package ukv
 
 /*
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../include
-#cgo LDFLAGS: -L${SRCDIR}/../build/lib -lukv_umem -lstdc++
+#cgo LDFLAGS: -L${SRCDIR}/../build/lib -lukv_embedded_umem -lstdc++
 #include "ukv/ukv.h"
 #include <stdlib.h>
 */
