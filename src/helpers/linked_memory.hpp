@@ -54,6 +54,7 @@ struct linked_memory_t {
         case kind_t::shared_k:
             begin = mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
             break;
+        case kind_t::unified_k: break;
         }
         auto header_ptr = (arena_header_t*)begin;
         if (!header_ptr)
@@ -70,6 +71,7 @@ struct linked_memory_t {
         switch (arena->kind) {
         case kind_t::sys_k: std::free(arena); break;
         case kind_t::shared_k: munmap(arena, arena->capacity); break;
+        case kind_t::unified_k: break;
         }
     }
 

@@ -454,7 +454,7 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
     result.opt_dont_watch = param_value(params, kParamFlagDontWatch);
     result.opt_shared_memory = param_value(params, kParamFlagSharedMemRead);
-    result.opt_dont_discard_memory;
+    result.opt_dont_discard_memory = param_value(params, kParamFlagDontDiscard);
     return result;
 }
 
@@ -668,7 +668,7 @@ class UKVService : public arf::FlightServerBase {
     ar::Status DoExchange( //
         arf::ServerCallContext const& server_call,
         std::unique_ptr<arf::FlightMessageReader> request_ptr,
-        std::unique_ptr<arf::FlightMessageWriter> response_ptr) {
+        std::unique_ptr<arf::FlightMessageWriter> response_ptr) override {
 
         ar::Status ar_status;
         arf::FlightMessageReader& request = *request_ptr;

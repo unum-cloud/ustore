@@ -81,7 +81,7 @@
         },
         {
             "label": "Build Native: Debug Arrow Benchmark",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_API_FLIGHT=1 .. && make ukv_flight_client_twitter_benchmark -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_API_FLIGHT_CLIENT=1 .. && make ukv_flight_client_twitter_benchmark -j8",
             "args": [],
             "type": "shell"
         },
@@ -93,13 +93,13 @@
         },
         {
             "label": "Build Native: Debug Arrow Client",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT=1 .. && make ukv_flight_client_unit_test -j8 && sleep 5",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_CLIENT=1 .. && make ukv_flight_client_unit_test -j8 && sleep 5",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Native: Debug Arrow Server",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT=1 .. && make ukv_umem_flight_server -j8",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_SERVER=1 .. && make ukv_umem_flight_server -j8",
             "args": [],
             "type": "shell"
         },

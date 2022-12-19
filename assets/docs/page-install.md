@@ -19,7 +19,9 @@ mkdir build_release && \
         -DUKV_BUILD_BENCHMARKS=0 \
         -DUKV_BUILD_SDK_PYTHON=0 \
         -DUKV_BUILD_API_REST=0 \
-        -DUKV_BUILD_API_FLIGHT=0 .. && \
+        -DUKV_BUILD_API_FLIGHT_CLIENT=0 \
+        -DUKV_BUILD_API_FLIGHT_SERVER=0 \
+        .. && \
     make -j16
 ```
 
@@ -61,7 +63,7 @@ The CMake options include:
 | UKV_BUILD_TESTS      |    1    |                                                                                              |
 | UKV_BUILD_BENCHMARKS |    0    | May require Arrow.                                                                           |
 | UKV_BUILD_SDK_PYTHON     |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
-| UKV_BUILD_API_FLIGHT |    0    | Apache Arrow: Flight.                                                                        |
+| UKV_BUILD_API_FLIGHT_CLIENT |    0    | Apache Arrow: Flight.                                                                        |
 | UKV_BUILD_API_REST   |    0    | Boost: Beast and ASIO.                                                                       |
 | UKV_USE_JEMALLOC     |    0    | JeMalloc or AutoConf to be visible.                                                          |
 
@@ -89,6 +91,17 @@ To fetch the most recent Python bindings:
 
 ```sh
 pip install --extra-index-url https://test.pypi.org/simple/ --force-reinstall ukv
+```
+
+On MacOS:
+
+```sh
+brew install cmake apache-arrow openssl zlib protobuf
+cmake \
+    -D CMAKE_C_COMPILER=gcc \
+    -D CMAKE_CXX_COMPILER=g++ \
+    -D UKV_BUILD_API_FLIGHT_CLIENT=1 \
+    .. && make -j 4
 ```
 
 ## Cloud Deployments

@@ -297,7 +297,7 @@ class any_arena_t {
     }
 
     inline bool is_remote() const noexcept { return accessible_; }
-    inline ukv_arena_t* member_ptr() noexcept { return accessible_ ?: owned_.member_ptr(); }
+    inline ukv_arena_t* member_ptr() noexcept { return accessible_ ? accessible_ : owned_.member_ptr(); }
     inline operator ukv_arena_t*() & noexcept { return member_ptr(); }
     inline arena_t release_owned() noexcept { return std::exchange(owned_, arena_t {owned_.db()}); }
 };

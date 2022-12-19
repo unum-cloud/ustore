@@ -9,7 +9,8 @@ option(UKV_BUILD_TESTS "Building C/C++ native tests" ON)
 option(UKV_BUILD_BENCHMARKS "Building C/C++ native benchmarks")
 
 option(UKV_BUILD_SDK_PYTHON "Building Python bidings for all SDKs")
-option(UKV_BUILD_API_FLIGHT "Building Apache Arrow Flight RPC server for all backends")
+option(UKV_BUILD_API_FLIGHT_CLIENT "Building Apache Arrow Flight RPC client for all backends")
+option(UKV_BUILD_API_FLIGHT_SERVER "Building Apache Arrow Flight RPC server for all backends")
 option(UKV_BUILD_API_REST "Building REST API server for all backends")
 
 option(UKV_USE_JEMALLOC "A faster allocator, that requires autoconf to be installed")
@@ -22,7 +23,8 @@ include(CMakeDependentOption)
 cmake_dependent_option(UKV_REBUILD_JEMALLOC "Enable to attempt to source and build JeMalloc locally" ON "UKV_USE_JEMALLOC" OFF)
 cmake_dependent_option(UKV_REBUILD_ONEAPI "Enable to attempt to source and build Intel OneAPI locally" ON "UKV_USE_ONEAPI" OFF)
 cmake_dependent_option(UKV_REBUILD_BOOST "Enable to attempt to source and build Boost locally" ON "UKV_BUILD_API_REST" OFF)
-cmake_dependent_option(UKV_REBUILD_ARROW "Enable to attempt to source and build Apache Arrow locally" ON "UKV_BUILD_SDK_PYTHON OR UKV_BUILD_API_FLIGHT" OFF)
+cmake_dependent_option(UKV_REBUILD_ARROW "Enable to attempt to source and build Apache Arrow locally" ON "UKV_BUILD_SDK_PYTHON OR UKV_BUILD_API_FLIGHT_CLIENT" OFF)
+cmake_dependent_option(UKV_REBUILD_GRPC "Enable to attempt to source and build Google RPC locally" ON "UKV_BUILD_SDK_PYTHON OR UKV_BUILD_API_FLIGHT_CLIENT" OFF)
 
 file(READ "VERSION" _VERSION_)
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
@@ -48,6 +50,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstrict-vtable-pointers")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunknown-attributes")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
@@ -57,6 +60,11 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
+
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} /Za")
+  set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG} /w2 /DEBUG")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MP /INCREMENTAL:NO")
 endif()
 
 # Optimizations for common x86 CPUs.
@@ -136,7 +144,7 @@ if(${UKV_USE_ONEAPI})
 endif()
 
 # Distributions:
-if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT})
+if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT_CLIENT})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
 
@@ -208,13 +216,16 @@ endif()
 
 # The rest of CMake will apply to all client libraries
 # Generate Apache Arrow Flight RPC backends
-if(${UKV_BUILD_API_FLIGHT})
+if(${UKV_BUILD_API_FLIGHT_CLIENT})
   add_library(ukv_flight_client src/arrow_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ukv_flight_client pthread yyjson simdjson bson pcre2 fmt::fmt arrow::arrow arrow::flight ssl crypto ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ukv_flight_client pthread yyjson simdjson bson pcre2 fmt::fmt arrow::arrow arrow::flight ${JEMALLOC_LIBRARIES})
   list(APPEND UKV_CLIENT_NAMES "flight_client")
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
 
   # add_dependencies(ukv_flight_client ${JEMALLOC_DEPENDENCY})
+endif()
+
+if(${UKV_BUILD_API_FLIGHT_SERVER})
   foreach(engine_name IN ITEMS ${UKV_ENGINE_NAMES})
     string(CONCAT target_name "ukv_" ${engine_name})
     get_target_property(target_LIBRARIES ${target_name} LINK_LIBRARIES)

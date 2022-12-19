@@ -508,6 +508,10 @@ void to_json_string(string_t& json_str, char (&str)[count_ak], ukv_error_t* c_er
     json_str.insert(json_str.size(), str, str + count_ak, c_error);
 }
 
+void to_json_string(string_t& json_str, char const* str, size_t count, ukv_error_t* c_error) {
+    json_str.insert(json_str.size(), str, str + count, c_error);
+}
+
 void to_json_string(string_t& json_str, char const* str, ukv_error_t* c_error) {
     json_str.insert(json_str.size(), str, str + std::strlen(str), c_error);
 }
@@ -731,7 +735,7 @@ static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v
 
 // MsgPack to Json
 void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_error) {
-    if (mpack_reader_error(&reader) != mpack_ok) [[unlikely]]
+    if (mpack_reader_error(&reader) != mpack_ok) // C++20: [[unlikely]]
         return;
 
     mpack_tag_t tag = mpack_read_tag(&reader);
@@ -765,7 +769,9 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
     case mpack_type_str: {
         size_t length = mpack_tag_str_length(&tag);
         auto data = mpack_read_bytes_inplace(&reader, length);
+        to_json_string(builder, "\"", c_error);
         to_json_string(builder, data, c_error);
+        to_json_string(builder, "\"", c_error);
         mpack_done_str(&reader);
         break;
     }
@@ -796,13 +802,16 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
 
         uint32_t count = mpack_tag_map_count(&tag);
         for (uint32_t i = 0; i != count; ++i) {
+            if (i != 0)
+                to_json_string(builder, ",", c_error);
+
             mpack_tag_t tag = mpack_read_tag(&reader);
             uint32_t length = mpack_tag_str_length(&tag);
             const char* key = mpack_read_bytes_inplace(&reader, length);
             // Write key into json string
             to_json_string(builder, "\"", c_error);
-            to_json_string(builder, key, c_error);
-            to_json_string(builder, "\" : ", c_error);
+            to_json_string(builder, key, length, c_error);
+            to_json_string(builder, "\":", c_error);
 
             object_reading(reader, builder, c_error);
             if (mpack_reader_error(&reader) != mpack_ok) // critical check!
@@ -989,6 +998,10 @@ json_t any_parse(value_view_t bytes,
     case ukv_doc_field_f32_k: root = yyjson_mut_real(doc, *reinterpret_cast<float const*>(bytes.data())); break;
     case ukv_doc_field_f64_k: root = yyjson_mut_real(doc, *reinterpret_cast<double const*>(bytes.data())); break;
     case ukv_doc_field_bool_k: root = yyjson_mut_bool(doc, *reinterpret_cast<bool const*>(bytes.data())); break;
+
+    case ukv_doc_field_bson_k:
+    case ukv_doc_field_json_k:
+    case ukv_doc_field_msgpack_k: break;
     }
     yyjson_mut_doc_set_root(doc, root);
     json_t result;
@@ -1649,18 +1662,37 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
             growing_tape.push_back(binary_doc, c.error);
             return;
         }
+
+        std::string_view result;
         auto padded_doc =
             sj::padded_string_view(binary_doc.c_str(), binary_doc.size(), binary_doc.size() + sj::SIMDJSON_PADDING);
-        auto maybe_doc = parser.iterate(padded_doc);
-        return_error_if_m(maybe_doc.error() == sj::SUCCESS, c.error, 0, "Fail To Parse Document!");
-        std::string_view result;
-        printed_number_buffer_t print_buffer;
-        if (maybe_doc.value().is_scalar())
-            result = get_value(maybe_doc.value(), c.type, print_buffer);
+
+        string_t output {arena};
+        if (c.type == ukv_doc_field_msgpack_k) {
+            json_to_mpack(padded_doc, output, c.error);
+            result = {output.data(), output.size()};
+        }
+        else if (c.type == ukv_doc_field_bson_k) {
+            bson_error_t error;
+            bson_t* b = bson_new_from_json((uint8_t*)binary_doc.c_str(), -1, &error);
+            result = {(const char*)bson_get_data(b), b->len};
+            growing_tape.push_back(result, c.error);
+            growing_tape.add_terminator(byte_t {0}, c.error);
+            return_if_error_m(c.error);
+            bson_clear(&b);
+            return;
+        }
         else {
-            auto parsed = maybe_doc.value().get_value();
-            auto branch = simdjson_lookup(parsed.value(), field);
-            result = get_value(branch, c.type, print_buffer);
+            auto maybe_doc = parser.iterate(padded_doc);
+            return_error_if_m(maybe_doc.error() == sj::SUCCESS, c.error, 0, "Fail To Parse Document!");
+            printed_number_buffer_t print_buffer;
+            if (maybe_doc.value().is_scalar())
+                result = get_value(maybe_doc.value(), c.type, print_buffer);
+            else {
+                auto parsed = maybe_doc.value().get_value();
+                auto branch = simdjson_lookup(parsed.value(), field);
+                result = get_value(branch, c.type, print_buffer);
+            }
         }
         growing_tape.push_back(result, c.error);
         growing_tape.add_terminator(byte_t {0}, c.error);
@@ -1948,7 +1980,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     // https://arrow.apache.org/docs/format/Columnar.html#buffer-alignment-and-padding
     bool wants_conversions = c.columns_conversions;
     bool wants_collisions = c.columns_collisions;
-    std::size_t slots_per_bitmap = divide_round_up(c.docs_count, bits_in_byte_k);
+    std::size_t slots_per_bitmap = divide_round_up<std::size_t>(c.docs_count, bits_in_byte_k);
     std::size_t count_bitmaps = 1ul + wants_conversions + wants_collisions;
     std::size_t bytes_per_bitmap = sizeof(ukv_octet_t) * slots_per_bitmap;
     std::size_t bytes_per_addresses_row = sizeof(void*) * c.fields_count;
@@ -2065,8 +2097,8 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
 
             column_begin_t column {
                 .validities = (*c.columns_validities)[field_idx],
-                .conversions = (*(c.columns_conversions ?: c.columns_validities))[field_idx],
-                .collisions = (*(c.columns_collisions ?: c.columns_validities))[field_idx],
+                .conversions = (*(c.columns_conversions ? c.columns_conversions : c.columns_validities))[field_idx],
+                .collisions = (*(c.columns_collisions ? c.columns_collisions : c.columns_validities))[field_idx],
                 .scalars = addresses_scalars[field_idx],
                 .str_offsets = addresses_offs[field_idx],
                 .str_lengths = addresses_lens[field_idx],

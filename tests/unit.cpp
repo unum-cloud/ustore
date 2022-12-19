@@ -452,17 +452,17 @@ TEST(db, batch_scan) {
 
     keys_range_t present_keys = collection.keys();
     keys_stream_t stream(db, collection, 256);
-    stream.seek_to_first();
+    EXPECT_TRUE(stream.seek_to_first());
     auto batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
 
-    stream.seek_to_next_batch();
+    EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
 
-    stream.seek_to_next_batch();
+    EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 0);
     EXPECT_TRUE(stream.is_end());
@@ -751,7 +751,11 @@ TEST(db, txn_unnamed_then_named) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, txn_sequenced_commit) {
+TEST(db, transaction_sequenced_commit) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1106,6 +1110,13 @@ TEST(db, docs_flat) {
     M_EXPECT_EQ_JSON(*collection[ckf(4, "age")].value(), "24");
     bson_clear(&b);
 
+    // MsgPack
+    auto mpack = *collection[1].value(ukv_doc_field_msgpack_k);
+    collection.at(5, ukv_doc_field_msgpack_k) = mpack;
+    M_EXPECT_EQ_JSON(*collection[5].value(), jsons[0]);
+    M_EXPECT_EQ_JSON(*collection[ckf(5, "person")].value(), "\"Alice\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(5, "age")].value(), "24");
+
 #if 0
     // MsgPack
     collection.as(ukv_format_msgpack_k);
@@ -1134,9 +1145,9 @@ TEST(db, docs_nested_batch) {
     auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(continuous_jsons.data());
     std::array<ukv_length_t, 4> offsets = {
         0,
-        jsons[0].size(),
-        jsons[0].size() + jsons[1].size(),
-        jsons[0].size() + jsons[1].size() + jsons[2].size(),
+        static_cast<ukv_length_t>(jsons[0].size()),
+        static_cast<ukv_length_t>(jsons[0].size() + jsons[1].size()),
+        static_cast<ukv_length_t>(jsons[0].size() + jsons[1].size() + jsons[2].size()),
     };
     contents_arg_t values {
         .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
@@ -1145,7 +1156,7 @@ TEST(db, docs_nested_batch) {
 
     std::array<ukv_key_t, 3> keys = {1, 2, 3};
     auto ref = collection[keys];
-    ref.assign(values);
+    EXPECT_TRUE(ref.assign(values));
 
     // Read One By One
     M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);

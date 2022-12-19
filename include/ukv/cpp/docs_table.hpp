@@ -238,7 +238,7 @@ class column_view_t {
     ukv_octet_t* validities() const noexcept { return validities_; }
     ukv_length_t* offsets() const noexcept { return offsets_; }
     ukv_length_t* lengths() const noexcept { return lengths_; }
-    ukv_byte_t* contents() const noexcept { return scalars_ ?: tape_; }
+    ukv_byte_t* contents() const noexcept { return scalars_ ? scalars_ : tape_; }
 };
 
 /**

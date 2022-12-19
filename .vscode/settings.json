@@ -118,7 +118,9 @@
         "cassert": "cpp",
         "cerrno": "cpp",
         "cfloat": "cpp",
-        "climits": "cpp"
+        "climits": "cpp",
+        "__bits": "cpp",
+        "__std_stream": "cpp"
     },
     "java.configuration.updateBuildConfiguration": "automatic",
     "python.testing.pytestEnabled": true,

@@ -25,7 +25,7 @@ TEST(db, validation) {
     ukv_length_t val_len = sizeof(std::uint64_t);
     std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
-    ukv_length_t count = 3;
+    constexpr ukv_length_t count = 3;
 
     contents_arg_t values {
         .offsets_begin = {offs.data(), sizeof(ukv_length_t)},

@@ -5,6 +5,7 @@
 #include <chrono>
 #include <charconv>
 #include <filesystem>
+#include <unordered_map>
 
 #include <gtest/gtest.h>
 
@@ -328,8 +329,8 @@ void log_updated_keys(std::FILE* stream, std::unordered_map<ukv_key_t, bool> con
     std::fprintf(stream, "Updated Keys\n\n");
     for (auto& key_and_presence : updated_keys) {
         key_and_presence.second //
-            ? std::fprintf(stream, "PRESENT: %ld\n", key_and_presence.first)
-            : std::fprintf(stream, "MISSING: %ld\n", key_and_presence.first);
+            ? std::fprintf(stream, "PRESENT: %lld\n", key_and_presence.first)
+            : std::fprintf(stream, "MISSING: %lld\n", key_and_presence.first);
     }
     std::fprintf(stream, "\n\n");
 }
@@ -346,9 +347,9 @@ void log_operations( //
             continue;
 
         switch (operations[idx].type) {
-        case operation_code_t::insert_k: std::fprintf(stream, "INSERT: %ld\n", operations[idx].key); break;
-        case operation_code_t::remove_k: std::fprintf(stream, "REMOVE: %ld\n", operations[idx].key); break;
-        case operation_code_t::select_k: std::fprintf(stream, "SELECT: %ld\n", operations[idx].key); break;
+        case operation_code_t::insert_k: std::fprintf(stream, "INSERT: %lld\n", operations[idx].key); break;
+        case operation_code_t::remove_k: std::fprintf(stream, "REMOVE: %lld\n", operations[idx].key); break;
+        case operation_code_t::select_k: std::fprintf(stream, "SELECT: %lld\n", operations[idx].key); break;
         }
     }
     std::fprintf(stream, "\n\n");
@@ -397,7 +398,7 @@ void transactions_consistency(std::size_t transaction_count) {
         auto collection = tasks[iter_idx].txn.collection().throw_or_release();
 
         for (std::size_t batch_idx = 0; batch_idx != tasks[iter_idx].operation_count; ++batch_idx) {
-            operation_code_t type {choose_operation_type(random_generator)};
+            operation_code_t type {static_cast<operation_code_t>(choose_operation_type(random_generator))};
             ukv_key_t key = choose_key(random_generator);
             bool watch = choose_watch(random_generator);
             switch (type) {
