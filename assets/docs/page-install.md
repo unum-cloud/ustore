@@ -26,11 +26,11 @@ mkdir build_release && \
 ```
 
 This will only produce 1 library for each embedded backend.
-Building Flight API and REST API may require [additional steps](#partial).
+Building Flight API and REST API may require [additional steps](#partial--customized-builds).
 
 ### Adding UKV to Your CMake Project
 
-Assuming CMake is the least straigthforward build tool in history, there is a pretty short exampl of you can link UKV to your CMake project.
+Assuming CMake is the least straightforward build tool in history, there is a pretty short example of you can link UKV to your CMake project.
 
 ```cmake
 cmake_minimum_required(VERSION 3.11)
@@ -55,17 +55,17 @@ target_link_libraries(ukv_example_test ukv::ukv_umem)
 ### Partial & Customized Builds
 
 By default, our builds prioritize compatibility over performance.
-Still, you can link against your favourite allocator or build every one of the provided bindings.
+Still, you can link against your favorite allocator or build every one of the provided bindings.
 The CMake options include:
 
-| Option               | Default | Manual Installation Requirements                                                             |
-| :------------------- | :-----: | :------------------------------------------------------------------------------------------- |
-| UKV_BUILD_TESTS      |    1    |                                                                                              |
-| UKV_BUILD_BENCHMARKS |    0    | May require Arrow.                                                                           |
-| UKV_BUILD_SDK_PYTHON     |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
+| Option                      | Default | Manual Installation Requirements                                                             |
+| :-------------------------- | :-----: | :------------------------------------------------------------------------------------------- |
+| UKV_BUILD_TESTS             |    1    |                                                                                              |
+| UKV_BUILD_BENCHMARKS        |    0    | May require Arrow.                                                                           |
+| UKV_BUILD_SDK_PYTHON        |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
 | UKV_BUILD_API_FLIGHT_CLIENT |    0    | Apache Arrow: Flight.                                                                        |
-| UKV_BUILD_API_REST   |    0    | Boost: Beast and ASIO.                                                                       |
-| UKV_USE_JEMALLOC     |    0    | JeMalloc or AutoConf to be visible.                                                          |
+| UKV_BUILD_API_REST          |    0    | Boost: Beast and ASIO.                                                                       |
+| UKV_USE_JEMALLOC            |    0    | JeMalloc or AutoConf to be visible.                                                          |
 
 Following scripts are provided to help:
 
@@ -81,7 +81,7 @@ To build the Flight RPC Docker image locally:
 docker build -t ukv .
 ```
 
-To build the Conan package localy, without installing it:
+To build the Conan package locally, without installing it:
 
 ```sh
 conan create . ukv/testing --build=missing
@@ -107,14 +107,14 @@ cmake \
 ## Cloud Deployments
 
 UKV is coming to the clouds across the globe!
-You can still manually `docker run` us, but for more entrprise-y deployments you may want:
+You can still manually `docker run` us, but for more enterprise-y deployments you may want:
 
 * horizontal auto-scaling,
-* higher performace,
+* higher performance,
 * rolling updates,
 * support.
 
-For that, try us on your favourite marketplace:
+For that, try us on your favorite marketplace:
 
 * Amazon Web Services.
 * Microsoft Azure.
