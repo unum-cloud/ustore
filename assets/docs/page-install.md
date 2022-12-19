@@ -12,13 +12,14 @@ We use CMake as the default build tool.
 Most dependencies will be fetched with the integrated CMake scripts.
 
 ```sh
-mkdir build_release && \
+mkdir -p build_release && \
     cd build_release && \
     cmake \
-        -DUKV_BUILD_TESTS=0 \
-        -DUKV_BUILD_BENCHMARKS=0 \
-        -DUKV_BUILD_SDK_PYTHON=0 \
-        -DUKV_BUILD_API_REST=0 \
+        -DUKV_BUILD_ENGINE_UMEM=1 \
+        -DUKV_BUILD_ENGINE_LEVELDB=1 \
+        -DUKV_BUILD_ENGINE_ROCKSDB=1 \
+        -DUKV_BUILD_TESTS=1 \
+        -DUKV_BUILD_BENCHMARKS=1 \
         -DUKV_BUILD_API_FLIGHT_CLIENT=0 \
         -DUKV_BUILD_API_FLIGHT_SERVER=0 \
         .. && \
@@ -42,7 +43,6 @@ FetchContent_Declare(
     ukv
     GIT_REPOSITORY https://github.com/unum-cloud/UKV.git
     GIT_SHALLOW TRUE
-    GIT_TAG v0.3.0
 )
 FetchContent_MakeAvailable(ukv)
 set(ukv_INCLUDE_DIR ${ukv_SOURCE_DIR}/include)

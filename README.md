@@ -73,8 +73,8 @@ If they were built on UKV, they could have become 5x faster by changing a single
 
 ---
 
-- [Features](#features)
 - [Basic Use Cases](#basic-use-cases)
+- [Features](#features)
 - [Available Backends](#available-backends)
   - [Engines](#engines)
   - [Modalities](#modalities)
@@ -101,6 +101,26 @@ If they were built on UKV, they could have become 5x faster by changing a single
 &nbsp;&nbsp;
 <a href="#"><img src="https://img.shields.io/github/workflow/status/unum-cloud/ukv/Build"/></a>
 </p>
+
+## Basic Use Cases
+
+1. Getting a Python, GoLang, or Java wrapper for vanilla RocksDB or LevelDB.
+2. Serving them via Apache Arrow Flight RPC to Spark, Kafka, or PyTorch.
+3. Embedded Document and Graph DB that will avoid networking overheads.
+4. Tiering DBMS between in-memory and persistent backends under one API.
+
+Already excited?
+Give it a try.
+It is as easy as using `dict` in Python.
+
+```python
+$ pip install ukv
+$ python
+
+>>> import ukv.umem as embedded
+>>> db = embedded.DataBase()
+>>> db.main[42] = 'Hi'
+```
 
 ## Features
 
@@ -134,26 +154,6 @@ Especially to Machine Learning practitioners.
 </ul>
 </td>
 </table>
-
-## Basic Use Cases
-
-1. Getting a Python, GoLang, or Java wrapper for vanilla RocksDB or LevelDB.
-2. Serving them via Apache Arrow Flight RPC to Spark, Kafka, or PyTorch.
-3. Embedded Document and Graph DB that will avoid networking overheads.
-4. Tiering DBMS between in-memory and persistent backends under one API.
-
-Already excited?
-Give it a try.
-It is as easy as using `dict` in Python.
-
-```python
-$ pip install ukv
-$ python
-
->>> import ukv.umem as embedded
->>> db = embedded.DataBase()
->>> db.main[42] = 'Hi'
-```
 
 ## Available Backends
 
