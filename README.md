@@ -39,11 +39,9 @@ GoLang
 <a href="https://arrow.apache.org/">Apache Arrow</a>
 <br/>
 <b>available on</b>:
+<a href="#installation">CMake</a>
+•
 <a href="https://pypi.org/project/ukv/">PyPI</a>
-•
-Conan
-•
-Maven
 •
 <a href="https://hub.docker.com/repository/docker/unum/ukv">Docker Hub</a>
 </div>
