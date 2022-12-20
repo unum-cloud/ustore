@@ -659,7 +659,6 @@ void ukv_sample(ukv_sample_t* c_ptr) {
             ++matched_pairs_count;
         };
 
-        auto previous_key = collection_key_t {sample.collection, sample.min_key};
         // auto status = c.transaction //
         //                   ? sample_and_watch(txn, previous_key, sample.limit, c.options, found_pair)
         //                   : sample_and_watch(db.pairs, previous_key, sample.limit, c.options, found_pair);
