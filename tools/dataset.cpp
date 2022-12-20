@@ -65,7 +65,7 @@ class arena_allocator_gt {
   public:
     using value_type = type_at;
     using pointer = value_type*;
-    using const_pointer = pointer const*;
+    using const_pointer = value_type const*;
     using reference = value_type&;
     using const_reference = value_type const&;
     using size_type = std::size_t;
@@ -238,7 +238,19 @@ class string_iterator_t {
 
 template <typename imp_exp_at>
 bool validate_graph_fields(imp_exp_at& c) {
-    return (c.source_id_field || c.target_id_field || c.edge_id_field) ? true : false;
+    if (!c.source_id_field) {
+        *c.error = "Invalid source id field";
+        return false;
+    }
+    if (!c.target_id_field) {
+        *c.error = "Invalid target id field";
+        return false;
+    }
+    if (!c.edge_id_field) {
+        *c.error = "Invalid edge id field";
+        return false;
+    }
+    return true;
 }
 
 template <typename imp_exp_at>
@@ -395,20 +407,16 @@ void simdjson_object_parser( //
 void fields_parser( //
     ukv_error_t* error,
     linked_memory_lock_t& arena,
-    fields_t const& strided_fields,
+    fields_t const& fields,
     stl_vector_t<size_t>& counts,
     size_t fields_count,
     tape_t& tape) {
 
-    stl_vector_t<std::string> fields(fields_count, alloc_t<std::string>(arena, error));
-    stl_vector_t<std::string> prefixes(alloc_t<std::string>(arena, error));
+    stl_vector_t<char*> prefixes(alloc_t<char*>(arena, error));
 
     size_t pre_idx = 0;
     size_t offset = 0;
     size_t pos = 0;
-
-    for (size_t idx = 0; idx < fields_count; ++idx)
-        fields[idx] = strided_fields[idx];
 
     auto close_bracket = [&]() {
         prefixes.pop_back();
@@ -418,47 +426,56 @@ void fields_parser( //
     };
 
     auto fill_prefixes = [&](size_t idx) {
-        while (pos != std::string::npos) {
-            prefixes.push_back(fields[idx].substr(0, pos + 1));
-            auto str = fmt::format("\"{}\":{{{}", fields[idx].substr(pre_idx, pos - pre_idx), '\0');
+        while (pos <= strlen(fields[idx])) {
+            prefixes.push_back(arena.alloc<char>(pos + 2, error).begin());
+            std::memcpy(prefixes.back(), fields[idx], pos + 1);
+            prefixes.back()[pos + 1] = '\0';
+            auto substr = arena.alloc<char>(pos - pre_idx + 2, error);
+            std::memcpy(substr.begin(), fields[idx] + pre_idx, pos - pre_idx);
+            substr[substr.size() - 2] = '\0';
+            auto str = fmt::format("\"{}\":{{{}", substr.begin(), '\0');
             strncpy(tape.begin() + offset, str.data(), str.size());
             offset += str.size();
             pre_idx = pos + 1;
-            pos = fields[idx].find('/', pre_idx);
+            pos = strchr(fields[idx] + pre_idx, '/') - fields[idx];      
         }
     };
 
     for (size_t idx = 0; idx < fields_count;) {
-        if (is_ptr(fields[idx].data())) {
+        if (is_ptr(fields[idx])) {
             pre_idx = 1;
 
-            pos = fields[idx].find('/', pre_idx);
-            if (pos != std::string::npos) {
+            pos = strchr(fields[idx] + pre_idx, '/') - fields[idx];
+            if (pos <= strlen(fields[idx])) {
                 fill_prefixes(idx);
                 while (prefixes.size()) {
                     counts.push_back(0);
-                    pre_idx = prefixes.back().size() + 1;
-                    while (strncmp_(prefixes.back().data(), fields[idx].data(), prefixes.back().size())) {
-                        auto str = fmt::format("\"{}\":{}", fields[idx].substr(pre_idx - 1), '\0');
+                    pre_idx = strlen(prefixes.back()) + 1;
+                    while (strncmp_(prefixes.back(), fields[idx], strlen(prefixes.back()))) {
+                        size_t length = strlen(fields[idx]) - pre_idx + 2;
+                        auto substr = arena.alloc<char>(length, error);
+                        std::memcpy(substr.begin(), fields[idx] + pre_idx - 1, length);
+                        substr[substr.size() - 1] = '\0';
+                        auto str = fmt::format("\"{}\":{}", substr.begin(), '\0');
                         strncpy(tape.begin() + offset, str.data(), str.size());
                         offset += str.size();
                         ++counts.back();
                         ++idx;
-                        if (idx == fields.size()) {
+                        if (idx == fields_count) {
                             close_bracket();
                             return;
                         }
                         while (prefixes.size() && !strncmp_( //
-                                                      prefixes.back().data(),
-                                                      fields[idx].data(),
-                                                      prefixes.back().size()))
+                                                      prefixes.back(),
+                                                      fields[idx],
+                                                      strlen(prefixes.back())))
                             close_bracket();
 
                         if (prefixes.size() == 0)
                             break;
 
-                        pos = fields[idx].find('/', pre_idx);
-                        if (pos != std::string::npos) {
+                        pos = strchr(fields[idx] + pre_idx, '/') - fields[idx];
+                        if (pos <= strlen(fields[idx])) {
                             fill_prefixes(idx);
                             counts.push_back(0);
                         }
@@ -466,7 +483,7 @@ void fields_parser( //
                 }
             }
             else {
-                auto str = fmt::format("\"{}\":{}", fields[idx].substr(1), '\0');
+                auto str = fmt::format("\"{}\":{}", fields[idx] + 1, '\0');
                 strncpy(tape.begin() + offset, str.data(), str.size());
                 offset += str.size();
                 break;
@@ -837,7 +854,8 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
     ukv_graph_import_t& c = *c_ptr;
     auto ext = std::filesystem::path(c.paths_pattern).extension();
 
-    return_if_error(validate_graph_fields(c), c.error, 0, "Invalid fields");
+    if (!validate_graph_fields(c))
+        return_on_error(c.error);
     return_if_error(c.paths_pattern, c.error, 0, "Invalid paths pattern");
     if (strcmp_(ext.c_str(), ".ndjson"))
         return_if_error(c.file_size != 0, c.error, 0, "File size not entered");
@@ -858,7 +876,8 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
 void ukv_graph_export(ukv_graph_export_t* c_ptr) {
 
     ukv_graph_export_t& c = *c_ptr;
-    return_if_error(validate_graph_fields(c), c.error, 0, "Invalid fields");
+    if (!validate_graph_fields(c))
+        return_on_error(c.error);
     return_if_error(c.paths_extension, c.error, 0, "Invalid paths extension");
     ///////// Choosing a method /////////
 
