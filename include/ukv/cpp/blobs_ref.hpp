@@ -70,7 +70,6 @@ class blobs_ref_gt {
     ukv_transaction_t txn_ = nullptr;
     ukv_arena_t* arena_ = nullptr;
     locations_store_t locations_;
-    ukv_doc_field_type_t format_ = ukv_doc_field_default_k;
 
     template <typename contents_arg_at>
     status_t any_assign(contents_arg_at&&, ukv_options_t) noexcept;
@@ -82,12 +81,8 @@ class blobs_ref_gt {
     expected_gt<expected_at> any_gather(contents_arg_at&&, ukv_options_t) noexcept;
 
   public:
-    blobs_ref_gt(ukv_database_t db,
-                 ukv_transaction_t txn,
-                 locations_store_t locations,
-                 ukv_arena_t* arena,
-                 ukv_doc_field_type_t format = ukv_doc_field_default_k) noexcept
-        : db_(db), txn_(txn), arena_(arena), locations_(locations), format_(format) {}
+    blobs_ref_gt(ukv_database_t db, ukv_transaction_t txn, locations_at&& locations, ukv_arena_t* arena) noexcept
+        : db_(db), txn_(txn), arena_(arena), locations_(std::forward<locations_at>(locations)) {}
 
     blobs_ref_gt(blobs_ref_gt&&) = default;
     blobs_ref_gt& operator=(blobs_ref_gt&&) = default;
@@ -96,11 +91,6 @@ class blobs_ref_gt {
 
     blobs_ref_gt& on(arena_t& arena) noexcept {
         arena_ = arena.member_ptr();
-        return *this;
-    }
-
-    blobs_ref_gt& as(ukv_doc_field_type_t format) noexcept {
-        format_ = format;
         return *this;
     }
 
