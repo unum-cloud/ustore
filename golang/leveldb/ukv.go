@@ -1,7 +1,7 @@
 package ukv
 
 /*
-#cgo LDFLAGS: -L${SRCDIR}/../../lib -lukv_leveldb -lleveldb -lstdc++
+#cgo LDFLAGS: -L${SRCDIR}/../../lib -lukv_embedded_leveldb -lleveldb -lstdc++
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../../include
 
 #include "ukv/db.h"
@@ -12,11 +12,11 @@ import (
 	u "github.com/unum-cloud/UKV/golang/internal"
 )
 
-type Level struct {
+type LevelDB struct {
 	u.DataBase
 }
 
-func CreateDB() Level {
+func CreateDB() LevelDB {
 	backend := u.BackendInterface{
 		UKV_error_free:      C.ukv_error_free,
 		UKV_arena_free:      C.ukv_arena_free,
@@ -26,6 +26,6 @@ func CreateDB() Level {
 		UKV_write:           C.ukv_write,
 		UKV_val_len_missing: u.ukv_length_t(C.ukv_length_missing_k)}
 
-	db := Level{DataBase: u.DataBase{Backend: backend}}
+	db := LevelDB{DataBase: u.DataBase{Backend: backend}}
 	return db
 }

@@ -24,7 +24,7 @@
             "name": "C++: Test UMem API",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_umem_api_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_api_ukv_embedded_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -47,7 +47,7 @@
             "name": "C++: Test LevelDB API",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_leveldb_api_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_api_ukv_embedded_leveldb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -65,7 +65,7 @@
             "name": "C++: Test RocksDB API",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_rocksdb_api_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_api_ukv_embedded_rocksdb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -146,7 +146,7 @@
             "name": "C++: Test UDisk",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_udisk_unit_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_embedded_udisk",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -161,7 +161,7 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Test UMem",
+            "name": "C++: Stress Isolated Inserts UMem",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build_debug/build/bin/stress_insert_atomic_isolated_ukv_embedded_umem",
@@ -183,7 +183,34 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UMem Stress Test",
+            "preLaunchTask": "Build Native: Stress Isolated Inserts UMem",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "C++: Stress Serializable Transactions UMem",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_serializable_transactions_ukv_embedded_umem",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                },
+                {
+                    "name": "UKV_TEST_PATH",
+                    "value": ""
+                }
+            ],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Stress Serializable Transactions UMem",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -250,7 +277,7 @@
             "name": "C++: Benchmark UDisk",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_udisk_twitter_benchmark",
+            "program": "${workspaceFolder}/build_debug/build/bin/bench_twitter_ukv_embedded_udisk",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -268,7 +295,7 @@
             "name": "C++: Benchmark Arrow",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_flight_client_twitter_benchmark",
+            "program": "${workspaceFolder}/build_debug/build/bin/bench_twitter_ukv_flight_client_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -286,7 +313,7 @@
             "name": "C++: Test Arrow Client",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_flight_client_test_units",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_flight_client_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"

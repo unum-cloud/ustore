@@ -9,7 +9,7 @@ RUN apt update && apt install -y sudo git
 
 ENV arrow_version=9.0.0-1
 RUN apt update && apt install -y -V ca-certificates lsb-release wget && \
-    cd /tmp && wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    cd /tmp && wget --no-check-certificate https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt update && apt install -y -V libarrow-dev=${arrow_version} libarrow-dataset-dev=${arrow_version} libarrow-flight-dev=${arrow_version} \
     libarrow-python-dev=${arrow_version} libarrow-python-flight-dev=${arrow_version} libgandiva-dev=${arrow_version} libparquet-dev=${arrow_version} \
@@ -39,7 +39,7 @@ RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selectio
 
 ENV arrow_version=9.0.0-1
 RUN apt update && apt install -y -V ca-certificates lsb-release wget && \
-    cd /tmp && wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    cd /tmp && wget --no-check-certificate https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt update && apt install -y -V libarrow-dev=${arrow_version} libarrow-flight-dev=${arrow_version}
 

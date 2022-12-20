@@ -1,7 +1,7 @@
 package ukv
 
 /*
-#cgo LDFLAGS: -L${SRCDIR}/../../lib -lukv_umem -lstdc++
+#cgo LDFLAGS: -L${SRCDIR}/../../lib -lukv_embedded_rocksdb -lrocksdb -ldl -lm -lstdc++
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../../include
 
 #include "ukv/db.h"
@@ -12,11 +12,11 @@ import (
 	u "github.com/unum-cloud/UKV/golang/internal"
 )
 
-type UMem struct {
+type RocksDB struct {
 	u.DataBase
 }
 
-func CreateDB() UMem {
+func CreateDB() RocksDB {
 	backend := u.BackendInterface{
 		UKV_error_free:      C.ukv_error_free,
 		UKV_arena_free:      C.ukv_arena_free,
@@ -26,6 +26,6 @@ func CreateDB() UMem {
 		UKV_write:           C.ukv_write,
 		UKV_val_len_missing: u.ukv_length_t(C.ukv_length_missing_k)}
 
-	db := UMem{DataBase: u.DataBase{Backend: backend}}
+	db := RocksDB{DataBase: u.DataBase{Backend: backend}}
 	return db
 }

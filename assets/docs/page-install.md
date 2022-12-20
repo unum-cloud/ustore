@@ -12,13 +12,14 @@ We use CMake as the default build tool.
 Most dependencies will be fetched with the integrated CMake scripts.
 
 ```sh
-mkdir build_release && \
+mkdir -p build_release && \
     cd build_release && \
     cmake \
-        -DUKV_BUILD_TESTS=0 \
-        -DUKV_BUILD_BENCHMARKS=0 \
-        -DUKV_BUILD_SDK_PYTHON=0 \
-        -DUKV_BUILD_API_REST=0 \
+        -DUKV_BUILD_ENGINE_UMEM=1 \
+        -DUKV_BUILD_ENGINE_LEVELDB=1 \
+        -DUKV_BUILD_ENGINE_ROCKSDB=1 \
+        -DUKV_BUILD_TESTS=1 \
+        -DUKV_BUILD_BENCHMARKS=1 \
         -DUKV_BUILD_API_FLIGHT_CLIENT=0 \
         -DUKV_BUILD_API_FLIGHT_SERVER=0 \
         .. && \
@@ -42,14 +43,13 @@ FetchContent_Declare(
     ukv
     GIT_REPOSITORY https://github.com/unum-cloud/UKV.git
     GIT_SHALLOW TRUE
-    GIT_TAG v0.3.0
 )
 FetchContent_MakeAvailable(ukv)
 set(ukv_INCLUDE_DIR ${ukv_SOURCE_DIR}/include)
 include_directories(${ukv_INCLUDE_DIR})
 
 add_executable(ukv_example_test main.cpp)
-target_link_libraries(ukv_example_test ukv::ukv_umem)
+target_link_libraries(ukv_example_test ukv::ukv_embedded_umem)
 ```
 
 ### Partial & Customized Builds
@@ -62,9 +62,10 @@ The CMake options include:
 | :-------------------------- | :-----: | :------------------------------------------------------------------------------------------- |
 | UKV_BUILD_TESTS             |    1    |                                                                                              |
 | UKV_BUILD_BENCHMARKS        |    0    | May require Arrow.                                                                           |
-| UKV_BUILD_SDK_PYTHON        |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
 | UKV_BUILD_API_FLIGHT_CLIENT |    0    | Apache Arrow: Flight.                                                                        |
+| UKV_BUILD_API_FLIGHT_SERVER |    0    | Apache Arrow: Flight.                                                                        |
 | UKV_BUILD_API_REST          |    0    | Boost: Beast and ASIO.                                                                       |
+| UKV_BUILD_SDK_PYTHON        |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
 | UKV_USE_JEMALLOC            |    0    | JeMalloc or AutoConf to be visible.                                                          |
 
 Following scripts are provided to help:

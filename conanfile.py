@@ -61,8 +61,8 @@ class ConanUKV(ConanFile):
         cmake = CMake(self)
         cmake.install()
 
-        self.copy('*.a', dst='lib', src=os.path.join(self.source_folder, 'build/lib'))
-
+        self.copy('*.a', dst='lib',
+                  src=os.path.join(self.source_folder, 'build/lib'))
 
     def package_info(self):
         # Larger projects like UKV or Boost would have a lot of parts,
@@ -70,9 +70,9 @@ class ConanUKV(ConanFile):
         # https://docs.conan.io/en/1.26/creating_packages/package_information.html#using-components
         self.cpp_info.name = 'UKV'
         self.cpp_info.includedirs = ['include/']
-        self.cpp_info.components['umem'].libs = ['libukv_umem']
-        self.cpp_info.components['leveldb'].libs = ['libukv_leveldb']
-        self.cpp_info.components['rocksdb'].libs = ['libukv_rocksdb']
+        self.cpp_info.components['umem'].libs = ['libukv_embedded_umem']
+        self.cpp_info.components['leveldb'].libs = ['libukv_embedded_leveldb']
+        self.cpp_info.components['rocksdb'].libs = ['libukv_embedded_rocksdb']
         if self.options['with_arrow']:
             self.cpp_info.components['flight_client'].libs = [
                 'ukv_flight_client']
