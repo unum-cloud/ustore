@@ -343,9 +343,8 @@ void ukv_sample(ukv_sample_t* c_ptr) {
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
-    strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
-    sample_args_t samples {collections, lens, c.tasks_count};
+    sample_args_t samples {{}, lens, c.tasks_count};
 
     // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy(samples.count + 1, c.error, c.offsets);
