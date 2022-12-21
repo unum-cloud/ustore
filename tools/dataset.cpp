@@ -246,10 +246,6 @@ bool validate_graph_fields(imp_exp_at& c) {
         *c.error = "Invalid target id field";
         return false;
     }
-    if (!c.edge_id_field) {
-        *c.error = "Invalid edge id field";
-        return false;
-    }
     return true;
 }
 
@@ -437,7 +433,7 @@ void fields_parser( //
             strncpy(tape.begin() + offset, str.data(), str.size());
             offset += str.size();
             pre_idx = pos + 1;
-            pos = strchr(fields[idx] + pre_idx, '/') - fields[idx];      
+            pos = strchr(fields[idx] + pre_idx, '/') - fields[idx];
         }
     };
 
@@ -556,8 +552,8 @@ void parse_arrow_table(ukv_graph_import_t& c, ukv_size_t task_count, std::shared
     return_if_error(sources, c.error, 0, "The source field does not exist");
     auto targets = table->GetColumnByName(c.target_id_field);
     return_if_error(targets, c.error, 0, "The target field does not exist");
-    auto edges = table->GetColumnByName(c.edge_id_field);
-    return_if_error(edges && !strcmp_(c.edge_id_field, "edge"), c.error, 0, "The edge field does not exist");
+    auto edges = c.edge_id_field ? table->GetColumnByName(c.edge_id_field) : nullptr;
+    return_if_error(edges || (c.edge_id_field == nullptr), c.error, 0, "The edge field does not exist");
     size_t count = sources->num_chunks();
     return_if_error(count > 0, c.error, 0, "Empty Input");
     vertices_edges.reserve(std::min(ukv_size_t(sources->chunk(0)->length()), task_count));
@@ -608,8 +604,6 @@ void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table) {
 
 void export_parquet_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
 
-    bool edge_state = strcmp_(c.edge_id_field, "edge");
-
     parquet::schema::NodeVector fields;
     fields.push_back(parquet::schema::PrimitiveNode::Make( //
         c.source_id_field,
@@ -623,7 +617,7 @@ void export_parquet_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t lengt
         parquet::Type::INT64,
         parquet::ConvertedType::INT_64));
 
-    if (!edge_state)
+    if (c.edge_id_field)
         fields.push_back(parquet::schema::PrimitiveNode::Make( //
             c.edge_id_field,
             parquet::Repetition::REQUIRED,
@@ -652,7 +646,7 @@ void export_parquet_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t lengt
         data = id.first;
         for (size_t idx = 0; idx < id.second; idx += 3) {
             os << data[idx] << data[idx + 1];
-            if (!edge_state)
+            if (c.edge_id_field)
                 os << data[idx + 2];
             os << parquet::EndRow;
         }
@@ -684,9 +678,7 @@ void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
 
 void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
 
-    bool edge_state = strcmp_(c.edge_id_field, "edge");
     arrow::Status status;
-
     arrow::NumericBuilder<arrow::Int64Type> builder;
     status = builder.Resize(length / 3);
     return_if_error(status.ok(), c.error, 0, "Can't instantiate builder");
@@ -719,7 +711,7 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
     status = builder.Finish(&targets_array);
     return_if_error(status.ok(), c.error, 0, "Can't finish array(targets)");
 
-    if (!edge_state) {
+    if (c.edge_id_field) {
         fill_values(2);
         status = builder.AppendValues(values.begin(), values.size());
         return_if_error(status.ok(), c.error, 0, "Can't append values(edges)");
@@ -731,13 +723,13 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
 
     fields.push_back(arrow::field(c.source_id_field, arrow::int64()));
     fields.push_back(arrow::field(c.target_id_field, arrow::int64()));
-    if (!edge_state)
+    if (c.edge_id_field)
         fields.push_back(arrow::field(c.edge_id_field, arrow::int64()));
 
     std::shared_ptr<arrow::Schema> schema = std::make_shared<arrow::Schema>(fields);
     std::shared_ptr<arrow::Table> table = nullptr;
 
-    if (!edge_state)
+    if (c.edge_id_field)
         table = arrow::Table::Make(schema, {sources_array, targets_array, edges_array});
     else
         table = arrow::Table::Make(schema, {sources_array, targets_array});
@@ -761,9 +753,7 @@ void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) noexcept 
     arena_t arena_(c.db);
     auto arena = linked_memory(arena_.member_ptr(), c.options, c.error);
     edges_t edges(alloc_t<edge_t>(arena, c.error));
-
     edges.reserve(task_count);
-    bool edge_state = !strcmp_(c.edge_id_field, "edge");
 
     auto handle = open(c.paths_pattern, O_RDONLY);
     return_if_error(handle != -1, c.error, 0, "Can't open file");
@@ -786,7 +776,7 @@ void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) noexcept 
     for (auto doc : docs) {
         simdjson::ondemand::object data = doc.get_object().value();
         try {
-            if (edge_state)
+            if (c.edge_id_field)
                 edge = get_data(data, c.edge_id_field);
             edges.push_back(edge_t {get_data(data, c.source_id_field), get_data(data, c.target_id_field), edge});
         }
@@ -814,7 +804,7 @@ void export_ndjson_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length
     make_uuid(file_name, uuid_length_k);
     auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
-    if (strcmp_(c.edge_id_field, "edge")) {
+    if (!c.edge_id_field) {
         for (auto id : ids) {
             data = id.first;
             for (size_t idx = 0; idx < id.second; idx += 3) {
@@ -852,11 +842,13 @@ void export_ndjson_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length
 void ukv_graph_import(ukv_graph_import_t* c_ptr) {
 
     ukv_graph_import_t& c = *c_ptr;
-    auto ext = std::filesystem::path(c.paths_pattern).extension();
 
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_if_error(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
+    return_if_error(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
     if (!validate_graph_fields(c))
         return_on_error(c.error);
-    return_if_error(c.paths_pattern, c.error, 0, "Invalid paths pattern");
+    auto ext = std::filesystem::path(c.paths_pattern).extension();
     if (strcmp_(ext.c_str(), ".ndjson"))
         return_if_error(c.file_size != 0, c.error, 0, "File size not entered");
 
@@ -876,9 +868,13 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
 void ukv_graph_export(ukv_graph_export_t* c_ptr) {
 
     ukv_graph_export_t& c = *c_ptr;
+
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     if (!validate_graph_fields(c))
         return_on_error(c.error);
-    return_if_error(c.paths_extension, c.error, 0, "Invalid paths extension");
+    return_if_error(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
+    return_if_error(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
+
     ///////// Choosing a method /////////
 
     auto ext = c.paths_extension;
@@ -1370,13 +1366,15 @@ void export_ndjson_docs( //
 void ukv_docs_import(ukv_docs_import_t* c_ptr) {
 
     ukv_docs_import_t& c = *c_ptr;
-    auto ext = std::filesystem::path(c.paths_pattern).extension();
 
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_if_error(validate_docs_fields(c), c.error, 0, "Invalid fields");
-    return_if_error(c.paths_pattern, c.error, 0, "Invalid paths pattern");
+    return_if_error(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
+    return_if_error(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
+    auto ext = std::filesystem::path(c.paths_pattern).extension();
     if (strcmp_(ext.c_str(), ".ndjson"))
         return_if_error(c.file_size != 0, c.error, 0, "File size not entered");
-    return_if_error(c.id_field, c.error, 0, "id_field must be initialized");
+    return_if_error(c.id_field, c.error, uninitialized_state_k, "id_field must be initialized");
 
     if (ext == ".ndjson")
         import_ndjson_docs(c);
@@ -1393,9 +1391,12 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
 void ukv_docs_export(ukv_docs_export_t* c_ptr) {
 
     ukv_docs_export_t& c = *c_ptr;
-    using alloc_keys_t = alloc_t<ptr_range_gt<ukv_key_t const>>;
+
+    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_if_error(validate_docs_fields(c), c.error, 0, "Invalid fields");
-    return_if_error(c.paths_extension, c.error, 0, "Invalid paths extension");
+    return_if_error(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
+    return_if_error(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
+    using alloc_keys_t = alloc_t<ptr_range_gt<ukv_key_t const>>;
 
     ///////// Choosing a method /////////
     auto ext = c.paths_extension;
