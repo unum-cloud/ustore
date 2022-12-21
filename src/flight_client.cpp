@@ -14,6 +14,7 @@
 #include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
 
+#include <string_view>
 #include "ukv/db.h"
 #include "ukv/arrow.h"
 #include "ukv/cpp/types.hpp" // `ukv_doc_field()`
@@ -1155,7 +1156,7 @@ void ukv_collection_create(ukv_collection_create_t* c_ptr) {
     arf::Action action;
     fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightColCreate, kParamCollectionName, c.name);
     if (c.config)
-        action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c.config});
+        action.body = std::make_shared<ar::Buffer>(std::string_view {c.config});
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
     {

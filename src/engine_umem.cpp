@@ -618,10 +618,32 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     offsets[scans.count] = keys_output - *c.keys;
 }
 
+struct key_from_pair_t {
+    ukv_key_t* key_ptr;
+    key_from_pair_t(ukv_key_t* key) : key_ptr(key) {}
+    key_from_pair_t& operator=(pair_t const& pair) {
+        *key_ptr = pair.collection_key.key;
+        return *this;
+    };
+};
+
+struct key_iterator_t {
+    using value_type = ukv_key_t;
+    using pointer = value_type*;
+    using reference = value_type&;
+    using difference_type = std::ptrdiff_t;
+    using iterator_category = std::random_access_iterator_tag;
+
+    ukv_key_t* begin_;
+    key_iterator_t(ukv_key_t* key) : begin_(key) {}
+    key_from_pair_t operator[](std::size_t idx) { return &begin_[idx]; };
+};
+
 void ukv_sample(ukv_sample_t* c_ptr) {
 
     ukv_sample_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(!c.transaction, c.error, uninitialized_state_k, "Transaction sampling aren't supported!");
     if (!c.tasks_count)
         return;
 
@@ -629,15 +651,10 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     return_if_error_m(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
-    transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
     sample_args_t samples {collections, lens, c.tasks_count};
 
-    // validate_sample(c.transaction, samples, c.options, c.error);
-    // return_if_error_m(c.error);
-
-    // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy(samples.count + 1, c.error, c.offsets);
     return_if_error_m(c.error);
     auto counts = arena.alloc_or_dummy(samples.count, c.error, c.counts);
@@ -649,23 +666,22 @@ void ukv_sample(ukv_sample_t* c_ptr) {
 
     // 2. Fetch the data
     for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
-        sample_arg_t sample = samples[task_idx];
+        sample_arg_t task = samples[task_idx];
         offsets[task_idx] = keys_output - *c.keys;
 
-        ukv_length_t matched_pairs_count = 0;
-        auto found_pair = [&](pair_t const& pair) noexcept {
-            *keys_output = pair.collection_key.key;
-            ++keys_output;
-            ++matched_pairs_count;
-        };
+        std::random_device random_device;
+        std::mt19937 random_generator(random_device());
+        std::size_t seen = 0;
+        key_iterator_t iter(keys_output);
+        collection_key_t min(task.collection, std::numeric_limits<ukv_key_t>::min());
+        collection_key_t max(task.collection, std::numeric_limits<ukv_key_t>::max());
 
-        // auto status = c.transaction //
-        //                   ? sample_and_watch(txn, previous_key, sample.limit, c.options, found_pair)
-        //                   : sample_and_watch(db.pairs, previous_key, sample.limit, c.options, found_pair);
-        // if (!status)
-        //     return export_error_code(status, c.error);
+        auto status = db.pairs.sample_range(min, max, random_generator, seen, task.limit, iter);
+        if (!status)
+            return export_error_code(status, c.error);
 
-        counts[task_idx] = matched_pairs_count;
+        counts[task_idx] = task.limit;
+        keys_output += task.limit;
     }
     offsets[samples.count] = keys_output - *c.keys;
 }
