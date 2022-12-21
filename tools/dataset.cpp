@@ -229,7 +229,7 @@ class string_iterator_t {
         length_ = strlen(ptr_);
     }
     char* operator*() const { return ptr_; }
-    char operator[](size_t position) { return position < length_ ? ptr_[position] : '\0'; }
+    char last_character() { return ptr_[length_ - 1]; }
 
   private:
     char* ptr_;
@@ -382,7 +382,7 @@ void simdjson_object_parser( //
         try_close();
         if (is_ptr(fields[idx])) {
             if (strchr(fields[idx] + 1, '/') != NULL) {
-                while (iter[iter.size() - 1] == '{') {
+                while (iter.last_character() == '{') {
                     fmt::format_to(std::back_inserter(json), "{}", *iter);
                     ++iter;
                 }
@@ -504,7 +504,7 @@ void upsert_graph(ukv_graph_import_t& c, edges_t const& edges_src) {
         .db = c.db,
         .error = c.error,
         .arena = c.arena,
-        .options = c.options,
+        .options = ukv_option_dont_discard_memory_k,
         .tasks_count = edges_src.size(),
         .collections = &c.collection,
         .edges_ids = strided.edge_ids.begin().get(),
@@ -524,7 +524,7 @@ void upsert_docs(ukv_docs_import_t& c, docs_t& docs) {
         .db = c.db,
         .error = c.error,
         .arena = c.arena,
-        .options = c.options,
+        .options = ukv_option_dont_discard_memory_k,
         .tasks_count = docs.size(),
         .type = ukv_doc_field_json_k,
         .modification = ukv_doc_modify_upsert_k,
@@ -544,8 +544,7 @@ void upsert_docs(ukv_docs_import_t& c, docs_t& docs) {
 
 void parse_arrow_table(ukv_graph_import_t& c, ukv_size_t task_count, std::shared_ptr<arrow::Table> const& table) {
 
-    arena_t arena_(c.db);
-    auto arena = linked_memory(arena_.member_ptr(), c.options, c.error);
+    auto arena = linked_memory(c.arena, c.options, c.error);
     edges_t vertices_edges(alloc_t<edge_t>(arena, c.error));
 
     auto sources = table->GetColumnByName(c.source_id_field);
@@ -750,8 +749,7 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
 
 void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) noexcept {
 
-    arena_t arena_(c.db);
-    auto arena = linked_memory(arena_.member_ptr(), c.options, c.error);
+    auto arena = linked_memory(c.arena, c.options, c.error);
     edges_t edges(alloc_t<edge_t>(arena, c.error));
     edges.reserve(task_count);
 
@@ -1025,8 +1023,7 @@ void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const
 
 void import_whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
 
-    arena_t arena_(c.db);
-    auto arena = linked_memory(arena_.member_ptr(), c.options, c.error);
+    auto arena = linked_memory(c.arena, c.options, c.error);
     docs_t values(alloc_t<value_view_t>(arena, c.error));
 
     size_t used_mem = 0;
@@ -1051,8 +1048,7 @@ void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream
     for (size_t idx = 0; idx < c.fields_count; ++idx)
         max_size += strlen(fields[idx]);
 
-    arena_t arena_(c.db);
-    auto arena = linked_memory(arena_.member_ptr(), c.options, c.error);
+    auto arena = linked_memory(c.arena, c.options, c.error);
     docs_t values(alloc_t<value_view_t>(arena, c.error));
 
     size_t used_mem = 0;
@@ -1062,10 +1058,8 @@ void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream
     stl_vector_t<size_t> counts(alloc_t<size_t>(arena, c.error));
     counts.reserve(c.fields_count);
 
-    linked_memory_lock_t arena_tape = linked_memory(c.arena, c.options, c.error);
-    auto tape = arena_tape.alloc<char>(max_size, c.error);
-
-    fields_parser(c.error, arena_tape, fields, counts, c.fields_count, tape);
+    auto tape = arena.alloc<char>(max_size, c.error);
+    fields_parser(c.error, arena, fields, counts, c.fields_count, tape);
 
     for (auto doc : docs) {
         simdjson::ondemand::object object = doc.get_object().value();
@@ -1079,7 +1073,7 @@ void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream
         }
 
         json.push_back('\n');
-        json_cstr = arena_tape.alloc<char>(json.size() + 1, c.error).begin();
+        json_cstr = arena.alloc<char>(json.size() + 1, c.error).begin();
         std::memcpy(json_cstr, json.data(), json.size() + 1);
 
         values.push_back(json_cstr);
