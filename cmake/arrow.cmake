@@ -54,13 +54,16 @@ ExternalProject_Add(
     -DARROW_BUILD_UTILITIES=OFF
     -DARROW_GANDIVA=OFF
     
+    # Which components should be bundled:
+    # https://arrow.apache.org/docs/developers/cpp/building.html#build-dependency-management
+    # -Dc-ares_SOURCE=BUNDLED
+    # -Dre2_SOURCE=BUNDLED
+    # -Dabsl_SOURCE=BUNDLED
+    # -DProtobuf_SOURCE=BUNDLED
+    # -DgRPC_SOURCE=BUNDLED
+    # -DZLIB_SOURCE=BUNDLED
+    -DARROW_DEPENDENCY_SOURCE=BUNDLED
     -DABS_VENDORED=ON
-    -Dc-ares_SOURCE=BUNDLED
-    -Dre2_SOURCE=BUNDLED
-    -Dabsl_SOURCE=BUNDLED
-    -DProtobuf_SOURCE=BUNDLED
-    -DgRPC_SOURCE=BUNDLED
-    -DZLIB_SOURCE=BUNDLED
 )
 
 ExternalProject_Get_Property(Arrow-external SOURCE_DIR)

@@ -79,7 +79,7 @@ Following scripts are provided to help:
 To build the Flight RPC Docker image locally:
 
 ```sh
-docker build -t ukv .
+docker buildx build --platform=linux/amd64,linux/arm64 --file docker/Dockerfile . --progress=plain -c 32
 ```
 
 To build the Conan package locally, without installing it:

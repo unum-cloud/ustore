@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.16)
 project(UKV)
 
 option(UKV_BUILD_ENGINE_UMEM "Building REST API server for all backends" ON)
@@ -23,8 +23,6 @@ include(CMakeDependentOption)
 cmake_dependent_option(UKV_REBUILD_JEMALLOC "Enable to attempt to source and build JeMalloc locally" ON "UKV_USE_JEMALLOC" OFF)
 cmake_dependent_option(UKV_REBUILD_ONEAPI "Enable to attempt to source and build Intel OneAPI locally" ON "UKV_USE_ONEAPI" OFF)
 cmake_dependent_option(UKV_REBUILD_BOOST "Enable to attempt to source and build Boost locally" ON "UKV_BUILD_API_REST" OFF)
-cmake_dependent_option(UKV_REBUILD_ARROW "Enable to attempt to source and build Apache Arrow locally" ON "UKV_BUILD_SDK_PYTHON OR UKV_BUILD_API_FLIGHT_CLIENT" OFF)
-cmake_dependent_option(UKV_REBUILD_GRPC "Enable to attempt to source and build Google RPC locally" ON "UKV_BUILD_SDK_PYTHON OR UKV_BUILD_API_FLIGHT_CLIENT" OFF)
 
 file(READ "VERSION" _VERSION_)
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
