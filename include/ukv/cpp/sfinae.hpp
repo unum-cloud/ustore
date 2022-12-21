@@ -55,18 +55,30 @@ struct location_store_gt {
 };
 
 template <>
-struct location_store_gt<int> : public location_store_gt<collection_key_field_t> {};
+struct location_store_gt<int> : public location_store_gt<collection_key_field_t> {
+    using location_store_gt<collection_key_field_t>::location_store_gt;
+};
 template <>
-struct location_store_gt<ukv_key_t> : public location_store_gt<collection_key_field_t> {};
+struct location_store_gt<ukv_key_t> : public location_store_gt<collection_key_field_t> {
+    using location_store_gt<collection_key_field_t>::location_store_gt;
+};
 template <>
-struct location_store_gt<collection_key_t> : public location_store_gt<collection_key_field_t> {};
+struct location_store_gt<collection_key_t> : public location_store_gt<collection_key_field_t> {
+    using location_store_gt<collection_key_field_t>::location_store_gt;
+};
 
 template <>
-struct location_store_gt<int&> : public location_store_gt<collection_key_field_t> {};
+struct location_store_gt<int&> : public location_store_gt<collection_key_field_t> {
+    using location_store_gt<collection_key_field_t>::location_store_gt;
+};
 template <>
-struct location_store_gt<ukv_key_t&> : public location_store_gt<collection_key_field_t> {};
+struct location_store_gt<ukv_key_t&> : public location_store_gt<collection_key_field_t> {
+    using location_store_gt<collection_key_field_t>::location_store_gt;
+};
 template <>
-struct location_store_gt<collection_key_t&> : public location_store_gt<collection_key_field_t> {};
+struct location_store_gt<collection_key_t&> : public location_store_gt<collection_key_field_t> {
+    using location_store_gt<collection_key_field_t>::location_store_gt;
+};
 
 template <typename at>
 struct location_store_gt<at&> {

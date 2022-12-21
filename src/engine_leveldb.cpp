@@ -13,6 +13,7 @@
 #include "ukv/db.h"
 #include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
 #include "helpers/linked_array.hpp" // `uninitialized_array_gt`
+#include "helpers/full_scan.hpp"    // `reservoir_sample_iterator`
 
 using namespace unum::ukv;
 using namespace unum;
@@ -330,6 +331,55 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     offsets[scans.size()] = keys_output - *c.keys;
 }
 
+void ukv_sample(ukv_sample_t* c_ptr) {
+
+    ukv_sample_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
+        return;
+
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
+    strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
+    sample_args_t samples {{}, lens, c.tasks_count};
+
+    // 1. Allocate a tape for all the values to be fetched
+    auto offsets = arena.alloc_or_dummy(samples.count + 1, c.error, c.offsets);
+    return_if_error_m(c.error);
+    auto counts = arena.alloc_or_dummy(samples.count, c.error, c.counts);
+    return_if_error_m(c.error);
+
+    auto total_keys = reduce_n(samples.limits, samples.count, 0ul);
+    auto keys_output = *c.keys = arena.alloc<ukv_key_t>(total_keys, c.error).begin();
+    return_if_error_m(c.error);
+
+    // 2. Fetch the data
+    leveldb::ReadOptions options;
+    options.fill_cache = false;
+
+    if (c.transaction)
+        options.snapshot = txn.snapshot;
+
+    for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
+        sample_arg_t task = samples[task_idx];
+        offsets[task_idx] = keys_output - *c.keys;
+
+        level_iter_uptr_t it;
+        safe_section("Creating a LevelDB iterator", c.error, [&] { it = level_iter_uptr_t(db.NewIterator(options)); });
+        return_if_error_m(c.error);
+
+        ptr_range_gt<ukv_key_t> sampled_keys(keys_output, task.limit);
+        reservoir_sample_iterator(it, sampled_keys, c.error);
+
+        counts[task_idx] = task.limit;
+        keys_output += task.limit;
+    }
+    offsets[samples.count] = keys_output - *c.keys;
+}
+
 void ukv_measure(ukv_measure_t* c_ptr) {
 
     ukv_measure_t& c = *c_ptr;
@@ -393,9 +443,9 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     bool invalidate = c.mode == ukv_drop_keys_vals_handle_k;
     return_error_if_m(c.id == ukv_collection_main_k && !invalidate,
-                    c.error,
-                    args_combo_k,
-                    "Collections not supported by LevelDB!");
+                      c.error,
+                      args_combo_k,
+                      "Collections not supported by LevelDB!");
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
 

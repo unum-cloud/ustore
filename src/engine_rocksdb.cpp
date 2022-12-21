@@ -27,6 +27,7 @@
 #include "ukv/db.h"
 #include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
 #include "helpers/linked_array.hpp" // `uninitialized_array_gt`
+#include "helpers/full_scan.hpp"    // `reservoir_sample_iterator`
 
 using namespace unum::ukv;
 using namespace unum;
@@ -478,6 +479,61 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     offsets[tasks.size()] = keys_output - *c.keys;
 }
 
+void ukv_sample(ukv_sample_t* c_ptr) {
+
+    ukv_sample_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
+        return;
+
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
+    strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
+    strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
+    sample_args_t samples {collections, lens, c.tasks_count};
+
+    // 1. Allocate a tape for all the values to be fetched
+    auto offsets = arena.alloc_or_dummy(samples.count + 1, c.error, c.offsets);
+    return_if_error_m(c.error);
+    auto counts = arena.alloc_or_dummy(samples.count, c.error, c.counts);
+    return_if_error_m(c.error);
+
+    auto total_keys = reduce_n(samples.limits, samples.count, 0ul);
+    auto keys_output = *c.keys = arena.alloc<ukv_key_t>(total_keys, c.error).begin();
+    return_if_error_m(c.error);
+
+    // 2. Fetch the data
+    rocksdb::ReadOptions options;
+    options.fill_cache = false;
+
+    if (&txn)
+        options.snapshot = txn.GetSnapshot();
+
+    for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
+        sample_arg_t task = samples[task_idx];
+        auto collection = rocks_collection(db, task.collection);
+        offsets[task_idx] = keys_output - *c.keys;
+
+        std::unique_ptr<rocksdb::Iterator> it;
+        safe_section("Creating a RocksDB iterator", c.error, [&] {
+            it = &txn //
+                     ? std::unique_ptr<rocksdb::Iterator>(txn.GetIterator(options, collection))
+                     : std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(options, collection));
+        });
+        return_if_error_m(c.error);
+
+        ptr_range_gt<ukv_key_t> sampled_keys(keys_output, task.limit);
+        reservoir_sample_iterator(it, sampled_keys, c.error);
+
+        counts[task_idx] = task.limit;
+        keys_output += task.limit;
+    }
+    offsets[samples.count] = keys_output - *c.keys;
+}
+
 void ukv_measure(ukv_measure_t* c_ptr) {
 
     ukv_measure_t& c = *c_ptr;
@@ -561,9 +617,9 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
 
     bool invalidate = c.mode == ukv_drop_keys_vals_handle_k;
     return_error_if_m(c.id != ukv_collection_main_k || !invalidate,
-                    c.error,
-                    args_combo_k,
-                    "Default collection can't be invalidated.");
+                      c.error,
+                      args_combo_k,
+                      "Default collection can't be invalidated.");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_collection_t* collection_ptr = reinterpret_cast<rocks_collection_t*>(c.id);
