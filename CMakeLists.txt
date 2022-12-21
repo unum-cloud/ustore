@@ -144,7 +144,7 @@ if(${UKV_USE_ONEAPI})
 endif()
 
 # Distributions:
-if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT_CLIENT})
+if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT_CLIENT} OR ${UKV_BUILD_API_FLIGHT_SERVER})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
 
