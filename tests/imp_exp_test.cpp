@@ -44,6 +44,7 @@ static constexpr ukv_str_view_t ext_parquet_k = ".parquet";
 static constexpr ukv_str_view_t ext_ndjson_k = ".ndjson";
 static constexpr ukv_str_view_t ext_csv_k = ".csv";
 
+static constexpr ukv_str_view_t fields_ak[] = {"number", "difficulty", "size"};
 static constexpr ukv_str_view_t source_k = "number";
 static constexpr ukv_str_view_t target_k = "difficulty";
 static constexpr ukv_str_view_t edge_k = "size";
@@ -203,6 +204,8 @@ bool test_graph(ukv_str_view_t file, ukv_str_view_t ext) {
         .edge_id_field = edge_k,
     };
     ukv_graph_import(&imp);
+
+    EXPECT_TRUE(status);
 
     ukv_graph_export_t exp {
         .db = db,
@@ -413,7 +416,7 @@ bool cmp_table_docs(ukv_str_view_t lhs, ukv_str_view_t rhs) {
 }
 
 template <typename comparator>
-bool test_docs(ukv_str_view_t file, ukv_str_view_t ext, comparator cmp) {
+bool test_whole_docs(ukv_str_view_t file, ukv_str_view_t ext, comparator cmp) {
 
     arena_t arena(db);
     status_t status;
@@ -468,6 +471,432 @@ bool test_docs(ukv_str_view_t file, ukv_str_view_t ext, comparator cmp) {
     return true;
 }
 
+template <typename comparator>
+bool test_sub_docs(ukv_str_view_t file, ukv_str_view_t ext, comparator cmp) {
+
+    arena_t arena(db);
+    status_t status;
+
+    std::vector<std::string> updated_paths;
+    std::string new_file;
+    size_t size = 0;
+
+    if (std::strcmp(ndjson_k, file) == 0) {
+        std::filesystem::path pt {file};
+        size = std::filesystem::file_size(pt);
+    }
+
+    ukv_docs_import_t docs {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_pattern = file,
+        .file_size = size,
+        .fields_count = 3,
+        .fields = fields_ak,
+        .fields_stride = sizeof(ukv_str_view_t),
+        .id_field = edge_k,
+    };
+    ukv_docs_import(&docs);
+
+    EXPECT_TRUE(status);
+
+    ukv_docs_export_t exdocs {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_extension = ext,
+        .fields_count = 3,
+        .fields = fields_ak,
+        .fields_stride = sizeof(ukv_str_view_t),
+    };
+    ukv_docs_export(&exdocs);
+
+    for (const auto& entry : fs::directory_iterator(path))
+        updated_paths.push_back(entry.path());
+
+    EXPECT_GT(updated_paths.size(), paths.size());
+
+    for (size_t idx = 0; idx < paths.size(); ++idx) {
+        if (paths[idx] != updated_paths[idx]) {
+            new_file = updated_paths[idx];
+            break;
+        }
+    }
+    if (new_file.size() == 0)
+        new_file = updated_paths.back();
+
+    new_file.erase(0, 2);
+    EXPECT_TRUE(cmp(file, new_file.data()));
+
+    std::remove(new_file.data());
+    return true;
+}
+
+bool test_crash_cases_graph_import(ukv_str_view_t file) {
+    arena_t arena(db);
+    status_t status;
+
+    size_t size = 0;
+
+    if (std::strcmp(ndjson_k, file) == 0) {
+        std::filesystem::path pt {file};
+        size = std::filesystem::file_size(pt);
+    }
+
+    ukv_graph_import_t imp_path_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_graph_k,
+        .paths_pattern = nullptr,
+        .file_size = size,
+        .source_id_field = source_k,
+        .target_id_field = target_k,
+        .edge_id_field = edge_k,
+    };
+    ukv_graph_import(&imp_path_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    if (std::strcmp(ndjson_k, file) == 0) {
+        ukv_graph_import_t imp_size_null {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .collection = collection_graph_k,
+            .paths_pattern = file,
+            .file_size = 0,
+            .source_id_field = source_k,
+            .target_id_field = target_k,
+            .edge_id_field = edge_k,
+        };
+        ukv_graph_import(&imp_size_null);
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
+
+    ukv_graph_import_t imp_source_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_graph_k,
+        .paths_pattern = file,
+        .file_size = size,
+        .source_id_field = nullptr,
+        .target_id_field = target_k,
+        .edge_id_field = edge_k,
+    };
+    ukv_graph_import(&imp_source_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_graph_import_t imp_target_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_graph_k,
+        .paths_pattern = file,
+        .file_size = size,
+        .source_id_field = source_k,
+        .target_id_field = nullptr,
+        .edge_id_field = edge_k,
+    };
+    ukv_graph_import(&imp_target_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_graph_import_t imp_edge_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_graph_k,
+        .paths_pattern = file,
+        .file_size = size,
+        .source_id_field = source_k,
+        .target_id_field = target_k,
+        .edge_id_field = nullptr,
+    };
+    ukv_graph_import(&imp_edge_null);
+    EXPECT_TRUE(status);
+    status.release_error();
+
+    ukv_graph_import_t imp_db_null {
+        .db = nullptr,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_graph_k,
+        .paths_pattern = file,
+        .file_size = size,
+        .source_id_field = source_k,
+        .target_id_field = target_k,
+        .edge_id_field = edge_k,
+    };
+    ukv_graph_import(&imp_db_null);
+    EXPECT_FALSE(status);
+}
+
+bool test_crash_cases_graph_export(ukv_str_view_t ext) {
+    arena_t arena(db);
+    status_t status;
+    size_t size = 0;
+
+    ukv_graph_export_t exp_path_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_graph_k,
+        .paths_extension = nullptr,
+        .source_id_field = source_k,
+        .target_id_field = target_k,
+        .edge_id_field = edge_k,
+    };
+    ukv_graph_export(&exp_path_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_graph_export_t exp_source_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_graph_k,
+        .paths_extension = ext,
+        .source_id_field = nullptr,
+        .target_id_field = target_k,
+        .edge_id_field = edge_k,
+    };
+    ukv_graph_export(&exp_source_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_graph_export_t exp_target_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_graph_k,
+        .paths_extension = ext,
+        .source_id_field = source_k,
+        .target_id_field = nullptr,
+        .edge_id_field = edge_k,
+    };
+    ukv_graph_export(&exp_target_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_graph_export_t exp_edge_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_graph_k,
+        .paths_extension = ext,
+        .source_id_field = source_k,
+        .target_id_field = target_k,
+        .edge_id_field = nullptr,
+    };
+    ukv_graph_export(&exp_edge_null);
+    EXPECT_TRUE(status);
+    status.release_error();
+
+    ukv_graph_export_t exp_db_null {
+        .db = nullptr,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_graph_k,
+        .paths_extension = ext,
+        .source_id_field = source_k,
+        .target_id_field = target_k,
+        .edge_id_field = edge_k,
+    };
+    ukv_graph_export(&exp_db_null);
+    EXPECT_FALSE(status);
+
+    for (const auto& entry : fs::directory_iterator(path)) {
+        std::string path = entry.path();
+        if (std::strcmp(path.data() + (path.size() - strlen(ext)), ext) == 0)
+            std::remove(path.data());
+    }
+}
+
+bool test_crash_cases_docs_import(ukv_str_view_t file) {
+    arena_t arena(db);
+    status_t status;
+
+    size_t size = 0;
+
+    if (std::strcmp(ndjson_k, file) == 0) {
+        std::filesystem::path pt {file};
+        size = std::filesystem::file_size(pt);
+    }
+
+    ukv_docs_import_t imp_path_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_pattern = nullptr,
+        .file_size = size,
+        .fields_count = 3,
+        .fields = fields_ak,
+        .fields_stride = sizeof(ukv_str_view_t),
+    };
+    ukv_docs_import(&imp_path_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    if (std::strcmp(ndjson_k, file) == 0) {
+        ukv_docs_import_t imp_size_null {
+            .db = db,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .collection = collection_docs_k,
+            .paths_pattern = file,
+            .file_size = 0,
+            .fields_count = 3,
+            .fields = fields_ak,
+            .fields_stride = sizeof(ukv_str_view_t),
+        };
+        ukv_docs_import(&imp_size_null);
+        EXPECT_FALSE(status);
+        status.release_error();
+    }
+
+    ukv_docs_import_t imp_count_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_pattern = file,
+        .file_size = size,
+        .fields_count = 0,
+        .fields = fields_ak,
+        .fields_stride = sizeof(ukv_str_view_t),
+    };
+    ukv_docs_import(&imp_count_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_docs_import_t imp_fields_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_pattern = file,
+        .file_size = size,
+        .fields_count = 3,
+        .fields = nullptr,
+        .fields_stride = sizeof(ukv_str_view_t),
+    };
+    ukv_docs_import(&imp_fields_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_docs_import_t imp_stride_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_pattern = file,
+        .file_size = size,
+        .fields_count = 3,
+        .fields = fields_ak,
+        .fields_stride = 0,
+    };
+    ukv_docs_import(&imp_stride_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_docs_import_t imp_db_null {
+        .db = nullptr,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_pattern = file,
+        .file_size = size,
+        .fields_count = 3,
+        .fields = fields_ak,
+        .fields_stride = sizeof(ukv_str_view_t),
+    };
+    ukv_docs_import(&imp_db_null);
+    EXPECT_FALSE(status);
+}
+
+bool test_crash_cases_docs_export(ukv_str_view_t ext) {
+    arena_t arena(db);
+    status_t status;
+    size_t size = 0;
+
+    ukv_docs_export_t imp_path_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_extension = nullptr,
+        .fields_count = 3,
+        .fields = fields_ak,
+        .fields_stride = sizeof(ukv_str_view_t),
+    };
+    ukv_docs_export(&imp_path_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_docs_export_t imp_count_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_extension = ext,
+        .fields_count = 0,
+        .fields = fields_ak,
+        .fields_stride = sizeof(ukv_str_view_t),
+    };
+    ukv_docs_export(&imp_count_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_docs_export_t imp_fields_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_extension = ext,
+        .fields_count = 3,
+        .fields = nullptr,
+        .fields_stride = sizeof(ukv_str_view_t),
+    };
+    ukv_docs_export(&imp_fields_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_docs_export_t imp_stride_null {
+        .db = db,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_extension = ext,
+        .fields_count = 3,
+        .fields = fields_ak,
+        .fields_stride = 0,
+    };
+    ukv_docs_export(&imp_stride_null);
+    EXPECT_FALSE(status);
+    status.release_error();
+
+    ukv_docs_export_t imp_db_null {
+        .db = nullptr,
+        .error = status.member_ptr(),
+        .arena = arena.member_ptr(),
+        .collection = collection_docs_k,
+        .paths_extension = ext,
+        .fields_count = 3,
+        .fields = fields_ak,
+        .fields_stride = sizeof(ukv_str_view_t),
+    };
+    ukv_docs_export(&imp_db_null);
+    EXPECT_FALSE(status);
+}
+
 TEST(import_export, graph) {
     test_graph(ndjson_k, ext_ndjson_k);
     test_graph(ndjson_k, ext_parquet_k);
@@ -480,16 +909,76 @@ TEST(import_export, graph) {
     test_graph(csv_k, ext_csv_k);
 }
 
-TEST(import_export, docs) {
-    test_docs(ndjson_k, ext_ndjson_k, cmp_ndjson_docs);
-    test_docs(ndjson_k, ext_parquet_k, cmp_table_docs);
-    test_docs(ndjson_k, ext_csv_k, cmp_table_docs);
-    test_docs(parquet_k, ext_ndjson_k, cmp_ndjson_docs);
-    test_docs(parquet_k, ext_parquet_k, cmp_table_docs);
-    test_docs(parquet_k, ext_csv_k, cmp_table_docs);
-    test_docs(csv_k, ext_ndjson_k, cmp_ndjson_docs);
-    test_docs(csv_k, ext_parquet_k, cmp_table_docs);
-    test_docs(csv_k, ext_csv_k, cmp_table_docs);
+TEST(import_export, whole_docs) {
+    test_whole_docs(ndjson_k, ext_ndjson_k, cmp_ndjson_docs);
+    test_whole_docs(ndjson_k, ext_parquet_k, cmp_table_docs);
+    test_whole_docs(ndjson_k, ext_csv_k, cmp_table_docs);
+    test_whole_docs(parquet_k, ext_ndjson_k, cmp_ndjson_docs);
+    test_whole_docs(parquet_k, ext_parquet_k, cmp_table_docs);
+    test_whole_docs(parquet_k, ext_csv_k, cmp_table_docs);
+    test_whole_docs(csv_k, ext_ndjson_k, cmp_ndjson_docs);
+    test_whole_docs(csv_k, ext_parquet_k, cmp_table_docs);
+    test_whole_docs(csv_k, ext_csv_k, cmp_table_docs);
+}
+
+TEST(import_export, sub_docs) {
+    test_sub_docs(ndjson_k, ext_ndjson_k, cmp_ndjson_docs);
+    test_sub_docs(ndjson_k, ext_parquet_k, cmp_table_docs);
+    test_sub_docs(ndjson_k, ext_csv_k, cmp_table_docs);
+    test_sub_docs(parquet_k, ext_ndjson_k, cmp_ndjson_docs);
+    test_sub_docs(parquet_k, ext_parquet_k, cmp_table_docs);
+    test_sub_docs(parquet_k, ext_csv_k, cmp_table_docs);
+    test_sub_docs(csv_k, ext_ndjson_k, cmp_ndjson_docs);
+    test_sub_docs(csv_k, ext_parquet_k, cmp_table_docs);
+    test_sub_docs(csv_k, ext_csv_k, cmp_table_docs);
+}
+
+TEST(crash_cases, graph_import) {
+    test_crash_cases_graph_import(ndjson_k);
+    test_crash_cases_graph_import(ndjson_k);
+    test_crash_cases_graph_import(ndjson_k);
+    test_crash_cases_graph_import(parquet_k);
+    test_crash_cases_graph_import(parquet_k);
+    test_crash_cases_graph_import(parquet_k);
+    test_crash_cases_graph_import(csv_k);
+    test_crash_cases_graph_import(csv_k);
+    test_crash_cases_graph_import(csv_k);
+}
+
+TEST(crash_cases, graph_export) {
+    test_crash_cases_graph_export(ext_ndjson_k);
+    test_crash_cases_graph_export(ext_parquet_k);
+    test_crash_cases_graph_export(ext_csv_k);
+    test_crash_cases_graph_export(ext_ndjson_k);
+    test_crash_cases_graph_export(ext_parquet_k);
+    test_crash_cases_graph_export(ext_csv_k);
+    test_crash_cases_graph_export(ext_ndjson_k);
+    test_crash_cases_graph_export(ext_parquet_k);
+    test_crash_cases_graph_export(ext_csv_k);
+}
+
+TEST(crash_cases, docs_import) {
+    test_crash_cases_docs_import(ndjson_k);
+    test_crash_cases_docs_import(ndjson_k);
+    test_crash_cases_docs_import(ndjson_k);
+    test_crash_cases_docs_import(parquet_k);
+    test_crash_cases_docs_import(parquet_k);
+    test_crash_cases_docs_import(parquet_k);
+    test_crash_cases_docs_import(csv_k);
+    test_crash_cases_docs_import(csv_k);
+    test_crash_cases_docs_import(csv_k);
+}
+
+TEST(crash_cases, docs_export) {
+    test_crash_cases_docs_export(ext_ndjson_k);
+    test_crash_cases_docs_export(ext_parquet_k);
+    test_crash_cases_docs_export(ext_csv_k);
+    test_crash_cases_docs_export(ext_ndjson_k);
+    test_crash_cases_docs_export(ext_parquet_k);
+    test_crash_cases_docs_export(ext_csv_k);
+    test_crash_cases_docs_export(ext_ndjson_k);
+    test_crash_cases_docs_export(ext_parquet_k);
+    test_crash_cases_docs_export(ext_csv_k);
 }
 
 int main(int argc, char** argv) {
