@@ -3,5 +3,6 @@
     "max_file_size": 268435456,
     "max_open_files": -1,
     "compression": "none",
-    "cache_size": 200000
+    "cache_size": 200000,
+    "db_path": "/var/lib/ukv/leveldb/"
 }

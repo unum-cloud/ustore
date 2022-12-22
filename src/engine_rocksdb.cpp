@@ -9,7 +9,7 @@
  * choice for various Relational Database, built on top of it.
  * Examples: Yugabyte, TiDB, and, optionally: Mongo, MySQL, Cassandra, MariaDB.
  *
- * ## @b PlainTable vs `BlockBasedTable` Format
+ * ## @b PlainTable vs @b BlockBasedTable Format
  * We use fixed-length integer keys, which are natively supported by `PlainTable`.
  * It, however, doesn't support @b non-prefix-based-`Seek()` in scans.
  * Moreover, not being the default variant, its significantly less optimized,
@@ -18,6 +18,7 @@
  */
 
 #include <mutex>
+#include <filesystem>
 
 #include <rocksdb/db.h>
 #include <rocksdb/utilities/options_util.h>
@@ -29,6 +30,7 @@
 #include "helpers/linked_array.hpp" // `uninitialized_array_gt`
 #include "helpers/full_scan.hpp"    // `reservoir_sample_iterator`
 
+namespace stdfs = std::filesystem;
 using namespace unum::ukv;
 using namespace unum;
 
@@ -48,6 +50,8 @@ ukv_key_t const ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 bool const ukv_supports_transactions_k = true;
 bool const ukv_supports_named_collections_k = true;
 bool const ukv_supports_snapshots_k = true;
+
+static constexpr char const* config_name_k = "config_rocksdb.ini";
 
 struct key_comparator_t final : public rocksdb::Comparator {
     inline int Compare(rocksdb::Slice const& a, rocksdb::Slice const& b) const override {
@@ -119,29 +123,44 @@ rocks_collection_t* rocks_collection(rocks_db_t& db, ukv_collection_t collection
 void ukv_database_init(ukv_database_init_t* c_ptr) {
 
     ukv_database_init_t& c = *c_ptr;
-    if (!c.config || !std::strlen(c.config)) {
-        *c.error = "RocksDB requires a configuration file or a path!";
-        return;
-    }
-
     safe_section("Opening RocksDB", c.error, [&] {
         rocks_db_t* db_ptr = new rocks_db_t;
-        std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
+        rocks_status_t status;
+
+        stdfs::path root = c.root_directory;
+        stdfs::file_status root_status = stdfs::status(root);
+        return_error_if_m(root_status.type() == stdfs::file_type::directory,
+                          c.error,
+                          args_wrong_k,
+                          "Root isn't a directory");
+        stdfs::path config_path = stdfs::path(root) / config_name_k;
+        stdfs::file_status config_status = stdfs::status(config_path);
+
+        // Recovering RocksDB isn't trivial and depends on a number of configuration parameters:
+        // http://rocksdb.org/blog/2016/03/07/rocksdb-options-file.html
+        // https://github.com/facebook/rocksdb/wiki/RocksDB-Options-File
         rocksdb::Options options;
-        rocksdb::ConfigOptions config_options;
-
-        std::string path = c.config;
-        rocks_status_t status = rocksdb::LoadLatestOptions(config_options, path, &options, &column_descriptors);
-        return_error_if_m(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
-
-        if (status.IsNotFound()) {
-            // TODO: Take the config path from c.config!
-            std::string config_path = "./assets/rocksdb.cfg";
-            status = rocksdb::LoadOptionsFromFile(config_path, rocksdb::Env::Default(), &options, &column_descriptors);
-            return_error_if_m(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
-            if (status.IsNotFound())
-                options.compression = rocksdb::kNoCompression;
+        options.compression = rocksdb::kNoCompression;
+        std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
+        if (config_status.type() == stdfs::file_type::not_found) {
+            log_warning_m(
+                "Configuration file is missing under the path %s. "
+                "Default will be used\n",
+                config_path.c_str());
         }
+        else {
+            status = rocksdb::LoadOptionsFromFile(config_path, rocksdb::Env::Default(), &options, &column_descriptors);
+            return_error_if_m(status.ok(), c.error, error_unknown_k, "Couldn't parse RocksDB config");
+            log_warning_m("Initializing RocksDB from config: %s\n", config_path.c_str());
+            if (options.compression != rocksdb::kNoCompression)
+                log_warning_m(
+                    "We discourage general-purpose compression in favour "
+                    "of modality-aware compression in UKV\n");
+        }
+
+        rocksdb::ConfigOptions config_options;
+        status = rocksdb::LoadLatestOptions(config_options, root, &options, &column_descriptors);
+        return_error_if_m(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
 
         auto cf_options = rocksdb::ColumnFamilyOptions();
         cf_options.comparator = &key_comparator_k;
@@ -157,7 +176,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 
         rocks_native_t* native_db = nullptr;
         rocksdb::OptimisticTransactionDBOptions txn_options;
-        status = rocks_native_t::Open(options, txn_options, path, column_descriptors, &db_ptr->columns, &native_db);
+        status = rocks_native_t::Open(options, txn_options, root, column_descriptors, &db_ptr->columns, &native_db);
         return_error_if_m(status.ok(), c.error, error_unknown_k, "Opening RocksDB with options");
 
         db_ptr->native = std::unique_ptr<rocks_native_t>(native_db);
