@@ -290,7 +290,11 @@ if(${UKV_BUILD_SDK_PYTHON})
 
   foreach(client_lib_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT client_lib "ukv_embedded_" ${client_lib_name})
-    string(CONCAT wrap_lib "py_" ${client_lib})
+    if (${client_lib_name} STREQUAL "flight_client")
+      string(CONCAT client_lib "ukv_" ${client_lib_name})
+    endif()
+    
+    string(CONCAT wrap_lib "py_" ${client_lib_name})
     get_target_property(client_dependencies ${client_lib} LINK_LIBRARIES)
 
     pybind11_add_module(${wrap_lib} MODULE python/pybind.cpp python/database.cpp python/networkx.cpp python/documents.cpp python/pandas.cpp)
