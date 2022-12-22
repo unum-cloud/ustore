@@ -1559,6 +1559,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
 
@@ -1566,31 +1567,6 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
     auto has_fields = fields && (!fields.repeats() || *fields);
-    if (!has_fields && c.type == internal_format_k && c.modification == ukv_doc_modify_upsert_k) {
-        ukv_write_t write {
-            .db = c.db,
-            .error = c.error,
-            .transaction = c.transaction,
-            .arena = arena,
-            .options = c.options,
-            .tasks_count = c.tasks_count,
-            .collections = c.collections,
-            .collections_stride = c.collections_stride,
-            .keys = c.keys,
-            .keys_stride = c.keys_stride,
-            .presences = c.presences,
-            .offsets = c.offsets,
-            .offsets_stride = c.offsets_stride,
-            .lengths = c.lengths,
-            .lengths_stride = c.lengths_stride,
-            .values = c.values,
-            .values_stride = c.values_stride,
-        };
-        return ukv_write(&write);
-    }
-
-    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
     bits_view_t presences {c.presences};
@@ -1600,15 +1576,57 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
 
     places_arg_t places {collections, keys, fields, c.tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
-    read_modify_write(c.db,
-                      c.transaction,
-                      places,
-                      contents,
-                      c.options,
-                      static_cast<doc_modification_t>(c.modification),
-                      c.type,
-                      arena,
-                      c.error);
+
+    if (has_fields || c.type != internal_format_k || c.modification != ukv_doc_modify_upsert_k)
+        return read_modify_write(c.db,
+                                 c.transaction,
+                                 places,
+                                 contents,
+                                 c.options,
+                                 static_cast<doc_modification_t>(c.modification),
+                                 c.type,
+                                 arena,
+                                 c.error);
+
+    // Validate Jsons Before Write
+    ukv_length_t max_length = 0;
+    for (std::size_t i = 0; i != contents.size(); ++i) {
+        if (max_length < contents[i].size() && contents[i].size() != ukv_length_missing_k)
+            max_length = contents[i].size();
+    }
+
+    auto document = arena.alloc<byte_t>(max_length + sj::SIMDJSON_PADDING, c.error);
+    return_if_error_m(c.error);
+
+    sj::dom::parser parser;
+    for (std::size_t i = 0; i < contents.size(); ++i) {
+        std::memcpy(document.begin(), contents[i].data(), contents[i].size());
+        std::memset(document.begin() + contents[i].size(), 0, sj::SIMDJSON_PADDING);
+        auto result = parser.parse((const char*)document.begin(), contents[i].size(), false);
+        return_error_if_m(result.error() == sj::SUCCESS, c.error, 0, "Invalid Json!");
+    }
+
+    ukv_write_t write {
+        .db = c.db,
+        .error = c.error,
+        .transaction = c.transaction,
+        .arena = arena,
+        .options = c.options,
+        .tasks_count = c.tasks_count,
+        .collections = c.collections,
+        .collections_stride = c.collections_stride,
+        .keys = c.keys,
+        .keys_stride = c.keys_stride,
+        .presences = c.presences,
+        .offsets = c.offsets,
+        .offsets_stride = c.offsets_stride,
+        .lengths = c.lengths,
+        .lengths_stride = c.lengths_stride,
+        .values = c.values,
+        .values_stride = c.values_stride,
+    };
+
+    ukv_write(&write);
 }
 
 void ukv_docs_read(ukv_docs_read_t* c_ptr) {

@@ -39,11 +39,9 @@ GoLang
 <a href="https://arrow.apache.org/">Apache Arrow</a>
 <br/>
 <b>available on</b>:
+<a href="#installation">CMake</a>
+•
 <a href="https://pypi.org/project/ukv/">PyPI</a>
-•
-Conan
-•
-Maven
 •
 <a href="https://hub.docker.com/repository/docker/unum/ukv">Docker Hub</a>
 </div>
@@ -62,7 +60,7 @@ This gives you the flexibility to iterate on different parts of this modular dat
 ![UCSB 10 TB Results](assets/charts/Performance.png)
 
 **Flexibility is essential, but so is performance**.
-Even our open-source baseline implementations of Document and Graph modalities often outperform classical commercial DBMS products.
+Even our open-source baseline implementations of Document and Graph modalities on top UMem or RocksDB often outperform classical commercial DBMS products.
 The proprietary version obliterates them.
 Modern persistent IO on high-end servers can exceed 120 GB/s per socket when built on user-space drivers like [SPDK][spdk].
 To harness that power, unlike LevelDB and RocksDB, we had to design an interface that avoids dynamic polymorphism and has no constraints on memory allocation strategies and used containers.
@@ -85,6 +83,7 @@ If they were built on UKV, they could have become 5x faster by changing a single
 - [Testing](#testing)
 - [Benchmarks](#benchmarks)
 - [Tooling](#tooling)
+- [Roadmap](#roadmap)
 - [Development \& Licensing](#development--licensing)
 - [Presets, Limitations and FAQ](#presets-limitations-and-faq)
 
@@ -343,6 +342,16 @@ Following tools are currently in the works.
 - Visualization tools and dashboards. 🔜
 
 > [Read full tooling guide in our docs here][ukv-tools].
+
+## Roadmap
+
+1. Fetching remote configs.
+2. Builds for Arm, MacOS, Windows.
+3. Bindings for GoLang, Java, JavaScript.
+4. Improved Vector Search.
+5. Persistent Snapshots.
+6. Continuous Replication.
+7. Horizontal Scaling.
 
 ## Development & Licensing
 

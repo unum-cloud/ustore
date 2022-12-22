@@ -1,25 +1,21 @@
-FROM ubuntu:20.04 as builder
+FROM ubuntu:focal as builder
 ENV DEBIAN_FRONTEND="noninteractive" TZ="Europe/London"
-RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
-# Few components have to be installed separately:
-# 1. CMake: build-essential, cmake
-# 2. Arrow: https://arrow.apache.org/install/
-# 3. Boost, if you need the REST server, which we don't :)
-RUN apt update && apt install -y sudo git
 
-ENV arrow_version=9.0.0-1
-RUN apt update && apt install -y -V ca-certificates lsb-release wget && \
-    cd /tmp && wget --no-check-certificate https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt update && apt install -y -V libarrow-dev=${arrow_version} libarrow-dataset-dev=${arrow_version} libarrow-flight-dev=${arrow_version} \
-    libarrow-python-dev=${arrow_version} libarrow-python-flight-dev=${arrow_version} libgandiva-dev=${arrow_version} libparquet-dev=${arrow_version} \
-    python3 python3-pip
-RUN pip install cmake
+RUN ln -s /usr/bin/dpkg-split /usr/sbin/dpkg-split && \
+    ln -s /usr/bin/dpkg-deb /usr/sbin/dpkg-deb && \
+    ln -s /bin/rm /usr/sbin/rm && \
+    ln -s /bin/tar /usr/sbin/tar && \
+    ln -s /bin/as /usr/sbin/as
+
+RUN apt-get update -y && \
+    apt-get install -y apt-utils 2>&1 | grep -v "debconf: delaying package configuration, since apt-utils is not installed" && \
+    apt-get install -y --no-install-recommends cmake git libssl-dev build-essential zlib1g zlib1g-dev
 
 COPY . /usr/src/ukv
 WORKDIR /usr/src/ukv
+
+RUN git config --global http.sslVerify "false"
 RUN cmake \
-    -DUKV_BUILD_SDK_PYTHON=0 \
     -DUKV_BUILD_TESTS=0 \
     -DUKV_BUILD_BENCHMARKS=0 \
     -DUKV_BUILD_ENGINE_UMEM=1 \
@@ -28,21 +24,12 @@ RUN cmake \
     -DUKV_BUILD_API_FLIGHT_CLIENT=0 \
     -DUKV_BUILD_API_FLIGHT_SERVER=1 . && \
     make -j32 \
-    ukv_flight_server_umem \
-    ukv_flight_server_leveldb \
-    ukv_flight_server_rocksdb
+        ukv_flight_server_umem \
+        ukv_flight_server_leveldb \
+        ukv_flight_server_rocksdb
 
 ## TODO: Optimize: https://github.com/docker-slim/docker-slim
-FROM ubuntu:20.04
-ENV DEBIAN_FRONTEND="noninteractive" TZ="Europe/London"
-RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
-
-ENV arrow_version=9.0.0-1
-RUN apt update && apt install -y -V ca-certificates lsb-release wget && \
-    cd /tmp && wget --no-check-certificate https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt update && apt install -y -V libarrow-dev=${arrow_version} libarrow-flight-dev=${arrow_version}
-
+FROM ubuntu:focal
 WORKDIR /root/
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_umem ./umem_server
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_leveldb ./leveldb_server
