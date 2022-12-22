@@ -218,7 +218,7 @@ endif()
 
 # The rest of CMake will apply to all client libraries
 # Generate Apache Arrow Flight RPC backends
-set(UKV_CLIENT_NAMES UKV_ENGINE_NAMES)
+set(UKV_CLIENT_NAMES ${UKV_ENGINE_NAMES})
 if(${UKV_BUILD_API_FLIGHT_CLIENT})
   add_library(ukv_flight_client src/flight_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
   target_link_libraries(ukv_flight_client pthread yyjson simdjson bson pcre2 fmt::fmt arrow::flight arrow::bundled arrow::dataset arrow::arrow ssl crypto ${JEMALLOC_LIBRARIES})
