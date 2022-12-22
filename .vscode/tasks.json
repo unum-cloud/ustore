@@ -99,7 +99,7 @@
         },
         {
             "label": "Build Native: Debug Arrow Client",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_CLIENT=1 .. && make test_units_ukv_flight_client_umem -j8 && sleep 5",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_CLIENT=1 .. && make test_units_ukv_flight_client -j8 && sleep 5",
             "args": [],
             "type": "shell"
         },
