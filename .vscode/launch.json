@@ -188,6 +188,29 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
+            "name": "C++: Stress Isolated Inserts RocksDB",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_insert_atomic_isolated_ukv_embedded_rocksdb",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                }
+            ],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Stress Isolated Inserts RocksDB",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
             "name": "C++: Stress Serializable Transactions UMem",
             "type": "cppdbg",
             "request": "launch",
@@ -215,10 +238,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Test RocksDB",
+            "name": "C++: Stress Serializable Transactions RocksDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/stress_insert_atomic_isolated_ukv_embedded_rocksdb",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_serializable_transactions_ukv_embedded_rocksdb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -233,7 +256,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug RocksDB Stress Test",
+            "preLaunchTask": "Build Native: Stress Serializable Transactions RocksDB",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -313,7 +336,7 @@
             "name": "C++: Test Arrow Client",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_flight_client_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_flight_client",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"

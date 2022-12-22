@@ -44,14 +44,20 @@
             "type": "shell"
         },
         {
+            "label": "Build Native: Stress Isolated Inserts RocksDB",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 .. && make stress_insert_atomic_isolated_ukv_embedded_rocksdb -j8",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Build Native: Stress Serializable Transactions UMem",
             "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 .. && make stress_serializable_transactions_ukv_embedded_umem -j8",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug RocksDB Stress Test",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 .. && make stress_insert_atomic_isolated_ukv_rocembedded_ksdb -j8",
+            "label": "Build Native: Stress Serializable Transactions RocksDB",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 .. && make stress_serializable_transactions_ukv_embedded_rocksdb -j8",
             "args": [],
             "type": "shell"
         },
@@ -99,7 +105,7 @@
         },
         {
             "label": "Build Native: Debug Arrow Client",
-            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_CLIENT=1 .. && make test_units_ukv_flight_client_umem -j8 && sleep 5",
+            "command": "mkdir -p build_debug && cd build_debug && cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_CLIENT=1 .. && make test_units_ukv_flight_client -j8 && sleep 5",
             "args": [],
             "type": "shell"
         },

@@ -9,7 +9,7 @@ RUN ln -s /usr/bin/dpkg-split /usr/sbin/dpkg-split && \
 
 RUN apt-get update -y && \
     apt-get install -y apt-utils 2>&1 | grep -v "debconf: delaying package configuration, since apt-utils is not installed" && \
-    apt-get install -y --no-install-recommends cmake git libssl-dev build-essential zlib1g zlib1g-dev
+    apt-get install -y --no-install-recommends cmake git libssl-dev build-essential zlib1g zlib1g-dev python3 python3-dev
 
 COPY . /usr/src/ukv
 WORKDIR /usr/src/ukv
