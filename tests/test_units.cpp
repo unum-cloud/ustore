@@ -1208,6 +1208,16 @@ TEST(db, docs_nested_batch) {
     offsets[3] = field_value1.size() + field_value2.size() + field_value3.size();
     check_equalities(ref_with_fields, values);
 
+    // Check Invalid Json Write
+    std::string invalid_json = R"({"name":"Alice", } "age": 24})";
+    offsets[1] = jsons[0].size();
+    offsets[2] = jsons[0].size() + jsons[1].size();
+    offsets[3] = jsons[0].size() + jsons[1].size() + invalid_json.size();
+    continuous_jsons = jsons[0] + jsons[1] + invalid_json;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(continuous_jsons.data());
+
+    EXPECT_FALSE(ref.assign(values));
+
     EXPECT_TRUE(db.clear());
 }
 
