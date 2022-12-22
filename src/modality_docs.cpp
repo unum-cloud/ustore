@@ -1363,6 +1363,7 @@ void read_modify_unique_docs( //
             ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
             value_view_t binary_doc = *found_binary_it;
             callback(task_idx, field, binary_doc);
+            return_if_error_m(c_error);
         }
     }
     else {
@@ -1392,6 +1393,7 @@ void read_modify_unique_docs( //
                               0,
                               "Invalid Arguments!");
             callback(task_idx, field, value_view_t::make_empty());
+            return_if_error_m(c_error);
         }
     }
 
@@ -1588,7 +1590,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
                                  arena,
                                  c.error);
 
-    // Validate Jsons Before Write
+    // Validate JSONs Before Write
     ukv_length_t max_length = 0;
     for (std::size_t i = 0; i != contents.size(); ++i) {
         if (max_length < contents[i].size() && contents[i].size() != ukv_length_missing_k)
