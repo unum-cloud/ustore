@@ -1597,6 +1597,8 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
 
     sj::dom::parser parser;
     auto document = arena.alloc<byte_t>(max_length + sj::SIMDJSON_PADDING, c.error);
+    return_if_error_m(c.error);
+
     for (std::size_t i = 0; i < contents.size(); ++i) {
         std::memcpy(document.begin(), contents[i].data(), contents[i].size());
         std::memset(document.begin() + contents[i].size(), 0, sj::SIMDJSON_PADDING);
