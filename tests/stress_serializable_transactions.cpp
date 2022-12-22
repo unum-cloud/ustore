@@ -254,7 +254,10 @@ class test_one_config_t : public testing::Test {
 };
 
 int main(int argc, char** argv) {
-    std::filesystem::create_directory("./tmp");
+    if (path() && std::strlen(path())) {
+        std::filesystem::remove_all(path());
+        std::filesystem::create_directories(path());
+    }
     ::testing::InitGoogleTest(&argc, argv);
 
     std::vector<std::size_t> thread_counts {2, 3, 4, 5, 6, 7, 8, 9, 10};
