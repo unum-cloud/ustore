@@ -135,13 +135,13 @@ void serializable_writes( //
         bool produced_error = false;
         std::size_t passed_checkpoints = 0;
 
-        ukv_transaction_t txn;
+        transaction_t txn = db.transact().throw_or_release();
 
         while (!produced_error && passed_checkpoints < max_checkpoints) {
             // Make a few transactions in a row.
             // They will be of identical size, but with different keys.
             for (std::size_t iteration = 0; iteration != transactions_between_checkpoints; ++iteration) {
-                transaction_t txn = db.transact().throw_or_release();
+                txn.reset().throw_unhandled();
                 for (std::size_t part = 0; part != parts_total_k; ++part) {
                     operation_t& op = operations[iteration * parts_total_k + part];
                     op.code = (random_generator() % parts_total_k) > part_inserts_ak //
@@ -198,8 +198,8 @@ void serializable_writes( //
                     payload_t retrieved = *reinterpret_cast<payload_t const*>(retrieved_str.data());
                     EXPECT_EQ(expected, retrieved);
                 }
+                EXPECT_TRUE(concurrent.clear());
                 sequential.clear();
-                EXPECT_TRUE(db.clear());
             }
 
             // Continue into
@@ -213,6 +213,8 @@ void serializable_writes( //
         threads.push_back(std::thread(thread_logic, thread_idx));
     for (auto& thread : threads)
         thread.join();
+
+    EXPECT_TRUE(db.clear());
 }
 
 void test_writes(database_t& db, std::size_t thread_count, std::size_t checkpoint_frequency) {
