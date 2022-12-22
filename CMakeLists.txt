@@ -9,6 +9,7 @@ option(UKV_BUILD_TESTS "Building C/C++ native tests" ON)
 option(UKV_BUILD_BENCHMARKS "Building C/C++ native benchmarks")
 
 option(UKV_BUILD_SDK_PYTHON "Building Python bidings for all SDKs")
+option(UKV_BUILD_API_FLIGHT "Building Apache Arrow Flight RPC server and client for all backends")
 option(UKV_BUILD_API_FLIGHT_CLIENT "Building Apache Arrow Flight RPC client for all backends")
 option(UKV_BUILD_API_FLIGHT_SERVER "Building Apache Arrow Flight RPC server for all backends")
 option(UKV_BUILD_API_REST "Building REST API server for all backends")
@@ -17,6 +18,11 @@ option(UKV_USE_JEMALLOC "A faster allocator, that requires autoconf to be instal
 option(UKV_USE_ONEAPI "Faster concurrency primitives from Intel")
 
 set(UKV_ENGINE_UDISK_PATH "" CACHE STRING "Pass a path to UDisk binary to produce a full range of bindings")
+
+if (UKV_BUILD_API_FLIGHT)
+  set(UKV_BUILD_API_FLIGHT_SERVER ON)
+  set(UKV_BUILD_API_FLIGHT_CLIENT ON)
+endif()
 
 # Some settings are mutually dependant
 include(CMakeDependentOption)
@@ -144,7 +150,7 @@ if(${UKV_USE_ONEAPI})
 endif()
 
 # Distributions:
-if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT_CLIENT})
+if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT_CLIENT} OR ${UKV_BUILD_API_FLIGHT_SERVER})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
 
@@ -214,10 +220,12 @@ endif()
 
 # The rest of CMake will apply to all client libraries
 # Generate Apache Arrow Flight RPC backends
+set(UKV_CLIENT_NAMES UKV_ENGINE_NAMES)
 if(${UKV_BUILD_API_FLIGHT_CLIENT})
   add_library(ukv_flight_client src/flight_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
   target_link_libraries(ukv_flight_client pthread yyjson simdjson bson pcre2 fmt::fmt arrow::arrow arrow::flight ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
+  list(APPEND UKV_CLIENT_NAMES "flight_client")
   list(APPEND UKV_CLIENT_LIBS "ukv_flight_client")
 endif()
 
@@ -282,7 +290,8 @@ if(${UKV_BUILD_SDK_PYTHON})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pybind11.cmake")
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ukv)
 
-  foreach(client_lib IN ITEMS ${UKV_CLIENT_LIBS})
+  foreach(client_lib_name IN ITEMS ${UKV_CLIENT_NAMES})
+    string(CONCAT client_lib "ukv_embedded_" ${client_lib_name})
     string(CONCAT wrap_lib "py_" ${client_lib})
     get_target_property(client_dependencies ${client_lib} LINK_LIBRARIES)
 
@@ -290,7 +299,7 @@ if(${UKV_BUILD_SDK_PYTHON})
     target_include_directories(${wrap_lib} PUBLIC python/ ${PYARROW_DIR}/include)
     target_link_directories(${wrap_lib} PUBLIC ${PYARROW_DIR})
     target_link_libraries(${wrap_lib} PRIVATE pthread arrow::arrow arrow::dataset arrow::flight arrow::bundled fmt::fmt arrow_python ${client_lib} ${client_dependencies})
-    target_compile_definitions(${wrap_lib} PRIVATE UKV_VERSION="${_VERSION_}" UKV_PYTHON_MODULE_NAME=${client_lib})
-    set_target_properties(${wrap_lib} PROPERTIES OUTPUT_NAME ${client_lib})
+    target_compile_definitions(${wrap_lib} PRIVATE UKV_VERSION="${_VERSION_}" UKV_PYTHON_MODULE_NAME=${client_lib_name})
+    set_target_properties(${wrap_lib} PROPERTIES OUTPUT_NAME ${client_lib_name})
   endforeach()
 endif()
