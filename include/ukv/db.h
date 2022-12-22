@@ -238,15 +238,18 @@ extern bool const ukv_supports_snapshots_k;
  */
 typedef struct ukv_database_init_t {
     /**
-     * @brief Path to place on disk, where the configuration files and,
-     * potentially, data will leave. Any sub-folders will be used by
-     * the UKV.
+     * @brief Configuration parameter for the DBMS.
      *
-     * In-memory stores may not have any disk access at all.
-     * For persistent stores the recommended location on Linux is:
-     * `/var/lib/ukv/`.
+     * For embedded distributions should be the root directory,
+     * under which the DBMS and it's files will be organized.
+     *
+     * Recommendations:
+     * - UMem: empty or `/var/lib/ukv/umem/` for eventually persistent.
+     * - RocksDB: `/var/lib/ukv/rocksdb/` optionally storing `config_rocksdb.ini`.
+     * - LevelDB: `/var/lib/ukv/leveldb/` optionally storing `config_leveldb.json`.
+     * - Flight API Client: `grpc://0.0.0.0:38709`.
      */
-    ukv_str_view_t root_directory = NULL;
+    ukv_str_view_t config = NULL;
     /** @brief A pointer to the opened KVS, unless `error` is filled. */
     ukv_database_t* db;
     /** @brief Pointer to exported error message. */

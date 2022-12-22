@@ -947,6 +947,8 @@ TEST(db, paths) {
     ukv_paths_match(&paths_match);
     EXPECT_EQ(results_counts[0], 0);
     EXPECT_EQ(*paths_match.error, nullptr);
+
+    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -956,7 +958,7 @@ TEST(db, paths) {
  */
 TEST(db, paths_linked_list) {
 
-    constexpr std::size_t count = 100;
+    constexpr std::size_t count = 1000;
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1056,6 +1058,8 @@ TEST(db, paths_linked_list) {
         EXPECT_TRUE(status);
         EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
     }
+
+    EXPECT_TRUE(db.clear());
 }
 
 #pragma region Documents Modality
@@ -1295,7 +1299,9 @@ TEST(db, docs_merge_and_patch) {
         auto expected = it["expected"].dump();
         collection[1] = doc.c_str();
         EXPECT_TRUE(collection[1].patch(patch.c_str()));
-        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+        auto maybe_value = collection[1].value();
+        EXPECT_TRUE(maybe_value);
+        M_EXPECT_EQ_JSON(maybe_value->c_str(), expected.c_str());
     }
 
     std::ifstream f_merge("tests/merge.json");
@@ -1306,7 +1312,9 @@ TEST(db, docs_merge_and_patch) {
         auto expected = it["expected"].dump();
         collection[1] = doc.c_str();
         EXPECT_TRUE(collection[1].merge(merge.c_str()));
-        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+        auto maybe_value = collection[1].value();
+        EXPECT_TRUE(maybe_value);
+        M_EXPECT_EQ_JSON(maybe_value->c_str(), expected.c_str());
     }
 
     EXPECT_TRUE(db.clear());
@@ -2030,7 +2038,10 @@ TEST(db, vectors) {
 }
 
 int main(int argc, char** argv) {
-    std::filesystem::create_directories(path());
+    if (path() && std::strlen(path())) {
+        std::filesystem::remove_all(path());
+        std::filesystem::create_directories(path());
+    }
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

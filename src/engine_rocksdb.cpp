@@ -34,12 +34,6 @@ namespace stdfs = std::filesystem;
 using namespace unum::ukv;
 using namespace unum;
 
-using rocks_native_t = rocksdb::OptimisticTransactionDB;
-using rocks_status_t = rocksdb::Status;
-using rocks_value_t = rocksdb::PinnableSlice;
-using rocks_txn_t = rocksdb::Transaction;
-using rocks_collection_t = rocksdb::ColumnFamilyHandle;
-
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
@@ -50,6 +44,12 @@ ukv_key_t const ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 bool const ukv_supports_transactions_k = true;
 bool const ukv_supports_named_collections_k = true;
 bool const ukv_supports_snapshots_k = true;
+
+using rocks_native_t = rocksdb::OptimisticTransactionDB;
+using rocks_status_t = rocksdb::Status;
+using rocks_value_t = rocksdb::PinnableSlice;
+using rocks_txn_t = rocksdb::Transaction;
+using rocks_collection_t = rocksdb::ColumnFamilyHandle;
 
 static constexpr char const* config_name_k = "config_rocksdb.ini";
 
@@ -127,7 +127,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         rocks_db_t* db_ptr = new rocks_db_t;
         rocks_status_t status;
 
-        stdfs::path root = c.root_directory;
+        stdfs::path root = c.config;
         stdfs::file_status root_status = stdfs::status(root);
         return_error_if_m(root_status.type() == stdfs::file_type::directory,
                           c.error,
