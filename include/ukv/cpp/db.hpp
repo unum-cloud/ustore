@@ -266,10 +266,10 @@ class database_t : public std::enable_shared_from_this<database_t> {
     database_t(database_t&& other) noexcept : db_(std::exchange(other.db_, nullptr)) {}
     operator ukv_database_t() const noexcept { return db_; }
 
-    status_t open(ukv_str_view_t config = nullptr) noexcept {
+    status_t open(ukv_str_view_t root_directory = nullptr) noexcept {
         status_t status;
         ukv_database_init_t database {
-            .config = config,
+            .root_directory = root_directory,
             .db = &db_,
             .error = status.member_ptr(),
         };

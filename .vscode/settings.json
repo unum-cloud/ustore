@@ -161,6 +161,7 @@
         "sharded",
         "simdjson",
         "SPDK",
+        "stdfs",
         "tparam",
         "txns",
         "umem",

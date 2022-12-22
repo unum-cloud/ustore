@@ -31,8 +31,15 @@ RUN cmake \
 ## TODO: Optimize: https://github.com/docker-slim/docker-slim
 FROM ubuntu:focal
 WORKDIR /root/
+
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_umem ./umem_server
+COPY ./assets/config_umem.json /var/lib/ukv/umem/config_umem.json
+
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_leveldb ./leveldb_server
+COPY ./assets/config_leveldb.json /var/lib/ukv/leveldb/config_leveldb.json
+
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_rocksdb ./rocksdb_server
+COPY ./assets/config_rocksdb.ini /var/lib/ukv/rocksdb/config_rocksdb.ini
+
 EXPOSE 38709
 CMD ["./umem_server"]

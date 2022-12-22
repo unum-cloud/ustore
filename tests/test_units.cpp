@@ -1232,7 +1232,7 @@ TEST(db, docs_modify) {
     M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
 
     // Update
-    auto modifier = R"( {"person": {"name":"Charls", "age": 28}} )"_json.dump();
+    auto modifier = R"( {"person": {"name":"Charles", "age": 28}} )"_json.dump();
     EXPECT_TRUE(collection[1].update(modifier.c_str()));
     auto result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
@@ -1262,14 +1262,14 @@ TEST(db, docs_modify) {
     M_EXPECT_EQ_JSON(result->c_str(), jsons[2].c_str());
 
     // Upsert By Field
-    modifier = R"("Charls")"_json.dump();
-    expected = R"( {"person": "Charls", "age": 26} )"_json.dump();
+    modifier = R"("Charles")"_json.dump();
+    expected = R"( {"person": "Charles", "age": 26} )"_json.dump();
     EXPECT_TRUE(collection[ckf(1, "/person")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     modifier = R"(70)"_json.dump();
-    expected = R"( {"person": "Charls", "age": 26, "weight" : 70} )"_json.dump();
+    expected = R"( {"person": "Charles", "age": 26, "weight" : 70} )"_json.dump();
     EXPECT_TRUE(collection[ckf(1, "/weight")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
@@ -1867,6 +1867,8 @@ TEST(db, graph_layering_shapes) {
     over_the_vertices(true, 0);
     EXPECT_TRUE(db.clear());
     over_the_vertices(false, 0);
+
+    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -2028,7 +2030,7 @@ TEST(db, vectors) {
 }
 
 int main(int argc, char** argv) {
-    std::filesystem::create_directory("./tmp");
+    std::filesystem::create_directories(path());
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

@@ -237,8 +237,16 @@ extern bool const ukv_supports_snapshots_k;
  * - remote in-memory transactional KVS
  */
 typedef struct ukv_database_init_t {
-    /** @brief A NULL-terminated @b JSON string with configuration specs. */
-    ukv_str_view_t config = NULL;
+    /**
+     * @brief Path to place on disk, where the configuration files and,
+     * potentially, data will leave. Any sub-folders will be used by
+     * the UKV.
+     *
+     * In-memory stores may not have any disk access at all.
+     * For persistent stores the recommended location on Linux is:
+     * `/var/lib/ukv/`.
+     */
+    ukv_str_view_t root_directory = NULL;
     /** @brief A pointer to the opened KVS, unless `error` is filled. */
     ukv_database_t* db;
     /** @brief Pointer to exported error message. */
