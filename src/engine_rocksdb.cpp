@@ -577,7 +577,7 @@ void ukv_measure(ukv_measure_t* c_ptr) {
 
     rocksdb::Range range;
     uint64_t approximate_size = 0;
-    uint64_t keys_size = 0;
+    uint64_t keys_count = 0;
     uint64_t sst_files_size = 0;
     rocks_status_t status;
 
@@ -590,18 +590,17 @@ void ukv_measure(ukv_measure_t* c_ptr) {
             status = db.native->GetApproximateSizes(options, collection, &range, 1, &approximate_size);
             if (export_error(status, c.error))
                 return;
-            db.native->GetIntProperty(collection, "rocksdb.estimate-num-keys", &keys_size);
+            db.native->GetIntProperty(collection, "rocksdb.estimate-num-keys", &keys_count);
             db.native->GetIntProperty(collection, "rocksdb.total-sst-files-size", &sst_files_size);
         });
         return_if_error_m(c.error);
 
-        ukv_size_t estimate[6];
-        min_cardinalities[i] = estimate[0] = static_cast<ukv_size_t>(0);
-        max_cardinalities[i] = estimate[1] = static_cast<ukv_size_t>(keys_size);
-        min_value_bytes[i] = estimate[2] = static_cast<ukv_size_t>(0);
-        max_value_bytes[i] = estimate[3] = static_cast<ukv_size_t>(0);
-        min_space_usages[i] = estimate[4] = approximate_size;
-        max_space_usages[i] = estimate[5] = sst_files_size;
+        min_cardinalities[i] = static_cast<ukv_size_t>(0);
+        max_cardinalities[i] = static_cast<ukv_size_t>(keys_count);
+        min_value_bytes[i] = static_cast<ukv_size_t>(0);
+        max_value_bytes[i] = std::numeric_limits<ukv_size_t>::max();
+        min_space_usages[i] = approximate_size;
+        max_space_usages[i] = sst_files_size;
     }
 }
 

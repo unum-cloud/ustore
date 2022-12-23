@@ -664,7 +664,6 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     auto keys_output = *c.keys = arena.alloc<ukv_key_t>(total_keys, c.error).begin();
     return_if_error_m(c.error);
 
-    // 2. Fetch the data
     for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
         sample_arg_t task = samples[task_idx];
         offsets[task_idx] = keys_output - *c.keys;
@@ -677,8 +676,8 @@ void ukv_sample(ukv_sample_t* c_ptr) {
         collection_key_t max(task.collection, std::numeric_limits<ukv_key_t>::max());
 
         auto status = db.pairs.sample_range(min, max, random_generator, seen, task.limit, iter);
-        if (!status)
-            return export_error_code(status, c.error);
+        export_error_code(status, c.error);
+        return_if_error_m(c.error);
 
         counts[task_idx] = task.limit;
         keys_output += task.limit;
@@ -710,7 +709,32 @@ void ukv_measure(ukv_measure_t* c_ptr) {
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c.end_keys, c.end_keys_stride};
 
-    *c.error = "Not implemented";
+    for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
+        auto collection = collections[i];
+        ukv_key_t const min_key = start_keys[i];
+        ukv_key_t const max_key = end_keys[i];
+
+        collection_key_t min(collection, min_key);
+        collection_key_t max(collection, max_key);
+
+        std::size_t cardinality = 0;
+        std::size_t value_bytes = 0;
+        std::size_t space_usage = 0;
+        auto status = db.pairs.range(min, max, [&](pair_t& pair) noexcept {
+            ++cardinality;
+            value_bytes += pair.range.size();
+            space_usage += pair.range.size() + sizeof(pair_t);
+        });
+        export_error_code(status, c.error);
+        return_if_error_m(c.error);
+
+        min_cardinalities[i] = static_cast<ukv_size_t>(cardinality);
+        max_cardinalities[i] = std::numeric_limits<ukv_size_t>::max();
+        min_value_bytes[i] = value_bytes;
+        max_value_bytes[i] = std::numeric_limits<ukv_size_t>::max();
+        min_space_usages[i] = space_usage;
+        max_space_usages[i] = std::numeric_limits<ukv_size_t>::max();
+    }
 }
 
 /*********************************************************/
