@@ -4,6 +4,7 @@
 #include <mutex>
 #include <chrono>
 #include <charconv>
+#include <string>
 #include <filesystem>
 #include <unordered_map>
 #include <condition_variable>
@@ -96,12 +97,51 @@ class barrier_t {
     }
 };
 
+std::string log_operations(std::vector<operation_t> const& ops) {
+    std::string logs;
+    for (operation_t const& op : ops) {
+        auto mark = op.commited ? "✅" : "❌";
+        switch (op.code) {
+        case operation_code_t::insert_k:
+            fmt::format_to(std::back_inserter(logs), "{} {}. INSERT: {}={}\n", op.sequence, mark, op.key, op.value);
+            break;
+        case operation_code_t::remove_k: //
+            fmt::format_to(std::back_inserter(logs), "{} {}. ERASE: {}\n", op.sequence, mark, op.key);
+            break;
+        default: break;
+        }
+    }
+    return logs;
+}
+
+template <typename associative_container_at>
+std::string log_contents(associative_container_at&& elements) {
+    std::string logs;
+    for (auto element : elements)
+        fmt::format_to(std::back_inserter(logs), "{}={}\n", element.first, element.second);
+    return logs;
+}
+
+template <typename expected_container_at, typename received_container_at>
+std::string log_comparison(std::vector<operation_t> const& ops,
+                           expected_container_at&& expected,
+                           received_container_at&& received) {
+    std::stringstream logs;
+    logs                          //
+        << "Operations:\n"        //
+        << log_operations(ops)    //
+        << "Expected contents:\n" //
+        << log_contents(expected) //
+        << "Received contents:\n" //
+        << log_contents(received);
+    return logs.str();
+}
+
 /**
  * @brief
  *
  * On every thread runs random write operations: insertions and removals.
  * After ::transactions_between_checkpoints it reaches a checkpoint, where all threads stop.
- *
  *
  * @tparam part_inserts_ak
  * @tparam part_removes_ak
@@ -191,12 +231,23 @@ void serializable_writes( //
 
                 // Now check that the contents of both collections are identical
                 blobs_collection_t concurrent = db.collection().throw_or_release();
+                EXPECT_EQ(sequential.size(), concurrent.items().size())
+                    << log_comparison(operations_across_threads, sequential, concurrent.items());
+
                 for (auto const& kv : sequential) {
                     payload_t expected = kv.second;
-                    value_view_t retrieved_str = concurrent[kv.first].value().throw_or_release();
-                    EXPECT_TRUE(retrieved_str);
+                    auto maybe_retrieved_str = concurrent[kv.first].value();
+                    EXPECT_TRUE(maybe_retrieved_str)                                                 //
+                        << log_comparison(operations_across_threads, sequential, concurrent.items()) //
+                        << "Failed to retrieve: " << kv.first;
+                    value_view_t retrieved_str = maybe_retrieved_str.throw_or_ref();
+                    EXPECT_TRUE(retrieved_str)                                                       //
+                        << log_comparison(operations_across_threads, sequential, concurrent.items()) //
+                        << "Missing key: " << kv.first;
                     payload_t retrieved = *reinterpret_cast<payload_t const*>(retrieved_str.data());
-                    EXPECT_EQ(expected, retrieved);
+                    EXPECT_EQ(expected, retrieved)                                                   //
+                        << log_comparison(operations_across_threads, sequential, concurrent.items()) //
+                        << "Received wrong value for: " << kv.first;
                 }
                 EXPECT_TRUE(concurrent.clear());
                 sequential.clear();
