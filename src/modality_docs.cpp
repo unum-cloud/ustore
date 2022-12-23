@@ -1572,7 +1572,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
 
     ptr_range_gt<ukv_key_t> tape;
     if (!c.keys) {
-        return_if_error(c.values, c.error, uninitialized_state_k, "Keys and values is uninitialized");
+        return_error_if_m(c.values, c.error, uninitialized_state_k, "Keys and values is uninitialized");
 
         tape = arena.alloc<ukv_key_t>(c.tasks_count, c.error);
         strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values, c.values_stride};
@@ -1584,7 +1584,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
             simdjson::ondemand::object data = doc.get_object().value();
 
             auto result = reset(data)[c.id_field];
-            return_if_error((simdjson::SUCCESS == result.error()),
+            return_error_if_m((simdjson::SUCCESS == result.error()),
                             c.error,
                             uninitialized_state_k,
                             "Keys and values is uninitialized");
@@ -1644,7 +1644,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
         .tasks_count = c.tasks_count,
         .collections = c.collections,
         .collections_stride = c.collections_stride,
-        .keys = c.keys,
+        .keys = c.keys ? c.keys : tape.begin(),
         .keys_stride = c.keys_stride,
         .presences = c.presences,
         .offsets = c.offsets,
