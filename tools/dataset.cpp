@@ -78,7 +78,8 @@ class arena_allocator_gt {
     };
 
   public:
-    inline explicit arena_allocator_gt() {}
+    inline explicit arena_allocator_gt()
+        : arena_(linked_memory(nullptr, ukv_options_default_k, nullptr)), error_(nullptr) {}
     inline ~arena_allocator_gt() {}
     inline explicit arena_allocator_gt(arena_allocator_gt const& other) : arena_(other.arena_), error_(other.error_) {}
 
@@ -570,13 +571,13 @@ void parse_arrow_table(ukv_graph_import_t& c, ukv_size_t task_count, std::shared
     edges_t vertices_edges(alloc_t<edge_t>(arena, c.error));
 
     auto sources = table->GetColumnByName(c.source_id_field);
-    return_if_error(sources, c.error, 0, "The source field does not exist");
+    return_error_if_m(sources, c.error, 0, "The source field does not exist");
     auto targets = table->GetColumnByName(c.target_id_field);
-    return_if_error(targets, c.error, 0, "The target field does not exist");
+    return_error_if_m(targets, c.error, 0, "The target field does not exist");
     auto edges = c.edge_id_field ? table->GetColumnByName(c.edge_id_field) : nullptr;
-    return_if_error(edges || (c.edge_id_field == nullptr), c.error, 0, "The edge field does not exist");
+    return_error_if_m(edges || (c.edge_id_field == nullptr), c.error, 0, "The edge field does not exist");
     size_t count = sources->num_chunks();
-    return_if_error(count > 0, c.error, 0, "Empty Input");
+    return_error_if_m(count > 0, c.error, 0, "Empty Input");
     vertices_edges.reserve(std::min(ukv_size_t(sources->chunk(0)->length()), task_count));
 
     for (size_t chunk_idx = 0; chunk_idx != count; ++chunk_idx) {
@@ -611,16 +612,16 @@ void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table) {
 
     // Open File
     auto maybe_input = arrow::io::ReadableFile::Open(c.paths_pattern);
-    return_if_error(maybe_input.ok(), c.error, 0, "Can't open file");
+    return_error_if_m(maybe_input.ok(), c.error, 0, "Can't open file");
     auto input = *maybe_input;
 
     std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
     status = parquet::arrow::OpenFile(input, pool, &arrow_reader);
-    return_if_error(status.ok(), c.error, 0, "Can't instantiate reader");
+    return_error_if_m(status.ok(), c.error, 0, "Can't instantiate reader");
 
     // Read File into table
     status = arrow_reader->ReadTable(&table);
-    return_if_error(status.ok(), c.error, 0, "Can't read file");
+    return_error_if_m(status.ok(), c.error, 0, "Can't read file");
 }
 
 void export_parquet_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
@@ -652,7 +653,7 @@ void export_parquet_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t lengt
     make_uuid(file_name, uuid_length_k);
 
     auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
-    return_if_error(maybe_outfile.ok(), c.error, 0, "Can't open file");
+    return_error_if_m(maybe_outfile.ok(), c.error, 0, "Can't open file");
     auto outfile = *maybe_outfile;
 
     parquet::WriterProperties::Builder builder;
@@ -679,7 +680,7 @@ void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
 
     arrow::io::IOContext io_context = arrow::io::default_io_context();
     auto maybe_input = arrow::io::ReadableFile::Open(c.paths_pattern);
-    return_if_error(maybe_input.ok(), c.error, 0, "Can't open file");
+    return_error_if_m(maybe_input.ok(), c.error, 0, "Can't open file");
     std::shared_ptr<arrow::io::InputStream> input = *maybe_input;
 
     auto read_options = arrow::csv::ReadOptions::Defaults();
@@ -688,12 +689,12 @@ void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
 
     // Instantiate TableReader from input stream and options
     auto maybe_reader = arrow::csv::TableReader::Make(io_context, input, read_options, parse_options, convert_options);
-    return_if_error(maybe_reader.ok(), c.error, 0, "Can't instantiate reader");
+    return_error_if_m(maybe_reader.ok(), c.error, 0, "Can't instantiate reader");
     std::shared_ptr<arrow::csv::TableReader> reader = *maybe_reader;
 
     // Read table from CSV file
     auto maybe_table = reader->Read();
-    return_if_error(maybe_table.ok(), c.error, 0, "Can't read file");
+    return_error_if_m(maybe_table.ok(), c.error, 0, "Can't read file");
     table = *maybe_table;
 }
 
@@ -702,7 +703,7 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
     arrow::Status status;
     arrow::NumericBuilder<arrow::Int64Type> builder;
     status = builder.Resize(length / 3);
-    return_if_error(status.ok(), c.error, 0, "Can't instantiate builder");
+    return_error_if_m(status.ok(), c.error, 0, "Can't instantiate builder");
 
     array_t sources_array;
     array_t targets_array;
@@ -722,22 +723,22 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
 
     fill_values(0);
     status = builder.AppendValues(values.begin(), values.size());
-    return_if_error(status.ok(), c.error, 0, "Can't append values(sources)");
+    return_error_if_m(status.ok(), c.error, 0, "Can't append values(sources)");
     status = builder.Finish(&sources_array);
-    return_if_error(status.ok(), c.error, 0, "Can't finish array(sources)");
+    return_error_if_m(status.ok(), c.error, 0, "Can't finish array(sources)");
 
     fill_values(1);
     status = builder.AppendValues(values.begin(), values.size());
-    return_if_error(status.ok(), c.error, 0, "Can't append values(targets)");
+    return_error_if_m(status.ok(), c.error, 0, "Can't append values(targets)");
     status = builder.Finish(&targets_array);
-    return_if_error(status.ok(), c.error, 0, "Can't finish array(targets)");
+    return_error_if_m(status.ok(), c.error, 0, "Can't finish array(targets)");
 
     if (c.edge_id_field) {
         fill_values(2);
         status = builder.AppendValues(values.begin(), values.size());
-        return_if_error(status.ok(), c.error, 0, "Can't append values(edges)");
+        return_error_if_m(status.ok(), c.error, 0, "Can't append values(edges)");
         status = builder.Finish(&edges_array);
-        return_if_error(status.ok(), c.error, 0, "Can't finish array(edges)");
+        return_error_if_m(status.ok(), c.error, 0, "Can't finish array(edges)");
     }
 
     arrow::FieldVector fields;
@@ -754,17 +755,17 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
         table = arrow::Table::Make(schema, {sources_array, targets_array, edges_array});
     else
         table = arrow::Table::Make(schema, {sources_array, targets_array});
-    return_if_error(table, c.error, 0, "Can't make schema");
+    return_error_if_m(table, c.error, 0, "Can't make schema");
 
     char file_name[uuid_length_k];
     make_uuid(file_name, uuid_length_k);
 
     auto maybe_outstream = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
-    return_if_error(maybe_outstream.ok(), c.error, 0, "Can't open file");
+    return_error_if_m(maybe_outstream.ok(), c.error, 0, "Can't open file");
     std::shared_ptr<arrow::io::FileOutputStream> outstream = *maybe_outstream;
 
     status = arrow::csv::WriteCSV(*table, arrow::csv::WriteOptions::Defaults(), outstream.get());
-    return_if_error(status.ok(), c.error, 0, "Can't write in file");
+    return_error_if_m(status.ok(), c.error, 0, "Can't write in file");
 }
 
 #pragma region - Parsing with SIMDJSON
@@ -776,7 +777,7 @@ void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) noexcept 
     edges.reserve(task_count);
 
     auto handle = open(c.paths_pattern, O_RDONLY);
-    return_if_error(handle != -1, c.error, 0, "Can't open file");
+    return_error_if_m(handle != -1, c.error, 0, "Can't open file");
 
     auto begin = mmap(NULL, c.file_size, PROT_READ, MAP_PRIVATE, handle, 0);
     std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), c.file_size);
@@ -802,7 +803,7 @@ void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) noexcept 
         }
         catch (simdjson::simdjson_error const& ex) {
             *c.error = ex.what();
-            return_on_error(c.error);
+            return_if_error_m(c.error);
         }
 
         if (edges.size() == task_count) {
@@ -863,14 +864,14 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
 
     ukv_graph_import_t& c = *c_ptr;
 
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_if_error(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
-    return_if_error(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
+    return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
     if (!validate_graph_fields(c))
-        return_on_error(c.error);
+        return_if_error_m(c.error);
     auto ext = std::filesystem::path(c.paths_pattern).extension();
     if (strcmp_(ext.c_str(), ".ndjson"))
-        return_if_error(c.file_size != 0, c.error, 0, "File size not entered");
+        return_error_if_m(c.file_size != 0, c.error, 0, "File size not entered");
 
     ukv_size_t task_count = c.max_batch_size / sizeof(edge_t);
     if (ext == ".ndjson")
@@ -889,11 +890,11 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
 
     ukv_graph_export_t& c = *c_ptr;
 
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     if (!validate_graph_fields(c))
-        return_on_error(c.error);
-    return_if_error(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
-    return_if_error(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
+        return_if_error_m(c.error);
+    return_error_if_m(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
+    return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
 
     ///////// Choosing a method /////////
 
@@ -906,7 +907,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
                                          ? &export_csv_graph
                                          : nullptr;
 
-    return_if_error(export_method, c.error, 0, "Not supported format");
+    return_error_if_m(export_method, c.error, 0, "Not supported format");
 
     std::plus plus;
 
@@ -922,7 +923,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
 
     keys_stream_t stream(c.db, c.collection, task_count, nullptr);
     auto status = stream.seek_to_first();
-    return_if_error(status, c.error, 0, "No batches in stream");
+    return_error_if_m(status, c.error, 0, "No batches in stream");
 
     while (!stream.is_end()) {
         ids_in_edges.push_back({nullptr, 0});
@@ -951,7 +952,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
         ids_in_edges.back().second = batch_ids;
 
         status = stream.seek_to_next_batch();
-        return_if_error(status, c.error, 0, "Invalid batch");
+        return_error_if_m(status, c.error, 0, "Invalid batch");
     }
     export_method(c, ids_in_edges, total_ids);
 }
@@ -996,7 +997,7 @@ void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const
 
     for (size_t idx = 0; idx < c.fields_count; ++idx) {
         chunked_array_t column = table->GetColumnByName(fields[idx]);
-        return_if_error(column, c.error, 0, fmt::format("{} is not exist", fields[idx]).c_str());
+        return_error_if_m(column, c.error, 0, fmt::format("{} is not exist", fields[idx]).c_str());
         columns[idx] = column;
     }
 
@@ -1091,7 +1092,7 @@ void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream
         }
         catch (simdjson::simdjson_error const& ex) {
             *c.error = ex.what();
-            return_on_error(c.error);
+            return_if_error_m(c.error);
         }
 
         json.push_back('\n');
@@ -1114,7 +1115,7 @@ void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream
 void import_ndjson_docs(ukv_docs_import_t& c) {
 
     auto handle = open(c.paths_pattern, O_RDONLY);
-    return_if_error(handle != -1, c.error, 0, "Can't open file");
+    return_error_if_m(handle != -1, c.error, 0, "Can't open file");
 
     auto begin = mmap(NULL, c.file_size, PROT_READ, MAP_PRIVATE, handle, 0);
     std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), c.file_size);
@@ -1232,7 +1233,7 @@ void export_sub_docs( //
             }
             catch (simdjson::simdjson_error const& ex) {
                 *c.error = ex.what();
-                return_on_error(c.error);
+                return_if_error_m(c.error);
             }
             if (flag == 0) {
                 os << *iter << json.data();
@@ -1282,7 +1283,7 @@ void export_parquet_docs( //
     make_uuid(file_name, uuid_length_k);
 
     auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
-    return_if_error(maybe_outfile.ok(), c.error, 0, "Can't open file");
+    return_error_if_m(maybe_outfile.ok(), c.error, 0, "Can't open file");
     auto outfile = *maybe_outfile;
 
     parquet::WriterProperties::Builder builder;
@@ -1314,9 +1315,9 @@ void export_csv_docs( //
     arrow::StringBuilder str_builder;
 
     status = int_builder.Resize(size);
-    return_if_error(status.ok(), c.error, 0, "Can't instantiate builder");
+    return_error_if_m(status.ok(), c.error, 0, "Can't instantiate builder");
     status = str_builder.Resize(size);
-    return_if_error(status.ok(), c.error, 0, "Can't instantiate builder");
+    return_error_if_m(status.ok(), c.error, 0, "Can't instantiate builder");
 
     array_t keys_array;
     array_t docs_array;
@@ -1330,14 +1331,14 @@ void export_csv_docs( //
         export_whole_docs(values, keys, &docs_vec, &keys_vec, nullptr, arena, c.error, 0, 1);
 
     status = int_builder.AppendValues(keys_vec.begin(), keys_vec.size());
-    return_if_error(status.ok(), c.error, 0, "Can't append keys");
+    return_error_if_m(status.ok(), c.error, 0, "Can't append keys");
     status = int_builder.Finish(&keys_array);
-    return_if_error(status.ok(), c.error, 0, "Can't finish array(keys)");
+    return_error_if_m(status.ok(), c.error, 0, "Can't finish array(keys)");
 
     status = str_builder.AppendValues((char const**)docs_vec.begin(), docs_vec.size());
-    return_if_error(status.ok(), c.error, 0, "Can't append docs");
+    return_error_if_m(status.ok(), c.error, 0, "Can't append docs");
     status = str_builder.Finish(&docs_array);
-    return_if_error(status.ok(), c.error, 0, "Can't finish array(docs)");
+    return_error_if_m(status.ok(), c.error, 0, "Can't finish array(docs)");
 
     arrow::FieldVector fields;
     fields.push_back(arrow::field("_id", arrow::int64()));
@@ -1351,11 +1352,11 @@ void export_csv_docs( //
     make_uuid(file_name, uuid_length_k);
 
     auto maybe_outstream = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
-    return_if_error(maybe_outstream.ok(), c.error, 0, "Can't open file");
+    return_error_if_m(maybe_outstream.ok(), c.error, 0, "Can't open file");
     std::shared_ptr<arrow::io::FileOutputStream> outstream = *maybe_outstream;
 
     status = arrow::csv::WriteCSV(*table, arrow::csv::WriteOptions::Defaults(), outstream.get());
-    return_if_error(status.ok(), c.error, 0, "Can't write in file");
+    return_error_if_m(status.ok(), c.error, 0, "Can't write in file");
 }
 
 void export_ndjson_docs( //
@@ -1383,14 +1384,14 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
 
     ukv_docs_import_t& c = *c_ptr;
 
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_if_error(validate_docs_fields(c), c.error, 0, "Invalid fields");
-    return_if_error(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
-    return_if_error(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(validate_docs_fields(c), c.error, 0, "Invalid fields");
+    return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
+    return_error_if_m(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
     auto ext = std::filesystem::path(c.paths_pattern).extension();
     if (strcmp_(ext.c_str(), ".ndjson"))
-        return_if_error(c.file_size != 0, c.error, 0, "File size not entered");
-    return_if_error(c.id_field, c.error, uninitialized_state_k, "id_field must be initialized");
+        return_error_if_m(c.file_size != 0, c.error, 0, "File size not entered");
+    return_error_if_m(c.id_field, c.error, uninitialized_state_k, "id_field must be initialized");
 
     if (ext == ".ndjson")
         import_ndjson_docs(c);
@@ -1408,10 +1409,10 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
 
     ukv_docs_export_t& c = *c_ptr;
 
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_if_error(validate_docs_fields(c), c.error, 0, "Invalid fields");
-    return_if_error(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
-    return_if_error(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(validate_docs_fields(c), c.error, 0, "Invalid fields");
+    return_error_if_m(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
+    return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
     using alloc_keys_t = alloc_t<ptr_range_gt<ukv_key_t const>>;
 
     ///////// Choosing a method /////////
@@ -1424,7 +1425,7 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
                                          ? &export_csv_docs
                                          : nullptr;
 
-    return_if_error(export_method, c.error, 0, "Not supported format");
+    return_error_if_m(export_method, c.error, 0, "Not supported format");
 
     ukv_length_t* offsets = nullptr;
     ukv_length_t* lengths = nullptr;
@@ -1439,7 +1440,7 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     vals_t values(alloc_t<val_t>(arena, c.error));
 
     auto status = stream.seek_to_first();
-    return_if_error(status, c.error, 0, "No batches in stream");
+    return_error_if_m(status, c.error, 0, "No batches in stream");
 
     while (!stream.is_end()) {
         keys.push_back(stream.keys_batch());
@@ -1465,7 +1466,7 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
         values.back().second = offsets[count - 1] + lengths[count - 1];
 
         status = stream.seek_to_next_batch();
-        return_if_error(status, c.error, 0, "Invalid batch");
+        return_error_if_m(status, c.error, 0, "Invalid batch");
     }
 
     export_method( //
