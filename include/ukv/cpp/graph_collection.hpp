@@ -132,7 +132,7 @@ class graph_collection_t {
     status_t upsert_edge(edge_t const& edge) noexcept { return upsert_edges(edges_view_t {&edge, &edge + 1}); }
     status_t remove_edge(edge_t const& edge) noexcept { return remove_edges(edges_view_t {&edge, &edge + 1}); }
 
-    status_t upsert_vertex(ukv_key_t vertex) noexcept { return upsert_vertices({{&vertex}, 1}); }
+    status_t upsert_vertex(ukv_key_t const vertex) noexcept { return upsert_vertices({{&vertex}, 1}); }
     template <typename key_arg_at>
     status_t upsert_vertices(key_arg_at&& vertices) noexcept {
         return upsert_vertices(strided_range(vertices).immutable());
