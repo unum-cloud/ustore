@@ -43,7 +43,7 @@ ukv_length_t const ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max
 ukv_key_t const ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 bool const ukv_supports_transactions_k = true;
 bool const ukv_supports_named_collections_k = true;
-bool const ukv_supports_snapshots_k = true;
+bool const ukv_supports_snapshots_k = false;
 
 using rocks_native_t = rocksdb::OptimisticTransactionDB;
 using rocks_status_t = rocksdb::Status;
@@ -753,7 +753,7 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = **reinterpret_cast<rocks_txn_t**>(c.transaction);
     rocksdb::OptimisticTransactionOptions txn_options;
-    txn_options.set_snapshot = !(c.options & ukv_option_transaction_dont_watch_k);
+    txn_options.set_snapshot = false;
     rocksdb::WriteOptions options;
     options.sync = safe;
     options.disableWAL = !safe;

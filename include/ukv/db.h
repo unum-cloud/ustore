@@ -432,7 +432,6 @@ typedef struct ukv_transaction_init_t {
      * @brief Transaction options.
      *
      * Possible values:
-     * - `::ukv_option_transaction_dont_watch_k`
      * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
     ukv_options_t options = ukv_options_default_k;

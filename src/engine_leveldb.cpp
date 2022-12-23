@@ -541,6 +541,9 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
     ukv_transaction_init_t& c = *c_ptr;
+    *c.error = "Transactions not supported by LevelDB!";
+
+#if 0 // TODO: Persistent Snapshots will be receiving a separate interface.
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     validate_transaction_begin(c.transaction, c.options, c.error);
     return_if_error_m(c.error);
@@ -558,8 +561,7 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
         if (!txn.snapshot)
             *c.error = "Couldn't start a transaction!";
     }
-    else
-        *c.error = "Transactions not supported by LevelDB!";
+#endif
 }
 
 void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
@@ -576,7 +578,8 @@ void ukv_arena_free(ukv_arena_t c_arena) {
     clear_linked_memory(c_arena);
 }
 
-void ukv_transaction_free(ukv_transaction_t c_txn) {
+void ukv_transaction_free(ukv_transaction_t) {
+#if 0 // TODO: Persistent Snapshots will be receiving a separate interface.
     if (!c_txn)
         return;
     level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c_txn);
@@ -586,6 +589,7 @@ void ukv_transaction_free(ukv_transaction_t c_txn) {
     txn.db = nullptr;
     txn.snapshot = nullptr;
     delete &txn;
+#endif
 }
 
 void ukv_database_free(ukv_database_t c_db) {
@@ -595,5 +599,5 @@ void ukv_database_free(ukv_database_t c_db) {
     delete db;
 }
 
-void ukv_error_free(ukv_error_t const) {
+void ukv_error_free(ukv_error_t) {
 }
