@@ -291,6 +291,28 @@ void make_uuid(char* out, size_t sz) {
     out[sz - 1] = '\0'; // end of string
 }
 
+template <typename ukv_docs_imp_exp_t>
+fields_t prepare_fields(ukv_docs_imp_exp_t& c, linked_memory_lock_t& arena) {
+
+    fields_t fields {c.fields, c.fields_stride};
+    stl_vector_t<ukv_str_view_t> prepared_fields;
+    prepared_fields.reserve(c.fields_count);
+    size_t next_idx = 0;
+    size_t count = 0;
+
+    for (size_t idx = 0; idx < c.fields_count - 1; ++count) {
+        next_idx = idx + 1;
+        size_t len = strlen(fields[idx]);
+        auto field = arena.alloc<char>(len + 1, c.error);
+        std::memcpy(field.begin(), fields[idx], len + 1);
+        prepared_fields.push_back(field.begin());
+        while (strncmp_(fields[idx], fields[next_idx], strlen(fields[idx])) && next_idx < c.fields_count)
+            ++next_idx;
+        idx = next_idx;
+    }
+    return {prepared_fields.data(), sizeof(ukv_str_view_t)};
+}
+
 void prepare_for_csv(std::string& str, size_t pos = 0) {
     pos = str.find('\"', pos);
     while (pos != std::string::npos) {
@@ -1043,12 +1065,12 @@ void import_whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stre
 
 void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) noexcept {
 
-    fields_t fields {c.fields, c.fields_stride};
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    auto fields = prepare_fields(c, arena);
     size_t max_size = c.fields_count * symbols_count_k;
     for (size_t idx = 0; idx < c.fields_count; ++idx)
         max_size += strlen(fields[idx]);
 
-    auto arena = linked_memory(c.arena, c.options, c.error);
     docs_t values(alloc_t<value_view_t>(arena, c.error));
 
     size_t used_mem = 0;
@@ -1179,7 +1201,7 @@ void export_sub_docs( //
     int flag) {
 
     auto iter = pass_through_iterator(keys);
-    fields_t fields {c.fields, c.fields_stride};
+    auto fields = prepare_fields(c, arena);
     std::string json = flag == 1 ? csv_prefix_k : prefix_k;
 
     ptr_range_gt<char*>& docs_vec = *docs_ptr;
