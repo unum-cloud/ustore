@@ -59,11 +59,10 @@ using array_t = std::shared_ptr<arrow::Array>;
 
 #pragma region - Helpers
 
-template <typename type_at>
+template <typename at>
 class arena_allocator_gt {
-
   public:
-    using value_type = type_at;
+    using value_type = at;
     using pointer = value_type*;
     using const_pointer = value_type const*;
     using reference = value_type&;
@@ -71,20 +70,18 @@ class arena_allocator_gt {
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
 
-  public:
-    template <typename type_ut>
+    template <typename other_at>
     struct rebind {
-        using other = arena_allocator_gt<type_ut>;
+        using other = arena_allocator_gt<other_at>;
     };
 
-  public:
     inline explicit arena_allocator_gt()
         : arena_(linked_memory(nullptr, ukv_options_default_k, nullptr)), error_(nullptr) {}
     inline ~arena_allocator_gt() {}
     inline explicit arena_allocator_gt(arena_allocator_gt const& other) : arena_(other.arena_), error_(other.error_) {}
 
-    template <typename type_ut>
-    inline explicit arena_allocator_gt(arena_allocator_gt<type_ut> const& other)
+    template <typename other_at>
+    inline explicit arena_allocator_gt(arena_allocator_gt<other_at> const& other)
         : arena_(other.arena_), error_(other.error_) {}
 
     inline explicit arena_allocator_gt(linked_memory_lock_t const& arena, ukv_error_t* error)
@@ -93,7 +90,7 @@ class arena_allocator_gt {
     inline const_pointer address(const_reference r) { return &r; }
     inline pointer address(reference r) { return &r; }
 
-    inline pointer allocate(size_type sz, typename std::allocator<void>::const_pointer = 0) {
+    inline pointer allocate(size_type sz, typename std::allocator<void>::const_pointer = nullptr) {
         return arena_.alloc<value_type>(sz, error_).begin();
     }
     inline void deallocate(pointer p, size_type) { p->~value_type(); }
@@ -108,11 +105,11 @@ class arena_allocator_gt {
     ukv_error_t* error_;
 };
 
-template <typename type_at>
-using alloc_t = arena_allocator_gt<type_at>;
+template <typename at>
+using alloc_t = arena_allocator_gt<at>;
 
-template <typename type_at>
-using stl_vector_t = std::vector<type_at, alloc_t<type_at>>;
+template <typename at>
+using stl_vector_t = std::vector<at, alloc_t<at>>;
 using edges_t = stl_vector_t<edge_t>;
 using docs_t = stl_vector_t<value_view_t>;
 using keys_t = stl_vector_t<keys_length_t>;
@@ -121,6 +118,7 @@ using vals_t = stl_vector_t<val_t>;
 class arrow_visitor_t {
   public:
     arrow_visitor_t(std::string& json) : json(json) {}
+
     arrow::Status Visit(arrow::NullArray const& arr) {
         return arrow::Status(arrow::StatusCode::TypeError, "Not supported type");
     }
@@ -202,14 +200,14 @@ class arrow_visitor_t {
     size_t idx = 0;
 
   private:
-    template <typename cont_at>
-    arrow::Status format(cont_at const& cont, size_t idx) {
+    template <typename at>
+    arrow::Status format(at const& cont, size_t idx) {
         fmt::format_to(std::back_inserter(json), "{},", cont.Value(idx));
         return arrow::Status::OK();
     }
 
-    template <typename cont_at>
-    arrow::Status format_bin_str(cont_at const& cont, size_t idx) {
+    template <typename at>
+    arrow::Status format_bin_str(at const& cont, size_t idx) {
         auto str = std::string(cont.Value(idx).data(), cont.Value(idx).size());
         if (str.back() == '\n')
             str.pop_back();
@@ -220,17 +218,17 @@ class arrow_visitor_t {
 
 class string_iterator_t {
   public:
-    string_iterator_t(char* ptr) : ptr_(ptr) { length_ = strlen(ptr_); }
+    inline string_iterator_t(char* ptr) : ptr_(ptr) { length_ = strlen(ptr_); }
 
-    size_t length() { return length_; }
-    size_t size() { return length(); }
+    inline size_t length() { return length_; }
+    inline size_t size() { return length(); }
 
-    string_iterator_t& operator++() {
+    inline string_iterator_t& operator++() {
         ptr_ += length_ + 1;
         length_ = strlen(ptr_);
     }
-    char* operator*() const { return ptr_; }
-    char last_character() { return ptr_[length_ - 1]; }
+    inline char* operator*() const { return ptr_; }
+    inline char last_character() { return ptr_[length_ - 1]; }
 
   private:
     char* ptr_;
@@ -252,18 +250,18 @@ bool validate_graph_fields(imp_exp_at& c) {
 
 template <typename imp_exp_at>
 bool validate_docs_fields(imp_exp_at& c) {
-    if (c.fields_count == 0 && c.fields == NULL)
+    if (c.fields_count == 0 && c.fields == nullptr)
         return true;
-    else if (c.fields_count == 0 && c.fields != NULL)
+    else if (c.fields_count == 0 && c.fields != nullptr)
         return false;
-    else if (c.fields_count != 0 && c.fields == NULL)
+    else if (c.fields_count != 0 && c.fields == nullptr)
         return false;
-    else if (c.fields_count != 0 && c.fields != NULL && c.fields_stride == 0)
+    else if (c.fields_count != 0 && c.fields != nullptr && c.fields_stride == 0)
         return false;
 
     fields_t fields {c.fields, c.fields_stride};
     for (size_t idx = 0; idx < c.fields_count; ++idx) {
-        if (fields[idx] == NULL)
+        if (fields[idx] == nullptr)
             return false;
     }
     return true;
@@ -281,11 +279,11 @@ bool chrcmp_(const char lhs, const char rhs) {
     return lhs == rhs;
 }
 
-bool is_ptr(ukv_str_view_t field) {
+bool is_json_ptr(ukv_str_view_t field) {
     return chrcmp_(field[0], '/');
 }
 
-void make_uuid(char* out, size_t sz) {
+void generate_uuid(char* out, size_t sz) {
     uuid_t uuid;
     uuid_generate(uuid);
     uuid_unparse(uuid, out);
@@ -328,13 +326,9 @@ simdjson::ondemand::object& rewinded(simdjson::ondemand::object& doc) noexcept {
     return doc;
 }
 
-void get_value( //
-    simdjson::ondemand::object& data,
-    ukv_str_view_t json_field,
-    ukv_str_view_t field,
-    std::string& json) {
+void get_value(simdjson::ondemand::object& data, ukv_str_view_t json_field, ukv_str_view_t field, std::string& json) {
 
-    bool state = is_ptr(field);
+    bool state = is_json_ptr(field);
 
     auto get_result = [&]() {
         return state ? rewinded(data).at_pointer(field) : rewinded(data)[field];
@@ -403,8 +397,8 @@ void simdjson_object_parser( //
 
     for (size_t idx = 0; idx < fields_count;) {
         try_close();
-        if (is_ptr(fields[idx])) {
-            if (strchr(fields[idx] + 1, '/') != NULL) {
+        if (is_json_ptr(fields[idx])) {
+            if (strchr(fields[idx] + 1, '/') != nullptr) {
                 while (iter.last_character() == '{') {
                     fmt::format_to(std::back_inserter(json), "{}", *iter);
                     ++iter;
@@ -461,7 +455,7 @@ void fields_parser( //
     };
 
     for (size_t idx = 0; idx < fields_count;) {
-        if (is_ptr(fields[idx])) {
+        if (is_json_ptr(fields[idx])) {
             pre_idx = 1;
 
             pos = strchr(fields[idx] + pre_idx, '/') - fields[idx];
@@ -650,7 +644,7 @@ void export_parquet_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t lengt
         parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, fields));
 
     char file_name[uuid_length_k];
-    make_uuid(file_name, uuid_length_k);
+    generate_uuid(file_name, uuid_length_k);
 
     auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
     return_error_if_m(maybe_outfile.ok(), c.error, 0, "Can't open file");
@@ -758,7 +752,7 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
     return_error_if_m(table, c.error, 0, "Can't make schema");
 
     char file_name[uuid_length_k];
-    make_uuid(file_name, uuid_length_k);
+    generate_uuid(file_name, uuid_length_k);
 
     auto maybe_outstream = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
     return_error_if_m(maybe_outstream.ok(), c.error, 0, "Can't open file");
@@ -779,7 +773,7 @@ void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) noexcept 
     auto handle = open(c.paths_pattern, O_RDONLY);
     return_error_if_m(handle != -1, c.error, 0, "Can't open file");
 
-    auto begin = mmap(NULL, c.file_size, PROT_READ, MAP_PRIVATE, handle, 0);
+    auto begin = mmap(nullptr, c.file_size, PROT_READ, MAP_PRIVATE, handle, 0);
     std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), c.file_size);
     madvise(begin, c.file_size, MADV_SEQUENTIAL);
 
@@ -822,7 +816,7 @@ void export_ndjson_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length
 
     ukv_key_t* data = nullptr;
     char file_name[uuid_length_k];
-    make_uuid(file_name, uuid_length_k);
+    generate_uuid(file_name, uuid_length_k);
     auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
     if (!c.edge_id_field) {
@@ -896,16 +890,11 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
     return_error_if_m(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
 
-    ///////// Choosing a method /////////
-
     auto ext = c.paths_extension;
-    auto export_method = strcmp_(ext, ".parquet") //
-                             ? &export_parquet_graph
-                             : strcmp_(ext, ".ndjson") //
-                                   ? &export_ndjson_graph
-                                   : strcmp_(ext, ".csv") //
-                                         ? &export_csv_graph
-                                         : nullptr;
+    auto export_method = strcmp_(ext, ".parquet")  ? &export_parquet_graph
+                         : strcmp_(ext, ".ndjson") ? &export_ndjson_graph
+                         : strcmp_(ext, ".csv")    ? &export_csv_graph
+                                                   : nullptr;
 
     return_error_if_m(export_method, c.error, 0, "Not supported format");
 
@@ -1117,7 +1106,7 @@ void import_ndjson_docs(ukv_docs_import_t& c) {
     auto handle = open(c.paths_pattern, O_RDONLY);
     return_error_if_m(handle != -1, c.error, 0, "Can't open file");
 
-    auto begin = mmap(NULL, c.file_size, PROT_READ, MAP_PRIVATE, handle, 0);
+    auto begin = mmap(nullptr, c.file_size, PROT_READ, MAP_PRIVATE, handle, 0);
     std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), c.file_size);
     madvise(begin, c.file_size, MADV_SEQUENTIAL);
 
@@ -1260,7 +1249,7 @@ void export_sub_docs( //
 void export_parquet_docs( //
     ukv_docs_export_t& c,
     stl_vector_t<ptr_range_gt<ukv_key_t const>>& keys,
-    ukv_size_t size_in_bytes,
+    ukv_size_t size_bytes,
     vals_t& values) {
 
     parquet::schema::NodeVector nodes;
@@ -1280,7 +1269,7 @@ void export_parquet_docs( //
         parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, nodes));
 
     char file_name[uuid_length_k];
-    make_uuid(file_name, uuid_length_k);
+    generate_uuid(file_name, uuid_length_k);
 
     auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
     return_error_if_m(maybe_outfile.ok(), c.error, 0, "Can't open file");
@@ -1288,7 +1277,7 @@ void export_parquet_docs( //
 
     parquet::WriterProperties::Builder builder;
     builder.memory_pool(arrow::default_memory_pool());
-    builder.write_batch_size(std::min(size_in_bytes, c.max_batch_size));
+    builder.write_batch_size(std::min(size_bytes, c.max_batch_size));
 
     parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
 
@@ -1302,14 +1291,14 @@ void export_parquet_docs( //
 void export_csv_docs( //
     ukv_docs_export_t& c,
     stl_vector_t<ptr_range_gt<ukv_key_t const>>& keys,
-    ukv_size_t size_in_bytes,
+    ukv_size_t size_bytes,
     vals_t& values) {
 
     ukv_size_t size = 0;
     arrow::Status status;
 
-    for (auto _ : keys)
-        size += _.size();
+    for (auto key : keys)
+        size += key.size();
 
     arrow::NumericBuilder<arrow::Int64Type> int_builder;
     arrow::StringBuilder str_builder;
@@ -1349,7 +1338,7 @@ void export_csv_docs( //
     table = arrow::Table::Make(schema, {keys_array, docs_array});
 
     char file_name[uuid_length_k];
-    make_uuid(file_name, uuid_length_k);
+    generate_uuid(file_name, uuid_length_k);
 
     auto maybe_outstream = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
     return_error_if_m(maybe_outstream.ok(), c.error, 0, "Can't open file");
@@ -1362,11 +1351,11 @@ void export_csv_docs( //
 void export_ndjson_docs( //
     ukv_docs_export_t& c,
     stl_vector_t<ptr_range_gt<ukv_key_t const>>& keys,
-    ukv_size_t size_in_bytes,
+    ukv_size_t size_bytes,
     vals_t& values) {
 
     char file_name[uuid_length_k];
-    make_uuid(file_name, uuid_length_k);
+    generate_uuid(file_name, uuid_length_k);
     auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
@@ -1415,22 +1404,18 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
     using alloc_keys_t = alloc_t<ptr_range_gt<ukv_key_t const>>;
 
-    ///////// Choosing a method /////////
     auto ext = c.paths_extension;
-    auto export_method = strcmp_(ext, ".parquet") //
-                             ? &export_parquet_docs
-                             : strcmp_(ext, ".ndjson") //
-                                   ? &export_ndjson_docs
-                                   : strcmp_(ext, ".csv") //
-                                         ? &export_csv_docs
-                                         : nullptr;
+    auto export_method = strcmp_(ext, ".parquet")  ? &export_parquet_docs
+                         : strcmp_(ext, ".ndjson") ? &export_ndjson_docs
+                         : strcmp_(ext, ".csv")    ? &export_csv_docs
+                                                   : nullptr;
 
     return_error_if_m(export_method, c.error, 0, "Not supported format");
 
     ukv_length_t* offsets = nullptr;
     ukv_length_t* lengths = nullptr;
 
-    ukv_size_t size_in_bytes = 0;
+    ukv_size_t size_bytes = 0;
     ukv_size_t task_count = 1024;
 
     keys_stream_t stream(c.db, c.collection, task_count);
@@ -1462,7 +1447,7 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
         ukv_docs_read(&docs_read);
 
         size_t count = stream.keys_batch().size();
-        size_in_bytes += offsets[count - 1] + lengths[count - 1];
+        size_bytes += offsets[count - 1] + lengths[count - 1];
         values.back().second = offsets[count - 1] + lengths[count - 1];
 
         status = stream.seek_to_next_batch();
@@ -1472,7 +1457,7 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     export_method( //
         c,
         keys,
-        size_in_bytes,
+        size_bytes,
         values);
 }
 
