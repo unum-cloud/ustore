@@ -110,6 +110,12 @@ TEST(db, inserts_and_deletes) {
 }
 
 int main(int argc, char** argv) {
+
+    if (!ukv_supports_transactions_k) {
+        std::printf("Selected UKV Engine doesn't support ACID transactions\n");
+        return 1;
+    }
+
     if (path() && std::strlen(path())) {
         std::filesystem::remove_all(path());
         std::filesystem::create_directories(path());

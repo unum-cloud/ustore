@@ -160,7 +160,7 @@ std::string log_comparison(std::vector<operation_t> const& ops,
  * @param concurrent_threads
  */
 template <std::size_t part_inserts_ak, std::size_t part_removes_ak, std::size_t part_selects_ak = 0>
-void serializable_writes( //
+void linear_writes( //
     database_t& db,
     std::size_t transactions_between_checkpoints,
     std::size_t concurrent_threads,
@@ -281,22 +281,22 @@ void serializable_writes( //
 
 void test_writes(database_t& db, std::size_t thread_count, std::size_t checkpoint_frequency) {
     // Just Writes
-    serializable_writes<1, 0>(db, checkpoint_frequency, thread_count);
-    serializable_writes<2, 0>(db, checkpoint_frequency, thread_count);
-    serializable_writes<3, 0>(db, checkpoint_frequency, thread_count);
-    serializable_writes<4, 0>(db, checkpoint_frequency, thread_count);
-    serializable_writes<10, 0>(db, checkpoint_frequency, thread_count);
+    linear_writes<1, 0>(db, checkpoint_frequency, thread_count);
+    linear_writes<2, 0>(db, checkpoint_frequency, thread_count);
+    linear_writes<3, 0>(db, checkpoint_frequency, thread_count);
+    linear_writes<4, 0>(db, checkpoint_frequency, thread_count);
+    linear_writes<10, 0>(db, checkpoint_frequency, thread_count);
 
     // Mixing
-    serializable_writes<1, 1>(db, checkpoint_frequency, thread_count);
-    serializable_writes<2, 1>(db, checkpoint_frequency, thread_count);
-    serializable_writes<3, 1>(db, checkpoint_frequency, thread_count);
-    serializable_writes<4, 1>(db, checkpoint_frequency, thread_count);
-    serializable_writes<10, 1>(db, checkpoint_frequency, thread_count);
+    linear_writes<1, 1>(db, checkpoint_frequency, thread_count);
+    linear_writes<2, 1>(db, checkpoint_frequency, thread_count);
+    linear_writes<3, 1>(db, checkpoint_frequency, thread_count);
+    linear_writes<4, 1>(db, checkpoint_frequency, thread_count);
+    linear_writes<10, 1>(db, checkpoint_frequency, thread_count);
 
     // Larger Batches
-    serializable_writes<10, 5>(db, checkpoint_frequency, thread_count);
-    serializable_writes<30, 3>(db, checkpoint_frequency, thread_count);
+    linear_writes<10, 5>(db, checkpoint_frequency, thread_count);
+    linear_writes<30, 3>(db, checkpoint_frequency, thread_count);
 }
 
 class test_one_config_t : public testing::Test {
@@ -316,6 +316,12 @@ class test_one_config_t : public testing::Test {
 };
 
 int main(int argc, char** argv) {
+
+    if (!ukv_supports_transactions_k) {
+        std::printf("Selected UKV Engine doesn't support ACID transactions\n");
+        return 1;
+    }
+
     if (path() && std::strlen(path())) {
         std::filesystem::remove_all(path());
         std::filesystem::create_directories(path());
@@ -328,7 +334,7 @@ int main(int argc, char** argv) {
     for (auto thread_count : thread_counts)
         for (auto checkpoint_frequency : checkpoint_frequencies)
             testing::RegisterTest(
-                "serializable_writes",
+                "linear_writes",
                 fmt::format("{} threads, {} transactions between checks", thread_count, checkpoint_frequency).c_str(),
                 nullptr,
                 nullptr,

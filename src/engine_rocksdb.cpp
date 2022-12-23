@@ -466,7 +466,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
-    if (&txn)
+    if (c.transaction)
         options.snapshot = txn.GetSnapshot();
 
     for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
@@ -528,7 +528,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
-    if (&txn)
+    if (c.transaction)
         options.snapshot = txn.GetSnapshot();
 
     for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {

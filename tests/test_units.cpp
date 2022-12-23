@@ -297,14 +297,14 @@ TEST(db, overwrite_with_step) {
     EXPECT_EQ(collection.keys().size(), 200ul);
     EXPECT_EQ(collection.items().size(), 200ul);
 
-    // Overwrites
+    // Overwrites and new entries between two ranges
     for (ukv_key_t k = 800; k != 1100; k += 2)
         collection[k] = "third";
     for (ukv_key_t k = 800; k != 1100; k += 2)
         EXPECT_EQ(*collection[k].value(), "third");
 
-    EXPECT_EQ(collection.keys().size(), 200ul);
-    EXPECT_EQ(collection.items().size(), 200ul);
+    EXPECT_EQ(collection.keys().size(), 250ul);
+    EXPECT_EQ(collection.items().size(), 250ul);
 
     EXPECT_TRUE(db.clear());
 }
@@ -681,6 +681,51 @@ TEST(db, transaction_overwrite) {
 
     EXPECT_EQ(*db.collection()->at(2).value(), value_view_t {"173252511"});
     EXPECT_EQ(*db.collection()->at(1).value(), value_view_t {"1818561106"});
+    EXPECT_EQ(db.collection()->keys().size(), 2u);
+    EXPECT_TRUE(db.clear());
+
+    // Another real case, that has been found in RocksDB engine
+    transaction_t txn46263 = *db.transact();
+    blobs_collection_t main46263 = *txn46263.collection();
+    transaction_t txn46278 = *db.transact();
+    blobs_collection_t main46278 = *txn46278.collection();
+
+    EXPECT_TRUE(main46263[1].erase());
+    EXPECT_TRUE(main46263[2].assign("1512435004"));
+    EXPECT_TRUE(main46263[1].erase());
+    EXPECT_TRUE(main46263[5].assign("1506174981"));
+    EXPECT_TRUE(main46263[7].erase());
+    EXPECT_TRUE(main46263[1].erase());
+    EXPECT_TRUE(main46263[2].erase());
+    EXPECT_TRUE(main46263[2].erase());
+    EXPECT_TRUE(main46263[7].erase());
+    EXPECT_TRUE(main46263[1].erase());
+    EXPECT_TRUE(main46263[4].erase());
+    EXPECT_TRUE(main46263[1].erase());
+    EXPECT_TRUE(main46263[4].assign("3199607125"));
+    EXPECT_TRUE(main46263[6].erase());
+    EXPECT_TRUE(main46263[3].erase());
+    EXPECT_TRUE(txn46263.commit());
+
+    EXPECT_TRUE(main46278[3].erase());
+    EXPECT_TRUE(main46278[7].erase());
+    EXPECT_TRUE(main46278[1].erase());
+    EXPECT_TRUE(main46278[6].erase());
+    EXPECT_TRUE(main46278[4].erase());
+    EXPECT_TRUE(main46278[3].assign("572327713"));
+    EXPECT_TRUE(main46278[6].erase());
+    EXPECT_TRUE(main46278[1].erase());
+    EXPECT_TRUE(main46278[3].erase());
+    EXPECT_TRUE(main46278[6].erase());
+    EXPECT_TRUE(main46278[3].erase());
+    EXPECT_TRUE(main46278[2].assign("3174360422"));
+    EXPECT_TRUE(main46278[4].erase());
+    EXPECT_TRUE(main46278[7].erase());
+    EXPECT_TRUE(main46278[1].erase());
+    EXPECT_TRUE(txn46278.commit());
+
+    EXPECT_EQ(*db.collection()->at(2).value(), value_view_t {"3174360422"});
+    EXPECT_EQ(*db.collection()->at(5).value(), value_view_t {"1506174981"});
     EXPECT_EQ(db.collection()->keys().size(), 2u);
     EXPECT_TRUE(db.clear());
 }
