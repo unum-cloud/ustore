@@ -662,6 +662,62 @@ void ukv_graph_remove_edges(ukv_graph_remove_edges_t* c_ptr) {
         c.error);
 }
 
+void ukv_graph_upsert_vertices(ukv_graph_upsert_vertices_t* c_ptr) {
+
+    ukv_graph_upsert_vertices_t& c = *c_ptr;
+    if (!c.tasks_count)
+        return;
+
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+    ukv_length_t* c_found_lengths = nullptr;
+
+    ukv_read_t read {
+        .db = c.db,
+        .error = c.error,
+        .transaction = c.transaction,
+        .arena = arena,
+        .options = c.options,
+        .tasks_count = c.tasks_count,
+        .collections = c.collections,
+        .collections_stride = c.collections_stride,
+        .keys = c.vertices,
+        .keys_stride = c.vertices_stride,
+        .lengths = &c_found_lengths,
+    };
+
+    ukv_read(&read);
+    return_if_error_m(c.error);
+
+    std::size_t idx = 0;
+    auto vertices_to_upsert = arena.alloc<ukv_key_t>(c.tasks_count, c.error);
+    strided_range_gt<ukv_key_t const> vertices {{c.vertices, c.vertices_stride}, c.tasks_count};
+    for (std::size_t i = 0; i != c.tasks_count; ++i) {
+        if (c_found_lengths[i] == ukv_length_missing_k) {
+            vertices_to_upsert[idx] = vertices[i];
+            ++idx;
+        }
+    }
+
+    ukv_length_t length = 0;
+    value_view_t empty_value = "";
+    ukv_write_t write {
+        .db = c.db,
+        .error = c.error,
+        .transaction = c.transaction,
+        .arena = arena,
+        .tasks_count = idx,
+        .collections = c.collections,
+        .collections_stride = c.collections_stride,
+        .keys = vertices_to_upsert.begin(),
+        .keys_stride = sizeof(ukv_key_t),
+        .lengths = &length,
+        .values = empty_value.member_ptr(),
+    };
+
+    ukv_write(&write);
+}
+
 void ukv_graph_remove_vertices(ukv_graph_remove_vertices_t* c_ptr) {
 
     ukv_graph_remove_vertices_t& c = *c_ptr;
