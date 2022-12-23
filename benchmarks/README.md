@@ -49,10 +49,10 @@ For document-like workloads:
 | Yugabyte                       |    2 K    |   82 K    |
 | MongoDB                        |   18 K    |   210 K   |
 |                                |           |           |
-| UKV on RocksDB                 |   26 K    |   1.2 M   |
-| UKV on RocksDB with Flight API |   22 K    |   207 K   |
-| UKV on UMem                    |   404 K   |   1.3 M   |
-| UKV on UMem with Flight API    |   175 K   |   237 K   |
+| UKV on RocksDB                 |   22 K    |  742k/s   |
+| UKV on RocksDB with Flight API |   23 K    |  282k/s   |
+| UKV on UMem                    |   350 K   |  4.8M/s   |
+| UKV on UMem with Flight API    |   206 K   |  371k/s   |
 
 For graphs, we show the number of edges per second handled by different queries:
 
@@ -60,10 +60,10 @@ For graphs, we show the number of edges per second handled by different queries:
 | :----------------------------- | :-------: | :---------------: |
 | Neo4J                          |    2 K    |       1.5 K       |
 |                                |           |                   |
-| UKV on RocksDB                 |   631 K   |       3.7 M       |
-| UKV on RocksDB with Flight API |   149 K   |      1.48 M       |
-| UKV on UMem                    |   378 K   |       21 M        |
-| UKV on UMem with Flight API    |   176 K   |       17 M        |
+| UKV on RocksDB                 |   241 K   |       3.7 M       |
+| UKV on RocksDB with Flight API |   119 K   |      1.48 M       |
+| UKV on UMem                    |   201 K   |       21 M        |
+| UKV on UMem with Flight API    |   163 K   |       17 M        |
 
 For MongoDB, we also tried the official <code class="docutils literal notranslate"><a href="https://www.mongodb.com/docs/database-tools/mongoimport/" class="pre">mongoimport</a></code> tool, which supports both `.csv` and `.ndjson`.
 The results are mixed compared to a multi-process setup.

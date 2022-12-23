@@ -91,7 +91,10 @@ TEST(db, insert_atomic_isolated) {
 }
 
 int main(int argc, char** argv) {
-    std::filesystem::create_directory("./tmp");
+    if (path() && std::strlen(path())) {
+        std::filesystem::remove_all(path());
+        std::filesystem::create_directories(path());
+    }
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

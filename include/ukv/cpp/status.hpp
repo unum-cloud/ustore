@@ -187,6 +187,9 @@ enum error_code_t {
 
 } // namespace unum::ukv
 
+// #define log_warning_m(format, ...) fprintf(stderr, format, __VA_ARGS__)
+#define log_warning_m(format, ...) {}
+
 #define log_error_m(c_error, code, message) \
     { *c_error = message; }
 

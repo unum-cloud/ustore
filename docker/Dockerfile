@@ -9,7 +9,7 @@ RUN ln -s /usr/bin/dpkg-split /usr/sbin/dpkg-split && \
 
 RUN apt-get update -y && \
     apt-get install -y apt-utils 2>&1 | grep -v "debconf: delaying package configuration, since apt-utils is not installed" && \
-    apt-get install -y --no-install-recommends cmake git libssl-dev build-essential zlib1g zlib1g-dev
+    apt-get install -y --no-install-recommends cmake git libssl-dev build-essential zlib1g zlib1g-dev python3 python3-dev
 
 COPY . /usr/src/ukv
 WORKDIR /usr/src/ukv
@@ -30,9 +30,16 @@ RUN cmake \
 
 ## TODO: Optimize: https://github.com/docker-slim/docker-slim
 FROM ubuntu:focal
-WORKDIR /root/
+WORKDIR /var/lib/ukv/
+
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_umem ./umem_server
+COPY ./assets/config_umem.json ./umem/config_umem.json
+
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_leveldb ./leveldb_server
+COPY ./assets/config_leveldb.json ./leveldb/config_leveldb.json
+
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_rocksdb ./rocksdb_server
+COPY ./assets/config_rocksdb.ini ./rocksdb/config_rocksdb.ini
+
 EXPOSE 38709
 CMD ["./umem_server"]

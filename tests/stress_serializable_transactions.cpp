@@ -4,6 +4,7 @@
 #include <mutex>
 #include <chrono>
 #include <charconv>
+#include <string>
 #include <filesystem>
 #include <unordered_map>
 #include <condition_variable>
@@ -96,12 +97,60 @@ class barrier_t {
     }
 };
 
+std::string log_operations(std::vector<operation_t> const& ops) {
+    std::string logs;
+    for (operation_t const& op : ops) {
+        auto mark = op.commited ? "✅" : "❌";
+        switch (op.code) {
+        case operation_code_t::insert_k:
+            fmt::format_to(std::back_inserter(logs), "{} {}. INSERT: {}={}\n", op.sequence, mark, op.key, op.value);
+            break;
+        case operation_code_t::remove_k: //
+            fmt::format_to(std::back_inserter(logs), "{} {}. ERASE: {}\n", op.sequence, mark, op.key);
+            break;
+        default: break;
+        }
+    }
+    return logs;
+}
+
+template <typename associative_container_at>
+std::string log_contents(associative_container_at&& elements) {
+    std::string logs;
+    for (auto element : elements) {
+        std::string payload;
+        using second_t = std::remove_all_extents_t<decltype(element.second)>;
+        if constexpr (std::is_same_v<second_t, payload_t>)
+            payload = std::to_string(element.second);
+        else
+            payload = element.second.size() //
+                          ? std::to_string(*reinterpret_cast<payload_t const*>(element.second.data()))
+                          : "";
+        fmt::format_to(std::back_inserter(logs), "{}={}\n", element.first, payload);
+    }
+    return logs;
+}
+
+template <typename expected_container_at, typename received_container_at>
+std::string log_comparison(std::vector<operation_t> const& ops,
+                           expected_container_at&& expected,
+                           received_container_at&& received) {
+    std::stringstream logs;
+    logs                          //
+        << "Operations:\n"        //
+        << log_operations(ops)    //
+        << "Expected contents:\n" //
+        << log_contents(expected) //
+        << "Received contents:\n" //
+        << log_contents(received);
+    return logs.str();
+}
+
 /**
  * @brief
  *
  * On every thread runs random write operations: insertions and removals.
  * After ::transactions_between_checkpoints it reaches a checkpoint, where all threads stop.
- *
  *
  * @tparam part_inserts_ak
  * @tparam part_removes_ak
@@ -123,7 +172,7 @@ void serializable_writes( //
     constexpr std::size_t parts_total_k = part_inserts_ak + part_removes_ak;
     constexpr std::size_t mean_key_frequency_k = 4;
     ukv_key_t max_key = parts_total_k * transactions_between_checkpoints * concurrent_threads / mean_key_frequency_k;
-    std::uniform_int_distribution<ukv_key_t> dist_keys(0, max_key);
+    std::uniform_int_distribution<ukv_key_t> dist_keys(1, max_key);
 
     std::size_t operations_per_thread = transactions_between_checkpoints * parts_total_k;
     std::vector<operation_t> operations_across_threads {concurrent_threads * operations_per_thread};
@@ -135,13 +184,13 @@ void serializable_writes( //
         bool produced_error = false;
         std::size_t passed_checkpoints = 0;
 
-        ukv_transaction_t txn;
+        transaction_t txn = db.transact().throw_or_release();
 
         while (!produced_error && passed_checkpoints < max_checkpoints) {
             // Make a few transactions in a row.
             // They will be of identical size, but with different keys.
             for (std::size_t iteration = 0; iteration != transactions_between_checkpoints; ++iteration) {
-                transaction_t txn = db.transact().throw_or_release();
+                txn.reset().throw_unhandled();
                 for (std::size_t part = 0; part != parts_total_k; ++part) {
                     operation_t& op = operations[iteration * parts_total_k + part];
                     op.code = (random_generator() % parts_total_k) > part_inserts_ak //
@@ -191,15 +240,26 @@ void serializable_writes( //
 
                 // Now check that the contents of both collections are identical
                 blobs_collection_t concurrent = db.collection().throw_or_release();
+                EXPECT_EQ(sequential.size(), concurrent.items().size())
+                    << log_comparison(operations_across_threads, sequential, concurrent.items());
+
                 for (auto const& kv : sequential) {
                     payload_t expected = kv.second;
-                    value_view_t retrieved_str = concurrent[kv.first].value().throw_or_release();
-                    EXPECT_TRUE(retrieved_str);
+                    auto maybe_retrieved_str = concurrent[kv.first].value();
+                    EXPECT_TRUE(maybe_retrieved_str)                                                 //
+                        << log_comparison(operations_across_threads, sequential, concurrent.items()) //
+                        << "Failed to retrieve: " << kv.first;
+                    value_view_t retrieved_str = maybe_retrieved_str.throw_or_ref();
+                    EXPECT_TRUE(retrieved_str)                                                       //
+                        << log_comparison(operations_across_threads, sequential, concurrent.items()) //
+                        << "Missing key: " << kv.first;
                     payload_t retrieved = *reinterpret_cast<payload_t const*>(retrieved_str.data());
-                    EXPECT_EQ(expected, retrieved);
+                    EXPECT_EQ(expected, retrieved)                                                   //
+                        << log_comparison(operations_across_threads, sequential, concurrent.items()) //
+                        << "Received wrong value for: " << kv.first;
                 }
+                EXPECT_TRUE(concurrent.clear());
                 sequential.clear();
-                EXPECT_TRUE(db.clear());
             }
 
             // Continue into
@@ -213,6 +273,8 @@ void serializable_writes( //
         threads.push_back(std::thread(thread_logic, thread_idx));
     for (auto& thread : threads)
         thread.join();
+
+    EXPECT_TRUE(db.clear());
 }
 
 void test_writes(database_t& db, std::size_t thread_count, std::size_t checkpoint_frequency) {
@@ -252,7 +314,10 @@ class test_one_config_t : public testing::Test {
 };
 
 int main(int argc, char** argv) {
-    std::filesystem::create_directory("./tmp");
+    if (path() && std::strlen(path())) {
+        std::filesystem::remove_all(path());
+        std::filesystem::create_directories(path());
+    }
     ::testing::InitGoogleTest(&argc, argv);
 
     std::vector<std::size_t> thread_counts {2, 3, 4, 5, 6, 7, 8, 9, 10};

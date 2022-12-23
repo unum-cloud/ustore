@@ -4,7 +4,7 @@ include(ExternalProject)
 ExternalProject_Add(
     pcre2_external
     GIT_REPOSITORY https://github.com/PCRE2Project/pcre2.git
-    GIT_TAG pcre2-10.40
+    GIT_TAG "pcre2-10.42"
     GIT_SHALLOW 1
     GIT_PROGRESS 0
 

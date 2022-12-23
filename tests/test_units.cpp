@@ -947,6 +947,8 @@ TEST(db, paths) {
     ukv_paths_match(&paths_match);
     EXPECT_EQ(results_counts[0], 0);
     EXPECT_EQ(*paths_match.error, nullptr);
+
+    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -956,7 +958,7 @@ TEST(db, paths) {
  */
 TEST(db, paths_linked_list) {
 
-    constexpr std::size_t count = 100;
+    constexpr std::size_t count = 1000;
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1056,6 +1058,8 @@ TEST(db, paths_linked_list) {
         EXPECT_TRUE(status);
         EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
     }
+
+    EXPECT_TRUE(db.clear());
 }
 
 #pragma region Documents Modality
@@ -1232,7 +1236,7 @@ TEST(db, docs_modify) {
     M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
 
     // Update
-    auto modifier = R"( {"person": {"name":"Charls", "age": 28}} )"_json.dump();
+    auto modifier = R"( {"person": {"name":"Charles", "age": 28}} )"_json.dump();
     EXPECT_TRUE(collection[1].update(modifier.c_str()));
     auto result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
@@ -1262,14 +1266,14 @@ TEST(db, docs_modify) {
     M_EXPECT_EQ_JSON(result->c_str(), jsons[2].c_str());
 
     // Upsert By Field
-    modifier = R"("Charls")"_json.dump();
-    expected = R"( {"person": "Charls", "age": 26} )"_json.dump();
+    modifier = R"("Charles")"_json.dump();
+    expected = R"( {"person": "Charles", "age": 26} )"_json.dump();
     EXPECT_TRUE(collection[ckf(1, "/person")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     modifier = R"(70)"_json.dump();
-    expected = R"( {"person": "Charls", "age": 26, "weight" : 70} )"_json.dump();
+    expected = R"( {"person": "Charles", "age": 26, "weight" : 70} )"_json.dump();
     EXPECT_TRUE(collection[ckf(1, "/weight")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
@@ -1295,7 +1299,9 @@ TEST(db, docs_merge_and_patch) {
         auto expected = it["expected"].dump();
         collection[1] = doc.c_str();
         EXPECT_TRUE(collection[1].patch(patch.c_str()));
-        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+        auto maybe_value = collection[1].value();
+        EXPECT_TRUE(maybe_value);
+        M_EXPECT_EQ_JSON(maybe_value->c_str(), expected.c_str());
     }
 
     std::ifstream f_merge("tests/merge.json");
@@ -1306,7 +1312,9 @@ TEST(db, docs_merge_and_patch) {
         auto expected = it["expected"].dump();
         collection[1] = doc.c_str();
         EXPECT_TRUE(collection[1].merge(merge.c_str()));
-        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+        auto maybe_value = collection[1].value();
+        EXPECT_TRUE(maybe_value);
+        M_EXPECT_EQ_JSON(maybe_value->c_str(), expected.c_str());
     }
 
     EXPECT_TRUE(db.clear());
@@ -1896,6 +1904,8 @@ TEST(db, graph_layering_shapes) {
     over_the_vertices(true, 0);
     EXPECT_TRUE(db.clear());
     over_the_vertices(false, 0);
+
+    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -2057,7 +2067,10 @@ TEST(db, vectors) {
 }
 
 int main(int argc, char** argv) {
-    std::filesystem::create_directory("./tmp");
+    if (path() && std::strlen(path())) {
+        std::filesystem::remove_all(path());
+        std::filesystem::create_directories(path());
+    }
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

@@ -1,5 +1,5 @@
 /**
- * @file blobs_ref.hpp
+ * @file docs_ref.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp

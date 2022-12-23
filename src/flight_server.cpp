@@ -9,13 +9,15 @@
  * https://arrow.apache.org/cookbook/cpp/flight.html
  */
 
+#include <mutex>
+#include <chrono>   // `std::time_point`
+#include <cstdio>   // `std::printf`
+#include <iostream> // `std::cerr`
 #include <unordered_map>
 #include <unordered_set>
-#include <chrono> // `std::time_point`
-#include <cstdio> // `std::printf`
-#include <mutex>
 
 #include <arrow/flight/server.h>
+#include <clipp.h>
 
 #include "ukv/cpp/db.hpp"
 #include "ukv/cpp/types.hpp" // `hash_combine`
@@ -926,7 +928,8 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             ukv_size_t result_length = std::accumulate(found_counts, found_counts + tasks_count, 0);
             auto rounded_counts = arena.alloc<ukv_length_t>(result_length, 0);
-            std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
+            if (rounded_counts)
+                std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
             ukv_size_t collections_count = 1 + request_content;
             ukv_to_arrow_schema(result_length,
                                 collections_count,
@@ -1247,11 +1250,12 @@ class UKVService : public arf::FlightServerBase {
     }
 };
 
-ar::Status run_server() {
-    database_t db;
-    db.open().throw_unhandled();
+ar::Status run_server(ukv_str_view_t config, int port) {
 
-    arf::Location server_location = arf::Location::ForGrpcTcp("0.0.0.0", 38709).ValueUnsafe();
+    database_t db;
+    db.open(config).throw_unhandled();
+
+    arf::Location server_location = arf::Location::ForGrpcTcp("0.0.0.0", port).ValueUnsafe();
     arf::FlightServerOptions options(server_location);
     auto server = std::make_unique<UKVService>(std::move(db));
     ARROW_RETURN_NOT_OK(server->Init(options));
@@ -1262,5 +1266,25 @@ ar::Status run_server() {
 //------------------------------------------------------------------------------
 
 int main(int argc, char* argv[]) {
-    return run_server().ok() ? EXIT_SUCCESS : EXIT_FAILURE;
+
+    using namespace clipp;
+
+    int port = 38709;
+    std::string config;
+#if UKV_ENGINE_NAME == rocksdb
+    config = "/var/lib/ukv/rocksdb/";
+#elif UKV_ENGINE_NAME == leveldb
+    config = "/var/lib/ukv/leveldb/";
+#endif
+
+    auto cli = ( //
+        option("-d", "--dir").set(config).doc("Path to primary directory, potentially containing a configuration file"),
+        option("-p", "--port").set(port).doc("Port to use for connection"));
+
+    if (!parse(argc, argv, cli)) {
+        std::cerr << make_man_page(cli, argv[0]);
+        exit(1);
+    }
+
+    return run_server(config.c_str(), port).ok() ? EXIT_SUCCESS : EXIT_FAILURE;
 }

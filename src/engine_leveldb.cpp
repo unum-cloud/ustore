@@ -5,16 +5,20 @@
  * @brief Embedded Persistent Key-Value Store on top of @b LevelDB.
  * Has no support for collections, transactions or any non-CRUD jobs.
  */
+#include <fstream>
 
 #include <leveldb/db.h>
 #include <leveldb/comparator.h>
 #include <leveldb/write_batch.h>
+#include <leveldb/cache.h> // `NewLRUCache`
+#include <nlohmann/json.hpp>
 
 #include "ukv/db.h"
 #include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
 #include "helpers/linked_array.hpp" // `uninitialized_array_gt`
 #include "helpers/full_scan.hpp"    // `reservoir_sample_iterator`
 
+namespace stdfs = std::filesystem;
 using namespace unum::ukv;
 using namespace unum;
 
@@ -33,6 +37,8 @@ using level_db_t = leveldb::DB;
 using level_status_t = leveldb::Status;
 using level_options_t = leveldb::Options;
 using level_iter_uptr_t = std::unique_ptr<leveldb::Iterator>;
+
+static constexpr char const* config_name_k = "config_leveldb.json";
 
 struct key_comparator_t final : public leveldb::Comparator {
 
@@ -102,23 +108,59 @@ bool export_error(level_status_t const& status, ukv_error_t* c_error) {
 void ukv_database_init(ukv_database_init_t* c_ptr) {
 
     ukv_database_init_t& c = *c_ptr;
-    if (!c.config || !std::strlen(c.config)) {
-        *c.error = "LevelDB requires a configuration file or a path!";
-        return;
-    }
-
     try {
-        level_db_t* db_ptr = nullptr;
         level_options_t options;
+        options.comparator = &key_comparator_k;
         options.compression = leveldb::kNoCompression;
         options.create_if_missing = true;
-        options.comparator = &key_comparator_k;
+
+        // Check if the directory contains a config
+        stdfs::path root = c.config;
+        stdfs::file_status root_status = stdfs::status(root);
+        return_error_if_m(root_status.type() == stdfs::file_type::directory,
+                          c.error,
+                          args_wrong_k,
+                          "Root isn't a directory");
+        stdfs::path config_path = stdfs::path(root) / config_name_k;
+        stdfs::file_status config_status = stdfs::status(config_path);
+        if (config_status.type() == stdfs::file_type::not_found) {
+            log_warning_m(
+                "Configuration file is missing under the path %s. "
+                "Default will be used\n",
+                config_path.c_str());
+        }
+        else {
+            std::ifstream ifs(config_path.c_str());
+            nlohmann::json js = nlohmann::json::parse(ifs);
+            if (js.contains("write_buffer_size"))
+                options.write_buffer_size = js["write_buffer_size"];
+            if (js.contains("max_file_size"))
+                options.max_file_size = js["max_file_size"];
+            if (js.contains("max_open_files"))
+                options.max_open_files = js["max_open_files"];
+            if (js.contains("cache_size"))
+                options.block_cache = leveldb::NewLRUCache(js["cache_size"]);
+            if (js.contains("create_if_missing"))
+                options.create_if_missing = js["create_if_missing"];
+            if (js.contains("error_if_exists"))
+                options.error_if_exists = js["error_if_exists"];
+            if (js.contains("paranoid_checks"))
+                options.paranoid_checks = js["paranoid_checks"];
+            if (js.contains("compression"))
+                if (js["compression"] == "kSnappyCompression" || js["compression"] == "snappy")
+                    options.compression = leveldb::kSnappyCompression;
+        }
+
+        level_db_t* db_ptr = nullptr;
         level_status_t status = level_db_t::Open(options, c.config, &db_ptr);
         if (!status.ok()) {
             *c.error = "Couldn't open LevelDB";
             return;
         }
         *c.db = db_ptr;
+    }
+    catch (nlohmann::json::type_error const&) {
+        *c.error = "Unsupported type in LevelDB configuration key";
     }
     catch (...) {
         *c.error = "Open Failure";

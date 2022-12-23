@@ -84,7 +84,7 @@ If they were built on UKV, they could have become 5x faster by changing a single
 - [Benchmarks](#benchmarks)
 - [Tooling](#tooling)
 - [Roadmap](#roadmap)
-- [Development \& Licensing](#development--licensing)
+- [Contributing](#contributing)
 - [Presets, Limitations and FAQ](#presets-limitations-and-faq)
 
 ---
@@ -345,22 +345,21 @@ Following tools are currently in the works.
 
 ## Roadmap
 
-1. Fetching remote configs.
-2. Builds for Arm, MacOS, Windows.
-3. Bindings for GoLang, Java, JavaScript.
-4. Improved Vector Search.
-5. Persistent Snapshots.
-6. Continuous Replication.
-7. Horizontal Scaling.
+1. Builds for Arm, MacOS, Windows.
+2. Bindings for GoLang, Java, JavaScript.
+3. Improved Vector Search.
+4. Collection-level configuration.
+5. Document-schema validation.
+6. Persistent Snapshots.
+7. Continuous Replication.
+8. Horizontal Scaling.
 
-## Development & Licensing
+## Contributing
 
-This is an umbrella project for a number of FOSS libraries.
-Sometimes a couple of libraries can be used together for the same task to complement each other functionality.
-For example, `simdjson` is used for document validation and sampling, while `yyjson` is used for updates.
-
-A full list of dependencies is available at the link below, together with detailed descriptions of reference implementations.
-Licensing depends on which parts you are using.
+UKV is an umbrella project for many FOSS libraries.
+So any work on libraries like `simdjson`, `yyjson`, RocksDB, or Apache Arrow, indirectly benefits UKV.
+To participate in the UKV directly, please check out the guide and implementation details.
+Thank you!
 
 > [Read full development and contribution guide in our docs here][ukv-details].
 
