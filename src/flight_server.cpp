@@ -928,7 +928,8 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             ukv_size_t result_length = std::accumulate(found_counts, found_counts + tasks_count, 0);
             auto rounded_counts = arena.alloc<ukv_length_t>(result_length, 0);
-            std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
+            if (rounded_counts)
+                std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
             ukv_size_t collections_count = 1 + request_content;
             ukv_to_arrow_schema(result_length,
                                 collections_count,
