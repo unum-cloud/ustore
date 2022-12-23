@@ -33,10 +33,10 @@ jobs:
       - name: Configure CMake
         # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
         # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-        run: cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DUKV_BUILD_BENCHMARKS=1 .
+        run: cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 .
 
       - name: Build
-        run: make -j4 ukv_umem ukv_umem_unit_test ukv_umem_twitter_benchmark ukv_umem_tabular_graph_benchmark ukv_umem_api_test ukv_umem_compilation_test ukv_umem_stress_test
+        run: make -j4
 
       - name: Upload Binaries
         uses: actions/upload-artifact@v3.1.1
@@ -58,7 +58,7 @@ jobs:
       - name: Change Permissions
         run: chmod +x /home/runner/work/UKV/UKV/*
       - name: Run tests
-        run: for test in $(ls /home/runner/work/UKV/UKV/*unit_test); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
+        run: for test in $(ls /home/runner/work/UKV/UKV/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
 
   publish_python:
     runs-on: ubuntu-20.04
@@ -66,16 +66,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      
+
       - uses: pypa/cibuildwheel@v2.11.3
         with:
           output-dir: dist
-          
+
       - name: publish to test-pypi
         uses: pypa/gh-action-pypi-publish@v1.6.4
         with:
-            user: __token__
-            password: ${{ secrets.TWINE_API }}
-            repository_url: https://test.pypi.org/legacy/
-            verbose: true
-            print_hash: true
+          user: __token__
+          password: ${{ secrets.TWINE_API }}
+          verbose: true
+          print_hash: true

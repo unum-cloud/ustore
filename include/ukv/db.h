@@ -237,7 +237,18 @@ extern bool const ukv_supports_snapshots_k;
  * - remote in-memory transactional KVS
  */
 typedef struct ukv_database_init_t {
-    /** @brief A NULL-terminated @b JSON string with configuration specs. */
+    /**
+     * @brief Configuration parameter for the DBMS.
+     *
+     * For embedded distributions should be the root directory,
+     * under which the DBMS and it's files will be organized.
+     *
+     * Recommendations:
+     * - UMem: empty or `/var/lib/ukv/umem/` for eventually persistent.
+     * - RocksDB: `/var/lib/ukv/rocksdb/` optionally storing `config_rocksdb.ini`.
+     * - LevelDB: `/var/lib/ukv/leveldb/` optionally storing `config_leveldb.json`.
+     * - Flight API Client: `grpc://0.0.0.0:38709`.
+     */
     ukv_str_view_t config = NULL;
     /** @brief A pointer to the opened KVS, unless `error` is filled. */
     ukv_database_t* db;

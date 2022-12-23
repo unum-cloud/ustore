@@ -231,7 +231,7 @@ class pairs_stream_t {
             return status;
 
         values_view = joined_blobs_t {count, found_offs, found_vals};
-        next_min_key_ = count <= read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
+        next_min_key_ = count < read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
 
@@ -264,7 +264,7 @@ class pairs_stream_t {
 
     status_t advance() noexcept {
 
-        if (fetched_offset_ >= fetched_keys_.size())
+        if (fetched_offset_ + 1 >= fetched_keys_.size())
             return prefetch();
 
         ++fetched_offset_;
@@ -315,7 +315,7 @@ class pairs_stream_t {
     }
 
     bool is_end() const noexcept {
-        return next_min_key_ == ukv_key_unknown_k && fetched_offset_ >= fetched_keys_.size();
+        return next_min_key_ == ukv_key_unknown_k && fetched_offset_ + 1 >= fetched_keys_.size();
     }
 
     bool operator==(pairs_stream_t const& other) const noexcept {
@@ -467,7 +467,14 @@ struct keys_range_t {
 
     keys_stream_t begin() noexcept(false) { return members.keys_begin().throw_or_release(); }
     keys_stream_t end() noexcept(false) { return members.keys_end().throw_or_release(); }
-    std::size_t size() noexcept(false) { return members.size_estimates().throw_or_release().cardinality.max; }
+    std::size_t size() noexcept(false) {
+        auto it = begin();
+        auto e = end();
+        std::size_t count = 0;
+        for (; it != e; ++it)
+            ++count;
+        return count;
+    }
 
     expected_gt<sample_t> sample(std::size_t count, arena_t& arena) noexcept {
         ukv_length_t* found_counts = nullptr;
@@ -502,7 +509,14 @@ struct pairs_range_t {
 
     pairs_stream_t begin() noexcept(false) { return members.pairs_begin().throw_or_release(); }
     pairs_stream_t end() noexcept(false) { return members.pairs_end().throw_or_release(); }
-    std::size_t size() noexcept(false) { return members.size_estimates().throw_or_release().cardinality.max; }
+    std::size_t size() noexcept(false) {
+        auto it = begin();
+        auto e = end();
+        std::size_t count = 0;
+        for (; it != e; ++it)
+            ++count;
+        return count;
+    }
 };
 
 } // namespace unum::ukv

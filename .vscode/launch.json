@@ -24,7 +24,7 @@
             "name": "C++: Test UMem API",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_umem_api_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_api_ukv_embedded_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -47,7 +47,7 @@
             "name": "C++: Test LevelDB API",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_leveldb_api_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_api_ukv_embedded_leveldb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -65,7 +65,7 @@
             "name": "C++: Test RocksDB API",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_rocksdb_api_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_api_ukv_embedded_rocksdb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -83,7 +83,7 @@
             "name": "C++: Test UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_umem_unit_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_embedded_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -110,7 +110,7 @@
             "name": "C++: Test LevelDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_leveldb_unit_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_embedded_leveldb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -128,21 +128,28 @@
             "name": "C++: ImpExp Test UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_umem_imp_exp_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_embedded_rocksdb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
             ],
             "cwd": "${workspaceFolder}",
-            "environment": [
-                {
-                    "name": "ASAN_OPTIONS",
-                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
-                },
-                {
-                    "name": "UKV_TEST_PATH",
-                    "value": ""
-                }
+            "environment": [],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Debug RocksDB Test",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "C++: Test UDisk",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_embedded_udisk",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
             ],
             "showDisplayString": true,
             "stopAtEntry": false,
@@ -152,10 +159,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Test UMem",
+            "name": "C++: Stress Isolated Inserts UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_umem_stress_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_insert_atomic_isolated_ukv_embedded_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -174,15 +181,15 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UMem Stress Test",
+            "preLaunchTask": "Build Native: Stress Isolated Inserts UMem",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Test RocksDB",
+            "name": "C++: Stress Isolated Inserts RocksDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_rocksdb_stress_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_insert_atomic_isolated_ukv_embedded_rocksdb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -197,7 +204,57 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug RocksDB Stress Test",
+            "preLaunchTask": "Build Native: Stress Isolated Inserts RocksDB",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "C++: Stress Serializable Transactions UMem",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_serializable_transactions_ukv_embedded_umem",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                },
+                {
+                    "name": "UKV_TEST_PATH",
+                    "value": ""
+                }
+            ],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Stress Serializable Transactions UMem",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "C++: Stress Serializable Transactions RocksDB",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_serializable_transactions_ukv_embedded_rocksdb",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                }
+            ],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Native: Stress Serializable Transactions RocksDB",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -205,7 +262,7 @@
             "name": "C++: Benchmark UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_umem_twitter_benchmark",
+            "program": "${workspaceFolder}/build_debug/build/bin/benchmark_twitter_ukv_embedded_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -223,7 +280,7 @@
             "name": "C++: Benchmark RocksDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_rocksdb_twitter_benchmark",
+            "program": "${workspaceFolder}/build_debug/build/bin/benchmark_twitter_ukv_embedded_rocksdb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -241,7 +298,7 @@
             "name": "C++: Benchmark UDisk",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_udisk_twitter_benchmark",
+            "program": "${workspaceFolder}/build_debug/build/bin/bench_twitter_ukv_embedded_udisk",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -259,7 +316,7 @@
             "name": "C++: Benchmark Arrow",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_flight_client_twitter_benchmark",
+            "program": "${workspaceFolder}/build_debug/build/bin/bench_twitter_ukv_flight_client_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -277,7 +334,7 @@
             "name": "C++: Test Arrow Client",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_flight_client_unit_test",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_flight_client",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -295,11 +352,7 @@
             "name": "C++: Test Arrow Server",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_umem_flight_server",
-            "args": [
-                "--gtest_break_on_failure",
-                "--gtest_catch_exceptions=0"
-            ],
+            "program": "${workspaceFolder}/build_debug/build/bin/ukv_flight_server_umem",
             "cwd": "${workspaceFolder}",
             "environment": [],
             "showDisplayString": true,

@@ -244,7 +244,7 @@ json_t json_parse(value_view_t bytes, linked_memory_lock_t& arena, ukv_error_t* 
     yyjson_alc allocator = wrap_allocator(arena);
     yyjson_read_flag flg = YYJSON_READ_ALLOW_COMMENTS | YYJSON_READ_ALLOW_INF_AND_NAN;
     result.handle = yyjson_read_opts((char*)bytes.data(), (size_t)bytes.size(), flg, &allocator, NULL);
-    log_if_error(result.handle, c_error, 0, "Failed to parse document!");
+    log_error_if_m(result.handle, c_error, 0, "Failed to parse document!");
     result.mut_handle = yyjson_doc_mut_copy(result.handle, &allocator);
     return result;
 }
@@ -263,7 +263,7 @@ value_view_t json_dump(json_branch_t json,
     char* result_begin = json.mut_handle
                              ? yyjson_mut_val_write_opts(json.mut_handle, flg, &allocator, &result_length, NULL)
                              : yyjson_val_write_opts(json.handle, flg, &allocator, &result_length, NULL);
-    log_if_error(result_begin, c_error, 0, "Failed to serialize the document!");
+    log_error_if_m(result_begin, c_error, 0, "Failed to serialize the document!");
     auto result = value_view_t {reinterpret_cast<byte_t const*>(result_begin), result_length};
     result = output.push_back(result, c_error);
     output.add_terminator(byte_t {0}, c_error);
@@ -513,6 +513,10 @@ void to_json_string(string_t& json_str, char (&str)[count_ak], ukv_error_t* c_er
     json_str.insert(json_str.size(), str, str + count_ak, c_error);
 }
 
+void to_json_string(string_t& json_str, char const* str, size_t count, ukv_error_t* c_error) {
+    json_str.insert(json_str.size(), str, str + count, c_error);
+}
+
 void to_json_string(string_t& json_str, char const* str, ukv_error_t* c_error) {
     json_str.insert(json_str.size(), str, str + std::strlen(str), c_error);
 }
@@ -524,8 +528,8 @@ void to_json_number(string_t& json_str, at scalar, ukv_error_t* c_error) {
     json_str.insert(json_str.size(), result.data(), result.data() + result.size(), c_error);
 }
 
-static bool bson_visit_array(const bson_iter_t*, const char*, const bson_t*, void*);
-static bool bson_visit_document(const bson_iter_t*, const char*, const bson_t*, void*);
+static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const*, void*);
+static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const*, void*);
 
 static bool bson_visit_before(bson_iter_t const*, char const* key, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
@@ -607,7 +611,7 @@ static bool bson_visit_undefined(bson_iter_t const*, char const*, void* data) {
 }
 static bool bson_visit_oid(bson_iter_t const*, char const*, const bson_oid_t*, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    log_error(state.c_error, 0, "Unsupported type");
+    log_error_m(state.c_error, 0, "Unsupported type");
     return false;
 }
 static bool bson_visit_bool(bson_iter_t const*, char const*, bool v_bool, void* data) {
@@ -629,27 +633,27 @@ static bool bson_visit_null(bson_iter_t const*, char const*, void* data) {
 }
 static bool bson_visit_regex(bson_iter_t const*, char const*, char const*, char const*, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    log_error(state.c_error, 0, "Unsupported type");
+    log_error_m(state.c_error, 0, "Unsupported type");
     return false;
 }
 static bool bson_visit_dbpointer(bson_iter_t const*, char const*, size_t, char const*, bson_oid_t const*, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    log_error(state.c_error, 0, "Unsupported type");
+    log_error_m(state.c_error, 0, "Unsupported type");
     return false;
 }
 static bool bson_visit_code(bson_iter_t const*, char const*, size_t, char const*, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    log_error(state.c_error, 0, "Unsupported type");
+    log_error_m(state.c_error, 0, "Unsupported type");
     return false;
 }
 static bool bson_visit_symbol(bson_iter_t const*, char const*, size_t, char const*, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    log_error(state.c_error, 0, "Unsupported type");
+    log_error_m(state.c_error, 0, "Unsupported type");
     return false;
 }
 static bool bson_visit_codewscope(bson_iter_t const*, char const*, size_t, char const*, bson_t const*, void* data) {
     json_state_t* state = reinterpret_cast<json_state_t*>(data);
-    log_error(state->c_error, 0, "Unsupported type");
+    log_error_m(state->c_error, 0, "Unsupported type");
     return false;
 }
 static bool bson_visit_int32(bson_iter_t const*, char const*, int32_t v_int32, void* data) {
@@ -687,11 +691,11 @@ static bool bson_visit_minkey(bson_iter_t const*, char const*, void* data) {
 static void bson_visit_unsupported_type(bson_iter_t const* iter, char const*, uint32_t, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
     // state.error_offset = iter->off; //TODO
-    return_error(state.c_error, "BSON unsupported type");
+    return_error_m(state.c_error, "BSON unsupported type");
 }
 static bool bson_visit_decimal128(bson_iter_t const*, char const*, bson_decimal128_t const*, void* data) {
     json_state_t& state = *reinterpret_cast<json_state_t*>(data);
-    log_error(state.c_error, 0, "Unsupported type");
+    log_error_m(state.c_error, 0, "Unsupported type");
     return false;
 }
 
@@ -712,7 +716,7 @@ static bool bson_visit_array(bson_iter_t const*, char const*, bson_t const* v_ar
         to_json_string(child_state.json_str, open_arr_k, state.c_error);
 
         if (bson_iter_visit_all(&child, &bson_visitor, &child_state))
-            log_error(state.c_error, 0, "Failed to iterate the BSON array!");
+            log_error_m(state.c_error, 0, "Failed to iterate the BSON array!");
 
         to_json_string(child_state.json_str, close_arr_k, state.c_error);
     }
@@ -727,7 +731,7 @@ static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v
         to_json_string(child_state.json_str, open_k, state.c_error);
 
         if (bson_iter_visit_all(&child, &bson_visitor, &child_state))
-            log_error(state.c_error, 0, "Failed to iterate the BSON document!");
+            log_error_m(state.c_error, 0, "Failed to iterate the BSON document!");
 
         to_json_string(child_state.json_str, close_k, state.c_error);
     }
@@ -736,7 +740,7 @@ static bool bson_visit_document(bson_iter_t const*, char const*, bson_t const* v
 
 // MsgPack to Json
 void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_error) {
-    if (mpack_reader_error(&reader) != mpack_ok) [[unlikely]]
+    if (mpack_reader_error(&reader) != mpack_ok) // C++20: [[unlikely]]
         return;
 
     mpack_tag_t tag = mpack_read_tag(&reader);
@@ -770,7 +774,9 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
     case mpack_type_str: {
         size_t length = mpack_tag_str_length(&tag);
         auto data = mpack_read_bytes_inplace(&reader, length);
+        to_json_string(builder, "\"", c_error);
         to_json_string(builder, data, c_error);
+        to_json_string(builder, "\"", c_error);
         mpack_done_str(&reader);
         break;
     }
@@ -801,13 +807,16 @@ void object_reading(mpack_reader_t& reader, string_t& builder, ukv_error_t* c_er
 
         uint32_t count = mpack_tag_map_count(&tag);
         for (uint32_t i = 0; i != count; ++i) {
+            if (i != 0)
+                to_json_string(builder, ",", c_error);
+
             mpack_tag_t tag = mpack_read_tag(&reader);
             uint32_t length = mpack_tag_str_length(&tag);
             const char* key = mpack_read_bytes_inplace(&reader, length);
             // Write key into json string
             to_json_string(builder, "\"", c_error);
-            to_json_string(builder, key, c_error);
-            to_json_string(builder, "\" : ", c_error);
+            to_json_string(builder, key, length, c_error);
+            to_json_string(builder, "\":", c_error);
 
             object_reading(reader, builder, c_error);
             if (mpack_reader_error(&reader) != mpack_ok) // critical check!
@@ -846,8 +855,8 @@ void sample_leafs(mpack_writer_t& writer, sj::simdjson_result<sj::ondemand::valu
         auto end = object.end().value();
         while (begin != end) {
             auto field = *begin;
-            value_view_t key(field.key().raw());
-            mpack_write_str(&writer, key.c_str(), key.size());
+            std::string_view key = field.unescaped_key();
+            mpack_write_str(&writer, key.data(), key.size());
             sample_leafs(writer, field.value().value());
             ++begin;
         }
@@ -904,6 +913,9 @@ void sample_leafs(mpack_writer_t& writer, sj::simdjson_result<sj::ondemand::valu
 void json_to_mpack(sj::padded_string_view doc, string_t& output, ukv_error_t* c_error) {
     sj::ondemand::parser parser;
 
+    output.resize(doc.size(), c_error);
+    return_if_error_m(c_error);
+
     mpack_writer_t writer;
     mpack_writer_init(&writer, output.data(), doc.size());
 
@@ -914,6 +926,8 @@ void json_to_mpack(sj::padded_string_view doc, string_t& output, ukv_error_t* c_
     auto end = object.end().value();
     while (begin != end) {
         auto field = *begin;
+        std::string_view key = field.unescaped_key();
+        mpack_write_str(&writer, key.data(), key.size());
         sample_leafs(writer, field.value().value());
         ++begin;
     }
@@ -923,8 +937,8 @@ void json_to_mpack(sj::padded_string_view doc, string_t& output, ukv_error_t* c_
     size_t new_size = end_ptr - writer.buffer;
 
     output.resize(new_size, c_error);
-
     mpack_writer_destroy(&writer);
+    return_if_error_m(c_error);
 }
 
 json_t any_parse(value_view_t bytes,
@@ -989,6 +1003,10 @@ json_t any_parse(value_view_t bytes,
     case ukv_doc_field_f32_k: root = yyjson_mut_real(doc, *reinterpret_cast<float const*>(bytes.data())); break;
     case ukv_doc_field_f64_k: root = yyjson_mut_real(doc, *reinterpret_cast<double const*>(bytes.data())); break;
     case ukv_doc_field_bool_k: root = yyjson_mut_bool(doc, *reinterpret_cast<bool const*>(bytes.data())); break;
+
+    case ukv_doc_field_bson_k:
+    case ukv_doc_field_json_k:
+    case ukv_doc_field_msgpack_k: break;
     }
     yyjson_mut_doc_set_root(doc, root);
     json_t result;
@@ -1035,39 +1053,39 @@ void modify_field( //
     auto is_idx = std::all_of(last_key_or_idx.begin(), last_key_or_idx.end(), [](char c) { return std::isdigit(c); });
 
     yyjson_mut_val* val = json_lookupn(original_doc->root, json_ptr.data(), last_key_pos);
-    return_if_error(val, c_error, 0, "Invalid field!");
+    return_error_if_m(val, c_error, 0, "Invalid field!");
 
     if (yyjson_mut_is_arr(val)) {
-        return_if_error(is_idx || last_key_or_idx == "-", c_error, 0, "Invalid field!");
+        return_error_if_m(is_idx || last_key_or_idx == "-", c_error, 0, "Invalid field!");
         size_t idx = 0;
         std::from_chars(last_key_or_idx.begin(), last_key_or_idx.end(), idx);
         if (c_modification == doc_modification_t::merge_k) {
             yyjson_mut_val* mergeable = yyjson_mut_arr_get(val, idx);
-            return_if_error(mergeable, c_error, 0, "Invalid field!");
+            return_error_if_m(mergeable, c_error, 0, "Invalid field!");
             yyjson_mut_val* merge_result = yyjson_mut_merge_patch(original_doc, mergeable, modifier);
-            return_if_error(merge_result, c_error, 0, "Failed To Merge!");
-            return_if_error(yyjson_mut_arr_replace(val, idx, merge_result), c_error, 0, "Failed To Merge!");
+            return_error_if_m(merge_result, c_error, 0, "Failed To Merge!");
+            return_error_if_m(yyjson_mut_arr_replace(val, idx, merge_result), c_error, 0, "Failed To Merge!");
         }
         else if (c_modification == doc_modification_t::insert_k) {
             auto result = is_idx //
                               ? yyjson_mut_arr_insert(val, modifier, idx)
                               : yyjson_mut_arr_add_val(val, modifier);
-            return_if_error(result, c_error, 0, "Failed To Insert!");
+            return_error_if_m(result, c_error, 0, "Failed To Insert!");
         }
         else if (c_modification == doc_modification_t::remove_k) {
-            return_if_error(yyjson_mut_arr_remove(val, idx), c_error, 0, "Failed To Remove!");
+            return_error_if_m(yyjson_mut_arr_remove(val, idx), c_error, 0, "Failed To Remove!");
         }
         else if (c_modification == doc_modification_t::update_k) {
-            return_if_error(yyjson_mut_arr_replace(val, idx, modifier), c_error, 0, "Failed To Update!");
+            return_error_if_m(yyjson_mut_arr_replace(val, idx, modifier), c_error, 0, "Failed To Update!");
         }
         else if (c_modification == doc_modification_t::upsert_k) {
             auto result = yyjson_mut_arr_get(val, idx) //
                               ? yyjson_mut_arr_replace(val, idx, modifier) != nullptr
                               : yyjson_mut_arr_append(val, modifier);
-            return_if_error(result, c_error, 0, "Failed To Upsert!");
+            return_error_if_m(result, c_error, 0, "Failed To Upsert!");
         }
         else {
-            return_error(c_error, "Invalid Modification Mode!");
+            return_error_m(c_error, "Invalid Modification Mode!");
         }
     }
     else if (yyjson_mut_is_obj(val)) {
@@ -1079,28 +1097,28 @@ void modify_field( //
         }
         else if (c_modification == doc_modification_t::insert_k) {
             yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
-            return_if_error(yyjson_mut_obj_add(val, key, modifier), c_error, 0, "Failed To Insert!");
+            return_error_if_m(yyjson_mut_obj_add(val, key, modifier), c_error, 0, "Failed To Insert!");
         }
         else if (c_modification == doc_modification_t::remove_k) {
             yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
-            return_if_error(yyjson_mut_obj_remove(val, key), c_error, 0, "Failed To Insert!");
+            return_error_if_m(yyjson_mut_obj_remove(val, key), c_error, 0, "Failed To Insert!");
         }
         else if (c_modification == doc_modification_t::update_k) {
             yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
-            return_if_error(yyjson_mut_obj_replace(val, key, modifier), c_error, 0, "Failed To Update!");
+            return_error_if_m(yyjson_mut_obj_replace(val, key, modifier), c_error, 0, "Failed To Update!");
         }
         else if (c_modification == doc_modification_t::upsert_k) {
             if (yyjson_mut_obj_get(val, last_key_or_idx.data())) {
                 yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
-                return_if_error(yyjson_mut_obj_replace(val, key, modifier), c_error, 0, "Failed To Update!");
+                return_error_if_m(yyjson_mut_obj_replace(val, key, modifier), c_error, 0, "Failed To Update!");
             }
             else {
                 yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
-                return_if_error(yyjson_mut_obj_add(val, key, modifier), c_error, 0, "Failed To Update!");
+                return_error_if_m(yyjson_mut_obj_add(val, key, modifier), c_error, 0, "Failed To Update!");
             }
         }
         else {
-            return_error(c_error, "Invalid Modification Mode!");
+            return_error_m(c_error, "Invalid Modification Mode!");
         }
     }
 }
@@ -1133,74 +1151,74 @@ void patch( //
     linked_memory_lock_t& arena,
     ukv_error_t* c_error) {
 
-    return_if_error(yyjson_mut_is_arr(patch_doc), c_error, 0, "Invalid Patch Doc!");
+    return_error_if_m(yyjson_mut_is_arr(patch_doc), c_error, 0, "Invalid Patch Doc!");
     yyjson_mut_val* obj;
     yyjson_mut_arr_iter arr_iter;
     yyjson_mut_arr_iter_init(patch_doc, &arr_iter);
     while ((obj = yyjson_mut_arr_iter_next(&arr_iter))) {
-        return_if_error(yyjson_mut_is_obj(obj), c_error, 0, "Invalid Patch Doc!");
+        return_error_if_m(yyjson_mut_is_obj(obj), c_error, 0, "Invalid Patch Doc!");
         yyjson_mut_obj_iter obj_iter;
         yyjson_mut_obj_iter_init(obj, &obj_iter);
         yyjson_mut_val* op = yyjson_mut_obj_iter_get(&obj_iter, "op");
-        return_if_error(op, c_error, 0, "Invalid Patch Doc!");
+        return_error_if_m(op, c_error, 0, "Invalid Patch Doc!");
         if (yyjson_mut_equals_str(op, "add")) {
-            return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* path = yyjson_mut_obj_iter_get(&obj_iter, "path");
-            return_if_error(path, c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m(path, c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* value = yyjson_mut_obj_iter_get(&obj_iter, "value");
-            return_if_error(value, c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m(value, c_error, 0, "Invalid Patch Doc!");
             auto nested_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
             nested_path ? modify_field(original_doc, value, nested_path, doc_modification_t::insert_k, c_error)
                         : yyjson_mut_doc_set_root(original_doc, value);
         }
         else if (yyjson_mut_equals_str(op, "remove")) {
-            return_if_error((yyjson_mut_obj_size(obj) == 2), c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m((yyjson_mut_obj_size(obj) == 2), c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* path = yyjson_mut_obj_iter_get(&obj_iter, "path");
-            return_if_error(path, c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m(path, c_error, 0, "Invalid Patch Doc!");
             auto nested_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
             nested_path ? modify_field(original_doc, nullptr, nested_path, doc_modification_t::remove_k, c_error)
                         : yyjson_mut_doc_set_root(original_doc, NULL);
         }
         else if (yyjson_mut_equals_str(op, "replace")) {
-            return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* path = yyjson_mut_obj_iter_get(&obj_iter, "path");
-            return_if_error(path, c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m(path, c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* value = yyjson_mut_obj_iter_get(&obj_iter, "value");
-            return_if_error(value, c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m(value, c_error, 0, "Invalid Patch Doc!");
             auto nested_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
             nested_path ? modify_field(original_doc, value, nested_path, doc_modification_t::update_k, c_error)
                         : yyjson_mut_doc_set_root(original_doc, value);
         }
         else if (yyjson_mut_equals_str(op, "copy")) {
-            return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* path = yyjson_mut_obj_iter_get(&obj_iter, "path");
-            return_if_error(path, c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m(path, c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* from = yyjson_mut_obj_iter_get(&obj_iter, "from");
-            return_if_error(from, c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m(from, c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* value =
                 yyjson_mut_val_mut_copy(original_doc, json_lookup(original_doc->root, yyjson_mut_get_str(from)));
-            return_if_error(value, c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m(value, c_error, 0, "Invalid Patch Doc!");
             auto nested_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
             modify_field(original_doc, value, nested_path, doc_modification_t::upsert_k, c_error);
         }
         else if (yyjson_mut_equals_str(op, "move")) {
-            return_if_error((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m((yyjson_mut_obj_size(obj) == 3), c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* path = yyjson_mut_obj_iter_get(&obj_iter, "path");
-            return_if_error(path, c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m(path, c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* from = yyjson_mut_obj_iter_get(&obj_iter, "from");
-            return_if_error(from, c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m(from, c_error, 0, "Invalid Patch Doc!");
             yyjson_mut_val* value =
                 yyjson_mut_val_mut_copy(original_doc, json_lookup(original_doc->root, yyjson_mut_get_str(from)));
-            return_if_error(value, c_error, 0, "Invalid Patch Doc!");
+            return_error_if_m(value, c_error, 0, "Invalid Patch Doc!");
             auto nested_from_path = field_concat(field, yyjson_mut_get_str(from), arena, c_error);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
             modify_field(original_doc, nullptr, nested_from_path, doc_modification_t::remove_k, c_error);
             auto nested_to_path = field_concat(field, yyjson_mut_get_str(path), arena, c_error);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
             modify_field(original_doc, value, nested_to_path, doc_modification_t::upsert_k, c_error);
         }
     }
@@ -1222,7 +1240,7 @@ void modify( //
 
     if (field && c_modification != doc_modification_t::patch_k) {
         modify_field(original.mut_handle, modifier, field, c_modification, c_error);
-        return_if_error(original.mut_handle->root, c_error, 0, "Failed To Modify!");
+        return_error_if_m(original.mut_handle->root, c_error, 0, "Failed To Modify!");
         return;
     }
 
@@ -1235,7 +1253,7 @@ void modify( //
     else
         original.mut_handle->root = yyjson_mut_val_mut_copy(original.mut_handle, modifier);
 
-    return_if_error(original.mut_handle->root, c_error, 0, "Failed To Modify!");
+    return_error_if_m(original.mut_handle->root, c_error, 0, "Failed To Modify!");
 }
 
 template <typename callback_at>
@@ -1285,7 +1303,7 @@ void read_unique_docs( //
     }
 
     auto document = arena.alloc<byte_t>(max_length + sj::SIMDJSON_PADDING, c_error);
-    return_on_error(c_error);
+    return_if_error_m(c_error);
 
     for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
@@ -1336,20 +1354,21 @@ void read_modify_unique_docs( //
         };
 
         ukv_read(&read);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
 
         auto found_binaries = joined_blobs_t(places.count, found_binary_offs, found_binary_begin);
         auto found_binary_it = found_binaries.begin();
 
         for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx, ++found_binary_it) {
 
-            return_if_error(has_fields || c_modification != doc_modification_t::insert_k,
-                            c_error,
-                            0,
-                            "Key Already Exists!");
+            return_error_if_m(has_fields || c_modification != doc_modification_t::insert_k,
+                              c_error,
+                              0,
+                              "Key Already Exists!");
             ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
             value_view_t binary_doc = *found_binary_it;
             callback(task_idx, field, binary_doc);
+            return_if_error_m(c_error);
         }
     }
     else {
@@ -1368,17 +1387,18 @@ void read_modify_unique_docs( //
             .presences = &found_presences,
         };
         ukv_read(&read);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
 
         bits_view_t presents {found_presences};
         for (std::size_t task_idx = 0; task_idx != places.size(); ++task_idx) {
             ukv_str_view_t field = places.fields_begin ? places.fields_begin[task_idx] : nullptr;
-            return_if_error(presents[task_idx] || !has_fields, c_error, 0, "Key Not Exists!");
-            return_if_error(!presents[task_idx] || c_modification != doc_modification_t::insert_k,
-                            c_error,
-                            0,
-                            "Invalid Arguments!");
+            return_error_if_m(presents[task_idx] || !has_fields, c_error, 0, "Key Not Exists!");
+            return_error_if_m(!presents[task_idx] || c_modification != doc_modification_t::insert_k,
+                              c_error,
+                              0,
+                              "Invalid Arguments!");
             callback(task_idx, field, value_view_t::make_empty());
+            return_if_error_m(c_error);
         }
     }
 
@@ -1415,7 +1435,7 @@ void read_modify_docs( //
     // to sort & deduplicate the entries to minimize the random reads
     // from disk.
     auto unique_col_keys = arena.alloc<collection_key_t>(places.count, c_error);
-    return_on_error(c_error);
+    return_if_error_m(c_error);
 
     transform_n(places, places.count, unique_col_keys, std::mem_fn(&place_t::collection_key));
     unique_col_keys = {unique_col_keys.begin(), sort_and_deduplicate(unique_col_keys.begin(), unique_col_keys.end())};
@@ -1458,7 +1478,7 @@ void read_modify_docs( //
     };
 
     ukv_read(&read);
-    return_on_error(c_error);
+    return_if_error_m(c_error);
 
     // We will later need to locate the data for every separate request.
     // Doing it in O(N) tape iterations every time is too slow.
@@ -1492,30 +1512,30 @@ void read_modify_write( //
 
     growing_tape_t growing_tape {arena};
     growing_tape.reserve(places.size(), c_error);
-    return_on_error(c_error);
+    return_if_error_m(c_error);
 
     yyjson_alc allocator = wrap_allocator(arena);
     auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, value_view_t binary_doc) {
         json_t parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
 
         // This error is extremely unlikely, as we have previously accepted the data into the store.
-        return_on_error(c_error);
+        return_if_error_m(c_error);
         if (!parsed.mut_handle)
             parsed.mut_handle = yyjson_doc_mut_copy(parsed.handle, &allocator);
 
         json_t parsed_task = any_parse(contents[task_idx], c_type, arena, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
 
         // Perform modifications
         modify(parsed, parsed_task.mut_handle->root, field, c_modification, arena, c_error);
         any_dump({.mut_handle = parsed.mut_handle->root}, internal_format_k, arena, growing_tape, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
     };
 
     places_arg_t unique_places;
     auto opts = c_txn ? ukv_options_t(c_options & ~ukv_option_transaction_dont_watch_k) : c_options;
     read_modify_docs(c_db, c_txn, places, opts, c_modification, arena, unique_places, c_error, safe_callback);
-    return_on_error(c_error);
+    return_if_error_m(c_error);
 
     // By now, the tape contains concatenated updates docs:
     ukv_byte_t* tape_begin = reinterpret_cast<ukv_byte_t*>(growing_tape.contents().begin().get());
@@ -1546,8 +1566,9 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     if (!c.tasks_count)
         return;
 
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     ptr_range_gt<ukv_key_t> tape;
     if (!c.keys) {
@@ -1576,30 +1597,6 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
     auto has_fields = fields && (!fields.repeats() || *fields);
-    if (!has_fields && c.type == internal_format_k && c.modification == ukv_doc_modify_upsert_k) {
-        ukv_write_t write {
-            .db = c.db,
-            .error = c.error,
-            .transaction = c.transaction,
-            .arena = arena,
-            .options = c.options,
-            .tasks_count = c.tasks_count,
-            .collections = c.collections,
-            .collections_stride = c.collections_stride,
-            .keys = c.keys ? c.keys : tape.begin(),
-            .keys_stride = c.keys_stride,
-            .presences = c.presences,
-            .offsets = c.offsets,
-            .offsets_stride = c.offsets_stride,
-            .lengths = c.lengths,
-            .lengths_stride = c.lengths_stride,
-            .values = c.values,
-            .values_stride = c.values_stride,
-        };
-        return ukv_write(&write);
-    }
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys ? c.keys : tape.begin(), c.keys_stride};
     bits_view_t presences {c.presences};
@@ -1608,15 +1605,57 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values, c.values_stride};
     places_arg_t places {collections, keys, fields, c.tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
-    read_modify_write(c.db,
-                      c.transaction,
-                      places,
-                      contents,
-                      c.options,
-                      static_cast<doc_modification_t>(c.modification),
-                      c.type,
-                      arena,
-                      c.error);
+
+    if (has_fields || c.type != internal_format_k || c.modification != ukv_doc_modify_upsert_k)
+        return read_modify_write(c.db,
+                                 c.transaction,
+                                 places,
+                                 contents,
+                                 c.options,
+                                 static_cast<doc_modification_t>(c.modification),
+                                 c.type,
+                                 arena,
+                                 c.error);
+
+    // Validate JSONs Before Write
+    ukv_length_t max_length = 0;
+    for (std::size_t i = 0; i != contents.size(); ++i) {
+        if (max_length < contents[i].size() && contents[i].size() != ukv_length_missing_k)
+            max_length = contents[i].size();
+    }
+
+    auto document = arena.alloc<byte_t>(max_length + sj::SIMDJSON_PADDING, c.error);
+    return_if_error_m(c.error);
+
+    sj::dom::parser parser;
+    for (std::size_t i = 0; i < contents.size(); ++i) {
+        std::memcpy(document.begin(), contents[i].data(), contents[i].size());
+        std::memset(document.begin() + contents[i].size(), 0, sj::SIMDJSON_PADDING);
+        auto result = parser.parse((const char*)document.begin(), contents[i].size(), false);
+        return_error_if_m(result.error() == sj::SUCCESS, c.error, 0, "Invalid Json!");
+    }
+
+    ukv_write_t write {
+        .db = c.db,
+        .error = c.error,
+        .transaction = c.transaction,
+        .arena = arena,
+        .options = c.options,
+        .tasks_count = c.tasks_count,
+        .collections = c.collections,
+        .collections_stride = c.collections_stride,
+        .keys = c.keys,
+        .keys_stride = c.keys_stride,
+        .presences = c.presences,
+        .offsets = c.offsets,
+        .offsets_stride = c.offsets_stride,
+        .lengths = c.lengths,
+        .lengths_stride = c.lengths_stride,
+        .values = c.values,
+        .values_stride = c.values_stride,
+    };
+
+    ukv_write(&write);
 }
 
 void ukv_docs_read(ukv_docs_read_t* c_ptr) {
@@ -1626,7 +1665,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
         return;
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // If user wants the entire doc in the same format, as the one we use internally,
     // this request can be passed entirely to the underlying Key-Value store.
@@ -1652,7 +1691,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
         return ukv_read(&read);
     }
 
-    return_if_error(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
@@ -1662,7 +1701,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
     // Potentially sampling certain sub-fields again along the way.
     growing_tape_t growing_tape {arena};
     growing_tape.reserve(places.size(), c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
     sj::ondemand::parser parser;
 
     auto safe_callback = [&](ukv_size_t, ukv_str_view_t field, value_view_t binary_doc) {
@@ -1670,22 +1709,41 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
             growing_tape.push_back(binary_doc, c.error);
             return;
         }
+
+        std::string_view result;
         auto padded_doc =
             sj::padded_string_view(binary_doc.c_str(), binary_doc.size(), binary_doc.size() + sj::SIMDJSON_PADDING);
-        auto maybe_doc = parser.iterate(padded_doc);
-        return_if_error(maybe_doc.error() == sj::SUCCESS, c.error, 0, "Fail To Parse Document!");
-        std::string_view result;
-        printed_number_buffer_t print_buffer;
-        if (maybe_doc.value().is_scalar())
-            result = get_value(maybe_doc.value(), c.type, print_buffer);
+
+        string_t output {arena};
+        if (c.type == ukv_doc_field_msgpack_k) {
+            json_to_mpack(padded_doc, output, c.error);
+            result = {output.data(), output.size()};
+        }
+        else if (c.type == ukv_doc_field_bson_k) {
+            bson_error_t error;
+            bson_t* b = bson_new_from_json((uint8_t*)binary_doc.c_str(), -1, &error);
+            result = {(const char*)bson_get_data(b), b->len};
+            growing_tape.push_back(result, c.error);
+            growing_tape.add_terminator(byte_t {0}, c.error);
+            return_if_error_m(c.error);
+            bson_clear(&b);
+            return;
+        }
         else {
-            auto parsed = maybe_doc.value().get_value();
-            auto branch = simdjson_lookup(parsed.value(), field);
-            result = get_value(branch, c.type, print_buffer);
+            auto maybe_doc = parser.iterate(padded_doc);
+            return_error_if_m(maybe_doc.error() == sj::SUCCESS, c.error, 0, "Fail To Parse Document!");
+            printed_number_buffer_t print_buffer;
+            if (maybe_doc.value().is_scalar())
+                result = get_value(maybe_doc.value(), c.type, print_buffer);
+            else {
+                auto parsed = maybe_doc.value().get_value();
+                auto branch = simdjson_lookup(parsed.value(), field);
+                result = get_value(branch, c.type, print_buffer);
+            }
         }
         growing_tape.push_back(result, c.error);
         growing_tape.add_terminator(byte_t {0}, c.error);
-        return_on_error(c.error);
+        return_if_error_m(c.error);
     };
 
     places_arg_t unique_places;
@@ -1769,9 +1827,9 @@ void gist_recursively(yyjson_val* node,
             return;
 
         auto exported_path = exported_paths.push_back(path, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
         exported_paths.add_terminator(byte_t {0}, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
 
         path_str = std::string_view(exported_path.c_str(), exported_path.size());
         sorted_paths.insert(idx, &path_str, &path_str + 1, c_error);
@@ -1785,7 +1843,7 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
         return;
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     ukv_byte_t* found_binary_begin = nullptr;
     ukv_length_t* found_binary_offs = nullptr;
@@ -1807,7 +1865,7 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
     };
 
     ukv_read(&read);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
@@ -1825,13 +1883,13 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
             continue;
 
         json_t doc = any_parse(binary_doc, internal_format_k, arena, c.error);
-        return_on_error(c.error);
+        return_if_error_m(c.error);
         if (!doc)
             continue;
 
         yyjson_val* root = yyjson_doc_get_root(doc.handle);
         gist_recursively(root, field_name, sorted_paths, exported_paths, c.error);
-        return_on_error(c.error);
+        return_if_error_m(c.error);
     }
 
     if (c.fields_count)
@@ -1916,7 +1974,7 @@ struct column_begin_t {
         off = static_cast<ukv_length_t>(output.size());
         len = static_cast<ukv_length_t>(str.size());
         output.insert(output.size(), str.begin(), str.end(), c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
         if (with_separator)
             output.push_back('\0', c_error);
         if (is_last)
@@ -1931,7 +1989,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
         return;
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     // Retrieve the entire documents before we can sample internal fields
     ukv_byte_t* found_binary_begin = nullptr;
@@ -1952,7 +2010,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     };
 
     ukv_read(&read);
-    return_on_error(c.error);
+    return_if_error_m(c.error);
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
@@ -1969,7 +2027,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     // https://arrow.apache.org/docs/format/Columnar.html#buffer-alignment-and-padding
     bool wants_conversions = c.columns_conversions;
     bool wants_collisions = c.columns_collisions;
-    std::size_t slots_per_bitmap = divide_round_up(c.docs_count, bits_in_byte_k);
+    std::size_t slots_per_bitmap = divide_round_up<std::size_t>(c.docs_count, bits_in_byte_k);
     std::size_t count_bitmaps = 1ul + wants_conversions + wants_collisions;
     std::size_t bytes_per_bitmap = sizeof(ukv_octet_t) * slots_per_bitmap;
     std::size_t bytes_per_addresses_row = sizeof(void*) * c.fields_count;
@@ -2072,7 +2130,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     for (ukv_size_t doc_idx = 0; doc_idx != c.docs_count; ++doc_idx, ++found_binary_it) {
         value_view_t binary_doc = *found_binary_it;
         json_t doc = any_parse(binary_doc, internal_format_k, arena, c.error);
-        return_on_error(c.error);
+        return_if_error_m(c.error);
         if (!doc)
             continue;
         yyjson_val* root = yyjson_doc_get_root(doc.handle);
@@ -2086,8 +2144,8 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
 
             column_begin_t column {
                 .validities = (*c.columns_validities)[field_idx],
-                .conversions = (*(c.columns_conversions ?: c.columns_validities))[field_idx],
-                .collisions = (*(c.columns_collisions ?: c.columns_validities))[field_idx],
+                .conversions = (*(c.columns_conversions ? c.columns_conversions : c.columns_validities))[field_idx],
+                .collisions = (*(c.columns_collisions ? c.columns_collisions : c.columns_validities))[field_idx],
                 .scalars = addresses_scalars[field_idx],
                 .str_offsets = addresses_offs[field_idx],
                 .str_lengths = addresses_lens[field_idx],

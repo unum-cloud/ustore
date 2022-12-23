@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
     // Single-element access
     main[42] = "purpose of life";
     main.at(42) = "purpose of life";
-    *main[42].value() == "purpose of life";
+    _ = *main[42].value() == "purpose of life";
     _ = main[42].clear();
 
     // Mapping multiple keys to same values

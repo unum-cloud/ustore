@@ -1,5 +1,5 @@
 /**
- * @file arrow_server.cpp
+ * @file flight_server.cpp
  * @author Ashot Vardanian
  * @date 2022-07-18
  *
@@ -9,13 +9,15 @@
  * https://arrow.apache.org/cookbook/cpp/flight.html
  */
 
+#include <mutex>
+#include <chrono>   // `std::time_point`
+#include <cstdio>   // `std::printf`
+#include <iostream> // `std::cerr`
 #include <unordered_map>
 #include <unordered_set>
-#include <chrono> // `std::time_point`
-#include <cstdio> // `std::printf`
-#include <mutex>
 
 #include <arrow/flight/server.h>
+#include <clipp.h>
 
 #include "ukv/cpp/db.hpp"
 #include "ukv/cpp/types.hpp" // `hash_combine`
@@ -268,7 +270,7 @@ class sessions_t {
 
         auto age = std::chrono::duration_cast<std::chrono::milliseconds>(it->second.last_access - sys_clock_t::now());
         if (age.count() < milliseconds_timeout || it->second.executing) {
-            log_error(c_error, error_unknown_k, "Too many concurrent sessions");
+            log_error_m(c_error, error_unknown_k, "Too many concurrent sessions");
             return {};
         }
 
@@ -301,13 +303,13 @@ class sessions_t {
 
         auto it = client_to_txn_.find(session_id);
         if (it == client_to_txn_.end()) {
-            log_error(c_error, args_wrong_k, "Transaction was terminated, start a new one");
+            log_error_m(c_error, args_wrong_k, "Transaction was terminated, start a new one");
             return {};
         }
 
         running_txn_t& running = it->second;
         if (running.executing) {
-            log_error(c_error, args_wrong_k, "Transaction can't be modified concurrently.");
+            log_error_m(c_error, args_wrong_k, "Transaction can't be modified concurrently.");
             return {};
         }
 
@@ -324,7 +326,7 @@ class sessions_t {
 
         auto it = client_to_txn_.find(session_id);
         if (it != client_to_txn_.end()) {
-            log_error(c_error, args_wrong_k, "Such transaction is already running, just continue using it.");
+            log_error_m(c_error, args_wrong_k, "Such transaction is already running, just continue using it.");
             return {};
         }
 
@@ -454,7 +456,7 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
     result.opt_dont_watch = param_value(params, kParamFlagDontWatch);
     result.opt_shared_memory = param_value(params, kParamFlagSharedMemRead);
-    result.opt_dont_discard_memory;
+    result.opt_dont_discard_memory = param_value(params, kParamFlagDontDiscard);
     return result;
 }
 
@@ -641,7 +643,7 @@ class UKVService : public arf::FlightServerBase {
 
             running_txn_t session = sessions_.continue_txn(params.session_id, status.member_ptr());
             if (!status) {
-                sessions_.hold_txn(params.session_id, session);
+                sessions_.release_txn(params.session_id);
                 return ar::Status::ExecutionError(status.message());
             }
 
@@ -653,7 +655,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_transaction_commit(&txn_commit);
             if (!status) {
-                sessions_.hold_txn(params.session_id, session);
+                sessions_.release_txn(params.session_id);
                 return ar::Status::ExecutionError(status.message());
             }
 
@@ -668,7 +670,7 @@ class UKVService : public arf::FlightServerBase {
     ar::Status DoExchange( //
         arf::ServerCallContext const& server_call,
         std::unique_ptr<arf::FlightMessageReader> request_ptr,
-        std::unique_ptr<arf::FlightMessageWriter> response_ptr) {
+        std::unique_ptr<arf::FlightMessageWriter> response_ptr) override {
 
         ar::Status ar_status;
         arf::FlightMessageReader& request = *request_ptr;
@@ -683,6 +685,22 @@ class UKVService : public arf::FlightServerBase {
             return ar_status;
 
         bool is_empty_values = false;
+
+        /// @param `collections`
+        ukv_collection_t c_collection_id = ukv_collection_main_k;
+        strided_iterator_gt<ukv_collection_t> input_collections;
+        if (params.collection_id) {
+            c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
+            input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
+        }
+        else
+            input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
+
+        // Reserve resources for the execution of this request
+        auto session = sessions_.lock(params.session_id, status.member_ptr());
+        if (!status)
+            return ar::Status::ExecutionError(status.message());
+
         if (is_query(desc.cmd, kFlightRead)) {
 
             /// @param `keys`
@@ -690,22 +708,10 @@ class UKVService : public arf::FlightServerBase {
             if (!input_keys)
                 return ar::Status::Invalid("Keys must have been provided for reads");
 
-            /// @param `collections`
-            ukv_collection_t c_collection_id = ukv_collection_main_k;
-            strided_iterator_gt<ukv_collection_t> input_collections;
-            if (params.collection_id) {
-                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
-            }
-            else
-                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
-
             bool const request_only_presences = params.read_part == kParamReadPartPresences;
             bool const request_only_lengths = params.read_part == kParamReadPartLengths;
             bool const request_content = !request_only_lengths && !request_only_presences;
 
-            // Reserve resources for the execution of this request
-            auto session = sessions_.lock(params.session_id, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -787,24 +793,9 @@ class UKVService : public arf::FlightServerBase {
             if (!input_paths.contents_begin)
                 return ar::Status::Invalid("Keys must have been provided for reads");
 
-            /// @param `collections`
-            ukv_collection_t c_collection_id = ukv_collection_main_k;
-            strided_iterator_gt<ukv_collection_t> input_collections;
-            if (params.collection_id) {
-                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
-            }
-            else
-                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
-
             bool const request_only_presences = params.read_part == kParamReadPartPresences;
             bool const request_only_lengths = params.read_part == kParamReadPartLengths;
             bool const request_content = !request_only_lengths && !request_only_presences;
-
-            // Reserve resources for the execution of this request
-            auto session = sessions_.lock(params.session_id, status.member_ptr());
-            if (!status)
-                return ar::Status::ExecutionError(status.message());
 
             // As we are immediately exporting in the Arrow format,
             // we don't need the lengths, just the NULL indicators
@@ -891,23 +882,8 @@ class UKVService : public arf::FlightServerBase {
             /// @param `limits`
             auto input_limits = get_lengths(input_schema_c, input_batch_c, kArgCountLimits);
 
-            /// @param `collections`
-            ukv_collection_t c_collection_id = ukv_collection_main_k;
-            strided_iterator_gt<ukv_collection_t> input_collections;
-            if (params.collection_id) {
-                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
-            }
-            else
-                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
-
             bool const request_only_counts = params.read_part == kParamReadPartLengths;
             bool const request_content = !request_only_counts;
-
-            // Reserve resources for the execution of this request
-            auto session = sessions_.lock(params.session_id, status.member_ptr());
-            if (!status)
-                return ar::Status::ExecutionError(status.message());
 
             // As we are immediately exporting in the Arrow format,
             // we don't need the lengths, just the NULL indicators
@@ -952,7 +928,8 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             ukv_size_t result_length = std::accumulate(found_counts, found_counts + tasks_count, 0);
             auto rounded_counts = arena.alloc<ukv_length_t>(result_length, 0);
-            std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
+            if (rounded_counts)
+                std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
             ukv_size_t collections_count = 1 + request_content;
             ukv_to_arrow_schema(result_length,
                                 collections_count,
@@ -992,23 +969,9 @@ class UKVService : public arf::FlightServerBase {
             auto input_start_keys = get_keys(input_schema_c, input_batch_c, kArgScanStarts);
             /// @param `lengths`
             auto input_lengths = get_lengths(input_schema_c, input_batch_c, kArgCountLimits);
-            /// @param `collections`
-            ukv_collection_t c_collection_id = ukv_collection_main_k;
-            strided_iterator_gt<ukv_collection_t> input_collections;
-            if (params.collection_id) {
-                c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
-                input_collections = strided_iterator_gt<ukv_collection_t> {&c_collection_id};
-            }
-            else
-                input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
 
             if (!input_start_keys || !input_lengths)
                 return ar::Status::Invalid("Keys and lengths must have been provided for scans");
-
-            // Reserve resources for the execution of this request
-            auto session = sessions_.lock(params.session_id, status.member_ptr());
-            if (!status)
-                return ar::Status::ExecutionError(status.message());
 
             // As we are immediately exporting in the Arrow format,
             // we don't need the lengths, just the NULL indicators
@@ -1287,11 +1250,12 @@ class UKVService : public arf::FlightServerBase {
     }
 };
 
-ar::Status run_server() {
-    database_t db;
-    db.open().throw_unhandled();
+ar::Status run_server(ukv_str_view_t config, int port) {
 
-    arf::Location server_location = arf::Location::ForGrpcTcp("0.0.0.0", 38709).ValueUnsafe();
+    database_t db;
+    db.open(config).throw_unhandled();
+
+    arf::Location server_location = arf::Location::ForGrpcTcp("0.0.0.0", port).ValueUnsafe();
     arf::FlightServerOptions options(server_location);
     auto server = std::make_unique<UKVService>(std::move(db));
     ARROW_RETURN_NOT_OK(server->Init(options));
@@ -1302,5 +1266,25 @@ ar::Status run_server() {
 //------------------------------------------------------------------------------
 
 int main(int argc, char* argv[]) {
-    return run_server().ok() ? EXIT_SUCCESS : EXIT_FAILURE;
+
+    using namespace clipp;
+
+    int port = 38709;
+    std::string config;
+#if UKV_ENGINE_NAME == rocksdb
+    config = "/var/lib/ukv/rocksdb/";
+#elif UKV_ENGINE_NAME == leveldb
+    config = "/var/lib/ukv/leveldb/";
+#endif
+
+    auto cli = ( //
+        option("-d", "--dir").set(config).doc("Path to primary directory, potentially containing a configuration file"),
+        option("-p", "--port").set(port).doc("Port to use for connection"));
+
+    if (!parse(argc, argv, cli)) {
+        std::cerr << make_man_page(cli, argv[0]);
+        exit(1);
+    }
+
+    return run_server(config.c_str(), port).ok() ? EXIT_SUCCESS : EXIT_FAILURE;
 }

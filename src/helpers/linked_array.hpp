@@ -73,7 +73,7 @@ class uninitialized_array_gt {
         auto new_cap = next_power_of_two(size);
         auto tape = ptr_ ? arena_ptr_->grow<element_t>({ptr_, cap_}, new_cap - cap_, c_error)
                          : arena_ptr_->alloc<element_t>(new_cap, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
 
         ptr_ = tape.begin();
         cap_ = static_cast<ukv_length_t>(new_cap);
@@ -86,7 +86,7 @@ class uninitialized_array_gt {
         new_cap = next_power_of_two(new_cap);
         auto tape = ptr_ ? arena_ptr_->grow<element_t>({ptr_, cap_}, new_cap - cap_, c_error)
                          : arena_ptr_->alloc<element_t>(new_cap, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
 
         ptr_ = tape.begin();
         cap_ = static_cast<ukv_length_t>(new_cap);
@@ -95,14 +95,14 @@ class uninitialized_array_gt {
     void push_back(element_t val, ukv_error_t* c_error) {
         auto new_size = length_ + 1;
         reserve(new_size, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
 
         ptr_[length_] = std::move(val);
         length_ = new_size;
     }
 
     void insert(std::size_t offset, ptrc_t inserted_begin, ptrc_t inserted_end, ukv_error_t* c_error) {
-        return_if_error(size() >= offset, c_error, out_of_range_k, "Can't insert");
+        return_error_if_m(size() >= offset, c_error, out_of_range_k, "Can't insert");
 
         auto inserted_len = static_cast<ukv_length_t>(inserted_end - inserted_begin);
         auto following_len = static_cast<ukv_length_t>(length_ - offset);
@@ -110,7 +110,7 @@ class uninitialized_array_gt {
 
         if (new_size > cap_) {
             auto tape = arena_ptr_->grow<element_t>({ptr_, cap_}, new_size - cap_, c_error);
-            return_on_error(c_error);
+            return_if_error_m(c_error);
             ptr_ = tape.begin();
             cap_ = length_ = new_size;
         }
@@ -122,7 +122,7 @@ class uninitialized_array_gt {
     }
 
     void erase(std::size_t offset, std::size_t length, ukv_error_t* c_error) {
-        return_if_error(size() >= offset + length, c_error, out_of_range_k, "Can't erase");
+        return_error_if_m(size() >= offset + length, c_error, out_of_range_k, "Can't erase");
 
         auto following_len = length_ - (offset + length);
         std::memmove(ptr_ + offset, ptr_ + offset + length, following_len * sizeof(element_t));
@@ -205,7 +205,7 @@ class growing_tape_t {
 
     void add_terminator(byte_t terminator, ukv_error_t* c_error) {
         contents_.push_back(terminator, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
         offsets_[lengths_.size()] += 1;
     }
 

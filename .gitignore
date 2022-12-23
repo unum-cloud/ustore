@@ -44,6 +44,7 @@ build/
 build_debug/
 build_release/
 tmp/
+lib/
 *.log
 bin/
 __pycache__
@@ -56,6 +57,7 @@ build_version.cc
 CPackConfig.cmake
 CPackSourceConfig.cmake
 doxygen_docs/html
+wheelhouse
 
 # Allow
 !gradle/wrapper/gradle-wrapper.jar

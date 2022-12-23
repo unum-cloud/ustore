@@ -183,7 +183,7 @@ class blobs_collection_t {
 
             if constexpr (sfinae_has_field_gt<plain_t>::value)
                 arg.field = keys.field;
-            return result_t {db_, txn_, arg, arena_};
+            return result_t {db_, txn_, std::move(arg), arena_};
         }
         else {
             using locations_t = locations_in_collection_gt<keys_arg_at>;

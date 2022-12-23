@@ -1,7 +1,7 @@
 
 include(ExternalProject)
 set(JEMALLOC_DISABLE_TLS )
-if (${UKV_BUILD_PYTHON})
+if (${UKV_BUILD_SDK_PYTHON})
     set(JEMALLOC_DISABLE_TLS --disable-initial-exec-tls)
 endif()
 

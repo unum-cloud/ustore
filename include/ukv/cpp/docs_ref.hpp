@@ -1,5 +1,5 @@
 /**
- * @file blobs_ref.hpp
+ * @file docs_ref.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp
@@ -84,10 +84,10 @@ class docs_ref_gt {
   public:
     docs_ref_gt(ukv_database_t db,
                 ukv_transaction_t txn,
-                locations_store_t locations,
+                locations_at&& locations,
                 ukv_arena_t* arena,
                 ukv_doc_field_type_t type = ukv_doc_field_default_k) noexcept
-        : db_(db), transaction_(txn), arena_(arena), locations_(locations), type_(type) {}
+        : db_(db), transaction_(txn), arena_(arena), locations_(std::forward<locations_at>(locations)), type_(type) {}
 
     docs_ref_gt(docs_ref_gt&&) = default;
     docs_ref_gt& operator=(docs_ref_gt&&) = default;

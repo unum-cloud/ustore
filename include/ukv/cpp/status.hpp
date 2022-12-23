@@ -187,28 +187,31 @@ enum error_code_t {
 
 } // namespace unum::ukv
 
-#define log_error(c_error, code, message) \
+// #define log_warning_m(format, ...) fprintf(stderr, format, __VA_ARGS__)
+#define log_warning_m(format, ...) {}
+
+#define log_error_m(c_error, code, message) \
     { *c_error = message; }
 
-#define log_if_error(must_be_true, c_error, code, message) \
-    if (!(must_be_true)) {                                 \
-        *c_error = message;                                \
+#define log_error_if_m(must_be_true, c_error, code, message) \
+    if (!(must_be_true)) {                                   \
+        *c_error = message;                                  \
     }
 
-#define return_if_error(must_be_true, c_error, code, message) \
-    if (!(must_be_true)) {                                    \
-        *c_error = message;                                   \
-        return;                                               \
+#define return_error_if_m(must_be_true, c_error, code, message) \
+    if (!(must_be_true)) {                                      \
+        *c_error = message;                                     \
+        return;                                                 \
     }
 
-#define return_on_error(c_error) \
-    {                            \
-        if (*c_error)            \
-            return;              \
+#define return_if_error_m(c_error) \
+    {                              \
+        if (*c_error)              \
+            return;                \
     }
 
-#define return_error(c_error, message) \
-    {                                  \
-        *c_error = message;            \
-        return;                        \
+#define return_error_m(c_error, message) \
+    {                                    \
+        *c_error = message;              \
+        return;                          \
     }

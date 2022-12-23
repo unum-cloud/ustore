@@ -54,6 +54,7 @@ struct linked_memory_t {
         case kind_t::shared_k:
             begin = mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
             break;
+        case kind_t::unified_k: break;
         }
         auto header_ptr = (arena_header_t*)begin;
         if (!header_ptr)
@@ -70,6 +71,7 @@ struct linked_memory_t {
         switch (arena->kind) {
         case kind_t::sys_k: std::free(arena); break;
         case kind_t::shared_k: munmap(arena, arena->capacity); break;
+        case kind_t::unified_k: break;
         }
     }
 
@@ -180,7 +182,7 @@ struct linked_memory_lock_t {
         if (!size)
             return {};
         void* result = memory.alloc(sizeof(at) * size, alignment);
-        log_if_error(result, c_error, out_of_memory_k, "");
+        log_error_if_m(result, c_error, out_of_memory_k, "Couldn't allocate new sub-arena");
         return {reinterpret_cast<at*>(result), size};
     }
 
@@ -202,7 +204,7 @@ struct linked_memory_lock_t {
         if (result)
             std::memcpy(result, span.begin(), span.size_bytes());
         else
-            log_error(c_error, out_of_memory_k, "");
+            log_error_m(c_error, out_of_memory_k, "Couldn't grow a memory buffer");
         return {reinterpret_cast<at*>(result), new_size};
     }
 
@@ -260,10 +262,10 @@ void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dang
         dangerous();
     }
     catch (std::bad_alloc const&) {
-        log_error(c_error, out_of_memory_k, name);
+        log_error_m(c_error, out_of_memory_k, name);
     }
     catch (...) {
-        log_error(c_error, error_unknown_k, name);
+        log_error_m(c_error, error_unknown_k, name);
     }
 }
 

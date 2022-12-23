@@ -35,7 +35,7 @@ More broadly:
 
 ## Embedded Implementations
 
-### ConsistentSet
+### UMem
 
 In-memory backend with disk serialization.
 
@@ -58,6 +58,10 @@ The industry-standard persistent backend.
 * Depends on [facebook/rocksdb](github.com/facebook/rocksdb).
 * Supports snapshots, transactions and named collections.
 
+### UDisk
+
+Our proprietary Key-Value Store, available on demand.
+
 ## Standalone Servers
 
 Any of the above "Embedded Implementations" can be wrapped into a server.
@@ -70,18 +74,4 @@ This makes it easy for the external frameworks to send and gather info from UKV 
 ### RESTful API
 
 We implement a REST server using `Boost.Beast` and the underlying `Boost.Asio`, as the go-to Web-Dev libraries in C++.
-To test the REST API, `./src/run_rest.sh` and then cURL into it:
-
-```sh
-curl -X PUT \
-  -H "Accept: Application/json" \
-  -H "Content-Type: application/octet-stream" \
-  0.0.0.0/8080/one/42?col=sub \
-  -d 'purpose of life'
-
-curl -i \
-  -H "Accept: application/octet-stream" \
-  0.0.0.0/8080/one/42?col=sub
-```
-
 ## Contributing

@@ -12,23 +12,24 @@ We use CMake as the default build tool.
 Most dependencies will be fetched with the integrated CMake scripts.
 
 ```sh
-mkdir build_release && \
-    cd build_release && \
     cmake \
-        -DUKV_BUILD_TESTS=0 \
-        -DUKV_BUILD_BENCHMARKS=0 \
-        -DUKV_BUILD_PYTHON=0 \
-        -DUKV_BUILD_REST_API=0 \
-        -DUKV_BUILD_FLIGHT_API=0 .. && \
-    make -j16
+        -DUKV_BUILD_ENGINE_UMEM=1 \
+        -DUKV_BUILD_ENGINE_LEVELDB=1 \
+        -DUKV_BUILD_ENGINE_ROCKSDB=1 \
+        -DUKV_BUILD_TESTS=1 \
+        -DUKV_BUILD_BENCHMARKS=1 \
+        -DUKV_BUILD_API_FLIGHT_CLIENT=0 \
+        -DUKV_BUILD_API_FLIGHT_SERVER=0 \
+        -B ./build_release && \
+    make -j16 -C ./build_release
 ```
 
 This will only produce 1 library for each embedded backend.
-Building Flight API and REST API may require [additional steps](#partial).
+Building Flight API and REST API may require [additional steps](#partial--customized-builds).
 
 ### Adding UKV to Your CMake Project
 
-Assuming CMake is the least straigthforward build tool in history, there is a pretty short exampl of you can link UKV to your CMake project.
+Assuming CMake is the least straightforward build tool in history, there is a pretty short example of you can link UKV to your CMake project.
 
 ```cmake
 cmake_minimum_required(VERSION 3.11)
@@ -40,30 +41,30 @@ FetchContent_Declare(
     ukv
     GIT_REPOSITORY https://github.com/unum-cloud/UKV.git
     GIT_SHALLOW TRUE
-    GIT_TAG v0.3.0
 )
 FetchContent_MakeAvailable(ukv)
 set(ukv_INCLUDE_DIR ${ukv_SOURCE_DIR}/include)
 include_directories(${ukv_INCLUDE_DIR})
 
 add_executable(ukv_example_test main.cpp)
-target_link_libraries(ukv_example_test ukv::ukv_umem)
+target_link_libraries(ukv_example_test ukv::ukv_embedded_umem)
 ```
 
 ### Partial & Customized Builds
 
 By default, our builds prioritize compatibility over performance.
-Still, you can link against your favourite allocator or build every one of the provided bindings.
+Still, you can link against your favorite allocator or build every one of the provided bindings.
 The CMake options include:
 
-| Option               | Default | Manual Installation Requirements                                                             |
-| :------------------- | :-----: | :------------------------------------------------------------------------------------------- |
-| UKV_BUILD_TESTS      |    1    |                                                                                              |
-| UKV_BUILD_BENCHMARKS |    0    | May require Arrow.                                                                           |
-| UKV_BUILD_PYTHON     |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
-| UKV_BUILD_FLIGHT_API |    0    | Apache Arrow: Flight.                                                                        |
-| UKV_BUILD_REST_API   |    0    | Boost: Beast and ASIO.                                                                       |
-| UKV_USE_JEMALLOC     |    0    | JeMalloc or AutoConf to be visible.                                                          |
+| Option                      | Default | Manual Installation Requirements                                                             |
+| :-------------------------- | :-----: | :------------------------------------------------------------------------------------------- |
+| UKV_BUILD_TESTS             |    1    |                                                                                              |
+| UKV_BUILD_BENCHMARKS        |    0    | May require Arrow.                                                                           |
+| UKV_BUILD_API_FLIGHT_CLIENT |    0    | Apache Arrow: Flight.                                                                        |
+| UKV_BUILD_API_FLIGHT_SERVER |    0    | Apache Arrow: Flight.                                                                        |
+| UKV_BUILD_API_REST          |    0    | Boost: Beast and ASIO.                                                                       |
+| UKV_BUILD_SDK_PYTHON        |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
+| UKV_USE_JEMALLOC            |    0    | JeMalloc or AutoConf to be visible.                                                          |
 
 Following scripts are provided to help:
 
@@ -76,10 +77,10 @@ Following scripts are provided to help:
 To build the Flight RPC Docker image locally:
 
 ```sh
-docker build -t ukv .
+docker buildx build --platform=linux/amd64,linux/arm64 --file docker/Dockerfile . --progress=plain -c 32
 ```
 
-To build the Conan package localy, without installing it:
+To build the Conan package locally, without installing it:
 
 ```sh
 conan create . ukv/testing --build=missing
@@ -91,17 +92,28 @@ To fetch the most recent Python bindings:
 pip install --extra-index-url https://test.pypi.org/simple/ --force-reinstall ukv
 ```
 
+On MacOS:
+
+```sh
+brew install cmake apache-arrow openssl zlib protobuf
+cmake \
+    -D CMAKE_C_COMPILER=gcc \
+    -D CMAKE_CXX_COMPILER=g++ \
+    -D UKV_BUILD_API_FLIGHT_CLIENT=1 \
+    .. && make -j 4
+```
+
 ## Cloud Deployments
 
 UKV is coming to the clouds across the globe!
-You can still manually `docker run` us, but for more entrprise-y deployments you may want:
+You can still manually `docker run` us, but for more enterprise-y deployments you may want:
 
 * horizontal auto-scaling,
-* higher performace,
+* higher performance,
 * rolling updates,
 * support.
 
-For that, try us on your favourite marketplace:
+For that, try us on your favorite marketplace:
 
 * Amazon Web Services.
 * Microsoft Azure.

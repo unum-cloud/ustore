@@ -66,6 +66,7 @@ inline static std::string const kParamReadPart = "part";
 inline static std::string const kParamDropMode = "mode";
 inline static std::string const kParamFlagFlushWrite = "flush";
 inline static std::string const kParamFlagDontWatch = "dont_watch";
+inline static std::string const kParamFlagDontDiscard = "dont_discard";
 inline static std::string const kParamFlagSharedMemRead = "shared";
 
 inline static std::string const kParamReadPartLengths = "lengths";
@@ -112,7 +113,7 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
     void ReleaseUnused() override {}
     int64_t bytes_allocated() const override { return bytes_allocated_; }
     int64_t max_memory() const override { return INT64_MAX; }
-    std::string backend_name() const { return "ukv"; }
+    std::string backend_name() const override { return "ukv"; }
 };
 
 ar::ipc::IpcReadOptions arrow_read_options(arrow_mem_pool_t& pool) {
@@ -294,7 +295,7 @@ void ukv_to_continuous_bin( //
     if (!contents.is_continuous()) {
         size_t total = transform_reduce_n(contents, places_count, 0ul, std::mem_fn(&value_view_t::size));
         auto joined_paths = arena.alloc<byte_t>(total, c_error);
-        return_on_error(c_error);
+        return_if_error_m(c_error);
         size_t slots_count = divide_round_up<std::size_t>(places_count, CHAR_BIT);
 
         // Exports into the Arrow-compatible form

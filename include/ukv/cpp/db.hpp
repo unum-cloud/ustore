@@ -95,8 +95,8 @@ class context_t : public std::enable_shared_from_this<context_t> {
     }
 
     template <typename keys_arg_at>
-    blobs_ref_gt<keys_arg_at> operator[](keys_arg_at keys) noexcept { //
-        return {db_, txn_, std::move(keys), arena_};
+    blobs_ref_gt<keys_arg_at> operator[](keys_arg_at&& keys) noexcept { //
+        return blobs_ref_gt<keys_arg_at> {db_, txn_, std::forward<keys_arg_at>(keys), arena_.member_ptr()};
     }
 
     expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }

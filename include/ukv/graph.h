@@ -270,6 +270,48 @@ typedef struct ukv_graph_remove_edges_t { //
 void ukv_graph_remove_edges(ukv_graph_remove_edges_t*);
 
 /**
+ * @brief Upsert vertices.
+ * @see `ukv_graph_upsert_vertices()`.
+ */
+typedef struct ukv_graph_upsert_vertices_t { //
+
+    /// @name Context
+    /// @{
+
+    /** @brief Already open database instance. */
+    ukv_database_t db;
+    /** @brief Pointer to exported error message. */
+    ukv_error_t* error;
+    /** @brief The transaction in which the operation will be watched. */
+    ukv_transaction_t transaction = NULL;
+    /** @brief Reusable memory handle. */
+    ukv_arena_t* arena = NULL;
+    /** @brief Read and Write options. @see `ukv_read_t`, `ukv_write_t`. */
+    ukv_options_t options = ukv_options_default_k;
+
+    /// @}
+    /// @name Inputs
+    /// @{
+
+    ukv_size_t tasks_count = 1;
+
+    ukv_collection_t const* collections = NULL;
+    ukv_size_t collections_stride = 0;
+
+    ukv_key_t const* vertices = NULL;
+    ukv_size_t vertices_stride = 0;
+
+    /// @}
+
+} ukv_graph_upsert_vertices_t;
+
+/**
+ * @brief Upsert vertices.
+ * @see `ukv_graph_upsert_vertices_t`.
+ */
+void ukv_graph_upsert_vertices(ukv_graph_upsert_vertices_t*);
+
+/**
  * @brief Removes vertices and all related edges from the graph.
  * @see `ukv_graph_remove_vertices()`.
  */

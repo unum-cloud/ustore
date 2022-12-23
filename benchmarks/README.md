@@ -8,6 +8,20 @@ It covers LMDB, LevelDB, RocksDB, WiredTiger, Redis, MongoDB, and our Key-Value 
 * [Results][ucsb-1] for 1 TB collections.
 * [Results][ucsb-10] for 10 TB collections.
 
+As of December 2022, typical results can look like:
+
+| Operation           | RocksDB | UDisk | UDisk + GPU |
+| :------------------ | :-----: | :---: | :---------: |
+| Initialization      |  603 K  | 60 M  |             |
+| Read                |  420 K  |  1 M  |             |
+| Batch Read          |  650 K  | 4.5 M |             |
+| Range Select        |   5 M   |  2 M  |             |
+| Scan                |  17 M   | 17 M  |             |
+| Read & Update, 1:1  |  64 K   | 173 K |    214 K    |
+| Read & Upsert, 19:1 |  128 K  | 270 K |    276 K    |
+| Batch Upsert        |  57 K   | 260 K |    182 K    |
+| Remove              |  420 K  | 874 K |     1 M     |
+
 ## Twitter
 
 Twitter benchmark operated on real-world sample of Tweets obtained via [Twitter Stream API][twitter-samples].
@@ -17,7 +31,11 @@ We took over 1 TB of tweets packed consecutively into `.ndjson` files and simula
 You can obtain results for your hardware and your sample of Tweets using the following command.
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=1 .. && make ukv_umem_twitter_benchmark && ./build/bin/ukv_umem_twitter_benchmark
+cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DUKV_BUILD_BENCHMARKS=1 .. \
+    && make benchmark_twitter_ukv_embedded_umem \
+    && ./build/bin/benchmark_twitter_ukv_embedded_umem
 ```
 
 We manually repeated this same benchmark for a few other DBMS brands.
@@ -26,26 +44,30 @@ The following results should be taken with the grain of salt and aren't as accur
 
 For document-like workloads:
 
-|                |  Insertion  |  Retrieval  |
-| :------------- | :---------: | :---------: |
-| MongoDB        | 18 K ops/s  | 210 K ops/s |
-| Yugabyte       |  2 K ops/s  | 82 K ops/s  |
-|                |             |             |
-| UKV on RocksDB | 15 K ops/s  | 140 K ops/s |
-| UKV on UDisk   | 42 K ops/s  |  1 M ops/s  |
-| UKV on UMem    | 157 K ops/s |  2 M ops/s  |
+|                                | Insertion | Retrieval |
+| :----------------------------- | :-------: | :-------: |
+| Yugabyte                       |    2 K    |   82 K    |
+| MongoDB                        |   18 K    |   210 K   |
+|                                |           |           |
+| UKV on RocksDB                 |   22 K    |  742k/s   |
+| UKV on RocksDB with Flight API |   23 K    |  282k/s   |
+| UKV on UMem                    |   350 K   |  4.8M/s   |
+| UKV on UMem with Flight API    |   206 K   |  371k/s   |
 
-For graphs:
+For graphs, we show the number of edges per second handled by different queries:
 
-|              | Insertion  | Two-hop Retrieval |
-| :----------- | :--------: | :---------------: |
-| Neo4J        | 2 K ops/s  |    1.5 K ops/s    |
-|              |            |                   |
-| UKV on UDisk | 37 K ops/s |    52 K ops/s     |
+|                                | Insertion | Two-hop Retrieval |
+| :----------------------------- | :-------: | :---------------: |
+| Neo4J                          |    2 K    |       1.5 K       |
+|                                |           |                   |
+| UKV on RocksDB                 |   241 K   |       3.7 M       |
+| UKV on RocksDB with Flight API |   119 K   |      1.48 M       |
+| UKV on UMem                    |   201 K   |       21 M        |
+| UKV on UMem with Flight API    |   163 K   |       17 M        |
 
 For MongoDB, we also tried the official <code class="docutils literal notranslate"><a href="https://www.mongodb.com/docs/database-tools/mongoimport/" class="pre">mongoimport</a></code> tool, which supports both `.csv` and `.ndjson`.
 The results are mixed compared to a multi-process setup.
-For Neo4J, significantly better results are possible if you are doing initialization with a pre-processed `.csv` file, but the same applies to our solutions.
+For Neo4J, significantly better results are possible if you are doing initialization with a pre-processed `.csv` file, but the same applies to UKV.
 
 ## Tables and Graphs
 
@@ -53,21 +75,19 @@ Generalizing the Twitter benchmark, we wrote a Python and a C++ benchmark for ta
 Unlike the previous benchmark, the schema must be fixed, but you can input `.json`, `.csv`, and `.parquet` files.
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=1 .. && make ukv_umem_tabular_graph_benchmark && ./build/bin/ukv_umem_tabular_graph_benchmark
+cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=1 .. && make benchmark_tabular_graph_ukv_embedded_umem && ./build/bin/benchmark_tabular_graph_ukv_embedded_umem
 ```
 
 For Python:
 
 ```sh
-python benchmarks/tabular_graph_benchmark.py
+python benchmarks/tabular_graph.py
 ```
 
 We manually repeated this same benchmark for several other DBMS brands and multiple publicly available datasets.
 Below are the results.
 
-### Reconstructing the Bitcoin Graph
-
-### Friendster Adjacency List
+### Friendster Graph
 
 We take a real-world graph dataset, distributed in `.csv` form - the "Friendster" social network.
 It contains:

@@ -1,5 +1,5 @@
 /**
- * @file unit.cpp
+ * @file test_units.cpp
  * @author Ashot Vardanian
  * @date 2022-07-06
  *
@@ -452,17 +452,17 @@ TEST(db, batch_scan) {
 
     keys_range_t present_keys = collection.keys();
     keys_stream_t stream(db, collection, 256);
-    stream.seek_to_first();
+    EXPECT_TRUE(stream.seek_to_first());
     auto batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
 
-    stream.seek_to_next_batch();
+    EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
 
-    stream.seek_to_next_batch();
+    EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 0);
     EXPECT_TRUE(stream.is_end());
@@ -751,6 +751,45 @@ TEST(db, txn_unnamed_then_named) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, transaction_sequenced_commit) {
+
+    if (!ukv_supports_transactions_k)
+        return;
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    EXPECT_TRUE(db.transact());
+    transaction_t txn = *db.transact();
+
+    triplet_t triplet;
+    auto txn_ref = txn[triplet.keys];
+
+    EXPECT_TRUE(txn_ref.assign(triplet.contents()));
+    auto maybe_sequence_number = txn.sequenced_commit();
+    EXPECT_TRUE(maybe_sequence_number);
+    auto current_sequence_number = *maybe_sequence_number;
+    EXPECT_GT(current_sequence_number, 0);
+    EXPECT_TRUE(txn.reset());
+#if 0
+    auto previous_sequence_number = current_sequence_number;
+    EXPECT_TRUE(txn_ref.value());
+    maybe_sequence_number = txn.sequenced_commit();
+    EXPECT_TRUE(maybe_sequence_number);
+    current_sequence_number = *maybe_sequence_number;
+    EXPECT_EQ(current_sequence_number, previous_sequence_number);
+    EXPECT_TRUE(txn.reset());
+
+    previous_sequence_number = current_sequence_number;
+    EXPECT_TRUE(txn_ref.assign(triplet.contents()));
+    maybe_sequence_number = txn.sequenced_commit();
+    EXPECT_TRUE(maybe_sequence_number);
+    current_sequence_number = *maybe_sequence_number;
+    EXPECT_GT(current_sequence_number, previous_sequence_number);
+#endif
+    EXPECT_TRUE(db.clear());
+}
+
 #pragma region Paths Modality
 
 /**
@@ -850,7 +889,6 @@ TEST(db, paths) {
 
     // Now try matching a Regular Expression
     prefix = "Netflix|Google";
-    max_count = 20;
     paths_match.tasks_count = 1;
     paths_match.patterns = &prefix;
     ukv_paths_match(&paths_match);
@@ -862,13 +900,53 @@ TEST(db, paths) {
 
     // Try a more complex regular expression
     prefix = "A.*e";
-    max_count = 20;
     ukv_paths_match(&paths_match);
     first_match_for_a = std::string_view(tape_begin);
     second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
     EXPECT_EQ(results_counts[0], 2);
     EXPECT_TRUE(first_match_for_a == "Apple" || first_match_for_a == "Adobe");
     EXPECT_TRUE(second_match_for_a == "Apple" || second_match_for_a == "Adobe");
+
+    // Existing single letter prefix
+    prefix = "A";
+    ukv_paths_match(&paths_match);
+    first_match_for_a = std::string_view(tape_begin);
+    second_match_for_a = std::string_view(tape_begin + tape_offsets[1]);
+    EXPECT_EQ(results_counts[0], 3);
+    EXPECT_TRUE(first_match_for_a == "Apple" || first_match_for_a == "Adobe" || first_match_for_a == "Amazon");
+    EXPECT_TRUE(second_match_for_a == "Apple" || second_match_for_a == "Adobe" || second_match_for_a == "Amazon");
+
+    // Missing single letter prefix
+    prefix = "X";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
+    // Missing pattern
+    prefix = "X.*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
+    // Try a more complex regular expression
+    prefix = "oo:18:\\*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
+    // Try an even more complex regular expression
+    prefix = "oo:18:\\\\*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
+
+    EXPECT_TRUE(db.clear());
+
+    // Try an even more complex regular expression on empty DB
+    prefix = "oo:18:\\\\*";
+    ukv_paths_match(&paths_match);
+    EXPECT_EQ(results_counts[0], 0);
+    EXPECT_EQ(*paths_match.error, nullptr);
 
     EXPECT_TRUE(db.clear());
 }
@@ -880,7 +958,7 @@ TEST(db, paths) {
  */
 TEST(db, paths_linked_list) {
 
-    constexpr std::size_t count = 100;
+    constexpr std::size_t count = 1000;
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -980,6 +1058,8 @@ TEST(db, paths_linked_list) {
         EXPECT_TRUE(status);
         EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
     }
+
+    EXPECT_TRUE(db.clear());
 }
 
 #pragma region Documents Modality
@@ -1011,26 +1091,35 @@ TEST(db, docs_flat) {
 
     // JSON
     docs_collection_t collection = *db.collection<docs_collection_t>();
-    auto json = R"( {"person": "Carl", "age": 24} )"_json.dump();
-    collection[1] = json.c_str();
-    M_EXPECT_EQ_JSON(*collection[1].value(), json);
-    M_EXPECT_EQ_JSON(*collection[ckf(1, "person")].value(), "\"Carl\"");
-    M_EXPECT_EQ_JSON(*collection[ckf(1, "age")].value(), "24");
+    auto jsons = make_three_flat_docs();
+    collection[1] = jsons[0].c_str();
+    collection[2] = jsons[1].c_str();
+    collection[3] = jsons[2].c_str();
+    M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), "\"Bob\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(3, "age")].value(), "26");
 
     // Binary
     auto maybe_person = collection[ckf(1, "person")].value(ukv_doc_field_str_k);
-    EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Carl"));
+    EXPECT_EQ(std::string_view(maybe_person->c_str(), maybe_person->size()), std::string_view("Alice"));
 
     // BSON
     bson_error_t error;
-    bson_t* b = bson_new_from_json((uint8_t*)json.c_str(), -1, &error);
+    bson_t* b = bson_new_from_json((uint8_t*)jsons[0].c_str(), -1, &error);
     const uint8_t* buffer = bson_get_data(b);
     auto view = value_view_t(buffer, b->len);
-    collection.at(2, ukv_doc_field_bson_k) = view;
-    M_EXPECT_EQ_JSON(*collection[2].value(), json);
-    M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), "\"Carl\"");
-    M_EXPECT_EQ_JSON(*collection[ckf(2, "age")].value(), "24");
+    collection.at(4, ukv_doc_field_bson_k) = view;
+    M_EXPECT_EQ_JSON(*collection[4].value(), jsons[0]);
+    M_EXPECT_EQ_JSON(*collection[ckf(4, "person")].value(), "\"Alice\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(4, "age")].value(), "24");
     bson_clear(&b);
+
+    // MsgPack
+    auto mpack = *collection[1].value(ukv_doc_field_msgpack_k);
+    collection.at(5, ukv_doc_field_msgpack_k) = mpack;
+    M_EXPECT_EQ_JSON(*collection[5].value(), jsons[0]);
+    M_EXPECT_EQ_JSON(*collection[ckf(5, "person")].value(), "\"Alice\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(5, "age")].value(), "24");
 
 #if 0
     // MsgPack
@@ -1055,16 +1144,14 @@ TEST(db, docs_nested_batch) {
     EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
 
-    auto json1 = R"({"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    auto json2 = R"({"person": [{"name":"Joe", "age": 25}]} )"_json.dump();
-    auto json3 = R"({"person": "Charls", "age": 26} )"_json.dump();
-    std::string jsons = json1 + json2 + json3;
-    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(jsons.data());
+    auto jsons = make_three_nested_docs();
+    std::string continuous_jsons = jsons[0] + jsons[1] + jsons[2];
+    auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(continuous_jsons.data());
     std::array<ukv_length_t, 4> offsets = {
         0,
-        json1.size(),
-        json1.size() + json2.size(),
-        json1.size() + json2.size() + json3.size(),
+        static_cast<ukv_length_t>(jsons[0].size()),
+        static_cast<ukv_length_t>(jsons[0].size() + jsons[1].size()),
+        static_cast<ukv_length_t>(jsons[0].size() + jsons[1].size() + jsons[2].size()),
     };
     contents_arg_t values {
         .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
@@ -1073,19 +1160,19 @@ TEST(db, docs_nested_batch) {
 
     std::array<ukv_key_t, 3> keys = {1, 2, 3};
     auto ref = collection[keys];
-    ref.assign(values);
+    EXPECT_TRUE(ref.assign(values));
 
     // Read One By One
-    M_EXPECT_EQ_JSON(*collection[1].value(), json1);
-    M_EXPECT_EQ_JSON(*collection[2].value(), json2);
-    M_EXPECT_EQ_JSON(*collection[3].value(), json3);
+    M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
+    M_EXPECT_EQ_JSON(*collection[2].value(), jsons[1]);
+    M_EXPECT_EQ_JSON(*collection[3].value(), jsons[2]);
 
-    auto expected = R"({"name":"Carl", "age": 24})"_json.dump();
+    auto expected = R"({"name":"Alice", "age": 24})"_json.dump();
     M_EXPECT_EQ_JSON(*collection[ckf(1, "person")].value(), expected);
 
-    expected = R"([{"name":"Joe", "age": 25}])"_json.dump();
+    expected = R"([{"name":"Bob", "age": 25}])"_json.dump();
     M_EXPECT_EQ_JSON(*collection[ckf(2, "person")].value(), expected);
-    M_EXPECT_EQ_JSON(*collection[ckf(2, "/person/0/name")].value(), "\"Joe\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(2, "/person/0/name")].value(), "\"Bob\"");
 
     // Read sorted keys
     check_equalities(ref, values);
@@ -1093,19 +1180,19 @@ TEST(db, docs_nested_batch) {
     // Read not sorted keys
     std::array<ukv_key_t, 3> not_sorted_keys = {1, 3, 2};
     auto not_sorted_ref = collection[not_sorted_keys];
-    std::string not_sorted_jsons = json1 + json3 + json2;
+    std::string not_sorted_jsons = jsons[0] + jsons[2] + jsons[1];
     vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(not_sorted_jsons.data());
-    offsets[2] = json1.size() + json3.size();
-    offsets[3] = json1.size() + json3.size() + json2.size();
+    offsets[2] = jsons[0].size() + jsons[2].size();
+    offsets[3] = jsons[0].size() + jsons[2].size() + jsons[1].size();
     check_equalities(not_sorted_ref, values);
 
     // Read duplicate keys
     std::array<ukv_key_t, 3> duplicate_keys = {1, 2, 1};
     auto duplicate_ref = collection[duplicate_keys];
-    std::string duplicate_jsons = json1 + json2 + json1;
+    std::string duplicate_jsons = jsons[0] + jsons[1] + jsons[0];
     vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(duplicate_jsons.data());
-    offsets[2] = json1.size() + json2.size();
-    offsets[3] = json1.size() + json2.size() + json1.size();
+    offsets[2] = jsons[0].size() + jsons[1].size();
+    offsets[3] = jsons[0].size() + jsons[1].size() + jsons[0].size();
     check_equalities(duplicate_ref, values);
 
     // Read with fields
@@ -1115,15 +1202,25 @@ TEST(db, docs_nested_batch) {
         ckf(3, "age"),
     };
     auto ref_with_fields = collection[keys_with_fields];
-    auto field1 = R"({"name":"Carl", "age": 24} )"_json.dump();
-    auto field2 = R"("Joe")"_json.dump();
-    auto field3 = R"(26)"_json.dump();
-    std::string fields = field1 + field2 + field3;
-    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(fields.data());
-    offsets[1] = field1.size();
-    offsets[2] = field1.size() + field2.size();
-    offsets[3] = field1.size() + field2.size() + field3.size();
+    auto field_value1 = R"({"name":"Alice", "age": 24})"_json.dump();
+    auto field_value2 = R"("Bob")"_json.dump();
+    auto field_value3 = R"(26)"_json.dump();
+    std::string field_values = field_value1 + field_value2 + field_value3;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(field_values.data());
+    offsets[1] = field_value1.size();
+    offsets[2] = field_value1.size() + field_value2.size();
+    offsets[3] = field_value1.size() + field_value2.size() + field_value3.size();
     check_equalities(ref_with_fields, values);
+
+    // Check Invalid Json Write
+    std::string invalid_json = R"({"name":"Alice", } "age": 24})";
+    offsets[1] = jsons[0].size();
+    offsets[2] = jsons[0].size() + jsons[1].size();
+    offsets[3] = jsons[0].size() + jsons[1].size() + invalid_json.size();
+    continuous_jsons = jsons[0] + jsons[1] + invalid_json;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(continuous_jsons.data());
+
+    EXPECT_FALSE(ref.assign(values));
 
     EXPECT_TRUE(db.clear());
 }
@@ -1134,122 +1231,50 @@ TEST(db, docs_modify) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
+    auto jsons = make_three_nested_docs();
+    collection[1] = jsons[0].c_str();
+    M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
 
-    auto json = R"( { 
-        "a": {
-            "b": "c",
-            "0": { 
-                "b": [
-                    {"1":"2"},
-                    {"3":"4"},
-                    {"5":"6"},
-                    {"7":"8"},
-                    {"9":"10"}
-                ]
-            }
-        }
-    })"_json.dump();
-    collection[1] = json.c_str();
-    M_EXPECT_EQ_JSON(*collection[1].value(), json);
-
-    // Merge
-    auto modifier =
-        R"( { "a": {"b": "c","0":{"b":[{"1":"2"},{"3":"14"},{"5":"6"},{"7":"8"},{"9":"10"},{"11":"12"}]} } })"_json
-            .dump();
-    EXPECT_TRUE(collection[1].merge(modifier.c_str()));
+    // Update
+    auto modifier = R"( {"person": {"name":"Charles", "age": 28}} )"_json.dump();
+    EXPECT_TRUE(collection[1].update(modifier.c_str()));
     auto result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
 
-    // Merge by field
-    modifier = R"({"9": "11"})"_json.dump();
-    auto expected =
-        R"( { "a": {"b": "c","0":{"b":[{"1":"2"},{"3":"14"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"}]} } })"_json
-            .dump();
-    EXPECT_TRUE(collection[ckf(1, "/a/0/b/4")].merge(modifier.c_str()));
-    result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
-
-    // Patch
-    modifier = R"([ 
-        { "op": "add", "path": "/a/key", "value": "value" },
-        { "op": "replace", "path": "/a/0/b/0", "value": {"1":"3"} },
-        { "op": "copy", "path": "/a/another_key", "from": "/a/key" },
-        { "op": "move", "path": "/a/0/b/5", "from": "/a/0/b/1" },
-        { "op": "remove", "path": "/a/b" }
-    ])"_json.dump();
-    expected = R"( { 
-        "a": {
-            "key" : "value",
-            "another_key" : "value",
-            "0": {
-                "b":[
-                    {"1":"3"},
-                    {"5":"6"},
-                    {"7":"8"},
-                    {"9":"11"},
-                    {"11":"12"},
-                    {"3":"14"}
-                ]
-            } 
-        } 
-    })"_json.dump();
-    EXPECT_TRUE(collection[1].patch(modifier.c_str()));
-    result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
-
-    // Patch By Field
-    modifier = R"([ { "op": "add", "path": "/6", "value": {"15":"16"} } ])"_json.dump();
-    expected =
-        R"( { "a": {"key" : "value","another_key" :
-        "value","0":{"b":[{"1":"3"},{"5":"6"},{"7":"8"},{"9":"11"},{"11":"12"},{"3":"14"},{"15":"16"}]} } })"_json
-            .dump();
-    EXPECT_TRUE(collection[ckf(1, "/a/0/b")].patch(modifier.c_str()));
-    result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
-
-    // Update
-    modifier = R"( {"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    EXPECT_TRUE(collection[1].update(modifier.c_str()));
-    result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
-
     // Update By Field
-    modifier = R"( {"name": "Jack", "age": 28} )"_json.dump();
-    expected = R"( {"person": {"name":"Jack", "age": 28}} )"_json.dump();
+    modifier = R"( {"name": "Alice", "age": 24} )"_json.dump();
     EXPECT_TRUE(collection[ckf(1, "/person")].update(modifier.c_str()));
     result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
+    M_EXPECT_EQ_JSON(result->c_str(), jsons[0].c_str());
 
     // Insert
-    modifier = R"( {"person": {"name":"Carl", "age": 24}} )"_json.dump();
-    EXPECT_FALSE(collection[1].insert(modifier.c_str()));
-    EXPECT_TRUE(collection[2].insert(modifier.c_str()));
+    EXPECT_FALSE(collection[1].insert(jsons[1].c_str()));
+    EXPECT_TRUE(collection[2].insert(jsons[1].c_str()));
     result = collection[2].value();
-    M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
+    M_EXPECT_EQ_JSON(result->c_str(), jsons[1].c_str());
 
     // Insert By Field
     modifier = R"("Doe" )"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 24, "surname" : "Doe"}} )"_json.dump();
-    EXPECT_TRUE(collection[ckf(2, "/person/surname")].insert(modifier.c_str()));
+    auto expected = R"({"person": [{"name":"Bob", "age": 25, "surname" : "Doe"}]})"_json.dump();
+    EXPECT_TRUE(collection[ckf(2, "/person/0/surname")].insert(modifier.c_str()));
     result = collection[2].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     // Upsert
-    modifier = R"( {"person": {"name":"Jack", "age": 28}} )"_json.dump();
-    EXPECT_TRUE(collection[1].upsert(modifier.c_str()));
+    EXPECT_TRUE(collection[1].upsert(jsons[2].c_str()));
     result = collection[1].value();
-    M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
+    M_EXPECT_EQ_JSON(result->c_str(), jsons[2].c_str());
 
     // Upsert By Field
-    modifier = R"("Carl")"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 28}} )"_json.dump();
-    EXPECT_TRUE(collection[ckf(1, "/person/name")].upsert(modifier.c_str()));
+    modifier = R"("Charles")"_json.dump();
+    expected = R"( {"person": "Charles", "age": 26} )"_json.dump();
+    EXPECT_TRUE(collection[ckf(1, "/person")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
-    modifier = R"("Doe")"_json.dump();
-    expected = R"( {"person": {"name":"Carl", "age": 28, "surname" : "Doe"}} )"_json.dump();
-    EXPECT_TRUE(collection[ckf(1, "/person/surname")].upsert(modifier.c_str()));
+    modifier = R"(70)"_json.dump();
+    expected = R"( {"person": "Charles", "age": 26, "weight" : 70} )"_json.dump();
+    EXPECT_TRUE(collection[ckf(1, "/weight")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
@@ -1274,7 +1299,9 @@ TEST(db, docs_merge_and_patch) {
         auto expected = it["expected"].dump();
         collection[1] = doc.c_str();
         EXPECT_TRUE(collection[1].patch(patch.c_str()));
-        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+        auto maybe_value = collection[1].value();
+        EXPECT_TRUE(maybe_value);
+        M_EXPECT_EQ_JSON(maybe_value->c_str(), expected.c_str());
     }
 
     std::ifstream f_merge("tests/merge.json");
@@ -1285,7 +1312,9 @@ TEST(db, docs_merge_and_patch) {
         auto expected = it["expected"].dump();
         collection[1] = doc.c_str();
         EXPECT_TRUE(collection[1].merge(merge.c_str()));
-        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+        auto maybe_value = collection[1].value();
+        EXPECT_TRUE(maybe_value);
+        M_EXPECT_EQ_JSON(maybe_value->c_str(), expected.c_str());
     }
 
     EXPECT_TRUE(db.clear());
@@ -1470,6 +1499,35 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
     return es;
 }
 
+TEST(db, graph_upsert_vertices) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t net = *db.collection<graph_collection_t>();
+    edge_t edge1 {1, 2, 9};
+    EXPECT_TRUE(net.upsert_edge(edge1));
+    EXPECT_TRUE(*net.contains(1));
+    EXPECT_TRUE(*net.contains(2));
+    EXPECT_FALSE(*net.contains(3));
+
+    EXPECT_TRUE(net.upsert_vertex(3));
+    EXPECT_TRUE(*net.contains(3));
+
+    std::vector<ukv_key_t> vertices {1, 4, 5, 2};
+    EXPECT_TRUE(net.upsert_vertices(vertices));
+
+    EXPECT_TRUE(*net.contains(1));
+    EXPECT_TRUE(*net.contains(2));
+    EXPECT_TRUE(*net.contains(4));
+    EXPECT_TRUE(*net.contains(5));
+
+    auto neighbors = net.neighbors(1).throw_or_release();
+    EXPECT_EQ(neighbors.size(), 1);
+    EXPECT_EQ(neighbors[0], 2);
+
+    EXPECT_TRUE(db.clear());
+}
+
 /**
  * Tests "Graphs" Modality, with on of the simplest network designs - a triangle.
  * Three vertices, three connections between them, forming 3 undirected, or 6 directed edges.
@@ -1487,9 +1545,9 @@ TEST(db, graph_triangle) {
     edge_t edge2 {2, 3, 10};
     edge_t edge3 {3, 1, 11};
 
-    EXPECT_TRUE(net.upsert(edge1));
-    EXPECT_TRUE(net.upsert(edge2));
-    EXPECT_TRUE(net.upsert(edge3));
+    EXPECT_TRUE(net.upsert_edge(edge1));
+    EXPECT_TRUE(net.upsert_edge(edge2));
+    EXPECT_TRUE(net.upsert_edge(edge3));
 
     auto neighbors = net.neighbors(1).throw_or_release();
     EXPECT_EQ(neighbors.size(), 2);
@@ -1541,7 +1599,7 @@ TEST(db, graph_triangle) {
     }
 
     // Remove a single edge, making sure that the nodes info persists
-    EXPECT_TRUE(net.remove({
+    EXPECT_TRUE(net.remove_edges({
         {{&edge1.source_id}, 1},
         {{&edge1.target_id}, 1},
         {{&edge1.id}, 1},
@@ -1551,7 +1609,7 @@ TEST(db, graph_triangle) {
     EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
 
     // Bring that edge back
-    EXPECT_TRUE(net.upsert({
+    EXPECT_TRUE(net.upsert_edges({
         {{&edge1.source_id}, 1},
         {{&edge1.target_id}, 1},
         {{&edge1.id}, 1},
@@ -1560,16 +1618,16 @@ TEST(db, graph_triangle) {
 
     // Remove a vertex
     ukv_key_t vertex_to_remove = 2;
-    EXPECT_TRUE(net.remove(vertex_to_remove));
+    EXPECT_TRUE(net.remove_vertex(vertex_to_remove));
     EXPECT_FALSE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
 
     // Bring back the whole graph
-    EXPECT_TRUE(net.upsert(edge1));
-    EXPECT_TRUE(net.upsert(edge2));
-    EXPECT_TRUE(net.upsert(edge3));
+    EXPECT_TRUE(net.upsert_edge(edge1));
+    EXPECT_TRUE(net.upsert_edge(edge2));
+    EXPECT_TRUE(net.upsert_edge(edge3));
     EXPECT_TRUE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
@@ -1598,7 +1656,7 @@ TEST(db, graph_triangle_batch) {
         {3, 1, 11},
     };
 
-    EXPECT_TRUE(net.upsert(edges(triangle)));
+    EXPECT_TRUE(net.upsert_edges(edges(triangle)));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_FALSE(*net.contains(9));
@@ -1644,7 +1702,7 @@ TEST(db, graph_triangle_batch) {
     }
 
     // Remove a single edge, making sure that the nodes info persists
-    EXPECT_TRUE(net.remove(edges_view_t {
+    EXPECT_TRUE(net.remove_edges(edges_view_t {
         {{&triangle[0].source_id}, 1},
         {{&triangle[0].target_id}, 1},
         {{&triangle[0].id}, 1},
@@ -1654,7 +1712,7 @@ TEST(db, graph_triangle_batch) {
     EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
 
     // Bring that edge back
-    EXPECT_TRUE(net.upsert(edges_view_t {
+    EXPECT_TRUE(net.upsert_edges(edges_view_t {
         {{&triangle[0].source_id}, 1},
         {{&triangle[0].target_id}, 1},
         {{&triangle[0].id}, 1},
@@ -1663,14 +1721,14 @@ TEST(db, graph_triangle_batch) {
 
     // Remove a vertex
     ukv_key_t vertex_to_remove = 2;
-    EXPECT_TRUE(net.remove(vertex_to_remove));
+    EXPECT_TRUE(net.remove_vertex(vertex_to_remove));
     EXPECT_FALSE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
 
     // Bring back the whole graph
-    EXPECT_TRUE(net.upsert(edges(triangle)));
+    EXPECT_TRUE(net.upsert_edges(edges(triangle)));
     EXPECT_TRUE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
@@ -1694,14 +1752,14 @@ TEST(db, graph_transaction_watch) {
 
     edge_t edge_ab {'A', 'B', 19};
     edge_t edge_bc {'B', 'C', 31};
-    EXPECT_TRUE(net.upsert(edge_ab));
-    EXPECT_TRUE(net.upsert(edge_bc));
+    EXPECT_TRUE(net.upsert_edge(edge_ab));
+    EXPECT_TRUE(net.upsert_edge(edge_bc));
 
     transaction_t txn = *db.transact();
     graph_collection_t txn_net = *txn.collection<graph_collection_t>();
     EXPECT_EQ(txn_net.degree('B'), 2);
-    EXPECT_TRUE(txn_net.remove(edge_bc));
-    EXPECT_TRUE(net.remove(edge_ab));
+    EXPECT_TRUE(txn_net.remove_edge(edge_bc));
+    EXPECT_TRUE(net.remove_edge(edge_ab));
 
     EXPECT_FALSE(txn.commit());
     EXPECT_TRUE(db.clear());
@@ -1718,7 +1776,7 @@ TEST(db, graph_random_fill) {
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
@@ -1747,9 +1805,9 @@ TEST(db, graph_conflicting_transactions) {
     edge_t edge2 {2, 3, 10};
     edge_t edge3 {3, 1, 11};
 
-    EXPECT_TRUE(txn_net.upsert(edge1));
-    EXPECT_TRUE(txn_net.upsert(edge2));
-    EXPECT_TRUE(txn_net.upsert(edge3));
+    EXPECT_TRUE(txn_net.upsert_edge(edge1));
+    EXPECT_TRUE(txn_net.upsert_edge(edge2));
+    EXPECT_TRUE(txn_net.upsert_edge(edge3));
 
     EXPECT_TRUE(*txn_net.contains(1));
     EXPECT_TRUE(*txn_net.contains(2));
@@ -1773,8 +1831,8 @@ TEST(db, graph_conflicting_transactions) {
     edge_t edge4 {4, 5, 15};
     edge_t edge5 {5, 6, 16};
 
-    EXPECT_TRUE(txn_net.upsert(edge4));
-    EXPECT_TRUE(txn_net2.upsert(edge5));
+    EXPECT_TRUE(txn_net.upsert_edge(edge4));
+    EXPECT_TRUE(txn_net2.upsert_edge(edge5));
 
     EXPECT_TRUE(txn.commit());
     EXPECT_FALSE(txn2.commit());
@@ -1825,27 +1883,29 @@ TEST(db, graph_layering_shapes) {
         {5, 5, 15},
     };
 
-    EXPECT_TRUE(graph.upsert(edges(star)));
+    EXPECT_TRUE(graph.upsert_edges(edges(star)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    EXPECT_TRUE(graph.upsert_edges(edges(pentagon)));
     over_the_vertices(true, 4u);
-    EXPECT_TRUE(graph.remove(edges(star)));
+    EXPECT_TRUE(graph.remove_edges(edges(star)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.upsert(edges(star)));
+    EXPECT_TRUE(graph.upsert_edges(edges(star)));
     over_the_vertices(true, 4u);
-    EXPECT_TRUE(graph.remove(edges(pentagon)));
+    EXPECT_TRUE(graph.remove_edges(edges(pentagon)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    EXPECT_TRUE(graph.upsert_edges(edges(pentagon)));
     over_the_vertices(true, 4u);
-    EXPECT_TRUE(graph.upsert(edges(self_loops)));
+    EXPECT_TRUE(graph.upsert_edges(edges(self_loops)));
     over_the_vertices(true, 6u);
-    EXPECT_TRUE(graph.remove(edges(star)));
-    EXPECT_TRUE(graph.remove(edges(pentagon)));
+    EXPECT_TRUE(graph.remove_edges(edges(star)));
+    EXPECT_TRUE(graph.remove_edges(edges(pentagon)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.remove(edges(self_loops)));
+    EXPECT_TRUE(graph.remove_edges(edges(self_loops)));
     over_the_vertices(true, 0);
     EXPECT_TRUE(db.clear());
     over_the_vertices(false, 0);
+
+    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1860,12 +1920,12 @@ TEST(db, graph_remove_vertices) {
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
-        EXPECT_TRUE(graph.remove(vertex_id));
+        EXPECT_TRUE(graph.remove_vertex(vertex_id));
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_FALSE(*graph.contains(vertex_id));
     }
@@ -1885,8 +1945,8 @@ TEST(db, graph_remove_edges_keep_vertices) {
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
-    EXPECT_TRUE(graph.remove(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
+    EXPECT_TRUE(graph.remove_edges(edges(edges_vec)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
@@ -1905,7 +1965,7 @@ TEST(db, graph_get_edges) {
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     std::vector<edge_t> received_edges;
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
@@ -1914,7 +1974,7 @@ TEST(db, graph_get_edges) {
         for (size_t i = 0; i != es.size(); ++i)
             received_edges.push_back(es[i]);
     }
-    EXPECT_TRUE(graph.remove(edges(received_edges)));
+    EXPECT_TRUE(graph.remove_edges(edges(received_edges)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
@@ -1938,7 +1998,7 @@ TEST(db, graph_degrees) {
     std::iota(vertices.begin(), vertices.end(), 0);
 
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     auto degrees = *graph.degrees(strided_range(vertices).immutable());
     EXPECT_EQ(degrees.size(), vertices_count);
@@ -2007,7 +2067,10 @@ TEST(db, vectors) {
 }
 
 int main(int argc, char** argv) {
-    std::filesystem::create_directory("./tmp");
+    if (path() && std::strlen(path())) {
+        std::filesystem::remove_all(path());
+        std::filesystem::create_directories(path());
+    }
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
