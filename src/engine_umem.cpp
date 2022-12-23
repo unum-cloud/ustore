@@ -521,9 +521,15 @@ void ukv_write(ukv_write_t* c_ptr) {
                 if (auto watch_status = txn.watch(key); !watch_status)
                     return export_error_code(watch_status, c.error);
 
-            pair_t pair {key, content, c.error};
-            return_if_error_m(c.error);
-            auto status = txn.upsert(std::move(pair));
+            consistent_set_status_t status;
+            if (content) {
+                pair_t pair {key, content, c.error};
+                return_if_error_m(c.error);
+                status = txn.upsert(std::move(pair));
+            }
+            else
+                status = txn.erase(key);
+
             if (!status)
                 return export_error_code(status, c.error);
         }
