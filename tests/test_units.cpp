@@ -1491,6 +1491,35 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
     return es;
 }
 
+TEST(db, graph_upsert_vertices) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t net = *db.collection<graph_collection_t>();
+    edge_t edge1 {1, 2, 9};
+    EXPECT_TRUE(net.upsert_edge(edge1));
+    EXPECT_TRUE(*net.contains(1));
+    EXPECT_TRUE(*net.contains(2));
+    EXPECT_FALSE(*net.contains(3));
+
+    EXPECT_TRUE(net.upsert_vertex(3));
+    EXPECT_TRUE(*net.contains(3));
+
+    std::vector<ukv_key_t> vertices {1, 4, 5, 2};
+    EXPECT_TRUE(net.upsert_vertices(vertices));
+
+    EXPECT_TRUE(*net.contains(1));
+    EXPECT_TRUE(*net.contains(2));
+    EXPECT_TRUE(*net.contains(4));
+    EXPECT_TRUE(*net.contains(5));
+
+    auto neighbors = net.neighbors(1).throw_or_release();
+    EXPECT_EQ(neighbors.size(), 1);
+    EXPECT_EQ(neighbors[0], 2);
+
+    EXPECT_TRUE(db.clear());
+}
+
 /**
  * Tests "Graphs" Modality, with on of the simplest network designs - a triangle.
  * Three vertices, three connections between them, forming 3 undirected, or 6 directed edges.
@@ -1508,9 +1537,9 @@ TEST(db, graph_triangle) {
     edge_t edge2 {2, 3, 10};
     edge_t edge3 {3, 1, 11};
 
-    EXPECT_TRUE(net.upsert(edge1));
-    EXPECT_TRUE(net.upsert(edge2));
-    EXPECT_TRUE(net.upsert(edge3));
+    EXPECT_TRUE(net.upsert_edge(edge1));
+    EXPECT_TRUE(net.upsert_edge(edge2));
+    EXPECT_TRUE(net.upsert_edge(edge3));
 
     auto neighbors = net.neighbors(1).throw_or_release();
     EXPECT_EQ(neighbors.size(), 2);
@@ -1562,7 +1591,7 @@ TEST(db, graph_triangle) {
     }
 
     // Remove a single edge, making sure that the nodes info persists
-    EXPECT_TRUE(net.remove({
+    EXPECT_TRUE(net.remove_edges({
         {{&edge1.source_id}, 1},
         {{&edge1.target_id}, 1},
         {{&edge1.id}, 1},
@@ -1572,7 +1601,7 @@ TEST(db, graph_triangle) {
     EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
 
     // Bring that edge back
-    EXPECT_TRUE(net.upsert({
+    EXPECT_TRUE(net.upsert_edges({
         {{&edge1.source_id}, 1},
         {{&edge1.target_id}, 1},
         {{&edge1.id}, 1},
@@ -1581,16 +1610,16 @@ TEST(db, graph_triangle) {
 
     // Remove a vertex
     ukv_key_t vertex_to_remove = 2;
-    EXPECT_TRUE(net.remove(vertex_to_remove));
+    EXPECT_TRUE(net.remove_vertex(vertex_to_remove));
     EXPECT_FALSE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
 
     // Bring back the whole graph
-    EXPECT_TRUE(net.upsert(edge1));
-    EXPECT_TRUE(net.upsert(edge2));
-    EXPECT_TRUE(net.upsert(edge3));
+    EXPECT_TRUE(net.upsert_edge(edge1));
+    EXPECT_TRUE(net.upsert_edge(edge2));
+    EXPECT_TRUE(net.upsert_edge(edge3));
     EXPECT_TRUE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
@@ -1619,7 +1648,7 @@ TEST(db, graph_triangle_batch) {
         {3, 1, 11},
     };
 
-    EXPECT_TRUE(net.upsert(edges(triangle)));
+    EXPECT_TRUE(net.upsert_edges(edges(triangle)));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_FALSE(*net.contains(9));
@@ -1665,7 +1694,7 @@ TEST(db, graph_triangle_batch) {
     }
 
     // Remove a single edge, making sure that the nodes info persists
-    EXPECT_TRUE(net.remove(edges_view_t {
+    EXPECT_TRUE(net.remove_edges(edges_view_t {
         {{&triangle[0].source_id}, 1},
         {{&triangle[0].target_id}, 1},
         {{&triangle[0].id}, 1},
@@ -1675,7 +1704,7 @@ TEST(db, graph_triangle_batch) {
     EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
 
     // Bring that edge back
-    EXPECT_TRUE(net.upsert(edges_view_t {
+    EXPECT_TRUE(net.upsert_edges(edges_view_t {
         {{&triangle[0].source_id}, 1},
         {{&triangle[0].target_id}, 1},
         {{&triangle[0].id}, 1},
@@ -1684,14 +1713,14 @@ TEST(db, graph_triangle_batch) {
 
     // Remove a vertex
     ukv_key_t vertex_to_remove = 2;
-    EXPECT_TRUE(net.remove(vertex_to_remove));
+    EXPECT_TRUE(net.remove_vertex(vertex_to_remove));
     EXPECT_FALSE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
 
     // Bring back the whole graph
-    EXPECT_TRUE(net.upsert(edges(triangle)));
+    EXPECT_TRUE(net.upsert_edges(edges(triangle)));
     EXPECT_TRUE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
@@ -1715,14 +1744,14 @@ TEST(db, graph_transaction_watch) {
 
     edge_t edge_ab {'A', 'B', 19};
     edge_t edge_bc {'B', 'C', 31};
-    EXPECT_TRUE(net.upsert(edge_ab));
-    EXPECT_TRUE(net.upsert(edge_bc));
+    EXPECT_TRUE(net.upsert_edge(edge_ab));
+    EXPECT_TRUE(net.upsert_edge(edge_bc));
 
     transaction_t txn = *db.transact();
     graph_collection_t txn_net = *txn.collection<graph_collection_t>();
     EXPECT_EQ(txn_net.degree('B'), 2);
-    EXPECT_TRUE(txn_net.remove(edge_bc));
-    EXPECT_TRUE(net.remove(edge_ab));
+    EXPECT_TRUE(txn_net.remove_edge(edge_bc));
+    EXPECT_TRUE(net.remove_edge(edge_ab));
 
     EXPECT_FALSE(txn.commit());
     EXPECT_TRUE(db.clear());
@@ -1739,7 +1768,7 @@ TEST(db, graph_random_fill) {
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
@@ -1768,9 +1797,9 @@ TEST(db, graph_conflicting_transactions) {
     edge_t edge2 {2, 3, 10};
     edge_t edge3 {3, 1, 11};
 
-    EXPECT_TRUE(txn_net.upsert(edge1));
-    EXPECT_TRUE(txn_net.upsert(edge2));
-    EXPECT_TRUE(txn_net.upsert(edge3));
+    EXPECT_TRUE(txn_net.upsert_edge(edge1));
+    EXPECT_TRUE(txn_net.upsert_edge(edge2));
+    EXPECT_TRUE(txn_net.upsert_edge(edge3));
 
     EXPECT_TRUE(*txn_net.contains(1));
     EXPECT_TRUE(*txn_net.contains(2));
@@ -1794,8 +1823,8 @@ TEST(db, graph_conflicting_transactions) {
     edge_t edge4 {4, 5, 15};
     edge_t edge5 {5, 6, 16};
 
-    EXPECT_TRUE(txn_net.upsert(edge4));
-    EXPECT_TRUE(txn_net2.upsert(edge5));
+    EXPECT_TRUE(txn_net.upsert_edge(edge4));
+    EXPECT_TRUE(txn_net2.upsert_edge(edge5));
 
     EXPECT_TRUE(txn.commit());
     EXPECT_FALSE(txn2.commit());
@@ -1846,24 +1875,24 @@ TEST(db, graph_layering_shapes) {
         {5, 5, 15},
     };
 
-    EXPECT_TRUE(graph.upsert(edges(star)));
+    EXPECT_TRUE(graph.upsert_edges(edges(star)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    EXPECT_TRUE(graph.upsert_edges(edges(pentagon)));
     over_the_vertices(true, 4u);
-    EXPECT_TRUE(graph.remove(edges(star)));
+    EXPECT_TRUE(graph.remove_edges(edges(star)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.upsert(edges(star)));
+    EXPECT_TRUE(graph.upsert_edges(edges(star)));
     over_the_vertices(true, 4u);
-    EXPECT_TRUE(graph.remove(edges(pentagon)));
+    EXPECT_TRUE(graph.remove_edges(edges(pentagon)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    EXPECT_TRUE(graph.upsert_edges(edges(pentagon)));
     over_the_vertices(true, 4u);
-    EXPECT_TRUE(graph.upsert(edges(self_loops)));
+    EXPECT_TRUE(graph.upsert_edges(edges(self_loops)));
     over_the_vertices(true, 6u);
-    EXPECT_TRUE(graph.remove(edges(star)));
-    EXPECT_TRUE(graph.remove(edges(pentagon)));
+    EXPECT_TRUE(graph.remove_edges(edges(star)));
+    EXPECT_TRUE(graph.remove_edges(edges(pentagon)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.remove(edges(self_loops)));
+    EXPECT_TRUE(graph.remove_edges(edges(self_loops)));
     over_the_vertices(true, 0);
     EXPECT_TRUE(db.clear());
     over_the_vertices(false, 0);
@@ -1881,12 +1910,12 @@ TEST(db, graph_remove_vertices) {
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
-        EXPECT_TRUE(graph.remove(vertex_id));
+        EXPECT_TRUE(graph.remove_vertex(vertex_id));
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_FALSE(*graph.contains(vertex_id));
     }
@@ -1906,8 +1935,8 @@ TEST(db, graph_remove_edges_keep_vertices) {
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
-    EXPECT_TRUE(graph.remove(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
+    EXPECT_TRUE(graph.remove_edges(edges(edges_vec)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
@@ -1926,7 +1955,7 @@ TEST(db, graph_get_edges) {
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     std::vector<edge_t> received_edges;
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
@@ -1935,7 +1964,7 @@ TEST(db, graph_get_edges) {
         for (size_t i = 0; i != es.size(); ++i)
             received_edges.push_back(es[i]);
     }
-    EXPECT_TRUE(graph.remove(edges(received_edges)));
+    EXPECT_TRUE(graph.remove_edges(edges(received_edges)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
@@ -1959,7 +1988,7 @@ TEST(db, graph_degrees) {
     std::iota(vertices.begin(), vertices.end(), 0);
 
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     auto degrees = *graph.degrees(strided_range(vertices).immutable());
     EXPECT_EQ(degrees.size(), vertices_count);
