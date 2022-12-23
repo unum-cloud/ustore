@@ -342,6 +342,8 @@ class consecutive_chunks_iterator_gt {
     using pointer = void;
     using reference = void;
 
+    consecutive_chunks_iterator_gt() = default;
+
     template <typename same_size_at>
     consecutive_chunks_iterator_gt(ukv_length_t const* lens, same_size_at* vals) noexcept
         : lengths_(lens), contents_((element_t*)(vals)) {
@@ -385,6 +387,8 @@ class joined_chunks_iterator_gt {
     using value_type = chunk_t;
     using pointer = void;
     using reference = void;
+
+    joined_chunks_iterator_gt() = default;
 
     template <typename same_size_at>
     joined_chunks_iterator_gt(ukv_length_t* offs, same_size_at* vals) noexcept
