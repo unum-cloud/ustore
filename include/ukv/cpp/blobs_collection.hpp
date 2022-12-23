@@ -105,11 +105,9 @@ class blobs_collection_t {
         return {maybe.release_status(), std::move(maybe->cardinality)};
     }
 
-    std::size_t size() const noexcept(false) {
-        auto maybe = size_range();
-        maybe.throw_unhandled();
-        return (maybe->min + maybe->max) / 2;
-    }
+    std::size_t size() const noexcept(false) { return keys().size(); }
+    pairs_stream_t begin() const noexcept(false) { return items().begin(); }
+    pairs_stream_t end() const noexcept(false) { return items().end(); }
 
     status_t clear_values() noexcept {
         status_t status;

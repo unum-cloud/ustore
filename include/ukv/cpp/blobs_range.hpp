@@ -110,7 +110,7 @@ class keys_stream_t {
 
     status_t advance() noexcept {
 
-        if (fetched_offset_ + 1 >= fetched_keys_.size())
+        if (fetched_offset_ >= fetched_keys_.size())
             return prefetch();
 
         ++fetched_offset_;
@@ -148,7 +148,7 @@ class keys_stream_t {
     }
 
     bool is_end() const noexcept {
-        return next_min_key_ == ukv_key_unknown_k && fetched_offset_ + 1 >= fetched_keys_.size();
+        return next_min_key_ == ukv_key_unknown_k && fetched_offset_ >= fetched_keys_.size();
     }
 
     bool operator==(keys_stream_t const& other) const noexcept {

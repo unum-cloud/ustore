@@ -257,6 +257,9 @@ TEST(db, clear_collection_by_clearing_db) {
     auto ref = collection[triplet.keys];
     round_trip(ref, triplet.contents_arrow());
 
+    EXPECT_EQ(collection.keys().size(), 3ul);
+    EXPECT_EQ(collection.items().size(), 3ul);
+
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(db.clear());
     check_length(ref, ukv_length_missing_k);
@@ -282,17 +285,26 @@ TEST(db, overwrite_with_step) {
     for (ukv_key_t k = 1000; k != 1100; ++k)
         EXPECT_EQ(*collection[k].value(), "some");
 
+    EXPECT_EQ(collection.keys().size(), 100ul);
+    EXPECT_EQ(collection.items().size(), 100ul);
+
     // Monotonically decreasing
     for (ukv_key_t k = 900; k != 800; --k)
         collection[k] = "other";
     for (ukv_key_t k = 900; k != 800; --k)
         EXPECT_EQ(*collection[k].value(), "other");
 
+    EXPECT_EQ(collection.keys().size(), 200ul);
+    EXPECT_EQ(collection.items().size(), 200ul);
+
     // Overwrites
     for (ukv_key_t k = 800; k != 1100; k += 2)
         collection[k] = "third";
     for (ukv_key_t k = 800; k != 1100; k += 2)
         EXPECT_EQ(*collection[k].value(), "third");
+
+    EXPECT_EQ(collection.keys().size(), 200ul);
+    EXPECT_EQ(collection.items().size(), 200ul);
 
     EXPECT_TRUE(db.clear());
 }
@@ -323,6 +335,9 @@ TEST(db, persistency) {
         auto collection_ref = collection[triplet.keys];
         check_equalities(collection_ref, triplet);
         check_length(collection_ref, triplet_t::val_size_k);
+
+        EXPECT_EQ(collection.keys().size(), 3ul);
+        EXPECT_EQ(collection.items().size(), 3ul);
     }
     EXPECT_TRUE(db.clear());
 }
@@ -546,34 +561,6 @@ TEST(db, multiple_collection) {
     EXPECT_FALSE(*db.contains("col5"));
 }
 
-// TODO: What is this?
-TEST(db, unnamed_and_named) {
-
-    if (!ukv_supports_named_collections_k)
-        return;
-
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-
-    triplet_t triplet;
-
-    EXPECT_FALSE(db.collection_create(""));
-
-    for (auto&& name : {"one", "three"}) {
-        for (auto& val : triplet.vals)
-            val += 7;
-
-        auto maybe_collection = db.collection_create(name);
-        EXPECT_TRUE(maybe_collection);
-        blobs_collection_t collection = std::move(maybe_collection).throw_or_release();
-        auto collection_ref = collection[triplet.keys];
-        check_length(collection_ref, ukv_length_missing_k);
-        round_trip(collection_ref, triplet);
-        check_length(collection_ref, triplet_t::val_size_k);
-    }
-    EXPECT_TRUE(db.clear());
-}
-
 /**
  * Checks the "Read Commited" consistency guarantees of transactions.
  * Readers can't see the contents of pending (not committed) transactions.
@@ -663,91 +650,78 @@ TEST(db, transaction_snapshot_isolation) {
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, txn_named) {
+TEST(db, transaction_overwrite) {
 
     if (!ukv_supports_transactions_k)
         return;
-    if (!ukv_supports_named_collections_k)
-        return;
 
     database_t db;
-    triplet_t triplet;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
+    blobs_collection_t main = *txn.collection();
 
-    // Transaction with named collection
-    EXPECT_FALSE(db.collection("named_col"));
-    EXPECT_TRUE(db.collection("named_col", true));
-    blobs_collection_t named_collection = *db.collection("named_col");
-    std::vector<collection_key_t> sub_keys {
-        {named_collection, triplet.keys[0]},
-        {named_collection, triplet.keys[1]},
-        {named_collection, triplet.keys[2]},
-    };
-    auto txn_named_collection_ref = txn[sub_keys];
-    round_trip(txn_named_collection_ref, triplet);
-
-    // Check for missing values before commit
-    auto named_collection_ref = named_collection[triplet.keys];
-    check_length(named_collection_ref, ukv_length_missing_k);
+    // Real case, that has been found in RocksDB engine
+    EXPECT_TRUE(main[2].erase());
+    EXPECT_TRUE(main[7].erase());
+    EXPECT_TRUE(main[6].erase());
+    EXPECT_TRUE(main[1].erase());
+    EXPECT_TRUE(main[2].erase());
+    EXPECT_TRUE(main[6].erase());
+    EXPECT_TRUE(main[6].erase());
+    EXPECT_TRUE(main[3].erase());
+    EXPECT_TRUE(main[2].erase());
+    EXPECT_TRUE(main[2].erase());
+    EXPECT_TRUE(main[6].erase());
+    EXPECT_TRUE(main[7].erase());
+    EXPECT_TRUE(main[7].erase());
+    EXPECT_TRUE(main[2].assign("173252511"));
+    EXPECT_TRUE(main[1].assign("1818561106"));
     EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn.reset());
 
-    // Validate that values match after commit
-    check_equalities(named_collection_ref, triplet);
+    EXPECT_EQ(*db.collection()->at(2).value(), value_view_t {"173252511"});
+    EXPECT_EQ(*db.collection()->at(1).value(), value_view_t {"1818561106"});
+    EXPECT_EQ(db.collection()->keys().size(), 2u);
     EXPECT_TRUE(db.clear());
 }
 
-TEST(db, txn_unnamed_then_named) {
+TEST(db, transaction_erase_missing) {
 
     if (!ukv_supports_transactions_k)
-        return;
-    if (!ukv_supports_named_collections_k)
         return;
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
-
     EXPECT_TRUE(db.transact());
-    transaction_t txn = *db.transact();
+    transaction_t txn1 = *db.transact();
+    transaction_t txn2 = *db.transact();
 
-    triplet_t triplet;
+    EXPECT_TRUE(txn2.collection()->at(-7297309151944849401).erase());
+    EXPECT_TRUE(txn1.collection()->at(-8640850744835793378).erase());
+    EXPECT_TRUE(txn1.commit());
+    EXPECT_TRUE(txn2.commit());
 
-    auto txn_ref = txn[triplet.keys];
-    round_trip(txn_ref, triplet);
+    EXPECT_EQ(*db.collection()->at(-8640850744835793378).value(), value_view_t {});
+    EXPECT_EQ(*db.collection()->at(-7297309151944849401).value(), value_view_t {});
+    EXPECT_EQ(db.collection()->keys().size(), 0u);
+    EXPECT_TRUE(db.clear());
+}
 
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
-    auto collection_ref = collection[triplet.keys];
+TEST(db, transaction_write_conflicting) {
 
-    // Check for missing values before commit
-    check_length(collection_ref, ukv_length_missing_k);
-    EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn.reset());
+    if (!ukv_supports_transactions_k)
+        return;
 
-    // Validate that values match after commit
-    check_equalities(collection_ref, triplet);
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.transact());
+    transaction_t txn1 = *db.transact();
+    transaction_t txn2 = *db.transact();
 
-    // Transaction with named collection
-    EXPECT_TRUE(db.collection_create("named_col"));
-    blobs_collection_t named_collection = *db.collection("named_col");
-    std::vector<collection_key_t> sub_keys {
-        {named_collection, triplet.keys[0]},
-        {named_collection, triplet.keys[1]},
-        {named_collection, triplet.keys[2]},
-    };
-    auto txn_named_collection_ref = txn[sub_keys];
-    round_trip(txn_named_collection_ref, triplet);
-
-    // Check for missing values before commit
-    auto named_collection_ref = named_collection[triplet.keys];
-    check_length(named_collection_ref, ukv_length_missing_k);
-    EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn.reset());
-
-    // Validate that values match after commit
-    check_equalities(named_collection_ref, triplet);
+    EXPECT_TRUE(txn2.collection()->at(6).assign("a"));
+    EXPECT_TRUE(txn1.collection()->at(6).assign("b"));
+    EXPECT_TRUE(txn1.commit());
+    EXPECT_FALSE(txn2.commit());
     EXPECT_TRUE(db.clear());
 }
 
