@@ -161,10 +161,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Isolated Inserts UMem",
+            "name": "C++: Stress Atomicity UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/stress_insert_atomic_isolated_ukv_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_atomicity_ukv_embedded_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -183,15 +183,15 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Stress Isolated Inserts UMem",
+            "preLaunchTask": "Build Native: Stress Atomicity UMem",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Isolated Inserts RocksDB",
+            "name": "C++: Stress Atomicity RocksDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/stress_insert_atomic_isolated_ukv_embedded_rocksdb",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_atomicity_ukv_embedded_rocksdb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -206,15 +206,15 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Stress Isolated Inserts RocksDB",
+            "preLaunchTask": "Build Native: Stress Atomicity RocksDB",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Serializable Transactions UMem",
+            "name": "C++: Stress Linearizability UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/stress_serializable_transactions_ukv_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_linearizability_ukv_embedded_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -233,15 +233,15 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Stress Serializable Transactions UMem",
+            "preLaunchTask": "Build Native: Stress Linearizability UMem",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Serializable Transactions RocksDB",
+            "name": "C++: Stress Linearizability RocksDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/stress_serializable_transactions_ukv_embedded_rocksdb",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_linearizability_ukv_embedded_rocksdb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -256,7 +256,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Stress Serializable Transactions RocksDB",
+            "preLaunchTask": "Build Native: Stress Linearizability RocksDB",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },

@@ -38,26 +38,26 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Stress Isolated Inserts UMem",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make stress_insert_atomic_isolated_ukv_embedded_umem -j8 -C ./build_debug",
+            "label": "Build Native: Stress Atomicity UMem",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make stress_atomicity_ukv_embedded_umem -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Stress Isolated Inserts RocksDB",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make stress_insert_atomic_isolated_ukv_embedded_rocksdb -j8 -C ./build_debug",
+            "label": "Build Native: Stress Atomicity RocksDB",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make stress_atomicity_ukv_embedded_rocksdb -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Stress Serializable Transactions UMem",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make stress_serializable_transactions_ukv_embedded_umem -j8 -C ./build_debug",
+            "label": "Build Native: Stress Linearizability UMem",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make stress_linearizability_ukv_embedded_umem -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Stress Serializable Transactions RocksDB",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make stress_serializable_transactions_ukv_embedded_rocksdb -j8 -C ./build_debug",
+            "label": "Build Native: Stress Linearizability RocksDB",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make stress_linearizability_ukv_embedded_rocksdb -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },

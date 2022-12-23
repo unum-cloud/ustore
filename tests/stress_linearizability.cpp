@@ -101,12 +101,13 @@ std::string log_operations(std::vector<operation_t> const& ops) {
     std::string logs;
     for (operation_t const& op : ops) {
         auto mark = op.commited ? "✅" : "❌";
+        auto back = std::back_inserter(logs);
         switch (op.code) {
         case operation_code_t::insert_k:
-            fmt::format_to(std::back_inserter(logs), "{} {}. INSERT: {}={}\n", op.sequence, mark, op.key, op.value);
+            fmt::format_to(back, "{} {}. main[{}].assign(\"{}\");\n", op.sequence, mark, op.key, op.value);
             break;
         case operation_code_t::remove_k: //
-            fmt::format_to(std::back_inserter(logs), "{} {}. ERASE: {}\n", op.sequence, mark, op.key);
+            fmt::format_to(back, "{} {}. main[{}].erase();\n", op.sequence, mark, op.key);
             break;
         default: break;
         }
@@ -259,6 +260,7 @@ void serializable_writes( //
                         << "Received wrong value for: " << kv.first;
                 }
                 EXPECT_TRUE(concurrent.clear());
+                EXPECT_TRUE(db.clear());
                 sequential.clear();
             }
 
