@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
-project(UKV)
+
+file(READ "VERSION" UKV_VERSION)
+project(UKV
+  LANGUAGES C CXX
+  VERSION ${UKV_VERSION}
+  HOMEPAGE_URL "https://github.com/unum-cloud/ukv"
+  DESCRIPTION "Universal Binary DBMS Interface to manage Docs • Graphs • Blobs • Vectors × in Local • Remote × RocksDB • LevelDB • UMem • UDisk × from C • C++ • Python • Java • GoLang"
+)
 
 option(UKV_BUILD_ENGINE_UMEM "Building REST API server for all backends" ON)
 option(UKV_BUILD_ENGINE_LEVELDB "Building REST API server for all backends")
@@ -30,7 +37,6 @@ cmake_dependent_option(UKV_REBUILD_JEMALLOC "Enable to attempt to source and bui
 cmake_dependent_option(UKV_REBUILD_ONEAPI "Enable to attempt to source and build Intel OneAPI locally" ON "UKV_USE_ONEAPI" OFF)
 cmake_dependent_option(UKV_REBUILD_BOOST "Enable to attempt to source and build Boost locally" ON "UKV_BUILD_API_REST" OFF)
 
-file(READ "VERSION" _VERSION_)
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -177,7 +183,7 @@ set(UKV_TEST_NAMES "test_api" "test_compilation" "test_units" "stress_insert_ato
 if(${UKV_BUILD_ENGINE_UMEM})
   add_library(ukv_embedded_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
   target_link_libraries(ukv_embedded_umem pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
-  target_compile_definitions(ukv_embedded_umem INTERFACE UKV_VERSION="${_VERSION_}")
+  target_compile_definitions(ukv_embedded_umem INTERFACE UKV_VERSION="${UKV_VERSION}")
   target_compile_definitions(ukv_embedded_umem INTERFACE UKV_ENGINE_NAME=umem)
 
   list(APPEND UKV_ENGINE_NAMES "umem")
@@ -187,7 +193,7 @@ endif()
 if(${UKV_BUILD_ENGINE_ROCKSDB})
   add_library(ukv_embedded_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
   target_link_libraries(ukv_embedded_rocksdb rocksdb pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES})
-  target_compile_definitions(ukv_embedded_rocksdb INTERFACE UKV_VERSION="${_VERSION_}")
+  target_compile_definitions(ukv_embedded_rocksdb INTERFACE UKV_VERSION="${UKV_VERSION}")
   target_compile_definitions(ukv_embedded_rocksdb INTERFACE UKV_ENGINE_NAME=rocksdb)
 
   list(APPEND UKV_ENGINE_NAMES "rocksdb")
@@ -198,7 +204,7 @@ if(${UKV_BUILD_ENGINE_LEVELDB})
   add_library(ukv_embedded_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
   target_link_libraries(ukv_embedded_leveldb leveldb pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES})
   set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
-  target_compile_definitions(ukv_embedded_leveldb INTERFACE UKV_VERSION="${_VERSION_}")
+  target_compile_definitions(ukv_embedded_leveldb INTERFACE UKV_VERSION="${UKV_VERSION}")
   target_compile_definitions(ukv_embedded_leveldb INTERFACE UKV_ENGINE_NAME=leveldb)
 
   list(APPEND UKV_ENGINE_NAMES "leveldb")
@@ -213,7 +219,7 @@ if(EXISTS ${UKV_ENGINE_UDISK_PATH})
 
   add_library(ukv_embedded_udisk src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
   target_link_libraries(ukv_embedded_udisk udisk pthread yyjson simdjson bson pcre2 nlohmann_json::nlohmann_json ${JEMALLOC_LIBRARIES})
-  target_compile_definitions(ukv_embedded_udisk INTERFACE UKV_VERSION="${_VERSION_}")
+  target_compile_definitions(ukv_embedded_udisk INTERFACE UKV_VERSION="${UKV_VERSION}")
   target_compile_definitions(ukv_embedded_udisk INTERFACE UKV_ENGINE_NAME=udisk)
 
   list(APPEND UKV_ENGINE_NAMES "udisk")
@@ -308,7 +314,7 @@ if(${UKV_BUILD_SDK_PYTHON})
     target_include_directories(${wrap_lib} PUBLIC python/ ${PYARROW_DIR}/include)
     target_link_directories(${wrap_lib} PUBLIC ${PYARROW_DIR})
     target_link_libraries(${wrap_lib} PRIVATE pthread arrow::dataset arrow_python arrow::flight arrow::bundled arrow::arrow fmt::fmt ${client_lib} ${client_dependencies})
-    target_compile_definitions(${wrap_lib} PRIVATE UKV_VERSION="${_VERSION_}" UKV_PYTHON_MODULE_NAME=${client_lib_name})
+    target_compile_definitions(${wrap_lib} PRIVATE UKV_VERSION="${UKV_VERSION}" UKV_PYTHON_MODULE_NAME=${client_lib_name})
     set_target_properties(${wrap_lib} PROPERTIES OUTPUT_NAME ${client_lib_name})
   endforeach()
 endif()
