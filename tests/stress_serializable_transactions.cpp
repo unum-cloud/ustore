@@ -117,8 +117,17 @@ std::string log_operations(std::vector<operation_t> const& ops) {
 template <typename associative_container_at>
 std::string log_contents(associative_container_at&& elements) {
     std::string logs;
-    for (auto element : elements)
-        fmt::format_to(std::back_inserter(logs), "{}={}\n", element.first, element.second);
+    for (auto element : elements) {
+        std::string payload;
+        using second_t = std::remove_all_extents_t<decltype(element.second)>;
+        if constexpr (std::is_same_v<second_t, payload_t>)
+            payload = std::to_string(element.second);
+        else
+            payload = element.second.size() //
+                          ? std::to_string(*reinterpret_cast<payload_t const*>(element.second.data()))
+                          : "";
+        fmt::format_to(std::back_inserter(logs), "{}={}\n", element.first, payload);
+    }
     return logs;
 }
 
@@ -163,7 +172,7 @@ void serializable_writes( //
     constexpr std::size_t parts_total_k = part_inserts_ak + part_removes_ak;
     constexpr std::size_t mean_key_frequency_k = 4;
     ukv_key_t max_key = parts_total_k * transactions_between_checkpoints * concurrent_threads / mean_key_frequency_k;
-    std::uniform_int_distribution<ukv_key_t> dist_keys(0, max_key);
+    std::uniform_int_distribution<ukv_key_t> dist_keys(1, max_key);
 
     std::size_t operations_per_thread = transactions_between_checkpoints * parts_total_k;
     std::vector<operation_t> operations_across_threads {concurrent_threads * operations_per_thread};
