@@ -57,7 +57,7 @@
         },
         {
             "label": "Build Native: Stress Serializable Transactions RocksDB",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make stress_serializable_transactions_ukv_embedded_rocksdb -j8 -C ./build_debug",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make stress_serializable_transactions_ukv_embedded_rocksdb -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
