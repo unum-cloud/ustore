@@ -209,7 +209,7 @@ void write_one( //
         status =        //
             !content    //
                 ? watch //
-                      ? txn_ptr->SingleDelete(collection, key)
+                      ? txn_ptr->Delete(collection, key)
                       : txn_ptr->DeleteUntracked(collection, key)
                 : watch //
                       ? txn_ptr->Put(collection, key, to_slice(content))
@@ -217,7 +217,7 @@ void write_one( //
     else
         status =     //
             !content //
-                ? db.native->SingleDelete(options, collection, key)
+                ? db.native->Delete(options, collection, key)
                 : db.native->Put(options, collection, key, to_slice(content));
 
     export_error(status, c_error);
@@ -247,7 +247,7 @@ void write_many( //
             auto status =   //
                 !content    //
                     ? watch //
-                          ? txn_ptr->SingleDelete(collection, key)
+                          ? txn_ptr->Delete(collection, key)
                           : txn_ptr->DeleteUntracked(collection, key)
                     : watch //
                           ? txn_ptr->Put(collection, key, to_slice(content))
