@@ -40,7 +40,24 @@ class graph_collection_t {
     graph_collection_t(graph_collection_t const&) = delete;
     graph_collection_t& operator=(graph_collection_t const&) = delete;
 
-    status_t upsert(edges_view_t const& edges) noexcept {
+    status_t upsert_vertices(strided_range_gt<ukv_key_t const> vertices) noexcept {
+        status_t status;
+        ukv_graph_upsert_vertices_t upsert {
+            .db = db_,
+            .error = status.member_ptr(),
+            .transaction = transaction_,
+            .arena = arena_,
+            .tasks_count = vertices.size(),
+            .collections = &collection_,
+            .vertices = vertices.data(),
+            .vertices_stride = vertices.stride(),
+        };
+
+        ukv_graph_upsert_vertices(&upsert);
+        return status;
+    }
+
+    status_t upsert_edges(edges_view_t const& edges) noexcept {
         status_t status;
 
         ukv_graph_upsert_edges_t graph_upsert_edges {
@@ -62,41 +79,7 @@ class graph_collection_t {
         return status;
     }
 
-    status_t remove(edges_view_t const& edges) noexcept {
-        status_t status;
-
-        ukv_graph_remove_edges_t graph_remove_edges {
-            .db = db_,
-            .error = status.member_ptr(),
-            .transaction = transaction_,
-            .arena = arena_,
-            .tasks_count = edges.size(),
-            .collections = &collection_,
-            .edges_ids = edges.edge_ids.begin().get(),
-            .edges_stride = edges.edge_ids.stride(),
-            .sources_ids = edges.source_ids.begin().get(),
-            .sources_stride = edges.source_ids.stride(),
-            .targets_ids = edges.target_ids.begin().get(),
-            .targets_stride = edges.target_ids.stride(),
-        };
-
-        ukv_graph_remove_edges(&graph_remove_edges);
-        return status;
-    }
-
-    inline ukv_collection_t* member_ptr() noexcept { return &collection_; }
-
-    status_t upsert(edge_t const& edge) noexcept { return upsert(edges_view_t {&edge, &edge + 1}); }
-    status_t remove(edge_t const& edge) noexcept { return remove(edges_view_t {&edge, &edge + 1}); }
-
-    status_t remove( //
-        ukv_key_t const vertex,
-        ukv_vertex_role_t const role = ukv_vertex_role_any_k,
-        bool flush = false) noexcept {
-        return remove({{&vertex}, 1}, {{&role}, 1}, flush);
-    }
-
-    status_t remove( //
+    status_t remove_vertices( //
         strided_range_gt<ukv_key_t const> vertices,
         strided_range_gt<ukv_vertex_role_t const> roles = {},
         bool flush = false) noexcept {
@@ -120,6 +103,50 @@ class graph_collection_t {
 
         ukv_graph_remove_vertices(&graph_remove_vertices);
         return status;
+    }
+
+    status_t remove_edges(edges_view_t const& edges) noexcept {
+        status_t status;
+
+        ukv_graph_remove_edges_t graph_remove_edges {
+            .db = db_,
+            .error = status.member_ptr(),
+            .transaction = transaction_,
+            .arena = arena_,
+            .tasks_count = edges.size(),
+            .collections = &collection_,
+            .edges_ids = edges.edge_ids.begin().get(),
+            .edges_stride = edges.edge_ids.stride(),
+            .sources_ids = edges.source_ids.begin().get(),
+            .sources_stride = edges.source_ids.stride(),
+            .targets_ids = edges.target_ids.begin().get(),
+            .targets_stride = edges.target_ids.stride(),
+        };
+
+        ukv_graph_remove_edges(&graph_remove_edges);
+        return status;
+    }
+
+    inline ukv_collection_t* member_ptr() noexcept { return &collection_; }
+
+    status_t upsert_edge(edge_t const& edge) noexcept { return upsert_edges(edges_view_t {&edge, &edge + 1}); }
+    status_t remove_edge(edge_t const& edge) noexcept { return remove_edges(edges_view_t {&edge, &edge + 1}); }
+
+    status_t upsert_vertex(ukv_key_t vertex) noexcept { return upsert_vertices({{&vertex}, 1}); }
+    template <typename key_arg_at>
+    status_t upsert_vertices(key_arg_at&& vertices) noexcept {
+        return upsert_vertices(strided_range(vertices).immutable());
+    }
+
+    status_t remove_vertex( //
+        ukv_key_t const vertex,
+        ukv_vertex_role_t const role = ukv_vertex_role_any_k,
+        bool flush = false) noexcept {
+        return remove_vertices({{&vertex}, 1}, {{&role}, 1}, flush);
+    }
+    template <typename key_arg_at>
+    status_t remove_vertices(key_arg_at&& vertices) noexcept {
+        return remove_vertices(strided_range(vertices).immutable());
     }
 
     status_t remove_edges() noexcept {
