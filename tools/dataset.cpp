@@ -11,9 +11,6 @@
 #include <algorithm>
 #include <filesystem>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wall"
-#pragma GCC diagnostic ignored "-Wextra"
 #include <arrow/api.h>
 #include <arrow/array.h>
 #include <arrow/table.h>
@@ -27,7 +24,6 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/stream_writer.h>
 #include <arrow/compute/api_aggregate.h>
-#pragma GCC diagnostic pop
 
 #include <simdjson.h>
 #include <fmt/format.h>
@@ -44,10 +40,17 @@
 using namespace unum::ukv::bench;
 using namespace unum::ukv;
 
+// 1GB for every batch
+constexpr std::size_t max_batch_size = 1024 * 1024 * 1024;
+// 2 vertices and 1 edge
 constexpr std::size_t vertices_edge_k = 3;
+// Count of symbols to make json ('"', '"', ':', ',')
 constexpr std::size_t symbols_count_k = 4;
+// Length of generated uuid
 constexpr std::size_t uuid_length_k = 36;
+// Json object open brackets for json and parquet
 constexpr ukv_str_view_t prefix_k = "{";
+// Json object open brackets for csv
 constexpr ukv_str_view_t csv_prefix_k = "\"{";
 
 using tape_t = ptr_range_gt<char>;
@@ -420,8 +423,8 @@ void simdjson_object_parser( //
 void fields_parser( //
     ukv_error_t* error,
     linked_memory_lock_t& arena,
-    fields_t const& fields,
     stl_vector_t<size_t>& counts,
+    fields_t const& fields,
     size_t fields_count,
     tape_t& tape) {
 
@@ -773,9 +776,10 @@ void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) noexcept 
     auto handle = open(c.paths_pattern, O_RDONLY);
     return_error_if_m(handle != -1, c.error, 0, "Can't open file");
 
-    auto begin = mmap(nullptr, c.file_size, PROT_READ, MAP_PRIVATE, handle, 0);
-    std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), c.file_size);
-    madvise(begin, c.file_size, MADV_SEQUENTIAL);
+    size_t file_size = std::filesystem::file_size(std::filesystem::path(c.paths_pattern));
+    auto begin = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, handle, 0);
+    std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), file_size);
+    madvise(begin, file_size, MADV_SEQUENTIAL);
 
     auto get_data = [&](simdjson::ondemand::object& data, ukv_str_view_t field) {
         return chrcmp_(field[0], '/') ? rewinded(data).at_pointer(field) : rewinded(data)[field];
@@ -863,11 +867,9 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
     if (!validate_graph_fields(c))
         return_if_error_m(c.error);
-    auto ext = std::filesystem::path(c.paths_pattern).extension();
-    if (strcmp_(ext.c_str(), ".ndjson"))
-        return_error_if_m(c.file_size != 0, c.error, 0, "File size not entered");
 
-    ukv_size_t task_count = c.max_batch_size / sizeof(edge_t);
+    auto ext = std::filesystem::path(c.paths_pattern).extension();
+    ukv_size_t task_count = max_batch_size / sizeof(edge_t);
     if (ext == ".ndjson")
         import_ndjson_graph(c, task_count);
     else {
@@ -908,7 +910,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
     ukv_size_t count = 0;
     ukv_size_t batch_ids = 0;
     ukv_size_t total_ids = 0;
-    ukv_size_t task_count = c.max_batch_size / sizeof(edge_t);
+    ukv_size_t task_count = max_batch_size / sizeof(edge_t);
 
     keys_stream_t stream(c.db, c.collection, task_count, nullptr);
     auto status = stream.seek_to_first();
@@ -1018,7 +1020,7 @@ void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const
             used_mem += json.size();
             json = "{";
 
-            if (used_mem >= c.max_batch_size) {
+            if (used_mem >= max_batch_size) {
                 upsert_docs(c, values);
                 values.clear();
                 used_mem = 0;
@@ -1044,7 +1046,7 @@ void import_whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stre
         simdjson::ondemand::object object = doc.get_object().value();
         values.push_back(rewinded(object).raw_json().value());
         used_mem += values.back().size();
-        if (used_mem >= c.max_batch_size) {
+        if (used_mem >= max_batch_size) {
             upsert_docs(c, values);
             values.clear();
         }
@@ -1071,7 +1073,7 @@ void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream
     counts.reserve(c.fields_count);
 
     auto tape = arena.alloc<char>(max_size, c.error);
-    fields_parser(c.error, arena, fields, counts, c.fields_count, tape);
+    fields_parser(c.error, arena, counts, fields, c.fields_count, tape);
 
     for (auto doc : docs) {
         simdjson::ondemand::object object = doc.get_object().value();
@@ -1092,7 +1094,7 @@ void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream
         used_mem += json.size();
         json = "{";
 
-        if (used_mem >= c.max_batch_size) {
+        if (used_mem >= max_batch_size) {
             upsert_docs(c, values);
             values.clear();
         }
@@ -1106,9 +1108,10 @@ void import_ndjson_docs(ukv_docs_import_t& c) {
     auto handle = open(c.paths_pattern, O_RDONLY);
     return_error_if_m(handle != -1, c.error, 0, "Can't open file");
 
-    auto begin = mmap(nullptr, c.file_size, PROT_READ, MAP_PRIVATE, handle, 0);
-    std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), c.file_size);
-    madvise(begin, c.file_size, MADV_SEQUENTIAL);
+    size_t file_size = std::filesystem::file_size(std::filesystem::path(c.paths_pattern));
+    auto begin = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, handle, 0);
+    std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), file_size);
+    madvise(begin, file_size, MADV_SEQUENTIAL);
 
     simdjson::ondemand::parser parser;
     simdjson::ondemand::document_stream docs = parser.iterate_many( //
@@ -1205,7 +1208,7 @@ void export_sub_docs( //
     stl_vector_t<size_t> counts(alloc_t<size_t>(arena, c.error));
     counts.reserve(c.fields_count);
     auto tape = arena.alloc<char>(max_size, c.error);
-    fields_parser(c.error, arena, fields, counts, c.fields_count, tape);
+    fields_parser(c.error, arena, counts, fields, c.fields_count, tape);
 
     size_t idx = 0;
     for (auto value : values) {
@@ -1277,7 +1280,7 @@ void export_parquet_docs( //
 
     parquet::WriterProperties::Builder builder;
     builder.memory_pool(arrow::default_memory_pool());
-    builder.write_batch_size(std::min(size_bytes, c.max_batch_size));
+    builder.write_batch_size(std::min(size_bytes, max_batch_size));
 
     parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
 
@@ -1377,11 +1380,9 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
     return_error_if_m(validate_docs_fields(c), c.error, 0, "Invalid fields");
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
     return_error_if_m(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
-    auto ext = std::filesystem::path(c.paths_pattern).extension();
-    if (strcmp_(ext.c_str(), ".ndjson"))
-        return_error_if_m(c.file_size != 0, c.error, 0, "File size not entered");
     return_error_if_m(c.id_field, c.error, uninitialized_state_k, "id_field must be initialized");
 
+    auto ext = std::filesystem::path(c.paths_pattern).extension();
     if (ext == ".ndjson")
         import_ndjson_docs(c);
     else {
@@ -1416,7 +1417,7 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     ukv_length_t* lengths = nullptr;
 
     ukv_size_t size_bytes = 0;
-    ukv_size_t task_count = 1024;
+    ukv_size_t task_count = 4096;
 
     keys_stream_t stream(c.db, c.collection, task_count);
     auto arena = linked_memory(c.arena, c.options, c.error);

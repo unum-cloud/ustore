@@ -185,12 +185,6 @@ bool test_graph(ukv_str_view_t file, ukv_str_view_t ext) {
 
     std::vector<std::string> updated_paths;
     std::string new_file;
-    size_t size = 0;
-
-    if (std::strcmp(ndjson_k, file) == 0) {
-        std::filesystem::path pt {file};
-        size = std::filesystem::file_size(pt);
-    }
 
     ukv_graph_import_t imp {
         .db = db,
@@ -198,7 +192,6 @@ bool test_graph(ukv_str_view_t file, ukv_str_view_t ext) {
         .arena = arena.member_ptr(),
         .collection = collection_graph_k,
         .paths_pattern = file,
-        .file_size = size,
         .source_id_field = source_k,
         .target_id_field = target_k,
         .edge_id_field = edge_k,
@@ -436,7 +429,6 @@ bool test_whole_docs(ukv_str_view_t file, ukv_str_view_t ext, comparator cmp) {
         .arena = arena.member_ptr(),
         .collection = collection_docs_k,
         .paths_pattern = file,
-        .file_size = size,
         .id_field = edge_k,
     };
     ukv_docs_import(&docs);
@@ -492,7 +484,6 @@ bool test_sub_docs(ukv_str_view_t file, ukv_str_view_t ext, comparator cmp) {
         .arena = arena.member_ptr(),
         .collection = collection_docs_k,
         .paths_pattern = file,
-        .file_size = size,
         .fields_count = 3,
         .fields = fields_ak,
         .fields_stride = sizeof(ukv_str_view_t),
@@ -552,7 +543,6 @@ bool test_crash_cases_graph_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .collection = collection_graph_k,
         .paths_pattern = nullptr,
-        .file_size = size,
         .source_id_field = source_k,
         .target_id_field = target_k,
         .edge_id_field = edge_k,
@@ -568,7 +558,6 @@ bool test_crash_cases_graph_import(ukv_str_view_t file) {
             .arena = arena.member_ptr(),
             .collection = collection_graph_k,
             .paths_pattern = file,
-            .file_size = 0,
             .source_id_field = source_k,
             .target_id_field = target_k,
             .edge_id_field = edge_k,
@@ -584,7 +573,6 @@ bool test_crash_cases_graph_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .collection = collection_graph_k,
         .paths_pattern = file,
-        .file_size = size,
         .source_id_field = nullptr,
         .target_id_field = target_k,
         .edge_id_field = edge_k,
@@ -599,7 +587,6 @@ bool test_crash_cases_graph_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .collection = collection_graph_k,
         .paths_pattern = file,
-        .file_size = size,
         .source_id_field = source_k,
         .target_id_field = nullptr,
         .edge_id_field = edge_k,
@@ -614,7 +601,6 @@ bool test_crash_cases_graph_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .collection = collection_graph_k,
         .paths_pattern = file,
-        .file_size = size,
         .source_id_field = source_k,
         .target_id_field = target_k,
         .edge_id_field = nullptr,
@@ -629,7 +615,6 @@ bool test_crash_cases_graph_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .collection = collection_graph_k,
         .paths_pattern = file,
-        .file_size = size,
         .source_id_field = source_k,
         .target_id_field = target_k,
         .edge_id_field = edge_k,
@@ -736,7 +721,6 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .collection = collection_docs_k,
         .paths_pattern = nullptr,
-        .file_size = size,
         .fields_count = 3,
         .fields = fields_ak,
         .fields_stride = sizeof(ukv_str_view_t),
@@ -752,7 +736,6 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
             .arena = arena.member_ptr(),
             .collection = collection_docs_k,
             .paths_pattern = file,
-            .file_size = 0,
             .fields_count = 3,
             .fields = fields_ak,
             .fields_stride = sizeof(ukv_str_view_t),
@@ -768,7 +751,6 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .collection = collection_docs_k,
         .paths_pattern = file,
-        .file_size = size,
         .fields_count = 0,
         .fields = fields_ak,
         .fields_stride = sizeof(ukv_str_view_t),
@@ -783,7 +765,6 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .collection = collection_docs_k,
         .paths_pattern = file,
-        .file_size = size,
         .fields_count = 3,
         .fields = nullptr,
         .fields_stride = sizeof(ukv_str_view_t),
@@ -798,7 +779,6 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .collection = collection_docs_k,
         .paths_pattern = file,
-        .file_size = size,
         .fields_count = 3,
         .fields = fields_ak,
         .fields_stride = 0,
@@ -813,7 +793,6 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .collection = collection_docs_k,
         .paths_pattern = file,
-        .file_size = size,
         .fields_count = 3,
         .fields = fields_ak,
         .fields_stride = sizeof(ukv_str_view_t),
