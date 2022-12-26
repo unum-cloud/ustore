@@ -25,8 +25,8 @@ enum class byte_t : std::uint8_t {};
  */
 struct collection_key_t {
 
-    ukv_collection_t collection = ukv_collection_main_k;
-    ukv_key_t key = 0;
+    ukv_collection_t collection {ukv_collection_main_k};
+    ukv_key_t key {0};
 
     collection_key_t() = default;
     collection_key_t(collection_key_t const&) = default;
@@ -57,9 +57,9 @@ struct collection_key_t {
 };
 
 struct collection_key_field_t {
-    ukv_collection_t collection = 0;
-    ukv_key_t key = ukv_key_unknown_k;
-    ukv_str_view_t field = nullptr;
+    ukv_collection_t collection {0};
+    ukv_key_t key {ukv_key_unknown_k};
+    ukv_str_view_t field {nullptr};
 
     collection_key_field_t() = default;
     collection_key_field_t(ukv_key_t key) noexcept : collection(ukv_collection_main_k), key(key), field(nullptr) {}
@@ -80,7 +80,7 @@ inline collection_key_field_t ckf(args_at&&... args) {
 struct edge_t {
     ukv_key_t source_id;
     ukv_key_t target_id;
-    ukv_key_t id = ukv_default_edge_id_k;
+    ukv_key_t id {ukv_default_edge_id_k};
 
     inline bool operator==(edge_t const& other) const noexcept {
         return (source_id == other.source_id) & (target_id == other.target_id) & (id == other.id);
@@ -96,8 +96,8 @@ struct edge_t {
  * in a sorted order.
  */
 struct neighborship_t {
-    ukv_key_t neighbor_id = 0;
-    ukv_key_t edge_id = 0;
+    ukv_key_t neighbor_id {0};
+    ukv_key_t edge_id {0};
 
     friend inline bool operator<(neighborship_t a, neighborship_t b) noexcept {
         return (a.neighbor_id < b.neighbor_id) | ((a.neighbor_id == b.neighbor_id) & (a.edge_id < b.edge_id));

@@ -42,9 +42,9 @@ struct collections_list_t {
  */
 class context_t : public std::enable_shared_from_this<context_t> {
   protected:
-    ukv_database_t db_ = nullptr;
-    ukv_transaction_t txn_ = nullptr;
-    arena_t arena_;
+    ukv_database_t db_ {nullptr};
+    ukv_transaction_t txn_ {nullptr};
+    arena_t arena_ {nullptr};
 
   public:
     inline context_t() noexcept : arena_(nullptr) {}

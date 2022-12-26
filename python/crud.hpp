@@ -13,11 +13,11 @@
 namespace unum::ukv::pyb {
 
 struct py_bin_req_t {
-    ukv_key_t key = ukv_key_unknown_k;
-    ukv_str_view_t field = nullptr;
-    ukv_bytes_ptr_t ptr = nullptr;
-    ukv_length_t off = 0;
-    ukv_length_t len = 0;
+    ukv_key_t key {ukv_key_unknown_k};
+    ukv_str_view_t field {nullptr};
+    ukv_bytes_ptr_t ptr {nullptr};
+    ukv_length_t off {0};
+    ukv_length_t len {0};
 };
 
 #pragma region Writes
@@ -41,6 +41,7 @@ static void write_one_binary(py_collection_gt<collection_at>& collection, PyObje
         .transaction = collection.txn(),
         .arena = collection.member_arena(),
         .options = collection.options(),
+        .tasks_count = 1,
         .collections = collection.member_collection(),
         .keys = &key,
         .lengths = val.member_length(),
@@ -166,6 +167,7 @@ static py::object read_one_binary(py_blobs_collection_t& collection, PyObject* k
             .transaction = collection.txn(),
             .arena = collection.member_arena(),
             .options = collection.options(),
+            .tasks_count = 1,
             .collections = collection.member_collection(),
             .keys = &key,
             .lengths = &found_lengths,
@@ -370,6 +372,7 @@ static py::array_t<ukv_key_t> scan_binary( //
         .transaction = collection.txn(),
         .arena = collection.member_arena(),
         .options = collection.options(),
+        .tasks_count = 1,
         .collections = collection.member_collection(),
         .start_keys = &min_key,
         .count_limits = &count_limit,

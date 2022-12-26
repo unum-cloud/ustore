@@ -41,10 +41,10 @@ namespace unum::ukv {
  * any "Document Format".
  */
 class blobs_collection_t {
-    ukv_database_t db_ = nullptr;
-    ukv_collection_t collection_ = ukv_collection_main_k;
-    ukv_transaction_t txn_ = nullptr;
-    any_arena_t arena_;
+    ukv_database_t db_ {nullptr};
+    ukv_collection_t collection_ {ukv_collection_main_k};
+    ukv_transaction_t txn_ {nullptr};
+    any_arena_t arena_ {nullptr};
 
   public:
     inline blobs_collection_t() noexcept : arena_(nullptr) {}

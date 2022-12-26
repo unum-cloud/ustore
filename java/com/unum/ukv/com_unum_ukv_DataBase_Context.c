@@ -94,10 +94,10 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_clear__(JNIEnv* e
     }
 
     ukv_collection_drop_t collection_drop {
-        db = db_ptr_c;
-        error = &error_c;
-        id = ukv_collection_main_k;
-        mode = ukv_drop_keys_vals_k;
+        .db = db_ptr_c,
+        .error = &error_c,
+        .id = ukv_collection_main_k,
+        .mode = ukv_drop_keys_vals_k,
     };
 
     ukv_collection_drop(&collection_drop);

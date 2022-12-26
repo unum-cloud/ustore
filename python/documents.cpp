@@ -39,6 +39,7 @@ class docs_pairs_stream_t {
             .error = status.member_ptr(),
             .transaction = txn_,
             .arena = arena_scan_.member_ptr(),
+            .tasks_count = 1,
             .collections = &collection_,
             .start_keys = &next_min_key_,
             .count_limits = &read_ahead_,

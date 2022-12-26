@@ -25,9 +25,9 @@ class null_context_t {
  * Won't allow adding or removing collections or bulk-removing all entries.
  */
 class borrowed_transactional_context_t {
-    ukv_database_t db_ = nullptr;
-    ukv_transaction_t txn_ = nullptr;
-    ukv_arena_t* arena_ = nullptr;
+    ukv_database_t db_ {nullptr};
+    ukv_transaction_t txn_ {nullptr};
+    ukv_arena_t* arena_ {nullptr};
 
   public:
     ukv_database_t db() noexcept { return db_; }
@@ -43,9 +43,9 @@ class borrowed_transactional_context_t {
  * Won't allow adding or removing collections or bulk-removing all entries.
  */
 class owned_transactional_context_t {
-    ukv_database_t db_ = nullptr;
-    ukv_transaction_t txn_ = nullptr;
-    ukv_arena_t arena_ = nullptr;
+    ukv_database_t db_ {nullptr};
+    ukv_transaction_t txn_ {nullptr};
+    ukv_arena_t arena_ {nullptr};
 
   public:
     ukv_database_t db() noexcept { return db_; }
@@ -54,7 +54,7 @@ class owned_transactional_context_t {
 };
 
 /**
- * @brief Allows any operations without any "transactional compositioning"
+ * @brief Allows any operations without any "transactional compositing"
  * on the memory owned by this context. Mostly used for testing, addition
  * and removal of collections and bulk entry removals.
  */
