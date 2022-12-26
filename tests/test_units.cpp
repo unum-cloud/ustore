@@ -1976,6 +1976,15 @@ TEST(db, graph_remove_vertices) {
         EXPECT_FALSE(*graph.contains(vertex_id));
     }
 
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
+    std::vector<ukv_key_t> vertices(vertices_count);
+    std::iota(vertices.begin(), vertices.end(), 0);
+    EXPECT_TRUE(graph.remove_vertices(vertices));
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_FALSE(*graph.contains(vertex_id));
+    }
+
     EXPECT_TRUE(db.clear());
 }
 
