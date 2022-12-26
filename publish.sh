@@ -3,12 +3,12 @@ set -e
 version=$(cat VERSION)
 # Clean up
 echo -e "------ \e[93mClean up\e[0m ------"
-rm -rf build _deps build_debug CMakeCache.txt CMakeFiles wheelhouse Makefile bin tmp/*
+rm -rf build _deps build_debug build_release CMakeCache.txt CMakeFiles wheelhouse Makefile bin tmp/*
 
 # Build and test
 echo -e "------ \e[93mBuild\e[0m ------"
 cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_TESTS=1 \
-      -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_LEVELDB=0 -DUKV_BUILD_ENGINE_ROCKSDB=0 -DUKV_BUILD_API_FLIGHT=0 \
+      -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_LEVELDB=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -DUKV_BUILD_API_FLIGHT=0 \
       .
 make -j32
 echo -e "------ \e[92mBuild Passing\e[0m ------"
@@ -19,21 +19,21 @@ for test in $(ls ./build/bin/*test_units*); do
 done
 echo -e "------ \e[92mTests Passing!\e[0m ------"
 
-# Build and test python
-echo -e "------ \e[93mBuild and Test python\e[0m ------"
+# Build and test Python
+echo -e "------ \e[93mBuild and Test Python\e[0m ------"
 cibuildwheel --platform linux
 echo -e "------ \e[92mPython passing!\e[0m ------"
 
 # Publish Python
-read -p "Publish to Pypi? " -n 1 -r
+read -p "Publish to PyPi? " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "------ \e[93mPublishing python to pypi\e[0m ------"
+    echo -e "------ \e[93mPublishing python to PyPi\e[0m ------"
     twine upload wheelhouse/*.whl --verbose
     echo -e "------ \e[92mPython published!\e[0m ------"
 fi
 
 # Build Docker
-echo -e "\n------ \e[93mBuilding docker\e[0m ------"
+echo -e "\n------ \e[93mBuilding Docker\e[0m ------"
 docker build . --file docker/Dockerfile --tag unum/ukv:$version-focal
 echo -e "------ \e[92mDocker Built!\e[0m ------"
 
