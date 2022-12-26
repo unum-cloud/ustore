@@ -251,7 +251,7 @@ void ukv_write(ukv_write_t*);
  *
  * Check docs below to see how different variants can be invoked.
  */
-struct ukv_read_t {
+typedef struct ukv_read_t {
 
     /// @name Context
     /// @{
@@ -380,7 +380,7 @@ struct ukv_read_t {
      */
     ukv_byte_t** values;
     /// @}
-};
+} ukv_read_t;
 
 /**
  * @brief Main "getter" interface.
