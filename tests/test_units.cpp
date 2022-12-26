@@ -2126,10 +2126,16 @@ TEST(db, vectors) {
 }
 
 int main(int argc, char** argv) {
-    if (path() && std::strlen(path())) {
-        std::filesystem::remove_all(path());
-        std::filesystem::create_directories(path());
+    namespace stdfs = std::filesystem;
+    auto directory_str = path() ? std::string_view(path()) : "";
+    if (directory_str.size()) {
+        stdfs::remove_all(directory_str);
+        stdfs::create_directories(stdfs::path(directory_str).parent_path());
+        std::printf("Will work in directory: %s\n", directory_str.data());
     }
+    else
+        std::printf("Will work with default configuration\n");
+
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
