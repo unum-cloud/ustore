@@ -19,7 +19,7 @@ option(UKV_BUILD_SDK_PYTHON "Building Python bidings for all SDKs")
 option(UKV_BUILD_API_FLIGHT "Building Apache Arrow Flight RPC server and client for all backends")
 option(UKV_BUILD_API_FLIGHT_CLIENT "Building Apache Arrow Flight RPC client for all backends")
 option(UKV_BUILD_API_FLIGHT_SERVER "Building Apache Arrow Flight RPC server for all backends")
-option(UKV_BUILD_API_REST "Building REST API server for all backends")
+option(UKV_BUILD_API_REST_SERVER "Building REST API server for all backends")
 
 option(UKV_USE_JEMALLOC "A faster allocator, that requires autoconf to be installed")
 option(UKV_USE_ONEAPI "Faster concurrency primitives from Intel")
@@ -35,7 +35,7 @@ endif()
 include(CMakeDependentOption)
 cmake_dependent_option(UKV_REBUILD_JEMALLOC "Enable to attempt to source and build JeMalloc locally" ON "UKV_USE_JEMALLOC" OFF)
 cmake_dependent_option(UKV_REBUILD_ONEAPI "Enable to attempt to source and build Intel OneAPI locally" ON "UKV_USE_ONEAPI" OFF)
-cmake_dependent_option(UKV_REBUILD_BOOST "Enable to attempt to source and build Boost locally" ON "UKV_BUILD_API_REST" OFF)
+cmake_dependent_option(UKV_REBUILD_BOOST "Enable to attempt to source and build Boost locally" ON "UKV_BUILD_API_REST_SERVER" OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 set(CMAKE_CXX_STANDARD 17)
@@ -154,7 +154,10 @@ if(${UKV_USE_ONEAPI})
 endif()
 
 # Distributions:
-if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT_CLIENT} OR ${UKV_BUILD_API_FLIGHT_SERVER})
+# > UKV_BUILD_ENGINE_UMEM: Uses Arrow Parquet format to save binary collections on disk.
+# > UKV_BUILD_API_FLIGHT: Uses Arrow Flight RPC as a client-server communication protocol.
+# > UKV_BUILD_SDK_PYTHON: Uses Arrow for zero-copy data exchage with the Python runtime.
+if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT_CLIENT} OR ${UKV_BUILD_API_FLIGHT_SERVER} OR ${UKV_BUILD_ENGINE_UMEM})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
 
@@ -162,7 +165,7 @@ if(${UKV_BUILD_API_FLIGHT_SERVER})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/clipp.cmake")
 endif()
 
-if(${UKV_BUILD_API_REST})
+if(${UKV_BUILD_API_REST_SERVER})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/boost.cmake")
 endif()
 
@@ -182,7 +185,7 @@ set(UKV_TEST_NAMES "test_api" "test_compilation" "test_units" "stress_atomicity"
 # Define the Engine libraries we will need to build
 if(${UKV_BUILD_ENGINE_UMEM})
   add_library(ukv_embedded_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ukv_embedded_umem pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
+  target_link_libraries(ukv_embedded_umem pthread yyjson simdjson bson pcre2 arrow::parquet ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
   target_compile_definitions(ukv_embedded_umem INTERFACE UKV_VERSION="${UKV_VERSION}")
   target_compile_definitions(ukv_embedded_umem INTERFACE UKV_ENGINE_NAME=umem)
 
