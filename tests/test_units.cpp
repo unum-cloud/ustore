@@ -559,6 +559,33 @@ TEST(db, multiple_collection) {
     EXPECT_FALSE(*db.contains("col3"));
     EXPECT_FALSE(*db.contains("col4"));
     EXPECT_FALSE(*db.contains("col5"));
+
+    blobs_collection_t main_collection = *db.collection();
+    auto main_col_ref = main_collection[triplet.keys];
+
+    round_trip(main_col_ref, triplet);
+    check_length(main_col_ref, triplet_t::val_size_k);
+
+    EXPECT_TRUE(main_collection.clear_values());
+    check_length(main_col_ref, 0);
+
+    EXPECT_TRUE(db.clear());
+    auto range = main_collection.keys();
+    EXPECT_EQ(range.size(), 0);
+
+    auto maybe_txn = db.transact();
+    EXPECT_TRUE(maybe_txn);
+    auto maybe_cols = maybe_txn->collections();
+    EXPECT_TRUE(maybe_cols);
+
+    size_t count = 0;
+    auto cols = *maybe_cols;
+    while (!cols.names.is_end()) {
+
+        ++cols.names;
+        ++count;
+    }
+    EXPECT_EQ(count, 0);
 }
 
 /**
