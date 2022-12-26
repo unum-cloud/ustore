@@ -352,14 +352,15 @@ Following tools are currently in the works.
 Our [development roadmap][ukv-roadmap] is public and is hosted within the GitHub repository.
 Upcoming tasks include:
 
-1. Builds for Arm, MacOS, Windows.
-2. Richer bindings for GoLang, Java, JavaScript.
-3. Improved Vector Search.
-4. Collection-level configuration.
-5. Document-schema validation.
-6. Persistent Snapshots.
-7. Continuous Replication.
-8. Horizontal Scaling.
+- Builds for Arm, MacOS, Windows.
+- Richer bindings for GoLang, Java, JavaScript.
+- Improved Vector Search.
+- Collection-level configuration.
+- Owning and non-owning C++ wrappers.
+- Document-schema validation.
+- Persistent Snapshots.
+- Continuous Replication.
+- Horizontal Scaling.
 
 > [Read full roadmap in our docs here][ukv-details].
 
