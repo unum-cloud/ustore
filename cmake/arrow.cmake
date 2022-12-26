@@ -37,33 +37,39 @@ ExternalProject_Add(
     -DARROW_EXTRA_ERROR_CONTEXT=OFF
 
     -DARROW_DATASET=ON
-    -DARROW_CUDA=OFF
-    -DARROW_IPC=OFF
-    -DARROW_COMPUTE=OFF
-    -DARROW_JEMALLOC=OFF
-
-    -DARROW_PYTHON=OFF
+    -DARROW_PARQUET=ON
+    -DARROW_WITH_RE2=ON
+    -DARROW_COMPUTE=ON
     -DARROW_FLIGHT=ON
+    -DARROW_Thrift=ON
+    -DARROW_WITH_UTF8PROC=ON
+
+    -DPARQUET_REQUIRE_ENCRYPTION=OFF
+    -DARROW_CUDA=OFF
+    -DARROW_JEMALLOC=OFF
+    -DARROW_IPC=OFF
     -DARROW_JSON=OFF
     -DARROW_CSV=OFF
-    -DARROW_PARQUET=OFF
     -DARROW_FLIGHT_SQL=OFF
     -DARROW_WITH_UCX=OFF
-    -DARROW_WITH_RE2=ON
-    -DARROW_WITH_UTF8PROC=OFF
     -DARROW_BUILD_UTILITIES=OFF
     -DARROW_GANDIVA=OFF
-    
+    -DARROW_S3=OFF
+
+    -DABS_VENDORED=ON
+    -DPARQUET_MINIMAL_DEPENDENCY=ON
+
     # Which components should be bundled:
     # https://arrow.apache.org/docs/developers/cpp/building.html#build-dependency-management
-    # -Dc-ares_SOURCE=BUNDLED
-    # -Dre2_SOURCE=BUNDLED
-    # -Dabsl_SOURCE=BUNDLED
-    # -DProtobuf_SOURCE=BUNDLED
-    # -DgRPC_SOURCE=BUNDLED
-    # -DZLIB_SOURCE=BUNDLED
     -DARROW_DEPENDENCY_SOURCE=BUNDLED
-    -DABS_VENDORED=ON
+    -Dc-ares_SOURCE=BUNDLED
+    -Dre2_SOURCE=BUNDLED
+    -Dabsl_SOURCE=BUNDLED
+    -DProtobuf_SOURCE=BUNDLED
+    -DgRPC_SOURCE=BUNDLED
+    -DZLIB_SOURCE=BUNDLED
+    -DThrift_SOURCE=BUNDLED
+    -Dutf8proc_SOURCE=BUNDLED
 )
 
 ExternalProject_Get_Property(Arrow-external SOURCE_DIR)
@@ -83,14 +89,18 @@ add_library(arrow::flight STATIC IMPORTED)
 set_property(TARGET arrow::flight PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_flight.a)
 add_dependencies(arrow::flight Arrow-external)
 
-add_library(arrow::bundled STATIC IMPORTED)
-set_property(TARGET arrow::bundled PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_bundled_dependencies.a)
-add_dependencies(arrow::bundled Arrow-external)
-
-# add_library(arrow::cuda STATIC IMPORTED)
-# set_property(TARGET arrow::cuda PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_cuda.a)
-# add_dependencies(arrow::cuda Arrow-external)
+add_library(arrow::cuda STATIC IMPORTED)
+set_property(TARGET arrow::cuda PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_cuda.a)
+add_dependencies(arrow::cuda Arrow-external)
 
 add_library(arrow::dataset STATIC IMPORTED)
 set_property(TARGET arrow::dataset PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_dataset.a)
 add_dependencies(arrow::dataset Arrow-external)
+
+add_library(arrow::parquet STATIC IMPORTED)
+set_property(TARGET arrow::parquet PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libparquet.a)
+add_dependencies(arrow::parquet Arrow-external)
+
+add_library(arrow::bundled STATIC IMPORTED)
+set_property(TARGET arrow::bundled PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_bundled_dependencies.a)
+add_dependencies(arrow::bundled Arrow-external)

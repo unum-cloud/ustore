@@ -84,6 +84,8 @@ typedef void* ukv_transaction_t;
  * @brief Some unique integer identifier of a collection.
  * A @c ukv_database_t database can have many of those,
  * but never with repeating names or identifiers.
+ * Those identifiers are not guaranteed to remain the same
+ * between DBMS restarts.
  */
 typedef uint64_t ukv_collection_t;
 

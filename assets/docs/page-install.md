@@ -62,7 +62,7 @@ The CMake options include:
 | UKV_BUILD_BENCHMARKS        |    0    | May require Arrow.                                                                           |
 | UKV_BUILD_API_FLIGHT_CLIENT |    0    | Apache Arrow: Flight.                                                                        |
 | UKV_BUILD_API_FLIGHT_SERVER |    0    | Apache Arrow: Flight.                                                                        |
-| UKV_BUILD_API_REST          |    0    | Boost: Beast and ASIO.                                                                       |
+| UKV_BUILD_API_REST_SERVER   |    0    | Boost: Beast and ASIO.                                                                       |
 | UKV_BUILD_SDK_PYTHON        |    0    | Python: Interpreter, Development libraries. Apache Arrow: Dataset, Flight, Python libraries. |
 | UKV_USE_JEMALLOC            |    0    | JeMalloc or AutoConf to be visible.                                                          |
 
