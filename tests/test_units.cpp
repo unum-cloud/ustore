@@ -71,6 +71,15 @@ static char const* path() {
 #endif
 }
 
+void clear_environment() {
+    namespace stdfs = std::filesystem;
+    auto directory_str = path() ? std::string_view(path()) : "";
+    if (directory_str.empty())
+        return;
+    stdfs::remove_all(directory_str);
+    stdfs::create_directories(stdfs::path(directory_str).parent_path());
+}
+
 inline std::ostream& operator<<(std::ostream& os, collection_key_t obj) {
     return os << obj.collection << obj.key;
 }
@@ -231,6 +240,7 @@ void check_binary_collection(blobs_collection_t& collection) {
  */
 TEST(db, open_clear_close) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.clear());
@@ -239,7 +249,8 @@ TEST(db, open_clear_close) {
     EXPECT_TRUE(db.collection());
     blobs_collection_t collection = *db.collection();
     check_binary_collection(collection);
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -249,6 +260,7 @@ TEST(db, open_clear_close) {
  */
 TEST(db, clear_collection_by_clearing_db) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -271,6 +283,7 @@ TEST(db, clear_collection_by_clearing_db) {
  */
 TEST(db, overwrite_with_step) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.clear());
@@ -306,7 +319,8 @@ TEST(db, overwrite_with_step) {
     EXPECT_EQ(collection.keys().size(), 250ul);
     EXPECT_EQ(collection.items().size(), 250ul);
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -317,6 +331,7 @@ TEST(db, persistency) {
     if (!path())
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -339,7 +354,8 @@ TEST(db, persistency) {
         EXPECT_EQ(collection.keys().size(), 3ul);
         EXPECT_EQ(collection.items().size(), 3ul);
     }
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -348,6 +364,7 @@ TEST(db, persistency) {
  */
 TEST(db, named_collections) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -388,6 +405,7 @@ TEST(db, named_collections_list) {
     if (!ukv_supports_named_collections_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -423,7 +441,8 @@ TEST(db, named_collections_list) {
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(db.drop(""));
     EXPECT_TRUE(db.collection()->clear());
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -431,6 +450,7 @@ TEST(db, named_collections_list) {
  * but empty the binary strings.
  */
 TEST(db, clear_values) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -446,7 +466,8 @@ TEST(db, clear_values) {
     EXPECT_TRUE(col.clear_values());
     check_length(collection_ref, 0);
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -454,6 +475,7 @@ TEST(db, clear_values) {
  */
 TEST(db, batch_scan) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.collection());
@@ -482,7 +504,8 @@ TEST(db, batch_scan) {
     EXPECT_EQ(batch.size(), 0);
     EXPECT_TRUE(stream.is_end());
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 // TODO: Unit tests must be minimal.
@@ -490,6 +513,7 @@ TEST(db, multiple_collection) {
     if (!ukv_supports_named_collections_k)
         return;
 
+    clear_environment();
     database_t db;
 
     EXPECT_TRUE(db.open(path()));
@@ -598,6 +622,7 @@ TEST(db, transaction_read_commited) {
     if (!ukv_supports_transactions_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
@@ -619,7 +644,8 @@ TEST(db, transaction_read_commited) {
 
     // Validate that values match after commit
     check_equalities(collection_ref, triplet);
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -636,6 +662,7 @@ TEST(db, transaction_snapshot_isolation) {
     if (!ukv_supports_snapshots_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -674,7 +701,8 @@ TEST(db, transaction_snapshot_isolation) {
     auto ref = txn[triplet_same_v.keys];
     round_trip(ref, triplet_same_v);
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 TEST(db, transaction_overwrite) {
@@ -682,6 +710,7 @@ TEST(db, transaction_overwrite) {
     if (!ukv_supports_transactions_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
@@ -754,7 +783,8 @@ TEST(db, transaction_overwrite) {
     EXPECT_EQ(*db.collection()->at(2).value(), value_view_t {"3174360422"});
     EXPECT_EQ(*db.collection()->at(5).value(), value_view_t {"1506174981"});
     EXPECT_EQ(db.collection()->keys().size(), 2u);
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 TEST(db, transaction_erase_missing) {
@@ -762,6 +792,7 @@ TEST(db, transaction_erase_missing) {
     if (!ukv_supports_transactions_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
@@ -776,7 +807,8 @@ TEST(db, transaction_erase_missing) {
     EXPECT_EQ(*db.collection()->at(-8640850744835793378).value(), value_view_t {});
     EXPECT_EQ(*db.collection()->at(-7297309151944849401).value(), value_view_t {});
     EXPECT_EQ(db.collection()->keys().size(), 0u);
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 TEST(db, transaction_write_conflicting) {
@@ -784,6 +816,7 @@ TEST(db, transaction_write_conflicting) {
     if (!ukv_supports_transactions_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
@@ -794,7 +827,8 @@ TEST(db, transaction_write_conflicting) {
     EXPECT_TRUE(txn1.collection()->at(6).assign("b"));
     EXPECT_TRUE(txn1.commit());
     EXPECT_FALSE(txn2.commit());
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 TEST(db, transaction_sequenced_commit) {
@@ -802,6 +836,7 @@ TEST(db, transaction_sequenced_commit) {
     if (!ukv_supports_transactions_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -833,7 +868,8 @@ TEST(db, transaction_sequenced_commit) {
     current_sequence_number = *maybe_sequence_number;
     EXPECT_GT(current_sequence_number, previous_sequence_number);
 #endif
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 #pragma region Paths Modality
@@ -844,6 +880,7 @@ TEST(db, transaction_sequenced_commit) {
  */
 TEST(db, paths) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -995,7 +1032,8 @@ TEST(db, paths) {
     EXPECT_EQ(results_counts[0], 0);
     EXPECT_EQ(*paths_match.error, nullptr);
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1006,6 +1044,7 @@ TEST(db, paths) {
 TEST(db, paths_linked_list) {
 
     constexpr std::size_t count = 1000;
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1108,7 +1147,8 @@ TEST(db, paths_linked_list) {
         EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
     }
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 #pragma region Documents Modality
@@ -1135,6 +1175,7 @@ std::vector<std::string> make_three_nested_docs() {
  */
 TEST(db, docs_flat) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1180,7 +1221,8 @@ TEST(db, docs_flat) {
     M_EXPECT_EQ_MSG(val, "24");
 #endif
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1189,6 +1231,7 @@ TEST(db, docs_flat) {
  */
 TEST(db, docs_nested_batch) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
@@ -1271,12 +1314,14 @@ TEST(db, docs_nested_batch) {
 
     EXPECT_FALSE(ref.assign(values));
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 // TODO: Use understandable and rememberable keys.
 // Split into smaller parts.
 TEST(db, docs_modify) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
@@ -1327,7 +1372,8 @@ TEST(db, docs_modify) {
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1336,6 +1382,7 @@ TEST(db, docs_modify) {
  */
 TEST(db, docs_merge_and_patch) {
     using json_t = nlohmann::json;
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     docs_collection_t collection = *db.collection<docs_collection_t>();
@@ -1366,7 +1413,8 @@ TEST(db, docs_merge_and_patch) {
         M_EXPECT_EQ_JSON(maybe_value->c_str(), expected.c_str());
     }
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1377,6 +1425,7 @@ TEST(db, docs_merge_and_patch) {
 TEST(db, docs_table) {
 
     using json_t = nlohmann::json;
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1525,7 +1574,8 @@ TEST(db, docs_table) {
         EXPECT_STREQ(col1[2].value.c_str(), "24");
     }
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 #pragma region Graph Modality
@@ -1549,6 +1599,7 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
 }
 
 TEST(db, graph_upsert_vertices) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1574,7 +1625,8 @@ TEST(db, graph_upsert_vertices) {
     EXPECT_EQ(neighbors.size(), 1);
     EXPECT_EQ(neighbors[0], 2);
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1584,6 +1636,7 @@ TEST(db, graph_upsert_vertices) {
  */
 TEST(db, graph_triangle) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1682,7 +1735,8 @@ TEST(db, graph_triangle) {
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1693,6 +1747,7 @@ TEST(db, graph_triangle) {
  */
 TEST(db, graph_triangle_batch) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1782,7 +1837,8 @@ TEST(db, graph_triangle_batch) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1795,6 +1851,7 @@ TEST(db, graph_transaction_watch) {
     if (!ukv_supports_transactions_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     graph_collection_t net = *db.collection<graph_collection_t>();
@@ -1811,13 +1868,15 @@ TEST(db, graph_transaction_watch) {
     EXPECT_TRUE(net.remove_edge(edge_ab));
 
     EXPECT_FALSE(txn.commit());
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
  * Constructs a larger graph, validating the degrees in a resulting network afterward.
  */
 TEST(db, graph_random_fill) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1832,7 +1891,8 @@ TEST(db, graph_random_fill) {
         EXPECT_EQ(*graph.degree(vertex_id), 9u);
     }
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 // TODO: What is this?
@@ -1841,6 +1901,7 @@ TEST(db, graph_conflicting_transactions) {
     if (!ukv_supports_transactions_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1886,7 +1947,8 @@ TEST(db, graph_conflicting_transactions) {
     EXPECT_TRUE(txn.commit());
     EXPECT_FALSE(txn2.commit());
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1894,6 +1956,7 @@ TEST(db, graph_conflicting_transactions) {
  * a star, a pentagon, and five self-loops.
  */
 TEST(db, graph_layering_shapes) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1954,7 +2017,8 @@ TEST(db, graph_layering_shapes) {
     EXPECT_TRUE(db.clear());
     over_the_vertices(false, 0);
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1962,6 +2026,7 @@ TEST(db, graph_layering_shapes) {
  * as they trigger updates in all nodes connected to the removed one.
  */
 TEST(db, graph_remove_vertices) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1988,7 +2053,8 @@ TEST(db, graph_remove_vertices) {
         EXPECT_FALSE(*graph.contains(vertex_id));
     }
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1996,6 +2062,7 @@ TEST(db, graph_remove_vertices) {
  * in the graph, even though entirely disconnected.
  */
 TEST(db, graph_remove_edges_keep_vertices) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -2011,11 +2078,13 @@ TEST(db, graph_remove_edges_keep_vertices) {
         EXPECT_TRUE(*graph.contains(vertex_id));
     }
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 // TODO: Why do we need this?
 TEST(db, graph_get_edges) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -2039,13 +2108,15 @@ TEST(db, graph_get_edges) {
         EXPECT_TRUE(*graph.contains(vertex_id));
         EXPECT_EQ(graph.edges(vertex_id)->size(), 0);
     }
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 /**
  * Getting the degrees of multiple vertices simultaneously.
  */
 TEST(db, graph_degrees) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -2061,7 +2132,8 @@ TEST(db, graph_degrees) {
     auto degrees = *graph.degrees(strided_range(vertices).immutable());
     EXPECT_EQ(degrees.size(), vertices_count);
 
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 #pragma region Vectors Modality
@@ -2071,6 +2143,7 @@ TEST(db, graph_degrees) {
  * operations with just three distinctly different vectors in R3 space with Cosine metric.
  */
 TEST(db, vectors) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -2122,17 +2195,14 @@ TEST(db, vectors) {
     EXPECT_EQ(found_results[0], max_results);
     EXPECT_EQ(found_keys[0], ukv_key_t('a'));
     EXPECT_EQ(found_keys[1], ukv_key_t('b'));
-    EXPECT_TRUE(db.clear());
+    // Let's not clean, to be able to introspect the state after failures
+    // EXPECT_TRUE(db.clear());
 }
 
 int main(int argc, char** argv) {
-    namespace stdfs = std::filesystem;
     auto directory_str = path() ? std::string_view(path()) : "";
-    if (directory_str.size()) {
-        stdfs::remove_all(directory_str);
-        stdfs::create_directories(stdfs::path(directory_str).parent_path());
+    if (directory_str.size())
         std::printf("Will work in directory: %s\n", directory_str.data());
-    }
     else
         std::printf("Will work with default configuration\n");
 
