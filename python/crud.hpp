@@ -132,6 +132,7 @@ static py::object has_one_binary(py_collection_gt<collection_at>& collection, Py
             .transaction = collection.txn(),
             .arena = collection.member_arena(),
             .options = collection.options(),
+            .tasks_count = 1,
             .collections = collection.member_collection(),
             .keys = &key,
             .presences = &found_presences,
