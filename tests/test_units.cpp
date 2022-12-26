@@ -892,6 +892,7 @@ TEST(db, paths) {
         .db = db,
         .error = status.member_ptr(),
         .arena = arena.member_ptr(),
+        .tasks_count = 1,
         .match_counts_limits = &max_count,
         .patterns = &prefix,
         .match_counts = &results_counts,
@@ -1016,6 +1017,7 @@ TEST(db, paths_linked_list) {
         .db = db,
         .error = status.member_ptr(),
         .arena = arena.member_ptr(),
+        .tasks_count = 1,
         .path_separator = separator,
     };
 
@@ -1023,6 +1025,7 @@ TEST(db, paths_linked_list) {
         .db = db,
         .error = status.member_ptr(),
         .arena = arena.member_ptr(),
+        .tasks_count = 1,
         .path_separator = separator,
     };
 
@@ -1152,7 +1155,7 @@ TEST(db, docs_flat) {
     // BSON
     bson_error_t error;
     bson_t* b = bson_new_from_json((uint8_t*)jsons[0].c_str(), -1, &error);
-    const uint8_t* buffer = bson_get_data(b);
+    uint8_t const* buffer = bson_get_data(b);
     auto view = value_view_t(buffer, b->len);
     collection.at(4, ukv_doc_field_bson_k) = view;
     M_EXPECT_EQ_JSON(*collection[4].value(), jsons[0]);
@@ -2074,7 +2077,7 @@ TEST(db, vectors) {
     status_t status;
 
     float* vector_first_begin = &vectors[0][0];
-    ukv_vectors_write_t write;
+    ukv_vectors_write_t write {};
     write.db = db;
     write.arena = arena.member_ptr();
     write.error = status.member_ptr();
@@ -2091,11 +2094,12 @@ TEST(db, vectors) {
     ukv_length_t* found_results = nullptr;
     ukv_key_t* found_keys = nullptr;
     ukv_float_t* found_distances = nullptr;
-    ukv_vectors_search_t search;
+    ukv_vectors_search_t search {};
     search.db = db;
     search.arena = arena.member_ptr();
     search.error = status.member_ptr();
     search.dimensions = dims_k;
+    search.tasks_count = 1;
     search.match_counts_limits = &max_results;
     search.queries_starts = (ukv_bytes_cptr_t*)&vector_first_begin;
     search.queries_stride = sizeof(float) * dims_k;

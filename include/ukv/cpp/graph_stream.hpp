@@ -20,12 +20,12 @@ namespace unum::ukv {
  */
 class graph_stream_t {
 
-    ukv_database_t db_ = nullptr;
-    ukv_collection_t collection_ = ukv_collection_main_k;
-    ukv_transaction_t transaction_ = nullptr;
+    ukv_database_t db_ {nullptr};
+    ukv_collection_t collection_ {ukv_collection_main_k};
+    ukv_transaction_t transaction_ {nullptr};
 
-    edges_span_t fetched_edges_ = {};
-    std::size_t fetched_offset_ = 0;
+    edges_span_t fetched_edges_ {};
+    std::size_t fetched_offset_ {0};
 
     arena_t arena_;
     keys_stream_t vertex_stream_;

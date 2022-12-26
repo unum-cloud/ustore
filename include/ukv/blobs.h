@@ -102,12 +102,12 @@ typedef struct ukv_write_t {
      * @brief The transaction in which the operation will be watched.
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
      */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /**
      * @brief Write options.
      *
@@ -116,7 +116,7 @@ typedef struct ukv_write_t {
      * - `::ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional writes.
      * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Locations
@@ -126,7 +126,7 @@ typedef struct ukv_write_t {
      * @brief Number of separate operations packed in this read.
      * Always equal to the number of provided `keys`.
      */
-    ukv_size_t tasks_count = 1;
+    ukv_size_t tasks_count;
     /**
      * @brief Sequence of collections owning the `keys`.
      *
@@ -135,7 +135,7 @@ typedef struct ukv_write_t {
      * Use `ukv_collection_create()` or `ukv_collection_list()` to obtain collection IDs for string names.
      * Is @b optional.
      */
-    ukv_collection_t const* collections = NULL;
+    ukv_collection_t const* collections;
     /**
      * @brief Step between `collections`.
      *
@@ -144,7 +144,7 @@ typedef struct ukv_write_t {
      * You can use it to retrieve different keys from the same collection in one call.
      * Is @b optional.
      */
-    ukv_size_t collections_stride = 0;
+    ukv_size_t collections_stride;
     /**
      * @brief Sequence of keys to update.
      *
@@ -160,7 +160,7 @@ typedef struct ukv_write_t {
      * You can use it to retrieve the same key from different collections in one call.
      * Is @b optional.
      */
-    ukv_size_t keys_stride = 0;
+    ukv_size_t keys_stride;
 
     /// @}
     /// @name Contents
@@ -173,7 +173,7 @@ typedef struct ukv_write_t {
      * Is addressed the same way as in Apache Arrow.
      * Is @b optional.
      */
-    ukv_octet_t const* presences = NULL;
+    ukv_octet_t const* presences;
     /**
      * @brief The pointer to the offset (in bytes) of the first content within
      * the first chunk of `values`.
@@ -183,7 +183,7 @@ typedef struct ukv_write_t {
      * but also allows to skip some structure header, like the @c PyObject_HEAD
      * in every CPython runtime object.
      */
-    ukv_length_t const* offsets = NULL;
+    ukv_length_t const* offsets;
     /**
      * @brief Step between `offsets`.
      *
@@ -191,7 +191,7 @@ typedef struct ukv_write_t {
      * Zero stride would reuse the same address for all tasks.
      * Is @b optional.
      */
-    ukv_size_t offsets_stride = 0;
+    ukv_size_t offsets_stride;
     /**
      * @brief The pointer to the offset (in bytes) of the first content within
      * the first chunk of `values`. Zero-length entries are allowed.
@@ -200,7 +200,7 @@ typedef struct ukv_write_t {
      * If neither `offsets` nor `lengths` are passed, we assume values
      * to be `NULL`-terminated and infer the length from `values` themselves.
      */
-    ukv_length_t const* lengths = NULL;
+    ukv_length_t const* lengths;
     /**
      * @brief Step between `keys`.
      *
@@ -208,7 +208,7 @@ typedef struct ukv_write_t {
      * Zero stride would reuse the same address for all tasks.
      * Is @b optional.
      */
-    ukv_size_t lengths_stride = 0;
+    ukv_size_t lengths_stride;
     /**
      * @brief An array of pointers to data chunks.
      * If `NULL`, will simply delete all the `keys` from respective `collections`.
@@ -222,7 +222,7 @@ typedef struct ukv_write_t {
      * Zero stride would reuse the same address for all tasks.
      * Is @b optional.
      */
-    ukv_size_t values_stride = 0;
+    ukv_size_t values_stride;
 
     /// @}
 
@@ -267,13 +267,13 @@ struct ukv_read_t {
      * @brief The transaction in which the operation will be watched.
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
-    ukv_transaction_t transaction = NULL;
-    ukv_transaction_t snapshot = NULL;
+    ukv_transaction_t transaction;
+    ukv_transaction_t snapshot;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
      */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /**
      * @brief Read options.
      *
@@ -283,7 +283,7 @@ struct ukv_read_t {
      * - `::ukv_option_scan_bulk_k`: Suggests that the list of keys was received from a bulk scan.
      * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
@@ -293,7 +293,7 @@ struct ukv_read_t {
      * @brief Number of separate operations packed in this read.
      * Always equal to the number of provided `keys`.
      */
-    ukv_size_t tasks_count = 1;
+    ukv_size_t tasks_count;
     /**
      * @brief Sequence of collections owning the `keys`.
      *
@@ -302,7 +302,7 @@ struct ukv_read_t {
      * Use `ukv_collection_create()` or `ukv_collection_list()` to obtain collection IDs for string names.
      * Is @b optional.
      */
-    ukv_collection_t const* collections = NULL;
+    ukv_collection_t const* collections;
     /**
      * @brief Step between `collections`.
      *
@@ -311,7 +311,7 @@ struct ukv_read_t {
      * You can use it to retrieve different keys from the same collection in one call.
      * Is @b optional.
      */
-    ukv_size_t collections_stride = 0;
+    ukv_size_t collections_stride;
     /**
      * @brief Sequence of `keys` to retrieve.
      *
@@ -327,7 +327,7 @@ struct ukv_read_t {
      * You can use it to retrieve the same key from different collections in one call.
      * Is @b optional.
      */
-    ukv_size_t keys_stride = 0;
+    ukv_size_t keys_stride;
 
     /// @}
     /// @name Outputs
@@ -341,7 +341,7 @@ struct ukv_read_t {
      * Is addressed the same way as in Apache Arrow.
      * Is @b optional.
      */
-    ukv_octet_t** presences = NULL;
+    ukv_octet_t** presences;
     /**
      * @brief Output content offsets within `values`.
      *
@@ -351,7 +351,7 @@ struct ukv_read_t {
      * the end to allow inferring the length of the last entry without using `lengths`.
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
-    ukv_length_t** offsets = NULL;
+    ukv_length_t** offsets;
     /**
      * @brief Output content lengths within `values`.
      *
@@ -359,7 +359,7 @@ struct ukv_read_t {
      * Each defines a response length in bytes within `values`.
      * Is @b optional.
      */
-    ukv_length_t** lengths = NULL;
+    ukv_length_t** lengths;
     /**
      * @brief Output content tape.
      *
@@ -378,7 +378,7 @@ struct ukv_read_t {
      *
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
-    ukv_byte_t** values = NULL;
+    ukv_byte_t** values;
     /// @}
 };
 
@@ -421,12 +421,12 @@ typedef struct ukv_scan_t {
      * @brief The transaction in which the operation will be watched.
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
      */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /**
      * @brief Scan options.
      *
@@ -436,7 +436,7 @@ typedef struct ukv_scan_t {
      * - `::ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
      * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
@@ -446,7 +446,7 @@ typedef struct ukv_scan_t {
      * @brief Number of separate operations packed in this read.
      * Always equal to the number of provided `start_keys`.
      */
-    ukv_size_t tasks_count = 1;
+    ukv_size_t tasks_count;
     /**
      * @brief Sequence of collections owning the `start_keys`.
      *
@@ -455,7 +455,7 @@ typedef struct ukv_scan_t {
      * Use `ukv_collection_create()` or `ukv_collection_list()` to obtain collection IDs for string names.
      * Is @b optional.
      */
-    ukv_collection_t const* collections = NULL;
+    ukv_collection_t const* collections;
     /**
      * @brief Step between `collections`.
      *
@@ -464,7 +464,7 @@ typedef struct ukv_scan_t {
      * You can use it to retrieve different keys from the same collection in one call.
      * Is @b optional.
      */
-    ukv_size_t collections_stride = 0;
+    ukv_size_t collections_stride;
     /**
      * @brief Starting points for each scan or "range select".
      *
@@ -480,7 +480,7 @@ typedef struct ukv_scan_t {
      * You can use it to retrieve the same "ray" of keys from different `collections`.
      * Is @b optional.
      */
-    ukv_size_t start_keys_stride = 0;
+    ukv_size_t start_keys_stride;
     /**
      * @brief Number of consecutive entries to read in each request.
      *
@@ -496,7 +496,7 @@ typedef struct ukv_scan_t {
      * You can use it to retrieve identical number of entries from different start points.
      * Is @b optional.
      */
-    ukv_size_t count_limits_stride = 0;
+    ukv_size_t count_limits_stride;
 
     /// @}
     /// @name Outputs
@@ -511,7 +511,7 @@ typedef struct ukv_scan_t {
      * the end to allow inferring the length of the last entry without using `lengths`.
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
-    ukv_length_t** offsets = NULL;
+    ukv_length_t** offsets;
     /**
      * @brief Output number of found entries for each scan.
      *
@@ -560,12 +560,12 @@ typedef struct ukv_sample_t {
      * @brief The transaction in which the operation will be watched.
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
      */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /**
      * @brief Sampling options.
      *
@@ -575,7 +575,7 @@ typedef struct ukv_sample_t {
      * - `::ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
      * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
@@ -585,7 +585,7 @@ typedef struct ukv_sample_t {
      * @brief Number of separate operations packed in this read.
      * Always equal to the number of provided `start_keys`.
      */
-    ukv_size_t tasks_count = 1;
+    ukv_size_t tasks_count;
     /**
      * @brief Sequence of collections owning the `start_keys`.
      *
@@ -594,7 +594,7 @@ typedef struct ukv_sample_t {
      * Use `ukv_collection_create()` or `ukv_collection_list()` to obtain collection IDs for string names.
      * Is @b optional.
      */
-    ukv_collection_t const* collections = NULL;
+    ukv_collection_t const* collections;
     /**
      * @brief Step between `collections`.
      *
@@ -603,7 +603,7 @@ typedef struct ukv_sample_t {
      * You can use it to retrieve different keys from the same collection in one call.
      * Is @b optional.
      */
-    ukv_size_t collections_stride = 0;
+    ukv_size_t collections_stride;
     /**
      * @brief Number of samples to be gathered for each request.
      *
@@ -619,7 +619,7 @@ typedef struct ukv_sample_t {
      * You can use it to retrieve identical number of entries from different collections.
      * Is @b optional.
      */
-    ukv_size_t count_limits_stride = 0;
+    ukv_size_t count_limits_stride;
 
     /// @}
     /// @name Outputs
@@ -634,7 +634,7 @@ typedef struct ukv_sample_t {
      * the end to allow inferring the length of the last entry without using `lengths`.
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
-    ukv_length_t** offsets = NULL;
+    ukv_length_t** offsets;
     /**
      * @brief Output number of found entries for each scan.
      *
@@ -683,12 +683,12 @@ typedef struct ukv_measure_t {
      * @brief The transaction in which the operation will be watched.
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
      */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /**
      * @brief Scan options.
      *
@@ -698,7 +698,7 @@ typedef struct ukv_measure_t {
      * - `::ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
      * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
@@ -708,7 +708,7 @@ typedef struct ukv_measure_t {
      * @brief Number of separate operations packed in this read.
      * Always equal to the number of provided `start_keys`.
      */
-    ukv_size_t tasks_count = 1;
+    ukv_size_t tasks_count;
     /**
      * @brief Sequence of collections owning the `start_keys`.
      *
@@ -717,7 +717,7 @@ typedef struct ukv_measure_t {
      * Use `ukv_collection_create()` or `ukv_collection_list()` to obtain collection IDs for string names.
      * Is @b optional.
      */
-    ukv_collection_t const* collections = NULL;
+    ukv_collection_t const* collections;
     /**
      * @brief Step between `collections`.
      *
@@ -726,7 +726,7 @@ typedef struct ukv_measure_t {
      * You can use it to retrieve different keys from the same collection in one call.
      * Is @b optional.
      */
-    ukv_size_t collections_stride = 0;
+    ukv_size_t collections_stride;
     /**
      * @brief Starting points for each estimate.
      *
@@ -742,7 +742,7 @@ typedef struct ukv_measure_t {
      * You can use it to retrieve the same "ray" of keys from different `collections`.
      * Is @b optional.
      */
-    ukv_size_t start_keys_stride = 0;
+    ukv_size_t start_keys_stride;
     /**
      * @brief Ending points for each estimate.
      *
@@ -758,7 +758,7 @@ typedef struct ukv_measure_t {
      * You can use it to retrieve the same "ray" of keys from different `collections`.
      * Is @b optional.
      */
-    ukv_size_t end_keys_stride = 0;
+    ukv_size_t end_keys_stride;
 
     /// @}
     /// @name Outputs

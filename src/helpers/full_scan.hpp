@@ -33,6 +33,7 @@ void full_scan_collection( //
             .transaction = transaction,
             .arena = arena,
             .options = options,
+            .tasks_count = 1,
             .collections = &collection,
             .start_keys = &start_key,
             .count_limits = &read_ahead,
