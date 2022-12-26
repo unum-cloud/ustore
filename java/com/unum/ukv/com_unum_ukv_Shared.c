@@ -38,17 +38,17 @@ ukv_collection_t collection_ptr(JNIEnv* env_java, ukv_database_t db_ptr, jstring
 
     // We may be passing the empty name of the default collection
     if (!name_java)
-        return NULL;
+        return 0;
 
     // Temporarily copy the contents of the passed string
     jboolean name_is_copy_java = JNI_FALSE;
     char const* name_c = (*env_java)->GetStringUTFChars(env_java, name_java, &name_is_copy_java);
     if ((*env_java)->ExceptionCheck(env_java))
-        return NULL;
+        return 0;
 
     ukv_error_t error_c = NULL;
-    ukv_collection_t collection_c = NULL;
-    ukv_collection_create_t collection_init {
+    ukv_collection_t collection_c = 0;
+    struct ukv_collection_create_t collection_init = {
         .db = db_ptr,
         .error = &error_c,
         .name = name_c,

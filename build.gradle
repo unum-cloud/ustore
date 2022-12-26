@@ -85,9 +85,9 @@ test {
 }
 
 jar {
-    dependsOn("ukvUMemSharedLibrary")
-    dependsOn("ukvRocksDBSharedLibrary")
-    dependsOn("ukvLevelDBSharedLibrary")
+    dependsOn("ukvUmemSharedLibrary")
+    dependsOn("ukvRocksdbSharedLibrary")
+    dependsOn("ukvLeveldbSharedLibrary")
 
     into("umem") {
         from("$buildDir/libs/ukv/shared/umem/libukv.so")

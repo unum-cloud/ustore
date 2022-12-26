@@ -73,12 +73,12 @@ extern ukv_key_t ukv_default_edge_id_k;
  * that members of each collection are fixed to be either only sources
  * or only edges.
  */
-enum ukv_vertex_role_t {
+typedef enum ukv_vertex_role_t {
     ukv_vertex_role_unknown_k = 0,
     ukv_vertex_source_k = 1,
     ukv_vertex_target_k = 2,
     ukv_vertex_role_any_k = 3,
-};
+} ukv_vertex_role_t;
 
 /**
  * @brief Type to describe the number of edges a vertex connects to.
