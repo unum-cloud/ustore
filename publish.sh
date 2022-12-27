@@ -32,6 +32,20 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "------ \e[92mPython Published!\e[0m ------"
 fi
 
+
+# Build Go
+echo -e "------ \e[93mBuild GO\e[0m ------"
+bash go-ukv/pack.sh
+echo -e "------ \e[92mGo Built!\e[0m ------"
+
+# Test And Publish Go
+read -p "Publish Go? " -n 1 -r
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo -e "------ \e[93mPublishing Go to go-ukv\e[0m ------"
+    cd go-ukv && bash publish.sh && cd ../
+    echo -e "------ \e[92mGo Published!\e[0m ------"
+fi
+
 # Build Docker
 echo -e "\n------ \e[93mBuilding Docker\e[0m ------"
 docker build . --file docker/Dockerfile --tag unum/ukv:$version-focal
