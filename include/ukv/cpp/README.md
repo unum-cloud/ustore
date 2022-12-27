@@ -102,7 +102,7 @@ By default, collections store BLOB values.
 For document collections, would use a similar, but different syntax.
 
 ```cpp
-docs_collection_t collection = *db.collection<docs_collection_t>();
+docs_collection_t collection = db.main<docs_collection_t>();
 collection[1] = R"( { "person": "Alice", "age": 27, "height": 1 } )";
 collection[2] = R"( { "person": "Bob", "age": "27", "weight": 2 } )";
 ```
