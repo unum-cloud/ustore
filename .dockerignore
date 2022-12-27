@@ -2,7 +2,6 @@
 .decontainer
 .benchmarks
 
-assets
 lib
 python
 golang

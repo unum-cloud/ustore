@@ -7,10 +7,12 @@
  * It keeps all the pairs sorted and is pretty fast for a BST-based container.
  */
 
+#include <stdio.h> // Saving/reading from disk
+
+#include <map>
 #include <vector>
 #include <string>
 #include <string_view>
-#include <map>
 #include <unordered_map>
 #include <unordered_set>
 #include <shared_mutex>
@@ -18,18 +20,23 @@
 #include <numeric>    // `std::accumulate`
 #include <atomic>     // Thread-safe generation counters
 #include <filesystem> // Enumerating the directory
-#include <stdio.h>    // Saving/reading from disk
+#include <fstream>    // Passing file contents to JSON parser
 
 #include <consistent_set/consistent_set.hpp> // `av::consistent_set_gt`
 #include <consistent_set/consistent_avl.hpp> // `av::consistent_avl_gt`
 #include <consistent_set/locked.hpp>         // `av::locked_gt`
 #include <consistent_set/partitioned.hpp>    // `av::partitioned_gt`
 
+#include <nlohmann/json.hpp>       // `nlohmann::json`
+#include <arrow/io/file.h>         // `arrow::io::ReadableFile`
+#include <parquet/stream_reader.h> // `parquet::StreamReader`
+#include <parquet/stream_writer.h> // `parquet::StreamWriter`
+
 #include "ukv/db.h"
-#include "helpers/linked_memory.hpp"
 #include "helpers/file.hpp"
-#include "helpers/linked_array.hpp" // `unintialized_vector_gt`
-#include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
+#include "helpers/linked_memory.hpp" // `linked_memory_t`
+#include "helpers/linked_array.hpp"  // `unintialized_vector_gt`
+#include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -49,9 +56,13 @@ bool const ukv_supports_snapshots_k = false;
 using namespace unum::ukv;
 using namespace unum;
 using namespace av;
-namespace fs = std::filesystem;
+
+namespace stdfs = std::filesystem;
+using json_t = nlohmann::json;
 
 using blob_allocator_t = std::allocator<byte_t>;
+
+static constexpr char const* config_name_k = "config_umem.json";
 
 struct pair_t {
     collection_key_t collection_key;
@@ -91,6 +102,7 @@ struct pair_t {
     }
 
     operator collection_key_t() const noexcept { return collection_key; }
+    explicit operator bool() const noexcept { return range; }
 };
 
 struct pair_compare_t {
@@ -106,12 +118,12 @@ struct pair_compare_t {
 
 // using consistent_set_t = consistent_set_gt<pair_t, pair_compare_t>;
 // using consistent_set_t = consistent_avl_gt<pair_t, pair_compare_t>;
-// using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>, std::shared_mutex>;
-using consistent_set_t = partitioned_gt< //
-    consistent_set_gt<pair_t, pair_compare_t>,
-    std::hash<collection_key_t>,
-    std::shared_mutex,
-    64>;
+// using consistent_set_t = partitioned_gt< //
+//     consistent_set_gt<pair_t, pair_compare_t>,
+//     std::hash<collection_key_t>,
+//     std::shared_mutex,
+//     64>;
+using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>, std::shared_mutex>;
 using transaction_t = typename consistent_set_t::transaction_t;
 using generation_t = typename consistent_set_t::generation_t;
 
@@ -253,13 +265,13 @@ struct database_t {
      * @brief Path on disk, from which the data will be read.
      * When closed, we will try saving the DB on disk.
      */
-    std::string persisted_path;
+    std::string persisted_directory;
 
     database_t(consistent_set_t&& set) noexcept(false) : pairs(std::move(set)) {}
 
     database_t(database_t&& other) noexcept
         : pairs(std::move(other.pairs)), names(std::move(other.names)),
-          persisted_path(std::move(other.persisted_path)) {}
+          persisted_directory(std::move(other.persisted_directory)) {}
 };
 
 ukv_collection_t new_collection(database_t& db) noexcept {
@@ -285,132 +297,120 @@ void export_error_code(consistent_set_status_t code, ukv_error_t* c_error) noexc
 /*****************	 Writing to Disk	  ****************/
 /*********************************************************/
 
-void write_pair(file_handle_t const& handle, pair_t const& pair, ukv_error_t* c_error) noexcept {
+void write_collection( //
+    database_t const& db,
+    ukv_collection_t collection_id,
+    std::string const& collection_path,
+    ukv_error_t* c_error) noexcept(false) {
 
-    if (!pair.range)
-        return;
+    std::shared_ptr<arrow::io::FileOutputStream> out_file;
+    PARQUET_ASSIGN_OR_THROW(out_file, arrow::io::FileOutputStream::Open(collection_path));
 
-    auto saved_len = std::fwrite(&pair.collection_key.collection, sizeof(ukv_collection_t), 1, handle);
-    return_error_if_m(saved_len == 1, c_error, 0, "Write partially failed on collection.");
+    parquet::schema::NodeVector columns {};
+    columns.push_back(parquet::schema::PrimitiveNode::Make( //
+        "key",
+        parquet::Repetition::REQUIRED,
+        parquet::Type::INT64,
+        parquet::ConvertedType::INT_64));
+    columns.push_back(parquet::schema::PrimitiveNode::Make( //
+        "value",
+        parquet::Repetition::OPTIONAL,
+        parquet::Type::BYTE_ARRAY,
+        parquet::ConvertedType::UTF8));
+    auto schema = std::static_pointer_cast<parquet::schema::GroupNode>(
+        parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, columns));
+    parquet::WriterProperties::Builder builder;
+    parquet::StreamWriter os {parquet::ParquetFileWriter::Open(out_file, schema, builder.build())};
 
-    saved_len = std::fwrite(&pair.collection_key.key, sizeof(ukv_key_t), 1, handle);
-    return_error_if_m(saved_len == 1, c_error, 0, "Write partially failed on key.");
-
-    auto buf = value_view_t(pair.range);
-    auto buf_len = static_cast<ukv_length_t>(buf.size());
-    saved_len = std::fwrite(&buf_len, sizeof(ukv_length_t), 1, handle);
-    return_error_if_m(saved_len == 1, c_error, 0, "Write partially failed on value len.");
-
-    saved_len = std::fwrite(buf.data(), sizeof(byte_t), buf.size(), handle);
-    return_error_if_m(saved_len == buf.size(), c_error, 0, "Write partially failed on value.");
+    collection_key_t min(collection_id, std::numeric_limits<ukv_key_t>::min());
+    collection_key_t max(collection_id, std::numeric_limits<ukv_key_t>::max());
+    auto status = db.pairs.range(min, max, [&](pair_t& pair) noexcept {
+        std::optional<std::string_view> value;
+        if (pair.range.size())
+            value = std::string_view(pair.range);
+        os << pair.collection_key.key << value << parquet::EndRow;
+    });
+    export_error_code(status, c_error);
+    return_if_error_m(c_error);
 }
 
-void read_pair(file_handle_t const& handle, pair_t& pair, bool should_continue, ukv_error_t* c_error) noexcept {
+void write(database_t const& db, std::string const& dir_path, ukv_error_t* c_error) noexcept(false) {
 
-    // An empty row may contain no content
-    auto read_len = std::fread(&pair.collection_key.collection, sizeof(ukv_collection_t), 1, handle);
-    should_continue &= read_len == 1;
-    if (!should_continue)
-        return;
-    return_error_if_m(read_len <= 1, c_error, 0, "Read yielded unexpected result on key.");
-
-    // .. but if the row exists, it shouldn't be partial
-    read_len = std::fread(&pair.collection_key.key, sizeof(ukv_key_t), 1, handle);
-    return_error_if_m(read_len == 1, c_error, 0, "Read partially failed on key.");
-
-    auto buf_len = ukv_length_t(0);
-    read_len = std::fread(&buf_len, sizeof(ukv_length_t), 1, handle);
-    return_error_if_m(read_len == 1, c_error, 0, "Read partially failed on value len.");
-
-    auto buf_ptr = blob_allocator_t {}.allocate(buf_len);
-    return_error_if_m(buf_ptr != nullptr, c_error, out_of_memory_k, "Failed to allocate a blob");
-    pair.range = value_view_t {buf_ptr, buf_len};
-    read_len = std::fread(buf_ptr, sizeof(byte_t), buf_len, handle);
-    return_error_if_m(read_len == buf_len, c_error, 0, "Read partially failed on value.");
-}
-
-void write(database_t const& db, std::string const& path, ukv_error_t* c_error) noexcept {
-    // Using the classical C++ IO mechanisms is a bad tone in the modern world.
-    // They are ugly and, more importantly, painfully slow.
-    // https://www.reddit.com/r/cpp_questions/comments/e2xia9/performance_comparison_of_various_ways_of_reading/
-    //
-    // So instead we stick to the LibC way of doing things.
-    // POSIX API would have been even better, but LibC will provide
-    // higher portability for this reference implementation.
-    // https://www.ibm.com/docs/en/i/7.1?topic=functions-fopen-open-files
-    file_handle_t handle;
-    if ((*c_error = handle.open(path.c_str(), "wb+").release_error()))
+    // Check if the source directory even exists
+    if (!std::filesystem::is_directory(dir_path))
         return;
 
-    // Print stats about the overall dataset:
-    // https://fmt.dev/latest/api.html#_CPPv4IDpEN3fmt5printEvPNSt4FILEE13format_stringIDp1TEDpRR1T
-    std::fprintf(handle, "Total Items: %zu\n", db.pairs.size());
-    std::fprintf(handle, "Named Collections: %zu\n", db.names.size());
-    for (auto const& name_and_handle : db.names)
-        std::fprintf(handle,
-                     "-%s: 0x%016zx\n",
-                     name_and_handle.first.c_str(),
-                     static_cast<std::size_t>(name_and_handle.second));
-    std::fprintf(handle, "\n");
-
-    // Save the pairs
-    scan_full(db.pairs, [&](pair_t const& pair) noexcept { write_pair(handle, pair, c_error); });
+    auto main_path = stdfs::path(dir_path) / ".parquet";
+    write_collection(db, ukv_collection_main_k, main_path, c_error);
     return_if_error_m(c_error);
 
-    // Close the file
-    log_error_m(c_error, 0, handle.close().release_error());
+    for (auto const& collection : db.names) {
+        auto const& collection_name = collection.first;
+        auto const collection_path = stdfs::path(dir_path) / (collection_name + ".parquet");
+        write_collection(db, collection.second, collection_path, c_error);
+        return_if_error_m(c_error);
+    }
 }
 
-void read(database_t& db, std::string const& path, ukv_error_t* c_error) noexcept {
+bool ends_with(std::string_view str, std::string_view suffix) noexcept {
+    return str.size() >= suffix.size() &&
+           0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix.data(), suffix.size());
+}
+
+void read(database_t& db, std::string const& path, ukv_error_t* c_error) noexcept(false) {
+
+    // Clear the DB, before refilling it
     db.names.clear();
     auto status = db.pairs.clear();
-    if (!status)
-        return export_error_code(status, c_error);
+    export_error_code(status, c_error);
+    return_if_error_m(c_error);
 
-    // Check if file even exists
-    if (!std::filesystem::exists(path))
+    // Check if the source directory even exists
+    if (!std::filesystem::is_directory(path))
         return;
 
-    // Similar to serialization, we don't use STL here
-    file_handle_t handle;
-    if ((*c_error = handle.open(path.c_str(), "rb+").release_error()))
-        return;
-
-    // Get the collection size, to preallocate pairs
-    char line_buffer[256];
-    while (std::fgets(line_buffer, sizeof(line_buffer), handle) != NULL) {
-        // Check if it is a collection description
-        auto line_length = std::find(line_buffer, line_buffer + sizeof(line_buffer), '\n') - line_buffer;
-        if (line_length == 0)
-            break;
-        if (line_buffer[0] == '-') {
-            auto name_length = std::find(line_buffer + 1, line_buffer + sizeof(line_buffer), ':') - line_buffer;
-            auto name = std::string_view(line_buffer + 1, name_length);
-            auto id_str_begin = line_buffer + line_length - 16;
-            auto id_str_end = line_buffer + line_length;
-            auto id = std::strtoull(id_str_begin, &id_str_end, 16);
-            db.names.emplace(name, id);
-        }
-        else
-            // Skip metadata rows
+    // Loop over all persisted collections, reading them one by one
+    std::string_view extension {".parquet"};
+    for (auto const& dir_entry : std::filesystem::directory_iterator {path}) {
+        auto const& collection_path = dir_entry.path();
+        std::string collection_name = collection_path.filename();
+        if (!ends_with(collection_name, extension))
             continue;
-    }
 
-    // Load the pairs
-    bool should_continue = true;
-    while (std::feof(handle) == 0) {
-        pair_t pair;
-        read_pair(handle, pair, should_continue, c_error);
-        if (!should_continue)
-            break;
-        return_if_error_m(c_error);
-        auto status = db.pairs.upsert(std::move(pair));
-        if (!status)
-            return export_error_code(status, c_error);
-    }
+        collection_name.resize(collection_name.size() - extension.size());
+        ukv_collection_t collection_id = collection_name.empty() ? ukv_collection_main_k : new_collection(db);
+        if (!collection_name.empty())
+            db.names.emplace(collection_name, collection_id);
 
-    // Close the file
-    log_error_m(c_error, 0, handle.close().release_error());
+        std::shared_ptr<arrow::io::ReadableFile> in_file;
+        PARQUET_ASSIGN_OR_THROW(in_file, arrow::io::ReadableFile::Open(collection_path));
+        parquet::StreamReader os {parquet::ParquetFileReader::Open(in_file)};
+
+        ukv_key_t key;
+        std::optional<std::string> value;
+        while (!os.eof()) {
+            os >> key >> value >> parquet::EndRow;
+
+            pair_t pair;
+            pair.collection_key.collection = collection_id;
+            pair.collection_key.key = key;
+
+            // Converting to our internal representation would require a copy
+            if (value) {
+                auto buf_len = value->size();
+                auto buf_ptr = blob_allocator_t {}.allocate(buf_len);
+                return_error_if_m(buf_ptr != nullptr, c_error, out_of_memory_k, "Failed to allocate a blob");
+                pair.range = value_view_t {buf_ptr, buf_len};
+                std::memcpy(buf_ptr, value->data(), value->size());
+            }
+            else
+                pair.range = value_view_t::make_empty();
+
+            auto status = db.pairs.upsert(std::move(pair));
+            export_error_code(status, c_error);
+            return_if_error_m(c_error);
+        }
+    }
 }
 
 /*********************************************************/
@@ -427,8 +427,29 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         auto db_ptr = std::make_unique<database_t>(std::move(db)).release();
         auto len = c.config ? std::strlen(c.config) : 0;
         if (len) {
-            db_ptr->persisted_path = std::string(c.config, len);
-            read(*db_ptr, db_ptr->persisted_path, c.error);
+
+            // Check if the directory contains a config
+            stdfs::path root = c.config;
+            stdfs::file_status root_status = stdfs::status(root);
+            return_error_if_m(root_status.type() == stdfs::file_type::directory,
+                              c.error,
+                              args_wrong_k,
+                              "Root isn't a directory");
+            stdfs::path config_path = stdfs::path(root) / config_name_k;
+            stdfs::file_status config_status = stdfs::status(config_path);
+            if (config_status.type() == stdfs::file_type::not_found) {
+                log_warning_m(
+                    "Configuration file is missing under the path %s. "
+                    "Default will be used\n",
+                    config_path.c_str());
+            }
+            else {
+                std::ifstream ifs(config_path.c_str());
+                json_t js = json_t::parse(ifs);
+            }
+
+            db_ptr->persisted_directory = std::string(c.config, len);
+            read(*db_ptr, db_ptr->persisted_directory, c.error);
         }
         *c.db = db_ptr;
     });
@@ -521,9 +542,15 @@ void ukv_write(ukv_write_t* c_ptr) {
                 if (auto watch_status = txn.watch(key); !watch_status)
                     return export_error_code(watch_status, c.error);
 
-            pair_t pair {key, content, c.error};
-            return_if_error_m(c.error);
-            auto status = txn.upsert(std::move(pair));
+            consistent_set_status_t status;
+            if (content) {
+                pair_t pair {key, content, c.error};
+                return_if_error_m(c.error);
+                status = txn.upsert(std::move(pair));
+            }
+            else
+                status = txn.erase(key);
+
             if (!status)
                 return export_error_code(status, c.error);
         }
@@ -618,10 +645,32 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     offsets[scans.count] = keys_output - *c.keys;
 }
 
+struct key_from_pair_t {
+    ukv_key_t* key_ptr;
+    key_from_pair_t(ukv_key_t* key) : key_ptr(key) {}
+    key_from_pair_t& operator=(pair_t const& pair) {
+        *key_ptr = pair.collection_key.key;
+        return *this;
+    };
+};
+
+struct key_iterator_t {
+    using value_type = ukv_key_t;
+    using pointer = value_type*;
+    using reference = value_type&;
+    using difference_type = std::ptrdiff_t;
+    using iterator_category = std::random_access_iterator_tag;
+
+    ukv_key_t* begin_;
+    key_iterator_t(ukv_key_t* key) : begin_(key) {}
+    key_from_pair_t operator[](std::size_t idx) { return &begin_[idx]; };
+};
+
 void ukv_sample(ukv_sample_t* c_ptr) {
 
     ukv_sample_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(!c.transaction, c.error, uninitialized_state_k, "Transaction sampling aren't supported!");
     if (!c.tasks_count)
         return;
 
@@ -629,15 +678,10 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     return_if_error_m(c.error);
 
     database_t& db = *reinterpret_cast<database_t*>(c.db);
-    transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
     sample_args_t samples {collections, lens, c.tasks_count};
 
-    // validate_sample(c.transaction, samples, c.options, c.error);
-    // return_if_error_m(c.error);
-
-    // 1. Allocate a tape for all the values to be fetched
     auto offsets = arena.alloc_or_dummy(samples.count + 1, c.error, c.offsets);
     return_if_error_m(c.error);
     auto counts = arena.alloc_or_dummy(samples.count, c.error, c.counts);
@@ -647,26 +691,23 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     auto keys_output = *c.keys = arena.alloc<ukv_key_t>(total_keys, c.error).begin();
     return_if_error_m(c.error);
 
-    // 2. Fetch the data
     for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
-        sample_arg_t sample = samples[task_idx];
+        sample_arg_t task = samples[task_idx];
         offsets[task_idx] = keys_output - *c.keys;
 
-        ukv_length_t matched_pairs_count = 0;
-        auto found_pair = [&](pair_t const& pair) noexcept {
-            *keys_output = pair.collection_key.key;
-            ++keys_output;
-            ++matched_pairs_count;
-        };
+        std::random_device random_device;
+        std::mt19937 random_generator(random_device());
+        std::size_t seen = 0;
+        key_iterator_t iter(keys_output);
+        collection_key_t min(task.collection, std::numeric_limits<ukv_key_t>::min());
+        collection_key_t max(task.collection, std::numeric_limits<ukv_key_t>::max());
 
-        auto previous_key = collection_key_t {sample.collection, sample.min_key};
-        // auto status = c.transaction //
-        //                   ? sample_and_watch(txn, previous_key, sample.limit, c.options, found_pair)
-        //                   : sample_and_watch(db.pairs, previous_key, sample.limit, c.options, found_pair);
-        // if (!status)
-        //     return export_error_code(status, c.error);
+        auto status = db.pairs.sample_range(min, max, random_generator, seen, task.limit, iter);
+        export_error_code(status, c.error);
+        return_if_error_m(c.error);
 
-        counts[task_idx] = matched_pairs_count;
+        counts[task_idx] = task.limit;
+        keys_output += task.limit;
     }
     offsets[samples.count] = keys_output - *c.keys;
 }
@@ -695,7 +736,32 @@ void ukv_measure(ukv_measure_t* c_ptr) {
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
     strided_iterator_gt<ukv_key_t const> end_keys {c.end_keys, c.end_keys_stride};
 
-    *c.error = "Not implemented";
+    for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
+        auto collection = collections[i];
+        ukv_key_t const min_key = start_keys[i];
+        ukv_key_t const max_key = end_keys[i];
+
+        collection_key_t min(collection, min_key);
+        collection_key_t max(collection, max_key);
+
+        std::size_t cardinality = 0;
+        std::size_t value_bytes = 0;
+        std::size_t space_usage = 0;
+        auto status = db.pairs.range(min, max, [&](pair_t& pair) noexcept {
+            ++cardinality;
+            value_bytes += pair.range.size();
+            space_usage += pair.range.size() + sizeof(pair_t);
+        });
+        export_error_code(status, c.error);
+        return_if_error_m(c.error);
+
+        min_cardinalities[i] = static_cast<ukv_size_t>(cardinality);
+        max_cardinalities[i] = std::numeric_limits<ukv_size_t>::max();
+        min_value_bytes[i] = value_bytes;
+        max_value_bytes[i] = std::numeric_limits<ukv_size_t>::max();
+        min_space_usages[i] = space_usage;
+        max_space_usages[i] = std::numeric_limits<ukv_size_t>::max();
+    }
 }
 
 /*********************************************************/
@@ -859,7 +925,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c.options & ukv_option_write_flush_k)
-        write(db, db.persisted_path, c.error);
+        safe_section("Saving to disk", c.error, [&] { write(db, db.persisted_directory, c.error); });
 }
 
 /*********************************************************/
@@ -882,9 +948,9 @@ void ukv_database_free(ukv_database_t c_db) {
         return;
 
     database_t& db = *reinterpret_cast<database_t*>(c_db);
-    if (!db.persisted_path.empty()) {
+    if (!db.persisted_directory.empty()) {
         ukv_error_t c_error = nullptr;
-        write(db, db.persisted_path, &c_error);
+        safe_section("Saving to disk", &c_error, [&] { write(db, db.persisted_directory, &c_error); });
     }
 
     delete &db;

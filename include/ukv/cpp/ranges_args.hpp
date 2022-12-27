@@ -36,7 +36,7 @@ struct places_arg_t {
     strided_iterator_gt<ukv_collection_t const> collections_begin;
     strided_iterator_gt<ukv_key_t const> keys_begin;
     strided_iterator_gt<ukv_str_view_t const> fields_begin;
-    ukv_size_t count = 0;
+    ukv_size_t count {0};
 
     inline std::size_t size() const noexcept { return count; }
     inline place_t operator[](std::size_t i) const noexcept {
@@ -62,8 +62,8 @@ struct contents_arg_t {
     strided_iterator_gt<ukv_length_t const> offsets_begin;
     strided_iterator_gt<ukv_length_t const> lengths_begin;
     strided_iterator_gt<ukv_bytes_cptr_t const> contents_begin;
-    ukv_size_t count = 0;
-    ukv_char_t separator = '\0';
+    ukv_size_t count {0};
+    ukv_char_t separator {'\0'};
 
     inline std::size_t size() const noexcept { return count; }
     inline value_view_t operator[](std::size_t i) const noexcept {
@@ -132,7 +132,6 @@ struct scans_arg_t {
 
 struct sample_arg_t {
     ukv_collection_t collection;
-    ukv_key_t min_key;
     ukv_length_t limit;
 };
 
@@ -273,21 +272,21 @@ inline void validate_write(ukv_transaction_t const c_txn,
     bool const remove_all = !contents.contents_begin;
     if (remove_all)
         return_error_if_m(!contents.lengths_begin && !contents.offsets_begin,
-                        c_error,
-                        args_wrong_k,
-                        "Can't address NULLs!");
+                          c_error,
+                          args_wrong_k,
+                          "Can't address NULLs!");
 
     if (!places.same_collection() || same_collections_are_named(places.collections_begin))
         return_error_if_m(ukv_supports_named_collections_k,
-                        c_error,
-                        args_wrong_k,
-                        "Current engine does not support named collections!");
+                          c_error,
+                          args_wrong_k,
+                          "Current engine does not support named collections!");
 
     if (c_txn)
         return_error_if_m(ukv_supports_transactions_k,
-                        c_error,
-                        args_wrong_k,
-                        "Current engine does not support transactions!");
+                          c_error,
+                          args_wrong_k,
+                          "Current engine does not support transactions!");
 }
 
 inline void validate_read(ukv_transaction_t const c_txn,
@@ -305,15 +304,15 @@ inline void validate_read(ukv_transaction_t const c_txn,
 
     if (!places.same_collection() || same_collections_are_named(places.collections_begin))
         return_error_if_m(ukv_supports_named_collections_k,
-                        c_error,
-                        args_wrong_k,
-                        "Current engine does not support named collections!");
+                          c_error,
+                          args_wrong_k,
+                          "Current engine does not support named collections!");
 
     if (c_txn)
         return_error_if_m(ukv_supports_transactions_k,
-                        c_error,
-                        args_wrong_k,
-                        "Current engine does not support transactions!");
+                          c_error,
+                          args_wrong_k,
+                          "Current engine does not support transactions!");
 }
 
 inline void validate_scan(ukv_transaction_t const c_txn,
@@ -332,15 +331,15 @@ inline void validate_scan(ukv_transaction_t const c_txn,
 
     if (!args.same_collection() || same_collections_are_named(args.collections))
         return_error_if_m(ukv_supports_named_collections_k,
-                        c_error,
-                        args_wrong_k,
-                        "Current engine does not support named collections!");
+                          c_error,
+                          args_wrong_k,
+                          "Current engine does not support named collections!");
 
     if (c_txn)
         return_error_if_m(ukv_supports_transactions_k,
-                        c_error,
-                        args_wrong_k,
-                        "Current engine does not support transactions!");
+                          c_error,
+                          args_wrong_k,
+                          "Current engine does not support transactions!");
 }
 
 inline void validate_transaction_begin(ukv_transaction_t const c_txn,
@@ -349,9 +348,9 @@ inline void validate_transaction_begin(ukv_transaction_t const c_txn,
 
     return_error_if_m(c_txn, c_error, args_wrong_k, "Transaction is uninitialized");
     return_error_if_m(enum_is_subset(c_options, ukv_option_transaction_dont_watch_k),
-                    c_error,
-                    args_wrong_k,
-                    "Invalid options!");
+                      c_error,
+                      args_wrong_k,
+                      "Invalid options!");
 }
 
 inline void validate_transaction_commit(ukv_transaction_t const c_txn,

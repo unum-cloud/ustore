@@ -5,17 +5,24 @@
  * @brief Embedded Persistent Key-Value Store on top of @b LevelDB.
  * Has no support for collections, transactions or any non-CRUD jobs.
  */
+#include <fstream>
 
 #include <leveldb/db.h>
 #include <leveldb/comparator.h>
 #include <leveldb/write_batch.h>
+#include <leveldb/cache.h> // `NewLRUCache`
+#include <nlohmann/json.hpp>
 
 #include "ukv/db.h"
 #include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
 #include "helpers/linked_array.hpp" // `uninitialized_array_gt`
+#include "helpers/full_scan.hpp"    // `reservoir_sample_iterator`
 
 using namespace unum::ukv;
 using namespace unum;
+
+namespace stdfs = std::filesystem;
+using json_t = nlohmann::json;
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -32,6 +39,8 @@ using level_db_t = leveldb::DB;
 using level_status_t = leveldb::Status;
 using level_options_t = leveldb::Options;
 using level_iter_uptr_t = std::unique_ptr<leveldb::Iterator>;
+
+static constexpr char const* config_name_k = "config_leveldb.json";
 
 struct key_comparator_t final : public leveldb::Comparator {
 
@@ -101,23 +110,59 @@ bool export_error(level_status_t const& status, ukv_error_t* c_error) {
 void ukv_database_init(ukv_database_init_t* c_ptr) {
 
     ukv_database_init_t& c = *c_ptr;
-    if (!c.config || !std::strlen(c.config)) {
-        *c.error = "LevelDB requires a configuration file or a path!";
-        return;
-    }
-
     try {
-        level_db_t* db_ptr = nullptr;
         level_options_t options;
+        options.comparator = &key_comparator_k;
         options.compression = leveldb::kNoCompression;
         options.create_if_missing = true;
-        options.comparator = &key_comparator_k;
+
+        // Check if the directory contains a config
+        stdfs::path root = c.config;
+        stdfs::file_status root_status = stdfs::status(root);
+        return_error_if_m(root_status.type() == stdfs::file_type::directory,
+                          c.error,
+                          args_wrong_k,
+                          "Root isn't a directory");
+        stdfs::path config_path = stdfs::path(root) / config_name_k;
+        stdfs::file_status config_status = stdfs::status(config_path);
+        if (config_status.type() == stdfs::file_type::not_found) {
+            log_warning_m(
+                "Configuration file is missing under the path %s. "
+                "Default will be used\n",
+                config_path.c_str());
+        }
+        else {
+            std::ifstream ifs(config_path.c_str());
+            json_t js = json_t::parse(ifs);
+            if (js.contains("write_buffer_size"))
+                options.write_buffer_size = js["write_buffer_size"];
+            if (js.contains("max_file_size"))
+                options.max_file_size = js["max_file_size"];
+            if (js.contains("max_open_files"))
+                options.max_open_files = js["max_open_files"];
+            if (js.contains("cache_size"))
+                options.block_cache = leveldb::NewLRUCache(js["cache_size"]);
+            if (js.contains("create_if_missing"))
+                options.create_if_missing = js["create_if_missing"];
+            if (js.contains("error_if_exists"))
+                options.error_if_exists = js["error_if_exists"];
+            if (js.contains("paranoid_checks"))
+                options.paranoid_checks = js["paranoid_checks"];
+            if (js.contains("compression"))
+                if (js["compression"] == "kSnappyCompression" || js["compression"] == "snappy")
+                    options.compression = leveldb::kSnappyCompression;
+        }
+
+        level_db_t* db_ptr = nullptr;
         level_status_t status = level_db_t::Open(options, c.config, &db_ptr);
         if (!status.ok()) {
             *c.error = "Couldn't open LevelDB";
             return;
         }
         *c.db = db_ptr;
+    }
+    catch (json_t::type_error const&) {
+        *c.error = "Unsupported type in LevelDB configuration key";
     }
     catch (...) {
         *c.error = "Open Failure";
@@ -330,6 +375,55 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     offsets[scans.size()] = keys_output - *c.keys;
 }
 
+void ukv_sample(ukv_sample_t* c_ptr) {
+
+    ukv_sample_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
+        return;
+
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
+    strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
+    sample_args_t samples {{}, lens, c.tasks_count};
+
+    // 1. Allocate a tape for all the values to be fetched
+    auto offsets = arena.alloc_or_dummy(samples.count + 1, c.error, c.offsets);
+    return_if_error_m(c.error);
+    auto counts = arena.alloc_or_dummy(samples.count, c.error, c.counts);
+    return_if_error_m(c.error);
+
+    auto total_keys = reduce_n(samples.limits, samples.count, 0ul);
+    auto keys_output = *c.keys = arena.alloc<ukv_key_t>(total_keys, c.error).begin();
+    return_if_error_m(c.error);
+
+    // 2. Fetch the data
+    leveldb::ReadOptions options;
+    options.fill_cache = false;
+
+    if (c.transaction)
+        options.snapshot = txn.snapshot;
+
+    for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
+        sample_arg_t task = samples[task_idx];
+        offsets[task_idx] = keys_output - *c.keys;
+
+        level_iter_uptr_t it;
+        safe_section("Creating a LevelDB iterator", c.error, [&] { it = level_iter_uptr_t(db.NewIterator(options)); });
+        return_if_error_m(c.error);
+
+        ptr_range_gt<ukv_key_t> sampled_keys(keys_output, task.limit);
+        reservoir_sample_iterator(it, sampled_keys, c.error);
+
+        counts[task_idx] = task.limit;
+        keys_output += task.limit;
+    }
+    offsets[samples.count] = keys_output - *c.keys;
+}
+
 void ukv_measure(ukv_measure_t* c_ptr) {
 
     ukv_measure_t& c = *c_ptr;
@@ -393,9 +487,9 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     bool invalidate = c.mode == ukv_drop_keys_vals_handle_k;
     return_error_if_m(c.id == ukv_collection_main_k && !invalidate,
-                    c.error,
-                    args_combo_k,
-                    "Collections not supported by LevelDB!");
+                      c.error,
+                      args_combo_k,
+                      "Collections not supported by LevelDB!");
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
 
@@ -449,6 +543,9 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
     ukv_transaction_init_t& c = *c_ptr;
+    *c.error = "Transactions not supported by LevelDB!";
+
+#if 0 // TODO: Persistent Snapshots will be receiving a separate interface.
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     validate_transaction_begin(c.transaction, c.options, c.error);
     return_if_error_m(c.error);
@@ -466,8 +563,7 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
         if (!txn.snapshot)
             *c.error = "Couldn't start a transaction!";
     }
-    else
-        *c.error = "Transactions not supported by LevelDB!";
+#endif
 }
 
 void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
@@ -484,7 +580,8 @@ void ukv_arena_free(ukv_arena_t c_arena) {
     clear_linked_memory(c_arena);
 }
 
-void ukv_transaction_free(ukv_transaction_t c_txn) {
+void ukv_transaction_free(ukv_transaction_t) {
+#if 0 // TODO: Persistent Snapshots will be receiving a separate interface.
     if (!c_txn)
         return;
     level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c_txn);
@@ -494,6 +591,7 @@ void ukv_transaction_free(ukv_transaction_t c_txn) {
     txn.db = nullptr;
     txn.snapshot = nullptr;
     delete &txn;
+#endif
 }
 
 void ukv_database_free(ukv_database_t c_db) {
@@ -503,5 +601,5 @@ void ukv_database_free(ukv_database_t c_db) {
     delete db;
 }
 
-void ukv_error_free(ukv_error_t const) {
+void ukv_error_free(ukv_error_t) {
 }

@@ -38,7 +38,7 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
      * as native Python types when possible. By default, we export
      * into Apache Arrow arrays.
      */
-    bool export_into_arrow = true;
+    bool export_into_arrow {true};
 
     py_db_t(database_t&& n, std::string const& c) : native(std::move(n)), config(c) {}
     py_db_t(py_db_t&& other) noexcept : native(std::move(other.native)), config(std::move(other.config)) {}
@@ -54,8 +54,8 @@ struct py_transaction_t : public std::enable_shared_from_this<py_transaction_t> 
 
     std::weak_ptr<py_db_t> py_db_ptr;
 
-    bool dont_watch = false;
-    bool flush_writes = false;
+    bool dont_watch {false};
+    bool flush_writes {false};
 
     py_transaction_t(transaction_t&& t, std::shared_ptr<py_db_t> py_db_ptr) noexcept
         : native(std::move(t)), py_db_ptr(py_db_ptr) {}
@@ -77,7 +77,7 @@ struct py_collection_gt {
     std::weak_ptr<py_db_t> py_db_ptr;
     std::weak_ptr<py_transaction_t> py_txn_ptr;
     std::string name;
-    bool in_txn = false;
+    bool in_txn {false};
 
     ukv_collection_t* member_collection() noexcept { return native.member_ptr(); }
     ukv_arena_t* member_arena() noexcept { return native.member_arena(); }
@@ -133,10 +133,10 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     blobs_collection_t targets_attrs;
     blobs_collection_t relations_attrs;
 
-    bool in_txn = false;
-    bool is_directed = false;
-    bool is_multi = false;
-    bool allow_self_loops = false;
+    bool in_txn {false};
+    bool is_directed {false};
+    bool is_multi {false};
+    bool allow_self_loops {false};
 
     py_buffer_memory_t last_buffer;
 
@@ -149,8 +149,8 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
 };
 
 struct py_table_keys_range_t {
-    ukv_key_t min = std::numeric_limits<ukv_key_t>::min();
-    ukv_key_t max = std::numeric_limits<ukv_key_t>::max();
+    ukv_key_t min {std::numeric_limits<ukv_key_t>::min()};
+    ukv_key_t max {std::numeric_limits<ukv_key_t>::max()};
 };
 
 /**
@@ -163,15 +163,15 @@ struct py_table_collection_t : public std::enable_shared_from_this<py_table_coll
     std::variant<std::monostate, std::vector<ukv_str_view_t>> columns_names;
     std::variant<std::monostate, ukv_doc_field_type_t, std::vector<ukv_doc_field_type_t>> columns_types;
     std::variant<std::monostate, py_table_keys_range_t, std::vector<ukv_key_t>> rows_keys;
-    std::size_t head = std::numeric_limits<std::size_t>::max();
-    std::size_t tail = std::numeric_limits<std::size_t>::max();
-    bool head_was_defined_last = true;
+    std::size_t head {std::numeric_limits<std::size_t>::max()};
+    std::size_t tail {std::numeric_limits<std::size_t>::max()};
+    bool head_was_defined_last {true};
 
     py_table_collection_t() = default;
     py_table_collection_t(py_table_collection_t&&) = delete;
     py_table_collection_t(py_table_collection_t const&) = delete;
 
-    // Compatiability with Arrow Tables.
+    // Compatibility with Arrow Tables.
     // std::shared_ptr<ar::ChunkedArray> column(int i) const override;
     // std::vector<std::shared_ptr<ar::ChunkedArray>> const& columns() const override;
     // std::shared_ptr<ar::Table> Slice(int64_t offset, int64_t length) const override;
@@ -199,8 +199,8 @@ struct py_table_collection_t : public std::enable_shared_from_this<py_table_coll
 template <typename native_at>
 struct py_stream_with_ending_gt {
     native_at native;
-    ukv_key_t terminal = ukv_key_unknown_k;
-    bool stop = false;
+    ukv_key_t terminal {ukv_key_unknown_k};
+    bool stop {false};
 };
 
 /**

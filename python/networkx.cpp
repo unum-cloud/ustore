@@ -38,6 +38,22 @@ py::object wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
     return py::reinterpret_steal<py::object>(obj);
 }
 
+void upsert_vertices(py_graph_t& py_graph, py::object vertices_py) {
+    if (!PySequence_Check(vertices_py.ptr()))
+        throw std::invalid_argument("Nodes Must Be Sequence");
+    std::vector<ukv_key_t> vertices(PySequence_Size(vertices_py.ptr()));
+    py_transform_n(vertices_py.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
+    py_graph.ref().upsert_vertices(vertices).throw_unhandled();
+}
+
+void remove_vertices(py_graph_t& py_graph, py::object vertices_py) {
+    if (!PySequence_Check(vertices_py.ptr()))
+        throw std::invalid_argument("Nodes Must Be Sequence");
+    std::vector<ukv_key_t> vertices(PySequence_Size(vertices_py.ptr()));
+    py_transform_n(vertices_py.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
+    py_graph.ref().remove_vertices(vertices).throw_unhandled();
+}
+
 void ukv::wrap_networkx(py::module& m) {
 
     auto degs = py::class_<degree_view_t>(m, "DegreeView", py::module_local());
@@ -78,15 +94,15 @@ void ukv::wrap_networkx(py::module& m) {
 
             // Attach the primary collection
             database_t& db = py_db->native;
-            net_ptr->index = db.collection(index ? index->c_str() : "").throw_or_release();
+            net_ptr->index = db.find_or_create(index ? index->c_str() : "").throw_or_release();
 
             // Attach the additional collections
             if (sources_attrs)
-                net_ptr->sources_attrs = db.collection(sources_attrs->c_str()).throw_or_release();
+                net_ptr->sources_attrs = db.find_or_create(sources_attrs->c_str()).throw_or_release();
             if (targets_attrs)
-                net_ptr->sources_attrs = db.collection(targets_attrs->c_str()).throw_or_release();
+                net_ptr->sources_attrs = db.find_or_create(targets_attrs->c_str()).throw_or_release();
             if (relations_attrs)
-                net_ptr->sources_attrs = db.collection(relations_attrs->c_str()).throw_or_release();
+                net_ptr->sources_attrs = db.find_or_create(relations_attrs->c_str()).throw_or_release();
 
             return net_ptr;
         }),
@@ -238,46 +254,56 @@ void ukv::wrap_networkx(py::module& m) {
     // Adding and Removing Nodes and Edges
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#adding-and-removing-nodes-and-edges
     g.def(
+        "add_node",
+        [](py_graph_t& g, ukv_key_t v) { g.ref().upsert_vertex(v).throw_unhandled(); },
+        py::arg("v_to_upsert"));
+    g.def(
         "add_edge",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) {
-            g.ref().upsert(edge_t {v1, v2}).throw_unhandled();
+            g.ref().upsert_edge(edge_t {v1, v2}).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"));
     g.def(
         "add_edge",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t e) {
-            g.ref().upsert(edge_t {v1, v2, e}).throw_unhandled();
+            g.ref().upsert_edge(edge_t {v1, v2, e}).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"),
         py::arg("key"));
     g.def(
+        "remove_node",
+        [](py_graph_t& g, ukv_key_t v) { g.ref().remove_vertex(v).throw_unhandled(); },
+        py::arg("v_to_remove"));
+    g.def(
         "remove_edge",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) {
-            g.ref().remove(edge_t {v1, v2}).throw_unhandled();
+            g.ref().remove_edge(edge_t {v1, v2}).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"));
     g.def(
         "remove_edge",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t e) {
-            g.ref().remove(edge_t {v1, v2, e}).throw_unhandled();
+            g.ref().remove_edge(edge_t {v1, v2, e}).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"),
         py::arg("key"));
+    g.def("add_nodes_from", &upsert_vertices);
     g.def(
         "add_edges_from",
         [](py_graph_t& g, py::object adjacency_list) {
-            g.ref().upsert(parsed_adjacency_list_t(adjacency_list.ptr())).throw_unhandled();
+            g.ref().upsert_edges(parsed_adjacency_list_t(adjacency_list.ptr())).throw_unhandled();
         },
         py::arg("ebunch_to_add"),
         "Adds an adjacency list (in a form of 2 or 3 columnar matrix) to the graph.");
+    g.def("remove_nodes_from", &remove_vertices);
     g.def(
         "remove_edges_from",
         [](py_graph_t& g, py::object adjacency_list) {
-            g.ref().remove(parsed_adjacency_list_t(adjacency_list.ptr())).throw_unhandled();
+            g.ref().remove_edges(parsed_adjacency_list_t(adjacency_list.ptr())).throw_unhandled();
         },
         py::arg("ebunch"),
         "Removes all edges in supplied adjacency list (in a form of 2 or 3 columnar matrix) from the graph.");
@@ -285,7 +311,7 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "add_edges_from",
         [](py_graph_t& g, py::object v1s, py::object v2s, py::object es) {
-            g.ref().upsert(parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), es.ptr())).throw_unhandled();
+            g.ref().upsert_edges(parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), es.ptr())).throw_unhandled();
         },
         py::arg("us"),
         py::arg("vs"),
@@ -294,7 +320,7 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "remove_edges_from",
         [](py_graph_t& g, py::object v1s, py::object v2s, py::object es) {
-            g.ref().remove(parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), es.ptr())).throw_unhandled();
+            g.ref().remove_edges(parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), es.ptr())).throw_unhandled();
         },
         py::arg("us"),
         py::arg("vs"),

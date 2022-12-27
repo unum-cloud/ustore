@@ -20,7 +20,7 @@ If it fails, an exception will be raised and the stack will be unwound.
 ```cpp
 database_t db;
 status_t status = db.open();
-blobs_collection_t main = *db.collection();
+blobs_collection_t main = db.main();
 main[42] = "purpose of life"; // This raises, `.assign()` doesn't
 ```
 
@@ -41,7 +41,7 @@ database_t db;
 _ = db.open();
 
 // Single-element access
-blobs_collection_t main = db.collection().throw_or_release();
+blobs_collection_t main = db.main();
 main[42] = "purpose of life";
 main.at(42) = "purpose of life";
 *main[42].value() == "purpose of life";
@@ -102,7 +102,7 @@ By default, collections store BLOB values.
 For document collections, would use a similar, but different syntax.
 
 ```cpp
-docs_collection_t collection = *db.collection<docs_collection_t>();
+docs_collection_t collection = db.main<docs_collection_t>();
 collection[1] = R"( { "person": "Alice", "age": 27, "height": 1 } )";
 collection[2] = R"( { "person": "Bob", "age": "27", "weight": 2 } )";
 ```

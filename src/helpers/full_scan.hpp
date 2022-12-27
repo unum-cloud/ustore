@@ -5,6 +5,8 @@
  * @brief Callback-based full-scan over BLOB collection.
  */
 #pragma once
+#include <random>
+
 #include "ukv/blobs.h"
 
 namespace unum::ukv {
@@ -31,6 +33,7 @@ void full_scan_collection( //
             .transaction = transaction,
             .arena = arena,
             .options = options,
+            .tasks_count = 1,
             .collections = &collection,
             .start_keys = &start_key,
             .count_limits = &read_ahead,
@@ -83,7 +86,25 @@ void full_scan_collection( //
  * @see https://en.wikipedia.org/wiki/Reservoir_sampling
  */
 template <typename level_or_rocks_iterator_at>
-void reservoir_sample_iterator(level_or_rocks_iterator_at&&, ptr_range_gt<ukv_key_t>, ukv_error_t* c_error) noexcept {
+void reservoir_sample_iterator(level_or_rocks_iterator_at&& iterator,
+                               ptr_range_gt<ukv_key_t> sampled_keys,
+                               ukv_error_t* c_error) noexcept {
+
+    std::random_device random_device;
+    std::mt19937 random_generator(random_device());
+    std::uniform_int_distribution<ukv_key_t> dist(std::numeric_limits<ukv_key_t>::min());
+
+    std::size_t i = 0;
+    for (iterator->SeekToFirst(); i < sampled_keys.size(); ++i, iterator->Next()) {
+        return_error_if_m(iterator->Valid(), c_error, 0, "Sample Failure!");
+        std::memcpy(&sampled_keys[i], iterator->key().data(), sizeof(ukv_key_t));
+    }
+
+    for (std::size_t j = 0; iterator->Valid(); ++i, iterator->Next()) {
+        j = dist(random_generator) % (i + 1);
+        if (j < sampled_keys.size())
+            std::memcpy(&sampled_keys[j], iterator->key().data(), sizeof(ukv_key_t));
+    }
 }
 
 } // namespace unum::ukv

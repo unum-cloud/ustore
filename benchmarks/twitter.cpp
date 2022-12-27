@@ -429,8 +429,10 @@ static void graph_traverse_two_hops(bm::State& state) {
         auto total_edges = std::transform_reduce(degrees, degrees + count, 0ul, plus, [](ukv_vertex_degree_t d) {
             return d != ukv_vertex_degree_missing_k ? d : 0;
         });
-        auto total_ids = total_edges * 3;
-        auto unique_ids = sort_and_deduplicate(ids_in_edges, ids_in_edges + total_ids);
+        // Compact ~ Remove edge IDs from three-tuples
+        for (std::size_t i = 0; i != total_edges; ++i)
+            ids_in_edges[i * 2] = ids_in_edges[i * 3], ids_in_edges[i * 2 + 1] = ids_in_edges[i * 3 + 1];
+        auto unique_ids = sort_and_deduplicate(ids_in_edges, ids_in_edges + total_edges * 2);
 
         ukv_graph_find_edges_t graph_find_edges_second;
         graph_find_edges_second.db = db;
@@ -453,9 +455,7 @@ static void graph_traverse_two_hops(bm::State& state) {
         total_edges += std::transform_reduce(degrees, degrees + unique_ids, 0ul, plus, [](ukv_vertex_degree_t d) {
             return d != ukv_vertex_degree_missing_k ? d : 0;
         });
-        total_ids = total_edges * 3;
-
-        received_bytes += total_ids * sizeof(ukv_key_t);
+        received_bytes += total_edges * 3 * sizeof(ukv_key_t);
         received_edges += total_edges;
         return true;
     });

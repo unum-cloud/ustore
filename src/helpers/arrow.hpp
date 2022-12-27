@@ -66,6 +66,7 @@ inline static std::string const kParamReadPart = "part";
 inline static std::string const kParamDropMode = "mode";
 inline static std::string const kParamFlagFlushWrite = "flush";
 inline static std::string const kParamFlagDontWatch = "dont_watch";
+inline static std::string const kParamFlagDontDiscard = "";
 inline static std::string const kParamFlagSharedMemRead = "shared";
 
 inline static std::string const kParamReadPartLengths = "lengths";
@@ -112,7 +113,7 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
     void ReleaseUnused() override {}
     int64_t bytes_allocated() const override { return bytes_allocated_; }
     int64_t max_memory() const override { return INT64_MAX; }
-    std::string backend_name() const { return "ukv"; }
+    std::string backend_name() const override { return "ukv"; }
 };
 
 ar::ipc::IpcReadOptions arrow_read_options(arrow_mem_pool_t& pool) {

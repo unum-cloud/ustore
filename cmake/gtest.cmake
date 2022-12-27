@@ -5,3 +5,4 @@ FetchContent_Declare(
     GIT_TAG release-1.11.0
 )
 FetchContent_MakeAvailable(googletest)
+include_directories(${googletest_SOURCE_DIR}/googletest/include)

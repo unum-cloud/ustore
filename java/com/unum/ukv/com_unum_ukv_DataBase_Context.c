@@ -18,7 +18,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_open(JNIEnv* env_
         return;
 
     ukv_error_t error_c = NULL;
-    ukv_database_init_t database {
+    struct ukv_database_init_t database = {
         .config = config_c,
         .db = &db_ptr_c,
         .error = &error_c,
@@ -46,7 +46,7 @@ JNIEXPORT jobject JNICALL Java_com_unum_ukv_DataBase_00024Context_transaction(JN
     }
 
     ukv_error_t error_c = NULL;
-    ukv_transaction_init_t txn_init {
+    struct ukv_transaction_init_t txn_init = {
         .db = db_ptr_c,
         .error = &error_c,
         .transaction = &txn_ptr_c,
@@ -93,11 +93,11 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_clear__(JNIEnv* e
         return;
     }
 
-    ukv_collection_drop_t collection_drop {
-        db = db_ptr_c;
-        error = &error_c;
-        id = ukv_collection_main_k;
-        mode = ukv_drop_keys_vals_k;
+    struct ukv_collection_drop_t collection_drop = {
+        .db = db_ptr_c,
+        .error = &error_c,
+        .id = ukv_collection_main_k,
+        .mode = ukv_drop_keys_vals_k,
     };
 
     ukv_collection_drop(&collection_drop);

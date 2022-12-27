@@ -1,6 +1,7 @@
-#include <filesystem>
-#include <gtest/gtest.h>
 #include <vector>
+#include <filesystem>
+
+#include <gtest/gtest.h>
 
 #include "ukv/ukv.hpp"
 
@@ -17,15 +18,15 @@ TEST(db, validation) {
 
     database_t db;
     EXPECT_TRUE(db.open(path_k));
-    blobs_collection_t collection = *db.collection();
-    blobs_collection_t named_collection = *db.collection("col");
+    blobs_collection_t collection = db.main();
+    blobs_collection_t named_collection = *db.find_or_create("col");
     transaction_t txn = *db.transact();
     std::vector<ukv_key_t> keys {34, 35, 36};
     std::vector<std::uint64_t> vals {34, 35, 36};
     ukv_length_t val_len = sizeof(std::uint64_t);
     std::vector<ukv_length_t> offs {0, val_len, val_len * 2};
     auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(vals.data());
-    ukv_length_t count = 3;
+    constexpr ukv_length_t count = 3;
 
     contents_arg_t values {
         .offsets_begin = {offs.data(), sizeof(ukv_length_t)},

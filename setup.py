@@ -15,6 +15,7 @@ this_directory = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(this_directory, 'README.md')) as f:
     long_description = f.read()
 
+
 class CMakeExtension(Extension):
     def __init__(self, name, sourcedir=''):
         Extension.__init__(self, name, sources=[])
@@ -24,7 +25,8 @@ class CMakeExtension(Extension):
 class CMakeBuild(build_ext):
     def build_extension(self, ext):
         self.parallel = multiprocessing.cpu_count() // 2
-        extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
+        extdir = os.path.abspath(os.path.dirname(
+            self.get_ext_fullpath(ext.name)))
 
         # required for auto-detection & inclusion of auxiliary "native" libs
         if not extdir.endswith(os.path.sep):
@@ -37,23 +39,25 @@ class CMakeBuild(build_ext):
             '-DUKV_BUILD_ENGINE_UMEM=1',
             '-DUKV_BUILD_ENGINE_LEVELDB=1',
             '-DUKV_BUILD_ENGINE_ROCKSDB=1',
+            '-DUKV_BUILD_API_FLIGHT_CLIENT=1',
             '-DUKV_BUILD_SDK_PYTHON=1'
         ]
 
-        if ext.name == 'ukv.flight_client':
-            cmake_args.append('-DUKV_BUILD_API_FLIGHT=1')
         # Adding CMake arguments set as environment variable
         # (needed e.g. to build for ARM OSx on conda-forge)
         if 'CMAKE_ARGS' in os.environ:
-            cmake_args += [item for item in os.environ['CMAKE_ARGS'].split(' ') if item]
+            cmake_args += [
+                item for item in os.environ['CMAKE_ARGS'].split(' ') if item]
         elif 'CMAKE_ARGS_F' in os.environ:
-            cmake_args += [item.strip() for item in open(os.environ['CMAKE_ARGS_F']).read().split(' ') if item]
+            cmake_args += [item.strip()
+                           for item in open(os.environ['CMAKE_ARGS_F']).read().split(' ') if item]
 
         if sys.platform.startswith('darwin'):
             # Cross-compile support for macOS - respect ARCHFLAGS if set
             archs = re.findall(r'-arch (\S+)', os.environ.get('ARCHFLAGS', ''))
             if archs:
-                cmake_args += ['-DCMAKE_OSX_ARCHITECTURES={}'.format(';'.join(archs))]
+                cmake_args += [
+                    '-DCMAKE_OSX_ARCHITECTURES={}'.format(';'.join(archs))]
 
         # Set CMAKE_BUILD_PARALLEL_LEVEL to control the parallel build level
         # across all generators.
@@ -65,7 +69,8 @@ class CMakeBuild(build_ext):
                 build_args += [f'-j{self.parallel}']
 
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args)
-        subprocess.check_call(['cmake', '--build', '.', '--target', ext.name.replace('ukv.','py_')] + build_args)
+        subprocess.check_call(
+            ['cmake', '--build', '.', '--target', ext.name.replace('ukv.', 'py_')] + build_args)
 
 
 setup(
@@ -106,7 +111,7 @@ setup(
     zip_safe=False,
     install_requires=[
         'numpy>=1.16',
-        'pyarrow==9.0.0'
+        'pyarrow>=10.0.0,<11'
     ],
     extras_require={'test': 'pytest'},
     python_requires='>=3.7',

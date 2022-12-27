@@ -1,5 +1,5 @@
 /**
- * @file unit.cpp
+ * @file test_units.cpp
  * @author Ashot Vardanian
  * @date 2022-07-06
  *
@@ -69,6 +69,15 @@ static char const* path() {
 #else
     return nullptr;
 #endif
+}
+
+void clear_environment() {
+    namespace stdfs = std::filesystem;
+    auto directory_str = path() ? std::string_view(path()) : "";
+    if (directory_str.empty())
+        return;
+    stdfs::remove_all(directory_str);
+    stdfs::create_directories(stdfs::path(directory_str).parent_path());
 }
 
 inline std::ostream& operator<<(std::ostream& os, collection_key_t obj) {
@@ -231,15 +240,14 @@ void check_binary_collection(blobs_collection_t& collection) {
  */
 TEST(db, open_clear_close) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.clear());
 
     // Try getting the main collection
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
     check_binary_collection(collection);
-    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -249,13 +257,17 @@ TEST(db, open_clear_close) {
  */
 TEST(db, clear_collection_by_clearing_db) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
     triplet_t triplet;
     auto ref = collection[triplet.keys];
     round_trip(ref, triplet.contents_arrow());
+
+    EXPECT_EQ(collection.keys().size(), 3ul);
+    EXPECT_EQ(collection.items().size(), 3ul);
 
     // Overwrite with empty values, but check for existence
     EXPECT_TRUE(db.clear());
@@ -268,13 +280,13 @@ TEST(db, clear_collection_by_clearing_db) {
  */
 TEST(db, overwrite_with_step) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.clear());
 
     // Try getting the main collection
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
 
     // Monotonically increasing
     for (ukv_key_t k = 1000; k != 1100; ++k)
@@ -282,19 +294,26 @@ TEST(db, overwrite_with_step) {
     for (ukv_key_t k = 1000; k != 1100; ++k)
         EXPECT_EQ(*collection[k].value(), "some");
 
+    EXPECT_EQ(collection.keys().size(), 100ul);
+    EXPECT_EQ(collection.items().size(), 100ul);
+
     // Monotonically decreasing
     for (ukv_key_t k = 900; k != 800; --k)
         collection[k] = "other";
     for (ukv_key_t k = 900; k != 800; --k)
         EXPECT_EQ(*collection[k].value(), "other");
 
-    // Overwrites
+    EXPECT_EQ(collection.keys().size(), 200ul);
+    EXPECT_EQ(collection.items().size(), 200ul);
+
+    // Overwrites and new entries between two ranges
     for (ukv_key_t k = 800; k != 1100; k += 2)
         collection[k] = "third";
     for (ukv_key_t k = 800; k != 1100; k += 2)
         EXPECT_EQ(*collection[k].value(), "third");
 
-    EXPECT_TRUE(db.clear());
+    EXPECT_EQ(collection.keys().size(), 250ul);
+    EXPECT_EQ(collection.items().size(), 250ul);
 }
 
 /**
@@ -305,12 +324,13 @@ TEST(db, persistency) {
     if (!path())
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
     triplet_t triplet;
     {
-        blobs_collection_t collection = *db.collection();
+        blobs_collection_t collection = db.main();
         auto collection_ref = collection[triplet.keys];
         check_length(collection_ref, ukv_length_missing_k);
         round_trip(collection_ref, triplet);
@@ -319,12 +339,14 @@ TEST(db, persistency) {
     db.close();
     {
         EXPECT_TRUE(db.open(path()));
-        blobs_collection_t collection = *db.collection();
+        blobs_collection_t collection = db.main();
         auto collection_ref = collection[triplet.keys];
         check_equalities(collection_ref, triplet);
         check_length(collection_ref, triplet_t::val_size_k);
+
+        EXPECT_EQ(collection.keys().size(), 3ul);
+        EXPECT_EQ(collection.items().size(), 3ul);
     }
-    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -333,6 +355,7 @@ TEST(db, persistency) {
  */
 TEST(db, named_collections) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -346,9 +369,9 @@ TEST(db, named_collections) {
         EXPECT_TRUE(db["col1"]);
         EXPECT_TRUE(db["col2"]);
 
-        EXPECT_FALSE(db.collection_create("col1"));
+        EXPECT_FALSE(db.create("col1"));
         blobs_collection_t col1 = *db["col1"];
-        EXPECT_FALSE(db.collection_create("col2"));
+        EXPECT_FALSE(db.create("col2"));
         blobs_collection_t col2 = *db["col2"];
 
         check_binary_collection(col1);
@@ -373,13 +396,14 @@ TEST(db, named_collections_list) {
     if (!ukv_supports_named_collections_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    blobs_collection_t col1 = *db.collection_create("col1");
-    blobs_collection_t col2 = *db.collection_create("col2");
-    blobs_collection_t col3 = *db.collection_create("col3");
-    blobs_collection_t col4 = *db.collection_create("col4");
+    blobs_collection_t col1 = *db.create("col1");
+    blobs_collection_t col2 = *db.create("col2");
+    blobs_collection_t col3 = *db.create("col3");
+    blobs_collection_t col4 = *db.create("col4");
 
     EXPECT_TRUE(*db.contains("col1"));
     EXPECT_TRUE(*db.contains("col2"));
@@ -407,8 +431,7 @@ TEST(db, named_collections_list) {
     EXPECT_TRUE(db.drop("col1"));
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(db.drop(""));
-    EXPECT_TRUE(db.collection()->clear());
-    EXPECT_TRUE(db.clear());
+    EXPECT_TRUE(db.main().clear());
 }
 
 /**
@@ -416,12 +439,13 @@ TEST(db, named_collections_list) {
  * but empty the binary strings.
  */
 TEST(db, clear_values) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
     triplet_t triplet;
 
-    blobs_collection_t col = *db.collection();
+    blobs_collection_t col = db.main();
     auto collection_ref = col[triplet.keys];
 
     check_length(collection_ref, ukv_length_missing_k);
@@ -430,8 +454,6 @@ TEST(db, clear_values) {
 
     EXPECT_TRUE(col.clear_values());
     check_length(collection_ref, 0);
-
-    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -439,10 +461,10 @@ TEST(db, clear_values) {
  */
 TEST(db, batch_scan) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
 
     std::array<ukv_key_t, 512> keys;
     std::iota(std::begin(keys), std::end(keys), 0);
@@ -452,126 +474,20 @@ TEST(db, batch_scan) {
 
     keys_range_t present_keys = collection.keys();
     keys_stream_t stream(db, collection, 256);
-    stream.seek_to_first();
+    EXPECT_TRUE(stream.seek_to_first());
     auto batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
 
-    stream.seek_to_next_batch();
+    EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
 
-    stream.seek_to_next_batch();
+    EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 0);
     EXPECT_TRUE(stream.is_end());
-
-    EXPECT_TRUE(db.clear());
-}
-
-// TODO: Unit tests must be minimal.
-TEST(db, multiple_collection) {
-    if (!ukv_supports_named_collections_k)
-        return;
-
-    database_t db;
-
-    EXPECT_TRUE(db.open(path()));
-
-    blobs_collection_t col1 = *db.collection_create("col1");
-    blobs_collection_t col2 = *db.collection_create("col2");
-    blobs_collection_t col3 = *db.collection_create("col3");
-    blobs_collection_t col4 = *db.collection_create("col4");
-    blobs_collection_t col5 = *db.collection_create("col5");
-
-    triplet_t triplet;
-
-    auto col1_ref = col1[triplet.keys];
-    auto col2_ref = col2[triplet.keys];
-    auto col3_ref = col3[triplet.keys];
-    auto col4_ref = col4[triplet.keys];
-    auto col5_ref = col5[triplet.keys];
-
-    check_length(col1_ref, ukv_length_missing_k);
-    check_length(col2_ref, ukv_length_missing_k);
-    check_length(col3_ref, ukv_length_missing_k);
-    check_length(col4_ref, ukv_length_missing_k);
-    check_length(col5_ref, ukv_length_missing_k);
-
-    round_trip(col1_ref, triplet);
-    check_length(col1_ref, triplet_t::val_size_k);
-
-    round_trip(col2_ref, triplet);
-    check_length(col2_ref, triplet_t::val_size_k);
-
-    round_trip(col3_ref, triplet);
-    check_length(col3_ref, triplet_t::val_size_k);
-
-    round_trip(col4_ref, triplet);
-    check_length(col4_ref, triplet_t::val_size_k);
-
-    round_trip(col5_ref, triplet);
-    check_length(col5_ref, triplet_t::val_size_k);
-
-    EXPECT_TRUE(*db.contains("col1"));
-    EXPECT_TRUE(col1.clear_values());
-    check_length(col1_ref, 0);
-    EXPECT_TRUE(*db.contains("col1"));
-
-    EXPECT_TRUE(*db.contains("col2"));
-    EXPECT_TRUE(col2.clear_values());
-    check_length(col2_ref, 0);
-    EXPECT_TRUE(*db.contains("col2"));
-
-    EXPECT_TRUE(db.drop("col2"));
-    EXPECT_FALSE(*db.contains("col2"));
-
-    EXPECT_TRUE(*db.contains("col3"));
-    EXPECT_TRUE(*db.contains("col4"));
-    EXPECT_TRUE(*db.contains("col5"));
-
-    EXPECT_TRUE(db.drop("col4"));
-    EXPECT_FALSE(*db.contains("col4"));
-
-    check_length(col3_ref, triplet_t::val_size_k);
-    check_length(col5_ref, triplet_t::val_size_k);
-
-    EXPECT_TRUE(db.clear());
-
-    EXPECT_FALSE(*db.contains("col1"));
-    EXPECT_FALSE(*db.contains("col2"));
-    EXPECT_FALSE(*db.contains("col3"));
-    EXPECT_FALSE(*db.contains("col4"));
-    EXPECT_FALSE(*db.contains("col5"));
-}
-
-// TODO: What is this?
-TEST(db, unnamed_and_named) {
-
-    if (!ukv_supports_named_collections_k)
-        return;
-
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-
-    triplet_t triplet;
-
-    EXPECT_FALSE(db.collection_create(""));
-
-    for (auto&& name : {"one", "three"}) {
-        for (auto& val : triplet.vals)
-            val += 7;
-
-        auto maybe_collection = db.collection_create(name);
-        EXPECT_TRUE(maybe_collection);
-        blobs_collection_t collection = std::move(maybe_collection).throw_or_release();
-        auto collection_ref = collection[triplet.keys];
-        check_length(collection_ref, ukv_length_missing_k);
-        round_trip(collection_ref, triplet);
-        check_length(collection_ref, triplet_t::val_size_k);
-    }
-    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -580,10 +496,10 @@ TEST(db, unnamed_and_named) {
  * https://jepsen.io/consistency/models/read-committed
  */
 TEST(db, transaction_read_commited) {
-
     if (!ukv_supports_transactions_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
@@ -594,8 +510,7 @@ TEST(db, transaction_read_commited) {
     auto txn_ref = txn[triplet.keys];
     round_trip(txn_ref, triplet);
 
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
     auto collection_ref = collection[triplet.keys];
 
     // Check for missing values before commit
@@ -605,7 +520,6 @@ TEST(db, transaction_read_commited) {
 
     // Validate that values match after commit
     check_equalities(collection_ref, triplet);
-    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -618,10 +532,10 @@ TEST(db, transaction_read_commited) {
  * https://jepsen.io/consistency/models/snapshot-isolation
  */
 TEST(db, transaction_snapshot_isolation) {
-
     if (!ukv_supports_snapshots_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -629,8 +543,7 @@ TEST(db, transaction_snapshot_isolation) {
     triplet_t triplet_same_v;
     triplet_same_v.vals = {'D', 'D', 'D'};
 
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
     auto collection_ref = collection[triplet.keys];
 
     check_length(collection_ref, ukv_length_missing_k);
@@ -659,99 +572,54 @@ TEST(db, transaction_snapshot_isolation) {
     txn = *db.transact(true);
     auto ref = txn[triplet_same_v.keys];
     round_trip(ref, triplet_same_v);
-
-    EXPECT_TRUE(db.clear());
 }
 
-TEST(db, txn_named) {
-
+TEST(db, transaction_erase_missing) {
     if (!ukv_supports_transactions_k)
         return;
-    if (!ukv_supports_named_collections_k)
-        return;
 
+    clear_environment();
     database_t db;
-    triplet_t triplet;
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
-    transaction_t txn = *db.transact();
+    transaction_t txn1 = *db.transact();
+    transaction_t txn2 = *db.transact();
 
-    // Transaction with named collection
-    EXPECT_FALSE(db.collection("named_col"));
-    EXPECT_TRUE(db.collection("named_col", true));
-    blobs_collection_t named_collection = *db.collection("named_col");
-    std::vector<collection_key_t> sub_keys {
-        {named_collection, triplet.keys[0]},
-        {named_collection, triplet.keys[1]},
-        {named_collection, triplet.keys[2]},
-    };
-    auto txn_named_collection_ref = txn[sub_keys];
-    round_trip(txn_named_collection_ref, triplet);
+    EXPECT_TRUE(txn2.main().at(-7297309151944849401).erase());
+    EXPECT_TRUE(txn1.main().at(-8640850744835793378).erase());
+    EXPECT_TRUE(txn1.commit());
+    EXPECT_TRUE(txn2.commit());
 
-    // Check for missing values before commit
-    auto named_collection_ref = named_collection[triplet.keys];
-    check_length(named_collection_ref, ukv_length_missing_k);
-    EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn.reset());
-
-    // Validate that values match after commit
-    check_equalities(named_collection_ref, triplet);
-    EXPECT_TRUE(db.clear());
+    EXPECT_EQ(db.main().at(-8640850744835793378).value(), value_view_t {});
+    EXPECT_EQ(db.main().at(-7297309151944849401).value(), value_view_t {});
+    EXPECT_EQ(db.main().keys().size(), 0u);
 }
 
-TEST(db, txn_unnamed_then_named) {
-
+TEST(db, transaction_write_conflicting) {
     if (!ukv_supports_transactions_k)
         return;
-    if (!ukv_supports_named_collections_k)
-        return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
-
     EXPECT_TRUE(db.transact());
-    transaction_t txn = *db.transact();
+    transaction_t txn1 = *db.transact();
+    transaction_t txn2 = *db.transact();
 
-    triplet_t triplet;
-
-    auto txn_ref = txn[triplet.keys];
-    round_trip(txn_ref, triplet);
-
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
-    auto collection_ref = collection[triplet.keys];
-
-    // Check for missing values before commit
-    check_length(collection_ref, ukv_length_missing_k);
-    EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn.reset());
-
-    // Validate that values match after commit
-    check_equalities(collection_ref, triplet);
-
-    // Transaction with named collection
-    EXPECT_TRUE(db.collection_create("named_col"));
-    blobs_collection_t named_collection = *db.collection("named_col");
-    std::vector<collection_key_t> sub_keys {
-        {named_collection, triplet.keys[0]},
-        {named_collection, triplet.keys[1]},
-        {named_collection, triplet.keys[2]},
-    };
-    auto txn_named_collection_ref = txn[sub_keys];
-    round_trip(txn_named_collection_ref, triplet);
-
-    // Check for missing values before commit
-    auto named_collection_ref = named_collection[triplet.keys];
-    check_length(named_collection_ref, ukv_length_missing_k);
-    EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(txn.reset());
-
-    // Validate that values match after commit
-    check_equalities(named_collection_ref, triplet);
-    EXPECT_TRUE(db.clear());
+    EXPECT_TRUE(txn2.main().at(6).assign("a"));
+    EXPECT_TRUE(txn1.main().at(6).assign("b"));
+    EXPECT_TRUE(txn1.commit());
+    EXPECT_FALSE(txn2.commit());
 }
 
-TEST(db, txn_sequenced_commit) {
+/**
+ *
+ */
+TEST(db, transaction_sequenced_commit) {
+    if (!ukv_supports_transactions_k)
+        return;
+
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -767,7 +635,7 @@ TEST(db, txn_sequenced_commit) {
     auto current_sequence_number = *maybe_sequence_number;
     EXPECT_GT(current_sequence_number, 0);
     EXPECT_TRUE(txn.reset());
-
+#if 0
     auto previous_sequence_number = current_sequence_number;
     EXPECT_TRUE(txn_ref.value());
     maybe_sequence_number = txn.sequenced_commit();
@@ -782,8 +650,7 @@ TEST(db, txn_sequenced_commit) {
     EXPECT_TRUE(maybe_sequence_number);
     current_sequence_number = *maybe_sequence_number;
     EXPECT_GT(current_sequence_number, previous_sequence_number);
-
-    EXPECT_TRUE(db.clear());
+#endif
 }
 
 #pragma region Paths Modality
@@ -794,6 +661,7 @@ TEST(db, txn_sequenced_commit) {
  */
 TEST(db, paths) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -842,6 +710,7 @@ TEST(db, paths) {
         .db = db,
         .error = status.member_ptr(),
         .arena = arena.member_ptr(),
+        .tasks_count = 1,
         .match_counts_limits = &max_count,
         .patterns = &prefix,
         .match_counts = &results_counts,
@@ -951,8 +820,8 @@ TEST(db, paths) {
  * this test helps catch problems in bucket reorganization.
  */
 TEST(db, paths_linked_list) {
-
-    constexpr std::size_t count = 100;
+    constexpr std::size_t count = 1000;
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -964,6 +833,7 @@ TEST(db, paths_linked_list) {
         .db = db,
         .error = status.member_ptr(),
         .arena = arena.member_ptr(),
+        .tasks_count = 1,
         .path_separator = separator,
     };
 
@@ -971,6 +841,7 @@ TEST(db, paths_linked_list) {
         .db = db,
         .error = status.member_ptr(),
         .arena = arena.member_ptr(),
+        .tasks_count = 1,
         .path_separator = separator,
     };
 
@@ -1056,7 +927,6 @@ TEST(db, paths_linked_list) {
 
 #pragma region Documents Modality
 
-// TODO: Use those structures
 std::vector<std::string> make_three_flat_docs() {
     auto json1 = R"( {"person": "Alice", "age": 24} )"_json.dump();
     auto json2 = R"( {"person": "Bob", "age": 25} )"_json.dump();
@@ -1078,11 +948,12 @@ std::vector<std::string> make_three_nested_docs() {
  */
 TEST(db, docs_flat) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
     // JSON
-    docs_collection_t collection = *db.collection<docs_collection_t>();
+    docs_collection_t collection = db.main<docs_collection_t>();
     auto jsons = make_three_flat_docs();
     collection[1] = jsons[0].c_str();
     collection[2] = jsons[1].c_str();
@@ -1097,26 +968,21 @@ TEST(db, docs_flat) {
 
     // BSON
     bson_error_t error;
-    bson_t* b = bson_new_from_json((uint8_t*)jsons[0].c_str(), -1, &error);
-    const uint8_t* buffer = bson_get_data(b);
-    auto view = value_view_t(buffer, b->len);
+    bson_t* bson = bson_new_from_json((uint8_t*)jsons[0].c_str(), -1, &error);
+    uint8_t const* buffer = bson_get_data(bson);
+    auto view = value_view_t(buffer, bson->len);
     collection.at(4, ukv_doc_field_bson_k) = view;
     M_EXPECT_EQ_JSON(*collection[4].value(), jsons[0]);
     M_EXPECT_EQ_JSON(*collection[ckf(4, "person")].value(), "\"Alice\"");
     M_EXPECT_EQ_JSON(*collection[ckf(4, "age")].value(), "24");
-    bson_clear(&b);
+    bson_clear(&bson);
 
-#if 0
     // MsgPack
-    collection.as(ukv_format_msgpack_k);
-    M_EXPECT_EQ_MSG(val, json.c_str());
-    val = *collection[ckf(1, "person")].value();
-    M_EXPECT_EQ_MSG(val, "\"Carl\"");
-    val = *collection[ckf(1, "age")].value();
-    M_EXPECT_EQ_MSG(val, "24");
-#endif
-
-    EXPECT_TRUE(db.clear());
+    auto message_pack = *collection[1].value(ukv_doc_field_msgpack_k);
+    collection.at(5, ukv_doc_field_msgpack_k) = message_pack;
+    M_EXPECT_EQ_JSON(*collection[5].value(), jsons[0]);
+    M_EXPECT_EQ_JSON(*collection[ckf(5, "person")].value(), "\"Alice\"");
+    M_EXPECT_EQ_JSON(*collection[ckf(5, "age")].value(), "24");
 }
 
 /**
@@ -1125,18 +991,19 @@ TEST(db, docs_flat) {
  */
 TEST(db, docs_nested_batch) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
-    docs_collection_t collection = *db.collection<docs_collection_t>();
+    docs_collection_t collection = db.main<docs_collection_t>();
 
     auto jsons = make_three_nested_docs();
     std::string continuous_jsons = jsons[0] + jsons[1] + jsons[2];
     auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(continuous_jsons.data());
     std::array<ukv_length_t, 4> offsets = {
         0,
-        jsons[0].size(),
-        jsons[0].size() + jsons[1].size(),
-        jsons[0].size() + jsons[1].size() + jsons[2].size(),
+        static_cast<ukv_length_t>(jsons[0].size()),
+        static_cast<ukv_length_t>(jsons[0].size() + jsons[1].size()),
+        static_cast<ukv_length_t>(jsons[0].size() + jsons[1].size() + jsons[2].size()),
     };
     contents_arg_t values {
         .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
@@ -1145,7 +1012,7 @@ TEST(db, docs_nested_batch) {
 
     std::array<ukv_key_t, 3> keys = {1, 2, 3};
     auto ref = collection[keys];
-    ref.assign(values);
+    EXPECT_TRUE(ref.assign(values));
 
     // Read One By One
     M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
@@ -1197,21 +1064,31 @@ TEST(db, docs_nested_batch) {
     offsets[3] = field_value1.size() + field_value2.size() + field_value3.size();
     check_equalities(ref_with_fields, values);
 
-    EXPECT_TRUE(db.clear());
+    // Check Invalid Json Write
+    std::string invalid_json = R"({"name":"Alice", } "age": 24})";
+    offsets[1] = jsons[0].size();
+    offsets[2] = jsons[0].size() + jsons[1].size();
+    offsets[3] = jsons[0].size() + jsons[1].size() + invalid_json.size();
+    continuous_jsons = jsons[0] + jsons[1] + invalid_json;
+    vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(continuous_jsons.data());
+
+    EXPECT_FALSE(ref.assign(values));
 }
 
-// TODO: Use understandable and rememberable keys.
-// Split into smaller parts.
+/**
+ * Performs basic JSON Pathes, JSON Merge-Patches, and sub-document level updates.
+ */
 TEST(db, docs_modify) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
-    docs_collection_t collection = *db.collection<docs_collection_t>();
+    docs_collection_t collection = db.main<docs_collection_t>();
     auto jsons = make_three_nested_docs();
     collection[1] = jsons[0].c_str();
     M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
 
     // Update
-    auto modifier = R"( {"person": {"name":"Charls", "age": 28}} )"_json.dump();
+    auto modifier = R"( {"person": {"name":"Charles", "age": 28}} )"_json.dump();
     EXPECT_TRUE(collection[1].update(modifier.c_str()));
     auto result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), modifier.c_str());
@@ -1241,19 +1118,17 @@ TEST(db, docs_modify) {
     M_EXPECT_EQ_JSON(result->c_str(), jsons[2].c_str());
 
     // Upsert By Field
-    modifier = R"("Charls")"_json.dump();
-    expected = R"( {"person": "Charls", "age": 26} )"_json.dump();
+    modifier = R"("Charles")"_json.dump();
+    expected = R"( {"person": "Charles", "age": 26} )"_json.dump();
     EXPECT_TRUE(collection[ckf(1, "/person")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
 
     modifier = R"(70)"_json.dump();
-    expected = R"( {"person": "Charls", "age": 26, "weight" : 70} )"_json.dump();
+    expected = R"( {"person": "Charles", "age": 26, "weight" : 70} )"_json.dump();
     EXPECT_TRUE(collection[ckf(1, "/weight")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
-
-    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1262,9 +1137,10 @@ TEST(db, docs_modify) {
  */
 TEST(db, docs_merge_and_patch) {
     using json_t = nlohmann::json;
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
-    docs_collection_t collection = *db.collection<docs_collection_t>();
+    docs_collection_t collection = db.main<docs_collection_t>();
 
     std::ifstream f_patch("tests/patch.json");
     json_t j_object = json_t::parse(f_patch);
@@ -1274,7 +1150,9 @@ TEST(db, docs_merge_and_patch) {
         auto expected = it["expected"].dump();
         collection[1] = doc.c_str();
         EXPECT_TRUE(collection[1].patch(patch.c_str()));
-        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+        auto maybe_value = collection[1].value();
+        EXPECT_TRUE(maybe_value);
+        M_EXPECT_EQ_JSON(maybe_value->c_str(), expected.c_str());
     }
 
     std::ifstream f_merge("tests/merge.json");
@@ -1285,10 +1163,10 @@ TEST(db, docs_merge_and_patch) {
         auto expected = it["expected"].dump();
         collection[1] = doc.c_str();
         EXPECT_TRUE(collection[1].merge(merge.c_str()));
-        M_EXPECT_EQ_JSON(collection[1].value()->c_str(), expected.c_str());
+        auto maybe_value = collection[1].value();
+        EXPECT_TRUE(maybe_value);
+        M_EXPECT_EQ_JSON(maybe_value->c_str(), expected.c_str());
     }
-
-    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1297,13 +1175,13 @@ TEST(db, docs_merge_and_patch) {
  * and higher-level compile-time C++ meta-programming abstractions.
  */
 TEST(db, docs_table) {
-
     using json_t = nlohmann::json;
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
     // Inject basic data
-    docs_collection_t collection = *db.collection<docs_collection_t>();
+    docs_collection_t collection = db.main<docs_collection_t>();
     auto json_alice = R"( { "person": "Alice", "age": 27, "height": 1 } )"_json.dump();
     auto json_bob = R"( { "person": "Bob", "age": "27", "weight": 2 } )"_json.dump();
     auto json_carl = R"( { "person": "Carl", "age": 24 } )"_json.dump();
@@ -1446,8 +1324,6 @@ TEST(db, docs_table) {
         EXPECT_STREQ(col1[1].value.c_str(), "27");
         EXPECT_STREQ(col1[2].value.c_str(), "24");
     }
-
-    EXPECT_TRUE(db.clear());
 }
 
 #pragma region Graph Modality
@@ -1471,25 +1347,64 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
 }
 
 /**
+ * Upserts disconnected vertices into the graph.
+ */
+TEST(db, graph_upsert_vertices) {
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t net = db.main<graph_collection_t>();
+    std::vector<ukv_key_t> vertices {1, 4, 5, 2};
+    EXPECT_TRUE(net.upsert_vertices(vertices));
+
+    EXPECT_TRUE(*net.contains(1));
+    EXPECT_TRUE(*net.contains(2));
+    EXPECT_TRUE(*net.contains(4));
+    EXPECT_TRUE(*net.contains(5));
+}
+
+/**
+ * Upserts an edge and its member vertices into the graph.
+ */
+TEST(db, graph_upsert_edge) {
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t net = db.main<graph_collection_t>();
+    edge_t edge {1, 2, 9};
+    EXPECT_TRUE(net.upsert_edge(edge));
+    EXPECT_TRUE(*net.contains(1));
+    EXPECT_TRUE(*net.contains(2));
+    EXPECT_FALSE(*net.contains(3));
+
+    auto neighbors = net.neighbors(1).throw_or_release();
+    EXPECT_EQ(neighbors.size(), 1);
+    EXPECT_EQ(neighbors[0], 2);
+}
+
+/**
  * Tests "Graphs" Modality, with on of the simplest network designs - a triangle.
  * Three vertices, three connections between them, forming 3 undirected, or 6 directed edges.
  * Tests edge upserts, existence checks, degree computation, vertex removals.
  */
 TEST(db, graph_triangle) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t net = *db.collection<graph_collection_t>();
+    graph_collection_t net = db.main<graph_collection_t>();
 
     // triangle
     edge_t edge1 {1, 2, 9};
     edge_t edge2 {2, 3, 10};
     edge_t edge3 {3, 1, 11};
 
-    EXPECT_TRUE(net.upsert(edge1));
-    EXPECT_TRUE(net.upsert(edge2));
-    EXPECT_TRUE(net.upsert(edge3));
+    EXPECT_TRUE(net.upsert_edge(edge1));
+    EXPECT_TRUE(net.upsert_edge(edge2));
+    EXPECT_TRUE(net.upsert_edge(edge3));
 
     auto neighbors = net.neighbors(1).throw_or_release();
     EXPECT_EQ(neighbors.size(), 2);
@@ -1541,7 +1456,7 @@ TEST(db, graph_triangle) {
     }
 
     // Remove a single edge, making sure that the nodes info persists
-    EXPECT_TRUE(net.remove({
+    EXPECT_TRUE(net.remove_edges({
         {{&edge1.source_id}, 1},
         {{&edge1.target_id}, 1},
         {{&edge1.id}, 1},
@@ -1551,7 +1466,7 @@ TEST(db, graph_triangle) {
     EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
 
     // Bring that edge back
-    EXPECT_TRUE(net.upsert({
+    EXPECT_TRUE(net.upsert_edges({
         {{&edge1.source_id}, 1},
         {{&edge1.target_id}, 1},
         {{&edge1.id}, 1},
@@ -1560,22 +1475,20 @@ TEST(db, graph_triangle) {
 
     // Remove a vertex
     ukv_key_t vertex_to_remove = 2;
-    EXPECT_TRUE(net.remove(vertex_to_remove));
+    EXPECT_TRUE(net.remove_vertex(vertex_to_remove));
     EXPECT_FALSE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
 
     // Bring back the whole graph
-    EXPECT_TRUE(net.upsert(edge1));
-    EXPECT_TRUE(net.upsert(edge2));
-    EXPECT_TRUE(net.upsert(edge3));
+    EXPECT_TRUE(net.upsert_edge(edge1));
+    EXPECT_TRUE(net.upsert_edge(edge2));
+    EXPECT_TRUE(net.upsert_edge(edge3));
     EXPECT_TRUE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
-
-    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1586,11 +1499,12 @@ TEST(db, graph_triangle) {
  */
 TEST(db, graph_triangle_batch) {
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    blobs_collection_t main = *db.collection();
-    graph_collection_t net = *db.collection<graph_collection_t>();
+    blobs_collection_t main = db.main();
+    graph_collection_t net = db.main<graph_collection_t>();
 
     std::vector<edge_t> triangle {
         {1, 2, 9},
@@ -1598,7 +1512,7 @@ TEST(db, graph_triangle_batch) {
         {3, 1, 11},
     };
 
-    EXPECT_TRUE(net.upsert(edges(triangle)));
+    EXPECT_TRUE(net.upsert_edges(edges(triangle)));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
     EXPECT_FALSE(*net.contains(9));
@@ -1644,7 +1558,7 @@ TEST(db, graph_triangle_batch) {
     }
 
     // Remove a single edge, making sure that the nodes info persists
-    EXPECT_TRUE(net.remove(edges_view_t {
+    EXPECT_TRUE(net.remove_edges(edges_view_t {
         {{&triangle[0].source_id}, 1},
         {{&triangle[0].target_id}, 1},
         {{&triangle[0].id}, 1},
@@ -1654,7 +1568,7 @@ TEST(db, graph_triangle_batch) {
     EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
 
     // Bring that edge back
-    EXPECT_TRUE(net.upsert(edges_view_t {
+    EXPECT_TRUE(net.upsert_edges(edges_view_t {
         {{&triangle[0].source_id}, 1},
         {{&triangle[0].target_id}, 1},
         {{&triangle[0].id}, 1},
@@ -1663,19 +1577,18 @@ TEST(db, graph_triangle_batch) {
 
     // Remove a vertex
     ukv_key_t vertex_to_remove = 2;
-    EXPECT_TRUE(net.remove(vertex_to_remove));
+    EXPECT_TRUE(net.remove_vertex(vertex_to_remove));
     EXPECT_FALSE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
 
     // Bring back the whole graph
-    EXPECT_TRUE(net.upsert(edges(triangle)));
+    EXPECT_TRUE(net.upsert_edges(edges(triangle)));
     EXPECT_TRUE(*net.contains(vertex_to_remove));
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
-    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1684,102 +1597,72 @@ TEST(db, graph_triangle_batch) {
  * while A-B is updated externally, the commit will fail.
  */
 TEST(db, graph_transaction_watch) {
-
     if (!ukv_supports_transactions_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
-    graph_collection_t net = *db.collection<graph_collection_t>();
+    graph_collection_t net = db.main<graph_collection_t>();
 
     edge_t edge_ab {'A', 'B', 19};
     edge_t edge_bc {'B', 'C', 31};
-    EXPECT_TRUE(net.upsert(edge_ab));
-    EXPECT_TRUE(net.upsert(edge_bc));
+    EXPECT_TRUE(net.upsert_edge(edge_ab));
+    EXPECT_TRUE(net.upsert_edge(edge_bc));
 
     transaction_t txn = *db.transact();
-    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
+    graph_collection_t txn_net = txn.main<graph_collection_t>();
     EXPECT_EQ(txn_net.degree('B'), 2);
-    EXPECT_TRUE(txn_net.remove(edge_bc));
-    EXPECT_TRUE(net.remove(edge_ab));
+    EXPECT_TRUE(txn_net.remove_edge(edge_bc));
+    EXPECT_TRUE(net.remove_edge(edge_ab));
 
     EXPECT_FALSE(txn.commit());
-    EXPECT_TRUE(db.clear());
 }
 
 /**
  * Constructs a larger graph, validating the degrees in a resulting network afterward.
  */
 TEST(db, graph_random_fill) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_EQ(*graph.degree(vertex_id), 9u);
     }
-
-    EXPECT_TRUE(db.clear());
 }
 
-// TODO: What is this?
+/**
+ * Inserts two edges with a shared vertex in two separate transactions.
+ * The latter insert must fail, as it depends on the preceding state of the vertex.
+ */
 TEST(db, graph_conflicting_transactions) {
-
     if (!ukv_supports_transactions_k)
         return;
 
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t net = *db.collection<graph_collection_t>();
-
     transaction_t txn = *db.transact();
-    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
-
-    // triangle
-    edge_t edge1 {1, 2, 9};
-    edge_t edge2 {2, 3, 10};
-    edge_t edge3 {3, 1, 11};
-
-    EXPECT_TRUE(txn_net.upsert(edge1));
-    EXPECT_TRUE(txn_net.upsert(edge2));
-    EXPECT_TRUE(txn_net.upsert(edge3));
-
-    EXPECT_TRUE(*txn_net.contains(1));
-    EXPECT_TRUE(*txn_net.contains(2));
-    EXPECT_TRUE(*txn_net.contains(3));
-
-    EXPECT_FALSE(*net.contains(1));
-    EXPECT_FALSE(*net.contains(2));
-    EXPECT_FALSE(*net.contains(3));
-
-    EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(*net.contains(1));
-    EXPECT_TRUE(*net.contains(2));
-    EXPECT_TRUE(*net.contains(3));
-
-    EXPECT_TRUE(txn.reset());
-    txn_net = *txn.collection<graph_collection_t>();
-
+    graph_collection_t txn_net = txn.main<graph_collection_t>();
     transaction_t txn2 = *db.transact();
-    graph_collection_t txn_net2 = *txn2.collection<graph_collection_t>();
+    graph_collection_t txn_net2 = txn2.main<graph_collection_t>();
 
     edge_t edge4 {4, 5, 15};
     edge_t edge5 {5, 6, 16};
 
-    EXPECT_TRUE(txn_net.upsert(edge4));
-    EXPECT_TRUE(txn_net2.upsert(edge5));
-
+    EXPECT_TRUE(txn_net.upsert_edge(edge4));
+    EXPECT_TRUE(txn_net2.upsert_edge(edge5));
     EXPECT_TRUE(txn.commit());
     EXPECT_FALSE(txn2.commit());
-
-    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1787,10 +1670,11 @@ TEST(db, graph_conflicting_transactions) {
  * a star, a pentagon, and five self-loops.
  */
 TEST(db, graph_layering_shapes) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     std::vector<ukv_key_t> vertices = {1, 2, 3, 4, 5};
     auto over_the_vertices = [&](bool exist, size_t degree) {
@@ -1825,24 +1709,24 @@ TEST(db, graph_layering_shapes) {
         {5, 5, 15},
     };
 
-    EXPECT_TRUE(graph.upsert(edges(star)));
+    EXPECT_TRUE(graph.upsert_edges(edges(star)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    EXPECT_TRUE(graph.upsert_edges(edges(pentagon)));
     over_the_vertices(true, 4u);
-    EXPECT_TRUE(graph.remove(edges(star)));
+    EXPECT_TRUE(graph.remove_edges(edges(star)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.upsert(edges(star)));
+    EXPECT_TRUE(graph.upsert_edges(edges(star)));
     over_the_vertices(true, 4u);
-    EXPECT_TRUE(graph.remove(edges(pentagon)));
+    EXPECT_TRUE(graph.remove_edges(edges(pentagon)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.upsert(edges(pentagon)));
+    EXPECT_TRUE(graph.upsert_edges(edges(pentagon)));
     over_the_vertices(true, 4u);
-    EXPECT_TRUE(graph.upsert(edges(self_loops)));
+    EXPECT_TRUE(graph.upsert_edges(edges(self_loops)));
     over_the_vertices(true, 6u);
-    EXPECT_TRUE(graph.remove(edges(star)));
-    EXPECT_TRUE(graph.remove(edges(pentagon)));
+    EXPECT_TRUE(graph.remove_edges(edges(star)));
+    EXPECT_TRUE(graph.remove_edges(edges(pentagon)));
     over_the_vertices(true, 2u);
-    EXPECT_TRUE(graph.remove(edges(self_loops)));
+    EXPECT_TRUE(graph.remove_edges(edges(self_loops)));
     over_the_vertices(true, 0);
     EXPECT_TRUE(db.clear());
     over_the_vertices(false, 0);
@@ -1853,24 +1737,32 @@ TEST(db, graph_layering_shapes) {
  * as they trigger updates in all nodes connected to the removed one.
  */
 TEST(db, graph_remove_vertices) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
-        EXPECT_TRUE(graph.remove(vertex_id));
+        EXPECT_TRUE(graph.remove_vertex(vertex_id));
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_FALSE(*graph.contains(vertex_id));
     }
 
-    EXPECT_TRUE(db.clear());
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
+    std::vector<ukv_key_t> vertices(vertices_count);
+    std::iota(vertices.begin(), vertices.end(), 0);
+    EXPECT_TRUE(graph.remove_vertices(vertices));
+    for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
+        EXPECT_TRUE(graph.contains(vertex_id));
+        EXPECT_FALSE(*graph.contains(vertex_id));
+    }
 }
 
 /**
@@ -1878,34 +1770,37 @@ TEST(db, graph_remove_vertices) {
  * in the graph, even though entirely disconnected.
  */
 TEST(db, graph_remove_edges_keep_vertices) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
-    EXPECT_TRUE(graph.remove(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
+    EXPECT_TRUE(graph.remove_edges(edges(edges_vec)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
     }
-
-    EXPECT_TRUE(db.clear());
 }
-
-// TODO: Why do we need this?
-TEST(db, graph_get_edges) {
+/**
+ * Add edges to the graph. Checks how many edges each vertex has.
+ * Then remove the edges, making sure that the vertices aren't
+ * connected to each other anymore.
+ */
+TEST(db, graph_get_vertex_edges) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     std::vector<edge_t> received_edges;
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
@@ -1914,36 +1809,34 @@ TEST(db, graph_get_edges) {
         for (size_t i = 0; i != es.size(); ++i)
             received_edges.push_back(es[i]);
     }
-    EXPECT_TRUE(graph.remove(edges(received_edges)));
+    EXPECT_TRUE(graph.remove_edges(edges(received_edges)));
 
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
         EXPECT_EQ(graph.edges(vertex_id)->size(), 0);
     }
-    EXPECT_TRUE(db.clear());
 }
 
 /**
  * Getting the degrees of multiple vertices simultaneously.
  */
 TEST(db, graph_degrees) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
     std::vector<ukv_key_t> vertices(vertices_count);
     std::iota(vertices.begin(), vertices.end(), 0);
 
     auto edges_vec = make_edges(vertices_count, 100);
-    EXPECT_TRUE(graph.upsert(edges(edges_vec)));
+    EXPECT_TRUE(graph.upsert_edges(edges(edges_vec)));
 
     auto degrees = *graph.degrees(strided_range(vertices).immutable());
     EXPECT_EQ(degrees.size(), vertices_count);
-
-    EXPECT_TRUE(db.clear());
 }
 
 #pragma region Vectors Modality
@@ -1953,6 +1846,7 @@ TEST(db, graph_degrees) {
  * operations with just three distinctly different vectors in R3 space with Cosine metric.
  */
 TEST(db, vectors) {
+    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
@@ -1968,7 +1862,7 @@ TEST(db, vectors) {
     status_t status;
 
     float* vector_first_begin = &vectors[0][0];
-    ukv_vectors_write_t write;
+    ukv_vectors_write_t write {};
     write.db = db;
     write.arena = arena.member_ptr();
     write.error = status.member_ptr();
@@ -1985,11 +1879,12 @@ TEST(db, vectors) {
     ukv_length_t* found_results = nullptr;
     ukv_key_t* found_keys = nullptr;
     ukv_float_t* found_distances = nullptr;
-    ukv_vectors_search_t search;
+    ukv_vectors_search_t search {};
     search.db = db;
     search.arena = arena.member_ptr();
     search.error = status.member_ptr();
     search.dimensions = dims_k;
+    search.tasks_count = 1;
     search.match_counts_limits = &max_results;
     search.queries_starts = (ukv_bytes_cptr_t*)&vector_first_begin;
     search.queries_stride = sizeof(float) * dims_k;
@@ -2003,11 +1898,15 @@ TEST(db, vectors) {
     EXPECT_EQ(found_results[0], max_results);
     EXPECT_EQ(found_keys[0], ukv_key_t('a'));
     EXPECT_EQ(found_keys[1], ukv_key_t('b'));
-    EXPECT_TRUE(db.clear());
 }
 
 int main(int argc, char** argv) {
-    std::filesystem::create_directory("./tmp");
+    auto directory_str = path() ? std::string_view(path()) : "";
+    if (directory_str.size())
+        std::printf("Will work in directory: %s\n", directory_str.data());
+    else
+        std::printf("Will work with default configuration\n");
+
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

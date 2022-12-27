@@ -26,13 +26,13 @@ int main(int argc, char** argv) {
     _ = db.open();
 
     // Try getting the main collection
-    _ = db.collection();
-    blobs_collection_t main = *db.collection();
+    _ = db.main();
+    blobs_collection_t main = db.main();
 
     // Single-element access
     main[42] = "purpose of life";
     main.at(42) = "purpose of life";
-    *main[42].value() == "purpose of life";
+    _ = *main[42].value() == "purpose of life";
     _ = main[42].clear();
 
     // Mapping multiple keys to same values
@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
         (void)value;
 
     // Accessing named collections
-    blobs_collection_t prefixes = *db.collection("prefixes");
+    blobs_collection_t prefixes = *db.find_or_create("prefixes");
     prefixes.at(42) = "purpose";
     db["articles"]->at(42) = "of";
     db["suffixes"]->at(42) = "life";

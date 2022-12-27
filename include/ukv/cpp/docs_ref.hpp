@@ -1,5 +1,5 @@
 /**
- * @file blobs_ref.hpp
+ * @file docs_ref.hpp
  * @author Ashot Vardanian
  * @date 26 Jun 2022
  * @addtogroup Cpp
@@ -84,10 +84,10 @@ class docs_ref_gt {
   public:
     docs_ref_gt(ukv_database_t db,
                 ukv_transaction_t txn,
-                locations_store_t locations,
+                locations_at&& locations,
                 ukv_arena_t* arena,
                 ukv_doc_field_type_t type = ukv_doc_field_default_k) noexcept
-        : db_(db), transaction_(txn), arena_(arena), locations_(locations), type_(type) {}
+        : db_(db), transaction_(txn), arena_(arena), locations_(std::forward<locations_at>(locations)), type_(type) {}
 
     docs_ref_gt(docs_ref_gt&&) = default;
     docs_ref_gt& operator=(docs_ref_gt&&) = default;
@@ -292,7 +292,7 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t
     auto fields = keys_extractor_t {}.fields(locs);
     auto has_fields = fields && (!fields.repeats() || *fields);
 
-    ukv_docs_read_t docs_read;
+    ukv_docs_read_t docs_read {};
     docs_read.db = db_;
     docs_read.error = status.member_ptr();
     docs_read.transaction = transaction_;
@@ -359,7 +359,7 @@ status_t docs_ref_gt<locations_at>::any_write(contents_arg_at&& vals_ref,
     auto offsets = value_extractor_t {}.offsets(vals);
     auto lengths = value_extractor_t {}.lengths(vals);
 
-    ukv_docs_write_t docs_write;
+    ukv_docs_write_t docs_write {};
     docs_write.db = db_;
     docs_write.error = status.member_ptr();
     docs_write.transaction = transaction_;
@@ -400,7 +400,7 @@ expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool watch) noexcept 
     auto keys = keys_extractor_t {}.keys(locs);
     auto collections = keys_extractor_t {}.collections(locs);
 
-    ukv_docs_gist_t docs_gist;
+    ukv_docs_gist_t docs_gist {};
     docs_gist.db = db_;
     docs_gist.error = status.member_ptr();
     docs_gist.transaction = transaction_;
@@ -440,7 +440,7 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layou
         layout.types().begin(),
     };
 
-    ukv_docs_gather_t docs_gather;
+    ukv_docs_gather_t docs_gather {};
     docs_gather.db = db_;
     docs_gather.error = status.member_ptr();
     docs_gather.transaction = transaction_;

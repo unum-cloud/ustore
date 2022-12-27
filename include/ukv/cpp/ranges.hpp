@@ -38,8 +38,8 @@ class strided_iterator_gt {
     using reference = value_type&;
 
   protected:
-    element_t* raw_ = nullptr;
-    ukv_size_t stride_ = 0;
+    element_t* raw_ {nullptr};
+    ukv_size_t stride_ {0};
 
     element_t* upshift(std::ptrdiff_t bytes) const noexcept { return (element_t*)((char*)raw_ + bytes); }
     element_t* downshift(std::ptrdiff_t bytes) const noexcept { return (element_t*)((char*)raw_ - bytes); }
@@ -125,7 +125,7 @@ class bits_span_t {
     using reference = ref_t;
 
   protected:
-    element_t* begin_ = nullptr;
+    element_t* begin_ {nullptr};
 
   public:
     bits_span_t(element_t* begin = nullptr) noexcept : begin_(begin) {}
@@ -152,7 +152,7 @@ class bits_view_t {
     using reference = void;
 
   protected:
-    element_t* begin_ = nullptr;
+    element_t* begin_ {nullptr};
 
   public:
     bits_view_t(element_t* begin = nullptr) noexcept : begin_(begin) {}
@@ -183,8 +183,8 @@ class strided_range_gt {
   protected:
     static_assert(!std::is_void_v<element_t>);
 
-    iterator_t begin_ = nullptr;
-    ukv_size_t count_ = 0;
+    iterator_t begin_ {nullptr};
+    ukv_size_t count_ {0};
 
   public:
     strided_range_gt() = default;
@@ -272,8 +272,8 @@ struct indexed_range_gt {
     using value_type = element_t;
     using reference = element_t&;
 
-    pointer_t begin_ = nullptr;
-    pointer_t end_ = nullptr;
+    pointer_t begin_ {nullptr};
+    pointer_t end_ {nullptr};
 
     indexed_range_gt() noexcept : begin_(nullptr), end_(nullptr) {}
     indexed_range_gt(pointer_t begin, pointer_t end) noexcept : begin_(begin), end_(end) {}
@@ -310,8 +310,8 @@ using ptr_range_gt = indexed_range_gt<element_at*>;
 
 template <typename pointer_at>
 struct range_gt {
-    pointer_at begin_ = nullptr;
-    pointer_at end_ = nullptr;
+    pointer_at begin_ {nullptr};
+    pointer_at end_ {nullptr};
 
     inline pointer_at const& begin() const& noexcept { return begin_; }
     inline pointer_at const& end() const& noexcept { return end_; }
@@ -332,8 +332,8 @@ class consecutive_chunks_iterator_gt {
     using chunk_t = chunk_at;
     using element_t = typename chunk_t::value_type;
 
-    ukv_length_t const* lengths_ = nullptr;
-    element_t* contents_ = nullptr;
+    ukv_length_t const* lengths_ {nullptr};
+    element_t* contents_ {nullptr};
 
   public:
     using iterator_category = std::random_access_iterator_tag;
@@ -341,6 +341,8 @@ class consecutive_chunks_iterator_gt {
     using value_type = chunk_t;
     using pointer = void;
     using reference = void;
+
+    consecutive_chunks_iterator_gt() = default;
 
     template <typename same_size_at>
     consecutive_chunks_iterator_gt(ukv_length_t const* lens, same_size_at* vals) noexcept
@@ -376,8 +378,8 @@ class joined_chunks_iterator_gt {
     using chunk_t = chunk_at;
     using element_t = typename chunk_t::value_type;
 
-    ukv_length_t* offsets_ = nullptr;
-    element_t* contents_ = nullptr;
+    ukv_length_t* offsets_ {nullptr};
+    element_t* contents_ {nullptr};
 
   public:
     using iterator_category = std::random_access_iterator_tag;
@@ -385,6 +387,8 @@ class joined_chunks_iterator_gt {
     using value_type = chunk_t;
     using pointer = void;
     using reference = void;
+
+    joined_chunks_iterator_gt() = default;
 
     template <typename same_size_at>
     joined_chunks_iterator_gt(ukv_length_t* offs, same_size_at* vals) noexcept
@@ -417,9 +421,9 @@ class joined_chunks_gt {
     using chunk_t = chunk_at;
     using element_t = typename chunk_t::value_type;
 
-    ukv_size_t count_ = 0;
-    ukv_length_t* offsets_ = nullptr;
-    element_t* contents_ = nullptr;
+    ukv_size_t count_ {0};
+    ukv_length_t* offsets_ {nullptr};
+    element_t* contents_ {nullptr};
 
   public:
     using value_type = chunk_t;
@@ -456,9 +460,9 @@ class embedded_chunks_iterator_gt {
     using chunk_t = chunk_at;
     using element_t = typename chunk_t::value_type;
 
-    ukv_length_t* offsets_ = nullptr;
-    ukv_length_t* lengths_ = nullptr;
-    element_t* contents_ = nullptr;
+    ukv_length_t* offsets_ {nullptr};
+    ukv_length_t* lengths_ {nullptr};
+    element_t* contents_ {nullptr};
 
   public:
     using iterator_category = std::random_access_iterator_tag;
@@ -497,10 +501,10 @@ class embedded_chunks_gt {
     using chunk_t = chunk_at;
     using element_t = typename chunk_t::value_type;
 
-    ukv_size_t count_ = 0;
-    ukv_length_t* offsets_ = nullptr;
-    ukv_length_t* lengths_ = nullptr;
-    element_t* contents_ = nullptr;
+    ukv_size_t count_ {0};
+    ukv_length_t* offsets_ {nullptr};
+    ukv_length_t* lengths_ {nullptr};
+    element_t* contents_ {nullptr};
 
   public:
     using value_type = chunk_t;
@@ -534,8 +538,8 @@ using embedded_blobs_t = embedded_chunks_gt<value_view_t>;
  * Can be used for `ukv_docs_gist()` or `ukv_collection_list()`.
  */
 class strings_tape_iterator_t {
-    ukv_size_t remaining_count_ = 0;
-    ukv_str_view_t current_ = nullptr;
+    ukv_size_t remaining_count_ {0};
+    ukv_str_view_t current_ {nullptr};
 
   public:
     using iterator_category = std::forward_iterator_tag;
@@ -577,11 +581,11 @@ class strided_matrix_gt {
     static_assert(!std::is_void_v<scalar_t>);
 
   private:
-    scalar_t* begin_ = nullptr;
-    ukv_size_t bytes_between_rows_ = 0;
-    ukv_size_t bytes_between_columns_ = 0;
-    ukv_size_t rows_ = 0;
-    ukv_size_t columns_ = 0;
+    scalar_t* begin_ {nullptr};
+    ukv_size_t bytes_between_rows_ {0};
+    ukv_size_t bytes_between_columns_ {0};
+    ukv_size_t rows_ {0};
+    ukv_size_t columns_ {0};
 
   public:
     strided_matrix_gt() = default;

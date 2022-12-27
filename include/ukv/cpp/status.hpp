@@ -16,8 +16,8 @@
 namespace unum::ukv {
 
 class [[nodiscard]] status_t {
-    ukv_error_t raw_ = nullptr;
-    bool is_view_ = false;
+    ukv_error_t raw_ {nullptr};
+    bool is_view_ {false};
 
   public:
     static status_t status_view(char const* msg) noexcept {
@@ -186,6 +186,10 @@ enum error_code_t {
 };
 
 } // namespace unum::ukv
+
+// #define log_warning_m(format, ...) fprintf(stderr, format, __VA_ARGS__)
+#define log_warning_m(format, ...) \
+    {}
 
 #define log_error_m(c_error, code, message) \
     { *c_error = message; }

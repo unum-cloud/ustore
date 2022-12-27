@@ -39,6 +39,7 @@ class docs_pairs_stream_t {
             .error = status.member_ptr(),
             .transaction = txn_,
             .arena = arena_scan_.member_ptr(),
+            .tasks_count = 1,
             .collections = &collection_,
             .start_keys = &next_min_key_,
             .count_limits = &read_ahead_,
@@ -300,6 +301,7 @@ void ukv::wrap_document(py::module& m) {
     py_docs_collection.def("__delitem__", &remove_doc);
     py_docs_collection.def("__getitem__", &read_doc);
     py_docs_collection.def("__contains__", &has_doc);
+    py_docs_collection.def("__len__", &get_length<docs_collection_t>);
 
     py_docs_collection.def("clear", [](py_docs_collection_t& collection) { collection.native.clear(); });
 

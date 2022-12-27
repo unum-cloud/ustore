@@ -1,5 +1,5 @@
 /**
- * @file arrow_client.cpp
+ * @file flight_client.cpp
  * @author Ashot Vardanian
  *
  * @brief Client library for Apache Arrow RPC server.
@@ -7,8 +7,9 @@
  * Understanding the costs of remote communication, might keep a cache.
  */
 
-#include <thread> // `std::this_thread`
-#include <mutex>  // `std::mutex`
+#include <thread>      // `std::this_thread`
+#include <mutex>       // `std::mutex`
+#include <string_view> // `std::string_view`
 
 #include <fmt/core.h> // `fmt::format_to`
 #include <arrow/c/abi.h>
@@ -49,6 +50,18 @@ arf::FlightCallOptions arrow_call_options(arrow_mem_pool_t& pool) {
     options.write_options = arrow_write_options(pool);
     options.memory_manager;
     return options;
+}
+
+void export_options(ukv_options_t options, std::string& cmd) {
+    if (options & ukv_option_read_shared_memory_k)
+        fmt::format_to(std::back_inserter(cmd), "{}&", kParamFlagSharedMemRead);
+    if (options & ukv_option_transaction_dont_watch_k)
+        fmt::format_to(std::back_inserter(cmd), "{}&", kParamFlagDontWatch);
+
+    // This flag shouldn't be forwarded to the server.
+    // In standalone builds it only applies to the client.
+    // if (options & ukv_option_dont_discard_memory_k)
+    //     fmt::format_to(std::back_inserter(cmd), "{}&", kParamFlagDontDiscard);
 }
 
 /*********************************************************/
@@ -105,8 +118,6 @@ void ukv_read(ukv_read_t* c_ptr) {
                                          ? kParamReadPartLengths.c_str()
                                          : nullptr;
 
-    bool const read_shared = c.options & ukv_option_read_shared_memory_k;
-    bool const dont_watch = c.options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
     descriptor.type = arf::FlightDescriptor::UNKNOWN;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightRead);
@@ -119,10 +130,7 @@ void ukv_read(ukv_read_t* c_ptr) {
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (partial_mode)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamReadPart, partial_mode);
-    if (read_shared)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (dont_watch)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagDontWatch);
+    export_options(c.options, descriptor.cmd);
 
     bool const has_collections_column = collections && !same_collection;
     constexpr bool has_keys_column = true;
@@ -627,8 +635,6 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
                                    ? kParamReadPartPresences.c_str()
                                    : nullptr;
 
-    bool const read_shared = c.options & ukv_option_read_shared_memory_k;
-    bool const dont_watch = c.options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
     descriptor.type = arf::FlightDescriptor::UNKNOWN;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightMatchPath);
@@ -641,10 +647,7 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (partial_mode)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamReadPart, partial_mode);
-    if (read_shared)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (dont_watch)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagDontWatch);
+    export_options(c.options, descriptor.cmd);
 
     bool const has_collections_column = collections && !same_collection;
     bool const has_previous_column = previous != nullptr;
@@ -827,8 +830,6 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
                                          ? kParamReadPartLengths.c_str()
                                          : nullptr;
 
-    bool const read_shared = c.options & ukv_option_read_shared_memory_k;
-    bool const dont_watch = c.options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
     descriptor.type = arf::FlightDescriptor::UNKNOWN;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightReadPath);
@@ -841,10 +842,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (partial_mode)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamReadPart, partial_mode);
-    if (read_shared)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (dont_watch)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagDontWatch);
+    export_options(c.options, descriptor.cmd);
 
     bool const has_collections_column = collections && !same_collection;
     constexpr bool has_paths_column = true;
@@ -1075,8 +1073,6 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     arf::FlightCallOptions options = arrow_call_options(pool);
 
     // Configure the `cmd` descriptor
-    bool const read_shared = c.options & ukv_option_read_shared_memory_k;
-    bool const dont_watch = c.options & ukv_option_transaction_dont_watch_k;
     arf::FlightDescriptor descriptor;
     descriptor.type = arf::FlightDescriptor::UNKNOWN;
     fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightScan);
@@ -1087,10 +1083,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
                        std::uintptr_t(c.transaction));
     if (same_named_collection)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
-    if (read_shared)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagSharedMemRead);
-    if (dont_watch)
-        fmt::format_to(std::back_inserter(descriptor.cmd), "{}&", kParamFlagDontWatch);
+    export_options(c.options, descriptor.cmd);
 
     // Send the request to server
     ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
@@ -1121,7 +1114,10 @@ void ukv_scan(ukv_scan_t* c_ptr) {
 
     // Convert the responses in Arrow C form
     return_error_if_m(output_schema_c.n_children == 1, c.error, error_unknown_k, "Expecting one column");
-    return_error_if_m(output_schema_c.children[0]->n_children == 1, c.error, error_unknown_k, "Expecting one sub-column");
+    return_error_if_m(output_schema_c.children[0]->n_children == 1,
+                      c.error,
+                      error_unknown_k,
+                      "Expecting one sub-column");
 
     auto offs_ptr = (ukv_length_t*)output_array_c.children[0]->buffers[1];
     auto data_ptr = (ukv_key_t*)output_array_c.children[0]->children[0]->buffers[1];
@@ -1163,7 +1159,7 @@ void ukv_collection_create(ukv_collection_create_t* c_ptr) {
     arf::Action action;
     fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightColCreate, kParamCollectionName, c.name);
     if (c.config)
-        action.body = std::make_shared<ar::Buffer>(ar::util::string_view {c.config});
+        action.body = std::make_shared<ar::Buffer>(std::string_view {c.config});
 
     ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
     {
@@ -1178,7 +1174,10 @@ void ukv_collection_create(ukv_collection_create_t* c_ptr) {
     return_error_if_m(maybe_id.ok(), c.error, network_k, "No response received");
 
     auto& id_ptr = maybe_id.ValueUnsafe();
-    return_error_if_m(id_ptr->body->size() == sizeof(ukv_collection_t), c.error, error_unknown_k, "Inadequate response");
+    return_error_if_m(id_ptr->body->size() == sizeof(ukv_collection_t),
+                      c.error,
+                      error_unknown_k,
+                      "Inadequate response");
     std::memcpy(c.id, id_ptr->body->data(), sizeof(ukv_collection_t));
 }
 
@@ -1301,7 +1300,10 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
     return_error_if_m(maybe_id.ok(), c.error, network_k, "No response received");
 
     auto& id_ptr = maybe_id.ValueUnsafe();
-    return_error_if_m(id_ptr->body->size() == sizeof(ukv_transaction_t), c.error, error_unknown_k, "Inadequate response");
+    return_error_if_m(id_ptr->body->size() == sizeof(ukv_transaction_t),
+                      c.error,
+                      error_unknown_k,
+                      "Inadequate response");
     std::memcpy(c.transaction, id_ptr->body->data(), sizeof(ukv_transaction_t));
 }
 

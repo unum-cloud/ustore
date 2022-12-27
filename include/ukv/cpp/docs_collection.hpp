@@ -40,11 +40,11 @@ namespace unum::ukv {
  * any "Document type".
  */
 class docs_collection_t {
-    ukv_database_t db_ = nullptr;
-    ukv_collection_t collection_ = ukv_collection_main_k;
-    ukv_transaction_t txn_ = nullptr;
-    any_arena_t arena_;
-    ukv_doc_field_type_t type_ = ukv_doc_field_default_k;
+    ukv_database_t db_ {nullptr};
+    ukv_collection_t collection_  {ukv_collection_main_k};
+    ukv_transaction_t txn_ {nullptr};
+    any_arena_t arena_ {nullptr};
+    ukv_doc_field_type_t type_ {ukv_doc_field_default_k};
 
   public:
     inline docs_collection_t() noexcept : arena_(nullptr) {}
@@ -189,7 +189,7 @@ class docs_collection_t {
 
             if constexpr (sfinae_has_field_gt<plain_t>::value)
                 arg.field = keys.field;
-            return result_t {db_, txn_, arg, arena_, type};
+            return result_t {db_, txn_, std::move(arg), arena_, type};
         }
         else {
             using locations_t = locations_in_collection_gt<keys_arg_at>;
