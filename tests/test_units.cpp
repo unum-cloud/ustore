@@ -515,43 +515,23 @@ TEST(db, multiple_collection) {
 
     clear_environment();
     database_t db;
-
     EXPECT_TRUE(db.open(path()));
 
     blobs_collection_t col1 = *db.collection_create("col1");
     blobs_collection_t col2 = *db.collection_create("col2");
-    blobs_collection_t col3 = *db.collection_create("col3");
-    blobs_collection_t col4 = *db.collection_create("col4");
-    blobs_collection_t col5 = *db.collection_create("col5");
 
     triplet_t triplet;
-
     auto col1_ref = col1[triplet.keys];
     auto col2_ref = col2[triplet.keys];
-    auto col3_ref = col3[triplet.keys];
-    auto col4_ref = col4[triplet.keys];
-    auto col5_ref = col5[triplet.keys];
 
     check_length(col1_ref, ukv_length_missing_k);
     check_length(col2_ref, ukv_length_missing_k);
-    check_length(col3_ref, ukv_length_missing_k);
-    check_length(col4_ref, ukv_length_missing_k);
-    check_length(col5_ref, ukv_length_missing_k);
 
     round_trip(col1_ref, triplet);
     check_length(col1_ref, triplet_t::val_size_k);
 
     round_trip(col2_ref, triplet);
     check_length(col2_ref, triplet_t::val_size_k);
-
-    round_trip(col3_ref, triplet);
-    check_length(col3_ref, triplet_t::val_size_k);
-
-    round_trip(col4_ref, triplet);
-    check_length(col4_ref, triplet_t::val_size_k);
-
-    round_trip(col5_ref, triplet);
-    check_length(col5_ref, triplet_t::val_size_k);
 
     EXPECT_TRUE(*db.contains("col1"));
     EXPECT_TRUE(col1.clear_values());
@@ -566,23 +546,10 @@ TEST(db, multiple_collection) {
     EXPECT_TRUE(db.drop("col2"));
     EXPECT_FALSE(*db.contains("col2"));
 
-    EXPECT_TRUE(*db.contains("col3"));
-    EXPECT_TRUE(*db.contains("col4"));
-    EXPECT_TRUE(*db.contains("col5"));
-
-    EXPECT_TRUE(db.drop("col4"));
-    EXPECT_FALSE(*db.contains("col4"));
-
-    check_length(col3_ref, triplet_t::val_size_k);
-    check_length(col5_ref, triplet_t::val_size_k);
-
     EXPECT_TRUE(db.clear());
 
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
-    EXPECT_FALSE(*db.contains("col3"));
-    EXPECT_FALSE(*db.contains("col4"));
-    EXPECT_FALSE(*db.contains("col5"));
 
     blobs_collection_t main_collection = *db.collection();
     auto main_col_ref = main_collection[triplet.keys];
@@ -605,7 +572,6 @@ TEST(db, multiple_collection) {
     size_t count = 0;
     auto cols = *maybe_cols;
     while (!cols.names.is_end()) {
-
         ++cols.names;
         ++count;
     }
@@ -618,7 +584,6 @@ TEST(db, multiple_collection) {
  * https://jepsen.io/consistency/models/read-committed
  */
 TEST(db, transaction_read_commited) {
-
     if (!ukv_supports_transactions_k)
         return;
 
@@ -658,7 +623,6 @@ TEST(db, transaction_read_commited) {
  * https://jepsen.io/consistency/models/snapshot-isolation
  */
 TEST(db, transaction_snapshot_isolation) {
-
     if (!ukv_supports_snapshots_k)
         return;
 
@@ -706,7 +670,6 @@ TEST(db, transaction_snapshot_isolation) {
 }
 
 TEST(db, transaction_overwrite) {
-
     if (!ukv_supports_transactions_k)
         return;
 
@@ -788,7 +751,6 @@ TEST(db, transaction_overwrite) {
 }
 
 TEST(db, transaction_erase_missing) {
-
     if (!ukv_supports_transactions_k)
         return;
 
@@ -812,7 +774,6 @@ TEST(db, transaction_erase_missing) {
 }
 
 TEST(db, transaction_write_conflicting) {
-
     if (!ukv_supports_transactions_k)
         return;
 
@@ -832,7 +793,6 @@ TEST(db, transaction_write_conflicting) {
 }
 
 TEST(db, transaction_sequenced_commit) {
-
     if (!ukv_supports_transactions_k)
         return;
 
@@ -1042,7 +1002,6 @@ TEST(db, paths) {
  * this test helps catch problems in bucket reorganization.
  */
 TEST(db, paths_linked_list) {
-
     constexpr std::size_t count = 1000;
     clear_environment();
     database_t db;
@@ -1210,16 +1169,6 @@ TEST(db, docs_flat) {
     M_EXPECT_EQ_JSON(*collection[5].value(), jsons[0]);
     M_EXPECT_EQ_JSON(*collection[ckf(5, "person")].value(), "\"Alice\"");
     M_EXPECT_EQ_JSON(*collection[ckf(5, "age")].value(), "24");
-
-#if 0
-    // MsgPack
-    collection.as(ukv_format_msgpack_k);
-    M_EXPECT_EQ_MSG(val, json.c_str());
-    val = *collection[ckf(1, "person")].value();
-    M_EXPECT_EQ_MSG(val, "\"Carl\"");
-    val = *collection[ckf(1, "age")].value();
-    M_EXPECT_EQ_MSG(val, "24");
-#endif
 
     // Let's not clean, to be able to introspect the state after failures
     // EXPECT_TRUE(db.clear());
@@ -1423,7 +1372,6 @@ TEST(db, docs_merge_and_patch) {
  * and higher-level compile-time C++ meta-programming abstractions.
  */
 TEST(db, docs_table) {
-
     using json_t = nlohmann::json;
     clear_environment();
     database_t db;
@@ -1847,7 +1795,6 @@ TEST(db, graph_triangle_batch) {
  * while A-B is updated externally, the commit will fail.
  */
 TEST(db, graph_transaction_watch) {
-
     if (!ukv_supports_transactions_k)
         return;
 
@@ -1897,7 +1844,6 @@ TEST(db, graph_random_fill) {
 
 // TODO: What is this?
 TEST(db, graph_conflicting_transactions) {
-
     if (!ukv_supports_transactions_k)
         return;
 
