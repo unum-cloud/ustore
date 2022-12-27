@@ -1281,8 +1281,8 @@ int main(int argc, char* argv[]) {
     config = "/var/lib/ukv/leveldb/";
 #elif defined(UKV_ENGINE_IS_ROCKSDB)
     config = "/var/lib/ukv/rocksdb/";
-#else
-    config = "";
+#elif defined(UKV_ENGINE_IS_UDISK)
+    config = "/var/lib/ukv/udisk/";
 #endif
 
     auto cli = ( //
