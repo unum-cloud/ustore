@@ -1802,9 +1802,12 @@ TEST(db, graph_remove_edges_keep_vertices) {
         EXPECT_TRUE(*graph.contains(vertex_id));
     }
 }
-
-// TODO: Why do we need this?
-TEST(db, graph_get_edges) {
+/**
+ * Add edges to the graph. Checks how many edges each vertex has.
+ * Then removed the edges, making sure that the vertices aren't
+ * connected to each other.
+ */
+TEST(db, graph_get_vertex_edges) {
     clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
