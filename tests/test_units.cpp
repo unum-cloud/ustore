@@ -1076,7 +1076,7 @@ TEST(db, docs_nested_batch) {
 }
 
 /**
- *
+ * Performs basic JSON Pathes, JSON Merge-Patches, and sub-document level updates.
  */
 TEST(db, docs_modify) {
     clear_environment();
@@ -1346,21 +1346,15 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
     return es;
 }
 
+/**
+ * Upserts disconnected vertices into the graph.
+ */
 TEST(db, graph_upsert_vertices) {
     clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
     graph_collection_t net = db.main<graph_collection_t>();
-    edge_t edge1 {1, 2, 9};
-    EXPECT_TRUE(net.upsert_edge(edge1));
-    EXPECT_TRUE(*net.contains(1));
-    EXPECT_TRUE(*net.contains(2));
-    EXPECT_FALSE(*net.contains(3));
-
-    EXPECT_TRUE(net.upsert_vertex(3));
-    EXPECT_TRUE(*net.contains(3));
-
     std::vector<ukv_key_t> vertices {1, 4, 5, 2};
     EXPECT_TRUE(net.upsert_vertices(vertices));
 
@@ -1368,6 +1362,22 @@ TEST(db, graph_upsert_vertices) {
     EXPECT_TRUE(*net.contains(2));
     EXPECT_TRUE(*net.contains(4));
     EXPECT_TRUE(*net.contains(5));
+}
+
+/**
+ * Upserts an edge and its member vertices into the graph.
+ */
+TEST(db, graph_upsert_edge) {
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t net = db.main<graph_collection_t>();
+    edge_t edge {1, 2, 9};
+    EXPECT_TRUE(net.upsert_edge(edge));
+    EXPECT_TRUE(*net.contains(1));
+    EXPECT_TRUE(*net.contains(2));
+    EXPECT_FALSE(*net.contains(3));
 
     auto neighbors = net.neighbors(1).throw_or_release();
     EXPECT_EQ(neighbors.size(), 1);
@@ -1629,7 +1639,10 @@ TEST(db, graph_random_fill) {
     }
 }
 
-// TODO: What is this?
+/**
+ * Inserts two edges with a shared vertex in two separate transactions.
+ * The latter insert must fail, as it depends on the preceding state of the vertex.
+ */
 TEST(db, graph_conflicting_transactions) {
     if (!ukv_supports_transactions_k)
         return;
@@ -1638,36 +1651,8 @@ TEST(db, graph_conflicting_transactions) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t net = db.main<graph_collection_t>();
-
     transaction_t txn = *db.transact();
     graph_collection_t txn_net = txn.main<graph_collection_t>();
-
-    // triangle
-    edge_t edge1 {1, 2, 9};
-    edge_t edge2 {2, 3, 10};
-    edge_t edge3 {3, 1, 11};
-
-    EXPECT_TRUE(txn_net.upsert_edge(edge1));
-    EXPECT_TRUE(txn_net.upsert_edge(edge2));
-    EXPECT_TRUE(txn_net.upsert_edge(edge3));
-
-    EXPECT_TRUE(*txn_net.contains(1));
-    EXPECT_TRUE(*txn_net.contains(2));
-    EXPECT_TRUE(*txn_net.contains(3));
-
-    EXPECT_FALSE(*net.contains(1));
-    EXPECT_FALSE(*net.contains(2));
-    EXPECT_FALSE(*net.contains(3));
-
-    EXPECT_TRUE(txn.commit());
-    EXPECT_TRUE(*net.contains(1));
-    EXPECT_TRUE(*net.contains(2));
-    EXPECT_TRUE(*net.contains(3));
-
-    EXPECT_TRUE(txn.reset());
-    txn_net = txn.main<graph_collection_t>();
-
     transaction_t txn2 = *db.transact();
     graph_collection_t txn_net2 = txn2.main<graph_collection_t>();
 
@@ -1676,7 +1661,6 @@ TEST(db, graph_conflicting_transactions) {
 
     EXPECT_TRUE(txn_net.upsert_edge(edge4));
     EXPECT_TRUE(txn_net2.upsert_edge(edge5));
-
     EXPECT_TRUE(txn.commit());
     EXPECT_FALSE(txn2.commit());
 }
@@ -1804,8 +1788,8 @@ TEST(db, graph_remove_edges_keep_vertices) {
 }
 /**
  * Add edges to the graph. Checks how many edges each vertex has.
- * Then removed the edges, making sure that the vertices aren't
- * connected to each other.
+ * Then remove the edges, making sure that the vertices aren't
+ * connected to each other anymore.
  */
 TEST(db, graph_get_vertex_edges) {
     clear_environment();
