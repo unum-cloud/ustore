@@ -931,6 +931,10 @@ class UKVService : public arf::FlightServerBase {
             auto rounded_counts = arena.alloc<ukv_length_t>(result_length, 0);
             if (rounded_counts)
                 std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
+            else {
+                rounded_counts = arena.alloc<ukv_length_t>(1, 0);
+                // std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
+            }
             ukv_size_t collections_count = 1 + request_content;
             ukv_to_arrow_schema(result_length,
                                 collections_count,
@@ -956,7 +960,7 @@ class UKVService : public arf::FlightServerBase {
                     ukv_doc_field_bin_k,
                     nullptr,
                     found_offsets,
-                    found_values,
+                    result_length ? (void const*)found_values : (void const*)(&zero_size_data_k),
                     output_schema_c.children[1],
                     output_batch_c.children[1],
                     status.member_ptr());
@@ -1272,10 +1276,13 @@ int main(int argc, char* argv[]) {
 
     int port = 38709;
     std::string config;
-#if UKV_ENGINE_NAME == rocksdb
-    config = "/var/lib/ukv/rocksdb/";
-#elif UKV_ENGINE_NAME == leveldb
+
+#if defined(UKV_ENGINE_IS_LEVELDB)
     config = "/var/lib/ukv/leveldb/";
+#elif defined(UKV_ENGINE_IS_ROCKSDB)
+    config = "/var/lib/ukv/rocksdb/";
+#else
+    config = "";
 #endif
 
     auto cli = ( //
