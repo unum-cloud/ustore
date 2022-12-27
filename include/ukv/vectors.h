@@ -52,32 +52,32 @@ typedef struct ukv_vectors_write_t {
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /** @brief Read and Write options for Read-Modify-Write logic. @see `ukv_read_t`, `ukv_write_t`. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count = 1;
+    ukv_size_t tasks_count;
     ukv_length_t dimensions;
-    ukv_vector_scalar_t scalar_type = ukv_vector_scalar_f32_k;
+    ukv_vector_scalar_t scalar_type;
 
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
+    ukv_collection_t const* collections;
+    ukv_size_t collections_stride;
 
     ukv_key_t const* keys;
-    ukv_size_t keys_stride = 0;
+    ukv_size_t keys_stride;
 
     ukv_bytes_cptr_t const* vectors_starts;
-    ukv_size_t vectors_starts_stride = 0;
-    ukv_size_t vectors_stride = 0;
+    ukv_size_t vectors_starts_stride;
+    ukv_size_t vectors_stride;
 
-    ukv_length_t const* offsets = NULL;
-    ukv_size_t offsets_stride = 0;
+    ukv_length_t const* offsets;
+    ukv_size_t offsets_stride;
 
     // @}
 
@@ -106,34 +106,34 @@ typedef struct ukv_vectors_read_t {
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /** @brief Read options. @see `ukv_read_t`. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count = 1;
+    ukv_size_t tasks_count;
     ukv_length_t dimensions;
-    ukv_vector_scalar_t scalar_type = ukv_vector_scalar_f32_k;
+    ukv_vector_scalar_t scalar_type;
 
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
+    ukv_collection_t const* collections;
+    ukv_size_t collections_stride;
 
-    ukv_key_t const* keys = NULL;
-    ukv_size_t keys_stride = 0;
+    ukv_key_t const* keys;
+    ukv_size_t keys_stride;
 
     /// @}
 
     /// @}
     /// @name Outputs
     /// @{
-    ukv_octet_t** presences = NULL;
-    ukv_length_t** offsets = NULL;
-    ukv_byte_t** vectors = NULL;
+    ukv_octet_t** presences;
+    ukv_length_t** offsets;
+    ukv_byte_t** vectors;
     /// @}
 
 } ukv_vectors_read_t;
@@ -159,42 +159,42 @@ typedef struct ukv_vectors_search_t {
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /** @brief Read options. @see `ukv_read_t`. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count = 1;
+    ukv_size_t tasks_count;
     ukv_length_t dimensions;
-    ukv_vector_scalar_t scalar_type = ukv_vector_scalar_f32_k;
-    ukv_vector_metric_t metric = ukv_vector_metric_cos_k;
-    ukv_float_t metric_threshold = 0;
+    ukv_vector_scalar_t scalar_type;
+    ukv_vector_metric_t metric;
+    ukv_float_t metric_threshold;
 
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
+    ukv_collection_t const* collections;
+    ukv_size_t collections_stride;
 
     ukv_length_t const* match_counts_limits;
-    ukv_size_t match_counts_limits_stride = 0;
+    ukv_size_t match_counts_limits_stride;
 
     ukv_bytes_cptr_t const* queries_starts;
-    ukv_size_t queries_starts_stride = 0;
-    ukv_size_t queries_stride = 0;
+    ukv_size_t queries_starts_stride;
+    ukv_size_t queries_stride;
 
-    ukv_length_t const* queries_offsets = NULL;
-    ukv_size_t queries_offsets_stride = 0;
+    ukv_length_t const* queries_offsets;
+    ukv_size_t queries_offsets_stride;
 
     /// @}
     /// @name Outputs
     /// @{
-    ukv_length_t** match_counts = NULL;
-    ukv_length_t** match_offsets = NULL;
-    ukv_key_t** match_keys = NULL;
-    ukv_float_t** match_metrics = NULL;
+    ukv_length_t** match_counts;
+    ukv_length_t** match_offsets;
+    ukv_key_t** match_keys;
+    ukv_float_t** match_metrics;
     /// @}
 
 } ukv_vectors_search_t;

@@ -138,7 +138,9 @@
         "build/lib/**/*.jar"
     ],
     "cSpell.words": [
+        "arange",
         "Ashot",
+        "BLAS",
         "bson",
         "FOSS",
         "frontends",

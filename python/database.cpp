@@ -254,17 +254,17 @@ void ukv::wrap_database(py::module& m) {
 
     py_kstream.def("__next__", [](py_kstream_t& kstream) {
         ukv_key_t key = kstream.native.key();
-        if (kstream.stop)
+        if (kstream.native.is_end() || kstream.stop)
             throw py::stop_iteration();
-        kstream.stop = kstream.terminal == key || kstream.native.is_end();
+        kstream.stop = kstream.terminal == key;
         ++kstream.native;
         return key;
     });
     py_kvstream.def("__next__", [](py_kvstream_t& kvstream) {
         ukv_key_t key = kvstream.native.key();
-        if (kvstream.stop)
+        if (kvstream.native.is_end() || kvstream.stop)
             throw py::stop_iteration();
-        kvstream.stop = kvstream.terminal == key || kvstream.native.is_end();
+        kvstream.stop = kvstream.terminal == key;
         value_view_t value_view = kvstream.native.value();
         PyObject* value_ptr = PyBytes_FromStringAndSize(value_view.c_str(), value_view.size());
         ++kvstream.native;

@@ -36,12 +36,13 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_put( //
     ukv_arena_t arena_c = NULL;
     ukv_error_t error_c = NULL;
 
-    ukv_write_t write {
+    struct ukv_write_t write = {
         .db = db_ptr_c,
         .error = &error_c,
         .transaction = txn_ptr_c,
         .arena = &arena_c,
         .options = options_c,
+        .tasks_count = 1,
         .collections = &collection_ptr_c,
         .keys = &key_c,
         .offsets = &value_off_c,
@@ -79,12 +80,13 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_containsK
     ukv_octet_t* found_presences_c = NULL;
     ukv_arena_t arena_c = NULL;
     ukv_error_t error_c = NULL;
-    ukv_read_t read {
+    struct ukv_read_t read = {
         .db = db_ptr_c,
         .error = &error_c,
         .transaction = txn_ptr_c,
         .arena = &arena_c,
         .options = options_c,
+        .tasks_count = 1,
         .collections = &collection_ptr_c,
         .keys = &key_c,
         .presences = &found_presences_c,
@@ -126,12 +128,13 @@ JNIEXPORT jbyteArray JNICALL Java_com_unum_ukv_DataBase_00024Transaction_get( //
     ukv_bytes_ptr_t found_values_c = NULL;
     ukv_arena_t arena_c = NULL;
     ukv_error_t error_c = NULL;
-    ukv_read_t read {
+    struct ukv_read_t read = {
         .db = db_ptr_c,
         .error = &error_c,
         .transaction = txn_ptr_c,
         .arena = &arena_c,
         .options = options_c,
+        .tasks_count = 1,
         .collections = &collection_ptr_c,
         .keys = &key_c,
         .offsets = &found_offsets_c,
@@ -188,12 +191,13 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_erase( //
     ukv_arena_t arena_c = NULL;
     ukv_error_t error_c = NULL;
 
-    ukv_write_t write {
+    struct ukv_write_t write = {
         .db = db_ptr_c,
         .error = &error_c,
         .transaction = txn_ptr_c,
         .arena = &arena_c,
         .options = options_c,
+        .tasks_count = 1,
         .collections = &collection_ptr_c,
         .keys = &key_c,
     };
@@ -220,7 +224,7 @@ JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Transaction_rollback( //
     }
 
     ukv_error_t error_c = NULL;
-    ukv_transaction_init_t txn_init {
+    struct ukv_transaction_init_t txn_init = {
         .db = db_ptr_c,
         .error = &error_c,
         .transaction = &txn_ptr_c,
@@ -248,10 +252,10 @@ JNIEXPORT jboolean JNICALL Java_com_unum_ukv_DataBase_00024Transaction_commit( /
 
     ukv_options_t options_c = ukv_options_default_k;
     ukv_error_t error_c = NULL;
-    ukv_transaction_commit_t txn_commit {
+    struct ukv_transaction_commit_t txn_commit = {
         .db = db_ptr_c,
         .error = &error_c,
-        .transaction txn_ptr_c,
+        .transaction = txn_ptr_c,
         .options = options_c,
     };
 
