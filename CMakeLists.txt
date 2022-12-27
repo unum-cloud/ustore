@@ -185,7 +185,7 @@ set(UKV_TEST_NAMES "test_units")
 # Define the Engine libraries we will need to build
 if(${UKV_BUILD_ENGINE_UMEM})
   add_library(ukv_embedded_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ukv_embedded_umem pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
+  target_link_libraries(ukv_embedded_umem pthread yyjson simdjson bson pcre2 arrow::parquet arrow::arrow arrow::bundled ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
   target_compile_definitions(ukv_embedded_umem INTERFACE UKV_VERSION="${UKV_VERSION}")
   target_compile_definitions(ukv_embedded_umem INTERFACE UKV_ENGINE_NAME=umem)
 
@@ -274,13 +274,7 @@ if(${UKV_BUILD_TESTS})
     foreach(test_name IN ITEMS ${UKV_TEST_NAMES})
       string(CONCAT test_exe ${test_name} "_" ${client_lib})
       add_executable(${test_exe} tests/${test_name}.cpp)
-
-      if(${client_lib} MATCHES "umem")
-        target_compile_definitions(${test_exe} PUBLIC UKV_TEST_PATH="tmp/umem/all.dat")
-      else()
-        target_compile_definitions(${test_exe} PUBLIC UKV_TEST_PATH="tmp/${client_lib}/")
-      endif()
-
+      target_compile_definitions(${test_exe} PUBLIC UKV_TEST_PATH="tmp/${client_lib}/")
       target_link_libraries(${test_exe} gtest fmt::fmt ${client_lib} ${client_dependencies})
       add_test(NAME "${test_exe}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_exe}")
     endforeach()

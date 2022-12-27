@@ -1,24 +1,32 @@
+import java.io.File;
+import java.util.Arrays;
 
-import com.unum.ukv.DataBaseLevelDB;
 import org.junit.Test;
 
-import java.util.Arrays;
+import com.unum.ukv.DataBaseLevelDB;
 
 public class DataBaseLevelDBTest {
     static {
         DataBaseLevelDB.init();
     }
+
+    public static void deleteDirectoryFiles(String path) {
+        File directory = new File(path);
+        if (!directory.isDirectory())
+            return;
+        
+        for (File f : directory.listFiles())
+            f.delete();
+    }
+
     @Test
     public void test() {
-        DataBaseLevelDB.Context ctx = new DataBaseLevelDB.Context("");
+        String path = "./tmp/";
+        deleteDirectoryFiles(path);
+        DataBaseLevelDB.Context ctx = new DataBaseLevelDB.Context(path);
+
         ctx.put(42, "hey".getBytes());
         assert Arrays.equals(ctx.get(42), "hey".getBytes()) : "Received wrong value";
-
-        DataBaseLevelDB.Transaction txn = ctx.transaction();
-        txn.put("any", 42, "meaning of life".getBytes());
-        assert Arrays.equals(txn.get("any", 42), "meaning of life".getBytes()) : "Wrong philosophy";
-        txn.commit();
-        assert Arrays.equals(ctx.get("any", 42), "meaning of life".getBytes()) : "Accepted wrong philosophy";
 
         ctx.close();
         System.out.println("Success!");
