@@ -578,6 +578,48 @@ TEST(db, multiple_collection) {
     EXPECT_EQ(count, 0);
 }
 
+TEST(db, check_contents_of_collection) {
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    blobs_collection_t main_collection = *db.collection();
+
+    EXPECT_EQ(main_collection.keys().size(), 0);
+    EXPECT_EQ(main_collection.items().size(), 0);
+    EXPECT_EQ(*main_collection.at(0).value(), value_view_t {});
+    EXPECT_EQ(*main_collection.at(1).value(), value_view_t {});
+    EXPECT_EQ(*main_collection.at(2).value(), value_view_t {});
+    EXPECT_EQ(*main_collection.at('a').value(), value_view_t {});
+    EXPECT_EQ(*main_collection.at('b').value(), value_view_t {});
+    EXPECT_EQ(*main_collection.at('c').value(), value_view_t {});
+
+    EXPECT_EQ(main_collection.keys().size(), 0);
+
+    triplet_t triplet;
+    auto main_col_ref = main_collection[triplet.keys];
+    round_trip(main_col_ref, triplet);
+    check_length(main_col_ref, triplet_t::val_size_k);
+    EXPECT_EQ(main_collection.keys().size(), 3ul);
+
+    value_view_t val = *main_collection.at(0).value();
+    EXPECT_EQ(*main_collection.at('a').value(), value_view_t {"A"});
+    EXPECT_EQ(*main_collection.at('b').value(), value_view_t {"B"});
+    EXPECT_EQ(*main_collection.at('c').value(), value_view_t {"C"});
+
+    triplet.vals = {'M', 'N', 'K'};
+    round_trip(main_col_ref, triplet);
+    check_length(main_col_ref, triplet_t::val_size_k);
+    EXPECT_EQ(*main_collection.at('a').value(), value_view_t {"M"});
+    EXPECT_EQ(*main_collection.at('b').value(), value_view_t {"N"});
+    EXPECT_EQ(*main_collection.at('c').value(), value_view_t {"K"});
+    EXPECT_EQ(main_collection.keys().size(), 3ul);
+
+    main_collection.clear();
+    EXPECT_EQ(*main_collection.at('a').value(), value_view_t {});
+    EXPECT_EQ(*main_collection.at('b').value(), value_view_t {});
+    EXPECT_EQ(*main_collection.at('c').value(), value_view_t {});
+    EXPECT_EQ(main_collection.keys().size(), 0);
+}
+
 /**
  * Checks the "Read Commited" consistency guarantees of transactions.
  * Readers can't see the contents of pending (not committed) transactions.
