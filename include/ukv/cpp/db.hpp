@@ -288,8 +288,40 @@ class database_t : public std::enable_shared_from_this<database_t> {
             close();
     }
 
+    expected_gt<context_t> transact(bool snapshot = false) noexcept {
+        if (snapshot && !ukv_supports_snapshots_k)
+            return status_t::status_view("Snapshots not supported!");
+
+        status_t status;
+        ukv_transaction_t raw = nullptr;
+        ukv_transaction_init_t txn_init {
+            .db = db_,
+            .error = status.member_ptr(),
+            .transaction = &raw,
+        };
+
+        ukv_transaction_init(&txn_init);
+        if (!status)
+            return {std::move(status), context_t {db_, nullptr}};
+        else
+            return context_t {db_, raw};
+    }
+
+    expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name, true); }
+    operator expected_gt<blobs_collection_t>() noexcept { return collection(); }
+
+    expected_gt<bool> contains(std::string_view name) noexcept { return context_t {db_, nullptr}.contains(name); }
+
     template <typename collection_at = blobs_collection_t>
-    expected_gt<collection_at> collection_create(ukv_str_view_t name, ukv_str_view_t config = "") noexcept {
+    expected_gt<collection_at> collection(std::string_view name = {}) noexcept {
+        auto maybe_id = find<collection_at>(name);
+        if (!maybe_id)
+            return maybe_id.release_status();
+        return collection_at {db_, *maybe_id, nullptr, nullptr};
+    }
+
+    template <typename collection_at = blobs_collection_t>
+    expected_gt<collection_at> create(ukv_str_view_t name, ukv_str_view_t config = "") noexcept {
         status_t status;
         ukv_collection_t collection = ukv_collection_main_k;
         ukv_collection_create_t collection_init {
@@ -305,6 +337,23 @@ class database_t : public std::enable_shared_from_this<database_t> {
             return status;
         else
             return collection_at {db_, collection, nullptr, nullptr};
+    }
+
+    template <typename collection_at = blobs_collection_t>
+    expected_gt<ukv_collection_t> find_or_create(std::string_view name) noexcept {
+        auto collection_id = context_t {db_, nullptr}.find(name);
+        if (collection_id)
+            return collection_id;
+
+        auto col = create<collection_at>(name.data()).throw_or_release();
+        return ukv_collection_t(*col.member_ptr());
+    }
+
+    status_t drop(std::string_view name) noexcept {
+        auto maybe_collection = collection(name);
+        if (!maybe_collection)
+            return maybe_collection.release_status();
+        return maybe_collection->drop();
     }
 
     status_t clear() noexcept {
@@ -334,52 +383,6 @@ class database_t : public std::enable_shared_from_this<database_t> {
         collection_drop.mode = ukv_drop_keys_vals_k;
         ukv_collection_drop(&collection_drop);
         return status;
-    }
-
-    expected_gt<context_t> transact(bool snapshot = false) noexcept {
-        if (snapshot && !ukv_supports_snapshots_k)
-            return status_t::status_view("Snapshots not supported!");
-
-        status_t status;
-        ukv_transaction_t raw = nullptr;
-        ukv_transaction_init_t txn_init {
-            .db = db_,
-            .error = status.member_ptr(),
-            .transaction = &raw,
-        };
-
-        ukv_transaction_init(&txn_init);
-        if (!status)
-            return {std::move(status), context_t {db_, nullptr}};
-        else
-            return context_t {db_, raw};
-    }
-
-    expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name, true); }
-    operator expected_gt<blobs_collection_t>() noexcept { return collection(); }
-    template <typename collection_at = blobs_collection_t>
-    expected_gt<ukv_collection_t> find(std::string_view name, bool make = false) noexcept {
-        auto collection_id = context_t {db_, nullptr}.find(name);
-        if (!collection_id && make) {
-            auto col = collection_create<collection_at>(name.data()).throw_or_release();
-            return ukv_collection_t(*col.member_ptr());
-        }
-        return collection_id;
-    }
-    expected_gt<bool> contains(std::string_view name) noexcept { return context_t {db_, nullptr}.contains(name); }
-    status_t drop(std::string_view name) noexcept {
-        auto maybe_collection = collection(name);
-        if (!maybe_collection)
-            return maybe_collection.release_status();
-        return maybe_collection->drop();
-    }
-
-    template <typename collection_at = blobs_collection_t>
-    expected_gt<collection_at> collection(std::string_view name = {}, bool make = false) noexcept {
-        auto maybe_id = find<collection_at>(name, make);
-        if (!maybe_id)
-            return maybe_id.release_status();
-        return collection_at {db_, *maybe_id, nullptr, nullptr};
     }
 };
 

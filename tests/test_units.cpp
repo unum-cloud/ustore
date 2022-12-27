@@ -378,9 +378,9 @@ TEST(db, named_collections) {
         EXPECT_TRUE(db["col1"]);
         EXPECT_TRUE(db["col2"]);
 
-        EXPECT_FALSE(db.collection_create("col1"));
+        EXPECT_FALSE(db.create("col1"));
         blobs_collection_t col1 = *db["col1"];
-        EXPECT_FALSE(db.collection_create("col2"));
+        EXPECT_FALSE(db.create("col2"));
         blobs_collection_t col2 = *db["col2"];
 
         check_binary_collection(col1);
@@ -409,10 +409,10 @@ TEST(db, named_collections_list) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    blobs_collection_t col1 = *db.collection_create("col1");
-    blobs_collection_t col2 = *db.collection_create("col2");
-    blobs_collection_t col3 = *db.collection_create("col3");
-    blobs_collection_t col4 = *db.collection_create("col4");
+    blobs_collection_t col1 = *db.create("col1");
+    blobs_collection_t col2 = *db.create("col2");
+    blobs_collection_t col3 = *db.create("col3");
+    blobs_collection_t col4 = *db.create("col4");
 
     EXPECT_TRUE(*db.contains("col1"));
     EXPECT_TRUE(*db.contains("col2"));
@@ -518,11 +518,11 @@ TEST(db, multiple_collection) {
 
     EXPECT_TRUE(db.open(path()));
 
-    blobs_collection_t col1 = *db.collection_create("col1");
-    blobs_collection_t col2 = *db.collection_create("col2");
-    blobs_collection_t col3 = *db.collection_create("col3");
-    blobs_collection_t col4 = *db.collection_create("col4");
-    blobs_collection_t col5 = *db.collection_create("col5");
+    blobs_collection_t col1 = *db.create("col1");
+    blobs_collection_t col2 = *db.create("col2");
+    blobs_collection_t col3 = *db.create("col3");
+    blobs_collection_t col4 = *db.create("col4");
+    blobs_collection_t col5 = *db.create("col5");
 
     triplet_t triplet;
 

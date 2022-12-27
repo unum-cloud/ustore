@@ -399,6 +399,11 @@ static py::array_t<ukv_key_t> scan_binary( //
         return py::array_t<ukv_key_t>(found_lengths[0], found_keys);
 }
 
+template <typename collection_at>
+static std::size_t get_length(collection_at& collection) {
+    return collection.native.size();
+}
+
 #if 0
 /**
  * @brief Exports values into preallocated multi-dimensional NumPy-like buffers.
