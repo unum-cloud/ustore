@@ -20,6 +20,7 @@ done
 echo -e "------ \e[92mTests Passing!\e[0m ------"
 
 # Build and Test Python
+pip install cibuildwheel twine
 echo -e "------ \e[93mBuild and Test Python\e[0m ------"
 CIBW_BUILD="cp37-*" cibuildwheel --platform linux &
 CIBW_BUILD="cp38-*" cibuildwheel --platform linux &
