@@ -10,19 +10,19 @@ public class DataBaseLevelDBTest {
         DataBaseLevelDB.init();
     }
 
-    public static void deleteDirectoryFiles(File directory) {
-        if (directory.isDirectory()) {
-            File[] contents = directory.listFiles();
-            for (File f : contents)
-                f.delete();
-        }
+    public static void deleteDirectoryFiles(String path) {
+        File directory = new File(path);
+        if (!directory.isDirectory())
+            return;
+        
+        for (File f : directory.listFiles())
+            f.delete();
     }
 
     @Test
     public void test() {
         String path = "./tmp/";
-        deleteDirectoryFiles(new File(path));
-
+        deleteDirectoryFiles(path);
         DataBaseLevelDB.Context ctx = new DataBaseLevelDB.Context(path);
 
         ctx.put(42, "hey".getBytes());
