@@ -180,7 +180,7 @@ endif()
 
 set(UKV_ENGINE_NAMES)
 set(UKV_CLIENT_LIBS)
-set(UKV_TEST_NAMES "test_api" "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
+set(UKV_TEST_NAMES "test_units")
 
 # Define the Engine libraries we will need to build
 if(${UKV_BUILD_ENGINE_UMEM})
@@ -274,7 +274,13 @@ if(${UKV_BUILD_TESTS})
     foreach(test_name IN ITEMS ${UKV_TEST_NAMES})
       string(CONCAT test_exe ${test_name} "_" ${client_lib})
       add_executable(${test_exe} tests/${test_name}.cpp)
-      target_compile_definitions(${test_exe} PUBLIC UKV_TEST_PATH="tmp/${client_lib}")
+
+      if(${client_lib} MATCHES "umem")
+        target_compile_definitions(${test_exe} PUBLIC UKV_TEST_PATH="tmp/umem/all.dat")
+      else()
+        target_compile_definitions(${test_exe} PUBLIC UKV_TEST_PATH="tmp/${client_lib}/")
+      endif()
+
       target_link_libraries(${test_exe} gtest fmt::fmt ${client_lib} ${client_dependencies})
       add_test(NAME "${test_exe}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_exe}")
     endforeach()

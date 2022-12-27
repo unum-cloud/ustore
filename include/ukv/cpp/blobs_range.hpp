@@ -36,16 +36,16 @@ struct size_estimates_t;
  */
 class keys_stream_t {
 
-    ukv_database_t db_ = nullptr;
-    ukv_collection_t collection_ = ukv_collection_main_k;
-    ukv_transaction_t txn_ = nullptr;
+    ukv_database_t db_ {nullptr};
+    ukv_collection_t collection_ {ukv_collection_main_k};
+    ukv_transaction_t txn_ {nullptr};
 
-    arena_t arena_;
-    ukv_length_t read_ahead_ = 0;
+    arena_t arena_ {nullptr};
+    ukv_length_t read_ahead_ {0};
 
-    ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
-    ptr_range_gt<ukv_key_t> fetched_keys_;
-    std::size_t fetched_offset_ = 0;
+    ukv_key_t next_min_key_ {std::numeric_limits<ukv_key_t>::min()};
+    ptr_range_gt<ukv_key_t> fetched_keys_ {};
+    std::size_t fetched_offset_ {0};
 
     status_t prefetch() noexcept {
 
@@ -61,6 +61,7 @@ class keys_stream_t {
             .error = status.member_ptr(),
             .transaction = txn_,
             .arena = arena_.member_ptr(),
+            .tasks_count = 1,
             .collections = &collection_,
             .start_keys = &next_min_key_,
             .count_limits = &read_ahead_,
@@ -170,18 +171,18 @@ class keys_stream_t {
 
 class pairs_stream_t {
 
-    ukv_database_t db_ = nullptr;
-    ukv_collection_t collection_ = ukv_collection_main_k;
-    ukv_transaction_t txn_ = nullptr;
+    ukv_database_t db_ {nullptr};
+    ukv_collection_t collection_ {ukv_collection_main_k};
+    ukv_transaction_t txn_ {nullptr};
 
-    arena_t arena_;
-    ukv_length_t read_ahead_ = 0;
+    arena_t arena_ {nullptr};
+    ukv_length_t read_ahead_ {0};
 
-    ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
-    ptr_range_gt<ukv_key_t> fetched_keys_;
-    joined_blobs_t values_view_;
-    joined_blobs_iterator_t values_iterator_;
-    std::size_t fetched_offset_ = 0;
+    ukv_key_t next_min_key_ {std::numeric_limits<ukv_key_t>::min()};
+    ptr_range_gt<ukv_key_t> fetched_keys_ {};
+    joined_blobs_t values_view_ {};
+    joined_blobs_iterator_t values_iterator_ {};
+    std::size_t fetched_offset_ {0};
 
     status_t prefetch() noexcept {
 
@@ -196,6 +197,7 @@ class pairs_stream_t {
             .error = status.member_ptr(),
             .transaction = txn_,
             .arena = arena_.member_ptr(),
+            .tasks_count = 1,
             .collections = &collection_,
             .start_keys = &next_min_key_,
             .count_limits = &read_ahead_,

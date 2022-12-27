@@ -48,46 +48,46 @@ typedef struct ukv_paths_write_t {
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /** @brief Read and Write options for Read-Modify-Write logic. @see `ukv_read_t`, `ukv_write_t`. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count = 1;
-    ukv_char_t path_separator = '\0';
+    ukv_size_t tasks_count;
+    ukv_char_t path_separator;
 
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
+    ukv_collection_t const* collections;
+    ukv_size_t collections_stride;
 
     /// @name Variable Length Keys
     /// @{
-    ukv_str_view_t const* paths = NULL;
-    ukv_size_t paths_stride = 0;
+    ukv_str_view_t const* paths;
+    ukv_size_t paths_stride;
 
-    ukv_length_t const* paths_offsets = NULL;
-    ukv_size_t paths_offsets_stride = 0;
+    ukv_length_t const* paths_offsets;
+    ukv_size_t paths_offsets_stride;
 
-    ukv_length_t const* paths_lengths = NULL;
-    ukv_size_t paths_lengths_stride = 0;
+    ukv_length_t const* paths_lengths;
+    ukv_size_t paths_lengths_stride;
     // @}
 
     /// @name Variable Length Values
     /// @{
-    ukv_octet_t const* values_presences = NULL;
+    ukv_octet_t const* values_presences;
 
-    ukv_length_t const* values_offsets = NULL;
-    ukv_size_t values_offsets_stride = 0;
+    ukv_length_t const* values_offsets;
+    ukv_size_t values_offsets_stride;
 
-    ukv_length_t const* values_lengths = NULL;
-    ukv_size_t values_lengths_stride = 0;
+    ukv_length_t const* values_lengths;
+    ukv_size_t values_lengths_stride;
 
-    ukv_bytes_cptr_t const* values_bytes = NULL;
-    ukv_size_t values_bytes_stride = 0;
+    ukv_bytes_cptr_t const* values_bytes;
+    ukv_size_t values_bytes_stride;
     // @}
 
     // @}
@@ -116,41 +116,41 @@ typedef struct ukv_paths_read_t {
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /** @brief Read options. @see `ukv_read_t`. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count = 1;
-    ukv_char_t path_separator = '\0';
+    ukv_size_t tasks_count;
+    ukv_char_t path_separator;
 
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
+    ukv_collection_t const* collections;
+    ukv_size_t collections_stride;
 
     /// @name Variable Length Keys
     /// @{
-    ukv_str_view_t const* paths = NULL;
-    ukv_size_t paths_stride = 0;
+    ukv_str_view_t const* paths;
+    ukv_size_t paths_stride;
 
-    ukv_length_t const* paths_offsets = NULL;
-    ukv_size_t paths_offsets_stride = 0;
+    ukv_length_t const* paths_offsets;
+    ukv_size_t paths_offsets_stride;
 
-    ukv_length_t const* paths_lengths = NULL;
-    ukv_size_t paths_lengths_stride = 0;
+    ukv_length_t const* paths_lengths;
+    ukv_size_t paths_lengths_stride;
     /// @}
 
     /// @}
     /// @name Outputs
     /// @{
-    ukv_octet_t** presences = NULL;
-    ukv_length_t** offsets = NULL;
-    ukv_length_t** lengths = NULL;
-    ukv_byte_t** values = NULL;
+    ukv_octet_t** presences;
+    ukv_length_t** offsets;
+    ukv_length_t** lengths;
+    ukv_byte_t** values;
     /// @}
 
 } ukv_paths_read_t;
@@ -180,55 +180,55 @@ typedef struct ukv_paths_match_t {
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /** @brief Read options. @see `ukv_read_t`. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count = 1;
-    ukv_char_t path_separator = '\0';
+    ukv_size_t tasks_count;
+    ukv_char_t path_separator;
 
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
+    ukv_collection_t const* collections;
+    ukv_size_t collections_stride;
 
     ukv_length_t const* match_counts_limits;
-    ukv_size_t match_counts_limits_stride = 0;
+    ukv_size_t match_counts_limits_stride;
 
     /// @name Variable Length Patterns to Match in Paths
     /// @{
     ukv_str_view_t const* patterns;
-    ukv_size_t patterns_stride = 0;
+    ukv_size_t patterns_stride;
 
-    ukv_length_t const* patterns_offsets = NULL;
-    ukv_size_t patterns_offsets_stride = 0;
+    ukv_length_t const* patterns_offsets;
+    ukv_size_t patterns_offsets_stride;
 
-    ukv_length_t const* patterns_lengths = NULL;
-    ukv_size_t patterns_lengths_stride = 0;
+    ukv_length_t const* patterns_lengths;
+    ukv_size_t patterns_lengths_stride;
     /// @}
 
     /// @name Previous Matches Used for Pagination
     /// @{
-    ukv_str_view_t const* previous = NULL;
-    ukv_size_t previous_stride = 0;
+    ukv_str_view_t const* previous;
+    ukv_size_t previous_stride;
 
-    ukv_length_t const* previous_offsets = NULL;
-    ukv_size_t previous_offsets_stride = 0;
+    ukv_length_t const* previous_offsets;
+    ukv_size_t previous_offsets_stride;
 
-    ukv_length_t const* previous_lengths = NULL;
-    ukv_size_t previous_lengths_stride = 0;
+    ukv_length_t const* previous_lengths;
+    ukv_size_t previous_lengths_stride;
     /// @}
 
     /// @}
     /// @name Outputs
     /// @{
-    ukv_length_t** match_counts = NULL;
-    ukv_length_t** paths_offsets = NULL;
-    ukv_char_t** paths_strings = NULL;
+    ukv_length_t** match_counts;
+    ukv_length_t** paths_offsets;
+    ukv_char_t** paths_strings;
     /// @}
 
 } ukv_paths_match_t;

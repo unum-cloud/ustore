@@ -7,14 +7,14 @@
  * Understanding the costs of remote communication, might keep a cache.
  */
 
-#include <thread> // `std::this_thread`
-#include <mutex>  // `std::mutex`
+#include <thread>      // `std::this_thread`
+#include <mutex>       // `std::mutex`
+#include <string_view> // `std::string_view`
 
 #include <fmt/core.h> // `fmt::format_to`
 #include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
 
-#include <string_view>
 #include "ukv/db.h"
 #include "ukv/arrow.h"
 #include "ukv/cpp/types.hpp" // `ukv_doc_field()`
@@ -57,8 +57,11 @@ void export_options(ukv_options_t options, std::string& cmd) {
         fmt::format_to(std::back_inserter(cmd), "{}&", kParamFlagSharedMemRead);
     if (options & ukv_option_transaction_dont_watch_k)
         fmt::format_to(std::back_inserter(cmd), "{}&", kParamFlagDontWatch);
-    if (options & ukv_option_dont_discard_memory_k)
-        fmt::format_to(std::back_inserter(cmd), "{}&", kParamFlagDontDiscard);
+
+    // This flag shouldn't be forwarded to the server.
+    // In standalone builds it only applies to the client.
+    // if (options & ukv_option_dont_discard_memory_k)
+    //     fmt::format_to(std::back_inserter(cmd), "{}&", kParamFlagDontDiscard);
 }
 
 /*********************************************************/

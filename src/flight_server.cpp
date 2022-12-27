@@ -16,8 +16,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <arrow/flight/server.h>
-#include <clipp.h>
+#include <arrow/flight/server.h> // RPC Server Implementation
+#include <clipp.h>               // Command Line Interface
 
 #include "ukv/cpp/db.hpp"
 #include "ukv/cpp/types.hpp" // `hash_combine`
@@ -456,7 +456,10 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     result.opt_flush = param_value(params, kParamFlagFlushWrite);
     result.opt_dont_watch = param_value(params, kParamFlagDontWatch);
     result.opt_shared_memory = param_value(params, kParamFlagSharedMemRead);
-    result.opt_dont_discard_memory = param_value(params, kParamFlagDontDiscard);
+
+    // This flag shouldn't have been forwarded to the server.
+    // In standalone builds it remains on the client.
+    // result.opt_dont_discard_memory = param_value(params, kParamFlagDontDiscard);
     return result;
 }
 
@@ -468,8 +471,6 @@ ukv_options_t ukv_options(session_params_t const& params) noexcept {
         result = ukv_options_t(result | ukv_option_write_flush_k);
     if (params.opt_shared_memory)
         result = ukv_options_t(result | ukv_option_read_shared_memory_k);
-    if (params.opt_dont_discard_memory)
-        result = ukv_options_t(result | ukv_option_dont_discard_memory_k);
     return result;
 }
 

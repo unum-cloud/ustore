@@ -10,17 +10,15 @@ It covers LMDB, LevelDB, RocksDB, WiredTiger, Redis, MongoDB, and our Key-Value 
 
 As of December 2022, typical results can look like:
 
-| Operation           | RocksDB | UDisk | UDisk + GPU |
-| :------------------ | :-----: | :---: | :---------: |
-| Initialization      |  603 K  | 60 M  |             |
-| Read                |  420 K  |  1 M  |             |
-| Batch Read          |  650 K  | 4.5 M |             |
-| Range Select        |   5 M   |  2 M  |             |
-| Scan                |  17 M   | 17 M  |             |
-| Read & Update, 1:1  |  64 K   | 173 K |    214 K    |
-| Read & Upsert, 19:1 |  128 K  | 270 K |    276 K    |
-| Batch Upsert        |  57 K   | 260 K |    182 K    |
-| Remove              |  420 K  | 874 K |     1 M     |
+| Operation           | RocksDB | UDisk |
+| :------------------ | :-----: | :---: |
+| Scan                |  17 M   | 17 M  |
+| **Batch Read**      |  650 K  | 4.5 M |
+| Read                |  420 K  |  1 M  |
+| Read & Update, 1:1  |  64 K   | 173 K |
+| Read & Upsert, 19:1 |  128 K  | 270 K |
+| **Batch Upsert**    |  57 K   | 260 K |
+| Remove              |  420 K  | 874 K |
 
 ## Twitter
 
@@ -49,10 +47,10 @@ For document-like workloads:
 | Yugabyte                       |    2 K    |   82 K    |
 | MongoDB                        |   18 K    |   210 K   |
 |                                |           |           |
-| UKV on RocksDB                 |   22 K    |  742k/s   |
-| UKV on RocksDB with Flight API |   23 K    |  282k/s   |
-| UKV on UMem                    |   350 K   |  4.8M/s   |
-| UKV on UMem with Flight API    |   206 K   |  371k/s   |
+| UKV on RocksDB                 |   22 K    |   742 K   |
+| UKV on RocksDB with Flight API |   23 K    |   282 K   |
+| UKV on UMem                    |   350 K   |   4.8 M   |
+| UKV on UMem with Flight API    |   206 K   |   371 K   |
 
 For graphs, we show the number of edges per second handled by different queries:
 
@@ -87,19 +85,7 @@ python benchmarks/tabular_graph.py
 We manually repeated this same benchmark for several other DBMS brands and multiple publicly available datasets.
 Below are the results.
 
-### Friendster Graph
-
-We take a real-world graph dataset, distributed in `.csv` form - the "Friendster" social network.
-It contains:
-
-* 8'254'696 vertices.
-* 1'847'117'371 edges.
-* ~225 edges per vertex.
-
-With Neo4J, imports took 3h 45m, averaging at:
-
-* 136'449 edges/s.
-* 5.3 MB/s.
+> Coming soon!
 
 [ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
 [ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb

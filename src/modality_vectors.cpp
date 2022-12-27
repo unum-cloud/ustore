@@ -204,7 +204,7 @@ void ukv_vectors_write(ukv_vectors_write_t* c_ptr) {
     ukv_length_t* starting_samples_offsets = NULL;
     ukv_length_t* starting_samples_counts = NULL;
     ukv_key_t* starting_samples_keys = NULL;
-    ukv_sample_t sample;
+    ukv_sample_t sample {};
     sample.db = c.db;
     sample.error = c.error;
     sample.transaction = c.transaction;
@@ -256,7 +256,7 @@ void ukv_vectors_write(ukv_vectors_write_t* c_ptr) {
 
     // Submit both original and quantized entries
     entry_t& first = quantized_entries[0];
-    ukv_write_t write;
+    ukv_write_t write {};
     write.db = c.db;
     write.error = c.error;
     write.transaction = c.transaction;
@@ -287,7 +287,7 @@ void ukv_vectors_read(ukv_vectors_read_t* c_ptr) {
     auto vector_size = c.dimensions * size_bytes(c.scalar_type);
 
     // Read from disk, but potentially re-layout the data response.
-    ukv_read_t read;
+    ukv_read_t read {};
     read.db = c.db;
     read.error = c.error;
     read.transaction = c.transaction;
