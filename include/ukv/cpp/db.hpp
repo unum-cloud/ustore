@@ -99,8 +99,12 @@ class context_t : public std::enable_shared_from_this<context_t> {
         return blobs_ref_gt<keys_arg_at> {db_, txn_, std::forward<keys_arg_at>(keys), arena_.member_ptr()};
     }
 
-    expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name); }
-    operator expected_gt<blobs_collection_t>() noexcept { return collection(); }
+    expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return find(name); }
+
+    template <typename collection_at = blobs_collection_t>
+    collection_at main() noexcept {
+        return collection_at {db_, ukv_collection_main_k, txn_, arena_.member_ptr()};
+    }
 
     expected_gt<collections_list_t> collections() noexcept {
         ukv_size_t count = 0;
@@ -144,31 +148,12 @@ class context_t : public std::enable_shared_from_this<context_t> {
         return false;
     }
 
-    expected_gt<ukv_collection_t> find(std::string_view name) noexcept {
-
-        if (name.empty())
-            return ukv_collection_t(ukv_collection_main_k);
-
-        auto maybe_cols = collections();
-        if (!maybe_cols)
-            return maybe_cols.release_status();
-
-        auto cols = *maybe_cols;
-        auto name_it = cols.names;
-        auto id_it = cols.ids.begin();
-        for (; id_it != cols.ids.end(); ++id_it, ++name_it) {
-            if (name.compare(*name_it) == 0)
-                return ukv_collection_t(*id_it);
-        }
-        return status_t::status_view("Collection not found.");
-    }
-
     /**
      * @brief Provides a view of a single collection synchronized with the transaction.
      * @tparam collection_at Can be a @c blobs_collection_t, @c docs_collection_t, @c graph_collection_t.
      */
     template <typename collection_at = blobs_collection_t>
-    expected_gt<collection_at> collection(std::string_view name = {}) noexcept {
+    expected_gt<collection_at> find(std::string_view name = {}) noexcept {
 
         if (name.empty())
             return collection_at {db_, ukv_collection_main_k, txn_, arena_.member_ptr()};
@@ -180,11 +165,10 @@ class context_t : public std::enable_shared_from_this<context_t> {
         auto cols = *maybe_cols;
         auto name_it = cols.names;
         auto id_it = cols.ids.begin();
-        for (; id_it != cols.ids.end(); ++id_it, ++name_it) {
-            if (*name_it != name)
-                continue;
-            return collection_at {db_, *id_it, txn_, arena_.member_ptr()};
-        }
+        for (; id_it != cols.ids.end(); ++id_it, ++name_it)
+            if (*name_it == name)
+                return collection_at {db_, *id_it, txn_, arena_.member_ptr()};
+
         return status_t::status_view("No such collection is present");
     }
 
@@ -307,18 +291,14 @@ class database_t : public std::enable_shared_from_this<database_t> {
             return context_t {db_, raw};
     }
 
-    expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return collection(name, true); }
-    operator expected_gt<blobs_collection_t>() noexcept { return collection(); }
-
-    expected_gt<bool> contains(std::string_view name) noexcept { return context_t {db_, nullptr}.contains(name); }
-
     template <typename collection_at = blobs_collection_t>
-    expected_gt<collection_at> collection(std::string_view name = {}) noexcept {
-        auto maybe_id = find<collection_at>(name);
-        if (!maybe_id)
-            return maybe_id.release_status();
-        return collection_at {db_, *maybe_id, nullptr, nullptr};
+    collection_at main() noexcept {
+        return collection_at {db_, ukv_collection_main_k};
     }
+
+    operator blobs_collection_t() noexcept { return main(); }
+    expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return find_or_create(name); }
+    expected_gt<bool> contains(std::string_view name) noexcept { return context_t {db_, nullptr}.contains(name); }
 
     template <typename collection_at = blobs_collection_t>
     expected_gt<collection_at> create(ukv_str_view_t name, ukv_str_view_t config = "") noexcept {
@@ -340,17 +320,23 @@ class database_t : public std::enable_shared_from_this<database_t> {
     }
 
     template <typename collection_at = blobs_collection_t>
-    expected_gt<ukv_collection_t> find_or_create(std::string_view name) noexcept {
-        auto collection_id = context_t {db_, nullptr}.find(name);
-        if (collection_id)
-            return collection_id;
+    expected_gt<collection_at> find(std::string_view name = {}) noexcept {
+        auto maybe_id = context_t {db_, nullptr}.find(name);
+        if (!maybe_id)
+            return maybe_id.release_status();
+        return collection_at {db_, *maybe_id, nullptr, nullptr};
+    }
 
-        auto col = create<collection_at>(name.data()).throw_or_release();
-        return ukv_collection_t(*col.member_ptr());
+    template <typename collection_at = blobs_collection_t>
+    expected_gt<collection_at> find_or_create(ukv_str_view_t name) noexcept {
+        auto maybe_id = context_t {db_, nullptr}.find(name);
+        if (maybe_id)
+            return collection_at {db_, *maybe_id, nullptr, nullptr};
+        return create<collection_at>(name);
     }
 
     status_t drop(std::string_view name) noexcept {
-        auto maybe_collection = collection(name);
+        auto maybe_collection = find(name);
         if (!maybe_collection)
             return maybe_collection.release_status();
         return maybe_collection->drop();
