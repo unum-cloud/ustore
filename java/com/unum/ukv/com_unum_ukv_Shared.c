@@ -58,7 +58,6 @@ ukv_collection_t collection_ptr(JNIEnv* env_java, ukv_database_t db_ptr, jstring
     struct ukv_collection_list_t collection_list = {
         .db = db_ptr,
         .error = &error_c,
-        // .transaction = txn_,
         .arena = &arena_c,
         .count = &count,
         .ids = &ids,
@@ -67,11 +66,13 @@ ukv_collection_t collection_ptr(JNIEnv* env_java, ukv_database_t db_ptr, jstring
 
     ukv_collection_t collection_c = 0;
     ukv_collection_list(&collection_list);
-    for (ukv_size_t i = 0, j = 0; i < count; ++i, j+= strlen(names + j)) {
-        if (strcmp(names + j, name_c) != 0)
-            continue;
-        collection_c = ids[i];
-        break;
+    if (error_c == NULL) {
+        for (ukv_size_t i = 0, j = 0; i < count; ++i, j+= strlen(names + j)) {
+            if (strcmp(names + j, name_c) != 0)
+                continue;
+            collection_c = ids[i];
+            break;
+        }
     }
 
     // Create new collection by name `name_c`
