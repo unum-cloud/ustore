@@ -940,7 +940,7 @@ void ukv_database_free(ukv_database_t c_db) {
     database_t& db = *reinterpret_cast<database_t*>(c_db);
     if (!db.persisted_directory.empty()) {
         ukv_error_t c_error = nullptr;
-        safe_section("Saving to disk", c.error, [&] { write(db, db.persisted_directory, c_error); });
+        safe_section("Saving to disk", &c_error, [&] { write(db, db.persisted_directory, &c_error); });
     }
 
     delete &db;
