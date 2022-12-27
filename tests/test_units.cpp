@@ -1073,7 +1073,6 @@ TEST(db, paths_linked_list) {
 
 #pragma region Documents Modality
 
-// TODO: Use those structures
 std::vector<std::string> make_three_flat_docs() {
     auto json1 = R"( {"person": "Alice", "age": 24} )"_json.dump();
     auto json2 = R"( {"person": "Bob", "age": 25} )"_json.dump();
@@ -1115,31 +1114,21 @@ TEST(db, docs_flat) {
 
     // BSON
     bson_error_t error;
-    bson_t* b = bson_new_from_json((uint8_t*)jsons[0].c_str(), -1, &error);
-    uint8_t const* buffer = bson_get_data(b);
-    auto view = value_view_t(buffer, b->len);
+    bson_t* bson = bson_new_from_json((uint8_t*)jsons[0].c_str(), -1, &error);
+    uint8_t const* buffer = bson_get_data(bson);
+    auto view = value_view_t(buffer, bson->len);
     collection.at(4, ukv_doc_field_bson_k) = view;
     M_EXPECT_EQ_JSON(*collection[4].value(), jsons[0]);
     M_EXPECT_EQ_JSON(*collection[ckf(4, "person")].value(), "\"Alice\"");
     M_EXPECT_EQ_JSON(*collection[ckf(4, "age")].value(), "24");
-    bson_clear(&b);
+    bson_clear(&bson);
 
     // MsgPack
-    auto mpack = *collection[1].value(ukv_doc_field_msgpack_k);
-    collection.at(5, ukv_doc_field_msgpack_k) = mpack;
+    auto message_pack = *collection[1].value(ukv_doc_field_msgpack_k);
+    collection.at(5, ukv_doc_field_msgpack_k) = message_pack;
     M_EXPECT_EQ_JSON(*collection[5].value(), jsons[0]);
     M_EXPECT_EQ_JSON(*collection[ckf(5, "person")].value(), "\"Alice\"");
     M_EXPECT_EQ_JSON(*collection[ckf(5, "age")].value(), "24");
-
-#if 0
-    // MsgPack
-    collection.as(ukv_format_msgpack_k);
-    M_EXPECT_EQ_MSG(val, json.c_str());
-    val = *collection[ckf(1, "person")].value();
-    M_EXPECT_EQ_MSG(val, "\"Carl\"");
-    val = *collection[ckf(1, "age")].value();
-    M_EXPECT_EQ_MSG(val, "24");
-#endif
 }
 
 /**

@@ -13,4 +13,4 @@ set -e
 
 cmake -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -DUKV_BUILD_ENGINE_LEVELDB=1 . 
 make -j16
-./java/gradlew build
+./java/gradlew build #--info
