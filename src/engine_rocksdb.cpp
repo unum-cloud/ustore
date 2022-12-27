@@ -43,7 +43,7 @@ ukv_length_t const ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max
 ukv_key_t const ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 bool const ukv_supports_transactions_k = true;
 bool const ukv_supports_named_collections_k = true;
-bool const ukv_supports_snapshots_k = true;
+bool const ukv_supports_snapshots_k = false;
 
 using rocks_native_t = rocksdb::OptimisticTransactionDB;
 using rocks_status_t = rocksdb::Status;
@@ -209,7 +209,7 @@ void write_one( //
         status =        //
             !content    //
                 ? watch //
-                      ? txn_ptr->SingleDelete(collection, key)
+                      ? txn_ptr->Delete(collection, key)
                       : txn_ptr->DeleteUntracked(collection, key)
                 : watch //
                       ? txn_ptr->Put(collection, key, to_slice(content))
@@ -217,7 +217,7 @@ void write_one( //
     else
         status =     //
             !content //
-                ? db.native->SingleDelete(options, collection, key)
+                ? db.native->Delete(options, collection, key)
                 : db.native->Put(options, collection, key, to_slice(content));
 
     export_error(status, c_error);
@@ -247,7 +247,7 @@ void write_many( //
             auto status =   //
                 !content    //
                     ? watch //
-                          ? txn_ptr->SingleDelete(collection, key)
+                          ? txn_ptr->Delete(collection, key)
                           : txn_ptr->DeleteUntracked(collection, key)
                     : watch //
                           ? txn_ptr->Put(collection, key, to_slice(content))
@@ -466,7 +466,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
-    if (&txn)
+    if (c.transaction)
         options.snapshot = txn.GetSnapshot();
 
     for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
@@ -528,7 +528,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
-    if (&txn)
+    if (c.transaction)
         options.snapshot = txn.GetSnapshot();
 
     for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
@@ -753,7 +753,7 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = **reinterpret_cast<rocks_txn_t**>(c.transaction);
     rocksdb::OptimisticTransactionOptions txn_options;
-    txn_options.set_snapshot = !(c.options & ukv_option_transaction_dont_watch_k);
+    txn_options.set_snapshot = false;
     rocksdb::WriteOptions options;
     options.sync = safe;
     options.disableWAL = !safe;

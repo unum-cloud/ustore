@@ -84,6 +84,8 @@ typedef void* ukv_transaction_t;
  * @brief Some unique integer identifier of a collection.
  * A @c ukv_database_t database can have many of those,
  * but never with repeating names or identifiers.
+ * Those identifiers are not guaranteed to remain the same
+ * between DBMS restarts.
  */
 typedef uint64_t ukv_collection_t;
 
@@ -200,12 +202,12 @@ typedef enum {
  * @brief The "mode" of collection removal.
  */
 typedef enum {
-    /** @brief Clear the values, but keep the keys. */
-    ukv_drop_vals_k = 0,
+    /** @brief Remove the handle and all of the contents. */
+    ukv_drop_keys_vals_handle_k = 0,
     /** @brief Remove keys and values, but keep the collection. */
     ukv_drop_keys_vals_k = 1,
-    /** @brief Remove the handle and all of the contents. */
-    ukv_drop_keys_vals_handle_k = 2,
+    /** @brief Clear the values, but keep the keys. */
+    ukv_drop_vals_k = 2,
 } ukv_drop_mode_t;
 
 /**
@@ -249,7 +251,7 @@ typedef struct ukv_database_init_t {
      * - LevelDB: `/var/lib/ukv/leveldb/` optionally storing `config_leveldb.json`.
      * - Flight API Client: `grpc://0.0.0.0:38709`.
      */
-    ukv_str_view_t config = NULL;
+    ukv_str_view_t config;
     /** @brief A pointer to the opened KVS, unless `error` is filled. */
     ukv_database_t* db;
     /** @brief Pointer to exported error message. */
@@ -291,19 +293,19 @@ typedef struct ukv_collection_list_t {
      * @brief The snapshot in which the retrieval will be conducted.
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
      */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /**
      * @brief Listing options.
      *
      * Possible values:
      * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Contents
@@ -343,7 +345,7 @@ typedef struct ukv_collection_create_t {
     /** @brief Unique name for the new collection. */
     ukv_str_view_t name;
     /** @brief Optional configuration JSON string. */
-    ukv_str_view_t config = NULL;
+    ukv_str_view_t config;
     /** @brief Output for the collection handle. */
     ukv_collection_t* id;
 } ukv_collection_create_t;
@@ -369,7 +371,7 @@ typedef struct ukv_collection_drop_t {
     /** @brief Existing collection handle. */
     ukv_collection_t id;
     /** @brief Controls if values, pairs or the whole collection must be dropped. */
-    ukv_drop_mode_t mode = ukv_drop_keys_vals_handle_k;
+    ukv_drop_mode_t mode;
 } ukv_collection_drop_t;
 
 /**
@@ -398,7 +400,7 @@ typedef struct ukv_database_control_t {
     /** @brief Already open database instance. */
     ukv_database_t db;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief The input command as a NULL-terminated string. */
@@ -432,10 +434,9 @@ typedef struct ukv_transaction_init_t {
      * @brief Transaction options.
      *
      * Possible values:
-     * - `::ukv_option_transaction_dont_watch_k`
      * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /** @brief In-out transaction handle. */
     ukv_transaction_t* transaction;
@@ -464,9 +465,9 @@ typedef struct ukv_transaction_stage_t {
     /** @brief Initialized transaction handle. */
     ukv_transaction_t transaction;
     /** @brief Staging options. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
     /** @brief Optional output for the transaction stage sequence number. */
-    ukv_sequence_number_t* sequence_number = NULL;
+    ukv_sequence_number_t* sequence_number;
 
 } ukv_transaction_stage_t;
 
@@ -493,9 +494,9 @@ typedef struct ukv_transaction_commit_t {
     /** @brief Initialized transaction handle. */
     ukv_transaction_t transaction;
     /** @brief Staging options. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
     /** @brief Optional output for the transaction commit sequence number. */
-    ukv_sequence_number_t* sequence_number = NULL;
+    ukv_sequence_number_t* sequence_number;
 
 } ukv_transaction_commit_t;
 

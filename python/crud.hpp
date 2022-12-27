@@ -13,11 +13,11 @@
 namespace unum::ukv::pyb {
 
 struct py_bin_req_t {
-    ukv_key_t key = ukv_key_unknown_k;
-    ukv_str_view_t field = nullptr;
-    ukv_bytes_ptr_t ptr = nullptr;
-    ukv_length_t off = 0;
-    ukv_length_t len = 0;
+    ukv_key_t key {ukv_key_unknown_k};
+    ukv_str_view_t field {nullptr};
+    ukv_bytes_ptr_t ptr {nullptr};
+    ukv_length_t off {0};
+    ukv_length_t len {0};
 };
 
 #pragma region Writes
@@ -41,6 +41,7 @@ static void write_one_binary(py_collection_gt<collection_at>& collection, PyObje
         .transaction = collection.txn(),
         .arena = collection.member_arena(),
         .options = collection.options(),
+        .tasks_count = 1,
         .collections = collection.member_collection(),
         .keys = &key,
         .lengths = val.member_length(),
@@ -131,6 +132,7 @@ static py::object has_one_binary(py_collection_gt<collection_at>& collection, Py
             .transaction = collection.txn(),
             .arena = collection.member_arena(),
             .options = collection.options(),
+            .tasks_count = 1,
             .collections = collection.member_collection(),
             .keys = &key,
             .presences = &found_presences,
@@ -166,6 +168,7 @@ static py::object read_one_binary(py_blobs_collection_t& collection, PyObject* k
             .transaction = collection.txn(),
             .arena = collection.member_arena(),
             .options = collection.options(),
+            .tasks_count = 1,
             .collections = collection.member_collection(),
             .keys = &key,
             .lengths = &found_lengths,
@@ -370,6 +373,7 @@ static py::array_t<ukv_key_t> scan_binary( //
         .transaction = collection.txn(),
         .arena = collection.member_arena(),
         .options = collection.options(),
+        .tasks_count = 1,
         .collections = collection.member_collection(),
         .start_keys = &min_key,
         .count_limits = &count_limit,
@@ -393,6 +397,11 @@ static py::array_t<ukv_key_t> scan_binary( //
     }
     else
         return py::array_t<ukv_key_t>(found_lengths[0], found_keys);
+}
+
+template <typename collection_at>
+static std::size_t get_length(collection_at& collection) {
+    return collection.native.size();
 }
 
 #if 0

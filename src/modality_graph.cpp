@@ -783,7 +783,7 @@ void ukv_graph_remove_vertices(ukv_graph_remove_vertices_t* c_ptr) {
     for (std::size_t i = 0; i != unique_strided.size(); ++i) {
         auto vertex_collection = vertex_collections[i];
         auto vertex_id = vertices[i];
-        auto vertex_role = vertex_roles[i];
+        auto vertex_role = vertex_roles ? vertex_roles[i] : ukv_vertex_role_any_k;
 
         auto vertex_idx = offset_in_sorted(unique_entries, collection_key_t {vertex_collection, vertex_id});
         updated_entry_t& vertex_value = unique_entries[vertex_idx];

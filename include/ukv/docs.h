@@ -56,32 +56,31 @@ extern "C" {
  */
 typedef enum ukv_doc_field_type_t {
 
-    ukv_doc_field_null_k = 0,
-    ukv_doc_field_bool_k = 1,
-    ukv_doc_field_uuid_k = 2,
-
-    ukv_doc_field_i8_k = 10,
-    ukv_doc_field_i16_k = 11,
-    ukv_doc_field_i32_k = 12,
-    ukv_doc_field_i64_k = 13,
-
-    ukv_doc_field_u8_k = 20,
-    ukv_doc_field_u16_k = 21,
-    ukv_doc_field_u32_k = 22,
-    ukv_doc_field_u64_k = 23,
-
-    ukv_doc_field_f16_k = 30,
-    ukv_doc_field_f32_k = 31,
-    ukv_doc_field_f64_k = 32,
-
-    ukv_doc_field_bin_k = 40,
-    ukv_doc_field_str_k = 41,
-
-    ukv_doc_field_json_k = 'j',
-    ukv_doc_field_bson_k = 'b',
-    ukv_doc_field_msgpack_k = 'm',
-
+    ukv_doc_field_json_k = 0,
+    ukv_doc_field_bson_k = 1,
+    ukv_doc_field_msgpack_k = 2,
     ukv_doc_field_default_k = ukv_doc_field_json_k,
+
+    ukv_doc_field_null_k = 10,
+    ukv_doc_field_bool_k = 11,
+    ukv_doc_field_uuid_k = 12,
+
+    ukv_doc_field_i8_k = 20,
+    ukv_doc_field_i16_k = 21,
+    ukv_doc_field_i32_k = 22,
+    ukv_doc_field_i64_k = 23,
+
+    ukv_doc_field_u8_k = 30,
+    ukv_doc_field_u16_k = 31,
+    ukv_doc_field_u32_k = 32,
+    ukv_doc_field_u64_k = 33,
+
+    ukv_doc_field_f16_k = 40,
+    ukv_doc_field_f32_k = 41,
+    ukv_doc_field_f64_k = 42,
+
+    ukv_doc_field_bin_k = 50,
+    ukv_doc_field_str_k = 51,
 
 } ukv_doc_field_type_t;
 
@@ -123,36 +122,36 @@ typedef struct ukv_docs_write_t {
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /** @brief Write or Read+Write options for Read-Modify-Write operations. @see `ukv_write_t`. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count = 1;
-    ukv_doc_field_type_t type = ukv_doc_field_default_k;
-    ukv_doc_modification_t modification = ukv_doc_modify_upsert_k;
+    ukv_size_t tasks_count;
+    ukv_doc_field_type_t type;
+    ukv_doc_modification_t modification;
 
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
+    ukv_collection_t const* collections;
+    ukv_size_t collections_stride;
 
-    ukv_key_t const* keys = NULL;
-    ukv_size_t keys_stride = 0;
+    ukv_key_t const* keys;
+    ukv_size_t keys_stride;
 
-    ukv_str_view_t const* fields = NULL;
-    ukv_size_t fields_stride = 0;
+    ukv_str_view_t const* fields;
+    ukv_size_t fields_stride;
 
-    ukv_octet_t const* presences = NULL;
+    ukv_octet_t const* presences;
 
-    ukv_length_t const* offsets = NULL;
-    ukv_size_t offsets_stride = 0;
+    ukv_length_t const* offsets;
+    ukv_size_t offsets_stride;
 
-    ukv_length_t const* lengths = NULL;
-    ukv_size_t lengths_stride = 0;
+    ukv_length_t const* lengths;
+    ukv_size_t lengths_stride;
 
     ukv_bytes_cptr_t const* values = NULL;
     ukv_size_t values_stride = 0;
@@ -184,36 +183,36 @@ typedef struct ukv_docs_read_t {
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /** @brief Read options. @see `ukv_read_t`. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_doc_field_type_t type = ukv_doc_field_default_k;
-    ukv_size_t tasks_count = 1;
+    ukv_doc_field_type_t type;
+    ukv_size_t tasks_count;
 
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
+    ukv_collection_t const* collections;
+    ukv_size_t collections_stride;
 
-    ukv_key_t const* keys = NULL;
-    ukv_size_t keys_stride = 0;
+    ukv_key_t const* keys;
+    ukv_size_t keys_stride;
 
-    ukv_str_view_t const* fields = NULL;
-    ukv_size_t fields_stride = 0;
+    ukv_str_view_t const* fields;
+    ukv_size_t fields_stride;
 
     /// @}
     /// @name Outputs
     /// @{
 
-    ukv_octet_t** presences = NULL;
-    ukv_length_t** offsets = NULL;
-    ukv_length_t** lengths = NULL;
-    ukv_bytes_ptr_t* values = NULL;
+    ukv_octet_t** presences;
+    ukv_length_t** offsets;
+    ukv_length_t** lengths;
+    ukv_bytes_ptr_t* values;
 
     /// @}
 
@@ -240,31 +239,31 @@ typedef struct ukv_docs_gist_t {
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /** @brief Read options. @see `ukv_read_t`. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t docs_count = 1;
+    ukv_size_t docs_count;
 
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
+    ukv_collection_t const* collections;
+    ukv_size_t collections_stride;
 
-    ukv_key_t const* keys = NULL;
-    ukv_size_t keys_stride = 0;
+    ukv_key_t const* keys;
+    ukv_size_t keys_stride;
 
     /// @}
     /// @name Outputs
     /// @{
 
-    ukv_size_t* fields_count = NULL;
-    ukv_length_t** offsets = NULL;
-    ukv_char_t** fields = NULL;
+    ukv_size_t* fields_count;
+    ukv_length_t** offsets;
+    ukv_char_t** fields;
 
     /// @}
 
@@ -326,44 +325,44 @@ typedef struct ukv_docs_gather_t {
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction = NULL;
+    ukv_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena = NULL;
+    ukv_arena_t* arena;
     /** @brief Read options. @see `ukv_read_t`. */
-    ukv_options_t options = ukv_options_default_k;
+    ukv_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t docs_count = 1;
-    ukv_size_t fields_count = 1;
+    ukv_size_t docs_count;
+    ukv_size_t fields_count;
 
-    ukv_collection_t const* collections = NULL;
-    ukv_size_t collections_stride = 0;
+    ukv_collection_t const* collections;
+    ukv_size_t collections_stride;
 
-    ukv_key_t const* keys = NULL;
-    ukv_size_t keys_stride = 0;
+    ukv_key_t const* keys;
+    ukv_size_t keys_stride;
 
-    ukv_str_view_t const* fields = NULL;
-    ukv_size_t fields_stride = 0;
+    ukv_str_view_t const* fields;
+    ukv_size_t fields_stride;
 
-    ukv_doc_field_type_t const* types = NULL;
-    ukv_size_t types_stride = 0;
+    ukv_doc_field_type_t const* types;
+    ukv_size_t types_stride;
 
     /// @}
     /// @name Outputs
     /// @{
 
-    ukv_octet_t*** columns_validities = NULL;
-    ukv_octet_t*** columns_conversions = NULL;
-    ukv_octet_t*** columns_collisions = NULL;
+    ukv_octet_t*** columns_validities;
+    ukv_octet_t*** columns_conversions;
+    ukv_octet_t*** columns_collisions;
 
-    ukv_byte_t*** columns_scalars = NULL;
+    ukv_byte_t*** columns_scalars;
 
-    ukv_length_t*** columns_offsets = NULL;
-    ukv_length_t*** columns_lengths = NULL;
-    ukv_byte_t** joined_strings = NULL;
+    ukv_length_t*** columns_offsets;
+    ukv_length_t*** columns_lengths;
+    ukv_byte_t** joined_strings;
 
     /// @}
 

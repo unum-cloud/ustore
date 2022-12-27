@@ -13,6 +13,7 @@ RUN apt-get update -y && \
 
 COPY . /usr/src/ukv
 WORKDIR /usr/src/ukv
+RUN rm -rf build _deps build_debug CMakeCache.txt CMakeFiles wheelhouse Makefile bin tmp/*
 
 RUN git config --global http.sslVerify "false"
 RUN cmake \

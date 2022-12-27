@@ -38,7 +38,7 @@ GoLang
 •
 <a href="https://arrow.apache.org/">Apache Arrow</a>
 <br/>
-<b>available on</b>:
+<b>available through</b>:
 <a href="#installation">CMake</a>
 •
 <a href="https://pypi.org/project/ukv/">PyPI</a>
@@ -57,17 +57,21 @@ It can easily be expanded to support alternative underlying Key-Value Stores (KV
 In the same way, you can add SDKs for other high-level languages or support for data types specific to your application that we haven't considered.
 This gives you the flexibility to iterate on different parts of this modular data lake without changing the business logic of your application, decoupling it from the underlying storage technology.
 
-![UCSB 10 TB Results](assets/charts/Performance.png)
+![Documents Processing Performance Chart for UKV and MongoDB](assets/charts/PerformanceDocs.png)
 
 **Flexibility is essential, but so is performance**.
-Even our open-source baseline implementations of Document and Graph modalities on top UMem or RocksDB often outperform classical commercial DBMS products.
-The proprietary version obliterates them.
-Modern persistent IO on high-end servers can exceed 120 GB/s per socket when built on user-space drivers like [SPDK][spdk].
-To harness that power, unlike LevelDB and RocksDB, we had to design an interface that avoids dynamic polymorphism and has no constraints on memory allocation strategies and used containers.
-That is how UKV began.
+We prefer to avoid dynamic memory allocations across all modalities and prefer libraries that share that mindset.
+For instance, the reference implementation of Document collections uses `simdjson` to read and `yyjson` to update docs, storing them in RocksDB and serving them through Apache Arrow Flight RPC.
+Even such a surprisingly obvious combination often outperforms commercial DBMS products.
+The upcoming UDisk-based version obliterates them.
 
-Half of the modern data storage systems are built on RocksDB.
-If they were built on UKV, they could have become 5x faster by changing a single config file.
+![Binary Processing Performance Chart for UKV and MongoDB](assets/charts/PerformanceBinary.png)
+
+Modern persistent IO on high-end servers can exceed 120 GB/s per socket when built on user-space drivers like [SPDK][spdk].
+This is close to the real-world throughput of eight-channel DDR4 memory.
+Making evan a single copy of data on the hot path would slash that performance.
+Processing hundreds of terabytes per node, we couldn't have used LevelDB, RocksDB, or even their interfaces for our purposes to avoid dynamic polymorphism and any constraints on memory allocation strategies.
+That is how UKV began, but hopefully, it can grow further, advancing the storage ecosystem the same way the standardization of [BLAS][blas] has pushed the frontiers of numerical compute and, later, AI.
 
 ---
 
@@ -133,7 +137,7 @@ Especially to Machine Learning practitioners.
 
 <ul>
 <li> <b>ACID Transactions</b> across collections  </li>
-<li> Persistent <b>Snapshots</b> </li>
+<li> Persistent <b>Snapshots</b> 🔜 </li>
 <li> Operation-level <b>WATCH</b>-es  </li>
 <li> <b>BSON, JSON, MessagePack</b> support  </li>
 <li> <b>JSON Patches</b> & Merge-Patches  </li>
@@ -149,7 +153,7 @@ Especially to Machine Learning practitioners.
 <li> <b>Bulk Scans</b>, Random <b>Sampling</b> </li>
 <li> <b>Pandas</b> Tabular interface </li>
 <li> <b>NetworkX</b> Graph interface </li>
-<li> <b>PyTorch</b> & <b>TensorFlow</b> Data-Loaders </li>
+<li> <b>PyTorch</b> & <b>TensorFlow</b> Data-Loaders 🔜 </li>
 </ul>
 </td>
 </table>
@@ -345,14 +349,20 @@ Following tools are currently in the works.
 
 ## Roadmap
 
-1. Builds for Arm, MacOS, Windows.
-2. Bindings for GoLang, Java, JavaScript.
-3. Improved Vector Search.
-4. Collection-level configuration.
-5. Document-schema validation.
-6. Persistent Snapshots.
-7. Continuous Replication.
-8. Horizontal Scaling.
+Our [development roadmap][ukv-roadmap] is public and is hosted within the GitHub repository.
+Upcoming tasks include:
+
+- Builds for Arm, MacOS, Windows.
+- Richer bindings for GoLang, Java, JavaScript.
+- Improved Vector Search.
+- Collection-level configuration.
+- Owning and non-owning C++ wrappers.
+- Document-schema validation.
+- Persistent Snapshots.
+- Continuous Replication.
+- Horizontal Scaling.
+
+> [Read full roadmap in our docs here][ukv-details].
 
 ## Contributing
 
@@ -388,12 +398,13 @@ Thank you!
 [ukv-vs-rocks]: https://unum.cloud/UKV/related#leveldb-rocksdb
 [ukv-vs-sql]: https://unum.cloud/UKV/related#sql-mql-cypher
 [ukv-c-headers]: https://github.com/unum-cloud/UKV/tree/main/include/ukv
+[ukv-roadmap]: https://github.com/orgs/unum-cloud/projects/2
 
 [ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
 [ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
 [ucsb]: https://github.com/unum-cloud/ucsb
 
-[acid]: https://en.wikipedia.org/wiki/ACID
+[blas]: https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms
 [flight]: https://arrow.apache.org/docs/format/Flight.html
 [networkx]: https://networkx.org
 [pandas]: https://pandas.pydata.org

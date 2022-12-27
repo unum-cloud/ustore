@@ -84,7 +84,7 @@ template <typename at>
 struct location_store_gt<at&> {
     using store_t = at*;
     using plain_t = at;
-    store_t store = nullptr;
+    store_t store {nullptr};
 
     location_store_gt() = default;
     location_store_gt(location_store_gt&&) = default;

@@ -66,7 +66,7 @@ using table_header_t = table_header_gt<std::monostate>;
 struct table_index_view_t {
     strided_iterator_gt<ukv_collection_t const> collections_begin;
     strided_iterator_gt<ukv_key_t const> keys_begin;
-    std::size_t count = 0;
+    std::size_t count {0};
 
     strided_range_gt<ukv_collection_t const> collections() const noexcept { return {collections_begin, count}; }
     strided_range_gt<ukv_key_t const> keys() const noexcept { return {keys_begin, count}; }
@@ -75,7 +75,7 @@ struct table_index_view_t {
 struct table_header_view_t {
     strided_iterator_gt<ukv_str_view_t const> fields_begin;
     strided_iterator_gt<ukv_doc_field_type_t const> types_begin;
-    std::size_t count = 0;
+    std::size_t count {0};
 
     strided_range_gt<ukv_str_view_t const> fields() const noexcept { return {fields_begin, count}; }
     strided_range_gt<ukv_doc_field_type_t const> types() const noexcept { return {types_begin, count}; }
@@ -83,28 +83,28 @@ struct table_header_view_t {
 
 template <typename element_at>
 struct cell_gt {
-    bool valid = false;
-    bool converted = false;
-    bool collides = false;
+    bool valid {false};
+    bool converted {false};
+    bool collides {false};
     element_at value;
 };
 
 template <>
 struct cell_gt<value_view_t> {
-    bool valid = false;
-    bool converted = false;
-    bool collides = false;
+    bool valid {false};
+    bool converted {false};
+    bool collides {false};
     value_view_t value;
 };
 
 template <typename element_at>
 class column_view_scalar_gt {
-    ukv_octet_t* validities_ = nullptr;
-    ukv_octet_t* conversions_ = nullptr;
-    ukv_octet_t* collisions_ = nullptr;
-    element_at* scalars_ = nullptr;
-    ukv_size_t count_ = 0;
-    ukv_str_view_t name_ = nullptr;
+    ukv_octet_t* validities_ {nullptr};
+    ukv_octet_t* conversions_ {nullptr};
+    ukv_octet_t* collisions_ {nullptr};
+    element_at* scalars_ {nullptr};
+    ukv_size_t count_ {0};
+    ukv_str_view_t name_ {nullptr};
 
   public:
     using scalar_t = element_at;
@@ -143,14 +143,14 @@ class column_view_scalar_gt {
 
 template <typename element_at>
 class column_view_varlen_gt {
-    ukv_octet_t* validities_ = nullptr;
-    ukv_octet_t* conversions_ = nullptr;
-    ukv_octet_t* collisions_ = nullptr;
-    ukv_byte_t* tape_ = nullptr;
-    ukv_length_t* offsets_ = nullptr;
-    ukv_length_t* lengths_ = nullptr;
-    ukv_size_t count_ = 0;
-    ukv_str_view_t name_ = nullptr;
+    ukv_octet_t* validities_ {nullptr};
+    ukv_octet_t* conversions_ {nullptr};
+    ukv_octet_t* collisions_ {nullptr};
+    ukv_byte_t* tape_ {nullptr};
+    ukv_length_t* offsets_ {nullptr};
+    ukv_length_t* lengths_ {nullptr};
+    ukv_size_t count_ {0};
+    ukv_str_view_t name_ {nullptr};
 
   public:
     using cell_t = cell_gt<element_at>;
@@ -192,16 +192,16 @@ class column_view_varlen_gt {
 };
 
 class column_view_t {
-    ukv_octet_t* validities_ = nullptr;
-    ukv_octet_t* conversions_ = nullptr;
-    ukv_octet_t* collisions_ = nullptr;
-    ukv_byte_t* scalars_ = nullptr;
-    ukv_byte_t* tape_ = nullptr;
-    ukv_length_t* offsets_ = nullptr;
-    ukv_length_t* lengths_ = nullptr;
-    ukv_size_t count_ = 0;
-    ukv_str_view_t name_ = nullptr;
-    ukv_doc_field_type_t type_ = ukv_doc_field_json_k;
+    ukv_octet_t* validities_ {nullptr};
+    ukv_octet_t* conversions_ {nullptr};
+    ukv_octet_t* collisions_ {nullptr};
+    ukv_byte_t* scalars_ {nullptr};
+    ukv_byte_t* tape_ {nullptr};
+    ukv_length_t* offsets_ {nullptr};
+    ukv_length_t* lengths_ {nullptr};
+    ukv_size_t count_ {0};
+    ukv_str_view_t name_ {nullptr};
+    ukv_doc_field_type_t type_ {ukv_doc_field_json_k};
 
   public:
     column_view_t( //

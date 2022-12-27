@@ -36,16 +36,16 @@ struct size_estimates_t;
  */
 class keys_stream_t {
 
-    ukv_database_t db_ = nullptr;
-    ukv_collection_t collection_ = ukv_collection_main_k;
-    ukv_transaction_t txn_ = nullptr;
+    ukv_database_t db_ {nullptr};
+    ukv_collection_t collection_ {ukv_collection_main_k};
+    ukv_transaction_t txn_ {nullptr};
 
-    arena_t arena_;
-    ukv_length_t read_ahead_ = 0;
+    arena_t arena_ {nullptr};
+    ukv_length_t read_ahead_ {0};
 
-    ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
-    ptr_range_gt<ukv_key_t> fetched_keys_;
-    std::size_t fetched_offset_ = 0;
+    ukv_key_t next_min_key_ {std::numeric_limits<ukv_key_t>::min()};
+    ptr_range_gt<ukv_key_t> fetched_keys_ {};
+    std::size_t fetched_offset_ {0};
 
     status_t prefetch() noexcept {
 
@@ -61,6 +61,7 @@ class keys_stream_t {
             .error = status.member_ptr(),
             .transaction = txn_,
             .arena = arena_.member_ptr(),
+            .tasks_count = 1,
             .collections = &collection_,
             .start_keys = &next_min_key_,
             .count_limits = &read_ahead_,
@@ -110,7 +111,7 @@ class keys_stream_t {
 
     status_t advance() noexcept {
 
-        if (fetched_offset_ + 1 >= fetched_keys_.size())
+        if (fetched_offset_ >= fetched_keys_.size())
             return prefetch();
 
         ++fetched_offset_;
@@ -148,7 +149,7 @@ class keys_stream_t {
     }
 
     bool is_end() const noexcept {
-        return next_min_key_ == ukv_key_unknown_k && fetched_offset_ + 1 >= fetched_keys_.size();
+        return next_min_key_ == ukv_key_unknown_k && fetched_offset_ >= fetched_keys_.size();
     }
 
     bool operator==(keys_stream_t const& other) const noexcept {
@@ -170,17 +171,18 @@ class keys_stream_t {
 
 class pairs_stream_t {
 
-    ukv_database_t db_ = nullptr;
-    ukv_collection_t collection_ = ukv_collection_main_k;
-    ukv_transaction_t txn_ = nullptr;
+    ukv_database_t db_ {nullptr};
+    ukv_collection_t collection_ {ukv_collection_main_k};
+    ukv_transaction_t txn_ {nullptr};
 
-    arena_t arena_;
-    ukv_length_t read_ahead_ = 0;
+    arena_t arena_ {nullptr};
+    ukv_length_t read_ahead_ {0};
 
-    ukv_key_t next_min_key_ = std::numeric_limits<ukv_key_t>::min();
-    ptr_range_gt<ukv_key_t> fetched_keys_;
-    joined_blobs_t values_view;
-    std::size_t fetched_offset_ = 0;
+    ukv_key_t next_min_key_ {std::numeric_limits<ukv_key_t>::min()};
+    ptr_range_gt<ukv_key_t> fetched_keys_ {};
+    joined_blobs_t values_view_ {};
+    joined_blobs_iterator_t values_iterator_ {};
+    std::size_t fetched_offset_ {0};
 
     status_t prefetch() noexcept {
 
@@ -195,6 +197,7 @@ class pairs_stream_t {
             .error = status.member_ptr(),
             .transaction = txn_,
             .arena = arena_.member_ptr(),
+            .tasks_count = 1,
             .collections = &collection_,
             .start_keys = &next_min_key_,
             .count_limits = &read_ahead_,
@@ -230,7 +233,8 @@ class pairs_stream_t {
         if (!status)
             return status;
 
-        values_view = joined_blobs_t {count, found_offs, found_vals};
+        values_view_ = joined_blobs_t {count, found_offs, found_vals};
+        values_iterator_ = values_view_.begin();
         next_min_key_ = count < read_ahead_ ? ukv_key_unknown_k : fetched_keys_[count - 1] + 1;
         return {};
     }
@@ -264,10 +268,11 @@ class pairs_stream_t {
 
     status_t advance() noexcept {
 
-        if (fetched_offset_ + 1 >= fetched_keys_.size())
+        if (fetched_offset_ >= fetched_keys_.size())
             return prefetch();
 
         ++fetched_offset_;
+        ++values_iterator_;
         return {};
     }
 
@@ -282,24 +287,15 @@ class pairs_stream_t {
             return *this;
 
         fetched_keys_ = {};
+        values_iterator_ = {};
         fetched_offset_ = 0;
         next_min_key_ = ukv_key_unknown_k;
         return *this;
     }
 
     ukv_key_t key() const noexcept { return fetched_keys_[fetched_offset_]; }
-    value_view_t value() const noexcept {
-        auto it = values_view.begin();
-        for (size_t i = 0; i != fetched_offset_; ++i)
-            ++it;
-        return *it;
-    }
-    value_type item() const noexcept {
-        auto it = values_view.begin();
-        for (size_t i = 0; i != fetched_offset_; ++i)
-            ++it;
-        return std::make_pair(fetched_keys_[fetched_offset_], *it);
-    }
+    value_view_t value() const noexcept { return *values_iterator_; }
+    value_type item() const noexcept { return std::make_pair(fetched_keys_[fetched_offset_], *values_iterator_); }
     value_type operator*() const noexcept { return item(); }
 
     status_t seek_to_first() noexcept { return seek(std::numeric_limits<ukv_key_t>::min()); }
@@ -315,7 +311,7 @@ class pairs_stream_t {
     }
 
     bool is_end() const noexcept {
-        return next_min_key_ == ukv_key_unknown_k && fetched_offset_ + 1 >= fetched_keys_.size();
+        return next_min_key_ == ukv_key_unknown_k && fetched_offset_ >= fetched_keys_.size();
     }
 
     bool operator==(pairs_stream_t const& other) const noexcept {

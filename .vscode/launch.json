@@ -21,10 +21,10 @@
             "cppAttachName": "(GDB) Attach Python",
         },
         {
-            "name": "C++: Test UMem API",
+            "name": "C++: Test UMem Stateless",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/test_api_ukv_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_embedded_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -32,50 +32,18 @@
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                },
+                {
                     "name": "UKV_TEST_PATH",
-                    "value": ""
+                    "value": "",
                 }
             ],
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UMem Test API",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb"
-        },
-        {
-            "name": "C++: Test LevelDB API",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/test_api_ukv_embedded_leveldb",
-            "args": [
-                "--gtest_break_on_failure",
-                "--gtest_catch_exceptions=0"
-            ],
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "showDisplayString": true,
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug LevelDB Test API",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb"
-        },
-        {
-            "name": "C++: Test RocksDB API",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/test_api_ukv_embedded_rocksdb",
-            "args": [
-                "--gtest_break_on_failure",
-                "--gtest_catch_exceptions=0"
-            ],
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "showDisplayString": true,
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug RocksDB Test API",
+            "preLaunchTask": "Build Debug UMem Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -93,16 +61,12 @@
                 {
                     "name": "ASAN_OPTIONS",
                     "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
-                },
-                {
-                    "name": "UKV_TEST_PATH",
-                    "value": ""
                 }
             ],
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UMem Test",
+            "preLaunchTask": "Build Debug UMem Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -120,7 +84,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug LevelDB Test",
+            "preLaunchTask": "Build Debug LevelDB Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -159,10 +123,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Isolated Inserts UMem",
+            "name": "C++: Stress Atomicity UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/stress_insert_atomic_isolated_ukv_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_atomicity_ukv_embedded_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -181,15 +145,15 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Stress Isolated Inserts UMem",
+            "preLaunchTask": "Build Stress Atomicity UMem",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Isolated Inserts RocksDB",
+            "name": "C++: Stress Atomicity RocksDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/stress_insert_atomic_isolated_ukv_embedded_rocksdb",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_atomicity_ukv_embedded_rocksdb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -204,15 +168,15 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Stress Isolated Inserts RocksDB",
+            "preLaunchTask": "Build Stress Atomicity RocksDB",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Serializable Transactions UMem",
+            "name": "C++: Stress Linearizability UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/stress_serializable_transactions_ukv_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_linearizability_ukv_embedded_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -231,15 +195,15 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Stress Serializable Transactions UMem",
+            "preLaunchTask": "Build Stress Linearizability UMem",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Serializable Transactions RocksDB",
+            "name": "C++: Stress Linearizability RocksDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/stress_serializable_transactions_ukv_embedded_rocksdb",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_linearizability_ukv_embedded_rocksdb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -254,7 +218,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Stress Serializable Transactions RocksDB",
+            "preLaunchTask": "Build Stress Linearizability RocksDB",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -272,7 +236,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UMem Benchmark",
+            "preLaunchTask": "Build Debug UMem Benchmark",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -290,7 +254,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug RocksDB Benchmark",
+            "preLaunchTask": "Build Debug RocksDB Benchmark",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -308,7 +272,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UDisk Benchmark",
+            "preLaunchTask": "Build Debug UDisk Benchmark",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -326,7 +290,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug Arrow Benchmark",
+            "preLaunchTask": "Build Debug Arrow Benchmark",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -344,7 +308,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug Arrow Client",
+            "preLaunchTask": "Build Debug Arrow Client",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -358,7 +322,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug Arrow Server",
+            "preLaunchTask": "Build Debug Arrow Server",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },

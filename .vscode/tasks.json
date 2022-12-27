@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build Native: Debug",
+            "label": "Build Debug",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -j 12",
             "args": [],
             "type": "shell"
@@ -20,50 +20,50 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug UMem Test",
+            "label": "Build Debug UMem Test",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make test_units_ukv_embedded_umem -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug LevelDB Test",
+            "label": "Build Debug LevelDB Test",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_LEVELDB=1 -B ./build_debug && make test_units_ukv_embedded_leveldb -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug RocksDB Test",
+            "label": "Build Debug RocksDB Test",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make test_units_ukv_embedded_rocksdb -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug UDisk Test",
+            "label": "Build Debug UDisk Test",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make test_units_ukv_embedded_udisk -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Stress Isolated Inserts UMem",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make stress_insert_atomic_isolated_ukv_embedded_umem -j8 -C ./build_debug",
+            "label": "Build Stress Atomicity UMem",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make stress_atomicity_ukv_embedded_umem -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Stress Isolated Inserts RocksDB",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make stress_insert_atomic_isolated_ukv_embedded_rocksdb -j8 -C ./build_debug",
+            "label": "Build Stress Atomicity RocksDB",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make stress_atomicity_ukv_embedded_rocksdb -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Stress Serializable Transactions UMem",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make stress_serializable_transactions_ukv_embedded_umem -j8 -C ./build_debug",
+            "label": "Build Stress Linearizability UMem",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make stress_linearizability_ukv_embedded_umem -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Stress Serializable Transactions RocksDB",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make stress_serializable_transactions_ukv_embedded_rocksdb -j8 -C ./build_debug",
+            "label": "Build Stress Linearizability RocksDB",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make stress_linearizability_ukv_embedded_rocksdb -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
@@ -98,31 +98,31 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug RocksDB Benchmark",
+            "label": "Build Debug RocksDB Benchmark",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make benchmark_twitter_ukv_embedded_rocksdb -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug Arrow Benchmark",
+            "label": "Build Debug Arrow Benchmark",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_API_FLIGHT_CLIENT=1 -B ./build_debug && make bench_twitter_ukv_flight_client_umem -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug UDisk Benchmark",
+            "label": "Build Debug UDisk Benchmark",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -B ./build_debug && make bench_twitter_ukv_embedded_udisk -j8 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug Arrow Client",
+            "label": "Build Debug Arrow Client",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_CLIENT=1 -B ./build_debug && make test_units_ukv_flight_client -j8 -C ./build_debug && sleep 5",
             "args": [],
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug Arrow Server",
+            "label": "Build Debug Arrow Server",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_API_FLIGHT_SERVER=1 -B ./build_debug && make ukv_flight_server_umem -j8 -C ./build_debug",
             "args": [],
             "type": "shell"

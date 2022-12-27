@@ -66,9 +66,9 @@ class blobs_ref_gt {
     using length_t = std::conditional_t<is_one_k, ukv_length_t, ptr_range_gt<ukv_length_t>>;
 
   protected:
-    ukv_database_t db_ = nullptr;
-    ukv_transaction_t txn_ = nullptr;
-    ukv_arena_t* arena_ = nullptr;
+    ukv_database_t db_ {nullptr};
+    ukv_transaction_t txn_ {nullptr};
+    ukv_arena_t* arena_ {nullptr};
     locations_store_t locations_;
 
     template <typename contents_arg_at>
