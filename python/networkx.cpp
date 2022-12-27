@@ -94,15 +94,15 @@ void ukv::wrap_networkx(py::module& m) {
 
             // Attach the primary collection
             database_t& db = py_db->native;
-            net_ptr->index = db.collection(index ? index->c_str() : "").throw_or_release();
+            net_ptr->index = db.find_or_create(index ? index->c_str() : "").throw_or_release();
 
             // Attach the additional collections
             if (sources_attrs)
-                net_ptr->sources_attrs = db.collection(sources_attrs->c_str()).throw_or_release();
+                net_ptr->sources_attrs = db.find_or_create(sources_attrs->c_str()).throw_or_release();
             if (targets_attrs)
-                net_ptr->sources_attrs = db.collection(targets_attrs->c_str()).throw_or_release();
+                net_ptr->sources_attrs = db.find_or_create(targets_attrs->c_str()).throw_or_release();
             if (relations_attrs)
-                net_ptr->sources_attrs = db.collection(relations_attrs->c_str()).throw_or_release();
+                net_ptr->sources_attrs = db.find_or_create(relations_attrs->c_str()).throw_or_release();
 
             return net_ptr;
         }),

@@ -240,7 +240,7 @@ void linear_writes( //
                 }
 
                 // Now check that the contents of both collections are identical
-                blobs_collection_t concurrent = db.collection().throw_or_release();
+                blobs_collection_t concurrent = db.main();
                 EXPECT_EQ(sequential.size(), concurrent.items().size())
                     << log_comparison(operations_across_threads, sequential, concurrent.items());
 
