@@ -24,7 +24,7 @@ static std::unique_ptr<py_collection_gt<collection_at>> punned_collection( //
     std::shared_ptr<py_transaction_t> py_txn_ptr,
     std::string const& name) {
 
-    ukv_collection_t collection = py_db_ptr->native.find<collection_at>(name, true);
+    ukv_collection_t collection = py_db_ptr->native.find_or_make<collection_at>(name).throw_or_release();
 
     auto py_collection = std::make_unique<py_collection_gt<collection_at>>();
     py_collection->name = name;
@@ -113,6 +113,7 @@ void ukv::wrap_database(py::module& m) {
     py_collection.def("__delitem__", &remove_binary<blobs_collection_t>);
     py_collection.def("__contains__", &has_binary<blobs_collection_t>);
     py_collection.def("__getitem__", &read_binary);
+    py_collection.def("__len__", &get_length<blobs_collection_t>);
 
     py_collection.def("clear",
                       [](py_blobs_collection_t& py_collection) { py_collection.native.clear().throw_unhandled(); });
@@ -196,6 +197,29 @@ void ukv::wrap_database(py::module& m) {
     py_db.def("__getitem__", &punned_db_collection, py::arg("collection"));
     py_txn.def("__getitem__", &punned_txn_collection, py::arg("collection"));
     py_db.def("clear", [](py_db_t& py_db) { py_db.native.clear().throw_unhandled(); });
+
+    py_db.def("collection_names", [](py_db_t& py_db) {
+        status_t status;
+        ukv_size_t count {0};
+        ukv_collection_t* ids {nullptr};
+        arena_t arena(py_db.native);
+        ukv_str_view_t names {nullptr};
+        ukv_collection_list_t collection_list {
+            .db = py_db.native,
+            .error = status.member_ptr(),
+            .arena = arena.member_ptr(),
+            .count = &count,
+            .ids = &ids,
+            .names = &names,
+        };
+        ukv_collection_list(&collection_list);
+        status.throw_unhandled();
+        std::vector<std::string> names_copy {count};
+        strings_tape_iterator_t names_it {count, names};
+        while (!names_it.is_end())
+            names_copy.push_back(*names_it);
+        return names_copy;
+    });
 
     py_db.def(
         "__contains__",

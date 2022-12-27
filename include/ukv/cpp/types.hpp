@@ -32,9 +32,9 @@ struct collection_key_t {
     collection_key_t(collection_key_t const&) = default;
     collection_key_t& operator=(collection_key_t const&) = default;
 
+    inline explicit collection_key_t(ukv_key_t k) noexcept : key(k) {}
+    inline collection_key_t in(ukv_collection_t collection) const noexcept { return {collection, key}; }
     inline collection_key_t(ukv_collection_t c, ukv_key_t k) noexcept : collection(c), key(k) {}
-    inline collection_key_t(ukv_key_t k) noexcept : key(k) {}
-    inline collection_key_t in(ukv_collection_t collection) noexcept { return {collection, key}; }
 
     inline bool operator==(collection_key_t const& other) const noexcept {
         return (collection == other.collection) & (key == other.key);
@@ -62,16 +62,17 @@ struct collection_key_field_t {
     ukv_str_view_t field {nullptr};
 
     collection_key_field_t() = default;
-    collection_key_field_t(ukv_key_t key) noexcept : collection(ukv_collection_main_k), key(key), field(nullptr) {}
     collection_key_field_t(ukv_collection_t collection, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
         : collection(collection), key(key), field(field) {}
-    collection_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept
+    explicit collection_key_field_t(ukv_key_t key) noexcept
+        : collection(ukv_collection_main_k), key(key), field(nullptr) {}
+    explicit collection_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept
         : collection(ukv_collection_main_k), key(key), field(field) {}
 };
 
 template <typename... args_at>
 inline collection_key_field_t ckf(args_at&&... args) {
-    return {std::forward<args_at>(args)...};
+    return collection_key_field_t {std::forward<args_at>(args)...};
 }
 
 /**
