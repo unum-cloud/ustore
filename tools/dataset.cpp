@@ -82,11 +82,9 @@ class arena_allocator_gt {
         : arena_(linked_memory(nullptr, ukv_options_default_k, nullptr)), error_(nullptr) {}
     inline ~arena_allocator_gt() {}
     inline explicit arena_allocator_gt(arena_allocator_gt const& other) : arena_(other.arena_), error_(other.error_) {}
-
     template <typename other_at>
     inline explicit arena_allocator_gt(arena_allocator_gt<other_at> const& other)
         : arena_(other.arena_), error_(other.error_) {}
-
     inline explicit arena_allocator_gt(linked_memory_lock_t const& arena, ukv_error_t* error)
         : arena_(arena), error_(error) {}
 
@@ -239,31 +237,87 @@ class string_iterator_t {
 };
 
 template <typename imp_exp_at>
-bool validate_graph_fields(imp_exp_at& c) {
-    if (!c.source_id_field) {
-        *c.error = "Invalid source id field";
+bool validate_graph_fields(imp_exp_at& imp_exp, bool is_exp = false) {
+    if (!imp_exp.source_id_field) {
+        *imp_exp.error = "Invalid source id field";
         return false;
     }
-    if (!c.target_id_field) {
-        *c.error = "Invalid target id field";
+    if (!imp_exp.target_id_field) {
+        *imp_exp.error = "Invalid target id field";
         return false;
     }
+
+    if (is_exp) {
+        auto check_first_char = [](char ch) {
+            return (ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122) || ch == 95;
+        };
+
+        auto check_char = [](char ch) {
+            return (ch >= 48 && ch <= 57) || (ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122) || //
+                   ch == 32 || ch == 45 || ch == 95;
+        };
+
+        auto validate_field = [=](ukv_str_view_t field) {
+            for (size_t idx = 1; idx < strlen(field); ++idx) {
+                if (check_char(field[idx]))
+                    continue;
+
+                return false;
+            }
+            return true;
+        };
+
+        if (!check_first_char(imp_exp.source_id_field[0])) {
+            *imp_exp.error = "(source) field must start with A-Z, a-z, '_'";
+            return false;
+        }
+
+        if (!check_first_char(imp_exp.target_id_field[0])) {
+            *imp_exp.error = "(target) field must start with A-Z, a-z, '_'";
+            return false;
+        }
+
+        if (!imp_exp.edge_id_field) {
+            if (!check_first_char(imp_exp.edge_id_field[0])) {
+                *imp_exp.error = "(edge) field must start with A-Z, a-z, '_'";
+                return false;
+            }
+        }
+
+        if (!validate_field(imp_exp.source_id_field)) {
+            *imp_exp.error = "(source) field can contain A-Z, a-z, 0-9, ' ', '-', '_'";
+            return false;
+        }
+
+        if (!validate_field(imp_exp.target_id_field)) {
+            *imp_exp.error = "(target) field can contain A-Z, a-z, 0-9, ' ', '-', '_'";
+            return false;
+        }
+
+        if (!imp_exp.edge_id_field) {
+            if (!validate_field(imp_exp.edge_id_field)) {
+                *imp_exp.error = "(edge) field can contain A-Z, a-z, 0-9, ' ', '-', '_'";
+                return false;
+            }
+        }
+    }
+
     return true;
 }
 
 template <typename imp_exp_at>
-bool validate_docs_fields(imp_exp_at& c) {
-    if (c.fields_count == 0 && c.fields == nullptr)
+bool validate_docs_fields(imp_exp_at& imp_exp) {
+    if (imp_exp.fields_count == 0 && imp_exp.fields == nullptr)
         return true;
-    else if (c.fields_count == 0 && c.fields != nullptr)
+    else if (imp_exp.fields_count == 0 && imp_exp.fields != nullptr)
         return false;
-    else if (c.fields_count != 0 && c.fields == nullptr)
+    else if (imp_exp.fields_count != 0 && imp_exp.fields == nullptr)
         return false;
-    else if (c.fields_count != 0 && c.fields != nullptr && c.fields_stride == 0)
+    else if (imp_exp.fields_count != 0 && imp_exp.fields != nullptr && imp_exp.fields_stride == 0)
         return false;
 
-    fields_t fields {c.fields, c.fields_stride};
-    for (size_t idx = 0; idx < c.fields_count; ++idx) {
+    fields_t fields {imp_exp.fields, imp_exp.fields_stride};
+    for (size_t idx = 0; idx < imp_exp.fields_count; ++idx) {
         if (fields[idx] == nullptr)
             return false;
     }
@@ -887,7 +941,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
     ukv_graph_export_t& c = *c_ptr;
 
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    if (!validate_graph_fields(c))
+    if (!validate_graph_fields(c, true))
         return_if_error_m(c.error);
     return_error_if_m(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
