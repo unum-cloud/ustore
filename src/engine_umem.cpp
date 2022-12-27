@@ -296,31 +296,61 @@ void export_error_code(consistent_set_status_t code, ukv_error_t* c_error) noexc
 /*****************	 Writing to Disk	  ****************/
 /*********************************************************/
 
-void write(database_t const& db, std::string const& path, ukv_error_t* c_error) noexcept(false) {
+void write_collection( //
+    database_t const& db,
+    ukv_collection_t collection_id,
+    std::string const& collection_path,
+    ukv_error_t* c_error) noexcept(false) {
+
+    std::shared_ptr<arrow::io::FileOutputStream> out_file;
+    PARQUET_ASSIGN_OR_THROW(out_file, arrow::io::FileOutputStream::Open(collection_path));
+
+    parquet::schema::NodeVector columns {};
+    columns.push_back(parquet::schema::PrimitiveNode::Make( //
+        "key",
+        parquet::Repetition::REQUIRED,
+        parquet::Type::INT64,
+        parquet::ConvertedType::INT_64));
+    columns.push_back(parquet::schema::PrimitiveNode::Make( //
+        "value",
+        parquet::Repetition::REQUIRED,
+        parquet::Type::BYTE_ARRAY,
+        parquet::ConvertedType::UTF8));
+    auto schema = std::static_pointer_cast<parquet::schema::GroupNode>(
+        parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, columns));
+    parquet::WriterProperties::Builder builder;
+    parquet::StreamWriter os {parquet::ParquetFileWriter::Open(out_file, schema, builder.build())};
+
+    collection_key_t min(collection_id, std::numeric_limits<ukv_key_t>::min());
+    collection_key_t max(collection_id, std::numeric_limits<ukv_key_t>::max());
+    auto status = db.pairs.range(min, max, [&](pair_t& pair) noexcept {
+        os << pair.collection_key.key << std::string_view(pair.range) << parquet::EndRow;
+    });
+    export_error_code(status, c_error);
+    return_if_error_m(c_error);
+}
+
+void write(database_t const& db, std::string const& dir_path, ukv_error_t* c_error) noexcept(false) {
 
     // Check if the source directory even exists
-    if (!std::filesystem::is_directory(path))
+    if (!std::filesystem::is_directory(dir_path))
         return;
+
+    auto main_path = stdfs::path(dir_path) / ".parquet";
+    write_collection(db, ukv_collection_main_k, main_path, c_error);
+    return_if_error_m(c_error);
 
     for (auto const& collection : db.names) {
         auto const& collection_name = collection.first;
-        auto const collection_path = stdfs::path(path) / (collection_name + ".parquet");
-
-        std::shared_ptr<arrow::io::FileOutputStream> outfile;
-        PARQUET_ASSIGN_OR_THROW(outfile, arrow::io::FileOutputStream::Open(collection_path));
-        parquet::WriterProperties::Builder builder;
-        std::shared_ptr<parquet::schema::GroupNode> schema;
-        parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
-
-        ukv_collection_t collection_id = collection.second;
-        collection_key_t min(collection_id, std::numeric_limits<ukv_key_t>::min());
-        collection_key_t max(collection_id, std::numeric_limits<ukv_key_t>::max());
-        auto status = db.pairs.range(min, max, [&](pair_t& pair) noexcept {
-            os << pair.collection_key.key << std::string_view(pair.range) << parquet::EndRow;
-        });
-        export_error_code(status, c_error);
+        auto const collection_path = stdfs::path(dir_path) / (collection_name + ".parquet");
+        write_collection(db, collection.second, collection_path, c_error);
         return_if_error_m(c_error);
     }
+}
+
+bool ends_with(std::string_view str, std::string_view suffix) noexcept {
+    return str.size() >= suffix.size() &&
+           0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix.data(), suffix.size());
 }
 
 void read(database_t& db, std::string const& path, ukv_error_t* c_error) noexcept(false) {
@@ -336,18 +366,21 @@ void read(database_t& db, std::string const& path, ukv_error_t* c_error) noexcep
         return;
 
     // Loop over all persisted collections, reading them one by one
+    std::string_view extension {".parquet"};
     for (auto const& dir_entry : std::filesystem::directory_iterator {path}) {
         auto const& collection_path = dir_entry.path();
-        if (collection_path.extension() != ".parquet")
+        std::string collection_name = collection_path.filename();
+        if (!ends_with(collection_name, extension))
             continue;
 
-        auto const collection_name = collection_path.filename();
+        collection_name.resize(collection_name.size() - extension.size());
         ukv_collection_t collection_id = collection_name.empty() ? ukv_collection_main_k : new_collection(db);
-        db.names.emplace(collection_name, collection_id);
+        if (!collection_name.empty())
+            db.names.emplace(collection_name, collection_id);
 
-        std::shared_ptr<arrow::io::ReadableFile> infile;
-        PARQUET_ASSIGN_OR_THROW(infile, arrow::io::ReadableFile::Open(collection_path));
-        parquet::StreamReader os {parquet::ParquetFileReader::Open(infile)};
+        std::shared_ptr<arrow::io::ReadableFile> in_file;
+        PARQUET_ASSIGN_OR_THROW(in_file, arrow::io::ReadableFile::Open(collection_path));
+        parquet::StreamReader os {parquet::ParquetFileReader::Open(in_file)};
 
         ukv_key_t key;
         std::string value;
@@ -362,6 +395,7 @@ void read(database_t& db, std::string const& path, ukv_error_t* c_error) noexcep
             pair.collection_key.collection = collection_id;
             pair.collection_key.key = key;
             pair.range = value_view_t {buf_ptr, buf_len};
+            std::memcpy(buf_ptr, value.data(), value.size());
             auto status = db.pairs.upsert(std::move(pair));
             export_error_code(status, c_error);
             return_if_error_m(c_error);
@@ -881,7 +915,7 @@ void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
 
     // TODO: Degrade the lock to "shared" state before starting expensive IO
     if (c.options & ukv_option_write_flush_k)
-        write(db, db.persisted_directory, c.error);
+        safe_section("Saving to disk", c.error, [&] { write(db, db.persisted_directory, c.error); });
 }
 
 /*********************************************************/
@@ -906,7 +940,7 @@ void ukv_database_free(ukv_database_t c_db) {
     database_t& db = *reinterpret_cast<database_t*>(c_db);
     if (!db.persisted_directory.empty()) {
         ukv_error_t c_error = nullptr;
-        write(db, db.persisted_directory, &c_error);
+        safe_section("Saving to disk", c.error, [&] { write(db, db.persisted_directory, c_error); });
     }
 
     delete &db;
