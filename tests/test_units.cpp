@@ -490,118 +490,6 @@ TEST(db, batch_scan) {
     EXPECT_TRUE(stream.is_end());
 }
 
-// TODO: Unit tests must be minimal.
-TEST(db, multiple_collection) {
-    if (!ukv_supports_named_collections_k)
-        return;
-
-    clear_environment();
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-
-    blobs_collection_t col1 = *db.create("col1");
-    blobs_collection_t col2 = *db.create("col2");
-
-    triplet_t triplet;
-    auto col1_ref = col1[triplet.keys];
-    auto col2_ref = col2[triplet.keys];
-
-    check_length(col1_ref, ukv_length_missing_k);
-    check_length(col2_ref, ukv_length_missing_k);
-
-    round_trip(col1_ref, triplet);
-    check_length(col1_ref, triplet_t::val_size_k);
-
-    round_trip(col2_ref, triplet);
-    check_length(col2_ref, triplet_t::val_size_k);
-
-    EXPECT_TRUE(*db.contains("col1"));
-    EXPECT_TRUE(col1.clear_values());
-    check_length(col1_ref, 0);
-    EXPECT_TRUE(*db.contains("col1"));
-
-    EXPECT_TRUE(*db.contains("col2"));
-    EXPECT_TRUE(col2.clear_values());
-    check_length(col2_ref, 0);
-    EXPECT_TRUE(*db.contains("col2"));
-
-    EXPECT_TRUE(db.drop("col2"));
-    EXPECT_FALSE(*db.contains("col2"));
-
-    EXPECT_TRUE(db.clear());
-
-    EXPECT_FALSE(*db.contains("col1"));
-    EXPECT_FALSE(*db.contains("col2"));
-
-    blobs_collection_t main_collection = db.main();
-    auto main_col_ref = main_collection[triplet.keys];
-
-    round_trip(main_col_ref, triplet);
-    check_length(main_col_ref, triplet_t::val_size_k);
-
-    EXPECT_TRUE(main_collection.clear_values());
-    check_length(main_col_ref, 0);
-
-    EXPECT_TRUE(db.clear());
-    auto range = main_collection.keys();
-    EXPECT_EQ(range.size(), 0);
-
-    auto maybe_txn = db.transact();
-    EXPECT_TRUE(maybe_txn);
-    auto maybe_cols = maybe_txn->collections();
-    EXPECT_TRUE(maybe_cols);
-
-    size_t count = 0;
-    auto cols = *maybe_cols;
-    while (!cols.names.is_end()) {
-        ++cols.names;
-        ++count;
-    }
-    EXPECT_EQ(count, 0);
-}
-
-TEST(db, check_contents_of_collection) {
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-    blobs_collection_t main_collection = *db.collection();
-
-    EXPECT_EQ(main_collection.keys().size(), 0);
-    EXPECT_EQ(main_collection.items().size(), 0);
-    EXPECT_EQ(*main_collection.at(0).value(), value_view_t {});
-    EXPECT_EQ(*main_collection.at(1).value(), value_view_t {});
-    EXPECT_EQ(*main_collection.at(2).value(), value_view_t {});
-    EXPECT_EQ(*main_collection.at('a').value(), value_view_t {});
-    EXPECT_EQ(*main_collection.at('b').value(), value_view_t {});
-    EXPECT_EQ(*main_collection.at('c').value(), value_view_t {});
-
-    EXPECT_EQ(main_collection.keys().size(), 0);
-
-    triplet_t triplet;
-    auto main_col_ref = main_collection[triplet.keys];
-    round_trip(main_col_ref, triplet);
-    check_length(main_col_ref, triplet_t::val_size_k);
-    EXPECT_EQ(main_collection.keys().size(), 3ul);
-
-    value_view_t val = *main_collection.at(0).value();
-    EXPECT_EQ(*main_collection.at('a').value(), value_view_t {"A"});
-    EXPECT_EQ(*main_collection.at('b').value(), value_view_t {"B"});
-    EXPECT_EQ(*main_collection.at('c').value(), value_view_t {"C"});
-
-    triplet.vals = {'M', 'N', 'K'};
-    round_trip(main_col_ref, triplet);
-    check_length(main_col_ref, triplet_t::val_size_k);
-    EXPECT_EQ(*main_collection.at('a').value(), value_view_t {"M"});
-    EXPECT_EQ(*main_collection.at('b').value(), value_view_t {"N"});
-    EXPECT_EQ(*main_collection.at('c').value(), value_view_t {"K"});
-    EXPECT_EQ(main_collection.keys().size(), 3ul);
-
-    main_collection.clear();
-    EXPECT_EQ(*main_collection.at('a').value(), value_view_t {});
-    EXPECT_EQ(*main_collection.at('b').value(), value_view_t {});
-    EXPECT_EQ(*main_collection.at('c').value(), value_view_t {});
-    EXPECT_EQ(main_collection.keys().size(), 0);
-}
-
 /**
  * Checks the "Read Commited" consistency guarantees of transactions.
  * Readers can't see the contents of pending (not committed) transactions.
@@ -686,85 +574,6 @@ TEST(db, transaction_snapshot_isolation) {
     round_trip(ref, triplet_same_v);
 }
 
-TEST(db, transaction_overwrite) {
-    if (!ukv_supports_transactions_k)
-        return;
-
-    clear_environment();
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-    EXPECT_TRUE(db.transact());
-    transaction_t txn = *db.transact();
-    blobs_collection_t main = txn.main();
-
-    // Real case, that has been found in RocksDB engine
-    EXPECT_TRUE(main[2].erase());
-    EXPECT_TRUE(main[7].erase());
-    EXPECT_TRUE(main[6].erase());
-    EXPECT_TRUE(main[1].erase());
-    EXPECT_TRUE(main[2].erase());
-    EXPECT_TRUE(main[6].erase());
-    EXPECT_TRUE(main[6].erase());
-    EXPECT_TRUE(main[3].erase());
-    EXPECT_TRUE(main[2].erase());
-    EXPECT_TRUE(main[2].erase());
-    EXPECT_TRUE(main[6].erase());
-    EXPECT_TRUE(main[7].erase());
-    EXPECT_TRUE(main[7].erase());
-    EXPECT_TRUE(main[2].assign("173252511"));
-    EXPECT_TRUE(main[1].assign("1818561106"));
-    EXPECT_TRUE(txn.commit());
-
-    EXPECT_EQ(db.main().at(2).value(), value_view_t {"173252511"});
-    EXPECT_EQ(db.main().at(1).value(), value_view_t {"1818561106"});
-    EXPECT_EQ(db.main().keys().size(), 2u);
-    EXPECT_TRUE(db.clear());
-
-    // Another real case, that has been found in RocksDB engine
-    transaction_t txn46263 = *db.transact();
-    blobs_collection_t main46263 = txn46263.main();
-    transaction_t txn46278 = *db.transact();
-    blobs_collection_t main46278 = txn46278.main();
-
-    EXPECT_TRUE(main46263[1].erase());
-    EXPECT_TRUE(main46263[2].assign("1512435004"));
-    EXPECT_TRUE(main46263[1].erase());
-    EXPECT_TRUE(main46263[5].assign("1506174981"));
-    EXPECT_TRUE(main46263[7].erase());
-    EXPECT_TRUE(main46263[1].erase());
-    EXPECT_TRUE(main46263[2].erase());
-    EXPECT_TRUE(main46263[2].erase());
-    EXPECT_TRUE(main46263[7].erase());
-    EXPECT_TRUE(main46263[1].erase());
-    EXPECT_TRUE(main46263[4].erase());
-    EXPECT_TRUE(main46263[1].erase());
-    EXPECT_TRUE(main46263[4].assign("3199607125"));
-    EXPECT_TRUE(main46263[6].erase());
-    EXPECT_TRUE(main46263[3].erase());
-    EXPECT_TRUE(txn46263.commit());
-
-    EXPECT_TRUE(main46278[3].erase());
-    EXPECT_TRUE(main46278[7].erase());
-    EXPECT_TRUE(main46278[1].erase());
-    EXPECT_TRUE(main46278[6].erase());
-    EXPECT_TRUE(main46278[4].erase());
-    EXPECT_TRUE(main46278[3].assign("572327713"));
-    EXPECT_TRUE(main46278[6].erase());
-    EXPECT_TRUE(main46278[1].erase());
-    EXPECT_TRUE(main46278[3].erase());
-    EXPECT_TRUE(main46278[6].erase());
-    EXPECT_TRUE(main46278[3].erase());
-    EXPECT_TRUE(main46278[2].assign("3174360422"));
-    EXPECT_TRUE(main46278[4].erase());
-    EXPECT_TRUE(main46278[7].erase());
-    EXPECT_TRUE(main46278[1].erase());
-    EXPECT_TRUE(txn46278.commit());
-
-    EXPECT_EQ(db.main().at(2).value(), value_view_t {"3174360422"});
-    EXPECT_EQ(db.main().at(5).value(), value_view_t {"1506174981"});
-    EXPECT_EQ(db.main().keys().size(), 2u);
-}
-
 TEST(db, transaction_erase_missing) {
     if (!ukv_supports_transactions_k)
         return;
@@ -803,6 +612,9 @@ TEST(db, transaction_write_conflicting) {
     EXPECT_FALSE(txn2.commit());
 }
 
+/**
+ *
+ */
 TEST(db, transaction_sequenced_commit) {
     if (!ukv_supports_transactions_k)
         return;
@@ -1263,8 +1075,9 @@ TEST(db, docs_nested_batch) {
     EXPECT_FALSE(ref.assign(values));
 }
 
-// TODO: Use understandable and rememberable keys.
-// Split into smaller parts.
+/**
+ *
+ */
 TEST(db, docs_modify) {
     clear_environment();
     database_t db;

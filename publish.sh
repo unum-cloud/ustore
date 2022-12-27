@@ -15,7 +15,7 @@ echo -e "------ \e[92mBuild Passing\e[0m ------"
 
 for test in $(ls ./build_release/build/bin/*test_units*); do
     echo -e "------ \e[93mRunning $test\e[0m ------";
-    UKV_TEST_PATH=./tmp $test
+    $test
 done
 echo -e "------ \e[92mTests Passing!\e[0m ------"
 
