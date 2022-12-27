@@ -21,6 +21,33 @@
             "cppAttachName": "(GDB) Attach Python",
         },
         {
+            "name": "C++: Test UMem Stateless",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_embedded_umem",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                },
+                {
+                    "name": "UKV_TEST_PATH",
+                    "value": "",
+                }
+            ],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Debug UMem Test",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
             "name": "C++: Test UMem",
             "type": "cppdbg",
             "request": "launch",
