@@ -400,7 +400,7 @@ static py::array_t<ukv_key_t> scan_binary( //
 }
 
 template <typename collection_at>
-static std::size_t get_length(collection_at& collection) {
+static std::size_t get_length(py_collection_gt<collection_at>& collection) {
     return collection.native.size();
 }
 

@@ -24,7 +24,7 @@ static std::unique_ptr<py_collection_gt<collection_at>> punned_collection( //
     std::shared_ptr<py_transaction_t> py_txn_ptr,
     std::string const& name) {
 
-    ukv_collection_t collection = py_db_ptr->native.find_or_create<collection_at>(name).throw_or_release();
+    ukv_collection_t collection = py_db_ptr->native.find_or_create<collection_at>(name.c_str()).throw_or_release();
 
     auto py_collection = std::make_unique<py_collection_gt<collection_at>>();
     py_collection->name = name;
