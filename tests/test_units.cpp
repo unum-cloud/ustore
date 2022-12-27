@@ -1170,16 +1170,6 @@ TEST(db, docs_flat) {
     M_EXPECT_EQ_JSON(*collection[ckf(5, "person")].value(), "\"Alice\"");
     M_EXPECT_EQ_JSON(*collection[ckf(5, "age")].value(), "24");
 
-#if 0
-    // MsgPack
-    collection.as(ukv_format_msgpack_k);
-    M_EXPECT_EQ_MSG(val, json.c_str());
-    val = *collection[ckf(1, "person")].value();
-    M_EXPECT_EQ_MSG(val, "\"Carl\"");
-    val = *collection[ckf(1, "age")].value();
-    M_EXPECT_EQ_MSG(val, "24");
-#endif
-
     // Let's not clean, to be able to introspect the state after failures
     // EXPECT_TRUE(db.clear());
 }
