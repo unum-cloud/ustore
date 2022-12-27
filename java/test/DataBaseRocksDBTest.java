@@ -10,7 +10,7 @@ public class DataBaseRocksDBTest {
     }
     @Test
     public void test() {
-        DataBaseRocksDB.Context ctx = new DataBaseRocksDB.Context("");
+        DataBaseRocksDB.Context ctx = new DataBaseRocksDB.Context("./tmp");
         ctx.put(42, "hey".getBytes());
         assert Arrays.equals(ctx.get(42), "hey".getBytes()) : "Received wrong value";
 

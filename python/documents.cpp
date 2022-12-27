@@ -301,6 +301,7 @@ void ukv::wrap_document(py::module& m) {
     py_docs_collection.def("__delitem__", &remove_doc);
     py_docs_collection.def("__getitem__", &read_doc);
     py_docs_collection.def("__contains__", &has_doc);
+    py_docs_collection.def("__len__", &get_length<py_docs_collection_t>);
 
     py_docs_collection.def("clear", [](py_docs_collection_t& collection) { collection.native.clear(); });
 

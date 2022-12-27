@@ -246,11 +246,8 @@ TEST(db, open_clear_close) {
     EXPECT_TRUE(db.clear());
 
     // Try getting the main collection
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
     check_binary_collection(collection);
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -264,7 +261,7 @@ TEST(db, clear_collection_by_clearing_db) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
     triplet_t triplet;
     auto ref = collection[triplet.keys];
     round_trip(ref, triplet.contents_arrow());
@@ -289,8 +286,7 @@ TEST(db, overwrite_with_step) {
     EXPECT_TRUE(db.clear());
 
     // Try getting the main collection
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
 
     // Monotonically increasing
     for (ukv_key_t k = 1000; k != 1100; ++k)
@@ -318,9 +314,6 @@ TEST(db, overwrite_with_step) {
 
     EXPECT_EQ(collection.keys().size(), 250ul);
     EXPECT_EQ(collection.items().size(), 250ul);
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -337,7 +330,7 @@ TEST(db, persistency) {
 
     triplet_t triplet;
     {
-        blobs_collection_t collection = *db.collection();
+        blobs_collection_t collection = db.main();
         auto collection_ref = collection[triplet.keys];
         check_length(collection_ref, ukv_length_missing_k);
         round_trip(collection_ref, triplet);
@@ -346,7 +339,7 @@ TEST(db, persistency) {
     db.close();
     {
         EXPECT_TRUE(db.open(path()));
-        blobs_collection_t collection = *db.collection();
+        blobs_collection_t collection = db.main();
         auto collection_ref = collection[triplet.keys];
         check_equalities(collection_ref, triplet);
         check_length(collection_ref, triplet_t::val_size_k);
@@ -354,8 +347,6 @@ TEST(db, persistency) {
         EXPECT_EQ(collection.keys().size(), 3ul);
         EXPECT_EQ(collection.items().size(), 3ul);
     }
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -378,9 +369,9 @@ TEST(db, named_collections) {
         EXPECT_TRUE(db["col1"]);
         EXPECT_TRUE(db["col2"]);
 
-        EXPECT_FALSE(db.collection_create("col1"));
+        EXPECT_FALSE(db.create("col1"));
         blobs_collection_t col1 = *db["col1"];
-        EXPECT_FALSE(db.collection_create("col2"));
+        EXPECT_FALSE(db.create("col2"));
         blobs_collection_t col2 = *db["col2"];
 
         check_binary_collection(col1);
@@ -409,10 +400,10 @@ TEST(db, named_collections_list) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    blobs_collection_t col1 = *db.collection_create("col1");
-    blobs_collection_t col2 = *db.collection_create("col2");
-    blobs_collection_t col3 = *db.collection_create("col3");
-    blobs_collection_t col4 = *db.collection_create("col4");
+    blobs_collection_t col1 = *db.create("col1");
+    blobs_collection_t col2 = *db.create("col2");
+    blobs_collection_t col3 = *db.create("col3");
+    blobs_collection_t col4 = *db.create("col4");
 
     EXPECT_TRUE(*db.contains("col1"));
     EXPECT_TRUE(*db.contains("col2"));
@@ -440,9 +431,7 @@ TEST(db, named_collections_list) {
     EXPECT_TRUE(db.drop("col1"));
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(db.drop(""));
-    EXPECT_TRUE(db.collection()->clear());
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
+    EXPECT_TRUE(db.main().clear());
 }
 
 /**
@@ -456,7 +445,7 @@ TEST(db, clear_values) {
 
     triplet_t triplet;
 
-    blobs_collection_t col = *db.collection();
+    blobs_collection_t col = db.main();
     auto collection_ref = col[triplet.keys];
 
     check_length(collection_ref, ukv_length_missing_k);
@@ -465,9 +454,6 @@ TEST(db, clear_values) {
 
     EXPECT_TRUE(col.clear_values());
     check_length(collection_ref, 0);
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -478,8 +464,7 @@ TEST(db, batch_scan) {
     clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
 
     std::array<ukv_key_t, 512> keys;
     std::iota(std::begin(keys), std::end(keys), 0);
@@ -503,9 +488,6 @@ TEST(db, batch_scan) {
     batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 0);
     EXPECT_TRUE(stream.is_end());
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 // TODO: Unit tests must be minimal.
@@ -517,8 +499,8 @@ TEST(db, multiple_collection) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    blobs_collection_t col1 = *db.collection_create("col1");
-    blobs_collection_t col2 = *db.collection_create("col2");
+    blobs_collection_t col1 = *db.create("col1");
+    blobs_collection_t col2 = *db.create("col2");
 
     triplet_t triplet;
     auto col1_ref = col1[triplet.keys];
@@ -551,7 +533,7 @@ TEST(db, multiple_collection) {
     EXPECT_FALSE(*db.contains("col1"));
     EXPECT_FALSE(*db.contains("col2"));
 
-    blobs_collection_t main_collection = *db.collection();
+    blobs_collection_t main_collection = db.main();
     auto main_col_ref = main_collection[triplet.keys];
 
     round_trip(main_col_ref, triplet);
@@ -640,8 +622,7 @@ TEST(db, transaction_read_commited) {
     auto txn_ref = txn[triplet.keys];
     round_trip(txn_ref, triplet);
 
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
     auto collection_ref = collection[triplet.keys];
 
     // Check for missing values before commit
@@ -651,8 +632,6 @@ TEST(db, transaction_read_commited) {
 
     // Validate that values match after commit
     check_equalities(collection_ref, triplet);
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -676,8 +655,7 @@ TEST(db, transaction_snapshot_isolation) {
     triplet_t triplet_same_v;
     triplet_same_v.vals = {'D', 'D', 'D'};
 
-    EXPECT_TRUE(db.collection());
-    blobs_collection_t collection = *db.collection();
+    blobs_collection_t collection = db.main();
     auto collection_ref = collection[triplet.keys];
 
     check_length(collection_ref, ukv_length_missing_k);
@@ -706,9 +684,6 @@ TEST(db, transaction_snapshot_isolation) {
     txn = *db.transact(true);
     auto ref = txn[triplet_same_v.keys];
     round_trip(ref, triplet_same_v);
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 TEST(db, transaction_overwrite) {
@@ -720,7 +695,7 @@ TEST(db, transaction_overwrite) {
     EXPECT_TRUE(db.open(path()));
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
-    blobs_collection_t main = *txn.collection();
+    blobs_collection_t main = txn.main();
 
     // Real case, that has been found in RocksDB engine
     EXPECT_TRUE(main[2].erase());
@@ -740,16 +715,16 @@ TEST(db, transaction_overwrite) {
     EXPECT_TRUE(main[1].assign("1818561106"));
     EXPECT_TRUE(txn.commit());
 
-    EXPECT_EQ(*db.collection()->at(2).value(), value_view_t {"173252511"});
-    EXPECT_EQ(*db.collection()->at(1).value(), value_view_t {"1818561106"});
-    EXPECT_EQ(db.collection()->keys().size(), 2u);
+    EXPECT_EQ(db.main().at(2).value(), value_view_t {"173252511"});
+    EXPECT_EQ(db.main().at(1).value(), value_view_t {"1818561106"});
+    EXPECT_EQ(db.main().keys().size(), 2u);
     EXPECT_TRUE(db.clear());
 
     // Another real case, that has been found in RocksDB engine
     transaction_t txn46263 = *db.transact();
-    blobs_collection_t main46263 = *txn46263.collection();
+    blobs_collection_t main46263 = txn46263.main();
     transaction_t txn46278 = *db.transact();
-    blobs_collection_t main46278 = *txn46278.collection();
+    blobs_collection_t main46278 = txn46278.main();
 
     EXPECT_TRUE(main46263[1].erase());
     EXPECT_TRUE(main46263[2].assign("1512435004"));
@@ -785,11 +760,9 @@ TEST(db, transaction_overwrite) {
     EXPECT_TRUE(main46278[1].erase());
     EXPECT_TRUE(txn46278.commit());
 
-    EXPECT_EQ(*db.collection()->at(2).value(), value_view_t {"3174360422"});
-    EXPECT_EQ(*db.collection()->at(5).value(), value_view_t {"1506174981"});
-    EXPECT_EQ(db.collection()->keys().size(), 2u);
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
+    EXPECT_EQ(db.main().at(2).value(), value_view_t {"3174360422"});
+    EXPECT_EQ(db.main().at(5).value(), value_view_t {"1506174981"});
+    EXPECT_EQ(db.main().keys().size(), 2u);
 }
 
 TEST(db, transaction_erase_missing) {
@@ -803,16 +776,14 @@ TEST(db, transaction_erase_missing) {
     transaction_t txn1 = *db.transact();
     transaction_t txn2 = *db.transact();
 
-    EXPECT_TRUE(txn2.collection()->at(-7297309151944849401).erase());
-    EXPECT_TRUE(txn1.collection()->at(-8640850744835793378).erase());
+    EXPECT_TRUE(txn2.main().at(-7297309151944849401).erase());
+    EXPECT_TRUE(txn1.main().at(-8640850744835793378).erase());
     EXPECT_TRUE(txn1.commit());
     EXPECT_TRUE(txn2.commit());
 
-    EXPECT_EQ(*db.collection()->at(-8640850744835793378).value(), value_view_t {});
-    EXPECT_EQ(*db.collection()->at(-7297309151944849401).value(), value_view_t {});
-    EXPECT_EQ(db.collection()->keys().size(), 0u);
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
+    EXPECT_EQ(db.main().at(-8640850744835793378).value(), value_view_t {});
+    EXPECT_EQ(db.main().at(-7297309151944849401).value(), value_view_t {});
+    EXPECT_EQ(db.main().keys().size(), 0u);
 }
 
 TEST(db, transaction_write_conflicting) {
@@ -826,12 +797,10 @@ TEST(db, transaction_write_conflicting) {
     transaction_t txn1 = *db.transact();
     transaction_t txn2 = *db.transact();
 
-    EXPECT_TRUE(txn2.collection()->at(6).assign("a"));
-    EXPECT_TRUE(txn1.collection()->at(6).assign("b"));
+    EXPECT_TRUE(txn2.main().at(6).assign("a"));
+    EXPECT_TRUE(txn1.main().at(6).assign("b"));
     EXPECT_TRUE(txn1.commit());
     EXPECT_FALSE(txn2.commit());
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 TEST(db, transaction_sequenced_commit) {
@@ -870,8 +839,6 @@ TEST(db, transaction_sequenced_commit) {
     current_sequence_number = *maybe_sequence_number;
     EXPECT_GT(current_sequence_number, previous_sequence_number);
 #endif
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 #pragma region Paths Modality
@@ -1033,9 +1000,6 @@ TEST(db, paths) {
     ukv_paths_match(&paths_match);
     EXPECT_EQ(results_counts[0], 0);
     EXPECT_EQ(*paths_match.error, nullptr);
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1147,14 +1111,10 @@ TEST(db, paths_linked_list) {
         EXPECT_TRUE(status);
         EXPECT_EQ(std::string_view(smaller), std::string_view(smaller_received));
     }
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 #pragma region Documents Modality
 
-// TODO: Use those structures
 std::vector<std::string> make_three_flat_docs() {
     auto json1 = R"( {"person": "Alice", "age": 24} )"_json.dump();
     auto json2 = R"( {"person": "Bob", "age": 25} )"_json.dump();
@@ -1181,7 +1141,7 @@ TEST(db, docs_flat) {
     EXPECT_TRUE(db.open(path()));
 
     // JSON
-    docs_collection_t collection = *db.collection<docs_collection_t>();
+    docs_collection_t collection = db.main<docs_collection_t>();
     auto jsons = make_three_flat_docs();
     collection[1] = jsons[0].c_str();
     collection[2] = jsons[1].c_str();
@@ -1196,24 +1156,21 @@ TEST(db, docs_flat) {
 
     // BSON
     bson_error_t error;
-    bson_t* b = bson_new_from_json((uint8_t*)jsons[0].c_str(), -1, &error);
-    uint8_t const* buffer = bson_get_data(b);
-    auto view = value_view_t(buffer, b->len);
+    bson_t* bson = bson_new_from_json((uint8_t*)jsons[0].c_str(), -1, &error);
+    uint8_t const* buffer = bson_get_data(bson);
+    auto view = value_view_t(buffer, bson->len);
     collection.at(4, ukv_doc_field_bson_k) = view;
     M_EXPECT_EQ_JSON(*collection[4].value(), jsons[0]);
     M_EXPECT_EQ_JSON(*collection[ckf(4, "person")].value(), "\"Alice\"");
     M_EXPECT_EQ_JSON(*collection[ckf(4, "age")].value(), "24");
-    bson_clear(&b);
+    bson_clear(&bson);
 
     // MsgPack
-    auto mpack = *collection[1].value(ukv_doc_field_msgpack_k);
-    collection.at(5, ukv_doc_field_msgpack_k) = mpack;
+    auto message_pack = *collection[1].value(ukv_doc_field_msgpack_k);
+    collection.at(5, ukv_doc_field_msgpack_k) = message_pack;
     M_EXPECT_EQ_JSON(*collection[5].value(), jsons[0]);
     M_EXPECT_EQ_JSON(*collection[ckf(5, "person")].value(), "\"Alice\"");
     M_EXPECT_EQ_JSON(*collection[ckf(5, "age")].value(), "24");
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1225,7 +1182,7 @@ TEST(db, docs_nested_batch) {
     clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
-    docs_collection_t collection = *db.collection<docs_collection_t>();
+    docs_collection_t collection = db.main<docs_collection_t>();
 
     auto jsons = make_three_nested_docs();
     std::string continuous_jsons = jsons[0] + jsons[1] + jsons[2];
@@ -1304,9 +1261,6 @@ TEST(db, docs_nested_batch) {
     vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(continuous_jsons.data());
 
     EXPECT_FALSE(ref.assign(values));
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 // TODO: Use understandable and rememberable keys.
@@ -1315,7 +1269,7 @@ TEST(db, docs_modify) {
     clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
-    docs_collection_t collection = *db.collection<docs_collection_t>();
+    docs_collection_t collection = db.main<docs_collection_t>();
     auto jsons = make_three_nested_docs();
     collection[1] = jsons[0].c_str();
     M_EXPECT_EQ_JSON(*collection[1].value(), jsons[0]);
@@ -1362,9 +1316,6 @@ TEST(db, docs_modify) {
     EXPECT_TRUE(collection[ckf(1, "/weight")].upsert(modifier.c_str()));
     result = collection[1].value();
     M_EXPECT_EQ_JSON(result->c_str(), expected.c_str());
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1376,7 +1327,7 @@ TEST(db, docs_merge_and_patch) {
     clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
-    docs_collection_t collection = *db.collection<docs_collection_t>();
+    docs_collection_t collection = db.main<docs_collection_t>();
 
     std::ifstream f_patch("tests/patch.json");
     json_t j_object = json_t::parse(f_patch);
@@ -1403,9 +1354,6 @@ TEST(db, docs_merge_and_patch) {
         EXPECT_TRUE(maybe_value);
         M_EXPECT_EQ_JSON(maybe_value->c_str(), expected.c_str());
     }
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1420,7 +1368,7 @@ TEST(db, docs_table) {
     EXPECT_TRUE(db.open(path()));
 
     // Inject basic data
-    docs_collection_t collection = *db.collection<docs_collection_t>();
+    docs_collection_t collection = db.main<docs_collection_t>();
     auto json_alice = R"( { "person": "Alice", "age": 27, "height": 1 } )"_json.dump();
     auto json_bob = R"( { "person": "Bob", "age": "27", "weight": 2 } )"_json.dump();
     auto json_carl = R"( { "person": "Carl", "age": 24 } )"_json.dump();
@@ -1563,9 +1511,6 @@ TEST(db, docs_table) {
         EXPECT_STREQ(col1[1].value.c_str(), "27");
         EXPECT_STREQ(col1[2].value.c_str(), "24");
     }
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 #pragma region Graph Modality
@@ -1593,7 +1538,7 @@ TEST(db, graph_upsert_vertices) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t net = *db.collection<graph_collection_t>();
+    graph_collection_t net = db.main<graph_collection_t>();
     edge_t edge1 {1, 2, 9};
     EXPECT_TRUE(net.upsert_edge(edge1));
     EXPECT_TRUE(*net.contains(1));
@@ -1614,9 +1559,6 @@ TEST(db, graph_upsert_vertices) {
     auto neighbors = net.neighbors(1).throw_or_release();
     EXPECT_EQ(neighbors.size(), 1);
     EXPECT_EQ(neighbors[0], 2);
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1630,7 +1572,7 @@ TEST(db, graph_triangle) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t net = *db.collection<graph_collection_t>();
+    graph_collection_t net = db.main<graph_collection_t>();
 
     // triangle
     edge_t edge1 {1, 2, 9};
@@ -1724,9 +1666,6 @@ TEST(db, graph_triangle) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1741,8 +1680,8 @@ TEST(db, graph_triangle_batch) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    blobs_collection_t main = *db.collection();
-    graph_collection_t net = *db.collection<graph_collection_t>();
+    blobs_collection_t main = db.main();
+    graph_collection_t net = db.main<graph_collection_t>();
 
     std::vector<edge_t> triangle {
         {1, 2, 9},
@@ -1827,8 +1766,6 @@ TEST(db, graph_triangle_batch) {
     EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
     EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
     EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1843,7 +1780,7 @@ TEST(db, graph_transaction_watch) {
     clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(path()));
-    graph_collection_t net = *db.collection<graph_collection_t>();
+    graph_collection_t net = db.main<graph_collection_t>();
 
     edge_t edge_ab {'A', 'B', 19};
     edge_t edge_bc {'B', 'C', 31};
@@ -1851,14 +1788,12 @@ TEST(db, graph_transaction_watch) {
     EXPECT_TRUE(net.upsert_edge(edge_bc));
 
     transaction_t txn = *db.transact();
-    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
+    graph_collection_t txn_net = txn.main<graph_collection_t>();
     EXPECT_EQ(txn_net.degree('B'), 2);
     EXPECT_TRUE(txn_net.remove_edge(edge_bc));
     EXPECT_TRUE(net.remove_edge(edge_ab));
 
     EXPECT_FALSE(txn.commit());
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1869,7 +1804,7 @@ TEST(db, graph_random_fill) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
@@ -1879,9 +1814,6 @@ TEST(db, graph_random_fill) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_EQ(*graph.degree(vertex_id), 9u);
     }
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 // TODO: What is this?
@@ -1893,10 +1825,10 @@ TEST(db, graph_conflicting_transactions) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t net = *db.collection<graph_collection_t>();
+    graph_collection_t net = db.main<graph_collection_t>();
 
     transaction_t txn = *db.transact();
-    graph_collection_t txn_net = *txn.collection<graph_collection_t>();
+    graph_collection_t txn_net = txn.main<graph_collection_t>();
 
     // triangle
     edge_t edge1 {1, 2, 9};
@@ -1921,10 +1853,10 @@ TEST(db, graph_conflicting_transactions) {
     EXPECT_TRUE(*net.contains(3));
 
     EXPECT_TRUE(txn.reset());
-    txn_net = *txn.collection<graph_collection_t>();
+    txn_net = txn.main<graph_collection_t>();
 
     transaction_t txn2 = *db.transact();
-    graph_collection_t txn_net2 = *txn2.collection<graph_collection_t>();
+    graph_collection_t txn_net2 = txn2.main<graph_collection_t>();
 
     edge_t edge4 {4, 5, 15};
     edge_t edge5 {5, 6, 16};
@@ -1934,9 +1866,6 @@ TEST(db, graph_conflicting_transactions) {
 
     EXPECT_TRUE(txn.commit());
     EXPECT_FALSE(txn2.commit());
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -1948,7 +1877,7 @@ TEST(db, graph_layering_shapes) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     std::vector<ukv_key_t> vertices = {1, 2, 3, 4, 5};
     auto over_the_vertices = [&](bool exist, size_t degree) {
@@ -2004,9 +1933,6 @@ TEST(db, graph_layering_shapes) {
     over_the_vertices(true, 0);
     EXPECT_TRUE(db.clear());
     over_the_vertices(false, 0);
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -2018,7 +1944,7 @@ TEST(db, graph_remove_vertices) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
@@ -2040,9 +1966,6 @@ TEST(db, graph_remove_vertices) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_FALSE(*graph.contains(vertex_id));
     }
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -2054,7 +1977,7 @@ TEST(db, graph_remove_edges_keep_vertices) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
@@ -2065,9 +1988,6 @@ TEST(db, graph_remove_edges_keep_vertices) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
     }
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 // TODO: Why do we need this?
@@ -2076,7 +1996,7 @@ TEST(db, graph_get_edges) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
     auto edges_vec = make_edges(vertices_count, 100);
@@ -2096,8 +2016,6 @@ TEST(db, graph_get_edges) {
         EXPECT_TRUE(*graph.contains(vertex_id));
         EXPECT_EQ(graph.edges(vertex_id)->size(), 0);
     }
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -2108,7 +2026,7 @@ TEST(db, graph_degrees) {
     database_t db;
     EXPECT_TRUE(db.open(path()));
 
-    graph_collection_t graph = *db.collection<graph_collection_t>();
+    graph_collection_t graph = db.main<graph_collection_t>();
 
     constexpr std::size_t vertices_count = 1000;
     std::vector<ukv_key_t> vertices(vertices_count);
@@ -2119,9 +2037,6 @@ TEST(db, graph_degrees) {
 
     auto degrees = *graph.degrees(strided_range(vertices).immutable());
     EXPECT_EQ(degrees.size(), vertices_count);
-
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 #pragma region Vectors Modality
@@ -2183,8 +2098,6 @@ TEST(db, vectors) {
     EXPECT_EQ(found_results[0], max_results);
     EXPECT_EQ(found_keys[0], ukv_key_t('a'));
     EXPECT_EQ(found_keys[1], ukv_key_t('b'));
-    // Let's not clean, to be able to introspect the state after failures
-    // EXPECT_TRUE(db.clear());
 }
 
 int main(int argc, char** argv) {

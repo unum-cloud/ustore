@@ -3,33 +3,33 @@ set -e
 version=$(cat VERSION)
 # Clean up
 echo -e "------ \e[93mClean up\e[0m ------"
-rm -rf build _deps build_debug build_release CMakeCache.txt CMakeFiles wheelhouse Makefile bin tmp/*
+rm -rf CMakeCache.txt CMakeFiles wheelhouse Makefile bin tmp/*
 
 # Build and test
 echo -e "------ \e[93mBuild\e[0m ------"
-cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_TESTS=1 \
+cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_TESTS=1 -B ./build_release \
       -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_LEVELDB=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -DUKV_BUILD_API_FLIGHT=0 \
       .
-make -j32
+make -j 32 -C ./build_release
 echo -e "------ \e[92mBuild Passing\e[0m ------"
 
-for test in $(ls ./build/bin/*test_units*); do
+for test in $(ls ./build_release/build/bin/*test_units*); do
     echo -e "------ \e[93mRunning $test\e[0m ------";
     UKV_TEST_PATH=./tmp $test
 done
 echo -e "------ \e[92mTests Passing!\e[0m ------"
 
-# Build and test Python
+# Build and Test Python
 echo -e "------ \e[93mBuild and Test Python\e[0m ------"
 cibuildwheel --platform linux
-echo -e "------ \e[92mPython passing!\e[0m ------"
+echo -e "------ \e[92mPython Tests Passing!\e[0m ------"
 
 # Publish Python
 read -p "Publish to PyPi? " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "------ \e[93mPublishing python to PyPi\e[0m ------"
+    echo -e "------ \e[93mPublishing Python to PyPi\e[0m ------"
     twine upload wheelhouse/*.whl --verbose
-    echo -e "------ \e[92mPython published!\e[0m ------"
+    echo -e "------ \e[92mPython Published!\e[0m ------"
 fi
 
 # Build Docker
