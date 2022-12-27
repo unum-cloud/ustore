@@ -34,10 +34,6 @@
                 {
                     "name": "ASAN_OPTIONS",
                     "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
-                },
-                {
-                    "name": "UKV_TEST_PATH",
-                    "value": ""
                 }
             ],
             "showDisplayString": true,

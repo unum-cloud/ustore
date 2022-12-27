@@ -185,7 +185,7 @@ set(UKV_TEST_NAMES "test_units")
 # Define the Engine libraries we will need to build
 if(${UKV_BUILD_ENGINE_UMEM})
   add_library(ukv_embedded_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ukv_embedded_umem pthread yyjson simdjson bson pcre2 ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
+  target_link_libraries(ukv_embedded_umem pthread yyjson simdjson bson pcre2 arrow::parquet arrow::arrow arrow::bundled ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
   target_compile_definitions(ukv_embedded_umem INTERFACE UKV_VERSION="${UKV_VERSION}")
   target_compile_definitions(ukv_embedded_umem INTERFACE UKV_ENGINE_NAME=umem)
 

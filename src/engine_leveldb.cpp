@@ -18,9 +18,11 @@
 #include "helpers/linked_array.hpp" // `uninitialized_array_gt`
 #include "helpers/full_scan.hpp"    // `reservoir_sample_iterator`
 
-namespace stdfs = std::filesystem;
 using namespace unum::ukv;
 using namespace unum;
+
+namespace stdfs = std::filesystem;
+using json_t = nlohmann::json;
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -131,7 +133,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         }
         else {
             std::ifstream ifs(config_path.c_str());
-            nlohmann::json js = nlohmann::json::parse(ifs);
+            json_t js = json_t::parse(ifs);
             if (js.contains("write_buffer_size"))
                 options.write_buffer_size = js["write_buffer_size"];
             if (js.contains("max_file_size"))
@@ -159,7 +161,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         }
         *c.db = db_ptr;
     }
-    catch (nlohmann::json::type_error const&) {
+    catch (json_t::type_error const&) {
         *c.error = "Unsupported type in LevelDB configuration key";
     }
     catch (...) {
