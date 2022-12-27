@@ -224,7 +224,7 @@ void check_binary_collection(blobs_collection_t& collection) {
     EXPECT_TRUE(ref.erase());
     check_length(ref, ukv_length_missing_k);
 }
-#if 0
+
 /**
  * Try opening a DB, clearing it, accessing the main collection.
  * Write some data into that main collection, and test retrieving it.
@@ -308,7 +308,7 @@ TEST(db, overwrite_with_step) {
 
     EXPECT_TRUE(db.clear());
 }
-#endif
+
 /**
  * Populate the main collection, close the DBMS, reopen it, check consistency.
  */
