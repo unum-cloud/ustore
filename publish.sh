@@ -32,6 +32,19 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "------ \e[92mPython Published!\e[0m ------"
 fi
 
+# Build and Test Python
+echo -e "------ \e[93mBuild and Test Java\e[0m ------"
+export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+bash java/pack.sh
+echo -e "------ \e[92mJava Tests Passing!\e[0m ------"
+
+# Publish Java
+read -p "Publish to oss.sonatype.org? " -n 1 -r
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo -e "------ \e[93mPublishing Java to oss.sonatype.org\e[0m ------"
+    ./java/gradlew publish
+    echo -e "------ \e[92mJava Published!\e[0m ------"
+fi
 
 # Build Go
 echo -e "------ \e[93mBuild GO\e[0m ------"
