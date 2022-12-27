@@ -102,6 +102,7 @@ struct pair_t {
     }
 
     operator collection_key_t() const noexcept { return collection_key; }
+    explicit operator bool() const noexcept { return range; }
 };
 
 struct pair_compare_t {
@@ -313,7 +314,7 @@ void write_collection( //
         parquet::ConvertedType::INT_64));
     columns.push_back(parquet::schema::PrimitiveNode::Make( //
         "value",
-        parquet::Repetition::REQUIRED,
+        parquet::Repetition::OPTIONAL,
         parquet::Type::BYTE_ARRAY,
         parquet::ConvertedType::UTF8));
     auto schema = std::static_pointer_cast<parquet::schema::GroupNode>(
@@ -324,7 +325,10 @@ void write_collection( //
     collection_key_t min(collection_id, std::numeric_limits<ukv_key_t>::min());
     collection_key_t max(collection_id, std::numeric_limits<ukv_key_t>::max());
     auto status = db.pairs.range(min, max, [&](pair_t& pair) noexcept {
-        os << pair.collection_key.key << std::string_view(pair.range) << parquet::EndRow;
+        std::optional<std::string_view> value;
+        if (pair.range.size())
+            value = std::string_view(pair.range);
+        os << pair.collection_key.key << value << parquet::EndRow;
     });
     export_error_code(status, c_error);
     return_if_error_m(c_error);
