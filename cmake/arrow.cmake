@@ -41,7 +41,6 @@ ExternalProject_Add(
     -DARROW_WITH_RE2=ON
     -DARROW_COMPUTE=ON
     -DARROW_FLIGHT=ON
-    -DARROW_Thrift=ON
     -DARROW_WITH_UTF8PROC=ON
 
     -DPARQUET_REQUIRE_ENCRYPTION=OFF
@@ -57,7 +56,6 @@ ExternalProject_Add(
     -DARROW_S3=OFF
 
     -DABS_VENDORED=ON
-    -DPARQUET_MINIMAL_DEPENDENCY=ON
 
     # Which components should be bundled:
     # https://arrow.apache.org/docs/developers/cpp/building.html#build-dependency-management
