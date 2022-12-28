@@ -1,6 +1,14 @@
 #!/bin/sh
 set -e
+
 version=$(cat VERSION)
+rev=$(git rev-list HEAD --count)
+version="${version%.*}.$rev"
+echo -n $version > VERSION
+echo -e "------ \e[104mStarting UKV - $version Build\e[0m ------"
+
+###
+
 # Clean up
 echo -e "------ \e[93mClean up\e[0m ------"
 rm -rf CMakeCache.txt CMakeFiles wheelhouse Makefile bin tmp/*
