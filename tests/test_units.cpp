@@ -330,22 +330,42 @@ TEST(db, persistency) {
 
     triplet_t triplet;
     {
-        blobs_collection_t collection = db.main();
-        auto collection_ref = collection[triplet.keys];
-        check_length(collection_ref, ukv_length_missing_k);
-        round_trip(collection_ref, triplet);
-        check_length(collection_ref, triplet_t::val_size_k);
+        blobs_collection_t main_collection = db.main();
+        auto main_collection_ref = main_collection[triplet.keys];
+        check_length(main_collection_ref, ukv_length_missing_k);
+        round_trip(main_collection_ref, triplet);
+        check_length(main_collection_ref, triplet_t::val_size_k);
+
+        if (ukv_supports_named_collections_k) {
+            blobs_collection_t named_collection = *db.create("collection");
+            auto named_collection_ref = named_collection[triplet.keys];
+            check_length(named_collection_ref, ukv_length_missing_k);
+            round_trip(named_collection_ref, triplet);
+            check_length(named_collection_ref, triplet_t::val_size_k);
+            EXPECT_TRUE(named_collection.clear_values());
+            check_length(named_collection_ref, 0);
+        }
     }
     db.close();
     {
         EXPECT_TRUE(db.open(path()));
-        blobs_collection_t collection = db.main();
-        auto collection_ref = collection[triplet.keys];
-        check_equalities(collection_ref, triplet);
-        check_length(collection_ref, triplet_t::val_size_k);
 
-        EXPECT_EQ(collection.keys().size(), 3ul);
-        EXPECT_EQ(collection.items().size(), 3ul);
+        blobs_collection_t main_collection = db.main();
+        auto main_collection_ref = main_collection[triplet.keys];
+        check_equalities(main_collection_ref, triplet);
+        check_length(main_collection_ref, triplet_t::val_size_k);
+        EXPECT_EQ(main_collection.keys().size(), 3ul);
+        EXPECT_EQ(main_collection.items().size(), 3ul);
+
+        if (ukv_supports_named_collections_k) {
+            EXPECT_TRUE(db.contains("collection"));
+            EXPECT_TRUE(*db.contains("collection"));
+            blobs_collection_t named_collection = *db["collection"];
+            auto named_collection_ref = named_collection[triplet.keys];
+            check_length(named_collection_ref, 0);
+            EXPECT_EQ(named_collection.keys().size(), 3ul);
+            EXPECT_EQ(named_collection.items().size(), 3ul);
+        }
     }
 }
 
@@ -1837,6 +1857,31 @@ TEST(db, graph_degrees) {
 
     auto degrees = *graph.degrees(strided_range(vertices).immutable());
     EXPECT_EQ(degrees.size(), vertices_count);
+}
+
+TEST(db, graph_neighbors) {
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t graph = db.main<graph_collection_t>();
+    edge_t edge1 {1, 1, 17};
+    edge_t edge2 {1, 2, 15};
+    edge_t edge3 {2, 3, 16};
+
+    graph.upsert_edge(edge1);
+    graph.upsert_edge(edge2);
+    graph.upsert_edge(edge3);
+
+    auto neighbors = graph.neighbors(1).throw_or_release();
+    EXPECT_EQ(neighbors.size(), 2);
+    EXPECT_EQ(neighbors[0], 1);
+    EXPECT_EQ(neighbors[1], 2);
+
+    neighbors = graph.neighbors(2).throw_or_release();
+    EXPECT_EQ(neighbors.size(), 2);
+    EXPECT_EQ(neighbors[0], 3);
+    EXPECT_EQ(neighbors[1], 1);
 }
 
 #pragma region Vectors Modality
