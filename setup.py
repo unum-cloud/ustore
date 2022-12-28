@@ -7,7 +7,7 @@ import multiprocessing
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
-__version__ = open('VERSION', 'r').read() + '.' + str(time.time_ns())
+__version__ = open('VERSION', 'r').read()
 __libname__ = 'ukv'
 
 
