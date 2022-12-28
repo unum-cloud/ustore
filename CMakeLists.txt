@@ -180,7 +180,7 @@ endif()
 
 set(UKV_ENGINE_NAMES)
 set(UKV_CLIENT_LIBS)
-set(UKV_TEST_NAMES "test_api" "test_compilation" "test_imp_exp" "test_units" "stress_insert_atomic_isolated" "stress_serializable_transactions")
+set(UKV_TEST_NAMES "test_imp_exp" "test_units")
 
 # Define the Engine libraries we will need to build
 if(${UKV_BUILD_ENGINE_UMEM})
@@ -275,7 +275,7 @@ if(${UKV_BUILD_TESTS})
       string(CONCAT test_exe ${test_name} "_" ${client_lib})
       add_executable(${test_exe} tests/${test_name}.cpp tools/dataset.cpp)
       target_compile_definitions(${test_exe} PUBLIC UKV_TEST_PATH="tmp/${client_lib}")
-      target_link_libraries(${test_exe} gtest arrow arrow_flight parquet simdjson fmt::fmt benchmark uuid ${client_lib} ${client_dependencies})
+      target_link_libraries(${test_exe} gtest arrow::parquet arrow::arrow arrow::flight simdjson fmt::fmt benchmark uuid ${client_lib} ${client_dependencies})
       add_test(NAME "${test_exe}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_exe}")  
     endforeach()
   endforeach()
@@ -292,7 +292,7 @@ if(${UKV_BUILD_BENCHMARKS})
 
     string(CONCAT bench_name "bench_tabular_graph_" ${client_lib})
     add_executable(${bench_name} benchmarks/tabular_graph.cpp tools/dataset.cpp)
-    target_link_libraries(${bench_name} arrow arrow_flight parquet simdjson fmt::fmt benchmark uuid ${client_lib} ${client_dependencies})
+    target_link_libraries(${bench_name} arrow::parquet arrow::arrow arrow::flight simdjson fmt::fmt benchmark uuid ${client_lib} ${client_dependencies})
   endforeach()
 endif()
 
