@@ -61,7 +61,7 @@ void insert_atomic_isolated(std::size_t count_batches) {
 
             while (true) {
                 transaction_t txn = db.transact().throw_or_release();
-                auto collection = txn.collection().throw_or_release();
+                auto collection = txn.main();
                 if (!will_delete)
                     collection[keys].assign(value);
                 else
@@ -79,7 +79,7 @@ void insert_atomic_isolated(std::size_t count_batches) {
     for (std::size_t i = 0; i < threads_count_ak; ++i)
         threads[i].join();
 
-    blobs_collection_t collection = db.collection().throw_or_release();
+    blobs_collection_t collection = db.main();
 
     for (std::size_t idx_batch = 0; idx_batch != count_batches; ++idx_batch) {
         std::array<ukv_key_t, batch_size_ak> keys;

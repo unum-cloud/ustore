@@ -387,19 +387,25 @@ void read(database_t& db, std::string const& path, ukv_error_t* c_error) noexcep
         parquet::StreamReader os {parquet::ParquetFileReader::Open(in_file)};
 
         ukv_key_t key;
-        std::string value;
+        std::optional<std::string> value;
         while (!os.eof()) {
             os >> key >> value >> parquet::EndRow;
 
-            // Converting to our internal representation would require a copy
-            auto buf_len = value.size();
-            auto buf_ptr = blob_allocator_t {}.allocate(buf_len);
-            return_error_if_m(buf_ptr != nullptr, c_error, out_of_memory_k, "Failed to allocate a blob");
             pair_t pair;
             pair.collection_key.collection = collection_id;
             pair.collection_key.key = key;
-            pair.range = value_view_t {buf_ptr, buf_len};
-            std::memcpy(buf_ptr, value.data(), value.size());
+
+            // Converting to our internal representation would require a copy
+            if (value) {
+                auto buf_len = value->size();
+                auto buf_ptr = blob_allocator_t {}.allocate(buf_len);
+                return_error_if_m(buf_ptr != nullptr, c_error, out_of_memory_k, "Failed to allocate a blob");
+                pair.range = value_view_t {buf_ptr, buf_len};
+                std::memcpy(buf_ptr, value->data(), value->size());
+            }
+            else
+                pair.range = value_view_t::make_empty();
+
             auto status = db.pairs.upsert(std::move(pair));
             export_error_code(status, c_error);
             return_if_error_m(c_error);

@@ -24,7 +24,7 @@ static std::unique_ptr<py_collection_gt<collection_at>> punned_collection( //
     std::shared_ptr<py_transaction_t> py_txn_ptr,
     std::string const& name) {
 
-    ukv_collection_t collection = py_db_ptr->native.find_or_make<collection_at>(name).throw_or_release();
+    ukv_collection_t collection = py_db_ptr->native.find_or_create<collection_at>(name.c_str()).throw_or_release();
 
     auto py_collection = std::make_unique<py_collection_gt<collection_at>>();
     py_collection->name = name;
@@ -203,7 +203,7 @@ void ukv::wrap_database(py::module& m) {
         ukv_size_t count {0};
         ukv_collection_t* ids {nullptr};
         arena_t arena(py_db.native);
-        ukv_str_view_t names {nullptr};
+        ukv_str_span_t names {nullptr};
         ukv_collection_list_t collection_list {
             .db = py_db.native,
             .error = status.member_ptr(),

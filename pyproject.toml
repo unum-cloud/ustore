@@ -11,7 +11,7 @@ testpaths = ["python/tests"]
 
 
 [tool.cibuildwheel]
-build-verbosity = 3
+build-verbosity = 0
 before-all = [
     "yum install -y bzip2-devel libffi-devel zlib-devel wget python3-devel perl-IPC-Cmd perl-Test-Simple",
     "cd /usr/src && wget https://www.openssl.org/source/openssl-3.0.7.tar.gz",
