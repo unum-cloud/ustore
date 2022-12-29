@@ -2,12 +2,13 @@ import os
 import re
 import subprocess
 import sys
+from distutils.dir_util import copy_tree
 import time
 import multiprocessing
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
-__version__ = open('VERSION', 'r').read() + '.' + str(time.time_ns())
+__version__ = open('VERSION', 'r').read()
 __libname__ = 'ukv'
 
 
@@ -31,6 +32,11 @@ class CMakeBuild(build_ext):
         # required for auto-detection & inclusion of auxiliary "native" libs
         if not extdir.endswith(os.path.sep):
             extdir += os.path.sep
+
+        if "PYTHON_DEBUG" in os.environ:
+            os.makedirs(extdir, exist_ok=True)
+            copy_tree("./build/lib/", extdir)
+            return
 
         cmake_args = [
             f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}',
