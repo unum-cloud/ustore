@@ -483,6 +483,7 @@ struct keys_range_t {
             .error = status.member_ptr(),
             .transaction = members.txn(),
             .arena = arena.member_ptr(),
+            .tasks_count = 1,
             .collections = &c_collection,
             .count_limits = &c_count,
             .counts = &found_counts,
