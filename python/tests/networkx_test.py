@@ -87,6 +87,29 @@ def test_random_fill():
         assert net.has_node(targets[index])
         assert net.has_edge(sources[index], targets[index])
 
+
+def test_neighbors():
+    db = ukv.DataBase()
+    net = db.main.graph
+
+    sources = np.arange(100)
+    targets = np.arange(1,101)
+    net.add_edges_from(sources,targets)
+
+    neighbors = net.neighbors(0)
+    assert len(neighbors) == 1
+    assert neighbors[0] == 1 
+
+    neighbors = net.neighbors(100)
+    assert len(neighbors) == 1
+    assert neighbors[0] == 99 
+
+    for node in range(1,100):
+        neighbors = net.neighbors(node)
+        assert len(neighbors) == 2
+        assert neighbors[0] == node + 1 
+        assert neighbors[1] == node - 1
+
 def test_upsert_remove_nodes_batch():
     db = ukv.DataBase()
     net = db.main.graph
