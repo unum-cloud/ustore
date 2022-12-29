@@ -107,8 +107,8 @@ inline void to_string(PyObject* obj, std::string& output) {
             case 29:
             case 30:
             case 31: {
-                output += "\\u00";
-                auto target_ptr = reinterpret_cast<uint8_t*>(output.data() + output.size());
+                output += "\\u0000";
+                auto target_ptr = reinterpret_cast<uint8_t*>(output.data() + output.size() - 2);
                 char_to_hex(c, target_ptr);
                 break;
             }
