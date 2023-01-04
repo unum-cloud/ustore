@@ -547,7 +547,7 @@ int main(int argc, char** argv) {
     db.open("/mnt/md0/Twitter/LevelDB").throw_unhandled();
 #elif defined(UKV_ENGINE_IS_ROCKSDB)
     db.open("/mnt/md0/Twitter/RocksDB").throw_unhandled();
-#elif defined(UKV_ENGINE_IS_UNUMDB)
+#elif defined(UKV_ENGINE_IS_UDISK)
     db.open("/mnt/md0/Twitter/UnumDB").throw_unhandled();
 #else
     db.open().throw_unhandled();
