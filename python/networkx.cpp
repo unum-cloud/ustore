@@ -38,22 +38,6 @@ py::object wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
     return py::reinterpret_steal<py::object>(obj);
 }
 
-void upsert_vertices(py_graph_t& py_graph, py::object vertices_py) {
-    if (!PySequence_Check(vertices_py.ptr()))
-        throw std::invalid_argument("Nodes Must Be Sequence");
-    std::vector<ukv_key_t> vertices(PySequence_Size(vertices_py.ptr()));
-    py_transform_n(vertices_py.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
-    py_graph.ref().upsert_vertices(vertices).throw_unhandled();
-}
-
-void remove_vertices(py_graph_t& py_graph, py::object vertices_py) {
-    if (!PySequence_Check(vertices_py.ptr()))
-        throw std::invalid_argument("Nodes Must Be Sequence");
-    std::vector<ukv_key_t> vertices(PySequence_Size(vertices_py.ptr()));
-    py_transform_n(vertices_py.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
-    py_graph.ref().remove_vertices(vertices).throw_unhandled();
-}
-
 void ukv::wrap_networkx(py::module& m) {
 
     auto degs = py::class_<degree_view_t>(m, "DegreeView", py::module_local());
@@ -291,7 +275,11 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("u_for_edge"),
         py::arg("v_for_edge"),
         py::arg("key"));
-    g.def("add_nodes_from", &upsert_vertices);
+    g.def("add_nodes_from", [](py_graph_t& g, py::object vs) {
+        auto vs_buf = py_buffer(vs.ptr());
+        auto vs_stride = py_strided_range<ukv_key_t const>(vs_buf);
+        g.ref().upsert_vertices(vs_stride).throw_unhandled();
+    });
     g.def(
         "add_edges_from",
         [](py_graph_t& g, py::object adjacency_list) {
@@ -299,7 +287,11 @@ void ukv::wrap_networkx(py::module& m) {
         },
         py::arg("ebunch_to_add"),
         "Adds an adjacency list (in a form of 2 or 3 columnar matrix) to the graph.");
-    g.def("remove_nodes_from", &remove_vertices);
+    g.def("remove_nodes_from", [](py_graph_t& g, py::object vs) {
+        auto vs_buf = py_buffer(vs.ptr());
+        auto vs_stride = py_strided_range<ukv_key_t const>(vs_buf);
+        g.ref().remove_vertices(vs_stride).throw_unhandled();
+    });
     g.def(
         "remove_edges_from",
         [](py_graph_t& g, py::object adjacency_list) {
