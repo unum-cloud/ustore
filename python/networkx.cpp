@@ -150,6 +150,18 @@ void ukv::wrap_networkx(py::module& m) {
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { return g.ref().edges(v1, v2).throw_or_release().size(); },
         "Returns the number of edges between two nodes.");
 
+    g.def(
+        "number_of_edges",
+        [](py_graph_t& g) {
+            auto present_edges = g.ref().edges(ukv_vertex_source_k).throw_or_release();
+            auto present_it = std::move(present_edges).begin();
+            auto count_results = 0;
+            for (; !present_it.is_end(); ++present_it)
+                ++count_results;
+            return count_results;
+        },
+        "Returns edges count");
+
     // Reporting nodes edges and neighbors
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#reporting-nodes-edges-and-neighbors
     g.def(
