@@ -1460,18 +1460,18 @@ TEST(db, graph_triangle) {
     // Check scans
     EXPECT_TRUE(net.edges());
     {
-        std::unordered_set<edge_t, edge_hash_t> expected_edges {edge1, edge2, edge3};
-        std::unordered_set<edge_t, edge_hash_t> exported_edges;
+        std::vector<edge_t> expected_edges {edge1, edge2, edge3};
+        std::vector<edge_t> exported_edges;
 
-        auto present_edges = *net.edges();
+        auto present_edges = *net.edges(ukv_vertex_source_k);
         auto present_it = std::move(present_edges).begin();
         auto count_results = 0;
         while (!present_it.is_end()) {
-            exported_edges.insert(*present_it);
+            exported_edges.push_back(*present_it);
             ++present_it;
             ++count_results;
         }
-        EXPECT_EQ(count_results, 6);
+        EXPECT_EQ(count_results, 3);
         EXPECT_EQ(exported_edges, expected_edges);
     }
 
@@ -1562,18 +1562,18 @@ TEST(db, graph_triangle_batch) {
     // Check scans
     EXPECT_TRUE(net.edges());
     {
-        std::unordered_set<edge_t, edge_hash_t> expected_edges {triangle.begin(), triangle.end()};
-        std::unordered_set<edge_t, edge_hash_t> exported_edges;
+        std::vector<edge_t> expected_edges {triangle.begin(), triangle.end()};
+        std::vector<edge_t> exported_edges;
 
-        auto present_edges = *net.edges();
+        auto present_edges = *net.edges(ukv_vertex_source_k);
         auto present_it = std::move(present_edges).begin();
         size_t count_results = 0ul;
         while (!present_it.is_end()) {
-            exported_edges.insert(*present_it);
+            exported_edges.push_back(*present_it);
             ++present_it;
             ++count_results;
         }
-        EXPECT_EQ(count_results, triangle.size() * 2);
+        EXPECT_EQ(count_results, triangle.size());
         EXPECT_EQ(exported_edges, expected_edges);
     }
 
