@@ -62,9 +62,9 @@ void ukv::wrap_networkx(py::module& m) {
         auto result = g.ref().degree(v, degs.roles).throw_or_release();
         return result;
     });
-    degs.def("__getitem__", [](degree_view_t& degs, PyObject* vs) {
+    degs.def("__getitem__", [](degree_view_t& degs, py::object vs) {
         py_graph_t& g = *degs.net_ptr.lock().get();
-        auto ids_handle = py_buffer(vs);
+        auto ids_handle = py_buffer(vs.ptr());
         auto ids = py_strided_range<ukv_key_t const>(ids_handle);
         auto result = g.ref().degrees(ids, {{&degs.roles, 0u}, ids.size()}).throw_or_release();
         return wrap_into_buffer<ukv_vertex_degree_t const>(
