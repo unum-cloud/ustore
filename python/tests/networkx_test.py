@@ -110,6 +110,40 @@ def test_neighbors():
         assert neighbors[0] == node + 1 
         assert neighbors[1] == node - 1
 
+
+def test_degree():
+    db = ukv.DataBase()
+    net = db.main.graph
+
+    sources = np.arange(100)
+    targets = np.arange(1,101)
+    net.add_edges_from(sources,targets)
+
+    degs = net.degree
+    assert degs[0] == degs[100] == 1
+    for node in range(1,100):
+        assert degs[node] == 2
+
+    in_degs = net.in_degree
+    assert in_degs[0] == 0
+    for node in range(1,101):
+        assert in_degs[node] == 1
+
+    out_degs = net.out_degree
+    assert out_degs[101] == 0
+    for node in range(100):
+        assert out_degs[node] == 1
+
+    # Batch
+    expected_degrees = [2] * 99
+    expected_degrees.append(1)
+    expected_degrees.insert(0,1)
+    vertices = np.arange(101)
+    degrees = degs[vertices]
+    for i in vertices:
+        assert degrees[i] == expected_degrees[i]
+
+
 def test_upsert_remove_nodes_batch():
     db = ukv.DataBase()
     net = db.main.graph
