@@ -155,8 +155,9 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "nodes",
         [](py_graph_t& g) {
-            // TODO: Give our the keys stream
-            throw_not_implemented();
+            blobs_range_t members(g.index.db(), g.index.txn(), g.index);
+            keys_range_t range {members};
+            return py::cast(std::make_unique<keys_range_t>(range));
         },
         "A NodeView of the graph.");
     g.def(
