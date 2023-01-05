@@ -56,6 +56,18 @@ void ukv::wrap_networkx(py::module& m) {
             strided_range<ukv_vertex_degree_t const>(result.begin(), result.end()));
     });
 
+    auto edges_range = py::class_<range_gt<graph_stream_t>>(m, "EdgesRange", py::module_local());
+    edges_range.def("__iter__", [](range_gt<graph_stream_t>& range) { return std::move(range).begin(); });
+
+    auto edges_stream = py::class_<graph_stream_t>(m, "EdgesStream", py::module_local());
+    edges_stream.def("__next__", [](graph_stream_t& stream) {
+        if (stream.is_end())
+            throw py::stop_iteration();
+        auto edge = stream.edge();
+        ++stream;
+        return py::make_tuple(edge.source_id, edge.target_id);
+    });
+
     auto g = py::class_<py_graph_t, std::shared_ptr<py_graph_t>>(m, "Network", py::module_local());
     g.def( //
         py::init([](std::shared_ptr<py_db_t> py_db,
@@ -191,9 +203,7 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("n"),
         "Returns True if the graph contains the node n.");
 
-    g.def("edges", [](py_graph_t& g) { throw_not_implemented(); });
-    g.def("out_edges", [](py_graph_t& g) { throw_not_implemented(); });
-    g.def("in_edges", [](py_graph_t& g) { throw_not_implemented(); });
+    g.def("edges", [](py_graph_t& g) { return g.ref().edges(ukv_vertex_source_k).throw_or_release(); });
 
     g.def(
         "has_edge",
