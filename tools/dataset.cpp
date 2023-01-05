@@ -351,7 +351,7 @@ template <typename ukv_docs_imp_exp_t>
 fields_t prepare_fields(ukv_docs_imp_exp_t& c, linked_memory_lock_t& arena) {
 
     fields_t fields {c.fields, c.fields_stride};
-    stl_vector_t<ukv_str_view_t> prepared_fields;
+    stl_vector_t<ukv_str_view_t> prepared_fields(alloc_t<ukv_str_view_t>(arena, c.error));
     prepared_fields.reserve(c.fields_count);
     size_t next_idx = 0;
     size_t count = 0;
@@ -362,8 +362,15 @@ fields_t prepare_fields(ukv_docs_imp_exp_t& c, linked_memory_lock_t& arena) {
         auto field = arena.alloc<char>(len + 1, c.error);
         std::memcpy(field.begin(), fields[idx], len + 1);
         prepared_fields.push_back(field.begin());
-        while (strncmp_(fields[idx], fields[next_idx], strlen(fields[idx])) && next_idx < c.fields_count)
+        while (next_idx < c.fields_count && chrcmp_(fields[idx][0], '/') &&
+               strncmp_(fields[idx], fields[next_idx], strlen(fields[idx])))
             ++next_idx;
+        if (next_idx == idx + 1 && next_idx == c.fields_count - 1) {
+            size_t len = strlen(fields[next_idx]);
+            auto field = arena.alloc<char>(len + 1, c.error);
+            std::memcpy(field.begin(), fields[next_idx], len + 1);
+            prepared_fields.push_back(field.begin());
+        }
         idx = next_idx;
     }
     return {prepared_fields.data(), sizeof(ukv_str_view_t)};
@@ -495,19 +502,19 @@ void fields_parser( //
         offset += 2;
     };
 
-    auto fill_prefixes = [&](size_t idx) {
-        while (pos <= strlen(fields[idx])) {
+    auto fill_prefixes = [&](ukv_str_view_t field) {
+        while (pos <= strlen(field)) {
             prefixes.push_back(arena.alloc<char>(pos + 2, error).begin());
-            std::memcpy(prefixes.back(), fields[idx], pos + 1);
+            std::memcpy(prefixes.back(), field, pos + 1);
             prefixes.back()[pos + 1] = '\0';
             auto substr = arena.alloc<char>(pos - pre_idx + 2, error);
-            std::memcpy(substr.begin(), fields[idx] + pre_idx, pos - pre_idx);
+            std::memcpy(substr.begin(), field + pre_idx, pos - pre_idx);
             substr[substr.size() - 2] = '\0';
             auto str = fmt::format("\"{}\":{{{}", substr.begin(), '\0');
             strncpy(tape.begin() + offset, str.data(), str.size());
             offset += str.size();
             pre_idx = pos + 1;
-            pos = strchr(fields[idx] + pre_idx, '/') - fields[idx];
+            pos = strchr(field + pre_idx, '/') - field;
         }
     };
 
@@ -517,11 +524,11 @@ void fields_parser( //
 
             pos = strchr(fields[idx] + pre_idx, '/') - fields[idx];
             if (pos <= strlen(fields[idx])) {
-                fill_prefixes(idx);
+                fill_prefixes(fields[idx]);
                 while (prefixes.size()) {
                     counts.push_back(0);
-                    pre_idx = strlen(prefixes.back()) + 1;
                     while (strncmp_(prefixes.back(), fields[idx], strlen(prefixes.back()))) {
+                        pre_idx = strlen(prefixes.back()) + 1;
                         size_t length = strlen(fields[idx]) - pre_idx + 2;
                         auto substr = arena.alloc<char>(length, error);
                         std::memcpy(substr.begin(), fields[idx] + pre_idx - 1, length);
@@ -532,21 +539,29 @@ void fields_parser( //
                         ++counts.back();
                         ++idx;
                         if (idx == fields_count) {
-                            close_bracket();
+                            while (prefixes.size())
+                                close_bracket();
                             return;
                         }
+                        size_t sz = prefixes.size();
                         while (prefixes.size() && !strncmp_( //
                                                       prefixes.back(),
                                                       fields[idx],
-                                                      strlen(prefixes.back())))
+                                                      strlen(prefixes.back()))) {
                             close_bracket();
+                        }
 
                         if (prefixes.size() == 0)
                             break;
+                        else if (sz > prefixes.size()) {
+                            pre_idx = strlen(prefixes.back()) + 1;
+                            counts.push_back(0);
+                        }
 
                         pos = strchr(fields[idx] + pre_idx, '/') - fields[idx];
                         if (pos <= strlen(fields[idx])) {
-                            fill_prefixes(idx);
+                            --pre_idx;
+                            fill_prefixes(fields[idx]);
                             counts.push_back(0);
                         }
                     }
@@ -663,19 +678,19 @@ void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table) {
 
     // Open File
     auto maybe_input = arrow::io::ReadableFile::Open(c.paths_pattern);
-    return_error_if_m(maybe_input.ok(), c.error, 0, "Can't open file");
+    return_error_if_m(maybe_input.ok(), c.error, 0, status.ToString().c_str());
     auto input = *maybe_input;
 
     std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
     status = parquet::arrow::OpenFile(input, pool, &arrow_reader);
-    return_error_if_m(status.ok(), c.error, 0, "Can't instantiate reader");
+    return_error_if_m(status.ok(), c.error, 0, status.ToString().c_str());
 
     // Read File into table
     status = arrow_reader->ReadTable(&table);
-    return_error_if_m(status.ok(), c.error, 0, "Can't read file");
+    return_error_if_m(status.ok(), c.error, 0, status.ToString().c_str());
 }
 
-void export_parquet_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
+void export_parquet_graph(ukv_graph_export_t& c, keys_t const& ids, ukv_length_t length, linked_memory_lock_t& arena) {
 
     parquet::schema::NodeVector fields;
     fields.push_back(parquet::schema::PrimitiveNode::Make( //
@@ -749,7 +764,7 @@ void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
     table = *maybe_table;
 }
 
-void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
+void export_csv_graph(ukv_graph_export_t& c, keys_t const& ids, ukv_length_t length, linked_memory_lock_t& arena) {
 
     arrow::Status status;
     arrow::NumericBuilder<arrow::Int64Type> builder;
@@ -760,8 +775,8 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
     array_t targets_array;
     array_t edges_array;
 
-    auto arena = linked_memory(c.arena, c.options, c.error);
     auto values = arena.alloc<ukv_key_t>(length / 3, c.error);
+    return_if_error_m(c.error);
 
     auto fill_values = [&](size_t offset) {
         ukv_key_t* data = nullptr;
@@ -870,7 +885,7 @@ void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) noexcept 
     close(handle);
 }
 
-void export_ndjson_graph(ukv_graph_export_t& c, keys_t& ids, ukv_length_t length) {
+void export_ndjson_graph(ukv_graph_export_t& c, keys_t const& ids, ukv_length_t length, linked_memory_lock_t& arena) {
 
     ukv_key_t* data = nullptr;
     char file_name[uuid_length_k];
@@ -932,6 +947,7 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
             import_parquet(c, table);
         else if (ext == ".csv")
             import_csv(c, table);
+        return_if_error_m(c.error);
         parse_arrow_table(c, task_count, table);
     }
 }
@@ -978,7 +994,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
             .db = c.db,
             .error = c.error,
             .arena = c.arena,
-            .options = c.options,
+            .options = ukv_option_dont_discard_memory_k,
             .tasks_count = count,
             .collections = &c.collection,
             .vertices = stream.keys_batch().begin(),
@@ -999,7 +1015,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
         status = stream.seek_to_next_batch();
         return_error_if_m(status, c.error, 0, "Invalid batch");
     }
-    export_method(c, ids_in_edges, total_ids);
+    export_method(c, ids_in_edges, total_ids, arena);
 }
 
 #pragma region - Graph End
@@ -1307,7 +1323,8 @@ void export_parquet_docs( //
     ukv_docs_export_t& c,
     stl_vector_t<ptr_range_gt<ukv_key_t const>>& keys,
     ukv_size_t size_bytes,
-    vals_t& values) {
+    vals_t& values,
+    linked_memory_lock_t& arena) {
 
     parquet::schema::NodeVector nodes;
     nodes.push_back(parquet::schema::PrimitiveNode::Make( //
@@ -1338,7 +1355,6 @@ void export_parquet_docs( //
 
     parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
 
-    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     if (c.fields)
         export_sub_docs(c, values, keys, nullptr, nullptr, &os, arena, 0, 0);
     else
@@ -1349,7 +1365,8 @@ void export_csv_docs( //
     ukv_docs_export_t& c,
     stl_vector_t<ptr_range_gt<ukv_key_t const>>& keys,
     ukv_size_t size_bytes,
-    vals_t& values) {
+    vals_t& values,
+    linked_memory_lock_t& arena) {
 
     ukv_size_t size = 0;
     arrow::Status status;
@@ -1367,7 +1384,6 @@ void export_csv_docs( //
 
     array_t keys_array;
     array_t docs_array;
-    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     auto keys_vec = arena.alloc<ukv_key_t>(size, c.error);
     auto docs_vec = arena.alloc<char*>(size, c.error);
 
@@ -1388,7 +1404,7 @@ void export_csv_docs( //
 
     arrow::FieldVector fields;
     fields.push_back(arrow::field("_id", arrow::int64()));
-    fields.push_back(arrow::field("doc", arrow::int64()));
+    fields.push_back(arrow::field("doc", arrow::large_binary()));
     std::shared_ptr<arrow::Schema> schema = std::make_shared<arrow::Schema>(fields);
 
     std::shared_ptr<arrow::Table> table;
@@ -1409,13 +1425,13 @@ void export_ndjson_docs( //
     ukv_docs_export_t& c,
     stl_vector_t<ptr_range_gt<ukv_key_t const>>& keys,
     ukv_size_t size_bytes,
-    vals_t& values) {
+    vals_t& values,
+    linked_memory_lock_t& arena) {
 
     char file_name[uuid_length_k];
     generate_uuid(file_name, uuid_length_k);
     auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
-    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     if (c.fields)
         export_sub_docs(c, values, keys, nullptr, nullptr, nullptr, arena, handle, 2);
     else
@@ -1513,7 +1529,8 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
         c,
         keys,
         size_bytes,
-        values);
+        values,
+        arena);
 }
 
 #pragma region - Docs End
