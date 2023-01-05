@@ -37,16 +37,25 @@ def test_triangle():
 
     assert net.has_node(1) and net.has_node(2) and net.has_node(3)
 
+    expected_nodes = [1,2,3]
+    exported_nodes = []
+    for i, node in enumerate(net.nodes()):
+        exported_nodes.append(node)
+    assert exported_nodes == expected_nodes
+
+    assert net.number_of_edges() == 3
     assert net.number_of_edges(1, 2) == 1
     assert net.number_of_edges(2, 3) == 1
     assert net.number_of_edges(3, 1) == 1
 
+    expected_edges = [(1,2),(2,3),(3,1)]
+    exported_edges = []
+    for edge in net.edges():
+        exported_edges.append(edge)
+    assert exported_edges == expected_edges
+
     assert len(list(net.successors(1))) == 1
     assert len(list(net.predecessors(1))) == 1
-
-    net.remove_edge(1, 2)
-    net.remove_edge(2, 3)
-    net.remove_edge(3, 1)
 
 
 def test_triangle_batch():
