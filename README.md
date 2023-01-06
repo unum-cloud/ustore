@@ -49,7 +49,7 @@ GoLang
 ---
 
 **UKV is an open standard** for a NoSQL binary database interface, focusing on "Create, Read, Update, Delete" operations, or CRUD for short.
-It is defined as a [few isolated C headers][ukv-c-headers], and comes with numerous backend [**engines**](#engines), supporting various data [**modalities**](#modalities), and an ecosystem of [**frontends**](#frontends) to access the data.
+It is defined as a [few isolated C headers][ukv-c-headers], and comes with numerous backend [engines](#engines), supporting various data [modalities](#modalities), and an ecosystem of [frontends](#frontends) to access the data.
 
 ![UKV: Small Map](https://github.com/unum-cloud/UKV/raw/main/assets/charts/Intro.png)
 
@@ -72,6 +72,8 @@ This is close to the real-world throughput of eight-channel DDR4 memory.
 Making even a single copy of data on the hot path would slash that performance.
 Processing hundreds of terabytes per node, we couldn't have used LevelDB, RocksDB, or even their interfaces for our purposes to avoid dynamic polymorphism and any constraints on memory allocation strategies.
 That is how UKV began, but hopefully, it can grow further, advancing the storage ecosystem the same way the standardization of [BLAS][blas] has pushed the frontiers of numerical compute and, later, AI.
+
+[Keynote on UKV and UDisk](https://www.youtube.com/watch?v=ybWeUf_hC7o), [Full Documentation](https://unum.cloud/ukv)
 
 ---
 
@@ -251,7 +253,7 @@ Some frontends here have entire ecosystems around them!
 
 ## Documentation
 
-For guidance on installation, development, deployment, and administration, see our [documentation](https://unum.cloud/UKV).
+For guidance on installation, development, deployment, and administration, see our [documentation](https://unum.cloud/ukv).
 
 ## Installation
 
@@ -384,22 +386,22 @@ Thank you!
 - Why not use LevelDB or RocksDB interface? [Answered][ukv-vs-rocks]
 - Why not use SQL, MQL or Cypher? [Answered][ukv-vs-sql]
 
-[ukv-c-tutor]: https://unum.cloud/UKV/c
-[ukv-cpp-tutor]: https://unum.cloud/UKV/cpp
-[ukv-python-tutor]: https://unum.cloud/UKV/python
-[ukv-java-tutor]: https://unum.cloud/UKV/java
-[ukv-golang-tutor]: https://unum.cloud/UKV/golang
-[ukv-flight-tutor]: https://unum.cloud/UKV/flight
-[ukv-tests]: https://unum.cloud/UKV/tests
-[ukv-benchmarks]: https://unum.cloud/UKV/benchmarks
-[ukv-tools]: https://unum.cloud/UKV/tools
-[ukv-install]: https://unum.cloud/UKV/install
-[ukv-details]: https://unum.cloud/UKV/details
-[ukv-keys-size]: https://unum.cloud/UKV/c#integer-keys
-[ukv-values-size]: https://unum.cloud/UKV/c#smallish-values
-[ukv-acid]: https://unum.cloud/UKV/c#acid-transactions
-[ukv-vs-rocks]: https://unum.cloud/UKV/related#leveldb-rocksdb
-[ukv-vs-sql]: https://unum.cloud/UKV/related#sql-mql-cypher
+[ukv-c-tutor]: https://unum.cloud/ukv/c
+[ukv-cpp-tutor]: https://unum.cloud/ukv/cpp
+[ukv-python-tutor]: https://unum.cloud/ukv/python
+[ukv-java-tutor]: https://unum.cloud/ukv/java
+[ukv-golang-tutor]: https://unum.cloud/ukv/golang
+[ukv-flight-tutor]: https://unum.cloud/ukv/flight
+[ukv-tests]: https://unum.cloud/ukv/tests
+[ukv-benchmarks]: https://unum.cloud/ukv/benchmarks
+[ukv-tools]: https://unum.cloud/ukv/tools
+[ukv-install]: https://unum.cloud/ukv/install
+[ukv-details]: https://unum.cloud/ukv/details
+[ukv-keys-size]: https://unum.cloud/ukv/c#integer-keys
+[ukv-values-size]: https://unum.cloud/ukv/c#smallish-values
+[ukv-acid]: https://unum.cloud/ukv/c#acid-transactions
+[ukv-vs-rocks]: https://unum.cloud/ukv/related#leveldb-rocksdb
+[ukv-vs-sql]: https://unum.cloud/ukv/related#sql-mql-cypher
 [ukv-c-headers]: https://github.com/unum-cloud/UKV/tree/main/include/ukv
 [ukv-roadmap]: https://github.com/orgs/unum-cloud/projects/2
 
