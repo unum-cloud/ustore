@@ -62,6 +62,10 @@ struct key_comparator_t final : public leveldb::Comparator {
     }
 };
 
+struct level_snapshot_t {
+    leveldb::Snapshot const* snapshot = nullptr;
+};
+
 struct level_txn_t {
     leveldb::DB* db = nullptr;
     leveldb::Snapshot const* snapshot = nullptr;
@@ -166,6 +170,40 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
     }
     catch (...) {
         *c.error = "Open Failure";
+    }
+}
+
+void ukv_snapshot_list(ukv_snapshot_list_t*) {
+    // TODO
+}
+
+void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
+    ukv_snapshot_create_t& c = *c_ptr;
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    level_snapshot_t& snp = **reinterpret_cast<level_snapshot_t**>(c.snapshot);
+
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!*c.snapshot)
+        safe_section("Allocating snapshot handle", c.error, [&] { *c.snapshot = new level_snapshot_t(); });
+    return_if_error_m(c.error);
+
+    snp.snapshot = db.GetSnapshot();
+    if (!*c.snapshot)
+        *c.error = "Couldn't get a snapshot!";
+}
+
+void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
+    if (!c_ptr)
+        return;
+
+    ukv_snapshot_drop_t& c = *c_ptr;
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+
+    if (c.snapshot) {
+        level_snapshot_t& snp = **reinterpret_cast<level_snapshot_t**>(c.snapshot);
+        db.ReleaseSnapshot(snp.snapshot);
+        snp.snapshot = nullptr;
+        delete &snp;
     }
 }
 
