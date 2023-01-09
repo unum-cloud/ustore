@@ -184,6 +184,18 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
     });
 }
 
+void ukv_snapshot_list(ukv_snapshot_list_t*) {
+    // TODO
+}
+
+void ukv_snapshot_create(ukv_snapshot_create_t*) {
+    // TODO
+}
+
+void ukv_snapshot_drop(ukv_snapshot_drop_t*) {
+    // TODO
+}
+
 void write_one( //
     rocks_db_t& db,
     rocks_txn_t* txn_ptr,
