@@ -31,6 +31,11 @@ RUN cmake \
 
 ## TODO: Optimize: https://github.com/docker-slim/docker-slim
 FROM ubuntu:focal
+
+RUN apt-get update -y && \
+    apt-get install -y apt-utils 2>&1 | grep -v "debconf: delaying package configuration, since apt-utils is not installed" && \
+    apt-get install -y --no-install-recommends libssl-dev
+
 WORKDIR /var/lib/ukv/
 
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_umem ./umem_server
