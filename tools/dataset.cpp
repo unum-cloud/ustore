@@ -212,7 +212,7 @@ class arrow_visitor_t {
         auto str = std::string(cont.Value(idx).data(), cont.Value(idx).size());
         if (str.back() == '\n')
             str.pop_back();
-        fmt::format_to(std::back_inserter(json), "{},", str.data());
+        fmt::format_to(std::back_inserter(json), "\"{}\",", str.data());
         return arrow::Status::OK();
     }
 };
