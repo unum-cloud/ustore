@@ -6,6 +6,7 @@ from time import perf_counter
 
 import ukv.umem as ukv
 import numpy as np
+from random import sample
 
 keys = np.random.randint(
     low=1, high=10_000_000,
@@ -35,8 +36,13 @@ for slice_start in range(0, len(keys), max_batch_size):
 
 t4 = perf_counter()
 
-print('Elapsed time for imports: {:.3f}s and {:.3f}s. {:.3f}s for batches'.
-      format(t2-t1, t3-t2, t4-t3))
+for slice_start in range(0, len(keys), max_batch_size):
+    acid_dict.broadcast(keys[slice_start:slice_start+max_batch_size], value)
+
+t5 = perf_counter()
+
+print('Elapsed time for imports: {:.3f}s and {:.3f}s. {:.3f}s for batches {:.3f}s for broadcast'.
+      format(t2-t1, t3-t2, t4-t3, t5-t4))
 
 # Comparing read performance on random gathers
 t1 = perf_counter()
@@ -76,3 +82,18 @@ for key in acid_dict.keys:
 t3 = perf_counter()
 
 print('Elapsed time for scans: {:.3f}s and {:.3f}s'.format(t2-t1, t3-t2))
+
+# Comparing random sampling
+t1 = perf_counter()
+
+for _ in range(10):
+    sample(list(native_dict.keys()), max_batch_size)
+
+t2 = perf_counter()
+
+for _ in range(10):
+    acid_dict.sample_keys(max_batch_size)
+
+t3 = perf_counter()
+
+print('Elapsed time for samples: {:.3f}s and {:.3f}s'.format(t2-t1, t3-t2))

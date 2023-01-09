@@ -180,7 +180,7 @@ endif()
 
 set(UKV_ENGINE_NAMES)
 set(UKV_CLIENT_LIBS)
-set(UKV_TEST_NAMES "test_units")
+set(UKV_TEST_NAMES "test_api" "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
 
 # Define the Engine libraries we will need to build
 if(${UKV_BUILD_ENGINE_UMEM})
