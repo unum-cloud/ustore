@@ -26,11 +26,12 @@ def test_table():
     assert table[['name']].astype(
         'bytes').to_arrow() == pa.RecordBatch.from_pandas(df_names)
 
-    # Tweets And Names
-    df_names_and_tweets = pd.DataFrame([{'name': 'Lex', 'tweets': 2221},
-                                        {'name': 'Andrew', 'tweets': 3935},
-                                        {'name': 'Joe', 'tweets': 45900}
-                                        ])
+    # Tweets and Names
+    df_names_and_tweets = pd.DataFrame([
+        {'name': 'Lex', 'tweets': 2221},
+        {'name': 'Andrew', 'tweets': 3935},
+        {'name': 'Joe', 'tweets': 45900}
+    ])
     schema = pa.schema([
         pa.field('name', pa.binary()),
         pa.field('tweets', pa.int32())])
@@ -38,11 +39,12 @@ def test_table():
     assert table.astype({'name': 'bytes', 'tweets': 'int32'}
                         ).to_arrow() == pa.RecordBatch.from_pandas(df_names_and_tweets, schema)
 
-    # Surnames And Names
-    df_names_and_tweets = pd.DataFrame([{'name': 'Lex', 'lastname': 'Fridman'},
-                                        {'name': 'Andrew', 'lastname': 'Huberman'},
-                                        {'name': 'Joe', 'lastname': 'Rogan'}
-                                        ])
+    # Surnames and Names
+    df_names_and_tweets = pd.DataFrame([
+        {'name': 'Lex', 'lastname': 'Fridman'},
+        {'name': 'Andrew', 'lastname': 'Huberman'},
+        {'name': 'Joe', 'lastname': 'Rogan'}
+    ])
     schema = pa.schema([
         pa.field('name', pa.binary()),
         pa.field('lastname', pa.binary())])
@@ -50,13 +52,12 @@ def test_table():
     assert table.astype({'name': 'bytes', 'lastname': 'bytes'}
                         ).to_arrow() == pa.RecordBatch.from_pandas(df_names_and_tweets, schema)
 
-    # ALL
-    all = pd.DataFrame([{'name': 'Lex', 'tweets': 2221, 'lastname': 'Fridman'},
-                        {'name': 'Andrew', 'tweets': 3935,
-                         'lastname': 'Huberman'},
-                        {'name': 'Joe', 'tweets': 45900,
-                         'lastname': 'Rogan'}
-                        ])
+    # All
+    all = pd.DataFrame([
+        {'name': 'Lex', 'tweets': 2221, 'lastname': 'Fridman'},
+        {'name': 'Andrew', 'tweets': 3935, 'lastname': 'Huberman'},
+        {'name': 'Joe', 'tweets': 45900, 'lastname': 'Rogan'}
+    ])
     schema = pa.schema([
         pa.field('name', pa.binary()),
         pa.field('tweets', pa.int32()),
