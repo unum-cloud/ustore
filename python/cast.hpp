@@ -98,6 +98,11 @@ scalar_at py_to_scalar(PyObject* obj) {
             return static_cast<scalar_at>(PyLong_AsUnsignedLong(obj));
         else if (PyNumber_Check(obj))
             return static_cast<scalar_at>(PyNumber_AsSsize_t(obj, NULL));
+        else if (arrow::py::is_scalar(obj)) {
+            auto scalar = arrow::py::unwrap_scalar(obj).ValueOrDie()->CastTo(arrow::uint64());
+            auto uint64_scalar = std::static_pointer_cast<arrow::UInt64Scalar>(scalar.ValueOrDie());
+            return static_cast<scalar_at>(uint64_scalar->value);
+        }
 
         throw std::invalid_argument("Expects integer");
         return 0;

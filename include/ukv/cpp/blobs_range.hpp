@@ -472,7 +472,7 @@ struct keys_range_t {
         return count;
     }
 
-    expected_gt<sample_t> sample(std::size_t count, arena_t& arena) noexcept {
+    expected_gt<sample_t> sample(std::size_t count, ukv_arena_t* arena) noexcept {
         ukv_length_t* found_counts = nullptr;
         ukv_key_t* found_keys = nullptr;
         status_t status;
@@ -482,7 +482,8 @@ struct keys_range_t {
             .db = members.db(),
             .error = status.member_ptr(),
             .transaction = members.txn(),
-            .arena = arena.member_ptr(),
+            .arena = arena,
+            .tasks_count = 1,
             .collections = &c_collection,
             .count_limits = &c_count,
             .counts = &found_counts,

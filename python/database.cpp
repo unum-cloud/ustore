@@ -1,3 +1,7 @@
+#include <arrow/c/bridge.h>
+#include <arrow/python/pyarrow.h>
+
+#include "ukv/arrow.h"
 #include "pybind.hpp"
 #include "crud.hpp"
 #include "cast.hpp"
@@ -62,6 +66,30 @@ range_at& until(range_at& range, ukv_key_t key) {
     return range;
 }
 
+py::object sample(py_blobs_collection_t& py_collection, std::size_t count) {
+    blobs_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
+    keys_range_t range {members};
+    ptr_range_gt<ukv_key_t> samples = range.sample(count, py_collection.member_arena()).throw_or_release();
+
+    status_t status;
+    ArrowSchema c_arrow_schema;
+    ArrowArray c_arrow_array;
+    ukv_to_arrow_schema(count, 0, &c_arrow_schema, &c_arrow_array, status.member_ptr());
+    ukv_to_arrow_column(count,
+                        "samples",
+                        ukv_doc_field_i64_k,
+                        nullptr,
+                        nullptr,
+                        samples.begin(),
+                        &c_arrow_schema,
+                        &c_arrow_array,
+                        status.member_ptr());
+
+    arrow::Result<std::shared_ptr<arrow::Array>> array = arrow::ImportArray(&c_arrow_array, &c_arrow_schema);
+    PyObject* array_python = arrow::py::wrap_array(array.ValueOrDie());
+    return py::reinterpret_steal<py::object>(array_python);
+}
+
 template <typename range_at>
 auto iterate(range_at& range) {
     using native_t = typename range_at::iterator_type;
@@ -106,6 +134,7 @@ void ukv::wrap_database(py::module& m) {
     py_collection.def("pop", &remove_binary<blobs_collection_t>);  // Unlike Python, won't return the result
     py_collection.def("has_key", &has_binary<blobs_collection_t>); // Similar to Python 2
     py_collection.def("get", &read_binary);
+    py_collection.def("sample_keys", &sample);
     py_collection.def("update", &update_binary);
     py_collection.def("broadcast", &broadcast_binary);
     py_collection.def("scan", &scan_binary<blobs_collection_t>);
@@ -255,11 +284,9 @@ void ukv::wrap_database(py::module& m) {
     py_krange.def("__iter__", &iterate<keys_range_t>);
     py_krange.def("since", &since<keys_range_t>);
     py_krange.def("until", &until<keys_range_t>);
-    py_krange.def("sample", &until<keys_range_t>);
     py_kvrange.def("__iter__", &iterate<pairs_range_t>);
     py_kvrange.def("since", &since<pairs_range_t>);
     py_kvrange.def("until", &until<pairs_range_t>);
-    py_kvrange.def("sample", &until<pairs_range_t>);
 
     // Using slices on the keys view is too cumbersome!
     // It's never clear if we want a range of IDs or offsets.

@@ -280,7 +280,7 @@
             "name": "C++: Benchmark Arrow",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/bench_twitter_ukv_flight_client_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/bench_twitter_ukv_flight_client",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
