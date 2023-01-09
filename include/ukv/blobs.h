@@ -422,6 +422,7 @@ typedef struct ukv_scan_t {
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
     ukv_transaction_t transaction;
+    ukv_transaction_t snapshot;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
@@ -561,6 +562,7 @@ typedef struct ukv_sample_t {
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
     ukv_transaction_t transaction;
+    ukv_transaction_t snapshot;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
