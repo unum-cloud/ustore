@@ -62,6 +62,8 @@ struct key_comparator_t final : public leveldb::Comparator {
     }
 };
 
+static key_comparator_t const key_comparator_k = {};
+
 struct level_snapshot_t {
     leveldb::Snapshot const* snapshot = nullptr;
 };
@@ -70,8 +72,6 @@ struct level_txn_t {
     leveldb::DB* db = nullptr;
     leveldb::Snapshot const* snapshot = nullptr;
 };
-
-static key_comparator_t const key_comparator_k = {};
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -309,7 +309,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
+    level_snapshot_t& snp = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
     places_arg_t places {{}, keys, {}, c.tasks_count};
 
@@ -330,8 +330,8 @@ void ukv_read(ukv_read_t* c_ptr) {
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
-        if (c.transaction)
-            options.snapshot = txn.snapshot;
+        if (c.snapshot)
+            options.snapshot = snp.snapshot;
 
         std::string value_buffer;
         ukv_length_t progress_in_tape = 0;
@@ -361,12 +361,12 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
+    level_snapshot_t& snp = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
     scans_arg_t scans {{}, start_keys, limits, c.tasks_count};
 
-    validate_scan(c.transaction, scans, c.options, c.error);
+    validate_scan(c.snapshot, scans, c.options, c.error);
     return_if_error_m(c.error);
 
     // 1. Allocate a tape for all the values to be fetched
@@ -383,8 +383,8 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     leveldb::ReadOptions options;
     options.fill_cache = false;
 
-    if (c.transaction)
-        options.snapshot = txn.snapshot;
+    if (c.snapshot)
+        options.snapshot = snp.snapshot;
 
     level_iter_uptr_t it;
     try {
@@ -424,7 +424,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c.transaction);
+    level_snapshot_t& snp = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
     sample_args_t samples {{}, lens, c.tasks_count};
 
@@ -442,8 +442,8 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     leveldb::ReadOptions options;
     options.fill_cache = false;
 
-    if (c.transaction)
-        options.snapshot = txn.snapshot;
+    if (c.snapshot)
+        options.snapshot = snp.snapshot;
 
     for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
         sample_arg_t task = samples[task_idx];
