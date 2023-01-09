@@ -64,8 +64,7 @@ struct collection_key_field_t {
     collection_key_field_t() = default;
     collection_key_field_t(ukv_collection_t collection, ukv_key_t key, ukv_str_view_t field = nullptr) noexcept
         : collection(collection), key(key), field(field) {}
-    explicit collection_key_field_t(ukv_key_t key) noexcept
-        : collection(ukv_collection_main_k), key(key), field(nullptr) {}
+    collection_key_field_t(ukv_key_t key) noexcept : collection(ukv_collection_main_k), key(key), field(nullptr) {}
     explicit collection_key_field_t(ukv_key_t key, ukv_str_view_t field) noexcept
         : collection(ukv_collection_main_k), key(key), field(field) {}
 };

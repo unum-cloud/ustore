@@ -262,7 +262,7 @@ Run the following script to pull and run the container, exposing [Apache Arrow F
 Client SDKs will also communicate through that same port, by default.
 
 ```sh
-docker run --rm --name TestUKV -p 38709:38709 unum/ukv
+docker run -d --rm --name ukv-test -p 38709:38709 unum/ukv
 ```
 
 For C/C++ clients and for the embedded distribution of UKV, CMake is the default form of installation.
