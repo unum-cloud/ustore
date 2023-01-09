@@ -53,9 +53,9 @@ bool const ukv_supports_snapshots_k = false;
 /*****************	 C++ Implementation	  ****************/
 /*********************************************************/
 
+using namespace unum::ucset;
 using namespace unum::ukv;
 using namespace unum;
-using namespace unum::ucset;
 
 namespace stdfs = std::filesystem;
 using json_t = nlohmann::json;
@@ -123,15 +123,15 @@ struct pair_compare_t {
 //     std::hash<collection_key_t>,
 //     std::shared_mutex,
 //     64>;
-using ucset_t = locked_gt<ucset_gt<pair_t, pair_compare_t>, std::shared_mutex>;
+using ucset_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>, std::shared_mutex>;
 using transaction_t = typename ucset_t::transaction_t;
 using generation_t = typename ucset_t::generation_t;
 
 template <typename set_or_transaction_at, typename callback_at>
-ucset_status_t find_and_watch(set_or_transaction_at& set_or_transaction,
-                              collection_key_t collection_key,
-                              ukv_options_t options,
-                              callback_at&& callback) noexcept {
+ucset::status_t find_and_watch(set_or_transaction_at& set_or_transaction,
+                               collection_key_t collection_key,
+                               ukv_options_t options,
+                               callback_at&& callback) noexcept {
 
     if constexpr (!std::is_same<set_or_transaction_at, ucset_t>()) {
         bool dont_watch = options & ukv_option_transaction_dont_watch_k;
@@ -148,16 +148,16 @@ ucset_status_t find_and_watch(set_or_transaction_at& set_or_transaction,
 }
 
 template <typename set_or_transaction_at, typename callback_at>
-ucset_status_t scan_and_watch(set_or_transaction_at& set_or_transaction,
-                              collection_key_t start,
-                              std::size_t range_limit,
-                              ukv_options_t options,
-                              callback_at&& callback) noexcept {
+ucset::status_t scan_and_watch(set_or_transaction_at& set_or_transaction,
+                               collection_key_t start,
+                               std::size_t range_limit,
+                               ukv_options_t options,
+                               callback_at&& callback) noexcept {
 
     std::size_t match_idx = 0;
     collection_key_t previous = start;
     bool reached_end = false;
-    auto watch_status = ucset_status_t();
+    auto watch_status = ucset::status_t();
     auto callback_pair = [&](pair_t const& pair) noexcept {
         reached_end = pair.collection_key.collection != previous.collection;
         if (reached_end)
@@ -193,7 +193,7 @@ ucset_status_t scan_and_watch(set_or_transaction_at& set_or_transaction,
 }
 
 template <typename set_or_transaction_at, typename callback_at>
-ucset_status_t scan_full(set_or_transaction_at& set_or_transaction, callback_at&& callback) noexcept {
+ucset::status_t scan_full(set_or_transaction_at& set_or_transaction, callback_at&& callback) noexcept {
 
     collection_key_t previous {
         std::numeric_limits<ukv_collection_t>::min(),
@@ -288,7 +288,7 @@ ukv_collection_t new_collection(database_t& db) noexcept {
     return new_handle;
 }
 
-void export_error_code(ucset_status_t code, ukv_error_t* c_error) noexcept {
+void export_error_code(ucset::status_t code, ukv_error_t* c_error) noexcept {
     if (!code)
         *c_error = "Faced error!";
 }
@@ -542,7 +542,7 @@ void ukv_write(ukv_write_t* c_ptr) {
                 if (auto watch_status = txn.watch(key); !watch_status)
                     return export_error_code(watch_status, c.error);
 
-            ucset_status_t status;
+            ucset::status_t status;
             if (content) {
                 pair_t pair {key, content, c.error};
                 return_if_error_m(c.error);
