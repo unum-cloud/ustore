@@ -93,7 +93,7 @@ setup(
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'Intended Audience :: Information Technology',
-        'License :: Other/Proprietary License',
+        'License :: OSI Approved :: Apache Software License 2.0 (Apache-2.0)',
         'Natural Language :: English',
         'Operating System :: POSIX',
         'Operating System :: POSIX :: Linux',
