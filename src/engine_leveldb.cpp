@@ -68,11 +68,6 @@ struct level_snapshot_t {
     leveldb::Snapshot const* snapshot = nullptr;
 };
 
-struct level_txn_t {
-    leveldb::DB* db = nullptr;
-    leveldb::Snapshot const* snapshot = nullptr;
-};
-
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
 /*********************************************************/
@@ -582,26 +577,6 @@ void ukv_transaction_init(ukv_transaction_init_t* c_ptr) {
 
     ukv_transaction_init_t& c = *c_ptr;
     *c.error = "Transactions not supported by LevelDB!";
-
-#if 0 // TODO: Persistent Snapshots will be receiving a separate interface.
-    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    validate_transaction_begin(c.transaction, c.options, c.error);
-    return_if_error_m(c.error);
-    if (!*c.transaction)
-        safe_section("Allocating transaction handle", c.error, [&] { *c.transaction = new level_txn_t(); });
-    return_if_error_m(c.error);
-
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_txn_t& txn = **reinterpret_cast<level_txn_t**>(c.transaction);
-
-    auto wants_just_snapshot = !(c.options & ukv_option_transaction_dont_watch_k);
-    if (wants_just_snapshot) {
-        txn.snapshot = db.GetSnapshot();
-        txn.db = &db;
-        if (!txn.snapshot)
-            *c.error = "Couldn't start a transaction!";
-    }
-#endif
 }
 
 void ukv_transaction_commit(ukv_transaction_commit_t* c_ptr) {
@@ -619,17 +594,6 @@ void ukv_arena_free(ukv_arena_t c_arena) {
 }
 
 void ukv_transaction_free(ukv_transaction_t) {
-#if 0 // TODO: Persistent Snapshots will be receiving a separate interface.
-    if (!c_txn)
-        return;
-    level_txn_t& txn = *reinterpret_cast<level_txn_t*>(c_txn);
-    level_db_t& db = *txn.db;
-    if (txn.snapshot)
-        db.ReleaseSnapshot(txn.snapshot);
-    txn.db = nullptr;
-    txn.snapshot = nullptr;
-    delete &txn;
-#endif
 }
 
 void ukv_database_free(ukv_database_t c_db) {
