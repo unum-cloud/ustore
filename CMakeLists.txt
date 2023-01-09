@@ -125,7 +125,7 @@ endif()
 
 # Engines:
 if(${UKV_BUILD_ENGINE_UMEM})
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/consistent_set.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/ucset.cmake")
 endif()
 
 if(${UKV_BUILD_ENGINE_ROCKSDB})

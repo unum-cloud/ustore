@@ -12,7 +12,7 @@ Backed by Open-Source and Proprietary Implementations<br/>
 •
 UDisk
 •
-<a href="https://github.com/ashvardanian/consistent_set">UMem</a>
+<a href="https://github.com/unum-cloud/ucset">UMem</a>
 <br/>
 <b>to store</b>:
 Blobs
@@ -193,7 +193,7 @@ Now it serves as the foundation for half of the DBMS startups.
 UMem and UDisk are both designed and maintained by Unum.
 Both are feature-complete, but the most crucial feature our alternatives provide is performance.
 Being fast in memory is easy.
-The core logic of UMem can be found in the templated header-only <code class="docutils literal notranslate"><a href="https://github.com/ashvardanian/consistent_set" class="pre">consistent_set</a></code> library.
+The core logic of UMem can be found in the templated header-only <code class="docutils literal notranslate"><a href="https://github.com/unum-cloud/ucset" class="pre">ucset</a></code> library.
 
 Designing UDisk was a much more challenging 7-year long endeavour.
 It included inventing new tree-like structures, implementing partial kernel bypass with `io_uring`, complete bypass with `SPDK`, GPU acceleration, and even a custom internal filesystem.

@@ -39,7 +39,7 @@ More broadly:
 
 In-memory backend with disk serialization.
 
-* Depends on [ashvardanian/consistent_set](github.com/ashvardanian/consistent_set).
+* Depends on [unum-cloud/ucset](github.com/unum-cloud/ucset).
 * Supports snapshots, transactions and named collections.
 
 Is by far the fastest of all backends, but with the lowest Durability.
