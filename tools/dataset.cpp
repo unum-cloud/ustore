@@ -376,15 +376,6 @@ fields_t prepare_fields(ukv_docs_imp_exp_t& c, linked_memory_lock_t& arena) {
     return {prepared_fields.data(), sizeof(ukv_str_view_t)};
 }
 
-void prepare_for_csv(std::string& str, size_t pos = 0) {
-    pos = str.find('\"', pos);
-    while (pos != std::string::npos) {
-        str.insert(pos, 1, '\"');
-        pos += 2;
-        pos = str.find('\"', pos);
-    }
-}
-
 simdjson::ondemand::object& rewinded(simdjson::ondemand::object& doc) noexcept {
     doc.reset();
     return doc;
@@ -1235,9 +1226,6 @@ void export_whole_docs( //
                 os << parquet::EndRow;
             }
             else if (flag == 1) {
-                prepare_for_csv(json);
-                json.insert(0, 1, '\"');
-                json.push_back('\"');
                 keys_vec[idx] = *iter;
                 docs_vec[idx] = arena.alloc<char>(json.size() + 1, error).begin();
                 std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
@@ -1265,7 +1253,7 @@ void export_sub_docs( //
 
     auto iter = pass_through_iterator(keys);
     auto fields = prepare_fields(c, arena);
-    std::string json = flag == 1 ? csv_prefix_k : prefix_k;
+    std::string json = prefix_k;
 
     ptr_range_gt<char*>& docs_vec = *docs_ptr;
     ptr_range_gt<ukv_key_t>& keys_vec = *keys_ptr;
@@ -1302,8 +1290,6 @@ void export_sub_docs( //
                 os << parquet::EndRow;
             }
             else if (flag == 1) {
-                prepare_for_csv(json, 1);
-                json.push_back('\"');
                 keys_vec[idx] = *iter;
                 docs_vec[idx] = arena.alloc<char>(json.size() + 1, c.error).begin();
                 std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
@@ -1313,7 +1299,7 @@ void export_sub_docs( //
                 auto str = fmt::format("{{\"_id\":{},\"doc\":{}}}\n", *iter, json.data());
                 write(handle, str.data(), str.size());
             }
-            json = flag == 1 ? csv_prefix_k : prefix_k;
+            json = prefix_k;
             ++iter;
         }
     }
