@@ -33,7 +33,7 @@ class CMakeBuild(build_ext):
         if not extdir.endswith(os.path.sep):
             extdir += os.path.sep
 
-        if "PYTHON_DEBUG" in os.environ:
+        if 'PYTHON_DEBUG' in os.environ:
             os.makedirs(extdir, exist_ok=True)
             copy_tree("./build/lib/", extdir)
             return
