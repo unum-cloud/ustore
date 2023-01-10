@@ -1485,13 +1485,13 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     arrow::StringBuilder string_builder;
     arrow::NumericBuilder<arrow::Int64Type> int_builder;
     
-    fields_t fields;
-    ptr_range_gt<char> tape;
-    counts.reserve(c.fields_count);
-    stl_vector_t<size_t> counts(alloc_t<size_t>(arena, c.error));
-
     keys_stream_t stream(c.db, c.collection, task_count);
     auto arena = linked_memory(c.arena, c.options, c.error);
+
+    fields_t fields;
+    ptr_range_gt<char> tape;
+    stl_vector_t<size_t> counts(alloc_t<size_t>(arena, c.error));
+    counts.reserve(c.fields_count);
 
     if (pcn == 0)
         make_parquet(c, os);
