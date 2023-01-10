@@ -301,11 +301,10 @@ typedef struct ukv_snapshot_list_t { /// @name Context
     /// @name Contents
     /// @{
 
-    /** @brief Number of present collections. */
+    /** @brief Number of present snapshots. */
     ukv_size_t* count;
-    /** @brief Handles of all the snapshots in same order as `names`. */
+    /** @brief All snapshots. */
     ukv_snapshot_t** snapshots;
-    /** @brief Offsets of separate strings in the `names` tape. */
     /// @}
 } ukv_snapshot_list_t;
 
@@ -367,6 +366,11 @@ typedef struct ukv_collection_list_t {
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
     ukv_transaction_t transaction;
+    /**
+     * @brief A snapshot captures a point-in-time view of the DB at the time it's created.
+     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     */
+    ukv_snapshot_t snapshot;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.

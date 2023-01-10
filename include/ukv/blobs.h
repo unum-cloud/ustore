@@ -268,7 +268,11 @@ typedef struct ukv_read_t {
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
     ukv_transaction_t transaction;
-    ukv_transaction_t snapshot;
+    /**
+     * @brief The snapshot captures a view of the database at the time it's created.
+     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     */
+    ukv_snapshot_t snapshot;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
@@ -422,7 +426,11 @@ typedef struct ukv_scan_t {
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
     ukv_transaction_t transaction;
-    ukv_transaction_t snapshot;
+    /**
+     * @brief A snapshot captures a point-in-time view of the DB at the time it's created.
+     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     */
+    ukv_snapshot_t snapshot;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
@@ -562,7 +570,11 @@ typedef struct ukv_sample_t {
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
     ukv_transaction_t transaction;
-    ukv_transaction_t snapshot;
+    /**
+     * @brief The snapshot captures a view of the database at the time it's created.
+     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     */
+    ukv_snapshot_t snapshot;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
@@ -686,6 +698,11 @@ typedef struct ukv_measure_t {
      * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
      */
     ukv_transaction_t transaction;
+    /**
+     * @brief A snapshot captures a point-in-time view of the DB at the time it's created.
+     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     */
+    ukv_snapshot_t snapshot;
     /**
      * @brief Reusable memory handle.
      * @see `ukv_arena_free()`.
