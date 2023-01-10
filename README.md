@@ -130,6 +130,24 @@ $ python
 >>> db.main[42] = 'Hi'
 ```
 
+<details>
+  <summary>Same with persisted RocksDB</summary>
+  
+  ```python
+  >>> import ukv.rocksdb as embedded
+  >>> db = embedded.DataBase('/tmp/ukv/rocksdb/')
+  ```
+</details>
+
+<details>
+  <summary>Same with an arbitrary standalone UKV distribution</summary>
+  
+  ```python
+  >>> import ukv.flight_client as remote
+  >>> db = remote.DataBase('grpc://0.0.0.0:38709')
+  ```
+</details>
+
 ## Features
 
 A Key Value Store is generally an associative container with sub-linear search time.
@@ -385,6 +403,9 @@ Thank you!
 - Transactions are ACI(D) by-default. [What does it mean?][ukv-acid]
 - Why not use LevelDB or RocksDB interface? [Answered][ukv-vs-rocks]
 - Why not use SQL, MQL or Cypher? [Answered][ukv-vs-sql]
+- Does UKV support Time-To-Live? [Answered][ukv-ttl]
+- Does UKV support compression? [Answered][ukv-compression]
+- Does UKV support queues? [Anwered][ukv-queues]
 
 [ukv-c-tutor]: https://unum.cloud/ukv/c
 [ukv-cpp-tutor]: https://unum.cloud/ukv/cpp
@@ -404,6 +425,9 @@ Thank you!
 [ukv-vs-sql]: https://unum.cloud/ukv/related#sql-mql-cypher
 [ukv-c-headers]: https://github.com/unum-cloud/UKV/tree/main/include/ukv
 [ukv-roadmap]: https://github.com/orgs/unum-cloud/projects/2
+[ukv-compression]: https://github.com/unum-cloud/ukv/discussions/232
+[ukv-ttl]: https://github.com/unum-cloud/ukv/discussions/230
+[ukv-queues]: https://github.com/unum-cloud/ukv/discussions/228
 
 [ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
 [ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
