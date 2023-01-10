@@ -423,7 +423,7 @@ void get_value(simdjson::ondemand::object& data, ukv_str_view_t json_field, ukv_
             std::back_inserter(json),
             "{}{},",
             json_field,
-            std::string_view(get_result().value()));
+            bool(get_result().value()) ? "true" : "false");
         break;
     default: break;
     }
@@ -431,7 +431,7 @@ void get_value(simdjson::ondemand::object& data, ukv_str_view_t json_field, ukv_
 
 void simdjson_object_parser( //
     simdjson::ondemand::object& object,
-    stl_vector_t<size_t>& counts,
+    stl_vector_t<size_t> const& counts,
     fields_t const& fields,
     size_t fields_count,
     tape_t const& tape,
@@ -1190,127 +1190,112 @@ void import_ndjson_docs(ukv_docs_import_t& c) {
 }
 
 void export_whole_docs( //
-    vals_t& values,
-    stl_vector_t<ptr_range_gt<ukv_key_t const>>& keys,
-    ptr_range_gt<char*>* docs_ptr,
-    ptr_range_gt<ukv_key_t>* keys_ptr,
-    parquet::StreamWriter* os_ptr,
-    linked_memory_lock_t arena,
     ukv_error_t* error,
+    linked_memory_lock_t arena,
+    ptr_range_gt<ukv_key_t const>& keys,
+    ptr_range_gt<ukv_key_t>* keys_ptr,
+    ptr_range_gt<char*>* docs_ptr,
+    parquet::StreamWriter* os_ptr,
+    val_t const& values,
     int handle,
     int flag) {
-
-    auto iter = pass_through_iterator(keys);
 
     ptr_range_gt<char*>& docs_vec = *docs_ptr;
     ptr_range_gt<ukv_key_t>& keys_vec = *keys_ptr;
     parquet::StreamWriter& os = *os_ptr;
 
     size_t idx = 0;
-    for (auto value : values) {
-        simdjson::ondemand::parser parser;
-        simdjson::ondemand::document_stream docs = parser.iterate_many( //
-            value.first,
-            value.second,
-            1000000ul);
+    auto iter = keys.begin();
 
-        for (auto doc : docs) {
-            simdjson::ondemand::object obj = doc.get_object().value();
-            auto value = rewinded(obj).raw_json().value();
-            auto json = std::string(value.data(), value.size());
-            json.pop_back();
+    simdjson::ondemand::parser parser;
+    simdjson::ondemand::document_stream docs = parser.iterate_many( //
+        values.first,
+        values.second,
+        1000000ul);
 
-            if (flag == 0) {
-                auto val = *iter;
-                os << *iter << json.data();
-                os << parquet::EndRow;
-            }
-            else if (flag == 1) {
-                keys_vec[idx] = *iter;
-                docs_vec[idx] = arena.alloc<char>(json.size() + 1, error).begin();
-                std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
-                ++idx;
-            }
-            else {
-                auto str = fmt::format("{{\"_id\":{},\"doc\":{}}}\n", *iter, json.data());
-                write(handle, str.data(), str.size());
-            }
-            ++iter;
+    for (auto doc : docs) {
+        simdjson::ondemand::object obj = doc.get_object().value();
+        auto value = rewinded(obj).raw_json().value();
+        auto json = std::string(value.data(), value.size());
+        json.pop_back();
+
+        if (flag == 0) {
+            auto val = *iter;
+            os << *iter << json.data();
+            os << parquet::EndRow;
         }
+        else if (flag == 1) {
+            keys_vec[idx] = *iter;
+            docs_vec[idx] = arena.alloc<char>(json.size() + 1, error).begin();
+            std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
+            ++idx;
+        }
+        else {
+            auto str = fmt::format("{{\"_id\":{},\"doc\":{}}}\n", *iter, json.data());
+            write(handle, str.data(), str.size());
+        }
+        ++iter;
     }
 }
 
 void export_sub_docs( //
     ukv_docs_export_t& c,
-    vals_t& values,
-    stl_vector_t<ptr_range_gt<ukv_key_t const>>& keys,
+    linked_memory_lock_t arena,
+    parquet::StreamWriter* os_ptr,
     ptr_range_gt<char*>* docs_ptr,
     ptr_range_gt<ukv_key_t>* keys_ptr,
-    parquet::StreamWriter* os_ptr,
-    linked_memory_lock_t arena,
+    ptr_range_gt<ukv_key_t const>& keys,
+    stl_vector_t<size_t> const& counts,
+    ptr_range_gt<char> const& tape,
+    fields_t const& fields,
+    val_t const& values,
     int handle,
     int flag) {
-
-    auto iter = pass_through_iterator(keys);
-    auto fields = prepare_fields(c, arena);
-    std::string json = prefix_k;
 
     ptr_range_gt<char*>& docs_vec = *docs_ptr;
     ptr_range_gt<ukv_key_t>& keys_vec = *keys_ptr;
     parquet::StreamWriter& os = *os_ptr;
 
-    size_t max_size = c.fields_count * symbols_count_k;
-    for (size_t idx = 0; idx < c.fields_count; ++idx)
-        max_size += strlen(fields[idx]);
-
-    stl_vector_t<size_t> counts(alloc_t<size_t>(arena, c.error));
-    counts.reserve(c.fields_count);
-    auto tape = arena.alloc<char>(max_size, c.error);
-    fields_parser(c.error, arena, counts, fields, c.fields_count, tape);
-
     size_t idx = 0;
-    for (auto value : values) {
-        simdjson::ondemand::parser parser;
-        simdjson::ondemand::document_stream docs = parser.iterate_many( //
-            value.first,
-            value.second,
-            1000000ul);
+    auto iter = keys.begin();
+    std::string json = prefix_k;
 
-        for (auto doc : docs) {
-            simdjson::ondemand::object obj = doc.get_object().value();
-            try {
-                simdjson_object_parser(obj, counts, fields, c.fields_count, tape, json);
-            }
-            catch (simdjson::simdjson_error const& ex) {
-                *c.error = ex.what();
-                return_if_error_m(c.error);
-            }
-            if (flag == 0) {
-                os << *iter << json.data();
-                os << parquet::EndRow;
-            }
-            else if (flag == 1) {
-                keys_vec[idx] = *iter;
-                docs_vec[idx] = arena.alloc<char>(json.size() + 1, c.error).begin();
-                std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
-                ++idx;
-            }
-            else {
-                auto str = fmt::format("{{\"_id\":{},\"doc\":{}}}\n", *iter, json.data());
-                write(handle, str.data(), str.size());
-            }
-            json = prefix_k;
-            ++iter;
+    simdjson::ondemand::parser parser;
+    simdjson::ondemand::document_stream docs = parser.iterate_many( //
+        values.first,
+        values.second,
+        1000000ul);
+
+    for (auto doc : docs) {
+        simdjson::ondemand::object obj = doc.get_object().value();
+        try {
+            simdjson_object_parser(obj, counts, fields, c.fields_count, tape, json);
         }
+        catch (simdjson::simdjson_error const& ex) {
+            *c.error = ex.what();
+            return_if_error_m(c.error);
+        }
+        if (flag == 0) {
+            os << *iter << json.data();
+            os << parquet::EndRow;
+        }
+        else if (flag == 1) {
+            keys_vec[idx] = *iter;
+            docs_vec[idx] = arena.alloc<char>(json.size() + 1, c.error).begin();
+            std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
+            ++idx;
+        }
+        else {
+            auto dat = *iter;
+            auto str = fmt::format("{{\"_id\":{},\"doc\":{}}}\n", *iter, json.data());
+            write(handle, str.data(), str.size());
+        }
+        json = prefix_k;
+        ++iter;
     }
 }
 
-void export_parquet_docs( //
-    ukv_docs_export_t& c,
-    stl_vector_t<ptr_range_gt<ukv_key_t const>>& keys,
-    ukv_size_t size_bytes,
-    vals_t& values,
-    linked_memory_lock_t& arena) {
+void make_parquet(ukv_docs_export_t& c, parquet::StreamWriter& os) {
 
     parquet::schema::NodeVector nodes;
     nodes.push_back(parquet::schema::PrimitiveNode::Make( //
@@ -1337,55 +1322,73 @@ void export_parquet_docs( //
 
     parquet::WriterProperties::Builder builder;
     builder.memory_pool(arrow::default_memory_pool());
-    builder.write_batch_size(std::min(size_bytes, max_batch_size));
+    builder.write_batch_size(max_batch_size);
 
-    parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
-
-    if (c.fields)
-        export_sub_docs(c, values, keys, nullptr, nullptr, &os, arena, 0, 0);
-    else
-        export_whole_docs(values, keys, nullptr, nullptr, &os, arena, c.error, 0, 0);
+    os = parquet::StreamWriter {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
 }
 
-void export_csv_docs( //
+void write_in_parquet( //
     ukv_docs_export_t& c,
-    stl_vector_t<ptr_range_gt<ukv_key_t const>>& keys,
-    ukv_size_t size_bytes,
-    vals_t& values,
-    linked_memory_lock_t& arena) {
-
-    ukv_size_t size = 0;
-    arrow::Status status;
-
-    for (auto key : keys)
-        size += key.size();
-
-    arrow::NumericBuilder<arrow::Int64Type> int_builder;
-    arrow::StringBuilder str_builder;
-
-    status = int_builder.Resize(size);
-    return_error_if_m(status.ok(), c.error, 0, "Can't instantiate builder");
-    status = str_builder.Resize(size);
-    return_error_if_m(status.ok(), c.error, 0, "Can't instantiate builder");
-
-    array_t keys_array;
-    array_t docs_array;
-    auto keys_vec = arena.alloc<ukv_key_t>(size, c.error);
-    auto docs_vec = arena.alloc<char*>(size, c.error);
+    linked_memory_lock_t& arena,
+    parquet::StreamWriter& ostream,
+    ptr_range_gt<ukv_key_t const>& keys,
+    stl_vector_t<size_t> const& counts,
+    ptr_range_gt<char> const& tape,
+    fields_t const& fields,
+    val_t const& values) {
 
     if (c.fields)
-        export_sub_docs(c, values, keys, &docs_vec, &keys_vec, nullptr, arena, 0, 1);
+        export_sub_docs(c, arena, &ostream, nullptr, nullptr, keys, counts, tape, fields, values, 0, 0);
     else
-        export_whole_docs(values, keys, &docs_vec, &keys_vec, nullptr, arena, c.error, 0, 1);
+        export_whole_docs(c.error, arena, keys, nullptr, nullptr, &ostream, values, 0, 0);
+}
+
+void write_in_csv( //
+    ukv_docs_export_t& c,
+    linked_memory_lock_t& arena,
+    ptr_range_gt<char*>& docs_vec,
+    ptr_range_gt<ukv_key_t>& keys_vec,
+    ptr_range_gt<ukv_key_t const>& keys,
+    arrow::NumericBuilder<arrow::Int64Type>& int_builder,
+    arrow::StringBuilder& string_builder,
+    stl_vector_t<size_t> const& counts,
+    ptr_range_gt<char> const& tape,
+    fields_t const& fields,
+    val_t const& values) {
+
+    arrow::Status status;
+    size_t size = keys.size();
+    status = int_builder.Resize(int_builder.capacity() + size);
+    return_error_if_m(status.ok(), c.error, 0, "Can't resize builder");
+    status = string_builder.Resize(string_builder.capacity() + size);
+    return_error_if_m(status.ok(), c.error, 0, "Can't resize builder");
+
+    keys_vec.end_ = keys_vec.begin() + size;
+    docs_vec.end_ = docs_vec.begin() + size;
+
+    if (c.fields)
+        export_sub_docs(c, arena, nullptr, &docs_vec, &keys_vec, keys, counts, tape, fields, values, 0, 1);
+    else
+        export_whole_docs(c.error, arena, keys, &keys_vec, &docs_vec, nullptr, values, 0, 1);
 
     status = int_builder.AppendValues(keys_vec.begin(), keys_vec.size());
     return_error_if_m(status.ok(), c.error, 0, "Can't append keys");
+    status = string_builder.AppendValues((char const**)docs_vec.begin(), docs_vec.size());
+    return_error_if_m(status.ok(), c.error, 0, "Can't append docs");
+}
+
+void end_csv( //
+    ukv_docs_export_t& c,
+    arrow::StringBuilder& string_builder,
+    arrow::NumericBuilder<arrow::Int64Type>& int_builder) {
+
+    array_t keys_array;
+    array_t docs_array;
+    arrow::Status status;
+
     status = int_builder.Finish(&keys_array);
     return_error_if_m(status.ok(), c.error, 0, "Can't finish array(keys)");
-
-    status = str_builder.AppendValues((char const**)docs_vec.begin(), docs_vec.size());
-    return_error_if_m(status.ok(), c.error, 0, "Can't append docs");
-    status = str_builder.Finish(&docs_array);
+    status = string_builder.Finish(&docs_array);
     return_error_if_m(status.ok(), c.error, 0, "Can't finish array(docs)");
 
     arrow::FieldVector fields;
@@ -1407,23 +1410,30 @@ void export_csv_docs( //
     return_error_if_m(status.ok(), c.error, 0, "Can't write in file");
 }
 
-void export_ndjson_docs( //
-    ukv_docs_export_t& c,
-    stl_vector_t<ptr_range_gt<ukv_key_t const>>& keys,
-    ukv_size_t size_bytes,
-    vals_t& values,
-    linked_memory_lock_t& arena) {
-
+int make_ndjson(ukv_docs_export_t& c) {
     char file_name[uuid_length_k];
     generate_uuid(file_name, uuid_length_k);
-    auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    return open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+}
+
+void write_in_ndjson( //
+    ukv_docs_export_t& c,
+    linked_memory_lock_t& arena,
+    ptr_range_gt<ukv_key_t const>& keys,
+    stl_vector_t<size_t> const& counts,
+    ptr_range_gt<char> const& tape,
+    fields_t const& fields,
+    val_t const& values,
+    int handle) {
 
     if (c.fields)
-        export_sub_docs(c, values, keys, nullptr, nullptr, nullptr, arena, handle, 2);
+        export_sub_docs(c, arena, nullptr, nullptr, nullptr, keys, counts, tape, fields, values, handle, 2);
     else
-        export_whole_docs(values, keys, nullptr, nullptr, nullptr, arena, c.error, handle, 2);
+        export_whole_docs(c.error, arena, keys, nullptr, nullptr, nullptr, values, handle, 2);
+}
 
-    close(handle);
+void end_ndjson(int fd) {
+    close(fd);
 }
 
 #pragma region - Main Functions(Docs)
@@ -1459,64 +1469,87 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     return_error_if_m(validate_docs_fields(c), c.error, 0, "Invalid fields");
     return_error_if_m(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
-    using alloc_keys_t = alloc_t<ptr_range_gt<ukv_key_t const>>;
 
     auto ext = c.paths_extension;
-    auto export_method = strcmp_(ext, ".parquet")  ? &export_parquet_docs
-                         : strcmp_(ext, ".ndjson") ? &export_ndjson_docs
-                         : strcmp_(ext, ".csv")    ? &export_csv_docs
-                                                   : nullptr;
-
-    return_error_if_m(export_method, c.error, 0, "Not supported format");
+    int pcn = strcmp_(ext, ".parquet") ? 0 : strcmp_(ext, ".csv") ? 1 : strcmp_(ext, ".ndjson") ? 2 : -1;
+    return_error_if_m(!(pcn == -1), c.error, 0, "Not supported format");
 
     ukv_length_t* offsets = nullptr;
     ukv_length_t* lengths = nullptr;
-
-    ukv_size_t size_bytes = 0;
     ukv_size_t task_count = 4096;
+
+    int handle = 0;
+    parquet::StreamWriter os;
+    ptr_range_gt<char*> docs_vec;
+    ptr_range_gt<ukv_key_t> keys_vec;
+    arrow::StringBuilder string_builder;
+    arrow::NumericBuilder<arrow::Int64Type> int_builder;
+    
+    fields_t fields;
+    ptr_range_gt<char> tape;
+    counts.reserve(c.fields_count);
+    stl_vector_t<size_t> counts(alloc_t<size_t>(arena, c.error));
 
     keys_stream_t stream(c.db, c.collection, task_count);
     auto arena = linked_memory(c.arena, c.options, c.error);
 
-    stl_vector_t<ptr_range_gt<ukv_key_t const>> keys(alloc_keys_t(arena, c.error));
-    vals_t values(alloc_t<val_t>(arena, c.error));
+    if (pcn == 0)
+        make_parquet(c, os);
+    else if (pcn == 1) {
+        keys_vec = arena.alloc<ukv_key_t>(task_count, c.error);
+        docs_vec = arena.alloc<char*>(task_count, c.error);
+    }
+    else
+        handle = make_ndjson(c);
+
+    if (c.fields) {
+        fields = prepare_fields(c, arena);
+        size_t max_size = c.fields_count * symbols_count_k;
+        for (size_t idx = 0; idx < c.fields_count; ++idx)
+            max_size += strlen(fields[idx]);
+
+        tape = arena.alloc<char>(max_size, c.error);
+        fields_parser(c.error, arena, counts, fields, c.fields_count, tape);
+    }
 
     auto status = stream.seek_to_first();
     return_error_if_m(status, c.error, 0, "No batches in stream");
 
     while (!stream.is_end()) {
-        keys.push_back(stream.keys_batch());
-        values.push_back({nullptr, 0});
+        auto keys = stream.keys_batch();
+        val_t values {nullptr, 0};
 
         ukv_docs_read_t docs_read {
             .db = c.db,
             .error = c.error,
             .arena = c.arena,
-            .options = c.options,
-            .tasks_count = stream.keys_batch().size(),
+            .options = ukv_option_dont_discard_memory_k,
+            .tasks_count = keys.size(),
             .collections = &c.collection,
-            .keys = stream.keys_batch().begin(),
+            .keys = keys.begin(),
             .keys_stride = sizeof(ukv_key_t),
             .offsets = &offsets,
             .lengths = &lengths,
-            .values = &values.back().first,
+            .values = &values.first,
         };
         ukv_docs_read(&docs_read);
+        values.second = offsets[keys.size() - 1] + lengths[keys.size() - 1];
 
-        size_t count = stream.keys_batch().size();
-        size_bytes += offsets[count - 1] + lengths[count - 1];
-        values.back().second = offsets[count - 1] + lengths[count - 1];
+        if (pcn == 0)
+            write_in_parquet(c, arena, os, keys, counts, tape, fields, values);
+        else if (pcn == 1)
+            write_in_csv(c, arena, docs_vec, keys_vec, keys, int_builder, string_builder, counts, tape, fields, values);
+        else
+            write_in_ndjson(c, arena, keys, counts, tape, fields, values, handle);
 
         status = stream.seek_to_next_batch();
         return_error_if_m(status, c.error, 0, "Invalid batch");
     }
 
-    export_method( //
-        c,
-        keys,
-        size_bytes,
-        values,
-        arena);
+    if (pcn == 1)
+        end_csv(c, string_builder, int_builder);
+    else if (pcn == 2)
+        end_ndjson(handle);
 }
 
 #pragma region - Docs End
