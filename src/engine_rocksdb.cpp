@@ -80,6 +80,10 @@ struct rocks_db_t {
     std::mutex mutex;
 };
 
+struct rocks_snapshot_t {
+    rocksdb::Snapshot const* snapshot = nullptr;
+};
+
 inline rocksdb::Slice to_slice(ukv_key_t const& key) noexcept {
     return {reinterpret_cast<char const*>(&key), sizeof(ukv_key_t)};
 }
@@ -188,12 +192,33 @@ void ukv_snapshot_list(ukv_snapshot_list_t*) {
     // TODO
 }
 
-void ukv_snapshot_create(ukv_snapshot_create_t*) {
-    // TODO
+void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
+    ukv_snapshot_create_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!*c.snapshot)
+        safe_section("Allocating snapshot handle", c.error, [&] { *c.snapshot = new rocks_snapshot_t(); });
+    return_if_error_m(c.error);
+
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    rocks_snapshot_t& snap = **reinterpret_cast<rocks_snapshot_t**>(c.snapshot);
+
+    snap.snapshot = db.native->GetSnapshot();
+    if (!*c.snapshot)
+        *c.error = "Couldn't get a snapshot!";
 }
 
-void ukv_snapshot_drop(ukv_snapshot_drop_t*) {
-    // TODO
+void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
+    if (!c_ptr)
+        return;
+
+    ukv_snapshot_drop_t& c = *c_ptr;
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    rocks_snapshot_t& snap = **reinterpret_cast<rocks_snapshot_t**>(c.snapshot);
+
+    if (snap.snapshot)
+        db.native->ReleaseSnapshot(snap.snapshot);
+    snap.snapshot = nullptr;
+    delete &snap;
 }
 
 void write_one( //
