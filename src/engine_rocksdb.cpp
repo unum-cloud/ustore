@@ -480,13 +480,13 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     return_if_error_m(c.error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
     scans_arg_t tasks {collections, start_keys, limits, c.tasks_count};
 
-    validate_scan(c.transaction, tasks, c.options, c.error);
+    validate_scan(c.snapshot, tasks, c.options, c.error);
     return_if_error_m(c.error);
 
     // 1. Allocate a tape for all the values to be fetched
@@ -503,8 +503,8 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
-    if (c.transaction)
-        options.snapshot = txn.GetSnapshot();
+    if (snap.snapshot)
+        options.snapshot = snap.snapshot;
 
     for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
         scan_t task = tasks[i];
@@ -546,7 +546,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     return_if_error_m(c.error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
     sample_args_t samples {collections, lens, c.tasks_count};
@@ -565,8 +565,8 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
-    if (c.transaction)
-        options.snapshot = txn.GetSnapshot();
+    if (snap.snapshot)
+        options.snapshot = snap.snapshot;
 
     for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
         sample_arg_t task = samples[task_idx];

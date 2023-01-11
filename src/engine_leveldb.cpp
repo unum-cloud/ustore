@@ -303,7 +303,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_snapshot_t& snp = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
     places_arg_t places {{}, keys, {}, c.tasks_count};
 
@@ -324,8 +324,8 @@ void ukv_read(ukv_read_t* c_ptr) {
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
-        if (c.snapshot)
-            options.snapshot = snp.snapshot;
+        if (snap.snapshot)
+            options.snapshot = snap.snapshot;
 
         std::string value_buffer;
         ukv_length_t progress_in_tape = 0;
