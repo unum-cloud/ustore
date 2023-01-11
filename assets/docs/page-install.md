@@ -74,22 +74,22 @@ Following scripts are provided to help:
 * `./golang/pack.sh`: Build GoLang package.
 * `./java/pack.sh`: Build Java package.
 
-To build the Flight RPC Docker image locally:
+To build the Apache Arrow Flight RPC Docker image locally, for both x86 and Arm:
 
 ```sh
-docker buildx build --platform=linux/amd64,linux/arm64 --file docker/Dockerfile . --progress=plain -c 32
+docker buildx build --platform=linux/amd64,linux/arm64 --file docker/Dockerfile . --progress=plain -c 32 --tag unum/ukv:nightly
+```
+
+To fetch the most recent Python bindings:
+
+```sh
+pip install --force-reinstall ukv
 ```
 
 To build the Conan package locally, without installing it:
 
 ```sh
 conan create . ukv/testing --build=missing
-```
-
-To fetch the most recent Python bindings:
-
-```sh
-pip install --extra-index-url https://test.pypi.org/simple/ --force-reinstall ukv
 ```
 
 On MacOS:

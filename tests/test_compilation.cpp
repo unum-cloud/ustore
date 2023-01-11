@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
     _ = main[{43, 44}].on(arena).value(/*track:*/ false);
 
     // Working with sub documents
-    docs_collection_t docs = *db.collection<docs_collection_t>("docs");
+    docs_collection_t docs = *db.find_or_create<docs_collection_t>("docs");
     docs[56] = R"( {"hello": "world", "answer": 42} )"_json.dump().c_str();
     _ = docs[ckf(56, "hello")].value() == "world";
 

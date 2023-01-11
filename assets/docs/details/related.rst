@@ -2,4 +2,4 @@
 Related Projects
 ================
 
-.. mdinclude:: ./page-related.md
+.. mdinclude:: ./../page-related.md

@@ -21,8 +21,9 @@ option(UKV_BUILD_API_FLIGHT_CLIENT "Building Apache Arrow Flight RPC client for 
 option(UKV_BUILD_API_FLIGHT_SERVER "Building Apache Arrow Flight RPC server for all backends")
 option(UKV_BUILD_API_REST_SERVER "Building REST API server for all backends")
 
-option(UKV_USE_JEMALLOC "A faster allocator, that requires autoconf to be installed")
+option(UKV_USE_JEMALLOC "Faster allocator, that requires autoconf to be installed")
 option(UKV_USE_ONEAPI "Faster concurrency primitives from Intel")
+option(UKV_USE_UUID "Replaces default 64-bit keys with 128-bit UUID compatible integers")
 
 set(UKV_ENGINE_UDISK_PATH "" CACHE STRING "Pass a path to UDisk binary to produce a full range of bindings")
 
@@ -125,7 +126,7 @@ endif()
 
 # Engines:
 if(${UKV_BUILD_ENGINE_UMEM})
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/consistent_set.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/ucset.cmake")
 endif()
 
 if(${UKV_BUILD_ENGINE_ROCKSDB})
