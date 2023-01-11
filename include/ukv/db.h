@@ -331,7 +331,7 @@ typedef struct ukv_snapshot_drop_t {
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
     /** @brief Existing snapshot handle. */
-    ukv_snapshot_t* snapshot;
+    ukv_snapshot_t snapshot;
 } ukv_snapshot_drop_t;
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t*);

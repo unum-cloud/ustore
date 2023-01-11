@@ -183,7 +183,7 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     level_snapshot_t& snap = **reinterpret_cast<level_snapshot_t**>(c.snapshot);
 
     snap.snapshot = db.GetSnapshot();
-    if (!*c.snapshot)
+    if (!snap.snapshot)
         *c.error = "Couldn't get a snapshot!";
 }
 
@@ -193,7 +193,7 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
 
     ukv_snapshot_drop_t& c = *c_ptr;
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_snapshot_t& snap = **reinterpret_cast<level_snapshot_t**>(c.snapshot);
+    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
 
     if (snap.snapshot)
         db.ReleaseSnapshot(snap.snapshot);

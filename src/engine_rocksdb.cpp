@@ -200,10 +200,10 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     return_if_error_m(c.error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    rocks_snapshot_t& snap = **reinterpret_cast<rocks_snapshot_t**>(c.snapshot);
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
 
     snap.snapshot = db.native->GetSnapshot();
-    if (!*c.snapshot)
+    if (!snap.snapshot)
         *c.error = "Couldn't get a snapshot!";
 }
 
