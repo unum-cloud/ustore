@@ -39,7 +39,7 @@ include(FetchContent)
 
 FetchContent_Declare(
     ukv
-    GIT_REPOSITORY https://github.com/unum-cloud/UKV.git
+    GIT_REPOSITORY https://github.com/unum-cloud/ukv.git
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(ukv)
@@ -127,8 +127,8 @@ Coming Soon.
 ---
 
 * To see a usage examples, check the [C][c-example] API and the [C++ API](cpp-example) tests.
-* To read the documentation, [check unum.cloud/ukv](https://unum.cloud/UKV).
-* To contribute to the development, [check the `src/`](https://github.com/unum-cloud/UKV/blob/main/src).
+* To read the documentation, [check unum.cloud/ukv](https://unum.cloud/ukv).
+* To contribute to the development, [check the `src/`](https://github.com/unum-cloud/ukv/blob/main/src).
 
-[c-example]: https://github.com/unum-cloud/UKV/blob/main/tests/compilation.cpp
-[cpp-example]: https://github.com/unum-cloud/UKV/blob/main/tests/compilation.cpp
+[c-example]: https://github.com/unum-cloud/ukv/blob/main/tests/compilation.cpp
+[cpp-example]: https://github.com/unum-cloud/ukv/blob/main/tests/compilation.cpp

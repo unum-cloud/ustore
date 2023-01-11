@@ -4,7 +4,7 @@ When contributing to the development of UKV, please first discuss the change you
 
 ## Starting with Issues
 
-Start contributing by adding new issue or continuing an [existing](https://github.com/unum-cloud/UKV/issues) one.
+Start contributing by adding new issue or continuing an [existing](https://github.com/unum-cloud/ukv/issues) one.
 To create an effective and high quality ticket, try to add the following information:
 
 * Steps to reproduce the issue, or a minimal test case.

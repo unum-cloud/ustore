@@ -51,13 +51,13 @@ GoLang
 **UKV is an open standard** for a NoSQL binary database interface, focusing on "Create, Read, Update, Delete" operations, or CRUD for short.
 It is defined as a [few isolated C headers][ukv-c-headers], and comes with numerous backend [engines](#engines), supporting various data [modalities](#modalities), and an ecosystem of [frontends](#frontends) to access the data.
 
-![UKV: Small Map](https://github.com/unum-cloud/UKV/raw/main/assets/charts/Intro.png)
+![UKV: Small Map](https://github.com/unum-cloud/ukv/raw/main/assets/charts/Intro.png)
 
 It can easily be expanded to support alternative underlying Key-Value Stores (KVS), embedded, standalone, or sharded, such as [Redis][redis].
 In the same way, you can add SDKs for other high-level languages or support for data types specific to your application that we haven't considered.
 This gives you the flexibility to iterate on different parts of this modular data lake without changing the business logic of your application, decoupling it from the underlying storage technology.
 
-![Documents Processing Performance Chart for UKV and MongoDB](https://github.com/unum-cloud/UKV/raw/main/assets/charts/PerformanceDocs.png)
+![Documents Processing Performance Chart for UKV and MongoDB](https://github.com/unum-cloud/ukv/raw/main/assets/charts/PerformanceDocs.png)
 
 **Flexibility is essential, but so is performance**.
 We prefer to avoid dynamic memory allocations across all modalities and prefer libraries that share that mindset.
@@ -65,7 +65,7 @@ For instance, the reference implementation of Document collections uses `simdjso
 Even such a surprisingly obvious combination often outperforms commercial DBMS products.
 The upcoming UDisk-based version obliterates them.
 
-![Binary Processing Performance Chart for UKV and MongoDB](https://github.com/unum-cloud/UKV/raw/main/assets/charts/PerformanceBinary.png)
+![Binary Processing Performance Chart for UKV and MongoDB](https://github.com/unum-cloud/ukv/raw/main/assets/charts/PerformanceBinary.png)
 
 Modern persistent IO on high-end servers can exceed 120 GB/s per socket when built on user-space drivers like [SPDK][spdk].
 This is close to the real-world throughput of eight-channel DDR4 memory.
@@ -188,7 +188,7 @@ First, the Engine, being a Key-Value Store for the serialized representations.
 Second, implementations of Modalities, being various serialization and indexing approaches for structured data.
 Third, a Distribution form, such as the implementation of some web-protocol for communication with the outside world.
 
-![UKV: Backend](https://github.com/unum-cloud/UKV/raw/main/assets/charts/Backend.png)
+![UKV: Backend](https://github.com/unum-cloud/ukv/raw/main/assets/charts/Backend.png)
 
 ### Engines
 
@@ -247,7 +247,7 @@ UKV for Python and for C++ look very different.
 Our Python SDK mimics other Python libraries - [Pandas][pandas] and [NetworkX][networkx].
 Similarly, C++ library provides the interface C++ developers expect.
 
-![UKV: Frontends](https://github.com/unum-cloud/UKV/raw/main/assets/charts/Frontend.png)
+![UKV: Frontends](https://github.com/unum-cloud/ukv/raw/main/assets/charts/Frontend.png)
 
 As we know, people use different languages for different purposes.
 Some C-level functionality isn't implemented for some languages.
@@ -267,7 +267,7 @@ Either because there was no demand for it, or as we haven't gotten to it yet.
 Some frontends here have entire ecosystems around them!
 [Apache Arrow Flight][flight] API, for instance, has its own bindings for  C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
 
-![UKV: Frontends](https://github.com/unum-cloud/UKV/raw/main/assets/charts/Arrow.png)
+![UKV: Frontends](https://github.com/unum-cloud/ukv/raw/main/assets/charts/Arrow.png)
 
 ## Documentation
 
@@ -289,7 +289,7 @@ It may require installing Arrow separately, if you want client-server communicat
 ```cmake
 FetchContent_Declare(
     ukv
-    GIT_REPOSITORY https://github.com/unum-cloud/UKV.git
+    GIT_REPOSITORY https://github.com/unum-cloud/ukv.git
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(ukv)
@@ -423,7 +423,7 @@ Thank you!
 [ukv-acid]: https://unum.cloud/ukv/c#acid-transactions
 [ukv-vs-rocks]: https://unum.cloud/ukv/related#leveldb-rocksdb
 [ukv-vs-sql]: https://unum.cloud/ukv/related#sql-mql-cypher
-[ukv-c-headers]: https://github.com/unum-cloud/UKV/tree/main/include/ukv
+[ukv-c-headers]: https://github.com/unum-cloud/ukv/tree/main/include/ukv
 [ukv-roadmap]: https://github.com/orgs/unum-cloud/projects/2
 [ukv-compression]: https://github.com/unum-cloud/ukv/discussions/232
 [ukv-ttl]: https://github.com/unum-cloud/ukv/discussions/230
