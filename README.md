@@ -1,6 +1,6 @@
 <h1 align="center">Universal Keys & Values</h1>
 <h3 align="center">
-Binary Interface Standard for Database Management<br/>
+Open Binary Interface for NoSQL Database Management<br/>
 Backed by Open-Source and Proprietary Implementations<br/>
 </h3>
 
