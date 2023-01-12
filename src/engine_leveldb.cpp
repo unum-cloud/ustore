@@ -324,7 +324,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
-        if (snap.snapshot)
+        if (c.snapshot)
             options.snapshot = snap.snapshot;
 
         std::string value_buffer;
