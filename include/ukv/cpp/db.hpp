@@ -291,6 +291,21 @@ class database_t : public std::enable_shared_from_this<database_t> {
             return context_t {db_, raw};
     }
 
+    expected_gt<context_t> snapshot() noexcept {
+        status_t status;
+        ukv_snapshot_t raw = nullptr;
+        ukv_snapshot_create_t snap_create {
+            .db = db_,
+            .error = status.member_ptr(),
+            .snapshot = &raw,
+        };
+        ukv_snapshot_create(&snap_create);
+        if (!status)
+            return {std::move(status), context_t {db_, nullptr}};
+        else
+            return context_t {db_, raw};
+    }
+
     template <typename collection_at = blobs_collection_t>
     collection_at main() noexcept {
         return collection_at {db_, ukv_collection_main_k};
