@@ -68,7 +68,7 @@ class ConanUKV(ConanFile):
         # Larger projects like UKV or Boost would have a lot of parts,
         # but it is recommended to ship one library per component
         # https://docs.conan.io/en/1.26/creating_packages/package_information.html#using-components
-        self.cpp_info.name = 'UKV'
+        self.cpp_info.name = 'ukv'
         self.cpp_info.includedirs = ['include/']
         self.cpp_info.components['umem'].libs = ['libukv_embedded_umem']
         self.cpp_info.components['leveldb'].libs = ['libukv_embedded_leveldb']
