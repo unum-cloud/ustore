@@ -44,7 +44,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "------ \e[92mPython Published!\e[0m ------"
 fi
 
-# Build and Test Python
+# Build and Test Java
 echo -e "------ \e[93mBuild and Test Java\e[0m ------"
 export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
 bash java/pack.sh
