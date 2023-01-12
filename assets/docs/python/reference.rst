@@ -1,10 +1,6 @@
 API Referance
 ==============
 
-=========
-UMEM
-=========
-
-.. automodule:: ukv.umem
+.. automodule:: ukv.rocksdb
     :members:
     :undoc-members:
