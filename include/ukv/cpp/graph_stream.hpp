@@ -99,7 +99,7 @@ class graph_stream_t {
 
     status_t advance() noexcept {
 
-        if (fetched_offset_ >= fetched_edges_.size()) {
+        if (fetched_offset_ >= fetched_edges_.size() - 1) {
             auto status = vertex_stream_.seek_to_next_batch();
             if (!status)
                 return status;
