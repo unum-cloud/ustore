@@ -212,11 +212,13 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
         return;
 
     ukv_snapshot_drop_t& c = *c_ptr;
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    rocks_snapshot_t& snap = **reinterpret_cast<rocks_snapshot_t**>(c.snapshot);
+    if (!c.snapshot)
+        return;
 
-    if (snap.snapshot)
-        db.native->ReleaseSnapshot(snap.snapshot);
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
+
+    db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
     delete &snap;
 }
@@ -547,6 +549,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     return_if_error_m(c.error);
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
     rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};

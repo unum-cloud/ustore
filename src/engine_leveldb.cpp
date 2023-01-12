@@ -192,11 +192,13 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
         return;
 
     ukv_snapshot_drop_t& c = *c_ptr;
+    if (!c.snapshot)
+        return;
+
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
 
-    if (snap.snapshot)
-        db.ReleaseSnapshot(snap.snapshot);
+    db.ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
     delete &snap;
 }
