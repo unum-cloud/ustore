@@ -1,4 +1,5 @@
 import random
+import numpy as np
 
 
 def best_partition(graph, max_community_size=100, min_modularity_growth=0.0000001):
@@ -15,13 +16,13 @@ def best_partition(graph, max_community_size=100, min_modularity_growth=0.000000
     for node in graph.nodes():
         degrees[node] = degreview[node]
         partition[node] = random.randint(0, max_community_size-1)
-        node_com_degrees[node] = [0] * max_community_size
+        node_com_degrees[node] = np.zeros((max_community_size,), dtype=int)
     com_tot_degree = degrees.copy()
 
     modified = True
     while modified:
         for node in node_com_degrees.keys():
-            node_com_degrees[node] = [0] * max_community_size
+            node_com_degrees[node] = np.zeros((max_community_size,), dtype=int)
 
         links = 0
         for node, neighbor in graph.edges():
