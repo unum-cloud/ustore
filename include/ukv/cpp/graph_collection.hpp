@@ -373,11 +373,12 @@ class graph_collection_t {
         return strided_range_gt<ukv_key_t> {maybe->source_ids};
     }
 
-    expected_gt<strided_range_gt<ukv_key_t>> neighbors(ukv_key_t vertex) noexcept {
+    expected_gt<strided_range_gt<ukv_key_t>> neighbors(ukv_key_t vertex,
+                                                       ukv_vertex_role_t role = ukv_vertex_role_any_k) noexcept {
         // Retrieving neighbors in directed graphs is trickier than just `successors` or `predecessors`.
         // We are receiving an adjacency list, where both incoming an edges exist.
         // So the stride/offset is not uniform across the entire list.
-        auto maybe = edges(vertex, ukv_vertex_role_any_k);
+        auto maybe = edges(vertex, role);
         if (!maybe)
             return maybe.release_status();
 
