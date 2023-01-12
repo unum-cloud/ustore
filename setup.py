@@ -33,7 +33,7 @@ class CMakeBuild(build_ext):
         if not extdir.endswith(os.path.sep):
             extdir += os.path.sep
 
-        if "PYTHON_DEBUG" in os.environ:
+        if 'PYTHON_DEBUG' in os.environ:
             os.makedirs(extdir, exist_ok=True)
             copy_tree("./build/lib/", extdir)
             return
@@ -85,7 +85,7 @@ setup(
 
     author='Ashot Vardanian',
     author_email='info@unum.cloud',
-    url='https://github.com/unum-cloud/UKV',
+    url='https://github.com/unum-cloud/ukv',
     description='Python bindings for Unum\'s Universal Key-Value store.',
     long_description=long_description,
     long_description_content_type='text/markdown',
