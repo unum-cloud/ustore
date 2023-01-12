@@ -227,6 +227,7 @@ void check_binary_collection(blobs_collection_t& collection) {
     for (; expected_it != triplet.keys.end(); ++present_it, ++expected_it) {
         EXPECT_EQ(*expected_it, *present_it);
     }
+    ++present_it;
     EXPECT_TRUE(present_it.is_end());
 
     // Remove all of the values and check that they are missing
@@ -476,6 +477,29 @@ TEST(db, clear_values) {
     check_length(collection_ref, 0);
 }
 
+TEST(db, scan) {
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    blobs_collection_t collection = db.main();
+
+    constexpr std::size_t keys_size = 1000;
+    std::array<ukv_key_t, keys_size> keys;
+    std::iota(std::begin(keys), std::end(keys), 0);
+    auto ref = collection[keys];
+    value_view_t value("value");
+    EXPECT_TRUE(ref.assign(value));
+    keys_stream_t stream(db, collection, 256);
+
+    EXPECT_TRUE(stream.seek_to_first());
+    ukv_key_t key = 0;
+    while (!stream.is_end()) {
+        EXPECT_EQ(stream.key(), key++);
+        ++stream;
+    }
+    EXPECT_EQ(key, keys_size);
+}
+
 /**
  * Ordered batched scan over the main collection.
  */
@@ -491,18 +515,21 @@ TEST(db, batch_scan) {
     auto ref = collection[keys];
     value_view_t value("value");
     EXPECT_TRUE(ref.assign(value));
-
-    keys_range_t present_keys = collection.keys();
     keys_stream_t stream(db, collection, 256);
+
     EXPECT_TRUE(stream.seek_to_first());
     auto batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
+    for (ukv_key_t i = 0; i != 256; ++i)
+        EXPECT_EQ(batch[i], i);
 
     EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
+    for (ukv_key_t i = 0; i != 256; ++i)
+        EXPECT_EQ(batch[i], i + 256);
 
     EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
