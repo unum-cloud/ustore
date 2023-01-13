@@ -238,7 +238,7 @@ static void docs_sample_blobs(bm::State& state) {
         ukv_byte_t* values = nullptr;
 
         status_t status;
-        ukv_read_t read;
+        ukv_read_t read {};
         read.db = db;
         read.error = status.member_ptr();
         read.arena = arena.member_ptr();
@@ -272,7 +272,7 @@ static void docs_sample_objects(bm::State& state) {
         ukv_byte_t* values = nullptr;
 
         status_t status;
-        ukv_docs_read_t docs_read;
+        ukv_docs_read_t docs_read {};
         docs_read.db = db;
         docs_read.error = status.member_ptr();
         docs_read.arena = arena.member_ptr();
@@ -306,7 +306,7 @@ static void docs_sample_field(bm::State& state) {
         ukv_byte_t* values = nullptr;
 
         status_t status;
-        ukv_docs_read_t docs_read;
+        ukv_docs_read_t docs_read {};
         docs_read.db = db;
         docs_read.error = status.member_ptr();
         docs_read.arena = arena.member_ptr();
@@ -351,7 +351,7 @@ static void docs_sample_table(bm::State& state) {
         ukv_byte_t* strings = nullptr;
 
         status_t status;
-        ukv_docs_gather_t docs_gather;
+        ukv_docs_gather_t docs_gather {};
         docs_gather.db = db;
         docs_gather.error = status.member_ptr();
         docs_gather.arena = arena.member_ptr();
@@ -409,7 +409,7 @@ static void graph_traverse_two_hops(bm::State& state) {
         ukv_key_t* ids_in_edges = nullptr;
 
         status_t status;
-        ukv_graph_find_edges_t graph_find_edges_first;
+        ukv_graph_find_edges_t graph_find_edges_first {};
         graph_find_edges_first.db = db;
         graph_find_edges_first.error = status.member_ptr();
         graph_find_edges_first.arena = arena.member_ptr();
@@ -434,7 +434,7 @@ static void graph_traverse_two_hops(bm::State& state) {
             ids_in_edges[i * 2] = ids_in_edges[i * 3], ids_in_edges[i * 2 + 1] = ids_in_edges[i * 3 + 1];
         auto unique_ids = sort_and_deduplicate(ids_in_edges, ids_in_edges + total_edges * 2);
 
-        ukv_graph_find_edges_t graph_find_edges_second;
+        ukv_graph_find_edges_t graph_find_edges_second {};
         graph_find_edges_second.db = db;
         graph_find_edges_second.error = status.member_ptr();
         graph_find_edges_second.arena = arena.member_ptr();
