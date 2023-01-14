@@ -27,6 +27,10 @@ for test in $(ls ./build_release/build/bin/*test_units*); do
 done
 echo -e "------ \e[92mTests Passing!\e[0m ------"
 
+# Push the tag
+git tag "v${version}"
+git push origin --tags
+
 # Build and Test Python
 pip install cibuildwheel twine
 echo -e "------ \e[93mBuild and Test Python\e[0m ------"

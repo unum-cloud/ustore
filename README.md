@@ -107,6 +107,7 @@ That is how UKV began, but hopefully, it can grow further, advancing the storage
 <a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/stars/unum-cloud/ukv?"/></a>
 &nbsp;&nbsp;
 <a href="#"><img src="https://img.shields.io/github/workflow/status/unum-cloud/ukv/Build"/></a>
+<a href="https://zenodo.org/badge/latestdoi/502647695"><img src="https://zenodo.org/badge/502647695.svg" alt="DOI"></a>
 
 </p>
 
