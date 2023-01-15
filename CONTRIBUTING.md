@@ -75,3 +75,8 @@ Which is a well known and widely adopted set.
 1. Ensure your code compiles. Run `cmake . && make` before creating the pull request.
 2. Feel free to open PR Drafts for larger changes, if you want a more active participation from maintainers and the community.
 3. Merge into `dev` branch. The `main` branch is protected.
+
+
+## Implementing a new Language Binding
+
+## Implementing a new Engine
