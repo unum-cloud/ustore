@@ -96,19 +96,19 @@ That is how UKV began, but hopefully, it can grow further, advancing the storage
 ---
 
 <p align="center">
-<a href="https://twitter.com/unum_cloud"><img src="https://img.shields.io/badge/twitter-follow_us-1d9bf0.svg?"/></a>
+<a href="https://discord.gg/S6bYJsfFg9"><img src="https://img.shields.io/discord/1063947616615923875?label=discord"></a>
 &nbsp;&nbsp;
 <a href="https://www.linkedin.com/company/unum-cloud/"><img src="https://img.shields.io/badge/linkedin-connect_with_us-0a66c2.svg?"/></a>
 &nbsp;&nbsp;
-<a href="https://t.me/unum_ukv"><img src="https://img.shields.io/badge/telegram-ask_anything-0a66c2?logo=telegram"/></a>
+<a href="https://twitter.com/unum_cloud"><img src="https://img.shields.io/badge/twitter-follow_us-1d9bf0.svg?"/></a>
+&nbsp;&nbsp;
+<a href="https://zenodo.org/badge/latestdoi/502647695"><img src="https://zenodo.org/badge/502647695.svg" alt="DOI"></a>
 &nbsp;&nbsp;
 <a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/issues-closed-raw/unum-cloud/ukv?"/></a>
 &nbsp;&nbsp;
 <a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/stars/unum-cloud/ukv?"/></a>
 &nbsp;&nbsp;
 <a href="#"><img src="https://img.shields.io/github/workflow/status/unum-cloud/ukv/Build"/></a>
-<a href="https://zenodo.org/badge/latestdoi/502647695"><img src="https://zenodo.org/badge/502647695.svg" alt="DOI"></a>
-
 </p>
 
 ## Basic Use Cases
@@ -407,6 +407,8 @@ Thank you!
 - Does UKV support Time-To-Live? [Answered][ukv-ttl]
 - Does UKV support compression? [Answered][ukv-compression]
 - Does UKV support queues? [Anwered][ukv-queues]
+- How can I add Bindings for language X? [Answered][ukv-new-bindings]
+- How can I add database X as an Engine? [Answered][ukv-new-engine]
 
 [ukv-c-tutor]: https://unum.cloud/ukv/c
 [ukv-cpp-tutor]: https://unum.cloud/ukv/cpp
@@ -429,6 +431,8 @@ Thank you!
 [ukv-compression]: https://github.com/unum-cloud/ukv/discussions/232
 [ukv-ttl]: https://github.com/unum-cloud/ukv/discussions/230
 [ukv-queues]: https://github.com/unum-cloud/ukv/discussions/228
+[ukv-new-bindings]: https://github.com/unum-cloud/ukv/c#implementing-a-new-language-binding
+[ukv-new-engine]: https://github.com/unum-cloud/ukv/c#implementing-a-new-engine
 
 [ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
 [ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
