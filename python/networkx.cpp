@@ -176,7 +176,7 @@ void ukv::wrap_networkx(py::module& m) {
 
     // Reporting nodes edges and neighbors
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#reporting-nodes-edges-and-neighbors
-    g.def(
+    g.def_property_readonly(
         "nodes",
         [](py_graph_t& g) {
             blobs_range_t members(g.index.db(), g.index.txn(), g.index);
@@ -203,7 +203,8 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("n"),
         "Returns True if the graph contains the node n.");
 
-    g.def("edges", [](py_graph_t& g) { return g.ref().edges(ukv_vertex_source_k).throw_or_release(); });
+    g.def_property_readonly("edges",
+                            [](py_graph_t& g) { return g.ref().edges(ukv_vertex_source_k).throw_or_release(); });
 
     g.def(
         "has_edge",
