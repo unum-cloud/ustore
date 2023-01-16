@@ -121,7 +121,8 @@ class arrow_visitor_t {
     arrow_visitor_t(std::string& json) : json(json) {}
 
     arrow::Status Visit(arrow::NullArray const& arr) {
-        return arrow::Status(arrow::StatusCode::TypeError, "Not supported type");
+        fmt::format_to(std::back_inserter(json), "\"\",");
+        return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::BooleanArray const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::Int8Array const& arr) { return format(arr, idx); }
@@ -201,6 +202,14 @@ class arrow_visitor_t {
     size_t idx = 0;
 
   private:
+    inline static constexpr char int_to_hex_k[16] = {
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
+    inline void char_to_hex(uint8_t const c, uint8_t* hex) noexcept {
+        hex[0] = int_to_hex_k[c >> 4];
+        hex[1] = int_to_hex_k[c & 0x0F];
+    }
+
     template <typename at>
     arrow::Status format(at const& cont, size_t idx) {
         fmt::format_to(std::back_inserter(json), "{},", cont.Value(idx));
@@ -209,10 +218,57 @@ class arrow_visitor_t {
 
     template <typename at>
     arrow::Status format_bin_str(at const& cont, size_t idx) {
-        auto str = std::string(cont.Value(idx).data(), cont.Value(idx).size());
-        if (str.back() == '\n')
-            str.pop_back();
-        fmt::format_to(std::back_inserter(json), "\"{}\",", str.data());
+        auto str = cont.Value(idx);
+        std::string output;
+        output.reserve(str.size());
+        for (std::size_t i = 0; i != str.size(); ++i) {
+            uint8_t c = str[i];
+            switch (c) {
+            case 34: output += "\\\""; break;
+            case 92: output += "\\\\"; break;
+            case 8: output += "\\b"; break;
+            case 9: output += "\\t"; break;
+            case 10: output += "\\n"; break;
+            case 12: output += "\\f"; break;
+            case 13: output += "\\r"; break;
+            case 0:
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+            case 6:
+            case 7:
+            case 11:
+            case 14:
+            case 15:
+            case 16:
+            case 17:
+            case 18:
+            case 19:
+            case 20:
+            case 21:
+            case 22:
+            case 23:
+            case 24:
+            case 25:
+            case 26:
+            case 27:
+            case 28:
+            case 29:
+            case 30:
+            case 31: {
+                output += "\\u0000";
+                auto target_ptr = reinterpret_cast<uint8_t*>(output.data() + output.size() - 2);
+                char_to_hex(c, target_ptr);
+                break;
+            }
+            default: output += c;
+            }
+        }
+        if (output.back() == '\n')
+            output.pop_back();
+        fmt::format_to(std::back_inserter(json), "\"{}\",", output.data());
         return arrow::Status::OK();
     }
 };
@@ -235,6 +291,29 @@ class string_iterator_t {
     char* ptr_;
     size_t length_;
 };
+
+bool strcmp_(char const* lhs, char const* rhs) {
+    return std::strcmp(lhs, rhs) == 0;
+}
+
+bool strncmp_(char const* lhs, char const* rhs, size_t sz) {
+    return std::strncmp(lhs, rhs, sz) == 0;
+}
+
+bool chrcmp_(const char lhs, const char rhs) {
+    return lhs == rhs;
+}
+
+bool is_json_ptr(ukv_str_view_t field) {
+    return chrcmp_(field[0], '/');
+}
+
+void generate_uuid(char* out, size_t sz) {
+    uuid_t uuid;
+    uuid_generate(uuid);
+    uuid_unparse(uuid, out);
+    out[sz - 1] = '\0'; // end of string
+}
 
 template <typename imp_exp_at>
 bool validate_graph_fields(imp_exp_at& imp_exp, bool is_exp = false) {
@@ -306,50 +385,46 @@ bool validate_graph_fields(imp_exp_at& imp_exp, bool is_exp = false) {
 }
 
 template <typename imp_exp_at>
-bool validate_docs_fields(imp_exp_at& imp_exp) {
+void validate_docs_fields(imp_exp_at& imp_exp) {
     if (imp_exp.fields_count == 0 && imp_exp.fields == nullptr)
-        return true;
-    else if (imp_exp.fields_count == 0 && imp_exp.fields != nullptr)
-        return false;
-    else if (imp_exp.fields_count != 0 && imp_exp.fields == nullptr)
-        return false;
-    else if (imp_exp.fields_count != 0 && imp_exp.fields != nullptr && imp_exp.fields_stride == 0)
-        return false;
+        return;
+    return_error_if_m(!(imp_exp.fields_count == 0 && imp_exp.fields != nullptr),
+                      imp_exp.error,
+                      uninitialized_state_k,
+                      "Fields count must be initialized");
+    return_error_if_m(!(imp_exp.fields_count != 0 && imp_exp.fields == nullptr),
+                      imp_exp.error,
+                      uninitialized_state_k,
+                      "Fields must be initialized");
+    return_error_if_m(!(imp_exp.fields_count != 0 && imp_exp.fields != nullptr && imp_exp.fields_stride == 0),
+                      imp_exp.error,
+                      uninitialized_state_k,
+                      "Fields stride must be initialized");
 
     fields_t fields {imp_exp.fields, imp_exp.fields_stride};
     for (size_t idx = 0; idx < imp_exp.fields_count; ++idx) {
-        if (fields[idx] == nullptr)
-            return false;
+        return_error_if_m(fields[idx] != nullptr, imp_exp.error, 0, "Invalid field!");
     }
-    return true;
 }
 
-bool strcmp_(char const* lhs, char const* rhs) {
-    return std::strcmp(lhs, rhs) == 0;
-}
+void check_for_id_field(ukv_docs_import_t& imp) {
+    if (imp.fields == nullptr)
+        return;
 
-bool strncmp_(char const* lhs, char const* rhs, size_t sz) {
-    return std::strncmp(lhs, rhs, sz) == 0;
-}
-
-bool chrcmp_(const char lhs, const char rhs) {
-    return lhs == rhs;
-}
-
-bool is_json_ptr(ukv_str_view_t field) {
-    return chrcmp_(field[0], '/');
-}
-
-void generate_uuid(char* out, size_t sz) {
-    uuid_t uuid;
-    uuid_generate(uuid);
-    uuid_unparse(uuid, out);
-    out[sz - 1] = '\0'; // end of string
+    bool state = false;
+    fields_t fields {imp.fields, imp.fields_stride};
+    for (size_t idx = 0; idx < imp.fields_count; ++idx) {
+        if (strcmp_(fields[idx], imp.id_field))
+            state = true;
+    }
+    return_error_if_m(state, imp.error, 0, "Fields must contain id_field");
 }
 
 template <typename ukv_docs_imp_exp_t>
 fields_t prepare_fields(ukv_docs_imp_exp_t& c, linked_memory_lock_t& arena) {
 
+    if (c.fields_count == 1)
+        return {c.fields, c.fields_stride};
     fields_t fields {c.fields, c.fields_stride};
     stl_vector_t<ukv_str_view_t> prepared_fields(alloc_t<ukv_str_view_t>(arena, c.error));
     prepared_fields.reserve(c.fields_count);
@@ -424,6 +499,13 @@ void get_value(simdjson::ondemand::object& data, ukv_str_view_t json_field, ukv_
             "{}{},",
             json_field,
             bool(get_result().value()) ? "true" : "false");
+        break;
+    case simdjson::ondemand::json_type::null:
+        fmt::format_to( //
+            std::back_inserter(json),
+            "{}{},",
+            json_field,
+            "null");
         break;
     default: break;
     }
@@ -1443,7 +1525,10 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
     ukv_docs_import_t& c = *c_ptr;
 
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_error_if_m(validate_docs_fields(c), c.error, 0, "Invalid fields");
+    validate_docs_fields(c);
+    return_if_error_m(c.error);
+    check_for_id_field(c);
+    return_if_error_m(c.error);
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
     return_error_if_m(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
     return_error_if_m(c.id_field, c.error, uninitialized_state_k, "id_field must be initialized");
@@ -1457,6 +1542,7 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
             import_parquet(c, table);
         else if (ext == ".csv")
             import_csv(c, table);
+        return_if_error_m(c.error);
         parse_arrow_table(c, table);
     }
 }
@@ -1466,7 +1552,8 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     ukv_docs_export_t& c = *c_ptr;
 
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_error_if_m(validate_docs_fields(c), c.error, 0, "Invalid fields");
+    validate_docs_fields(c);
+    return_if_error_m(c.error);
     return_error_if_m(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
 
@@ -1484,7 +1571,7 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     ptr_range_gt<ukv_key_t> keys_vec;
     arrow::StringBuilder string_builder;
     arrow::NumericBuilder<arrow::Int64Type> int_builder;
-    
+
     keys_stream_t stream(c.db, c.collection, task_count);
     auto arena = linked_memory(c.arena, c.options, c.error);
 
