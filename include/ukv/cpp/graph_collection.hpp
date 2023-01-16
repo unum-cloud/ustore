@@ -253,8 +253,8 @@ class graph_collection_t {
         ukv_vertex_role_t role = ukv_vertex_role_any_k,
         std::size_t vertices_read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
 
-        graph_stream_t b {db_, collection_, vertices_read_ahead, transaction_, role};
-        graph_stream_t e {db_, collection_, vertices_read_ahead, transaction_, role};
+        graph_stream_t b {db_, collection_, transaction_, vertices_read_ahead, role};
+        graph_stream_t e {db_, collection_, transaction_, vertices_read_ahead, role};
         status_t status = b.seek_to_first();
         if (!status)
             return status;

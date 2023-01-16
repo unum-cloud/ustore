@@ -84,7 +84,7 @@ setup(
 
     author='Ashot Vardanian',
     author_email='info@unum.cloud',
-    url='https://github.com/unum-cloud/UKV',
+    url='https://github.com/unum-cloud/ukv',
     description='Python bindings for Unum\'s Universal Key-Value store.',
     long_description=long_description,
     long_description_content_type='text/markdown',

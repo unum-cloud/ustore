@@ -2,7 +2,7 @@
  * @brief Unlike @see "pybind11/nlohmann.hpp" provides a more fine-grained
  * control over how the conversion is implemented.
  *
- * TODO: Revert to this: https://github.com/ashvardanian/UKV/commit/6d6df13188efb0ad12d67c96ce2904fda6c838d0
+ * TODO: Revert to this: https://github.com/ashvardanian/ukv/commit/6d6df13188efb0ad12d67c96ce2904fda6c838d0
  */
 #pragma once
 #include <fmt/core.h>
