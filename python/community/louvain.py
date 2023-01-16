@@ -1,57 +1,75 @@
-import random
-import numpy as np
+from typing import Mapping, Tuple
 
 
-def best_partition(graph, max_community_size=100, min_modularity_growth=0.0000001):
+def node_affiliation(
+        graph,
+        partition: Mapping[int, int],
+        node: int, node_community: int, neighbor_community: int) -> Tuple[int, int]:
+    """
+    Simultaneously computes the number of edges between `node` and
+    members of `node_community` as well as `neighbor_community`.
+    """
+    node_community_degree = 0
+    neighbor_community_degree = 0
+    for neighbor in graph.neighbors(node):
+        if (partition[neighbor] == node_community):
+            node_community_degree += 1
+        elif (partition[neighbor] == neighbor_community):
+            neighbor_community_degree += 1
+    return (node_community_degree, neighbor_community_degree)
 
-    if (max_community_size > graph.number_of_nodes()):
-        max_community_size = graph.number_of_nodes()
 
+def try_moving(
+        graph,
+        partition: Mapping[int, int], community_degrees: Mapping[int, int], count_edges: int,
+        node: int, node_degree: int, neighbor: int, min_modularity_growth: float) -> bool:
+    """
+    Attempts to move `node` to the parent community of its `neighbor`.
+    """
+
+    node_community = partition[node]
+    neighbor_community = partition[neighbor]
+
+    node_com_tot_degree = community_degrees[node_community]
+    neighbor_com_tot_degree = community_degrees[neighbor_community]
+
+    degree_in_node_com, degree_in_neighbor_com = node_affiliation(
+        graph, partition, node, node_community, neighbor_community)
+
+    delta_modularity = (1 / count_edges) * (degree_in_neighbor_com - degree_in_node_com) - \
+        (node_degree / (2 * (count_edges**2))) * \
+        (node_degree + neighbor_com_tot_degree - node_com_tot_degree)
+
+    if delta_modularity > min_modularity_growth:
+        community_degrees[node_community] -= (node_degree - degree_in_node_com)
+        community_degrees[neighbor_community] += (
+            node_degree - degree_in_neighbor_com)
+        partition[node] = partition[neighbor]
+        return True
+
+    return False
+
+
+def best_partition(graph, min_modularity_growth: float = 0.0000001) -> Mapping[int, int]:
     partition = {}
     degrees = {}
-    com_tot_degree = {}
-    node_com_degrees = {}
-    degreview = graph.degree
+    # For every partition, stores the accumulated number of degrees of all of its members
+    community_degrees = {}
 
-    for node in graph.nodes():
-        degrees[node] = degreview[node]
-        partition[node] = random.randint(0, max_community_size-1)
-        node_com_degrees[node] = np.zeros((max_community_size,), dtype=int)
-    com_tot_degree = degrees.copy()
+    for node in graph.nodes:
+        degrees[node] = graph.degree[node]
+        partition[node] = node
+    community_degrees = degrees.copy()
+    count_edges = graph.number_of_edges()
 
-    modified = True
+    modified = 1
     while modified:
-        for node in node_com_degrees.keys():
-            node_com_degrees[node] = np.zeros((max_community_size,), dtype=int)
-
-        links = 0
-        for node, neighbor in graph.edges():
-            links += 1
-            node_com_degrees[node][partition[neighbor]] += 1
-            node_com_degrees[neighbor][partition[node]] += 1
-
-        modified = False
-        for node, neighbor in graph.edges():
-            if partition[node] == partition[neighbor]:
-                continue
-
-            community_node = partition[node]
-            community_neighbor = partition[neighbor]
-            deg = degrees[node]
-            node_com_tot_degree = com_tot_degree[community_node]
-            neighbor_com_tot_degree = com_tot_degree[community_neighbor]
-            degree_in_node_com = node_com_degrees[node][community_node]
-            degree_in_neighbor_com = node_com_degrees[node][community_neighbor]
-
-            delta_modularity = (1/links) * (degree_in_neighbor_com-degree_in_node_com) - \
-                (deg/(2*(links**2))) * \
-                (deg + neighbor_com_tot_degree - node_com_tot_degree)
-
-            if delta_modularity > min_modularity_growth:
-                com_tot_degree[community_node] -= (deg - degree_in_node_com)
-                com_tot_degree[community_neighbor] += (
-                    deg - degree_in_neighbor_com)
-                partition[node] = partition[neighbor]
-                modified = True
+        modified = 0
+        for v1, v2 in graph.edges:
+            if partition[v1] != partition[v2]:
+                modified += \
+                    try_moving(graph, partition, community_degrees, count_edges, v1, degrees[v1], v2, min_modularity_growth) or \
+                    try_moving(graph, partition, community_degrees,
+                               count_edges, v2, degrees[v2], v1, min_modularity_growth)
 
     return partition
