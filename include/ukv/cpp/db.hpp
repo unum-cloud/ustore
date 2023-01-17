@@ -317,7 +317,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
         if (!status)
             return {std::move(status), context_t {db_, nullptr}};
         else
-            return context_t {db_, raw};
+            return context_t {db_, nullptr, raw};
     }
 
     template <typename collection_at = blobs_collection_t>
