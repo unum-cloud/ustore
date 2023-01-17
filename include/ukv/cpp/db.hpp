@@ -53,8 +53,8 @@ class context_t : public std::enable_shared_from_this<context_t> {
         : db_(db), txn_(txn), snap_(snap), arena_(db) {}
     inline context_t(context_t const&) = delete;
     inline context_t(context_t&& other) noexcept
-        : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), arena_(std::exchange(other.arena_, {nullptr})) {}
-
+        : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), snap_(std::exchange(other.snap_, nullptr)),
+          arena_(std::exchange(other.arena_, {nullptr})) {}
     inline context_t& operator=(context_t&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(txn_, other.txn_);
