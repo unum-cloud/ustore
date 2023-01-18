@@ -1561,10 +1561,6 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     int pcn = strcmp_(ext, ".parquet") ? 0 : strcmp_(ext, ".csv") ? 1 : strcmp_(ext, ".ndjson") ? 2 : -1;
     return_error_if_m(!(pcn == -1), c.error, 0, "Not supported format");
 
-    ukv_length_t* offsets = nullptr;
-    ukv_length_t* lengths = nullptr;
-    ukv_size_t task_count = 4096;
-
     int handle = 0;
     parquet::StreamWriter os;
     ptr_range_gt<char*> docs_vec;
@@ -1572,6 +1568,7 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     arrow::StringBuilder string_builder;
     arrow::NumericBuilder<arrow::Int64Type> int_builder;
 
+    ukv_size_t task_count = 4096;
     keys_stream_t stream(c.db, c.collection, task_count);
     auto arena = linked_memory(c.arena, c.options, c.error);
 
@@ -1603,8 +1600,10 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     return_error_if_m(status, c.error, 0, "No batches in stream");
 
     while (!stream.is_end()) {
-        auto keys = stream.keys_batch();
         val_t values {nullptr, 0};
+        ukv_length_t* offsets = nullptr;
+        ukv_length_t* lengths = nullptr;
+        auto keys = stream.keys_batch();
 
         ukv_docs_read_t docs_read {
             .db = c.db,
