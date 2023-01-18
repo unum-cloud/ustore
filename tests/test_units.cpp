@@ -549,13 +549,13 @@ TEST(db, transaction_snapshot_isolation) {
     check_length(collection_ref, ukv_length_missing_k);
     round_trip(collection_ref, triplet);
 
-    transaction_t txn = *db.transact(true);
-    auto txn_ref = txn[triplet.keys];
-    check_equalities(txn_ref, triplet);
+    auto snap = *db.snapshot();
+    auto snap_ref = snap[triplet.keys];
+    check_equalities(snap_ref, triplet);
     round_trip(collection_ref, triplet_same_v);
 
     // Validate that values match
-    auto maybe_retrieved = txn_ref.value();
+    auto maybe_retrieved = snap_ref.value();
     auto const& retrieved = *maybe_retrieved;
     auto it = retrieved.begin();
     auto cont = triplet_same_v.contents_full();
@@ -569,8 +569,8 @@ TEST(db, transaction_snapshot_isolation) {
         EXPECT_NE(retrieved_view, expected_view);
     }
 
-    txn = *db.transact(true);
-    auto ref = txn[triplet_same_v.keys];
+    snap = *db.snapshot();
+    auto ref = snap[triplet_same_v.keys];
     round_trip(ref, triplet_same_v);
 }
 
