@@ -1255,7 +1255,7 @@ class UKVService : public arf::FlightServerBase {
     }
 };
 
-ar::Status run_server(ukv_str_view_t config, int port) {
+ar::Status run_server(ukv_str_view_t config, int port, bool quiet) {
 
     database_t db;
     db.open(config).throw_unhandled();
@@ -1264,7 +1264,8 @@ ar::Status run_server(ukv_str_view_t config, int port) {
     arf::FlightServerOptions options(server_location);
     auto server = std::make_unique<UKVService>(std::move(db));
     ARROW_RETURN_NOT_OK(server->Init(options));
-    std::printf("Listening on port: %i\n", server->port());
+    if (!quiet)
+        std::printf("Listening on port: %i\n", server->port());
     return server->Serve();
 }
 
@@ -1276,6 +1277,7 @@ int main(int argc, char* argv[]) {
 
     int port = 38709;
     std::string config;
+    bool quiet = false;
 
 #if defined(UKV_ENGINE_IS_LEVELDB)
     config = "/var/lib/ukv/leveldb/";
@@ -1287,12 +1289,13 @@ int main(int argc, char* argv[]) {
 
     auto cli = ( //
         option("-d", "--dir").set(config).doc("Path to primary directory, potentially containing a configuration file"),
-        option("-p", "--port").set(port).doc("Port to use for connection"));
+        option("-p", "--port").set(port).doc("Port to use for connection"),
+        option("-q", "--quiet").set(quiet).doc("Silence outputs"));
 
     if (!parse(argc, argv, cli)) {
         std::cerr << make_man_page(cli, argv[0]);
         exit(1);
     }
 
-    return run_server(config.c_str(), port).ok() ? EXIT_SUCCESS : EXIT_FAILURE;
+    return run_server(config.c_str(), port, quiet).ok() ? EXIT_SUCCESS : EXIT_FAILURE;
 }

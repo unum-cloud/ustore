@@ -32,8 +32,8 @@ You can obtain results for your hardware and your sample of Tweets using the fol
 cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DUKV_BUILD_BENCHMARKS=1 .. \
-    && make benchmark_twitter_ukv_embedded_umem \
-    && ./build/bin/benchmark_twitter_ukv_embedded_umem
+    && make bench_twitter_ukv_embedded_umem \
+    && ./build/bin/bench_twitter_ukv_embedded_umem
 ```
 
 We manually repeated this same benchmark for a few other DBMS brands.
