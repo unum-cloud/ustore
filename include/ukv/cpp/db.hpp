@@ -195,10 +195,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
      *                 long-running analytical tasks with strong consistency
      *                 requirements.
      */
-    status_t reset(bool snapshot = false) noexcept {
-        if (snapshot && !ukv_supports_snapshots_k)
-            return status_t::status_view("Snapshots not supported!");
-
+    status_t reset() noexcept {
         status_t status;
         ukv_transaction_init_t txn_init {
             .db = db_,
@@ -286,10 +283,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
             close();
     }
 
-    expected_gt<context_t> transact(bool snapshot = false) noexcept {
-        if (snapshot && !ukv_supports_snapshots_k)
-            return status_t::status_view("Snapshots not supported!");
-
+    expected_gt<context_t> transact() noexcept {
         status_t status;
         ukv_transaction_t raw = nullptr;
         ukv_transaction_init_t txn_init {

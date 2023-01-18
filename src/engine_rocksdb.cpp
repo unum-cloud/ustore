@@ -43,7 +43,7 @@ ukv_length_t const ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max
 ukv_key_t const ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 bool const ukv_supports_transactions_k = true;
 bool const ukv_supports_named_collections_k = true;
-bool const ukv_supports_snapshots_k = false;
+bool const ukv_supports_snapshots_k = true;
 
 using rocks_native_t = rocksdb::OptimisticTransactionDB;
 using rocks_status_t = rocksdb::Status;
