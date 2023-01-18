@@ -63,13 +63,13 @@
         },
         {
             "label": "Build Debug UMem Benchmark",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -B ./build_debug && make benchmark_twitter_ukv_embedded_umem -j8 --silent -C ./build_debug",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -B ./build_debug && make bench_twitter_ukv_embedded_umem -j8 --silent -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Debug RocksDB Benchmark",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make benchmark_twitter_ukv_embedded_rocksdb -j8 --silent -C ./build_debug",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make bench_twitter_ukv_embedded_rocksdb -j8 --silent -C ./build_debug",
             "args": [],
             "type": "shell"
         },
