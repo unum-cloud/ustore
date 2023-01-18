@@ -10,6 +10,7 @@ def node_affiliation(
     Simultaneously computes the number of edges between `node` and
     members of `node_community` as well as `neighbor_community`.
     """
+
     node_community_degree = 0
     neighbor_community_degree = 0
     if is_weighted:
@@ -111,6 +112,7 @@ def super_node_graph(graph, partition: Mapping[int, int], is_weighted: bool):
     """
     Create super node graph, where nodes are communities and edges are degrees between communities.
     """
+    
     G = nx.Graph()
     G.add_nodes_from(partition.values())
 
