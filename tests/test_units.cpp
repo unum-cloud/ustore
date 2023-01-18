@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <unistd.h>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -71,13 +72,33 @@ static char const* path() {
 #endif
 }
 
+#if defined(UKV_FLIGHT_CLIENT)
+static pid_t srv_id = -1;
+static std::string srv_path;
+#endif
+
 void clear_environment() {
+#if defined(UKV_FLIGHT_CLIENT)
+    if (srv_id > 0) {
+        kill(srv_id, SIGKILL);
+        waitpid(srv_id, nullptr, 0);
+    }
+
+    srv_id = fork();
+    if (srv_id == 0) {
+        usleep(1); // TODO Any statement is requiered to be run for successful `execl` run...
+        execl(srv_path.c_str(), srv_path.c_str(), "--quiet", (char*)(NULL));
+        exit(0);
+    }
+    usleep(100000); // 0.1 sec
+#endif
+
     namespace stdfs = std::filesystem;
     auto directory_str = path() ? std::string_view(path()) : "";
-    if (directory_str.empty())
-        return;
-    stdfs::remove_all(directory_str);
-    stdfs::create_directories(stdfs::path(directory_str).parent_path());
+    if (!directory_str.empty()) {
+        stdfs::remove_all(directory_str);
+        stdfs::create_directories(stdfs::path(directory_str).parent_path());
+    }
 }
 
 inline std::ostream& operator<<(std::ostream& os, collection_key_t obj) {
@@ -1973,6 +1994,12 @@ TEST(db, vectors) {
 }
 
 int main(int argc, char** argv) {
+
+#if defined(UKV_FLIGHT_CLIENT)
+    srv_path = argv[0];
+    srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ukv_flight_server_umem";
+#endif
+
     auto directory_str = path() ? std::string_view(path()) : "";
     if (directory_str.size())
         std::printf("Will work in directory: %s\n", directory_str.data());
@@ -1980,5 +2007,10 @@ int main(int argc, char** argv) {
         std::printf("Will work with default configuration\n");
 
     ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    int status = RUN_ALL_TESTS();
+#if defined(UKV_FLIGHT_CLIENT)
+    kill(srv_id, SIGKILL);
+    waitpid(srv_id, nullptr, 0);
+#endif
+    return status;
 }
