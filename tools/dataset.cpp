@@ -356,7 +356,7 @@ bool validate_graph_fields(imp_exp_at& imp_exp, bool is_exp = false) {
             return false;
         }
 
-        if (!imp_exp.edge_id_field) {
+        if (imp_exp.edge_id_field) {
             if (!check_first_char(imp_exp.edge_id_field[0])) {
                 *imp_exp.error = "(edge) field must start with A-Z, a-z, '_'";
                 return false;
@@ -373,7 +373,7 @@ bool validate_graph_fields(imp_exp_at& imp_exp, bool is_exp = false) {
             return false;
         }
 
-        if (!imp_exp.edge_id_field) {
+        if (imp_exp.edge_id_field) {
             if (!validate_field(imp_exp.edge_id_field)) {
                 *imp_exp.error = "(edge) field can contain A-Z, a-z, 0-9, ' ', '-', '_'";
                 return false;
