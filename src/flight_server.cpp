@@ -937,7 +937,6 @@ class UKVService : public arf::FlightServerBase {
                 std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
             else {
                 rounded_counts = arena.alloc<ukv_length_t>(1, 0);
-                rounded_counts[0] = 0;
                 result_length = 1;
             }
 
