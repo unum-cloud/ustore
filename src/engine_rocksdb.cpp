@@ -345,14 +345,15 @@ template <typename value_enumerator_at>
 void read_one( //
     rocks_db_t& db,
     rocks_txn_t* txn_ptr,
+    rocks_snapshot_t* snap_ptr,
     places_arg_t places,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
     ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
-    if (txn_ptr)
-        options.snapshot = txn_ptr->GetSnapshot();
+    if (snap_ptr)
+        options.snapshot = snap_ptr->snapshot;
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
 
@@ -384,14 +385,15 @@ template <typename value_enumerator_at>
 void read_many( //
     rocks_db_t& db,
     rocks_txn_t* txn_ptr,
+    rocks_snapshot_t* snap_ptr,
     places_arg_t places,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
     ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
-    if (txn_ptr)
-        options.snapshot = txn_ptr->GetSnapshot();
+    if (snap_ptr)
+        options.snapshot = snap_ptr->snapshot;
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
     std::vector<rocks_collection_t*> cols(places.count);
@@ -435,6 +437,7 @@ void ukv_read(ukv_read_t* c_ptr) {
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
@@ -464,8 +467,8 @@ void ukv_read(ukv_read_t* c_ptr) {
 
     safe_section("Reading from RocksDB", c.error, [&] {
         c.tasks_count == 1 //
-            ? read_one(db, &txn, places, c.options, data_enumerator, c.error)
-            : read_many(db, &txn, places, c.options, data_enumerator, c.error);
+            ? read_one(db, &txn, &snap, places, c.options, data_enumerator, c.error)
+            : read_many(db, &txn, &snap, places, c.options, data_enumerator, c.error);
         offs[places.count] = contents.size();
 
         if (needs_export)
