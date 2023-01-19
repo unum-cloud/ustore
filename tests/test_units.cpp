@@ -551,7 +551,7 @@ TEST(db, transaction_snapshot_isolation) {
 
     auto snap = *db.snapshot();
     auto snap_ref = snap[triplet.keys];
-    check_equalities(snap_ref, triplet);
+    round_trip(snap_ref, triplet);
     round_trip(collection_ref, triplet_same_v);
 
     // Validate that values match
