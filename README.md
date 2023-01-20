@@ -77,10 +77,10 @@ This gives you the flexibility to iterate on different parts of this modular dat
 ![Documents Processing Performance Chart for UKV and MongoDB](https://github.com/unum-cloud/ukv/raw/main/assets/charts/PerformanceDocs.png)
 
 **Flexibility is essential, but so is performance**.
-We prefer to avoid dynamic memory allocations across all modalities and prefer libraries that share that mindset.
+We prefer to avoid dynamic memory allocations across all modalities and choose libraries that share that mindset.
 For instance, the reference implementation of Document collections uses `simdjson` to read and `yyjson` to update docs, storing them in RocksDB and serving them through Apache Arrow Flight RPC.
 Even such a surprisingly obvious combination often outperforms commercial DBMS products.
-The upcoming UDisk-based version obliterates them.
+The UDisk-based version obliterates them.
 
 ![Binary Processing Performance Chart for UKV and MongoDB](https://github.com/unum-cloud/ukv/raw/main/assets/charts/PerformanceBinary.png)
 
