@@ -32,9 +32,9 @@
 
 #include "dataset.h"
 #include "../benchmarks/mixed.hpp"
-#include "../src/helpers/linked_memory.hpp" // `linked_memory_lock_t`
+#include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
 
-#include <ukv/cpp/ranges.hpp>      // `sort_and_deduplicate`
+#include <ukv/cpp/ranges.hpp>
 #include <ukv/cpp/blobs_range.hpp> // `keys_stream_t`
 
 using namespace unum::ukv::bench;
