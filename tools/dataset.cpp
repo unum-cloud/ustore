@@ -3,7 +3,7 @@
 #include <sys/stat.h>  // `stat` to obtain file metadata
 #include <sys/mman.h>  // `mmap` to read datasets faster
 #include <uuid/uuid.h> // `uuid` to make file name
-#include <unistd.h>
+#include <unistd.h>    // `close` files
 
 #include <vector>
 #include <cstring>
@@ -271,25 +271,6 @@ class arrow_visitor_t {
     }
 };
 
-class string_iterator_t {
-  public:
-    inline string_iterator_t(char* ptr) : ptr_(ptr) { length_ = strlen(ptr_); }
-
-    inline size_t length() { return length_; }
-    inline size_t size() { return length(); }
-
-    inline string_iterator_t& operator++() {
-        ptr_ += length_ + 1;
-        length_ = strlen(ptr_);
-    }
-    inline char* operator*() const { return ptr_; }
-    inline char last_character() { return ptr_[length_ - 1]; }
-
-  private:
-    char* ptr_;
-    size_t length_;
-};
-
 bool strcmp_(char const* lhs, char const* rhs) {
     return std::strcmp(lhs, rhs) == 0;
 }
@@ -517,7 +498,7 @@ void simdjson_object_parser( //
     tape_t const& tape,
     std::string& json) {
 
-    string_iterator_t iter(tape.begin());
+    strings_tape_iterator_t iter(fields_count * fields_count, tape.begin());
     auto counts_iter = counts.begin();
 
     auto try_close = [&]() {
@@ -534,7 +515,7 @@ void simdjson_object_parser( //
         try_close();
         if (is_json_ptr(fields[idx])) {
             if (strchr(fields[idx] + 1, '/') != nullptr) {
-                while (iter.last_character() == '{') {
+                while ((*iter)[strlen(*iter) - 1] == '{') {
                     fmt::format_to(std::back_inserter(json), "{}", *iter);
                     ++iter;
                 }
