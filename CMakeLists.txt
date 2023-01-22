@@ -116,6 +116,7 @@ endif()
 # Install 3rd Party Packages
 include(FetchContent)
 include_directories(include/)
+include_directories(src/)
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
   set(FETCHCONTENT_QUIET OFF)
