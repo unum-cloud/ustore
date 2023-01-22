@@ -40,8 +40,6 @@
 using namespace unum::ukv::bench;
 using namespace unum::ukv;
 
-// 1GB for every batch
-constexpr std::size_t max_batch_size = 1024 * 1024 * 1024;
 // 2 vertices and 1 edge
 constexpr std::size_t vertices_edge_k = 3;
 // Count of symbols to make json ('"', '"', ':', ',')
@@ -1007,11 +1005,12 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
+    return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
     if (!validate_graph_fields(c))
         return_if_error_m(c.error);
 
     auto ext = std::filesystem::path(c.paths_pattern).extension();
-    ukv_size_t task_count = max_batch_size / sizeof(edge_t);
+    ukv_size_t task_count = c.max_batch_size / sizeof(edge_t);
     if (ext == ".ndjson")
         import_ndjson_graph(c, task_count);
     else {
@@ -1034,6 +1033,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
         return_if_error_m(c.error);
     return_error_if_m(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
+    return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
 
     auto ext = c.paths_extension;
     auto export_method = strcmp_(ext, ".parquet")  ? &export_parquet_graph
@@ -1053,7 +1053,7 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
     ukv_size_t count = 0;
     ukv_size_t batch_ids = 0;
     ukv_size_t total_ids = 0;
-    ukv_size_t task_count = max_batch_size / sizeof(edge_t);
+    ukv_size_t task_count = c.max_batch_size / sizeof(edge_t);
 
     keys_stream_t stream(c.db, c.collection, task_count, nullptr);
     auto status = stream.seek_to_first();
@@ -1163,7 +1163,7 @@ void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const
             used_mem += json.size();
             json = "{";
 
-            if (used_mem >= max_batch_size) {
+            if (used_mem >= c.max_batch_size) {
                 upsert_docs(c, values);
                 values.clear();
                 used_mem = 0;
@@ -1189,7 +1189,7 @@ void import_whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stre
         simdjson::ondemand::object object = doc.get_object().value();
         values.push_back(rewinded(object).raw_json().value());
         used_mem += values.back().size();
-        if (used_mem >= max_batch_size) {
+        if (used_mem >= c.max_batch_size) {
             upsert_docs(c, values);
             values.clear();
         }
@@ -1237,7 +1237,7 @@ void import_sub_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream
         used_mem += json.size();
         json = "{";
 
-        if (used_mem >= max_batch_size) {
+        if (used_mem >= c.max_batch_size) {
             upsert_docs(c, values);
             values.clear();
         }
@@ -1404,7 +1404,7 @@ void make_parquet(ukv_docs_export_t& c, parquet::StreamWriter& os) {
 
     parquet::WriterProperties::Builder builder;
     builder.memory_pool(arrow::default_memory_pool());
-    builder.write_batch_size(max_batch_size);
+    builder.write_batch_size(c.max_batch_size);
 
     os = parquet::StreamWriter {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
 }
@@ -1527,11 +1527,12 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     validate_docs_fields(c);
     return_if_error_m(c.error);
+    return_error_if_m(c.id_field, c.error, uninitialized_state_k, "id_field must be initialized");
     check_for_id_field(c);
     return_if_error_m(c.error);
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
+    return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
     return_error_if_m(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
-    return_error_if_m(c.id_field, c.error, uninitialized_state_k, "id_field must be initialized");
 
     auto ext = std::filesystem::path(c.paths_pattern).extension();
     if (ext == ".ndjson")
@@ -1556,6 +1557,7 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     return_if_error_m(c.error);
     return_error_if_m(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
     return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
+    return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
 
     auto ext = c.paths_extension;
     int pcn = strcmp_(ext, ".parquet") ? 0 : strcmp_(ext, ".csv") ? 1 : strcmp_(ext, ".ndjson") ? 2 : -1;

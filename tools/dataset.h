@@ -16,6 +16,7 @@ typedef struct ukv_graph_import_t {
 
     ukv_collection_t collection = ukv_collection_main_k;
     ukv_str_view_t paths_pattern = ".*\\.(csv|ndjson|parquet)";
+    ukv_size_t max_batch_size = 1024ul * 1024ul * 1024ul;
     ukv_callback_t callback = NULL;
     ukv_callback_payload_t callback_payload = NULL;
 
@@ -36,6 +37,7 @@ typedef struct ukv_graph_export_t {
 
     ukv_collection_t collection = ukv_collection_main_k;
     ukv_str_view_t paths_extension = ".parquet";
+    ukv_size_t max_batch_size = 1024ul * 1024ul * 1024ul;
     ukv_callback_t callback = NULL;
     ukv_callback_payload_t callback_payload = NULL;
 
@@ -56,6 +58,7 @@ typedef struct ukv_docs_import_t {
 
     ukv_collection_t collection = ukv_collection_main_k;
     ukv_str_view_t paths_pattern = ".*\\.(csv|ndjson|parquet)";
+    ukv_size_t max_batch_size = 1024ul * 1024ul * 1024ul;
     ukv_callback_t callback = NULL;
     ukv_callback_payload_t callback_payload = NULL;
 
@@ -79,6 +82,7 @@ typedef struct ukv_docs_export_t {
 
     ukv_collection_t collection = ukv_collection_main_k;
     ukv_str_view_t paths_extension = ".parquet";
+    ukv_size_t max_batch_size = 1024ul * 1024ul * 1024ul;
     ukv_callback_t callback = NULL;
     ukv_callback_payload_t callback_payload = NULL;
 
