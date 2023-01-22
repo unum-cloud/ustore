@@ -5,6 +5,7 @@
 #include <uuid/uuid.h> // `uuid` to make file name
 #include <unistd.h>    // `close` files
 
+#include <ctime>
 #include <vector>
 #include <cstring>
 #include <numeric>
@@ -44,8 +45,6 @@ using namespace unum::ukv;
 constexpr std::size_t vertices_edge_k = 3;
 // Count of symbols to make json ('"', '"', ':', ',')
 constexpr std::size_t symbols_count_k = 4;
-// Length of generated uuid
-constexpr std::size_t uuid_length_k = 36;
 // Json object open brackets for json and parquet
 constexpr ukv_str_view_t prefix_k = "{";
 // Json object open brackets for csv
@@ -287,11 +286,15 @@ bool is_json_ptr(ukv_str_view_t field) {
     return chrcmp_(field[0], '/');
 }
 
-void generate_uuid(char* out, size_t sz) {
-    uuid_t uuid;
-    uuid_generate(uuid);
-    uuid_unparse(uuid, out);
-    out[sz - 1] = '\0'; // end of string
+ukv_char_t* generate_file_name() {
+    time_t now = time(0);
+    ukv_char_t* out = ctime(&now);
+    for (size_t idx = 0; idx < strlen(out); ++idx) {
+        if (out[idx] == ' ' | out[idx] == ':')
+            out[idx] = '_';
+    }
+    out[strlen(out) - 1] = '\0';
+    return out;
 }
 
 template <typename imp_exp_at>
@@ -767,10 +770,8 @@ void export_parquet_graph(ukv_graph_export_t& c, keys_t const& ids, ukv_length_t
     std::shared_ptr<parquet::schema::GroupNode> schema = std::static_pointer_cast<parquet::schema::GroupNode>(
         parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, fields));
 
-    char file_name[uuid_length_k];
-    generate_uuid(file_name, uuid_length_k);
-
-    auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
+    auto maybe_outfile =
+        arrow::io::FileOutputStream::Open(fmt::format("{}{}", generate_file_name(), c.paths_extension));
     return_error_if_m(maybe_outfile.ok(), c.error, 0, "Can't open file");
     auto outfile = *maybe_outfile;
 
@@ -875,10 +876,8 @@ void export_csv_graph(ukv_graph_export_t& c, keys_t const& ids, ukv_length_t len
         table = arrow::Table::Make(schema, {sources_array, targets_array});
     return_error_if_m(table, c.error, 0, "Can't make schema");
 
-    char file_name[uuid_length_k];
-    generate_uuid(file_name, uuid_length_k);
-
-    auto maybe_outstream = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
+    auto maybe_outstream =
+        arrow::io::FileOutputStream::Open(fmt::format("{}{}", generate_file_name(), c.paths_extension));
     return_error_if_m(maybe_outstream.ok(), c.error, 0, "Can't open file");
     std::shared_ptr<arrow::io::FileOutputStream> outstream = *maybe_outstream;
 
@@ -940,9 +939,9 @@ void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) noexcept 
 void export_ndjson_graph(ukv_graph_export_t& c, keys_t const& ids, ukv_length_t length, linked_memory_lock_t& arena) {
 
     ukv_key_t* data = nullptr;
-    char file_name[uuid_length_k];
-    generate_uuid(file_name, uuid_length_k);
-    auto handle = open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    auto handle = open(fmt::format("{}{}", generate_file_name(), c.paths_extension).data(),
+                       O_CREAT | O_WRONLY,
+                       S_IRUSR | S_IWUSR);
 
     if (!c.edge_id_field) {
         for (auto id : ids) {
@@ -1376,10 +1375,8 @@ void make_parquet(ukv_docs_export_t& c, parquet::StreamWriter& os) {
     std::shared_ptr<parquet::schema::GroupNode> schema = std::static_pointer_cast<parquet::schema::GroupNode>(
         parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, nodes));
 
-    char file_name[uuid_length_k];
-    generate_uuid(file_name, uuid_length_k);
-
-    auto maybe_outfile = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
+    auto maybe_outfile =
+        arrow::io::FileOutputStream::Open(fmt::format("{}{}", generate_file_name(), c.paths_extension));
     return_error_if_m(maybe_outfile.ok(), c.error, 0, "Can't open file");
     auto outfile = *maybe_outfile;
 
@@ -1462,10 +1459,8 @@ void end_csv( //
     std::shared_ptr<arrow::Table> table;
     table = arrow::Table::Make(schema, {keys_array, docs_array});
 
-    char file_name[uuid_length_k];
-    generate_uuid(file_name, uuid_length_k);
-
-    auto maybe_outstream = arrow::io::FileOutputStream::Open(fmt::format("{}{}", file_name, c.paths_extension));
+    auto maybe_outstream =
+        arrow::io::FileOutputStream::Open(fmt::format("{}{}", generate_file_name(), c.paths_extension));
     return_error_if_m(maybe_outstream.ok(), c.error, 0, "Can't open file");
     std::shared_ptr<arrow::io::FileOutputStream> outstream = *maybe_outstream;
 
@@ -1474,9 +1469,9 @@ void end_csv( //
 }
 
 int make_ndjson(ukv_docs_export_t& c) {
-    char file_name[uuid_length_k];
-    generate_uuid(file_name, uuid_length_k);
-    return open(fmt::format("{}{}", file_name, c.paths_extension).data(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    return open(fmt::format("{}{}", generate_file_name(), c.paths_extension).data(),
+                O_CREAT | O_WRONLY,
+                S_IRUSR | S_IWUSR);
 }
 
 void write_in_ndjson( //
