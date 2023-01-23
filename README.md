@@ -93,8 +93,8 @@ That is how UKV began, but hopefully, it can grow further, advancing the storage
 ---
 
 <p align="center">
-Video introduction on <a href="https://www.youtube.com/watch?v=ybWeUf_hC7o">Youtube</a> • 
-Communication channel on <a href="https://discord.gg/4mxGrenbNt">Discord</a> • 
+Video intro on <a href="https://www.youtube.com/watch?v=ybWeUf_hC7o">Youtube</a> • 
+Communications on <a href="https://discord.gg/4mxGrenbNt">Discord</a> • 
 Full <a href="https://unum.cloud/ukv">documentation</a>
 </a>
 
