@@ -430,6 +430,7 @@ fields_t prepare_fields(ukv_docs_imp_exp_t& c, linked_memory_lock_t& arena) {
         }
         idx = next_idx;
     }
+    c.fields_count = prepared_fields.size();
     return {prepared_fields.data(), sizeof(ukv_str_view_t)};
 }
 
