@@ -290,7 +290,7 @@ ukv_char_t* generate_file_name() {
     time_t now = time(0);
     ukv_char_t* out = ctime(&now);
     for (size_t idx = 0; idx < strlen(out); ++idx) {
-        if (out[idx] == ' ' | out[idx] == ':')
+        if ((out[idx] == ' ') | (out[idx] == ':'))
             out[idx] = '_';
     }
     out[strlen(out) - 1] = '\0';
