@@ -93,8 +93,8 @@ That is how UKV began, but hopefully, it can grow further, advancing the storage
 ---
 
 <p align="center">
-Video introduction on <a href="https://www.youtube.com/watch?v=ybWeUf_hC7o">Youtube</a> • 
-Communication channel on <a href="https://discord.gg/4mxGrenbNt">Discord</a> • 
+Video intro on <a href="https://www.youtube.com/watch?v=ybWeUf_hC7o">Youtube</a> • 
+Communications on <a href="https://discord.gg/4mxGrenbNt">Discord</a> • 
 Full <a href="https://unum.cloud/ukv">documentation</a>
 </a>
 
@@ -442,6 +442,8 @@ Thank you!
 - Does UKV support Time-To-Live? [Answered][ukv-ttl]
 - Does UKV support compression? [Answered][ukv-compression]
 - Does UKV support queues? [Anwered][ukv-queues]
+- How can I add Bindings for language X? [Answered][ukv-new-bindings]
+- How can I add database X as an Engine? [Answered][ukv-new-engine]
 
 [ukv-c-tutor]: https://unum.cloud/ukv/c
 [ukv-cpp-tutor]: https://unum.cloud/ukv/cpp
@@ -464,6 +466,8 @@ Thank you!
 [ukv-compression]: https://github.com/unum-cloud/ukv/discussions/232
 [ukv-ttl]: https://github.com/unum-cloud/ukv/discussions/230
 [ukv-queues]: https://github.com/unum-cloud/ukv/discussions/228
+[ukv-new-bindings]: https://github.com/unum-cloud/ukv/c#implementing-a-new-language-binding
+[ukv-new-engine]: https://github.com/unum-cloud/ukv/c#implementing-a-new-engine
 
 [ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
 [ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb

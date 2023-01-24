@@ -1,16 +1,19 @@
 import os
 import re
-import subprocess
 import sys
 import json
 from distutils.dir_util import copy_tree
 from os.path import abspath, exists, dirname, join
 import multiprocessing
 from setuptools import setup, Extension, Command
+import subprocess
+import multiprocessing
+from distutils.dir_util import copy_tree
+from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
 __version__ = open('VERSION', 'r').read()
-__libname__ = 'ukv'
+__lib_name__ = 'ukv'
 
 
 this_directory = os.path.abspath(dirname(__file__))
@@ -19,29 +22,29 @@ with open(os.path.join(this_directory, 'README.md')) as f:
 
 
 class CMakeExtension(Extension):
-    def __init__(self, name, sourcedir=''):
+    def __init__(self, name, source_dir=''):
         Extension.__init__(self, name, sources=[])
-        self.sourcedir = os.path.abspath(sourcedir)
+        self.source_dir = os.path.abspath(source_dir)
 
 
 class CMakeBuild(build_ext):
     def build_extension(self, ext):
         self.parallel = multiprocessing.cpu_count() // 2
-        extdir = os.path.abspath(dirname(
+        extension_dir = os.path.abspath(dirname(
             self.get_ext_fullpath(ext.name)))
 
         # required for auto-detection & inclusion of auxiliary "native" libs
-        if not extdir.endswith(os.path.sep):
-            extdir += os.path.sep
+        if not extension_dir.endswith(os.path.sep):
+            extension_dir += os.path.sep
 
-        if 'PYTHON_DEBUG' in os.environ:
-            os.makedirs(extdir, exist_ok=True)
-            copy_tree("./build/lib/", extdir)
+        if 'UKV_DEBUG_PYTHON' in os.environ:
+            os.makedirs(extension_dir, exist_ok=True)
+            copy_tree("./build/lib/", extension_dir)
             return
 
         cmake_args = [
-            f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}',
-            f'-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY={extdir}',
+            f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extension_dir}',
+            f'-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY={extension_dir}',
             f'-DPYTHON_EXECUTABLE={sys.executable}',
             '-DUKV_BUILD_ENGINE_UMEM=1',
             '-DUKV_BUILD_ENGINE_LEVELDB=1',
@@ -75,7 +78,7 @@ class CMakeBuild(build_ext):
             if hasattr(self, 'parallel') and self.parallel:
                 build_args += [f'-j{self.parallel}']
 
-        subprocess.check_call(['cmake', ext.sourcedir] + cmake_args)
+        subprocess.check_call(['cmake', ext.source_dir] + cmake_args)
         subprocess.check_call(
             ['cmake', '--build', '.', '--target', ext.name.replace('ukv.', 'py_')] + build_args)
   
@@ -144,7 +147,7 @@ class BuildPyi(Command):
 
 
 setup(
-    name=__libname__,
+    name=__lib_name__,
     version=__version__,
 
     author='Ashot Vardanian',
