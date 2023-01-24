@@ -73,13 +73,13 @@ fi
 
 # Build Docker
 echo -e "\n------ \e[93mBuilding Docker\e[0m ------"
-docker buildx build --platform=linux/amd64,linux/arm64 . --file docker/Dockerfile --tag unum/ukv:$version-focal
+docker buildx build --tag unum/ukv:$version-focal --tag unum/ukv:latest --platform=linux/amd64,linux/arm64 . --file docker/Dockerfile --push
 echo -e "------ \e[92mDocker Built!\e[0m ------"
 
 read -p "Publish to DockerHub? " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "------ \e[93mPublishing to DockerHub\e[0m ------"
-    docker login && docker push unum/ukv:$version-focal
+    docker login && docker push unum/ukv -a
     echo -e "------ \e[92mDocker Publish!\e[0m ------"
 fi
 
