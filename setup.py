@@ -2,17 +2,18 @@ import os
 import re
 import subprocess
 import sys
+import json
 from distutils.dir_util import copy_tree
-import time
+from os.path import abspath, exists, dirname, join
 import multiprocessing
-from setuptools import setup, Extension
+from setuptools import setup, Extension, Command
 from setuptools.command.build_ext import build_ext
 
 __version__ = open('VERSION', 'r').read()
 __libname__ = 'ukv'
 
 
-this_directory = os.path.abspath(os.path.dirname(__file__))
+this_directory = os.path.abspath(dirname(__file__))
 with open(os.path.join(this_directory, 'README.md')) as f:
     long_description = f.read()
 
@@ -26,7 +27,7 @@ class CMakeExtension(Extension):
 class CMakeBuild(build_ext):
     def build_extension(self, ext):
         self.parallel = multiprocessing.cpu_count() // 2
-        extdir = os.path.abspath(os.path.dirname(
+        extdir = os.path.abspath(dirname(
             self.get_ext_fullpath(ext.name)))
 
         # required for auto-detection & inclusion of auxiliary "native" libs
@@ -77,6 +78,69 @@ class CMakeBuild(build_ext):
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args)
         subprocess.check_call(
             ['cmake', '--build', '.', '--target', ext.name.replace('ukv.', 'py_')] + build_args)
+  
+    def run(self):
+        build_ext.run(self)
+        self.run_command("build_pyi")
+
+class BuildPyi(Command):
+    command_name = "build_pyi"
+    description = "Generates pyi files from built extensions"
+
+    def initialize_options(self):
+        self.build_lib = None
+
+    def finalize_options(self):
+        self.set_undefined_options("build", ("build_lib", "build_lib"))
+
+    def run(self):
+        # Gather information for needed stubs
+        data = {"mapping": {}, "stubs": []}
+        env = os.environ.copy()
+
+        # Requires information from build_ext to work
+        build_ext = self.distribution.get_command_obj("build_ext")
+        if build_ext.inplace:
+            inst_command = self.distribution.get_command_obj("install")
+            inst_command.ensure_finalized()
+            data["out"] = inst_command.install_platlib
+        else:
+            data["out"] = self.build_lib
+
+        wrappers = ["ukv"]
+        # Ensure that the associated packages can always be found locally
+        for wrapper in wrappers:
+            pkgdir = wrapper.split(".")
+            init_py = abspath(join(self.build_lib, *pkgdir, "__init__.py"))
+            data["mapping"][wrapper] = init_py
+            if not exists(init_py):
+                print("###### Does not exist", init_py)
+                open(init_py, "w").close()
+
+        for ext in build_ext.extensions:
+            fname = build_ext.get_ext_filename(ext.name)
+            data["mapping"][ext.name] = abspath(join(self.build_lib, fname))
+            data["stubs"].append(ext.name)
+
+
+        data_json = json.dumps(data)
+        print("###### " ,data_json)
+        # Execute in a subprocess in case it crashes
+        args = [sys.executable, "-m", "py11stubs", data_json]
+
+        proc = subprocess.run(args, env=env, capture_output=True)
+        print( 'exit status:', proc.returncode )
+        print( 'stdout:', proc.stdout.decode() )
+        print( 'stderr:', proc.stderr.decode() )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                "Failed to generate .pyi file via %s" % (args,)
+            ) from None
+
+        # Create a py.typed for PEP 561
+        print("########################", data["out"])
+        with open(join(data["out"], "ukv", "py.typed"), "w"):
+            pass
 
 
 setup(
@@ -112,8 +176,11 @@ setup(
         CMakeExtension('ukv.umem'),
         CMakeExtension('ukv.rocksdb'),
         CMakeExtension('ukv.leveldb'),
-        CMakeExtension('ukv.flight_client')],
-    cmdclass={'build_ext': CMakeBuild},
+        CMakeExtension('ukv.flight_client')
+        ],
+    cmdclass={
+        'build_ext': CMakeBuild, 
+        "build_pyi": BuildPyi},
     zip_safe=False,
     install_requires=[
         'numpy>=1.16',
