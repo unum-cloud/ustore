@@ -305,6 +305,8 @@ typedef struct ukv_snapshot_list_t { /// @name Context
     ukv_size_t* count;
     /** @brief All snapshots. */
     ukv_snapshot_t** snapshots;
+    /** @brief NULL-terminated snapshots names tape in same order as `snapshots`. */
+    ukv_char_t** names;
     /// @}
 } ukv_snapshot_list_t;
 
@@ -319,6 +321,8 @@ typedef struct ukv_snapshot_create_t {
     ukv_database_t db;
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
+    /** @brief Unique name for the new snapshot. */
+    ukv_str_view_t name;
     /** @brief Output for the snapshot handle. */
     ukv_snapshot_t* snapshot;
 } ukv_snapshot_create_t;
