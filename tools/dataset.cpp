@@ -199,7 +199,7 @@ class arrow_visitor_t {
     inline static constexpr char int_to_hex_k[16] = {
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
-    inline void char_to_hex(uint8_t const c, uint8_t* hex) noexcept {
+    inline void char_to_hex(ukv_byte_t const c, ukv_byte_t* hex) noexcept {
         hex[0] = int_to_hex_k[c >> 4];
         hex[1] = int_to_hex_k[c & 0x0F];
     }
@@ -213,18 +213,18 @@ class arrow_visitor_t {
     template <typename at>
     arrow::Status format_bin_str(at const& cont, ukv_size_t idx) {
         auto str = cont.Value(idx);
-        std::string output;
-        output.reserve(str.size());
-        for (std::size_t ch_idx = 0; ch_idx != str.size(); ++ch_idx) {
-            uint8_t ch = str[ch_idx];
+        json.push_back('\"');
+        json.reserve(json.size() + str.size());
+        for (ukv_size_t ch_idx = 0; ch_idx != str.size(); ++ch_idx) {
+            ukv_byte_t ch = str[ch_idx];
             switch (ch) {
-            case 34: output += "\\\""; break;
-            case 92: output += "\\\\"; break;
-            case 8: output += "\\b"; break;
-            case 9: output += "\\t"; break;
-            case 10: output += "\\n"; break;
-            case 12: output += "\\f"; break;
-            case 13: output += "\\r"; break;
+            case 34: json += "\\\""; break;
+            case 92: json += "\\\\"; break;
+            case 8: json += "\\b"; break;
+            case 9: json += "\\t"; break;
+            case 10: json += "\\n"; break;
+            case 12: json += "\\f"; break;
+            case 13: json += "\\r"; break;
             case 0:
             case 1:
             case 2:
@@ -252,17 +252,17 @@ class arrow_visitor_t {
             case 29:
             case 30:
             case 31: {
-                output += "\\u0000";
-                auto target_ptr = reinterpret_cast<uint8_t*>(output.data() + output.size() - 2);
+                json += "\\u0000";
+                auto target_ptr = reinterpret_cast<ukv_byte_t*>(json.data() + json.size() - 2);
                 char_to_hex(ch, target_ptr);
                 break;
             }
-            default: output += ch;
+            default: json += ch;
             }
         }
-        if (output.back() == '\n')
-            output.pop_back();
-        fmt::format_to(std::back_inserter(json), "\"{}\",", output.data());
+        if (json.back() == '\n')
+            json.pop_back();
+        json += "\",";
         return arrow::Status::OK();
     }
 };
