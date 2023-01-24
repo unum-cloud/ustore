@@ -117,7 +117,6 @@ class BuildPyi(Command):
             init_py = abspath(join(self.build_lib, *pkgdir, "__init__.py"))
             data["mapping"][wrapper] = init_py
             if not exists(init_py):
-                print("###### Does not exist", init_py)
                 open(init_py, "w").close()
 
         for ext in build_ext.extensions:
@@ -127,7 +126,6 @@ class BuildPyi(Command):
 
 
         data_json = json.dumps(data)
-        print("###### " ,data_json)
         # Execute in a subprocess in case it crashes
         args = [sys.executable, "-m", "py11stubs", data_json]
 
@@ -141,7 +139,6 @@ class BuildPyi(Command):
             ) from None
 
         # Create a py.typed for PEP 561
-        print("########################", data["out"])
         with open(join(data["out"], "ukv", "py.typed"), "w"):
             pass
 
