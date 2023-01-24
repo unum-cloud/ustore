@@ -49,8 +49,10 @@ class keys_stream_t {
 
     status_t prefetch() noexcept {
 
-        if (next_min_key_ == ukv_key_unknown_k)
+        if (next_min_key_ == ukv_key_unknown_k) {
+            ++fetched_offset_;
             return {};
+        }
 
         ukv_length_t* found_counts = nullptr;
         ukv_key_t* found_keys = nullptr;
@@ -111,7 +113,7 @@ class keys_stream_t {
 
     status_t advance() noexcept {
 
-        if (fetched_offset_ >= fetched_keys_.size())
+        if (fetched_offset_ >= fetched_keys_.size() - 1)
             return prefetch();
 
         ++fetched_offset_;

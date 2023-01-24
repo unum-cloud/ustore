@@ -2,4 +2,4 @@
 GoLang SDK
 ============
 
-.. mdinclude:: ../../../golang/README.md
+.. mdinclude:: ../../../go-ukv/README.md
