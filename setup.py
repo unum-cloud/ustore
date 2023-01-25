@@ -33,13 +33,13 @@ class CMakeBuild(build_ext):
         extension_dir = os.path.abspath(dirname(
             self.get_ext_fullpath(ext.name)))
 
-        # required for auto-detection & inclusion of auxiliary "native" libs
+        # required for auto-detection & inclusion of auxiliary 'native' libs
         if not extension_dir.endswith(os.path.sep):
             extension_dir += os.path.sep
 
         if 'UKV_DEBUG_PYTHON' in os.environ:
             os.makedirs(extension_dir, exist_ok=True)
-            copy_tree("./build/lib/", extension_dir)
+            copy_tree('./build/lib/', extension_dir)
             return
 
         cmake_args = [
@@ -84,50 +84,50 @@ class CMakeBuild(build_ext):
   
     def run(self):
         build_ext.run(self)
-        self.run_command("build_pyi")
+        self.run_command('build_pyi')
 
 class BuildPyi(Command):
-    command_name = "build_pyi"
-    description = "Generates pyi files from built extensions"
+    command_name = 'build_pyi'
+    description = 'Generates pyi files from built extensions'
 
     def initialize_options(self):
         self.build_lib = None
 
     def finalize_options(self):
-        self.set_undefined_options("build", ("build_lib", "build_lib"))
+        self.set_undefined_options('build', ('build_lib', 'build_lib'))
 
     def run(self):
         # Gather information for needed stubs
-        data = {"mapping": {}, "stubs": []}
+        data = {'mapping': {}, 'stubs': []}
         env = os.environ.copy()
 
         # Requires information from build_ext to work
-        build_ext = self.distribution.get_command_obj("build_ext")
+        build_ext = self.distribution.get_command_obj('build_ext')
         if build_ext.inplace:
-            inst_command = self.distribution.get_command_obj("install")
+            inst_command = self.distribution.get_command_obj('install')
             inst_command.ensure_finalized()
-            data["out"] = inst_command.install_platlib
+            data['out'] = inst_command.install_platlib
         else:
-            data["out"] = self.build_lib
+            data['out'] = self.build_lib
 
-        wrappers = ["ukv"]
+        wrappers = ['ukv']
         # Ensure that the associated packages can always be found locally
         for wrapper in wrappers:
-            pkgdir = wrapper.split(".")
-            init_py = abspath(join(self.build_lib, *pkgdir, "__init__.py"))
-            data["mapping"][wrapper] = init_py
+            pkgdir = wrapper.split('.')
+            init_py = abspath(join(self.build_lib, *pkgdir, '__init__.py'))
+            data['mapping'][wrapper] = init_py
             if not exists(init_py):
-                open(init_py, "w").close()
+                open(init_py, 'w').close()
 
         for ext in build_ext.extensions:
             fname = build_ext.get_ext_filename(ext.name)
-            data["mapping"][ext.name] = abspath(join(self.build_lib, fname))
-            data["stubs"].append(ext.name)
+            data['mapping'][ext.name] = abspath(join(self.build_lib, fname))
+            data['stubs'].append(ext.name)
 
 
         data_json = json.dumps(data)
         # Execute in a subprocess in case it crashes
-        args = [sys.executable, "-m", "py11stubs", data_json]
+        args = [sys.executable, '-m', 'py11stubs', data_json]
 
         proc = subprocess.run(args, env=env, capture_output=True)
         print( 'exit status:', proc.returncode )
@@ -135,11 +135,11 @@ class BuildPyi(Command):
         print( 'stderr:', proc.stderr.decode() )
         if proc.returncode != 0:
             raise RuntimeError(
-                "Failed to generate .pyi file via %s" % (args,)
+                'Failed to generate .pyi file via %s' % (args,)
             ) from None
 
         # Create a py.typed for PEP 561
-        with open(join(data["out"], "ukv", "py.typed"), "w"):
+        with open(join(data['out'], 'ukv', 'py.typed'), 'w'):
             pass
 
 
@@ -180,7 +180,7 @@ setup(
         ],
     cmdclass={
         'build_ext': CMakeBuild, 
-        "build_pyi": BuildPyi},
+        'build_pyi': BuildPyi},
     zip_safe=False,
     install_requires=[
         'numpy>=1.16',
