@@ -165,14 +165,7 @@ void ukv::wrap_networkx(py::module& m) {
 
     g.def(
         "number_of_edges",
-        [](py_graph_t& g) {
-            auto present_edges = g.ref().edges(ukv_vertex_source_k).throw_or_release();
-            auto present_it = std::move(present_edges).begin();
-            auto count_results = 0;
-            for (; !present_it.is_end(); ++present_it)
-                ++count_results;
-            return count_results;
-        },
+        [](py_graph_t& g) { return g.ref().number_of_edges(); },
         "Returns edges count");
 
     // Reporting nodes edges and neighbors
