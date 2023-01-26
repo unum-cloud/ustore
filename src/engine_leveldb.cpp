@@ -35,7 +35,7 @@ bool const ukv_supports_transactions_k = false;
 bool const ukv_supports_named_collections_k = false;
 bool const ukv_supports_snapshots_k = true;
 
-using level_db_t = leveldb::DB;
+using level_native_t = leveldb::DB;
 using level_status_t = leveldb::Status;
 using level_options_t = leveldb::Options;
 using level_iter_uptr_t = std::unique_ptr<leveldb::Iterator>;
@@ -66,6 +66,11 @@ static key_comparator_t const key_comparator_k = {};
 
 struct level_snapshot_t {
     leveldb::Snapshot const* snapshot = nullptr;
+};
+
+struct level_db_t {
+    std::unique_ptr<level_native_t> native;
+    std::map<ukv_size_t, ukv_snapshot_t*> snapshots;
 };
 
 /*********************************************************/
@@ -152,12 +157,14 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
                     options.compression = leveldb::kSnappyCompression;
         }
 
-        level_db_t* db_ptr = nullptr;
-        level_status_t status = level_db_t::Open(options, c.config, &db_ptr);
+        level_db_t* db_ptr = new level_db_t;
+        level_native_t* native_db = nullptr;
+        level_status_t status = leveldb::DB::Open(options, c.config, &native_db);
         if (!status.ok()) {
             *c.error = "Couldn't open LevelDB";
             return;
         }
+        db_ptr->native = std::unique_ptr<level_native_t>(native_db);
         *c.db = db_ptr;
     }
     catch (json_t::type_error const&) {
@@ -171,7 +178,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
     ukv_snapshot_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_error_if_m(c.count && c.names, c.error, args_combo_k, "Need names and outputs!");
+    return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need id and outputs!");
 }
 
 void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
@@ -184,7 +191,7 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_snapshot_t& snap = **reinterpret_cast<level_snapshot_t**>(c.snapshot);
 
-    snap.snapshot = db.GetSnapshot();
+    snap.snapshot = db.native->GetSnapshot();
     if (!snap.snapshot)
         *c.error = "Couldn't get a snapshot!";
 }
@@ -200,7 +207,7 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
 
-    db.ReleaseSnapshot(snap.snapshot);
+    db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
     delete &snap;
 }
@@ -215,7 +222,8 @@ void write_one( //
     auto place = places[0];
     auto content = contents[0];
     auto key = to_slice(place.key);
-    level_status_t status = !content ? db.Delete(options, key) : db.Put(options, key, to_slice(content));
+    level_status_t status =
+        !content ? db.native->Delete(options, key) : db.native->Put(options, key, to_slice(content));
     export_error(status, c_error);
 }
 
@@ -238,7 +246,7 @@ void write_many( //
             batch.Put(key, to_slice(content));
     }
 
-    level_status_t status = db.Write(options, &batch);
+    level_status_t status = db.native->Write(options, &batch);
     export_error(status, c_error);
 }
 
@@ -285,7 +293,7 @@ void read_enumerate( //
 
     for (std::size_t i = 0; i != tasks.size(); ++i) {
         place_t place = tasks[i];
-        level_status_t status = db.Get(options, to_slice(place.key), &value);
+        level_status_t status = db.native->Get(options, to_slice(place.key), &value);
         if (!status.IsNotFound()) {
             if (export_error(status, c_error))
                 return;
@@ -386,7 +394,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
 
     level_iter_uptr_t it;
     try {
-        it = level_iter_uptr_t(db.NewIterator(options));
+        it = level_iter_uptr_t(db.native->NewIterator(options));
     }
     catch (...) {
         *c.error = "Fail To Create Iterator";
@@ -448,7 +456,9 @@ void ukv_sample(ukv_sample_t* c_ptr) {
         offsets[task_idx] = keys_output - *c.keys;
 
         level_iter_uptr_t it;
-        safe_section("Creating a LevelDB iterator", c.error, [&] { it = level_iter_uptr_t(db.NewIterator(options)); });
+        safe_section("Creating a LevelDB iterator", c.error, [&] {
+            it = level_iter_uptr_t(db.native->NewIterator(options));
+        });
         return_if_error_m(c.error);
 
         ptr_range_gt<ukv_key_t> sampled_keys(keys_output, task.limit);
@@ -493,11 +503,11 @@ void ukv_measure(ukv_measure_t* c_ptr) {
         ukv_key_t const max_key = end_keys[i];
         leveldb::Range range(to_slice(min_key), to_slice(max_key));
         try {
-            db.GetApproximateSizes(&range, 1, &approximate_size);
+            db.native->GetApproximateSizes(&range, 1, &approximate_size);
             min_space_usages[i] = approximate_size;
 
             memory_usage = "0";
-            db.GetProperty("leveldb.approximate-memory-usage", &memory_usage.value());
+            db.native->GetProperty("leveldb.approximate-memory-usage", &memory_usage.value());
             max_space_usages[i] = std::stoi(memory_usage.value());
         }
         catch (...) {
@@ -530,7 +540,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
 
     leveldb::WriteBatch batch;
-    auto it = std::unique_ptr<leveldb::Iterator>(db.NewIterator(leveldb::ReadOptions()));
+    auto it = std::unique_ptr<leveldb::Iterator>(db.native->NewIterator(leveldb::ReadOptions()));
 
     if (c.mode == ukv_drop_keys_vals_k) {
         for (it->SeekToFirst(); it->Valid(); it->Next())
@@ -544,7 +554,7 @@ void ukv_collection_drop(ukv_collection_drop_t* c_ptr) {
 
     leveldb::WriteOptions options;
     options.sync = true;
-    level_status_t status = db.Write(options, &batch);
+    level_status_t status = db.native->Write(options, &batch);
     export_error(status, c.error);
 }
 
