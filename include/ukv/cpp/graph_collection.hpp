@@ -256,6 +256,25 @@ class graph_collection_t {
         return stream;
     }
 
+    std::size_t number_of_vertices() {
+        blobs_range_t members(db_, transaction_, collection_);
+        keys_range_t range {members};
+        return range.size();
+    }
+
+    std::size_t number_of_edges() {
+        graph_stream_t stream {db_,
+                               collection_,
+                               transaction_,
+                               keys_stream_t::default_read_ahead_k,
+                               ukv_vertex_source_k};
+        stream.seek_to_first();
+        std::size_t count_results = 0;
+        for (; !stream.is_end(); ++stream)
+            ++count_results;
+        return count_results;
+    }
+
     using adjacency_range_t = range_gt<graph_stream_t>;
 
     expected_gt<adjacency_range_t> edges(
