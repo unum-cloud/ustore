@@ -247,7 +247,7 @@ class graph_collection_t {
         return blobs_ref_gt<places_arg_t>(db_, transaction_, std::move(arg), arena_).present(watch);
     }
 
-    expected_gt<keys_stream_t> nodes_stream(
+    expected_gt<keys_stream_t> vertex_stream(
         std::size_t vertices_read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
         blobs_range_t members(db_, transaction_, collection_);
         keys_range_t range {members};

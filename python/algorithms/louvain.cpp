@@ -21,7 +21,7 @@ bool first_phase(graph_collection_t& graph,
 
     bool improvement = false;
     bool modified = true;
-    auto stream = graph.nodes_stream().throw_or_release();
+    auto stream = graph.vertex_stream().throw_or_release();
     vertex_degrees_t degree_in_coms;
 
     while (modified) {
@@ -149,7 +149,7 @@ double modularity(partition_t& partition, community_degrees_t& community_degrees
 graph_t gen_graph(graph_collection_t& graph, partition_t& partition) {
 
     graph_t induced_graph;
-    auto stream = graph.nodes_stream().throw_or_release();
+    auto stream = graph.vertex_stream().throw_or_release();
 
     while (!stream.is_end()) {
         auto vertex = stream.key();
@@ -198,7 +198,7 @@ partition_t best_partition(graph_collection_t& graph_collection, float min_modul
     vertex_degrees.reserve(count_vertices);
     community_degrees.reserve(count_vertices);
 
-    auto stream = graph_collection.nodes_stream().throw_or_release();
+    auto stream = graph_collection.vertex_stream().throw_or_release();
     while (!stream.is_end()) {
         auto vertices = stream.keys_batch();
         auto degrees = graph_collection.degrees(vertices).throw_or_release();
