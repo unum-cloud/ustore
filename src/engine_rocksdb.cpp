@@ -80,7 +80,7 @@ struct rocks_snapshot_t {
 
 struct rocks_db_t {
     std::vector<rocks_collection_t*> columns;
-    std::map<ukv_str_view_t, ukv_snapshot_t*> snapshots;
+    std::map<ukv_size_t, ukv_snapshot_t*> snapshots;
     std::unique_ptr<rocks_native_t> native;
     std::mutex mutex;
 };
@@ -192,7 +192,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
     ukv_snapshot_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_error_if_m(c.count && c.names, c.error, args_combo_k, "Need names and outputs!");
+    return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need ids and outputs!");
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
@@ -201,21 +201,13 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
     std::size_t snapshots_count = db.snapshots.size();
     *c.count = static_cast<ukv_size_t>(snapshots_count);
 
-    // Every string will be null-terminated
-    std::size_t strings_length = 0;
-    for (const auto& [name, _] : db.snapshots)
-        strings_length += std::strlen(name) /* name.size() */ + 1;
-
-    auto names = arena.alloc<char>(strings_length, c.error).begin();
-    *c.names = names;
+    // For every snapshot we also need to export IDs
+    auto ids = arena.alloc_or_dummy(snapshots_count, c.error, c.ids);
     return_if_error_m(c.error);
 
     std::size_t i = 0;
-    for (const auto& [name, _] : db.snapshots) {
-        auto len = std::strlen(name) /* name.size() */;
-        std::memcpy(names, name, len);
-        names[len] = '\0';
-        names += len + 1;
+    for (const auto& [id, _] : db.snapshots) {
+        ids[i] = id;
         ++i;
     }
 }
@@ -223,14 +215,12 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
 void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
 
     ukv_snapshot_create_t& c = *c_ptr;
-    // auto name_len = c.name ? std::strlen(c.name) : 0;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    for (const auto& [name, snapshot] : db.snapshots) {
+    for (const auto& [id, snapshot] : db.snapshots)
         if (snapshot)
-            return_error_if_m(name != c.name, c.error, args_wrong_k, "Such snapshot already exists!");
-    }
+            return_error_if_m(id != c.id, c.error, args_wrong_k, "Such snapshot already exists!");
 
     if (!*c.snapshot)
         safe_section("Allocating snapshot handle", c.error, [&] { *c.snapshot = new rocks_snapshot_t(); });
@@ -241,7 +231,9 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     snap.snapshot = db.native->GetSnapshot();
     if (!snap.snapshot)
         *c.error = "Couldn't get a snapshot!";
-    db.snapshots[c.name] = c.snapshot;
+
+    c.id = reinterpret_cast<std::size_t>(snap.snapshot);
+    db.snapshots[c.id] = c.snapshot;
 }
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
@@ -252,12 +244,24 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
     if (!c.snapshot)
         return;
 
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
+    // rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    // rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
 
-    db.native->ReleaseSnapshot(snap.snapshot);
-    snap.snapshot = nullptr;
-    delete &snap;
+    // db.native->ReleaseSnapshot(snap.snapshot);
+    // snap.snapshot = nullptr;
+    // delete &snap;
+
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    for (const auto& [id, snapshot] : db.snapshots) {
+        if (snapshot == c.snapshot) {
+            rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
+            db.native->ReleaseSnapshot(snap.snapshot);
+            snap.snapshot = nullptr;
+
+            db.snapshots.erase(id);
+            break;
+        }
+    }
 }
 
 void write_one( //
