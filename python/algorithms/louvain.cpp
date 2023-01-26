@@ -186,7 +186,7 @@ graph_t gen_graph(graph_t& graph, partition_t& partition) {
 
 partition_t best_partition(graph_collection_t& graph_collection, float min_modularity_growth = 0.0000001) {
 
-    auto count_vertices = graph_collection.number_of_nodes();
+    auto count_vertices = graph_collection.number_of_vertices();
     auto count_edges = graph_collection.number_of_edges();
 
     partition_t partition;
