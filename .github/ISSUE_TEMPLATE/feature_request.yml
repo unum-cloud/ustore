@@ -24,7 +24,6 @@ body:
     id: check
     attributes:
       label: Can you contribute to the implementation?
-      description: Embedded version is the one that has no client-server communication, everything is packed into one library.
       options:
         - label: I can contribute
   - type: dropdown

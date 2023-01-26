@@ -14,7 +14,6 @@ body:
     id: what
     attributes:
       label: Describe the bug
-      description: What exactly is going wrong?
       placeholder: A short description of what the bug is.
     validations:
       required: true
@@ -22,7 +21,6 @@ body:
     id: steps
     attributes:
       label: Steps to reproduce
-      description: What are the steps necessary to reproduce this bug?
       placeholder: Detail the steps taken to reproduce the behavior.
     validations:
       required: true
@@ -30,7 +28,6 @@ body:
     id: expected
     attributes:
       label: Expected behavior
-      description: What is the behavior that you would expect to see?
       placeholder: A clear and concise description of what you expected to happen.
     validations:
       required: true
