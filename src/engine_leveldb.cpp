@@ -179,6 +179,23 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
     ukv_snapshot_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need id and outputs!");
+
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    std::size_t snapshots_count = db.snapshots.size();
+    *c.count = static_cast<ukv_size_t>(snapshots_count);
+
+    // For every snapshot we also need to export IDs
+    auto ids = arena.alloc_or_dummy(snapshots_count, c.error, c.ids);
+    return_if_error_m(c.error);
+
+    std::size_t i = 0;
+    for (const auto& [id, _] : db.snapshots) {
+        ids[i] = id;
+        ++i;
+    }
 }
 
 void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
@@ -194,6 +211,9 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     snap.snapshot = db.native->GetSnapshot();
     if (!snap.snapshot)
         *c.error = "Couldn't get a snapshot!";
+
+    c.id = reinterpret_cast<std::size_t>(snap.snapshot);
+    db.snapshots[c.id] = c.snapshot;
 }
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
@@ -205,11 +225,22 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
         return;
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+    // level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
 
-    db.native->ReleaseSnapshot(snap.snapshot);
-    snap.snapshot = nullptr;
-    delete &snap;
+    // db.native->ReleaseSnapshot(snap.snapshot);
+    // snap.snapshot = nullptr;
+    // delete &snap;
+
+    for (const auto& [id, snapshot] : db.snapshots) {
+        if (snapshot == c.snapshot) {
+            level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+            db.native->ReleaseSnapshot(snap.snapshot);
+            snap.snapshot = nullptr;
+
+            db.snapshots.erase(id);
+            break;
+        }
+    }
 }
 
 void write_one( //

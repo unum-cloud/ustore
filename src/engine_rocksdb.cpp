@@ -244,14 +244,13 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
     if (!c.snapshot)
         return;
 
-    // rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     // rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
 
     // db.native->ReleaseSnapshot(snap.snapshot);
     // snap.snapshot = nullptr;
     // delete &snap;
 
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     for (const auto& [id, snapshot] : db.snapshots) {
         if (snapshot == c.snapshot) {
             rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
