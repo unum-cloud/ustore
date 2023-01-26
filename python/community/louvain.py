@@ -140,15 +140,17 @@ def _gen_graph_from_weighted(graph, partition: Mapping[int, int]):
 
 def modularity(
         partition: Mapping[int, int],
-        count_edges: int, community_degrees: Mapping[int, int], community_in_degrees: Mapping[int, int]) -> float:
+        degree_sum: int, community_degrees: Mapping[int, int], community_in_degrees: Mapping[int, int]) -> float:
     """
     Compute the modularity of a partition of a graph
     """
 
+    m = degree_sum / 2
+    norm = 1 / m ** 2
     res = 0.
     for com in set(partition.values()):
-        res += (community_in_degrees.get(com, 0.) / count_edges) - \
-               (community_degrees.get(com, 0.) / (2. * count_edges)) ** 2
+        res += ((community_degrees[com] - community_in_degrees[com]
+                 ) / m) - (degree_sum * degree_sum * norm)
     return res
 
 
@@ -171,9 +173,10 @@ def best_partition(graph, min_mod_growth: float = 0.0000001) -> Mapping[int, int
 
     while improvement:
         count_edges = graph.number_of_edges()
+        degree_sum = graph.size()
         partition, community_degrees, community_in_degrees, improvement = _one_level(
             graph, count_edges, True)
-        new_mod = modularity(partition, count_edges,
+        new_mod = modularity(partition, degree_sum,
                              community_degrees, community_in_degrees)
 
         if not improvement or new_mod - mod <= min_mod_growth:
