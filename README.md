@@ -1,11 +1,26 @@
 <h1 align="center">Universal Keys & Values</h1>
 <h3 align="center">
-Binary Interface Standard for Database Management<br/>
-Backed by Open-Source and Proprietary Implementations<br/>
+Modular Transactional NoSQL Database<br/>
+Bringing Zero-Copy Semantics into Storage<br/>
 </h3>
+<br/>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=ybWeUf_hC7o"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/youtube.svg" alt="Youtube"></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="https://discord.gg/4mxGrenbNt"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/discord.svg" alt="Discord"></a>
+	&nbsp;&nbsp;&nbsp;
+  <a href="https://www.linkedin.com/company/unum-cloud/"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/linkedin.svg" alt="LinkedIn"></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="https://twitter.com/unum_cloud"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/twitter.svg" alt="Twitter"></a>
+  &nbsp;&nbsp;&nbsp;
+	<a href="https://unum.cloud/post"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/blog.svg" alt="Blog"></a>
+	&nbsp;&nbsp;&nbsp;
+	<a href="https://github.com/unum-cloud/ukv"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/github.svg" alt="GitHub"></a>
+</p>
 
 <div align="center">
-<b>built on</b>:
+<b>choose either</b>:
 <a href="https://github.com/facebook/rocksdb">RocksDB</a>
 •
 <a href="https://github.com/google/leveldb">LevelDB</a>
@@ -25,7 +40,7 @@ Vectors
 •
 Texts
 <br/>
-<b>accessible from</b>:
+<b>with drivers for</b>:
 C
 •
 C++
@@ -48,8 +63,10 @@ GoLang
 
 ---
 
-**UKV is an open standard** for a NoSQL binary database interface, focusing on "Create, Read, Update, Delete" operations, or CRUD for short.
-It is defined as a [few isolated C headers][ukv-c-headers], and comes with numerous backend [engines](#engines), supporting various data [modalities](#modalities), and an ecosystem of [frontends](#frontends) to access the data.
+UKV is more than a database.
+It is a "build your database" toolkit and an open standard for NoSQL potentially-transactional databases, defining zero-copy binary interfaces for "Create, Read, Update, Delete" operations, or CRUD for short.
+
+A [few simple C99 headers][ukv-c-headers] can link almost any underlying storage [engine](#engines) to many high-level language [bindings](#frontends), extending their support for binary string values to graphs, flexible-schema documents, and other [modalities](#modalities).
 
 ![UKV: Small Map](https://github.com/unum-cloud/ukv/raw/main/assets/charts/Intro.png)
 
@@ -60,10 +77,10 @@ This gives you the flexibility to iterate on different parts of this modular dat
 ![Documents Processing Performance Chart for UKV and MongoDB](https://github.com/unum-cloud/ukv/raw/main/assets/charts/PerformanceDocs.png)
 
 **Flexibility is essential, but so is performance**.
-We prefer to avoid dynamic memory allocations across all modalities and prefer libraries that share that mindset.
+We prefer to avoid dynamic memory allocations across all modalities and choose libraries that share that mindset.
 For instance, the reference implementation of Document collections uses `simdjson` to read and `yyjson` to update docs, storing them in RocksDB and serving them through Apache Arrow Flight RPC.
 Even such a surprisingly obvious combination often outperforms commercial DBMS products.
-The upcoming UDisk-based version obliterates them.
+The UDisk-based version obliterates them.
 
 ![Binary Processing Performance Chart for UKV and MongoDB](https://github.com/unum-cloud/ukv/raw/main/assets/charts/PerformanceBinary.png)
 
@@ -73,7 +90,29 @@ Making even a single copy of data on the hot path would slash that performance.
 Processing hundreds of terabytes per node, we couldn't have used LevelDB, RocksDB, or even their interfaces for our purposes to avoid dynamic polymorphism and any constraints on memory allocation strategies.
 That is how UKV began, but hopefully, it can grow further, advancing the storage ecosystem the same way the standardization of [BLAS][blas] has pushed the frontiers of numerical compute and, later, AI.
 
-[Keynote on UKV and UDisk](https://www.youtube.com/watch?v=ybWeUf_hC7o), [Full Documentation](https://unum.cloud/ukv)
+---
+
+<p align="center">
+Video intro on <a href="https://www.youtube.com/watch?v=ybWeUf_hC7o">Youtube</a> • 
+Communications on <a href="https://discord.gg/4mxGrenbNt">Discord</a> • 
+Full <a href="https://unum.cloud/ukv">documentation</a>
+</a>
+
+<p align="center">
+<a href="https://discord.gg/4mxGrenbNt"><img src="https://img.shields.io/discord/1063947616615923875?label=discord"></a>
+&nbsp;&nbsp;
+<a href="https://www.linkedin.com/company/unum-cloud/"><img src="https://img.shields.io/badge/linkedin-connect_with_us-0a66c2.svg?"/></a>
+&nbsp;&nbsp;
+<a href="https://twitter.com/unum_cloud"><img src="https://img.shields.io/badge/twitter-follow_us-1d9bf0.svg?"/></a>
+&nbsp;&nbsp;
+<a href="https://zenodo.org/badge/latestdoi/502647695"><img src="https://zenodo.org/badge/502647695.svg" alt="DOI"></a>
+&nbsp;&nbsp;
+<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/issues-closed-raw/unum-cloud/ukv?"/></a>
+&nbsp;&nbsp;
+<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/stars/unum-cloud/ukv?"/></a>
+&nbsp;&nbsp;
+<a href="#"><img src="https://img.shields.io/github/workflow/status/unum-cloud/ukv/Build"/></a>
+</p>
 
 ---
 
@@ -91,24 +130,9 @@ That is how UKV began, but hopefully, it can grow further, advancing the storage
 - [Tooling](#tooling)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
-- [Presets, Limitations and FAQ](#presets-limitations-and-faq)
+- [Frequently Asked Questions](#frequently-asked-questions)
 
 ---
-
-<p align="center">
-<a href="https://twitter.com/unum_cloud"><img src="https://img.shields.io/badge/twitter-follow_us-1d9bf0.svg?"/></a>
-&nbsp;&nbsp;
-<a href="https://www.linkedin.com/company/unum-cloud/"><img src="https://img.shields.io/badge/linkedin-connect_with_us-0a66c2.svg?"/></a>
-&nbsp;&nbsp;
-<a href="https://t.me/unum_ukv"><img src="https://img.shields.io/badge/telegram-ask_anything-0a66c2?logo=telegram"/></a>
-&nbsp;&nbsp;
-<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/issues-closed-raw/unum-cloud/ukv?"/></a>
-&nbsp;&nbsp;
-<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/stars/unum-cloud/ukv?"/></a>
-&nbsp;&nbsp;
-<a href="#"><img src="https://img.shields.io/github/workflow/status/unum-cloud/ukv/Build"/></a>
-
-</p>
 
 ## Basic Use Cases
 
@@ -148,6 +172,18 @@ $ python
   ```
 </details>
 
+Tabular, graph and other operations should also be familiar to anyone using [Pandas][pandas] or [NetworkX][networkx].
+Function calls would look identical, but the underlying implementation may be addressing hundreds of terabytes of data placed somewhere in persistent memory on a remote machine.
+
+```python
+>>> db = ukv.DataBase()
+>>> net = db.main.graph
+>>> net.add_edge(1, 2)
+>>> assert net.has_edge(1, 2)
+>>> assert net.has_node(1) and net.has_node(2)
+>>> assert net.number_of_edges(1, 2) == 1
+```
+
 ## Features
 
 A Key Value Store is generally an associative container with sub-linear search time.
@@ -155,12 +191,12 @@ Every DBMS uses such abstractions for primary keys in each collection and indexe
 But UKV has more to offer.
 Especially to Machine Learning practitioners.
 
-<table>
+<table width="100%">
 <td style="text-align: center">
 
 <ul>
 <li> <b>ACID Transactions</b> across collections  </li>
-<li> Persistent <b>Snapshots</b> 🔜 </li>
+<li> Persistent <b>Snapshots</b> 🔜 v0.5</li>
 <li> Operation-level <b>WATCH</b>-es  </li>
 <li> <b>BSON, JSON, MessagePack</b> support  </li>
 <li> <b>JSON Patches</b> & Merge-Patches  </li>
@@ -176,7 +212,7 @@ Especially to Machine Learning practitioners.
 <li> <b>Bulk Scans</b>, Random <b>Sampling</b> </li>
 <li> <b>Pandas</b> Tabular interface </li>
 <li> <b>NetworkX</b> Graph interface </li>
-<li> <b>PyTorch</b> & <b>TensorFlow</b> Data-Loaders 🔜 </li>
+<li> <b>PyTorch</b> & <b>TensorFlow</b> Data-Loaders 🔜 v0.6</li>
 </ul>
 </td>
 </table>
@@ -396,7 +432,7 @@ Thank you!
 
 > [Read full development and contribution guide in our docs here][ukv-details].
 
-## Presets, Limitations and FAQ
+## Frequently Asked Questions
 
 - Keys are 64-bit integers, by default. [Why?][ukv-keys-size]
 - Values are binary strings under 4 GB long. [Why?][ukv-values-size]
@@ -406,6 +442,8 @@ Thank you!
 - Does UKV support Time-To-Live? [Answered][ukv-ttl]
 - Does UKV support compression? [Answered][ukv-compression]
 - Does UKV support queues? [Anwered][ukv-queues]
+- How can I add Bindings for language X? [Answered][ukv-new-bindings]
+- How can I add database X as an Engine? [Answered][ukv-new-engine]
 
 [ukv-c-tutor]: https://unum.cloud/ukv/c
 [ukv-cpp-tutor]: https://unum.cloud/ukv/cpp
@@ -428,6 +466,8 @@ Thank you!
 [ukv-compression]: https://github.com/unum-cloud/ukv/discussions/232
 [ukv-ttl]: https://github.com/unum-cloud/ukv/discussions/230
 [ukv-queues]: https://github.com/unum-cloud/ukv/discussions/228
+[ukv-new-bindings]: https://github.com/unum-cloud/ukv/c#implementing-a-new-language-binding
+[ukv-new-engine]: https://github.com/unum-cloud/ukv/c#implementing-a-new-engine
 
 [ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
 [ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb

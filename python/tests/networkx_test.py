@@ -105,16 +105,16 @@ def test_neighbors():
     targets = np.arange(1, 101)
     net.add_edges_from(sources, targets)
 
-    neighbors = net.neighbors(0)
+    neighbors = net[0]
     assert len(neighbors) == 1
     assert neighbors[0] == 1
 
-    neighbors = net.neighbors(100)
+    neighbors = net[100]
     assert len(neighbors) == 1
     assert neighbors[0] == 99
 
     for node in range(1, 100):
-        neighbors = net.neighbors(node)
+        neighbors = net[node]
         assert len(neighbors) == 2
         assert neighbors[0] == node + 1
         assert neighbors[1] == node - 1
