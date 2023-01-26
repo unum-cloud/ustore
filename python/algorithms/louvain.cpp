@@ -1,3 +1,21 @@
+/**
+ * @file louvain.cpp
+ * @author Davit Vardanyan
+ * @version 0.1
+ * @date 2023-01-26
+ *
+ * @brief Louvain algorithm for Community Detection.
+ *
+ * This Louvain algorithm implementation is split into 2 phases:
+ * 1. Extract communities from a Graph database, building a super-graph of communities,
+ * 2. Repeatedly extract higher-level communities from the in-memory graph of smaller communities.
+ *
+ * Just like in the original implementations, the goal is to maximize the modularity metric.
+ * Unlike most implementations, however, during iterations we only compute the "delta",
+ * which makes the implementation more efficient.
+ *
+ * @copyright Copyright (c) 2023
+ */
 #include "ukv/ukv.hpp"
 
 using namespace unum::ukv;
@@ -17,7 +35,7 @@ bool first_phase(graph_collection_t& graph,
                  partition_t& partition,
                  vertex_degrees_t& degrees,
                  community_degrees_t& community_degrees,
-                 std::size_t count_edges) {
+                 std::size_t count_edges) noexcept(false) {
 
     bool improvement = false;
     bool modified = true;
@@ -48,10 +66,9 @@ bool first_phase(graph_collection_t& graph,
 
                 auto neighbor_com_tot_degree = community_degrees[neighbor_community].tot_degree;
                 auto vertex_in_neighbor_com_degree = degree_in_coms[neighbor_community];
-
-                double delta = (1.0 / count_edges) * (vertex_in_neighbor_com_degree - vertex_in_vertex_com_degree) -
-                               (vertex_degree / (2.0 * (count_edges * count_edges))) *
-                                   (vertex_degree + neighbor_com_tot_degree - vertex_com_tot_degree);
+                auto delta = (1.0 / count_edges) * (vertex_in_neighbor_com_degree - vertex_in_vertex_com_degree) -
+                             (vertex_degree / (2.0 * (count_edges * count_edges))) *
+                                 (vertex_degree + neighbor_com_tot_degree - vertex_com_tot_degree);
 
                 if (delta > best_mod) {
                     best_mod = delta;
@@ -80,7 +97,7 @@ bool second_phase(graph_t& graph,
                   partition_t& partition,
                   vertex_degrees_t& degrees,
                   community_degrees_t& community_degrees,
-                  std::size_t count_edges) {
+                  std::size_t count_edges) noexcept(false) {
 
     bool improvement = false;
     bool modified = true;
@@ -109,10 +126,9 @@ bool second_phase(graph_t& graph,
 
                 auto neighbor_com_tot_degree = community_degrees[neighbor_community].tot_degree;
                 auto vertex_in_neighbor_com_degree = degree_in_coms[neighbor_community];
-
-                double delta = (1.0 / count_edges) * (vertex_in_neighbor_com_degree - vertex_in_vertex_com_degree) -
-                               (vertex_degree / (2.0 * (count_edges * count_edges))) *
-                                   (vertex_degree + neighbor_com_tot_degree - vertex_com_tot_degree);
+                auto delta = (1.0 / count_edges) * (vertex_in_neighbor_com_degree - vertex_in_vertex_com_degree) -
+                             (vertex_degree / (2.0 * (count_edges * count_edges))) *
+                                 (vertex_degree + neighbor_com_tot_degree - vertex_com_tot_degree);
 
                 if (delta > best_mod) {
                     best_mod = delta;
@@ -136,55 +152,56 @@ bool second_phase(graph_t& graph,
     return improvement;
 }
 
-double modularity(partition_t& partition, community_degrees_t& community_degrees, double deg_sum) {
-    auto m = deg_sum / 2;
-    auto norm = 1 / (m * m);
-    double res = 0.0;
-    for (auto const& iter : partition)
-        res += ((community_degrees[iter.second].tot_degree - community_degrees[iter.second].in_degree) / m) -
-               (deg_sum * deg_sum * norm);
+double modularity(partition_t const& partition, community_degrees_t const& community_degrees, double deg_sum) noexcept {
+    auto m = deg_sum / 2.0;
+    auto norm = 1.0 / (m * m);
+    auto res = 0.0;
+    for (auto const& iter : partition) {
+        community_degree_t const& community_degree = community_degrees.at(iter.second);
+        res += ((community_degree.tot_degree - community_degree.in_degree) / m) - (deg_sum * deg_sum * norm);
+    }
     return res;
 }
 
-graph_t gen_graph(graph_collection_t& graph, partition_t& partition) {
+graph_t induce_community_graph(graph_collection_t const& graph, partition_t const& partition) noexcept(false) {
 
     graph_t induced_graph;
     auto stream = graph.vertex_stream().throw_or_release();
 
     while (!stream.is_end()) {
         auto vertex = stream.key();
-        ++stream;
-
-        auto com1 = partition[vertex];
+        auto vertex_com = partition.at(vertex);
         auto neighbors = graph.neighbors(vertex).throw_or_release();
         for (auto neighbor : neighbors) {
-            auto com2 = partition[neighbor];
-            if (com1 == com2)
+            auto neighbor_com = partition.at(neighbor);
+            if (vertex_com == neighbor_com)
                 continue;
-            induced_graph[com1][com2] += 1;
+            induced_graph[vertex_com][neighbor_com] += 1;
         }
+        ++stream;
     }
 
     return induced_graph;
 }
 
-graph_t gen_graph(graph_t& graph, partition_t& partition) {
+graph_t induce_community_graph(graph_t const& graph, partition_t const& partition) noexcept(false) {
 
     graph_t induced_graph;
     for (auto const& graph_iter : graph) {
-        auto com1 = partition[graph_iter.first];
+        auto vertex_com = partition.at(graph_iter.first);
         for (auto const& neighbor_iter : graph_iter.second) {
-            auto com2 = partition[neighbor_iter.first];
-            if (com1 == com2)
+            auto neighbor_com = partition.at(neighbor_iter.first);
+            if (vertex_com == neighbor_com)
                 continue;
-            induced_graph[com1][com2] += neighbor_iter.second;
+            induced_graph[vertex_com][neighbor_com] += neighbor_iter.second;
         }
     }
 
     return induced_graph;
 }
 
-partition_t best_partition(graph_collection_t& graph_collection, float min_modularity_growth = 0.0000001) {
+partition_t best_partition(graph_collection_t& graph_collection,
+                           float min_modularity_growth = 0.0000001) noexcept(false) {
 
     auto count_vertices = graph_collection.number_of_vertices();
     auto count_edges = graph_collection.number_of_edges();
@@ -212,7 +229,7 @@ partition_t best_partition(graph_collection_t& graph_collection, float min_modul
 
     bool improvement = first_phase(graph_collection, partition, vertex_degrees, community_degrees, count_edges);
     auto mod = modularity(partition, community_degrees, count_edges);
-    auto graph = gen_graph(graph_collection, partition);
+    auto graph = induce_community_graph(graph_collection, partition);
     partitions.insert(partitions.begin(), std::move(partition));
 
     while (improvement) {
@@ -240,7 +257,7 @@ partition_t best_partition(graph_collection_t& graph_collection, float min_modul
         if (new_mod - mod <= min_modularity_growth)
             break;
 
-        graph = gen_graph(graph, partition);
+        graph = induce_community_graph(graph, partition);
         partitions.insert(partitions.begin(), std::move(partition));
         mod = new_mod;
     }
