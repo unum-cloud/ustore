@@ -1,6 +1,7 @@
 #include "pybind.hpp"
 #include "crud.hpp"
 #include "cast_args.hpp"
+#include "algorithms/louvain.cpp"
 
 using namespace unum::ukv::pyb;
 using namespace unum::ukv;
@@ -377,6 +378,15 @@ void ukv::wrap_networkx(py::module& m) {
             // throw_not_implemented();
         },
         "Removes both vertices and edges from the graph.");
+
+    g.def(
+        "community_louvain",
+        [](py_graph_t& g) {
+            graph_collection_t graph = g.ref();
+            auto partition = best_partition(graph);
+            return py::cast(partition);
+        },
+        "Community Louvain.");
 
     // Making copies and subgraphs
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#making-copies-and-subgraphs
