@@ -81,10 +81,11 @@ class CMakeBuild(build_ext):
         subprocess.check_call(['cmake', ext.source_dir] + cmake_args)
         subprocess.check_call(
             ['cmake', '--build', '.', '--target', ext.name.replace('ukv.', 'py_')] + build_args)
-  
+
     def run(self):
         build_ext.run(self)
         self.run_command('build_pyi')
+
 
 class BuildPyi(Command):
     command_name = 'build_pyi'
@@ -124,15 +125,14 @@ class BuildPyi(Command):
             data['mapping'][ext.name] = abspath(join(self.build_lib, fname))
             data['stubs'].append(ext.name)
 
-
         data_json = json.dumps(data)
         # Execute in a subprocess in case it crashes
         args = [sys.executable, '-m', 'py11stubs', data_json]
 
         proc = subprocess.run(args, env=env, capture_output=True)
-        print( 'exit status:', proc.returncode )
-        print( 'stdout:', proc.stdout.decode() )
-        print( 'stderr:', proc.stderr.decode() )
+        print('exit status:', proc.returncode)
+        print('stdout:', proc.stdout.decode())
+        print('stderr:', proc.stderr.decode())
         if proc.returncode != 0:
             raise RuntimeError(
                 'Failed to generate .pyi file via %s' % (args,)
@@ -176,10 +176,10 @@ setup(
         CMakeExtension('ukv.umem'),
         CMakeExtension('ukv.rocksdb'),
         CMakeExtension('ukv.leveldb'),
-        CMakeExtension('ukv.flight_client')
-        ],
+        CMakeExtension('ukv.flight_client'),
+    ],
     cmdclass={
-        'build_ext': CMakeBuild, 
+        'build_ext': CMakeBuild,
         'build_pyi': BuildPyi},
     zip_safe=False,
     install_requires=[
