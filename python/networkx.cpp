@@ -359,16 +359,24 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("keys") = nullptr,
         "Removes edges from members of the first array to members of the second array.");
 
-    g.def("clear_edges", [](py_graph_t& g) { throw_not_implemented(); });
+    g.def(
+        "clear_edges",
+        [](py_graph_t& g) {
+            g.index.clear_values().throw_unhandled();
+            if (g.relations_attrs.db())
+                g.relations_attrs.clear_values().throw_unhandled();
+        },
+        "Removes edges from the graph.");
     g.def(
         "clear",
         [](py_graph_t& g) {
-            // database_t& db = g.db_ptr->native;
-            // db.clear(g.index);
-            // db.clear(g.sources_attrs);
-            // db.clear(g.targets_attrs);
-            // db.clear(g.relations_attrs);
-            // throw_not_implemented();
+            g.index.clear();
+            if (g.sources_attrs.db())
+                g.sources_attrs.clear();
+            if (g.targets_attrs.db())
+                g.targets_attrs.clear();
+            if (g.relations_attrs.db())
+                g.relations_attrs.clear();
         },
         "Removes both vertices and edges from the graph.");
 
