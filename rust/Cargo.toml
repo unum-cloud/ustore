@@ -5,9 +5,8 @@ publish = true
 edition = "2021"
 readme = "CARGO.md"
 homepage = "https://github.com/unum-cloud/ukv"
-documentation = "https://unum.cloud/ukv/rust/index.html"
 repository = "https://github.com/unum-cloud/ukv"
-build = "build.rs"
+documentation = "https://unum.cloud/ukv/rust/index.html"
 
 [build-dependencies]
 bindgen = "0.63.0"
