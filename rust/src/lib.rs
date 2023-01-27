@@ -1,37 +1,53 @@
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+
 mod error;
-mod ukv;
 
-use std::ffi::CString;
+pub mod bindings {
+	include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+}
 
-include!("../src/ukv/bindings.rs");
-
-type UkvDatabaseInitType = ukv_database_init_t;
+type UkvDatabaseInitType = bindings::ukv_database_init_t;
 
 pub struct Database {
-	db: UkvDatabaseInitType,
+	pub db: UkvDatabaseInitType,
+}
+
+impl Default for Database {
+	fn default() -> Self {
+		let config: *const _ = std::ffi::CString::default().as_ptr();
+		let error: *mut _ = &mut CString::default().as_ptr();
+		let void_fn = &mut () as *mut _ as *mut std::ffi::c_void;
+		let mut db = UkvDatabaseInitType {
+			error,
+			config,
+			db: void_fn as _,
+		};
+
+		unsafe { bindings::ukv_database_init(&mut db) };
+		Self {
+			db,
+		}
+	}
 }
 
 impl Database {
 	/// Open a new database using ukv_database_init()
-	pub fn new() -> Result<Self, error::DataStoreError> {
-		let c_str = CString::default();
-		let config: *const std::ffi::c_char = c_str.as_ptr();
-		let error: *mut *const std::ffi::c_char = &mut c_str.as_ptr();
-		let mut void_fn = &mut () as *mut _ as *mut std::ffi::c_void;
-		let db_ptr = &mut void_fn;
-		let mut database = UkvDatabaseInitType {
-			config,
-			db: db_ptr,
+	pub fn new() -> Self {
+		let config: *const _ = std::ffi::CString::default().as_ptr();
+		let error: *mut _ = &mut CString::default().as_ptr();
+		let void_fn = &mut () as *mut _ as *mut std::ffi::c_void;
+		let mut db = UkvDatabaseInitType {
 			error,
-		};
-		// Calling C++ function generated from bindgen
-		unsafe {
-			ukv_database_init(&mut database);
+			config,
+			db: void_fn as _,
 		};
 
-		Ok(Self {
-			db: database,
-		})
+		unsafe { bindings::ukv_database_init(&mut db) };
+		Self {
+			db,
+		}
 	}
 
 	pub fn contains_key() {}
@@ -39,9 +55,8 @@ impl Database {
 	// Close a database using ukv_database_free()
 	pub fn close() -> Result<(), error::DataStoreError> {
 		let void_fn = &mut () as *mut _ as *mut std::ffi::c_void;
-		unsafe {
-			ukv_database_free(void_fn);
-		};
+		unsafe { bindings::ukv_database_free(void_fn) };
+
 		Ok(())
 	}
 }
