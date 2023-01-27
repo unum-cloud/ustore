@@ -929,14 +929,18 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             ukv_size_t result_length = std::accumulate(found_counts, found_counts + tasks_count, 0);
-            auto rounded_counts = arena.alloc<ukv_length_t>(result_length, 0);
+            auto rounded_counts = arena.alloc<ukv_length_t>(result_length, status.member_ptr(), 0);
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
             void const* values_ptr = result_length ? reinterpret_cast<void const*>(found_values)
                                                    : reinterpret_cast<void const*>(&zero_size_data_k);
 
             if (rounded_counts)
                 std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
             else {
-                rounded_counts = arena.alloc<ukv_length_t>(1, 0);
+                rounded_counts = arena.alloc<ukv_length_t>(1, status.member_ptr(), 0);
+                if (!status)
+                    return ar::Status::ExecutionError(status.message());
                 result_length = 1;
             }
 
@@ -1008,6 +1012,57 @@ class UKVService : public arf::FlightServerBase {
             scan.counts = &found_counts;
 
             ukv_scan(&scan);
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ukv_to_arrow_schema(tasks_count, 1, &output_schema_c, &output_batch_c, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ukv_to_arrow_list( //
+                tasks_count,
+                kArgKeys.c_str(),
+                ukv_doc_field<ukv_key_t>(),
+                nullptr,
+                found_offsets,
+                found_keys,
+                output_schema_c.children[0],
+                output_batch_c.children[0],
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+        }
+        else if (is_query(desc.cmd, kFlightSample)) {
+
+            /// @param `limits`
+            auto input_limits = get_lengths(input_schema_c, input_batch_c, kArgCountLimits);
+
+            if (!input_limits)
+                return ar::Status::Invalid("Limits must have been provided for sampling");
+
+            // As we are immediately exporting in the Arrow format,
+            // we don't need the lengths, just the NULL indicators
+            ukv_length_t* found_offsets = nullptr;
+            ukv_length_t* found_lengths = nullptr;
+            ukv_length_t* found_counts = nullptr;
+            ukv_key_t* found_keys = nullptr;
+            ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
+            ukv_sample_t sample;
+            sample.db = db_;
+            sample.error = status.member_ptr();
+            sample.transaction = session.txn;
+            sample.arena = &session.arena;
+            sample.options = ukv_options(params);
+            sample.tasks_count = tasks_count;
+            sample.collections = input_collections.get();
+            sample.collections_stride = input_collections.stride();
+            sample.count_limits = input_limits.get();
+            sample.count_limits_stride = input_limits.stride();
+            sample.offsets = &found_offsets;
+            sample.keys = &found_keys;
+            sample.counts = &found_counts;
+
+            ukv_sample(&sample);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -1255,7 +1310,6 @@ class UKVService : public arf::FlightServerBase {
             *response_ptr = std::move(stream);
             return ar::Status::OK();
         }
-
         return ar::Status::OK();
     }
 };

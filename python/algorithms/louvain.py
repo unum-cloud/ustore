@@ -1,6 +1,10 @@
-from typing import Mapping, Tuple, List
+# Baseline Python implementation of Louvain Community detection algorithm,
+# similar to the one in NetworkX, designed to operate with both in-memory
+# graphs and the ones persisted in UKV.
+from typing import Mapping, Tuple
 
 import networkx as nx
+
 
 def _node_affiliation(graph, partition: Mapping[int, int], node: int) -> Tuple[int, int]:
     """
@@ -13,6 +17,7 @@ def _node_affiliation(graph, partition: Mapping[int, int], node: int) -> Tuple[i
         degrees[partition[neighbor]] = degrees.get(partition[neighbor], 0) + 1
     return degrees
 
+
 def _node_affiliation_weighted(graph, partition: Mapping[int, int], node: int) -> Tuple[int, int]:
     """
     Simultaneously computes the weighted degree between `node` and
@@ -20,8 +25,9 @@ def _node_affiliation_weighted(graph, partition: Mapping[int, int], node: int) -
     """
 
     degrees = {}
-    for neighbor, datas in graph[node].items():
-        degrees[partition[neighbor]] = degrees.get(partition[neighbor], 0) + datas.get('weight', 1)
+    for neighbor, data in graph[node].items():
+        degrees[partition[neighbor]] = degrees.get(
+            partition[neighbor], 0) + data.get('weight', 1)
     return degrees
 
 
@@ -82,7 +88,8 @@ def _one_level(graph, count_edges: int, is_weighted: bool) -> Mapping[int, int]:
                     best_com = neighbor_community
 
             if best_com != node_community:
-                community_degrees[node_community] -= (node_degree - node_in_node_com_degree)
+                community_degrees[node_community] -= (
+                    node_degree - node_in_node_com_degree)
                 node_in_best_com_degree = degree_in_coms[best_com]
                 community_degrees[best_com] += (
                     node_degree - node_in_best_com_degree)
@@ -92,7 +99,6 @@ def _one_level(graph, count_edges: int, is_weighted: bool) -> Mapping[int, int]:
                 modified += 1
                 improvement = True
 
-
     return partition, community_degrees, community_in_degrees, improvement
 
 
@@ -100,7 +106,7 @@ def _gen_graph(graph, partition: Mapping[int, int]):
     """
     Create super node graph, where nodes are communities and edges are degrees between communities.
     """
-    
+
     G = nx.Graph()
     G.add_nodes_from(partition.values())
 
@@ -109,41 +115,47 @@ def _gen_graph(graph, partition: Mapping[int, int]):
         com2 = partition[node2]
         if com1 == com2:
             continue
-        w_prec = G.get_edge_data(com1, com2, {"weight": 0}).get("weight", 1)
-        G.add_edge(com1, com2, **{"weight": w_prec + 1})
+        w_prec = G.get_edge_data(com1, com2, {'weight': 0}).get('weight', 1)
+        G.add_edge(com1, com2, **{'weight': w_prec + 1})
 
     return G
+
 
 def _gen_graph_from_weighted(graph, partition: Mapping[int, int]):
     """
     Create super node graph from weighted graph, where nodes are communities and edges are degrees between communities.
     """
-    
+
     G = nx.Graph()
     G.add_nodes_from(partition.values())
 
-    for node1, node2, datas in graph.edges(data=True):
+    for node1, node2, data in graph.edges(data=True):
         com1 = partition[node1]
         com2 = partition[node2]
         if com1 == com2:
             continue
-        edge_weight = datas.get('weight', 1)
-        w_prec = G.get_edge_data(com1, com2, {"weight": 0}).get("weight", 1)
-        G.add_edge(com1, com2, **{"weight": w_prec + edge_weight})
+        edge_weight = data.get('weight', 1)
+        w_prec = G.get_edge_data(com1, com2, {'weight': 0}).get('weight', 1)
+        G.add_edge(com1, com2, **{'weight': w_prec + edge_weight})
 
     return G
 
+
 def modularity(
-    partition: Mapping[int, int], \
-    count_edges: int, community_degrees: Mapping[int, int], community_in_degrees: Mapping[int, int]) -> float:
+        partition: Mapping[int, int],
+        community_degrees: Mapping[int, int],
+        community_in_degrees: Mapping[int, int],
+        degree_sum: int) -> float:
     """
     Compute the modularity of a partition of a graph
     """
 
+    m = degree_sum / 2
+    norm = 1 / m ** 2
     res = 0.
     for com in set(partition.values()):
-        res += (community_in_degrees.get(com, 0.) / count_edges) - \
-               (community_degrees.get(com, 0.) / (2. * count_edges)) ** 2
+        res += ((community_degrees[com] - community_in_degrees[com]
+                 ) / m) - (degree_sum * degree_sum * norm)
     return res
 
 
@@ -154,25 +166,30 @@ def best_partition(graph, min_mod_growth: float = 0.0000001) -> Mapping[int, int
 
     partitions = []
     count_edges = graph.number_of_edges()
-    partition, community_degrees, community_in_degrees, improvement = _one_level(graph, count_edges, False)
-    mod = modularity(partition, count_edges, community_degrees, community_in_degrees)
+    partition, community_degrees, community_in_degrees, improvement = _one_level(
+        graph, count_edges, False)
     if not improvement:
         return partition
+    mod = modularity(partition, community_degrees,
+                     community_in_degrees, count_edges)
 
     partitions.insert(0, partition)
     graph = _gen_graph(graph, partition)
 
-    while True:
+    while improvement:
         count_edges = graph.number_of_edges()
-        partition, community_degrees, community_in_degrees, improvement = _one_level(graph, count_edges, True)
-        new_mod = modularity(partition, count_edges, community_degrees, community_in_degrees)
+        degree_sum = graph.size()
+        partition, community_degrees, community_in_degrees, improvement = _one_level(
+            graph, count_edges, True)
+        new_mod = modularity(partition, community_degrees,
+                             community_in_degrees, degree_sum)
+
         if not improvement or new_mod - mod <= min_mod_growth:
             break
 
         mod = new_mod
         partitions.insert(0, partition)
         graph = _gen_graph_from_weighted(graph, partition)
-
 
     partition = partitions[0]
     for index in range(1, len(partitions)):

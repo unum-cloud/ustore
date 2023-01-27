@@ -1,6 +1,7 @@
 #include "pybind.hpp"
 #include "crud.hpp"
 #include "cast_args.hpp"
+#include "algorithms/louvain.cpp"
 
 using namespace unum::ukv::pyb;
 using namespace unum::ukv;
@@ -164,14 +165,7 @@ void ukv::wrap_networkx(py::module& m) {
 
     g.def(
         "number_of_edges",
-        [](py_graph_t& g) {
-            auto present_edges = g.ref().edges(ukv_vertex_source_k).throw_or_release();
-            auto present_it = std::move(present_edges).begin();
-            auto count_results = 0;
-            for (; !present_it.is_end(); ++present_it)
-                ++count_results;
-            return count_results;
-        },
+        [](py_graph_t& g) { return g.ref().number_of_edges(); },
         "Returns edges count");
 
     // Reporting nodes edges and neighbors
@@ -365,18 +359,35 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("keys") = nullptr,
         "Removes edges from members of the first array to members of the second array.");
 
-    g.def("clear_edges", [](py_graph_t& g) { throw_not_implemented(); });
+    g.def(
+        "clear_edges",
+        [](py_graph_t& g) {
+            g.index.clear_values().throw_unhandled();
+            if (g.relations_attrs.db())
+                g.relations_attrs.clear_values().throw_unhandled();
+        },
+        "Removes edges from the graph.");
     g.def(
         "clear",
         [](py_graph_t& g) {
-            // database_t& db = g.db_ptr->native;
-            // db.clear(g.index);
-            // db.clear(g.sources_attrs);
-            // db.clear(g.targets_attrs);
-            // db.clear(g.relations_attrs);
-            // throw_not_implemented();
+            g.index.clear();
+            if (g.sources_attrs.db())
+                g.sources_attrs.clear();
+            if (g.targets_attrs.db())
+                g.targets_attrs.clear();
+            if (g.relations_attrs.db())
+                g.relations_attrs.clear();
         },
         "Removes both vertices and edges from the graph.");
+
+    g.def(
+        "community_louvain",
+        [](py_graph_t& g) {
+            graph_collection_t graph = g.ref();
+            auto partition = best_partition(graph);
+            return py::cast(partition);
+        },
+        "Community Louvain.");
 
     // Making copies and subgraphs
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#making-copies-and-subgraphs

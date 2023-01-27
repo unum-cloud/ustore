@@ -247,6 +247,34 @@ class graph_collection_t {
         return blobs_ref_gt<places_arg_t>(db_, transaction_, std::move(arg), arena_).present(watch);
     }
 
+    expected_gt<keys_stream_t> vertex_stream(
+        std::size_t vertices_read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
+        blobs_range_t members(db_, transaction_, collection_);
+        keys_range_t range {members};
+        keys_stream_t stream = range.begin();
+        stream.seek_to_first();
+        return stream;
+    }
+
+    std::size_t number_of_vertices() {
+        blobs_range_t members(db_, transaction_, collection_);
+        keys_range_t range {members};
+        return range.size();
+    }
+
+    std::size_t number_of_edges() {
+        graph_stream_t stream {db_,
+                               collection_,
+                               transaction_,
+                               keys_stream_t::default_read_ahead_k,
+                               ukv_vertex_source_k};
+        stream.seek_to_first();
+        std::size_t count_results = 0;
+        for (; !stream.is_end(); ++stream)
+            ++count_results;
+        return count_results;
+    }
+
     using adjacency_range_t = range_gt<graph_stream_t>;
 
     expected_gt<adjacency_range_t> edges(

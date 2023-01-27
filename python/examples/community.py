@@ -5,7 +5,7 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 
 import ukv.umem as ukv
-sys.path.insert(0, 'python/community/')
+sys.path.insert(0, 'python/algorithms/')
 from louvain import best_partition # autopep8: off
 
 G = nx.karate_club_graph()
@@ -16,6 +16,8 @@ for v1,v2 in G.edges:
     graph.add_edge(v1,v2)
 
 partition = best_partition(graph)
+#or
+partition = graph.community_louvain()
 
 # draw the graph
 pos = nx.spring_layout(G)
