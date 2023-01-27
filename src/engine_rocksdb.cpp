@@ -226,7 +226,7 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
         safe_section("Allocating snapshot handle", c.error, [&] { *c.snapshot = new rocks_snapshot_t(); });
     return_if_error_m(c.error);
 
-    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
+    rocks_snapshot_t& snap = **reinterpret_cast<rocks_snapshot_t**>(c.snapshot);
 
     snap.snapshot = db.native->GetSnapshot();
     if (!snap.snapshot)
