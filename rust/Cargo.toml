@@ -1,0 +1,18 @@
+[package]
+name = "ukv"
+version = "0.0.1"
+publish = true
+edition = "2021"
+readme = "CARGO.md"
+homepage = "https://github.com/unum-cloud/ukv"
+repository = "https://github.com/unum-cloud/ukv"
+documentation = "https://unum.cloud/ukv/rust/index.html"
+
+[build-dependencies]
+bindgen = "0.63.0"
+
+[lib]
+name = "ukv"
+
+[dependencies]
+thiserror = "1.0.38"
