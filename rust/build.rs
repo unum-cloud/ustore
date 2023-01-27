@@ -10,8 +10,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	println!("cargo:rustc-link-search=../include/ukv");
 
 	let bindings = bindgen::Builder::default()
-		// .header("../include/ukv/db.h")
-		// .header("../include/ukv/blobs.h")
 		.header("./wrapper.h")
 		.clang_args(&["-I../include", "-I../include/ukv"])
 		.detect_include_paths(true)
