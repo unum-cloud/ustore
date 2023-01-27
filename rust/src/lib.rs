@@ -17,7 +17,7 @@ pub struct Database {
 impl Default for Database {
 	fn default() -> Self {
 		let config: *const _ = std::ffi::CString::default().as_ptr();
-		let error: *mut _ = &mut CString::default().as_ptr();
+		let error: *mut _ = &mut std::ffi::CString::default().as_ptr();
 		let void_fn = &mut () as *mut _ as *mut std::ffi::c_void;
 		let mut db = UkvDatabaseInitType {
 			error,
@@ -36,7 +36,7 @@ impl Database {
 	/// Open a new database using ukv_database_init()
 	pub fn new() -> Self {
 		let config: *const _ = std::ffi::CString::default().as_ptr();
-		let error: *mut _ = &mut CString::default().as_ptr();
+		let error: *mut _ = &mut std::ffi::CString::default().as_ptr();
 		let void_fn = &mut () as *mut _ as *mut std::ffi::c_void;
 		let mut db = UkvDatabaseInitType {
 			error,
