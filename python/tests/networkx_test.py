@@ -208,6 +208,33 @@ def test_remove_nodes_and_related_edges():
         assert not net.has_edge(source, target)
 
 
+def test_clear():
+    db = ukv.DataBase()
+    main = db.main
+    net = main.graph
+
+    sources = np.arange(100)
+    targets = np.arange(100, 200)
+    net.add_edges_from(sources, targets)
+
+    for source, target in zip(sources, targets):
+        assert net.has_node(source)
+        assert net.has_node(target)
+        assert net.has_edge(source, target)
+
+    net.clear_edges()
+    for source, target in zip(sources, targets):
+        assert net.has_node(source)
+        assert net.has_node(target)
+        assert not net.has_edge(source, target)
+
+    net.clear()
+    for source, target in zip(sources, targets):
+        assert not net.has_node(source)
+        assert not net.has_node(target)
+        assert not net.has_edge(source, target)
+
+
 def test_transaction_watch():
     db = ukv.DataBase()
     net = db.main.graph
