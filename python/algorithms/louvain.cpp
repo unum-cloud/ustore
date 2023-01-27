@@ -163,7 +163,7 @@ double modularity(partition_t const& partition, community_degrees_t const& commu
     return res;
 }
 
-graph_t induce_community_graph(graph_collection_t const& graph, partition_t const& partition) noexcept(false) {
+graph_t induce_community_graph(graph_collection_t& graph, partition_t const& partition) noexcept(false) {
 
     graph_t induced_graph;
     auto stream = graph.vertex_stream().throw_or_release();
