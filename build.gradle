@@ -110,7 +110,7 @@ publishing {
             pom {
                 name = "UKV"
                 description = "Universal Key-Value store interface for both in-memory and persistent transactional collections for Java"
-                url = "https://github.com/unum-cloud/UKV"
+                url = "https://github.com/unum-cloud/ukv"
                 licenses {
                     license {
                         name = 'The Apache License, Version 2.0'

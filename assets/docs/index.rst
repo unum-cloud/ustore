@@ -38,10 +38,11 @@ Overview
    :hidden:
    :caption: �
 
-   tests/index
-   benchmarks/index
-   details/index
-   related
+   details/tests
+   details/benchmarks
+   details/implementation
+   details/contributing
+   details/related
 
 .. toctree:: 
    :hidden:

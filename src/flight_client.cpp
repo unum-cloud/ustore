@@ -1134,6 +1134,137 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     }
 }
 
+void ukv_sample(ukv_sample_t* c_ptr) {
+
+    ukv_sample_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
+    strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
+
+    places_arg_t places {collections, {}, {}, c.tasks_count};
+
+    ar::Status ar_status;
+    arrow_mem_pool_t pool(arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
+
+    // Configure the `cmd` descriptor
+    bool const same_collection = places.same_collection();
+    bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
+
+    arf::FlightDescriptor descriptor;
+    descriptor.type = arf::FlightDescriptor::UNKNOWN;
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}?", kFlightSample);
+    if (c.transaction)
+        fmt::format_to(std::back_inserter(descriptor.cmd),
+                       "{}=0x{:0>16x}&",
+                       kParamTransactionID,
+                       std::uintptr_t(c.transaction));
+    if (same_named_collection)
+        fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
+    export_options(c.options, descriptor.cmd);
+
+    bool const has_collections_column = collections && !same_collection;
+    bool const has_limits_column = true;
+
+    // If all requests map to the same collection, we can avoid passing its ID
+    if (has_collections_column && !collections.is_continuous()) {
+        auto continuous = arena.alloc<ukv_collection_t>(places.count, c.error);
+        return_if_error_m(c.error);
+        transform_n(collections, places.count, continuous.begin());
+        collections = {continuous.begin(), sizeof(ukv_collection_t)};
+    }
+
+    if (has_limits_column && !limits.is_continuous()) {
+        auto continuous = arena.alloc<ukv_length_t>(places.size(), c.error);
+        return_if_error_m(c.error);
+        transform_n(limits, places.size(), continuous.begin());
+        limits = {continuous.begin(), places.size()};
+    }
+
+    // Now build-up the Arrow representation
+    ArrowArray input_array_c, output_array_c;
+    ArrowSchema input_schema_c, output_schema_c;
+    auto count_collections = has_collections_column + has_limits_column;
+    ukv_to_arrow_schema(places.count, count_collections, &input_schema_c, &input_array_c, c.error);
+    return_if_error_m(c.error);
+
+    if (has_collections_column)
+        ukv_to_arrow_column( //
+            c.tasks_count,
+            kArgCols.c_str(),
+            ukv_doc_field<ukv_collection_t>(),
+            nullptr,
+            nullptr,
+            collections.get(),
+            input_schema_c.children[0],
+            input_array_c.children[0],
+            c.error);
+    return_if_error_m(c.error);
+
+    if (has_limits_column)
+        ukv_to_arrow_column( //
+            c.tasks_count,
+            kArgCountLimits.c_str(),
+            ukv_doc_field<ukv_length_t>(),
+            nullptr,
+            nullptr,
+            limits.get(),
+            input_schema_c.children[has_collections_column],
+            input_array_c.children[has_collections_column],
+            c.error);
+    return_if_error_m(c.error);
+
+    // Send the request to server
+    ar::Result<std::shared_ptr<ar::RecordBatch>> maybe_batch = ar::ImportRecordBatch(&input_array_c, &input_schema_c);
+    return_error_if_m(maybe_batch.ok(), c.error, error_unknown_k, "Can't pack RecordBatch");
+
+    std::shared_ptr<ar::RecordBatch> batch_ptr = maybe_batch.ValueUnsafe();
+    if (batch_ptr->num_rows() == 0)
+        return;
+    ar::Result<arf::FlightClient::DoExchangeResult> result = db.flight->DoExchange(options, descriptor);
+    return_error_if_m(result.ok(), c.error, network_k, "Failed to Get with Arrow server");
+
+    ar_status = result->writer->Begin(batch_ptr->schema());
+    return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing schema");
+
+    auto table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
+    ar_status = result->writer->WriteTable(*table);
+    return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing request");
+
+    ar_status = result->writer->DoneWriting();
+    return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Submitting request");
+
+    // Fetch the responses
+    // Requesting `ToTable` might be more efficient than concatenating and
+    // reallocating directly from our arena, as the underlying Arrow implementation
+    // may know the length of the entire dataset.
+    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c);
+    return_error_if_m(ar_status.ok(), c.error, network_k, "No response");
+
+    // Convert the responses in Arrow C form
+    return_error_if_m(output_schema_c.n_children == 1, c.error, error_unknown_k, "Expecting one column");
+
+    // Export the results into out expected form
+    auto offs_ptr = (ukv_length_t*)output_array_c.children[0]->buffers[1];
+    auto data_ptr = (ukv_key_t*)output_array_c.children[0]->children[0]->buffers[1];
+
+    if (c.offsets)
+        *c.offsets = offs_ptr;
+    if (c.keys)
+        *c.keys = data_ptr;
+    if (c.counts) {
+        auto lens = *c.counts = arena.alloc<ukv_length_t>(places.count, c.error).begin();
+        return_if_error_m(c.error);
+        for (std::size_t i = 0; i != places.count; ++i)
+            lens[i] = offs_ptr[i + 1] - offs_ptr[i];
+    }
+}
+
 void ukv_measure(ukv_measure_t* c_ptr) {
 
     ukv_measure_t& c = *c_ptr;

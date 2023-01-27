@@ -27,6 +27,10 @@ for test in $(ls ./build_release/build/bin/*test_units*); do
 done
 echo -e "------ \e[92mTests Passing!\e[0m ------"
 
+# Push the tag
+git tag "v${version}"
+git push origin --tags
+
 # Build and Test Python
 pip install cibuildwheel twine
 echo -e "------ \e[93mBuild and Test Python\e[0m ------"
@@ -44,7 +48,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "------ \e[92mPython Published!\e[0m ------"
 fi
 
-# Build and Test Python
+# Build and Test Java
 echo -e "------ \e[93mBuild and Test Java\e[0m ------"
 export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
 bash java/pack.sh
@@ -63,23 +67,23 @@ echo -e "------ \e[93mBuild GO\e[0m ------"
 bash go-ukv/pack.sh
 echo -e "------ \e[92mGo Built!\e[0m ------"
 
-# Test And Publish Go
+# Test and Publish Go
 read -p "Publish Go? " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "------ \e[93mPublishing Go to go-ukv\e[0m ------"
-    cd go-ukv && bash publish.sh && cd ../
+    cd go-ukv && bash publish.sh ; cd ..
     echo -e "------ \e[92mGo Published!\e[0m ------"
 fi
 
 # Build Docker
 echo -e "\n------ \e[93mBuilding Docker\e[0m ------"
-docker buildx build --platform=linux/amd64,linux/arm64 . --file docker/Dockerfile --tag unum/ukv:$version-focal
+docker buildx build --platform "linux/amd64,linux/arm64" --file docker/Dockerfile --tag unum/ukv:$version-focal --tag unum/ukv:latest --cache-from "type=local,src=docker/cache" --output registry .
 echo -e "------ \e[92mDocker Built!\e[0m ------"
 
 read -p "Publish to DockerHub? " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "------ \e[93mPublishing to DockerHub\e[0m ------"
-    docker login && docker push unum/ukv:$version-focal
+    docker login && docker push unum/ukv -a
     echo -e "------ \e[92mDocker Publish!\e[0m ------"
 fi
 

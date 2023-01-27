@@ -37,9 +37,9 @@ def test_triangle():
 
     assert net.has_node(1) and net.has_node(2) and net.has_node(3)
 
-    expected_nodes = [1,2,3]
+    expected_nodes = [1, 2, 3]
     exported_nodes = []
-    for i, node in enumerate(net.nodes()):
+    for node in net.nodes:
         exported_nodes.append(node)
     assert exported_nodes == expected_nodes
 
@@ -48,9 +48,9 @@ def test_triangle():
     assert net.number_of_edges(2, 3) == 1
     assert net.number_of_edges(3, 1) == 1
 
-    expected_edges = [(1,2),(2,3),(3,1)]
+    expected_edges = [(1, 2), (2, 3), (3, 1)]
     exported_edges = []
-    for edge in net.edges():
+    for edge in net.edges:
         exported_edges.append(edge)
     assert exported_edges == expected_edges
 
@@ -102,21 +102,21 @@ def test_neighbors():
     net = db.main.graph
 
     sources = np.arange(100)
-    targets = np.arange(1,101)
-    net.add_edges_from(sources,targets)
+    targets = np.arange(1, 101)
+    net.add_edges_from(sources, targets)
 
-    neighbors = net.neighbors(0)
+    neighbors = net[0]
     assert len(neighbors) == 1
-    assert neighbors[0] == 1 
+    assert neighbors[0] == 1
 
-    neighbors = net.neighbors(100)
+    neighbors = net[100]
     assert len(neighbors) == 1
-    assert neighbors[0] == 99 
+    assert neighbors[0] == 99
 
-    for node in range(1,100):
-        neighbors = net.neighbors(node)
+    for node in range(1, 100):
+        neighbors = net[node]
         assert len(neighbors) == 2
-        assert neighbors[0] == node + 1 
+        assert neighbors[0] == node + 1
         assert neighbors[1] == node - 1
 
 
@@ -125,17 +125,17 @@ def test_degree():
     net = db.main.graph
 
     sources = np.arange(100)
-    targets = np.arange(1,101)
-    net.add_edges_from(sources,targets)
+    targets = np.arange(1, 101)
+    net.add_edges_from(sources, targets)
 
     degs = net.degree
     assert degs[0] == degs[100] == 1
-    for node in range(1,100):
+    for node in range(1, 100):
         assert degs[node] == 2
 
     in_degs = net.in_degree
     assert in_degs[0] == 0
-    for node in range(1,101):
+    for node in range(1, 101):
         assert in_degs[node] == 1
 
     out_degs = net.out_degree
@@ -146,7 +146,7 @@ def test_degree():
     # Batch
     expected_degrees = [2] * 99
     expected_degrees.append(1)
-    expected_degrees.insert(0,1)
+    expected_degrees.insert(0, 1)
     vertices = np.arange(101)
     degrees = degs[vertices]
     for i in vertices:
@@ -205,6 +205,33 @@ def test_remove_nodes_and_related_edges():
         net.remove_node(source)
         assert not net.has_node(source)
         assert net.has_node(target)
+        assert not net.has_edge(source, target)
+
+
+def test_clear():
+    db = ukv.DataBase()
+    main = db.main
+    net = main.graph
+
+    sources = np.arange(100)
+    targets = np.arange(100, 200)
+    net.add_edges_from(sources, targets)
+
+    for source, target in zip(sources, targets):
+        assert net.has_node(source)
+        assert net.has_node(target)
+        assert net.has_edge(source, target)
+
+    net.clear_edges()
+    for source, target in zip(sources, targets):
+        assert net.has_node(source)
+        assert net.has_node(target)
+        assert not net.has_edge(source, target)
+
+    net.clear()
+    for source, target in zip(sources, targets):
+        assert not net.has_node(source)
+        assert not net.has_node(target)
         assert not net.has_edge(source, target)
 
 

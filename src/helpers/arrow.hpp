@@ -32,6 +32,7 @@ namespace arf = arrow::flight;
 namespace ar = arrow;
 
 inline static std::string const kFlightListCols = "list_collections";   /// `DoGet`
+inline static std::string const kFlightSample = "sample";               /// `DoGet`
 inline static std::string const kFlightColCreate = "create_collection"; /// `DoAction`
 inline static std::string const kFlightColDrop = "remove_collection";   /// `DoAction`
 
