@@ -2,9 +2,15 @@ Examples
 ========
 
 =================
+Browser
+=================
+.. literalinclude:: ../../../python/examples/browser.py
+   :language: python
+
+=================
 Consistent Dict
 =================
-.. literalinclude:: ../../../python/examples/basic_dictionary.py
+.. literalinclude:: ../../../python/examples/consistent_dict.py
    :language: python
 
 =================

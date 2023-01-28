@@ -49,8 +49,10 @@ class keys_stream_t {
 
     status_t prefetch() noexcept {
 
-        if (next_min_key_ == ukv_key_unknown_k)
+        if (next_min_key_ == ukv_key_unknown_k) {
+            ++fetched_offset_;
             return {};
+        }
 
         ukv_length_t* found_counts = nullptr;
         ukv_key_t* found_keys = nullptr;
@@ -111,7 +113,7 @@ class keys_stream_t {
 
     status_t advance() noexcept {
 
-        if (fetched_offset_ >= fetched_keys_.size())
+        if (fetched_offset_ >= fetched_keys_.size() - 1)
             return prefetch();
 
         ++fetched_offset_;
@@ -472,7 +474,7 @@ struct keys_range_t {
         return count;
     }
 
-    expected_gt<sample_t> sample(std::size_t count, arena_t& arena) noexcept {
+    expected_gt<sample_t> sample(std::size_t count, ukv_arena_t* arena) noexcept {
         ukv_length_t* found_counts = nullptr;
         ukv_key_t* found_keys = nullptr;
         status_t status;
@@ -482,7 +484,8 @@ struct keys_range_t {
             .db = members.db(),
             .error = status.member_ptr(),
             .transaction = members.txn(),
-            .arena = arena.member_ptr(),
+            .arena = arena,
+            .tasks_count = 1,
             .collections = &c_collection,
             .count_limits = &c_count,
             .counts = &found_counts,

@@ -52,7 +52,7 @@ As such, for sub-document level gathers and updates, we use:
 [ejdb]: https://github.com/Softmotions/ejdb
 [surreal]: https://github.com/surrealdb/surrealdb
 [arango]: https://github.com/arango/arangodb
-[ukv-keys-size]: https://unum.cloud/UKV/c/#integer-keys
+[ukv-keys-size]: https://unum.cloud/ukv/c/#integer-keys
 [pointer]: https://datatracker.ietf.org/doc/html/rfc6901
 [patch]: https://datatracker.ietf.org/doc/html/rfc6902
 [merge-patch]: https://datatracker.ietf.org/doc/html/rfc7386

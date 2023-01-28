@@ -31,6 +31,16 @@ RUN cmake \
 
 ## TODO: Optimize: https://github.com/docker-slim/docker-slim
 FROM ubuntu:focal
+
+RUN apt-get update -y && \
+    apt-get install -y apt-utils 2>&1 | grep -v "debconf: delaying package configuration, since apt-utils is not installed" && \
+    apt-get install -y --no-install-recommends libssl-dev
+
+# Add Tini
+ENV TINI_VERSION v0.19.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+RUN chmod +x /tini
+
 WORKDIR /var/lib/ukv/
 
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_umem ./umem_server
@@ -43,4 +53,5 @@ COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_rocksdb ./rocksdb_s
 COPY ./assets/config_rocksdb.ini ./rocksdb/config_rocksdb.ini
 
 EXPOSE 38709
+ENTRYPOINT ["/tini", "--"]
 CMD ["./umem_server"]

@@ -23,6 +23,7 @@ class graph_stream_t {
     ukv_database_t db_ {nullptr};
     ukv_collection_t collection_ {ukv_collection_main_k};
     ukv_transaction_t transaction_ {nullptr};
+    ukv_vertex_role_t role_ = ukv_vertex_role_any_k;
 
     edges_span_t fetched_edges_ {};
     std::size_t fetched_offset_ {0};
@@ -37,7 +38,6 @@ class graph_stream_t {
         status_t status;
         ukv_vertex_degree_t* degrees_per_vertex = nullptr;
         ukv_key_t* edges_per_vertex = nullptr;
-        ukv_vertex_role_t role = ukv_vertex_role_any_k;
 
         ukv_graph_find_edges_t graph_find_edges {
             .db = db_,
@@ -48,7 +48,7 @@ class graph_stream_t {
             .collections = &collection_,
             .vertices = vertices.begin().get(),
             .vertices_stride = vertices.stride(),
-            .roles = &role,
+            .roles = &role_,
             .degrees_per_vertex = &degrees_per_vertex,
             .edges_per_vertex = &edges_per_vertex,
         };
@@ -78,9 +78,10 @@ class graph_stream_t {
 
     graph_stream_t(ukv_database_t db,
                    ukv_collection_t collection = ukv_collection_main_k,
+                   ukv_transaction_t txn = nullptr,
                    std::size_t read_ahead_vertices = keys_stream_t::default_read_ahead_k,
-                   ukv_transaction_t txn = nullptr)
-        : db_(db), collection_(collection), transaction_(txn), arena_(db),
+                   ukv_vertex_role_t role = ukv_vertex_role_any_k)
+        : db_(db), collection_(collection), transaction_(txn), role_(role), arena_(db),
           vertex_stream_(db, collection, read_ahead_vertices, txn) {}
 
     graph_stream_t(graph_stream_t&&) = default;
@@ -98,7 +99,7 @@ class graph_stream_t {
 
     status_t advance() noexcept {
 
-        if (fetched_offset_ >= fetched_edges_.size()) {
+        if (fetched_offset_ >= fetched_edges_.size() - 1) {
             auto status = vertex_stream_.seek_to_next_batch();
             if (!status)
                 return status;

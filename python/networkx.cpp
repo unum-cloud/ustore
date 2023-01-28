@@ -1,6 +1,7 @@
 #include "pybind.hpp"
 #include "crud.hpp"
 #include "cast_args.hpp"
+#include "algorithms/louvain.cpp"
 
 using namespace unum::ukv::pyb;
 using namespace unum::ukv;
@@ -38,22 +39,6 @@ py::object wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
     return py::reinterpret_steal<py::object>(obj);
 }
 
-void upsert_vertices(py_graph_t& py_graph, py::object vertices_py) {
-    if (!PySequence_Check(vertices_py.ptr()))
-        throw std::invalid_argument("Nodes Must Be Sequence");
-    std::vector<ukv_key_t> vertices(PySequence_Size(vertices_py.ptr()));
-    py_transform_n(vertices_py.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
-    py_graph.ref().upsert_vertices(vertices).throw_unhandled();
-}
-
-void remove_vertices(py_graph_t& py_graph, py::object vertices_py) {
-    if (!PySequence_Check(vertices_py.ptr()))
-        throw std::invalid_argument("Nodes Must Be Sequence");
-    std::vector<ukv_key_t> vertices(PySequence_Size(vertices_py.ptr()));
-    py_transform_n(vertices_py.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
-    py_graph.ref().remove_vertices(vertices).throw_unhandled();
-}
-
 void ukv::wrap_networkx(py::module& m) {
 
     auto degs = py::class_<degree_view_t>(m, "DegreeView", py::module_local());
@@ -62,14 +47,26 @@ void ukv::wrap_networkx(py::module& m) {
         auto result = g.ref().degree(v, degs.roles).throw_or_release();
         return result;
     });
-    degs.def("__getitem__", [](degree_view_t& degs, PyObject* vs) {
+    degs.def("__getitem__", [](degree_view_t& degs, py::object vs) {
         py_graph_t& g = *degs.net_ptr.lock().get();
-        auto ids_handle = py_buffer(vs);
+        auto ids_handle = py_buffer(vs.ptr());
         auto ids = py_strided_range<ukv_key_t const>(ids_handle);
         auto result = g.ref().degrees(ids, {{&degs.roles, 0u}, ids.size()}).throw_or_release();
         return wrap_into_buffer<ukv_vertex_degree_t const>(
             g,
             strided_range<ukv_vertex_degree_t const>(result.begin(), result.end()));
+    });
+
+    auto edges_range = py::class_<range_gt<graph_stream_t>>(m, "EdgesRange", py::module_local());
+    edges_range.def("__iter__", [](range_gt<graph_stream_t>& range) { return std::move(range).begin(); });
+
+    auto edges_stream = py::class_<graph_stream_t>(m, "EdgesStream", py::module_local());
+    edges_stream.def("__next__", [](graph_stream_t& stream) {
+        if (stream.is_end())
+            throw py::stop_iteration();
+        auto edge = stream.edge();
+        ++stream;
+        return py::make_tuple(edge.source_id, edge.target_id);
     });
 
     auto g = py::class_<py_graph_t, std::shared_ptr<py_graph_t>>(m, "Network", py::module_local());
@@ -166,13 +163,19 @@ void ukv::wrap_networkx(py::module& m) {
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { return g.ref().edges(v1, v2).throw_or_release().size(); },
         "Returns the number of edges between two nodes.");
 
+    g.def(
+        "number_of_edges",
+        [](py_graph_t& g) { return g.ref().number_of_edges(); },
+        "Returns edges count");
+
     // Reporting nodes edges and neighbors
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#reporting-nodes-edges-and-neighbors
-    g.def(
+    g.def_property_readonly(
         "nodes",
         [](py_graph_t& g) {
-            // TODO: Give our the keys stream
-            throw_not_implemented();
+            blobs_range_t members(g.index.db(), g.index.txn(), g.index);
+            keys_range_t range {members};
+            return py::cast(std::make_unique<keys_range_t>(range));
         },
         "A NodeView of the graph.");
     g.def(
@@ -194,9 +197,8 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("n"),
         "Returns True if the graph contains the node n.");
 
-    g.def("edges", [](py_graph_t& g) { throw_not_implemented(); });
-    g.def("out_edges", [](py_graph_t& g) { throw_not_implemented(); });
-    g.def("in_edges", [](py_graph_t& g) { throw_not_implemented(); });
+    g.def_property_readonly("edges",
+                            [](py_graph_t& g) { return g.ref().edges(ukv_vertex_source_k).throw_or_release(); });
 
     g.def(
         "has_edge",
@@ -219,7 +221,7 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("v"));
 
     g.def(
-        "neighbors",
+        "__getitem__",
         [](py_graph_t& g, ukv_key_t n) { return wrap_into_buffer(g, g.ref().neighbors(n).throw_or_release()); },
         py::arg("n"),
         "Returns an iterable of incoming and outgoing nodes of n. Potentially with duplicates.");
@@ -291,7 +293,22 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("u_for_edge"),
         py::arg("v_for_edge"),
         py::arg("key"));
-    g.def("add_nodes_from", &upsert_vertices);
+    g.def("add_nodes_from", [](py_graph_t& g, py::object vs) {
+        if (PyObject_CheckBuffer(vs.ptr())) {
+            py_buffer_t buf = py_buffer(vs.ptr());
+            if (!can_cast_internal_scalars<ukv_key_t>(buf))
+                throw std::invalid_argument("Expecting @c ukv_key_t scalars in zero-copy interface");
+            auto vertices = py_strided_range<ukv_key_t const>(buf);
+            g.ref().upsert_vertices(vertices).throw_unhandled();
+        }
+        else {
+            if (!PySequence_Check(vs.ptr()))
+                throw std::invalid_argument("Nodes Must Be Sequence");
+            std::vector<ukv_key_t> vertices(PySequence_Size(vs.ptr()));
+            py_transform_n(vs.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
+            g.ref().upsert_vertices(vertices).throw_unhandled();
+        }
+    });
     g.def(
         "add_edges_from",
         [](py_graph_t& g, py::object adjacency_list) {
@@ -299,7 +316,22 @@ void ukv::wrap_networkx(py::module& m) {
         },
         py::arg("ebunch_to_add"),
         "Adds an adjacency list (in a form of 2 or 3 columnar matrix) to the graph.");
-    g.def("remove_nodes_from", &remove_vertices);
+    g.def("remove_nodes_from", [](py_graph_t& g, py::object vs) {
+        if (PyObject_CheckBuffer(vs.ptr())) {
+            py_buffer_t buf = py_buffer(vs.ptr());
+            if (!can_cast_internal_scalars<ukv_key_t>(buf))
+                throw std::invalid_argument("Expecting @c ukv_key_t scalars in zero-copy interface");
+            auto vertices = py_strided_range<ukv_key_t const>(buf);
+            g.ref().remove_vertices(vertices).throw_unhandled();
+        }
+        else {
+            if (!PySequence_Check(vs.ptr()))
+                throw std::invalid_argument("Nodes Must Be Sequence");
+            std::vector<ukv_key_t> vertices(PySequence_Size(vs.ptr()));
+            py_transform_n(vs.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
+            g.ref().remove_vertices(vertices).throw_unhandled();
+        }
+    });
     g.def(
         "remove_edges_from",
         [](py_graph_t& g, py::object adjacency_list) {
@@ -327,18 +359,35 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("keys") = nullptr,
         "Removes edges from members of the first array to members of the second array.");
 
-    g.def("clear_edges", [](py_graph_t& g) { throw_not_implemented(); });
+    g.def(
+        "clear_edges",
+        [](py_graph_t& g) {
+            g.index.clear_values().throw_unhandled();
+            if (g.relations_attrs.db())
+                g.relations_attrs.clear_values().throw_unhandled();
+        },
+        "Removes edges from the graph.");
     g.def(
         "clear",
         [](py_graph_t& g) {
-            // database_t& db = g.db_ptr->native;
-            // db.clear(g.index);
-            // db.clear(g.sources_attrs);
-            // db.clear(g.targets_attrs);
-            // db.clear(g.relations_attrs);
-            // throw_not_implemented();
+            g.index.clear();
+            if (g.sources_attrs.db())
+                g.sources_attrs.clear();
+            if (g.targets_attrs.db())
+                g.targets_attrs.clear();
+            if (g.relations_attrs.db())
+                g.relations_attrs.clear();
         },
         "Removes both vertices and edges from the graph.");
+
+    g.def(
+        "community_louvain",
+        [](py_graph_t& g) {
+            graph_collection_t graph = g.ref();
+            auto partition = best_partition(graph);
+            return py::cast(partition);
+        },
+        "Community Louvain.");
 
     // Making copies and subgraphs
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#making-copies-and-subgraphs

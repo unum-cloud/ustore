@@ -22,10 +22,10 @@
 #include <filesystem> // Enumerating the directory
 #include <fstream>    // Passing file contents to JSON parser
 
-#include <consistent_set/consistent_set.hpp> // `av::consistent_set_gt`
-#include <consistent_set/consistent_avl.hpp> // `av::consistent_avl_gt`
-#include <consistent_set/locked.hpp>         // `av::locked_gt`
-#include <consistent_set/partitioned.hpp>    // `av::partitioned_gt`
+#include <ucset/consistent_set.hpp> // `ucset::consistent_set_gt`
+#include <ucset/consistent_avl.hpp> // `ucset::consistent_avl_gt`
+#include <ucset/locked.hpp>         // `ucset::locked_gt`
+#include <ucset/partitioned.hpp>    // `ucset::partitioned_gt`
 
 #include <nlohmann/json.hpp>       // `nlohmann::json`
 #include <arrow/io/file.h>         // `arrow::io::ReadableFile`
@@ -53,9 +53,9 @@ bool const ukv_supports_snapshots_k = false;
 /*****************	 C++ Implementation	  ****************/
 /*********************************************************/
 
+using namespace unum::ucset;
 using namespace unum::ukv;
 using namespace unum;
-using namespace av;
 
 namespace stdfs = std::filesystem;
 using json_t = nlohmann::json;
@@ -116,24 +116,24 @@ struct pair_compare_t {
 /*****************  Using Consistent Sets ****************/
 /*********************************************************/
 
-// using consistent_set_t = consistent_set_gt<pair_t, pair_compare_t>;
-// using consistent_set_t = consistent_avl_gt<pair_t, pair_compare_t>;
-// using consistent_set_t = partitioned_gt< //
-//     consistent_set_gt<pair_t, pair_compare_t>,
+// using ucset_t = ucset_gt<pair_t, pair_compare_t>;
+// using ucset_t = consistent_avl_gt<pair_t, pair_compare_t>;
+// using ucset_t = partitioned_gt< //
+//     ucset_gt<pair_t, pair_compare_t>,
 //     std::hash<collection_key_t>,
 //     std::shared_mutex,
 //     64>;
-using consistent_set_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>, std::shared_mutex>;
-using transaction_t = typename consistent_set_t::transaction_t;
-using generation_t = typename consistent_set_t::generation_t;
+using ucset_t = locked_gt<consistent_set_gt<pair_t, pair_compare_t>, std::shared_mutex>;
+using transaction_t = typename ucset_t::transaction_t;
+using generation_t = typename ucset_t::generation_t;
 
 template <typename set_or_transaction_at, typename callback_at>
-consistent_set_status_t find_and_watch(set_or_transaction_at& set_or_transaction,
-                                       collection_key_t collection_key,
-                                       ukv_options_t options,
-                                       callback_at&& callback) noexcept {
+ucset::status_t find_and_watch(set_or_transaction_at& set_or_transaction,
+                               collection_key_t collection_key,
+                               ukv_options_t options,
+                               callback_at&& callback) noexcept {
 
-    if constexpr (!std::is_same<set_or_transaction_at, consistent_set_t>()) {
+    if constexpr (!std::is_same<set_or_transaction_at, ucset_t>()) {
         bool dont_watch = options & ukv_option_transaction_dont_watch_k;
         if (!dont_watch)
             if (auto watch_status = set_or_transaction.watch(collection_key); !watch_status)
@@ -148,22 +148,22 @@ consistent_set_status_t find_and_watch(set_or_transaction_at& set_or_transaction
 }
 
 template <typename set_or_transaction_at, typename callback_at>
-consistent_set_status_t scan_and_watch(set_or_transaction_at& set_or_transaction,
-                                       collection_key_t start,
-                                       std::size_t range_limit,
-                                       ukv_options_t options,
-                                       callback_at&& callback) noexcept {
+ucset::status_t scan_and_watch(set_or_transaction_at& set_or_transaction,
+                               collection_key_t start,
+                               std::size_t range_limit,
+                               ukv_options_t options,
+                               callback_at&& callback) noexcept {
 
     std::size_t match_idx = 0;
     collection_key_t previous = start;
     bool reached_end = false;
-    auto watch_status = consistent_set_status_t();
+    auto watch_status = ucset::status_t();
     auto callback_pair = [&](pair_t const& pair) noexcept {
         reached_end = pair.collection_key.collection != previous.collection;
         if (reached_end)
             return;
 
-        if constexpr (!std::is_same<set_or_transaction_at, consistent_set_t>()) {
+        if constexpr (!std::is_same<set_or_transaction_at, ucset_t>()) {
             bool dont_watch = options & ukv_option_transaction_dont_watch_k;
             if (!dont_watch)
                 if (watch_status = set_or_transaction.watch(pair); !watch_status)
@@ -193,7 +193,7 @@ consistent_set_status_t scan_and_watch(set_or_transaction_at& set_or_transaction
 }
 
 template <typename set_or_transaction_at, typename callback_at>
-consistent_set_status_t scan_full(set_or_transaction_at& set_or_transaction, callback_at&& callback) noexcept {
+ucset::status_t scan_full(set_or_transaction_at& set_or_transaction, callback_at&& callback) noexcept {
 
     collection_key_t previous {
         std::numeric_limits<ukv_collection_t>::min(),
@@ -252,7 +252,7 @@ struct database_t {
     /**
      * @brief Primary database state.
      */
-    consistent_set_t pairs;
+    ucset_t pairs;
 
     /**
      * @brief A variable-size set of named collections.
@@ -267,7 +267,7 @@ struct database_t {
      */
     std::string persisted_directory;
 
-    database_t(consistent_set_t&& set) noexcept(false) : pairs(std::move(set)) {}
+    database_t(ucset_t&& set) noexcept(false) : pairs(std::move(set)) {}
 
     database_t(database_t&& other) noexcept
         : pairs(std::move(other.pairs)), names(std::move(other.names)),
@@ -288,7 +288,7 @@ ukv_collection_t new_collection(database_t& db) noexcept {
     return new_handle;
 }
 
-void export_error_code(consistent_set_status_t code, ukv_error_t* c_error) noexcept {
+void export_error_code(ucset::status_t code, ukv_error_t* c_error) noexcept {
     if (!code)
         *c_error = "Faced error!";
 }
@@ -421,7 +421,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 
     ukv_database_init_t& c = *c_ptr;
     safe_section("Initializing DBMS", c.error, [&] {
-        auto maybe_pairs = consistent_set_t::make();
+        auto maybe_pairs = ucset_t::make();
         return_error_if_m(maybe_pairs, c.error, error_unknown_k, "Couldn't build consistent set");
         auto db = database_t(std::move(maybe_pairs).value());
         auto db_ptr = std::make_unique<database_t>(std::move(db)).release();
@@ -554,7 +554,7 @@ void ukv_write(ukv_write_t* c_ptr) {
                 if (auto watch_status = txn.watch(key); !watch_status)
                     return export_error_code(watch_status, c.error);
 
-            consistent_set_status_t status;
+            ucset::status_t status;
             if (content) {
                 pair_t pair {key, content, c.error};
                 return_if_error_m(c.error);

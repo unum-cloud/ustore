@@ -19,7 +19,7 @@ Largely for that reason we chose to use the following libraries for the implemen
 * For Documents:
   * `yyjson`: to update the state of documents.
   * `simdjson`: to sample fields from immutable documents.
-  * `mongo-c-drived`: to support BSON inputs.
+  * `mongo-c-driver`: to support BSON inputs.
   * `zlib` for document compression.
 * For Paths:
   * `pcre2`: to JIT Regular Expressions.
@@ -39,7 +39,7 @@ More broadly:
 
 In-memory backend with disk serialization.
 
-* Depends on [ashvardanian/consistent_set](github.com/ashvardanian/consistent_set).
+* Depends on [unum-cloud/ucset](github.com/unum-cloud/ucset).
 * Supports snapshots, transactions and named collections.
 
 Is by far the fastest of all backends, but with the lowest Durability.
@@ -74,4 +74,6 @@ This makes it easy for the external frameworks to send and gather info from UKV 
 ### RESTful API
 
 We implement a REST server using `Boost.Beast` and the underlying `Boost.Asio`, as the go-to Web-Dev libraries in C++.
+
 ## Contributing
+

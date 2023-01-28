@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <unistd.h>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -71,13 +72,33 @@ static char const* path() {
 #endif
 }
 
+#if defined(UKV_FLIGHT_CLIENT)
+static pid_t srv_id = -1;
+static std::string srv_path;
+#endif
+
 void clear_environment() {
+#if defined(UKV_FLIGHT_CLIENT)
+    if (srv_id > 0) {
+        kill(srv_id, SIGKILL);
+        waitpid(srv_id, nullptr, 0);
+    }
+
+    srv_id = fork();
+    if (srv_id == 0) {
+        usleep(1); // TODO Any statement is requiered to be run for successful `execl` run...
+        execl(srv_path.c_str(), srv_path.c_str(), "--quiet", (char*)(NULL));
+        exit(0);
+    }
+    usleep(100000); // 0.1 sec
+#endif
+
     namespace stdfs = std::filesystem;
     auto directory_str = path() ? std::string_view(path()) : "";
-    if (directory_str.empty())
-        return;
-    stdfs::remove_all(directory_str);
-    stdfs::create_directories(stdfs::path(directory_str).parent_path());
+    if (!directory_str.empty()) {
+        stdfs::remove_all(directory_str);
+        stdfs::create_directories(stdfs::path(directory_str).parent_path());
+    }
 }
 
 inline std::ostream& operator<<(std::ostream& os, collection_key_t obj) {
@@ -227,6 +248,7 @@ void check_binary_collection(blobs_collection_t& collection) {
     for (; expected_it != triplet.keys.end(); ++present_it, ++expected_it) {
         EXPECT_EQ(*expected_it, *present_it);
     }
+    ++present_it;
     EXPECT_TRUE(present_it.is_end());
 
     // Remove all of the values and check that they are missing
@@ -330,22 +352,42 @@ TEST(db, persistency) {
 
     triplet_t triplet;
     {
-        blobs_collection_t collection = db.main();
-        auto collection_ref = collection[triplet.keys];
-        check_length(collection_ref, ukv_length_missing_k);
-        round_trip(collection_ref, triplet);
-        check_length(collection_ref, triplet_t::val_size_k);
+        blobs_collection_t main_collection = db.main();
+        auto main_collection_ref = main_collection[triplet.keys];
+        check_length(main_collection_ref, ukv_length_missing_k);
+        round_trip(main_collection_ref, triplet);
+        check_length(main_collection_ref, triplet_t::val_size_k);
+
+        if (ukv_supports_named_collections_k) {
+            blobs_collection_t named_collection = *db.create("collection");
+            auto named_collection_ref = named_collection[triplet.keys];
+            check_length(named_collection_ref, ukv_length_missing_k);
+            round_trip(named_collection_ref, triplet);
+            check_length(named_collection_ref, triplet_t::val_size_k);
+            EXPECT_TRUE(named_collection.clear_values());
+            check_length(named_collection_ref, 0);
+        }
     }
     db.close();
     {
         EXPECT_TRUE(db.open(path()));
-        blobs_collection_t collection = db.main();
-        auto collection_ref = collection[triplet.keys];
-        check_equalities(collection_ref, triplet);
-        check_length(collection_ref, triplet_t::val_size_k);
 
-        EXPECT_EQ(collection.keys().size(), 3ul);
-        EXPECT_EQ(collection.items().size(), 3ul);
+        blobs_collection_t main_collection = db.main();
+        auto main_collection_ref = main_collection[triplet.keys];
+        check_equalities(main_collection_ref, triplet);
+        check_length(main_collection_ref, triplet_t::val_size_k);
+        EXPECT_EQ(main_collection.keys().size(), 3ul);
+        EXPECT_EQ(main_collection.items().size(), 3ul);
+
+        if (ukv_supports_named_collections_k) {
+            EXPECT_TRUE(db.contains("collection"));
+            EXPECT_TRUE(*db.contains("collection"));
+            blobs_collection_t named_collection = *db["collection"];
+            auto named_collection_ref = named_collection[triplet.keys];
+            check_length(named_collection_ref, 0);
+            EXPECT_EQ(named_collection.keys().size(), 3ul);
+            EXPECT_EQ(named_collection.items().size(), 3ul);
+        }
     }
 }
 
@@ -456,6 +498,29 @@ TEST(db, clear_values) {
     check_length(collection_ref, 0);
 }
 
+TEST(db, scan) {
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+    blobs_collection_t collection = db.main();
+
+    constexpr std::size_t keys_size = 1000;
+    std::array<ukv_key_t, keys_size> keys;
+    std::iota(std::begin(keys), std::end(keys), 0);
+    auto ref = collection[keys];
+    value_view_t value("value");
+    EXPECT_TRUE(ref.assign(value));
+    keys_stream_t stream(db, collection, 256);
+
+    EXPECT_TRUE(stream.seek_to_first());
+    ukv_key_t key = 0;
+    while (!stream.is_end()) {
+        EXPECT_EQ(stream.key(), key++);
+        ++stream;
+    }
+    EXPECT_EQ(key, keys_size);
+}
+
 /**
  * Ordered batched scan over the main collection.
  */
@@ -471,18 +536,21 @@ TEST(db, batch_scan) {
     auto ref = collection[keys];
     value_view_t value("value");
     EXPECT_TRUE(ref.assign(value));
-
-    keys_range_t present_keys = collection.keys();
     keys_stream_t stream(db, collection, 256);
+
     EXPECT_TRUE(stream.seek_to_first());
     auto batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
+    for (ukv_key_t i = 0; i != 256; ++i)
+        EXPECT_EQ(batch[i], i);
 
     EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
     EXPECT_EQ(batch.size(), 256);
     EXPECT_FALSE(stream.is_end());
+    for (ukv_key_t i = 0; i != 256; ++i)
+        EXPECT_EQ(batch[i], i + 256);
 
     EXPECT_TRUE(stream.seek_to_next_batch());
     batch = stream.keys_batch();
@@ -1442,18 +1510,18 @@ TEST(db, graph_triangle) {
     // Check scans
     EXPECT_TRUE(net.edges());
     {
-        std::unordered_set<edge_t, edge_hash_t> expected_edges {edge1, edge2, edge3};
-        std::unordered_set<edge_t, edge_hash_t> exported_edges;
+        std::vector<edge_t> expected_edges {edge1, edge2, edge3};
+        std::vector<edge_t> exported_edges;
 
-        auto present_edges = *net.edges();
+        auto present_edges = *net.edges(ukv_vertex_source_k);
         auto present_it = std::move(present_edges).begin();
         auto count_results = 0;
         while (!present_it.is_end()) {
-            exported_edges.insert(*present_it);
+            exported_edges.push_back(*present_it);
             ++present_it;
             ++count_results;
         }
-        EXPECT_EQ(count_results, 6);
+        EXPECT_EQ(count_results, 3);
         EXPECT_EQ(exported_edges, expected_edges);
     }
 
@@ -1544,18 +1612,18 @@ TEST(db, graph_triangle_batch) {
     // Check scans
     EXPECT_TRUE(net.edges());
     {
-        std::unordered_set<edge_t, edge_hash_t> expected_edges {triangle.begin(), triangle.end()};
-        std::unordered_set<edge_t, edge_hash_t> exported_edges;
+        std::vector<edge_t> expected_edges {triangle.begin(), triangle.end()};
+        std::vector<edge_t> exported_edges;
 
-        auto present_edges = *net.edges();
+        auto present_edges = *net.edges(ukv_vertex_source_k);
         auto present_it = std::move(present_edges).begin();
         size_t count_results = 0ul;
         while (!present_it.is_end()) {
-            exported_edges.insert(*present_it);
+            exported_edges.push_back(*present_it);
             ++present_it;
             ++count_results;
         }
-        EXPECT_EQ(count_results, triangle.size() * 2);
+        EXPECT_EQ(count_results, triangle.size());
         EXPECT_EQ(exported_edges, expected_edges);
     }
 
@@ -1841,6 +1909,31 @@ TEST(db, graph_degrees) {
     EXPECT_EQ(degrees.size(), vertices_count);
 }
 
+TEST(db, graph_neighbors) {
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    graph_collection_t graph = db.main<graph_collection_t>();
+    edge_t edge1 {1, 1, 17};
+    edge_t edge2 {1, 2, 15};
+    edge_t edge3 {2, 3, 16};
+
+    graph.upsert_edge(edge1);
+    graph.upsert_edge(edge2);
+    graph.upsert_edge(edge3);
+
+    auto neighbors = graph.neighbors(1).throw_or_release();
+    EXPECT_EQ(neighbors.size(), 2);
+    EXPECT_EQ(neighbors[0], 1);
+    EXPECT_EQ(neighbors[1], 2);
+
+    neighbors = graph.neighbors(2).throw_or_release();
+    EXPECT_EQ(neighbors.size(), 2);
+    EXPECT_EQ(neighbors[0], 3);
+    EXPECT_EQ(neighbors[1], 1);
+}
+
 #pragma region Vectors Modality
 
 /**
@@ -1903,6 +1996,12 @@ TEST(db, vectors) {
 }
 
 int main(int argc, char** argv) {
+
+#if defined(UKV_FLIGHT_CLIENT)
+    srv_path = argv[0];
+    srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ukv_flight_server_umem";
+#endif
+
     auto directory_str = path() ? std::string_view(path()) : "";
     if (directory_str.size())
         std::printf("Will work in directory: %s\n", directory_str.data());
@@ -1910,5 +2009,10 @@ int main(int argc, char** argv) {
         std::printf("Will work with default configuration\n");
 
     ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    int status = RUN_ALL_TESTS();
+#if defined(UKV_FLIGHT_CLIENT)
+    kill(srv_id, SIGKILL);
+    waitpid(srv_id, nullptr, 0);
+#endif
+    return status;
 }
