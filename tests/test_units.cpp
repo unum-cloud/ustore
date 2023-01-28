@@ -572,6 +572,8 @@ TEST(db, transaction_snapshot_isolation) {
     snap = *db.snapshot();
     auto ref = snap[triplet_same_v.keys];
     round_trip(ref, triplet_same_v);
+
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, transaction_erase_missing) {
