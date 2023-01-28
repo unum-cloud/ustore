@@ -69,8 +69,8 @@ struct level_snapshot_t {
 };
 
 struct level_db_t {
+    std::map<ukv_size_t, ukv_snapshot_t> snapshots;
     std::unique_ptr<level_native_t> native;
-    std::map<ukv_size_t, ukv_snapshot_t*> snapshots;
 };
 
 /*********************************************************/
@@ -212,8 +212,8 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     if (!snap.snapshot)
         *c.error = "Couldn't get a snapshot!";
 
-    c.id = reinterpret_cast<std::size_t>(snap.snapshot);
-    db.snapshots[c.id] = c.snapshot;
+    c.id = reinterpret_cast<std::size_t>(*c.snapshot);
+    db.snapshots[c.id] = *c.snapshot;
 }
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
@@ -225,12 +225,6 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
         return;
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    // level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
-
-    // db.native->ReleaseSnapshot(snap.snapshot);
-    // snap.snapshot = nullptr;
-    // delete &snap;
-
     for (const auto& [id, snapshot] : db.snapshots) {
         if (snapshot == c.snapshot) {
             level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);

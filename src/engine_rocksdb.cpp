@@ -80,7 +80,7 @@ struct rocks_snapshot_t {
 
 struct rocks_db_t {
     std::vector<rocks_collection_t*> columns;
-    std::map<ukv_size_t, ukv_snapshot_t*> snapshots;
+    std::map<ukv_size_t, ukv_snapshot_t> snapshots;
     std::unique_ptr<rocks_native_t> native;
     std::mutex mutex;
 };
@@ -190,6 +190,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 }
 
 void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
+
     ukv_snapshot_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need ids and outputs!");
@@ -232,11 +233,12 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     if (!snap.snapshot)
         *c.error = "Couldn't get a snapshot!";
 
-    c.id = reinterpret_cast<std::size_t>(snap.snapshot);
-    db.snapshots[c.id] = c.snapshot;
+    c.id = reinterpret_cast<std::size_t>(*c.snapshot);
+    db.snapshots[c.id] = *c.snapshot;
 }
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
+
     if (!c_ptr)
         return;
 
@@ -245,11 +247,6 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
         return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    // rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
-
-    // db.native->ReleaseSnapshot(snap.snapshot);
-    // snap.snapshot = nullptr;
-    // delete &snap;
 
     for (const auto& [id, snapshot] : db.snapshots) {
         if (snapshot == c.snapshot) {
