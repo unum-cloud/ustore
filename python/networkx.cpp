@@ -399,6 +399,11 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("n"),
         "Returns an iterable of incoming and outgoing nodes of n. Potentially with duplicates.");
     g.def(
+        "neighbors",
+        [](py_graph_t& g, ukv_key_t n) { return wrap_into_buffer(g, g.ref().neighbors(n).throw_or_release()); },
+        py::arg("n"),
+        "Returns an iterable of incoming and outgoing nodes of n. Potentially with duplicates.");
+    g.def(
         "successors",
         [](py_graph_t& g, ukv_key_t n) { return wrap_into_buffer(g, g.ref().successors(n).throw_or_release()); },
         py::arg("n"),
