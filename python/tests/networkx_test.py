@@ -235,6 +235,31 @@ def test_clear():
         assert not net.has_edge(source, target)
 
 
+def test_nodes_attributes():
+    db = ukv.DataBase()
+    net = ukv.Network(db, 'graph', 'nodes')
+
+    net.add_node(1, id=1, name='node1')
+    net.add_node(2)
+    net.add_node(3, id=3, name='node3')
+
+    expected_node_data = {}
+    retrieved_node_data = {}
+
+    for i in range(1000):
+        if i % 2:
+            net.add_node(i, id=i, name='node{}'.format(i))
+            expected_node_data[i] = {'id': i, 'name': 'node{}'.format(i)}
+        else:
+            net.add_node(i)
+            expected_node_data[i] = {}
+
+    for node, data in net.nodes(True):
+        retrieved_node_data[node] = data
+
+    assert retrieved_node_data == expected_node_data
+
+
 def test_transaction_watch():
     db = ukv.DataBase()
     net = db.main.graph
