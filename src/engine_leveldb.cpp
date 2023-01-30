@@ -5,6 +5,7 @@
  * @brief Embedded Persistent Key-Value Store on top of @b LevelDB.
  * Has no support for collections, transactions or any non-CRUD jobs.
  */
+#include <mutex>
 #include <fstream>
 
 #include <leveldb/db.h>
@@ -71,6 +72,7 @@ struct level_snapshot_t {
 struct level_db_t {
     std::unordered_map<ukv_size_t, ukv_snapshot_t> snapshots;
     std::unique_ptr<level_native_t> native;
+    std::mutex mutex;
 };
 
 /*********************************************************/
@@ -184,6 +186,7 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
     return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    std::lock_guard<std::mutex> locker(db.mutex);
     std::size_t snapshots_count = db.snapshots.size();
     *c.count = static_cast<ukv_size_t>(snapshots_count);
 
@@ -201,13 +204,19 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
 void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     ukv_snapshot_create_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    
+     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    std::lock_guard<std::mutex> locker(db.mutex);
+    auto id = reinterpret_cast<std::size_t>(*c.snapshot);
+    auto it = db.snapshots.find(id);
+    if(it != db.snapshots.end())
+        return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
+
     if (!*c.snapshot)
         safe_section("Allocating snapshot handle", c.error, [&] { *c.snapshot = new level_snapshot_t(); });
     return_if_error_m(c.error);
 
-    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_snapshot_t& snap = **reinterpret_cast<level_snapshot_t**>(c.snapshot);
-
     snap.snapshot = db.native->GetSnapshot();
     if (!snap.snapshot)
         *c.error = "Couldn't get a snapshot!";
@@ -230,7 +239,9 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
     snap.snapshot = nullptr;
 
     auto id = reinterpret_cast<std::size_t>(c.snapshot);
+    db.mutex.lock();
     db.snapshots.erase(id);
+    db.mutex.unlock();
 }
 
 void write_one( //
