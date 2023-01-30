@@ -2,9 +2,12 @@
 set -e
 
 version=$(cat VERSION)
-rev=$(git rev-list HEAD --count)
-version="${version%.*}.$rev"
-echo -n $version > VERSION
+if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -q "VERSION"; then 
+    rev=$(git rev-list HEAD --count)
+    version="${version%.*}.$rev"
+    echo -n $version > VERSION
+    git add VERSION && git commit -m "Bump Version" && git push
+fi
 echo -e "------ \e[104mStarting UKV - $version Build\e[0m ------"
 
 ###
