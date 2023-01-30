@@ -1,11 +1,76 @@
 #include "pybind.hpp"
 #include "crud.hpp"
+#include "nlohmann.hpp"
 #include "cast_args.hpp"
 #include "algorithms/louvain.cpp"
 
 using namespace unum::ukv::pyb;
 using namespace unum::ukv;
 using namespace unum;
+
+struct nodes_stream_t {
+    keys_stream_t native;
+    docs_collection_t& collection;
+    bool read_data;
+
+    embedded_blobs_t attrs;
+    ptr_range_gt<ukv_key_t const> fetched_nodes;
+    std::size_t index = 0;
+
+    nodes_stream_t(keys_stream_t&& stream, docs_collection_t& col, bool data = false)
+        : native(std::move(stream)), collection(col), read_data(data) {
+        fetched_nodes = native.keys_batch();
+        if (read_data)
+            read_attributes();
+    }
+
+    void read_attributes() {
+        status_t status;
+        ukv_length_t* found_offsets = nullptr;
+        ukv_length_t* found_lengths = nullptr;
+        ukv_bytes_ptr_t found_values = nullptr;
+        ukv_str_view_t fields = nullptr;
+        auto count = static_cast<ukv_size_t>(fetched_nodes.size());
+
+        ukv_docs_read_t docs_read {
+            .db = collection.db(),
+            .error = status.member_ptr(),
+            .transaction = collection.txn(),
+            .arena = collection.member_arena(),
+            .type = ukv_doc_field_json_k,
+            .tasks_count = count,
+            .collections = collection.member_ptr(),
+            .keys = fetched_nodes.begin(),
+            .keys_stride = sizeof(ukv_key_t),
+            .fields = &fields,
+            .fields_stride = 0,
+            .offsets = &found_offsets,
+            .lengths = &found_lengths,
+            .values = &found_values,
+        };
+
+        ukv_docs_read(&docs_read);
+        status.throw_unhandled();
+        attrs = embedded_blobs_t {count, found_offsets, found_lengths, found_values};
+    }
+
+    void next_batch() {
+        native.seek_to_next_batch();
+        fetched_nodes = native.keys_batch();
+        if (read_data)
+            read_attributes();
+        index = 0;
+    }
+
+    ukv_key_t key() { return fetched_nodes[index]; }
+    value_view_t data() { return attrs[index] ? attrs[index] : "{}"; }
+};
+
+struct nodes_range_t {
+    keys_range_t native;
+    docs_collection_t& collection;
+    bool read_data = false;
+};
 
 struct degree_view_t {
     std::weak_ptr<py_graph_t> net_ptr;
@@ -57,6 +122,35 @@ void ukv::wrap_networkx(py::module& m) {
             strided_range<ukv_vertex_degree_t const>(result.begin(), result.end()));
     });
 
+    auto nodes_range = py::class_<nodes_range_t>(m, "NodesRange", py::module_local());
+    nodes_range.def("__iter__", [](nodes_range_t& range) {
+        auto stream = std::move(range.native).begin();
+        return nodes_stream_t {std::move(stream), range.collection, range.read_data};
+    });
+
+    nodes_range.def("__call__", [](nodes_range_t& range, bool data = false) {
+        range.read_data = data;
+        return range;
+    });
+    py::arg("data") = false;
+
+    auto nodes_stream = py::class_<nodes_stream_t>(m, "NodesStream", py::module_local());
+    nodes_stream.def("__next__", [](nodes_stream_t& stream) {
+        if (stream.index >= stream.fetched_nodes.size()) {
+            if (stream.native.is_end())
+                throw py::stop_iteration();
+            stream.next_batch();
+        }
+        py::object ret;
+        if (stream.read_data)
+            ret = py::make_tuple(stream.key(),
+                                 py::reinterpret_steal<py::object>(from_json(json_t::parse(stream.data()))));
+        else
+            ret = py::cast(stream.key());
+        ++stream.index;
+        return ret;
+    });
+
     auto edges_range = py::class_<range_gt<graph_stream_t>>(m, "EdgesRange", py::module_local());
     edges_range.def("__iter__", [](range_gt<graph_stream_t>& range) { return std::move(range).begin(); });
 
@@ -73,8 +167,7 @@ void ukv::wrap_networkx(py::module& m) {
     g.def( //
         py::init([](std::shared_ptr<py_db_t> py_db,
                     std::optional<std::string> index,
-                    std::optional<std::string> sources_attrs,
-                    std::optional<std::string> targets_attrs,
+                    std::optional<std::string> vertices_attrs,
                     std::optional<std::string> relations_attrs,
                     bool directed = false,
                     bool multi = false,
@@ -94,19 +187,18 @@ void ukv::wrap_networkx(py::module& m) {
             net_ptr->index = db.find_or_create(index ? index->c_str() : "").throw_or_release();
 
             // Attach the additional collections
-            if (sources_attrs)
-                net_ptr->sources_attrs = db.find_or_create(sources_attrs->c_str()).throw_or_release();
-            if (targets_attrs)
-                net_ptr->sources_attrs = db.find_or_create(targets_attrs->c_str()).throw_or_release();
+            if (vertices_attrs)
+                net_ptr->vertices_attrs =
+                    db.find_or_create<docs_collection_t>(vertices_attrs->c_str()).throw_or_release();
             if (relations_attrs)
-                net_ptr->sources_attrs = db.find_or_create(relations_attrs->c_str()).throw_or_release();
+                net_ptr->relations_attrs =
+                    db.find_or_create<docs_collection_t>(relations_attrs->c_str()).throw_or_release();
 
             return net_ptr;
         }),
         py::arg("db"),
         py::arg("index"),
-        py::arg("sources") = std::nullopt,
-        py::arg("targets") = std::nullopt,
+        py::arg("vertices") = std::nullopt,
         py::arg("relations") = std::nullopt,
         py::arg("directed") = false,
         py::arg("multi") = false,
@@ -174,8 +266,8 @@ void ukv::wrap_networkx(py::module& m) {
         "nodes",
         [](py_graph_t& g) {
             blobs_range_t members(g.index.db(), g.index.txn(), g.index);
-            keys_range_t range {members};
-            return py::cast(std::make_unique<keys_range_t>(range));
+            nodes_range_t range {members, g.vertices_attrs};
+            return py::cast(std::make_unique<nodes_range_t>(range));
         },
         "A NodeView of the graph.");
     g.def(
@@ -257,7 +349,14 @@ void ukv::wrap_networkx(py::module& m) {
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#adding-and-removing-nodes-and-edges
     g.def(
         "add_node",
-        [](py_graph_t& g, ukv_key_t v) { g.ref().upsert_vertex(v).throw_unhandled(); },
+        [](py_graph_t& g, ukv_key_t v, py::kwargs const& attrs) {
+            g.ref().upsert_vertex(v).throw_unhandled();
+            if (!attrs.size())
+                return;
+            std::string json_str;
+            to_string(attrs.ptr(), json_str);
+            g.vertices_attrs[v].assign(value_view_t(json_str)).throw_unhandled();
+        },
         py::arg("v_to_upsert"));
     g.def(
         "add_edge",
@@ -371,10 +470,8 @@ void ukv::wrap_networkx(py::module& m) {
         "clear",
         [](py_graph_t& g) {
             g.index.clear();
-            if (g.sources_attrs.db())
-                g.sources_attrs.clear();
-            if (g.targets_attrs.db())
-                g.targets_attrs.clear();
+            if (g.vertices_attrs.db())
+                g.vertices_attrs.clear();
             if (g.relations_attrs.db())
                 g.relations_attrs.clear();
         },
