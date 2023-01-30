@@ -374,7 +374,11 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("key"));
     g.def(
         "remove_node",
-        [](py_graph_t& g, ukv_key_t v) { g.ref().remove_vertex(v).throw_unhandled(); },
+        [](py_graph_t& g, ukv_key_t v) {
+            g.ref().remove_vertex(v).throw_unhandled();
+            if (g.vertices_attrs.db())
+                g.vertices_attrs[v].clear().throw_unhandled();
+        },
         py::arg("v_to_remove"));
     g.def(
         "remove_edge",
@@ -431,6 +435,8 @@ void ukv::wrap_networkx(py::module& m) {
                 throw std::invalid_argument("Expecting @c ukv_key_t scalars in zero-copy interface");
             auto vertices = py_strided_range<ukv_key_t const>(buf);
             g.ref().remove_vertices(vertices).throw_unhandled();
+            if (g.vertices_attrs.db())
+                g.vertices_attrs[vertices].clear().throw_unhandled();
         }
         else {
             if (!PySequence_Check(vs.ptr()))
@@ -438,6 +444,8 @@ void ukv::wrap_networkx(py::module& m) {
             std::vector<ukv_key_t> vertices(PySequence_Size(vs.ptr()));
             py_transform_n(vs.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
             g.ref().remove_vertices(vertices).throw_unhandled();
+            if (g.vertices_attrs.db())
+                g.vertices_attrs[vertices].clear().throw_unhandled();
         }
     });
     g.def(
