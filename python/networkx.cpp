@@ -132,7 +132,6 @@ void ukv::wrap_networkx(py::module& m) {
         range.read_data = data;
         return range;
     });
-    py::arg("data") = false;
 
     auto nodes_stream = py::class_<nodes_stream_t>(m, "NodesStream", py::module_local());
     nodes_stream.def("__next__", [](nodes_stream_t& stream) {
@@ -392,13 +391,18 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("u_for_edge"),
         py::arg("v_for_edge"),
         py::arg("key"));
-    g.def("add_nodes_from", [](py_graph_t& g, py::object vs) {
+    g.def("add_nodes_from", [](py_graph_t& g, py::object vs, py::kwargs const& attrs) {
         if (PyObject_CheckBuffer(vs.ptr())) {
             py_buffer_t buf = py_buffer(vs.ptr());
             if (!can_cast_internal_scalars<ukv_key_t>(buf))
                 throw std::invalid_argument("Expecting @c ukv_key_t scalars in zero-copy interface");
             auto vertices = py_strided_range<ukv_key_t const>(buf);
             g.ref().upsert_vertices(vertices).throw_unhandled();
+            if (!attrs.size())
+                return;
+            std::string json_str;
+            to_string(attrs.ptr(), json_str);
+            g.vertices_attrs[vertices].assign(value_view_t(json_str)).throw_unhandled();
         }
         else {
             if (!PySequence_Check(vs.ptr()))
@@ -406,6 +410,11 @@ void ukv::wrap_networkx(py::module& m) {
             std::vector<ukv_key_t> vertices(PySequence_Size(vs.ptr()));
             py_transform_n(vs.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
             g.ref().upsert_vertices(vertices).throw_unhandled();
+            if (!attrs.size())
+                return;
+            std::string json_str;
+            to_string(attrs.ptr(), json_str);
+            g.vertices_attrs[vertices].assign(value_view_t(json_str)).throw_unhandled();
         }
     });
     g.def(
