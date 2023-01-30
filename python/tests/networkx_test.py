@@ -259,6 +259,13 @@ def test_nodes_attributes():
 
     assert retrieved_node_data == expected_node_data
 
+    net.clear()
+    nodes = np.arange(100)
+    net.add_nodes_from(nodes, name='node')
+
+    for node, data in net.nodes(True):
+        assert data == {'name': 'node'}
+
 
 def test_transaction_watch():
     db = ukv.DataBase()
