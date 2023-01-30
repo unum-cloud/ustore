@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📜 Propose major changes
+    url: https://github.com/unum-cloud/ukv/discussions
+    about: Submit large proposals on GitHub
+  - name: 💬 Ask on Discord
+    url: https://discord.gg/4mxGrenbNt
+    about: Real-time communication with maintainers, contributors, and broader community
