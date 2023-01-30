@@ -80,7 +80,7 @@ struct rocks_snapshot_t {
 
 struct rocks_db_t {
     std::vector<rocks_collection_t*> columns;
-    std::map<ukv_size_t, ukv_snapshot_t> snapshots;
+    std::unordered_map<ukv_size_t, ukv_snapshot_t> snapshots;
     std::unique_ptr<rocks_native_t> native;
     std::mutex mutex;
 };
@@ -247,17 +247,12 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
         return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
+    db.native->ReleaseSnapshot(snap.snapshot);
+    snap.snapshot = nullptr;
 
-    for (const auto& [id, snapshot] : db.snapshots) {
-        if (snapshot == c.snapshot) {
-            rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
-            db.native->ReleaseSnapshot(snap.snapshot);
-            snap.snapshot = nullptr;
-
-            db.snapshots.erase(id);
-            break;
-        }
-    }
+    auto id = reinterpret_cast<std::size_t>(c.snapshot);
+    db.snapshots.erase(id);
 }
 
 void write_one( //

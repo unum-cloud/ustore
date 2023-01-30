@@ -69,7 +69,7 @@ struct level_snapshot_t {
 };
 
 struct level_db_t {
-    std::map<ukv_size_t, ukv_snapshot_t> snapshots;
+    std::unordered_map<ukv_size_t, ukv_snapshot_t> snapshots;
     std::unique_ptr<level_native_t> native;
 };
 
@@ -225,16 +225,12 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
         return;
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    for (const auto& [id, snapshot] : db.snapshots) {
-        if (snapshot == c.snapshot) {
-            level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
-            db.native->ReleaseSnapshot(snap.snapshot);
-            snap.snapshot = nullptr;
+    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+    db.native->ReleaseSnapshot(snap.snapshot);
+    snap.snapshot = nullptr;
 
-            db.snapshots.erase(id);
-            break;
-        }
-    }
+    auto id = reinterpret_cast<std::size_t>(c.snapshot);
+    db.snapshots.erase(id);
 }
 
 void write_one( //
