@@ -72,6 +72,70 @@ struct nodes_range_t {
     bool read_data = false;
 };
 
+struct edges_stream_t {
+    graph_stream_t native;
+    docs_collection_t& collection;
+    bool read_data;
+
+    embedded_blobs_t attrs;
+    edges_span_t fetched_edges;
+    std::size_t index = 0;
+
+    edges_stream_t(graph_stream_t&& stream, docs_collection_t& col, bool data = false)
+        : native(std::move(stream)), collection(col), read_data(data) {
+        fetched_edges = native.edges_batch();
+        if (read_data)
+            read_attributes();
+    }
+
+    void read_attributes() {
+        status_t status;
+        ukv_length_t* found_offsets = nullptr;
+        ukv_length_t* found_lengths = nullptr;
+        ukv_bytes_ptr_t found_values = nullptr;
+        ukv_str_view_t fields = nullptr;
+        auto count = static_cast<ukv_size_t>(fetched_edges.size());
+
+        ukv_docs_read_t docs_read {
+            .db = collection.db(),
+            .error = status.member_ptr(),
+            .transaction = collection.txn(),
+            .arena = collection.member_arena(),
+            .type = ukv_doc_field_json_k,
+            .tasks_count = count,
+            .collections = collection.member_ptr(),
+            .keys = fetched_edges.edge_ids.data(),
+            .keys_stride = fetched_edges.edge_ids.stride(),
+            .fields = &fields,
+            .fields_stride = 0,
+            .offsets = &found_offsets,
+            .lengths = &found_lengths,
+            .values = &found_values,
+        };
+
+        ukv_docs_read(&docs_read);
+        status.throw_unhandled();
+        attrs = embedded_blobs_t {count, found_offsets, found_lengths, found_values};
+    }
+
+    void next_batch() {
+        native.seek_to_next_batch();
+        fetched_edges = native.edges_batch();
+        if (read_data)
+            read_attributes();
+        index = 0;
+    }
+
+    edge_t edge() { return fetched_edges[index]; }
+    value_view_t data() { return attrs[index] ? attrs[index] : "{}"; }
+};
+
+struct edges_range_t {
+    range_gt<graph_stream_t> native;
+    docs_collection_t& collection;
+    bool read_data = false;
+};
+
 struct degree_view_t {
     std::weak_ptr<py_graph_t> net_ptr;
     ukv_vertex_role_t roles = ukv_vertex_role_any_k;
@@ -150,16 +214,33 @@ void ukv::wrap_networkx(py::module& m) {
         return ret;
     });
 
-    auto edges_range = py::class_<range_gt<graph_stream_t>>(m, "EdgesRange", py::module_local());
-    edges_range.def("__iter__", [](range_gt<graph_stream_t>& range) { return std::move(range).begin(); });
+    auto edges_range = py::class_<edges_range_t>(m, "EdgesRange", py::module_local());
+    edges_range.def("__iter__", [](edges_range_t& range) {
+        return edges_stream_t(std::move(range.native).begin(), range.collection, range.read_data);
+    });
 
-    auto edges_stream = py::class_<graph_stream_t>(m, "EdgesStream", py::module_local());
-    edges_stream.def("__next__", [](graph_stream_t& stream) {
-        if (stream.is_end())
-            throw py::stop_iteration();
+    edges_range.def("__call__", [](edges_range_t& range, bool data = false) {
+        range.read_data = data;
+        return std::move(range);
+    });
+
+    auto edges_stream = py::class_<edges_stream_t>(m, "EdgesStream", py::module_local());
+    edges_stream.def("__next__", [](edges_stream_t& stream) {
+        if (stream.index >= stream.fetched_edges.size()) {
+            if (stream.native.is_end())
+                throw py::stop_iteration();
+            stream.next_batch();
+        }
         auto edge = stream.edge();
-        ++stream;
-        return py::make_tuple(edge.source_id, edge.target_id);
+        py::object ret;
+        if (stream.read_data)
+            ret = py::make_tuple(edge.source_id,
+                                 edge.target_id,
+                                 py::reinterpret_steal<py::object>(from_json(json_t::parse(stream.data()))));
+        else
+            ret = py::make_tuple(edge.source_id, edge.target_id);
+        ++stream.index;
+        return ret;
     });
 
     auto g = py::class_<py_graph_t, std::shared_ptr<py_graph_t>>(m, "Network", py::module_local());
@@ -288,8 +369,9 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("n"),
         "Returns True if the graph contains the node n.");
 
-    g.def_property_readonly("edges",
-                            [](py_graph_t& g) { return g.ref().edges(ukv_vertex_source_k).throw_or_release(); });
+    g.def_property_readonly("edges", [](py_graph_t& g) {
+        return edges_range_t {g.ref().edges(ukv_vertex_source_k).throw_or_release(), g.relations_attrs};
+    });
 
     g.def(
         "has_edge",
@@ -366,12 +448,17 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("v_for_edge"));
     g.def(
         "add_edge",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t e) {
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t e, py::kwargs const& attrs) {
             g.ref().upsert_edge(edge_t {v1, v2, e}).throw_unhandled();
+            if (!attrs.size())
+                return;
+            std::string json_str;
+            to_string(attrs.ptr(), json_str);
+            g.relations_attrs[e].assign(value_view_t(json_str)).throw_unhandled();
         },
         py::arg("u_for_edge"),
         py::arg("v_for_edge"),
-        py::arg("key"));
+        py::arg("id"));
     g.def(
         "remove_node",
         [](py_graph_t& g, ukv_key_t v) {
@@ -458,8 +545,28 @@ void ukv::wrap_networkx(py::module& m) {
 
     g.def(
         "add_edges_from",
-        [](py_graph_t& g, py::object v1s, py::object v2s, py::object es) {
+        [](py_graph_t& g, py::object v1s, py::object v2s, py::object es, py::kwargs const& attrs) {
             g.ref().upsert_edges(parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), es.ptr())).throw_unhandled();
+
+            if (!attrs.size())
+                return;
+
+            std::string json_str;
+            to_string(attrs.ptr(), json_str);
+            if (PyObject_CheckBuffer(es.ptr())) {
+                py_buffer_t buf = py_buffer(es.ptr());
+                if (!can_cast_internal_scalars<ukv_key_t>(buf))
+                    throw std::invalid_argument("Expecting @c ukv_key_t scalars in zero-copy interface");
+                auto edge_ids = py_strided_range<ukv_key_t const>(buf);
+                g.relations_attrs[edge_ids].assign(value_view_t(json_str)).throw_unhandled();
+            }
+            else {
+                if (!PySequence_Check(es.ptr()))
+                    throw std::invalid_argument("Edge Ids Must Be Sequence");
+                std::vector<ukv_key_t> edge_ids(PySequence_Size(es.ptr()));
+                py_transform_n(es.ptr(), &py_to_scalar<ukv_key_t>, edge_ids.begin());
+                g.relations_attrs[edge_ids].assign(value_view_t(json_str)).throw_unhandled();
+            }
         },
         py::arg("us"),
         py::arg("vs"),
@@ -469,6 +576,24 @@ void ukv::wrap_networkx(py::module& m) {
         "remove_edges_from",
         [](py_graph_t& g, py::object v1s, py::object v2s, py::object es) {
             g.ref().remove_edges(parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), es.ptr())).throw_unhandled();
+
+            if (!g.relations_attrs.db())
+                return;
+
+            if (PyObject_CheckBuffer(es.ptr())) {
+                py_buffer_t buf = py_buffer(es.ptr());
+                if (!can_cast_internal_scalars<ukv_key_t>(buf))
+                    throw std::invalid_argument("Expecting @c ukv_key_t scalars in zero-copy interface");
+                auto edge_ids = py_strided_range<ukv_key_t const>(buf);
+                g.relations_attrs[edge_ids].clear().throw_unhandled();
+            }
+            else {
+                if (!PySequence_Check(es.ptr()))
+                    throw std::invalid_argument("Edge Ids Must Be Sequence");
+                std::vector<ukv_key_t> edge_ids(PySequence_Size(es.ptr()));
+                py_transform_n(es.ptr(), &py_to_scalar<ukv_key_t>, edge_ids.begin());
+                g.relations_attrs[edge_ids].clear().throw_unhandled();
+            }
         },
         py::arg("us"),
         py::arg("vs"),
