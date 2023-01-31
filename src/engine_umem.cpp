@@ -22,10 +22,11 @@
 #include <filesystem> // Enumerating the directory
 #include <fstream>    // Passing file contents to JSON parser
 
+// TODO: These alternative containers need further testing:
+// #include <ucset/consistent_avl.hpp> // `ucset::consistent_avl_gt`
+// #include <ucset/partitioned.hpp>    // `ucset::partitioned_gt`
 #include <ucset/consistent_set.hpp> // `ucset::consistent_set_gt`
-#include <ucset/consistent_avl.hpp> // `ucset::consistent_avl_gt`
 #include <ucset/locked.hpp>         // `ucset::locked_gt`
-#include <ucset/partitioned.hpp>    // `ucset::partitioned_gt`
 
 #include <nlohmann/json.hpp>       // `nlohmann::json`
 #include <arrow/io/file.h>         // `arrow::io::ReadableFile`
