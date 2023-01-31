@@ -371,12 +371,14 @@ void fill_tensor( //
 
 ### Wrapping: Java
 
-"~/ukv/java/com/unum/ukv/com_unum_ukv_DataBase_Context.c"
+"~/ukv/java/com/unum/ukv/cloud_unum_ukv_DataBase_Context.c"
 
 ```java
-JNIEXPORT void JNICALL Java_com_unum_ukv_DataBase_00024Context_open(JNIEnv* env_java,
-                                                                    jobject db_java,
-                                                                    jstring config_java) {
+JNIEXPORT void JNICALL Java_cloud_unum_ukv_DataBase_00024Context_open(
+    JNIEnv* env_java,
+    jobject db_java,
+    jstring config_java) {
+        
     ukv_database_t db_ptr_c = db_ptr(env_java, db_java);
     if (db_ptr_c) {
         forward_error(env_java, "Database is already opened. Close it's current state first!");
