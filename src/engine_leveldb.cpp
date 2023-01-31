@@ -204,12 +204,12 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
 void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     ukv_snapshot_create_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    
-     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     std::lock_guard<std::mutex> locker(db.mutex);
     auto id = reinterpret_cast<std::size_t>(*c.snapshot);
     auto it = db.snapshots.find(id);
-    if(it != db.snapshots.end())
+    if (it != db.snapshots.end())
         return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
 
     if (!*c.snapshot)

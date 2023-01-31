@@ -223,7 +223,7 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     std::lock_guard<std::mutex> locker(db.mutex);
     auto id = reinterpret_cast<std::size_t>(*c.snapshot);
     auto it = db.snapshots.find(id);
-    if(it != db.snapshots.end())
+    if (it != db.snapshots.end())
         return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
 
     if (!*c.snapshot)
