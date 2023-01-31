@@ -35,13 +35,13 @@ git tag "v${version}"
 git push origin --tags
 
 # Build and Test Python
+rm -rf wheelhouse/*
 pip install cibuildwheel twine
 echo -e "------ \e[93mBuild and Test Python\e[0m ------"
-CIBW_BUILD="cp37-*" cibuildwheel --platform linux &
-CIBW_BUILD="cp38-*" cibuildwheel --platform linux &
-CIBW_BUILD="cp39-*" cibuildwheel --platform linux &
-CIBW_BUILD="cp310-*" cibuildwheel --platform linux &
-wait
+CIBW_BUILD="cp37-*" cibuildwheel --platform linux
+CIBW_BUILD="cp38-*" cibuildwheel --platform linux
+CIBW_BUILD="cp39-*" cibuildwheel --platform linux
+CIBW_BUILD="cp310-*" cibuildwheel --platform linux
 echo -e "------ \e[92mPython Tests Passing!\e[0m ------"
 
 # Publish Python
