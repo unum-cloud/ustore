@@ -64,11 +64,11 @@ model {
                 }
 
                 if (buildType == buildTypes.umem) {
-                    linker.args '-L', "${projectDir}/build/lib", "-l", "ukv_embedded_umem", "-l", "c"
+                    linker.args '-L', "${projectDir}/build/lib", "-l", "umem_bundle", "-l", "c"
                 } else if (buildType == buildTypes.rocksdb) {
-                    linker.args '-L', "${projectDir}/build/lib", "-l", "ukv_embedded_rocksdb", "-l", "rocksdb", "-l", "c"
+                    linker.args '-L', "${projectDir}/build/lib", "-l", "rocksdb_bundle", "-l", "c"
                 } else if (buildType == buildTypes.leveldb) {
-                    linker.args '-L', "${projectDir}/build/lib", "-l", "ukv_embedded_leveldb", "-l", "leveldb", "-l", "c"
+                    linker.args '-L', "${projectDir}/build/lib", "-l", "leveldb_bundle", "-l", "c"
                 }
             }
         }
