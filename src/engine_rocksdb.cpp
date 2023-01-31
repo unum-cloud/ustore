@@ -208,10 +208,8 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
     return_if_error_m(c.error);
 
     std::size_t i = 0;
-    for (const auto& [id, _] : db.snapshots) {
-        ids[i] = id;
-        ++i;
-    }
+    for (const auto& [id, _] : db.snapshots)
+        ids[i++] = id;
 }
 
 void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
