@@ -131,30 +131,102 @@ You can convert a collection handle into a structured binding:
 ```python
 main_collection.graph # for NetworkX-like feel
 main_collection.docs # for `dict`-like values, that we map into JSONs
-main_collection.docs.table # for Pandas experience when working with docs
-main_collection.paths # for string keys
+main_collection.table # for Pandas experience when working with docs
 main_collection.vectors # for high-dimensional vector values and k-ANN
+main_collection.paths # for string keys
 ```
 
 ### Graphs: NetworkX
 
 With over 10'000 stars on GitHub NetworkX might just be the most popular network-science package across all languages.
 We adapt part of its interface for labeled directed graphs to preserve familiar look.
-But if NetworkX hardly scales beyond a thousand nodes, our Graph engine is designed to handle billions.
+But if NetworkX hardly scales beyond a thousand nodes, our Graph engine is designed to handle trillions.
 
-* `.order()`, `.number_of_nodes()`, `len`
-* `.nodes()`, `.has_node()`, `in`, `nbunch_iter()`
-* `.edges()`, `.in_edges()`, `.out_edges()`
-* `.has_edge()`, `.get_edge_data()`
-* `.degree[]`, `.in_degree[]`, `.out_degree[]`
-* `.neighbors()`, `.successors()`, `.predecessors()`
-* `.add_edge()`, `.add_edges_from()`
-* `.remove_edge()`, `.remove_edges_from()`
-* `.clear_edges()`, `.clear()`
-* `.subgraph()`, `.edge_subgraph()`
-* `.write_adjlist()`
+```python
+import numpy as np
 
-We are now bridging UKV with [CuGraph][cugraph] for GPU acceleration.
+# Let's build a random sparse graph:
+g = db.main.graph
+node_ids = np.arange(1_000_000)
+source_ids = np.random.choice(node_ids, 10_000_000)
+target_ids = np.random.choice(node_ids, 10_000_000)
+g.add_edges_from(source_ids, target_ids)
+
+# Let's export an adjacency matrix for a small subset of nodes:
+subset_size = 1_000
+subset_ids = np.random.choice(node_ids, subset_size)
+adjacency_matrix = np.zeros((subset_size, subset_size), dtype=bool)
+for i, subset_id in enumerate(subset_ids):
+    neighbors_ids = g[subset_id]
+    for j, subset_id in enumerate(subset_ids):
+        adjacency_matrix[i, j] = subset_id in neighbors_ids
+```
+
+This allows you to very large graphs in parts, that fit into memory.
+Need vertex degrees to compute the normalized **Laplacian**?
+
+```python
+normalizer = np.diag(np.power(adjacency_matrix.sum(axis=0), -0.5))
+laplacian_matrix = np.identity(subset_size) - normalizer @ adjacency_matrix @ normalizer
+```
+
+Want to **Page-Rank**?
+
+```python
+d = 0.85
+tolerance = 1e-2
+max_iterations = 100
+weight = adjacency_matrix / adjacency_matrix.sum(axis=0)
+page_rank = np.ones(subset_size).reshape(subset_size, 1) * 1. / subset_size
+
+for _ in range(max_iterations):
+    old_page_rank = page_rank[:]
+    page_rank = d * weight @ page_rank + (1 - d) / subset_size
+    shift = np.absolute(page_rank - old_page_rank).sum()
+    if shift < tolerance:
+        break
+```
+
+Want to build a **Knowledge Graph** using a 1000 "worker" processes reasoning on the same graph representation, computing different metrics and performing updates?
+You can't do that in NetworkX, but you can in UKV!
+
+```python
+import ukv.flight_client as remote
+
+db = remote.DataBase('remote.server.ip.address:38709')
+controversial_articles_category: int = ...
+is_controversial = lambda text: 'scandal' in text
+
+with ukv.Transaction(db) as txn:
+    descriptions_collection = txn['descriptions']
+    articles_ids = descriptions_collection.sample(100)
+    articles = descriptions_collection[articles_ids]
+    controversial_ids = [article_id for article_id, article in zip(articles_ids, articles) if is_controversial(article)]
+
+    g = txn['categories'].graph
+    g.add_edges_from(controversial_ids, [controversial_articles_category] * len(controversial_ids))
+```
+
+---
+
+Primary functions:
+
+* `.order()`, `.number_of_nodes()`, `len`: to estimate size.
+* `.nodes()`, `.has_node()`, `in`, `nbunch_iter()`: to work with nodes.
+* `.edges()`, `.in_edges()`, `.out_edges()`: to iterate through edges.
+* `.has_edge()`, `.get_edge_data()`: to check for specific edges.
+* `.degree[]`, `.in_degree[]`, `.out_degree[]`: to get node degrees.
+* `.__getitem__()`, `.successors()`, `.predecessors()`: to traverse the graph.
+* `.add_edge()`, `.add_edges_from()`: to add edges.
+* `.remove_edge()`, `.remove_edges_from()`: to remove edges.
+* `.clear_edges()`, `.clear()`: to clear the graph.
+
+Our next milestones for Graphs are:
+
+* attributes in vertices and edges,
+* easier subgraph extraction methods: `.subgraph()`, `.edge_subgraph()`,
+* imports and exports from files: `.write_adjlist()`,
+* integrating [CuGraph][cugraph] for GPU acceleration.
 
 ### Tables: Pandas
 
