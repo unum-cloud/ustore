@@ -1,4 +1,4 @@
-name: Deploy static content to Pages
+name: Publish Documentation
 
 on:
   # Runs on pushes targeting the default branch
@@ -35,11 +35,11 @@ jobs:
         run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708
       - name: Install ukv from pip
         run: pip install ukv
-      - name: Build Documentation
+      - name: Build Docs
         run: cd assets/docs && doxygen config.dox && make html
       - name: Copy assets
         run: cp -r assets build/docs/html/
-      - name: Upload artifact
+      - name: Upload Artifacts
         uses: actions/upload-pages-artifact@v1
         with:
           # Upload entire repository
