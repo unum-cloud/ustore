@@ -305,8 +305,6 @@ typedef struct ukv_snapshot_list_t { /// @name Context
     ukv_size_t* count;
     /** @brief All snapshots. */
     ukv_snapshot_t** snapshots;
-    /** @brief All snapshots ids tape in same order as `snapshots`. */
-    ukv_size_t** ids;
     /// @}
 } ukv_snapshot_list_t;
 

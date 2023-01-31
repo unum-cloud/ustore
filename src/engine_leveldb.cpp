@@ -180,7 +180,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
     ukv_snapshot_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need id and outputs!");
+    return_error_if_m(c.count && c.snapshots, c.error, args_combo_k, "Need snapshots and outputs!");
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
@@ -190,13 +190,12 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
     std::size_t snapshots_count = db.snapshots.size();
     *c.count = static_cast<ukv_size_t>(snapshots_count);
 
-    // For every snapshot we also need to export IDs
-    auto ids = arena.alloc_or_dummy(snapshots_count, c.error, c.ids);
+    auto snapshots = arena.alloc_or_dummy(snapshots_count, c.error, c.snapshots);
     return_if_error_m(c.error);
 
     std::size_t i = 0;
-    for (const auto& [id, _] : db.snapshots)
-        ids[i++] = id;
+    for (const auto& [_, snapshot] : db.snapshots)
+        snapshots[i++] = snapshot;
 }
 
 void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
