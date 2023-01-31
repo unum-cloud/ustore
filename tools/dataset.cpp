@@ -226,39 +226,39 @@ class arrow_visitor_t {
             case 10: json += "\\n"; break;
             case 12: json += "\\f"; break;
             case 13: json += "\\r"; break;
-            case 0:
-            case 1:
-            case 2:
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-            case 11:
-            case 14:
-            case 15:
-            case 16:
-            case 17:
-            case 18:
-            case 19:
-            case 20:
-            case 21:
-            case 22:
-            case 23:
-            case 24:
-            case 25:
-            case 26:
-            case 27:
-            case 28:
-            case 29:
-            case 30:
+            case 0: [[fallthrough]];
+            case 1: [[fallthrough]];
+            case 2: [[fallthrough]];
+            case 3: [[fallthrough]];
+            case 4: [[fallthrough]];
+            case 5: [[fallthrough]];
+            case 6: [[fallthrough]];
+            case 7: [[fallthrough]];
+            case 11: [[fallthrough]];
+            case 14: [[fallthrough]];
+            case 15: [[fallthrough]];
+            case 16: [[fallthrough]];
+            case 17: [[fallthrough]];
+            case 18: [[fallthrough]];
+            case 19: [[fallthrough]];
+            case 20: [[fallthrough]];
+            case 21: [[fallthrough]];
+            case 22: [[fallthrough]];
+            case 23: [[fallthrough]];
+            case 24: [[fallthrough]];
+            case 25: [[fallthrough]];
+            case 26: [[fallthrough]];
+            case 27: [[fallthrough]];
+            case 28: [[fallthrough]];
+            case 29: [[fallthrough]];
+            case 30: [[fallthrough]];
             case 31: {
                 json += "\\u0000";
                 auto target_ptr = reinterpret_cast<ukv_byte_t*>(json.data() + json.size() - 2);
                 char_to_hex(ch, target_ptr);
                 break;
             }
-            default: json += ch;
+            default: json += ch; [[fallthrough]];
             }
         }
         if (json.back() == '\n')
@@ -308,12 +308,12 @@ bool validate_graph_fields(imp_exp_at& imp_exp, bool is_exp = false) {
 
     if (is_exp) {
         auto check_first_char = [](ukv_char_t ch) {
-            return (ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122) || ch == 95;
+            return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '_';
         };
 
         auto check_char = [](ukv_char_t ch) {
-            return (ch >= 48 && ch <= 57) || (ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122) || //
-                   ch == 32 || ch == 45 || ch == 95;
+            return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || //
+                   ch == ' ' || ch == '-' || ch == '_';
         };
 
         auto validate_field = [=](ukv_str_view_t field) {
@@ -1012,10 +1012,12 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
 
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
-    return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
     return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
     if (!validate_graph_fields(c))
         return_if_error_m(c.error);
+
+    if (!c.arena)
+        c.arena = arena_t(c.db).member_ptr();
 
     auto ext = std::filesystem::path(c.paths_pattern).extension();
     ukv_size_t task_count = c.max_batch_size / sizeof(edge_t);
@@ -1040,12 +1042,14 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
     if (!validate_graph_fields(c, true))
         return_if_error_m(c.error);
     return_error_if_m(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
-    return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
     return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
 
     auto ext = c.paths_extension;
     int pcn = strcmp_(ext, ".parquet") ? 0 : strcmp_(ext, ".csv") ? 1 : strcmp_(ext, ".ndjson") ? 2 : -1;
     return_error_if_m(!(pcn == -1), c.error, 0, "Not supported format");
+
+    if (!c.arena)
+        c.arena = arena_t(c.db).member_ptr();
 
     parquet::StreamWriter os;
     int handle = 0;
@@ -1552,9 +1556,11 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
     return_error_if_m(c.id_field, c.error, uninitialized_state_k, "id_field must be initialized");
     check_for_id_field(c);
     return_if_error_m(c.error);
-    return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
     return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
     return_error_if_m(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
+
+    if (!c.arena)
+        c.arena = arena_t(c.db).member_ptr();
 
     auto ext = std::filesystem::path(c.paths_pattern).extension();
     if (ext == ".ndjson")
@@ -1578,12 +1584,14 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     validate_docs_fields(c);
     return_if_error_m(c.error);
     return_error_if_m(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
-    return_error_if_m(c.arena, c.error, uninitialized_state_k, "Arena is uninitialized");
     return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
 
     auto ext = c.paths_extension;
     int pcn = strcmp_(ext, ".parquet") ? 0 : strcmp_(ext, ".csv") ? 1 : strcmp_(ext, ".ndjson") ? 2 : -1;
     return_error_if_m(!(pcn == -1), c.error, 0, "Not supported format");
+
+    if (!c.arena)
+        c.arena = arena_t(c.db).member_ptr();
 
     int handle = 0;
     parquet::StreamWriter os;
