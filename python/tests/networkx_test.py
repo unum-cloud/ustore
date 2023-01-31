@@ -25,6 +25,8 @@ def test_line():
     assert net.has_node(2)
     assert not net.has_edge(1, 2)
 
+    net.clear()
+
 
 def test_triangle():
     db = ukv.DataBase()
@@ -57,6 +59,8 @@ def test_triangle():
     assert len(list(net.successors(1))) == 1
     assert len(list(net.predecessors(1))) == 1
 
+    net.clear()
+
 
 def test_triangle_batch():
     db = ukv.DataBase()
@@ -82,6 +86,8 @@ def test_triangle_batch():
     assert not net.has_edge(1, 2) and not net.has_edge(2, 3)
     assert net.has_edge(3, 1)
 
+    net.clear()
+
 
 def test_random_fill():
     db = ukv.DataBase()
@@ -95,6 +101,8 @@ def test_random_fill():
         assert net.has_node(sources[index])
         assert net.has_node(targets[index])
         assert net.has_edge(sources[index], targets[index])
+
+    net.clear()
 
 
 def test_neighbors():
@@ -118,6 +126,8 @@ def test_neighbors():
         assert len(neighbors) == 2
         assert neighbors[0] == node + 1
         assert neighbors[1] == node - 1
+
+    net.clear()
 
 
 def test_degree():
@@ -152,6 +162,8 @@ def test_degree():
     for i in vertices:
         assert degrees[i] == expected_degrees[i]
 
+    net.clear()
+
 
 def test_upsert_remove_nodes_batch():
     db = ukv.DataBase()
@@ -165,6 +177,8 @@ def test_upsert_remove_nodes_batch():
     net.remove_nodes_from(nodes)
     for node in nodes:
         assert not net.has_node(node)
+
+    net.clear()
 
 
 def test_remove_edges():
@@ -189,6 +203,8 @@ def test_remove_edges():
     for source, target in zip(sources[50:], targets[50:]):
         assert not net.has_edge(source, target)
 
+    net.clear()
+
 
 def test_remove_nodes_and_related_edges():
     db = ukv.DataBase()
@@ -206,6 +222,8 @@ def test_remove_nodes_and_related_edges():
         assert not net.has_node(source)
         assert net.has_node(target)
         assert not net.has_edge(source, target)
+
+    net.clear()
 
 
 def test_clear():
@@ -234,6 +252,71 @@ def test_clear():
         assert not net.has_node(target)
         assert not net.has_edge(source, target)
 
+    net.clear()
+
+
+def test_nodes_attributes():
+    db = ukv.DataBase()
+    net = ukv.Network(db, 'graph', 'nodes')
+
+    net.add_node(1, id=1, name='node1')
+    net.add_node(2)
+    net.add_node(3, id=3, name='node3')
+
+    expected_node_data = {}
+    retrieved_node_data = {}
+
+    for i in range(1000):
+        if i % 2:
+            net.add_node(i, id=i, name='node{}'.format(i))
+            expected_node_data[i] = {'id': i, 'name': 'node{}'.format(i)}
+        else:
+            net.add_node(i)
+            expected_node_data[i] = {}
+
+    for node, data in net.nodes(True):
+        retrieved_node_data[node] = data
+
+    assert retrieved_node_data == expected_node_data
+
+    net.clear()
+    nodes = np.arange(100)
+    net.add_nodes_from(nodes, name='node')
+
+    for node, data in net.nodes(True):
+        assert data == {'name': 'node'}
+
+    net.clear()
+
+
+def test_edges_attributes():
+    db = ukv.DataBase()
+    net = ukv.Network(db, 'graph', 'nodes', 'edges')
+
+    for i in range(100):
+        net.add_edge(i, i+1, i, weight=i)
+
+    index = 0
+    for node1, node2, data in net.edges(True):
+        assert node1 == index
+        assert node2 == index+1
+        assert data == {'weight': index}
+        index += 1
+
+    net.clear()
+
+    sources = np.arange(100)
+    targets = np.arange(100, 200)
+    ids = np.arange(100)
+    net.add_edges_from(sources, targets, ids, weight=1)
+
+    index = 0
+    for node1, node2, data in net.edges(True):
+        assert node1 == sources[index]
+        assert node2 == targets[index]
+        assert data == {'weight': 1}
+        index += 1
+
 
 def test_transaction_watch():
     db = ukv.DataBase()
@@ -249,6 +332,8 @@ def test_transaction_watch():
     net.remove_edge(1, 2)
     with pytest.raises(Exception):
         txn.commit()
+
+    net.clear()
 
 
 def test_conflicting_transactions():

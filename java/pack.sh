@@ -11,6 +11,6 @@ set -e
 #       brew install java
 #       export JAVA_HOME="/usr/libexec/java_home -v 1.8"
 
-cmake -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -DUKV_BUILD_ENGINE_LEVELDB=1 . 
+cmake -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -DUKV_BUILD_ENGINE_LEVELDB=1 -DUKV_BUILD_BUNDLES=ON . 
 make -j16
 ./java/gradlew build #--info
