@@ -44,7 +44,7 @@ class blobs_collection_t {
     ukv_database_t db_ {nullptr};
     ukv_collection_t collection_ {ukv_collection_main_k};
     ukv_transaction_t txn_ {nullptr};
-    ukv_snapshot_t snap_ {nullptr};
+    ukv_snapshot_t snap_ {ukv_snapshot_k};
     any_arena_t arena_ {nullptr};
 
   public:
@@ -52,13 +52,13 @@ class blobs_collection_t {
     inline blobs_collection_t(ukv_database_t db_ptr,
                               ukv_collection_t collection = ukv_collection_main_k,
                               ukv_transaction_t txn = nullptr,
-                              ukv_snapshot_t snap = nullptr,
+                              ukv_snapshot_t snap = ukv_snapshot_k,
                               ukv_arena_t* arena = nullptr) noexcept
         : db_(db_ptr), collection_(collection), txn_(txn), snap_(snap), arena_(db_, arena) {}
 
     inline blobs_collection_t(blobs_collection_t&& other) noexcept
         : db_(other.db_), collection_(std::exchange(other.collection_, ukv_collection_main_k)),
-          txn_(std::exchange(other.txn_, nullptr)), snap_(std::exchange(other.snap_, nullptr)),
+          txn_(std::exchange(other.txn_, nullptr)), snap_(std::exchange(other.snap_, ukv_snapshot_k)),
           arena_(std::exchange(other.arena_, {nullptr})) {}
 
     inline blobs_collection_t& operator=(blobs_collection_t&& other) noexcept {

@@ -64,7 +64,7 @@ typedef void* ukv_database_t;
  * @brief
  *
  */
-typedef void* ukv_snapshot_t;
+typedef uint64_t ukv_snapshot_t;
 
 /**
  * @brief Opaque Transaction handle.
@@ -222,6 +222,7 @@ typedef enum {
  * Only `::ukv_drop_keys_vals_k` and `::ukv_drop_vals_k` apply to it.
  */
 extern ukv_collection_t const ukv_collection_main_k;
+extern ukv_snapshot_t const ukv_snapshot_k;
 extern ukv_length_t const ukv_length_missing_k;
 extern ukv_key_t const ukv_key_unknown_k;
 
@@ -303,8 +304,8 @@ typedef struct ukv_snapshot_list_t { /// @name Context
 
     /** @brief Number of present snapshots. */
     ukv_size_t* count;
-    /** @brief All snapshots. */
-    ukv_snapshot_t** snapshots;
+    /** @brief All snapshots ids. */
+    ukv_size_t** ids;
     /// @}
 } ukv_snapshot_list_t;
 
