@@ -24,6 +24,7 @@ namespace unum::ukv {
 class graph_collection_t {
     ukv_database_t db_ = nullptr;
     ukv_transaction_t transaction_ = nullptr;
+    ukv_transaction_t snapshot_ = nullptr;
     ukv_collection_t collection_ = ukv_collection_main_k;
     any_arena_t arena_;
 
@@ -32,8 +33,9 @@ class graph_collection_t {
     graph_collection_t(ukv_database_t db,
                        ukv_collection_t collection = ukv_collection_main_k,
                        ukv_transaction_t txn = nullptr,
+                       ukv_snapshot_t snap = nullptr,
                        ukv_arena_t* arena = nullptr) noexcept
-        : db_(db), transaction_(txn), collection_(collection), arena_(db_, arena) {}
+        : db_(db), transaction_(txn), snapshot_(snap), collection_(collection), arena_(db_, arena) {}
 
     graph_collection_t(graph_collection_t&&) = default;
     graph_collection_t& operator=(graph_collection_t&&) = default;
@@ -230,7 +232,8 @@ class graph_collection_t {
     }
 
     expected_gt<bool> contains(ukv_key_t vertex, bool watch = true) noexcept {
-        return blobs_ref_gt<collection_key_field_t>(db_, transaction_, ckf(collection_, vertex), arena_).present(watch);
+        return blobs_ref_gt<collection_key_field_t>(db_, transaction_, snapshot_, ckf(collection_, vertex), arena_)
+            .present(watch);
     }
 
     /**
@@ -244,7 +247,7 @@ class graph_collection_t {
         arg.collections_begin = {&collection_, 0};
         arg.keys_begin = vertices.begin();
         arg.count = vertices.count();
-        return blobs_ref_gt<places_arg_t>(db_, transaction_, std::move(arg), arena_).present(watch);
+        return blobs_ref_gt<places_arg_t>(db_, transaction_, snapshot_, std::move(arg), arena_).present(watch);
     }
 
     expected_gt<keys_stream_t> vertex_stream(

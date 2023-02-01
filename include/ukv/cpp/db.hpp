@@ -44,18 +44,21 @@ class context_t : public std::enable_shared_from_this<context_t> {
   protected:
     ukv_database_t db_ {nullptr};
     ukv_transaction_t txn_ {nullptr};
+    ukv_snapshot_t snap_ {nullptr};
     arena_t arena_ {nullptr};
 
   public:
     inline context_t() noexcept : arena_(nullptr) {}
-    inline context_t(ukv_database_t db, ukv_transaction_t txn = nullptr) noexcept : db_(db), txn_(txn), arena_(db) {}
+    inline context_t(ukv_database_t db, ukv_transaction_t txn = nullptr, ukv_snapshot_t snap = nullptr) noexcept
+        : db_(db), txn_(txn), snap_(snap), arena_(db) {}
     inline context_t(context_t const&) = delete;
     inline context_t(context_t&& other) noexcept
-        : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), arena_(std::exchange(other.arena_, {nullptr})) {}
-
+        : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), snap_(std::exchange(other.snap_, nullptr)),
+          arena_(std::exchange(other.arena_, {nullptr})) {}
     inline context_t& operator=(context_t&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(txn_, other.txn_);
+        std::swap(snap_, other.snap_);
         std::swap(arena_, other.arena_);
         return *this;
     }
@@ -63,10 +66,20 @@ class context_t : public std::enable_shared_from_this<context_t> {
     inline ~context_t() noexcept {
         ukv_transaction_free(txn_);
         txn_ = nullptr;
+
+        status_t status;
+        ukv_snapshot_drop_t snap_drop {
+            .db = db_,
+            .error = status.member_ptr(),
+            .snapshot = snap_,
+        };
+        ukv_snapshot_drop(&snap_drop);
+        snap_ = nullptr;
     }
 
     inline ukv_database_t db() const noexcept { return db_; }
     inline ukv_transaction_t txn() const noexcept { return txn_; }
+    inline ukv_snapshot_t snap() const noexcept { return snap_; }
     inline operator ukv_transaction_t() const noexcept { return txn_; }
 
     blobs_ref_gt<places_arg_t> operator[](strided_range_gt<collection_key_t const> collections_and_keys) noexcept {
@@ -74,7 +87,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
         arg.collections_begin = collections_and_keys.members(&collection_key_t::collection).begin();
         arg.keys_begin = collections_and_keys.members(&collection_key_t::key).begin();
         arg.count = collections_and_keys.size();
-        return {db_, txn_, std::move(arg), arena_};
+        return {db_, txn_, snap_, std::move(arg), arena_};
     }
 
     blobs_ref_gt<places_arg_t> operator[](
@@ -84,26 +97,26 @@ class context_t : public std::enable_shared_from_this<context_t> {
         arg.keys_begin = collections_and_keys.members(&collection_key_field_t::key).begin();
         arg.fields_begin = collections_and_keys.members(&collection_key_field_t::field).begin();
         arg.count = collections_and_keys.size();
-        return {db_, txn_, std::move(arg), arena_};
+        return {db_, txn_, snap_, std::move(arg), arena_};
     }
 
     blobs_ref_gt<places_arg_t> operator[](keys_view_t keys) noexcept { //
         places_arg_t arg;
         arg.keys_begin = keys.begin();
         arg.count = keys.size();
-        return {db_, txn_, std::move(arg), arena_};
+        return {db_, txn_, snap_, std::move(arg), arena_};
     }
 
     template <typename keys_arg_at>
     blobs_ref_gt<keys_arg_at> operator[](keys_arg_at&& keys) noexcept { //
-        return blobs_ref_gt<keys_arg_at> {db_, txn_, std::forward<keys_arg_at>(keys), arena_.member_ptr()};
+        return blobs_ref_gt<keys_arg_at> {db_, txn_, snap_, std::forward<keys_arg_at>(keys), arena_.member_ptr()};
     }
 
     expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return find(name); }
 
     template <typename collection_at = blobs_collection_t>
     collection_at main() noexcept {
-        return collection_at {db_, ukv_collection_main_k, txn_, arena_.member_ptr()};
+        return collection_at {db_, ukv_collection_main_k, txn_, snap_, arena_.member_ptr()};
     }
 
     expected_gt<collections_list_t> collections() noexcept {
@@ -115,6 +128,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
             .db = db_,
             .error = status.member_ptr(),
             .transaction = txn_,
+            .snapshot = snap_,
             .arena = arena_.member_ptr(),
             .count = &count,
             .ids = &ids,
@@ -181,10 +195,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
      *                 long-running analytical tasks with strong consistency
      *                 requirements.
      */
-    status_t reset(bool snapshot = false) noexcept {
-        if (snapshot && !ukv_supports_snapshots_k)
-            return status_t::status_view("Snapshots not supported!");
-
+    status_t reset() noexcept {
         status_t status;
         ukv_transaction_init_t txn_init {
             .db = db_,
@@ -272,10 +283,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
             close();
     }
 
-    expected_gt<context_t> transact(bool snapshot = false) noexcept {
-        if (snapshot && !ukv_supports_snapshots_k)
-            return status_t::status_view("Snapshots not supported!");
-
+    expected_gt<context_t> transact() noexcept {
         status_t status;
         ukv_transaction_t raw = nullptr;
         ukv_transaction_init_t txn_init {
@@ -289,6 +297,21 @@ class database_t : public std::enable_shared_from_this<database_t> {
             return {std::move(status), context_t {db_, nullptr}};
         else
             return context_t {db_, raw};
+    }
+
+    expected_gt<context_t> snapshot() noexcept {
+        status_t status;
+        ukv_snapshot_t raw = nullptr;
+        ukv_snapshot_create_t snap_create {
+            .db = db_,
+            .error = status.member_ptr(),
+            .snapshot = &raw,
+        };
+        ukv_snapshot_create(&snap_create);
+        if (!status)
+            return {std::move(status), context_t {db_, nullptr}};
+        else
+            return context_t {db_, nullptr, raw};
     }
 
     template <typename collection_at = blobs_collection_t>

@@ -44,6 +44,7 @@ class blobs_collection_t {
     ukv_database_t db_ {nullptr};
     ukv_collection_t collection_ {ukv_collection_main_k};
     ukv_transaction_t txn_ {nullptr};
+    ukv_snapshot_t snap_ {nullptr};
     any_arena_t arena_ {nullptr};
 
   public:
@@ -51,28 +52,32 @@ class blobs_collection_t {
     inline blobs_collection_t(ukv_database_t db_ptr,
                               ukv_collection_t collection = ukv_collection_main_k,
                               ukv_transaction_t txn = nullptr,
+                              ukv_snapshot_t snap = nullptr,
                               ukv_arena_t* arena = nullptr) noexcept
-        : db_(db_ptr), collection_(collection), txn_(txn), arena_(db_, arena) {}
+        : db_(db_ptr), collection_(collection), txn_(txn), snap_(snap), arena_(db_, arena) {}
 
     inline blobs_collection_t(blobs_collection_t&& other) noexcept
         : db_(other.db_), collection_(std::exchange(other.collection_, ukv_collection_main_k)),
-          txn_(std::exchange(other.txn_, nullptr)), arena_(std::exchange(other.arena_, {nullptr})) {}
+          txn_(std::exchange(other.txn_, nullptr)), snap_(std::exchange(other.snap_, nullptr)),
+          arena_(std::exchange(other.arena_, {nullptr})) {}
 
     inline blobs_collection_t& operator=(blobs_collection_t&& other) noexcept {
         std::swap(db_, other.db_);
         std::swap(collection_, other.collection_);
         std::swap(txn_, other.txn_);
+        std::swap(snap_, other.snap_);
         std::swap(arena_, other.arena_);
         return *this;
     }
 
     inline blobs_collection_t(blobs_collection_t const& other) noexcept
-        : db_(other.db_), collection_(other.collection_), txn_(other.txn_), arena_(other.db_) {}
+        : db_(other.db_), collection_(other.collection_), txn_(other.txn_), snap_(other.snap_), arena_(other.db_) {}
 
     inline blobs_collection_t& operator=(blobs_collection_t const& other) noexcept {
         db_ = other.db_;
         collection_ = other.collection_;
         txn_ = other.txn_;
+        snap_ = other.snap_;
         arena_ = any_arena_t(other.db_);
         return *this;
     }
@@ -156,7 +161,7 @@ class blobs_collection_t {
         arg.collections_begin = &collection_;
         arg.keys_begin = keys.begin();
         arg.count = keys.size();
-        return {db_, txn_, {std::move(arg)}, arena_};
+        return {db_, txn_, snap_, {std::move(arg)}, arena_};
     }
 
     template <typename keys_arg_at>
@@ -181,12 +186,12 @@ class blobs_collection_t {
 
             if constexpr (sfinae_has_field_gt<plain_t>::value)
                 arg.field = keys.field;
-            return result_t {db_, txn_, std::move(arg), arena_};
+            return result_t {db_, txn_, snap_, std::move(arg), arena_};
         }
         else {
             using locations_t = locations_in_collection_gt<keys_arg_at>;
             using result_t = blobs_ref_gt<locations_t>;
-            return result_t {db_, txn_, locations_t {std::forward<keys_arg_at>(keys), collection_}, arena_};
+            return result_t {db_, txn_, snap_, locations_t {std::forward<keys_arg_at>(keys), collection_}, arena_};
         }
     }
 };

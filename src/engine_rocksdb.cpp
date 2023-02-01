@@ -43,7 +43,7 @@ ukv_length_t const ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max
 ukv_key_t const ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 bool const ukv_supports_transactions_k = true;
 bool const ukv_supports_named_collections_k = true;
-bool const ukv_supports_snapshots_k = false;
+bool const ukv_supports_snapshots_k = true;
 
 using rocks_native_t = rocksdb::OptimisticTransactionDB;
 using rocks_status_t = rocksdb::Status;
@@ -74,8 +74,13 @@ struct key_comparator_t final : public rocksdb::Comparator {
 
 static key_comparator_t key_comparator_k = {};
 
+struct rocks_snapshot_t {
+    rocksdb::Snapshot const* snapshot = nullptr;
+};
+
 struct rocks_db_t {
     std::vector<rocks_collection_t*> columns;
+    std::unordered_map<ukv_size_t, ukv_snapshot_t> snapshots;
     std::unique_ptr<rocks_native_t> native;
     std::mutex mutex;
 };
@@ -182,6 +187,73 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         db_ptr->native = std::unique_ptr<rocks_native_t>(native_db);
         *c.db = db_ptr;
     });
+}
+
+void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
+
+    ukv_snapshot_list_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.count && c.snapshots, c.error, args_combo_k, "Need snapshots and outputs!");
+
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    std::lock_guard<std::mutex> locker(db.mutex);
+    std::size_t snapshots_count = db.snapshots.size();
+    *c.count = static_cast<ukv_size_t>(snapshots_count);
+
+    auto snapshots = arena.alloc_or_dummy(snapshots_count, c.error, c.snapshots);
+    return_if_error_m(c.error);
+
+    std::size_t i = 0;
+    for (const auto& [_, snapshot] : db.snapshots)
+        snapshots[i++] = snapshot;
+}
+
+void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
+
+    ukv_snapshot_create_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    std::lock_guard<std::mutex> locker(db.mutex);
+    auto id = reinterpret_cast<std::size_t>(*c.snapshot);
+    auto it = db.snapshots.find(id);
+    if (it != db.snapshots.end())
+        return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
+
+    if (!*c.snapshot)
+        safe_section("Allocating snapshot handle", c.error, [&] { *c.snapshot = new rocks_snapshot_t(); });
+    return_if_error_m(c.error);
+
+    rocks_snapshot_t& snap = **reinterpret_cast<rocks_snapshot_t**>(c.snapshot);
+    snap.snapshot = db.native->GetSnapshot();
+    if (!snap.snapshot)
+        *c.error = "Couldn't get a snapshot!";
+
+    c.id = id;
+    db.snapshots[c.id] = *c.snapshot;
+}
+
+void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
+
+    if (!c_ptr)
+        return;
+
+    ukv_snapshot_drop_t& c = *c_ptr;
+    if (!c.snapshot)
+        return;
+
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
+    db.native->ReleaseSnapshot(snap.snapshot);
+    snap.snapshot = nullptr;
+
+    auto id = reinterpret_cast<std::size_t>(c.snapshot);
+    db.mutex.lock();
+    db.snapshots.erase(id);
+    db.mutex.unlock();
 }
 
 void write_one( //
@@ -306,14 +378,15 @@ template <typename value_enumerator_at>
 void read_one( //
     rocks_db_t& db,
     rocks_txn_t* txn_ptr,
+    rocks_snapshot_t* snap_ptr,
     places_arg_t places,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
     ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
-    if (txn_ptr)
-        options.snapshot = txn_ptr->GetSnapshot();
+    if (snap_ptr)
+        options.snapshot = snap_ptr->snapshot;
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
 
@@ -345,14 +418,15 @@ template <typename value_enumerator_at>
 void read_many( //
     rocks_db_t& db,
     rocks_txn_t* txn_ptr,
+    rocks_snapshot_t* snap_ptr,
     places_arg_t places,
     ukv_options_t const c_options,
     value_enumerator_at enumerator,
     ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
-    if (txn_ptr)
-        options.snapshot = txn_ptr->GetSnapshot();
+    if (snap_ptr)
+        options.snapshot = snap_ptr->snapshot;
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
     std::vector<rocks_collection_t*> cols(places.count);
@@ -396,6 +470,7 @@ void ukv_read(ukv_read_t* c_ptr) {
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
 
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
@@ -425,8 +500,8 @@ void ukv_read(ukv_read_t* c_ptr) {
 
     safe_section("Reading from RocksDB", c.error, [&] {
         c.tasks_count == 1 //
-            ? read_one(db, &txn, places, c.options, data_enumerator, c.error)
-            : read_many(db, &txn, places, c.options, data_enumerator, c.error);
+            ? read_one(db, &txn, &snap, places, c.options, data_enumerator, c.error)
+            : read_many(db, &txn, &snap, places, c.options, data_enumerator, c.error);
         offs[places.count] = contents.size();
 
         if (needs_export)
@@ -444,6 +519,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
@@ -466,8 +542,8 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
-    if (c.transaction)
-        options.snapshot = txn.GetSnapshot();
+    if (c.snapshot)
+        options.snapshot = snap.snapshot;
 
     for (ukv_size_t i = 0; i != c.tasks_count; ++i) {
         scan_t task = tasks[i];
@@ -510,6 +586,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
     sample_args_t samples {collections, lens, c.tasks_count};
@@ -528,8 +605,8 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     rocksdb::ReadOptions options;
     options.fill_cache = false;
 
-    if (c.transaction)
-        options.snapshot = txn.GetSnapshot();
+    if (c.snapshot)
+        options.snapshot = snap.snapshot;
 
     for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
         sample_arg_t task = samples[task_idx];
