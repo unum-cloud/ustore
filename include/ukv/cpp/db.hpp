@@ -44,16 +44,16 @@ class context_t : public std::enable_shared_from_this<context_t> {
   protected:
     ukv_database_t db_ {nullptr};
     ukv_transaction_t txn_ {nullptr};
-    ukv_snapshot_t snap_ {ukv_snapshot_k};
+    ukv_snapshot_t snap_ {};
     arena_t arena_ {nullptr};
 
   public:
     inline context_t() noexcept : arena_(nullptr) {}
-    inline context_t(ukv_database_t db, ukv_transaction_t txn = nullptr, ukv_snapshot_t snap = ukv_snapshot_k) noexcept
+    inline context_t(ukv_database_t db, ukv_transaction_t txn = nullptr, ukv_snapshot_t snap = {}) noexcept
         : db_(db), txn_(txn), snap_(snap), arena_(db) {}
     inline context_t(context_t const&) = delete;
     inline context_t(context_t&& other) noexcept
-        : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), snap_(std::exchange(other.snap_, ukv_snapshot_k)),
+        : db_(other.db_), txn_(std::exchange(other.txn_, nullptr)), snap_(std::exchange(other.snap_, {})),
           arena_(std::exchange(other.arena_, {nullptr})) {}
     inline context_t& operator=(context_t&& other) noexcept {
         std::swap(db_, other.db_);
@@ -172,7 +172,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
     expected_gt<collection_at> find(std::string_view name = {}) noexcept {
 
         if (name.empty())
-            return collection_at {db_, ukv_snapshot_k, txn_, ukv_snapshot_k, arena_.member_ptr()};
+            return collection_at {db_, ukv_collection_main_k, txn_, {}, arena_.member_ptr()};
 
         auto maybe_cols = collections();
         if (!maybe_cols)
@@ -183,7 +183,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
         auto id_it = cols.ids.begin();
         for (; id_it != cols.ids.end(); ++id_it, ++name_it)
             if (*name_it == name)
-                return collection_at {db_, *id_it, txn_, ukv_snapshot_k, arena_.member_ptr()};
+                return collection_at {db_, *id_it, txn_, {}, arena_.member_ptr()};
 
         return status_t::status_view("No such collection is present");
     }
@@ -341,7 +341,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
         if (!status)
             return status;
         else
-            return collection_at {db_, collection, nullptr, ukv_snapshot_k, nullptr};
+            return collection_at {db_, collection, nullptr};
     }
 
     template <typename collection_at = blobs_collection_t>
@@ -349,14 +349,14 @@ class database_t : public std::enable_shared_from_this<database_t> {
         auto maybe_id = context_t {db_, nullptr}.find(name);
         if (!maybe_id)
             return maybe_id.release_status();
-        return collection_at {db_, *maybe_id, nullptr, ukv_snapshot_k, nullptr};
+        return collection_at {db_, *maybe_id, nullptr};
     }
 
     template <typename collection_at = blobs_collection_t>
     expected_gt<collection_at> find_or_create(ukv_str_view_t name) noexcept {
         auto maybe_id = context_t {db_, nullptr}.find(name);
         if (maybe_id)
-            return collection_at {db_, *maybe_id, nullptr, ukv_snapshot_k, nullptr};
+            return collection_at {db_, *maybe_id, nullptr};
         return create<collection_at>(name);
     }
 

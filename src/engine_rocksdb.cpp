@@ -39,7 +39,6 @@ using namespace unum;
 /*********************************************************/
 
 ukv_collection_t const ukv_collection_main_k = 0;
-ukv_snapshot_t const ukv_snapshot_k = 0;
 ukv_length_t const ukv_length_missing_k = std::numeric_limits<ukv_length_t>::max();
 ukv_key_t const ukv_key_unknown_k = std::numeric_limits<ukv_key_t>::max();
 bool const ukv_supports_transactions_k = true;

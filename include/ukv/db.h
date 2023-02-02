@@ -222,7 +222,6 @@ typedef enum {
  * Only `::ukv_drop_keys_vals_k` and `::ukv_drop_vals_k` apply to it.
  */
 extern ukv_collection_t const ukv_collection_main_k;
-extern ukv_snapshot_t const ukv_snapshot_k;
 extern ukv_length_t const ukv_length_missing_k;
 extern ukv_key_t const ukv_key_unknown_k;
 
