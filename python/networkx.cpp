@@ -1,3 +1,5 @@
+#include <charconv>
+
 #include "pybind.hpp"
 #include "crud.hpp"
 #include "nlohmann.hpp"
@@ -93,7 +95,6 @@ struct edges_stream_t {
         ukv_length_t* found_offsets = nullptr;
         ukv_length_t* found_lengths = nullptr;
         ukv_bytes_ptr_t found_values = nullptr;
-        ukv_str_view_t fields = nullptr;
         auto count = static_cast<ukv_size_t>(fetched_edges.size());
 
         ukv_docs_read_t docs_read {
@@ -106,8 +107,6 @@ struct edges_stream_t {
             .collections = collection.member_ptr(),
             .keys = fetched_edges.edge_ids.data(),
             .keys_stride = fetched_edges.edge_ids.stride(),
-            .fields = &fields,
-            .fields_stride = 0,
             .offsets = &found_offsets,
             .lengths = &found_lengths,
             .values = &found_values,
@@ -130,6 +129,104 @@ struct edges_stream_t {
     value_view_t data() { return attrs[index] ? attrs[index] : "{}"; }
 };
 
+void compute_degrees(py_graph_t& graph,
+                     strided_range_gt<ukv_key_t const> vertices,
+                     ukv_vertex_role_t role,
+                     ukv_str_view_t weight,
+                     ukv_vertex_degree_t** degrees) {
+
+    status_t status;
+    ukv_key_t* edges_per_vertex = nullptr;
+    auto count = static_cast<ukv_size_t>(vertices.size());
+
+    ukv_graph_find_edges_t graph_find_edges {
+        .db = graph.index.db(),
+        .error = status.member_ptr(),
+        .transaction = graph.index.txn(),
+        .arena = graph.index.member_arena(),
+        .tasks_count = count,
+        .collections = graph.index.member_ptr(),
+        .vertices = vertices.begin().get(),
+        .vertices_stride = vertices.stride(),
+        .roles = &role,
+        .degrees_per_vertex = degrees,
+        .edges_per_vertex = &edges_per_vertex,
+    };
+
+    ukv_graph_find_edges(&graph_find_edges);
+    status.throw_unhandled();
+    if (!weight)
+        return;
+
+    auto edges_begin = reinterpret_cast<edge_t*>(edges_per_vertex);
+    auto all_edges_count = transform_reduce_n(*degrees, count, 0ul, [](ukv_vertex_degree_t deg) {
+        return deg == ukv_vertex_degree_missing_k ? 0 : deg;
+    });
+    auto edges = edges_span_t {edges_begin, edges_begin + all_edges_count};
+
+    ukv_length_t* found_offsets = nullptr;
+    ukv_length_t* found_lengths = nullptr;
+    ukv_bytes_ptr_t found_values = nullptr;
+
+    ukv_docs_read_t docs_read {
+        .db = graph.relations_attrs.db(),
+        .error = status.member_ptr(),
+        .transaction = graph.relations_attrs.txn(),
+        .arena = graph.relations_attrs.member_arena(),
+        .type = ukv_doc_field_json_k,
+        .tasks_count = count,
+        .collections = graph.relations_attrs.member_ptr(),
+        .keys = edges.edge_ids.data(),
+        .keys_stride = edges.edge_ids.stride(),
+        .fields = &weight,
+        .fields_stride = 0,
+        .offsets = &found_offsets,
+        .lengths = &found_lengths,
+        .values = &found_values,
+    };
+
+    ukv_docs_read(&docs_read);
+    status.throw_unhandled();
+    auto values = embedded_blobs_t {count, found_offsets, found_lengths, found_values};
+
+    auto value_iterator = values.begin();
+    for (std::size_t i = 0; i != count; ++i) {
+        auto edges_count = (*degrees)[i];
+        (*degrees)[i] = transform_reduce_n(value_iterator, edges_count, 0ul, [](value_view_t edge_weight) {
+            ukv_vertex_degree_t weight;
+            std::from_chars(edge_weight.c_str(), edge_weight.c_str() + edge_weight.size(), weight);
+            return weight;
+        });
+    }
+}
+
+struct degrees_stream_t {
+    keys_stream_t keys_stream;
+    py_graph_t& graph;
+    ukv_str_view_t weight_field;
+    ukv_vertex_role_t vertex_role;
+
+    ptr_range_gt<ukv_key_t const> fetched_nodes;
+    ukv_vertex_degree_t* degrees = nullptr;
+    std::size_t index = 0;
+
+    degrees_stream_t(keys_stream_t&& stream, py_graph_t& net, ukv_str_view_t field, ukv_vertex_role_t role)
+        : keys_stream(std::move(stream)), graph(net), weight_field(field), vertex_role(role) {
+        fetched_nodes = keys_stream.keys_batch();
+        compute_degrees(graph, fetched_nodes, vertex_role, weight_field, &degrees);
+    }
+
+    void next_batch() {
+        keys_stream.seek_to_next_batch();
+        fetched_nodes = keys_stream.keys_batch();
+        compute_degrees(graph, fetched_nodes, vertex_role, weight_field, &degrees);
+        index = 0;
+    }
+
+    ukv_key_t key() { return fetched_nodes[index]; }
+    ukv_vertex_degree_t degree() { return degrees[index]; }
+};
+
 struct edges_range_t {
     range_gt<graph_stream_t> native;
     docs_collection_t& collection;
@@ -139,6 +236,7 @@ struct edges_range_t {
 struct degree_view_t {
     std::weak_ptr<py_graph_t> net_ptr;
     ukv_vertex_role_t roles = ukv_vertex_role_any_k;
+    std::string weight = "";
 };
 
 template <typename element_at>
@@ -171,19 +269,68 @@ py::object wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
 void ukv::wrap_networkx(py::module& m) {
 
     auto degs = py::class_<degree_view_t>(m, "DegreeView", py::module_local());
+    auto degs_stream = py::class_<degrees_stream_t>(m, "DegreesStream", py::module_local());
     degs.def("__getitem__", [](degree_view_t& degs, ukv_key_t v) {
         py_graph_t& g = *degs.net_ptr.lock().get();
         auto result = g.ref().degree(v, degs.roles).throw_or_release();
         return result;
     });
-    degs.def("__getitem__", [](degree_view_t& degs, py::object vs) {
+
+    degs.def(
+        "__call__",
+        [](degree_view_t& degs, py::object vs, std::string weight = "") {
+            py_graph_t& g = *degs.net_ptr.lock().get();
+            ukv_vertex_degree_t* degrees;
+
+            if (PyList_Check(vs.ptr())) {
+                std::vector<ukv_key_t> vertices(PySequence_Size(vs.ptr()));
+                py_transform_n(vs.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
+                compute_degrees(g,
+                                strided_range(vertices).immutable(),
+                                degs.roles,
+                                weight.size() ? weight.c_str() : nullptr,
+                                &degrees);
+                py::list res(vertices.size());
+                for (std::size_t i = 0; i != vertices.size(); ++i)
+                    res[i] = py::make_tuple(vertices[i], degrees[i]);
+                return py::object(res);
+            }
+
+            auto vs_handle = py_buffer(vs.ptr());
+            auto vertices = py_strided_range<ukv_key_t const>(vs_handle);
+            compute_degrees(g, vertices, degs.roles, weight.size() ? weight.c_str() : nullptr, &degrees);
+            return wrap_into_buffer<ukv_vertex_degree_t const>(
+                g,
+                strided_range<ukv_vertex_degree_t const>(degrees, degrees + vertices.size()));
+        },
+        py::arg("vs"),
+        py::arg("weight") = "");
+
+    degs.def(
+        "__call__",
+        [](degree_view_t& degs, std::string weight = "") {
+            degs.weight = weight;
+            return degs;
+        },
+        py::arg("weight") = "");
+
+    degs.def("__iter__", [](degree_view_t& degs) {
         py_graph_t& g = *degs.net_ptr.lock().get();
-        auto ids_handle = py_buffer(vs.ptr());
-        auto ids = py_strided_range<ukv_key_t const>(ids_handle);
-        auto result = g.ref().degrees(ids, {{&degs.roles, 0u}, ids.size()}).throw_or_release();
-        return wrap_into_buffer<ukv_vertex_degree_t const>(
-            g,
-            strided_range<ukv_vertex_degree_t const>(result.begin(), result.end()));
+        blobs_range_t members(g.index.db(), g.index.txn(), g.index);
+        keys_stream_t stream = keys_range_t({members}).begin();
+        return degrees_stream_t(std::move(stream), g, degs.weight.size() ? degs.weight.c_str() : nullptr, degs.roles);
+    });
+
+    degs_stream.def("__next__", [](degrees_stream_t& stream) {
+        if (stream.index >= stream.fetched_nodes.size()) {
+            if (stream.keys_stream.is_end())
+                throw py::stop_iteration();
+            stream.next_batch();
+        }
+
+        auto ret = py::make_tuple(stream.key(), stream.degree());
+        ++stream.index;
+        return ret;
     });
 
     auto nodes_range = py::class_<nodes_range_t>(m, "NodesRange", py::module_local());
@@ -192,10 +339,13 @@ void ukv::wrap_networkx(py::module& m) {
         return nodes_stream_t {std::move(stream), range.collection, range.read_data};
     });
 
-    nodes_range.def("__call__", [](nodes_range_t& range, bool data = false) {
-        range.read_data = data;
-        return range;
-    });
+    nodes_range.def(
+        "__call__",
+        [](nodes_range_t& range, bool data = false) {
+            range.read_data = data;
+            return range;
+        },
+        py::arg("data") = false);
 
     auto nodes_stream = py::class_<nodes_stream_t>(m, "NodesStream", py::module_local());
     nodes_stream.def("__next__", [](nodes_stream_t& stream) {
@@ -219,10 +369,13 @@ void ukv::wrap_networkx(py::module& m) {
         return edges_stream_t(std::move(range.native).begin(), range.collection, range.read_data);
     });
 
-    edges_range.def("__call__", [](edges_range_t& range, bool data = false) {
-        range.read_data = data;
-        return std::move(range);
-    });
+    edges_range.def(
+        "__call__",
+        [](edges_range_t& range, bool data = false) {
+            range.read_data = data;
+            return std::move(range);
+        },
+        py::arg("data") = false);
 
     auto edges_stream = py::class_<edges_stream_t>(m, "EdgesStream", py::module_local());
     edges_stream.def("__next__", [](edges_stream_t& stream) {

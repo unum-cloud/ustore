@@ -318,7 +318,7 @@
             "name": "C++: Test Arrow Server",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ukv_flight_server_udisk",
+            "program": "${workspaceFolder}/build_debug/build/bin/ukv_flight_server_umem",
             "cwd": "${workspaceFolder}",
             "environment": [],
             "showDisplayString": true,
