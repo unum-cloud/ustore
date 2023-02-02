@@ -210,16 +210,16 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     if (it != db.snapshots.end())
         return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
 
-    level_snapshot_t* snapshot = nullptr;
-    safe_section("Allocating snapshot handle", c.error, [&] { snapshot = new level_snapshot_t(); });
+    level_snapshot_t* level_snapshot = nullptr;
+    safe_section("Allocating snapshot handle", c.error, [&] { level_snapshot = new level_snapshot_t(); });
     return_if_error_m(c.error);
 
-    snapshot->snapshot = db.native->GetSnapshot();
-    if (!snapshot->snapshot)
+    level_snapshot->snapshot = db.native->GetSnapshot();
+    if (!level_snapshot->snapshot)
         *c.error = "Couldn't get a snapshot!";
 
-    c.id = reinterpret_cast<std::size_t>(snapshot);
-    db.snapshots[c.id] = snapshot;
+    *c.snapshot = reinterpret_cast<std::size_t>(level_snapshot);
+    db.snapshots[*c.snapshot] = level_snapshot;
 }
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {

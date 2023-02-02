@@ -320,8 +320,6 @@ typedef struct ukv_snapshot_create_t {
     ukv_database_t db;
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
-    /** @brief Unique id for the new snapshot. */
-    ukv_size_t id;
     /** @brief Output for the snapshot handle. */
     ukv_snapshot_t* snapshot;
 } ukv_snapshot_create_t;
