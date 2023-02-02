@@ -1398,6 +1398,59 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 }
 
 /*********************************************************/
+/*****************		Snapshots	  ****************/
+/*********************************************************/
+void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
+    // TODO
+}
+
+void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
+    ukv_snapshot_create_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+
+    arf::Action action;
+    fmt::format_to(std::back_inserter(action.type), "{}", kFlightSnapCreate);
+
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
+    {
+        std::lock_guard<std::mutex> lk(db.arena_lock);
+        arrow_mem_pool_t pool(db.arena);
+        arf::FlightCallOptions options = arrow_call_options(pool);
+        maybe_stream = db.flight->DoAction(options, action);
+    }
+    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+    auto& stream_ptr = maybe_stream.ValueUnsafe();
+    ar::Result<std::unique_ptr<arf::Result>> maybe_id = stream_ptr->Next();
+    return_error_if_m(maybe_id.ok(), c.error, network_k, "No response received");
+
+    auto& id_ptr = maybe_id.ValueUnsafe();
+    return_error_if_m(id_ptr->body->size() == sizeof(ukv_snapshot_t), c.error, error_unknown_k, "Inadequate response");
+    std::memcpy(c.snapshot, id_ptr->body->data(), sizeof(ukv_snapshot_t));
+}
+
+void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
+    ukv_snapshot_drop_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+
+    arf::Action action;
+    fmt::format_to(std::back_inserter(action.type),
+                   "{}?0x{:0>16x}&{}={}",
+                   kFlightSnapCreate,
+                   kParamSnapshotID,
+                   c.snapshot);
+
+    std::lock_guard<std::mutex> lk(db.arena_lock);
+    arrow_mem_pool_t pool(db.arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
+    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+}
+
+/*********************************************************/
 /*****************		Transactions	  ****************/
 /*********************************************************/
 

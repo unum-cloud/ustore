@@ -37,6 +37,8 @@ static std::int64_t const zero_size_data_k[1] = {0};
 
 inline static arf::ActionType const kActionColOpen {kFlightColCreate, "Find a collection descriptor by name."};
 inline static arf::ActionType const kActionColDrop {kFlightColDrop, "Delete a named collection."};
+inline static arf::ActionType const kActionSnapOpen {kFlightSnapCreate, "Find a snapshot descriptor by name."};
+inline static arf::ActionType const kActionSnapDrop {kFlightSnapDrop, "Delete a named snapshot."};
 inline static arf::ActionType const kActionTxnBegin {kFlightTxnBegin, "Starts an ACID transaction and returns its ID."};
 inline static arf::ActionType const kActionTxnCommit {kFlightTxnCommit, "Commit a previously started transaction."};
 
@@ -447,6 +449,8 @@ session_params_t session_params(arf::ServerCallContext const& server_call, std::
     if (result.transaction_id)
         result.session_id.txn_id = parse_txn_id(*result.transaction_id);
 
+    result.snapshot_id = param_value(params, kParamSnapshotID);
+
     result.collection_name = param_value(params, kParamCollectionName);
     result.collection_id = param_value(params, kParamCollectionID);
 
@@ -515,7 +519,8 @@ class UKVService : public arf::FlightServerBase {
     ar::Status ListActions( //
         arf::ServerCallContext const&,
         std::vector<arf::ActionType>* actions) override {
-        *actions = {kActionColOpen, kActionColDrop, kActionTxnBegin, kActionTxnCommit};
+        *actions =
+            {kActionColOpen, kActionColDrop, kActionSnapOpen, kActionSnapDrop, kActionTxnBegin, kActionTxnCommit};
         return ar::Status::OK();
     }
 
@@ -603,6 +608,48 @@ class UKVService : public arf::FlightServerBase {
                 .mode = mode,
             };
             ukv_collection_drop(&collection_drop);
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+            *results_ptr = return_empty();
+            return ar::Status::OK();
+        }
+
+        // Create a snapshot
+        if (is_query(action.type, kActionSnapOpen.type)) {
+            if (!params.snapshot_id)
+                return ar::Status::Invalid("Missing snapshot ID argument");
+
+            ukv_collection_t snapshot_id = 0;
+            ukv_snapshot_create_t snapshot_create {
+                .db = db_,
+                .error = status.member_ptr(),
+                .snapshot = &snapshot_id,
+            };
+
+            ukv_snapshot_create(snapshot_create);
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            *results_ptr = return_scalar<ukv_collection_t>(snapshot_id);
+            return ar::Status::OK();
+        }
+
+        // Dropping a snapshot
+        if (is_query(action.type, kActionSnapDrop.type)) {
+            if (!params.snapshot_id)
+                return ar::Status::Invalid("Missing snapshot ID argument");
+
+            ukv_collection_t c_snapshot_id = {};
+            if (params.snapshot_id)
+                c_snapshot_id = parse_u64_hex(*params.snapshot_id, {});
+
+            ukv_collection_drop_t snapshot_drop {
+                .db = db_,
+                .error = status.member_ptr(),
+                .snapshot = c_snapshot_id,
+            };
+
+            ukv_snapshot_drop(&snapshot_drop);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             *results_ptr = return_empty();
