@@ -40,7 +40,8 @@ echo -e "------ \e[93mBuild and Test Python\e[0m ------"
 CIBW_BUILD="cp37-*" cibuildwheel --platform linux &
 CIBW_BUILD="cp38-*" cibuildwheel --platform linux &
 CIBW_BUILD="cp39-*" cibuildwheel --platform linux &
-CIBW_BUILD="cp310-*" cibuildwheel --platform linux
+CIBW_BUILD="cp310-*" cibuildwheel --platform linux &
+wait
 echo -e "------ \e[92mPython Tests Passing!\e[0m ------"
 
 # Publish Python
@@ -65,22 +66,23 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "------ \e[92mJava Published!\e[0m ------"
 fi
 
-# Build Go
-echo -e "------ \e[93mBuild GO\e[0m ------"
+# Build GoLang
+echo -e "------ \e[93mBuild GoLang\e[0m ------"
+git submodule update --init --recursive --remote go-ukv/
 bash go-ukv/pack.sh
 echo -e "------ \e[92mGo Built!\e[0m ------"
 
-# Test and Publish Go
-read -p "Publish Go? " -n 1 -r
+# Test and Publish GoLang
+read -p "Publish GoLang? " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "------ \e[93mPublishing Go to go-ukv\e[0m ------"
-    cd go-ukv && bash publish.sh ; cd ..
+    echo -e "------ \e[93mPublishing GoLang to go-ukv\e[0m ------"
+    sudo apt update && sudo apt install golang && cd go-ukv && bash publish.sh ; cd ..
     echo -e "------ \e[92mGo Published!\e[0m ------"
 fi
 
 # Build Docker
 echo -e "\n------ \e[93mBuilding Docker\e[0m ------"
-docker buildx build --platform "linux/amd64,linux/arm64" --file docker/Dockerfile --tag unum/ukv:$version-focal --tag unum/ukv:latest --cache-from "type=local,src=docker/cache" --output registry .
+docker buildx build --platform "linux/amd64,linux/arm64" --file docker/Dockerfile --tag unum/ukv:$version-focal --tag unum/ukv:latest --output registry .
 echo -e "------ \e[92mDocker Built!\e[0m ------"
 
 read -p "Publish to DockerHub? " -n 1 -r

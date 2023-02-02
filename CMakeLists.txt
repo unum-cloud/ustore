@@ -343,7 +343,7 @@ if(${UKV_BUILD_BUNDLES})
       continue()
     endif()
 
-    string(CONCAT bundle_lib ${client_lib_name} "_bundle")
+    string(CONCAT bundle_lib "ukv_" ${client_lib_name} "_bundle")
     bundle_static_library(${client_lib} ${bundle_lib})
   endforeach()
 endif()
