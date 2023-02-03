@@ -80,7 +80,7 @@ struct rocks_snapshot_t {
 
 struct rocks_db_t {
     std::vector<rocks_collection_t*> columns;
-    std::unordered_map<ukv_size_t, ukv_snapshot_t> snapshots;
+    std::unordered_map<ukv_size_t, rocks_snapshot_t*> snapshots;
     std::unique_ptr<rocks_native_t> native;
     std::mutex mutex;
 };
@@ -193,7 +193,7 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
 
     ukv_snapshot_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    return_error_if_m(c.count && c.snapshots, c.error, args_combo_k, "Need snapshots and outputs!");
+    return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need outputs!");
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
@@ -203,12 +203,13 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
     std::size_t snapshots_count = db.snapshots.size();
     *c.count = static_cast<ukv_size_t>(snapshots_count);
 
-    auto snapshots = arena.alloc_or_dummy(snapshots_count, c.error, c.snapshots);
+    // For every snapshot we also need to export IDs
+    auto ids = arena.alloc_or_dummy(snapshots_count, c.error, c.ids);
     return_if_error_m(c.error);
 
     std::size_t i = 0;
-    for (const auto& [_, snapshot] : db.snapshots)
-        snapshots[i++] = snapshot;
+    for (const auto& [id, _] : db.snapshots)
+        ids[i++] = id;
 }
 
 void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
@@ -218,22 +219,20 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     std::lock_guard<std::mutex> locker(db.mutex);
-    auto id = reinterpret_cast<std::size_t>(*c.snapshot);
-    auto it = db.snapshots.find(id);
+    auto it = db.snapshots.find(*c.snapshot);
     if (it != db.snapshots.end())
         return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
 
-    if (!*c.snapshot)
-        safe_section("Allocating snapshot handle", c.error, [&] { *c.snapshot = new rocks_snapshot_t(); });
+    rocks_snapshot_t* rocks_snapshot = nullptr;
+    safe_section("Allocating snapshot handle", c.error, [&] { rocks_snapshot = new rocks_snapshot_t(); });
     return_if_error_m(c.error);
 
-    rocks_snapshot_t& snap = **reinterpret_cast<rocks_snapshot_t**>(c.snapshot);
-    snap.snapshot = db.native->GetSnapshot();
-    if (!snap.snapshot)
+    rocks_snapshot->snapshot = db.native->GetSnapshot();
+    if (!rocks_snapshot->snapshot)
         *c.error = "Couldn't get a snapshot!";
 
-    c.id = id;
-    db.snapshots[c.id] = *c.snapshot;
+    *c.snapshot = reinterpret_cast<std::size_t>(rocks_snapshot);
+    db.snapshots[*c.snapshot] = rocks_snapshot;
 }
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {

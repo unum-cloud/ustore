@@ -84,7 +84,8 @@ class CMakeBuild(build_ext):
 
     def run(self):
         build_ext.run(self)
-        self.run_command('build_pyi')
+        if 'UKV_DEBUG_PYTHON' not in os.environ:
+            self.run_command('build_pyi')
 
 
 class BuildPyi(Command):

@@ -132,11 +132,12 @@ def test_neighbors():
 
 def test_degree():
     db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.Network(db, 'graph', 'nodes', 'edges')
 
     sources = np.arange(100)
     targets = np.arange(1, 101)
-    net.add_edges_from(sources, targets)
+    ids = np.arange(100)
+    net.add_edges_from(sources, targets, ids, weight=2)
 
     degs = net.degree
     assert degs[0] == degs[100] == 1
@@ -153,14 +154,26 @@ def test_degree():
     for node in range(100):
         assert out_degs[node] == 1
 
-    # Batch
+    # Batch(List, Numpy)
+    assert net.degree([0, 1, 2]) == [(0, 1), (1, 2), (2, 2)]
+    assert net.degree([100, 1, 2, 0], weight='weight') == [
+        (100, 2), (1, 4), (2, 4), (0, 2)]
+
+    # Whole graph
     expected_degrees = [2] * 99
     expected_degrees.append(1)
     expected_degrees.insert(0, 1)
-    vertices = np.arange(101)
-    degrees = degs[vertices]
-    for i in vertices:
-        assert degrees[i] == expected_degrees[i]
+    exported_degrees = []
+    for node, deg in net.degree:
+        exported_degrees.append(deg)
+    assert exported_degrees == expected_degrees
+
+    expected_degrees = [deg*2 for deg in expected_degrees]
+
+    exported_degrees = []
+    for node, deg in net.degree(weight='weight'):
+        exported_degrees.append(deg)
+    assert exported_degrees == expected_degrees
 
     net.clear()
 
@@ -274,7 +287,7 @@ def test_nodes_attributes():
             net.add_node(i)
             expected_node_data[i] = {}
 
-    for node, data in net.nodes(True):
+    for node, data in net.nodes(data=True):
         retrieved_node_data[node] = data
 
     assert retrieved_node_data == expected_node_data
@@ -283,7 +296,7 @@ def test_nodes_attributes():
     nodes = np.arange(100)
     net.add_nodes_from(nodes, name='node')
 
-    for node, data in net.nodes(True):
+    for node, data in net.nodes(data=True):
         assert data == {'name': 'node'}
 
     net.clear()
@@ -297,7 +310,7 @@ def test_edges_attributes():
         net.add_edge(i, i+1, i, weight=i)
 
     index = 0
-    for node1, node2, data in net.edges(True):
+    for node1, node2, data in net.edges(data=True):
         assert node1 == index
         assert node2 == index+1
         assert data == {'weight': index}
@@ -311,7 +324,7 @@ def test_edges_attributes():
     net.add_edges_from(sources, targets, ids, weight=1)
 
     index = 0
-    for node1, node2, data in net.edges(True):
+    for node1, node2, data in net.edges(data=True):
         assert node1 == sources[index]
         assert node2 == targets[index]
         assert data == {'weight': 1}
