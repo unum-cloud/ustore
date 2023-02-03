@@ -64,7 +64,7 @@ typedef void* ukv_database_t;
  * @brief
  *
  */
-typedef void* ukv_snapshot_t;
+typedef uint64_t ukv_snapshot_t;
 
 /**
  * @brief Opaque Transaction handle.
@@ -303,8 +303,8 @@ typedef struct ukv_snapshot_list_t { /// @name Context
 
     /** @brief Number of present snapshots. */
     ukv_size_t* count;
-    /** @brief All snapshots. */
-    ukv_snapshot_t** snapshots;
+    /** @brief All snapshots ids. */
+    ukv_size_t** ids;
     /// @}
 } ukv_snapshot_list_t;
 
@@ -319,8 +319,6 @@ typedef struct ukv_snapshot_create_t {
     ukv_database_t db;
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
-    /** @brief Unique id for the new snapshot. */
-    ukv_size_t id;
     /** @brief Output for the snapshot handle. */
     ukv_snapshot_t* snapshot;
 } ukv_snapshot_create_t;
