@@ -289,11 +289,11 @@ def test_nodes_attributes():
 
     # Custom Field
     for node, name in net.nodes(data='name'):
-        name == 'node{}'.format(node) if node % 2 else None
+        assert name == ('node{}'.format(node) if node % 2 else None)
 
     # Custom Field With Default
-    for node, id in net.nodes(data='id',default = 1):
-        id == node if node % 2 else 1
+    for node, id in net.nodes(data='id', default=1):
+        assert (id == node if node % 2 else id == 1)
 
     # Batch Upsert
     net.clear()
@@ -311,26 +311,36 @@ def test_edges_attributes():
     net = ukv.Network(db, 'graph', 'nodes', 'edges')
 
     for i in range(100):
-        net.add_edge(i, i+1, i, weight=i)
+        net.add_edge(i, i+1, i, weight=i) if i % 2 else net.add_edge(i, i+1, i)
 
     index = 0
-    for node1, node2, data in net.edges(data=True):
-        assert node1 == index
-        assert node2 == index+1
-        assert data == {'weight': index}
+    for node, neighbor, data in net.edges(data=True):
+        assert node == index and neighbor == index+1
+        assert data == ({'weight': index} if node % 2 else {})
         index += 1
 
-    net.clear()
+    index = 0
+    for node, neighbor, weight in net.edges(data='weight'):
+        assert node == index and neighbor == index+1
+        assert weight == (node if node % 2 else None)
+        index += 1
 
+    index = 0
+    for node, neighbor, weight in net.edges(data='weight', default=1):
+        assert node == index and neighbor == index+1
+        assert weight == (node if node % 2 else 1)
+        index += 1
+
+    # Batch
+    net.clear()
     sources = np.arange(100)
     targets = np.arange(100, 200)
     ids = np.arange(100)
     net.add_edges_from(sources, targets, ids, weight=1)
 
     index = 0
-    for node1, node2, data in net.edges(data=True):
-        assert node1 == sources[index]
-        assert node2 == targets[index]
+    for node, neighbor, data in net.edges(data=True):
+        assert node == sources[index] and neighbor == targets[index]
         assert data == {'weight': 1}
         index += 1
 
