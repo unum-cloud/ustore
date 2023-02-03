@@ -14,25 +14,29 @@ struct nodes_stream_t {
     keys_stream_t native;
     docs_collection_t& collection;
     bool read_data;
+    ukv_str_view_t field;
+    ukv_str_view_t default_value;
 
     embedded_blobs_t attrs;
-    ptr_range_gt<ukv_key_t const> fetched_nodes;
+    ptr_range_gt<ukv_key_t const> nodes;
     std::size_t index = 0;
 
-    nodes_stream_t(keys_stream_t&& stream, docs_collection_t& col, bool data = false)
-        : native(std::move(stream)), collection(col), read_data(data) {
-        fetched_nodes = native.keys_batch();
-        if (read_data)
-            read_attributes();
+    nodes_stream_t(
+        keys_stream_t&& stream, docs_collection_t& col, bool data, ukv_str_view_t field, ukv_str_view_t default_value)
+        : native(std::move(stream)), collection(col), read_data(data), field(field), default_value(default_value) {
+        nodes = native.keys_batch();
+        read_attributes();
     }
 
     void read_attributes() {
+        if (!read_data)
+            return;
+
         status_t status;
         ukv_length_t* found_offsets = nullptr;
         ukv_length_t* found_lengths = nullptr;
         ukv_bytes_ptr_t found_values = nullptr;
-        ukv_str_view_t fields = nullptr;
-        auto count = static_cast<ukv_size_t>(fetched_nodes.size());
+        auto count = static_cast<ukv_size_t>(nodes.size());
 
         ukv_docs_read_t docs_read {
             .db = collection.db(),
@@ -42,9 +46,9 @@ struct nodes_stream_t {
             .type = ukv_doc_field_json_k,
             .tasks_count = count,
             .collections = collection.member_ptr(),
-            .keys = fetched_nodes.begin(),
+            .keys = nodes.begin(),
             .keys_stride = sizeof(ukv_key_t),
-            .fields = &fields,
+            .fields = &field,
             .fields_stride = 0,
             .offsets = &found_offsets,
             .lengths = &found_lengths,
@@ -58,20 +62,21 @@ struct nodes_stream_t {
 
     void next_batch() {
         native.seek_to_next_batch();
-        fetched_nodes = native.keys_batch();
-        if (read_data)
-            read_attributes();
+        nodes = native.keys_batch();
+        read_attributes();
         index = 0;
     }
 
-    ukv_key_t key() { return fetched_nodes[index]; }
-    value_view_t data() { return attrs[index] ? attrs[index] : "{}"; }
+    ukv_key_t key() { return nodes[index]; }
+    value_view_t data() { return attrs[index] && !attrs[index].empty() ? attrs[index] : default_value; }
 };
 
 struct nodes_range_t {
     keys_range_t native;
     docs_collection_t& collection;
     bool read_data = false;
+    std::string field;
+    std::string default_value;
 };
 
 struct edges_stream_t {
@@ -335,21 +340,38 @@ void ukv::wrap_networkx(py::module& m) {
 
     auto nodes_range = py::class_<nodes_range_t>(m, "NodesRange", py::module_local());
     nodes_range.def("__iter__", [](nodes_range_t& range) {
-        auto stream = std::move(range.native).begin();
-        return nodes_stream_t {std::move(stream), range.collection, range.read_data};
+        return nodes_stream_t {std::move(range.native).begin(),
+                               range.collection,
+                               range.read_data,
+                               range.field.size() ? range.field.c_str() : nullptr,
+                               range.default_value.c_str()};
     });
 
     nodes_range.def(
         "__call__",
         [](nodes_range_t& range, bool data = false) {
             range.read_data = data;
+            range.default_value = "{}";
             return range;
         },
         py::arg("data") = false);
 
+    nodes_range.def(
+        "__call__",
+        [](nodes_range_t& range, std::string& data, py::object default_value) {
+            range.read_data = true;
+            range.field = data;
+            std::string str;
+            to_string(default_value.ptr(), str);
+            range.default_value = std::move(str);
+            return range;
+        },
+        py::arg("data"),
+        py::arg("default") = py::reinterpret_steal<py::object>(Py_None));
+
     auto nodes_stream = py::class_<nodes_stream_t>(m, "NodesStream", py::module_local());
     nodes_stream.def("__next__", [](nodes_stream_t& stream) {
-        if (stream.index >= stream.fetched_nodes.size()) {
+        if (stream.index >= stream.nodes.size()) {
             if (stream.native.is_end())
                 throw py::stop_iteration();
             stream.next_batch();
@@ -810,7 +832,7 @@ void ukv::wrap_networkx(py::module& m) {
     // https://networkx.org/documentation/stable/reference/functions.html#graph
     // https://networkx.org/documentation/stable/reference/generated/networkx.classes.function.density.html
     // https://networkx.org/documentation/stable/reference/generated/networkx.classes.function.is_directed.html?highlight=is_directed
-    g.def_property_readonly("is_directed", [](py_graph_t& g) { return g.is_directed; });
+    g.def("is_directed", [](py_graph_t& g) { return g.is_directed; });
     g.def_property_readonly("is_multi", [](py_graph_t& g) { return g.is_multi; });
     g.def_property_readonly("allows_loops", [](py_graph_t& g) { return g.allow_self_loops; });
     m.def("is_directed", [](py_graph_t& g) { return g.is_directed; });
