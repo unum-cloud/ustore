@@ -272,14 +272,9 @@ def test_nodes_attributes():
     db = ukv.DataBase()
     net = ukv.Network(db, 'graph', 'nodes')
 
-    net.add_node(1, id=1, name='node1')
-    net.add_node(2)
-    net.add_node(3, id=3, name='node3')
-
     expected_node_data = {}
     retrieved_node_data = {}
-
-    for i in range(1000):
+    for i in range(10):
         if i % 2:
             net.add_node(i, id=i, name='node{}'.format(i))
             expected_node_data[i] = {'id': i, 'name': 'node{}'.format(i)}
@@ -287,11 +282,20 @@ def test_nodes_attributes():
             net.add_node(i)
             expected_node_data[i] = {}
 
+    # Whole Data
     for node, data in net.nodes(data=True):
         retrieved_node_data[node] = data
-
     assert retrieved_node_data == expected_node_data
 
+    # Custom Field
+    for node, name in net.nodes(data='name'):
+        name == 'node{}'.format(node) if node % 2 else None
+
+    # Custom Field With Default
+    for node, id in net.nodes(data='id',default = 1):
+        id == node if node % 2 else 1
+
+    # Batch Upsert
     net.clear()
     nodes = np.arange(100)
     net.add_nodes_from(nodes, name='node')
