@@ -162,9 +162,12 @@ void ukv::wrap_database(py::module& m) {
     py_txn.def( //
         py::init([](py_db_t& py_db, bool begin, bool watch, bool flush_writes, bool snapshot) {
             auto db_ptr = py_db.shared_from_this();
-            auto maybe_txn = py_db.native.transact(snapshot);
-            maybe_txn.throw_unhandled();
-            auto py_txn_ptr = std::make_shared<py_transaction_t>(*std::move(maybe_txn), db_ptr);
+            auto txn = py_db.native.transact().throw_or_release();
+            if (snapshot) {
+                auto snap = py_db.native.snapshot().throw_or_release();
+                txn.set_snapshot(snap.snap());
+            }
+            auto py_txn_ptr = std::make_shared<py_transaction_t>(std::move(txn), db_ptr);
             py_txn_ptr->dont_watch = !watch;
             py_txn_ptr->flush_writes = flush_writes;
             return py_txn_ptr;
