@@ -144,7 +144,9 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     py_graph_t(py_graph_t const&) = delete;
     ~py_graph_t() {}
 
-    graph_collection_t ref() { return graph_collection_t(index.db(), index, index.txn(), index.member_arena()); }
+    graph_collection_t ref() {
+        return graph_collection_t(index.db(), index, index.txn(), index.snap(), index.member_arena());
+    }
 };
 
 struct py_table_keys_range_t {
