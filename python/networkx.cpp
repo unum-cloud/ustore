@@ -49,7 +49,6 @@ struct nodes_stream_t {
             .keys = nodes.begin(),
             .keys_stride = sizeof(ukv_key_t),
             .fields = &field,
-            .fields_stride = 0,
             .offsets = &found_offsets,
             .lengths = &found_lengths,
             .values = &found_values,
@@ -83,24 +82,29 @@ struct edges_stream_t {
     graph_stream_t native;
     docs_collection_t& collection;
     bool read_data;
+    ukv_str_view_t field;
+    ukv_str_view_t default_value;
 
     embedded_blobs_t attrs;
-    edges_span_t fetched_edges;
+    edges_span_t edges;
     std::size_t index = 0;
 
-    edges_stream_t(graph_stream_t&& stream, docs_collection_t& col, bool data = false)
-        : native(std::move(stream)), collection(col), read_data(data) {
-        fetched_edges = native.edges_batch();
-        if (read_data)
-            read_attributes();
+    edges_stream_t(
+        graph_stream_t&& stream, docs_collection_t& col, bool data, ukv_str_view_t field, ukv_str_view_t default_value)
+        : native(std::move(stream)), collection(col), read_data(data), field(field), default_value(default_value) {
+        edges = native.edges_batch();
+        read_attributes();
     }
 
     void read_attributes() {
+        if (!read_data)
+            return;
+
         status_t status;
         ukv_length_t* found_offsets = nullptr;
         ukv_length_t* found_lengths = nullptr;
         ukv_bytes_ptr_t found_values = nullptr;
-        auto count = static_cast<ukv_size_t>(fetched_edges.size());
+        auto count = static_cast<ukv_size_t>(edges.size());
 
         ukv_docs_read_t docs_read {
             .db = collection.db(),
@@ -110,8 +114,9 @@ struct edges_stream_t {
             .type = ukv_doc_field_json_k,
             .tasks_count = count,
             .collections = collection.member_ptr(),
-            .keys = fetched_edges.edge_ids.data(),
-            .keys_stride = fetched_edges.edge_ids.stride(),
+            .keys = edges.edge_ids.data(),
+            .keys_stride = edges.edge_ids.stride(),
+            .fields = &field,
             .offsets = &found_offsets,
             .lengths = &found_lengths,
             .values = &found_values,
@@ -124,14 +129,21 @@ struct edges_stream_t {
 
     void next_batch() {
         native.seek_to_next_batch();
-        fetched_edges = native.edges_batch();
-        if (read_data)
-            read_attributes();
+        edges = native.edges_batch();
+        read_attributes();
         index = 0;
     }
 
-    edge_t edge() { return fetched_edges[index]; }
-    value_view_t data() { return attrs[index] ? attrs[index] : "{}"; }
+    edge_t edge() { return edges[index]; }
+    value_view_t data() { return attrs[index] && !attrs[index].empty() ? attrs[index] : default_value; }
+};
+
+struct edges_range_t {
+    range_gt<graph_stream_t> native;
+    docs_collection_t& collection;
+    bool read_data = false;
+    std::string field;
+    std::string default_value;
 };
 
 void compute_degrees(py_graph_t& graph,
@@ -230,12 +242,6 @@ struct degrees_stream_t {
 
     ukv_key_t key() { return fetched_nodes[index]; }
     ukv_vertex_degree_t degree() { return degrees[index]; }
-};
-
-struct edges_range_t {
-    range_gt<graph_stream_t> native;
-    docs_collection_t& collection;
-    bool read_data = false;
 };
 
 struct degree_view_t {
@@ -388,20 +394,38 @@ void ukv::wrap_networkx(py::module& m) {
 
     auto edges_range = py::class_<edges_range_t>(m, "EdgesRange", py::module_local());
     edges_range.def("__iter__", [](edges_range_t& range) {
-        return edges_stream_t(std::move(range.native).begin(), range.collection, range.read_data);
+        return edges_stream_t(std::move(range.native).begin(),
+                              range.collection,
+                              range.read_data,
+                              range.field.size() ? range.field.c_str() : nullptr,
+                              range.default_value.c_str());
     });
 
     edges_range.def(
         "__call__",
         [](edges_range_t& range, bool data = false) {
             range.read_data = data;
+            range.default_value = "{}";
             return std::move(range);
         },
         py::arg("data") = false);
 
+    edges_range.def(
+        "__call__",
+        [](edges_range_t& range, std::string& data, py::object default_value) {
+            range.read_data = true;
+            range.field = data;
+            std::string str;
+            to_string(default_value.ptr(), str);
+            range.default_value = std::move(str);
+            return std::move(range);
+        },
+        py::arg("data"),
+        py::arg("default") = py::reinterpret_steal<py::object>(Py_None));
+
     auto edges_stream = py::class_<edges_stream_t>(m, "EdgesStream", py::module_local());
     edges_stream.def("__next__", [](edges_stream_t& stream) {
-        if (stream.index >= stream.fetched_edges.size()) {
+        if (stream.index >= stream.edges.size()) {
             if (stream.native.is_end())
                 throw py::stop_iteration();
             stream.next_batch();
