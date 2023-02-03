@@ -87,6 +87,7 @@ class blobs_collection_t {
     inline ukv_arena_t* member_arena() noexcept { return arena_.member_ptr(); }
     inline ukv_database_t db() const noexcept { return db_; }
     inline ukv_transaction_t txn() const noexcept { return txn_; }
+    inline ukv_snapshot_t snap() const noexcept { return snap_; }
 
     inline blobs_range_t members( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
