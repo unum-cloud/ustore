@@ -84,7 +84,8 @@ class CMakeBuild(build_ext):
 
     def run(self):
         build_ext.run(self)
-        self.run_command('build_pyi')
+        if 'UKV_DEBUG_PYTHON' not in os.environ:
+            self.run_command('build_pyi')
 
 
 class BuildPyi(Command):
@@ -127,7 +128,7 @@ class BuildPyi(Command):
 
         data_json = json.dumps(data)
         # Execute in a subprocess in case it crashes
-        args = [sys.executable, '-m', 'py11stubs', data_json]
+        args = [sys.executable, '-m', 'python.py11stubs', data_json]
 
         proc = subprocess.run(args, env=env, capture_output=True)
         print('exit status:', proc.returncode)

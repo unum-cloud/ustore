@@ -68,6 +68,7 @@ class blobs_ref_gt {
   protected:
     ukv_database_t db_ {nullptr};
     ukv_transaction_t txn_ {nullptr};
+    ukv_snapshot_t snap_ {nullptr};
     ukv_arena_t* arena_ {nullptr};
     locations_store_t locations_;
 
@@ -81,8 +82,12 @@ class blobs_ref_gt {
     expected_gt<expected_at> any_gather(contents_arg_at&&, ukv_options_t) noexcept;
 
   public:
-    blobs_ref_gt(ukv_database_t db, ukv_transaction_t txn, locations_at&& locations, ukv_arena_t* arena) noexcept
-        : db_(db), txn_(txn), arena_(arena), locations_(std::forward<locations_at>(locations)) {}
+    blobs_ref_gt(ukv_database_t db,
+                 ukv_transaction_t txn,
+                 ukv_snapshot_t snap,
+                 locations_at&& locations,
+                 ukv_arena_t* arena) noexcept
+        : db_(db), txn_(txn), snap_(snap), arena_(arena), locations_(std::forward<locations_at>(locations)) {}
 
     blobs_ref_gt(blobs_ref_gt&&) = default;
     blobs_ref_gt& operator=(blobs_ref_gt&&) = default;
@@ -193,6 +198,7 @@ expected_gt<expected_at> blobs_ref_gt<locations_at>::any_get(ukv_options_t optio
         .db = db_,
         .error = status.member_ptr(),
         .transaction = txn_,
+        .snapshot = snap_,
         .arena = arena_,
         .options = options,
         .tasks_count = count,

@@ -129,9 +129,8 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     std::weak_ptr<py_transaction_t> py_txn_ptr;
 
     blobs_collection_t index;
-    blobs_collection_t sources_attrs;
-    blobs_collection_t targets_attrs;
-    blobs_collection_t relations_attrs;
+    docs_collection_t vertices_attrs;
+    docs_collection_t relations_attrs;
 
     bool in_txn {false};
     bool is_directed {false};
@@ -145,7 +144,9 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     py_graph_t(py_graph_t const&) = delete;
     ~py_graph_t() {}
 
-    graph_collection_t ref() { return graph_collection_t(index.db(), index, index.txn(), index.member_arena()); }
+    graph_collection_t ref() {
+        return graph_collection_t(index.db(), index, index.txn(), index.snap(), index.member_arena());
+    }
 };
 
 struct py_table_keys_range_t {
