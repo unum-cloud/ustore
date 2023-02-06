@@ -331,6 +331,25 @@ def test_edges_attributes():
         assert weight == (node if node % 2 else 1)
         index += 1
 
+    # nbunch
+    assert list(net.edges(1, data=True)) == [(1, 2, {'weight': 1})]
+    assert list(net.edges(2, data='weight', default=1)) == [
+        (2, 3, 1)]
+    assert list(net.edges(3, data='weight')) == [
+        (3, 4, 3)]
+
+    index = 0
+    for node, neighbor, data in net.edges([0, 1, 2, 3], data=True):
+        assert node == index and neighbor == index+1
+        assert data == ({'weight': index} if node % 2 else {})
+        index += 1
+
+    index = 0
+    for node, neighbor, weight in net.edges([0, 1, 2, 3], data='weight', default=1):
+        assert node == index and neighbor == index+1
+        assert weight == (node if node % 2 else 1)
+        index += 1
+
     # Batch
     net.clear()
     sources = np.arange(100)
