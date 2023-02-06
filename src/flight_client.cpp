@@ -1467,11 +1467,7 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
     arf::Action action;
-    fmt::format_to(std::back_inserter(action.type),
-                   "{}?0x{:0>16x}&{}={}",
-                   kFlightSnapCreate,
-                   kParamSnapshotID,
-                   c.snapshot);
+    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightSnapCreate, kParamSnapshotID, c.snapshot);
 
     std::lock_guard<std::mutex> lk(db.arena_lock);
     arrow_mem_pool_t pool(db.arena);
