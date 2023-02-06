@@ -1401,7 +1401,34 @@ void ukv_database_control(ukv_database_control_t* c_ptr) {
 /*****************		Snapshots	  ****************/
 /*********************************************************/
 void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
-    // TODO
+    ukv_collection_list_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    ar::Status ar_status;
+    arrow_mem_pool_t pool(arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+
+    arf::Ticket ticket {kFlightListSnap};
+    ar::Result<std::unique_ptr<arf::FlightStreamReader>> maybe_stream = db.flight->DoGet(ticket);
+    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+
+    ArrowSchema schema_c;
+    ArrowArray batch_c;
+    ar_status = unpack_table(maybe_table, schema_c, batch_c);
+    return_error_if_m(ar_status.ok(), c.error, args_combo_k, "Failed to unpack list of snapshots");
+
+    auto ids_column_idx = column_idx(schema_c, kArgSnaps);
+    return_error_if_m(ids_column_idx, c.error, args_combo_k, "Expecting one column");
+
+    if (c.count)
+        *c.count = static_cast<ukv_size_t>(batch_c.length);
+    if (c.ids)
+        *c.ids = (ukv_collection_t*)batch_c.children[*ids_column_idx]->buffers[1];
 }
 
 void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {

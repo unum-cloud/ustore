@@ -1299,6 +1299,7 @@ class UKVService : public arf::FlightServerBase {
             collection_list.db = db_;
             collection_list.error = status.member_ptr();
             collection_list.transaction = session.txn;
+            collection_list.snapshot = {}; // TODO
             collection_list.arena = &session.arena;
             collection_list.options = ukv_options(params);
             collection_list.count = &count;
@@ -1339,6 +1340,61 @@ class UKVService : public arf::FlightServerBase {
                 ukv_bytes_ptr_t(names),
                 schema_c.children[1],
                 array_c.children[1],
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            auto maybe_batch = ar::ImportRecordBatch(&array_c, &schema_c);
+            if (!maybe_batch.ok())
+                return maybe_batch.status();
+
+            auto batch = maybe_batch.ValueUnsafe();
+            auto maybe_reader = ar::RecordBatchReader::Make({batch});
+            if (!maybe_reader.ok())
+                return maybe_reader.status();
+
+            // TODO: Pass right IPC options
+            auto stream = std::make_unique<arf::RecordBatchStream>(maybe_reader.ValueUnsafe());
+            *response_ptr = std::move(stream);
+            return ar::Status::OK();
+        }
+        else if (is_query(ticket.ticket, kFlightListSnap)) {
+            // We will need some temporary memory for exports
+            auto session = sessions_.lock(params.session_id, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ukv_size_t count = 0;
+            ukv_snapshot_t* snapshots = nullptr;
+            ukv_snapshot_list_t snapshot_list;
+            snapshot_list.db = db_;
+            snapshot_list.error = status.member_ptr();
+            snapshot_list.transaction = session.txn;
+            snapshot_list.arena = &session.arena;
+            snapshot_list.options = ukv_options(params);
+            snapshot_list.count = &count;
+            snapshot_list.ids = &snapshots;
+
+            ukv_snapshot_list(&snapshot_list);
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            // Pack two columns into a Table
+            ArrowSchema schema_c;
+            ArrowArray array_c;
+            ukv_to_arrow_schema(count, 2, &schema_c, &array_c, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ukv_to_arrow_column( //
+                count,
+                kArgSnaps.c_str(),
+                ukv_doc_field<ukv_snapshot_t>(),
+                nullptr,
+                nullptr,
+                ukv_bytes_ptr_t(snapshots),
+                schema_c.children[0],
+                array_c.children[0],
                 status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());

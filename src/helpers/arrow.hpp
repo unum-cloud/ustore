@@ -51,6 +51,7 @@ inline static std::string const kFlightReadPath = "read_path";   /// `DoExchange
 inline static std::string const kFlightScan = "scan";            /// `DoExchange`
 inline static std::string const kFlightMeasure = "measure";      /// `DoExchange`
 
+inline static std::string const kArgSnaps = "snapshots";
 inline static std::string const kArgCols = "collections";
 inline static std::string const kArgKeys = "keys";
 inline static std::string const kArgVals = "values";
