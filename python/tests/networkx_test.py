@@ -363,6 +363,50 @@ def test_edges_attributes():
         assert data == {'weight': 1}
         index += 1
 
+    net.clear()
+
+
+def test_set_node_attributes():
+    db = ukv.DataBase()
+    net = ukv.Network(db, 'graph', 'nodes')
+
+    net.add_node(0)
+    net.add_node(1)
+    net.add_node(2)
+
+    # Set Attributes From Scalar And Name
+    attributes = 1
+    net.set_node_attributes(attributes, name='weight')
+
+    index = 0
+    for node, weight in net.nodes(data='weight'):
+        assert node == index
+        assert weight == 1
+        index += 1
+
+    # Set Attributes From Dict And Name
+    attributes = {0: 'node0', 1: 'node1', 2: 'node2'}
+    net.set_node_attributes(attributes, name='name')
+
+    index = 0
+    for node, name in net.nodes(data='name'):
+        assert node == index
+        assert name == 'node{}'.format(index)
+        index += 1
+
+    # Set Attributes From Dict of Dict
+    attributes = {0: {'id': '0'}, 1: {
+    }, 2: {'number': 2}}
+
+    net.set_node_attributes(attributes)
+    expected_datas = [{'name': 'node0', 'id': '0', 'weight': 1}, {
+        'name': 'node1', 'weight': 1}, {'name': 'node2', 'number': 2, 'weight': 1}]
+    exported_datas = []
+    for node, data in net.nodes(data=True):
+        exported_datas.append(data)
+
+    assert expected_datas == exported_datas
+
 
 def test_transaction_watch():
     db = ukv.DataBase()
