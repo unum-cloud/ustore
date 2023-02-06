@@ -631,6 +631,23 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("values"),
         py::arg("name") = std::nullopt);
 
+    g.def(
+        "get_node_attributes",
+        [](py_graph_t& g, std::string& name) {
+            std::unordered_map<ukv_key_t, py::object> map;
+            auto stream = g.ref().vertex_stream().throw_or_release();
+            while (!stream.is_end()) {
+                auto keys = stream.keys_batch().strided();
+                auto attrs = read_attributes(g.vertices_attrs, keys, name.c_str());
+                for (std::size_t i = 0; i != keys.size(); ++i)
+                    map[keys[i]] = py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[i])));
+
+                stream.seek_to_next_batch();
+            }
+            return py::cast(map);
+        },
+        py::arg("name"));
+
     g.def_property_readonly("edges", [](py_graph_t& g) {
         auto edges_ptr = std::make_unique<edges_range_t>();
         edges_ptr->net_ptr = g.shared_from_this();
@@ -656,6 +673,23 @@ void ukv::wrap_networkx(py::module& m) {
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { throw_not_implemented(); },
         py::arg("u"),
         py::arg("v"));
+
+    g.def(
+        "get_edge_attributes",
+        [](py_graph_t& g, std::string& name) {
+            std::unordered_map<ukv_key_t, py::object> map;
+            auto stream = g.ref().edges().throw_or_release().begin();
+            while (!stream.is_end()) {
+                auto keys = stream.edges_batch().edge_ids.immutable();
+                auto attrs = read_attributes(g.relations_attrs, keys, name.c_str());
+                for (std::size_t i = 0; i != keys.size(); ++i)
+                    map[keys[i]] = py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[i])));
+
+                stream.seek_to_next_batch();
+            }
+            return py::cast(map);
+        },
+        py::arg("name"));
 
     g.def(
         "set_edge_attributes",
