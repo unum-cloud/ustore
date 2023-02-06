@@ -423,6 +423,7 @@ session_lock_t::~session_lock_t() noexcept {
 struct session_params_t {
     session_id_t session_id;
     std::optional<std::string_view> transaction_id;
+    std::optional<std::string_view> snapshot_id;
     std::optional<std::string_view> collection_name;
     std::optional<std::string_view> collection_id;
     std::optional<std::string_view> collection_drop_mode;
@@ -626,7 +627,7 @@ class UKVService : public arf::FlightServerBase {
                 .snapshot = &snapshot_id,
             };
 
-            ukv_snapshot_create(snapshot_create);
+            ukv_snapshot_create(&snapshot_create);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -643,7 +644,7 @@ class UKVService : public arf::FlightServerBase {
             if (params.snapshot_id)
                 c_snapshot_id = parse_u64_hex(*params.snapshot_id, {});
 
-            ukv_collection_drop_t snapshot_drop {
+            ukv_snapshot_drop_t snapshot_drop {
                 .db = db_,
                 .error = status.member_ptr(),
                 .snapshot = c_snapshot_id,
@@ -1369,7 +1370,6 @@ class UKVService : public arf::FlightServerBase {
             ukv_snapshot_list_t snapshot_list;
             snapshot_list.db = db_;
             snapshot_list.error = status.member_ptr();
-            snapshot_list.transaction = session.txn;
             snapshot_list.arena = &session.arena;
             snapshot_list.options = ukv_options(params);
             snapshot_list.count = &count;
