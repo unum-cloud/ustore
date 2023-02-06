@@ -366,6 +366,30 @@ def test_edges_attributes():
     net.clear()
 
 
+def test_get_node_attributes():
+    db = ukv.DataBase()
+    net = ukv.Network(db, 'graph', 'nodes')
+
+    for node in range(1000):
+        net.add_node(node, weight=node)
+
+    weights = net.get_node_attributes("weight")
+    for node in range(1000):
+        assert weights[node] == node
+
+
+def test_get_edge_attributes():
+    db = ukv.DataBase()
+    net = ukv.Network(db, 'graph', 'nodes', 'edges')
+
+    for node in range(1000):
+        net.add_edge(node, node+1, node, weight=node)
+
+    weights = net.get_edge_attributes("weight")
+    for edge_id in range(1000):
+        assert weights[edge_id] == edge_id
+
+
 def test_set_node_attributes():
     db = ukv.DataBase()
     net = ukv.Network(db, 'graph', 'nodes')
