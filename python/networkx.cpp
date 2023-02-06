@@ -658,6 +658,48 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("v"));
 
     g.def(
+        "set_edge_attributes",
+        [](py_graph_t& g, py::object obj, std::optional<std::string> name) {
+            std::string json_to_merge;
+
+            if (PyDict_Check(obj.ptr())) {
+                PyObject *key, *value;
+                Py_ssize_t pos = 0;
+                while (PyDict_Next(obj.ptr(), &pos, &key, &value)) {
+                    json_to_merge.clear();
+                    if (!PyTuple_Check(key) || PyTuple_Size(key) != 3)
+                        throw std::invalid_argument("Invalid Argument");
+                    auto attr_key = py_to_scalar<ukv_key_t>(PyTuple_GetItem(key, 2));
+                    if (!PyDict_Check(value)) {
+                        fmt::format_to(std::back_inserter(json_to_merge), "{{\"{}\":", name.value());
+                        to_string(value, json_to_merge);
+                        json_to_merge += "}";
+                    }
+                    else
+                        to_string(value, json_to_merge);
+
+                    g.relations_attrs[attr_key].merge(json_to_merge.c_str());
+                }
+            }
+            else {
+                if (!name)
+                    throw std::invalid_argument("Invalid Argument");
+
+                fmt::format_to(std::back_inserter(json_to_merge), "{{\"{}\":", name.value());
+                to_string(obj.ptr(), json_to_merge);
+                json_to_merge += "}";
+
+                auto stream = g.ref().edges().throw_or_release().begin();
+                while (!stream.is_end()) {
+                    g.relations_attrs[stream.edges_batch().edge_ids].merge(json_to_merge.c_str());
+                    stream.seek_to_next_batch();
+                }
+            }
+        },
+        py::arg("values"),
+        py::arg("name") = std::nullopt);
+
+    g.def(
         "__getitem__",
         [](py_graph_t& g, ukv_key_t n) { return wrap_into_buffer(g, g.ref().neighbors(n).throw_or_release()); },
         py::arg("n"),
