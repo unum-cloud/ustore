@@ -272,14 +272,9 @@ def test_nodes_attributes():
     db = ukv.DataBase()
     net = ukv.Network(db, 'graph', 'nodes')
 
-    net.add_node(1, id=1, name='node1')
-    net.add_node(2)
-    net.add_node(3, id=3, name='node3')
-
     expected_node_data = {}
     retrieved_node_data = {}
-
-    for i in range(1000):
+    for i in range(10):
         if i % 2:
             net.add_node(i, id=i, name='node{}'.format(i))
             expected_node_data[i] = {'id': i, 'name': 'node{}'.format(i)}
@@ -287,11 +282,20 @@ def test_nodes_attributes():
             net.add_node(i)
             expected_node_data[i] = {}
 
+    # Whole Data
     for node, data in net.nodes(data=True):
         retrieved_node_data[node] = data
-
     assert retrieved_node_data == expected_node_data
 
+    # Custom Field
+    for node, name in net.nodes(data='name'):
+        assert name == ('node{}'.format(node) if node % 2 else None)
+
+    # Custom Field With Default
+    for node, id in net.nodes(data='id', default=1):
+        assert (id == node if node % 2 else id == 1)
+
+    # Batch Upsert
     net.clear()
     nodes = np.arange(100)
     net.add_nodes_from(nodes, name='node')
@@ -307,26 +311,55 @@ def test_edges_attributes():
     net = ukv.Network(db, 'graph', 'nodes', 'edges')
 
     for i in range(100):
-        net.add_edge(i, i+1, i, weight=i)
+        net.add_edge(i, i+1, i, weight=i) if i % 2 else net.add_edge(i, i+1, i)
 
     index = 0
-    for node1, node2, data in net.edges(data=True):
-        assert node1 == index
-        assert node2 == index+1
-        assert data == {'weight': index}
+    for node, neighbor, data in net.edges(data=True):
+        assert node == index and neighbor == index+1
+        assert data == ({'weight': index} if node % 2 else {})
         index += 1
 
-    net.clear()
+    index = 0
+    for node, neighbor, weight in net.edges(data='weight'):
+        assert node == index and neighbor == index+1
+        assert weight == (node if node % 2 else None)
+        index += 1
 
+    index = 0
+    for node, neighbor, weight in net.edges(data='weight', default=1):
+        assert node == index and neighbor == index+1
+        assert weight == (node if node % 2 else 1)
+        index += 1
+
+    # nbunch
+    assert list(net.edges(1, data=True)) == [(1, 2, {'weight': 1})]
+    assert list(net.edges(2, data='weight', default=1)) == [
+        (2, 3, 1)]
+    assert list(net.edges(3, data='weight')) == [
+        (3, 4, 3)]
+
+    index = 0
+    for node, neighbor, data in net.edges([0, 1, 2, 3], data=True):
+        assert node == index and neighbor == index+1
+        assert data == ({'weight': index} if node % 2 else {})
+        index += 1
+
+    index = 0
+    for node, neighbor, weight in net.edges([0, 1, 2, 3], data='weight', default=1):
+        assert node == index and neighbor == index+1
+        assert weight == (node if node % 2 else 1)
+        index += 1
+
+    # Batch
+    net.clear()
     sources = np.arange(100)
     targets = np.arange(100, 200)
     ids = np.arange(100)
     net.add_edges_from(sources, targets, ids, weight=1)
 
     index = 0
-    for node1, node2, data in net.edges(data=True):
-        assert node1 == sources[index]
-        assert node2 == targets[index]
+    for node, neighbor, data in net.edges(data=True):
+        assert node == sources[index] and neighbor == targets[index]
         assert data == {'weight': 1}
         index += 1
 

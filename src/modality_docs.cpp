@@ -1288,7 +1288,7 @@ void read_unique_docs( //
 
     ukv_length_t max_length =
         *std::max_element(found_binary_lens, found_binary_lens + places.count, [](ukv_length_t lhs, ukv_length_t rhs) {
-            return (lhs < rhs) && (lhs != ukv_length_missing_k) && rhs != ukv_length_missing_k;
+            return ((lhs < rhs) | (lhs == ukv_length_missing_k)) & (rhs != ukv_length_missing_k);
         });
 
     if (max_length == ukv_length_missing_k) {
