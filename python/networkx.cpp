@@ -591,6 +591,46 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("n"),
         "Returns True if the graph contains the node n.");
 
+    g.def(
+        "set_node_attributes",
+        [](py_graph_t& g, py::object obj, std::optional<std::string> name) {
+            std::string json_to_merge;
+
+            if (PyDict_Check(obj.ptr())) {
+                PyObject *key, *value;
+                Py_ssize_t pos = 0;
+                while (PyDict_Next(obj.ptr(), &pos, &key, &value)) {
+                    json_to_merge.clear();
+                    auto vertex = py_to_scalar<ukv_key_t>(key);
+                    if (!PyDict_Check(value)) {
+                        fmt::format_to(std::back_inserter(json_to_merge), "{{\"{}\":", name.value());
+                        to_string(value, json_to_merge);
+                        json_to_merge += "}";
+                    }
+                    else
+                        to_string(value, json_to_merge);
+
+                    g.vertices_attrs[vertex].merge(json_to_merge.c_str());
+                }
+            }
+            else {
+                if (!name)
+                    throw std::invalid_argument("Invalid Argument");
+
+                fmt::format_to(std::back_inserter(json_to_merge), "{{\"{}\":", name.value());
+                to_string(obj.ptr(), json_to_merge);
+                json_to_merge += "}";
+
+                auto stream = g.ref().vertex_stream().throw_or_release();
+                while (!stream.is_end()) {
+                    g.vertices_attrs[stream.keys_batch().strided()].merge(json_to_merge.c_str());
+                    stream.seek_to_next_batch();
+                }
+            }
+        },
+        py::arg("values"),
+        py::arg("name") = std::nullopt);
+
     g.def_property_readonly("edges", [](py_graph_t& g) {
         auto edges_ptr = std::make_unique<edges_range_t>();
         edges_ptr->net_ptr = g.shared_from_this();
