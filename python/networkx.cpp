@@ -302,26 +302,28 @@ void ukv::wrap_networkx(py::module& m) {
             py_graph_t& g = *degs.net_ptr.lock().get();
             ukv_vertex_degree_t* degrees;
 
-            if (PyList_Check(vs.ptr())) {
-                std::vector<ukv_key_t> vertices(PySequence_Size(vs.ptr()));
-                py_transform_n(vs.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
-                compute_degrees(g,
-                                strided_range(vertices).immutable(),
-                                degs.roles,
-                                weight.size() ? weight.c_str() : nullptr,
-                                &degrees);
-                py::list res(vertices.size());
-                for (std::size_t i = 0; i != vertices.size(); ++i)
-                    res[i] = py::make_tuple(vertices[i], degrees[i]);
-                return py::object(res);
+            if (PyObject_CheckBuffer(vs.ptr())) {
+                auto vs_handle = py_buffer(vs.ptr());
+                auto vertices = py_strided_range<ukv_key_t const>(vs_handle);
+                compute_degrees(g, vertices, degs.roles, weight.size() ? weight.c_str() : nullptr, &degrees);
+                return wrap_into_buffer<ukv_vertex_degree_t const>(
+                    g,
+                    strided_range<ukv_vertex_degree_t const>(degrees, degrees + vertices.size()));
             }
+            if (!PySequence_Check(vs.ptr()))
+                throw std::invalid_argument("Nodes Must Be Sequence");
 
-            auto vs_handle = py_buffer(vs.ptr());
-            auto vertices = py_strided_range<ukv_key_t const>(vs_handle);
-            compute_degrees(g, vertices, degs.roles, weight.size() ? weight.c_str() : nullptr, &degrees);
-            return wrap_into_buffer<ukv_vertex_degree_t const>(
-                g,
-                strided_range<ukv_vertex_degree_t const>(degrees, degrees + vertices.size()));
+            std::vector<ukv_key_t> vertices(PySequence_Size(vs.ptr()));
+            py_transform_n(vs.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
+            compute_degrees(g,
+                            strided_range(vertices).immutable(),
+                            degs.roles,
+                            weight.size() ? weight.c_str() : nullptr,
+                            &degrees);
+            py::list res(vertices.size());
+            for (std::size_t i = 0; i != vertices.size(); ++i)
+                res[i] = py::make_tuple(vertices[i], degrees[i]);
+            return py::object(res);
         },
         py::arg("vs"),
         py::arg("weight") = "");
