@@ -126,6 +126,7 @@ void ukv_read(ukv_read_t* c_ptr) {
                        "{}=0x{:0>16x}&",
                        kParamTransactionID,
                        std::uintptr_t(c.transaction));
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamSnapshotID, c.snapshot);
     if (same_named_collection)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (partial_mode)
@@ -838,6 +839,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
                        "{}=0x{:0>16x}&",
                        kParamTransactionID,
                        std::uintptr_t(c.transaction));
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamSnapshotID, c.snapshot);
     if (same_named_collection)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     if (partial_mode)
@@ -1081,6 +1083,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
                        "{}=0x{:0>16x}&",
                        kParamTransactionID,
                        std::uintptr_t(c.transaction));
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamSnapshotID, c.snapshot);
     if (same_named_collection)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     export_options(c.options, descriptor.cmd);
@@ -1164,6 +1167,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
                        "{}=0x{:0>16x}&",
                        kParamTransactionID,
                        std::uintptr_t(c.transaction));
+    fmt::format_to(std::back_inserter(descriptor.cmd), "{}={}&", kParamSnapshotID, c.snapshot);
     if (same_named_collection)
         fmt::format_to(std::back_inserter(descriptor.cmd), "{}=0x{:0>16x}&", kParamCollectionID, collections[0]);
     export_options(c.options, descriptor.cmd);
