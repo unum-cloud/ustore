@@ -34,8 +34,7 @@ class docs_pairs_stream_t {
         ukv_bytes_ptr_t found_values {};
         ukv_str_view_t fields {};
         status_t status {};
-        ukv_scan_t scan {
-        }
+        ukv_scan_t scan {};
         scan.db = db_;
         scan.error = status.member_ptr();
         scan.transaction = txn_;

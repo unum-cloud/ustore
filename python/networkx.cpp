@@ -21,21 +21,20 @@ embedded_blobs_t read_attributes( //
     ukv_bytes_ptr_t found_values = nullptr;
     auto count = static_cast<ukv_size_t>(keys.size());
 
-    ukv_docs_read_t docs_read {
-        .db = collection.db(),
-        .error = status.member_ptr(),
-        .transaction = collection.txn(),
-        .arena = collection.member_arena(),
-        .type = ukv_doc_field_json_k,
-        .tasks_count = count,
-        .collections = collection.member_ptr(),
-        .keys = keys.begin().get(),
-        .keys_stride = keys.stride(),
-        .fields = &field,
-        .offsets = &found_offsets,
-        .lengths = &found_lengths,
-        .values = &found_values,
-    };
+    ukv_docs_read_t docs_read {};
+    docs_read.db = collection.db();
+    docs_read.error = status.member_ptr();
+    docs_read.transaction = collection.txn();
+    docs_read.arena = collection.member_arena();
+    docs_read.type = ukv_doc_field_json_k;
+    docs_read.tasks_count = count;
+    docs_read.collections = collection.member_ptr();
+    docs_read.keys = keys.begin().get();
+    docs_read.keys_stride = keys.stride();
+    docs_read.fields = &field;
+    docs_read.offsets = &found_offsets;
+    docs_read.lengths = &found_lengths;
+    docs_read.values = &found_values;
 
     ukv_docs_read(&docs_read);
     status.throw_unhandled();
@@ -52,19 +51,18 @@ void compute_degrees(py_graph_t& graph,
     ukv_key_t* edges_per_vertex = nullptr;
     auto count = static_cast<ukv_size_t>(vertices.size());
 
-    ukv_graph_find_edges_t graph_find_edges {
-        .db = graph.index.db(),
-        .error = status.member_ptr(),
-        .transaction = graph.index.txn(),
-        .arena = graph.index.member_arena(),
-        .tasks_count = count,
-        .collections = graph.index.member_ptr(),
-        .vertices = vertices.begin().get(),
-        .vertices_stride = vertices.stride(),
-        .roles = &role,
-        .degrees_per_vertex = degrees,
-        .edges_per_vertex = &edges_per_vertex,
-    };
+    ukv_graph_find_edges_t graph_find_edges {};
+    graph_find_edges.db = graph.index.db();
+    graph_find_edges.error = status.member_ptr();
+    graph_find_edges.transaction = graph.index.txn();
+    graph_find_edges.arena = graph.index.member_arena();
+    graph_find_edges.tasks_count = count;
+    graph_find_edges.collections = graph.index.member_ptr();
+    graph_find_edges.vertices = vertices.begin().get();
+    graph_find_edges.vertices_stride = vertices.stride();
+    graph_find_edges.roles = &role;
+    graph_find_edges.degrees_per_vertex = degrees;
+    graph_find_edges.edges_per_vertex = &edges_per_vertex;
 
     ukv_graph_find_edges(&graph_find_edges);
     status.throw_unhandled();
@@ -178,20 +176,33 @@ struct edges_stream_t {
     }
 };
 
-struct nodes_range_t {
-    keys_range_t native;
-    docs_collection_t& collection;
-    bool read_data = false;
-    std::string field;
-    std::string default_value;
-};
+struct edges_nbunch_iter_t {
+    edges_span_t edges;
+    embedded_blobs_t attrs;
+    bool read_data;
+    ukv_str_view_t default_value;
 
-struct edges_range_t {
-    std::weak_ptr<py_graph_t> net_ptr;
-    std::vector<ukv_key_t> vertices;
-    bool read_data = false;
-    std::string field;
-    std::string default_value;
+    std::size_t index = 0;
+
+    edges_nbunch_iter_t(edges_span_t edges_span, embedded_blobs_t attributes, bool data, ukv_str_view_t default_value)
+        : edges(edges_span), attrs(attributes), read_data(data), default_value(default_value) {}
+
+    py::object next() {
+        if (index == edges.size())
+            throw py::stop_iteration();
+        edge_t edge = edges[index];
+        py::object ret;
+        if (read_data) {
+            value_view_t data = attrs[index] && !attrs[index].empty() ? attrs[index] : default_value;
+            ret = py::make_tuple(edge.source_id,
+                                 edge.target_id,
+                                 py::reinterpret_steal<py::object>(from_json(json_t::parse(data))));
+        }
+        else
+            ret = py::make_tuple(edge.source_id, edge.target_id);
+        ++index;
+        return ret;
+    }
 };
 
 struct degrees_stream_t {
@@ -224,6 +235,22 @@ struct degrees_stream_t {
         ++index;
         return ret;
     }
+};
+
+struct nodes_range_t {
+    keys_range_t native;
+    docs_collection_t& collection;
+    bool read_data = false;
+    std::string field;
+    std::string default_value;
+};
+
+struct edges_range_t {
+    std::weak_ptr<py_graph_t> net_ptr;
+    std::vector<ukv_key_t> vertices;
+    bool read_data = false;
+    std::string field;
+    std::string default_value;
 };
 
 struct degree_view_t {
@@ -525,7 +552,9 @@ void ukv::wrap_networkx(py::module& m) {
         "Returns the number of attributed edges.");
     g.def(
         "number_of_edges",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { return g.ref().edges(v1, v2).throw_or_release().size(); },
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) {
+            return g.ref().edges_between(v1, v2).throw_or_release().size();
+        },
         "Returns the number of edges between two nodes.");
 
     g.def(
@@ -627,13 +656,15 @@ void ukv::wrap_networkx(py::module& m) {
 
     g.def(
         "has_edge",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { return g.ref().edges(v1, v2).throw_or_release().size() != 0; },
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) {
+            return g.ref().edges_between(v1, v2).throw_or_release().size() != 0;
+        },
         py::arg("u"),
         py::arg("v"));
     g.def(
         "has_edge",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t e) {
-            auto ids = g.ref().edges(v1, v2).throw_or_release().edge_ids;
+            auto ids = g.ref().edges_between(v1, v2).throw_or_release().edge_ids;
             return std::find(ids.begin(), ids.end(), e) != ids.end();
         },
         py::arg("u"),
