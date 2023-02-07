@@ -4,8 +4,7 @@ import pytest
 
 
 def test_line():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     # 1 -> 2
     assert not net.has_node(1)
@@ -29,8 +28,7 @@ def test_line():
 
 
 def test_triangle():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     # 1 -> 2 -> 3 -> 1
     net.add_edge(1, 2)
@@ -63,8 +61,7 @@ def test_triangle():
 
 
 def test_triangle_batch():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     # TODO: Check why matrix casting fails!
     # edges = np.array([[1, 2], [2, 3], [3, 1]])
@@ -90,8 +87,7 @@ def test_triangle_batch():
 
 
 def test_random_fill():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     sources = np.random.randint(1000, size=100)
     targets = np.random.randint(1000, size=100)
@@ -179,8 +175,8 @@ def test_degree():
 
 
 def test_upsert_remove_nodes_batch():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
+
     nodes = np.arange(100)
 
     net.add_nodes_from(nodes)
@@ -195,8 +191,7 @@ def test_upsert_remove_nodes_batch():
 
 
 def test_remove_edges():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     sources = np.arange(100)
     targets = np.arange(100, 200)
@@ -220,8 +215,7 @@ def test_remove_edges():
 
 
 def test_remove_nodes_and_related_edges():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     sources = np.arange(100)
     targets = np.arange(100, 200)
@@ -240,9 +234,7 @@ def test_remove_nodes_and_related_edges():
 
 
 def test_clear():
-    db = ukv.DataBase()
-    main = db.main
-    net = main.graph
+    net = ukv.DataBase().main.graph
 
     sources = np.arange(100)
     targets = np.arange(100, 200)
