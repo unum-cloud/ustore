@@ -434,7 +434,7 @@ def test_set_node_attributes():
 
 def test_set_edge_attributes():
     db = ukv.DataBase()
-    net = ukv.Network(db, 'graph', 'nodes', 'edges')
+    net = ukv.Network(db, relations='edges')
 
     net.add_edge(0, 1, 0)
     net.add_edge(1, 2, 1)

@@ -499,7 +499,7 @@ void ukv::wrap_networkx(py::module& m) {
             return net_ptr;
         }),
         py::arg("db"),
-        py::arg("index"),
+        py::arg("index") = std::nullopt,
         py::arg("vertices") = std::nullopt,
         py::arg("relations") = std::nullopt,
         py::arg("directed") = false,
