@@ -341,7 +341,7 @@ class sessions_t {
         }
 
         // If we have free slots
-        running_txn_t running;
+        running_txn_t running {};
         running.arena = free_arenas_.back();
         running.txn = free_txns_.back();
         running.executing = true;
@@ -560,7 +560,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_collection_t collection_id = 0;
             ukv_str_view_t collection_config = get_null_terminated(action.body);
-            ukv_collection_create_t collection_init;
+            ukv_collection_create_t collection_init {};
             collection_init.db = db_;
             collection_init.error = status.member_ptr();
             collection_init.name = params.collection_name->begin();
@@ -615,7 +615,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             // Cleanup internal state
-            ukv_transaction_init_t txn_init;
+            ukv_transaction_init_t txn_init {};
             txn_init.db = db_;
             txn_init.error = status.member_ptr();
             txn_init.options = ukv_options(params);
@@ -643,7 +643,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             }
 
-            ukv_transaction_commit_t txn_commit;
+            ukv_transaction_commit_t txn_commit {};
             txn_commit.db = db_;
             txn_commit.error = status.member_ptr();
             txn_commit.transaction = session.txn;
@@ -718,7 +718,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_length_t* found_lengths = nullptr;
             ukv_octet_t* found_presences = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
-            ukv_read_t read;
+            ukv_read_t read {};
             read.db = db_;
             read.error = status.member_ptr();
             read.transaction = session.txn;
@@ -800,7 +800,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_length_t* found_lengths = nullptr;
             ukv_octet_t* found_presences = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
-            ukv_paths_read_t read;
+            ukv_paths_read_t read {};
             read.db = db_;
             read.error = status.member_ptr();
             read.transaction = session.txn;
@@ -887,7 +887,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_length_t* found_offsets = nullptr;
             ukv_length_t* found_counts = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
-            ukv_paths_match_t match;
+            ukv_paths_match_t match {};
             match.db = db_;
             match.error = status.member_ptr();
             match.transaction = session.txn;
@@ -989,7 +989,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_length_t* found_counts = nullptr;
             ukv_key_t* found_keys = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
-            ukv_scan_t scan;
+            ukv_scan_t scan {};
             scan.db = db_;
             scan.error = status.member_ptr();
             scan.transaction = session.txn;
@@ -1042,7 +1042,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_length_t* found_counts = nullptr;
             ukv_key_t* found_keys = nullptr;
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
-            ukv_sample_t sample;
+            ukv_sample_t sample {};
             sample.db = db_;
             sample.error = status.member_ptr();
             sample.transaction = session.txn;
@@ -1144,7 +1144,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
-            ukv_write_t write;
+            ukv_write_t write {};
             write.db = db_;
             write.error = status.member_ptr();
             write.transaction = session.txn;
@@ -1191,7 +1191,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             ukv_size_t tasks_count = static_cast<ukv_size_t>(input_batch_c.length);
-            ukv_paths_write_t write;
+            ukv_paths_write_t write {};
             write.db = db_;
             write.error = status.member_ptr();
             write.transaction = session.txn;
@@ -1243,7 +1243,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_collection_t* collections = nullptr;
             ukv_length_t* offsets = nullptr;
             ukv_str_span_t names = nullptr;
-            ukv_collection_list_t collection_list;
+            ukv_collection_list_t collection_list {};
             collection_list.db = db_;
             collection_list.error = status.member_ptr();
             collection_list.transaction = session.txn;
