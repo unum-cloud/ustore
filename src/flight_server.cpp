@@ -924,7 +924,7 @@ class UKVService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             ukv_size_t result_length = std::accumulate(found_counts, found_counts + tasks_count, 0);
-            auto rounded_counts = arena.alloc<ukv_length_t>(result_length, status.member_ptr(), 0);
+            auto rounded_counts = arena.alloc<ukv_length_t>(result_length, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
             void const* values_ptr = result_length ? reinterpret_cast<void const*>(found_values)
@@ -933,7 +933,7 @@ class UKVService : public arf::FlightServerBase {
             if (rounded_counts)
                 std::copy(found_counts, found_counts + tasks_count, rounded_counts.begin());
             else {
-                rounded_counts = arena.alloc<ukv_length_t>(1, status.member_ptr(), 0);
+                rounded_counts = arena.alloc<ukv_length_t>(1, status.member_ptr());
                 if (!status)
                     return ar::Status::ExecutionError(status.message());
                 result_length = 1;
