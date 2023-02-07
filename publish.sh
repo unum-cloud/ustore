@@ -6,7 +6,7 @@ if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -q "VERSION"; then
     rev=$(git rev-list HEAD --count)
     version="${version%.*}.$rev"
     echo -n $version > VERSION
-    git add VERSION && git commit -m "Bump Version" && git push
+    git add VERSION && git commit -m "Make: Bump Version" && git push
 fi
 echo -e "------ \e[104mStarting UKV - $version Build\e[0m ------"
 
@@ -35,13 +35,13 @@ git tag "v${version}"
 git push origin --tags
 
 # Build and Test Python
+rm -rf wheelhouse/*
 pip install cibuildwheel twine
 echo -e "------ \e[93mBuild and Test Python\e[0m ------"
-CIBW_BUILD="cp37-*" cibuildwheel --platform linux &
-CIBW_BUILD="cp38-*" cibuildwheel --platform linux &
-CIBW_BUILD="cp39-*" cibuildwheel --platform linux &
-CIBW_BUILD="cp310-*" cibuildwheel --platform linux &
-wait
+CIBW_BUILD="cp37-*" cibuildwheel --platform linux
+CIBW_BUILD="cp38-*" cibuildwheel --platform linux
+CIBW_BUILD="cp39-*" cibuildwheel --platform linux
+CIBW_BUILD="cp310-*" cibuildwheel --platform linux
 echo -e "------ \e[92mPython Tests Passing!\e[0m ------"
 
 # Publish Python

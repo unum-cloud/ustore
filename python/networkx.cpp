@@ -178,35 +178,6 @@ struct edges_stream_t {
     }
 };
 
-struct edges_nbunch_iter_t {
-    edges_span_t edges;
-    embedded_blobs_t attrs;
-    bool read_data;
-    ukv_str_view_t default_value;
-
-    std::size_t index = 0;
-
-    edges_nbunch_iter_t(edges_span_t edges_span, embedded_blobs_t attributes, bool data, ukv_str_view_t default_value)
-        : edges(edges_span), attrs(attributes), read_data(data), default_value(default_value) {}
-
-    py::object next() {
-        if (index == edges.size())
-            throw py::stop_iteration();
-        edge_t edge = edges[index];
-        py::object ret;
-        if (read_data) {
-            value_view_t data = attrs[index] && !attrs[index].empty() ? attrs[index] : default_value;
-            ret = py::make_tuple(edge.source_id,
-                                 edge.target_id,
-                                 py::reinterpret_steal<py::object>(from_json(json_t::parse(data))));
-        }
-        else
-            ret = py::make_tuple(edge.source_id, edge.target_id);
-        ++index;
-        return ret;
-    }
-};
-
 struct nodes_range_t {
     keys_range_t native;
     docs_collection_t& collection;

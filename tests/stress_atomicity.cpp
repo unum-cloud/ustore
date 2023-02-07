@@ -62,11 +62,10 @@ void insert_atomic_isolated(std::size_t count_batches) {
             while (true) {
                 transaction_t txn = db.transact().throw_or_release();
                 auto collection = txn.main();
-                if (!will_delete)
-                    collection[keys].assign(value);
-                else
-                    collection[keys].erase();
-                status_t status = txn.commit();
+                status_t status = !will_delete ? collection[keys].assign(value) : collection[keys].erase();
+                if (!status)
+                    continue;
+                status = txn.commit();
                 if (status)
                     break;
             }

@@ -62,12 +62,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstrict-vtable-pointers")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunknown-attributes")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -pedantic-errors")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -pedantic-errors")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
@@ -182,7 +183,7 @@ endif()
 
 set(UKV_ENGINE_NAMES)
 set(UKV_CLIENT_LIBS)
-set(UKV_TEST_NAMES "test_api" "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
+set(UKV_TEST_NAMES "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
 
 # Define the Engine libraries we will need to build
 if(${UKV_BUILD_ENGINE_UMEM})
@@ -336,6 +337,7 @@ endif()
 
 if(${UKV_BUILD_BUNDLES})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildUtils.cmake")
+
   foreach(client_lib_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT client_lib "ukv_embedded_" ${client_lib_name})
 

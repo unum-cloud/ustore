@@ -188,27 +188,27 @@ struct triplet_t {
     }
     contents_arg_t contents() const noexcept { return contents_arrow(); }
     contents_arg_t contents_lengths() const noexcept {
-        return {
-            .lengths_begin = {&lengths[0], sizeof(lengths[0])},
-            .contents_begin = {&vals_pointers[0], sizeof(vals_pointers[0])},
-            .count = 3,
-        };
+        contents_arg_t arg {};
+        arg.lengths_begin = {&lengths[0], sizeof(lengths[0])};
+        arg.contents_begin = {&vals_pointers[0], sizeof(vals_pointers[0])};
+        arg.count = 3;
+        return arg;
     }
     contents_arg_t contents_arrow() const noexcept {
-        return {
-            .offsets_begin = {&offsets[0], sizeof(offsets[0])},
-            .contents_begin = {&vals_pointers[0], 0},
-            .count = 3,
-        };
+        contents_arg_t arg {};
+        arg.offsets_begin = {&offsets[0], sizeof(offsets[0])};
+        arg.contents_begin = {&vals_pointers[0], 0};
+        arg.count = 3;
+        return arg;
     }
     contents_arg_t contents_full() const noexcept {
-        return {
-            .presences_begin = &presences,
-            .offsets_begin = {&offsets[0], sizeof(offsets[0])},
-            .lengths_begin = {&lengths[0], 0},
-            .contents_begin = {&vals_pointers[0], 0},
-            .count = 3,
-        };
+        contents_arg_t arg {};
+        arg.presences_begin = &presences;
+        arg.offsets_begin = {&offsets[0], sizeof(offsets[0])};
+        arg.lengths_begin = {&lengths[0], 0};
+        arg.contents_begin = {&vals_pointers[0], 0};
+        arg.count = 3;
+        return arg;
     }
 };
 
@@ -741,30 +741,30 @@ TEST(db, paths) {
     ukv_char_t separator = '\0';
 
     arena_t arena(db);
-    status_t status;
-    ukv_paths_write_t paths_write {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .tasks_count = keys_count,
-        .path_separator = separator,
-        .paths = keys,
-        .paths_stride = sizeof(char const*),
-        .values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(vals),
-        .values_bytes_stride = sizeof(char const*),
-    };
+    status_t status {};
+    ukv_paths_write_t paths_write {};
+    paths_write.db = db;
+    paths_write.error = status.member_ptr();
+    paths_write.arena = arena.member_ptr();
+    paths_write.tasks_count = keys_count;
+    paths_write.path_separator = separator;
+    paths_write.paths = keys;
+    paths_write.paths_stride = sizeof(char const*);
+    paths_write.values_bytes = reinterpret_cast<ukv_bytes_cptr_t*>(vals);
+    paths_write.values_bytes_stride = sizeof(char const*);
+
     ukv_paths_write(&paths_write);
-    char* vals_recovered = nullptr;
-    ukv_paths_read_t paths_read {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .tasks_count = keys_count,
-        .path_separator = separator,
-        .paths = keys,
-        .paths_stride = sizeof(char const*),
-        .values = reinterpret_cast<ukv_bytes_ptr_t*>(&vals_recovered),
-    };
+    char* vals_recovered {};
+    ukv_paths_read_t paths_read {};
+    paths_read.db = db;
+    paths_read.error = status.member_ptr();
+    paths_read.arena = arena.member_ptr();
+    paths_read.tasks_count = keys_count;
+    paths_read.path_separator = separator;
+    paths_read.paths = keys;
+    paths_read.paths_stride = sizeof(char const*);
+    paths_read.values = reinterpret_cast<ukv_bytes_ptr_t*>(&vals_recovered);
+
     ukv_paths_read(&paths_read);
     EXPECT_TRUE(status);
     EXPECT_EQ(std::string_view(vals_recovered, keys_count * 2),
@@ -773,20 +773,20 @@ TEST(db, paths) {
     // Try getting either "Netflix" or "Nvidia" as one of the keys with "N" prefix
     ukv_str_view_t prefix = "N";
     ukv_length_t max_count = 1;
-    ukv_length_t* results_counts = nullptr;
-    ukv_length_t* tape_offsets = nullptr;
-    ukv_char_t* tape_begin = nullptr;
-    ukv_paths_match_t paths_match {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .tasks_count = 1,
-        .match_counts_limits = &max_count,
-        .patterns = &prefix,
-        .match_counts = &results_counts,
-        .paths_offsets = &tape_offsets,
-        .paths_strings = &tape_begin,
-    };
+    ukv_length_t* results_counts {};
+    ukv_length_t* tape_offsets {};
+    ukv_char_t* tape_begin {};
+    ukv_paths_match_t paths_match {};
+    paths_match.db = db;
+    paths_match.error = status.member_ptr();
+    paths_match.arena = arena.member_ptr();
+    paths_match.tasks_count = 1;
+    paths_match.match_counts_limits = &max_count;
+    paths_match.patterns = &prefix;
+    paths_match.match_counts = &results_counts;
+    paths_match.paths_offsets = &tape_offsets;
+    paths_match.paths_strings = &tape_begin;
+
     ukv_paths_match(&paths_match);
     auto first_match_for_a = std::string_view(tape_begin);
     EXPECT_EQ(results_counts[0], 1);
@@ -899,21 +899,19 @@ TEST(db, paths_linked_list) {
     ukv_char_t separator = '\0';
     status_t status;
 
-    ukv_paths_write_t paths_write {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .tasks_count = 1,
-        .path_separator = separator,
-    };
+    ukv_paths_write_t paths_write {};
+    paths_write.db = db;
+    paths_write.error = status.member_ptr();
+    paths_write.arena = arena.member_ptr();
+    paths_write.tasks_count = 1;
+    paths_write.path_separator = separator;
 
-    ukv_paths_read_t paths_read {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .tasks_count = 1,
-        .path_separator = separator,
-    };
+    ukv_paths_read_t paths_read {};
+    paths_read.db = db;
+    paths_read.error = status.member_ptr();
+    paths_read.arena = arena.member_ptr();
+    paths_read.tasks_count = 1;
+    paths_read.path_separator = separator;
 
     // Generate some random strings for our tests
     constexpr auto alphabet = "abcdefghijklmnop";
@@ -1075,10 +1073,9 @@ TEST(db, docs_nested_batch) {
         static_cast<ukv_length_t>(jsons[0].size() + jsons[1].size()),
         static_cast<ukv_length_t>(jsons[0].size() + jsons[1].size() + jsons[2].size()),
     };
-    contents_arg_t values {
-        .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
-        .contents_begin = {&vals_begin, 0},
-    };
+    contents_arg_t values {};
+    values.offsets_begin = {offsets.data(), sizeof(ukv_length_t)};
+    values.contents_begin = {&vals_begin, 0};
 
     std::array<ukv_key_t, 3> keys = {1, 2, 3};
     auto ref = collection[keys];
@@ -1494,18 +1491,18 @@ TEST(db, graph_triangle) {
     EXPECT_EQ(*net.degree(2, ukv_vertex_source_k), 1u);
     EXPECT_EQ(*net.degree(3, ukv_vertex_source_k), 1u);
 
-    EXPECT_TRUE(net.edges(1));
-    EXPECT_EQ(net.edges(1)->size(), 2ul);
-    EXPECT_EQ(net.edges(1, ukv_vertex_source_k)->size(), 1ul);
-    EXPECT_EQ(net.edges(1, ukv_vertex_target_k)->size(), 1ul);
+    EXPECT_TRUE(net.edges_containing(1));
+    EXPECT_EQ(net.edges_containing(1)->size(), 2ul);
+    EXPECT_EQ(net.edges_containing(1, ukv_vertex_source_k)->size(), 1ul);
+    EXPECT_EQ(net.edges_containing(1, ukv_vertex_target_k)->size(), 1ul);
 
-    EXPECT_EQ(net.edges(3, ukv_vertex_target_k)->size(), 1ul);
-    EXPECT_EQ(net.edges(2, ukv_vertex_source_k)->size(), 1ul);
-    EXPECT_EQ((*net.edges(3, ukv_vertex_target_k))[0].source_id, 2);
-    EXPECT_EQ((*net.edges(3, ukv_vertex_target_k))[0].target_id, 3);
-    EXPECT_EQ((*net.edges(3, ukv_vertex_target_k))[0].id, 10);
-    EXPECT_EQ(net.edges(3, 1)->size(), 1ul);
-    EXPECT_EQ(net.edges(1, 3)->size(), 0ul);
+    EXPECT_EQ(net.edges_containing(3, ukv_vertex_target_k)->size(), 1ul);
+    EXPECT_EQ(net.edges_containing(2, ukv_vertex_source_k)->size(), 1ul);
+    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].source_id, 2);
+    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].target_id, 3);
+    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].id, 10);
+    EXPECT_EQ(net.edges_between(3, 1)->size(), 1ul);
+    EXPECT_EQ(net.edges_between(1, 3)->size(), 0ul);
 
     // Check scans
     EXPECT_TRUE(net.edges());
@@ -1533,7 +1530,7 @@ TEST(db, graph_triangle) {
     }));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
-    EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
+    EXPECT_EQ(net.edges_between(1, 2)->size(), 0ul);
 
     // Bring that edge back
     EXPECT_TRUE(net.upsert_edges({
@@ -1541,24 +1538,24 @@ TEST(db, graph_triangle) {
         {{&edge1.target_id}, 1},
         {{&edge1.id}, 1},
     }));
-    EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
+    EXPECT_EQ(net.edges_between(1, 2)->size(), 1ul);
 
     // Remove a vertex
     ukv_key_t vertex_to_remove = 2;
     EXPECT_TRUE(net.remove_vertex(vertex_to_remove));
     EXPECT_FALSE(*net.contains(vertex_to_remove));
-    EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
-    EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);
-    EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+    EXPECT_EQ(net.edges_containing(vertex_to_remove)->size(), 0ul);
+    EXPECT_EQ(net.edges_between(1, vertex_to_remove)->size(), 0ul);
+    EXPECT_EQ(net.edges_between(vertex_to_remove, 1)->size(), 0ul);
 
     // Bring back the whole graph
     EXPECT_TRUE(net.upsert_edge(edge1));
     EXPECT_TRUE(net.upsert_edge(edge2));
     EXPECT_TRUE(net.upsert_edge(edge3));
     EXPECT_TRUE(*net.contains(vertex_to_remove));
-    EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
-    EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
-    EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+    EXPECT_EQ(net.edges_containing(vertex_to_remove)->size(), 2ul);
+    EXPECT_EQ(net.edges_between(1, vertex_to_remove)->size(), 1ul);
+    EXPECT_EQ(net.edges_between(vertex_to_remove, 1)->size(), 0ul);
 }
 
 /**
@@ -1596,18 +1593,18 @@ TEST(db, graph_triangle_batch) {
     EXPECT_EQ(*net.degree(2, ukv_vertex_source_k), 1u);
     EXPECT_EQ(*net.degree(3, ukv_vertex_source_k), 1u);
 
-    EXPECT_TRUE(net.edges(1));
-    EXPECT_EQ(net.edges(1)->size(), 2ul);
-    EXPECT_EQ(net.edges(1, ukv_vertex_source_k)->size(), 1ul);
-    EXPECT_EQ(net.edges(1, ukv_vertex_target_k)->size(), 1ul);
+    EXPECT_TRUE(net.edges_containing(1));
+    EXPECT_EQ(net.edges_containing(1)->size(), 2ul);
+    EXPECT_EQ(net.edges_containing(1, ukv_vertex_source_k)->size(), 1ul);
+    EXPECT_EQ(net.edges_containing(1, ukv_vertex_target_k)->size(), 1ul);
 
-    EXPECT_EQ(net.edges(3, ukv_vertex_target_k)->size(), 1ul);
-    EXPECT_EQ(net.edges(2, ukv_vertex_source_k)->size(), 1ul);
-    EXPECT_EQ((*net.edges(3, ukv_vertex_target_k))[0].source_id, 2);
-    EXPECT_EQ((*net.edges(3, ukv_vertex_target_k))[0].target_id, 3);
-    EXPECT_EQ((*net.edges(3, ukv_vertex_target_k))[0].id, 10);
-    EXPECT_EQ(net.edges(3, 1)->size(), 1ul);
-    EXPECT_EQ(net.edges(1, 3)->size(), 0ul);
+    EXPECT_EQ(net.edges_containing(3, ukv_vertex_target_k)->size(), 1ul);
+    EXPECT_EQ(net.edges_containing(2, ukv_vertex_source_k)->size(), 1ul);
+    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].source_id, 2);
+    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].target_id, 3);
+    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].id, 10);
+    EXPECT_EQ(net.edges_between(3, 1)->size(), 1ul);
+    EXPECT_EQ(net.edges_between(1, 3)->size(), 0ul);
 
     // Check scans
     EXPECT_TRUE(net.edges());
@@ -1635,7 +1632,7 @@ TEST(db, graph_triangle_batch) {
     }));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
-    EXPECT_EQ(net.edges(1, 2)->size(), 0ul);
+    EXPECT_EQ(net.edges_between(1, 2)->size(), 0ul);
 
     // Bring that edge back
     EXPECT_TRUE(net.upsert_edges(edges_view_t {
@@ -1643,22 +1640,22 @@ TEST(db, graph_triangle_batch) {
         {{&triangle[0].target_id}, 1},
         {{&triangle[0].id}, 1},
     }));
-    EXPECT_EQ(net.edges(1, 2)->size(), 1ul);
+    EXPECT_EQ(net.edges_between(1, 2)->size(), 1ul);
 
     // Remove a vertex
     ukv_key_t vertex_to_remove = 2;
     EXPECT_TRUE(net.remove_vertex(vertex_to_remove));
     EXPECT_FALSE(*net.contains(vertex_to_remove));
-    EXPECT_EQ(net.edges(vertex_to_remove)->size(), 0ul);
-    EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 0ul);
-    EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+    EXPECT_EQ(net.edges_containing(vertex_to_remove)->size(), 0ul);
+    EXPECT_EQ(net.edges_between(1, vertex_to_remove)->size(), 0ul);
+    EXPECT_EQ(net.edges_between(vertex_to_remove, 1)->size(), 0ul);
 
     // Bring back the whole graph
     EXPECT_TRUE(net.upsert_edges(edges(triangle)));
     EXPECT_TRUE(*net.contains(vertex_to_remove));
-    EXPECT_EQ(net.edges(vertex_to_remove)->size(), 2ul);
-    EXPECT_EQ(net.edges(1, vertex_to_remove)->size(), 1ul);
-    EXPECT_EQ(net.edges(vertex_to_remove, 1)->size(), 0ul);
+    EXPECT_EQ(net.edges_containing(vertex_to_remove)->size(), 2ul);
+    EXPECT_EQ(net.edges_between(1, vertex_to_remove)->size(), 1ul);
+    EXPECT_EQ(net.edges_between(vertex_to_remove, 1)->size(), 0ul);
 }
 
 /**
@@ -1874,7 +1871,7 @@ TEST(db, graph_get_vertex_edges) {
 
     std::vector<edge_t> received_edges;
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
-        auto es = *graph.edges(vertex_id);
+        auto es = *graph.edges_containing(vertex_id);
         EXPECT_EQ(es.size(), 9u);
         for (size_t i = 0; i != es.size(); ++i)
             received_edges.push_back(es[i]);
@@ -1884,7 +1881,7 @@ TEST(db, graph_get_vertex_edges) {
     for (ukv_key_t vertex_id = 0; vertex_id != vertices_count; ++vertex_id) {
         EXPECT_TRUE(graph.contains(vertex_id));
         EXPECT_TRUE(*graph.contains(vertex_id));
-        EXPECT_EQ(graph.edges(vertex_id)->size(), 0);
+        EXPECT_EQ(graph.edges_containing(vertex_id)->size(), 0);
     }
 }
 
@@ -1919,9 +1916,9 @@ TEST(db, graph_neighbors) {
     edge_t edge2 {1, 2, 15};
     edge_t edge3 {2, 3, 16};
 
-    graph.upsert_edge(edge1);
-    graph.upsert_edge(edge2);
-    graph.upsert_edge(edge3);
+    EXPECT_TRUE(graph.upsert_edge(edge1));
+    EXPECT_TRUE(graph.upsert_edge(edge2));
+    EXPECT_TRUE(graph.upsert_edge(edge3));
 
     auto neighbors = graph.neighbors(1).throw_or_release();
     EXPECT_EQ(neighbors.size(), 2);

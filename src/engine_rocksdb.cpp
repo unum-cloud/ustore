@@ -550,7 +550,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
 
         std::unique_ptr<rocksdb::Iterator> it;
         safe_section("Creating a RocksDB iterator", c.error, [&] {
-            it = &txn //
+            it = c.transaction //
                      ? std::unique_ptr<rocksdb::Iterator>(txn.GetIterator(options, collection))
                      : std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(options, collection));
         });
@@ -614,7 +614,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
 
         std::unique_ptr<rocksdb::Iterator> it;
         safe_section("Creating a RocksDB iterator", c.error, [&] {
-            it = &txn //
+            it = c.transaction //
                      ? std::unique_ptr<rocksdb::Iterator>(txn.GetIterator(options, collection))
                      : std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(options, collection));
         });

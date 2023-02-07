@@ -232,18 +232,18 @@ void ukv::wrap_database(py::module& m) {
 
     py_db.def("collection_names", [](py_db_t& py_db) {
         status_t status;
-        ukv_size_t count {0};
-        ukv_collection_t* ids {nullptr};
+        ukv_size_t count {};
+        ukv_collection_t* ids {};
         arena_t arena(py_db.native);
-        ukv_str_span_t names {nullptr};
-        ukv_collection_list_t collection_list {
-            .db = py_db.native,
-            .error = status.member_ptr(),
-            .arena = arena.member_ptr(),
-            .count = &count,
-            .ids = &ids,
-            .names = &names,
-        };
+        ukv_str_span_t names {};
+        ukv_collection_list_t collection_list {};
+        collection_list.db = py_db.native;
+        collection_list.error = status.member_ptr();
+        collection_list.arena = arena.member_ptr();
+        collection_list.count = &count;
+        collection_list.ids = &ids;
+        collection_list.names = &names;
+
         ukv_collection_list(&collection_list);
         status.throw_unhandled();
         std::vector<std::string> names_copy {count};

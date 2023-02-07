@@ -6,7 +6,7 @@ plugins {
     id 'maven-publish'
 }
 
-group "com.unum.ukv"
+group "cloud.unum.ukv"
 version = file("VERSION").text.trim()
 
 sourceCompatibility = 1.8
@@ -46,7 +46,7 @@ model {
             sources {
                 c {
                     source {
-                        srcDirs "java/com/unum/ukv"
+                        srcDirs "java/cloud/unum/ukv"
                         include "**/*.c"
                     }
                     exportedHeaders {
