@@ -193,6 +193,7 @@ expected_gt<expected_at> blobs_ref_gt<locations_at>::any_get(ukv_options_t optio
     auto count = keys_extractor_t {}.count(locs);
     auto keys = keys_extractor_t {}.keys(locs);
     auto collections = keys_extractor_t {}.collections(locs);
+    ukv_read_t read {};
     read.db = db_;
     read.error = status.member_ptr();
     read.transaction = txn_;

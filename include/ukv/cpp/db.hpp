@@ -126,6 +126,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
         ukv_str_span_t names = nullptr;
         ukv_collection_t* ids = nullptr;
         status_t status;
+        ukv_collection_list_t collection_list {};
         collection_list.db = db_;
         collection_list.error = status.member_ptr();
         collection_list.transaction = txn_;

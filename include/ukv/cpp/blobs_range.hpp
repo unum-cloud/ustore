@@ -193,7 +193,7 @@ class pairs_stream_t {
         ukv_length_t* found_counts = nullptr;
         ukv_key_t* found_keys = nullptr;
         status_t status;
-        ukv_scan_t scan;
+        ukv_scan_t scan {};
         scan.db = db_;
         scan.error = status.member_ptr();
         scan.transaction = txn_;
