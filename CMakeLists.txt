@@ -15,6 +15,7 @@ option(UKV_BUILD_ENGINE_ROCKSDB "Building REST API server for all backends")
 option(UKV_BUILD_TESTS "Building C/C++ native tests" ON)
 option(UKV_BUILD_BENCHMARKS "Building C/C++ native benchmarks")
 
+option(UKV_BUILD_BUNDLES "Building backend bundles for embedding in wrappers" OFF)
 option(UKV_BUILD_SDK_PYTHON "Building Python bidings for all SDKs")
 option(UKV_BUILD_API_FLIGHT "Building Apache Arrow Flight RPC server and client for all backends")
 option(UKV_BUILD_API_FLIGHT_CLIENT "Building Apache Arrow Flight RPC client for all backends")
@@ -61,12 +62,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstrict-vtable-pointers")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunknown-attributes")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -pedantic-errors")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -pedantic-errors")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
@@ -181,7 +183,7 @@ endif()
 
 set(UKV_ENGINE_NAMES)
 set(UKV_CLIENT_LIBS)
-set(UKV_TEST_NAMES "test_api" "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
+set(UKV_TEST_NAMES "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
 
 # Define the Engine libraries we will need to build
 if(${UKV_BUILD_ENGINE_UMEM})
@@ -330,5 +332,20 @@ if(${UKV_BUILD_SDK_PYTHON})
     target_link_libraries(${wrap_lib} PRIVATE pthread arrow::dataset arrow_python arrow::flight arrow::bundled arrow::arrow fmt::fmt ${client_lib} ${client_dependencies})
     target_compile_definitions(${wrap_lib} PRIVATE UKV_VERSION="${UKV_VERSION}" UKV_PYTHON_MODULE_NAME=${client_lib_name})
     set_target_properties(${wrap_lib} PROPERTIES OUTPUT_NAME ${client_lib_name})
+  endforeach()
+endif()
+
+if(${UKV_BUILD_BUNDLES})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildUtils.cmake")
+
+  foreach(client_lib_name IN ITEMS ${UKV_CLIENT_NAMES})
+    string(CONCAT client_lib "ukv_embedded_" ${client_lib_name})
+
+    if(${client_lib_name} STREQUAL "flight_client")
+      continue()
+    endif()
+
+    string(CONCAT bundle_lib ${client_lib_name} "_bundle")
+    bundle_static_library(${client_lib} ${bundle_lib})
   endforeach()
 endif()

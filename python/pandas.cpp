@@ -314,10 +314,9 @@ void update(py_table_collection_t& df, py::object obj) {
 
     offsets.back() = jsons_to_merge.size();
     auto vals_begin = reinterpret_cast<ukv_bytes_ptr_t>(jsons_to_merge.data());
-    contents_arg_t values {
-        .offsets_begin = {offsets.data(), sizeof(ukv_length_t)},
-        .contents_begin = {&vals_begin, 0},
-    };
+    contents_arg_t values {};
+    values.offsets_begin = {offsets.data(), sizeof(ukv_length_t)};
+    values.contents_begin = {&vals_begin, 0};
 
     collection[keys].merge(values);
 }

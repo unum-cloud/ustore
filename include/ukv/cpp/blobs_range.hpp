@@ -58,18 +58,17 @@ class keys_stream_t {
         ukv_key_t* found_keys = nullptr;
 
         status_t status;
-        ukv_scan_t scan {
-            .db = db_,
-            .error = status.member_ptr(),
-            .transaction = txn_,
-            .arena = arena_.member_ptr(),
-            .tasks_count = 1,
-            .collections = &collection_,
-            .start_keys = &next_min_key_,
-            .count_limits = &read_ahead_,
-            .counts = &found_counts,
-            .keys = &found_keys,
-        };
+        ukv_scan_t scan {};
+        scan.db = db_;
+        scan.error = status.member_ptr();
+        scan.transaction = txn_;
+        scan.arena = arena_.member_ptr();
+        scan.tasks_count = 1;
+        scan.collections = &collection_;
+        scan.start_keys = &next_min_key_;
+        scan.count_limits = &read_ahead_;
+        scan.counts = &found_counts;
+        scan.keys = &found_keys;
 
         ukv_scan(&scan);
         if (!status)
@@ -95,7 +94,7 @@ class keys_stream_t {
     keys_stream_t(ukv_database_t db,
                   ukv_collection_t collection = ukv_collection_main_k,
                   std::size_t read_ahead = keys_stream_t::default_read_ahead_k,
-                  ukv_transaction_t txn = nullptr)
+                  ukv_transaction_t txn = nullptr) noexcept
         : db_(db), collection_(collection), txn_(txn), arena_(db), read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
 
     keys_stream_t(keys_stream_t&&) = default;
@@ -194,18 +193,17 @@ class pairs_stream_t {
         ukv_length_t* found_counts = nullptr;
         ukv_key_t* found_keys = nullptr;
         status_t status;
-        ukv_scan_t scan {
-            .db = db_,
-            .error = status.member_ptr(),
-            .transaction = txn_,
-            .arena = arena_.member_ptr(),
-            .tasks_count = 1,
-            .collections = &collection_,
-            .start_keys = &next_min_key_,
-            .count_limits = &read_ahead_,
-            .counts = &found_counts,
-            .keys = &found_keys,
-        };
+        ukv_scan_t scan;
+        scan.db = db_;
+        scan.error = status.member_ptr();
+        scan.transaction = txn_;
+        scan.arena = arena_.member_ptr();
+        scan.tasks_count = 1;
+        scan.collections = &collection_;
+        scan.start_keys = &next_min_key_;
+        scan.count_limits = &read_ahead_;
+        scan.counts = &found_counts;
+        scan.keys = &found_keys;
 
         ukv_scan(&scan);
         if (!status)
@@ -215,21 +213,20 @@ class pairs_stream_t {
         fetched_offset_ = 0;
         auto count = static_cast<ukv_size_t>(fetched_keys_.size());
 
-        ukv_bytes_ptr_t found_vals = nullptr;
-        ukv_length_t* found_offs = nullptr;
-        ukv_read_t read {
-            .db = db_,
-            .error = status.member_ptr(),
-            .transaction = txn_,
-            .arena = arena_.member_ptr(),
-            .options = ukv_option_dont_discard_memory_k,
-            .tasks_count = count,
-            .collections = &collection_,
-            .keys = found_keys,
-            .keys_stride = sizeof(ukv_key_t),
-            .offsets = &found_offs,
-            .values = &found_vals,
-        };
+        ukv_bytes_ptr_t found_vals {};
+        ukv_length_t* found_offs {};
+        ukv_read_t read {};
+        read.db = db_;
+        read.error = status.member_ptr();
+        read.transaction = txn_;
+        read.arena = arena_.member_ptr();
+        read.options = ukv_option_dont_discard_memory_k;
+        read.tasks_count = count;
+        read.collections = &collection_;
+        read.keys = found_keys;
+        read.keys_stride = sizeof(ukv_key_t);
+        read.offsets = &found_offs;
+        read.values = &found_vals;
 
         ukv_read(&read);
         if (!status)
@@ -252,7 +249,7 @@ class pairs_stream_t {
         ukv_database_t db,
         ukv_collection_t collection = ukv_collection_main_k,
         std::size_t read_ahead = pairs_stream_t::default_read_ahead_k,
-        ukv_transaction_t txn = nullptr)
+        ukv_transaction_t txn = nullptr) noexcept
         : db_(db), collection_(collection), txn_(txn), arena_(db_), read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
 
     pairs_stream_t(pairs_stream_t&&) = default;
@@ -419,21 +416,20 @@ class blobs_range_t {
         ukv_size_t* max_value_bytes = nullptr;
         ukv_size_t* min_space_usages = nullptr;
         ukv_size_t* max_space_usages = nullptr;
-        ukv_measure_t size {
-            .db = db_,
-            .error = s,
-            .transaction = txn_,
-            .arena = a,
-            .collections = &collection_,
-            .start_keys = &min_key_,
-            .end_keys = &max_key_,
-            .min_cardinalities = &min_cardinalities,
-            .max_cardinalities = &max_cardinalities,
-            .min_value_bytes = &min_value_bytes,
-            .max_value_bytes = &max_value_bytes,
-            .min_space_usages = &min_space_usages,
-            .max_space_usages = &max_space_usages,
-        };
+        ukv_measure_t size {};
+        size.db = db_;
+        size.error = s;
+        size.transaction = txn_;
+        size.arena = a;
+        size.collections = &collection_;
+        size.start_keys = &min_key_;
+        size.end_keys = &max_key_;
+        size.min_cardinalities = &min_cardinalities;
+        size.max_cardinalities = &max_cardinalities;
+        size.min_value_bytes = &min_value_bytes;
+        size.max_value_bytes = &max_value_bytes;
+        size.min_space_usages = &min_space_usages;
+        size.max_space_usages = &max_space_usages;
 
         ukv_measure(&size);
         if (!status)
@@ -480,18 +476,16 @@ struct keys_range_t {
         status_t status;
         ukv_length_t c_count = static_cast<ukv_length_t>(count);
         ukv_collection_t c_collection = members.collection();
-        ukv_sample_t sample {
-            .db = members.db(),
-            .error = status.member_ptr(),
-            .transaction = members.txn(),
-            .arena = arena,
-            .tasks_count = 1,
-            .collections = &c_collection,
-            .count_limits = &c_count,
-            .counts = &found_counts,
-            .keys = &found_keys,
-        };
-
+        ukv_sample_t sample {};
+        sample.db = members.db();
+        sample.error = status.member_ptr();
+        sample.transaction = members.txn();
+        sample.arena = arena;
+        sample.tasks_count = 1;
+        sample.collections = &c_collection;
+        sample.count_limits = &c_count;
+        sample.counts = &found_counts;
+        sample.keys = &found_keys;
         ukv_sample(&sample);
 
         if (!status)

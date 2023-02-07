@@ -257,16 +257,14 @@ inline void clear_linked_memory(ukv_arena_t& c_arena) noexcept {
 }
 
 template <typename dangerous_at>
-void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dangerous) noexcept {
-    try {
-        dangerous();
-    }
-    catch (std::bad_alloc const&) {
-        log_error_m(c_error, out_of_memory_k, name);
-    }
-    catch (...) {
-        log_error_m(c_error, error_unknown_k, name);
-    }
+void safe_section(ukv_str_view_t name, ukv_error_t* c_error, dangerous_at&& dangerous) try {
+    dangerous();
+}
+catch (std::bad_alloc const&) {
+    log_error_m(c_error, out_of_memory_k, name);
+}
+catch (...) {
+    log_error_m(c_error, error_unknown_k, name);
 }
 
 } // namespace unum::ukv

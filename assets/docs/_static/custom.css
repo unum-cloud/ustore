@@ -20,3 +20,7 @@ table>tbody>tr>td {
 table>tbody>tr>td:first-child {
     text-align: left;
 }
+
+#overview>p>a>img {
+    height: 25px !important;
+}

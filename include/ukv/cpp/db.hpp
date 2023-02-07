@@ -111,15 +111,14 @@ class context_t : public std::enable_shared_from_this<context_t> {
         ukv_str_span_t names = nullptr;
         ukv_collection_t* ids = nullptr;
         status_t status;
-        ukv_collection_list_t collection_list {
-            .db = db_,
-            .error = status.member_ptr(),
-            .transaction = txn_,
-            .arena = arena_.member_ptr(),
-            .count = &count,
-            .ids = &ids,
-            .names = &names,
-        };
+        ukv_collection_list_t collection_list {};
+        collection_list.db = db_;
+        collection_list.error = status.member_ptr();
+        collection_list.transaction = txn_;
+        collection_list.arena = arena_.member_ptr();
+        collection_list.count = &count;
+        collection_list.ids = &ids;
+        collection_list.names = &names;
 
         ukv_collection_list(&collection_list);
         collections_list_t result;
@@ -186,11 +185,10 @@ class context_t : public std::enable_shared_from_this<context_t> {
             return status_t::status_view("Snapshots not supported!");
 
         status_t status;
-        ukv_transaction_init_t txn_init {
-            .db = db_,
-            .error = status.member_ptr(),
-            .transaction = &txn_,
-        };
+        ukv_transaction_init_t txn_init {};
+        txn_init.db = db_;
+        txn_init.error = status.member_ptr();
+        txn_init.transaction = &txn_;
 
         ukv_transaction_init(&txn_init);
         return status;
@@ -203,12 +201,11 @@ class context_t : public std::enable_shared_from_this<context_t> {
     status_t commit(bool flush = false) noexcept {
         status_t status;
         auto options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
-        ukv_transaction_commit_t txn_commit {
-            .db = db_,
-            .error = status.member_ptr(),
-            .transaction = txn_,
-            .options = options,
-        };
+        ukv_transaction_commit_t txn_commit {};
+        txn_commit.db = db_;
+        txn_commit.error = status.member_ptr();
+        txn_commit.transaction = txn_;
+        txn_commit.options = options;
         ukv_transaction_commit(&txn_commit);
         return status;
     }
@@ -217,13 +214,12 @@ class context_t : public std::enable_shared_from_this<context_t> {
         status_t status;
         auto options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
         ukv_sequence_number_t sequence_number = std::numeric_limits<ukv_sequence_number_t>::max();
-        ukv_transaction_commit_t txn_commit {
-            .db = db_,
-            .error = status.member_ptr(),
-            .transaction = txn_,
-            .options = options,
-            .sequence_number = &sequence_number,
-        };
+        ukv_transaction_commit_t txn_commit {};
+        txn_commit.db = db_;
+        txn_commit.error = status.member_ptr();
+        txn_commit.transaction = txn_;
+        txn_commit.options = options;
+        txn_commit.sequence_number = &sequence_number;
         ukv_transaction_commit(&txn_commit);
         return {std::move(status), std::move(sequence_number)};
     }
@@ -253,12 +249,11 @@ class database_t : public std::enable_shared_from_this<database_t> {
 
     status_t open(ukv_str_view_t config = nullptr) noexcept {
         status_t status;
-        ukv_database_init_t database {
-            .config = config,
-            .db = &db_,
-            .error = status.member_ptr(),
-        };
-        ukv_database_init(&database);
+        ukv_database_init_t database_init {};
+        database_init.config = config;
+        database_init.db = &db_;
+        database_init.error = status.member_ptr();
+        ukv_database_init(&database_init);
         return status;
     }
 
@@ -276,13 +271,12 @@ class database_t : public std::enable_shared_from_this<database_t> {
         if (snapshot && !ukv_supports_snapshots_k)
             return status_t::status_view("Snapshots not supported!");
 
-        status_t status;
-        ukv_transaction_t raw = nullptr;
-        ukv_transaction_init_t txn_init {
-            .db = db_,
-            .error = status.member_ptr(),
-            .transaction = &raw,
-        };
+        status_t status {};
+        ukv_transaction_t raw {};
+        ukv_transaction_init_t txn_init {};
+        txn_init.db = db_;
+        txn_init.error = status.member_ptr();
+        txn_init.transaction = &raw;
 
         ukv_transaction_init(&txn_init);
         if (!status)
@@ -304,13 +298,12 @@ class database_t : public std::enable_shared_from_this<database_t> {
     expected_gt<collection_at> create(ukv_str_view_t name, ukv_str_view_t config = "") noexcept {
         status_t status;
         ukv_collection_t collection = ukv_collection_main_k;
-        ukv_collection_create_t collection_init {
-            .db = db_,
-            .error = status.member_ptr(),
-            .name = name,
-            .config = config,
-            .id = &collection,
-        };
+        ukv_collection_create_t collection_init {};
+        collection_init.db = db_;
+        collection_init.error = status.member_ptr();
+        collection_init.name = name;
+        collection_init.config = config;
+        collection_init.id = &collection;
 
         ukv_collection_create(&collection_init);
         if (!status)
@@ -352,11 +345,11 @@ class database_t : public std::enable_shared_from_this<database_t> {
 
         status_t status;
         auto cols = *maybe_cols;
-        ukv_collection_drop_t collection_drop {
-            .db = db_,
-            .error = status.member_ptr(),
-            .mode = ukv_drop_keys_vals_handle_k,
-        };
+        ukv_collection_drop_t collection_drop {};
+        collection_drop.db = db_;
+        collection_drop.error = status.member_ptr();
+        collection_drop.mode = ukv_drop_keys_vals_handle_k;
+
         for (auto id : cols.ids) {
             collection_drop.id = id;
             ukv_collection_drop(&collection_drop);
