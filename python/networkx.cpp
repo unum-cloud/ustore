@@ -25,29 +25,28 @@ struct nodes_stream_t {
     }
 
     void read_attributes() {
-        status_t status;
-        ukv_length_t* found_offsets = nullptr;
-        ukv_length_t* found_lengths = nullptr;
-        ukv_bytes_ptr_t found_values = nullptr;
-        ukv_str_view_t fields = nullptr;
+        status_t status {};
+        ukv_length_t* found_offsets {};
+        ukv_length_t* found_lengths {};
+        ukv_bytes_ptr_t found_values {};
+        ukv_str_view_t fields {};
         auto count = static_cast<ukv_size_t>(fetched_nodes.size());
 
-        ukv_docs_read_t docs_read {
-            .db = collection.db(),
-            .error = status.member_ptr(),
-            .transaction = collection.txn(),
-            .arena = collection.member_arena(),
-            .type = ukv_doc_field_json_k,
-            .tasks_count = count,
-            .collections = collection.member_ptr(),
-            .keys = fetched_nodes.begin(),
-            .keys_stride = sizeof(ukv_key_t),
-            .fields = &fields,
-            .fields_stride = 0,
-            .offsets = &found_offsets,
-            .lengths = &found_lengths,
-            .values = &found_values,
-        };
+        ukv_docs_read_t docs_read {};
+        docs_read.db = collection.db();
+        docs_read.error = status.member_ptr();
+        docs_read.transaction = collection.txn();
+        docs_read.arena = collection.member_arena();
+        docs_read.type = ukv_doc_field_json_k;
+        docs_read.tasks_count = count;
+        docs_read.collections = collection.member_ptr();
+        docs_read.keys = fetched_nodes.begin();
+        docs_read.keys_stride = sizeof(ukv_key_t);
+        docs_read.fields = &fields;
+        docs_read.fields_stride = 0;
+        docs_read.offsets = &found_offsets;
+        docs_read.lengths = &found_lengths;
+        docs_read.values = &found_values;
 
         ukv_docs_read(&docs_read);
         status.throw_unhandled();
@@ -89,29 +88,28 @@ struct edges_stream_t {
     }
 
     void read_attributes() {
-        status_t status;
-        ukv_length_t* found_offsets = nullptr;
-        ukv_length_t* found_lengths = nullptr;
-        ukv_bytes_ptr_t found_values = nullptr;
-        ukv_str_view_t fields = nullptr;
+        status_t status {};
+        ukv_length_t* found_offsets {};
+        ukv_length_t* found_lengths {};
+        ukv_bytes_ptr_t found_values {};
+        ukv_str_view_t fields {};
         auto count = static_cast<ukv_size_t>(fetched_edges.size());
 
-        ukv_docs_read_t docs_read {
-            .db = collection.db(),
-            .error = status.member_ptr(),
-            .transaction = collection.txn(),
-            .arena = collection.member_arena(),
-            .type = ukv_doc_field_json_k,
-            .tasks_count = count,
-            .collections = collection.member_ptr(),
-            .keys = fetched_edges.edge_ids.data(),
-            .keys_stride = fetched_edges.edge_ids.stride(),
-            .fields = &fields,
-            .fields_stride = 0,
-            .offsets = &found_offsets,
-            .lengths = &found_lengths,
-            .values = &found_values,
-        };
+        ukv_docs_read_t docs_read {};
+        docs_read.db = collection.db();
+        docs_read.error = status.member_ptr();
+        docs_read.transaction = collection.txn();
+        docs_read.arena = collection.member_arena();
+        docs_read.type = ukv_doc_field_json_k;
+        docs_read.tasks_count = count;
+        docs_read.collections = collection.member_ptr();
+        docs_read.keys = fetched_edges.edge_ids.data();
+        docs_read.keys_stride = fetched_edges.edge_ids.stride();
+        docs_read.fields = &fields;
+        docs_read.fields_stride = 0;
+        docs_read.offsets = &found_offsets;
+        docs_read.lengths = &found_lengths;
+        docs_read.values = &found_values;
 
         ukv_docs_read(&docs_read);
         status.throw_unhandled();

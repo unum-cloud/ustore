@@ -164,13 +164,13 @@ class docs_ref_gt {
      */
     status_t clear(bool flush = false) noexcept {
         ukv_bytes_ptr_t any = reinterpret_cast<ukv_bytes_ptr_t>(this);
-        ukv_length_t len = 0;
-        contents_arg_t arg {
-            .offsets_begin = {},
-            .lengths_begin = {&len},
-            .contents_begin = {&any},
-            .count = 1,
-        };
+        ukv_length_t len {};
+        contents_arg_t arg {};
+        arg.offsets_begin = {};
+        arg.lengths_begin = {&len};
+        arg.contents_begin = {&any};
+        arg.count = 1;
+
         return assign(arg, flush);
     }
 

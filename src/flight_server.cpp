@@ -218,10 +218,10 @@ struct session_id_hash_t {
  * popular FOSS C++ implementations have that.
  */
 struct running_txn_t {
-    ukv_transaction_t txn = nullptr;
-    ukv_arena_t arena = nullptr;
-    sys_time_t last_access;
-    bool executing = false;
+    ukv_transaction_t txn {};
+    ukv_arena_t arena {};
+    sys_time_t last_access {};
+    bool executing {};
 };
 
 using client_to_txn_t = std::unordered_map<session_id_t, running_txn_t, session_id_hash_t>;
@@ -408,12 +408,7 @@ session_lock_t::~session_lock_t() noexcept {
     if (is_txn())
         sessions.hold_txn( //
             session_id,
-            running_txn_t {
-                .txn = txn,
-                .arena = arena,
-                .last_access = sys_clock_t::now(),
-                .executing = true,
-            });
+            running_txn_t {txn, arena, sys_clock_t::now(), true});
     else
         sessions.release_arena(arena);
 }
@@ -596,12 +591,12 @@ class UKVService : public arf::FlightServerBase {
             if (params.collection_id)
                 c_collection_id = parse_u64_hex(*params.collection_id, ukv_collection_main_k);
 
-            ukv_collection_drop_t collection_drop {
-                .db = db_,
-                .error = status.member_ptr(),
-                .id = c_collection_id,
-                .mode = mode,
-            };
+            ukv_collection_drop_t collection_drop {};
+            collection_drop.db = db_;
+            collection_drop.error = status.member_ptr();
+            collection_drop.id = c_collection_id;
+            collection_drop.mode = mode;
+
             ukv_collection_drop(&collection_drop);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
