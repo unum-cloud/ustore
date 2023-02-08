@@ -615,7 +615,7 @@ class UKVService : public arf::FlightServerBase {
             if (!params.snapshot_id)
                 return ar::Status::Invalid("Missing snapshot ID argument");
 
-            ukv_collection_t snapshot_id = 0;
+            ukv_snapshot_t snapshot_id = 0;
             ukv_snapshot_create_t snapshot_create {
                 .db = db_,
                 .error = status.member_ptr(),
@@ -626,7 +626,7 @@ class UKVService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            *results_ptr = return_scalar<ukv_collection_t>(snapshot_id);
+            *results_ptr = return_scalar<ukv_snapshot_t>(snapshot_id);
             return ar::Status::OK();
         }
 
@@ -635,7 +635,7 @@ class UKVService : public arf::FlightServerBase {
             if (!params.snapshot_id)
                 return ar::Status::Invalid("Missing snapshot ID argument");
 
-            ukv_collection_t c_snapshot_id = {};
+            ukv_snapshot_t c_snapshot_id = 0;
             if (params.snapshot_id)
                 c_snapshot_id = parse_u64_hex(*params.snapshot_id, {});
 
@@ -740,6 +740,10 @@ class UKVService : public arf::FlightServerBase {
         else
             input_collections = get_collections(input_schema_c, input_batch_c, kArgCols);
 
+        ukv_snapshot_t c_snapshot_id = 0;
+        if (params.snapshot_id)
+            c_snapshot_id = parse_u64_hex(*params.snapshot_id, 0);
+
         // Reserve resources for the execution of this request
         auto session = sessions_.lock(params.session_id, status.member_ptr());
         if (!status)
@@ -770,6 +774,7 @@ class UKVService : public arf::FlightServerBase {
             read.db = db_;
             read.error = status.member_ptr();
             read.transaction = session.txn;
+            read.snapshot = c_snapshot_id;
             read.arena = &session.arena;
             read.options = ukv_options(params);
             read.tasks_count = tasks_count;
