@@ -4,8 +4,7 @@ import pytest
 
 
 def test_line():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     # 1 -> 2
     assert not net.has_node(1)
@@ -29,8 +28,7 @@ def test_line():
 
 
 def test_triangle():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     # 1 -> 2 -> 3 -> 1
     net.add_edge(1, 2)
@@ -63,8 +61,7 @@ def test_triangle():
 
 
 def test_triangle_batch():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     # TODO: Check why matrix casting fails!
     # edges = np.array([[1, 2], [2, 3], [3, 1]])
@@ -90,8 +87,7 @@ def test_triangle_batch():
 
 
 def test_random_fill():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     sources = np.random.randint(1000, size=100)
     targets = np.random.randint(1000, size=100)
@@ -179,8 +175,8 @@ def test_degree():
 
 
 def test_upsert_remove_nodes_batch():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
+
     nodes = np.arange(100)
 
     net.add_nodes_from(nodes)
@@ -195,8 +191,7 @@ def test_upsert_remove_nodes_batch():
 
 
 def test_remove_edges():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     sources = np.arange(100)
     targets = np.arange(100, 200)
@@ -220,8 +215,7 @@ def test_remove_edges():
 
 
 def test_remove_nodes_and_related_edges():
-    db = ukv.DataBase()
-    net = db.main.graph
+    net = ukv.DataBase().main.graph
 
     sources = np.arange(100)
     targets = np.arange(100, 200)
@@ -240,9 +234,7 @@ def test_remove_nodes_and_related_edges():
 
 
 def test_clear():
-    db = ukv.DataBase()
-    main = db.main
-    net = main.graph
+    net = ukv.DataBase().main.graph
 
     sources = np.arange(100)
     targets = np.arange(100, 200)
@@ -362,6 +354,115 @@ def test_edges_attributes():
         assert node == sources[index] and neighbor == targets[index]
         assert data == {'weight': 1}
         index += 1
+
+    net.clear()
+
+
+def test_get_node_attributes():
+    db = ukv.DataBase()
+    net = ukv.Network(db, 'graph', 'nodes')
+
+    for node in range(1000):
+        net.add_node(node, weight=node)
+
+    weights = net.get_node_attributes("weight")
+    for node in range(1000):
+        assert weights[node] == node
+
+
+def test_get_edge_attributes():
+    db = ukv.DataBase()
+    net = ukv.Network(db, 'graph', 'nodes', 'edges')
+
+    for node in range(1000):
+        net.add_edge(node, node+1, node, weight=node)
+
+    weights = net.get_edge_attributes("weight")
+    for edge_id in range(1000):
+        assert weights[edge_id] == edge_id
+
+
+def test_set_node_attributes():
+    db = ukv.DataBase()
+    net = ukv.Network(db, 'graph', 'nodes')
+
+    net.add_node(0)
+    net.add_node(1)
+    net.add_node(2)
+
+    # Set Attributes From Scalar And Name
+    attributes = 1
+    net.set_node_attributes(attributes, name='weight')
+
+    index = 0
+    for node, weight in net.nodes(data='weight'):
+        assert node == index
+        assert weight == 1
+        index += 1
+
+    # Set Attributes From Dict And Name
+    attributes = {0: 'node0', 1: 'node1', 2: 'node2'}
+    net.set_node_attributes(attributes, name='name')
+
+    index = 0
+    for node, name in net.nodes(data='name'):
+        assert node == index
+        assert name == 'node{}'.format(index)
+        index += 1
+
+    # Set Attributes From Dict of Dict
+    attributes = {0: {'id': '0'}, 1: {
+    }, 2: {'number': 2}}
+
+    net.set_node_attributes(attributes)
+    expected_datas = [{'name': 'node0', 'id': '0', 'weight': 1}, {
+        'name': 'node1', 'weight': 1}, {'name': 'node2', 'number': 2, 'weight': 1}]
+    exported_datas = []
+    for node, data in net.nodes(data=True):
+        exported_datas.append(data)
+
+    assert expected_datas == exported_datas
+
+
+def test_set_edge_attributes():
+    db = ukv.DataBase()
+    net = ukv.Network(db, relations='edges')
+
+    net.add_edge(0, 1, 0)
+    net.add_edge(1, 2, 1)
+    net.add_edge(2, 3, 2)
+
+    # Set Attributes From Scalar And Name
+    attributes = 1
+    net.set_edge_attributes(attributes, name='weight')
+
+    index = 0
+    for node, neighbor, weight in net.edges(data='weight'):
+        assert node == index and neighbor == index+1 and weight == 1
+        index += 1
+
+    # Set Attributes From Dict And Name
+    attributes = {(0, 1, 0): 'edge0', (1, 2, 1): 'edge1', (2, 3, 2): 'edge2'}
+    net.set_edge_attributes(attributes, name='name')
+
+    index = 0
+    for node, neighbor, name in net.edges(data='name'):
+        assert node == index and neighbor == index+1
+        assert name == 'edge{}'.format(index)
+        index += 1
+
+    # Set Attributes From Dict of Dict
+    attributes = {(0, 1, 0): {'id': '0'}, (1, 2, 1): {
+    }, (2, 3, 2): {'number': 2}}
+
+    net.set_edge_attributes(attributes)
+    expected_datas = [{'name': 'edge0', 'id': '0', 'weight': 1}, {
+        'name': 'edge1', 'weight': 1}, {'name': 'edge2', 'number': 2, 'weight': 1}]
+    exported_datas = []
+    for _, _, data in net.edges(data=True):
+        exported_datas.append(data)
+
+    assert expected_datas == exported_datas
 
 
 def test_transaction_watch():

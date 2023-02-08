@@ -51,7 +51,7 @@ static std::unique_ptr<py_blobs_collection_t> punned_db_collection(py_db_t& db, 
 
 static std::unique_ptr<py_blobs_collection_t> punned_txn_collection(py_transaction_t& txn,
                                                                     std::string const& collection) {
-    return punned_collection<blobs_collection_t>(txn.py_db_ptr.lock(), txn.shared_from_this(), collection);
+    return punned_collection<blobs_collection_t>(txn.py_db_ptr, txn.shared_from_this(), collection);
 }
 
 template <typename range_at>
@@ -232,18 +232,18 @@ void ukv::wrap_database(py::module& m) {
 
     py_db.def("collection_names", [](py_db_t& py_db) {
         status_t status;
-        ukv_size_t count {0};
-        ukv_collection_t* ids {nullptr};
+        ukv_size_t count {};
+        ukv_collection_t* ids {};
         arena_t arena(py_db.native);
-        ukv_str_span_t names {nullptr};
-        ukv_collection_list_t collection_list {
-            .db = py_db.native,
-            .error = status.member_ptr(),
-            .arena = arena.member_ptr(),
-            .count = &count,
-            .ids = &ids,
-            .names = &names,
-        };
+        ukv_str_span_t names {};
+        ukv_collection_list_t collection_list {};
+        collection_list.db = py_db.native;
+        collection_list.error = status.member_ptr();
+        collection_list.arena = arena.member_ptr();
+        collection_list.count = &count;
+        collection_list.ids = &ids;
+        collection_list.names = &names;
+
         ukv_collection_list(&collection_list);
         status.throw_unhandled();
         std::vector<std::string> names_copy {count};
@@ -276,8 +276,8 @@ void ukv::wrap_database(py::module& m) {
         return py::cast(py_table);
     });
     py_collection.def_property_readonly("docs", [](py_blobs_collection_t& py_collection) {
-        return punned_collection<docs_collection_t>(py_collection.py_db_ptr.lock(),
-                                                    py_collection.py_txn_ptr.lock(),
+        return punned_collection<docs_collection_t>(py_collection.py_db_ptr,
+                                                    py_collection.py_txn_ptr,
                                                     py_collection.name);
     });
     py_collection.def_property_readonly("media", [](py_blobs_collection_t& py_collection) { return 0; });

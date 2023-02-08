@@ -21,21 +21,20 @@ embedded_blobs_t read_attributes( //
     ukv_bytes_ptr_t found_values = nullptr;
     auto count = static_cast<ukv_size_t>(keys.size());
 
-    ukv_docs_read_t docs_read {
-        .db = collection.db(),
-        .error = status.member_ptr(),
-        .transaction = collection.txn(),
-        .arena = collection.member_arena(),
-        .type = ukv_doc_field_json_k,
-        .tasks_count = count,
-        .collections = collection.member_ptr(),
-        .keys = keys.begin().get(),
-        .keys_stride = keys.stride(),
-        .fields = &field,
-        .offsets = &found_offsets,
-        .lengths = &found_lengths,
-        .values = &found_values,
-    };
+    ukv_docs_read_t docs_read {};
+    docs_read.db = collection.db();
+    docs_read.error = status.member_ptr();
+    docs_read.transaction = collection.txn();
+    docs_read.arena = collection.member_arena();
+    docs_read.type = ukv_doc_field_json_k;
+    docs_read.tasks_count = count;
+    docs_read.collections = collection.member_ptr();
+    docs_read.keys = keys.begin().get();
+    docs_read.keys_stride = keys.stride();
+    docs_read.fields = &field;
+    docs_read.offsets = &found_offsets;
+    docs_read.lengths = &found_lengths;
+    docs_read.values = &found_values;
 
     ukv_docs_read(&docs_read);
     status.throw_unhandled();
@@ -52,19 +51,18 @@ void compute_degrees(py_graph_t& graph,
     ukv_key_t* edges_per_vertex = nullptr;
     auto count = static_cast<ukv_size_t>(vertices.size());
 
-    ukv_graph_find_edges_t graph_find_edges {
-        .db = graph.index.db(),
-        .error = status.member_ptr(),
-        .transaction = graph.index.txn(),
-        .arena = graph.index.member_arena(),
-        .tasks_count = count,
-        .collections = graph.index.member_ptr(),
-        .vertices = vertices.begin().get(),
-        .vertices_stride = vertices.stride(),
-        .roles = &role,
-        .degrees_per_vertex = degrees,
-        .edges_per_vertex = &edges_per_vertex,
-    };
+    ukv_graph_find_edges_t graph_find_edges {};
+    graph_find_edges.db = graph.index.db();
+    graph_find_edges.error = status.member_ptr();
+    graph_find_edges.transaction = graph.index.txn();
+    graph_find_edges.arena = graph.index.member_arena();
+    graph_find_edges.tasks_count = count;
+    graph_find_edges.collections = graph.index.member_ptr();
+    graph_find_edges.vertices = vertices.begin().get();
+    graph_find_edges.vertices_stride = vertices.stride();
+    graph_find_edges.roles = &role;
+    graph_find_edges.degrees_per_vertex = degrees;
+    graph_find_edges.edges_per_vertex = &edges_per_vertex;
 
     ukv_graph_find_edges(&graph_find_edges);
     status.throw_unhandled();
@@ -207,22 +205,6 @@ struct edges_nbunch_iter_t {
     }
 };
 
-struct nodes_range_t {
-    keys_range_t native;
-    docs_collection_t& collection;
-    bool read_data = false;
-    std::string field;
-    std::string default_value;
-};
-
-struct edges_range_t {
-    std::weak_ptr<py_graph_t> net_ptr;
-    std::vector<ukv_key_t> vertices;
-    bool read_data = false;
-    std::string field;
-    std::string default_value;
-};
-
 struct degrees_stream_t {
     keys_stream_t keys_stream;
     py_graph_t& graph;
@@ -253,6 +235,22 @@ struct degrees_stream_t {
         ++index;
         return ret;
     }
+};
+
+struct nodes_range_t {
+    keys_range_t native;
+    docs_collection_t& collection;
+    bool read_data = false;
+    std::string field;
+    std::string default_value;
+};
+
+struct edges_range_t {
+    std::weak_ptr<py_graph_t> net_ptr;
+    std::vector<ukv_key_t> vertices;
+    bool read_data = false;
+    std::string field;
+    std::string default_value;
 };
 
 struct degree_view_t {
@@ -304,26 +302,28 @@ void ukv::wrap_networkx(py::module& m) {
             py_graph_t& g = *degs.net_ptr.lock().get();
             ukv_vertex_degree_t* degrees;
 
-            if (PyList_Check(vs.ptr())) {
-                std::vector<ukv_key_t> vertices(PySequence_Size(vs.ptr()));
-                py_transform_n(vs.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
-                compute_degrees(g,
-                                strided_range(vertices).immutable(),
-                                degs.roles,
-                                weight.size() ? weight.c_str() : nullptr,
-                                &degrees);
-                py::list res(vertices.size());
-                for (std::size_t i = 0; i != vertices.size(); ++i)
-                    res[i] = py::make_tuple(vertices[i], degrees[i]);
-                return py::object(res);
+            if (PyObject_CheckBuffer(vs.ptr())) {
+                auto vs_handle = py_buffer(vs.ptr());
+                auto vertices = py_strided_range<ukv_key_t const>(vs_handle);
+                compute_degrees(g, vertices, degs.roles, weight.size() ? weight.c_str() : nullptr, &degrees);
+                return wrap_into_buffer<ukv_vertex_degree_t const>(
+                    g,
+                    strided_range<ukv_vertex_degree_t const>(degrees, degrees + vertices.size()));
             }
+            if (!PySequence_Check(vs.ptr()))
+                throw std::invalid_argument("Nodes Must Be Sequence");
 
-            auto vs_handle = py_buffer(vs.ptr());
-            auto vertices = py_strided_range<ukv_key_t const>(vs_handle);
-            compute_degrees(g, vertices, degs.roles, weight.size() ? weight.c_str() : nullptr, &degrees);
-            return wrap_into_buffer<ukv_vertex_degree_t const>(
-                g,
-                strided_range<ukv_vertex_degree_t const>(degrees, degrees + vertices.size()));
+            std::vector<ukv_key_t> vertices(PySequence_Size(vs.ptr()));
+            py_transform_n(vs.ptr(), &py_to_scalar<ukv_key_t>, vertices.begin());
+            compute_degrees(g,
+                            strided_range(vertices).immutable(),
+                            degs.roles,
+                            weight.size() ? weight.c_str() : nullptr,
+                            &degrees);
+            py::list res(vertices.size());
+            for (std::size_t i = 0; i != vertices.size(); ++i)
+                res[i] = py::make_tuple(vertices[i], degrees[i]);
+            return py::object(res);
         },
         py::arg("vs"),
         py::arg("weight") = "");
@@ -499,7 +499,7 @@ void ukv::wrap_networkx(py::module& m) {
             return net_ptr;
         }),
         py::arg("db"),
-        py::arg("index"),
+        py::arg("index") = std::nullopt,
         py::arg("vertices") = std::nullopt,
         py::arg("relations") = std::nullopt,
         py::arg("directed") = false,
@@ -554,7 +554,9 @@ void ukv::wrap_networkx(py::module& m) {
         "Returns the number of attributed edges.");
     g.def(
         "number_of_edges",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { return g.ref().edges(v1, v2).throw_or_release().size(); },
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) {
+            return g.ref().edges_between(v1, v2).throw_or_release().size();
+        },
         "Returns the number of edges between two nodes.");
 
     g.def(
@@ -591,6 +593,63 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("n"),
         "Returns True if the graph contains the node n.");
 
+    g.def(
+        "set_node_attributes",
+        [](py_graph_t& g, py::object obj, std::optional<std::string> name) {
+            std::string json_to_merge;
+
+            if (PyDict_Check(obj.ptr())) {
+                PyObject *key, *value;
+                Py_ssize_t pos = 0;
+                while (PyDict_Next(obj.ptr(), &pos, &key, &value)) {
+                    json_to_merge.clear();
+                    auto vertex = py_to_scalar<ukv_key_t>(key);
+                    if (!PyDict_Check(value)) {
+                        fmt::format_to(std::back_inserter(json_to_merge), "{{\"{}\":", name.value());
+                        to_string(value, json_to_merge);
+                        json_to_merge += "}";
+                    }
+                    else
+                        to_string(value, json_to_merge);
+
+                    g.vertices_attrs[vertex].merge(json_to_merge.c_str());
+                }
+            }
+            else {
+                if (!name)
+                    throw std::invalid_argument("Invalid Argument");
+
+                fmt::format_to(std::back_inserter(json_to_merge), "{{\"{}\":", name.value());
+                to_string(obj.ptr(), json_to_merge);
+                json_to_merge += "}";
+
+                auto stream = g.ref().vertex_stream().throw_or_release();
+                while (!stream.is_end()) {
+                    g.vertices_attrs[stream.keys_batch().strided()].merge(json_to_merge.c_str());
+                    stream.seek_to_next_batch();
+                }
+            }
+        },
+        py::arg("values"),
+        py::arg("name") = std::nullopt);
+
+    g.def(
+        "get_node_attributes",
+        [](py_graph_t& g, std::string& name) {
+            std::unordered_map<ukv_key_t, py::object> map;
+            auto stream = g.ref().vertex_stream().throw_or_release();
+            while (!stream.is_end()) {
+                auto keys = stream.keys_batch().strided();
+                auto attrs = read_attributes(g.vertices_attrs, keys, name.c_str());
+                for (std::size_t i = 0; i != keys.size(); ++i)
+                    map[keys[i]] = py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[i])));
+
+                stream.seek_to_next_batch();
+            }
+            return py::cast(map);
+        },
+        py::arg("name"));
+
     g.def_property_readonly("edges", [](py_graph_t& g) {
         auto edges_ptr = std::make_unique<edges_range_t>();
         edges_ptr->net_ptr = g.shared_from_this();
@@ -599,13 +658,15 @@ void ukv::wrap_networkx(py::module& m) {
 
     g.def(
         "has_edge",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { return g.ref().edges(v1, v2).throw_or_release().size() != 0; },
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) {
+            return g.ref().edges_between(v1, v2).throw_or_release().size() != 0;
+        },
         py::arg("u"),
         py::arg("v"));
     g.def(
         "has_edge",
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, ukv_key_t e) {
-            auto ids = g.ref().edges(v1, v2).throw_or_release().edge_ids;
+            auto ids = g.ref().edges_between(v1, v2).throw_or_release().edge_ids;
             return std::find(ids.begin(), ids.end(), e) != ids.end();
         },
         py::arg("u"),
@@ -616,6 +677,65 @@ void ukv::wrap_networkx(py::module& m) {
         [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { throw_not_implemented(); },
         py::arg("u"),
         py::arg("v"));
+
+    g.def(
+        "get_edge_attributes",
+        [](py_graph_t& g, std::string& name) {
+            std::unordered_map<ukv_key_t, py::object> map;
+            auto stream = g.ref().edges().throw_or_release().begin();
+            while (!stream.is_end()) {
+                auto keys = stream.edges_batch().edge_ids.immutable();
+                auto attrs = read_attributes(g.relations_attrs, keys, name.c_str());
+                for (std::size_t i = 0; i != keys.size(); ++i)
+                    map[keys[i]] = py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[i])));
+
+                stream.seek_to_next_batch();
+            }
+            return py::cast(map);
+        },
+        py::arg("name"));
+
+    g.def(
+        "set_edge_attributes",
+        [](py_graph_t& g, py::object obj, std::optional<std::string> name) {
+            std::string json_to_merge;
+
+            if (PyDict_Check(obj.ptr())) {
+                PyObject *key, *value;
+                Py_ssize_t pos = 0;
+                while (PyDict_Next(obj.ptr(), &pos, &key, &value)) {
+                    json_to_merge.clear();
+                    if (!PyTuple_Check(key) || PyTuple_Size(key) != 3)
+                        throw std::invalid_argument("Invalid Argument");
+                    auto attr_key = py_to_scalar<ukv_key_t>(PyTuple_GetItem(key, 2));
+                    if (!PyDict_Check(value)) {
+                        fmt::format_to(std::back_inserter(json_to_merge), "{{\"{}\":", name.value());
+                        to_string(value, json_to_merge);
+                        json_to_merge += "}";
+                    }
+                    else
+                        to_string(value, json_to_merge);
+
+                    g.relations_attrs[attr_key].merge(json_to_merge.c_str());
+                }
+            }
+            else {
+                if (!name)
+                    throw std::invalid_argument("Invalid Argument");
+
+                fmt::format_to(std::back_inserter(json_to_merge), "{{\"{}\":", name.value());
+                to_string(obj.ptr(), json_to_merge);
+                json_to_merge += "}";
+
+                auto stream = g.ref().edges().throw_or_release().begin();
+                while (!stream.is_end()) {
+                    g.relations_attrs[stream.edges_batch().edge_ids].merge(json_to_merge.c_str());
+                    stream.seek_to_next_batch();
+                }
+            }
+        },
+        py::arg("values"),
+        py::arg("name") = std::nullopt);
 
     g.def(
         "__getitem__",

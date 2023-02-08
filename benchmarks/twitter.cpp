@@ -131,10 +131,10 @@ static void index_file( //
             docs_w_paths.push_back(doc_w_path_t {user_screen_name, user_body});
 
         // Graph
-        edges.push_back(edge_t {.source_id = id, .target_id = user_id});
+        edges.push_back(edge_t {id, user_id});
         if (maybe_retweet.error() == simdjson::SUCCESS) {
-            edges.push_back(edge_t {.source_id = id, .target_id = re_id});
-            edges.push_back(edge_t {.source_id = user_id, .target_id = re_user_id, .id = re_id});
+            edges.push_back(edge_t {id, re_id});
+            edges.push_back(edge_t {user_id, re_user_id, re_id});
         }
 
         auto maybe_mentions = rewound(tweet).find_field("entities").find_field("user_mentions");
@@ -145,7 +145,7 @@ static void index_file( //
                 auto mentioned_id = mention["id"];
                 if (mentioned_id.type() != simdjson::ondemand::json_type::number)
                     continue;
-                edges.push_back(edge_t {.source_id = user_id, .target_id = mentioned_id, .id = id});
+                edges.push_back(edge_t {user_id, mentioned_id, id});
             }
         }
     }
@@ -557,13 +557,12 @@ int main(int argc, char** argv) {
     bool can_build_paths = false;
     if (ukv_supports_named_collections_k) {
         status_t status;
-        ukv_collection_create_t collection_init {
-            .db = db,
-            .error = status.member_ptr(),
-            .name = "twitter.docs",
-            .config = "",
-            .id = &collection_docs_k,
-        };
+        ukv_collection_create_t collection_init {};
+        collection_init.db = db;
+        collection_init.error = status.member_ptr();
+        collection_init.name = "twitter.docs";
+        collection_init.config = "";
+        collection_init.id = &collection_docs_k;
 
         ukv_collection_create(&collection_init);
         status.throw_unhandled();

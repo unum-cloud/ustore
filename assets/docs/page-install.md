@@ -12,16 +12,16 @@ We use CMake as the default build tool.
 Most dependencies will be fetched with the integrated CMake scripts.
 
 ```sh
-    cmake \
-        -DUKV_BUILD_ENGINE_UMEM=1 \
-        -DUKV_BUILD_ENGINE_LEVELDB=1 \
-        -DUKV_BUILD_ENGINE_ROCKSDB=1 \
-        -DUKV_BUILD_TESTS=1 \
-        -DUKV_BUILD_BENCHMARKS=1 \
-        -DUKV_BUILD_API_FLIGHT_CLIENT=0 \
-        -DUKV_BUILD_API_FLIGHT_SERVER=0 \
-        -B ./build_release && \
-    make -j16 -C ./build_release
+cmake \
+    -DUKV_BUILD_ENGINE_UMEM=1 \
+    -DUKV_BUILD_ENGINE_LEVELDB=1 \
+    -DUKV_BUILD_ENGINE_ROCKSDB=1 \
+    -DUKV_BUILD_TESTS=1 \
+    -DUKV_BUILD_BENCHMARKS=1 \
+    -DUKV_BUILD_API_FLIGHT_CLIENT=0 \
+    -DUKV_BUILD_API_FLIGHT_SERVER=0 \
+    -B ./build_release && \
+make -j16 -C ./build_release
 ```
 
 This will only produce 1 library for each embedded backend.
