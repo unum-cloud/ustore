@@ -10,6 +10,7 @@
  */
 
 #include <mutex>
+#include <charconv> // `std::from_chars`
 #include <chrono>   // `std::time_point`
 #include <cstdio>   // `std::printf`
 #include <iostream> // `std::cerr`
@@ -188,6 +189,12 @@ base_id_t parse_u64_hex(std::string_view str, base_id_t default_ = 0) noexcept {
 
 txn_id_t parse_txn_id(std::string_view str) {
     return txn_id_t {parse_u64_hex(str)};
+}
+
+base_id_t parse_snap_id(std::string_view str, base_id_t default_ = 0) {
+    base_id_t result = default_;
+    std::from_chars(str.data(), str.data() + str.size(), result);
+    return result;
 }
 
 struct session_id_t {
@@ -612,7 +619,7 @@ class UKVService : public arf::FlightServerBase {
 
         // Create a snapshot
         if (is_query(action.type, kActionSnapOpen.type)) {
-            if (!params.snapshot_id)
+            if (params.snapshot_id)
                 return ar::Status::Invalid("Missing snapshot ID argument");
 
             ukv_snapshot_t snapshot_id = 0;
@@ -637,7 +644,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_snapshot_t c_snapshot_id = 0;
             if (params.snapshot_id)
-                c_snapshot_id = parse_u64_hex(*params.snapshot_id, {});
+                c_snapshot_id = parse_snap_id(*params.snapshot_id);
 
             ukv_snapshot_drop_t snapshot_drop {
                 .db = db_,
@@ -742,7 +749,7 @@ class UKVService : public arf::FlightServerBase {
 
         ukv_snapshot_t c_snapshot_id = 0;
         if (params.snapshot_id)
-            c_snapshot_id = parse_u64_hex(*params.snapshot_id, 0);
+            c_snapshot_id = parse_snap_id(*params.snapshot_id);
 
         // Reserve resources for the execution of this request
         auto session = sessions_.lock(params.session_id, status.member_ptr());
