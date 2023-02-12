@@ -62,13 +62,8 @@ static inline ukv_key_t hash(id_str_t const& id_str) {
     return mix;
 }
 
-static bool generate_dataset = true;
-static std::vector<std::string> gen_twitter_contents;
-static std::vector<doc_w_path_t> gen_dataset_paths;
-static std::vector<doc_w_key_t> gen_dataset_docs;
-static std::vector<edge_t> gen_dataset_graph;
-
 static std::string dataset_directory = "/mnt/md0/Twitter/";
+static std::vector<std::string> twitter_content;
 static std::vector<std::size_t> source_sizes;
 static std::vector<std::string> source_files;
 static std::vector<std::string_view> mapped_contents;
@@ -102,33 +97,34 @@ std::string new_tweet(int64_t tweet_id,
         mentioned_users +=
             fmt::sprintf(R"({"screen_name":"","name":"","id":%1$d,"id_str":"%1$d","indices":[]},)", mentioned_user_id);
     }
-    
+
     // Remove the last comma if it exists.
     if (!mentioned_users.empty())
         mentioned_users.resize(mentioned_users.size() - 1);
 
     // tweet_template + std::string(simdjson::SIMDJSON_PADDING, ' ')
-    std::string twitter_json = fmt::sprintf(tweet_template, tweet_id, std::string(tweet_length, '_'), user_id, mentioned_users);
+    std::string twitter_json =
+        fmt::sprintf(tweet_template, tweet_id, std::string(tweet_length, '_'), user_id, mentioned_users);
     return twitter_json;
 }
 
-void generate_ndjson(std::size_t connectivity_factor) {
+void generate_twitter(std::size_t connectivity_factor) {
     std::random_device random_device;
     std::mt19937 random_generator(random_device());
     std::uniform_int_distribution<int64_t> dist(0);
 
     std::vector<size_t> user_ids;
-    user_ids.reserve(gen_twitter_contents.size());
+    user_ids.reserve(twitter_content.size());
 
     std::ifstream ifs("./assets/tweet_template.json");
     std::string tweet_template((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
 
-    for (std::size_t i = 0; i < gen_twitter_contents.size(); ++i) {
+    for (std::size_t i = 0; i < twitter_content.size(); ++i) {
         std::size_t text_length = dist(random_generator) % (2000);
         int64_t tweet_id = dist(random_generator) % (std::numeric_limits<int64_t>::max());
         int64_t user_id = dist(random_generator) % (std::numeric_limits<int64_t>::max());
 
-        std::size_t relation = std::min(dist(random_generator) % (3 * connectivity_factor), user_ids.size());
+        std::size_t relation = std::min(dist(random_generator) % (2 * connectivity_factor + 1), user_ids.size());
         std::vector<size_t> mentioned_user_ids(relation);
         for (size_t j = 0; j != relation; ++j) {
             auto it = user_ids.cbegin();
@@ -137,7 +133,7 @@ void generate_ndjson(std::size_t connectivity_factor) {
             mentioned_user_ids[j] = *it;
         }
 
-        gen_twitter_contents[i] = new_tweet(tweet_id, user_id, text_length, tweet_template, mentioned_user_ids);
+        twitter_content[i] = new_tweet(tweet_id, user_id, text_length, tweet_template, mentioned_user_ids);
         user_ids.push_back(user_id);
     }
 }
@@ -231,6 +227,18 @@ static void index_tweet( //
                     edges);
 }
 
+static void index_tweets( //
+    std::pair<std::size_t, std::size_t> range,
+    std::vector<doc_w_path_t>& docs_w_paths,
+    std::vector<doc_w_key_t>& docs_w_ids,
+    std::vector<edge_t>& edges) {
+
+    // For joined jsons (ndjson) strings
+    // https://github.com/simdjson/simdjson/blob/master/doc/basics.md#newline-delimited-json-ndjson-and-json-lines
+    for (std::size_t idx = range.first; idx != range.second; ++idx)
+        index_tweet(twitter_content[idx], docs_w_paths, docs_w_ids, edges);
+}
+
 static void index_file( //
     std::string_view mapped_contents,
     std::vector<doc_w_path_t>& docs_w_paths,
@@ -250,14 +258,11 @@ static void index_file( //
  * multiplying the number of tweets by `copies_per_tweet_k`.
  */
 void construct_docs(bm::State& state) {
-    if (generate_dataset = true)
-        return docs_upsert(state, db, collection_docs_k, gen_dataset_docs.begin(), gen_dataset_docs.size());
-    else
-        return docs_upsert(state,
-                           db,
-                           collection_docs_k,
-                           pass_through_iterator(dataset_docs),
-                           pass_through_size(dataset_docs));
+    return docs_upsert(state,
+                       db,
+                       collection_docs_k,
+                       pass_through_iterator(dataset_docs),
+                       pass_through_size(dataset_docs));
 }
 
 /**
@@ -267,28 +272,22 @@ void construct_docs(bm::State& state) {
  * - Authors and Retweeters labeled by Retweet IDs.
  */
 static void construct_graph(bm::State& state) {
-    if (generate_dataset = true)
-        return edges_upsert(state, db, collection_graph_k, gen_dataset_graph.begin(), gen_dataset_graph.size());
-    else
-        return edges_upsert(state,
-                            db,
-                            collection_graph_k,
-                            pass_through_iterator(dataset_graph),
-                            pass_through_size(dataset_graph));
+    return edges_upsert(state,
+                        db,
+                        collection_graph_k,
+                        pass_through_iterator(dataset_graph),
+                        pass_through_size(dataset_graph));
 }
 
 /**
  * @brief Maps string IDs to matching Twitter entities.
  */
 static void construct_paths(bm::State& state) {
-    if (generate_dataset = true)
-        return paths_upsert(state, db, collection_docs_k, gen_dataset_paths.begin(), gen_dataset_paths.size());
-    else
-        return paths_upsert(state,
-                            db,
-                            collection_docs_k,
-                            pass_through_iterator(dataset_paths),
-                            pass_through_size(dataset_paths));
+    return paths_upsert(state,
+                        db,
+                        collection_docs_k,
+                        pass_through_iterator(dataset_paths),
+                        pass_through_size(dataset_paths));
 }
 
 #pragma region - Analytics
@@ -298,7 +297,7 @@ void sample_tweet_id_batches(bm::State& state, callback_at callback) {
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    uniform_idx_t choose_file(0, dataset_docs.size() - 1);
+    uniform_idx_t choose_part(0, dataset_docs.size() - 1);
     uniform_idx_t choose_hash(0, copies_per_tweet_k - 1);
 
     auto const batch_size = static_cast<ukv_size_t>(state.range(0));
@@ -308,8 +307,8 @@ void sample_tweet_id_batches(bm::State& state, callback_at callback) {
     std::size_t successes = 0;
     for (auto _ : state) {
         for (std::size_t idx = 0; idx != batch_size; ++idx) {
-            std::size_t const file_idx = choose_file(gen);
-            auto const& tweets = dataset_docs[file_idx];
+            std::size_t const part_idx = choose_part(gen);
+            auto const& tweets = dataset_docs[part_idx];
             uniform_idx_t choose_tweet(0, tweets.size() - 1);
             std::size_t const tweet_idx = choose_tweet(gen);
             auto const& tweet = tweets[tweet_idx];
@@ -572,15 +571,19 @@ int main(int argc, char** argv) {
 
     // We divide by two, as most modern CPUs have
     // hyper-threading with two threads per core.
+    bool generate_dataset = true;
     std::size_t thread_count = std::thread::hardware_concurrency() / 2;
-    std::size_t max_twitters_count = 100'000;
+    std::size_t max_twitters_count = 1'000'000;
     std::size_t max_input_files = 1000;
+    std::size_t connectivity_factor = 4;
+
     std::size_t min_seconds = 10;
     std::size_t small_batch_size = 32;
     std::size_t mid_batch_size = 64;
     std::size_t big_batch_size = 128;
 #if defined(UKV_DEBUG)
     max_input_files = 1;
+    max_twitters_count = 100'000;
     thread_count = 1;
 #endif
 
@@ -632,44 +635,54 @@ int main(int argc, char** argv) {
             for (auto& thread : parsing_threads)
                 thread.join();
         }
-        std::printf("- indexed %zu docs\n", pass_through_size(dataset_docs));
-        std::printf("- indexed %zu relations\n", pass_through_size(dataset_graph));
-        std::printf("- indexed %zu paths\n", pass_through_size(dataset_paths));
     }
     else {
         // 1. Prepare the dataset parts
-        std::printf("Will generate ndjson files...\n");
-        gen_dataset_paths.reserve(max_twitters_count);
-        gen_dataset_docs.reserve(max_twitters_count);
-        gen_dataset_graph.reserve(max_twitters_count);
-        gen_twitter_contents.resize(max_twitters_count);
+        std::printf("Will prepare dataset parts...\n");
+        std::size_t parts_cnt = thread_count;
+        std::size_t part_size = max_twitters_count / thread_count;
+        std::size_t twitters_count = parts_cnt * part_size;
+        twitter_content.resize(twitters_count);
+
+        dataset_paths.resize(parts_cnt);
+        dataset_docs.resize(parts_cnt);
+        dataset_graph.resize(parts_cnt);
+        for (std::size_t idx = 0; idx != parts_cnt; ++idx) {
+            dataset_paths[idx].reserve(part_size);
+            dataset_docs[idx].reserve(part_size);
+            dataset_graph[idx].reserve(part_size * connectivity_factor);
+        }
 
         // 2. Generate the contents
-        generate_ndjson(4);
+        std::printf("Will generate tweeter content...\n");
+        generate_twitter(connectivity_factor);
 
         // 3. Index the dataset
-        std::printf("Will index the generated files...\n");
+        std::printf("Will index the generated content...\n");
         if (thread_count == 1) {
-            for (std::size_t idx = 0; idx != max_twitters_count; ++idx)
-                index_tweet(gen_twitter_contents[idx], gen_dataset_paths, gen_dataset_docs, gen_dataset_graph);
+            for (std::size_t idx = 0; idx != twitters_count; ++idx)
+                index_tweet(twitter_content[idx], dataset_paths[0], dataset_docs[0], dataset_graph[0]);
         }
         else {
             std::vector<std::thread> parsing_threads;
-            for (std::size_t idx = 0; idx != max_twitters_count; ++idx)
+            std::size_t offset = 0;
+            for (std::size_t idx = 0; idx != thread_count; ++idx) {
                 parsing_threads.push_back(std::thread( //
-                    &index_file,
-                    gen_twitter_contents[idx],
-                    std::ref(gen_dataset_paths),
-                    std::ref(gen_dataset_docs),
-                    std::ref(gen_dataset_graph)));
+                    &index_tweets,
+                    std::pair(offset, offset + part_size),
+                    std::ref(dataset_paths[idx]),
+                    std::ref(dataset_docs[idx]),
+                    std::ref(dataset_graph[idx])));
+                offset += part_size;
+            }
             for (auto& thread : parsing_threads)
                 thread.join();
         }
-
-        std::printf("- indexed %zu docs\n", gen_dataset_docs.size());
-        std::printf("- indexed %zu relations\n", gen_dataset_graph.size());
-        std::printf("- indexed %zu paths\n", gen_dataset_paths.size());
     }
+
+    std::printf("- indexed %zu docs\n", pass_through_size(dataset_docs));
+    std::printf("- indexed %zu relations\n", pass_through_size(dataset_graph));
+    std::printf("- indexed %zu paths\n", pass_through_size(dataset_paths));
 
 // 4. Run the actual benchmarks
 #if defined(UKV_ENGINE_IS_LEVELDB)
@@ -711,24 +724,21 @@ int main(int argc, char** argv) {
 
     std::printf("Will benchmark...\n");
     bm::RegisterBenchmark("construct_docs", &construct_docs) //
-        ->Iterations((generate_dataset ? gen_dataset_docs.size() : pass_through_size(dataset_docs)) /
-                     (thread_count * big_batch_size))
+        ->Iterations(pass_through_size(dataset_docs) / (thread_count * big_batch_size))
         ->UseRealTime()
         ->Threads(thread_count)
         ->Arg(big_batch_size);
 
     if (can_build_graph)
         bm::RegisterBenchmark("construct_graph", &construct_graph) //
-            ->Iterations((generate_dataset ? gen_dataset_graph.size() : pass_through_size(dataset_graph)) /
-                         (thread_count * big_batch_size))
+            ->Iterations(pass_through_size(dataset_graph) / (thread_count * big_batch_size))
             ->UseRealTime()
             ->Threads(thread_count)
             ->Arg(big_batch_size);
 
     if (can_build_paths)
         bm::RegisterBenchmark("construct_paths", &construct_paths) //
-            ->Iterations((generate_dataset ? gen_dataset_paths.size() : pass_through_size(dataset_paths)) /
-                         (thread_count * big_batch_size))
+            ->Iterations(pass_through_size(dataset_paths) / (thread_count * big_batch_size))
             ->UseRealTime()
             ->Threads(thread_count)
             ->Arg(big_batch_size);
@@ -780,6 +790,8 @@ int main(int argc, char** argv) {
     // To avoid sanitizer complaints, we should unmap the files:
     for (auto mapped_content : mapped_contents)
         munmap((void*)mapped_content.data(), mapped_content.size());
+    
+    // Clear DB after benchmark
     db.clear().throw_unhandled();
 
     return 0;
