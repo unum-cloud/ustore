@@ -301,7 +301,7 @@ if(${UKV_BUILD_BENCHMARKS})
 
     string(CONCAT bench_name "bench_twitter_" ${client_lib})
     add_executable(${bench_name} benchmarks/twitter.cpp)
-    target_link_libraries(${bench_name} benchmark ${client_lib} ${client_dependencies})
+    target_link_libraries(${bench_name} benchmark fmt::fmt ${client_lib} ${client_dependencies})
 
     string(CONCAT bench_name "bench_tabular_graph_" ${client_lib})
     add_executable(${bench_name} benchmarks/tabular_graph.cpp)
