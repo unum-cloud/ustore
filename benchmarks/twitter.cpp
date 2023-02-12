@@ -62,7 +62,7 @@ static inline ukv_key_t hash(id_str_t const& id_str) {
     return mix;
 }
 
-static std::string dataset_directory = "/mnt/md0/Twitter/";
+static std::string dataset_directory = "~/Datasets/Twitter/";
 static std::vector<std::string> twitter_content;
 static std::vector<std::size_t> source_sizes;
 static std::vector<std::string> source_files;
@@ -790,7 +790,7 @@ int main(int argc, char** argv) {
     // To avoid sanitizer complaints, we should unmap the files:
     for (auto mapped_content : mapped_contents)
         munmap((void*)mapped_content.data(), mapped_content.size());
-    
+
     // Clear DB after benchmark
     db.clear().throw_unhandled();
 
