@@ -1,8 +1,8 @@
 {
     "created_at": "Sat Jan 01 00:59:05 +0000 2022",
-    "id": %d,
-    "id_str": "",
-    "text": "%s",
+    "id": %1$d,
+    "id_str": "%1$d",
+    "text": "%2$s",
     "source": "<a href=\"https://twitter.com/settings/download\" rel=\"nofollow\">Twitter for DEVICE</a>",
     "truncated": false,
     "in_reply_to_status_id": null,
@@ -11,8 +11,8 @@
     "in_reply_to_user_id_str": null,
     "in_reply_to_screen_name": null,
     "user": {
-      "id": %d,
-      "id_str": "",
+      "id": %3$d,
+      "id_str": "%3$d",
       "name": "USER_NAME",
       "screen_name": "SCREEN_NAME",
       "location": "USER_LOCATION",
@@ -64,7 +64,7 @@
     "entities": {
       "hashtags": [],
       "urls": [],
-      "user_mentions": [%s],
+      "user_mentions": [%4$s],
       "symbols": []
     },
     "favorited": false,
