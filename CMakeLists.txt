@@ -15,7 +15,7 @@ option(UKV_BUILD_ENGINE_ROCKSDB "Building REST API server for all backends")
 option(UKV_BUILD_TESTS "Building C/C++ native tests" ON)
 option(UKV_BUILD_BENCHMARKS "Building C/C++ native benchmarks")
 
-option(UKV_BUILD_BUNDLES "Building backend bundles for embedding in wrappers" OFF)
+option(UKV_BUILD_BUNDLES "Building bundles libraries for GoLang and Java SDKs")
 option(UKV_BUILD_SDK_PYTHON "Building Python bidings for all SDKs")
 option(UKV_BUILD_API_FLIGHT "Building Apache Arrow Flight RPC server and client for all backends")
 option(UKV_BUILD_API_FLIGHT_CLIENT "Building Apache Arrow Flight RPC client for all backends")
