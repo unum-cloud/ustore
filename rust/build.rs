@@ -97,7 +97,8 @@ fn main() {
 	let output = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 	fs_extra::copy_items(
 		&[format!("{}/include", parent_dir).as_str()],
-		output.display().to_string().as_str(),
+		output.display().to_string().as_str(), // no need to include `include/`, since the whole
+                                               // directory is going to be copied.
 		&fs_extra::dir::CopyOptions {
 			depth: 0, // unlimited
 			overwrite: true,
