@@ -86,49 +86,53 @@ simdjson::ondemand::object& rewound(simdjson::ondemand::object& doc) noexcept {
     return doc;
 }
 
-std::string new_tweet(int64_t tweet_id,
-                      int64_t user_id,
-                      std::size_t tweet_length,
-                      std::string_view tweet_template,
-                      std::vector<size_t> const& mentioned_user_ids) {
+using twitter_id_t = std::int64_t;
+
+std::string new_tweet( //
+    twitter_id_t tweet_id,
+    twitter_id_t user_id,
+    std::size_t tweet_length,
+    std::string_view tweet_template,
+    std::vector<twitter_id_t> const& mentioned_user_ids) {
 
     std::string mentioned_users = "";
-    for (std::size_t mentioned_user_id : mentioned_user_ids) {
+    for (twitter_id_t mentioned_user_id : mentioned_user_ids)
         mentioned_users +=
             fmt::sprintf(R"({"screen_name":"","name":"","id":%1$d,"id_str":"%1$d","indices":[]},)", mentioned_user_id);
-    }
 
     // Remove the last comma if it exists.
     if (!mentioned_users.empty())
         mentioned_users.resize(mentioned_users.size() - 1);
 
     // tweet_template + std::string(simdjson::SIMDJSON_PADDING, ' ')
-    std::string twitter_json =
+    std::string tweet_json =
         fmt::sprintf(tweet_template, tweet_id, std::string(tweet_length, '_'), user_id, mentioned_users);
-    return twitter_json;
+    return tweet_json;
 }
 
 void generate_twitter(std::size_t connectivity_factor) {
     std::random_device random_device;
     std::mt19937 random_generator(random_device());
-    std::uniform_int_distribution<int64_t> dist(0);
+    std::uniform_int_distribution<twitter_id_t> positives(0);
+    std::uniform_int_distribution<std::size_t> text_lengths(1, 280);
 
-    std::vector<size_t> user_ids;
+    std::vector<twitter_id_t> user_ids;
     user_ids.reserve(twitter_content.size());
 
     std::ifstream ifs("./assets/tweet_template.json");
     std::string tweet_template((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
 
     for (std::size_t i = 0; i < twitter_content.size(); ++i) {
-        std::size_t text_length = dist(random_generator) % (2000);
-        int64_t tweet_id = dist(random_generator) % (std::numeric_limits<int64_t>::max());
-        int64_t user_id = dist(random_generator) % (std::numeric_limits<int64_t>::max());
+        std::size_t text_length = text_lengths(random_generator);
+        twitter_id_t tweet_id = positives(random_generator);
+        twitter_id_t user_id = positives(random_generator);
 
-        std::size_t relation = std::min(dist(random_generator) % (2 * connectivity_factor + 1), user_ids.size());
-        std::vector<size_t> mentioned_user_ids(relation);
-        for (size_t j = 0; j != relation; ++j) {
+        std::size_t relations_count =
+            std::min(positives(random_generator) % (2 * connectivity_factor + 1), user_ids.size());
+        std::vector<twitter_id_t> mentioned_user_ids(relations_count);
+        for (std::size_t j = 0; j != relations_count; ++j) {
             auto it = user_ids.cbegin();
-            std::size_t user_number = dist(random_generator) % user_ids.size();
+            twitter_id_t user_number = positives(random_generator) % user_ids.size();
             std::advance(it, user_number);
             mentioned_user_ids[j] = *it;
         }
@@ -573,7 +577,7 @@ int main(int argc, char** argv) {
     // hyper-threading with two threads per core.
     bool generate_dataset = true;
     std::size_t thread_count = std::thread::hardware_concurrency() / 2;
-    std::size_t max_twitters_count = 1'000'000;
+    std::size_t max_tweets_count = 1'000'000;
     std::size_t max_input_files = 1000;
     std::size_t connectivity_factor = 4;
 
@@ -583,11 +587,11 @@ int main(int argc, char** argv) {
     std::size_t big_batch_size = 128;
 #if defined(UKV_DEBUG)
     max_input_files = 1;
-    max_twitters_count = 100'000;
+    max_tweets_count = 100'000;
     thread_count = 1;
 #endif
 
-    if (generate_dataset == false) {
+    if (!generate_dataset) {
         // 1. Find the dataset parts
         std::printf("Will search for .ndjson files...\n");
         auto dataset_path = dataset_directory;
@@ -640,7 +644,7 @@ int main(int argc, char** argv) {
         // 1. Prepare the dataset parts
         std::printf("Will prepare dataset parts...\n");
         std::size_t parts_cnt = thread_count;
-        std::size_t part_size = max_twitters_count / thread_count;
+        std::size_t part_size = max_tweets_count / thread_count;
         std::size_t twitters_count = parts_cnt * part_size;
         twitter_content.resize(twitters_count);
 
