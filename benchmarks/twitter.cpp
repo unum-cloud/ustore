@@ -12,6 +12,9 @@
 
 #include <benchmark/benchmark.h>
 #include <simdjson.h>
+#include <fmt/printf.h>
+
+#include <argparse/argparse.hpp>
 
 #include <ukv/ukv.hpp>
 #include <ukv/cpp/ranges.hpp> // `sort_and_deduplicate`
@@ -60,6 +63,15 @@ static inline ukv_key_t hash(id_str_t const& id_str) {
     return mix;
 }
 
+struct settings_t {
+    std::size_t thread_count;
+    std::size_t max_input_files;
+    std::size_t min_seconds;
+    std::size_t small_batch_size;
+    std::size_t mid_batch_size;
+    std::size_t big_batch_size;
+};
+
 static std::string dataset_directory = "~/Datasets/Twitter/";
 static std::vector<std::string> source_files;
 static std::vector<std::size_t> source_sizes;
@@ -72,6 +84,32 @@ static database_t db;
 static ukv_collection_t collection_docs_k = ukv_collection_main_k;
 static ukv_collection_t collection_graph_k = ukv_collection_main_k;
 static ukv_collection_t collection_paths_k = ukv_collection_main_k;
+
+void parse_args(int argc, char* argv[], settings_t& settings) {
+    argparse::ArgumentParser program(argv[0]);
+    program.add_argument("-t", "--threads")
+        .default_value(int(std::thread::hardware_concurrency() / 2)).implicit_value(int(std::thread::hardware_concurrency() / 2))
+        .help("Threads count");
+    program.add_argument("-i", "--max_input_files").default_value(1000).implicit_value(1000).help("Maximum input files count");
+    program.add_argument("-m", "--min_seconds").default_value(10).implicit_value(10).help("Minimal seconds");
+    program.add_argument("-s", "--small_batch_size").default_value(32).implicit_value(32).help("Small batch size");
+    program.add_argument("-a", "--mid_batch_size").default_value(64).implicit_value(64).help("Middle batch size");
+    program.add_argument("-b", "--big_batch_size").default_value(128).implicit_value(128).help("Big batch size");
+
+    program.parse_known_args(argc, argv);
+
+    settings.thread_count = program.get<int>("threads");
+    settings.max_input_files = program.get<int>("max_input_files");
+    settings.min_seconds = program.get<int>("min_seconds");
+    settings.small_batch_size = program.get<int>("small_batch_size");
+    settings.mid_batch_size = program.get<int>("mid_batch_size");
+    settings.big_batch_size = program.get<int>("big_batch_size");
+
+    if (settings.thread_count == 0) {
+        fmt::print("-threads: Zero threads count specified\n");
+        exit(1);
+    }
+}
 
 simdjson::ondemand::document& rewound(simdjson::ondemand::document& doc) noexcept {
     doc.rewind();
@@ -469,15 +507,12 @@ int main(int argc, char** argv) {
 
     // We divide by two, as most modern CPUs have
     // hyper-threading with two threads per core.
-    std::size_t thread_count = std::thread::hardware_concurrency() / 2;
-    std::size_t max_input_files = 1000;
-    std::size_t min_seconds = 10;
-    std::size_t small_batch_size = 32;
-    std::size_t mid_batch_size = 64;
-    std::size_t big_batch_size = 128;
+    settings_t settings;
+    parse_args(argc, argv, settings);
+
 #if defined(UKV_DEBUG)
-    max_input_files = 1;
-    thread_count = 1;
+    settings.max_input_files = 1;
+    settings.thread_count = 1;
 #endif
 
     // 1. Find the dataset parts
@@ -495,7 +530,7 @@ int main(int argc, char** argv) {
         source_sizes.push_back(dir_entry.file_size());
     }
     std::printf("- found %i files\n", static_cast<int>(source_files.size()));
-    source_files.resize(std::min(max_input_files, source_files.size()));
+    source_files.resize(std::min(settings.max_input_files, source_files.size()));
     std::printf("- kept only %i files\n", static_cast<int>(source_files.size()));
     dataset_paths.resize(source_files.size());
     dataset_docs.resize(source_files.size());
@@ -519,7 +554,7 @@ int main(int argc, char** argv) {
 
     // 3. Index the dataset
     std::printf("Will index the files...\n");
-    if (thread_count == 1) {
+    if (settings.thread_count == 1) {
         for (std::size_t path_idx = 0; path_idx != source_files.size(); ++path_idx)
             index_file(mapped_contents[path_idx],
                        dataset_paths[path_idx],
@@ -583,65 +618,65 @@ int main(int argc, char** argv) {
 
     std::printf("Will benchmark...\n");
     bm::RegisterBenchmark("construct_docs", &construct_docs) //
-        ->Iterations(pass_through_size(dataset_docs) / (thread_count * big_batch_size))
+        ->Iterations(pass_through_size(dataset_docs) / (settings.thread_count * settings.big_batch_size))
         ->UseRealTime()
-        ->Threads(thread_count)
-        ->Arg(big_batch_size);
+        ->Threads(settings.thread_count)
+        ->Arg(settings.big_batch_size);
 
     if (can_build_graph)
         bm::RegisterBenchmark("construct_graph", &construct_graph) //
-            ->Iterations(pass_through_size(dataset_graph) / (thread_count * big_batch_size))
+            ->Iterations(pass_through_size(dataset_graph) / (settings.thread_count * settings.big_batch_size))
             ->UseRealTime()
-            ->Threads(thread_count)
-            ->Arg(big_batch_size);
+            ->Threads(settings.thread_count)
+            ->Arg(settings.big_batch_size);
 
     if (can_build_paths)
         bm::RegisterBenchmark("construct_paths", &construct_paths) //
-            ->Iterations(pass_through_size(dataset_paths) / (thread_count * big_batch_size))
+            ->Iterations(pass_through_size(dataset_paths) / (settings.thread_count * settings.big_batch_size))
             ->UseRealTime()
-            ->Threads(thread_count)
-            ->Arg(big_batch_size);
+            ->Threads(settings.thread_count)
+            ->Arg(settings.big_batch_size);
 
     if (ukv_doc_field_default_k != ukv_doc_field_json_k)
         bm::RegisterBenchmark("docs_sample_blobs", &docs_sample_blobs) //
-            ->MinTime(min_seconds)
+            ->MinTime(settings.min_seconds)
             ->UseRealTime()
-            ->Threads(thread_count)
-            ->Arg(small_batch_size)
-            ->Arg(mid_batch_size)
-            ->Arg(big_batch_size);
+            ->Threads(settings.thread_count)
+            ->Arg(settings.small_batch_size)
+            ->Arg(settings.mid_batch_size)
+            ->Arg(settings.big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_objects", &docs_sample_objects) //
-        ->MinTime(min_seconds)
+        ->MinTime(settings.min_seconds)
         ->UseRealTime()
-        ->Threads(thread_count)
-        ->Arg(small_batch_size)
-        ->Arg(mid_batch_size)
-        ->Arg(big_batch_size);
+        ->Threads(settings.thread_count)
+        ->Arg(settings.small_batch_size)
+        ->Arg(settings.mid_batch_size)
+        ->Arg(settings.big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_field", &docs_sample_field) //
-        ->MinTime(min_seconds)
+        ->MinTime(settings.min_seconds)
         ->UseRealTime()
-        ->Threads(thread_count)
-        ->Arg(small_batch_size)
-        ->Arg(mid_batch_size)
-        ->Arg(big_batch_size);
+        ->Threads(settings.thread_count)
+        ->Arg(settings.small_batch_size)
+        ->Arg(settings.mid_batch_size)
+        ->Arg(settings.big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_table", &docs_sample_table) //
-        ->MinTime(min_seconds)
+        ->MinTime(settings.min_seconds)
         ->UseRealTime()
-        ->Threads(thread_count)
-        ->Arg(small_batch_size)
-        ->Arg(mid_batch_size)
-        ->Arg(big_batch_size);
+        ->Threads(settings.thread_count)
+        ->Arg(settings.small_batch_size)
+        ->Arg(settings.mid_batch_size)
+        ->Arg(settings.big_batch_size);
 
     if (can_build_graph)
         bm::RegisterBenchmark("graph_traverse_two_hops", &graph_traverse_two_hops) //
-            ->MinTime(min_seconds)
-            ->Threads(thread_count)
-            ->Arg(small_batch_size)
-            ->Arg(mid_batch_size)
-            ->Arg(big_batch_size);
+            ->MinTime(settings.min_seconds)
+            ->Threads(settings.thread_count)
+            ->Arg(settings.small_batch_size)
+            ->Arg(settings.mid_batch_size)
+            ->Arg(settings.big_batch_size);
 
     bm::RunSpecifiedBenchmarks();
     bm::Shutdown();
