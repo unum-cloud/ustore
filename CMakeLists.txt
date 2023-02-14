@@ -15,7 +15,7 @@ option(UKV_BUILD_ENGINE_ROCKSDB "Building REST API server for all backends")
 option(UKV_BUILD_TESTS "Building C/C++ native tests" ON)
 option(UKV_BUILD_BENCHMARKS "Building C/C++ native benchmarks")
 
-option(UKV_BUILD_BUNDLES "Building backend bundles for embedding in wrappers" OFF)
+option(UKV_BUILD_BUNDLES "Building bundles libraries for GoLang and Java SDKs")
 option(UKV_BUILD_SDK_PYTHON "Building Python bidings for all SDKs")
 option(UKV_BUILD_API_FLIGHT "Building Apache Arrow Flight RPC server and client for all backends")
 option(UKV_BUILD_API_FLIGHT_CLIENT "Building Apache Arrow Flight RPC client for all backends")
@@ -62,12 +62,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstrict-vtable-pointers")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunknown-attributes")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -pedantic-errors")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -pedantic-errors")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
@@ -147,7 +148,6 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/yyjson.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/simdjson.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pcre2.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mpack.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/argparse.cmake")
 
 if(${UKV_USE_JEMALLOC})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
@@ -184,7 +184,7 @@ endif()
 
 set(UKV_ENGINE_NAMES)
 set(UKV_CLIENT_LIBS)
-set(UKV_TEST_NAMES "test_imp_exp" "test_units")
+set(UKV_TEST_NAMES "test_imp_exp" "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
 
 # Define the Engine libraries we will need to build
 if(${UKV_BUILD_ENGINE_UMEM})
@@ -297,6 +297,7 @@ endif()
 
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/argparse.cmake")
   foreach(client_lib IN ITEMS ${UKV_CLIENT_LIBS})
     get_target_property(client_dependencies ${client_lib} LINK_LIBRARIES)
 
@@ -338,6 +339,7 @@ endif()
 
 if(${UKV_BUILD_BUNDLES})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildUtils.cmake")
+
   foreach(client_lib_name IN ITEMS ${UKV_CLIENT_NAMES})
     string(CONCAT client_lib "ukv_embedded_" ${client_lib_name})
 

@@ -35,9 +35,7 @@ if __name__ == "__main__":
         t2 = time.perf_counter()
         print('Elapsed time for {} dataset with NetworkX: {:.3f}s '.format(name, t2-t1))
 
-        db = ukv.DataBase()
-        main = db.main
-        graph = main.graph
+        graph = ukv.DataBase().main.graph
         for v1, v2 in G.edges:
             graph.add_edge(v1, v2)
         G.clear()

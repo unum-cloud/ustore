@@ -52,7 +52,7 @@ struct py_db_t : public std::enable_shared_from_this<py_db_t> {
 struct py_transaction_t : public std::enable_shared_from_this<py_transaction_t> {
     transaction_t native;
 
-    std::weak_ptr<py_db_t> py_db_ptr;
+    std::shared_ptr<py_db_t> py_db_ptr;
 
     bool dont_watch {false};
     bool flush_writes {false};
@@ -74,31 +74,24 @@ template <typename collection_at>
 struct py_collection_gt {
     collection_at native;
 
-    std::weak_ptr<py_db_t> py_db_ptr;
-    std::weak_ptr<py_transaction_t> py_txn_ptr;
+    std::shared_ptr<py_db_t> py_db_ptr;
+    std::shared_ptr<py_transaction_t> py_txn_ptr;
     std::string name;
     bool in_txn {false};
 
     ukv_collection_t* member_collection() noexcept { return native.member_ptr(); }
     ukv_arena_t* member_arena() noexcept { return native.member_arena(); }
     ukv_options_t options() noexcept {
-        auto txn_ptr = py_txn_ptr.lock();
         auto base = ukv_options_default_k;
-        return txn_ptr ? static_cast<ukv_options_t>( //
-                             base |                  //
-                             (txn_ptr->dont_watch ? ukv_option_transaction_dont_watch_k : base) |
-                             (txn_ptr->flush_writes ? ukv_option_write_flush_k : base))
-                       : base;
+        return py_txn_ptr ? static_cast<ukv_options_t>( //
+                                base |                  //
+                                (py_txn_ptr->dont_watch ? ukv_option_transaction_dont_watch_k : base) |
+                                (py_txn_ptr->flush_writes ? ukv_option_write_flush_k : base))
+                          : base;
     }
-    ukv_database_t db() noexcept(false) {
-        if (py_db_ptr.expired())
-            throw std::domain_error("Collection references closed DB");
-        return native.db();
-    }
+    ukv_database_t db() noexcept(false) { return native.db(); }
     ukv_transaction_t txn() noexcept(false) {
-        if (in_txn && py_txn_ptr.expired())
-            throw std::domain_error("Collection references closed transaction");
-        return in_txn ? ukv_transaction_t(py_txn_ptr.lock()->native) : ukv_transaction_t(nullptr);
+        return in_txn ? ukv_transaction_t(py_txn_ptr->native) : ukv_transaction_t(nullptr);
     }
 
     /**
@@ -106,10 +99,7 @@ struct py_collection_gt {
      * as native Python types when possible. By default, we export
      * into Apache Arrow arrays.
      */
-    bool export_into_arrow() const noexcept {
-        auto db_ptr = py_db_ptr.lock();
-        return db_ptr->export_into_arrow;
-    }
+    bool export_into_arrow() const noexcept { return py_db_ptr->export_into_arrow; }
 };
 
 using py_blobs_collection_t = py_collection_gt<blobs_collection_t>;
@@ -125,8 +115,8 @@ struct py_buffer_memory_t {
 
 struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
 
-    std::weak_ptr<py_db_t> py_db_ptr;
-    std::weak_ptr<py_transaction_t> py_txn_ptr;
+    std::shared_ptr<py_db_t> py_db_ptr;
+    std::shared_ptr<py_transaction_t> py_txn_ptr;
 
     blobs_collection_t index;
     docs_collection_t vertices_attrs;

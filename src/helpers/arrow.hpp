@@ -36,6 +36,10 @@ inline static std::string const kFlightSample = "sample";               /// `DoG
 inline static std::string const kFlightColCreate = "create_collection"; /// `DoAction`
 inline static std::string const kFlightColDrop = "remove_collection";   /// `DoAction`
 
+inline static std::string const kFlightListSnap = "list_snapshots";    /// `DoGet`
+inline static std::string const kFlightSnapCreate = "create_snapshot"; /// `DoAction`
+inline static std::string const kFlightSnapDrop = "remove_snapshot";   /// `DoAction`
+
 inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
 inline static std::string const kFlightTxnCommit = "commit_transaction"; /// `DoAction`
 
@@ -47,6 +51,7 @@ inline static std::string const kFlightReadPath = "read_path";   /// `DoExchange
 inline static std::string const kFlightScan = "scan";            /// `DoExchange`
 inline static std::string const kFlightMeasure = "measure";      /// `DoExchange`
 
+inline static std::string const kArgSnaps = "snapshots";
 inline static std::string const kArgCols = "collections";
 inline static std::string const kArgKeys = "keys";
 inline static std::string const kArgVals = "values";
@@ -62,6 +67,7 @@ inline static std::string const kArgPrevPatterns = "prev_patterns";
 
 inline static std::string const kParamCollectionID = "collection_id";
 inline static std::string const kParamCollectionName = "collection_name";
+inline static std::string const kParamSnapshotID = "snapshot_id";
 inline static std::string const kParamTransactionID = "transaction_id";
 inline static std::string const kParamReadPart = "part";
 inline static std::string const kParamDropMode = "mode";

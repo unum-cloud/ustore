@@ -41,7 +41,7 @@ namespace unum::ukv {
  */
 class docs_collection_t {
     ukv_database_t db_ {nullptr};
-    ukv_collection_t collection_  {ukv_collection_main_k};
+    ukv_collection_t collection_ {ukv_collection_main_k};
     ukv_transaction_t txn_ {nullptr};
     any_arena_t arena_ {nullptr};
     ukv_doc_field_type_t type_ {ukv_doc_field_default_k};
@@ -112,36 +112,33 @@ class docs_collection_t {
 
     status_t clear_values() noexcept {
         status_t status;
-        ukv_collection_drop_t collection_drop {
-            .db = db_,
-            .error = status.member_ptr(),
-            .id = collection_,
-            .mode = ukv_drop_vals_k,
-        };
+        ukv_collection_drop_t collection_drop {};
+        collection_drop.db = db_;
+        collection_drop.error = status.member_ptr();
+        collection_drop.id = collection_;
+        collection_drop.mode = ukv_drop_vals_k;
         ukv_collection_drop(&collection_drop);
         return status;
     }
 
     status_t clear() noexcept {
         status_t status;
-        ukv_collection_drop_t collection_drop {
-            .db = db_,
-            .error = status.member_ptr(),
-            .id = collection_,
-            .mode = ukv_drop_keys_vals_k,
-        };
+        ukv_collection_drop_t collection_drop {};
+        collection_drop.db = db_;
+        collection_drop.error = status.member_ptr();
+        collection_drop.id = collection_;
+        collection_drop.mode = ukv_drop_keys_vals_k;
         ukv_collection_drop(&collection_drop);
         return status;
     }
 
     status_t drop() noexcept {
         status_t status;
-        ukv_collection_drop_t collection_drop {
-            .db = db_,
-            .error = status.member_ptr(),
-            .id = collection_,
-            .mode = ukv_drop_keys_vals_handle_k,
-        };
+        ukv_collection_drop_t collection_drop {};
+        collection_drop.db = db_;
+        collection_drop.error = status.member_ptr();
+        collection_drop.id = collection_;
+        collection_drop.mode = ukv_drop_keys_vals_handle_k;
         ukv_collection_drop(&collection_drop);
         return status;
     }
