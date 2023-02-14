@@ -177,8 +177,8 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
     }
 }
 
-void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
-    ukv_snapshot_list_t& c = *c_ptr;
+void ukv_snapshots_list(ukv_snapshots_list_t* c_ptr) {
+    ukv_snapshots_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need outputs!");
 

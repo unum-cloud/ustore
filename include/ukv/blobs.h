@@ -270,7 +270,7 @@ typedef struct ukv_read_t {
     ukv_transaction_t transaction;
     /**
      * @brief The snapshot captures a view of the database at the time it's created.
-     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     * @see `ukv_snapshots_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
      */
     ukv_snapshot_t snapshot;
     /**
@@ -428,7 +428,7 @@ typedef struct ukv_scan_t {
     ukv_transaction_t transaction;
     /**
      * @brief A snapshot captures a point-in-time view of the DB at the time it's created.
-     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     * @see `ukv_snapshots_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
      */
     ukv_snapshot_t snapshot;
     /**
@@ -572,7 +572,7 @@ typedef struct ukv_sample_t {
     ukv_transaction_t transaction;
     /**
      * @brief The snapshot captures a view of the database at the time it's created.
-     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     * @see `ukv_snapshots_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
      */
     ukv_snapshot_t snapshot;
     /**
@@ -700,7 +700,7 @@ typedef struct ukv_measure_t {
     ukv_transaction_t transaction;
     /**
      * @brief A snapshot captures a point-in-time view of the DB at the time it's created.
-     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     * @see `ukv_snapshots_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
      */
     ukv_snapshot_t snapshot;
     /**
