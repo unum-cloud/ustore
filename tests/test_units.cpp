@@ -643,6 +643,42 @@ TEST(db, transaction_snapshot_isolation) {
 
     EXPECT_TRUE(db.clear());
 }
+TEST(db, snapshots_list) {
+    if (!ukv_supports_snapshots_k)
+        return;
+
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    auto snap_1 = *db.snapshot();
+    auto snapshots = snap_1.snapshots();
+    auto snaps = *snapshots;
+
+    EXPECT_EQ(snaps.size(), 1u);
+
+    auto snap_2 = *db.snapshot();
+    snapshots = snap_2.snapshots();
+    snaps = *snapshots;
+    EXPECT_EQ(snaps.size(), 2u);
+
+    auto snap_3 = *db.snapshot();
+    snapshots = snap_3.snapshots();
+    snaps = *snapshots;
+
+    EXPECT_EQ(snaps.size(), 3u);
+
+    snap_1 = *db.snapshot();
+    snapshots = snap_1.snapshots();
+    snaps = *snapshots;
+    EXPECT_EQ(snaps.size(), 3u);
+
+    db.clear();
+
+    snapshots = snap_1.snapshots();
+    snaps = *snapshots;
+    EXPECT_EQ(snaps.size(), 0u);
+}
 
 TEST(db, transaction_erase_missing) {
     if (!ukv_supports_transactions_k)
