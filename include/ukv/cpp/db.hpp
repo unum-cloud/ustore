@@ -19,6 +19,7 @@
 
 namespace unum::ukv {
 
+using snapshots_list_t = ptr_range_gt<ukv_snapshot_t>;
 struct collections_list_t {
     ptr_range_gt<ukv_collection_t> ids;
     strings_tape_iterator_t names;
@@ -140,6 +141,23 @@ class context_t : public std::enable_shared_from_this<context_t> {
         collections_list_t result;
         result.ids = {ids, ids + count};
         result.names = {count, names};
+        return {std::move(status), std::move(result)};
+    }
+
+    expected_gt<snapshots_list_t> snapshots() noexcept {
+        ukv_size_t count = 0;
+        ukv_str_span_t names = nullptr;
+        ukv_snapshot_t* ids = nullptr;
+        status_t status;
+        ukv_snapshots_list_t snapshots_list {};
+        snapshots_list.db = db_;
+        snapshots_list.error = status.member_ptr();
+        snapshots_list.arena = arena_.member_ptr();
+        snapshots_list.count = &count;
+        snapshots_list.ids = &ids;
+
+        ukv_snapshots_list(&snapshots_list);
+        snapshots_list_t result = {ids, ids + count};
         return {std::move(status), std::move(result)};
     }
 
