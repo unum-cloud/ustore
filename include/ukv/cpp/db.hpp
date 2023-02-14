@@ -382,12 +382,28 @@ class database_t : public std::enable_shared_from_this<database_t> {
     status_t clear() noexcept {
         auto context = context_t {db_, nullptr};
 
+        status_t status;
+
+        // Remove snapshots
+        auto maybe_snaps = context.snapshots();
+        auto snaps = *maybe_snaps;
+
+        ukv_snapshot_drop_t snapshot_drop {};
+        snapshot_drop.db = db_;
+        snapshot_drop.error = status.member_ptr();
+
+        for (auto id : snaps) {
+            snapshot_drop.snapshot = id;
+            ukv_snapshot_drop(&snapshot_drop);
+            if (!status)
+                return status;
+        }
+
         // Remove named collections
         auto maybe_cols = context.collections();
         if (!maybe_cols)
             return maybe_cols.release_status();
 
-        status_t status;
         auto cols = *maybe_cols;
         ukv_collection_drop_t collection_drop {};
         collection_drop.db = db_;
