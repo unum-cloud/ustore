@@ -246,6 +246,9 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
+    if (!snap.snapshot)
+        return;
+
     db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
 

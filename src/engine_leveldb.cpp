@@ -231,6 +231,9 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+    if (!snap.snapshot)
+        return;
+
     db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
 
