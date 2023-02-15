@@ -75,7 +75,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
             .snapshot = snap_,
         };
         ukv_snapshot_drop(&snap_drop);
-        snap_ = {};
+        snap_ = 0;
     }
 
     inline ukv_database_t db() const noexcept { return db_; }
