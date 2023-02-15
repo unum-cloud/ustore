@@ -673,11 +673,53 @@ TEST(db, snapshots_list) {
     snaps = *snapshots;
     EXPECT_EQ(snaps.size(), 3u);
 
-    db.clear();
+    EXPECT_TRUE(db.clear());
 
     snapshots = snap_1.snapshots();
     snaps = *snapshots;
     EXPECT_EQ(snaps.size(), 0u);
+
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, transaction_with_snapshot) {
+    if (!ukv_supports_snapshots_k)
+        return;
+
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    triplet_t triplet;
+    triplet_t triplet_same_v;
+    triplet_same_v.vals = {'D', 'D', 'D'};
+
+    blobs_collection_t collection = db.main();
+    auto collection_ref = collection[triplet.keys];
+
+    check_length(collection_ref, ukv_length_missing_k);
+    round_trip(collection_ref, triplet);
+
+    auto snap = *db.snapshot();
+    auto snap_ref = snap[triplet.keys];
+    check_equalities(snap_ref, triplet);
+
+    round_trip(collection_ref, triplet_same_v);
+
+    transaction_t txn = *db.transact();
+    auto txn_ref_1 = txn[triplet.keys];
+    check_equalities(txn_ref_1, triplet_same_v);
+
+    txn.set_snapshot(snap.snap());
+    auto txn_ref_2 = txn[triplet.keys];
+    check_equalities(txn_ref_2, triplet);
+
+    snap = *db.snapshot();
+    txn.set_snapshot(snap.snap());
+
+    auto txn_ref_3 = txn[triplet.keys];
+    check_equalities(txn_ref_3, triplet_same_v);
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, transaction_erase_missing) {
