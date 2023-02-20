@@ -25,6 +25,7 @@ embedded_blobs_t read_attributes( //
     docs_read.db = collection.db();
     docs_read.error = status.member_ptr();
     docs_read.transaction = collection.txn();
+    docs_read.snapshot = collection.snap();
     docs_read.arena = collection.member_arena();
     docs_read.type = ukv_doc_field_json_k;
     docs_read.tasks_count = count;

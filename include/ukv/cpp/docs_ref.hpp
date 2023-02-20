@@ -299,6 +299,7 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t
     docs_read.db = db_;
     docs_read.error = status.member_ptr();
     docs_read.transaction = transaction_;
+    docs_read.snapshot = snapshot_;
     docs_read.arena = arena_;
     docs_read.options = options;
     docs_read.type = type;
@@ -407,6 +408,7 @@ expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool watch) noexcept 
     docs_gist.db = db_;
     docs_gist.error = status.member_ptr();
     docs_gist.transaction = transaction_;
+    docs_gist.snapshot = snapshot_;
     docs_gist.arena = arena_;
     docs_gist.options = options;
     docs_gist.docs_count = count;
@@ -447,6 +449,7 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layou
     docs_gather.db = db_;
     docs_gather.error = status.member_ptr();
     docs_gather.transaction = transaction_;
+    docs_gather.snapshot = snapshot_;
     docs_gather.arena = arena_;
     docs_gather.options = options;
     docs_gather.docs_count = count;
