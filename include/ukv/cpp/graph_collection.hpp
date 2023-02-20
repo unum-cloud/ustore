@@ -208,6 +208,7 @@ class graph_collection_t {
         graph_find_edges.db = db_;
         graph_find_edges.error = status.member_ptr();
         graph_find_edges.transaction = transaction_;
+        graph_find_edges.snapshot = snapshot_;
         graph_find_edges.arena = arena_;
         graph_find_edges.options = options;
         graph_find_edges.tasks_count = vertices.count();
@@ -308,6 +309,7 @@ class graph_collection_t {
         graph_find_edges.db = db_;
         graph_find_edges.error = status.member_ptr();
         graph_find_edges.transaction = transaction_;
+        graph_find_edges.snapshot = snapshot_;
         graph_find_edges.arena = arena_;
         graph_find_edges.options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
         graph_find_edges.tasks_count = 1;
@@ -362,6 +364,7 @@ class graph_collection_t {
         graph_find_edges.db = db_;
         graph_find_edges.error = status.member_ptr();
         graph_find_edges.transaction = transaction_;
+        graph_find_edges.snapshot = snapshot_;
         graph_find_edges.arena = arena_;
         graph_find_edges.options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
         graph_find_edges.tasks_count = vertices.count();

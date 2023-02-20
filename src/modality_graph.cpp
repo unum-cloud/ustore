@@ -307,6 +307,7 @@ template <bool export_center_ak = true, bool export_neighbor_ak = true, bool exp
 void export_edge_tuples( //
     ukv_database_t const c_db,
     ukv_transaction_t const c_transaction,
+    ukv_snapshot_t const c_snapshot,
     ukv_size_t const c_vertices_count,
 
     ukv_collection_t const* c_collections,
@@ -334,6 +335,7 @@ void export_edge_tuples( //
     read.db = c_db;
     read.error = c_error;
     read.transaction = c_transaction;
+    read.snapshot = c_snapshot;
     read.arena = arena;
     read.options = c_options;
     read.tasks_count = c_vertices_count;
@@ -600,6 +602,7 @@ void ukv_graph_find_edges(ukv_graph_find_edges_t* c_ptr) {
     return func( //
         c.db,
         c.transaction,
+        c.snapshot,
         c.tasks_count,
         c.collections,
         c.collections_stride,
@@ -739,6 +742,7 @@ void ukv_graph_remove_vertices(ukv_graph_remove_vertices_t* c_ptr) {
     export_edge_tuples<false, true, false>( //
         c.db,
         c.transaction,
+        0,
         c.tasks_count,
         c.collections,
         c.collections_stride,
