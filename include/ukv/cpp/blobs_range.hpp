@@ -376,11 +376,11 @@ class blobs_range_t {
   public:
     blobs_range_t(ukv_database_t db,
                   ukv_transaction_t txn = nullptr,
-                  ukv_snapshot_t snap_ = 0,
+                  ukv_snapshot_t snap = 0,
                   ukv_collection_t collection = ukv_collection_main_k,
                   ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
                   ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) noexcept
-        : db_(db), txn_(txn), collection_(collection), min_key_(min_key), max_key_(max_key) {}
+        : db_(db), txn_(txn), snap_(snap), collection_(collection), min_key_(min_key), max_key_(max_key) {}
 
     blobs_range_t(blobs_range_t&&) = default;
     blobs_range_t& operator=(blobs_range_t&&) = default;
