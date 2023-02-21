@@ -103,9 +103,18 @@ class blobs_ref_gt {
         return any_get<value_t>(!watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
     }
 
+    expected_gt<value_t> value(bool watch = true) const noexcept {
+        return any_get<value_t>(!watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
+    }
+
     operator expected_gt<value_t>() noexcept { return value(); }
+    operator expected_gt<value_t>() const noexcept { return value(); }
 
     expected_gt<length_t> length(bool watch = true) noexcept {
+        return any_get<length_t>(!watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
+    }
+
+    expected_gt<length_t> length(bool watch = true) const noexcept {
         return any_get<length_t>(!watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
     }
 
@@ -114,6 +123,10 @@ class blobs_ref_gt {
      * ! Related values may be empty strings.
      */
     expected_gt<present_t> present(bool watch = true) noexcept {
+        return any_get<present_t>(!watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
+    }
+
+    expected_gt<present_t> present(bool watch = true) const noexcept {
         return any_get<present_t>(!watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
     }
 

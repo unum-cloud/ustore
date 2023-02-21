@@ -45,7 +45,7 @@ class blobs_collection_t {
     ukv_collection_t collection_ {ukv_collection_main_k};
     ukv_transaction_t txn_ {nullptr};
     ukv_snapshot_t snap_ {};
-    any_arena_t arena_ {nullptr};
+    mutable any_arena_t arena_ {nullptr};
 
   public:
     inline blobs_collection_t() noexcept : arena_(nullptr) {}
@@ -153,6 +153,13 @@ class blobs_collection_t {
         return at(strided_range(keys));
     }
 
+    inline blobs_ref_gt<places_arg_t> operator[](std::initializer_list<ukv_key_t> keys) const noexcept {
+        return at(keys);
+    }
+    inline blobs_ref_gt<places_arg_t> at(std::initializer_list<ukv_key_t> keys) const noexcept { //
+        return const_cast<blobs_collection_t&>(*this).at(keys);
+    }
+
     inline blobs_ref_gt<places_arg_t> operator[](keys_view_t keys) noexcept { return at(keys); }
     inline blobs_ref_gt<places_arg_t> at(keys_view_t keys) noexcept {
         places_arg_t arg;
@@ -160,6 +167,11 @@ class blobs_collection_t {
         arg.keys_begin = keys.begin();
         arg.count = keys.size();
         return {db_, txn_, snap_, {std::move(arg)}, arena_};
+    }
+
+    inline blobs_ref_gt<places_arg_t> operator[](keys_view_t keys) const noexcept { return at(keys); }
+    inline blobs_ref_gt<places_arg_t> at(keys_view_t keys) const noexcept {
+        return const_cast<blobs_collection_t&>(*this).at(keys);
     }
 
     template <typename keys_arg_at>
@@ -191,6 +203,16 @@ class blobs_collection_t {
             using result_t = blobs_ref_gt<locations_t>;
             return result_t {db_, txn_, snap_, locations_t {std::forward<keys_arg_at>(keys), collection_}, arena_};
         }
+    }
+
+    template <typename keys_arg_at>
+    auto operator[](keys_arg_at&& keys) const noexcept { //
+        return at(std::forward<keys_arg_at>(keys));
+    }
+
+    template <typename keys_arg_at>
+    auto at(keys_arg_at&& keys) const noexcept { //
+        return const_cast<blobs_collection_t&>(*this).at(keys);
     }
 };
 
