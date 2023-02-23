@@ -430,7 +430,6 @@ void ukv::wrap_pandas(py::module& m) {
                                          &writer);
 
         auto table = arrow::Table::FromRecordBatches(batch->schema(), {batch}).ValueOrDie();
-        // fmt::print(table->T)
         if (!(writer->WriteTable(*table, batch->num_rows()).ok()))
             throw std::runtime_error("Write Failure");
 
