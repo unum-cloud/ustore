@@ -387,8 +387,11 @@ void read_one( //
     ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
-    if (snap_ptr)
+    if (snap_ptr) {
+        auto it = db.snapshots.find(reinterpret_cast<std::size_t>(snap_ptr));
+        return_error_if_m(it != db.snapshots.end(), c_error, args_wrong_k, "The snapshot does'nt exist!");
         options.snapshot = snap_ptr->snapshot;
+    }
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
 
@@ -427,8 +430,11 @@ void read_many( //
     ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
-    if (snap_ptr)
+    if (snap_ptr) {
+        auto it = db.snapshots.find(reinterpret_cast<std::size_t>(snap_ptr));
+        return_error_if_m(it != db.snapshots.end(), c_error, args_wrong_k, "The snapshot does'nt exist!");
         options.snapshot = snap_ptr->snapshot;
+    }
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
     std::vector<rocks_collection_t*> cols(places.count);
