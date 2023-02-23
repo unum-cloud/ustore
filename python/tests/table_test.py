@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.csv as csv
+import pyarrow.dataset as ds
 import ukv.umem as ukv
 pa.get_include()
 
@@ -77,3 +79,24 @@ def test_table():
     assert docs[1] == {'name': 'Jack', 'lastname': 'Fridman', 'tweets': 2}
     assert docs[2] == {'name': 'Charls', 'lastname': 'Huberman', 'tweets': 4}
     assert docs[3] == {'name': 'Sam', 'lastname': 'Rogan', 'tweets': 5}
+
+    # To CSV
+    table.astype({'name': 'str', 'tweets': 'int64'}
+                 ).to_csv("tmp/pandas.csv")
+
+    df = table.astype({'name': 'str', 'tweets': 'int64'}
+                      ).to_arrow()
+
+    exported_df = csv.read_csv("tmp/pandas.csv").to_batches()[0]
+    assert df == exported_df
+
+    # To Parquet
+    table.astype({'name': 'str', 'tweets': 'int32'}
+                 ).to_parquet("tmp/pandas.parquet")
+
+    df = table.astype({'name': 'str', 'tweets': 'int32'}
+                      ).to_arrow()
+
+    exported_df = next(ds.dataset("tmp/pandas.parquet",
+                       format="parquet").to_batches())
+    assert df == exported_df
