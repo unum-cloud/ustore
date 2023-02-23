@@ -722,6 +722,36 @@ TEST(db, transaction_with_snapshot) {
     EXPECT_TRUE(db.clear());
 }
 
+TEST(db, set_wrong_snapshot) {
+    if (!ukv_supports_transactions_k)
+        return;
+
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    triplet_t triplet;
+    blobs_collection_t collection = db.main();
+    auto collection_ref = collection[triplet.keys];
+
+    check_length(collection_ref, ukv_length_missing_k);
+    round_trip(collection_ref, triplet);
+
+    auto snap = *db.snapshot();
+
+    auto snapshots = snap.snapshots();
+    auto snaps = *snapshots;
+    EXPECT_EQ(snaps.size(), 1u);
+
+    ukv_snapshot_t wrong_snap = 1u;
+    snap.set_snapshot(wrong_snap);
+
+    auto snap_ref = snap[triplet.keys];
+    check_equalities(snap_ref, triplet);
+
+    EXPECT_TRUE(db.clear());
+}
+
 TEST(db, transaction_erase_missing) {
     if (!ukv_supports_transactions_k)
         return;
