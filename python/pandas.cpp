@@ -429,10 +429,7 @@ void ukv::wrap_pandas(py::module& m) {
                 str.erase(std::remove_if(str.begin(), str.end(), [](auto c) { return std::isspace(c) || c == '\x00'; }),
                           str.end());
                 result.reserve(result.size() + str.size() + 7);
-
-                result += "\"";
-                result += batch->column_name(i);
-                result += "\":";
+                fmt::format_to(std::back_inserter(result), "\"{}\":", batch->column_name(i));
 
                 auto key_index = 0;
                 auto pos = str.find("[");
@@ -444,9 +441,7 @@ void ukv::wrap_pandas(py::module& m) {
                     str.replace(pos, 1, fmt::format(",\"{}\":", keys_found[key_index]));
                     pos = str.find(",", pos + 1);
                 }
-
-                pos = str.find("]");
-                str.replace(pos, 1, fmt::format("}},", keys_found[key_index]));
+                str.replace(str.size() - 1, 1, fmt::format("}},", keys_found[key_index]));
                 result += str;
             }
             result[result.size() - 1] = '}';
