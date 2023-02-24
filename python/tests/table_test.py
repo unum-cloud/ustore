@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -12,15 +13,15 @@ def test_table():
     col = db.main
 
     docs = col.docs
-    docs[1] = {'name': 'Lex', 'lastname': 'Fridman', 'tweets': 2221}
-    docs[2] = {'name': 'Andrew', 'lastname': 'Huberman', 'tweets': 3935}
-    docs[3] = {'name': 'Joe', 'lastname': 'Rogan', 'tweets': 45900}
+    docs[0] = {'name': 'Lex', 'lastname': 'Fridman', 'tweets': 2221}
+    docs[1] = {'name': 'Andrew', 'lastname': 'Huberman', 'tweets': 3935}
+    docs[2] = {'name': 'Joe', 'lastname': 'Rogan', 'tweets': 45900}
 
     table = col.table
 
     # Tweets
     df_tweets = pd.DataFrame({'tweets': [2221, 3935, 45900]}, dtype=np.int32)
-    assert table[['tweets']].astype('int32').loc([1, 2, 3]).to_arrow() \
+    assert table[['tweets']].astype('int32').loc([0, 1, 2]).to_arrow() \
         == pa.RecordBatch.from_pandas(df_tweets)
 
     # Names
@@ -75,12 +76,12 @@ def test_table():
 
     modifier = pa.RecordBatch.from_arrays([tweets, names], names=column_names)
 
-    table.loc(slice(1, 3)).update(modifier)
-    assert docs[1] == {'name': 'Jack', 'lastname': 'Fridman', 'tweets': 2}
-    assert docs[2] == {'name': 'Charls', 'lastname': 'Huberman', 'tweets': 4}
-    assert docs[3] == {'name': 'Sam', 'lastname': 'Rogan', 'tweets': 5}
+    table.loc(slice(0, 2)).update(modifier)
+    assert docs[0] == {'name': 'Jack', 'lastname': 'Fridman', 'tweets': 2}
+    assert docs[1] == {'name': 'Charls', 'lastname': 'Huberman', 'tweets': 4}
+    assert docs[2] == {'name': 'Sam', 'lastname': 'Rogan', 'tweets': 5}
 
-    # To CSV
+    # CSV
     table.astype({'name': 'str', 'tweets': 'int64'}
                  ).to_csv("tmp/pandas.csv")
 
@@ -90,7 +91,7 @@ def test_table():
     exported_df = csv.read_csv("tmp/pandas.csv").to_batches()[0]
     assert df == exported_df
 
-    # To Parquet
+    # Parquet
     table.astype({'name': 'str', 'tweets': 'int32'}
                  ).to_parquet("tmp/pandas.parquet")
 
@@ -100,3 +101,15 @@ def test_table():
     exported_df = next(ds.dataset("tmp/pandas.parquet",
                        format="parquet").to_batches())
     assert df == exported_df
+
+    # JSON
+    expected_json = '''{"name":{"0":"Jack","1":"Charls","2":"Sam"},"tweets":{"0":2,"1":4,"2":5}}'''
+    exported_json = table.to_json()
+    assert exported_json == expected_json
+
+    table.to_json("tmp/pandas.json")
+    expected_json = json.loads(expected_json)
+    f = open("tmp/pandas.json")
+    exported_json = json.load(f)
+    f.close()
+    assert exported_json == expected_json
