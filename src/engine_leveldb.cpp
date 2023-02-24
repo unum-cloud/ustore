@@ -367,6 +367,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
+        std::lock_guard<std::mutex> locker(db.mutex);
         if (c.snapshot) {
             auto it = db.snapshots.find(c.snapshot);
             return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "The snapshot does'nt exist!");
@@ -421,7 +422,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     // 2. Fetch the data
     leveldb::ReadOptions options;
     options.fill_cache = false;
-
+    std::lock_guard<std::mutex> locker(db.mutex);
     if (c.snapshot) {
         auto it = db.snapshots.find(c.snapshot);
         return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "The snapshot does'nt exist!");
@@ -483,7 +484,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     // 2. Fetch the data
     leveldb::ReadOptions options;
     options.fill_cache = false;
-
+    std::lock_guard<std::mutex> locker(db.mutex);
     if (c.snapshot) {
         auto it = db.snapshots.find(c.snapshot);
         return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "The snapshot does'nt exist!");

@@ -387,6 +387,7 @@ void read_one( //
     ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
+    std::lock_guard<std::mutex> locker(db.mutex);
     if (snap_ptr) {
         auto it = db.snapshots.find(reinterpret_cast<std::size_t>(snap_ptr));
         return_error_if_m(it != db.snapshots.end(), c_error, args_wrong_k, "The snapshot does'nt exist!");
@@ -429,6 +430,7 @@ void read_many( //
     value_enumerator_at enumerator,
     ukv_error_t* c_error) noexcept(false) {
 
+    std::lock_guard<std::mutex> locker(db.mutex);
     rocksdb::ReadOptions options;
     if (snap_ptr) {
         auto it = db.snapshots.find(reinterpret_cast<std::size_t>(snap_ptr));
