@@ -1509,6 +1509,10 @@ void read_modify_write( //
     yyjson_alc allocator = wrap_allocator(arena);
     auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, value_view_t binary_doc) {
         json_t parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
+        if (!contents[task_idx]) {
+            any_dump({nullptr, parsed.mut_handle->root}, internal_format_k, arena, growing_tape, c_error);
+            return;
+        }
 
         // This error is extremely unlikely, as we have previously accepted the data into the store.
         return_if_error_m(c_error);
