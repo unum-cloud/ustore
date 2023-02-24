@@ -1,3 +1,4 @@
+#include <fmt/os.h>
 #include <fmt/format.h>
 
 #include <arrow/io/api.h>
@@ -416,7 +417,46 @@ void ukv::wrap_pandas(py::module& m) {
     });
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_json.html
-    // df.def("to_json", [](py_table_collection_t& df) {});
+    df.def(
+        "to_json",
+        [](py_table_collection_t& df, std::string const& path) {
+            auto batch = materialize(df);
+            auto& keys_found = std::get<std::vector<ukv_key_t>>(df.rows_keys);
+
+            std::string result = "{";
+            for (std::size_t i = 0; i != batch->num_columns(); ++i) {
+                auto str = batch->column(i)->ToString();
+                str.erase(std::remove_if(str.begin(), str.end(), [](auto c) { return std::isspace(c) || c == '\x00'; }),
+                          str.end());
+                result.reserve(result.size() + str.size() + 7);
+
+                result += "\"";
+                result += batch->column_name(i);
+                result += "\":";
+
+                auto key_index = 0;
+                auto pos = str.find("[");
+                str.replace(pos, 1, fmt::format("{{\"{}\":", keys_found[key_index]));
+
+                pos = str.find(",", pos);
+                while (pos != std::string::npos) {
+                    ++key_index;
+                    str.replace(pos, 1, fmt::format(",\"{}\":", keys_found[key_index]));
+                    pos = str.find(",", pos + 1);
+                }
+
+                pos = str.find("]");
+                str.replace(pos, 1, fmt::format("}},", keys_found[key_index]));
+                result += str;
+            }
+            result[result.size() - 1] = '}';
+
+            if (!path.size())
+                return py::cast(result);
+            fmt::output_file(path).print("{}", result);
+            return py::object(py::cast<py::none>(Py_None));
+        },
+        py::arg("path") = "");
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_parquet.html
     df.def("to_parquet", [](py_table_collection_t& df, std::string const& path) {
@@ -471,8 +511,10 @@ void ukv::wrap_pandas(py::module& m) {
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.replace.html
     // df.def("replace", [](py_table_collection_t& df) {});
+
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.merge.html
-    // df.def("merge", [](py_table_collection_t& df) {});
+    // df.def("merge", [](py_table_collection_t& df, std::shared_ptr<arrow::RecordBatch>& batch_to_merge) {});
+
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.join.html
     // df.def("join", [](py_table_collection_t& df) {});
 }
