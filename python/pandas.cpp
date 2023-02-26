@@ -1,7 +1,13 @@
+#include <fmt/os.h>
 #include <fmt/format.h>
 
+#include <arrow/io/api.h>
+#include <arrow/csv/api.h>
+#include <arrow/ipc/api.h>
 #include <arrow/c/bridge.h>
+#include <arrow/util/type_fwd.h>
 #include <arrow/python/pyarrow.h>
+#include <parquet/arrow/writer.h>
 
 #define ARROW_C_DATA_INTERFACE 1
 #define ARROW_C_STREAM_INTERFACE 1
@@ -128,7 +134,7 @@ void correct_table(docs_table_t& table) {
     }
 }
 
-static py::object materialize(py_table_collection_t& df) {
+static std::shared_ptr<arrow::RecordBatch> materialize(py_table_collection_t& df) {
 
     // Extract the keys, if not explicitly defined
     if (std::holds_alternative<std::monostate>(df.rows_keys))
@@ -223,13 +229,8 @@ static py::object materialize(py_table_collection_t& df) {
         status.throw_unhandled();
     }
 
-    // Pass C to C++ and then to Python:
-    // https://github.com/apache/arrow/blob/master/cpp/src/arrow/c/bridge.h#L138
-    arrow::Result<std::shared_ptr<arrow::RecordBatch>> table_arrow =
-        arrow::ImportRecordBatch(&c_arrow_array, &c_arrow_schema);
-    // https://github.com/apache/arrow/blob/a270afc946398a0279b1971a315858d8b5f07e2d/cpp/src/arrow/python/pyarrow.h#L52
-    PyObject* table_python = arrow::py::wrap_batch(table_arrow.ValueOrDie());
-    return py::reinterpret_steal<py::object>(table_python);
+    // https://github.com/apache/arrow/blob/e0e740bd7a24de68262c0b7e47eeed62a6cbd2a0/cpp/src/arrow/c/bridge.h#L163
+    return arrow::ImportRecordBatch(&c_arrow_array, &c_arrow_schema).ValueOrDie();
 }
 
 template <typename array_type_at>
@@ -408,14 +409,83 @@ void ukv::wrap_pandas(py::module& m) {
     // Addresses may be: specific IDs or a slice.
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.loc.html#pandas.DataFrame.loc
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.iloc.html#pandas.DataFrame.iloc
-    df.def("to_arrow", &materialize);
+    df.def("to_arrow", [](py_table_collection_t& df) {
+        auto record_batch = materialize(df);
+        // https://github.com/apache/arrow/blob/a270afc946398a0279b1971a315858d8b5f07e2d/cpp/src/arrow/python/pyarrow.h#L52
+        PyObject* table_python = arrow::py::wrap_batch(record_batch);
+        return py::reinterpret_steal<py::object>(table_python);
+    });
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_json.html
-    // df.def("to_json", [](py_table_collection_t& df, py::object const& path_or_buf) {});
+    df.def(
+        "to_json",
+        [](py_table_collection_t& df, std::string const& path) {
+            auto batch = materialize(df);
+            auto& keys_found = std::get<std::vector<ukv_key_t>>(df.rows_keys);
+
+            std::string result = "{";
+            for (std::size_t i = 0; i != batch->num_columns(); ++i) {
+                auto str = batch->column(i)->ToString();
+                str.erase(std::remove_if(str.begin(), str.end(), [](auto c) { return std::isspace(c) || c == '\x00'; }),
+                          str.end());
+                result.reserve(result.size() + str.size() + 7);
+                fmt::format_to(std::back_inserter(result), "\"{}\":", batch->column_name(i));
+
+                auto key_index = 0;
+                auto pos = str.find("[");
+                str.replace(pos, 1, fmt::format("{{\"{}\":", keys_found[key_index]));
+
+                pos = str.find(",", pos);
+                while (pos != std::string::npos) {
+                    ++key_index;
+                    str.replace(pos, 1, fmt::format(",\"{}\":", keys_found[key_index]));
+                    pos = str.find(",", pos + 1);
+                }
+                str.replace(str.size() - 1, 1, fmt::format("}},", keys_found[key_index]));
+                result += str;
+            }
+            result[result.size() - 1] = '}';
+
+            if (!path.size())
+                return py::cast(result);
+            fmt::output_file(path).print("{}", result);
+            return py::object(py::cast<py::none>(Py_None));
+        },
+        py::arg("path") = "");
+
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_parquet.html
-    // df.def("to_parquet", [](py_table_collection_t& df, py::object const& path_or_buf) {});
+    df.def("to_parquet", [](py_table_collection_t& df, std::string const& path) {
+        auto batch = materialize(df);
+        auto outfile = arrow::io::FileOutputStream::Open(path).ValueOrDie();
+        std::unique_ptr<parquet::arrow::FileWriter> writer;
+        parquet::arrow::FileWriter::Open(*batch->schema(),
+                                         arrow::default_memory_pool(),
+                                         outfile,
+                                         parquet::default_writer_properties(),
+                                         &writer);
+
+        auto table = arrow::Table::FromRecordBatches(batch->schema(), {batch}).ValueOrDie();
+        if (!(writer->WriteTable(*table, batch->num_rows()).ok()))
+            throw std::runtime_error("Write Failure");
+
+        if (!writer->Close().ok())
+            throw std::runtime_error("Close Failure");
+    });
+
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_csv.html
-    // df.def("to_csv", [](py_table_collection_t& df, py::object const& path_or_buf) {});
+    df.def("to_csv", [](py_table_collection_t& df, std::string const& path) {
+        auto batch = materialize(df);
+        auto output = arrow::io::FileOutputStream::Open(path).ValueOrDie();
+
+        auto writer =
+            arrow::csv::MakeCSVWriter(output, batch->schema(), arrow::csv::WriteOptions::Defaults()).ValueOrDie();
+        if (!writer->WriteRecordBatch(*batch).ok())
+            throw std::runtime_error("Write Failure");
+
+        if (!writer->Close().ok() || !writer->Close().ok())
+            throw std::runtime_error("Close Failure");
+    });
+
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_numpy.html
     // df.def("to_numpy", [](py_table_collection_t& df, py::handle mat) {});
 
@@ -436,8 +506,10 @@ void ukv::wrap_pandas(py::module& m) {
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.replace.html
     // df.def("replace", [](py_table_collection_t& df) {});
+
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.merge.html
-    // df.def("merge", [](py_table_collection_t& df) {});
+    // df.def("merge", [](py_table_collection_t& df, std::shared_ptr<arrow::RecordBatch>& batch_to_merge) {});
+
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.join.html
     // df.def("join", [](py_table_collection_t& df) {});
 }

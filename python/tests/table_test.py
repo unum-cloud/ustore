@@ -1,24 +1,28 @@
+import json
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.csv as csv
+import pyarrow.dataset as ds
 import ukv.umem as ukv
 pa.get_include()
 
 
-def test_table():
-    db = ukv.DataBase()
+def create_table(db):
     col = db.main
-
     docs = col.docs
-    docs[1] = {'name': 'Lex', 'lastname': 'Fridman', 'tweets': 2221}
-    docs[2] = {'name': 'Andrew', 'lastname': 'Huberman', 'tweets': 3935}
-    docs[3] = {'name': 'Joe', 'lastname': 'Rogan', 'tweets': 45900}
+    docs[0] = {'name': 'Lex', 'lastname': 'Fridman', 'tweets': 2221}
+    docs[1] = {'name': 'Andrew', 'lastname': 'Huberman', 'tweets': 3935}
+    docs[2] = {'name': 'Joe', 'lastname': 'Rogan', 'tweets': 45900}
+    return col.table
 
-    table = col.table
 
+def test_to_arrow():
+    db = ukv.DataBase()
+    table = create_table(db)
     # Tweets
     df_tweets = pd.DataFrame({'tweets': [2221, 3935, 45900]}, dtype=np.int32)
-    assert table[['tweets']].astype('int32').loc([1, 2, 3]).to_arrow() \
+    assert table[['tweets']].astype('int32').loc([0, 1, 2]).to_arrow() \
         == pa.RecordBatch.from_pandas(df_tweets)
 
     # Names
@@ -66,14 +70,81 @@ def test_table():
     assert table.astype({'name': 'bytes', 'tweets': 'int32', 'lastname': 'bytes'}
                         ).to_arrow() == pa.RecordBatch.from_pandas(all, schema)
 
-    # Update
+    db.clear()
+
+
+def test_update():
+    db = ukv.DataBase()
+    col = db.main
+    docs = col.docs
+    table = col.table
+
+    docs[0] = {'name': 'Lex', 'lastname': 'Fridman', 'tweets': 2221}
+    docs[1] = {'name': 'Andrew', 'lastname': 'Huberman', 'tweets': 3935}
+    docs[2] = {'name': 'Joe', 'lastname': 'Rogan', 'tweets': 45900}
+
     tweets = pa.array([2, 4, 5])
     names = pa.array(["Jack", "Charls", "Sam"])
     column_names = ["tweets", "name"]
 
     modifier = pa.RecordBatch.from_arrays([tweets, names], names=column_names)
+    table.loc(slice(0, 2)).update(modifier)
 
-    table.loc(slice(1, 3)).update(modifier)
-    assert docs[1] == {'name': 'Jack', 'lastname': 'Fridman', 'tweets': 2}
-    assert docs[2] == {'name': 'Charls', 'lastname': 'Huberman', 'tweets': 4}
-    assert docs[3] == {'name': 'Sam', 'lastname': 'Rogan', 'tweets': 5}
+    assert docs[0] == {'name': 'Jack', 'lastname': 'Fridman', 'tweets': 2}
+    assert docs[1] == {'name': 'Charls', 'lastname': 'Huberman', 'tweets': 4}
+    assert docs[2] == {'name': 'Sam', 'lastname': 'Rogan', 'tweets': 5}
+
+    db.clear()
+
+
+def test_csv():
+    db = ukv.DataBase()
+    table = create_table(db)
+    table.loc([0, 1])
+    table.astype({'name': 'str', 'tweets': 'int64'}
+                 ).to_csv("tmp/pandas.csv")
+
+    df = table.astype({'name': 'str', 'tweets': 'int64'}
+                      ).to_arrow()
+
+    exported_df = csv.read_csv("tmp/pandas.csv").to_batches()[0]
+    assert df == exported_df
+
+    db.clear()
+
+
+def test_parquet():
+    db = ukv.DataBase()
+    table = create_table(db)
+    table.loc([0, 1])
+    table.astype({'name': 'str', 'tweets': 'int32'}
+                 ).to_parquet("tmp/pandas.parquet")
+
+    df = table.astype({'name': 'str', 'tweets': 'int32'}
+                      ).to_arrow()
+
+    exported_df = next(ds.dataset("tmp/pandas.parquet",
+                       format="parquet").to_batches())
+    assert df == exported_df
+
+    db.clear()
+
+
+def test_json():
+    db = ukv.DataBase()
+    table = create_table(db)
+    table.loc([0, 1, 2])
+    table.astype({'name': 'str', 'tweets': 'int32'})
+
+    expected_json = '''{"name":{"0":"Lex","1":"Andrew","2":"Joe"},"tweets":{"0":2221,"1":3935,"2":45900}}'''
+    exported_json = table.to_json()
+    assert exported_json == expected_json
+
+    table.to_json("tmp/pandas.json")
+    expected_json = json.loads(expected_json)
+    f = open("tmp/pandas.json")
+    exported_json = json.load(f)
+    f.close()
+    assert exported_json == expected_json
+
+    db.clear()
