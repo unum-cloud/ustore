@@ -57,6 +57,15 @@ using chunked_array_t = std::shared_ptr<arrow::ChunkedArray>;
 using array_t = std::shared_ptr<arrow::Array>;
 using int_builder_t = arrow::NumericBuilder<arrow::Int64Type>;
 
+// Extensions formats
+enum ukv_dataset_ext_t {
+    parquet_k = 0,
+    csv_k,
+    ndjson_k,
+    unknown_k
+};
+using ext_t = ukv_dataset_ext_t;
+
 #pragma region - Helpers
 
 template <typename at>
@@ -657,6 +666,8 @@ void fields_parser( //
     }
 }
 
+#pragma endregion - Helpers
+
 #pragma region - Upserting
 
 void upsert_graph(ukv_graph_import_t& c, edges_t const& edges_src) {
@@ -701,8 +712,9 @@ void upsert_docs(ukv_docs_import_t& c, docs_t& docs) {
     ukv_docs_write(&docs_write);
 }
 
-#pragma region - Graph Begin
-#pragma region - Parsing with Apache Arrow
+#pragma endregion - Upserting
+
+#pragma region - Graph
 
 void parse_arrow_table(ukv_graph_import_t& c, ukv_size_t task_count, std::shared_ptr<arrow::Table> const& table) {
 
@@ -785,8 +797,6 @@ void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
     return_error_if_m(maybe_table.ok(), c.error, 0, "Can't read file");
     table = *maybe_table;
 }
-
-#pragma region - Parsing with SIMDJSON
 
 void import_ndjson_graph(ukv_graph_import_t& c, ukv_size_t task_count) noexcept {
 
@@ -891,7 +901,7 @@ void write_in_file_graph( //
     ptr_range_gt<ukv_key_t>& edges,
     parquet::StreamWriter& os,
     int handle,
-    int pcn) {
+    ext_t pcn) {
 
     ukv_size_t csv_idx = 0;
     ukv_key_t* data = nullptr;
@@ -907,9 +917,9 @@ void write_in_file_graph( //
     if (!c.edge_id_field) {
         data = ids.first;
         for (ukv_size_t idx = 0; idx < ids.second; idx += 3, ++csv_idx) {
-            if (pcn == 0)
+            if (pcn == parquet_k)
                 os << data[idx] << data[idx + 1] << parquet::EndRow;
-            else if (pcn == 1) {
+            else if (pcn == csv_k) {
                 sources[csv_idx] = data[idx];
                 targets[csv_idx] = data[idx + 1];
             }
@@ -927,9 +937,9 @@ void write_in_file_graph( //
     else {
         data = ids.first;
         for (ukv_size_t idx = 0; idx < ids.second; idx += 3, ++csv_idx) {
-            if (pcn == 0)
+            if (pcn == parquet_k)
                 os << data[idx] << data[idx + 1] << data[idx + 2] << parquet::EndRow;
-            else if (pcn == 1) {
+            else if (pcn == csv_k) {
                 sources[csv_idx] = data[idx];
                 targets[csv_idx] = data[idx + 1];
                 edges[csv_idx] = data[idx + 2];
@@ -1006,7 +1016,7 @@ void end_ndjson(int fd) {
 
 #pragma region - Main Functions(Graph)
 
-void ukv_graph_import(ukv_graph_import_t* c_ptr) {
+void ukv_graph_import(ukv_graph_import_t* c_ptr) noexcept(false) {
 
     ukv_graph_import_t& c = *c_ptr;
 
@@ -1034,7 +1044,7 @@ void ukv_graph_import(ukv_graph_import_t* c_ptr) {
     }
 }
 
-void ukv_graph_export(ukv_graph_export_t* c_ptr) {
+void ukv_graph_export(ukv_graph_export_t* c_ptr) noexcept(false) {
 
     ukv_graph_export_t& c = *c_ptr;
 
@@ -1045,8 +1055,8 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
     return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
 
     auto ext = c.paths_extension;
-    int pcn = strcmp_(ext, ".parquet") ? 0 : strcmp_(ext, ".csv") ? 1 : strcmp_(ext, ".ndjson") ? 2 : -1;
-    return_error_if_m(!(pcn == -1), c.error, 0, "Not supported format");
+    ext_t pcn = strcmp_(ext, ".parquet") ? parquet_k : strcmp_(ext, ".csv") ? csv_k : strcmp_(ext, ".ndjson") ? ndjson_k : unknown_k;
+    return_error_if_m(!(pcn == unknown_k), c.error, 0, "Not supported format");
 
     if (!c.arena)
         c.arena = arena_t(c.db).member_ptr();
@@ -1054,9 +1064,9 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
     parquet::StreamWriter os;
     int handle = 0;
 
-    if (pcn == 0)
+    if (pcn == parquet_k)
         make_parquet_graph(c, os);
-    else if (pcn == 2)
+    else if (pcn == ndjson_k)
         handle = make_ndjson(c);
 
     auto arena = linked_memory(c.arena, c.options, c.error);
@@ -1122,16 +1132,16 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) {
         status = stream.seek_to_next_batch();
         return_error_if_m(status, c.error, 0, "Invalid batch");
     }
-    if (pcn == 1)
+    if (pcn == csv_k)
         end_csv_graph(c, sources_builder, targets_builder, edges_builder);
-    else if (pcn == 2)
+    else if (pcn == ndjson_k)
         end_ndjson(handle);
 }
 
-#pragma region - Graph End
+#pragma endregion - Main Functions(Graph)
+#pragma endregion - Graph
 
-#pragma region - Docs Begin
-#pragma region - Parsing with Apache Arrow
+#pragma region - Docs
 
 void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const& table) {
 
@@ -1217,8 +1227,6 @@ void parse_arrow_table(ukv_docs_import_t& c, std::shared_ptr<arrow::Table> const
         values.clear();
     }
 }
-
-#pragma region - Parsing with SIMDJSON
 
 void import_whole_ndjson(ukv_docs_import_t& c, simdjson::ondemand::document_stream& docs) {
 
@@ -1323,7 +1331,7 @@ void export_whole_docs( //
     parquet::StreamWriter* os_ptr,
     val_t const& values,
     int handle,
-    int flag) {
+    ext_t pcn) {
 
     ptr_range_gt<ukv_char_t*>& docs_vec = *docs_ptr;
     ptr_range_gt<ukv_key_t>& keys_vec = *keys_ptr;
@@ -1344,12 +1352,12 @@ void export_whole_docs( //
         auto json = std::string(value.data(), value.size());
         json.pop_back();
 
-        if (flag == 0) {
+        if (pcn == parquet_k) {
             auto val = *iter;
             os << *iter << json.data();
             os << parquet::EndRow;
         }
-        else if (flag == 1) {
+        else if (pcn == csv_k) {
             keys_vec[idx] = *iter;
             docs_vec[idx] = arena.alloc<ukv_char_t>(json.size() + 1, error).begin();
             std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
@@ -1375,7 +1383,7 @@ void export_sub_docs( //
     counts_t const& counts,
     val_t const& values,
     int handle,
-    int flag) {
+    ext_t pcn) {
 
     ptr_range_gt<ukv_char_t*>& docs_vec = *docs_ptr;
     ptr_range_gt<ukv_key_t>& keys_vec = *keys_ptr;
@@ -1400,11 +1408,11 @@ void export_sub_docs( //
             *c.error = ex.what();
             return_if_error_m(c.error);
         }
-        if (flag == 0) {
+        if (pcn == parquet_k) {
             os << *iter << json.data();
             os << parquet::EndRow;
         }
-        else if (flag == 1) {
+        else if (pcn == csv_k) {
             keys_vec[idx] = *iter;
             docs_vec[idx] = arena.alloc<ukv_char_t>(json.size() + 1, c.error).begin();
             std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
@@ -1461,9 +1469,9 @@ void write_in_parquet( //
     val_t const& values) {
 
     if (c.fields)
-        export_sub_docs(c, arena, &ostream, nullptr, nullptr, keys, tape, fields, counts, values, 0, 0);
+        export_sub_docs(c, arena, &ostream, nullptr, nullptr, keys, tape, fields, counts, values, 0, parquet_k);
     else
-        export_whole_docs(c.error, arena, keys, nullptr, nullptr, &ostream, values, 0, 0);
+        export_whole_docs(c.error, arena, keys, nullptr, nullptr, &ostream, values, 0, parquet_k);
 }
 
 void write_in_csv( //
@@ -1487,9 +1495,9 @@ void write_in_csv( //
     return_error_if_m(status.ok(), c.error, 0, "Can't resize builder");
 
     if (c.fields)
-        export_sub_docs(c, arena, nullptr, &docs_vec, &keys_vec, keys, tape, fields, counts, values, 0, 1);
+        export_sub_docs(c, arena, nullptr, &docs_vec, &keys_vec, keys, tape, fields, counts, values, 0, csv_k);
     else
-        export_whole_docs(c.error, arena, keys, &keys_vec, &docs_vec, nullptr, values, 0, 1);
+        export_whole_docs(c.error, arena, keys, &keys_vec, &docs_vec, nullptr, values, 0, csv_k);
 
     status = int_builder.AppendValues(keys_vec.begin(), size);
     return_error_if_m(status.ok(), c.error, 0, "Can't append keys");
@@ -1539,14 +1547,14 @@ void write_in_ndjson( //
     int handle) {
 
     if (c.fields)
-        export_sub_docs(c, arena, nullptr, nullptr, nullptr, keys, tape, fields, counts, values, handle, 2);
+        export_sub_docs(c, arena, nullptr, nullptr, nullptr, keys, tape, fields, counts, values, handle, ndjson_k);
     else
-        export_whole_docs(c.error, arena, keys, nullptr, nullptr, nullptr, values, handle, 2);
+        export_whole_docs(c.error, arena, keys, nullptr, nullptr, nullptr, values, handle, ndjson_k);
 }
 
 #pragma region - Main Functions(Docs)
 
-void ukv_docs_import(ukv_docs_import_t* c_ptr) {
+void ukv_docs_import(ukv_docs_import_t* c_ptr) noexcept(false) {
 
     ukv_docs_import_t& c = *c_ptr;
 
@@ -1576,7 +1584,7 @@ void ukv_docs_import(ukv_docs_import_t* c_ptr) {
     }
 }
 
-void ukv_docs_export(ukv_docs_export_t* c_ptr) {
+void ukv_docs_export(ukv_docs_export_t* c_ptr) noexcept(false) {
 
     ukv_docs_export_t& c = *c_ptr;
 
@@ -1587,8 +1595,8 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
 
     auto ext = c.paths_extension;
-    int pcn = strcmp_(ext, ".parquet") ? 0 : strcmp_(ext, ".csv") ? 1 : strcmp_(ext, ".ndjson") ? 2 : -1;
-    return_error_if_m(!(pcn == -1), c.error, 0, "Not supported format");
+    ext_t pcn = strcmp_(ext, ".parquet") ? parquet_k : strcmp_(ext, ".csv") ? csv_k : strcmp_(ext, ".ndjson") ? ndjson_k : unknown_k;
+    return_error_if_m(!(pcn == unknown_k), c.error, 0, "Not supported format");
 
     if (!c.arena)
         c.arena = arena_t(c.db).member_ptr();
@@ -1608,9 +1616,9 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
     ptr_range_gt<ukv_char_t> tape;
     auto counts = arena.alloc<ukv_size_t>(c.fields_count, c.error);
 
-    if (pcn == 0)
+    if (pcn == parquet_k)
         make_parquet(c, os);
-    else if (pcn == 1) {
+    else if (pcn == csv_k) {
         keys_vec = arena.alloc<ukv_key_t>(task_count, c.error);
         docs_vec = arena.alloc<ukv_char_t*>(task_count, c.error);
     }
@@ -1673,9 +1681,9 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
             ukv_docs_read(&docs_read);
             values.second = offsets[idx - pre_idx - 1] + lengths[idx - 1];
 
-            if (pcn == 0)
+            if (pcn == parquet_k)
                 write_in_parquet(c, arena, os, keys, tape, fields, counts, values);
-            else if (pcn == 1)
+            else if (pcn == csv_k)
                 write_in_csv(c,
                              arena,
                              docs_vec,
@@ -1695,10 +1703,11 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) {
         return_error_if_m(status, c.error, 0, "Invalid batch");
     }
 
-    if (pcn == 1)
+    if (pcn == csv_k)
         end_csv(c, string_builder, int_builder);
-    else if (pcn == 2)
+    else if (pcn == ndjson_k)
         end_ndjson(handle);
 }
 
-#pragma region - Docs End
+#pragma endregion - Main Functions(Docs)
+#pragma endregion - Docs
