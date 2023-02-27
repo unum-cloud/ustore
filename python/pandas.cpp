@@ -541,4 +541,30 @@ void ukv::wrap_pandas(py::module& m) {
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.join.html
     // df.def("join", [](py_table_collection_t& df) {});
+
+    df.def("drop", [](py_table_collection_t& df, py::object cols) {
+        auto collection = docs_collection_t(df.binary.native.db(),
+                                            df.binary.native,
+                                            df.binary.native.txn(),
+                                            df.binary.native.member_arena());
+        auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
+        if (PyUnicode_Check(cols.ptr())) {
+            collection[keys]
+                .patch(fmt::format("[{{\"op\": \"remove\",\"path\": \"/{}\"}}]", py_to_bytes(cols.ptr())).c_str())
+                .throw_unhandled();
+        }
+        else if (PySequence_Check(cols.ptr())) {
+            auto size = PySequence_Size(cols.ptr());
+            std::string patch_command = "[";
+            patch_command.reserve(27 * size);
+            for (std::size_t i = 0; i != size; ++i)
+                patch_command += fmt::format("{{\"op\":\"remove\",\"path\":\"/{}\"}},",
+                                             py_to_bytes(PySequence_GetItem(cols.ptr(), i)));
+
+            patch_command[patch_command.size() - 1] = ']';
+            collection[keys].patch(patch_command.c_str()).throw_unhandled();
+        }
+        else
+            throw std::invalid_argument("Invalid Argument!");
+    });
 }
