@@ -497,7 +497,16 @@ void ukv::wrap_pandas(py::module& m) {
     // df.def("dtypes", [](py_table_collection_t& df) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.sample.html
-    // df.def("sample", [](py_table_collection_t& df, std::size_t count, bool replace) {});
+    df.def("sample", [](py_table_collection_t& df, std::size_t count) {
+        auto collection = docs_collection_t(df.binary.native.db(),
+                                            df.binary.native,
+                                            df.binary.native.txn(),
+                                            df.binary.native.member_arena());
+
+        auto keys = collection.keys().sample(count, df.binary.native.member_arena()).throw_or_release();
+        df.rows_keys = std::vector<ukv_key_t>(keys.begin(), keys.end());
+        return df.shared_from_this();
+    });
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.concat.html
     // df.def("concat", [](py_table_collection_t const& df, py_table_collection_t const& df_other) {});
