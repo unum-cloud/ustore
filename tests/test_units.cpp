@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <unistd.h>
+#include <thread>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -428,6 +429,30 @@ TEST(db, named_collections) {
 
     EXPECT_TRUE(db.clear());
     EXPECT_TRUE(*db.contains(""));
+}
+
+/**
+ * Creates news collection under unique names.
+ * Fill collection checking, dropping/checking existing collections.
+ */
+
+TEST(db, fill_drop_collection) {
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    blobs_collection_t collection = db.main();
+    blobs_collection_t col1 = db.create("col1").throw_or_release();
+
+    triplet_t triplet;
+    auto ref = col1[triplet.keys];
+    round_trip(ref, triplet.contents_arrow());
+
+    check_equalities(ref, triplet);
+    db.drop("col1");
+    check_equalities(ref, triplet);
+
+    EXPECT_TRUE(db.clear());
 }
 
 /**
