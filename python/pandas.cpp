@@ -508,7 +508,27 @@ void ukv::wrap_pandas(py::module& m) {
     // df.def("replace", [](py_table_collection_t& df) {});
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.merge.html
-    // df.def("merge", [](py_table_collection_t& df, std::shared_ptr<arrow::RecordBatch>& batch_to_merge) {});
+    df.def("merge", [](py_table_collection_t& df, py_table_collection_t& df_to_merge) {
+        auto collection_to_merge = docs_collection_t(df_to_merge.binary.native.db(),
+                                                     df_to_merge.binary.native,
+                                                     df_to_merge.binary.native.txn(),
+                                                     df_to_merge.binary.native.member_arena());
+        auto collection = docs_collection_t(df.binary.native.db(),
+                                            df.binary.native,
+                                            df.binary.native.txn(),
+                                            df.binary.native.member_arena());
+
+        auto& keys = std::get<std::vector<ukv_key_t>>(df_to_merge.rows_keys);
+        auto members = collection_to_merge[keys];
+        auto values = members.value().throw_or_release();
+        auto values_begin = reinterpret_cast<ukv_bytes_ptr_t>(values.contents());
+
+        contents_arg_t args {};
+        args.offsets_begin = {values.offsets(), sizeof(ukv_length_t)};
+        args.lengths_begin = {values.lengths(), sizeof(ukv_length_t)};
+        args.contents_begin = {&values_begin, 0};
+        collection[keys].merge(args).throw_unhandled();
+    });
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.join.html
     // df.def("join", [](py_table_collection_t& df) {});
