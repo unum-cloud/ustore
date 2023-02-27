@@ -189,6 +189,7 @@ def test_sample():
     docs = col.docs
     table = col.table
 
+    keys = [0, 1, 2, 3, 4, 5, 6]
     jsons = [{'name': b'Lex', 'tweets': 0},
              {'name': b'Andrew', 'tweets': 1},
              {'name': b'Joe', 'tweets': 2},
@@ -197,12 +198,44 @@ def test_sample():
              {'name': b'Jack', 'tweets': 5},
              {'name': b'Fred', 'tweets': 6}]
 
-    for index, json in enumerate(jsons):
-        docs[index] = json
-
+    docs.set(keys, jsons)
     names, tweets = pa.RecordBatch.from_pylist(jsons).columns
     table.astype({'name': 'bytes', 'tweets': 'int64'})
     for _ in range(10):
         exported_names, exported_tweets = table.sample(3).to_arrow().columns
         assert set(exported_names).issubset(set(names))
         assert set(exported_tweets).issubset(set(tweets))
+
+
+def test_drop():
+    col = ukv.DataBase().main
+    docs = col.docs
+    table = col.table
+
+    keys = [1, 2, 3]
+    jsons = [{'name': b'Lex', 'lastname': b'Fridman', 'tweets': 0},
+             {'name': b'Andrew', 'lastname': b'Huberman', 'tweets': 1},
+             {'name': b'Joe', 'lastname': b'Rogan', 'tweets': 2}]
+    docs.set(keys, jsons)
+    table.loc(keys).astype(
+        {'name': 'bytes', 'lastname': 'bytes', 'tweets': 'int64'})
+
+    table.drop('name')
+    expected_jsons = [{'name': None, 'lastname': b'Fridman', 'tweets': 0},
+                      {'name': None, 'lastname': b'Huberman', 'tweets': 1},
+                      {'name': None, 'lastname': b'Rogan', 'tweets': 2}]
+    assert table.to_arrow().to_pylist() == expected_jsons
+
+    docs.set(keys, jsons)
+    table.drop('tweets')
+    expected_jsons = [{'name': b'Lex', 'lastname': b'Fridman', 'tweets': None},
+                      {'name': b'Andrew', 'lastname': b'Huberman', 'tweets': None},
+                      {'name': b'Joe', 'lastname': b'Rogan', 'tweets': None}]
+    assert table.to_arrow().to_pylist() == expected_jsons
+
+    docs.set(keys, jsons)
+    table.drop(['name', 'lastname'])
+    expected_jsons = [{'name': None, 'lastname': None, 'tweets': 0},
+                      {'name': None, 'lastname': None, 'tweets': 1},
+                      {'name': None, 'lastname': None, 'tweets': 2}]
+    assert table.to_arrow().to_pylist() == expected_jsons
