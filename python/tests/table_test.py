@@ -148,3 +148,37 @@ def test_json():
     assert exported_json == expected_json
 
     db.clear()
+
+
+def test_merge():
+    db = ukv.DataBase()
+    col1 = db['table1']
+    docs1 = col1.docs
+    table1 = col1.table
+    docs1[0] = {'name': 'Lex', 'tweets': 0}
+    docs1[1] = {'name': 'Andrew', 'tweets': 1}
+    docs1[2] = {'name': 'Joe', 'tweets': 2}
+
+    col2 = db['table2']
+    docs2 = col2.docs
+    table2 = col2.table
+    docs2[0] = {'name': 'Lex', 'lastname': 'Fridman', 'tweets': 10}
+    docs2[1] = {'name': 'Charls', 'lastname': 'Huberman'}
+    docs2[3] = {'name': 'Carl', 'lastname': 'Rogan', 'tweets': 3}
+
+    table1.loc([0, 1, 2])
+    table2.loc([0, 1, 2, 3])
+    table1.merge(table2)
+
+    expected = pa.RecordBatch.from_pandas(pd.DataFrame([
+        {'name': 'Lex',  'tweets': 10, 'lastname': 'Fridman'},
+        {'name': 'Charls', 'tweets': 1, 'lastname': 'Huberman'},
+        {'name': 'Joe', 'tweets': 2, 'lastname': None},
+        {'name': 'Carl', 'tweets': 3, 'lastname': 'Rogan'},
+    ]))
+
+    table1.loc([0, 1, 2, 3])
+    exported = table1.astype(
+        {'name': 'str', 'tweets': 'int64', 'lastname': 'str'}).to_arrow()
+
+    assert expected == exported
