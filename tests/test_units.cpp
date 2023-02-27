@@ -523,6 +523,35 @@ TEST(db, clear_values) {
     check_length(collection_ref, 0);
 }
 
+TEST(db, collection_with_threads) {
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    blobs_collection_t collection = db.main();
+    blobs_collection_t col1 = db.create("col1").throw_or_release();
+
+    triplet_t triplet;
+    auto ref = col1[triplet.keys];
+    round_trip(ref, triplet.contents_arrow());
+
+    auto task_read = [&]() {
+        while (true)
+            check_equalities(ref, triplet);
+    };
+
+    auto task_remove = [&]() {
+        db.drop("col1");
+    };
+
+    std::thread t1(task_read);
+    std::thread t2(task_remove);
+    t1.join();
+    t2.join();
+
+    EXPECT_TRUE(db.clear());
+}
+
 TEST(db, scan) {
     clear_environment();
     database_t db;
