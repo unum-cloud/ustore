@@ -182,3 +182,27 @@ def test_merge():
         {'name': 'str', 'tweets': 'int64', 'lastname': 'str'}).to_arrow()
 
     assert expected == exported
+
+
+def test_sample():
+    col = ukv.DataBase().main
+    docs = col.docs
+    table = col.table
+
+    jsons = [{'name': b'Lex', 'tweets': 0},
+             {'name': b'Andrew', 'tweets': 1},
+             {'name': b'Joe', 'tweets': 2},
+             {'name': b'Charls', 'tweets': 3},
+             {'name': b'Carl', 'tweets': 4},
+             {'name': b'Jack', 'tweets': 5},
+             {'name': b'Fred', 'tweets': 6}]
+
+    for index, json in enumerate(jsons):
+        docs[index] = json
+
+    names, tweets = pa.RecordBatch.from_pylist(jsons).columns
+    table.astype({'name': 'bytes', 'tweets': 'int64'})
+    for _ in range(10):
+        exported_names, exported_tweets = table.sample(3).to_arrow().columns
+        assert set(exported_names).issubset(set(names))
+        assert set(exported_tweets).issubset(set(tweets))
