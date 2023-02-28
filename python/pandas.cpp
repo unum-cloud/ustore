@@ -591,4 +591,22 @@ void ukv::wrap_pandas(py::module& m) {
         auto fields = members.gist().throw_or_release();
         return keys_found.size() * fields.size();
     });
+
+    df.def_property_readonly("shape", [](py_table_collection_t& df) {
+        auto collection = docs_collection_t(df.binary.native.db(),
+                                            df.binary.native,
+                                            df.binary.native.txn(),
+                                            df.binary.native.member_arena());
+
+        auto keys_range = collection.keys();
+        auto keys_stream = keys_range.begin();
+        std::vector<ukv_key_t> keys_found;
+        while (!keys_stream.is_end()) {
+            keys_found.insert(keys_found.end(), keys_stream.keys_batch().begin(), keys_stream.keys_batch().end());
+            keys_stream.seek_to_next_batch();
+        }
+        auto members = collection[keys_found];
+        auto fields = members.gist().throw_or_release();
+        return py::make_tuple(keys_found.size(), fields.size());
+    });
 }
