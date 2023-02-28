@@ -609,4 +609,6 @@ void ukv::wrap_pandas(py::module& m) {
         auto fields = members.gist().throw_or_release();
         return py::make_tuple(keys_found.size(), fields.size());
     });
+
+    df.def_property_readonly("empty", [](py_table_collection_t& df) { return !df.binary.native.size(); });
 }
