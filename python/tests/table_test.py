@@ -276,3 +276,32 @@ def test_empty():
 
     docs.set(keys, jsons)
     assert table.empty == False
+
+
+def test_insert():
+
+    col = ukv.DataBase().main
+    docs = col.docs
+    table = col.table
+
+    assert table.empty == True
+
+    keys = [1, 2]
+    jsons = [{'name': b'Lex'},
+             {'name': b'Joe'}]
+    docs.set(keys, jsons)
+
+    table.insert('lastname', [b'Fridman', b'Rogan'])
+    jsons = [{'name': b'Lex', 'lastname': b'Fridman'},
+             {'name': b'Joe', 'lastname': b'Rogan'}]
+    assert table.astype(
+        {'name': 'bytes', 'lastname': 'bytes'}).to_arrow() == pa.RecordBatch.from_pylist(jsons)
+
+    table.insert({'tweets': [0, 1], 'id': [10, 11]})
+    jsons = [{'name': b'Lex', 'lastname': b'Fridman', 'tweets': 0, 'id': 10},
+             {'name': b'Joe', 'lastname': b'Rogan', 'tweets': 1, 'id': 11}]
+
+    expected = pa.RecordBatch.from_pylist(jsons)
+    exported = table.astype(
+        {'name': 'bytes', 'lastname': 'bytes', 'tweets': 'int64', 'id': 'int64'}).to_arrow()
+    assert expected == exported
