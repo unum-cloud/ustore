@@ -12,6 +12,7 @@
 #define ARROW_C_DATA_INTERFACE 1
 #define ARROW_C_STREAM_INTERFACE 1
 #include "ukv/arrow.h"
+#include "nlohmann.hpp"
 
 #include "pybind.hpp"
 #include "crud.hpp"
@@ -537,6 +538,94 @@ void ukv::wrap_pandas(py::module& m) {
         args.lengths_begin = {values.lengths(), sizeof(ukv_length_t)};
         args.contents_begin = {&values_begin, 0};
         collection[keys].merge(args).throw_unhandled();
+    });
+
+    df.def("insert", [](py_table_collection_t& df, std::string const& column_name, py::object obj) {
+        auto collection = docs_collection_t(df.binary.native.db(),
+                                            df.binary.native,
+                                            df.binary.native.txn(),
+                                            df.binary.native.member_arena());
+
+        if (std::holds_alternative<std::monostate>(df.rows_keys))
+            scan_rows(df);
+        else if (std::holds_alternative<py_table_keys_range_t>(df.rows_keys))
+            scan_rows_range(df);
+        auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
+
+        if (!PySequence_Check(obj.ptr()))
+            throw std::invalid_argument("Values must be sequence!");
+        auto size = PySequence_Size(obj.ptr());
+
+        std::string values;
+        std::vector<ukv_length_t> lengths(size);
+        std::vector<ukv_length_t> offsets(size + 1);
+        std::string field = "/" + column_name;
+        std::vector<collection_key_field_t> keys_with_fields(keys.size());
+        for (std::size_t i = 0; i != size; ++i) {
+            offsets[i] = values.size();
+            to_string(PySequence_GetItem(obj.ptr(), i), values);
+            lengths[i] = values.size() - offsets[i];
+            keys_with_fields[i] = ckf(keys[i], field.c_str());
+        }
+        offsets[size] = values.size();
+        auto values_begin = reinterpret_cast<ukv_bytes_ptr_t>(values.data());
+
+        contents_arg_t args {};
+        args.offsets_begin = {offsets.data(), sizeof(ukv_length_t)};
+        args.lengths_begin = {lengths.data(), sizeof(ukv_length_t)};
+        args.contents_begin = {&values_begin, 0};
+
+        collection[keys_with_fields].insert(args).throw_unhandled();
+    });
+
+    df.def("insert", [](py_table_collection_t& df, py::object obj) {
+        auto collection = docs_collection_t(df.binary.native.db(),
+                                            df.binary.native,
+                                            df.binary.native.txn(),
+                                            df.binary.native.member_arena());
+
+        if (std::holds_alternative<std::monostate>(df.rows_keys))
+            scan_rows(df);
+        else if (std::holds_alternative<py_table_keys_range_t>(df.rows_keys))
+            scan_rows_range(df);
+        auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
+        std::vector<collection_key_field_t> keys_with_fields(keys.size());
+
+        if (!PyDict_Check(obj.ptr()))
+            throw std::invalid_argument("Expected dictionary!");
+
+        std::string values;
+        auto values_begin = reinterpret_cast<ukv_bytes_ptr_t>(values.data());
+        contents_arg_t args {};
+        args.contents_begin = {&values_begin, 0};
+
+        PyObject *key, *value;
+        Py_ssize_t pos = 0;
+        while (PyDict_Next(obj.ptr(), &pos, &key, &value)) {
+            if (!PySequence_Check(value))
+                throw std::invalid_argument("Value must be sequence!");
+            if (!PyUnicode_Check(key))
+                throw std::invalid_argument("Key must be string!");
+
+            std::string field = "/";
+            field += PyUnicode_AsUTF8(key);
+
+            auto size = PySequence_Size(value);
+            std::vector<ukv_length_t> lengths(size);
+            std::vector<ukv_length_t> offsets(size + 1);
+            values.clear();
+            for (std::size_t i = 0; i != size; ++i) {
+                offsets[i] = values.size();
+                to_string(PySequence_GetItem(value, i), values);
+                lengths[i] = values.size() - offsets[i];
+                keys_with_fields[i] = ckf(keys[i], field.c_str());
+            }
+            offsets[size] = values.size();
+
+            args.offsets_begin = {offsets.data(), sizeof(ukv_length_t)};
+            args.lengths_begin = {lengths.data(), sizeof(ukv_length_t)};
+            collection[keys_with_fields].insert(args).throw_unhandled();
+        }
     });
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.join.html
