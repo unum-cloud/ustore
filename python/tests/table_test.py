@@ -242,9 +242,22 @@ def test_size():
     table = col.table
 
     keys = [1, 2, 3]
-    jsons = [{'name': b'Lex', 'tweets': 0},
-             {'name': b'Joe', 'lastname': b'Rogan'},
-             {'name': b'Andrew', 'lastname': b'Huberman', 'tweets': 1}]
+    jsons = [{'name': 'Lex', 'tweets': 0},
+             {'name': 'Joe', 'lastname': 'Rogan'},
+             {'name': 'Andrew', 'lastname': 'Huberman', 'tweets': 1}]
 
     docs.set(keys, jsons)
     assert table.size == 9
+
+
+def test_shape():
+    col = ukv.DataBase().main
+    docs = col.docs
+    table = col.table
+
+    keys = [1, 2]
+    jsons = [{'name': 'Lex', 'lastname': 'Fridman', 'tweets': 0},
+             {'name': 'Joe', 'lastname': 'Rogan', 'tweets': 2}]
+
+    docs.set(keys, jsons)
+    assert table.shape == (2, 3)
