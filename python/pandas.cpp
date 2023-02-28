@@ -138,9 +138,8 @@ static std::shared_ptr<arrow::RecordBatch> materialize(py_table_collection_t& df
 
     // Extract the keys, if not explicitly defined
     if (std::holds_alternative<std::monostate>(df.rows_keys))
-        throw std::invalid_argument("Full collection table materialization is not allowed");
-
-    if (std::holds_alternative<py_table_keys_range_t>(df.rows_keys))
+        scan_rows(df);
+    else if (std::holds_alternative<py_table_keys_range_t>(df.rows_keys))
         scan_rows_range(df);
 
     // Slice the keys using `head` and `tail`
@@ -527,6 +526,7 @@ void ukv::wrap_pandas(py::module& m) {
                                             df.binary.native.txn(),
                                             df.binary.native.member_arena());
 
+        scan_rows(df_to_merge);
         auto& keys = std::get<std::vector<ukv_key_t>>(df_to_merge.rows_keys);
         auto members = collection_to_merge[keys];
         auto values = members.value().throw_or_release();
@@ -547,6 +547,12 @@ void ukv::wrap_pandas(py::module& m) {
                                             df.binary.native,
                                             df.binary.native.txn(),
                                             df.binary.native.member_arena());
+
+        if (std::holds_alternative<std::monostate>(df.rows_keys))
+            scan_rows(df);
+        else if (std::holds_alternative<py_table_keys_range_t>(df.rows_keys))
+            scan_rows_range(df);
+
         auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
         if (PyUnicode_Check(cols.ptr())) {
             collection[keys]
@@ -566,5 +572,23 @@ void ukv::wrap_pandas(py::module& m) {
         }
         else
             throw std::invalid_argument("Invalid Argument!");
+    });
+
+    df.def_property_readonly("size", [](py_table_collection_t& df) {
+        auto collection = docs_collection_t(df.binary.native.db(),
+                                            df.binary.native,
+                                            df.binary.native.txn(),
+                                            df.binary.native.member_arena());
+
+        auto keys_range = collection.keys();
+        auto keys_stream = keys_range.begin();
+        std::vector<ukv_key_t> keys_found;
+        while (!keys_stream.is_end()) {
+            keys_found.insert(keys_found.end(), keys_stream.keys_batch().begin(), keys_stream.keys_batch().end());
+            keys_stream.seek_to_next_batch();
+        }
+        auto members = collection[keys_found];
+        auto fields = members.gist().throw_or_release();
+        return keys_found.size() * fields.size();
     });
 }
