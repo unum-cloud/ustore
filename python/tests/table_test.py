@@ -261,3 +261,18 @@ def test_shape():
 
     docs.set(keys, jsons)
     assert table.shape == (2, 3)
+
+
+def test_empty():
+    col = ukv.DataBase().main
+    docs = col.docs
+    table = col.table
+
+    assert table.empty == True
+
+    keys = [1, 2]
+    jsons = [{'name': 'Lex', 'tweets': 0},
+             {'name': 'Joe', 'tweets': 2}]
+
+    docs.set(keys, jsons)
+    assert table.empty == False
