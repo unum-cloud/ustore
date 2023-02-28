@@ -66,11 +66,15 @@ GoLang
 UKV is more than a database.
 It is a "build your database" toolkit and an open standard for NoSQL potentially-transactional databases, defining zero-copy binary interfaces for "Create, Read, Update, Delete" operations, or CRUD for short.
 
-A [few simple C99 headers][ukv-c-headers] can link almost any underlying storage [engine](#engines) to many high-level language [bindings](#frontends), extending their support for binary string values to graphs, flexible-schema documents, and other [modalities](#modalities).
+A [few simple C99 headers][ukv-c-headers] can link almost any underlying storage [engine](#engines) to many high-level language [bindings](#frontends), extending their support for binary string values to graphs, flexible-schema documents, and other [modalities](#modalities), aiming to replace MongoDB, Neo4J, Pinecone, and ElasticSearch with a single ACID-transactional system.
 
 ![UKV: Small Map](https://github.com/unum-cloud/ukv/raw/main/assets/charts/Intro.png)
 
-It can easily be expanded to support alternative underlying Key-Value Stores (KVS), embedded, standalone, or sharded, such as [Redis][redis].
+[Redis][redis], for example, provides RediSearch, RedisJSON, and RedisGraph with similar objectives.
+UKV does it better, allowing you to add your favorite Key-Value Stores (KVS), embedded, standalone, or sharded, such as [FoundationDB][foundationdb], multiplying its functionality.
+
+---
+
 In the same way, you can add SDKs for other high-level languages or support for data types specific to your application that we haven't considered.
 This gives you the flexibility to iterate on different parts of this modular data lake without changing the business logic of your application, decoupling it from the underlying storage technology.
 
@@ -441,7 +445,7 @@ Thank you!
 - Why not use SQL, MQL or Cypher? [Answered][ukv-vs-sql]
 - Does UKV support Time-To-Live? [Answered][ukv-ttl]
 - Does UKV support compression? [Answered][ukv-compression]
-- Does UKV support queues? [Anwered][ukv-queues]
+- Does UKV support queues? [Answered][ukv-queues]
 - How can I add Bindings for language X? [Answered][ukv-new-bindings]
 - How can I add database X as an Engine? [Answered][ukv-new-engine]
 
@@ -481,3 +485,4 @@ Thank you!
 [snap]: https://github.com/facebook/rocksdb/wiki/Snapshot
 [spdk]: https://spdk.io
 [redis]: https://redis.com
+[foundationdb]: https://www.foundationdb.org/
