@@ -305,3 +305,11 @@ def test_insert():
     exported = table.astype(
         {'name': 'bytes', 'lastname': 'bytes', 'tweets': 'int64', 'id': 'int64'}).to_arrow()
     assert expected == exported
+
+
+def test_from_dict():
+    main = ukv.DataBase().main
+    data = {'col1': [3, 2, 1, 0], 'col2': [b'a', b'b', b'c', b'd']}
+    table = ukv.from_dict(main, data)
+    table.astype({'col1': 'int64', 'col2': 'bytes'})
+    assert pa.RecordBatch.from_pydict(data) == table.to_arrow()
