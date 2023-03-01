@@ -694,11 +694,40 @@ void ukv::wrap_pandas(py::module& m) {
             to_string(key, k);
             for (std::size_t i = 0; i != PySequence_Size(value); ++i) {
                 v.clear();
-                to_string(PyList_GetItem(value, i), v);
+                to_string(PySequence_GetItem(value, i), v);
                 json = fmt::format("{{{}:{}}}", k, v);
                 collection[i].merge(json.c_str()).throw_unhandled();
             }
         }
+
+        auto df = std::make_shared<py_table_collection_t>();
+        df->binary = binary.native;
+        return df;
+    });
+
+    m.def("from_records", [](py_blobs_collection_t& binary, py::object data) {
+        if (!PySequence_Check(data.ptr()))
+            throw std::invalid_argument("Expect Sequence of Dictionaries");
+
+        auto collection =
+            docs_collection_t(binary.native.db(), binary.native, binary.native.txn(), binary.native.member_arena());
+
+        auto size = PySequence_Size(data.ptr());
+        std::string jsons;
+        std::vector<ukv_key_t> keys(size);
+        std::vector<ukv_length_t> offsets(size + 1);
+        for (std::size_t i = 0; i != size; ++i) {
+            keys[i] = i;
+            offsets[i] = jsons.size();
+            to_string(PySequence_GetItem(data.ptr(), i), jsons);
+        }
+        offsets[size] = jsons.size();
+
+        contents_arg_t args {};
+        auto values_begin = reinterpret_cast<ukv_bytes_ptr_t>(jsons.data());
+        args.contents_begin = {&values_begin, 0};
+        args.offsets_begin = {offsets.data(), sizeof(ukv_length_t)};
+        collection[keys].insert(args).throw_unhandled();
 
         auto df = std::make_shared<py_table_collection_t>();
         df->binary = binary.native;
