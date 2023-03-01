@@ -548,14 +548,12 @@ void ukv::wrap_pandas(py::module& m) {
         auto size = PySequence_Size(obj.ptr());
 
         std::string values;
-        std::vector<ukv_length_t> lengths(size);
         std::vector<ukv_length_t> offsets(size + 1);
         std::string field = "/" + column_name;
         std::vector<collection_key_field_t> keys_with_fields(keys.size());
         for (std::size_t i = 0; i != size; ++i) {
             offsets[i] = values.size();
             to_string(PySequence_GetItem(obj.ptr(), i), values);
-            lengths[i] = values.size() - offsets[i];
             keys_with_fields[i] = ckf(keys[i], field.c_str());
         }
         offsets[size] = values.size();
@@ -563,7 +561,6 @@ void ukv::wrap_pandas(py::module& m) {
 
         contents_arg_t args {};
         args.offsets_begin = {offsets.data(), sizeof(ukv_length_t)};
-        args.lengths_begin = {lengths.data(), sizeof(ukv_length_t)};
         args.contents_begin = {&values_begin, 0};
 
         collection[keys_with_fields].insert(args).throw_unhandled();
@@ -599,19 +596,16 @@ void ukv::wrap_pandas(py::module& m) {
             field += PyUnicode_AsUTF8(key);
 
             auto size = PySequence_Size(value);
-            std::vector<ukv_length_t> lengths(size);
             std::vector<ukv_length_t> offsets(size + 1);
             values.clear();
             for (std::size_t i = 0; i != size; ++i) {
                 offsets[i] = values.size();
                 to_string(PySequence_GetItem(value, i), values);
-                lengths[i] = values.size() - offsets[i];
                 keys_with_fields[i] = ckf(keys[i], field.c_str());
             }
             offsets[size] = values.size();
 
             args.offsets_begin = {offsets.data(), sizeof(ukv_length_t)};
-            args.lengths_begin = {lengths.data(), sizeof(ukv_length_t)};
             collection[keys_with_fields].insert(args).throw_unhandled();
         }
     });
