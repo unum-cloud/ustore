@@ -238,15 +238,17 @@ struct degrees_stream_t {
     }
 };
 
-struct nodes_range_t {
+struct nodes_range_t : public std::enable_shared_from_this<nodes_range_t> {
     keys_range_t native;
     docs_collection_t& collection;
     bool read_data = false;
     std::string field;
     std::string default_value;
+
+    nodes_range_t(keys_range_t n, docs_collection_t& c) : native(n), collection(c) {}
 };
 
-struct edges_range_t {
+struct edges_range_t : public std::enable_shared_from_this<edges_range_t> {
     std::weak_ptr<py_graph_t> net_ptr;
     std::vector<ukv_key_t> vertices;
     bool read_data = false;
@@ -346,7 +348,7 @@ void ukv::wrap_networkx(py::module& m) {
 
     degs_stream.def("__next__", [](degrees_stream_t& stream) { return stream.next(); });
 
-    auto nodes_range = py::class_<nodes_range_t>(m, "NodesRange", py::module_local());
+    auto nodes_range = py::class_<nodes_range_t, std::shared_ptr<nodes_range_t>>(m, "NodesRange", py::module_local());
     nodes_range.def("__iter__", [](nodes_range_t& range) {
         return nodes_stream_t {std::move(range.native).begin(),
                                range.collection,
@@ -360,7 +362,7 @@ void ukv::wrap_networkx(py::module& m) {
         [](nodes_range_t& range, bool data = false) {
             range.read_data = data;
             range.default_value = "{}";
-            return std::move(range);
+            return range.shared_from_this();
         },
         py::arg("data") = false);
 
@@ -372,7 +374,7 @@ void ukv::wrap_networkx(py::module& m) {
             std::string str;
             to_string(def_value.ptr(), str);
             range.default_value = std::move(str);
-            return std::move(range);
+            return range.shared_from_this();
         },
         py::arg("data"),
         py::arg("default") = py::reinterpret_steal<py::object>(Py_None));
@@ -380,7 +382,7 @@ void ukv::wrap_networkx(py::module& m) {
     auto nodes_stream = py::class_<nodes_stream_t>(m, "NodesStream", py::module_local());
     nodes_stream.def("__next__", [](nodes_stream_t& stream) { return stream.next(); });
 
-    auto edges_range = py::class_<edges_range_t>(m, "EdgesRange", py::module_local());
+    auto edges_range = py::class_<edges_range_t, std::shared_ptr<edges_range_t>>(m, "EdgesRange", py::module_local());
     edges_range.def("__iter__", [](edges_range_t& range) {
         py_graph_t& g = *range.net_ptr.lock().get();
         auto field = range.field.size() ? range.field.c_str() : nullptr;
@@ -405,7 +407,7 @@ void ukv::wrap_networkx(py::module& m) {
         [](edges_range_t& range, bool data = false) {
             range.read_data = data;
             range.default_value = "{}";
-            return std::move(range);
+            return range.shared_from_this();
         },
         py::arg("data") = false);
 
@@ -417,7 +419,7 @@ void ukv::wrap_networkx(py::module& m) {
             std::string str;
             to_string(def_value.ptr(), str);
             range.default_value = std::move(str);
-            return std::move(range);
+            return range.shared_from_this();
         },
         py::arg("data"),
         py::arg("default") = py::reinterpret_steal<py::object>(Py_None));
@@ -434,7 +436,7 @@ void ukv::wrap_networkx(py::module& m) {
                 range.vertices.resize(PySequence_Size(vs.ptr()));
                 py_transform_n(vs.ptr(), &py_to_scalar<ukv_key_t>, range.vertices.begin());
             }
-            return std::move(range);
+            return range.shared_from_this();
         },
         py::arg("vs"),
         py::arg("data"));
@@ -454,7 +456,7 @@ void ukv::wrap_networkx(py::module& m) {
                 range.vertices.resize(PySequence_Size(vs.ptr()));
                 py_transform_n(vs.ptr(), &py_to_scalar<ukv_key_t>, range.vertices.begin());
             }
-            return std::move(range);
+            return range.shared_from_this();
         },
         py::arg("vs"),
         py::arg("data"),
@@ -571,8 +573,9 @@ void ukv::wrap_networkx(py::module& m) {
         "nodes",
         [](py_graph_t& g) {
             blobs_range_t members(g.index.db(), g.index.txn(), g.index);
-            nodes_range_t range {members, g.vertices_attrs};
-            return py::cast(std::make_unique<nodes_range_t>(range));
+            keys_range_t keys {members};
+            auto range = std::make_shared<nodes_range_t>(keys, g.vertices_attrs);
+            return range;
         },
         "A NodeView of the graph.");
     g.def(
@@ -652,7 +655,7 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("name"));
 
     g.def_property_readonly("edges", [](py_graph_t& g) {
-        auto edges_ptr = std::make_unique<edges_range_t>();
+        auto edges_ptr = std::make_shared<edges_range_t>();
         edges_ptr->net_ptr = g.shared_from_this();
         return edges_ptr;
     });
