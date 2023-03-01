@@ -432,30 +432,6 @@ TEST(db, named_collections) {
 }
 
 /**
- * Creates news collection under unique names.
- * Fill collection checking, dropping/checking existing collections.
- */
-
-TEST(db, fill_drop_collection) {
-    clear_environment();
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-
-    blobs_collection_t collection = db.main();
-    blobs_collection_t col1 = db.create("col1").throw_or_release();
-
-    triplet_t triplet;
-    auto ref = col1[triplet.keys];
-    round_trip(ref, triplet.contents_arrow());
-
-    check_equalities(ref, triplet);
-    db.drop("col1");
-    check_equalities(ref, triplet);
-
-    EXPECT_TRUE(db.clear());
-}
-
-/**
  * Tests listing the names of present collections.
  */
 TEST(db, named_collections_list) {
@@ -541,7 +517,7 @@ TEST(db, collection_with_threads) {
     };
 
     auto task_remove = [&]() {
-        db.drop("col1");
+        col1.clear();
     };
 
     std::thread t1(task_read);
