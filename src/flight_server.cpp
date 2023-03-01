@@ -1374,7 +1374,7 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_size_t count = 0;
             ukv_snapshot_t* snapshots = nullptr;
-            ukv_snapshots_list_t snapshots_list;
+            ukv_snapshot_list_t snapshots_list;
             snapshots_list.db = db_;
             snapshots_list.error = status.member_ptr();
             snapshots_list.arena = &session.arena;
@@ -1382,7 +1382,7 @@ class UKVService : public arf::FlightServerBase {
             snapshots_list.count = &count;
             snapshots_list.ids = &snapshots;
 
-            ukv_snapshots_list(&snapshots_list);
+            ukv_snapshot_list(&snapshots_list);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 

@@ -274,7 +274,7 @@ void ukv_database_init(ukv_database_init_t*);
 /***************** Snapshot Management  ****************/
 /*********************************************************/
 
-typedef struct ukv_snapshots_list_t { /// @name Context
+typedef struct ukv_snapshot_list_t { /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
@@ -306,13 +306,13 @@ typedef struct ukv_snapshots_list_t { /// @name Context
     /** @brief All snapshots ids. */
     ukv_size_t** ids;
     /// @}
-} ukv_snapshots_list_t;
+} ukv_snapshot_list_t;
 
 /**
  * @brief Lists all snapshots in the DB.
- * @see `ukv_snapshots_list_t`.
+ * @see `ukv_snapshot_list_t`.
  */
-void ukv_snapshots_list(ukv_snapshots_list_t*);
+void ukv_snapshot_list(ukv_snapshot_list_t*);
 
 typedef struct ukv_snapshot_create_t {
     /** @brief Already open database instance. */
@@ -368,7 +368,7 @@ typedef struct ukv_collection_list_t {
     ukv_transaction_t transaction;
     /**
      * @brief A snapshot captures a point-in-time view of the DB at the time it's created.
-     * @see `ukv_snapshots_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
      */
     ukv_snapshot_t snapshot;
     /**

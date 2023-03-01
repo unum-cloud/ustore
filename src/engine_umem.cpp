@@ -456,7 +456,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
     });
 }
 
-void ukv_snapshots_list(ukv_snapshots_list_t*) {
+void ukv_snapshot_list(ukv_snapshot_list_t*) {
     // TODO
 }
 
