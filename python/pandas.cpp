@@ -679,4 +679,29 @@ void ukv::wrap_pandas(py::module& m) {
     });
 
     df.def_property_readonly("empty", [](py_table_collection_t& df) { return !df.binary.size(); });
+
+    m.def("from_dict", [](py_blobs_collection_t& binary, py::object data) {
+        if (!PyDict_Check(data.ptr()))
+            throw std::invalid_argument("Expect dictionary");
+        auto collection =
+            docs_collection_t(binary.native.db(), binary.native, binary.native.txn(), binary.native.member_arena());
+
+        PyObject *key, *value;
+        Py_ssize_t pos = 0;
+        std::string json, k, v;
+        while (PyDict_Next(data.ptr(), &pos, &key, &value)) {
+            k.clear();
+            to_string(key, k);
+            for (std::size_t i = 0; i != PySequence_Size(value); ++i) {
+                v.clear();
+                to_string(PyList_GetItem(value, i), v);
+                json = fmt::format("{{{}:{}}}", k, v);
+                collection[i].merge(json.c_str()).throw_unhandled();
+            }
+        }
+
+        auto df = std::make_shared<py_table_collection_t>();
+        df->binary = binary.native;
+        return df;
+    });
 }
