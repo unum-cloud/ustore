@@ -313,3 +313,15 @@ def test_from_dict():
     table = ukv.from_dict(main, data)
     table.astype({'col1': 'int64', 'col2': 'bytes'})
     assert pa.RecordBatch.from_pydict(data) == table.to_arrow()
+
+
+def test_from_records():
+    main = ukv.DataBase().main
+    data = [{'col1': 3, 'col2': b'a'},
+            {'col1': 2, 'col2': b'b'},
+            {'col1': 1, 'col2': b'c'},
+            {'col1': 0, 'col2': b'd'}]
+
+    table = ukv.from_records(main, data)
+    table.astype({'col1': 'int64', 'col2': 'bytes'})
+    assert pa.RecordBatch.from_pylist(data) == table.to_arrow()
