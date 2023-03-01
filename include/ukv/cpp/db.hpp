@@ -72,7 +72,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
         ukv_snapshot_drop_t snap_drop {
             .db = db_,
             .error = status.member_ptr(),
-            .snapshot = snap_,
+            .id = snap_,
         };
         ukv_snapshot_drop(&snap_drop);
         snap_ = 0;
@@ -320,7 +320,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
         ukv_snapshot_create_t snap_create {
             .db = db_,
             .error = status.member_ptr(),
-            .snapshot = &raw,
+            .id = &raw,
         };
         ukv_snapshot_create(&snap_create);
         if (!status)
@@ -393,7 +393,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
         snapshot_drop.error = status.member_ptr();
 
         for (auto id : snaps) {
-            snapshot_drop.snapshot = id;
+            snapshot_drop.id = id;
             ukv_snapshot_drop(&snapshot_drop);
             if (!status)
                 return status;

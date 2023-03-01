@@ -626,7 +626,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_snapshot_create_t snapshot_create {
                 .db = db_,
                 .error = status.member_ptr(),
-                .snapshot = &snapshot_id,
+                .id = &snapshot_id,
             };
 
             ukv_snapshot_create(&snapshot_create);
@@ -649,7 +649,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_snapshot_drop_t snapshot_drop {
                 .db = db_,
                 .error = status.member_ptr(),
-                .snapshot = c_snapshot_id,
+                .id = c_snapshot_id,
             };
 
             ukv_snapshot_drop(&snapshot_drop);

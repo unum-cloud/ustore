@@ -217,8 +217,8 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     if (!level_snapshot->snapshot)
         *c.error = "Couldn't get a snapshot!";
 
-    *c.snapshot = reinterpret_cast<std::size_t>(level_snapshot);
-    db.snapshots[*c.snapshot] = level_snapshot;
+    *c.id = reinterpret_cast<std::size_t>(level_snapshot);
+    db.snapshots[*c.id] = level_snapshot;
 }
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
