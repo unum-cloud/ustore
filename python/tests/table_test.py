@@ -22,7 +22,7 @@ def test_to_arrow():
     table = create_table(db)
     # Tweets
     df_tweets = pd.DataFrame({'tweets': [2221, 3935, 45900]}, dtype=np.int32)
-    assert table[['tweets']].astype('int32').loc([0, 1, 2]).to_arrow() \
+    assert table[['tweets']].astype('int32').to_arrow() \
         == pa.RecordBatch.from_pandas(df_tweets)
 
     # Names
@@ -88,7 +88,7 @@ def test_update():
     column_names = ["tweets", "name"]
 
     modifier = pa.RecordBatch.from_arrays([tweets, names], names=column_names)
-    table.loc(slice(0, 2)).update(modifier)
+    table.update(modifier)
 
     assert docs[0] == {'name': 'Jack', 'lastname': 'Fridman', 'tweets': 2}
     assert docs[1] == {'name': 'Charls', 'lastname': 'Huberman', 'tweets': 4}
@@ -100,7 +100,6 @@ def test_update():
 def test_csv():
     db = ukv.DataBase()
     table = create_table(db)
-    table.loc([0, 1])
     table.astype({'name': 'str', 'tweets': 'int64'}
                  ).to_csv("tmp/pandas.csv")
 
@@ -116,7 +115,6 @@ def test_csv():
 def test_parquet():
     db = ukv.DataBase()
     table = create_table(db)
-    table.loc([0, 1])
     table.astype({'name': 'str', 'tweets': 'int32'}
                  ).to_parquet("tmp/pandas.parquet")
 
@@ -133,7 +131,6 @@ def test_parquet():
 def test_json():
     db = ukv.DataBase()
     table = create_table(db)
-    table.loc([0, 1, 2])
     table.astype({'name': 'str', 'tweets': 'int32'})
 
     expected_json = '''{"name":{"0":"Lex","1":"Andrew","2":"Joe"},"tweets":{"0":2221,"1":3935,"2":45900}}'''
@@ -166,8 +163,6 @@ def test_merge():
     docs2[1] = {'name': 'Charls', 'lastname': 'Huberman'}
     docs2[3] = {'name': 'Carl', 'lastname': 'Rogan', 'tweets': 3}
 
-    table1.loc([0, 1, 2])
-    table2.loc([0, 1, 2, 3])
     table1.merge(table2)
 
     expected = pa.RecordBatch.from_pandas(pd.DataFrame([
@@ -177,7 +172,6 @@ def test_merge():
         {'name': 'Carl', 'tweets': 3, 'lastname': 'Rogan'},
     ]))
 
-    table1.loc([0, 1, 2, 3])
     exported = table1.astype(
         {'name': 'str', 'tweets': 'int64', 'lastname': 'str'}).to_arrow()
 
@@ -216,8 +210,9 @@ def test_drop():
     jsons = [{'name': b'Lex', 'lastname': b'Fridman', 'tweets': 0},
              {'name': b'Andrew', 'lastname': b'Huberman', 'tweets': 1},
              {'name': b'Joe', 'lastname': b'Rogan', 'tweets': 2}]
+
     docs.set(keys, jsons)
-    table.loc(keys).astype(
+    table.astype(
         {'name': 'bytes', 'lastname': 'bytes', 'tweets': 'int64'})
 
     table.drop('name')
@@ -239,3 +234,74 @@ def test_drop():
                       {'name': None, 'lastname': None, 'tweets': 1},
                       {'name': None, 'lastname': None, 'tweets': 2}]
     assert table.to_arrow().to_pylist() == expected_jsons
+
+
+def test_size():
+    col = ukv.DataBase().main
+    docs = col.docs
+    table = col.table
+
+    keys = [1, 2, 3]
+    jsons = [{'name': 'Lex', 'tweets': 0},
+             {'name': 'Joe', 'lastname': 'Rogan'},
+             {'name': 'Andrew', 'lastname': 'Huberman', 'tweets': 1}]
+
+    docs.set(keys, jsons)
+    assert table.size == 9
+
+
+def test_shape():
+    col = ukv.DataBase().main
+    docs = col.docs
+    table = col.table
+
+    keys = [1, 2]
+    jsons = [{'name': 'Lex', 'lastname': 'Fridman', 'tweets': 0},
+             {'name': 'Joe', 'lastname': 'Rogan', 'tweets': 2}]
+
+    docs.set(keys, jsons)
+    assert table.shape == (2, 3)
+
+
+def test_empty():
+    col = ukv.DataBase().main
+    docs = col.docs
+    table = col.table
+
+    assert table.empty == True
+
+    keys = [1, 2]
+    jsons = [{'name': 'Lex', 'tweets': 0},
+             {'name': 'Joe', 'tweets': 2}]
+
+    docs.set(keys, jsons)
+    assert table.empty == False
+
+
+def test_insert():
+
+    col = ukv.DataBase().main
+    docs = col.docs
+    table = col.table
+
+    assert table.empty == True
+
+    keys = [1, 2]
+    jsons = [{'name': b'Lex'},
+             {'name': b'Joe'}]
+    docs.set(keys, jsons)
+
+    table.insert('lastname', [b'Fridman', b'Rogan'])
+    jsons = [{'name': b'Lex', 'lastname': b'Fridman'},
+             {'name': b'Joe', 'lastname': b'Rogan'}]
+    assert table.astype(
+        {'name': 'bytes', 'lastname': 'bytes'}).to_arrow() == pa.RecordBatch.from_pylist(jsons)
+
+    table.insert({'tweets': [0, 1], 'id': [10, 11]})
+    jsons = [{'name': b'Lex', 'lastname': b'Fridman', 'tweets': 0, 'id': 10},
+             {'name': b'Joe', 'lastname': b'Rogan', 'tweets': 1, 'id': 11}]
+
+    expected = pa.RecordBatch.from_pylist(jsons)
+    exported = table.astype(
+        {'name': 'bytes', 'lastname': 'bytes', 'tweets': 'int64', 'id': 'int64'}).to_arrow()
+    assert expected == exported
