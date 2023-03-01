@@ -59,7 +59,7 @@ static ukv_doc_field_type_t ukv_doc_field_from_str(ukv_str_view_t type_name) {
 }
 
 void scan_rows(py_table_collection_t& df) {
-    auto keys_range = df.binary.native.keys();
+    auto keys_range = df.binary.keys();
     auto keys_stream = keys_range.begin();
     std::vector<ukv_key_t> keys_found;
     while (!keys_stream.is_end()) {
@@ -71,7 +71,7 @@ void scan_rows(py_table_collection_t& df) {
 
 void scan_rows_range(py_table_collection_t& df) {
     auto& range = std::get<py_table_keys_range_t>(df.rows_keys);
-    auto keys_range = df.binary.native.keys(range.min);
+    auto keys_range = df.binary.keys(range.min);
     auto keys_stream = keys_range.begin();
     std::vector<ukv_key_t> keys_found;
     while (!keys_stream.is_end()) {
@@ -168,10 +168,7 @@ static std::shared_ptr<arrow::RecordBatch> materialize(py_table_collection_t& df
         keys_found.resize(keys_count);
     }
 
-    auto collection = docs_collection_t(df.binary.native.db(),
-                                        df.binary.native,
-                                        df.binary.native.txn(),
-                                        df.binary.native.member_arena());
+    auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
     auto members = collection[keys_found];
 
     // Extract the present fields
@@ -267,7 +264,7 @@ void update(py_table_collection_t& df, py::object obj) {
         scan_rows_range(df);
 
     auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
-    auto collection = docs_collection_t(df.binary.native.db(), df.binary.native, df.binary.native.txn());
+    auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn());
 
     arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_record_batch = arrow::py::unwrap_batch(obj.ptr());
     std::shared_ptr<arrow::RecordBatch> record_batch = maybe_record_batch.ValueOrDie();
@@ -326,11 +323,14 @@ void ukv::wrap_pandas(py::module& m) {
 
     auto df =
         py::class_<py_table_collection_t, std::shared_ptr<py_table_collection_t>>(m, "DataFrame", py::module_local());
-    df.def(py::init([](py::handle dtype) {
-        // `dtype` can be a `dict` or a `list[tuple[str, str]]`, where every pair of
-        // strings contains a column name and Python type descriptor
-        return std::make_shared<py_table_collection_t>();
-    }));
+    df.def(py::init([](std::shared_ptr<py_db_t> py_db, std::string const& index) {
+               auto py_table = std::make_shared<py_table_collection_t>();
+               database_t& db = py_db->native;
+               py_table->binary = db.find_or_create(index.c_str()).throw_or_release();
+               return py_table;
+           }),
+           py::arg("db"),
+           py::arg("index") = "");
 
 #pragma region Managing Columns
 
@@ -498,12 +498,9 @@ void ukv::wrap_pandas(py::module& m) {
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.sample.html
     df.def("sample", [](py_table_collection_t& df, std::size_t count) {
-        auto collection = docs_collection_t(df.binary.native.db(),
-                                            df.binary.native,
-                                            df.binary.native.txn(),
-                                            df.binary.native.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
 
-        auto keys = collection.keys().sample(count, df.binary.native.member_arena()).throw_or_release();
+        auto keys = collection.keys().sample(count, df.binary.member_arena()).throw_or_release();
         df.rows_keys = std::vector<ukv_key_t>(keys.begin(), keys.end());
         return df.shared_from_this();
     });
@@ -518,14 +515,11 @@ void ukv::wrap_pandas(py::module& m) {
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.merge.html
     df.def("merge", [](py_table_collection_t& df, py_table_collection_t& df_to_merge) {
-        auto collection_to_merge = docs_collection_t(df_to_merge.binary.native.db(),
-                                                     df_to_merge.binary.native,
-                                                     df_to_merge.binary.native.txn(),
-                                                     df_to_merge.binary.native.member_arena());
-        auto collection = docs_collection_t(df.binary.native.db(),
-                                            df.binary.native,
-                                            df.binary.native.txn(),
-                                            df.binary.native.member_arena());
+        auto collection_to_merge = docs_collection_t(df_to_merge.binary.db(),
+                                                     df_to_merge.binary,
+                                                     df_to_merge.binary.txn(),
+                                                     df_to_merge.binary.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
 
         scan_rows(df_to_merge);
         auto& keys = std::get<std::vector<ukv_key_t>>(df_to_merge.rows_keys);
@@ -541,10 +535,7 @@ void ukv::wrap_pandas(py::module& m) {
     });
 
     df.def("insert", [](py_table_collection_t& df, std::string const& column_name, py::object obj) {
-        auto collection = docs_collection_t(df.binary.native.db(),
-                                            df.binary.native,
-                                            df.binary.native.txn(),
-                                            df.binary.native.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
 
         if (std::holds_alternative<std::monostate>(df.rows_keys))
             scan_rows(df);
@@ -579,10 +570,7 @@ void ukv::wrap_pandas(py::module& m) {
     });
 
     df.def("insert", [](py_table_collection_t& df, py::object obj) {
-        auto collection = docs_collection_t(df.binary.native.db(),
-                                            df.binary.native,
-                                            df.binary.native.txn(),
-                                            df.binary.native.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
 
         if (std::holds_alternative<std::monostate>(df.rows_keys))
             scan_rows(df);
@@ -632,10 +620,7 @@ void ukv::wrap_pandas(py::module& m) {
     // df.def("join", [](py_table_collection_t& df) {});
 
     df.def("drop", [](py_table_collection_t& df, py::object cols) {
-        auto collection = docs_collection_t(df.binary.native.db(),
-                                            df.binary.native,
-                                            df.binary.native.txn(),
-                                            df.binary.native.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
 
         if (std::holds_alternative<std::monostate>(df.rows_keys))
             scan_rows(df);
@@ -664,10 +649,7 @@ void ukv::wrap_pandas(py::module& m) {
     });
 
     df.def_property_readonly("size", [](py_table_collection_t& df) {
-        auto collection = docs_collection_t(df.binary.native.db(),
-                                            df.binary.native,
-                                            df.binary.native.txn(),
-                                            df.binary.native.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
 
         auto keys_range = collection.keys();
         auto keys_stream = keys_range.begin();
@@ -682,10 +664,7 @@ void ukv::wrap_pandas(py::module& m) {
     });
 
     df.def_property_readonly("shape", [](py_table_collection_t& df) {
-        auto collection = docs_collection_t(df.binary.native.db(),
-                                            df.binary.native,
-                                            df.binary.native.txn(),
-                                            df.binary.native.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
 
         auto keys_range = collection.keys();
         auto keys_stream = keys_range.begin();
@@ -699,5 +678,5 @@ void ukv::wrap_pandas(py::module& m) {
         return py::make_tuple(keys_found.size(), fields.size());
     });
 
-    df.def_property_readonly("empty", [](py_table_collection_t& df) { return !df.binary.native.size(); });
+    df.def_property_readonly("empty", [](py_table_collection_t& df) { return !df.binary.size(); });
 }

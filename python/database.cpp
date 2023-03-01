@@ -272,7 +272,7 @@ void ukv::wrap_database(py::module& m) {
     });
     py_collection.def_property_readonly("table", [](py_blobs_collection_t& py_collection) {
         auto py_table = std::make_shared<py_table_collection_t>();
-        py_table->binary = py_collection;
+        py_table->binary = py_collection.native;
         return py::cast(py_table);
     });
     py_collection.def_property_readonly("docs", [](py_blobs_collection_t& py_collection) {
