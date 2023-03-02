@@ -325,3 +325,22 @@ def test_from_records():
     table = ukv.from_records(main, data)
     table.astype({'col1': 'int64', 'col2': 'bytes'})
     assert pa.RecordBatch.from_pylist(data) == table.to_arrow()
+
+
+def test_rename():
+    main = ukv.DataBase().main
+    data = [{'col1': 3, 'col2': b'a'},
+            {'col1': 2, 'col2': b'b'},
+            {'col1': 1, 'col2': b'c'},
+            {'col1': 0, 'col2': b'd'}]
+
+    renamed_data = [{'col1': 3, 'col2': b'a'},
+                    {'col1': 2, 'col2': b'b'},
+                    {'col1': 1, 'col2': b'c'},
+                    {'col1': 0, 'col2': b'd'}]
+
+    table = ukv.from_records(main, data)
+
+    table.rename({'col1': 'column_1', 'col2': 'column_2'})
+    table.astype({'column_1': 'int64', 'column_2': 'bytes'})
+    assert table.to_arrow() == pa.RecordBatch.from_pylist(renamed_data)
