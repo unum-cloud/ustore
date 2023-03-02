@@ -13,6 +13,8 @@
 #include <iostream>
 #include <unistd.h>
 #include <thread>
+#include <mutex>
+#include <shared_mutex>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -499,6 +501,13 @@ TEST(db, clear_values) {
     check_length(collection_ref, 0);
 }
 
+/**
+ * Creates news collection under unique names.
+ * Fill data in collection. Checking/dropping/checking collection data by thread.
+ */
+std::shared_mutex m;
+bool is_deleted = false;
+
 TEST(db, collection_with_threads) {
     clear_environment();
     database_t db;
@@ -512,12 +521,20 @@ TEST(db, collection_with_threads) {
     round_trip(ref, triplet.contents_arrow());
 
     auto task_read = [&]() {
-        while (true)
+        while (true) {
+            std::shared_lock _ {m};
+            if (is_deleted) {
+                check_length(ref, ukv_length_missing_k);
+                break;
+            }
             check_equalities(ref, triplet);
+        }
     };
 
     auto task_remove = [&]() {
+        std::unique_lock _ {m};
         col1.clear();
+        is_deleted = true;
     };
 
     std::thread t1(task_read);
