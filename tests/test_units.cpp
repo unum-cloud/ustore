@@ -799,6 +799,55 @@ TEST(db, set_wrong_snapshot) {
     EXPECT_TRUE(db.clear());
 }
 
+/**
+ * Creates news collection under unique names.
+ * Fill data in collection. Checking/dropping/checking collection data by thread.
+ */
+TEST(db, snapshot_with_threads) {
+    clear_environment();
+    is_deleted = false;
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    triplet_t triplet;
+    triplet_t triplet_same_v;
+    triplet_same_v.vals = {'D', 'D', 'D'};
+
+    blobs_collection_t collection = db.main();
+    auto ref = collection[triplet.keys];
+    round_trip(ref, triplet);
+
+    auto snap = *db.snapshot();
+    auto snap_ref = snap[triplet.keys];
+
+    round_trip(ref, triplet_same_v);
+
+    auto task_read = [&]() {
+        while (true) {
+            std::shared_lock _ {m};
+            if (is_deleted) {
+                check_equalities(snap_ref, triplet_same_v);
+                break;
+            }
+            check_equalities(snap_ref, triplet);
+        }
+    };
+
+    auto task_reset = [&]() {
+        std::unique_lock _ {m};
+        snap.set_snapshot(0);
+        is_deleted = true;
+    };
+
+    std::thread t1(task_read);
+    std::thread t2(task_reset);
+    t1.join();
+    t2.join();
+
+    EXPECT_TRUE(db.clear());
+}
+
 TEST(db, transaction_erase_missing) {
     if (!ukv_supports_transactions_k)
         return;
