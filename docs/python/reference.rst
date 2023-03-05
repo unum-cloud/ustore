@@ -1,4 +1,4 @@
-API Referance
+API Reference
 ==============
 
 .. automodule:: ukv.rocksdb
