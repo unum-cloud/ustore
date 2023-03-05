@@ -12,7 +12,7 @@ Overview
    :hidden:
    :caption: �
 
-   details/install
+   install
    c/index
 
 .. toctree:: 
@@ -35,11 +35,11 @@ Overview
    :hidden:
    :caption: �
 
-   details/tests
-   details/benchmarks
-   details/implementation
-   details/contributing
-   details/related
+   tests
+   benchmarks
+   implementation
+   contributing
+   related
 
 .. toctree:: 
    :hidden:
