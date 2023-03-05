@@ -4,5 +4,5 @@ Examples
 ==================================
 REST server
 ==================================
-.. literalinclude:: ../page-rest-api.py
+.. literalinclude:: example.py
    :language: python

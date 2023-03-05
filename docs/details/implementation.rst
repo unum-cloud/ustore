@@ -2,4 +2,4 @@
 Implementation Details
 ========================
 
-.. mdinclude:: ../../../src/README.md
+.. mdinclude:: ../src/README.md

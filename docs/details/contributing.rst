@@ -2,4 +2,4 @@
 Contribution Guide
 ========================
 
-.. mdinclude:: ../../../CONTRIBUTING.md
+.. mdinclude:: ../CONTRIBUTING.md

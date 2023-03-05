@@ -2,4 +2,4 @@
 How We Test?
 ============
 
-.. mdinclude:: ../../../tests/README.md
+.. mdinclude:: ../tests/README.md

@@ -2,4 +2,4 @@
 Benchmark Results
 ========================
 
-.. mdinclude:: ../../../benchmarks/README.md
+.. mdinclude:: ../benchmarks/README.md

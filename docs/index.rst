@@ -2,7 +2,7 @@
 ==========
 Overview
 ==========
-.. mdinclude:: ../../README.md
+.. mdinclude:: ../README.md
 
 .. toctree:: 
    :hidden:
@@ -12,7 +12,7 @@ Overview
    :hidden:
    :caption: �
 
-   install
+   details/install
    c/index
 
 .. toctree:: 

@@ -9,17 +9,17 @@
 project = 'Unum · UKV'
 copyright = '2022, Unum'
 author = 'Unum'
-release = open('../../VERSION', 'r').read()
+release = open('../VERSION', 'r').read()
 with open('_static/custom.js', 'r+') as js:
     content = js.read()
     js.seek(0)
-    js.write(content.replace("$(VERSION)", release))
+    js.write(content.replace('$(VERSION)', release))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    'breathe', 'm2r2', 
+    'breathe', 'm2r2',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
@@ -29,7 +29,7 @@ extensions = [
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '*.md']
 
 
-googleanalytics_id = "UA-150644745-1"
+googleanalytics_id = 'UA-150644745-1'
 googleanalytics_enabled = True
 
 # -- Options for HTML output -------------------------------------------------
@@ -46,6 +46,5 @@ html_js_files = [
 ]
 
 
-
-breathe_projects = {"UKV": "../../build/xml"}
-breathe_default_project = "UKV"
+breathe_projects = {'UKV': '../build/xml'}
+breathe_default_project = 'UKV'

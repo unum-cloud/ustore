@@ -36,7 +36,7 @@ jobs:
       - name: Install ukv from pip
         run: pip install ukv
       - name: Build Docs
-        run: cd assets/docs && doxygen config.dox && make html
+        run: cd docs && doxygen conf.dox && make html
       - name: Copy assets
         run: cp -r assets build/docs/html/
       - name: Upload Artifacts
