@@ -662,33 +662,41 @@ void ukv::wrap_pandas(py::module& m) {
     });
 
     df.def_property_readonly("size", [](py_table_collection_t& df) {
-        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+        if (std::holds_alternative<std::monostate>(df.rows_keys))
+            scan_rows(df);
+        else if (std::holds_alternative<py_table_keys_range_t>(df.rows_keys))
+            scan_rows_range(df);
+        auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
 
-        auto keys_range = collection.keys();
-        auto keys_stream = keys_range.begin();
-        std::vector<ukv_key_t> keys_found;
-        while (!keys_stream.is_end()) {
-            keys_found.insert(keys_found.end(), keys_stream.keys_batch().begin(), keys_stream.keys_batch().end());
-            keys_stream.seek_to_next_batch();
+        if (std::holds_alternative<std::monostate>(df.columns_names)) {
+            auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+            auto fields = collection[keys].gist().throw_or_release();
+            auto names = std::vector<ukv_str_view_t>(fields.size());
+            transform_n(fields, names.size(), names.begin(), std::mem_fn(&std::string_view::data));
+            df.columns_names = names;
         }
-        auto members = collection[keys_found];
-        auto fields = members.gist().throw_or_release();
-        return keys_found.size() * fields.size();
+        auto& fields = std::get<std::vector<ukv_str_view_t>>(df.columns_names);
+
+        return keys.size() * fields.size();
     });
 
     df.def_property_readonly("shape", [](py_table_collection_t& df) {
-        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+        if (std::holds_alternative<std::monostate>(df.rows_keys))
+            scan_rows(df);
+        else if (std::holds_alternative<py_table_keys_range_t>(df.rows_keys))
+            scan_rows_range(df);
+        auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
 
-        auto keys_range = collection.keys();
-        auto keys_stream = keys_range.begin();
-        std::vector<ukv_key_t> keys_found;
-        while (!keys_stream.is_end()) {
-            keys_found.insert(keys_found.end(), keys_stream.keys_batch().begin(), keys_stream.keys_batch().end());
-            keys_stream.seek_to_next_batch();
+        if (std::holds_alternative<std::monostate>(df.columns_names)) {
+            auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+            auto fields = collection[keys].gist().throw_or_release();
+            auto names = std::vector<ukv_str_view_t>(fields.size());
+            transform_n(fields, names.size(), names.begin(), std::mem_fn(&std::string_view::data));
+            df.columns_names = names;
         }
-        auto members = collection[keys_found];
-        auto fields = members.gist().throw_or_release();
-        return py::make_tuple(keys_found.size(), fields.size());
+        auto& fields = std::get<std::vector<ukv_str_view_t>>(df.columns_names);
+
+        return py::make_tuple(keys.size(), fields.size());
     });
 
     df.def_property_readonly("empty", [](py_table_collection_t& df) { return !df.binary.size(); });
