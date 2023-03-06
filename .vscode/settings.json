@@ -172,6 +172,7 @@
         "tparam",
         "txns",
         "ucset",
+        "ujrpc",
         "umem",
         "UNUMDB",
         "upsert",
