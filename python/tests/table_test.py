@@ -133,7 +133,7 @@ def test_json():
     table = create_table(db)
     table.astype({'name': 'str', 'tweets': 'int32'})
 
-    expected_json = '''{'name':{'0':'Lex','1':'Andrew','2':'Joe'},'tweets':{'0':2221,'1':3935,'2':45900}}'''
+    expected_json = '''{"name":{"0":"Lex","1":"Andrew","2":"Joe"},"tweets":{"0":2221,"1":3935,"2":45900}}'''
     exported_json = table.to_json()
     assert exported_json == expected_json
 
