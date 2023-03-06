@@ -649,45 +649,16 @@ void ukv::wrap_pandas(py::module& m) {
         scan_rows(df);
         auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
         auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
-        auto values = collection[keys].value().throw_or_release();
 
-        std::string jsons, k, v;
-        std::vector<ukv_length_t> offsets(values.size() + 1);
-        for (size_t i = 0; i != values.size(); ++i) {
-            jsons.resize(jsons.size() + values.lengths()[i]);
-            std::memcpy(jsons.data() + values.offsets()[i],
-                        values.contents() + values.offsets()[i],
-                        values.lengths()[i]);
-        }
-
-        std::size_t difference = 0;
         PyObject *key, *value;
         Py_ssize_t pos = 0;
-        while (PyDict_Next(columns.ptr(), &pos, &key, &value)) {
-            k.clear();
-            v.clear();
-            to_string(key, k);
-            to_string(value, v);
-            k += ":";
-            v += ":";
-
-            std::string::size_type n = 0;
-            while ((n = jsons.find(k, n)) != std::string::npos) {
-                jsons.replace(n, k.size(), v);
-                n += v.size();
-            }
-            difference += v.size() - k.size();
-        }
-
-        offsets[0] = 0;
-        for (size_t i = 1; i != values.size() + 1; ++i)
-            offsets[i] = values.offsets()[i] + (i * difference);
-
-        contents_arg_t args {};
-        auto values_begin = reinterpret_cast<ukv_bytes_ptr_t>(jsons.data());
-        args.contents_begin = {&values_begin, 0};
-        args.offsets_begin = {offsets.data(), sizeof(ukv_length_t)};
-        collection[keys].upsert(args).throw_unhandled();
+        std::string patch_command = "[";
+        while (PyDict_Next(columns.ptr(), &pos, &key, &value))
+            patch_command += fmt::format("{{\"op\": \"move\",\"from\": \"/{}\",\"path\": \"/{}\"}},",
+                                         py_to_bytes(key),
+                                         py_to_bytes(value));
+        patch_command[patch_command.size() - 1] = ']';
+        collection[keys].patch(patch_command.c_str()).throw_unhandled();
     });
 
     df.def_property_readonly("size", [](py_table_collection_t& df) {
