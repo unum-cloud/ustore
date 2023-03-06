@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Unum · UKV'
-copyright = '2022, Unum'
+copyright = '2023, Unum'
 author = 'Unum'
 release = open('../VERSION', 'r').read()
 with open('_static/custom.js', 'r+') as js:
@@ -35,7 +35,7 @@ googleanalytics_enabled = True
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_logo = '../icons/logo.png'
+html_logo = '../assets/icons/logo.png'
 html_theme = 'furo'
 html_static_path = ['_static']
 html_css_files = [
