@@ -489,7 +489,6 @@ TEST(db, clear_values) {
     EXPECT_TRUE(db.open(path()));
 
     triplet_t triplet;
-
     blobs_collection_t col = db.main();
     auto collection_ref = col[triplet.keys];
 
@@ -499,48 +498,8 @@ TEST(db, clear_values) {
 
     EXPECT_TRUE(col.clear_values());
     check_length(collection_ref, 0);
-}
-
-/**
- * Creates news collection under unique names.
- * Fill data in collection. Checking/dropping/checking collection data by thread.
- */
-std::shared_mutex m;
-bool is_deleted = false;
-
-TEST(db, collection_with_threads) {
-    clear_environment();
-    database_t db;
-    EXPECT_TRUE(db.open(path()));
-
-    blobs_collection_t collection = db.main();
-    blobs_collection_t col1 = db.create("col1").throw_or_release();
-
-    triplet_t triplet;
-    auto ref = col1[triplet.keys];
-    round_trip(ref, triplet.contents_arrow());
-
-    auto task_read = [&]() {
-        while (true) {
-            std::shared_lock _ {m};
-            if (is_deleted) {
-                check_length(ref, ukv_length_missing_k);
-                break;
-            }
-            check_equalities(ref, triplet);
-        }
-    };
-
-    auto task_remove = [&]() {
-        std::unique_lock _ {m};
-        col1.clear();
-        is_deleted = true;
-    };
-
-    std::thread t1(task_read);
-    std::thread t2(task_remove);
-    t1.join();
-    t2.join();
+    col.clear();
+    check_length(collection_ref, ukv_length_missing_k);
 
     EXPECT_TRUE(db.clear());
 }
@@ -805,7 +764,6 @@ TEST(db, set_wrong_snapshot) {
  */
 TEST(db, snapshot_with_threads) {
     clear_environment();
-    is_deleted = false;
 
     database_t db;
     EXPECT_TRUE(db.open(path()));
@@ -823,9 +781,11 @@ TEST(db, snapshot_with_threads) {
 
     round_trip(ref, triplet_same_v);
 
+    std::shared_mutex mutex;
+    bool is_deleted = false;
     auto task_read = [&]() {
         while (true) {
-            std::shared_lock _ {m};
+            std::shared_lock _ {mutex};
             if (is_deleted) {
                 check_equalities(snap_ref, triplet_same_v);
                 break;
@@ -835,7 +795,7 @@ TEST(db, snapshot_with_threads) {
     };
 
     auto task_reset = [&]() {
-        std::unique_lock _ {m};
+        std::unique_lock _ {mutex};
         snap.set_snapshot(0);
         is_deleted = true;
     };

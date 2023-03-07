@@ -383,7 +383,6 @@ class database_t : public std::enable_shared_from_this<database_t> {
         auto context = context_t {db_, nullptr};
 
         status_t status;
-
         // Remove snapshots
         auto maybe_snaps = context.snapshots();
         auto snaps = *maybe_snaps;
