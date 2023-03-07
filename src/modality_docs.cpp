@@ -1101,7 +1101,7 @@ void modify_field( //
         }
         else if (c_modification == doc_modification_t::remove_k) {
             yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
-            return_error_if_m(yyjson_mut_obj_remove(val, key), c_error, 0, "Failed To Insert!");
+            return_error_if_m(yyjson_mut_obj_remove(val, key), c_error, 0, "Failed To Remove!");
         }
         else if (c_modification == doc_modification_t::update_k) {
             yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
