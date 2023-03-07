@@ -132,8 +132,8 @@ def test_degree():
 
     sources = np.arange(100)
     targets = np.arange(1, 101)
-    ids = np.arange(100)
-    net.add_edges_from(sources, targets, ids, weight=2)
+    edge_ids = np.arange(100)
+    net.add_edges_from(sources, targets, edge_ids, weight=2)
 
     degs = net.degree
     assert degs[0] == degs[100] == 1

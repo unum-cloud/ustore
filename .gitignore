@@ -37,6 +37,7 @@ dist/
 
 # Temporary Files
 Makefile
+!docs/Makefile
 CMakeCache.txt
 cmake_install.cmake
 CMakeFiles

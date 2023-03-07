@@ -140,7 +140,7 @@ main_collection.paths # for string keys
 
 With over 10'000 stars on GitHub NetworkX might just be the most popular network-science package across all languages.
 We adapt part of its interface for labeled directed graphs to preserve familiar look.
-But if NetworkX hardly scales beyond a thousand nodes, our Graph engine is designed to handle trillions.
+But if NetworkX hardly scales beyond a thousand nodes, we aim to support persistent memory Graphs, that can span tens of Terabytes.
 
 ```python
 import numpy as np
@@ -205,6 +205,21 @@ with ukv.Transaction(db) as txn:
 
     g = txn['categories'].graph
     g.add_edges_from(controversial_ids, [controversial_articles_category] * len(controversial_ids))
+```
+
+We also support Attributed Graphs.
+You only need to specify the names of document collections, where the attributes will be stored or pulled from:
+
+```python
+g = ukv.Network(db, 'graph', 'node_attributes', 'edge_attributes')
+source_ids = np.arange(100)
+target_ids = np.arange(1, 101)
+edge_ids = np.arange(100)
+g.add_edges_from(source_ids, target_ids, edge_ids, weight=2)
+assert g.degree(
+    [100, 1, 2, 0], 
+    weight='weight',
+) == [(100, 2), (1, 4), (2, 4), (0, 2)]
 ```
 
 ---

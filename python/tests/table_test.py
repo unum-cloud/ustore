@@ -84,8 +84,8 @@ def test_update():
     docs[2] = {'name': 'Joe', 'lastname': 'Rogan', 'tweets': 45900}
 
     tweets = pa.array([2, 4, 5])
-    names = pa.array(["Jack", "Charls", "Sam"])
-    column_names = ["tweets", "name"]
+    names = pa.array(['Jack', 'Charls', 'Sam'])
+    column_names = ['tweets', 'name']
 
     modifier = pa.RecordBatch.from_arrays([tweets, names], names=column_names)
     table.update(modifier)
@@ -101,12 +101,12 @@ def test_csv():
     db = ukv.DataBase()
     table = create_table(db)
     table.astype({'name': 'str', 'tweets': 'int64'}
-                 ).to_csv("tmp/pandas.csv")
+                 ).to_csv('tmp/pandas.csv')
 
     df = table.astype({'name': 'str', 'tweets': 'int64'}
                       ).to_arrow()
 
-    exported_df = csv.read_csv("tmp/pandas.csv").to_batches()[0]
+    exported_df = csv.read_csv('tmp/pandas.csv').to_batches()[0]
     assert df == exported_df
 
     db.clear()
@@ -116,13 +116,13 @@ def test_parquet():
     db = ukv.DataBase()
     table = create_table(db)
     table.astype({'name': 'str', 'tweets': 'int32'}
-                 ).to_parquet("tmp/pandas.parquet")
+                 ).to_parquet('tmp/pandas.parquet')
 
     df = table.astype({'name': 'str', 'tweets': 'int32'}
                       ).to_arrow()
 
-    exported_df = next(ds.dataset("tmp/pandas.parquet",
-                       format="parquet").to_batches())
+    exported_df = next(ds.dataset('tmp/pandas.parquet',
+                       format='parquet').to_batches())
     assert df == exported_df
 
     db.clear()
@@ -137,9 +137,9 @@ def test_json():
     exported_json = table.to_json()
     assert exported_json == expected_json
 
-    table.to_json("tmp/pandas.json")
+    table.to_json('tmp/pandas.json')
     expected_json = json.loads(expected_json)
-    f = open("tmp/pandas.json")
+    f = open('tmp/pandas.json')
     exported_json = json.load(f)
     f.close()
     assert exported_json == expected_json
@@ -305,3 +305,42 @@ def test_insert():
     exported = table.astype(
         {'name': 'bytes', 'lastname': 'bytes', 'tweets': 'int64', 'id': 'int64'}).to_arrow()
     assert expected == exported
+
+
+def test_from_dict():
+    main = ukv.DataBase().main
+    data = {'col1': [3, 2, 1, 0], 'col2': [b'a', b'b', b'c', b'd']}
+    table = ukv.from_dict(main, data)
+    table.astype({'col1': 'int64', 'col2': 'bytes'})
+    assert pa.RecordBatch.from_pydict(data) == table.to_arrow()
+
+
+def test_from_records():
+    main = ukv.DataBase().main
+    data = [{'col1': 3, 'col2': b'a'},
+            {'col1': 2, 'col2': b'b'},
+            {'col1': 1, 'col2': b'c'},
+            {'col1': 0, 'col2': b'd'}]
+
+    table = ukv.from_records(main, data)
+    table.astype({'col1': 'int64', 'col2': 'bytes'})
+    assert pa.RecordBatch.from_pylist(data) == table.to_arrow()
+
+
+def test_rename():
+    main = ukv.DataBase().main
+    data = [{'col1': 3, 'col2': b'a'},
+            {'col1': 2, 'col2': b'b'},
+            {'col1': 1, 'col2': b'c'},
+            {'col1': 0, 'col2': b'd'}]
+
+    renamed_data = [{'col1': 3, 'col2': b'a'},
+                    {'col1': 2, 'col2': b'b'},
+                    {'col1': 1, 'col2': b'c'},
+                    {'col1': 0, 'col2': b'd'}]
+
+    table = ukv.from_records(main, data)
+
+    table.rename({'col1': 'column_1', 'col2': 'column_2'})
+    table.astype({'column_1': 'int64', 'column_2': 'bytes'})
+    assert table.to_arrow() == pa.RecordBatch.from_pylist(renamed_data)
