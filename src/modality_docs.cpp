@@ -1644,7 +1644,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     write.tasks_count = c.tasks_count;
     write.collections = c.collections;
     write.collections_stride = c.collections_stride;
-    write.keys = c.keys;
+    write.keys = c.keys ? c.keys : tape.begin();
     write.keys_stride = c.keys_stride;
     write.presences = c.presences;
     write.offsets = c.offsets;
