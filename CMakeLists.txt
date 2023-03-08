@@ -120,6 +120,7 @@ endif()
 include(FetchContent)
 include_directories(include/)
 include_directories(src/)
+include_directories(tools/)
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
   set(FETCHCONTENT_QUIET OFF)
