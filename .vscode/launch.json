@@ -357,7 +357,7 @@
             "name": "C++: Tabular Benchmark UMem",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/ukv_umem_tabular_graph_benchmark",
+            "program": "${workspaceFolder}/build_debug/build/bin/bench_tabular_graph_ukv_embedded_umem",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -367,7 +367,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug Tabular UMem Benchmark",
+            "preLaunchTask": "Build Debug Tabular Benchmark",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         }
