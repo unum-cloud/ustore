@@ -31,7 +31,7 @@
 #include <gtest/gtest.h>
 
 #include <ukv/ukv.hpp>
-#include "../tools/dataset.h"
+#include "dataset.h"
 
 using namespace unum::ukv;
 using graph_t = std::vector<edge_t>;
@@ -42,6 +42,7 @@ namespace fs = std::filesystem;
 constexpr size_t max_batch_size_k = 1024 * 1024 * 1024;
 
 constexpr ukv_str_view_t dataset_path_k = "/home/vscode/Datasets/tweets32K.ndjson";
+constexpr ukv_str_view_t dataset_clean_path_k = "/home/vscode/Datasets/tweets32K-clean.ndjson";
 constexpr ukv_str_view_t parquet_path_k = "/home/vscode/Datasets/tweets32K-clean.parquet";
 constexpr ukv_str_view_t csv_path_k = "/home/vscode/Datasets/tweets32K-clean.csv";
 constexpr ukv_str_view_t ndjson_path_k = "sample_docs.ndjson";
@@ -488,10 +489,10 @@ void make_ndjson_graph() {
 }
 
 void make_test_files_graph() {
-    std::filesystem::path pt {dataset_path_k};
+    std::filesystem::path pt {dataset_clean_path_k};
     size_t size = std::filesystem::file_size(pt);
 
-    auto handle = open(dataset_path_k, O_RDONLY);
+    auto handle = open(dataset_clean_path_k, O_RDONLY);
     auto begin = mmap(NULL, size, PROT_READ, MAP_PRIVATE, handle, 0);
     std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), size);
     madvise(begin, size, MADV_SEQUENTIAL);
