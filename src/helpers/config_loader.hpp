@@ -10,6 +10,7 @@
 #include <string>            // `std::string`
 #include <vector>            // `std::vector`
 #include <nlohmann/json.hpp> // `nlohmann::json`
+#include <fmt/format.h> // `fmt::format`
 
 #include "ukv/cpp/status.hpp" // `status_t`
 
@@ -60,6 +61,7 @@ class config_loader_t {
     static inline status_t save_to_json_string(config_t const& config, std::string& str_json);
 
   private:
+    static inline std::string current_version() noexcept;
     static inline status_t validate_config(json_t const& json) noexcept;
 
     static inline bool parse_version(std::string const& str_version, uint8_t& major, uint8_t& minor) noexcept;
@@ -83,7 +85,6 @@ inline status_t config_loader_t::load_from_json(json_t const& json, config_t& co
                 for (auto j_disk : j_disks) {
                     disk_config_t disk;
                     disk.path = j_disk.value("path", "");
-                    disk.max_size = j_disk.value("max_size", disk_config_t::unlimited_space_k);
                     if (disk.path.empty())
                         return "Empty data directory path";
                     if (!parse_volume(j_disk, "max_size", disk.max_size))
@@ -110,6 +111,8 @@ inline status_t config_loader_t::load_from_json_string(std::string const& str_js
 inline status_t config_loader_t::save_to_json(config_t const& config, json_t& json) {
 
     json.clear();
+    json["version"] = current_version();
+
     json["directory"] = config.directory;
     json["engine_config_path"] = config.engine_config_path;
 
@@ -133,6 +136,10 @@ inline status_t config_loader_t::save_to_json_string(config_t const& config, std
 
     str_json = json.dump();
     return {};
+}
+
+inline std::string config_loader_t::current_version() noexcept {
+    return string_t::format("{}.{}", current_major_version_k, current_minor_version_k);
 }
 
 inline status_t config_loader_t::validate_config(json_t const& json) noexcept {
