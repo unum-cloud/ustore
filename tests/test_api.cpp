@@ -12,7 +12,7 @@ using namespace unum;
 static char const* path() {
     char* path = std::getenv("UKV_TEST_PATH");
     if (path)
-        return path;
+        return std::strlen(path) ? path : nullptr;
 
 #if defined(UKV_FLIGHT_CLIENT)
     return nullptr;

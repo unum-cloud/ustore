@@ -426,10 +426,10 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         auto db = database_t(std::move(maybe_pairs).value());
         auto db_ptr = std::make_unique<database_t>(std::move(db)).release();
 
-        if (c.config) {
+        if (c.config && std::strlen(c.config) > 0) {
             // Load config
             config_t config;
-            auto status = config_loader_t::load(c.config, config);
+            auto status = config_loader_t::load_from_json_string(c.config, config);
             return_error_if_m(status, c.error, args_wrong_k, status.message());
 
             // Root path

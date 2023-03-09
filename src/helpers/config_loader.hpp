@@ -42,7 +42,7 @@ struct config_t {
 };
 
 /**
- * @brief Loads DBMS configuration from json
+ * @brief DBMS configurations loader
  */
 class config_loader_t {
   public:
@@ -53,7 +53,8 @@ class config_loader_t {
     static constexpr uint8_t current_minor_version_k = 0;
 
   public:
-    static inline status_t load(json_t const& json, config_t& config) noexcept;
+    static inline status_t load_from_json(json_t const& json, config_t& config) noexcept;
+    static inline status_t load_from_json_string(std::string const& str_json, config_t& config) noexcept;
 
   private:
     static inline status_t validate_config(json_t const& json);
@@ -63,7 +64,7 @@ class config_loader_t {
     static inline bool parse_bytes(std::string const& str, size_t& bytes) noexcept;
 };
 
-inline status_t config_loader_t::load(json_t const& json, config_t& config) noexcept {
+inline status_t config_loader_t::load_from_json(json_t const& json, config_t& config) noexcept {
 
     try {
         auto status = validate_config(json);
@@ -96,6 +97,11 @@ inline status_t config_loader_t::load(json_t const& json, config_t& config) noex
     }
 
     return {};
+}
+
+inline status_t config_loader_t::load_from_json_string(std::string const& str_json, config_t& config) noexcept {
+    auto json = json_t::parse(str_json);
+    return load_from_json(json, config);
 }
 
 inline status_t config_loader_t::validate_config(json_t const& json) {

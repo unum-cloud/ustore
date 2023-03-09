@@ -124,7 +124,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         return_error_if_m(c.config, c.error, args_wrong_k, "Null config specified");
         // Load config
         config_t config;
-        auto st = config_loader_t::load(c.config, config);
+        auto st = config_loader_t::load_from_json_string(c.config, config);
         return_error_if_m(st, c.error, args_wrong_k, st.message());
 
         // Root path
@@ -171,7 +171,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 
         level_db_t* db_ptr = new level_db_t;
         level_native_t* native_db = nullptr;
-        level_status_t status = leveldb::DB::Open(options, c.config, &native_db);
+        level_status_t status = leveldb::DB::Open(options, root, &native_db);
         if (!status.ok()) {
             *c.error = "Couldn't open LevelDB";
             return;

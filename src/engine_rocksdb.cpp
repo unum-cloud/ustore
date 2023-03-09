@@ -134,7 +134,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         return_error_if_m(c.config, c.error, args_wrong_k, "Null config specified");
         // Load config
         config_t config;
-        auto st = config_loader_t::load(c.config, config);
+        auto st = config_loader_t::load_from_json_string(c.config, config);
         return_error_if_m(st, c.error, args_wrong_k, st.message());
 
         // Root path
