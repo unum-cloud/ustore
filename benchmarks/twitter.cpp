@@ -690,11 +690,11 @@ int main(int argc, char** argv) {
 
 // 4. Run the actual benchmarks
 #if defined(UKV_ENGINE_IS_LEVELDB)
-    db.open("/mnt/md0/Twitter/LevelDB").throw_unhandled();
+    db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/LevelDB"})").throw_unhandled();
 #elif defined(UKV_ENGINE_IS_ROCKSDB)
-    db.open("/mnt/md0/Twitter/RocksDB").throw_unhandled();
+    db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/RocksDB"})").throw_unhandled();
 #elif defined(UKV_ENGINE_IS_UDISK)
-    db.open("/mnt/md0/Twitter/UnumDB").throw_unhandled();
+    db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/UnumDB"})").throw_unhandled();
 #else
     db.open().throw_unhandled();
 #endif

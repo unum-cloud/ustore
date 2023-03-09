@@ -69,7 +69,7 @@ inline status_t config_loader_t::load(json_t const& json, config_t& config) noex
             return status;
 
         config.directory = json.value("directory");
-        config.engine_config_path = json.value("engine_config_path");
+        config.engine_config_path = json.value("engine_config_path", "");
 
         if (json.contains("data_directories")) {
             auto j_disks = json["data_directories"];
@@ -90,7 +90,7 @@ inline status_t config_loader_t::load(json_t const& json, config_t& config) noex
         }
     }
     catch (...) {
-        return "Exception occurred: Failed to load configs";
+        return "Exception occurred: Invalid json config file";
     }
 
     return {};

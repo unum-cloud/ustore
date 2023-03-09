@@ -31,6 +31,13 @@ static char const* path() {
 #endif
 }
 
+static std::string config() {
+    auto dir = path();
+    if (!dir)
+        return {};
+    return fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
+}
+
 enum class operation_code_t : std::uint8_t {
     insert_k,
     remove_k,
@@ -310,7 +317,7 @@ class test_one_config_t : public testing::Test {
 
     static void SetUpTestSuite() {}
     static void TearDownTestSuite() {}
-    void SetUp() override { EXPECT_TRUE(db.open(path())); }
+    void SetUp() override { EXPECT_TRUE(db.open(config().c_str())); }
     void TearDown() override { EXPECT_TRUE(db.clear()); }
     void TestBody() override { test_writes(db, thread_count, checkpoint_frequency); }
 };

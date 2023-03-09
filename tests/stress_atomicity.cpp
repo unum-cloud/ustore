@@ -28,6 +28,13 @@ static char const* path() {
 #endif
 }
 
+static std::string config() {
+    auto dir = path();
+    if (!dir)
+        return {};
+    return fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
+}
+
 /**
  * @brief Tests the atomicity of transactions.
  *
@@ -42,7 +49,7 @@ static char const* path() {
 template <std::size_t threads_count_ak, std::size_t batch_size_ak, std::size_t deletes_periodicity_ak>
 void insert_atomic_isolated(std::size_t count_batches) {
     database_t db;
-    EXPECT_TRUE(db.open(path()));
+    EXPECT_TRUE(db.open(config().c_str()));
     EXPECT_TRUE(db.clear());
 
     auto task = [&](size_t thread_idx) {
