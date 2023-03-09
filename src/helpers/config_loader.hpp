@@ -130,8 +130,9 @@ inline status_t config_loader_t::save_to_json_string(config_t const& config, std
     auto status = save_to_json(config, json);
     if (!status)
         return status;
-    str_json = json.to_string();
-    return true;
+
+    str_json = json.dump();
+    return {};
 }
 
 inline status_t config_loader_t::validate_config(json_t const& json) noexcept {
