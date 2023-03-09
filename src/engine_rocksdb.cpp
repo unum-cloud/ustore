@@ -26,9 +26,10 @@
 #include <rocksdb/utilities/optimistic_transaction_db.h>
 
 #include "ukv/db.h"
-#include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
-#include "helpers/linked_array.hpp" // `uninitialized_array_gt`
-#include "helpers/full_scan.hpp"    // `reservoir_sample_iterator`
+#include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
+#include "helpers/linked_array.hpp"  // `uninitialized_array_gt`
+#include "helpers/full_scan.hpp"     // `reservoir_sample_iterator`
+#include "helpers/config_loader.hpp" // `config_loader_t`
 
 namespace stdfs = std::filesystem;
 using namespace unum::ukv;
@@ -134,7 +135,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         // Load config
         config_t config;
         auto st = config_loader_t::load(c.config, config);
-        return_error_if_m(st, c.error, args_wrong_k, st.member_ptr());
+        return_error_if_m(st, c.error, args_wrong_k, st.message());
 
         // Root path
         stdfs::path root = config.directory;
@@ -187,7 +188,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 
         // Storage paths
         for (auto const& disk : config.data_directories)
-            options.db_paths.push_back(disk.path, disk.max_size);
+            options.db_paths.push_back({disk.path, disk.max_size});
 
         rocks_native_t* native_db = nullptr;
         rocksdb::OptimisticTransactionDBOptions txn_options;

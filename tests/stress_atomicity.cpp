@@ -8,6 +8,7 @@
 #include <unordered_map>
 
 #include <gtest/gtest.h>
+#include <fmt/format.h>
 
 #include "ukv/ukv.hpp"
 

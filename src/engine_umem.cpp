@@ -430,7 +430,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
             // Load config
             config_t config;
             auto status = config_loader_t::load(c.config, config);
-            return_error_if_m(status, c.error, args_wrong_k, status.member_ptr());
+            return_error_if_m(status, c.error, args_wrong_k, status.message());
 
             // Root path
             stdfs::path root = config.directory;
@@ -457,7 +457,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
                 json_t js = json_t::parse(ifs);
             }
 
-            db_ptr->persisted_directory = std::string(c.config, len);
+            db_ptr->persisted_directory = root;
             read(*db_ptr, db_ptr->persisted_directory, c.error);
         }
         *c.db = db_ptr;

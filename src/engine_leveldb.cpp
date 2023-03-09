@@ -15,9 +15,10 @@
 #include <nlohmann/json.hpp>
 
 #include "ukv/db.h"
-#include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
-#include "helpers/linked_array.hpp" // `uninitialized_array_gt`
-#include "helpers/full_scan.hpp"    // `reservoir_sample_iterator`
+#include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
+#include "helpers/linked_array.hpp"  // `uninitialized_array_gt`
+#include "helpers/full_scan.hpp"     // `reservoir_sample_iterator`
+#include "helpers/config_loader.hpp" // `config_loader_t`
 
 using namespace unum::ukv;
 using namespace unum;
@@ -123,8 +124,8 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         return_error_if_m(c.config, c.error, args_wrong_k, "Null config specified");
         // Load config
         config_t config;
-        auto status = config_loader_t::load(c.config, config);
-        return_error_if_m(status, c.error, args_wrong_k, status.member_ptr());
+        auto st = config_loader_t::load(c.config, config);
+        return_error_if_m(st, c.error, args_wrong_k, st.message());
 
         // Root path
         stdfs::path root = config.directory;
@@ -214,7 +215,7 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     std::lock_guard<std::mutex> locker(db.mutex);
-    auto it = db.snapshots.find(*c.snapshot);
+    auto it = db.snapshots.find(*c.id);
     if (it != db.snapshots.end())
         return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
 
@@ -235,18 +236,18 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
         return;
 
     ukv_snapshot_drop_t& c = *c_ptr;
-    if (!c.snapshot)
+    if (!c.id)
         return;
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.id);
     if (!snap.snapshot)
         return;
 
     db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
 
-    auto id = reinterpret_cast<std::size_t>(c.snapshot);
+    auto id = reinterpret_cast<std::size_t>(c.id);
     db.mutex.lock();
     db.snapshots.erase(id);
     db.mutex.unlock();
