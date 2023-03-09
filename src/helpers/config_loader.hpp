@@ -139,7 +139,7 @@ inline status_t config_loader_t::save_to_json_string(config_t const& config, std
 }
 
 inline std::string config_loader_t::current_version() noexcept {
-    return string_t::format("{}.{}", current_major_version_k, current_minor_version_k);
+    return fmt::format("{}.{}", current_major_version_k, current_minor_version_k);
 }
 
 inline status_t config_loader_t::validate_config(json_t const& json) noexcept {
