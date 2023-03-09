@@ -53,18 +53,21 @@ class config_loader_t {
     static constexpr uint8_t current_minor_version_k = 0;
 
   public:
-    static inline status_t load_from_json(json_t const& json, config_t& config) noexcept;
-    static inline status_t load_from_json_string(std::string const& str_json, config_t& config) noexcept;
+    static inline status_t load_from_json(json_t const& json, config_t& config);
+    static inline status_t load_from_json_string(std::string const& str_json, config_t& config);
+
+    static inline status_t save_to_json(config_t const& config,json_t& json);
+    static inline status_t save_to_json_string(config_t const& config, std::string& str_json);
 
   private:
-    static inline status_t validate_config(json_t const& json);
+    static inline status_t validate_config(json_t const& json) noexcept;
 
     static inline bool parse_version(std::string const& str_version, uint8_t& major, uint8_t& minor) noexcept;
     static inline bool parse_volume(json_t const& json, std::string const& key, size_t& bytes) noexcept;
     static inline bool parse_bytes(std::string const& str, size_t& bytes) noexcept;
 };
 
-inline status_t config_loader_t::load_from_json(json_t const& json, config_t& config) noexcept {
+inline status_t config_loader_t::load_from_json(json_t const& json, config_t& config) {
 
     try {
         auto status = validate_config(json);
@@ -99,12 +102,39 @@ inline status_t config_loader_t::load_from_json(json_t const& json, config_t& co
     return {};
 }
 
-inline status_t config_loader_t::load_from_json_string(std::string const& str_json, config_t& config) noexcept {
+inline status_t config_loader_t::load_from_json_string(std::string const& str_json, config_t& config) {
     auto json = json_t::parse(str_json);
     return load_from_json(json, config);
 }
 
-inline status_t config_loader_t::validate_config(json_t const& json) {
+inline status_t config_loader_t::save_to_json(config_t const& config, json_t& json) {
+
+    json.clear();
+    json["directory"] = config.directory;
+    json["engine_config_path"] = config.engine_config_path;
+
+    std::vector<json_t> j_data_directories;
+    for (auto const& directory : config.data_directories) {
+        json_t j_directory;
+        j_directory["path"] = directory.path;
+        j_directory["max_size"] = directory.max_size;
+        j_data_directories.push_back(j_directory);
+    }
+    json["data_directories"] = j_data_directories;
+
+    return {};
+}
+    
+inline status_t config_loader_t::save_to_json_string(config_t const& config, std::string& str_json) {
+    json_t json;
+    auto status = save_to_json(config, json);
+    if (!status)
+        return status;
+    str_json = json.to_string();
+    return true;
+}
+
+inline status_t config_loader_t::validate_config(json_t const& json) noexcept {
 
     std::string version = json.value("version", std::string());
     uint8_t major_version = 0;
