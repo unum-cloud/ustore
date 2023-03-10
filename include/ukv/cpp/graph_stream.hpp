@@ -23,6 +23,7 @@ class graph_stream_t {
     ukv_database_t db_ {nullptr};
     ukv_collection_t collection_ {ukv_collection_main_k};
     ukv_transaction_t transaction_ {nullptr};
+    ukv_snapshot_t snapshot_ {};
     ukv_vertex_role_t role_ = ukv_vertex_role_any_k;
 
     edges_span_t fetched_edges_ {};
@@ -43,6 +44,7 @@ class graph_stream_t {
         graph_find_edges.db = db_;
         graph_find_edges.error = status.member_ptr();
         graph_find_edges.transaction = transaction_;
+        graph_find_edges.snapshot = snapshot_;
         graph_find_edges.arena = arena_.member_ptr();
         graph_find_edges.tasks_count = vertices.count();
         graph_find_edges.collections = &collection_;
@@ -78,9 +80,10 @@ class graph_stream_t {
     graph_stream_t(ukv_database_t db,
                    ukv_collection_t collection = ukv_collection_main_k,
                    ukv_transaction_t txn = nullptr,
+                   ukv_snapshot_t snap = 0,
                    std::size_t read_ahead_vertices = keys_stream_t::default_read_ahead_k,
                    ukv_vertex_role_t role = ukv_vertex_role_any_k) noexcept
-        : db_(db), collection_(collection), transaction_(txn), role_(role), arena_(db),
+        : db_(db), collection_(collection), transaction_(txn), snapshot_(snap), role_(role), arena_(db),
           vertex_stream_(db, collection, read_ahead_vertices, txn) {}
 
     graph_stream_t(graph_stream_t&&) = default;

@@ -361,6 +361,7 @@ class blobs_range_t {
 
     ukv_database_t db_;
     ukv_transaction_t txn_;
+    ukv_snapshot_t snap_;
     ukv_collection_t collection_;
     ukv_key_t min_key_;
     ukv_key_t max_key_;
@@ -377,10 +378,11 @@ class blobs_range_t {
   public:
     blobs_range_t(ukv_database_t db,
                   ukv_transaction_t txn = nullptr,
+                  ukv_snapshot_t snap = 0,
                   ukv_collection_t collection = ukv_collection_main_k,
                   ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
                   ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) noexcept
-        : db_(db), txn_(txn), collection_(collection), min_key_(min_key), max_key_(max_key) {}
+        : db_(db), txn_(txn), snap_(snap), collection_(collection), min_key_(min_key), max_key_(max_key) {}
 
     blobs_range_t(blobs_range_t&&) = default;
     blobs_range_t& operator=(blobs_range_t&&) = default;
@@ -389,6 +391,7 @@ class blobs_range_t {
 
     ukv_database_t db() const noexcept { return db_; }
     ukv_transaction_t txn() const noexcept { return txn_; }
+    ukv_snapshot_t snap() const noexcept { return snap_; }
     ukv_collection_t collection() const noexcept { return collection_; }
 
     expected_gt<keys_stream_t> keys_begin(std::size_t read_ahead = keys_stream_t::default_read_ahead_k) noexcept {
@@ -422,6 +425,7 @@ class blobs_range_t {
         size.db = db_;
         size.error = s;
         size.transaction = txn_;
+        size.snapshot = snap_;
         size.arena = a;
         size.collections = &collection_;
         size.start_keys = &min_key_;
@@ -482,6 +486,7 @@ struct keys_range_t {
         sample.db = members.db();
         sample.error = status.member_ptr();
         sample.transaction = members.txn();
+        sample.snapshot = members.snap();
         sample.arena = arena;
         sample.tasks_count = 1;
         sample.collections = &c_collection;

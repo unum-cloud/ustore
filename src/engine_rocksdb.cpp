@@ -219,7 +219,7 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
     std::lock_guard<std::mutex> locker(db.mutex);
-    auto it = db.snapshots.find(*c.snapshot);
+    auto it = db.snapshots.find(*c.id);
     if (it != db.snapshots.end())
         return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
 
@@ -231,8 +231,8 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     if (!rocks_snapshot->snapshot)
         *c.error = "Couldn't get a snapshot!";
 
-    *c.snapshot = reinterpret_cast<std::size_t>(rocks_snapshot);
-    db.snapshots[*c.snapshot] = rocks_snapshot;
+    *c.id = reinterpret_cast<std::size_t>(rocks_snapshot);
+    db.snapshots[*c.id] = rocks_snapshot;
 }
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
@@ -241,15 +241,18 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
         return;
 
     ukv_snapshot_drop_t& c = *c_ptr;
-    if (!c.snapshot)
+    if (!c.id)
         return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.snapshot);
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.id);
+    if (!snap.snapshot)
+        return;
+
     db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
 
-    auto id = reinterpret_cast<std::size_t>(c.snapshot);
+    auto id = reinterpret_cast<std::size_t>(c.id);
     db.mutex.lock();
     db.snapshots.erase(id);
     db.mutex.unlock();
@@ -384,8 +387,11 @@ void read_one( //
     ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
-    if (snap_ptr)
+    if (snap_ptr) {
+        auto it = db.snapshots.find(reinterpret_cast<std::size_t>(snap_ptr));
+        return_error_if_m(it != db.snapshots.end(), c_error, args_wrong_k, "The snapshot does'nt exist!");
         options.snapshot = snap_ptr->snapshot;
+    }
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
 
@@ -424,8 +430,11 @@ void read_many( //
     ukv_error_t* c_error) noexcept(false) {
 
     rocksdb::ReadOptions options;
-    if (snap_ptr)
+    if (snap_ptr) {
+        auto it = db.snapshots.find(reinterpret_cast<std::size_t>(snap_ptr));
+        return_error_if_m(it != db.snapshots.end(), c_error, args_wrong_k, "The snapshot does'nt exist!");
         options.snapshot = snap_ptr->snapshot;
+    }
 
     bool watch = !(c_options & ukv_option_transaction_dont_watch_k);
     std::vector<rocks_collection_t*> cols(places.count);

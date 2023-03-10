@@ -12,6 +12,9 @@
 #include <fstream>
 #include <iostream>
 #include <unistd.h>
+#include <thread>
+#include <mutex>
+#include <shared_mutex>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -486,7 +489,6 @@ TEST(db, clear_values) {
     EXPECT_TRUE(db.open(path()));
 
     triplet_t triplet;
-
     blobs_collection_t col = db.main();
     auto collection_ref = col[triplet.keys];
 
@@ -496,6 +498,10 @@ TEST(db, clear_values) {
 
     EXPECT_TRUE(col.clear_values());
     check_length(collection_ref, 0);
+    col.clear();
+    check_length(collection_ref, ukv_length_missing_k);
+
+    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, scan) {
@@ -640,6 +646,164 @@ TEST(db, transaction_snapshot_isolation) {
     snap = *db.snapshot();
     auto ref = snap[triplet_same_v.keys];
     round_trip(ref, triplet_same_v);
+
+    EXPECT_TRUE(db.clear());
+}
+TEST(db, snapshots_list) {
+    if (!ukv_supports_snapshots_k)
+        return;
+
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    auto snap_1 = *db.snapshot();
+    auto snapshots = snap_1.snapshots();
+    auto snaps = *snapshots;
+
+    EXPECT_EQ(snaps.size(), 1u);
+
+    auto snap_2 = *db.snapshot();
+    snapshots = snap_2.snapshots();
+    snaps = *snapshots;
+    EXPECT_EQ(snaps.size(), 2u);
+
+    auto snap_3 = *db.snapshot();
+    snapshots = snap_3.snapshots();
+    snaps = *snapshots;
+
+    EXPECT_EQ(snaps.size(), 3u);
+
+    snap_1 = *db.snapshot();
+    snapshots = snap_1.snapshots();
+    snaps = *snapshots;
+    EXPECT_EQ(snaps.size(), 3u);
+
+    EXPECT_TRUE(db.clear());
+
+    snapshots = snap_1.snapshots();
+    snaps = *snapshots;
+    EXPECT_EQ(snaps.size(), 0u);
+
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, transaction_with_snapshot) {
+    if (!ukv_supports_snapshots_k)
+        return;
+
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    triplet_t triplet;
+    triplet_t triplet_same_v;
+    triplet_same_v.vals = {'D', 'D', 'D'};
+
+    blobs_collection_t collection = db.main();
+    auto collection_ref = collection[triplet.keys];
+
+    check_length(collection_ref, ukv_length_missing_k);
+    round_trip(collection_ref, triplet);
+
+    auto snap = *db.snapshot();
+    auto snap_ref = snap[triplet.keys];
+    check_equalities(snap_ref, triplet);
+
+    round_trip(collection_ref, triplet_same_v);
+
+    transaction_t txn = *db.transact();
+    auto txn_ref_1 = txn[triplet.keys];
+    check_equalities(txn_ref_1, triplet_same_v);
+
+    txn.set_snapshot(snap.snap());
+    auto txn_ref_2 = txn[triplet.keys];
+    check_equalities(txn_ref_2, triplet);
+
+    snap = *db.snapshot();
+    txn.set_snapshot(snap.snap());
+
+    auto txn_ref_3 = txn[triplet.keys];
+    check_equalities(txn_ref_3, triplet_same_v);
+    EXPECT_TRUE(db.clear());
+}
+
+TEST(db, set_wrong_snapshot) {
+    if (!ukv_supports_transactions_k)
+        return;
+
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    triplet_t triplet;
+    blobs_collection_t collection = db.main();
+    auto collection_ref = collection[triplet.keys];
+
+    check_length(collection_ref, ukv_length_missing_k);
+    round_trip(collection_ref, triplet);
+
+    auto snap = *db.snapshot();
+
+    auto snapshots = snap.snapshots();
+    auto snaps = *snapshots;
+    EXPECT_EQ(snaps.size(), 1u);
+
+    ukv_snapshot_t wrong_snap = 1u;
+    snap.set_snapshot(wrong_snap);
+
+    auto snap_ref = snap[triplet.keys];
+    check_equalities(snap_ref, triplet);
+
+    EXPECT_TRUE(db.clear());
+}
+
+/**
+ * Creates news collection under unique names.
+ * Fill data in collection. Checking/dropping/checking collection data by thread.
+ */
+TEST(db, snapshot_with_threads) {
+    clear_environment();
+
+    database_t db;
+    EXPECT_TRUE(db.open(path()));
+
+    triplet_t triplet;
+    triplet_t triplet_same_v;
+    triplet_same_v.vals = {'D', 'D', 'D'};
+
+    blobs_collection_t collection = db.main();
+    auto ref = collection[triplet.keys];
+    round_trip(ref, triplet);
+
+    auto snap = *db.snapshot();
+    auto snap_ref = snap[triplet.keys];
+
+    round_trip(ref, triplet_same_v);
+
+    std::shared_mutex mutex;
+    bool is_deleted = false;
+    auto task_read = [&]() {
+        while (true) {
+            std::shared_lock _ {mutex};
+            if (is_deleted) {
+                check_equalities(snap_ref, triplet_same_v);
+                break;
+            }
+            check_equalities(snap_ref, triplet);
+        }
+    };
+
+    auto task_reset = [&]() {
+        std::unique_lock _ {mutex};
+        snap.set_snapshot(0);
+        is_deleted = true;
+    };
+
+    std::thread t1(task_read);
+    std::thread t2(task_reset);
+    t1.join();
+    t2.join();
 
     EXPECT_TRUE(db.clear());
 }

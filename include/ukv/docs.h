@@ -182,6 +182,8 @@ typedef struct ukv_docs_read_t {
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
     ukv_transaction_t transaction;
+    /** @brief A snapshot captures a point-in-time view of the DB at the time it's created. */
+    ukv_snapshot_t snapshot;
     /** @brief Reusable memory handle. */
     ukv_arena_t* arena;
     /** @brief Read options. @see `ukv_read_t`. */
@@ -238,6 +240,8 @@ typedef struct ukv_docs_gist_t {
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
     ukv_transaction_t transaction;
+    /** @brief A snapshot captures a point-in-time view of the DB at the time it's created. */
+    ukv_snapshot_t snapshot;
     /** @brief Reusable memory handle. */
     ukv_arena_t* arena;
     /** @brief Read options. @see `ukv_read_t`. */
@@ -324,6 +328,8 @@ typedef struct ukv_docs_gather_t {
     ukv_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
     ukv_transaction_t transaction;
+    /** @brief A snapshot captures a point-in-time view of the DB at the time it's created. */
+    ukv_snapshot_t snapshot;
     /** @brief Reusable memory handle. */
     ukv_arena_t* arena;
     /** @brief Read options. @see `ukv_read_t`. */

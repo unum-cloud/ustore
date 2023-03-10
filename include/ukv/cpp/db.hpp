@@ -19,6 +19,7 @@
 
 namespace unum::ukv {
 
+using snapshots_list_t = ptr_range_gt<ukv_snapshot_t>;
 struct collections_list_t {
     ptr_range_gt<ukv_collection_t> ids;
     strings_tape_iterator_t names;
@@ -71,10 +72,10 @@ class context_t : public std::enable_shared_from_this<context_t> {
         ukv_snapshot_drop_t snap_drop {
             .db = db_,
             .error = status.member_ptr(),
-            .snapshot = snap_,
+            .id = snap_,
         };
         ukv_snapshot_drop(&snap_drop);
-        snap_ = {};
+        snap_ = 0;
     }
 
     inline ukv_database_t db() const noexcept { return db_; }
@@ -140,6 +141,23 @@ class context_t : public std::enable_shared_from_this<context_t> {
         collections_list_t result;
         result.ids = {ids, ids + count};
         result.names = {count, names};
+        return {std::move(status), std::move(result)};
+    }
+
+    expected_gt<snapshots_list_t> snapshots() noexcept {
+        ukv_size_t count = 0;
+        ukv_str_span_t names = nullptr;
+        ukv_snapshot_t* ids = nullptr;
+        status_t status;
+        ukv_snapshot_list_t snapshots_list {};
+        snapshots_list.db = db_;
+        snapshots_list.error = status.member_ptr();
+        snapshots_list.arena = arena_.member_ptr();
+        snapshots_list.count = &count;
+        snapshots_list.ids = &ids;
+
+        ukv_snapshot_list(&snapshots_list);
+        snapshots_list_t result = {ids, ids + count};
         return {std::move(status), std::move(result)};
     }
 
@@ -302,7 +320,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
         ukv_snapshot_create_t snap_create {
             .db = db_,
             .error = status.member_ptr(),
-            .snapshot = &raw,
+            .id = &raw,
         };
         ukv_snapshot_create(&snap_create);
         if (!status)
@@ -364,12 +382,27 @@ class database_t : public std::enable_shared_from_this<database_t> {
     status_t clear() noexcept {
         auto context = context_t {db_, nullptr};
 
+        status_t status;
+        // Remove snapshots
+        auto maybe_snaps = context.snapshots();
+        auto snaps = *maybe_snaps;
+
+        ukv_snapshot_drop_t snapshot_drop {};
+        snapshot_drop.db = db_;
+        snapshot_drop.error = status.member_ptr();
+
+        for (auto id : snaps) {
+            snapshot_drop.id = id;
+            ukv_snapshot_drop(&snapshot_drop);
+            if (!status)
+                return status;
+        }
+
         // Remove named collections
         auto maybe_cols = context.collections();
         if (!maybe_cols)
             return maybe_cols.release_status();
 
-        status_t status;
         auto cols = *maybe_cols;
         ukv_collection_drop_t collection_drop {};
         collection_drop.db = db_;
