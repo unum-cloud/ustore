@@ -55,7 +55,9 @@ class config_loader_t {
 
   public:
     static inline status_t load_from_json(json_t const& json, config_t& config);
-    static inline status_t load_from_json_string(std::string const& str_json, config_t& config);
+    static inline status_t load_from_json_string(std::string const& str_json,
+                                                 config_t& config,
+                                                 bool ignore_comments = false);
 
     static inline status_t save_to_json(config_t const& config, json_t& json);
     static inline status_t save_to_json_string(config_t const& config, std::string& str_json);
@@ -103,8 +105,10 @@ inline status_t config_loader_t::load_from_json(json_t const& json, config_t& co
     return {};
 }
 
-inline status_t config_loader_t::load_from_json_string(std::string const& str_json, config_t& config) {
-    auto json = json_t::parse(str_json);
+inline status_t config_loader_t::load_from_json_string(std::string const& str_json,
+                                                       config_t& config,
+                                                       bool ignore_comments) {
+    auto json = json_t::parse(str_json, nullptr, true, ignore_comments);
     return load_from_json(json, config);
 }
 
