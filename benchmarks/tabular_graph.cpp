@@ -50,16 +50,19 @@ struct args_t {
     std::string edge;
 
     std::string id;
+
+    size_t threads_count;
 };
 
 void parse_args(int argc, char* argv[], args_t& args) {
     argparse::ArgumentParser program(argv[0]);
     program.add_argument("-p", "--path").required().help("File path for importing");
     program.add_argument("-e", "--ext").required().help("File extension for exporting");
-    program.add_argument("-s", "--source").required().help("source field");
-    program.add_argument("-t", "--target").required().help("target field");
-    program.add_argument("-ed", "--edge").required().help("edge field");
-    program.add_argument("-i", "--id").required().help("id field");
+    program.add_argument("-s", "--source").required().help("Source field");
+    program.add_argument("-t", "--target").required().help("Target field");
+    program.add_argument("-ed", "--edge").required().help("Edge field");
+    program.add_argument("-i", "--id").required().help("Id field");
+    program.add_argument("-th", "--threads").required().help("Threads count");
 
     program.parse_known_args(argc, argv);
 
@@ -69,6 +72,7 @@ void parse_args(int argc, char* argv[], args_t& args) {
     args.target = program.get("target");
     args.edge = program.get("edge");
     args.id = program.get("id");
+    args.threads_count = program.get<size_t>("threads");
 }
 
 size_t get_keys_count() {
@@ -256,25 +260,25 @@ static void bench_graph_export(bm::State& state, args_t const& args) {
     state.counters["fails,%"] = bm::Counter((state.iterations() - successes) * 100.0, bm::Counter::kAvgThreads);
 }
 
-void bench_docs(args_t const& args, size_t threads = 1) {
+void bench_docs(args_t const& args) {
     bm::RegisterBenchmark(fmt::format("docs_import_{}", std::filesystem::path(args.path).extension().c_str()).c_str(),
                           [&](bm::State& s) { bench_docs_import(s, args); })
-        ->Threads(threads)
+        ->Threads(args.threads_count)
         ->Iterations(1);
     bm::RegisterBenchmark(fmt::format("docs_export_{}", args.extension.substr(1)).c_str(),
                           [&](bm::State& s) { bench_docs_export(s, args); })
-        ->Threads(threads)
+        ->Threads(args.threads_count)
         ->Iterations(1);
 }
 
-void bench_graph(args_t const& args, size_t threads = 1) {
+void bench_graph(args_t const& args) {
     bm::RegisterBenchmark(fmt::format("graph_import_{}", std::filesystem::path(args.path).extension().c_str()).c_str(),
                           [&](bm::State& s) { bench_graph_import(s, args); })
-        ->Threads(threads)
+        ->Threads(args.threads_count)
         ->Iterations(1);
     bm::RegisterBenchmark(fmt::format("graph_export_{}", args.extension.substr(1)).c_str(),
                           [&](bm::State& s) { bench_graph_export(s, args); })
-        ->Threads(threads)
+        ->Threads(args.threads_count)
         ->Iterations(1);
 }
 
@@ -287,10 +291,10 @@ int main(int argc, char** argv) {
 
     bench_graph(args);
     bench_docs(args);
-    // bench_docs(args, 2);
-    // bench_docs(args, 4);
-    // bench_docs(args, 16);
-    // bench_docs(args, 32);
+    // bench_docs(args);
+    // bench_docs(args);
+    // bench_docs(args);
+    // bench_docs(args);
 
     bm::RunSpecifiedBenchmarks();
     bm::Shutdown();
