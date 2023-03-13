@@ -62,7 +62,7 @@ void parse_args(int argc, char* argv[], args_t& args) {
     program.add_argument("-t", "--target").required().help("Target field");
     program.add_argument("-ed", "--edge").required().help("Edge field");
     program.add_argument("-i", "--id").required().help("Id field");
-    program.add_argument("-th", "--threads").required().help("Threads count");
+    program.add_argument("-th", "--threads").default_value(size_t(1)).implicit_value(size_t(1)).help("Threads count");
 
     program.parse_known_args(argc, argv);
 
