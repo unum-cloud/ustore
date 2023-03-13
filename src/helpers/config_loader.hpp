@@ -10,7 +10,7 @@
 #include <string>            // `std::string`
 #include <vector>            // `std::vector`
 #include <nlohmann/json.hpp> // `nlohmann::json`
-#include <fmt/format.h> // `fmt::format`
+#include <fmt/format.h>      // `fmt::format`
 
 #include "ukv/cpp/status.hpp" // `status_t`
 
@@ -57,7 +57,7 @@ class config_loader_t {
     static inline status_t load_from_json(json_t const& json, config_t& config);
     static inline status_t load_from_json_string(std::string const& str_json, config_t& config);
 
-    static inline status_t save_to_json(config_t const& config,json_t& json);
+    static inline status_t save_to_json(config_t const& config, json_t& json);
     static inline status_t save_to_json_string(config_t const& config, std::string& str_json);
 
   private:
@@ -127,7 +127,7 @@ inline status_t config_loader_t::save_to_json(config_t const& config, json_t& js
 
     return {};
 }
-    
+
 inline status_t config_loader_t::save_to_json_string(config_t const& config, std::string& str_json) {
     json_t json;
     auto status = save_to_json(config, json);
@@ -204,10 +204,14 @@ inline bool config_loader_t::parse_volume(json_t const& json, std::string const&
 
 inline bool config_loader_t::parse_bytes(std::string const& str, size_t& bytes) noexcept {
 
-    std::stringstream ss(str.c_str());
+    if (str.empty()) { // Just set zero if it is empty
+        bytes = 0;
+        return true;
+    }
 
     // Parse number
     double number = 0.0;
+    std::stringstream ss(str.c_str());
     if (str.rfind('.', 0) == 0 || (ss >> number).fail() || std::isnan(number))
         return false;
 
