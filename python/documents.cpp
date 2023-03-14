@@ -88,7 +88,7 @@ class docs_pairs_stream_t {
                         ukv_collection_t collection = ukv_collection_main_k,
                         std::size_t read_ahead = docs_pairs_stream_t::default_read_ahead_k,
                         ukv_transaction_t txn = nullptr,
-                        ukv_snapshot_t snap)
+                        ukv_snapshot_t snap = {})
         : db_(db), collection_(collection), txn_(txn), snap_(snap), arena_scan_(db_), arena_read_(db_),
           read_ahead_(static_cast<ukv_size_t>(read_ahead)) {}
 
