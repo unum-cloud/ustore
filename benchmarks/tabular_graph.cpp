@@ -38,7 +38,10 @@ using namespace unum::ukv;
 
 constexpr std::size_t max_batch_size_k = 1024 * 1024 * 1024;
 constexpr ukv_str_view_t path_k = "./";
+
 static database_t db;
+
+std::vector<std::string> paths;
 std::mutex mtx;
 
 struct args_t {
@@ -62,7 +65,7 @@ void parse_args(int argc, char* argv[], args_t& args) {
     program.add_argument("-t", "--target").required().help("Target field");
     program.add_argument("-ed", "--edge").required().help("Edge field");
     program.add_argument("-i", "--id").required().help("Id field");
-    program.add_argument("-th", "--threads").default_value(size_t(1)).implicit_value(size_t(1)).help("Threads count");
+    program.add_argument("-th", "--threads").default_value(std::string("1")).help("Threads count");
 
     program.parse_known_args(argc, argv);
 
@@ -72,7 +75,31 @@ void parse_args(int argc, char* argv[], args_t& args) {
     args.target = program.get("target");
     args.edge = program.get("edge");
     args.id = program.get("id");
-    args.threads_count = program.get<size_t>("threads");
+    args.threads_count = std::stoi(program.get("threads"));
+
+    if (args.threads_count == 0) {
+        fmt::print("Zero threads count specified\n");
+        exit(1);
+    }
+}
+
+void make_bench_files(args_t const& args) {
+    auto file_name = args.path.substr(args.path.find_last_of('/') + 1);
+    paths.resize(args.threads_count);
+    for (size_t idx = 0; idx < args.threads_count; ++idx) {
+        if (idx == 0) {
+            paths[idx] = args.path;
+            continue;
+        }
+
+        fmt::format_to(std::back_inserter(paths[idx]), "./{}_{}", idx, file_name);
+        std::filesystem::copy_file(args.path, paths[idx]);
+    }
+}
+
+void delete_bench_files() {
+    for (size_t idx = 0; idx < paths.size(); ++idx)
+        std::remove(paths[idx].c_str());
 }
 
 size_t get_keys_count() {
@@ -108,7 +135,7 @@ static void bench_docs_import(bm::State& state, args_t const& args) {
     size_t size = 0;
     size_t successes = 0;
 
-    std::filesystem::path pt {args.path};
+    std::filesystem::path pt {paths[state.thread_index()]};
     size_t file_size = std::filesystem::file_size(pt);
 
     for (auto _ : state) {
@@ -117,7 +144,7 @@ static void bench_docs_import(bm::State& state, args_t const& args) {
         docs.error = status.member_ptr();
         docs.arena = arena.member_ptr();
         docs.collection = collection;
-        docs.paths_pattern = args.path.c_str();
+        docs.paths_pattern = paths[state.thread_index()].c_str();
         docs.max_batch_size = max_batch_size_k;
         docs.id_field = args.id.c_str();
         ukv_docs_import(&docs);
@@ -150,7 +177,7 @@ static void bench_graph_import(bm::State& state, args_t const& args) {
         graph.error = status.member_ptr();
         graph.arena = arena.member_ptr();
         graph.collection = collection;
-        graph.paths_pattern = args.path.c_str();
+        graph.paths_pattern = paths[state.thread_index()].c_str();
         graph.max_batch_size = max_batch_size_k;
         graph.source_id_field = args.source.c_str();
         graph.target_id_field = args.target.c_str();
@@ -160,8 +187,10 @@ static void bench_graph_import(bm::State& state, args_t const& args) {
         state.PauseTiming();
         successes += status;
         if (status) {
+            mtx.lock();
             if (scan_state)
                 keys_in_bytes = get_keys_count() * sizeof(ukv_key_t), scan_state = false;
+            mtx.unlock();
             size += keys_in_bytes;
         }
         status.release_error();
@@ -261,10 +290,12 @@ static void bench_graph_export(bm::State& state, args_t const& args) {
 }
 
 void bench_docs(args_t const& args) {
-    bm::RegisterBenchmark(fmt::format("docs_import_{}", std::filesystem::path(args.path).extension().c_str()).c_str(),
-                          [&](bm::State& s) { bench_docs_import(s, args); })
+    bm::RegisterBenchmark( //
+        fmt::format("docs_import_{}", std::filesystem::path(args.path).extension().string().substr(1).c_str()).c_str(),
+        [&](bm::State& s) { bench_docs_import(s, args); })
         ->Threads(args.threads_count)
         ->Iterations(1);
+
     bm::RegisterBenchmark(fmt::format("docs_export_{}", args.extension.substr(1)).c_str(),
                           [&](bm::State& s) { bench_docs_export(s, args); })
         ->Threads(args.threads_count)
@@ -272,8 +303,9 @@ void bench_docs(args_t const& args) {
 }
 
 void bench_graph(args_t const& args) {
-    bm::RegisterBenchmark(fmt::format("graph_import_{}", std::filesystem::path(args.path).extension().c_str()).c_str(),
-                          [&](bm::State& s) { bench_graph_import(s, args); })
+    bm::RegisterBenchmark( //
+        fmt::format("graph_import_{}", std::filesystem::path(args.path).extension().string().substr(1).c_str()).c_str(),
+        [&](bm::State& s) { bench_graph_import(s, args); })
         ->Threads(args.threads_count)
         ->Iterations(1);
     bm::RegisterBenchmark(fmt::format("graph_export_{}", args.extension.substr(1)).c_str(),
@@ -286,18 +318,18 @@ int main(int argc, char** argv) {
 
     args_t args {};
     parse_args(argc, argv, args);
+    make_bench_files(args);
     bm::Initialize(&argc, argv);
     db.open().throw_unhandled();
 
     bench_graph(args);
     bench_docs(args);
-    // bench_docs(args);
-    // bench_docs(args);
-    // bench_docs(args);
-    // bench_docs(args);
 
     bm::RunSpecifiedBenchmarks();
     bm::Shutdown();
+
+    delete_bench_files();
     db.close();
+
     return 0;
 }
