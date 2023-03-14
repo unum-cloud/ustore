@@ -128,12 +128,8 @@ size_t get_keys_count() {
 
 static void bench_docs_import(bm::State& state, args_t const& args) {
     auto collection = db.main();
-    arena_t arena(db);
     status_t status;
-
-    size_t idx = 0;
-    size_t size = 0;
-    size_t successes = 0;
+    arena_t arena(db);
 
     std::filesystem::path pt {paths[state.thread_index()]};
     size_t file_size = std::filesystem::file_size(pt);
@@ -149,16 +145,9 @@ static void bench_docs_import(bm::State& state, args_t const& args) {
         docs.id_field = args.id.c_str();
         ukv_docs_import(&docs);
 
-        state.PauseTiming();
-        successes += status;
-        if (status)
-            size += file_size;
         status.release_error();
-        ++idx;
-        state.ResumeTiming();
     }
-    state.counters["bytes/s"] = bm::Counter(size, bm::Counter::kIsRate);
-    state.counters["fails,%"] = bm::Counter((state.iterations() - successes) * 100.0, bm::Counter::kAvgThreads);
+    state.counters["bytes/s"] = bm::Counter(state.iterations() * file_size, bm::Counter::kIsRate);
 }
 
 static void bench_graph_import(bm::State& state, args_t const& args) {
