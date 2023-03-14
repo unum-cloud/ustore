@@ -1648,6 +1648,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
         read.db = c.db;
         read.error = c.error;
         read.transaction = c.transaction;
+        read.snapshot = c.snapshot;
         read.arena = arena;
         read.options = c.options;
         read.tasks_count = c.tasks_count;
@@ -1823,6 +1824,7 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
     read.db = c.db;
     read.error = c.error;
     read.transaction = c.transaction;
+    read.snapshot = c.snapshot;
     read.arena = arena;
     read.options = c.options;
     read.tasks_count = c.docs_count;
@@ -1969,6 +1971,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     read.db = c.db;
     read.error = c.error;
     read.transaction = c.transaction;
+    read.snapshot = c.snapshot;
     read.arena = arena;
     read.options = c.options;
     read.tasks_count = c.docs_count;

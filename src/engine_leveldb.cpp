@@ -205,7 +205,7 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     std::lock_guard<std::mutex> locker(db.mutex);
-    auto it = db.snapshots.find(*c.snapshot);
+    auto it = db.snapshots.find(*c.id);
     if (it != db.snapshots.end())
         return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
 
@@ -217,8 +217,8 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     if (!level_snapshot->snapshot)
         *c.error = "Couldn't get a snapshot!";
 
-    *c.snapshot = reinterpret_cast<std::size_t>(level_snapshot);
-    db.snapshots[*c.snapshot] = level_snapshot;
+    *c.id = reinterpret_cast<std::size_t>(level_snapshot);
+    db.snapshots[*c.id] = level_snapshot;
 }
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
@@ -226,15 +226,18 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
         return;
 
     ukv_snapshot_drop_t& c = *c_ptr;
-    if (!c.snapshot)
+    if (!c.id)
         return;
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.id);
+    if (!snap.snapshot)
+        return;
+
     db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
 
-    auto id = reinterpret_cast<std::size_t>(c.snapshot);
+    auto id = reinterpret_cast<std::size_t>(c.id);
     db.mutex.lock();
     db.snapshots.erase(id);
     db.mutex.unlock();
@@ -364,8 +367,11 @@ void ukv_read(ukv_read_t* c_ptr) {
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
-        if (c.snapshot)
+        if (c.snapshot) {
+            auto it = db.snapshots.find(c.snapshot);
+            return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "The snapshot does'nt exist!");
             options.snapshot = snap.snapshot;
+        }
 
         std::string value_buffer;
         ukv_length_t progress_in_tape = 0;
@@ -395,7 +401,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_snapshot_t& snp = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
     scans_arg_t scans {{}, start_keys, limits, c.tasks_count};
@@ -415,9 +421,11 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     // 2. Fetch the data
     leveldb::ReadOptions options;
     options.fill_cache = false;
-
-    if (c.snapshot)
-        options.snapshot = snp.snapshot;
+    if (c.snapshot) {
+        auto it = db.snapshots.find(c.snapshot);
+        return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "The snapshot does'nt exist!");
+        options.snapshot = snap.snapshot;
+    }
 
     level_iter_uptr_t it;
     try {
@@ -457,7 +465,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_snapshot_t& snp = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
     sample_args_t samples {{}, lens, c.tasks_count};
 
@@ -474,9 +482,11 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     // 2. Fetch the data
     leveldb::ReadOptions options;
     options.fill_cache = false;
-
-    if (c.snapshot)
-        options.snapshot = snp.snapshot;
+    if (c.snapshot) {
+        auto it = db.snapshots.find(c.snapshot);
+        return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "The snapshot does'nt exist!");
+        options.snapshot = snap.snapshot;
+    }
 
     for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
         sample_arg_t task = samples[task_idx];
