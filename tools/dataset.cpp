@@ -47,6 +47,8 @@ constexpr ukv_size_t symbols_count_k = 4;
 // Json object open brackets for json and parquet
 constexpr ukv_str_view_t prefix_k = "{";
 
+std::mutex gen_mtx;
+
 using tape_t = ptr_range_gt<ukv_char_t>;
 using fields_t = strided_iterator_gt<ukv_str_view_t const>;
 using lengths_t = strided_iterator_gt<ukv_length_t const>;
@@ -57,12 +59,11 @@ using chunked_array_t = std::shared_ptr<arrow::ChunkedArray>;
 using array_t = std::shared_ptr<arrow::Array>;
 using int_builder_t = arrow::NumericBuilder<arrow::Int64Type>;
 
-// Extensions formats
 enum ukv_dataset_ext_t {
     parquet_k = 0,
     csv_k,
     ndjson_k,
-    unknown_k
+    unknown_k,
 };
 using ext_t = ukv_dataset_ext_t;
 
@@ -293,15 +294,23 @@ bool is_json_ptr(ukv_str_view_t field) {
     return chrcmp_(field[0], '/');
 }
 
+auto get_time_since_epoch() {
+    auto now = std::chrono::system_clock::now();
+    auto duration = now.time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+}
+
 std::string generate_file_name() {
     time_t now = time(0);
-    ukv_char_t* out = ctime(&now);
+    gen_mtx.lock();
+    ukv_char_t* out = std::ctime(&now);
+    gen_mtx.unlock();
     for (ukv_size_t idx = 0; idx < strlen(out); ++idx) {
         if ((out[idx] == ' ') | (out[idx] == ':'))
             out[idx] = '_';
     }
     out[strlen(out) - 1] = '\0';
-    return out;
+    return fmt::format("{}_{}", out, get_time_since_epoch());
 }
 
 template <typename imp_exp_at>
@@ -1055,7 +1064,10 @@ void ukv_graph_export(ukv_graph_export_t* c_ptr) noexcept(false) {
     return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
 
     auto ext = c.paths_extension;
-    ext_t pcn = strcmp_(ext, ".parquet") ? parquet_k : strcmp_(ext, ".csv") ? csv_k : strcmp_(ext, ".ndjson") ? ndjson_k : unknown_k;
+    ext_t pcn = strcmp_(ext, ".parquet")  ? parquet_k
+                : strcmp_(ext, ".csv")    ? csv_k
+                : strcmp_(ext, ".ndjson") ? ndjson_k
+                                          : unknown_k;
     return_error_if_m(!(pcn == unknown_k), c.error, 0, "Not supported format");
 
     if (!c.arena)
@@ -1595,7 +1607,10 @@ void ukv_docs_export(ukv_docs_export_t* c_ptr) noexcept(false) {
     return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
 
     auto ext = c.paths_extension;
-    ext_t pcn = strcmp_(ext, ".parquet") ? parquet_k : strcmp_(ext, ".csv") ? csv_k : strcmp_(ext, ".ndjson") ? ndjson_k : unknown_k;
+    ext_t pcn = strcmp_(ext, ".parquet")  ? parquet_k
+                : strcmp_(ext, ".csv")    ? csv_k
+                : strcmp_(ext, ".ndjson") ? ndjson_k
+                                          : unknown_k;
     return_error_if_m(!(pcn == unknown_k), c.error, 0, "Not supported format");
 
     if (!c.arena)
