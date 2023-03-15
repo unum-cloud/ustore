@@ -132,7 +132,7 @@ static void bench_docs_import(bm::State& state, args_t const& args) {
     arena_t arena(db);
 
     std::filesystem::path pt {paths[state.thread_index()]};
-    size_t file_size = std::filesystem::file_size(pt);
+    size_t size = std::filesystem::file_size(pt);
 
     for (auto _ : state) {
         ukv_docs_import_t docs {};
@@ -145,9 +145,10 @@ static void bench_docs_import(bm::State& state, args_t const& args) {
         docs.id_field = args.id.c_str();
         ukv_docs_import(&docs);
 
-        status.release_error();
+        if (!status)
+            status.release_error();
     }
-    state.counters["bytes/s"] = bm::Counter(state.iterations() * file_size, bm::Counter::kIsRate);
+    state.counters["bytes/s"] = bm::Counter(state.threads() * state.iterations() * size, bm::Counter::kIsRate);
 }
 
 static void bench_graph_import(bm::State& state, args_t const& args) {
@@ -155,11 +156,10 @@ static void bench_graph_import(bm::State& state, args_t const& args) {
     arena_t arena(db);
     status_t status;
 
-    size_t idx = 0;
     size_t size = 0;
     size_t keys_in_bytes = 0;
-    size_t successes = 0;
     bool scan_state = true;
+
     for (auto _ : state) {
         ukv_graph_import_t graph {};
         graph.db = db;
@@ -174,7 +174,6 @@ static void bench_graph_import(bm::State& state, args_t const& args) {
         ukv_graph_import(&graph);
 
         state.PauseTiming();
-        successes += status;
         if (status) {
             mtx.lock();
             if (scan_state)
@@ -183,11 +182,9 @@ static void bench_graph_import(bm::State& state, args_t const& args) {
             size += keys_in_bytes;
         }
         status.release_error();
-        ++idx;
         state.ResumeTiming();
     }
-    state.counters["bytes/s"] = bm::Counter(size, bm::Counter::kIsRate);
-    state.counters["fails,%"] = bm::Counter((state.iterations() - successes) * 100.0, bm::Counter::kAvgThreads);
+    state.counters["bytes/s"] = bm::Counter(state.threads() * state.iterations() * size, bm::Counter::kIsRate);
 }
 
 size_t find_and_delete() {
@@ -216,9 +213,7 @@ static void bench_docs_export(bm::State& state, args_t const& args) {
     arena_t arena(db);
     status_t status;
 
-    size_t idx = 0;
     size_t size = 0;
-    size_t successes = 0;
 
     for (auto _ : state) {
         ukv_docs_export_t docs {};
@@ -230,17 +225,12 @@ static void bench_docs_export(bm::State& state, args_t const& args) {
         docs.max_batch_size = max_batch_size_k;
         ukv_docs_export(&docs);
 
-        state.PauseTiming();
-        successes += status;
         if (status)
             size += find_and_delete();
         status.release_error();
-        ++idx;
-        state.ResumeTiming();
     }
     db.clear().throw_unhandled();
-    state.counters["bytes/s"] = bm::Counter(size, bm::Counter::kIsRate);
-    state.counters["fails,%"] = bm::Counter((state.iterations() - successes) * 100.0, bm::Counter::kAvgThreads);
+    state.counters["bytes/s"] = bm::Counter(state.threads() * state.iterations() * size, bm::Counter::kIsRate);
 }
 
 static void bench_graph_export(bm::State& state, args_t const& args) {
@@ -248,9 +238,7 @@ static void bench_graph_export(bm::State& state, args_t const& args) {
     arena_t arena(db);
     status_t status;
 
-    size_t idx = 0;
     size_t size = 0;
-    size_t successes = 0;
 
     for (auto _ : state) {
         ukv_graph_export_t graph {};
@@ -265,17 +253,11 @@ static void bench_graph_export(bm::State& state, args_t const& args) {
         graph.edge_id_field = args.edge.c_str();
         ukv_graph_export(&graph);
 
-        state.PauseTiming();
-        successes += status;
         if (status)
             size += find_and_delete();
-        status.release_error();
-        ++idx;
-        state.ResumeTiming();
     }
     db.clear().throw_unhandled();
-    state.counters["bytes/s"] = bm::Counter(size, bm::Counter::kIsRate);
-    state.counters["fails,%"] = bm::Counter((state.iterations() - successes) * 100.0, bm::Counter::kAvgThreads);
+    state.counters["bytes/s"] = bm::Counter(state.threads() * state.iterations() * size, bm::Counter::kIsRate);
 }
 
 void bench_docs(args_t const& args) {
