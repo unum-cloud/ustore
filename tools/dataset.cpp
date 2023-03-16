@@ -435,9 +435,11 @@ fields_t prepare_fields(ukv_docs_imp_exp_t& c, linked_memory_lock_t& arena) {
         std::memcpy(field.begin(), fields[idx], len + 1);
         prepared_fields[count] = field.begin();
         ++count;
-        while (next_idx < c.fields_count && chrcmp_(fields[idx][0], '/') &&
-               strncmp_(fields[idx], fields[next_idx], strlen(fields[idx])))
-            ++next_idx;
+        if (chrcmp_(fields[idx][0], '/')) {
+            while (next_idx < c.fields_count && strncmp_(fields[idx], fields[next_idx], strlen(fields[idx])) &&
+                   fields[next_idx][strlen(fields[idx])] == '/')
+                ++next_idx;
+        }
         if (next_idx == idx + 1 && next_idx == c.fields_count - 1) {
             ukv_size_t len = strlen(fields[next_idx]);
             auto field = arena.alloc<ukv_char_t>(len + 1, c.error);
