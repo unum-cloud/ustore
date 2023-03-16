@@ -342,6 +342,9 @@ if(${UKV_BUILD_BUNDLES})
     string(CONCAT client_lib "ukv_embedded_" ${client_lib_name})
 
     if(${client_lib_name} STREQUAL "flight_client")
+      string(CONCAT client "ukv_" ${client_lib_name})
+      string(CONCAT bundle_lib "ukv_" ${client_lib_name} "_bundle")
+      bundle_static_library(${client} ${bundle_lib})
       continue()
     endif()
 
