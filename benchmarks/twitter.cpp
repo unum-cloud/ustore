@@ -14,6 +14,9 @@
 #include <fmt/printf.h> // `fmt::sprintf`
 #include <benchmark/benchmark.h>
 #include <simdjson.h>
+#include <fmt/printf.h>
+
+#include <argparse/argparse.hpp>
 
 #include <ukv/ukv.hpp>
 #include <ukv/cpp/ranges.hpp> // `sort_and_deduplicate`
@@ -62,6 +65,18 @@ static inline ukv_key_t hash(id_str_t const& id_str) {
     return mix;
 }
 
+struct settings_t {
+    bool generate_dataset;
+    std::size_t threads_count;
+    std::size_t max_tweets_count;
+    std::size_t max_input_files;
+    std::size_t connectivity_factor;
+    std::size_t min_seconds;
+    std::size_t small_batch_size;
+    std::size_t mid_batch_size;
+    std::size_t big_batch_size;
+};
+
 static std::string dataset_directory = "~/Datasets/Twitter/";
 static std::vector<std::string> twitter_content;
 static std::vector<std::size_t> source_sizes;
@@ -75,6 +90,38 @@ static database_t db;
 static ukv_collection_t collection_docs_k = ukv_collection_main_k;
 static ukv_collection_t collection_graph_k = ukv_collection_main_k;
 static ukv_collection_t collection_paths_k = ukv_collection_main_k;
+
+void parse_args(int argc, char* argv[], settings_t& settings) {
+    argparse::ArgumentParser program(argv[0]);
+    program.add_argument("-gd", "--gen_dataset").default_value(true).help("Generate dataset");
+    program.add_argument("-t", "--threads")
+        .default_value(int(std::thread::hardware_concurrency() / 2))
+        .help("Threads count");
+    program.add_argument("-tw", "--max_tweets_count").default_value(1'000'000).help("Maximum tweets count");
+    program.add_argument("-i", "--max_input_files").default_value(1000).help("Maximum input files count");
+    program.add_argument("-c", "--con_factor").default_value(4).help("Connectivity factor");
+    program.add_argument("-n", "--min_seconds").default_value(10).help("Minimal seconds");
+    program.add_argument("-s", "--small_batch_size").default_value(32).help("Small batch size");
+    program.add_argument("-m", "--mid_batch_size").default_value(64).help("Middle batch size");
+    program.add_argument("-b", "--big_batch_size").default_value(128).help("Big batch size");
+
+    program.parse_known_args(argc, argv);
+
+    settings.generate_dataset = program.get<bool>("gen_dataset");
+    settings.threads_count = program.get<int>("threads");
+    settings.max_tweets_count = program.get<int>("max_tweets_count");
+    settings.max_input_files = program.get<int>("max_input_files");
+    settings.connectivity_factor = program.get<int>("con_factor");
+    settings.min_seconds = program.get<int>("min_seconds");
+    settings.small_batch_size = program.get<int>("small_batch_size");
+    settings.mid_batch_size = program.get<int>("mid_batch_size");
+    settings.big_batch_size = program.get<int>("big_batch_size");
+
+    if (settings.threads_count == 0) {
+        fmt::print("-threads: Zero threads count specified\n");
+        exit(1);
+    }
+}
 
 simdjson::ondemand::document& rewound(simdjson::ondemand::document& doc) noexcept {
     doc.rewind();
@@ -575,23 +622,16 @@ int main(int argc, char** argv) {
 
     // We divide by two, as most modern CPUs have
     // hyper-threading with two threads per core.
-    bool generate_dataset = true;
-    std::size_t thread_count = std::thread::hardware_concurrency() / 2;
-    std::size_t max_tweets_count = 1'000'000;
-    std::size_t max_input_files = 1000;
-    std::size_t connectivity_factor = 4;
-
-    std::size_t min_seconds = 10;
-    std::size_t small_batch_size = 32;
-    std::size_t mid_batch_size = 64;
-    std::size_t big_batch_size = 128;
+    settings_t settings;
+    parse_args(argc,argv,settings);
+    
 #if defined(UKV_DEBUG)
-    max_input_files = 1;
-    max_tweets_count = 100'000;
-    thread_count = 1;
+    settings.max_input_files = 1;
+    settings.max_tweets_count = 100'000;
+    settings.threads_count = 1;
 #endif
 
-    if (!generate_dataset) {
+    if (!settings.generate_dataset) {
         // 1. Find the dataset parts
         std::printf("Will search for .ndjson files...\n");
         auto dataset_path = dataset_directory;
@@ -607,7 +647,7 @@ int main(int argc, char** argv) {
             source_sizes.push_back(dir_entry.file_size());
         }
         std::printf("- found %i files\n", static_cast<int>(source_files.size()));
-        source_files.resize(std::min(max_input_files, source_files.size()));
+        source_files.resize(std::min(settings.max_input_files, source_files.size()));
         std::printf("- kept only %i files\n", static_cast<int>(source_files.size()));
         dataset_paths.resize(source_files.size());
         dataset_docs.resize(source_files.size());
@@ -620,7 +660,7 @@ int main(int argc, char** argv) {
 
         // 3. Index the dataset
         std::printf("Will index the files...\n");
-        if (thread_count == 1) {
+        if (settings.threads_count == 1) {
             for (std::size_t path_idx = 0; path_idx != source_files.size(); ++path_idx)
                 index_file(mapped_contents[path_idx],
                            dataset_paths[path_idx],
@@ -643,8 +683,8 @@ int main(int argc, char** argv) {
     else {
         // 1. Prepare the dataset parts
         std::printf("Will prepare dataset parts...\n");
-        std::size_t parts_cnt = thread_count;
-        std::size_t part_size = max_tweets_count / thread_count;
+        std::size_t parts_cnt = settings.threads_count;
+        std::size_t part_size = settings.max_tweets_count / settings.threads_count;
         std::size_t twitters_count = parts_cnt * part_size;
         twitter_content.resize(twitters_count);
 
@@ -654,23 +694,23 @@ int main(int argc, char** argv) {
         for (std::size_t idx = 0; idx != parts_cnt; ++idx) {
             dataset_paths[idx].reserve(part_size);
             dataset_docs[idx].reserve(part_size);
-            dataset_graph[idx].reserve(part_size * connectivity_factor);
+            dataset_graph[idx].reserve(part_size * settings.connectivity_factor);
         }
 
         // 2. Generate the contents
         std::printf("Will generate tweeter content...\n");
-        generate_twitter(connectivity_factor);
+        generate_twitter(settings.connectivity_factor);
 
         // 3. Index the dataset
         std::printf("Will index the generated content...\n");
-        if (thread_count == 1) {
+        if (settings.threads_count == 1) {
             for (std::size_t idx = 0; idx != twitters_count; ++idx)
                 index_tweet(twitter_content[idx], dataset_paths[0], dataset_docs[0], dataset_graph[0]);
         }
         else {
             std::vector<std::thread> parsing_threads;
             std::size_t offset = 0;
-            for (std::size_t idx = 0; idx != thread_count; ++idx) {
+            for (std::size_t idx = 0; idx != settings.threads_count; ++idx) {
                 parsing_threads.push_back(std::thread( //
                     &index_tweets,
                     std::pair(offset, offset + part_size),
@@ -728,65 +768,65 @@ int main(int argc, char** argv) {
 
     std::printf("Will benchmark...\n");
     bm::RegisterBenchmark("construct_docs", &construct_docs) //
-        ->Iterations(pass_through_size(dataset_docs) / (thread_count * big_batch_size))
+        ->Iterations(pass_through_size(dataset_docs) / (settings.threads_count * settings.big_batch_size))
         ->UseRealTime()
-        ->Threads(thread_count)
-        ->Arg(big_batch_size);
+        ->Threads(settings.threads_count)
+        ->Arg(settings.big_batch_size);
 
     if (can_build_graph)
         bm::RegisterBenchmark("construct_graph", &construct_graph) //
-            ->Iterations(pass_through_size(dataset_graph) / (thread_count * big_batch_size))
+            ->Iterations(pass_through_size(dataset_graph) / (settings.threads_count * settings.big_batch_size))
             ->UseRealTime()
-            ->Threads(thread_count)
-            ->Arg(big_batch_size);
+            ->Threads(settings.threads_count)
+            ->Arg(settings.big_batch_size);
 
     if (can_build_paths)
         bm::RegisterBenchmark("construct_paths", &construct_paths) //
-            ->Iterations(pass_through_size(dataset_paths) / (thread_count * big_batch_size))
+            ->Iterations(pass_through_size(dataset_paths) / (settings.threads_count * settings.big_batch_size))
             ->UseRealTime()
-            ->Threads(thread_count)
-            ->Arg(big_batch_size);
+            ->Threads(settings.threads_count)
+            ->Arg(settings.big_batch_size);
 
     if (ukv_doc_field_default_k != ukv_doc_field_json_k)
         bm::RegisterBenchmark("docs_sample_blobs", &docs_sample_blobs) //
-            ->MinTime(min_seconds)
+            ->MinTime(settings.min_seconds)
             ->UseRealTime()
-            ->Threads(thread_count)
-            ->Arg(small_batch_size)
-            ->Arg(mid_batch_size)
-            ->Arg(big_batch_size);
+            ->Threads(settings.threads_count)
+            ->Arg(settings.small_batch_size)
+            ->Arg(settings.mid_batch_size)
+            ->Arg(settings.big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_objects", &docs_sample_objects) //
-        ->MinTime(min_seconds)
+        ->MinTime(settings.min_seconds)
         ->UseRealTime()
-        ->Threads(thread_count)
-        ->Arg(small_batch_size)
-        ->Arg(mid_batch_size)
-        ->Arg(big_batch_size);
+        ->Threads(settings.threads_count)
+        ->Arg(settings.small_batch_size)
+        ->Arg(settings.mid_batch_size)
+        ->Arg(settings.big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_field", &docs_sample_field) //
-        ->MinTime(min_seconds)
+        ->MinTime(settings.min_seconds)
         ->UseRealTime()
-        ->Threads(thread_count)
-        ->Arg(small_batch_size)
-        ->Arg(mid_batch_size)
-        ->Arg(big_batch_size);
+        ->Threads(settings.threads_count)
+        ->Arg(settings.small_batch_size)
+        ->Arg(settings.mid_batch_size)
+        ->Arg(settings.big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_table", &docs_sample_table) //
-        ->MinTime(min_seconds)
+        ->MinTime(settings.min_seconds)
         ->UseRealTime()
-        ->Threads(thread_count)
-        ->Arg(small_batch_size)
-        ->Arg(mid_batch_size)
-        ->Arg(big_batch_size);
+        ->Threads(settings.threads_count)
+        ->Arg(settings.small_batch_size)
+        ->Arg(settings.mid_batch_size)
+        ->Arg(settings.big_batch_size);
 
     if (can_build_graph)
         bm::RegisterBenchmark("graph_traverse_two_hops", &graph_traverse_two_hops) //
-            ->MinTime(min_seconds)
-            ->Threads(thread_count)
-            ->Arg(small_batch_size)
-            ->Arg(mid_batch_size)
-            ->Arg(big_batch_size);
+            ->MinTime(settings.min_seconds)
+            ->Threads(settings.threads_count)
+            ->Arg(settings.small_batch_size)
+            ->Arg(settings.mid_batch_size)
+            ->Arg(settings.big_batch_size);
 
     bm::RunSpecifiedBenchmarks();
     bm::Shutdown();

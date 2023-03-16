@@ -230,6 +230,11 @@ yyjson_mut_val* json_lookupn(yyjson_mut_val* json, ukv_str_view_t field, size_t 
                              : yyjson_mut_obj_getn(json, field, len);
 }
 
+simdjson::ondemand::object& reset(simdjson::ondemand::object& doc) noexcept {
+    doc.reset();
+    return doc;
+}
+
 json_t json_parse(value_view_t bytes, linked_memory_lock_t& arena, ukv_error_t* c_error) noexcept {
 
     if (bytes.empty())
@@ -1096,7 +1101,7 @@ void modify_field( //
         }
         else if (c_modification == doc_modification_t::remove_k) {
             yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
-            return_error_if_m(yyjson_mut_obj_remove(val, key), c_error, 0, "Failed To Insert!");
+            return_error_if_m(yyjson_mut_obj_remove(val, key), c_error, 0, "Failed To Remove!");
         }
         else if (c_modification == doc_modification_t::update_k) {
             yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
@@ -1509,6 +1514,10 @@ void read_modify_write( //
     yyjson_alc allocator = wrap_allocator(arena);
     auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, value_view_t binary_doc) {
         json_t parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
+        if (!contents[task_idx]) {
+            any_dump({nullptr, parsed.mut_handle->root}, internal_format_k, arena, growing_tape, c_error);
+            return;
+        }
 
         // This error is extremely unlikely, as we have previously accepted the data into the store.
         return_if_error_m(c_error);
@@ -1561,17 +1570,39 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
 
+    ptr_range_gt<ukv_key_t> tape;
+    if (!c.keys) {
+        return_error_if_m(c.values, c.error, uninitialized_state_k, "Keys and values is uninitialized");
+
+        tape = arena.alloc<ukv_key_t>(c.tasks_count, c.error);
+        strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values, c.values_stride};
+        strided_iterator_gt<ukv_length_t const> lens {c.lengths, c.lengths_stride};
+
+        simdjson::ondemand::parser parser;
+        for (size_t idx = 0; idx < c.tasks_count; ++idx, ++vals, ++lens) {
+            simdjson::ondemand::document doc = parser.iterate(*vals, *lens, 1000000ul);
+            simdjson::ondemand::object data = doc.get_object().value();
+
+            auto result = reset(data)[c.id_field];
+            return_error_if_m((simdjson::SUCCESS == result.error()),
+                            c.error,
+                            uninitialized_state_k,
+                            "Keys and values is uninitialized");
+
+            tape[idx] = result;
+        }
+        c.keys_stride = sizeof(ukv_key_t);
+    }
     // If user wants the entire doc in the same format, as the one we use internally,
     // this request can be passed entirely to the underlying Key-Value store.
     strided_iterator_gt<ukv_str_view_t const> fields {c.fields, c.fields_stride};
     auto has_fields = fields && (!fields.repeats() || *fields);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
-    strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
+    strided_iterator_gt<ukv_key_t const> keys {c.keys ? c.keys : tape.begin(), c.keys_stride};
     bits_view_t presences {c.presences};
     strided_iterator_gt<ukv_length_t const> offs {c.offsets, c.offsets_stride};
     strided_iterator_gt<ukv_length_t const> lens {c.lengths, c.lengths_stride};
     strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values, c.values_stride};
-
     places_arg_t places {collections, keys, fields, c.tasks_count};
     contents_arg_t contents {presences, offs, lens, vals, c.tasks_count};
 
@@ -1613,7 +1644,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     write.tasks_count = c.tasks_count;
     write.collections = c.collections;
     write.collections_stride = c.collections_stride;
-    write.keys = c.keys;
+    write.keys = c.keys ? c.keys : tape.begin();
     write.keys_stride = c.keys_stride;
     write.presences = c.presences;
     write.offsets = c.offsets;

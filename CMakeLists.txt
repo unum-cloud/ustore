@@ -119,6 +119,8 @@ endif()
 # Install 3rd Party Packages
 include(FetchContent)
 include_directories(include/)
+include_directories(src/)
+include_directories(tools/)
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
   set(FETCHCONTENT_QUIET OFF)
@@ -183,7 +185,7 @@ endif()
 
 set(UKV_ENGINE_NAMES)
 set(UKV_CLIENT_LIBS)
-set(UKV_TEST_NAMES "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
+set(UKV_TEST_NAMES "test_imp_exp" "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
 
 # Define the Engine libraries we will need to build
 if(${UKV_BUILD_ENGINE_UMEM})
@@ -286,26 +288,27 @@ if(${UKV_BUILD_TESTS})
 
     foreach(test_name IN ITEMS ${UKV_TEST_NAMES})
       string(CONCAT test_exe ${test_name} "_" ${client_lib})
-      add_executable(${test_exe} tests/${test_name}.cpp)
-      target_compile_definitions(${test_exe} PUBLIC UKV_TEST_PATH="tmp/${client_lib}/")
-      target_link_libraries(${test_exe} gtest fmt::fmt ${client_lib} ${client_dependencies})
-      add_test(NAME "${test_exe}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_exe}")
+      add_executable(${test_exe} tests/${test_name}.cpp tools/dataset.cpp)
+      target_compile_definitions(${test_exe} PUBLIC UKV_TEST_PATH="tmp/${client_lib}")
+      target_link_libraries(${test_exe} gtest arrow::flight arrow::parquet arrow::arrow arrow::bundled simdjson fmt::fmt benchmark ${client_lib} ${client_dependencies})
+      add_test(NAME "${test_exe}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_exe}")  
     endforeach()
   endforeach()
 endif()
 
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/argparse.cmake")
   foreach(client_lib IN ITEMS ${UKV_CLIENT_LIBS})
     get_target_property(client_dependencies ${client_lib} LINK_LIBRARIES)
 
     string(CONCAT bench_name "bench_twitter_" ${client_lib})
     add_executable(${bench_name} benchmarks/twitter.cpp)
-    target_link_libraries(${bench_name} benchmark fmt::fmt ${client_lib} ${client_dependencies})
+    target_link_libraries(${bench_name} benchmark argparse fmt::fmt ${client_lib} ${client_dependencies})
 
     string(CONCAT bench_name "bench_tabular_graph_" ${client_lib})
-    add_executable(${bench_name} benchmarks/tabular_graph.cpp)
-    target_link_libraries(${bench_name} benchmark ${client_lib} ${client_dependencies})
+    add_executable(${bench_name} benchmarks/tabular_graph.cpp tools/dataset.cpp)
+    target_link_libraries(${bench_name} fmt::fmt benchmark argparse ${client_lib} ${client_dependencies})
   endforeach()
 endif()
 

@@ -275,14 +275,12 @@ def test_nodes_attributes():
             expected_node_data[i] = {}
 
     # Whole Data
-    nodes_data = net.nodes(data=True)
-    for node, data in nodes_data:
+    for node, data in net.nodes(data=True):
         retrieved_node_data[node] = data
     assert retrieved_node_data == expected_node_data
 
     # Custom Field
-    nodes_data = net.nodes(data='name')
-    for node, name in nodes_data:
+    for node, name in net.nodes(data='name'):
         assert name == ('node{}'.format(node) if node % 2 else None)
 
     # Custom Field With Default
@@ -308,22 +306,19 @@ def test_edges_attributes():
         net.add_edge(i, i+1, i, weight=i) if i % 2 else net.add_edge(i, i+1, i)
 
     index = 0
-    edges_data = net.edges(data=True)
-    for node, neighbor, data in edges_data:
+    for node, neighbor, data in net.edges(data=True):
         assert node == index and neighbor == index+1
         assert data == ({'weight': index} if node % 2 else {})
         index += 1
 
     index = 0
-    edges_data = net.edges(data='weight')
-    for node, neighbor, weight in edges_data:
+    for node, neighbor, weight in net.edges(data='weight'):
         assert node == index and neighbor == index+1
         assert weight == (node if node % 2 else None)
         index += 1
 
     index = 0
-    edges_data = net.edges(data='weight', default=1)
-    for node, neighbor, weight in edges_data:
+    for node, neighbor, weight in net.edges(data='weight', default=1):
         assert node == index and neighbor == index+1
         assert weight == (node if node % 2 else 1)
         index += 1
@@ -336,15 +331,13 @@ def test_edges_attributes():
         (3, 4, 3)]
 
     index = 0
-    edges_data = net.edges([0, 1, 2, 3], data=True)
-    for node, neighbor, data in edges_data:
+    for node, neighbor, data in net.edges([0, 1, 2, 3], data=True):
         assert node == index and neighbor == index+1
         assert data == ({'weight': index} if node % 2 else {})
         index += 1
 
     index = 0
-    edges_data = net.edges([0, 1, 2, 3], data='weight', default=1)
-    for node, neighbor, weight in edges_data:
+    for node, neighbor, weight in net.edges([0, 1, 2, 3], data='weight', default=1):
         assert node == index and neighbor == index+1
         assert weight == (node if node % 2 else 1)
         index += 1
