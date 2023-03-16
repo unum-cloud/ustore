@@ -1,6 +1,6 @@
 /**
  * @file tabular_graph.cpp
- * @brief Imports a big Parquet/CSV/ORCA dataset as a labeled graph.
+ * @brief Imports a big Parquet/CSV/NDJSON dataset as a labeled graph.
  * @version 0.1
  * @date 2022-10-02
  *
@@ -36,12 +36,13 @@
 namespace bm = benchmark;
 using namespace unum::ukv;
 
-constexpr std::size_t max_batch_size_k = 1024 * 1024 * 1024;
+constexpr size_t max_batch_size_k = 1024 * 1024 * 1024;
 constexpr ukv_str_view_t path_k = "./";
 
 static database_t db;
 
-std::vector<std::string> paths;
+static std::vector<size_t> source_sizes;
+static std::vector<std::string> source_files;
 std::mutex mtx;
 
 struct args_t {
@@ -55,6 +56,7 @@ struct args_t {
     std::string id;
 
     size_t threads_count;
+    size_t files_count;
 };
 
 void parse_args(int argc, char* argv[], args_t& args) {
@@ -66,6 +68,7 @@ void parse_args(int argc, char* argv[], args_t& args) {
     program.add_argument("-ed", "--edge").required().help("Edge field");
     program.add_argument("-i", "--id").required().help("Id field");
     program.add_argument("-th", "--threads").default_value(std::string("1")).help("Threads count");
+    program.add_argument("-m", "--max_input_files").default_value(std::string("10")).help("Max input files count");
 
     program.parse_known_args(argc, argv);
 
@@ -76,33 +79,21 @@ void parse_args(int argc, char* argv[], args_t& args) {
     args.edge = program.get("edge");
     args.id = program.get("id");
     args.threads_count = std::stoi(program.get("threads"));
+    args.files_count = std::stoi(program.get("max_input_files"));
 
     if (args.threads_count == 0) {
         fmt::print("Zero threads count specified\n");
         exit(1);
     }
-}
 
-void make_bench_files(args_t const& args) {
-    auto file_name = args.path.substr(args.path.find_last_of('/') + 1);
-    paths.resize(args.threads_count);
-    for (size_t idx = 0; idx < args.threads_count; ++idx) {
-        if (idx == 0) {
-            paths[idx] = args.path;
-            continue;
-        }
-
-        fmt::format_to(std::back_inserter(paths[idx]), "./{}_{}", idx, file_name);
-        std::filesystem::copy_file(args.path, paths[idx]);
+    if (args.files_count == 0) {
+        fmt::print("Zero max input files count specified\n");
+        exit(1);
     }
 }
 
-void delete_bench_files() {
-    for (size_t idx = 0; idx < paths.size(); ++idx)
-        std::remove(paths[idx].c_str());
-}
-
 size_t get_keys_count() {
+    mtx.lock();
     status_t status;
     arena_t arena(db);
     ukv_collection_t collection = db.main();
@@ -123,6 +114,7 @@ size_t get_keys_count() {
     scan.counts = &found_counts;
     scan.keys = &keys;
     ukv_scan(&scan);
+    mtx.unlock();
     return (*found_counts * 3);
 }
 
@@ -131,8 +123,8 @@ static void bench_docs_import(bm::State& state, args_t const& args) {
     status_t status;
     arena_t arena(db);
 
-    std::filesystem::path pt {paths[state.thread_index()]};
-    size_t size = std::filesystem::file_size(pt);
+    size_t size = 0;
+    size_t idx = 0;
 
     for (auto _ : state) {
         ukv_docs_import_t docs {};
@@ -140,25 +132,25 @@ static void bench_docs_import(bm::State& state, args_t const& args) {
         docs.error = status.member_ptr();
         docs.arena = arena.member_ptr();
         docs.collection = collection;
-        docs.paths_pattern = paths[state.thread_index()].c_str();
+        docs.paths_pattern = source_files[state.thread_index() + idx].c_str();
         docs.max_batch_size = max_batch_size_k;
         docs.id_field = args.id.c_str();
         ukv_docs_import(&docs);
 
-        if (!status)
+        if (status)
+            size += source_sizes[state.thread_index() + idx];
+        else
             status.release_error();
+        ++idx;
     }
-    state.counters["bytes/s"] = bm::Counter(state.threads() * state.iterations() * size, bm::Counter::kIsRate);
+    state.counters["bytes/s"] = bm::Counter(state.iterations() * size, bm::Counter::kIsRate);
 }
 
 static void bench_graph_import(bm::State& state, args_t const& args) {
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
-
-    size_t size = 0;
-    size_t keys_in_bytes = 0;
-    bool scan_state = true;
+    size_t idx = 0;
 
     for (auto _ : state) {
         ukv_graph_import_t graph {};
@@ -166,25 +158,19 @@ static void bench_graph_import(bm::State& state, args_t const& args) {
         graph.error = status.member_ptr();
         graph.arena = arena.member_ptr();
         graph.collection = collection;
-        graph.paths_pattern = paths[state.thread_index()].c_str();
+        graph.paths_pattern = source_files[state.thread_index() + idx].c_str();
         graph.max_batch_size = max_batch_size_k;
         graph.source_id_field = args.source.c_str();
         graph.target_id_field = args.target.c_str();
         graph.edge_id_field = args.edge.c_str();
         ukv_graph_import(&graph);
 
-        state.PauseTiming();
-        if (status) {
-            mtx.lock();
-            if (scan_state)
-                keys_in_bytes = get_keys_count() * sizeof(ukv_key_t), scan_state = false;
-            mtx.unlock();
-            size += keys_in_bytes;
-        }
-        status.release_error();
-        state.ResumeTiming();
+        if (!status)
+            status.release_error();
+        ++idx;
     }
-    state.counters["bytes/s"] = bm::Counter(state.threads() * state.iterations() * size, bm::Counter::kIsRate);
+    size_t size = get_keys_count() * sizeof(ukv_key_t);
+    state.counters["bytes/s"] = bm::Counter(state.iterations() * size, bm::Counter::kIsRate);
 }
 
 size_t find_and_delete() {
@@ -227,10 +213,11 @@ static void bench_docs_export(bm::State& state, args_t const& args) {
 
         if (status)
             size += find_and_delete();
-        status.release_error();
+        else
+            status.release_error();
     }
     db.clear().throw_unhandled();
-    state.counters["bytes/s"] = bm::Counter(state.threads() * state.iterations() * size, bm::Counter::kIsRate);
+    state.counters["bytes/s"] = bm::Counter(state.iterations() * size, bm::Counter::kIsRate);
 }
 
 static void bench_graph_export(bm::State& state, args_t const& args) {
@@ -240,6 +227,14 @@ static void bench_graph_export(bm::State& state, args_t const& args) {
 
     size_t size = 0;
 
+    std::string source = args.source;
+    std::string target = args.target;
+    std::string edge = args.edge;
+
+    std::replace(source.begin(), source.end(), '/', '_');
+    std::replace(target.begin(), target.end(), '/', '_');
+    std::replace(edge.begin(), edge.end(), '/', '_');
+
     for (auto _ : state) {
         ukv_graph_export_t graph {};
         graph.db = db;
@@ -248,58 +243,77 @@ static void bench_graph_export(bm::State& state, args_t const& args) {
         graph.collection = collection;
         graph.paths_extension = args.extension.c_str();
         graph.max_batch_size = max_batch_size_k;
-        graph.source_id_field = args.source.c_str();
-        graph.target_id_field = args.target.c_str();
-        graph.edge_id_field = args.edge.c_str();
+        graph.source_id_field = source.c_str();
+        graph.target_id_field = target.c_str();
+        graph.edge_id_field = edge.c_str();
         ukv_graph_export(&graph);
 
         if (status)
             size += find_and_delete();
+        else
+            status.release_error();
     }
     db.clear().throw_unhandled();
-    state.counters["bytes/s"] = bm::Counter(state.threads() * state.iterations() * size, bm::Counter::kIsRate);
+    state.counters["bytes/s"] = bm::Counter(state.iterations() * size, bm::Counter::kIsRate);
+}
+
+void parse_paths(args_t& args) {
+    fmt::print("Will search for {} files...\n", args.extension);
+    auto dataset_path = args.path;
+    auto home_path = std::getenv("HOME");
+    if (dataset_path.front() == '~')
+        dataset_path = std::filesystem::path(home_path) / dataset_path.substr(2);
+    auto opts = std::filesystem::directory_options::follow_directory_symlink;
+    for (auto const& dir_entry : std::filesystem::directory_iterator(dataset_path, opts)) {
+        if (dir_entry.path().extension() != args.extension)
+            continue;
+
+        source_files.push_back(dir_entry.path());
+        source_sizes.push_back(dir_entry.file_size());
+    }
+    size_t files_count = std::min(source_files.size(), args.files_count * args.threads_count);
+    source_files.resize(files_count);
+    source_sizes.resize(files_count);
+    fmt::print("Files are ready for benchmark\n");
 }
 
 void bench_docs(args_t const& args) {
-    bm::RegisterBenchmark( //
-        fmt::format("docs_import_{}", std::filesystem::path(args.path).extension().string().substr(1).c_str()).c_str(),
-        [&](bm::State& s) { bench_docs_import(s, args); })
+    bm::RegisterBenchmark(fmt::format("docs_import_{}", args.extension.substr(1)).c_str(),
+                          [&](bm::State& s) { bench_docs_import(s, args); })
         ->Threads(args.threads_count)
-        ->Iterations(1);
+        ->Iterations(args.files_count);
 
     bm::RegisterBenchmark(fmt::format("docs_export_{}", args.extension.substr(1)).c_str(),
                           [&](bm::State& s) { bench_docs_export(s, args); })
         ->Threads(args.threads_count)
-        ->Iterations(1);
+        ->Iterations(args.files_count);
 }
 
 void bench_graph(args_t const& args) {
-    bm::RegisterBenchmark( //
-        fmt::format("graph_import_{}", std::filesystem::path(args.path).extension().string().substr(1).c_str()).c_str(),
-        [&](bm::State& s) { bench_graph_import(s, args); })
+    bm::RegisterBenchmark(fmt::format("graph_import_{}", args.extension.substr(1)).c_str(),
+                          [&](bm::State& s) { bench_graph_import(s, args); })
         ->Threads(args.threads_count)
-        ->Iterations(1);
+        ->Iterations(args.files_count);
     bm::RegisterBenchmark(fmt::format("graph_export_{}", args.extension.substr(1)).c_str(),
                           [&](bm::State& s) { bench_graph_export(s, args); })
         ->Threads(args.threads_count)
-        ->Iterations(1);
+        ->Iterations(args.files_count);
 }
 
 int main(int argc, char** argv) {
 
     args_t args {};
     parse_args(argc, argv, args);
-    make_bench_files(args);
+    parse_paths(args);
     bm::Initialize(&argc, argv);
     db.open().throw_unhandled();
 
-    bench_graph(args);
     bench_docs(args);
+    bench_graph(args);
 
     bm::RunSpecifiedBenchmarks();
     bm::Shutdown();
 
-    delete_bench_files();
     db.close();
 
     return 0;
