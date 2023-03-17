@@ -242,7 +242,7 @@ set(UKV_CLIENT_NAMES ${UKV_ENGINE_NAMES})
 
 if(${UKV_BUILD_API_FLIGHT_CLIENT})
   add_library(ukv_flight_client src/flight_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ukv_flight_client pthread yyjson simdjson bson pcre2 fmt::fmt arrow::flight arrow::bundled arrow::dataset arrow::arrow OpenSSL::SSL OpenSSL::Crypto ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ukv_flight_client pthread yyjson simdjson bson pcre2 fmt::fmt arrow::flight arrow::bundled arrow::dataset arrow::arrow openssl::ssl openssl::crypto ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
   list(APPEND UKV_CLIENT_NAMES "flight_client")
   list(APPEND UKV_CLIENT_LIBS "ukv_flight_client")
