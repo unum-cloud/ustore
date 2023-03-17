@@ -424,30 +424,60 @@ fields_t prepare_fields(ukv_docs_imp_exp_t& c, linked_memory_lock_t& arena) {
     if (c.fields_count == 1)
         return {c.fields, c.fields_stride};
     fields_t fields {c.fields, c.fields_stride};
-    auto prepared_fields = arena.alloc<ukv_str_view_t>(c.fields_count, c.error);
     ukv_size_t next_idx = 0;
-    ukv_size_t count = 0;
 
-    for (ukv_size_t idx = 0; idx < c.fields_count - 1;) {
+    auto bitmask = arena.alloc<ukv_octet_t>(c.fields_count, c.error);
+    for (auto& bit : bitmask)
+        bit = 1;
+
+    for (ukv_size_t idx = 0; idx < c.fields_count;) {
+        while (!bitmask[idx])
+            ++idx;
+
         next_idx = idx + 1;
+        if (chrcmp_(fields[idx][0], '/')) {
+            while (next_idx < c.fields_count && strncmp_(fields[idx], fields[next_idx], strlen(fields[idx])) &&
+                   chrcmp_(fields[next_idx][strlen(fields[idx])], '/') && bitmask[next_idx]) {
+                bitmask[next_idx] = 0;
+                ++next_idx;
+            }
+        }
+        else {
+            while (next_idx < c.fields_count && !chrcmp_(fields[next_idx][0], '/') &&
+                   strcmp_(fields[idx], fields[next_idx])) {
+                bitmask[next_idx] = 0;
+                ++next_idx;
+            }
+            ukv_size_t ptr_idx = next_idx;
+            while (ptr_idx < c.fields_count && !chrcmp_(fields[ptr_idx][0], '/'))
+                ++ptr_idx;
+
+            while (ptr_idx < c.fields_count) {
+                if (strncmp_(fields[idx], &fields[ptr_idx][1], strlen(fields[idx])) &&
+                    chrcmp_(fields[ptr_idx][strlen(fields[idx]) + 1], '/'))
+                    bitmask[ptr_idx] = 0;
+                ++ptr_idx;
+            }
+        }
+        idx = next_idx;
+    }
+
+    size_t count = 0;
+    for (auto bit : bitmask) {
+        if (bit)
+            ++count;
+    }
+    auto prepared_fields = arena.alloc<ukv_str_view_t>(count, c.error);
+
+    for (ukv_size_t idx = 0, pos = 0; idx < c.fields_count; ++idx) {
+        if (!bitmask[idx])
+            continue;
+
         ukv_size_t len = strlen(fields[idx]);
         auto field = arena.alloc<ukv_char_t>(len + 1, c.error);
         std::memcpy(field.begin(), fields[idx], len + 1);
-        prepared_fields[count] = field.begin();
-        ++count;
-        if (chrcmp_(fields[idx][0], '/')) {
-            while (next_idx < c.fields_count && strncmp_(fields[idx], fields[next_idx], strlen(fields[idx])) &&
-                   fields[next_idx][strlen(fields[idx])] == '/')
-                ++next_idx;
-        }
-        if (next_idx == idx + 1 && next_idx == c.fields_count - 1) {
-            ukv_size_t len = strlen(fields[next_idx]);
-            auto field = arena.alloc<ukv_char_t>(len + 1, c.error);
-            std::memcpy(field.begin(), fields[next_idx], len + 1);
-            prepared_fields[count] = field.begin();
-            ++count;
-        }
-        idx = next_idx;
+        prepared_fields[pos] = field.begin();
+        ++pos;
     }
     c.fields_count = count;
     return {prepared_fields.begin(), sizeof(ukv_str_view_t)};
