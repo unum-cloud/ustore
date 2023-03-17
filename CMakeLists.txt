@@ -164,6 +164,10 @@ if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT_CLIENT} OR ${UKV_BUILD_API_
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
 
+if(${UKV_BUILD_API_FLIGHT_CLIENT})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
+endif()
+
 if(${UKV_BUILD_API_FLIGHT_SERVER})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/clipp.cmake")
 endif()
@@ -238,7 +242,7 @@ set(UKV_CLIENT_NAMES ${UKV_ENGINE_NAMES})
 
 if(${UKV_BUILD_API_FLIGHT_CLIENT})
   add_library(ukv_flight_client src/flight_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ukv_flight_client pthread yyjson simdjson bson pcre2 fmt::fmt arrow::flight arrow::bundled arrow::dataset arrow::arrow ssl crypto ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ukv_flight_client pthread yyjson simdjson bson pcre2 fmt::fmt arrow::flight arrow::bundled arrow::dataset arrow::arrow OpenSSL::SSL OpenSSL::Crypto ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ukv_flight_client INTERFACE UKV_FLIGHT_CLIENT=TRUE)
   list(APPEND UKV_CLIENT_NAMES "flight_client")
   list(APPEND UKV_CLIENT_LIBS "ukv_flight_client")
