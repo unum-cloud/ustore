@@ -34,7 +34,6 @@
 #include "dataset.h"
 
 using namespace unum::ukv;
-using graph_t = std::vector<edge_t>;
 using docs_t = std::unordered_map<ukv_key_t, std::string>;
 
 namespace fs = std::filesystem;
@@ -49,11 +48,8 @@ constexpr ukv_str_view_t ndjson_path_k = "sample_docs.ndjson";
 constexpr ukv_str_view_t path_k = "./";
 constexpr size_t rows_count_k = 1000;
 
-static constexpr ukv_str_view_t parquet_k = "sample.parquet";
-static constexpr ukv_str_view_t ndjson_k = "sample.ndjson";
-static constexpr ukv_str_view_t csv_k = "sample.csv";
 static constexpr ukv_str_view_t ext_parquet_k = ".parquet";
-static constexpr ukv_str_view_t ext_ndjson_k = ".ndjson";
+static constexpr ukv_str_view_t ext_ndjson_path_k = ".ndjson";
 static constexpr ukv_str_view_t ext_csv_k = ".csv";
 
 constexpr size_t prefixes_count_k = 4;
@@ -92,17 +88,10 @@ static constexpr ukv_str_view_t fields_columns_ak[fields_columns_count_k] = {
     "retweeted",
 };
 
-static constexpr ukv_str_view_t source_path_k = "id";
-static constexpr ukv_str_view_t target_path_k = "/user/id";
-static constexpr ukv_str_view_t edge_path_k = "/user/followers_count";
-static constexpr ukv_str_view_t source_field_k = "id";
-static constexpr ukv_str_view_t target_field_k = "user_id";
-static constexpr ukv_str_view_t edge_field_k = "user_followers_count";
 static constexpr ukv_str_view_t doc_k = "doc";
 static constexpr ukv_str_view_t id_k = "_id";
 
 std::vector<std::string> paths;
-graph_t expected_edges;
 docs_t docs_w_keys;
 
 static database_t db;
@@ -398,329 +387,8 @@ void make_ndjson_docs() {
     close(handle);
 }
 
-void make_parquet_graph() {
-    parquet::schema::NodeVector fields;
-    fields.push_back(parquet::schema::PrimitiveNode::Make( //
-        source_field_k,
-        parquet::Repetition::REQUIRED,
-        parquet::Type::INT64,
-        parquet::ConvertedType::INT_64));
-
-    fields.push_back(parquet::schema::PrimitiveNode::Make( //
-        target_field_k,
-        parquet::Repetition::REQUIRED,
-        parquet::Type::INT64,
-        parquet::ConvertedType::INT_64));
-
-    fields.push_back(parquet::schema::PrimitiveNode::Make( //
-        edge_field_k,
-        parquet::Repetition::REQUIRED,
-        parquet::Type::INT64,
-        parquet::ConvertedType::INT_64));
-
-    std::shared_ptr<parquet::schema::GroupNode> schema = std::static_pointer_cast<parquet::schema::GroupNode>(
-        parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, fields));
-
-    auto outfile = *arrow::io::FileOutputStream::Open(parquet_k);
-
-    parquet::WriterProperties::Builder builder;
-    builder.memory_pool(arrow::default_memory_pool());
-    builder.write_batch_size(rows_count_k);
-
-    parquet::StreamWriter os {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
-
-    for (auto edge : expected_edges) {
-        os << edge.source_id << edge.target_id << edge.id << parquet::EndRow;
-    }
-}
-
-void make_csv_graph() {
-    arrow::Status status;
-    arrow::NumericBuilder<arrow::Int64Type> builder;
-    status = builder.Resize(expected_edges.size());
-    std::shared_ptr<arrow::Array> sources_array;
-    std::shared_ptr<arrow::Array> targets_array;
-    std::shared_ptr<arrow::Array> edges_array;
-    std::vector<ukv_key_t> values(expected_edges.size());
-
-    size_t idx = 0;
-    for (auto edge : expected_edges)
-        values[idx] = edge.source_id, ++idx;
-    status = builder.AppendValues(values);
-    status = builder.Finish(&sources_array);
-    idx = 0;
-    for (auto edge : expected_edges)
-        values[idx] = edge.target_id, ++idx;
-    status = builder.AppendValues(values);
-    status = builder.Finish(&targets_array);
-    idx = 0;
-    for (auto edge : expected_edges)
-        values[idx] = edge.id, ++idx;
-    status = builder.AppendValues(values);
-    status = builder.Finish(&edges_array);
-
-    arrow::FieldVector fields;
-    fields.push_back(arrow::field(source_field_k, arrow::int64()));
-    fields.push_back(arrow::field(target_field_k, arrow::int64()));
-    fields.push_back(arrow::field(edge_field_k, arrow::int64()));
-
-    std::shared_ptr<arrow::Schema> schema = std::make_shared<arrow::Schema>(fields);
-    std::shared_ptr<arrow::Table> table = nullptr;
-    table = arrow::Table::Make(schema, {sources_array, targets_array, edges_array});
-    std::shared_ptr<arrow::io::FileOutputStream> outstream = *arrow::io::FileOutputStream::Open(csv_k);
-    status = arrow::csv::WriteCSV(*table, arrow::csv::WriteOptions::Defaults(), outstream.get());
-}
-
-void make_ndjson_graph() {
-    auto handle = open(ndjson_k, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-
-    for (auto edge : expected_edges) {
-        auto str = fmt::format( //
-            "{{\"{}\":{},\"{}\":{},\"{}\":{}}}\n",
-            source_field_k,
-            edge.source_id,
-            target_field_k,
-            edge.target_id,
-            edge_field_k,
-            edge.id);
-        write(handle, str.data(), str.size());
-    }
-    close(handle);
-}
-
-void make_test_files_graph() {
-    std::filesystem::path pt {dataset_clean_path_k};
-    size_t size = std::filesystem::file_size(pt);
-
-    auto handle = open(dataset_clean_path_k, O_RDONLY);
-    auto begin = mmap(NULL, size, PROT_READ, MAP_PRIVATE, handle, 0);
-    std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), size);
-    madvise(begin, size, MADV_SEQUENTIAL);
-
-    auto get_value = [](simdjson::ondemand::object& obj, ukv_str_view_t field) {
-        return (field[0] == '/') ? rewind(obj).at_pointer(field) : rewind(obj)[field];
-    };
-
-    expected_edges.reserve(rows_count_k);
-    edge_t edge;
-
-    simdjson::ondemand::parser parser;
-    simdjson::ondemand::document_stream docs = parser.iterate_many( //
-        mapped_content.data(),
-        mapped_content.size(),
-        1000000ul);
-
-    for (auto doc : docs) {
-        simdjson::ondemand::object obj = doc.get_object().value();
-        try {
-            edge = edge_t {
-                get_value(obj, source_path_k),
-                get_value(obj, target_field_k),
-                get_value(obj, edge_field_k),
-            };
-        }
-        catch (simdjson::simdjson_error const& ex) {
-            continue;
-        }
-        expected_edges.push_back(edge);
-        if (expected_edges.size() == rows_count_k)
-            break;
-    }
-    make_parquet_graph();
-    make_csv_graph();
-    make_ndjson_graph();
-    for (size_t size = expected_edges.size(), idx = 0; idx < size; ++idx) {
-        expected_edges.push_back(edge_t {
-            expected_edges[idx].target_id,
-            expected_edges[idx].source_id,
-            expected_edges[idx].id,
-        });
-    }
-    std::sort(expected_edges.begin(), expected_edges.end(), [](auto const& lhs, auto const& rhs) {
-        return lhs.source_id < rhs.source_id;
-    });
-    munmap((void*)mapped_content.data(), mapped_content.size());
-    close(handle);
-}
-
-void delete_test_files() {
-    std::remove(parquet_k);
-    std::remove(csv_k);
-    std::remove(ndjson_k);
+void delete_test_file() {
     std::remove(ndjson_path_k);
-}
-
-void fill_array_from_ndjson(graph_t& array, std::string_view const& mapped_content) {
-
-    simdjson::ondemand::parser parser;
-    simdjson::ondemand::document_stream docs = parser.iterate_many( //
-        mapped_content.data(),
-        mapped_content.size(),
-        1000000ul);
-
-    auto get_value = [](simdjson::ondemand::object& data, ukv_str_view_t field) {
-        return (field[0] == '/') ? rewind(data).at_pointer(field) : rewind(data)[field];
-    };
-
-    for (auto doc : docs) {
-        simdjson::ondemand::object data = doc.get_object().value();
-        array.push_back(edge_t {
-            get_value(data, source_field_k),
-            get_value(data, target_field_k),
-            get_value(data, edge_field_k),
-        });
-    }
-}
-
-void fill_array_from_table(graph_t& array, std::shared_ptr<arrow::Table>& table) {
-
-    auto sources = table->GetColumnByName(source_field_k);
-    auto targets = table->GetColumnByName(target_field_k);
-    auto edges = table->GetColumnByName(edge_field_k);
-    size_t count = sources->num_chunks();
-    array.reserve(ukv_size_t(sources->chunk(0)->length()));
-
-    for (size_t chunk_idx = 0; chunk_idx != count; ++chunk_idx) {
-        auto source_chunk = sources->chunk(chunk_idx);
-        auto target_chunk = targets->chunk(chunk_idx);
-        auto edge_chunk = edges->chunk(chunk_idx);
-        auto source_array = std::static_pointer_cast<arrow::Int64Array>(source_chunk);
-        auto target_array = std::static_pointer_cast<arrow::Int64Array>(target_chunk);
-        auto edge_array = std::static_pointer_cast<arrow::Int64Array>(edge_chunk);
-        for (size_t value_idx = 0; value_idx != source_array->length(); ++value_idx) {
-            array.push_back(edge_t {
-                source_array->Value(value_idx),
-                target_array->Value(value_idx),
-                edge_array->Value(value_idx),
-            });
-        }
-    }
-}
-
-void fill_array(ukv_str_view_t file_name, graph_t& array) {
-
-    auto ext = std::filesystem::path(file_name).extension();
-
-    if (ext == ".ndjson") {
-        std::filesystem::path pt {file_name};
-        size_t size = std::filesystem::file_size(pt);
-
-        auto handle = open(file_name, O_RDONLY);
-        auto begin = mmap(NULL, size, PROT_READ, MAP_PRIVATE, handle, 0);
-        std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), size);
-        madvise(begin, size, MADV_SEQUENTIAL);
-        fill_array_from_ndjson(array, mapped_content);
-        munmap((void*)mapped_content.data(), mapped_content.size());
-    }
-    else {
-        std::shared_ptr<arrow::Table> table;
-        if (ext == ".parquet") {
-            arrow::MemoryPool* pool = arrow::default_memory_pool();
-            auto input = *arrow::io::ReadableFile::Open(file_name);
-            std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
-            parquet::arrow::OpenFile(input, pool, &arrow_reader);
-            arrow_reader->ReadTable(&table);
-        }
-        else if (ext == ".csv") {
-            std::shared_ptr<arrow::io::InputStream> input = *arrow::io::ReadableFile::Open(file_name);
-            auto read_options = arrow::csv::ReadOptions::Defaults();
-            auto parse_options = arrow::csv::ParseOptions::Defaults();
-            auto convert_options = arrow::csv::ConvertOptions::Defaults();
-            arrow::io::IOContext io_context = arrow::io::default_io_context();
-
-            std::shared_ptr<arrow::csv::TableReader> reader =
-                *arrow::csv::TableReader::Make(io_context, input, read_options, parse_options, convert_options);
-            table = *reader->Read();
-        }
-        fill_array_from_table(array, table);
-    }
-}
-
-bool cmp_graph(ukv_str_view_t src) {
-
-    graph_t edges;
-
-    fill_array(src, edges);
-    EXPECT_EQ(edges.size(), expected_edges.size());
-
-    for (size_t idx = 0; idx < expected_edges.size(); ++idx) {
-        size_t idx_ = idx;
-        while (edges[idx].target_id != expected_edges[idx_].target_id)
-            ++idx_;
-        if (idx != idx_)
-            std::swap(expected_edges[idx], expected_edges[idx_]);
-        EXPECT_EQ(expected_edges[idx].source_id, edges[idx].source_id);
-        EXPECT_EQ(expected_edges[idx].target_id, edges[idx].target_id);
-        EXPECT_EQ(expected_edges[idx].id, edges[idx].id);
-    }
-    return true;
-}
-
-bool test_graph(ukv_str_view_t file, ukv_str_view_t ext) {
-
-    auto collection = db.main();
-    arena_t arena(db);
-    status_t status;
-
-    std::vector<std::string> updated_paths;
-    std::string new_file;
-
-    ukv_graph_import_t imp {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_pattern = file,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = source_field_k,
-        .target_id_field = target_field_k,
-        .edge_id_field = edge_field_k,
-    };
-    ukv_graph_import(&imp);
-
-    EXPECT_TRUE(status);
-
-    ukv_graph_export_t exp {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_extension = ext,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = source_field_k,
-        .target_id_field = target_field_k,
-        .edge_id_field = edge_field_k,
-    };
-    ukv_graph_export(&exp);
-
-    EXPECT_TRUE(status);
-
-    for (const auto& entry : fs::directory_iterator(path_k))
-        updated_paths.push_back(entry.path());
-
-    EXPECT_GT(updated_paths.size(), paths.size());
-
-    for (size_t idx = 0; idx < paths.size(); ++idx) {
-        if (paths[idx] != updated_paths[idx]) {
-            new_file = updated_paths[idx];
-            break;
-        }
-    }
-    if (new_file.size() == 0)
-        new_file = updated_paths.back();
-
-    new_file.erase(0, 2);
-    EXPECT_TRUE(cmp_graph(new_file.data()));
-
-    std::remove(new_file.data());
-    db.clear().throw_unhandled();
-    return true;
 }
 
 void fill_from_table(std::shared_ptr<arrow::Table>& table) {
@@ -1152,214 +820,6 @@ bool test_whole_docs(ukv_str_view_t file, ukv_str_view_t ext, comparator cmp, bo
     return true;
 }
 
-bool test_crash_cases_graph_import(ukv_str_view_t file) {
-    auto collection = db.main();
-    arena_t arena(db);
-    status_t status;
-
-    size_t size = 0;
-
-    if (std::strcmp(ndjson_k, file) == 0) {
-        std::filesystem::path pt {file};
-        size = std::filesystem::file_size(pt);
-    }
-
-    ukv_graph_import_t imp_path_null {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_pattern = nullptr,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = source_field_k,
-        .target_id_field = target_field_k,
-        .edge_id_field = edge_field_k,
-    };
-    ukv_graph_import(&imp_path_null);
-    EXPECT_FALSE(status);
-    status.release_error();
-
-    ukv_graph_import_t imp_source_null {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_pattern = file,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = nullptr,
-        .target_id_field = target_field_k,
-        .edge_id_field = edge_field_k,
-    };
-    ukv_graph_import(&imp_source_null);
-    EXPECT_FALSE(status);
-    status.release_error();
-
-    ukv_graph_import_t imp_target_null {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_pattern = file,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = source_field_k,
-        .target_id_field = nullptr,
-        .edge_id_field = edge_field_k,
-    };
-    ukv_graph_import(&imp_target_null);
-    EXPECT_FALSE(status);
-    status.release_error();
-
-    ukv_graph_import_t imp_edge_null {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_pattern = file,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = source_field_k,
-        .target_id_field = target_field_k,
-        .edge_id_field = nullptr,
-    };
-    ukv_graph_import(&imp_edge_null);
-    EXPECT_TRUE(status);
-    status.release_error();
-
-    ukv_graph_import_t imp_db_null {
-        .db = nullptr,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_pattern = file,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = source_field_k,
-        .target_id_field = target_field_k,
-        .edge_id_field = edge_field_k,
-    };
-    ukv_graph_import(&imp_db_null);
-    EXPECT_FALSE(status);
-    db.clear().throw_unhandled();
-    return true;
-}
-
-bool test_crash_cases_graph_export(ukv_str_view_t ext) {
-    auto collection = db.main();
-    arena_t arena(db);
-    status_t status;
-    size_t size = 0;
-
-    ukv_graph_export_t exp_path_null {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_extension = nullptr,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = source_field_k,
-        .target_id_field = target_field_k,
-        .edge_id_field = edge_field_k,
-    };
-    ukv_graph_export(&exp_path_null);
-    EXPECT_FALSE(status);
-    status.release_error();
-
-    ukv_graph_export_t exp_source_null {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_extension = ext,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = nullptr,
-        .target_id_field = target_field_k,
-        .edge_id_field = edge_field_k,
-    };
-    ukv_graph_export(&exp_source_null);
-    EXPECT_FALSE(status);
-    status.release_error();
-
-    ukv_graph_export_t exp_target_null {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_extension = ext,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = source_field_k,
-        .target_id_field = nullptr,
-        .edge_id_field = edge_field_k,
-    };
-    ukv_graph_export(&exp_target_null);
-    EXPECT_FALSE(status);
-    status.release_error();
-
-    ukv_graph_export_t exp_edge_null {
-        .db = db,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_extension = ext,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = source_field_k,
-        .target_id_field = target_field_k,
-        .edge_id_field = nullptr,
-    };
-    ukv_graph_export(&exp_edge_null);
-    EXPECT_TRUE(status);
-    status.release_error();
-
-    ukv_graph_export_t exp_db_null {
-        .db = nullptr,
-        .error = status.member_ptr(),
-        .arena = arena.member_ptr(),
-        .options = ukv_options_default_k,
-        .collection = collection,
-        .paths_extension = ext,
-        .max_batch_size = max_batch_size_k,
-        .callback = nullptr,
-        .callback_payload = nullptr,
-        .source_id_field = source_field_k,
-        .target_id_field = target_field_k,
-        .edge_id_field = edge_field_k,
-    };
-    ukv_graph_export(&exp_db_null);
-    EXPECT_FALSE(status);
-
-    for (const auto& entry : fs::directory_iterator(path_k)) {
-        std::string path = entry.path();
-        if (std::strcmp(path.data() + (path.size() - strlen(ext)), ext) == 0)
-            std::remove(path.data());
-    }
-    db.clear().throw_unhandled();
-    return true;
-}
-
 bool test_crash_cases_docs_import(ukv_str_view_t file) {
     auto collection = db.main();
     arena_t arena(db);
@@ -1367,7 +827,7 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
 
     size_t size = 0;
 
-    if (std::strcmp(ndjson_k, file) == 0) {
+    if (std::strcmp(ndjson_path_k, file) == 0) {
         std::filesystem::path pt {file};
         size = std::filesystem::file_size(pt);
     }
@@ -1558,38 +1018,8 @@ bool test_crash_cases_docs_export(ukv_str_view_t ext) {
     return true;
 }
 
-TEST(import_export_graph, ndjosn_ndjson) {
-    test_graph(ndjson_k, ext_ndjson_k);
-}
-TEST(import_export_graph, ndjosn_parquet) {
-    test_graph(ndjson_k, ext_parquet_k);
-}
-TEST(import_export_graph, ndjosn_csv) {
-    test_graph(ndjson_k, ext_csv_k);
-}
-
-TEST(import_export_graph, parquet_ndjson) {
-    test_graph(parquet_k, ext_ndjson_k);
-}
-TEST(import_export_graph, parquet_parquet) {
-    test_graph(parquet_k, ext_parquet_k);
-}
-TEST(import_export_graph, parquet_csv) {
-    test_graph(parquet_k, ext_csv_k);
-}
-
-TEST(import_export_graph, csv_ndjson) {
-    test_graph(csv_k, ext_ndjson_k);
-}
-TEST(import_export_graph, csv_parquet) {
-    test_graph(csv_k, ext_parquet_k);
-}
-TEST(import_export_graph, csv_csv) {
-    test_graph(csv_k, ext_csv_k);
-}
-
 TEST(import_export_docs_whole, ndjosn_ndjson) {
-    test_whole_docs(ndjson_path_k, ext_ndjson_k, cmp_ndjson_docs_whole);
+    test_whole_docs(ndjson_path_k, ext_ndjson_path_k, cmp_ndjson_docs_whole);
 }
 TEST(import_export_docs_whole, ndjosn_parquet) {
     test_whole_docs(ndjson_path_k, ext_parquet_k, cmp_ndjson_docs_whole);
@@ -1599,7 +1029,7 @@ TEST(import_export_docs_whole, ndjosn_csv) {
 }
 
 TEST(import_export_docs_whole, parquet_ndjson) {
-    test_whole_docs(parquet_path_k, ext_ndjson_k, cmp_table_docs_whole, true);
+    test_whole_docs(parquet_path_k, ext_ndjson_path_k, cmp_table_docs_whole, true);
 }
 TEST(import_export_docs_whole, parquet_parquet) {
     test_whole_docs(parquet_path_k, ext_parquet_k, cmp_table_docs_whole, true);
@@ -1609,7 +1039,7 @@ TEST(import_export_docs_whole, parquet_csv) {
 }
 
 TEST(import_export_docs_whole, csv_ndjson) {
-    test_whole_docs(csv_path_k, ext_ndjson_k, cmp_table_docs_whole, true);
+    test_whole_docs(csv_path_k, ext_ndjson_path_k, cmp_table_docs_whole, true);
 }
 TEST(import_export_docs_whole, csv_parquet) {
     test_whole_docs(csv_path_k, ext_parquet_k, cmp_table_docs_whole, true);
@@ -1619,7 +1049,7 @@ TEST(import_export_docs_whole, csv_csv) {
 }
 
 TEST(import_export_docs_sub, ndjosn_ndjson) {
-    test_sub_docs(ndjson_path_k, ext_ndjson_k, cmp_ndjson_docs_sub);
+    test_sub_docs(ndjson_path_k, ext_ndjson_path_k, cmp_ndjson_docs_sub);
 }
 TEST(import_export_docs_sub, ndjosn_parquet) {
     test_sub_docs(ndjson_path_k, ext_parquet_k, cmp_ndjson_docs_sub);
@@ -1629,7 +1059,7 @@ TEST(import_export_docs_sub, ndjosn_csv) {
 }
 
 TEST(import_export_docs_sub, parquet_ndjson) {
-    test_sub_docs(parquet_path_k, ext_ndjson_k, cmp_table_docs_sub, true);
+    test_sub_docs(parquet_path_k, ext_ndjson_path_k, cmp_table_docs_sub, true);
 }
 TEST(import_export_docs_sub, parquet_parquet) {
     test_sub_docs(parquet_path_k, ext_parquet_k, cmp_table_docs_sub, true);
@@ -1639,37 +1069,13 @@ TEST(import_export_docs_sub, parquet_csv) {
 }
 
 TEST(import_export_docs_sub, csv_ndjson) {
-    test_sub_docs(csv_path_k, ext_ndjson_k, cmp_table_docs_sub, true);
+    test_sub_docs(csv_path_k, ext_ndjson_path_k, cmp_table_docs_sub, true);
 }
 TEST(import_export_docs_sub, csv_parquet) {
     test_sub_docs(csv_path_k, ext_parquet_k, cmp_table_docs_sub, true);
 }
 TEST(import_export_docs_sub, csv_csv) {
     test_sub_docs(csv_path_k, ext_csv_k, cmp_table_docs_sub, true);
-}
-
-TEST(crash_cases, graph_import) {
-    test_crash_cases_graph_import(ndjson_k);
-    test_crash_cases_graph_import(ndjson_k);
-    test_crash_cases_graph_import(ndjson_k);
-    test_crash_cases_graph_import(parquet_k);
-    test_crash_cases_graph_import(parquet_k);
-    test_crash_cases_graph_import(parquet_k);
-    test_crash_cases_graph_import(csv_k);
-    test_crash_cases_graph_import(csv_k);
-    test_crash_cases_graph_import(csv_k);
-}
-
-TEST(crash_cases, graph_export) {
-    test_crash_cases_graph_export(ext_ndjson_k);
-    test_crash_cases_graph_export(ext_parquet_k);
-    test_crash_cases_graph_export(ext_csv_k);
-    test_crash_cases_graph_export(ext_ndjson_k);
-    test_crash_cases_graph_export(ext_parquet_k);
-    test_crash_cases_graph_export(ext_csv_k);
-    test_crash_cases_graph_export(ext_ndjson_k);
-    test_crash_cases_graph_export(ext_parquet_k);
-    test_crash_cases_graph_export(ext_csv_k);
 }
 
 TEST(crash_cases, docs_import) {
@@ -1685,19 +1091,18 @@ TEST(crash_cases, docs_import) {
 }
 
 TEST(crash_cases, docs_export) {
-    test_crash_cases_docs_export(ext_ndjson_k);
+    test_crash_cases_docs_export(ext_ndjson_path_k);
     test_crash_cases_docs_export(ext_parquet_k);
     test_crash_cases_docs_export(ext_csv_k);
-    test_crash_cases_docs_export(ext_ndjson_k);
+    test_crash_cases_docs_export(ext_ndjson_path_k);
     test_crash_cases_docs_export(ext_parquet_k);
     test_crash_cases_docs_export(ext_csv_k);
-    test_crash_cases_docs_export(ext_ndjson_k);
+    test_crash_cases_docs_export(ext_ndjson_path_k);
     test_crash_cases_docs_export(ext_parquet_k);
     test_crash_cases_docs_export(ext_csv_k);
 }
 
 int main(int argc, char** argv) {
-    make_test_files_graph();
     make_ndjson_docs();
     for (const auto& entry : fs::directory_iterator(path_k))
         paths.push_back(ukv_str_span_t(entry.path().c_str()));
@@ -1705,6 +1110,6 @@ int main(int argc, char** argv) {
     db.open().throw_unhandled();
     ::testing::InitGoogleTest(&argc, argv);
     RUN_ALL_TESTS();
-    delete_test_files();
+    delete_test_file();
     return 0;
 }

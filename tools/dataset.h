@@ -7,48 +7,6 @@ extern "C" {
 
 #include <ukv/db.h>
 
-typedef struct ukv_graph_import_t {
-
-    ukv_database_t db;
-    ukv_error_t* error;
-    ukv_arena_t* arena; // optional
-    ukv_options_t options; // ukv_options_default_k
-
-    ukv_collection_t collection; // ukv_collection_main_k
-    ukv_str_view_t paths_pattern; // ".*\\.(csv|ndjson|parquet)"
-    ukv_size_t max_batch_size; // 1024ul * 1024ul * 1024ul;
-    ukv_callback_t callback; // optional
-    ukv_callback_payload_t callback_payload; // optional
-
-    ukv_str_view_t source_id_field; // "source"
-    ukv_str_view_t target_id_field; // "target"
-    ukv_str_view_t edge_id_field; // "edge"
-
-} ukv_graph_import_t;
-
-void ukv_graph_import(ukv_graph_import_t*);
-
-typedef struct ukv_graph_export_t {
-
-    ukv_database_t db;
-    ukv_error_t* error;
-    ukv_arena_t* arena; // optional
-    ukv_options_t options; // ukv_options_default_k
-
-    ukv_collection_t collection; // ukv_collection_main_k
-    ukv_str_view_t paths_extension; // ".parquet"
-    ukv_size_t max_batch_size; // 1024ul * 1024ul * 1024ul
-    ukv_callback_t callback; // optional
-    ukv_callback_payload_t callback_payload; // optional
-
-    ukv_str_view_t source_id_field; // "source"
-    ukv_str_view_t target_id_field; // "target"
-    ukv_str_view_t edge_id_field; // "edge"
-
-} ukv_graph_export_t;
-
-void ukv_graph_export(ukv_graph_export_t*);
-
 typedef struct ukv_docs_import_t {
 
     ukv_database_t db;
