@@ -134,13 +134,14 @@ struct linked_memory_t {
         first_ptr_ = nullptr;
     }
 
-    void release_supplementary() noexcept {
+    void release_partially() noexcept {
         if (!first_ptr_)
             return;
         arena_header_t* current = first_ptr_->next;
         while (current != nullptr)
             release_arena(std::exchange(current, current->next));
         first_ptr_->next = nullptr;
+        first_ptr_->used = sizeof(arena_header_t);
     }
 };
 
@@ -169,7 +170,7 @@ struct linked_memory_lock_t {
         : memory(memory) {
         if (memory.start_if_null(kind))
             if ((owns_the_lock = memory.lock_release_calls()) && !keep_old_data)
-                memory.release_supplementary();
+                memory.release_partially();
     }
 
     ~linked_memory_lock_t() noexcept {
