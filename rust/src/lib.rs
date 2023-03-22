@@ -11,6 +11,8 @@ pub type Error<'a> = std::borrow::Cow<'a, str>;
 /// module directly if you know what you are doing.
 pub mod bindings {
 	include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+
+	pub use root::*;
 }
 
 /// Provides a safe interface for working with [bindings::ukv_database_init_t].
@@ -21,12 +23,9 @@ pub struct Database {
 	inner: bindings::ukv_database_init_t,
 }
 
-/// Provides a _fallible_ initialization interface for [Database]. Prefer
-/// using [Database::new] for error-safe initialization. You should always
-/// check for errors after initialization by calling [Database::error] in
-/// case something fails.
-impl Default for Database {
-	fn default() -> Self {
+impl<'a> Database {
+	/// Creates a new [Database] instance.
+	pub fn new() -> Result<Self, Error<'a>> {
 		let mut inner = bindings::ukv_database_init_t {
 			db: &mut () as *mut _ as *mut std::ffi::c_void as _,
 			config: std::ffi::CString::default().as_ptr() as *const _,
@@ -34,19 +33,12 @@ impl Default for Database {
 		};
 
 		unsafe { bindings::ukv_database_init(&mut inner) };
-		Self {
+		let database = Self {
 			inner,
-		}
-	}
-}
+		};
 
-impl<'a> Database {
-	/// Creates a new [Database] instance. In case of errors, the
-	/// function will return [Error].
-	pub fn new() -> Result<Self, Error<'a>> {
-		let initialized: Database = Default::default();
-		initialized.error()?;
-		Ok(initialized)
+		database.error()?;
+		Ok(database)
 	}
 
 	/// Checks whether there are any errors created by the database,
@@ -62,14 +54,13 @@ impl<'a> Database {
 		Ok(())
 	}
 
-	/// Closes a [Database] instance. In case of errors, the function
-	/// will return [Error].
+	/// Closes a [Database] instance.
 	#[inline]
 	pub fn close(self) -> Result<(), Error<'a>> {
 		// We know that `self.inner.db` is going to point to a valid address
 		// in memory, thus, dereferencing the pointer here is safe.
 		unsafe { bindings::ukv_database_free(*self.inner.db) };
-		Ok(self.error()?)
+		self.error()
 	}
 }
 
@@ -83,13 +74,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_Database_default() {
-		assert!(Database::default().error().is_ok())
-	}
-
-	#[test]
 	fn test_Database_close() {
-		let database = Database::new().expect("Cannot initialize the database");
-		assert!(database.close().is_ok())
+		assert!(Database::new().expect("Cannot initialize the database").close().is_ok())
 	}
 }

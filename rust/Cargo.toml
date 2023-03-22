@@ -10,24 +10,14 @@ documentation = "https://unum.cloud/ukv/rust/index.html"
 
 [build-dependencies]
 bindgen = "0.63.0"
-cmake = "0.1.49"
-fs_extra = "1.2.0"
 num_cpus = "1.15.0"
 
 [lib]
 name = "ukv"
 
 [features]
-# Features for different backend implementations
-# Library filenames:
-# -  libukv_embedded_umem
-# -  libukv_embedded_leveldb
-# -  libukv_embedded_rocksdb
-# -  libukv_flight_client
 umem = []
 leveldb = []
 rocksdb = []
-flight-server = []
-flight-client = []
 default = ["umem"]
 
