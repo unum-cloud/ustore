@@ -10,10 +10,6 @@ project = 'Unum · UKV'
 copyright = '2023, Unum'
 author = 'Unum'
 release = open('../VERSION', 'r').read()
-with open('_static/custom.js', 'r+') as js:
-    content = js.read()
-    js.seek(0)
-    js.write(content.replace('$(VERSION)', release))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -35,15 +31,11 @@ googleanalytics_enabled = True
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_logo = '../assets/icons/logo.png'
+html_logo = '../assets/unum.png'
 html_theme = 'furo'
 html_static_path = ['_static']
-html_css_files = [
-    'custom.css'
-]
-html_js_files = [
-    'custom.js'
-]
+html_css_files = []
+html_js_files = []
 
 
 breathe_projects = {'UKV': '../build/xml'}
