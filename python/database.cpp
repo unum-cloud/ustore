@@ -248,8 +248,10 @@ void ukv::wrap_database(py::module& m) {
         status.throw_unhandled();
         std::vector<std::string> names_copy {count};
         strings_tape_iterator_t names_it {count, names};
-        while (!names_it.is_end())
+        while (!names_it.is_end()){
             names_copy.push_back(*names_it);
+            ++names_it;
+        }
         return names_copy;
     });
 
@@ -272,7 +274,7 @@ void ukv::wrap_database(py::module& m) {
     });
     py_collection.def_property_readonly("table", [](py_blobs_collection_t& py_collection) {
         auto py_table = std::make_shared<py_table_collection_t>();
-        py_table->binary = py_collection;
+        py_table->binary = py_collection.native;
         return py::cast(py_table);
     });
     py_collection.def_property_readonly("docs", [](py_blobs_collection_t& py_collection) {

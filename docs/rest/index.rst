@@ -2,7 +2,7 @@
 REST API
 =========
 
-.. mdinclude:: ../page-rest-api.md
+.. mdinclude:: ./index.md
 
 .. toctree::
    :hidden:

@@ -303,8 +303,8 @@ typedef struct ukv_snapshot_list_t { /// @name Context
 
     /** @brief Number of present snapshots. */
     ukv_size_t* count;
-    /** @brief All snapshots ids. */
-    ukv_size_t** ids;
+    /** @brief All snapshots id. */
+    ukv_snapshot_t** ids;
     /// @}
 } ukv_snapshot_list_t;
 
@@ -319,8 +319,8 @@ typedef struct ukv_snapshot_create_t {
     ukv_database_t db;
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
-    /** @brief Output for the snapshot handle. */
-    ukv_snapshot_t* snapshot;
+    /** @brief Output for the snapshot id. */
+    ukv_snapshot_t* id;
 } ukv_snapshot_create_t;
 
 void ukv_snapshot_create(ukv_snapshot_create_t*);
@@ -330,8 +330,8 @@ typedef struct ukv_snapshot_drop_t {
     ukv_database_t db;
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
-    /** @brief Existing snapshot handle. */
-    ukv_snapshot_t snapshot;
+    /** @brief Existing snapshot id. */
+    ukv_snapshot_t id;
 } ukv_snapshot_drop_t;
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t*);

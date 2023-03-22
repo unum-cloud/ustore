@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Unum · UKV'
-copyright = '2022, Unum'
+copyright = '2023, Unum'
 author = 'Unum'
 release = open('../VERSION', 'r').read()
 

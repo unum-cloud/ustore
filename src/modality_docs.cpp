@@ -1096,7 +1096,7 @@ void modify_field( //
         }
         else if (c_modification == doc_modification_t::remove_k) {
             yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
-            return_error_if_m(yyjson_mut_obj_remove(val, key), c_error, 0, "Failed To Insert!");
+            return_error_if_m(yyjson_mut_obj_remove(val, key), c_error, 0, "Failed To Remove!");
         }
         else if (c_modification == doc_modification_t::update_k) {
             yyjson_mut_val* key = yyjson_mut_strncpy(original_doc, last_key_or_idx.data(), last_key_or_idx.size());
@@ -1509,6 +1509,10 @@ void read_modify_write( //
     yyjson_alc allocator = wrap_allocator(arena);
     auto safe_callback = [&](ukv_size_t task_idx, ukv_str_view_t field, value_view_t binary_doc) {
         json_t parsed = any_parse(binary_doc, internal_format_k, arena, c_error);
+        if (!contents[task_idx]) {
+            any_dump({nullptr, parsed.mut_handle->root}, internal_format_k, arena, growing_tape, c_error);
+            return;
+        }
 
         // This error is extremely unlikely, as we have previously accepted the data into the store.
         return_if_error_m(c_error);
@@ -1644,6 +1648,7 @@ void ukv_docs_read(ukv_docs_read_t* c_ptr) {
         read.db = c.db;
         read.error = c.error;
         read.transaction = c.transaction;
+        read.snapshot = c.snapshot;
         read.arena = arena;
         read.options = c.options;
         read.tasks_count = c.tasks_count;
@@ -1819,6 +1824,7 @@ void ukv_docs_gist(ukv_docs_gist_t* c_ptr) {
     read.db = c.db;
     read.error = c.error;
     read.transaction = c.transaction;
+    read.snapshot = c.snapshot;
     read.arena = arena;
     read.options = c.options;
     read.tasks_count = c.docs_count;
@@ -1965,6 +1971,7 @@ void ukv_docs_gather(ukv_docs_gather_t* c_ptr) {
     read.db = c.db;
     read.error = c.error;
     read.transaction = c.transaction;
+    read.snapshot = c.snapshot;
     read.arena = arena;
     read.options = c.options;
     read.tasks_count = c.docs_count;

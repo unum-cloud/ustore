@@ -2,7 +2,7 @@
 Java SDK
 ============
 
-.. mdinclude:: ../java/README.md
+.. mdinclude:: ../../java/README.md
 
 
 .. toctree::
