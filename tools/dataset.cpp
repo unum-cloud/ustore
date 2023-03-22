@@ -310,26 +310,26 @@ std::string generate_file_name() {
     return fmt::format("{}_{}", out, get_time_since_epoch());
 }
 
-template <typename imp_exp_at>
-void validate_docs_fields(imp_exp_at& imp_exp) {
-    if (imp_exp.fields_count == 0 && imp_exp.fields == nullptr)
+template <typename task_at>
+void validate_docs_fields(task_at& task) {
+    if (!task.fields_count && !task.fields)
         return;
-    return_error_if_m(!(imp_exp.fields_count == 0 && imp_exp.fields != nullptr),
-                      imp_exp.error,
+    return_error_if_m(!(!task.fields_count && task.fields),
+                      task.error,
                       uninitialized_state_k,
                       "Fields count must be initialized");
-    return_error_if_m(!(imp_exp.fields_count != 0 && imp_exp.fields == nullptr),
-                      imp_exp.error,
+    return_error_if_m(!(task.fields_count && !task.fields),
+                      task.error,
                       uninitialized_state_k,
                       "Fields must be initialized");
-    return_error_if_m(!(imp_exp.fields_count != 0 && imp_exp.fields != nullptr && imp_exp.fields_stride == 0),
-                      imp_exp.error,
+    return_error_if_m(!(task.fields_count && task.fields && !task.fields_stride),
+                      task.error,
                       uninitialized_state_k,
                       "Fields stride must be initialized");
 
-    fields_t fields {imp_exp.fields, imp_exp.fields_stride};
-    for (ukv_size_t idx = 0; idx < imp_exp.fields_count; ++idx) {
-        return_error_if_m(fields[idx] != nullptr, imp_exp.error, 0, "Invalid field!");
+    fields_t fields {task.fields, task.fields_stride};
+    for (ukv_size_t idx = 0; idx < task.fields_count; ++idx) {
+        return_error_if_m(fields[idx] != nullptr, task.error, 0, "Invalid field!");
     }
 }
 
@@ -346,8 +346,8 @@ void check_for_id_field(ukv_docs_import_t& imp) {
     return_error_if_m(state, imp.error, 0, "Fields must contain id_field");
 }
 
-template <typename ukv_docs_imp_exp_t>
-fields_t prepare_fields(ukv_docs_imp_exp_t& c, linked_memory_lock_t& arena) {
+template <typename ukv_docs_task_t>
+fields_t prepare_fields(ukv_docs_task_t& c, linked_memory_lock_t& arena) {
 
     if (c.fields_count == 1)
         return {c.fields, c.fields_stride};

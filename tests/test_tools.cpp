@@ -40,10 +40,10 @@ namespace fs = std::filesystem;
 
 constexpr size_t max_batch_size_k = 1024 * 1024 * 1024;
 
-constexpr ukv_str_view_t dataset_path_k = "/home/vscode/Datasets/tweets32K.ndjson";
-constexpr ukv_str_view_t dataset_clean_path_k = "/home/vscode/Datasets/tweets32K-clean.ndjson";
-constexpr ukv_str_view_t parquet_path_k = "/home/vscode/Datasets/tweets32K-clean.parquet";
-constexpr ukv_str_view_t csv_path_k = "/home/vscode/Datasets/tweets32K-clean.csv";
+constexpr ukv_str_view_t dataset_path_k = "~/Datasets/tweets32K.ndjson";
+constexpr ukv_str_view_t dataset_clean_path_k = "~/Datasets/tweets32K-clean.ndjson";
+constexpr ukv_str_view_t parquet_path_k = "~/Datasets/tweets32K-clean.parquet";
+constexpr ukv_str_view_t csv_path_k = "~/Datasets/tweets32K-clean.csv";
 constexpr ukv_str_view_t ndjson_path_k = "sample_docs.ndjson";
 constexpr ukv_str_view_t path_k = "./";
 constexpr size_t rows_count_k = 1000;

@@ -8,14 +8,8 @@
             "type": "shell"
         },
         {
-            "label": "Build Native: Debug UMem ImpExp Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=1 -B ./build_debug && make test_imp_exp_ukv_embedded_umem -j8 -C ./build_debug",
-            "args": [],
-            "type": "shell"
-        },
-        {
-            "label": "Build Native: Release",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_TESTS=0 -B ./build_release && make -j 12 -C ./build_release",
+            "label": "Build Release",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_TESTS=0 -B ./build_release && make -j12 --silent -C ./build_release",
             "args": [],
             "type": "shell"
         },
@@ -64,12 +58,6 @@
         {
             "label": "Build Stress Linearizability RocksDB",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make stress_linearizability_ukv_embedded_rocksdb -j8 --silent -C ./build_debug",
-            "args": [],
-            "type": "shell"
-        },
-        {
-            "label": "Build Debug Tabular Benchmark",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=0 -DUKV_BUILD_BENCHMARKS=1 -B ./build_debug && make bench_tabular_graph_ukv_embedded_umem -j8 --silent -C ./build_debug",
             "args": [],
             "type": "shell"
         },

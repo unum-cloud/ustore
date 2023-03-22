@@ -89,10 +89,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: UMem ImpExp Test",
+            "name": "C++: Test RocksDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/test_imp_exp_ukv_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ukv_embedded_rocksdb",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -102,7 +102,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UMem ImpExp Test",
+            "preLaunchTask": "Build Debug RocksDB Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -115,10 +115,12 @@
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
             ],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Native: Debug UMem ImpExp Test",
+            "preLaunchTask": "Build Debug UDisk Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -353,24 +355,6 @@
             "vmArgs": "-Djava.library.path=${fileDirname} -Xcheck:jni",
             "cwd": "${workspaceFolder}/java"
         },
-        {
-            "name": "C++: Tabular Benchmark UMem",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/bench_tabular_graph_ukv_embedded_umem",
-            "args": [
-                "--gtest_break_on_failure",
-                "--gtest_catch_exceptions=0"
-            ],
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "showDisplayString": true,
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "preLaunchTask": "Build Debug Tabular Benchmark",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb"
-        }
     ],
     "compounds": [
         {

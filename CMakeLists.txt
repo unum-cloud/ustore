@@ -185,7 +185,7 @@ endif()
 
 set(UKV_ENGINE_NAMES)
 set(UKV_CLIENT_LIBS)
-set(UKV_TEST_NAMES "test_imp_exp" "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
+set(UKV_TEST_NAMES "test_tools" "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
 
 # Define the Engine libraries we will need to build
 if(${UKV_BUILD_ENGINE_UMEM})
@@ -291,7 +291,7 @@ if(${UKV_BUILD_TESTS})
       add_executable(${test_exe} tests/${test_name}.cpp tools/dataset.cpp)
       target_compile_definitions(${test_exe} PUBLIC UKV_TEST_PATH="tmp/${client_lib}")
       target_link_libraries(${test_exe} gtest arrow::flight arrow::parquet arrow::arrow arrow::bundled simdjson fmt::fmt benchmark ${client_lib} ${client_dependencies})
-      add_test(NAME "${test_exe}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_exe}")  
+      add_test(NAME "${test_exe}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_exe}")
     endforeach()
   endforeach()
 endif()
@@ -299,6 +299,7 @@ endif()
 # Generate benchmarks: Bitcoin Core & Twitter
 if(${UKV_BUILD_BENCHMARKS})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/argparse.cmake")
+
   foreach(client_lib IN ITEMS ${UKV_CLIENT_LIBS})
     get_target_property(client_dependencies ${client_lib} LINK_LIBRARIES)
 
