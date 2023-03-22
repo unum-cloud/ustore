@@ -168,7 +168,7 @@ static std::shared_ptr<arrow::RecordBatch> materialize(py_table_collection_t& df
         keys_found.resize(keys_count);
     }
 
-    auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+    auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.snap(), df.binary.member_arena());
     auto members = collection[keys_found];
 
     // Extract the present fields
@@ -498,7 +498,7 @@ void ukv::wrap_pandas(py::module& m) {
 
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.sample.html
     df.def("sample", [](py_table_collection_t& df, std::size_t count) {
-        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.snap(), df.binary.member_arena());
 
         auto keys = collection.keys().sample(count, df.binary.member_arena()).throw_or_release();
         df.rows_keys = std::vector<ukv_key_t>(keys.begin(), keys.end());
@@ -518,8 +518,9 @@ void ukv::wrap_pandas(py::module& m) {
         auto collection_to_merge = docs_collection_t(df_to_merge.binary.db(),
                                                      df_to_merge.binary,
                                                      df_to_merge.binary.txn(),
+                                                     df_to_merge.binary.snap(),
                                                      df_to_merge.binary.member_arena());
-        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.snap(), df.binary.member_arena());
 
         scan_rows(df_to_merge);
         auto& keys = std::get<std::vector<ukv_key_t>>(df_to_merge.rows_keys);
@@ -535,7 +536,7 @@ void ukv::wrap_pandas(py::module& m) {
     });
 
     df.def("insert", [](py_table_collection_t& df, std::string const& column_name, py::object obj) {
-        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.snap(), df.binary.member_arena());
 
         if (std::holds_alternative<std::monostate>(df.rows_keys))
             scan_rows(df);
@@ -567,7 +568,7 @@ void ukv::wrap_pandas(py::module& m) {
     });
 
     df.def("insert", [](py_table_collection_t& df, py::object obj) {
-        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.snap(), df.binary.member_arena());
 
         if (std::holds_alternative<std::monostate>(df.rows_keys))
             scan_rows(df);
@@ -614,7 +615,7 @@ void ukv::wrap_pandas(py::module& m) {
     // df.def("join", [](py_table_collection_t& df) {});
 
     df.def("drop", [](py_table_collection_t& df, py::object cols) {
-        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.snap(), df.binary.member_arena());
 
         if (std::holds_alternative<std::monostate>(df.rows_keys))
             scan_rows(df);
@@ -648,7 +649,7 @@ void ukv::wrap_pandas(py::module& m) {
 
         scan_rows(df);
         auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
-        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+        auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.snap(), df.binary.member_arena());
 
         PyObject *key, *value;
         Py_ssize_t pos = 0;
@@ -669,7 +670,7 @@ void ukv::wrap_pandas(py::module& m) {
         auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
 
         if (std::holds_alternative<std::monostate>(df.columns_names)) {
-            auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+            auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.snap(), df.binary.member_arena());
             auto fields = collection[keys].gist().throw_or_release();
             auto names = std::vector<ukv_str_view_t>(fields.size());
             transform_n(fields, names.size(), names.begin(), std::mem_fn(&std::string_view::data));
@@ -688,7 +689,7 @@ void ukv::wrap_pandas(py::module& m) {
         auto& keys = std::get<std::vector<ukv_key_t>>(df.rows_keys);
 
         if (std::holds_alternative<std::monostate>(df.columns_names)) {
-            auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.member_arena());
+            auto collection = docs_collection_t(df.binary.db(), df.binary, df.binary.txn(), df.binary.snap(), df.binary.member_arena());
             auto fields = collection[keys].gist().throw_or_release();
             auto names = std::vector<ukv_str_view_t>(fields.size());
             transform_n(fields, names.size(), names.begin(), std::mem_fn(&std::string_view::data));
@@ -705,7 +706,7 @@ void ukv::wrap_pandas(py::module& m) {
         if (!PyDict_Check(data.ptr()))
             throw std::invalid_argument("Expect dictionary");
         auto collection =
-            docs_collection_t(binary.native.db(), binary.native, binary.native.txn(), binary.native.member_arena());
+            docs_collection_t(binary.native.db(), binary.native, binary.native.txn(), binary.native.snap(), binary.native.member_arena());
 
         PyObject *key, *value;
         Py_ssize_t pos = 0;
@@ -731,7 +732,7 @@ void ukv::wrap_pandas(py::module& m) {
             throw std::invalid_argument("Expect Sequence of Dictionaries");
 
         auto collection =
-            docs_collection_t(binary.native.db(), binary.native, binary.native.txn(), binary.native.member_arena());
+            docs_collection_t(binary.native.db(), binary.native, binary.native.txn(), binary.native.snap(), binary.native.member_arena());
 
         auto size = PySequence_Size(data.ptr());
         std::string jsons;

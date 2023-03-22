@@ -737,7 +737,7 @@ TEST(db, transaction_with_snapshot) {
 }
 
 TEST(db, set_wrong_snapshot) {
-    if (!ukv_supports_transactions_k)
+    if (!ukv_supports_transactions_k || !ukv_supports_snapshots_k)
         return;
 
     clear_environment();
@@ -771,6 +771,9 @@ TEST(db, set_wrong_snapshot) {
  * Fill data in collection. Checking/dropping/checking collection data by thread.
  */
 TEST(db, snapshot_with_threads) {
+    if (!ukv_supports_snapshots_k)
+        return;
+
     clear_environment();
 
     database_t db;
