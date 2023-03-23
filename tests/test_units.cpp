@@ -729,7 +729,7 @@ TEST(db, transaction_with_snapshot) {
 }
 
 TEST(db, set_wrong_snapshot) {
-    if (!ukv_supports_transactions_k || !ukv_supports_snapshots_k)
+    if (!ukv_supports_snapshots_k)
         return;
 
     clear_environment();
@@ -745,15 +745,24 @@ TEST(db, set_wrong_snapshot) {
 
     auto snap = *db.snapshot();
 
+    auto snap_ref = snap[triplet.keys];
+    check_equalities(snap_ref, triplet);
+
     auto snapshots = snap.snapshots();
     auto snaps = *snapshots;
     EXPECT_EQ(snaps.size(), 1u);
 
+    auto snapshot = snap.snap();
+
     ukv_snapshot_t wrong_snap = 1u;
     snap.set_snapshot(wrong_snap);
 
-    auto snap_ref = snap[triplet.keys];
-    check_equalities(snap_ref, triplet);
+    auto wrong_snap_ref = snap[triplet.keys];
+    EXPECT_FALSE(wrong_snap_ref.value());
+
+    snap.set_snapshot(snapshot);
+    auto right_snap_ref = snap[triplet.keys];
+    EXPECT_TRUE(right_snap_ref.value());
 
     EXPECT_TRUE(db.clear());
 }
