@@ -3,31 +3,31 @@
     "tasks": [
         {
             "label": "Build Debug",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_TESTS=1 -B ./build_debug && make -j 12 -C ./build_debug",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_TESTS=1 -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_LEVELDB=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make -j 12 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Release",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_TESTS=0 -B ./build_release && make -j12 --silent -C ./build_release",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_TESTS=0 -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_LEVELDB=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_release && make -j12 --silent -C ./build_release",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Debug UMem Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make test_units_ukv_embedded_umem -j8 --silent -C ./build_debug",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_LEVELDB=0 -DUKV_BUILD_ENGINE_ROCKSDB=0 -B ./build_debug && make test_units_ukv_embedded_umem -j8 --silent -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Debug LevelDB Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_LEVELDB=1 -B ./build_debug && make test_units_ukv_embedded_leveldb -j8 --silent -C ./build_debug",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_UMEM=0 -DUKV_BUILD_ENGINE_LEVELDB=1 -DUKV_BUILD_ENGINE_ROCKSDB=0 -B ./build_debug && make test_units_ukv_embedded_leveldb -j8 --silent -C ./build_debug",
             "args": [],
             "type": "shell"
         },
         {
             "label": "Build Debug RocksDB Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make test_units_ukv_embedded_rocksdb -j8 --silent -C ./build_debug",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_UMEM=0 -DUKV_BUILD_ENGINE_LEVELDB=0 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make test_units_ukv_embedded_rocksdb -j8 --silent -C ./build_debug",
             "args": [],
             "type": "shell"
         },
