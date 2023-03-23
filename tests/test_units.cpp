@@ -729,7 +729,7 @@ TEST(db, transaction_with_snapshot) {
 }
 
 TEST(db, set_wrong_snapshot) {
-    if (!ukv_supports_transactions_k || !ukv_supports_snapshots_k)
+    if (!ukv_supports_snapshots_k)
         return;
 
     clear_environment();
@@ -745,15 +745,24 @@ TEST(db, set_wrong_snapshot) {
 
     auto snap = *db.snapshot();
 
+    auto snap_ref = snap[triplet.keys];
+    check_equalities(snap_ref, triplet);
+
     auto snapshots = snap.snapshots();
     auto snaps = *snapshots;
     EXPECT_EQ(snaps.size(), 1u);
 
+    auto snapshot = snap.snap();
+
     ukv_snapshot_t wrong_snap = 1u;
     snap.set_snapshot(wrong_snap);
 
-    auto snap_ref = snap[triplet.keys];
-    check_equalities(snap_ref, triplet);
+    auto wrong_snap_ref = snap[triplet.keys];
+    EXPECT_FALSE(wrong_snap_ref.value());
+
+    snap.set_snapshot(snapshot);
+    auto right_snap_ref = snap[triplet.keys];
+    EXPECT_TRUE(right_snap_ref.value());
 
     EXPECT_TRUE(db.clear());
 }
@@ -790,7 +799,8 @@ TEST(db, snapshot_with_threads) {
         while (true) {
             std::shared_lock _ {mutex};
             if (is_deleted) {
-                check_equalities(snap_ref, triplet_same_v);
+                auto ref = snap[triplet.keys];
+                check_equalities(ref, triplet_same_v);
                 break;
             }
             check_equalities(snap_ref, triplet);
@@ -962,6 +972,7 @@ TEST(db, paths) {
     // Try getting the remaining results, which is the other one from that same pair
     max_count = 10;
     paths_match.previous = &tape_begin;
+    paths_match.options = ukv_option_dont_discard_memory_k;
     ukv_paths_match(&paths_match);
     auto second_match_for_a = std::string_view(tape_begin);
     EXPECT_EQ(results_counts[0], 1);
