@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 file(READ "VERSION" UKV_VERSION)
+string(STRIP ${UKV_VERSION} UKV_VERSION)
 project(UKV
   LANGUAGES C CXX
   VERSION ${UKV_VERSION}
