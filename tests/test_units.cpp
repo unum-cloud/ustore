@@ -972,7 +972,7 @@ TEST(db, paths) {
     // Try getting the remaining results, which is the other one from that same pair
     max_count = 10;
     paths_match.previous = &tape_begin;
-    paths_match.options = ukv_option_dont_discard_memory_k;
+    paths_match.options = ukv_optison_dont_discard_memory_k;
     ukv_paths_match(&paths_match);
     auto second_match_for_a = std::string_view(tape_begin);
     EXPECT_EQ(results_counts[0], 1);
