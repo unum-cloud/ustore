@@ -790,7 +790,8 @@ TEST(db, snapshot_with_threads) {
         while (true) {
             std::shared_lock _ {mutex};
             if (is_deleted) {
-                check_equalities(snap_ref, triplet_same_v);
+                auto ref = snap[triplet.keys];
+                check_equalities(ref, triplet_same_v);
                 break;
             }
             check_equalities(snap_ref, triplet);
