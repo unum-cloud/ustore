@@ -3,7 +3,7 @@
     "tasks": [
         {
             "label": "Build Debug",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -j 12",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_TESTS=1 -B ./build_debug && make -j 12 -C ./build_debug",
             "args": [],
             "type": "shell"
         },
