@@ -9,11 +9,7 @@
 project = 'Unum · UKV'
 copyright = '2023, Unum'
 author = 'Unum'
-release = open('../VERSION', 'r').read()
-with open('_static/custom.js', 'r+') as js:
-    content = js.read()
-    js.seek(0)
-    js.write(content.replace('$(VERSION)', release))
+release = open('../VERSION', 'r').read().strip()
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
