@@ -11,6 +11,7 @@
       "main",
       {
         "name": "main-dev",
+        "channel": "",
         "prerelease": true
       }
     ],
