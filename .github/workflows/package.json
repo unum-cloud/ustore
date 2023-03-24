@@ -9,7 +9,7 @@
     "branches": [
       "main"
     ],
-    "debug": true,
+    "debug": false,
     "ci": true,
     "dryRun": false,
     "plugins": [

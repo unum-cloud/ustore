@@ -1,4 +1,4 @@
-name: Publish Documentation
+name: Release
 
 on:
   # Runs on pushes targeting the default branch
@@ -47,6 +47,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          ref: 'main'   
       - name: Setup Pages
         uses: actions/configure-pages@v2
       - name: Install Deps
