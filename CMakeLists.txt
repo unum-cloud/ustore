@@ -309,7 +309,7 @@ if(${UKV_BUILD_BENCHMARKS})
 
     string(CONCAT bench_name "bench_tabular_graph_" ${client_lib})
     add_executable(${bench_name} benchmarks/tabular_graph.cpp tools/dataset.cpp)
-    target_link_libraries(${bench_name} fmt::fmt benchmark argparse ${client_lib} ${client_dependencies})
+    target_link_libraries(${bench_name} fmt::fmt benchmark argparse arrow::flight arrow::parquet arrow::arrow arrow::bundled ${client_lib} ${client_dependencies})
   endforeach()
 endif()
 
