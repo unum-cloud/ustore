@@ -47,6 +47,8 @@ struct args_t {
     std::string path;
     std::string extension;
 
+    std::string config_path;
+
     std::string id;
 
     size_t threads_count;
@@ -57,6 +59,7 @@ void parse_args(int argc, char* argv[], args_t& args) {
     argparse::ArgumentParser program(argv[0]);
     program.add_argument("-p", "--path").required().help("File path for importing");
     program.add_argument("-e", "--ext").required().help("File extension for exporting");
+    program.add_argument("-c", "--cfg").required().help("Config path");
     program.add_argument("-i", "--id").required().help("Id field");
     program.add_argument("-th", "--threads").default_value(std::string("1")).help("Threads count");
     program.add_argument("-m", "--max_input_files").default_value(std::string("10")).help("Max input files count");
@@ -65,6 +68,7 @@ void parse_args(int argc, char* argv[], args_t& args) {
 
     args.path = program.get("path");
     args.extension = program.get("ext");
+    args.config_path = program.get("cfg");
     args.id = program.get("id");
     args.threads_count = std::stoi(program.get("threads"));
     args.files_count = std::stoi(program.get("max_input_files"));
@@ -87,6 +91,7 @@ static void bench_docs_import(bm::State& state, args_t const& args) {
 
     size_t size = 0;
     size_t idx = 0;
+    size_t pos = state.thread_index() * args.files_count;
 
     auto start = std::chrono::high_resolution_clock::now();
     for (auto _ : state) {
@@ -95,13 +100,13 @@ static void bench_docs_import(bm::State& state, args_t const& args) {
         docs.error = status.member_ptr();
         docs.arena = arena.member_ptr();
         docs.collection = collection;
-        docs.paths_pattern = source_files[state.thread_index() + idx].c_str();
+        docs.paths_pattern = source_files[pos + idx].c_str();
         docs.max_batch_size = max_batch_size_k;
         docs.id_field = args.id.c_str();
         ukv_docs_import(&docs);
 
         if (status)
-            size += source_sizes[state.thread_index() + idx];
+            size += source_sizes[pos + idx];
         else
             status.release_error();
         ++idx;
@@ -151,7 +156,6 @@ static void bench_docs_export(bm::State& state, args_t const& args) {
         docs.paths_extension = args.extension.c_str();
         docs.max_batch_size = max_batch_size_k;
         ukv_docs_export(&docs);
-
         if (status)
             size += find_and_delete();
         else
@@ -159,9 +163,9 @@ static void bench_docs_export(bm::State& state, args_t const& args) {
     }
     auto end = std::chrono::high_resolution_clock::now();
     double duration = std::chrono::duration<double, std::milli>(end - start).count() / 1000;
-    state.counters["bytes/s"] = bm::Counter(size  / duration);
-    state.counters["duration"] = bm::Counter(duration, bm::Counter::kAvgThreads);
-    state.counters["imported"] = bm::Counter(size);
+    state.counters["bytes/s"] = bm::Counter(size / duration);
+    state.counters["duration"] = bm::Counter(duration);
+    state.counters["exported"] = bm::Counter(size);
     db.clear().throw_unhandled();
 }
 
@@ -191,9 +195,7 @@ void bench_docs(args_t const& args) {
         ->Threads(args.threads_count)
         ->Iterations(args.files_count);
     bm::RegisterBenchmark(fmt::format("docs_export_{}", args.extension.substr(1)).c_str(),
-                          [&](bm::State& s) { bench_docs_export(s, args); })
-        ->Threads(args.threads_count)
-        ->Iterations(args.files_count);
+                          [&](bm::State& s) { bench_docs_export(s, args); });
 }
 
 int main(int argc, char** argv) {
@@ -202,7 +204,7 @@ int main(int argc, char** argv) {
     parse_args(argc, argv, args);
     parse_paths(args);
     bm::Initialize(&argc, argv);
-    db.open().throw_unhandled();
+    db.open(args.config_path.c_str()).throw_unhandled();
 
     bench_docs(args);
 
