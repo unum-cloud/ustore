@@ -71,7 +71,7 @@
       [
         "@semantic-release/exec",
         {
-          "prepareCmd": "echo '${nextRelease.version}' > VERSION"
+          "prepareCmd": "echo '${nextRelease.version}' | sed 's/[l,o]//g' > VERSION"
         }
       ],
       [
