@@ -8,11 +8,7 @@
   "release": {
     "branches": [
       "main",
-      {
-        "name": "main-dev",
-        "channel": "",
-        "prerelease": true
-      }
+      "main-dev"
     ],
     "debug": true,
     "ci": true,
@@ -70,7 +66,7 @@
       [
         "@semantic-release/exec",
         {
-          "prepareCmd": "echo '${nextRelease.version}' | sed 's/[l,o]//g' > VERSION"
+          "prepareCmd": "echo '${nextRelease.version}' > VERSION"
         }
       ],
       [
