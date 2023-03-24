@@ -444,7 +444,7 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
             return_error_if_m(config.data_directories.empty(), c.error, args_wrong_k, "Multi disk not supported");
 
             // Engine config
-            stdfs::path config_path = config.engine_config_path;
+            stdfs::path config_path = config.engine.config_file_path;
             stdfs::file_status config_status = stdfs::status(config_path);
             if (config_status.type() == stdfs::file_type::not_found) {
                 log_warning_m(
