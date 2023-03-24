@@ -18,6 +18,7 @@
  */
 
 #include <mutex>
+#include <fstream>
 #include <filesystem>
 
 #include <rocksdb/db.h>
@@ -26,9 +27,10 @@
 #include <rocksdb/utilities/optimistic_transaction_db.h>
 
 #include "ukv/db.h"
-#include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
-#include "helpers/linked_array.hpp" // `uninitialized_array_gt`
-#include "helpers/full_scan.hpp"    // `reservoir_sample_iterator`
+#include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
+#include "helpers/linked_array.hpp"  // `uninitialized_array_gt`
+#include "helpers/full_scan.hpp"     // `reservoir_sample_iterator`
+#include "helpers/config_loader.hpp" // `config_loader_t`
 
 namespace stdfs = std::filesystem;
 using namespace unum::ukv;
@@ -50,8 +52,6 @@ using rocks_status_t = rocksdb::Status;
 using rocks_value_t = rocksdb::PinnableSlice;
 using rocks_txn_t = rocksdb::Transaction;
 using rocks_collection_t = rocksdb::ColumnFamilyHandle;
-
-static constexpr char const* config_name_k = "config_rocksdb.ini";
 
 struct key_comparator_t final : public rocksdb::Comparator {
     inline int Compare(rocksdb::Slice const& a, rocksdb::Slice const& b) const override {
@@ -132,42 +132,107 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         rocks_db_t* db_ptr = new rocks_db_t;
         rocks_status_t status;
 
-        stdfs::path root = c.config;
+        return_error_if_m(c.config, c.error, args_wrong_k, "Null config specified");
+        // Load config
+        config_t config;
+        auto st = config_loader_t::load_from_json_string(c.config, config);
+        return_error_if_m(st, c.error, args_wrong_k, st.message());
+
+        // Root path
+        stdfs::path root = config.directory;
         stdfs::file_status root_status = stdfs::status(root);
         return_error_if_m(root_status.type() == stdfs::file_type::directory,
                           c.error,
                           args_wrong_k,
                           "Root isn't a directory");
-        stdfs::path config_path = stdfs::path(root) / config_name_k;
-        stdfs::file_status config_status = stdfs::status(config_path);
+
+        // Engine config
 
         // Recovering RocksDB isn't trivial and depends on a number of configuration parameters:
         // http://rocksdb.org/blog/2016/03/07/rocksdb-options-file.html
         // https://github.com/facebook/rocksdb/wiki/RocksDB-Options-File
+
+        json_t js = config.engine.config;
+        if (!config.engine.is_contains_config) {
+            log_warning_m(
+                "Configuration is missing. "
+                "Configuration file will be used\n",
+                config_path.c_str());
+
+            stdfs::path config_path = config.engine.config_file_path;
+            stdfs::file_status config_status = stdfs::status(config_path);
+
+            if (config_status.type() == stdfs::file_type::not_found) {
+                config_path = config.engine.config_url;
+                config_status = stdfs::status(config_path);
+                log_warning_m(
+                    "Configuration file is missing under the path %s. "
+                    "Default will be used\n",
+                    config_path.c_str());
+
+                if (config_status.type() == stdfs::file_type::not_found) {
+                    log_warning_m(
+                        "Configuration url is missing under the path %s. "
+                        "Default will be used\n",
+                        config_path.c_str());
+                }
+                else {
+                    std::ifstream ifs(config_path);
+                    js = json_t::parse(ifs);
+                }
+            }
+            else {
+                std::ifstream ifs(config_path);
+                js = json_t::parse(ifs);
+            }
+        }
+
         rocksdb::Options options;
         options.compression = rocksdb::kNoCompression;
+        auto cf_options = rocksdb::ColumnFamilyOptions();
         std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
-        if (config_status.type() == stdfs::file_type::not_found) {
-            log_warning_m(
-                "Configuration file is missing under the path %s. "
-                "Default will be used\n",
-                config_path.c_str());
+
+        if (js.contains("DBOptions")) {
+            auto j_db = js["DBOptions"];
+            if (j_db.contains("create_if_missing"))
+                options.create_if_missing = j_db["create_if_missing"];
+            if (j_db.contains("writable_file_max_buffer_size"))
+                options.writable_file_max_buffer_size = j_db["writable_file_max_buffer_size"];
+            if (j_db.contains("max_open_files"))
+                options.max_open_files = j_db["max_open_files"];
+            if (j_db.contains("max_file_opening_threads"))
+                options.max_file_opening_threads = j_db["max_file_opening_threads"];
         }
-        else {
-            status = rocksdb::LoadOptionsFromFile(config_path, rocksdb::Env::Default(), &options, &column_descriptors);
-            return_error_if_m(status.ok(), c.error, error_unknown_k, "Couldn't parse RocksDB config");
-            log_warning_m("Initializing RocksDB from config: %s\n", config_path.c_str());
-            if (options.compression != rocksdb::kNoCompression)
-                log_warning_m(
-                    "We discourage general-purpose compression in favour "
-                    "of modality-aware compression in UKV\n");
+
+        if (js.contains("CFOptions")) {
+            auto j_cf = js["CFOptions"];
+            if (j_cf.contains("max_write_buffer_number"))
+                cf_options.max_write_buffer_number = j_cf["max_write_buffer_number"];
+            if (j_cf.contains("write_buffer_size"))
+                cf_options.write_buffer_size = j_cf["write_buffer_size"];
+            if (j_cf.contains("target_file_size_base"))
+                cf_options.target_file_size_base = j_cf["target_file_size_base"];
+            if (j_cf.contains("max_compaction_bytes"))
+                cf_options.max_compaction_bytes = j_cf["max_compaction_bytes"];
+            if (j_cf.contains("level_compaction_dynamic_level_bytes"))
+                cf_options.level_compaction_dynamic_level_bytes = j_cf["level_compaction_dynamic_level_bytes"];
+            if (j_cf.contains("level0_stop_writes_trigger"))
+                cf_options.level0_stop_writes_trigger = j_cf["level0_stop_writes_trigger"];
+            if (j_cf.contains("target_file_size_multiplier"))
+                cf_options.target_file_size_multiplier = j_cf["target_file_size_multiplier"];
+            if (j_cf.contains("max_bytes_for_level_multiplier"))
+                cf_options.max_bytes_for_level_multiplier = j_cf["max_bytes_for_level_multiplier"];
+            if (j_cf.contains("compression"))
+                if (j_cf["compression"] != "kNoCompression")
+                    log_warning_m(
+                        "We discourage general-purpose compression in favour "
+                        "of modality-aware compression in UKV\n");
         }
 
         rocksdb::ConfigOptions config_options;
         status = rocksdb::LoadLatestOptions(config_options, root, &options, &column_descriptors);
         return_error_if_m(status.ok() || status.IsNotFound(), c.error, error_unknown_k, "Recovering RocksDB state");
 
-        auto cf_options = rocksdb::ColumnFamilyOptions();
         cf_options.comparator = &key_comparator_k;
         if (column_descriptors.empty())
             column_descriptors.push_back({rocksdb::kDefaultColumnFamilyName, std::move(cf_options)});
@@ -178,6 +243,10 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
 
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
+
+        // Storage paths
+        for (auto const& disk : config.data_directories)
+            options.db_paths.push_back({disk.path, disk.max_size});
 
         rocks_native_t* native_db = nullptr;
         rocksdb::OptimisticTransactionDBOptions txn_options;

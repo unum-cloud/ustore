@@ -1449,11 +1449,11 @@ int main(int argc, char* argv[]) {
     bool quiet = false;
 
 #if defined(UKV_ENGINE_IS_LEVELDB)
-    config = "/var/lib/ukv/leveldb/";
+    config = R"({"version": "1.0", "directory": "/var/lib/ukv/leveldb/"})";
 #elif defined(UKV_ENGINE_IS_ROCKSDB)
-    config = "/var/lib/ukv/rocksdb/";
+    config = R"({"version": "1.0", "directory": "/var/lib/ukv/rocksdb/"})";
 #elif defined(UKV_ENGINE_IS_UDISK)
-    config = "/var/lib/ukv/udisk/";
+    config = R"({"version": "1.0", "directory": "/var/lib/ukv/udisk/"})";
 #endif
 
     auto cli = ( //
