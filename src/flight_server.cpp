@@ -1444,27 +1444,36 @@ int main(int argc, char* argv[]) {
 
     using namespace clipp;
 
+    std::string config_path;
     int port = 38709;
-    std::string config;
     bool quiet = false;
+    bool help = false;
 
 #if defined(UKV_ENGINE_IS_LEVELDB)
-    config = "/var/lib/ukv/leveldb/";
+    config_path = "/var/lib/ukv/leveldb/";
 #elif defined(UKV_ENGINE_IS_ROCKSDB)
-    config = "/var/lib/ukv/rocksdb/";
+    config_path = "/var/lib/ukv/rocksdb/";
 #elif defined(UKV_ENGINE_IS_UDISK)
-    config = "/var/lib/ukv/udisk/";
+    config_path = "/var/lib/ukv/udisk/";
 #endif
 
     auto cli = ( //
-        option("-d", "--dir").set(config).doc("Path to primary directory, potentially containing a configuration file"),
-        option("-p", "--port").set(port).doc("Port to use for connection"),
-        option("-q", "--quiet").set(quiet).doc("Silence outputs"));
+        (option("-d", "--dir") & value("directory", config_path))
+            .doc("Path to primary directory, potentially containing a configuration file. The default value is " +
+                 config_path),
+        (option("-p", "--port") & value("port", port))
+            .doc("Port to use for connection. The default connection port is 38709"),
+        option("-q", "--quiet").set(quiet).doc("Silence outputs"),
+        option("-h", "--help").set(help).doc("Print this help information on this tool and exit"));
 
     if (!parse(argc, argv, cli)) {
         std::cerr << make_man_page(cli, argv[0]);
         exit(1);
     }
+    if (help) {
+        std::cout << make_man_page(cli, argv[0]);
+        exit(0);
+    }
 
-    return run_server(config.c_str(), port, quiet).ok() ? EXIT_SUCCESS : EXIT_FAILURE;
+    return run_server(config_path.c_str(), port, quiet).ok() ? EXIT_SUCCESS : EXIT_FAILURE;
 }
