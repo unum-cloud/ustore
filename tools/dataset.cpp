@@ -31,13 +31,11 @@
 #include <ukv/ukv.hpp>
 
 #include "dataset.h"
-#include "../benchmarks/mixed.hpp"
 #include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
 
 #include <ukv/cpp/ranges.hpp>
 #include <ukv/cpp/blobs_range.hpp> // `keys_stream_t`
 
-using namespace unum::ukv::bench;
 using namespace unum::ukv;
 
 // Count of symbols to make json ('"', '"', ':', ',')
