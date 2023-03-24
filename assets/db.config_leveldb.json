@@ -14,6 +14,15 @@
     "engine": {
         "config_url": "",
         "config_file_path": "./config_leveldb.json",
-        "config": {}
+        "config": {
+            "write_buffer_size": 268435456,
+            "max_file_size": 268435456,
+            "max_open_files": -1,
+            "cache_size": 200000,
+            "create_if_missing": false,
+            "error_if_exists": false,
+            "paranoid_checks": false,
+            "compression": null
+        }
     }
 }
