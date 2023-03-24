@@ -16,6 +16,8 @@
 
 namespace unum::ukv {
 
+using json_t = nlohmann::json;
+
 /**
  * @brief Storage disk configuration
  *
@@ -36,19 +38,23 @@ struct disk_config_t {
  * @data_directories: Storage paths where DB stores data.
  * @engine_config_path: Engine specific config file path.
  */
+struct engine_config_t {
+    bool is_contains_config = false;
+    std::string config_url;
+    std::string config_file_path;
+    json_t config;
+};
+
 struct config_t {
     std::string directory;
     std::vector<disk_config_t> data_directories;
-    std::string engine_config_path;
+    engine_config_t engine;
 };
 
 /**
  * @brief DBMS configurations loader
  */
 class config_loader_t {
-  public:
-    using json_t = nlohmann::json;
-
   public:
     static constexpr uint8_t current_major_version_k = 1;
     static constexpr uint8_t current_minor_version_k = 0;
@@ -79,7 +85,6 @@ inline status_t config_loader_t::load_from_json(json_t const& json, config_t& co
             return status;
 
         config.directory = json.value("directory", "./tmp/ukv/");
-        config.engine_config_path = json.value("engine_config_path", "");
 
         if (json.contains("data_directories")) {
             auto j_disks = json["data_directories"];
@@ -96,6 +101,16 @@ inline status_t config_loader_t::load_from_json(json_t const& json, config_t& co
             }
             else
                 return "Invalid data directories config";
+        }
+
+        if (json.contains("engine")) {
+            auto engine = json["engine"];
+            config.engine.config_url = engine["config_url"];
+            config.engine.config_file_path = engine["config_file_path"];
+            if (engine.contains("config")) {
+                config.engine.is_contains_config = true;
+                config.engine.config = engine["config"];
+            }
         }
     }
     catch (...) {
@@ -118,7 +133,6 @@ inline status_t config_loader_t::save_to_json(config_t const& config, json_t& js
     json["version"] = current_version();
 
     json["directory"] = config.directory;
-    json["engine_config_path"] = config.engine_config_path;
 
     std::vector<json_t> j_data_directories;
     for (auto const& directory : config.data_directories) {
