@@ -626,7 +626,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_snapshot_create_t snapshot_create {
                 .db = db_,
                 .error = status.member_ptr(),
-                .snapshot = &snapshot_id,
+                .id = &snapshot_id,
             };
 
             ukv_snapshot_create(&snapshot_create);
@@ -649,7 +649,7 @@ class UKVService : public arf::FlightServerBase {
             ukv_snapshot_drop_t snapshot_drop {
                 .db = db_,
                 .error = status.member_ptr(),
-                .snapshot = c_snapshot_id,
+                .id = c_snapshot_id,
             };
 
             ukv_snapshot_drop(&snapshot_drop);
@@ -1374,15 +1374,15 @@ class UKVService : public arf::FlightServerBase {
 
             ukv_size_t count = 0;
             ukv_snapshot_t* snapshots = nullptr;
-            ukv_snapshot_list_t snapshot_list;
-            snapshot_list.db = db_;
-            snapshot_list.error = status.member_ptr();
-            snapshot_list.arena = &session.arena;
-            snapshot_list.options = ukv_options(params);
-            snapshot_list.count = &count;
-            snapshot_list.ids = &snapshots;
+            ukv_snapshot_list_t snapshots_list;
+            snapshots_list.db = db_;
+            snapshots_list.error = status.member_ptr();
+            snapshots_list.arena = &session.arena;
+            snapshots_list.options = ukv_options(params);
+            snapshots_list.count = &count;
+            snapshots_list.ids = &snapshots;
 
-            ukv_snapshot_list(&snapshot_list);
+            ukv_snapshot_list(&snapshots_list);
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
@@ -1449,11 +1449,11 @@ int main(int argc, char* argv[]) {
     bool quiet = false;
 
 #if defined(UKV_ENGINE_IS_LEVELDB)
-    config = "/var/lib/ukv/leveldb/";
+    config = R"({"version": "1.0", "directory": "/var/lib/ukv/leveldb/"})";
 #elif defined(UKV_ENGINE_IS_ROCKSDB)
-    config = "/var/lib/ukv/rocksdb/";
+    config = R"({"version": "1.0", "directory": "/var/lib/ukv/rocksdb/"})";
 #elif defined(UKV_ENGINE_IS_UDISK)
-    config = "/var/lib/ukv/udisk/";
+    config = R"({"version": "1.0", "directory": "/var/lib/ukv/udisk/"})";
 #endif
 
     auto cli = ( //

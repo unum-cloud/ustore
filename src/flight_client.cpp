@@ -1461,7 +1461,7 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
 
     auto& id_ptr = maybe_id.ValueUnsafe();
     return_error_if_m(id_ptr->body->size() == sizeof(ukv_snapshot_t), c.error, error_unknown_k, "Inadequate response");
-    std::memcpy(c.snapshot, id_ptr->body->data(), sizeof(ukv_snapshot_t));
+    std::memcpy(c.id, id_ptr->body->data(), sizeof(ukv_snapshot_t));
 }
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
@@ -1471,7 +1471,7 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
     arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightSnapCreate, kParamSnapshotID, c.snapshot);
+    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightSnapCreate, kParamSnapshotID, c.id);
 
     std::lock_guard<std::mutex> lk(db.arena_lock);
     arrow_mem_pool_t pool(db.arena);

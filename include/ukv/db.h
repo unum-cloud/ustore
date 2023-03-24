@@ -247,14 +247,11 @@ extern bool const ukv_supports_snapshots_k;
 typedef struct ukv_database_init_t {
     /**
      * @brief Configuration parameter for the DBMS.
+     * @see `db.config.json` file.
      *
-     * For embedded distributions should be the root directory,
-     * under which the DBMS and it's files will be organized.
+     * For embedded distributions should be a json string containing DB options.
      *
-     * Recommendations:
-     * - UMem: empty or `/var/lib/ukv/umem/` for eventually persistent.
-     * - RocksDB: `/var/lib/ukv/rocksdb/` optionally storing `config_rocksdb.ini`.
-     * - LevelDB: `/var/lib/ukv/leveldb/` optionally storing `config_leveldb.json`.
+     * Special:
      * - Flight API Client: `grpc://0.0.0.0:38709`.
      */
     ukv_str_view_t config;
@@ -303,8 +300,8 @@ typedef struct ukv_snapshot_list_t { /// @name Context
 
     /** @brief Number of present snapshots. */
     ukv_size_t* count;
-    /** @brief All snapshots ids. */
-    ukv_size_t** ids;
+    /** @brief All snapshots id. */
+    ukv_snapshot_t** ids;
     /// @}
 } ukv_snapshot_list_t;
 
@@ -319,8 +316,8 @@ typedef struct ukv_snapshot_create_t {
     ukv_database_t db;
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
-    /** @brief Output for the snapshot handle. */
-    ukv_snapshot_t* snapshot;
+    /** @brief Output for the snapshot id. */
+    ukv_snapshot_t* id;
 } ukv_snapshot_create_t;
 
 void ukv_snapshot_create(ukv_snapshot_create_t*);
@@ -330,8 +327,8 @@ typedef struct ukv_snapshot_drop_t {
     ukv_database_t db;
     /** @brief Pointer to exported error message. */
     ukv_error_t* error;
-    /** @brief Existing snapshot handle. */
-    ukv_snapshot_t snapshot;
+    /** @brief Existing snapshot id. */
+    ukv_snapshot_t id;
 } ukv_snapshot_drop_t;
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t*);

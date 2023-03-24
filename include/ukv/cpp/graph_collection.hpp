@@ -208,6 +208,7 @@ class graph_collection_t {
         graph_find_edges.db = db_;
         graph_find_edges.error = status.member_ptr();
         graph_find_edges.transaction = transaction_;
+        graph_find_edges.snapshot = snapshot_;
         graph_find_edges.arena = arena_;
         graph_find_edges.options = options;
         graph_find_edges.tasks_count = vertices.count();
@@ -247,7 +248,7 @@ class graph_collection_t {
 
     expected_gt<keys_stream_t> vertex_stream(
         std::size_t vertices_read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
-        blobs_range_t members(db_, transaction_, collection_);
+        blobs_range_t members(db_, transaction_, snapshot_, collection_);
         keys_range_t range {members};
         keys_stream_t stream = range.begin();
         if (auto status = stream.seek_to_first(); !status)
@@ -256,7 +257,7 @@ class graph_collection_t {
     }
 
     std::size_t number_of_vertices() noexcept(false) {
-        blobs_range_t members(db_, transaction_, collection_);
+        blobs_range_t members(db_, transaction_, snapshot_, collection_);
         keys_range_t range {members};
         return range.size();
     }
@@ -266,6 +267,7 @@ class graph_collection_t {
             db_,
             collection_,
             transaction_,
+            snapshot_,
             keys_stream_t::default_read_ahead_k,
             ukv_vertex_source_k,
         };
@@ -282,8 +284,8 @@ class graph_collection_t {
         ukv_vertex_role_t role = ukv_vertex_role_any_k,
         std::size_t vertices_read_ahead = keys_stream_t::default_read_ahead_k) const noexcept {
 
-        graph_stream_t b {db_, collection_, transaction_, vertices_read_ahead, role};
-        graph_stream_t e {db_, collection_, transaction_, vertices_read_ahead, role};
+        graph_stream_t b {db_, collection_, transaction_, snapshot_, vertices_read_ahead, role};
+        graph_stream_t e {db_, collection_, transaction_, snapshot_, vertices_read_ahead, role};
         status_t status = b.seek_to_first();
         if (!status)
             return status;
@@ -308,6 +310,7 @@ class graph_collection_t {
         graph_find_edges.db = db_;
         graph_find_edges.error = status.member_ptr();
         graph_find_edges.transaction = transaction_;
+        graph_find_edges.snapshot = snapshot_;
         graph_find_edges.arena = arena_;
         graph_find_edges.options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
         graph_find_edges.tasks_count = 1;
@@ -362,6 +365,7 @@ class graph_collection_t {
         graph_find_edges.db = db_;
         graph_find_edges.error = status.member_ptr();
         graph_find_edges.transaction = transaction_;
+        graph_find_edges.snapshot = snapshot_;
         graph_find_edges.arena = arena_;
         graph_find_edges.options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
         graph_find_edges.tasks_count = vertices.count();

@@ -60,6 +60,7 @@ CPackSourceConfig.cmake
 doxygen_docs/html
 wheelhouse
 registry/
+package-lock.json
 
 # Allow
 !gradle/wrapper/gradle-wrapper.jar

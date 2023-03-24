@@ -92,7 +92,7 @@ class blobs_collection_t {
     inline blobs_range_t members( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
         ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
-        return {db_, txn_, collection_, min_key, max_key};
+        return {db_, txn_, snap_, collection_, min_key, max_key};
     }
     inline keys_range_t keys( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
@@ -103,7 +103,7 @@ class blobs_collection_t {
     inline pairs_range_t items( //
         ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
         ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
-        return {blobs_range_t {db_, txn_, collection_, min_key, max_key}};
+        return {blobs_range_t {db_, txn_, snap_, collection_, min_key, max_key}};
     }
 
     inline expected_gt<size_range_t> size_range() const noexcept {

@@ -15,9 +15,10 @@
 #include <nlohmann/json.hpp>
 
 #include "ukv/db.h"
-#include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
-#include "helpers/linked_array.hpp" // `uninitialized_array_gt`
-#include "helpers/full_scan.hpp"    // `reservoir_sample_iterator`
+#include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
+#include "helpers/linked_array.hpp"  // `uninitialized_array_gt`
+#include "helpers/full_scan.hpp"     // `reservoir_sample_iterator`
+#include "helpers/config_loader.hpp" // `config_loader_t`
 
 using namespace unum::ukv;
 using namespace unum;
@@ -40,8 +41,6 @@ using level_native_t = leveldb::DB;
 using level_status_t = leveldb::Status;
 using level_options_t = leveldb::Options;
 using level_iter_uptr_t = std::unique_ptr<leveldb::Iterator>;
-
-static constexpr char const* config_name_k = "config_leveldb.json";
 
 struct key_comparator_t final : public leveldb::Comparator {
 
@@ -122,46 +121,80 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         options.compression = leveldb::kNoCompression;
         options.create_if_missing = true;
 
-        // Check if the directory contains a config
-        stdfs::path root = c.config;
+        return_error_if_m(c.config, c.error, args_wrong_k, "Null config specified");
+        // Load config
+        config_t config;
+        auto st = config_loader_t::load_from_json_string(c.config, config);
+        return_error_if_m(st, c.error, args_wrong_k, st.message());
+
+        // Root path
+        stdfs::path root = config.directory;
         stdfs::file_status root_status = stdfs::status(root);
         return_error_if_m(root_status.type() == stdfs::file_type::directory,
                           c.error,
                           args_wrong_k,
                           "Root isn't a directory");
-        stdfs::path config_path = stdfs::path(root) / config_name_k;
-        stdfs::file_status config_status = stdfs::status(config_path);
-        if (config_status.type() == stdfs::file_type::not_found) {
+
+        // Storage paths
+        // return_error_if_m(config.data_directories.empty(), c.error, args_wrong_k, "Multi disk not supported");
+
+        // Engine config
+        json_t js = config.engine.config;
+        if (!config.engine.is_contains_config) {
             log_warning_m(
-                "Configuration file is missing under the path %s. "
-                "Default will be used\n",
+                "Configuration is missing. "
+                "Configuration file will be used\n",
                 config_path.c_str());
+
+            stdfs::path config_path = config.engine.config_file_path;
+            stdfs::file_status config_status = stdfs::status(config_path);
+
+            if (config_status.type() == stdfs::file_type::not_found) {
+                config_path = config.engine.config_url;
+                config_status = stdfs::status(config_path);
+                log_warning_m(
+                    "Configuration file is missing under the path %s. "
+                    "Default will be used\n",
+                    config_path.c_str());
+
+                if (config_status.type() == stdfs::file_type::not_found) {
+                    log_warning_m(
+                        "Configuration url is missing under the path %s. "
+                        "Default will be used\n",
+                        config_path.c_str());
+                }
+                else {
+                    std::ifstream ifs(config_path);
+                    js = json_t::parse(ifs);
+                }
+            }
+            else {
+                std::ifstream ifs(config_path);
+                js = json_t::parse(ifs);
+            }
         }
-        else {
-            std::ifstream ifs(config_path.c_str());
-            json_t js = json_t::parse(ifs);
-            if (js.contains("write_buffer_size"))
-                options.write_buffer_size = js["write_buffer_size"];
-            if (js.contains("max_file_size"))
-                options.max_file_size = js["max_file_size"];
-            if (js.contains("max_open_files"))
-                options.max_open_files = js["max_open_files"];
-            if (js.contains("cache_size"))
-                options.block_cache = leveldb::NewLRUCache(js["cache_size"]);
-            if (js.contains("create_if_missing"))
-                options.create_if_missing = js["create_if_missing"];
-            if (js.contains("error_if_exists"))
-                options.error_if_exists = js["error_if_exists"];
-            if (js.contains("paranoid_checks"))
-                options.paranoid_checks = js["paranoid_checks"];
-            if (js.contains("compression"))
-                if (js["compression"] == "kSnappyCompression" || js["compression"] == "snappy")
-                    options.compression = leveldb::kSnappyCompression;
-        }
+
+        if (js.contains("write_buffer_size"))
+            options.write_buffer_size = js["write_buffer_size"];
+        if (js.contains("max_file_size"))
+            options.max_file_size = js["max_file_size"];
+        if (js.contains("max_open_files"))
+            options.max_open_files = js["max_open_files"];
+        if (js.contains("cache_size"))
+            options.block_cache = leveldb::NewLRUCache(js["cache_size"]);
+        if (js.contains("create_if_missing"))
+            options.create_if_missing = js["create_if_missing"];
+        if (js.contains("error_if_exists"))
+            options.error_if_exists = js["error_if_exists"];
+        if (js.contains("paranoid_checks"))
+            options.paranoid_checks = js["paranoid_checks"];
+        if (js.contains("compression"))
+            if (js["compression"] == "kSnappyCompression" || js["compression"] == "snappy")
+                options.compression = leveldb::kSnappyCompression;
 
         level_db_t* db_ptr = new level_db_t;
         level_native_t* native_db = nullptr;
-        level_status_t status = leveldb::DB::Open(options, c.config, &native_db);
+        level_status_t status = leveldb::DB::Open(options, root, &native_db);
         if (!status.ok()) {
             *c.error = "Couldn't open LevelDB";
             return;
@@ -205,7 +238,7 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     std::lock_guard<std::mutex> locker(db.mutex);
-    auto it = db.snapshots.find(*c.snapshot);
+    auto it = db.snapshots.find(*c.id);
     if (it != db.snapshots.end())
         return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
 
@@ -217,8 +250,8 @@ void ukv_snapshot_create(ukv_snapshot_create_t* c_ptr) {
     if (!level_snapshot->snapshot)
         *c.error = "Couldn't get a snapshot!";
 
-    *c.snapshot = reinterpret_cast<std::size_t>(level_snapshot);
-    db.snapshots[*c.snapshot] = level_snapshot;
+    *c.id = reinterpret_cast<std::size_t>(level_snapshot);
+    db.snapshots[*c.id] = level_snapshot;
 }
 
 void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
@@ -226,15 +259,18 @@ void ukv_snapshot_drop(ukv_snapshot_drop_t* c_ptr) {
         return;
 
     ukv_snapshot_drop_t& c = *c_ptr;
-    if (!c.snapshot)
+    if (!c.id)
         return;
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.id);
+    if (!snap.snapshot)
+        return;
+
     db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
 
-    auto id = reinterpret_cast<std::size_t>(c.snapshot);
+    auto id = reinterpret_cast<std::size_t>(c.id);
     db.mutex.lock();
     db.snapshots.erase(id);
     db.mutex.unlock();
@@ -364,8 +400,11 @@ void ukv_read(ukv_read_t* c_ptr) {
     // 2. Pull metadata & data in one run, as reading from disk is expensive
     try {
         leveldb::ReadOptions options;
-        if (c.snapshot)
+        if (c.snapshot) {
+            auto it = db.snapshots.find(c.snapshot);
+            return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "The snapshot does'nt exist!");
             options.snapshot = snap.snapshot;
+        }
 
         std::string value_buffer;
         ukv_length_t progress_in_tape = 0;
@@ -395,7 +434,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_snapshot_t& snp = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
     scans_arg_t scans {{}, start_keys, limits, c.tasks_count};
@@ -415,9 +454,11 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     // 2. Fetch the data
     leveldb::ReadOptions options;
     options.fill_cache = false;
-
-    if (c.snapshot)
-        options.snapshot = snp.snapshot;
+    if (c.snapshot) {
+        auto it = db.snapshots.find(c.snapshot);
+        return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "The snapshot does'nt exist!");
+        options.snapshot = snap.snapshot;
+    }
 
     level_iter_uptr_t it;
     try {
@@ -457,7 +498,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     return_if_error_m(c.error);
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
-    level_snapshot_t& snp = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
+    level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.snapshot);
     strided_iterator_gt<ukv_length_t const> lens {c.count_limits, c.count_limits_stride};
     sample_args_t samples {{}, lens, c.tasks_count};
 
@@ -474,9 +515,11 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     // 2. Fetch the data
     leveldb::ReadOptions options;
     options.fill_cache = false;
-
-    if (c.snapshot)
-        options.snapshot = snp.snapshot;
+    if (c.snapshot) {
+        auto it = db.snapshots.find(c.snapshot);
+        return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "The snapshot does'nt exist!");
+        options.snapshot = snap.snapshot;
+    }
 
     for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
         sample_arg_t task = samples[task_idx];
