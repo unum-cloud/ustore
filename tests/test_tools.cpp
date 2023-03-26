@@ -41,7 +41,6 @@ namespace fs = std::filesystem;
 constexpr size_t max_batch_size_k = 1024 * 1024 * 1024;
 
 constexpr ukv_str_view_t dataset_path_k = "~/Datasets/tweets32K.ndjson";
-constexpr ukv_str_view_t dataset_clean_path_k = "~/Datasets/tweets32K-clean.ndjson";
 constexpr ukv_str_view_t parquet_path_k = "~/Datasets/tweets32K-clean.parquet";
 constexpr ukv_str_view_t csv_path_k = "~/Datasets/tweets32K-clean.csv";
 constexpr ukv_str_view_t ndjson_path_k = "sample_docs.ndjson";
@@ -91,6 +90,7 @@ static constexpr ukv_str_view_t fields_columns_ak[fields_columns_count_k] = {
 static constexpr ukv_str_view_t doc_k = "doc";
 static constexpr ukv_str_view_t id_k = "_id";
 
+std::filesystem::path home_path(std::getenv("HOME"));
 std::vector<std::string> paths;
 docs_t docs_w_keys;
 
@@ -305,11 +305,14 @@ class arrow_visitor_at {
 };
 
 void make_ndjson_docs() {
-    std::filesystem::path pt {dataset_path_k};
+    std::string dataset_path = dataset_path_k;
+    dataset_path = home_path / dataset_path.substr(2);
+
+    std::filesystem::path pt {dataset_path};
     size_t size = std::filesystem::file_size(pt);
 
     int fd = open(ndjson_path_k, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-    auto handle = open(dataset_path_k, O_RDONLY);
+    auto handle = open(dataset_path.c_str(), O_RDONLY);
     auto begin = mmap(NULL, size, PROT_READ, MAP_PRIVATE, handle, 0);
     std::string_view mapped_content = std::string_view(reinterpret_cast<char const*>(begin), size);
     madvise(begin, size, MADV_SEQUENTIAL);
@@ -698,13 +701,17 @@ bool test_sub_docs(ukv_str_view_t file, ukv_str_view_t ext, comparator cmp, bool
     std::vector<std::string> updated_paths;
     std::string new_file;
 
+    std::string dataset_path = file;
+    if (std::strcmp(ndjson_path_k, file) != 0)
+        dataset_path = home_path / dataset_path.substr(2);
+
     ukv_docs_import_t docs {
         .db = db,
         .error = status.member_ptr(),
         .arena = arena.member_ptr(),
         .options = ukv_options_default_k,
         .collection = collection,
-        .paths_pattern = file,
+        .paths_pattern = dataset_path.c_str(),
         .max_batch_size = max_batch_size_k,
         .callback = nullptr,
         .callback_payload = nullptr,
@@ -750,7 +757,7 @@ bool test_sub_docs(ukv_str_view_t file, ukv_str_view_t ext, comparator cmp, bool
         new_file = updated_paths.back();
 
     new_file.erase(0, 2);
-    EXPECT_TRUE(cmp(file, new_file.data()));
+    EXPECT_TRUE(cmp(dataset_path.c_str(), new_file.data()));
 
     std::remove(new_file.data());
     db.clear().throw_unhandled();
@@ -767,13 +774,17 @@ bool test_whole_docs(ukv_str_view_t file, ukv_str_view_t ext, comparator cmp, bo
     std::vector<std::string> updated_paths;
     std::string new_file;
 
+    std::string dataset_path = file;
+    if (std::strcmp(ndjson_path_k, file) != 0)
+        dataset_path = home_path / dataset_path.substr(2);
+
     ukv_docs_import_t docs {
         .db = db,
         .error = status.member_ptr(),
         .arena = arena.member_ptr(),
         .options = ukv_options_default_k,
         .collection = collection,
-        .paths_pattern = file,
+        .paths_pattern = dataset_path.c_str(),
         .max_batch_size = max_batch_size_k,
         .callback = nullptr,
         .callback_payload = nullptr,
@@ -813,7 +824,7 @@ bool test_whole_docs(ukv_str_view_t file, ukv_str_view_t ext, comparator cmp, bo
         new_file = updated_paths.back();
 
     new_file.erase(0, 2);
-    EXPECT_TRUE(cmp(file, new_file.data()));
+    EXPECT_TRUE(cmp(dataset_path.c_str(), new_file.data()));
 
     std::remove(new_file.data());
     db.clear().throw_unhandled();
@@ -825,12 +836,9 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
     arena_t arena(db);
     status_t status;
 
-    size_t size = 0;
-
-    if (std::strcmp(ndjson_path_k, file) == 0) {
-        std::filesystem::path pt {file};
-        size = std::filesystem::file_size(pt);
-    }
+    std::string dataset_path = file;
+    if (std::strcmp(ndjson_path_k, file) != 0)
+        dataset_path = home_path / dataset_path.substr(2);
 
     ukv_docs_import_t imp_path_null {
         .db = db,
@@ -856,7 +864,7 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .options = ukv_options_default_k,
         .collection = collection,
-        .paths_pattern = file,
+        .paths_pattern = dataset_path.c_str(),
         .max_batch_size = max_batch_size_k,
         .callback = nullptr,
         .callback_payload = nullptr,
@@ -874,7 +882,7 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .options = ukv_options_default_k,
         .collection = collection,
-        .paths_pattern = file,
+        .paths_pattern = dataset_path.c_str(),
         .max_batch_size = max_batch_size_k,
         .callback = nullptr,
         .callback_payload = nullptr,
@@ -892,7 +900,7 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
         .arena = arena.member_ptr(),
         .options = ukv_options_default_k,
         .collection = collection,
-        .paths_pattern = file,
+        .paths_pattern = dataset_path.c_str(),
         .max_batch_size = max_batch_size_k,
         .callback = nullptr,
         .callback_payload = nullptr,
@@ -909,7 +917,7 @@ bool test_crash_cases_docs_import(ukv_str_view_t file) {
         .error = status.member_ptr(),
         .arena = arena.member_ptr(),
         .collection = collection,
-        .paths_pattern = file,
+        .paths_pattern = dataset_path.c_str(),
         .fields_count = prefixes_count_k,
         .fields = prefixes_ak,
         .fields_stride = sizeof(ukv_str_view_t),
@@ -924,7 +932,6 @@ bool test_crash_cases_docs_export(ukv_str_view_t ext) {
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
-    size_t size = 0;
 
     ukv_docs_export_t imp_path_null {
         .db = db,
