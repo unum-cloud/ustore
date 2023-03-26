@@ -59,7 +59,7 @@ void parse_args(int argc, char* argv[], args_t& args) {
     argparse::ArgumentParser program(argv[0]);
     program.add_argument("-p", "--path").required().help("File path for importing");
     program.add_argument("-e", "--ext").required().help("File extension for exporting");
-    program.add_argument("-c", "--cfg").required().help("Config path");
+    program.add_argument("-c", "--cfg").default_value(std::string("")).help("Config path");
     program.add_argument("-i", "--id").required().help("Id field");
     program.add_argument("-th", "--threads").default_value(std::string("1")).help("Threads count");
     program.add_argument("-m", "--max_input_files").default_value(std::string("10")).help("Max input files count");
