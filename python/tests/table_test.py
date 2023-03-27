@@ -9,8 +9,8 @@ import ukv.umem as ukv
 
 pa.get_include()
 
-if not os.path.exists("tmp"):
-    os.makedirs("tmp")
+if not os.path.exists('tmp'):
+    os.makedirs('tmp')
 
 
 def create_table(db):
