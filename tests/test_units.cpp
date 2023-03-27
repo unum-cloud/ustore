@@ -22,6 +22,7 @@
 #include <fmt/format.h>
 
 #include "ukv/ukv.hpp"
+#include <ukv/cpp/ranges.hpp> // `check_presence`
 
 using namespace unum::ukv;
 using namespace unum;
@@ -510,6 +511,56 @@ TEST(db, clear_values) {
     check_length(collection_ref, ukv_length_missing_k);
 
     EXPECT_TRUE(db.clear());
+}
+
+/**
+ * Tests presences with C and C++ Interfaces.
+ */
+TEST(db, presences) {
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(config().c_str()));
+    auto main = db.main();
+
+    constexpr std::size_t keys_count = 1000;
+    for (std::size_t i = 0; i != keys_count; ++i) {
+        if (i % 10)
+            main[i] = "value";
+    }
+
+    // Native C Interface
+    std::vector<ukv_key_t> keys(keys_count);
+    std::iota(keys.begin(), keys.end(), 0);
+    ukv_octet_t* found_presences = nullptr;
+    arena_t arena(db);
+    status_t status {};
+    ukv_read_t read {};
+    read.db = db;
+    read.error = status.member_ptr();
+    read.arena = arena.member_ptr();
+    read.tasks_count = keys_count;
+    read.keys = keys.data();
+    read.keys_stride = sizeof(ukv_key_t);
+    read.presences = &found_presences;
+
+    ukv_read(&read);
+    EXPECT_TRUE(status);
+
+    for (std::size_t i = 0; i != keys_count; ++i) {
+        if (i % 10)
+            EXPECT_TRUE(check_presence(found_presences, i));
+        else
+            EXPECT_FALSE(check_presence(found_presences, i));
+    }
+
+    // C++ Interface
+    auto presences = main[keys].present().throw_or_release();
+    for (std::size_t i = 0; i != keys_count; ++i) {
+        if (i % 10)
+            EXPECT_TRUE(presences[i]);
+        else
+            EXPECT_FALSE(presences[i]);
+    }
 }
 
 TEST(db, scan) {
