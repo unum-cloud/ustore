@@ -106,6 +106,10 @@ class strided_iterator_gt {
     }
 };
 
+inline bool check_presence(ukv_octet_t const* begin, std::size_t idx) {
+    return *(begin + idx / CHAR_BIT) & (static_cast<ukv_octet_t>(1 << (idx % CHAR_BIT)));
+}
+
 class bits_span_t {
   public:
     struct ref_t {
