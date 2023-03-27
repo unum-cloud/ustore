@@ -209,7 +209,7 @@ void ukv_read(ukv_read_t* c_ptr) {
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c);
+    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c, &pool);
     return_error_if_m(ar_status.ok(), c.error, network_k, "No response");
 
     // Convert the responses in Arrow C form
@@ -778,7 +778,7 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c);
+    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c, &pool);
     return_error_if_m(ar_status.ok(), c.error, network_k, "No response");
 
     // Convert the responses in Arrow C form
@@ -929,7 +929,7 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c);
+    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c, &pool);
     return_error_if_m(ar_status.ok(), c.error, network_k, "No response");
 
     // Convert the responses in Arrow C form
@@ -1112,7 +1112,7 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c);
+    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c, &pool);
     return_error_if_m(ar_status.ok(), c.error, network_k, "No response");
 
     // Convert the responses in Arrow C form
@@ -1247,7 +1247,7 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c);
+    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c, &pool);
     return_error_if_m(ar_status.ok(), c.error, network_k, "No response");
 
     // Convert the responses in Arrow C form
@@ -1374,7 +1374,7 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
 
     ArrowSchema schema_c;
     ArrowArray batch_c;
-    ar_status = unpack_table(maybe_table, schema_c, batch_c);
+    ar_status = unpack_table(maybe_table, schema_c, batch_c, &pool);
     return_error_if_m(ar_status.ok(), c.error, args_combo_k, "Failed to unpack list of columns");
 
     auto ids_column_idx = column_idx(schema_c, kArgCols);
@@ -1426,7 +1426,7 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
 
     ArrowSchema schema_c;
     ArrowArray batch_c;
-    ar_status = unpack_table(maybe_table, schema_c, batch_c);
+    ar_status = unpack_table(maybe_table, schema_c, batch_c, &pool);
     return_error_if_m(ar_status.ok(), c.error, args_combo_k, "Failed to unpack list of snapshots");
 
     auto ids_column_idx = column_idx(schema_c, kArgSnaps);
