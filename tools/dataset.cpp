@@ -826,7 +826,7 @@ void import_ndjson_docs(ukv_docs_import_t& c) {
     madvise(begin, file_size, MADV_SEQUENTIAL);
 
     std::ifstream file(c.paths_pattern);
-    ukv_size_t rows_count = std::count(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), '\n');
+    ukv_size_t rows_count = std::count(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), '\n') + 1;
 
     simdjson::ondemand::parser parser;
     simdjson::ondemand::document_stream docs = parser.iterate_many( //
