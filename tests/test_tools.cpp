@@ -48,7 +48,7 @@ constexpr ukv_str_view_t path_k = "./";
 constexpr size_t rows_count_k = 1000;
 
 static constexpr ukv_str_view_t ext_parquet_k = ".parquet";
-static constexpr ukv_str_view_t ext_ndjson_path_k = ".ndjson";
+static constexpr ukv_str_view_t ext_ndjson_k = ".ndjson";
 static constexpr ukv_str_view_t ext_csv_k = ".csv";
 
 constexpr size_t prefixes_count_k = 4;
@@ -1026,7 +1026,7 @@ bool test_crash_cases_docs_export(ukv_str_view_t ext) {
 }
 
 TEST(import_export_docs_whole, ndjosn_ndjson) {
-    test_whole_docs(ndjson_path_k, ext_ndjson_path_k, cmp_ndjson_docs_whole);
+    test_whole_docs(ndjson_path_k, ext_ndjson_k, cmp_ndjson_docs_whole);
 }
 TEST(import_export_docs_whole, ndjosn_parquet) {
     test_whole_docs(ndjson_path_k, ext_parquet_k, cmp_ndjson_docs_whole);
@@ -1036,7 +1036,7 @@ TEST(import_export_docs_whole, ndjosn_csv) {
 }
 
 TEST(import_export_docs_whole, parquet_ndjson) {
-    test_whole_docs(parquet_path_k, ext_ndjson_path_k, cmp_table_docs_whole, true);
+    test_whole_docs(parquet_path_k, ext_ndjson_k, cmp_table_docs_whole, true);
 }
 TEST(import_export_docs_whole, parquet_parquet) {
     test_whole_docs(parquet_path_k, ext_parquet_k, cmp_table_docs_whole, true);
@@ -1046,7 +1046,7 @@ TEST(import_export_docs_whole, parquet_csv) {
 }
 
 TEST(import_export_docs_whole, csv_ndjson) {
-    test_whole_docs(csv_path_k, ext_ndjson_path_k, cmp_table_docs_whole, true);
+    test_whole_docs(csv_path_k, ext_ndjson_k, cmp_table_docs_whole, true);
 }
 TEST(import_export_docs_whole, csv_parquet) {
     test_whole_docs(csv_path_k, ext_parquet_k, cmp_table_docs_whole, true);
@@ -1056,7 +1056,7 @@ TEST(import_export_docs_whole, csv_csv) {
 }
 
 TEST(import_export_docs_sub, ndjosn_ndjson) {
-    test_sub_docs(ndjson_path_k, ext_ndjson_path_k, cmp_ndjson_docs_sub);
+    test_sub_docs(ndjson_path_k, ext_ndjson_k, cmp_ndjson_docs_sub);
 }
 TEST(import_export_docs_sub, ndjosn_parquet) {
     test_sub_docs(ndjson_path_k, ext_parquet_k, cmp_ndjson_docs_sub);
@@ -1066,7 +1066,7 @@ TEST(import_export_docs_sub, ndjosn_csv) {
 }
 
 TEST(import_export_docs_sub, parquet_ndjson) {
-    test_sub_docs(parquet_path_k, ext_ndjson_path_k, cmp_table_docs_sub, true);
+    test_sub_docs(parquet_path_k, ext_ndjson_k, cmp_table_docs_sub, true);
 }
 TEST(import_export_docs_sub, parquet_parquet) {
     test_sub_docs(parquet_path_k, ext_parquet_k, cmp_table_docs_sub, true);
@@ -1076,7 +1076,7 @@ TEST(import_export_docs_sub, parquet_csv) {
 }
 
 TEST(import_export_docs_sub, csv_ndjson) {
-    test_sub_docs(csv_path_k, ext_ndjson_path_k, cmp_table_docs_sub, true);
+    test_sub_docs(csv_path_k, ext_ndjson_k, cmp_table_docs_sub, true);
 }
 TEST(import_export_docs_sub, csv_parquet) {
     test_sub_docs(csv_path_k, ext_parquet_k, cmp_table_docs_sub, true);
@@ -1098,13 +1098,13 @@ TEST(crash_cases, docs_import) {
 }
 
 TEST(crash_cases, docs_export) {
-    test_crash_cases_docs_export(ext_ndjson_path_k);
+    test_crash_cases_docs_export(ext_ndjson_k);
     test_crash_cases_docs_export(ext_parquet_k);
     test_crash_cases_docs_export(ext_csv_k);
-    test_crash_cases_docs_export(ext_ndjson_path_k);
+    test_crash_cases_docs_export(ext_ndjson_k);
     test_crash_cases_docs_export(ext_parquet_k);
     test_crash_cases_docs_export(ext_csv_k);
-    test_crash_cases_docs_export(ext_ndjson_path_k);
+    test_crash_cases_docs_export(ext_ndjson_k);
     test_crash_cases_docs_export(ext_parquet_k);
     test_crash_cases_docs_export(ext_csv_k);
 }
