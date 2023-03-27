@@ -32,19 +32,25 @@ struct disk_config_t {
 };
 
 /**
- * @brief DBMS configuration
+ * @brief Engine configuration
  *
- * @directory: Main path where DB stores metadata, e.g schema, log, etc.
- * @data_directories: Storage paths where DB stores data.
- * @engine_config_path: Engine specific config file path.
+ * @config_url: URL where is located the config.
+ * @config_file_path: Local config file path.
+ * @config: Config in key-value format.
  */
 struct engine_config_t {
-    bool is_contains_config = false;
     std::string config_url;
     std::string config_file_path;
     json_t config;
 };
 
+/**
+ * @brief DBMS configuration
+ *
+ * @directory: Main path where DB stores metadata, e.g schema, log, etc.
+ * @data_directories: Storage paths where DB stores data.
+ * @engine_config_path: Engine specific config.
+ */
 struct config_t {
     std::string directory;
     std::vector<disk_config_t> data_directories;
@@ -84,8 +90,10 @@ inline status_t config_loader_t::load_from_json(json_t const& json, config_t& co
         if (!status)
             return status;
 
-        config.directory = json.value("directory", "./tmp/ukv/");
+        // Main directory
+        config.directory = json.value("directory", "");
 
+        // Storage disks
         if (json.contains("data_directories")) {
             auto j_disks = json["data_directories"];
             if (j_disks.is_array()) {
@@ -103,14 +111,13 @@ inline status_t config_loader_t::load_from_json(json_t const& json, config_t& co
                 return "Invalid data directories config";
         }
 
+        // Engine
         if (json.contains("engine")) {
             auto engine = json["engine"];
-            config.engine.config_url = engine["config_url"];
-            config.engine.config_file_path = engine["config_file_path"];
-            if (engine.contains("config")) {
-                config.engine.is_contains_config = true;
+            config.engine.config_url = engine.value("config_url", "");
+            config.engine.config_file_path = engine.value("config_file_path", "");;
+            if (engine.contains("config"))
                 config.engine.config = engine["config"];
-            }
         }
     }
     catch (...) {
@@ -132,8 +139,10 @@ inline status_t config_loader_t::save_to_json(config_t const& config, json_t& js
     json.clear();
     json["version"] = current_version();
 
+    // Main directory
     json["directory"] = config.directory;
 
+    // Storage disks
     std::vector<json_t> j_data_directories;
     for (auto const& directory : config.data_directories) {
         json_t j_directory;
@@ -142,6 +151,13 @@ inline status_t config_loader_t::save_to_json(config_t const& config, json_t& js
         j_data_directories.push_back(j_directory);
     }
     json["data_directories"] = j_data_directories;
+
+    // Engine
+    json_t j_engine;
+    j_engine["config_url"] = config.engine.config_url;
+    j_engine["config_file_path"] = config.engine.config_file_path;
+    j_engine["config"] = config.engine.config;
+    json["engine"] = j_engine;
 
     return {};
 }

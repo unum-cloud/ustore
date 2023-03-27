@@ -152,8 +152,9 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         // http://rocksdb.org/blog/2016/03/07/rocksdb-options-file.html
         // https://github.com/facebook/rocksdb/wiki/RocksDB-Options-File
 
+        return_error_if_m(config.engine.config_url.empty(), c.error, args_wrong_k,"Doesn't support URL configs");
         json_t js = config.engine.config;
-        if (!config.engine.is_contains_config) {
+        if (config.engine.config.empty()) {
             log_warning_m(
                 "Configuration is missing. "
                 "Configuration file will be used\n",
