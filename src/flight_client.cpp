@@ -48,7 +48,7 @@ arf::FlightCallOptions arrow_call_options(arrow_mem_pool_t& pool) {
     arf::FlightCallOptions options;
     options.read_options = arrow_read_options(pool);
     options.write_options = arrow_write_options(pool);
-    options.memory_manager;
+    options.memory_manager = ar::CPUDevice::memory_manager(&pool);
     return options;
 }
 
