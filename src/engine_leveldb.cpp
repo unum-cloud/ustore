@@ -136,10 +136,10 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
                           "Root isn't a directory");
 
         // Storage paths
-        // return_error_if_m(config.data_directories.empty(), c.error, args_wrong_k, "Multi disk not supported");
+        return_error_if_m(config.data_directories.empty(), c.error, args_wrong_k, "Multi disk not supported");
 
         // Engine config
-        return_error_if_m(config.engine.config_url.empty(), c.error, args_wrong_k,"Doesn't support URL configs");
+        return_error_if_m(config.engine.config_url.empty(), c.error, args_wrong_k, "Doesn't support URL configs");
         json_t js = config.engine.config;
         if (config.engine.config.empty()) {
             log_warning_m(
