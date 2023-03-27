@@ -1561,6 +1561,7 @@ void ukv_database_free(ukv_database_t c_db) {
     if (!c_db)
         return;
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c_db);
+    db.arena.release_all();
     delete &db;
 }
 
