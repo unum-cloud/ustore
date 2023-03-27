@@ -1,3 +1,4 @@
+import os
 import json
 import numpy as np
 import pandas as pd
@@ -5,7 +6,11 @@ import pyarrow as pa
 import pyarrow.csv as csv
 import pyarrow.dataset as ds
 import ukv.umem as ukv
+
 pa.get_include()
+
+if not os.path.exists("tmp"):
+    os.makedirs("tmp")
 
 
 def create_table(db):
