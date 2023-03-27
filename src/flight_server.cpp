@@ -10,6 +10,7 @@
  */
 
 #include <mutex>
+#include <fstream>  // `std::ifstream`
 #include <charconv> // `std::from_chars`
 #include <chrono>   // `std::time_point`
 #include <cstdio>   // `std::printf`
@@ -28,6 +29,8 @@
 
 using namespace unum::ukv;
 using namespace unum;
+
+namespace stdfs = std::filesystem;
 
 using sys_clock_t = std::chrono::system_clock;
 using sys_time_t = std::chrono::time_point<sys_clock_t>;
@@ -1444,23 +1447,14 @@ int main(int argc, char* argv[]) {
 
     using namespace clipp;
 
-    std::string config_path;
+    std::string config_path = "/var/lib/ukv/config.json";
     int port = 38709;
     bool quiet = false;
     bool help = false;
 
-#if defined(UKV_ENGINE_IS_LEVELDB)
-    config_path = "/var/lib/ukv/leveldb/";
-#elif defined(UKV_ENGINE_IS_ROCKSDB)
-    config_path = "/var/lib/ukv/rocksdb/";
-#elif defined(UKV_ENGINE_IS_UDISK)
-    config_path = "/var/lib/ukv/udisk/";
-#endif
-
     auto cli = ( //
-        (option("-d", "--dir") & value("directory", config_path))
-            .doc("Path to primary directory, potentially containing a configuration file. The default value is " +
-                 config_path),
+        (option("--config") & value("path", config_path))
+            .doc("Configuration file path. The default configuration file path is " + config_path),
         (option("-p", "--port") & value("port", port))
             .doc("Port to use for connection. The default connection port is 38709"),
         option("-q", "--quiet").set(quiet).doc("Silence outputs"),
@@ -1475,5 +1469,23 @@ int main(int argc, char* argv[]) {
         exit(0);
     }
 
-    return run_server(config_path.c_str(), port, quiet).ok() ? EXIT_SUCCESS : EXIT_FAILURE;
+    std::string config {};
+    stdfs::file_status config_status = stdfs::status(config_path);
+    if (config_status.type() == stdfs::file_type::not_found) {
+        config.assign(R"({
+        "version": "1.0",
+        "directory": "./tmp/ukv/",
+        "data_directories": [],
+        "engine": {
+            "config_url": "",
+            "config_file_path": "",
+            "config": {}}
+        })");
+    }
+    else {
+        std::ifstream ifs(config_path);
+        config = std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    }
+
+    return run_server(config.c_str(), port, quiet).ok() ? EXIT_SUCCESS : EXIT_FAILURE;
 }

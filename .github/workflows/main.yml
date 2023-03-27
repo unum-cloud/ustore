@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  # Runs on pushes targeting the default branch
+  push:
+    branches: ["main"]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+
+env:
+  GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
+
+
+jobs:
+
+  versioning:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
+    - uses: actions/setup-node@v3
+    - run: cp .github/workflows/package.json . && npm install && npx semantic-release
+
+
+  # Single deploy job since we're just deploying
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-22.04
+    needs: versioning
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: 'main'   
+      - name: Setup Pages
+        uses: actions/configure-pages@v2
+      - name: Install Deps
+        run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708
+      - name: Install ukv from pip
+        run: pip install ukv
+      - name: Fetch golang repo
+        run: git submodule update --init --recursive --remote go-ukv/
+      - name: Build Docs
+        run: cd docs && doxygen conf.dox && make html
+      - name: Copy assets
+        run: cp -r assets build/docs/html/
+      - name: Upload Artifacts
+        uses: actions/upload-pages-artifact@v1
+        with:
+          # Upload entire repository
+          path: "./build/docs/html/"
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
