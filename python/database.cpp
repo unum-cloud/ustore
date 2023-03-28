@@ -248,7 +248,7 @@ void ukv::wrap_database(py::module& m) {
         status.throw_unhandled();
         std::vector<std::string> names_copy {count};
         strings_tape_iterator_t names_it {count, names};
-        while (!names_it.is_end()){
+        while (!names_it.is_end()) {
             names_copy.push_back(*names_it);
             ++names_it;
         }
@@ -328,12 +328,12 @@ void ukv::wrap_database(py::module& m) {
     });
 
     py_collection.def_property_readonly("keys", [](py_blobs_collection_t& py_collection) {
-        blobs_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
+        blobs_range_t members(py_collection.db(), py_collection.txn(), 0, *py_collection.member_collection());
         keys_range_t range {members};
         return py::cast(std::make_unique<keys_range_t>(range));
     });
     py_collection.def_property_readonly("items", [](py_blobs_collection_t& py_collection) {
-        blobs_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
+        blobs_range_t members(py_collection.db(), py_collection.txn(), 0, *py_collection.member_collection());
         pairs_range_t range {members};
         return py::cast(std::make_unique<pairs_range_t>(range));
     });
