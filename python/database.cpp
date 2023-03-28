@@ -248,10 +248,9 @@ void ukv::wrap_database(py::module& m) {
         status.throw_unhandled();
         std::vector<std::string> names_copy {count};
         strings_tape_iterator_t names_it {count, names};
-        while (!names_it.is_end()) {
-            names_copy.push_back(*names_it);
-            ++names_it;
-        }
+        for (std::size_t i = 0; i != count; ++i, ++names_it)
+            names_copy[i] = *names_it;
+
         return names_copy;
     });
 
