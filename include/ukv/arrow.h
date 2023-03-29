@@ -351,7 +351,7 @@ static void ukv_to_arrow_stream( //
 }
 
 
-bool check_presence(ukv_octet_t const* begin, size_t idx) {
+static bool check_presence(ukv_octet_t const* begin, size_t idx) {
     return *(begin + idx / CHAR_BIT) & ((ukv_octet_t)(1 << (idx % CHAR_BIT)));
 }
 
