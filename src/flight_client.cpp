@@ -1366,7 +1366,7 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
                        "?{}=0x{:0>16x}",
                        kParamTransactionID,
                        std::uintptr_t(c.transaction));
-    ar::Result<std::unique_ptr<arf::FlightStreamReader>> maybe_stream = db.flight->DoGet(ticket);
+    ar::Result<std::unique_ptr<arf::FlightStreamReader>> maybe_stream = db.flight->DoGet(options, ticket);
     return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
 
     auto& stream_ptr = maybe_stream.ValueUnsafe();
@@ -1418,7 +1418,7 @@ void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
     arf::Ticket ticket {kFlightListSnap};
-    ar::Result<std::unique_ptr<arf::FlightStreamReader>> maybe_stream = db.flight->DoGet(ticket);
+    ar::Result<std::unique_ptr<arf::FlightStreamReader>> maybe_stream = db.flight->DoGet(options, ticket);
     return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
 
     auto& stream_ptr = maybe_stream.ValueUnsafe();
