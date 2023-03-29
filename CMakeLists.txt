@@ -14,6 +14,7 @@ option(UKV_BUILD_ENGINE_LEVELDB "Building REST API server for all backends")
 option(UKV_BUILD_ENGINE_ROCKSDB "Building REST API server for all backends")
 
 option(UKV_BUILD_TESTS "Building C/C++ native tests" ON)
+option(UKV_BUILD_SANITIZE "Use memory sanitizers for debug builds" ON)
 option(UKV_BUILD_BENCHMARKS "Building C/C++ native benchmarks")
 
 option(UKV_BUILD_BUNDLES "Building bundles libraries for GoLang and Java SDKs")
@@ -113,7 +114,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DUKV_DEBUG -g")
 find_package(Threads REQUIRED)
 set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 
-if(NOT ${UKV_BUILD_SDK_PYTHON})
+if(${UKV_BUILD_SANITIZE} AND NOT ${UKV_BUILD_SDK_PYTHON})
   set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
   set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
