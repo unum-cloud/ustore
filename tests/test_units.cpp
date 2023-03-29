@@ -548,19 +548,23 @@ TEST(db, presences) {
     EXPECT_TRUE(status);
 
     for (std::size_t i = 0; i != keys_count; ++i) {
-        if (i % 10)
+        if (i % 10) {
             EXPECT_TRUE(check_presence(found_presences, i));
-        else
+        }
+        else {
             EXPECT_FALSE(check_presence(found_presences, i));
+        }
     }
 
     // C++ Interface
     auto presences = main[keys].present().throw_or_release();
     for (std::size_t i = 0; i != keys_count; ++i) {
-        if (i % 10)
+        if (i % 10) {
             EXPECT_TRUE(presences[i]);
-        else
+        }
+        else {
             EXPECT_FALSE(presences[i]);
+        }
     }
 }
 
