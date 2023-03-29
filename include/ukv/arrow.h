@@ -279,7 +279,7 @@ static void ukv_to_arrow_list( //
     ukv_str_view_t const field_name,
     ukv_doc_field_type_t const field_type,
 
-    ukv_octet_t const* column_validities,
+    ukv_octet_t const* column_validities,static
     ukv_length_t const* column_offsets,
     void const* column_contents,
 
@@ -350,7 +350,7 @@ static void ukv_to_arrow_stream( //
     ukv_arena_t*) {
 }
 
-bool check_presence(ukv_octet_t const* begin, std::size_t idx) {
+static bool check_presence(ukv_octet_t const* begin, size_t idx) {
     return *(begin + idx / CHAR_BIT) & ((ukv_octet_t)(1 << (idx % CHAR_BIT)));
 }
 
