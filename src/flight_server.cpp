@@ -32,10 +32,6 @@ using namespace unum;
 using sys_clock_t = std::chrono::system_clock;
 using sys_time_t = std::chrono::time_point<sys_clock_t>;
 
-/// This is the "Arrow way" of dealing with empty values in the last buffer.
-/// https://github.com/apache/arrow/blob/2078af7c710d688c14313b9486b99c981550a7b7/cpp/src/arrow/memory_pool_internal.h#L34
-static std::int64_t const zero_size_data_k[1] = {0};
-
 inline static arf::ActionType const kActionColOpen {kFlightColCreate, "Find a collection descriptor by name."};
 inline static arf::ActionType const kActionColDrop {kFlightColDrop, "Delete a named collection."};
 inline static arf::ActionType const kActionSnapOpen {kFlightSnapCreate, "Find a snapshot descriptor by name."};
