@@ -98,6 +98,9 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
     ~arrow_mem_pool_t() {}
 
     ar::Status Allocate(int64_t size, uint8_t** ptr) override {
+        if (size < 0)
+            return ar::Status::Invalid("negative malloc size");
+
         if (size == 0) {
             *ptr = reinterpret_cast<uint8_t*>(&zero_size_data_k);
             return ar::Status::OK();
@@ -111,9 +114,10 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
         return ar::Status::OK();
     }
     ar::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr) override {
-        if (*ptr == reinterpret_cast<uint8_t*>(&zero_size_data_k)) {
+        if (new_size < 0)
+            return ar::Status::Invalid("negative malloc size");
+        if (*ptr == reinterpret_cast<uint8_t*>(&zero_size_data_k))
             return Allocate(new_size, ptr);
-        }
         if (new_size == 0) {
             *ptr = reinterpret_cast<uint8_t*>(&zero_size_data_k);
             bytes_allocated_ -= old_size;
@@ -129,6 +133,7 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
         bytes_allocated_ += new_size - old_size;
         return ar::Status::OK();
     }
+
     void Free(uint8_t* buffer, int64_t size) override {
         // resource_.deallocate(buffer, size); // deallocation is no-op
         bytes_allocated_ -= size;
