@@ -1,6 +1,6 @@
 {
     "version": "1.0",
-    "directory": "./tmp/main/",
+    "directory": "./tmp/ukv_embedded_leveldb/",
     "data_directories": [],
     "engine": {
         "config_url": "",
