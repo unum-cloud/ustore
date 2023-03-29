@@ -309,7 +309,7 @@ void ukv::wrap_document(py::module& m) {
     py_docs_collection.def("patch", &patch);
 
     py_docs_collection.def_property_readonly("keys", [](py_docs_collection_t& py_collection) {
-        blobs_range_t members(py_collection.db(), py_collection.txn(), *py_collection.member_collection());
+        blobs_range_t members(py_collection.db(), py_collection.txn(), 0, *py_collection.member_collection());
         keys_range_t range {members};
         return py::cast(std::make_unique<keys_range_t>(range));
     });
