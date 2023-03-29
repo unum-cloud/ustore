@@ -1427,6 +1427,15 @@ ar::Status run_server(ukv_str_view_t config, int port, bool quiet) {
 
     arf::Location server_location = arf::Location::ForGrpcTcp("0.0.0.0", port).ValueUnsafe();
     arf::FlightServerOptions options(server_location);
+
+    status_t status;
+    ukv_arena_t c_arena(db);
+    linked_memory_lock_t arena = linked_memory(&c_arena, ukv_options_default_k, status.member_ptr());
+    if (!status)
+        return ar::Status::ExecutionError(status.message());
+    arrow_mem_pool_t pool(arena);
+    options.memory_manager = ar::CPUDevice::memory_manager(&pool);
+
     auto server = std::make_unique<UKVService>(std::move(db));
     ARROW_RETURN_NOT_OK(server->Init(options));
     if (!quiet)
