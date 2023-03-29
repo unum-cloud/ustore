@@ -350,6 +350,10 @@ static void ukv_to_arrow_stream( //
     ukv_arena_t*) {
 }
 
+bool check_presence(ukv_octet_t const* begin, std::size_t idx) {
+    return *(begin + idx / CHAR_BIT) & ((ukv_octet_t)(1 << (idx % CHAR_BIT)));
+}
+
 #ifdef __cplusplus
 } /* end extern "C" */
 #endif
