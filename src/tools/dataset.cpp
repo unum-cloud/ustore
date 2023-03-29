@@ -17,25 +17,24 @@
 #include <arrow/table.h>
 #include <arrow/result.h>
 #include <arrow/status.h>
-#include <arrow/io/api.h>
-#include <arrow/csv/api.h>
-#include <arrow/io/file.h>
-#include <arrow/csv/writer.h>
 #include <arrow/memory_pool.h>
+#include <arrow/csv/api.h>
+#include <arrow/csv/writer.h>
+#include <arrow/io/api.h>
+#include <arrow/io/file.h>
+#include <arrow/compute/api_aggregate.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/stream_writer.h>
-#include <arrow/compute/api_aggregate.h>
 
 #include <simdjson.h>
 #include <fmt/format.h>
 
 #include <ukv/ukv.hpp>
+#include <ukv/cpp/ranges.hpp>
+#include <ukv/cpp/blobs_range.hpp>   // `keys_stream_t`
+#include <helpers/linked_memory.hpp> // `linked_memory_lock_t`
 
 #include "dataset.h"
-#include "helpers/linked_memory.hpp" // `linked_memory_lock_t`
-
-#include <ukv/cpp/ranges.hpp>
-#include <ukv/cpp/blobs_range.hpp> // `keys_stream_t`
 
 using namespace unum::ukv;
 
@@ -826,7 +825,8 @@ void import_ndjson_docs(ukv_docs_import_t& c) {
     madvise(begin, file_size, MADV_SEQUENTIAL);
 
     std::ifstream file(c.paths_pattern);
-    ukv_size_t rows_count = std::count(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), '\n') + 1;
+    ukv_size_t rows_count =
+        std::count(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), '\n') + 1;
 
     simdjson::ondemand::parser parser;
     simdjson::ondemand::document_stream docs = parser.iterate_many( //

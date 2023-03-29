@@ -14,12 +14,6 @@
             "type": "shell"
         },
         {
-            "label": "Build Debug Test Tools",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make test_tools_ukv_embedded_umem -j8 --silent -C ./build_debug",
-            "args": [],
-            "type": "shell"
-        },
-        {
             "label": "Build Debug UMem Test",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_LEVELDB=0 -DUKV_BUILD_ENGINE_ROCKSDB=0 -B ./build_debug && make test_units_ukv_embedded_umem -j8 --silent -C ./build_debug",
             "args": [],
@@ -40,6 +34,12 @@
         {
             "label": "Build Debug UDisk Test",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_ENGINE_UDISK_PATH=lib/libukv_udisk.a -B ./build_debug && make test_units_ukv_embedded_udisk -j8 --silent -C ./build_debug",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Debug Tools Test",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -B ./build_debug && make test_tools_ukv_embedded_umem -j8 --silent -C ./build_debug",
             "args": [],
             "type": "shell"
         },

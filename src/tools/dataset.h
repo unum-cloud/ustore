@@ -35,17 +35,17 @@ typedef struct ukv_docs_export_t {
 
     ukv_database_t db;
     ukv_error_t* error;
-    ukv_arena_t* arena; // optonal
+    ukv_arena_t* arena; // optional
     ukv_options_t options; // ukv_options_default_k
 
     ukv_collection_t collection; // ukv_collection_main_k
     ukv_str_view_t paths_extension; // ".parquet"
     ukv_size_t max_batch_size; // 1024ul * 1024ul * 1024ul
-    ukv_callback_t callback; // optonal
-    ukv_callback_payload_t callback_payload; // optonal
+    ukv_callback_t callback; // optional
+    ukv_callback_payload_t callback_payload; // optional
 
     ukv_size_t fields_count; // optional
-    ukv_str_view_t const* fields; // optonal
+    ukv_str_view_t const* fields; // optional
     ukv_size_t fields_stride; // optional
 
 } ukv_docs_export_t;

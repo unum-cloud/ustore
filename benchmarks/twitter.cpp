@@ -14,7 +14,6 @@
 #include <fmt/printf.h> // `fmt::sprintf`
 #include <benchmark/benchmark.h>
 #include <simdjson.h>
-#include <fmt/printf.h>
 
 #include <argparse/argparse.hpp>
 
