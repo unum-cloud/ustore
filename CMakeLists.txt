@@ -14,6 +14,7 @@ option(UKV_BUILD_ENGINE_LEVELDB "Building REST API server for all backends")
 option(UKV_BUILD_ENGINE_ROCKSDB "Building REST API server for all backends")
 
 option(UKV_BUILD_TESTS "Building C/C++ native tests" ON)
+option(UKV_BUILD_SANITIZE "Use memory sanitizers for debug builds" ON)
 option(UKV_BUILD_BENCHMARKS "Building C/C++ native benchmarks")
 
 option(UKV_BUILD_TOOLS "Building tools for UKV")
@@ -33,6 +34,8 @@ set(UKV_ENGINE_UDISK_PATH "" CACHE STRING "Pass a path to UDisk binary to produc
 if(UKV_BUILD_API_FLIGHT)
   set(UKV_BUILD_API_FLIGHT_SERVER ON)
   set(UKV_BUILD_API_FLIGHT_CLIENT ON)
+elseif(${UKV_BUILD_API_FLIGHT_CLIENT} OR ${UKV_BUILD_API_FLIGHT_SERVER})
+  set(UKV_BUILD_API_FLIGHT ON)
 endif()
 
 # Some settings are mutually dependant
@@ -112,7 +115,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DUKV_DEBUG -g")
 find_package(Threads REQUIRED)
 set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 
-if(NOT ${UKV_BUILD_SDK_PYTHON})
+if(${UKV_BUILD_SANITIZE} AND NOT ${UKV_BUILD_SDK_PYTHON})
   set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
   set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
@@ -168,7 +171,7 @@ if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT_CLIENT} OR ${UKV_BUILD_API_
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
 
-if(${UKV_BUILD_API_FLIGHT_CLIENT})
+if(${UKV_BUILD_API_FLIGHT})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
 endif()
 
@@ -260,7 +263,7 @@ if(${UKV_BUILD_API_FLIGHT_SERVER})
 
     string(CONCAT server_exe_name "ukv_flight_server_" ${engine_name})
     add_executable(${server_exe_name} src/flight_server.cpp)
-    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson arrow::flight arrow::bundled arrow::dataset arrow::arrow ssl crypto ${embedded_lib_name} ${embedded_dependencies})
+    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson arrow::flight arrow::bundled arrow::dataset arrow::arrow openssl::ssl openssl::crypto ${embedded_lib_name} ${embedded_dependencies})
     target_compile_definitions(${server_exe_name} INTERFACE UKV_ENGINE_NAME=${engine_name})
 
     if(${engine_name} STREQUAL "umem")

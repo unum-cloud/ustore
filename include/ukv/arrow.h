@@ -26,7 +26,7 @@ extern "C" {
 
 #include "ukv/docs.h"
 
-#if __has_include("arrow/c/abi.h") && !defined(ARROW_C_DATA_INTERFACE)
+#if !__has_include("arrow/c/abi.h") && !defined(ARROW_C_DATA_INTERFACE)
 #define ARROW_C_DATA_INTERFACE 1
 #define ARROW_C_STREAM_INTERFACE 1
 #endif
@@ -348,6 +348,11 @@ static void ukv_to_arrow_stream( //
 
     struct ArrowArrayStream*,
     ukv_arena_t*) {
+}
+
+
+static bool check_presence(ukv_octet_t const* begin, size_t idx) {
+    return *(begin + idx / CHAR_BIT) & ((ukv_octet_t)(1 << (idx % CHAR_BIT)));
 }
 
 #ifdef __cplusplus

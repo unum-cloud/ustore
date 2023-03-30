@@ -341,7 +341,7 @@ void ukv::wrap_networkx(py::module& m) {
 
     degs.def("__iter__", [](degree_view_t& degs) {
         py_graph_t& g = *degs.net_ptr.lock().get();
-        blobs_range_t members(g.index.db(), g.index.txn(), g.index);
+        blobs_range_t members(g.index.db(), g.index.txn(), 0, g.index);
         keys_stream_t stream = keys_range_t({members}).begin();
         return degrees_stream_t(std::move(stream), g, degs.weight.size() ? degs.weight.c_str() : nullptr, degs.roles);
     });
@@ -572,7 +572,7 @@ void ukv::wrap_networkx(py::module& m) {
     g.def_property_readonly(
         "nodes",
         [](py_graph_t& g) {
-            blobs_range_t members(g.index.db(), g.index.txn(), g.index);
+            blobs_range_t members(g.index.db(), g.index.txn(), 0, g.index);
             keys_range_t keys {members};
             auto range = std::make_shared<nodes_range_t>(keys, g.vertices_attrs);
             return range;

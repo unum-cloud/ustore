@@ -10,11 +10,12 @@
  */
 
 #include <mutex>
-#include <fstream>  // `std::ifstream`
-#include <charconv> // `std::from_chars`
-#include <chrono>   // `std::time_point`
-#include <cstdio>   // `std::printf`
-#include <iostream> // `std::cerr`
+#include <fstream>    // `std::ifstream`
+#include <charconv>   // `std::from_chars`
+#include <chrono>     // `std::time_point`
+#include <cstdio>     // `std::printf`
+#include <iostream>   // `std::cerr`
+#include <filesystem> // Enumerating the directory
 #include <unordered_map>
 #include <unordered_set>
 

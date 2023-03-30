@@ -94,27 +94,27 @@ void parse_args(int argc, char* argv[], settings_t& settings) {
     argparse::ArgumentParser program(argv[0]);
     program.add_argument("-gd", "--gen_dataset").default_value(true).help("Generate dataset");
     program.add_argument("-t", "--threads")
-        .default_value(int(std::thread::hardware_concurrency() / 2))
+        .default_value(std::to_string((std::thread::hardware_concurrency() / 2)))
         .help("Threads count");
-    program.add_argument("-tw", "--max_tweets_count").default_value(1'000'000).help("Maximum tweets count");
-    program.add_argument("-i", "--max_input_files").default_value(1000).help("Maximum input files count");
-    program.add_argument("-c", "--con_factor").default_value(4).help("Connectivity factor");
-    program.add_argument("-n", "--min_seconds").default_value(10).help("Minimal seconds");
-    program.add_argument("-s", "--small_batch_size").default_value(32).help("Small batch size");
-    program.add_argument("-m", "--mid_batch_size").default_value(64).help("Middle batch size");
-    program.add_argument("-b", "--big_batch_size").default_value(128).help("Big batch size");
+    program.add_argument("-tw", "--max_tweets_count").default_value("1'000'000").help("Maximum tweets count");
+    program.add_argument("-i", "--max_input_files").default_value("1000").help("Maximum input files count");
+    program.add_argument("-c", "--con_factor").default_value("4").help("Connectivity factor");
+    program.add_argument("-n", "--min_seconds").default_value("10").help("Minimal seconds");
+    program.add_argument("-s", "--small_batch_size").default_value("32").help("Small batch size");
+    program.add_argument("-m", "--mid_batch_size").default_value("64").help("Middle batch size");
+    program.add_argument("-b", "--big_batch_size").default_value("128").help("Big batch size");
 
     program.parse_known_args(argc, argv);
 
     settings.generate_dataset = program.get<bool>("gen_dataset");
-    settings.threads_count = program.get<int>("threads");
-    settings.max_tweets_count = program.get<int>("max_tweets_count");
-    settings.max_input_files = program.get<int>("max_input_files");
-    settings.connectivity_factor = program.get<int>("con_factor");
-    settings.min_seconds = program.get<int>("min_seconds");
-    settings.small_batch_size = program.get<int>("small_batch_size");
-    settings.mid_batch_size = program.get<int>("mid_batch_size");
-    settings.big_batch_size = program.get<int>("big_batch_size");
+    settings.threads_count = std::stoi(program.get("threads"));
+    settings.max_tweets_count = std::stoi(program.get("max_tweets_count"));
+    settings.max_input_files = std::stoi(program.get("max_input_files"));
+    settings.connectivity_factor = std::stoi(program.get("con_factor"));
+    settings.min_seconds = std::stoi(program.get("min_seconds"));
+    settings.small_batch_size = std::stoi(program.get("small_batch_size"));
+    settings.mid_batch_size = std::stoi(program.get("mid_batch_size"));
+    settings.big_batch_size = std::stoi(program.get("big_batch_size"));
 
     if (settings.threads_count == 0) {
         fmt::print("-threads: Zero threads count specified\n");
@@ -622,8 +622,8 @@ int main(int argc, char** argv) {
     // We divide by two, as most modern CPUs have
     // hyper-threading with two threads per core.
     settings_t settings;
-    parse_args(argc,argv,settings);
-    
+    parse_args(argc, argv, settings);
+
 #if defined(UKV_DEBUG)
     settings.max_input_files = 1;
     settings.max_tweets_count = 100'000;
