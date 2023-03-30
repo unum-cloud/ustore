@@ -884,7 +884,6 @@ void export_whole_docs( //
         json.pop_back();
 
         if (pcn == parquet_k) {
-            auto val = *iter;
             os << *iter << json.data();
             os << parquet::EndRow;
         }
@@ -950,7 +949,6 @@ void export_sub_docs( //
             ++idx;
         }
         else {
-            auto dat = *iter;
             auto str = fmt::format("{{\"_id\":{},\"doc\":{}}}\n", *iter, json.data());
             write(handle, str.data(), str.size());
         }
