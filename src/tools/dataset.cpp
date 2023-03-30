@@ -32,7 +32,7 @@
 #include <ukv/ukv.hpp>
 #include <ukv/cpp/ranges.hpp>
 #include <ukv/cpp/blobs_range.hpp>   // `keys_stream_t`
-#include <helpers/linked_memory.hpp> // `linked_memory_lock_t`
+#include <../helpers/linked_memory.hpp> // `linked_memory_lock_t`
 
 #include "dataset.h"
 
@@ -612,8 +612,7 @@ void upsert_docs(ukv_docs_import_t& c, docs_t& docs, ukv_size_t task_count) {
 
 #pragma region - Docs
 
-template <typename import_t>
-void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table, ukv_size_t& rows_count) {
+void import_parquet(ukv_docs_import_t& c, std::shared_ptr<arrow::Table>& table, ukv_size_t& rows_count) {
 
     arrow::Status status;
     arrow::MemoryPool* pool = arrow::default_memory_pool();
@@ -632,8 +631,7 @@ void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table, ukv_size_
     return_error_if_m(status.ok(), c.error, 0, status.ToString().c_str());
 }
 
-template <typename import_t>
-void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
+void import_csv(ukv_docs_import_t& c, std::shared_ptr<arrow::Table>& table) {
 
     arrow::io::IOContext io_context = arrow::io::default_io_context();
     auto maybe_input = arrow::io::ReadableFile::Open(c.paths_pattern);
@@ -845,7 +843,7 @@ void import_ndjson_docs(ukv_docs_import_t& c) {
 
 void export_whole_docs( //
     ukv_error_t* error,
-    linked_memory_lock_t arena,
+    linked_memory_lock_t& arena,
     ptr_range_gt<ukv_key_t const>& keys,
     ptr_range_gt<ukv_key_t>* keys_ptr,
     ptr_range_gt<ukv_char_t*>* docs_ptr,
@@ -894,7 +892,7 @@ void export_whole_docs( //
 
 void export_sub_docs( //
     ukv_docs_export_t& c,
-    linked_memory_lock_t arena,
+    linked_memory_lock_t& arena,
     parquet::StreamWriter* os_ptr,
     ptr_range_gt<ukv_char_t*>* docs_ptr,
     ptr_range_gt<ukv_key_t>* keys_ptr,
