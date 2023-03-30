@@ -23,9 +23,9 @@ namespace unum::ukv {
  */
 class graph_collection_t {
     ukv_database_t db_ = nullptr;
+    ukv_collection_t collection_ = ukv_collection_main_k;
     ukv_transaction_t transaction_ = nullptr;
     ukv_snapshot_t snapshot_ = {};
-    ukv_collection_t collection_ = ukv_collection_main_k;
     any_arena_t arena_;
 
   public:
@@ -35,7 +35,7 @@ class graph_collection_t {
                        ukv_transaction_t txn = nullptr,
                        ukv_snapshot_t snap = {},
                        ukv_arena_t* arena = nullptr) noexcept
-        : db_(db), transaction_(txn), snapshot_(snap), collection_(collection), arena_(db_, arena) {}
+        : db_(db), collection_(collection), transaction_(txn), snapshot_(snap), arena_(db_, arena) {}
 
     graph_collection_t(graph_collection_t&&) = default;
     graph_collection_t& operator=(graph_collection_t&&) = default;
