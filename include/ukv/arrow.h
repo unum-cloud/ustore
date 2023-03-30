@@ -26,9 +26,9 @@ extern "C" {
 
 #include "ukv/docs.h"
 
-#if __has_include("arrow/c/abi.h") && !defined(ARROW_C_DATA_INTERFACE)
-#define ARROW_C_DATA_INTERFACE 1
-#define ARROW_C_STREAM_INTERFACE 1
+#if !__has_include("arrow/c/abi.h") && !defined(ARROW_C_DATA_INTERFACE)
+#define ARROW_C_DATA_INTERFACE
+#define ARROW_C_STREAM_INTERFACE
 #endif
 
 #ifndef ARROW_C_DATA_INTERFACE
