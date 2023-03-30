@@ -31,8 +31,8 @@
 
 #include <ukv/ukv.hpp>
 #include <ukv/cpp/ranges.hpp>
-#include <ukv/cpp/blobs_range.hpp>   // `keys_stream_t`
-#include <../helpers/linked_memory.hpp> // `linked_memory_lock_t`
+#include <ukv/cpp/blobs_range.hpp>          // `keys_stream_t`
+#include <../src/helpers/linked_memory.hpp> // `linked_memory_lock_t`
 
 #include "dataset.h"
 
@@ -74,7 +74,10 @@ class arrow_visitor_t {
         fmt::format_to(std::back_inserter(json), "\"\",");
         return arrow::Status::OK();
     }
-    arrow::Status Visit(arrow::BooleanArray const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::BooleanArray const& arr) {
+        fmt::format_to(std::back_inserter(json), "true,");
+        return arrow::Status::OK();
+    }
     arrow::Status Visit(arrow::Int8Array const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::Int16Array const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::Int32Array const& arr) { return format(arr, idx); }
@@ -90,7 +93,10 @@ class arrow_visitor_t {
     arrow::Status Visit(arrow::BinaryArray const& arr) { return format_bin_str(arr, idx); }
     arrow::Status Visit(arrow::LargeStringArray const& arr) { return format_bin_str(arr, idx); }
     arrow::Status Visit(arrow::LargeBinaryArray const& arr) { return format_bin_str(arr, idx); }
-    arrow::Status Visit(arrow::FixedSizeBinaryArray const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::FixedSizeBinaryArray const& arr) {
+        fmt::format_to(std::back_inserter(json), "{},", reinterpret_cast<char const*>(arr.Value(idx)));
+        return arrow::Status::OK();
+    }
     arrow::Status Visit(arrow::Date32Array const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::Date64Array const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::Time32Array const& arr) { return format(arr, idx); }
@@ -112,8 +118,14 @@ class arrow_visitor_t {
     }
     arrow::Status Visit(arrow::MonthIntervalArray const& arr) { return format(arr, idx); }
     arrow::Status Visit(arrow::DurationArray const& arr) { return format(arr, idx); }
-    arrow::Status Visit(arrow::Decimal128Array const& arr) { return format(arr, idx); }
-    arrow::Status Visit(arrow::Decimal256Array const& arr) { return format(arr, idx); }
+    arrow::Status Visit(arrow::Decimal128Array const& arr) {
+        fmt::format_to(std::back_inserter(json), "{},", reinterpret_cast<char const*>(arr.Value(idx)));
+        return arrow::Status::OK();
+    }
+    arrow::Status Visit(arrow::Decimal256Array const& arr) {
+        fmt::format_to(std::back_inserter(json), "{},", reinterpret_cast<char const*>(arr.Value(idx)));
+        return arrow::Status::OK();
+    }
     arrow::Status Visit(arrow::ListArray const& arr) {
         arrow::VisitArrayInline(*arr.values().get(), this);
         return arrow::Status::OK();
