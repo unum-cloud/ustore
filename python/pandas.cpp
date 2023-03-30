@@ -610,6 +610,8 @@ void ukv::wrap_pandas(py::module& m) {
             offsets[size] = values.size();
 
             args.offsets_begin = {offsets.data(), sizeof(ukv_length_t)};
+            auto values_begin = reinterpret_cast<ukv_bytes_ptr_t>(values.data());
+            args.contents_begin = {&values_begin, 0};
             collection[keys_with_fields].insert(args).throw_unhandled();
         }
     });
