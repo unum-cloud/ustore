@@ -24,6 +24,7 @@ embedded_blobs_t read_attributes( //
     ukv_docs_read_t docs_read {};
     docs_read.db = collection.db();
     docs_read.error = status.member_ptr();
+    docs_read.options = ukv_option_dont_discard_memory_k;
     docs_read.transaction = collection.txn();
     docs_read.snapshot = collection.snap();
     docs_read.arena = collection.member_arena();
@@ -966,9 +967,9 @@ void ukv::wrap_networkx(py::module& m) {
         [](py_graph_t& g) {
             g.index.clear();
             if (g.vertices_attrs.db())
-                g.vertices_attrs.clear();
+                g.vertices_attrs.clear().throw_unhandled();
             if (g.relations_attrs.db())
-                g.relations_attrs.clear();
+                g.relations_attrs.clear().throw_unhandled();
         },
         "Removes both vertices and edges from the graph.");
 
