@@ -9,8 +9,8 @@
 #include <arrow/python/pyarrow.h>
 #include <parquet/arrow/writer.h>
 
-#define ARROW_C_DATA_INTERFACE 1
-#define ARROW_C_STREAM_INTERFACE 1
+#define ARROW_C_DATA_INTERFACE
+#define ARROW_C_STREAM_INTERFACE
 #include "ukv/arrow.h"
 #include "nlohmann.hpp"
 
