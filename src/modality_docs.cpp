@@ -1573,6 +1573,7 @@ void ukv_docs_write(ukv_docs_write_t* c_ptr) {
     ptr_range_gt<ukv_key_t> tape;
     if (!c.keys) {
         return_error_if_m(c.values, c.error, uninitialized_state_k, "Keys and values is uninitialized");
+        return_error_if_m(c.id_field, c.error, uninitialized_state_k, "Keys and id_field is uninitialized");
 
         tape = arena.alloc<ukv_key_t>(c.tasks_count, c.error);
         strided_iterator_gt<ukv_bytes_cptr_t const> vals {c.values, c.values_stride};
