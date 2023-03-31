@@ -136,62 +136,41 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
                           "Root isn't a directory");
 
         // Storage paths
-        return_error_if_m(config.data_directories.empty(), c.error, args_wrong_k, "Multi disk not supported");
+        return_error_if_m(config.data_directories.empty(), c.error, args_wrong_k, "Multi-disk not supported");
 
         // Engine config
         return_error_if_m(config.engine.config_url.empty(), c.error, args_wrong_k, "Doesn't support URL configs");
-        json_t js = config.engine.config;
-        if (config.engine.config.empty()) {
-            log_warning_m(
-                "Configuration is missing. "
-                "Configuration file will be used\n",
-                config_path.c_str());
 
-            stdfs::path config_path = config.engine.config_file_path;
-            stdfs::file_status config_status = stdfs::status(config_path);
+        auto fill_options = [](json_t const& js, level_options_t& options) {
+            if (js.contains("write_buffer_size"))
+                options.write_buffer_size = js["write_buffer_size"];
+            if (js.contains("max_file_size"))
+                options.max_file_size = js["max_file_size"];
+            if (js.contains("max_open_files"))
+                options.max_open_files = js["max_open_files"];
+            if (js.contains("cache_size"))
+                options.block_cache = leveldb::NewLRUCache(js["cache_size"]);
+            if (js.contains("create_if_missing"))
+                options.create_if_missing = js["create_if_missing"];
+            if (js.contains("error_if_exists"))
+                options.error_if_exists = js["error_if_exists"];
+            if (js.contains("paranoid_checks"))
+                options.paranoid_checks = js["paranoid_checks"];
+            if (js.contains("compression"))
+                if (js["compression"] == "kSnappyCompression" || js["compression"] == "snappy")
+                    options.compression = leveldb::kSnappyCompression;
+        };
 
-            if (config_status.type() == stdfs::file_type::not_found) {
-                config_path = config.engine.config_url;
-                config_status = stdfs::status(config_path);
-                log_warning_m(
-                    "Configuration file is missing under the path %s. "
-                    "Default will be used\n",
-                    config_path.c_str());
-
-                if (config_status.type() == stdfs::file_type::not_found) {
-                    log_warning_m(
-                        "Configuration url is missing under the path %s. "
-                        "Default will be used\n",
-                        config_path.c_str());
-                }
-                else {
-                    std::ifstream ifs(config_path);
-                    js = json_t::parse(ifs);
-                }
-            }
-            else {
-                std::ifstream ifs(config_path);
-                js = json_t::parse(ifs);
-            }
+        // Load from file
+        if (!config.engine.config_file_path.empty()) {
+            std::ifstream ifs(config.engine.config_file_path);
+            return_error_if_m(ifs, c.error, args_wrong_k, "Config file not found");
+            auto js = json_t::parse(ifs);
+            fill_options(js, options);
         }
-
-        if (js.contains("write_buffer_size"))
-            options.write_buffer_size = js["write_buffer_size"];
-        if (js.contains("max_file_size"))
-            options.max_file_size = js["max_file_size"];
-        if (js.contains("max_open_files"))
-            options.max_open_files = js["max_open_files"];
-        if (js.contains("cache_size"))
-            options.block_cache = leveldb::NewLRUCache(js["cache_size"]);
-        if (js.contains("create_if_missing"))
-            options.create_if_missing = js["create_if_missing"];
-        if (js.contains("error_if_exists"))
-            options.error_if_exists = js["error_if_exists"];
-        if (js.contains("paranoid_checks"))
-            options.paranoid_checks = js["paranoid_checks"];
-        if (js.contains("compression"))
-            if (js["compression"] == "kSnappyCompression" || js["compression"] == "snappy")
-                options.compression = leveldb::kSnappyCompression;
+        // Override with nested
+        if (!config.engine.config.empty())
+            fill_options(config.engine.config, options);
 
         level_db_t* db_ptr = new level_db_t;
         level_native_t* native_db = nullptr;
