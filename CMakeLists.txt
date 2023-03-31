@@ -168,7 +168,7 @@ if(${UKV_BUILD_SDK_PYTHON} OR ${UKV_BUILD_API_FLIGHT_CLIENT} OR ${UKV_BUILD_API_
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
 
-if(${UKV_BUILD_API_FLIGHT})
+if(${UKV_BUILD_API_FLIGHT_CLIENT})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
 endif()
 
@@ -187,6 +187,7 @@ endif()
 if(${UKV_BUILD_BENCHMARKS})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gbench.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/argparse.cmake")
 endif()
 
 set(UKV_ENGINE_NAMES)
@@ -259,7 +260,7 @@ if(${UKV_BUILD_API_FLIGHT_SERVER})
 
     string(CONCAT server_exe_name "ukv_flight_server_" ${engine_name})
     add_executable(${server_exe_name} src/flight_server.cpp)
-    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson arrow::flight arrow::bundled arrow::dataset arrow::arrow openssl::ssl openssl::crypto ${embedded_lib_name} ${embedded_dependencies})
+    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson arrow::flight arrow::bundled arrow::dataset arrow::arrow ssl crypto ${embedded_lib_name} ${embedded_dependencies})
     target_compile_definitions(${server_exe_name} INTERFACE UKV_ENGINE_NAME=${engine_name})
 
     if(${engine_name} STREQUAL "umem")
@@ -309,7 +310,7 @@ if(${UKV_BUILD_BENCHMARKS})
 
     string(CONCAT bench_name "bench_twitter_" ${client_lib})
     add_executable(${bench_name} benchmarks/twitter.cpp)
-    target_link_libraries(${bench_name} benchmark fmt::fmt ${client_lib} ${client_dependencies})
+    target_link_libraries(${bench_name} benchmark fmt::fmt argparse ${client_lib} ${client_dependencies})
 
     string(CONCAT bench_name "bench_tabular_graph_" ${client_lib})
     add_executable(${bench_name} benchmarks/tabular_graph.cpp)
