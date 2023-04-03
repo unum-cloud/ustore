@@ -7,7 +7,7 @@ on:
 env:
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
 
- 
+
 jobs:
 
   versioning:

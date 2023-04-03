@@ -147,87 +147,65 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
                           "Root isn't a directory");
 
         // Engine config
-
         // Recovering RocksDB isn't trivial and depends on a number of configuration parameters:
         // http://rocksdb.org/blog/2016/03/07/rocksdb-options-file.html
         // https://github.com/facebook/rocksdb/wiki/RocksDB-Options-File
-
-        return_error_if_m(config.engine.config_url.empty(), c.error, args_wrong_k,"Doesn't support URL configs");
-        json_t js = config.engine.config;
-        if (config.engine.config.empty()) {
-            log_warning_m(
-                "Configuration is missing. "
-                "Configuration file will be used\n",
-                config_path.c_str());
-
-            stdfs::path config_path = config.engine.config_file_path;
-            stdfs::file_status config_status = stdfs::status(config_path);
-
-            if (config_status.type() == stdfs::file_type::not_found) {
-                config_path = config.engine.config_url;
-                config_status = stdfs::status(config_path);
-                log_warning_m(
-                    "Configuration file is missing under the path %s. "
-                    "Default will be used\n",
-                    config_path.c_str());
-
-                if (config_status.type() == stdfs::file_type::not_found) {
-                    log_warning_m(
-                        "Configuration url is missing under the path %s. "
-                        "Default will be used\n",
-                        config_path.c_str());
-                }
-                else {
-                    std::ifstream ifs(config_path);
-                    js = json_t::parse(ifs);
-                }
-            }
-            else {
-                std::ifstream ifs(config_path);
-                js = json_t::parse(ifs);
-            }
-        }
-
         rocksdb::Options options;
         options.compression = rocksdb::kNoCompression;
         auto cf_options = rocksdb::ColumnFamilyOptions();
         std::vector<rocksdb::ColumnFamilyDescriptor> column_descriptors;
+        return_error_if_m(config.engine.config_url.empty(), c.error, args_wrong_k, "Doesn't support URL configs");
 
-        if (js.contains("DBOptions")) {
-            auto j_db = js["DBOptions"];
-            if (j_db.contains("create_if_missing"))
-                options.create_if_missing = j_db["create_if_missing"];
-            if (j_db.contains("writable_file_max_buffer_size"))
-                options.writable_file_max_buffer_size = j_db["writable_file_max_buffer_size"];
-            if (j_db.contains("max_open_files"))
-                options.max_open_files = j_db["max_open_files"];
-            if (j_db.contains("max_file_opening_threads"))
-                options.max_file_opening_threads = j_db["max_file_opening_threads"];
+        // Load from file
+        auto config_file = config.engine.config_file_path;
+        if (!config_file.empty()) {
+            status = rocksdb::LoadOptionsFromFile(config_file, rocksdb::Env::Default(), &options, &column_descriptors);
+            return_error_if_m(status.ok(), c.error, error_unknown_k, "Couldn't parse RocksDB config");
+            log_warning_m("Initializing RocksDB from config: %s\n", config_path.c_str());
+            if (options.compression != rocksdb::kNoCompression)
+                log_warning_m(
+                    "We discourage general-purpose compression in favour "
+                    "of modality-aware compression in UKV\n");
         }
+        // Override with nested
+        if (!config.engine.config.empty()) {
+            auto const& js = config.engine.config;
+            if (js.contains("DBOptions")) {
+                auto j_db = js["DBOptions"];
+                if (j_db.contains("create_if_missing"))
+                    options.create_if_missing = j_db["create_if_missing"];
+                if (j_db.contains("writable_file_max_buffer_size"))
+                    options.writable_file_max_buffer_size = j_db["writable_file_max_buffer_size"];
+                if (j_db.contains("max_open_files"))
+                    options.max_open_files = j_db["max_open_files"];
+                if (j_db.contains("max_file_opening_threads"))
+                    options.max_file_opening_threads = j_db["max_file_opening_threads"];
+            }
 
-        if (js.contains("CFOptions")) {
-            auto j_cf = js["CFOptions"];
-            if (j_cf.contains("max_write_buffer_number"))
-                cf_options.max_write_buffer_number = j_cf["max_write_buffer_number"];
-            if (j_cf.contains("write_buffer_size"))
-                cf_options.write_buffer_size = j_cf["write_buffer_size"];
-            if (j_cf.contains("target_file_size_base"))
-                cf_options.target_file_size_base = j_cf["target_file_size_base"];
-            if (j_cf.contains("max_compaction_bytes"))
-                cf_options.max_compaction_bytes = j_cf["max_compaction_bytes"];
-            if (j_cf.contains("level_compaction_dynamic_level_bytes"))
-                cf_options.level_compaction_dynamic_level_bytes = j_cf["level_compaction_dynamic_level_bytes"];
-            if (j_cf.contains("level0_stop_writes_trigger"))
-                cf_options.level0_stop_writes_trigger = j_cf["level0_stop_writes_trigger"];
-            if (j_cf.contains("target_file_size_multiplier"))
-                cf_options.target_file_size_multiplier = j_cf["target_file_size_multiplier"];
-            if (j_cf.contains("max_bytes_for_level_multiplier"))
-                cf_options.max_bytes_for_level_multiplier = j_cf["max_bytes_for_level_multiplier"];
-            if (j_cf.contains("compression"))
-                if (j_cf["compression"] != "kNoCompression")
-                    log_warning_m(
-                        "We discourage general-purpose compression in favour "
-                        "of modality-aware compression in UKV\n");
+            if (js.contains("CFOptions")) {
+                auto j_cf = js["CFOptions"];
+                if (j_cf.contains("max_write_buffer_number"))
+                    cf_options.max_write_buffer_number = j_cf["max_write_buffer_number"];
+                if (j_cf.contains("write_buffer_size"))
+                    cf_options.write_buffer_size = j_cf["write_buffer_size"];
+                if (j_cf.contains("target_file_size_base"))
+                    cf_options.target_file_size_base = j_cf["target_file_size_base"];
+                if (j_cf.contains("max_compaction_bytes"))
+                    cf_options.max_compaction_bytes = j_cf["max_compaction_bytes"];
+                if (j_cf.contains("level_compaction_dynamic_level_bytes"))
+                    cf_options.level_compaction_dynamic_level_bytes = j_cf["level_compaction_dynamic_level_bytes"];
+                if (j_cf.contains("level0_stop_writes_trigger"))
+                    cf_options.level0_stop_writes_trigger = j_cf["level0_stop_writes_trigger"];
+                if (j_cf.contains("target_file_size_multiplier"))
+                    cf_options.target_file_size_multiplier = j_cf["target_file_size_multiplier"];
+                if (j_cf.contains("max_bytes_for_level_multiplier"))
+                    cf_options.max_bytes_for_level_multiplier = j_cf["max_bytes_for_level_multiplier"];
+                if (j_cf.contains("compression"))
+                    if (j_cf["compression"] != "kNoCompression")
+                        log_warning_m(
+                            "We discourage general-purpose compression in favour "
+                            "of modality-aware compression in UKV\n");
+            }
         }
 
         rocksdb::ConfigOptions config_options;
