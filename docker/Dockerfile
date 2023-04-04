@@ -47,10 +47,10 @@ COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_umem ./umem_server
 COPY ./assets/db.config.json /var/lib/ukv/config.json
 
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_leveldb ./leveldb_server
-COPY ./assets/db.config_leveldb.json /var/lib/ukv/config.json
+COPY ./assets/db.config.json /var/lib/ukv/config.json
 
 COPY --from=builder /usr/src/ukv/build/bin/ukv_flight_server_rocksdb ./rocksdb_server
-COPY ./assets/db.config_rocksdb.json /var/lib/ukv/config.json
+COPY ./assets/db.config.json /var/lib/ukv/config.json
 
 EXPOSE 38709
 ENTRYPOINT ["/tini", "--"]
