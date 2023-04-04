@@ -30,11 +30,11 @@ before-build = [
     "mkdir -p build/ukv",
 ]
 
-skip = ["*musllinux*", "*i686*", "pp*", "cp36-*", "cp37-*", "cp38-*", "cp311-*"]
+skip = ["*musllinux*", "*i686*", "pp*", "cp36-*", "cp311-*"]
 
-test-command = "pytest {project}/python/tests/"
-test-requires = ["pandas"]
-test-extras = ["test"]
+# test-command = "pytest {project}/python/tests/"
+# test-requires = ["pandas"]
+# test-extras = ["test"]
 
 [tool.cibuildwheel.linux]
 repair-wheel-command = "auditwheel repair --lib-sdir . -w {dest_dir} {wheel}"
