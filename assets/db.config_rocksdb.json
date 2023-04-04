@@ -1,6 +1,6 @@
 {
     "version": "1.0",
-    "directory": "./tmp/main/",
+    "directory": "./tmp/ukv_embedded_rocksdb/",
     "data_directories": [
         {
             "path": "./tmp/storage/",
