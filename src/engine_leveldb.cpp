@@ -122,7 +122,6 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         options.create_if_missing = true;
 
         return_error_if_m(c.config, c.error, args_wrong_k, "Null config specified");
-
         // Load config
         config_t config;
         auto st = config_loader_t::load_from_json_string(c.config, config);
@@ -169,7 +168,6 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
             auto js = json_t::parse(ifs);
             fill_options(js, options);
         }
-        
         // Override with nested
         if (!config.engine.config.empty())
             fill_options(config.engine.config, options);
