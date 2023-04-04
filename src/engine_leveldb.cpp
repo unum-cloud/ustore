@@ -15,9 +15,10 @@
 #include <nlohmann/json.hpp>
 
 #include "ukv/db.h"
-#include "ukv/cpp/ranges_args.hpp"  // `places_arg_t`
-#include "helpers/linked_array.hpp" // `uninitialized_array_gt`
-#include "helpers/full_scan.hpp"    // `reservoir_sample_iterator`
+#include "ukv/cpp/ranges_args.hpp"   // `places_arg_t`
+#include "helpers/linked_array.hpp"  // `uninitialized_array_gt`
+#include "helpers/full_scan.hpp"     // `reservoir_sample_iterator`
+#include "helpers/config_loader.hpp" // `config_loader_t`
 
 using namespace unum::ukv;
 using namespace unum;
@@ -40,8 +41,6 @@ using level_native_t = leveldb::DB;
 using level_status_t = leveldb::Status;
 using level_options_t = leveldb::Options;
 using level_iter_uptr_t = std::unique_ptr<leveldb::Iterator>;
-
-static constexpr char const* config_name_k = "config_leveldb.json";
 
 struct key_comparator_t final : public leveldb::Comparator {
 
@@ -122,24 +121,27 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
         options.compression = leveldb::kNoCompression;
         options.create_if_missing = true;
 
-        // Check if the directory contains a config
-        stdfs::path root = c.config;
+        return_error_if_m(c.config, c.error, args_wrong_k, "Null config specified");
+        // Load config
+        config_t config;
+        auto st = config_loader_t::load_from_json_string(c.config, config);
+        return_error_if_m(st, c.error, args_wrong_k, st.message());
+
+        // Root path
+        stdfs::path root = config.directory;
         stdfs::file_status root_status = stdfs::status(root);
         return_error_if_m(root_status.type() == stdfs::file_type::directory,
                           c.error,
                           args_wrong_k,
                           "Root isn't a directory");
-        stdfs::path config_path = stdfs::path(root) / config_name_k;
-        stdfs::file_status config_status = stdfs::status(config_path);
-        if (config_status.type() == stdfs::file_type::not_found) {
-            log_warning_m(
-                "Configuration file is missing under the path %s. "
-                "Default will be used\n",
-                config_path.c_str());
-        }
-        else {
-            std::ifstream ifs(config_path.c_str());
-            json_t js = json_t::parse(ifs);
+
+        // Storage paths
+        return_error_if_m(config.data_directories.empty(), c.error, args_wrong_k, "Multi-disk not supported");
+
+        // Engine config
+        return_error_if_m(config.engine.config_url.empty(), c.error, args_wrong_k, "Doesn't support URL configs");
+
+        auto fill_options = [](json_t const& js, level_options_t& options) {
             if (js.contains("write_buffer_size"))
                 options.write_buffer_size = js["write_buffer_size"];
             if (js.contains("max_file_size"))
@@ -157,11 +159,22 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
             if (js.contains("compression"))
                 if (js["compression"] == "kSnappyCompression" || js["compression"] == "snappy")
                     options.compression = leveldb::kSnappyCompression;
+        };
+
+        // Load from file
+        if (!config.engine.config_file_path.empty()) {
+            std::ifstream ifs(config.engine.config_file_path);
+            return_error_if_m(ifs, c.error, args_wrong_k, "Config file not found");
+            auto js = json_t::parse(ifs);
+            fill_options(js, options);
         }
+        // Override with nested
+        if (!config.engine.config.empty())
+            fill_options(config.engine.config, options);
 
         level_db_t* db_ptr = new level_db_t;
         level_native_t* native_db = nullptr;
-        level_status_t status = leveldb::DB::Open(options, c.config, &native_db);
+        level_status_t status = leveldb::DB::Open(options, root, &native_db);
         if (!status.ok()) {
             *c.error = "Couldn't open LevelDB";
             return;

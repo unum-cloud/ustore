@@ -154,25 +154,32 @@ setup(
     description='Python bindings for Unum\'s Universal Key-Value store.',
     long_description=long_description,
     long_description_content_type='text/markdown',
+    license='Apache-2.0',
+
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
+
+        'Natural Language :: English',
         'Intended Audience :: Developers',
         'Intended Audience :: Information Technology',
         'License :: OSI Approved :: Apache Software License',
-        'Natural Language :: English',
+
+        'Operating System :: Unix',
         'Operating System :: POSIX',
         'Operating System :: POSIX :: Linux',
+
         'Programming Language :: C',
         'Programming Language :: C++',
-        'Programming Language :: Python :: 3 :: Only',
         'Programming Language :: Python :: Implementation :: CPython',
+        'Programming Language :: Python :: 3 :: Only',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+
         'Topic :: Database',
-        # More classifiers to come later:
-        # https://pypi.org/classifiers/
-        # 'Environment :: GPU',
-        # 'Framework :: Apache Airflow :: Provider',
-        # 'Framework :: IPython',
+        'Topic :: Database :: Database Engines/Servers',
+        'Topic :: Database :: Front-Ends',
     ],
+
     ext_modules=[
         CMakeExtension('ukv.umem'),
         CMakeExtension('ukv.rocksdb'),
@@ -188,5 +195,5 @@ setup(
         'pyarrow>=10.0.0,<11'
     ],
     extras_require={'test': 'pytest'},
-    python_requires='>=3.7',
+    python_requires='>=3.9',
 )

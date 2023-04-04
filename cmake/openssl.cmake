@@ -1,3 +1,5 @@
+include(ExternalProject)
+
 set(OPENSSL_SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/openssl-src)
 set(OPENSSL_INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/openssl)
 set(OPENSSL_INCLUDE_DIR ${OPENSSL_INSTALL_DIR}/include)
@@ -8,9 +10,9 @@ ExternalProject_Add(
   GIT_REPOSITORY https://github.com/openssl/openssl.git
   GIT_TAG openssl-3.1.0
   CONFIGURE_COMMAND
-    ${OPENSSL_CONFIGURE_COMMAND}
-    --prefix=${OPENSSL_INSTALL_DIR}
-    --openssldir=${OPENSSL_INSTALL_DIR}
+  ${OPENSSL_CONFIGURE_COMMAND}
+  --prefix=${OPENSSL_INSTALL_DIR}
+  --openssldir=${OPENSSL_INSTALL_DIR}
   BUILD_COMMAND make
   TEST_COMMAND ""
   INSTALL_COMMAND make install

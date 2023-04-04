@@ -10,10 +10,12 @@
  */
 
 #include <mutex>
-#include <charconv> // `std::from_chars`
-#include <chrono>   // `std::time_point`
-#include <cstdio>   // `std::printf`
-#include <iostream> // `std::cerr`
+#include <fstream>    // `std::ifstream`
+#include <charconv>   // `std::from_chars`
+#include <chrono>     // `std::time_point`
+#include <cstdio>     // `std::printf`
+#include <iostream>   // `std::cerr`
+#include <filesystem> // Enumerating the directory
 #include <unordered_map>
 #include <unordered_set>
 
@@ -28,6 +30,8 @@
 
 using namespace unum::ukv;
 using namespace unum;
+
+namespace stdfs = std::filesystem;
 
 using sys_clock_t = std::chrono::system_clock;
 using sys_time_t = std::chrono::time_point<sys_clock_t>;
@@ -1444,26 +1448,44 @@ int main(int argc, char* argv[]) {
 
     using namespace clipp;
 
+    std::string config_path = "/var/lib/ukv/config.json";
     int port = 38709;
-    std::string config;
     bool quiet = false;
-
-#if defined(UKV_ENGINE_IS_LEVELDB)
-    config = "/var/lib/ukv/leveldb/";
-#elif defined(UKV_ENGINE_IS_ROCKSDB)
-    config = "/var/lib/ukv/rocksdb/";
-#elif defined(UKV_ENGINE_IS_UDISK)
-    config = "/var/lib/ukv/udisk/";
-#endif
+    bool help = false;
 
     auto cli = ( //
-        option("-d", "--dir").set(config).doc("Path to primary directory, potentially containing a configuration file"),
-        option("-p", "--port").set(port).doc("Port to use for connection"),
-        option("-q", "--quiet").set(quiet).doc("Silence outputs"));
+        (option("--config") & value("path", config_path))
+            .doc("Configuration file path. The default configuration file path is " + config_path),
+        (option("-p", "--port") & value("port", port))
+            .doc("Port to use for connection. The default connection port is 38709"),
+        option("-q", "--quiet").set(quiet).doc("Silence outputs"),
+        option("-h", "--help").set(help).doc("Print this help information on this tool and exit"));
 
     if (!parse(argc, argv, cli)) {
         std::cerr << make_man_page(cli, argv[0]);
         exit(1);
+    }
+    if (help) {
+        std::cout << make_man_page(cli, argv[0]);
+        exit(0);
+    }
+
+    std::string config {};
+    stdfs::file_status config_status = stdfs::status(config_path);
+    if (config_status.type() == stdfs::file_type::not_found) {
+        config.assign(R"({
+        "version": "1.0",
+        "directory": "./tmp/ukv/",
+        "data_directories": [],
+        "engine": {
+            "config_url": "",
+            "config_file_path": "",
+            "config": {}}
+        })");
+    }
+    else {
+        std::ifstream ifs(config_path);
+        config = std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     }
 
     return run_server(config.c_str(), port, quiet).ok() ? EXIT_SUCCESS : EXIT_FAILURE;
