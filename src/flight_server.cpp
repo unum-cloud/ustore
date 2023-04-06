@@ -15,7 +15,7 @@
 #include <chrono>     // `std::time_point`
 #include <cstdio>     // `std::printf`
 #include <iostream>   // `std::cerr`
-#include <filesystem> // Enumerating the directory
+#include <filesystem> // Enumerating and creating directories
 #include <unordered_map>
 #include <unordered_set>
 
@@ -1470,9 +1470,16 @@ int main(int argc, char* argv[]) {
         exit(0);
     }
 
+    // Clearing the config_path input argument
+    if (!config_path.empty()) {
+        if (config_path.front() == '=' || config_path.front() == ' ')
+            config_path = config_path.substr(1, config_path.length() - 1);
+    }
+
     std::string config {};
     stdfs::file_status config_status = stdfs::status(config_path);
     if (config_status.type() == stdfs::file_type::not_found) {
+        stdfs::create_directories("./tmp/ukv/");
         config.assign(R"({
         "version": "1.0",
         "directory": "./tmp/ukv/",
@@ -1480,8 +1487,8 @@ int main(int argc, char* argv[]) {
         "engine": {
             "config_url": "",
             "config_file_path": "",
-            "config": {}}
-        })");
+            "config": {}
+        }})");
     }
     else {
         std::ifstream ifs(config_path);
