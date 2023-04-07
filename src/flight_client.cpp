@@ -1250,8 +1250,8 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     ar_status = result->writer->Begin(batch_ptr->schema());
     return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing schema");
 
-    auto table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
-    ar_status = result->writer->WriteTable(*table);
+    auto input_table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
+    ar_status = result->writer->WriteTable(*input_table);
     return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing request");
 
     ar_status = result->writer->DoneWriting();
@@ -1261,15 +1261,14 @@ void ukv_sample(ukv_sample_t* c_ptr) {
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c, &pool);
-    return_error_if_m(ar_status.ok(), c.error, network_k, "No response");
+    auto maybe_table = result->reader->ToTable();
+    return_error_if_m(maybe_table.ok(), c.error, error_unknown_k, "Failed to create table");
+    auto table = maybe_table.ValueUnsafe();
 
-    // Convert the responses in Arrow C form
-    return_error_if_m(output_schema_c.n_children == 1, c.error, error_unknown_k, "Expecting one column");
-
-    // Export the results into out expected form
-    auto offs_ptr = (ukv_length_t*)output_array_c.children[0]->buffers[1];
-    auto data_ptr = (ukv_key_t*)output_array_c.children[0]->children[0]->buffers[1];
+    auto keys_array = std::static_pointer_cast<ar::NumericArray<ar::Int32Type>>(table->column(0)->chunk(0));
+    auto offs_array = std::static_pointer_cast<ar::NumericArray<ar::UInt32Type>>(table->column(1)->chunk(0));
+    auto data_ptr = (ukv_key_t*)keys_array->raw_values();
+    auto offs_ptr = (ukv_length_t*)offs_array->raw_values();
 
     if (c.offsets)
         *c.offsets = offs_ptr;
@@ -1279,8 +1278,10 @@ void ukv_sample(ukv_sample_t* c_ptr) {
         auto lens = *c.counts = arena.alloc<ukv_length_t>(places.count, c.error).begin();
         return_if_error_m(c.error);
         for (std::size_t i = 0; i != places.count; ++i)
-            lens[i] = offs_ptr[i + 1] - offs_ptr[i];
+            lens[i] = offs_ptr ? offs_ptr[i + 1] - offs_ptr[i] : 0;
     }
+
+    db.readers.push_back(std::move(result->reader));
 }
 
 void ukv_measure(ukv_measure_t* c_ptr) {
