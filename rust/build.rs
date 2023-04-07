@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .output()
         .expect("Could not spawn a `cmake` process");
 
-    println!("CMake: {}", cmd.status);
+    println!("CMake Output: {}", cmd.status);
     std::io::stdout().write_all(&cmd.stdout)?;
     std::io::stderr().write_all(&cmd.stderr)?;
 
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .output()
         .expect("Could not spawn a `make` process");
 
-    println!("Make: {}", cmd.status);
+    println!("Make Output: {}", cmd.status);
     std::io::stdout().write_all(&cmd.stdout)?;
     std::io::stderr().write_all(&cmd.stderr)?;
 
@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .output()
         .expect("Could not spawn a `gcc` expansion process");
 
-    println!("GCC: {}", cmd.status);
+    println!("GCC Expansion Output: {}", cmd.status);
     std::io::stdout().write_all(&cmd.stdout)?;
     std::io::stderr().write_all(&cmd.stderr)?;
 
