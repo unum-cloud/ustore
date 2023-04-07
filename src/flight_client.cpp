@@ -14,6 +14,9 @@
 #include <fmt/core.h> // `fmt::format_to`
 #include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
+#include <arrow/array/array_nested.h>
+#include <arrow/array/array_binary.h>
+#include <arrow/array/array_primitive.h>
 
 #include "ukv/db.h"
 #include "ukv/arrow.h"
@@ -40,6 +43,7 @@ using namespace unum;
 
 struct rpc_client_t {
     std::unique_ptr<arf::FlightClient> flight;
+    std::vector<std::unique_ptr<arf::FlightStreamReader>> readers;
     linked_memory_t arena;
     std::mutex arena_lock;
 };
@@ -94,11 +98,13 @@ void ukv_read(ukv_read_t* c_ptr) {
 
     ukv_read_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    if (!(c.options & ukv_option_dont_discard_memory_k))
+        db.readers.clear();
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> keys {c.keys, c.keys_stride};
     places_arg_t places {collections, keys, {}, c.tasks_count};
@@ -198,8 +204,8 @@ void ukv_read(ukv_read_t* c_ptr) {
     ar_status = result->writer->Begin(batch_ptr->schema());
     return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing schema");
 
-    auto table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
-    ar_status = result->writer->WriteTable(*table);
+    auto input_table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
+    ar_status = result->writer->WriteTable(*input_table);
     return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing request");
 
     ar_status = result->writer->DoneWriting();
@@ -209,33 +215,32 @@ void ukv_read(ukv_read_t* c_ptr) {
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c, &pool);
-    return_error_if_m(ar_status.ok(), c.error, network_k, "No response");
+    auto maybe_table = result->reader->ToTable();
+    return_error_if_m(maybe_table.ok(), c.error, error_unknown_k, "Failed to create table");
+    auto table = maybe_table.ValueUnsafe();
+    return_error_if_m(table->num_columns() == 1, c.error, error_unknown_k, "Expecting one column");
 
-    // Convert the responses in Arrow C form
-    return_error_if_m(output_schema_c.n_children == 1, c.error, error_unknown_k, "Expecting one column");
-
-    // Export the results into out expected form
     if (request_only_presences) {
-        *c.presences = (ukv_octet_t*)output_array_c.children[0]->buffers[1];
+        auto array = std::static_pointer_cast<ar::NumericArray<ar::UInt8Type>>(table->column(0)->chunk(0));
+        *c.presences = (ukv_octet_t*)array->raw_values();
     }
     else if (request_only_lengths) {
-        auto presences_ptr = (ukv_octet_t*)output_array_c.children[0]->buffers[0];
-        auto lens_ptr = (ukv_length_t*)output_array_c.children[0]->buffers[1];
+        auto array = std::static_pointer_cast<ar::BinaryArray>(table->column(0)->chunk(0));
+        auto presences_ptr = (ukv_octet_t*)array->null_bitmap_data();
+        auto lens_ptr = (ukv_length_t*)array->value_offsets()->data();
         if (c.lengths)
-            *c.lengths = presences_ptr //
-                             ? arrow_replace_missing_scalars(presences_ptr,
-                                                             lens_ptr,
-                                                             output_array_c.length,
-                                                             ukv_length_missing_k)
-                             : lens_ptr;
+            *c.lengths =
+                presences_ptr //
+                    ? arrow_replace_missing_scalars(presences_ptr, lens_ptr, table->num_rows(), ukv_length_missing_k)
+                    : lens_ptr;
         if (c.presences)
             *c.presences = presences_ptr;
     }
     else {
-        auto presences_ptr = (ukv_octet_t*)output_array_c.children[0]->buffers[0];
-        auto offs_ptr = (ukv_length_t*)output_array_c.children[0]->buffers[1];
-        auto data_ptr = (ukv_bytes_ptr_t)output_array_c.children[0]->buffers[2];
+        auto array = std::static_pointer_cast<ar::BinaryArray>(table->column(0)->chunk(0));
+        auto presences_ptr = (ukv_octet_t*)array->null_bitmap_data();
+        auto offs_ptr = (ukv_length_t*)array->value_offsets()->data();
+        auto data_ptr = (ukv_bytes_ptr_t)array->value_data()->data();
 
         if (c.presences)
             *c.presences = presences_ptr;
@@ -258,6 +263,8 @@ void ukv_read(ukv_read_t* c_ptr) {
             }
         }
     }
+
+    db.readers.push_back(std::move(result->reader));
 }
 
 void ukv_write(ukv_write_t* c_ptr) {
@@ -602,11 +609,13 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
 
     ukv_paths_match_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    if (!(c.options & ukv_option_dont_discard_memory_k))
+        db.readers.clear();
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_length_t const> count_limits {c.match_counts_limits, c.match_counts_limits_stride};
 
@@ -767,8 +776,8 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     ar_status = result->writer->Begin(batch_ptr->schema());
     return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing schema");
 
-    auto table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
-    ar_status = result->writer->WriteTable(*table);
+    auto input_table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
+    ar_status = result->writer->WriteTable(*input_table);
     return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing request");
 
     ar_status = result->writer->DoneWriting();
@@ -778,35 +787,39 @@ void ukv_paths_match(ukv_paths_match_t* c_ptr) {
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c, &pool);
-    return_error_if_m(ar_status.ok(), c.error, network_k, "No response");
+    auto maybe_table = result->reader->ToTable();
+    return_error_if_m(maybe_table.ok(), c.error, error_unknown_k, "Failed to create table");
+    auto table = maybe_table.ValueUnsafe();
+    return_error_if_m(table->num_columns() >= 1, c.error, error_unknown_k, "Expecting one or two columns");
 
-    // Convert the responses in Arrow C form
-    return_error_if_m(output_schema_c.n_children >= 1, c.error, error_unknown_k, "Expecting one or two columns");
-
-    // Export the results into out expected form
-    *c.match_counts = (ukv_length_t*)output_array_c.children[0]->buffers[1];
+    auto array = std::static_pointer_cast<ar::NumericArray<ar::UInt32Type>>(table->column(0)->chunk(0));
+    *c.match_counts = (ukv_length_t*)array->raw_values();
     if (!request_only_counts) {
-        auto presences_ptr = (ukv_octet_t*)output_array_c.children[1]->buffers[0];
-        auto offs_ptr = (ukv_length_t*)output_array_c.children[1]->buffers[1];
-        auto data_ptr = (ukv_bytes_ptr_t)output_array_c.children[1]->buffers[2];
+        auto array = std::static_pointer_cast<ar::BinaryArray>(table->column(1)->chunk(0));
+        auto presences_ptr = (ukv_octet_t*)array->null_bitmap_data();
+        auto offs_ptr = (ukv_length_t*)array->value_offsets()->data();
+        auto data_ptr = (ukv_bytes_ptr_t)array->value_data()->data();
 
         if (c.paths_offsets)
             *c.paths_offsets = offs_ptr;
         if (c.paths_strings)
             *c.paths_strings = reinterpret_cast<ukv_char_t*>(data_ptr);
     }
+
+    db.readers.push_back(std::move(result->reader));
 }
 
 void ukv_paths_read(ukv_paths_read_t* c_ptr) {
 
     ukv_paths_read_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    if (!(c.options & ukv_option_dont_discard_memory_k))
+        db.readers.clear();
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_length_t const> path_offs {c.paths_offsets, c.paths_offsets_stride};
     strided_iterator_gt<ukv_length_t const> path_lens {c.paths_lengths, c.paths_lengths_stride};
@@ -918,8 +931,8 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     ar_status = result->writer->Begin(batch_ptr->schema());
     return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing schema");
 
-    auto table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
-    ar_status = result->writer->WriteTable(*table);
+    auto input_table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
+    ar_status = result->writer->WriteTable(*input_table);
     return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing request");
 
     ar_status = result->writer->DoneWriting();
@@ -929,33 +942,32 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c, &pool);
-    return_error_if_m(ar_status.ok(), c.error, network_k, "No response");
+    auto maybe_table = result->reader->ToTable();
+    return_error_if_m(maybe_table.ok(), c.error, error_unknown_k, "Failed to create table");
+    auto table = maybe_table.ValueUnsafe();
 
-    // Convert the responses in Arrow C form
-    return_error_if_m(output_schema_c.n_children == 1, c.error, error_unknown_k, "Expecting one column");
-
-    // Export the results into out expected form
     if (request_only_presences) {
-        *c.presences = (ukv_octet_t*)output_array_c.children[0]->buffers[1];
+        auto array = std::static_pointer_cast<ar::NumericArray<ar::UInt8Type>>(table->column(0)->chunk(0));
+        *c.presences = (ukv_octet_t*)array->raw_values();
     }
     else if (request_only_lengths) {
-        auto presences_ptr = (ukv_octet_t*)output_array_c.children[0]->buffers[0];
-        auto lens_ptr = (ukv_length_t*)output_array_c.children[0]->buffers[1];
+        auto array = std::static_pointer_cast<ar::BinaryArray>(table->column(0)->chunk(0));
+        auto presences_ptr = (ukv_octet_t*)array->null_bitmap_data();
+        auto lens_ptr = (ukv_length_t*)array->value_offsets()->data();
+
         if (c.lengths)
-            *c.lengths = presences_ptr //
-                             ? arrow_replace_missing_scalars(presences_ptr,
-                                                             lens_ptr,
-                                                             output_array_c.length,
-                                                             ukv_length_missing_k)
-                             : lens_ptr;
+            *c.lengths =
+                presences_ptr //
+                    ? arrow_replace_missing_scalars(presences_ptr, lens_ptr, table->num_rows(), ukv_length_missing_k)
+                    : lens_ptr;
         if (c.presences)
             *c.presences = presences_ptr;
     }
     else {
-        auto presences_ptr = (ukv_octet_t*)output_array_c.children[0]->buffers[0];
-        auto offs_ptr = (ukv_length_t*)output_array_c.children[0]->buffers[1];
-        auto data_ptr = (ukv_bytes_ptr_t)output_array_c.children[0]->buffers[2];
+        auto array = std::static_pointer_cast<ar::BinaryArray>(table->column(0)->chunk(0));
+        auto presences_ptr = (ukv_octet_t*)array->null_bitmap_data();
+        auto offs_ptr = (ukv_length_t*)array->value_offsets()->data();
+        auto data_ptr = (ukv_bytes_ptr_t)array->value_data()->data();
 
         if (c.presences)
             *c.presences = presences_ptr;
@@ -978,17 +990,21 @@ void ukv_paths_read(ukv_paths_read_t* c_ptr) {
             }
         }
     }
+
+    db.readers.push_back(std::move(result->reader));
 }
 
 void ukv_scan(ukv_scan_t* c_ptr) {
 
     ukv_scan_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    if (!(c.options & ukv_option_dont_discard_memory_k))
+        db.readers.clear();
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_key_t const> start_keys {c.start_keys, c.start_keys_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
@@ -1101,8 +1117,8 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     ar_status = result->writer->Begin(batch_ptr->schema());
     return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing schema");
 
-    auto table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
-    ar_status = result->writer->WriteTable(*table);
+    auto input_table = ar::Table::Make(batch_ptr->schema(), batch_ptr->columns(), static_cast<int64_t>(places.size()));
+    ar_status = result->writer->WriteTable(*input_table);
     return_error_if_m(ar_status.ok(), c.error, error_unknown_k, "Serializing request");
 
     ar_status = result->writer->DoneWriting();
@@ -1112,18 +1128,14 @@ void ukv_scan(ukv_scan_t* c_ptr) {
     // Requesting `ToTable` might be more efficient than concatenating and
     // reallocating directly from our arena, as the underlying Arrow implementation
     // may know the length of the entire dataset.
-    ar_status = unpack_table(result->reader->ToTable(), output_schema_c, output_array_c, &pool);
-    return_error_if_m(ar_status.ok(), c.error, network_k, "No response");
+    auto maybe_table = result->reader->ToTable();
+    return_error_if_m(maybe_table.ok(), c.error, error_unknown_k, "Failed to create table");
+    auto table = maybe_table.ValueUnsafe();
 
-    // Convert the responses in Arrow C form
-    return_error_if_m(output_schema_c.n_children == 1, c.error, error_unknown_k, "Expecting one column");
-    return_error_if_m(output_schema_c.children[0]->n_children == 1,
-                      c.error,
-                      error_unknown_k,
-                      "Expecting one sub-column");
-
-    auto offs_ptr = (ukv_length_t*)output_array_c.children[0]->buffers[1];
-    auto data_ptr = (ukv_key_t*)output_array_c.children[0]->children[0]->buffers[1];
+    auto keys_array = std::static_pointer_cast<ar::NumericArray<ar::Int32Type>>(table->column(0)->chunk(0));
+    auto offs_array = std::static_pointer_cast<ar::NumericArray<ar::UInt32Type>>(table->column(1)->chunk(0));
+    auto data_ptr = (ukv_key_t*)keys_array->raw_values();
+    auto offs_ptr = (ukv_length_t*)offs_array->raw_values();
 
     if (c.offsets)
         *c.offsets = offs_ptr;
@@ -1133,8 +1145,10 @@ void ukv_scan(ukv_scan_t* c_ptr) {
         auto lens = *c.counts = arena.alloc<ukv_length_t>(places.count, c.error).begin();
         return_if_error_m(c.error);
         for (std::size_t i = 0; i != places.count; ++i)
-            lens[i] = offs_ptr[i + 1] - offs_ptr[i];
+            lens[i] = offs_ptr ? offs_ptr[i + 1] - offs_ptr[i] : 0;
     }
+
+    db.readers.push_back(std::move(result->reader));
 }
 
 void ukv_sample(ukv_sample_t* c_ptr) {
@@ -1350,6 +1364,9 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
 
     ukv_collection_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    if (!(c.options & ukv_option_dont_discard_memory_k))
+        db.readers.clear();
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
@@ -1358,37 +1375,37 @@ void ukv_collection_list(ukv_collection_list_t* c_ptr) {
     arrow_mem_pool_t pool(arena);
     arf::FlightCallOptions options = arrow_call_options(pool);
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
-
     arf::Ticket ticket {kFlightListCols};
     if (c.transaction)
         fmt::format_to(std::back_inserter(ticket.ticket),
                        "?{}=0x{:0>16x}",
                        kParamTransactionID,
                        std::uintptr_t(c.transaction));
-    ar::Result<std::unique_ptr<arf::FlightStreamReader>> maybe_stream = db.flight->DoGet(options, ticket);
+
+    auto maybe_stream = db.flight->DoGet(options, ticket);
     return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
-
     auto& stream_ptr = maybe_stream.ValueUnsafe();
-    ar::Result<std::shared_ptr<ar::Table>> maybe_table = stream_ptr->ToTable();
 
-    ArrowSchema schema_c;
-    ArrowArray batch_c;
-    ar_status = unpack_table(maybe_table, schema_c, batch_c, &pool);
-    return_error_if_m(ar_status.ok(), c.error, args_combo_k, "Failed to unpack list of columns");
-
-    auto ids_column_idx = column_idx(schema_c, kArgCols);
-    auto names_column_idx = column_idx(schema_c, kArgNames);
-    return_error_if_m(ids_column_idx && names_column_idx, c.error, args_combo_k, "Expecting two columns");
+    auto maybe_table = stream_ptr->ToTable();
+    return_error_if_m(maybe_table.ok(), c.error, error_unknown_k, "Failed to create table");
+    auto table = maybe_table.ValueUnsafe();
 
     if (c.count)
-        *c.count = static_cast<ukv_size_t>(batch_c.length);
-    if (c.ids)
-        *c.ids = (ukv_collection_t*)batch_c.children[*ids_column_idx]->buffers[1];
-    if (c.offsets)
-        *c.offsets = (ukv_length_t*)batch_c.children[*names_column_idx]->buffers[1];
-    if (c.names)
-        *c.names = (ukv_str_span_t)batch_c.children[*names_column_idx]->buffers[2];
+        *c.count = static_cast<ukv_size_t>(table->num_rows());
+    if (c.names) {
+        auto array = std::static_pointer_cast<ar::BinaryArray>(table->column(1)->chunk(0));
+        return_error_if_m(table->column(1)->num_chunks() == 1, c.error, network_k, "Expected one chunk");
+        *c.names = (ukv_str_span_t)array->value_data()->data();
+        if (c.offsets)
+            *c.offsets = (ukv_length_t*)array->value_offsets()->data();
+    }
+    if (c.ids) {
+        auto array = std::static_pointer_cast<ar::NumericArray<ar::Int64Type>>(table->column(0)->chunk(0));
+        return_error_if_m(table->column(0)->num_chunks() == 1, c.error, network_k, "Expected one chunk");
+        *c.ids = (ukv_collection_t*)array->raw_values();
+    }
+
+    db.readers.push_back(std::move(stream_ptr));
 }
 
 void ukv_database_control(ukv_database_control_t* c_ptr) {
