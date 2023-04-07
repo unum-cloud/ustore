@@ -14,7 +14,6 @@
 #include <fmt/core.h> // `fmt::format_to`
 #include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
-#include <arrow/array/array_nested.h>
 #include <arrow/array/array_binary.h>
 #include <arrow/array/array_primitive.h>
 
