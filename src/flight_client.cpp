@@ -1155,11 +1155,13 @@ void ukv_sample(ukv_sample_t* c_ptr) {
 
     ukv_sample_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    if (!(c.options & ukv_option_dont_discard_memory_k))
+        db.readers.clear();
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
     strided_iterator_gt<ukv_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ukv_length_t const> limits {c.count_limits, c.count_limits_stride};
 
