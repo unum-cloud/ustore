@@ -1390,6 +1390,9 @@ class UKVService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
+            if (count == 0)
+                return ar::Status::OK();
+
             // Pack two columns into a Table
             ArrowSchema schema_c;
             ArrowArray array_c;
