@@ -53,7 +53,9 @@ jobs:
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v2
       - name: Install dependencies
-        run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery
+        run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery
+      - name: Clone Theme
+        run: git clone https://github.com/unum-cloud/www.unum.cloud-furo && cd www.unum.cloud-furo && pip install . && cd ../
       - name: Install UKV from PyPi
         run: pip install ukv
       - name: Fetch GoLang repo
