@@ -36,10 +36,6 @@ namespace stdfs = std::filesystem;
 using sys_clock_t = std::chrono::system_clock;
 using sys_time_t = std::chrono::time_point<sys_clock_t>;
 
-/// This is the "Arrow way" of dealing with empty values in the last buffer.
-/// https://github.com/apache/arrow/blob/2078af7c710d688c14313b9486b99c981550a7b7/cpp/src/arrow/memory_pool_internal.h#L34
-static std::int64_t const zero_size_data_k[1] = {0};
-
 inline static arf::ActionType const kActionColOpen {kFlightColCreate, "Find a collection descriptor by name."};
 inline static arf::ActionType const kActionColDrop {kFlightColDrop, "Delete a named collection."};
 inline static arf::ActionType const kActionSnapOpen {kFlightSnapCreate, "Find a snapshot descriptor by name."};
@@ -1074,19 +1070,32 @@ class UKVService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            ukv_to_arrow_schema(tasks_count, 1, &output_schema_c, &output_batch_c, status.member_ptr());
+            ukv_to_arrow_schema(found_offsets[tasks_count], 2, &output_schema_c, &output_batch_c, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            ukv_to_arrow_list( //
-                tasks_count,
+            ukv_to_arrow_column( //
+                found_offsets[tasks_count],
                 kArgKeys.c_str(),
                 ukv_doc_field<ukv_key_t>(),
                 nullptr,
-                found_offsets,
+                nullptr,
                 found_keys,
                 output_schema_c.children[0],
                 output_batch_c.children[0],
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ukv_to_arrow_column( //
+                found_offsets[tasks_count],
+                "offsets",
+                ukv_doc_field<ukv_key_t>(),
+                nullptr,
+                nullptr,
+                found_offsets,
+                output_schema_c.children[1],
+                output_batch_c.children[1],
                 status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
@@ -1125,22 +1134,33 @@ class UKVService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            ukv_to_arrow_schema(tasks_count, 1, &output_schema_c, &output_batch_c, status.member_ptr());
+            ukv_to_arrow_schema(found_offsets[tasks_count], 2, &output_schema_c, &output_batch_c, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            ukv_to_arrow_list( //
-                tasks_count,
+            ukv_to_arrow_column( //
+                found_offsets[tasks_count],
                 kArgKeys.c_str(),
                 ukv_doc_field<ukv_key_t>(),
                 nullptr,
-                found_offsets,
+                nullptr,
                 found_keys,
                 output_schema_c.children[0],
                 output_batch_c.children[0],
                 status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
+
+            ukv_to_arrow_column( //
+                found_offsets[tasks_count],
+                "offsets",
+                ukv_doc_field<ukv_key_t>(),
+                nullptr,
+                nullptr,
+                found_offsets,
+                output_schema_c.children[1],
+                output_batch_c.children[1],
+                status.member_ptr());
         }
 
         if (is_empty_values)
@@ -1435,6 +1455,15 @@ ar::Status run_server(ukv_str_view_t config, int port, bool quiet) {
 
     arf::Location server_location = arf::Location::ForGrpcTcp("0.0.0.0", port).ValueUnsafe();
     arf::FlightServerOptions options(server_location);
+
+    status_t status;
+    ukv_arena_t c_arena(db);
+    linked_memory_lock_t arena = linked_memory(&c_arena, ukv_options_default_k, status.member_ptr());
+    if (!status)
+        return ar::Status::ExecutionError(status.message());
+    arrow_mem_pool_t pool(arena);
+    options.memory_manager = ar::CPUDevice::memory_manager(&pool);
+
     auto server = std::make_unique<UKVService>(std::move(db));
     ARROW_RETURN_NOT_OK(server->Init(options));
     if (!quiet)
