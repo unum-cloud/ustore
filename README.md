@@ -6,17 +6,17 @@ Bringing Zero-Copy Semantics into Storage<br/>
 <br/>
 
 <p align="center">
-<a href="https://www.youtube.com/watch?v=ybWeUf_hC7o"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/youtube.svg" alt="Youtube"></a>
+<a href="https://www.youtube.com/watch?v=ybWeUf_hC7o"><img height="25" width="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/youtube.svg" alt="Youtube"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://discord.gg/4mxGrenbNt"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/discord.svg" alt="Discord"></a>
+<a href="https://discord.gg/4mxGrenbNt"><img height="25" width="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/discord.svg" alt="Discord"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://www.linkedin.com/company/unum-cloud/"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/linkedin.svg" alt="LinkedIn"></a>
+<a href="https://www.linkedin.com/company/unum-cloud/"><img height="25" width="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/linkedin.svg" alt="LinkedIn"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://twitter.com/unum_cloud"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/twitter.svg" alt="Twitter"></a>
+<a href="https://twitter.com/unum_cloud"><img height="25" width="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/twitter.svg" alt="Twitter"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://unum.cloud/post"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/blog.svg" alt="Blog"></a>
+<a href="https://unum.cloud/post"><img height="25" width="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/blog.svg" alt="Blog"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://github.com/unum-cloud/ukv"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/github.svg" alt="GitHub"></a>
+<a href="https://github.com/unum-cloud/ukv"><img height="25" width="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/github.svg" alt="GitHub"></a>
 </p>
 
 <div align="center">
@@ -293,19 +293,19 @@ As we know, people use different languages for different purposes.
 Some C-level functionality isn't implemented for some languages.
 Either because there was no demand for it, or as we haven't gotten to it yet.
 
-| Name             | Transact | Collections | Batches | Docs  | Graphs | Copies |
-| :--------------- | :------: | :---------: | :-----: | :---: | :----: | :----: |
-| C Standard       |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |   0    |
-|                  |          |             |         |       |        |        |
-| C++ SDK          |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |   0    |
-| Python SDK       |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |  0-1   |
-| GoLang SDK       |    ✓     |      ✓      |    ✓    |   ✗   |   ✗    |   1    |
-| Java SDK         |    ✓     |      ✓      |    ✗    |   ✗   |   ✗    |   1    |
-|                  |          |             |         |       |        |        |
-| Arrow Flight API |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |  0-2   |
+| Name             | Transact | Collections | Batches | Docs | Graphs | Copies |
+| :--------------- | :------: | :---------: | :-----: | :--: | :----: | :----: |
+| C Standard       |    ✓     |      ✓      |    ✓    |  ✓   |   ✓    |   0    |
+|                  |          |             |         |      |        |        |
+| C++ SDK          |    ✓     |      ✓      |    ✓    |  ✓   |   ✓    |   0    |
+| Python SDK       |    ✓     |      ✓      |    ✓    |  ✓   |   ✓    |  0-1   |
+| GoLang SDK       |    ✓     |      ✓      |    ✓    |  ✗   |   ✗    |   1    |
+| Java SDK         |    ✓     |      ✓      |    ✗    |  ✗   |   ✗    |   1    |
+|                  |          |             |         |      |        |        |
+| Arrow Flight API |    ✓     |      ✓      |    ✓    |  ✓   |   ✓    |  0-2   |
 
 Some frontends here have entire ecosystems around them!
-[Apache Arrow Flight][flight] API, for instance, has its own bindings for  C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
+[Apache Arrow Flight][flight] API, for instance, has its own bindings for C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
 
 ![UKV: Frontends](https://github.com/unum-cloud/ukv/raw/main/assets/charts/Arrow.png)
 
@@ -472,11 +472,9 @@ Thank you!
 [ukv-queues]: https://github.com/unum-cloud/ukv/discussions/228
 [ukv-new-bindings]: https://github.com/unum-cloud/ukv/c#implementing-a-new-language-binding
 [ukv-new-engine]: https://github.com/unum-cloud/ukv/c#implementing-a-new-engine
-
 [ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
 [ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
 [ucsb]: https://github.com/unum-cloud/ucsb
-
 [blas]: https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms
 [flight]: https://arrow.apache.org/docs/format/Flight.html
 [networkx]: https://networkx.org
