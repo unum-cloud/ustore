@@ -77,10 +77,23 @@ inline collection_key_field_t ckf(args_at&&... args) {
 /**
  * @brief Graph Edge, or in DBMS terms - a relationship.
  */
+inline ukv_key_t edge_id(size_t a, size_t b) {
+    return (a + b) * (a + b + 1) / 2 + a;
+}
+
 struct edge_t {
     ukv_key_t source_id;
     ukv_key_t target_id;
     ukv_key_t id {ukv_default_edge_id_k};
+
+    inline edge_t() = default;
+    inline edge_t(edge_t&&) = default;
+    inline edge_t(edge_t const&) = default;
+    inline edge_t& operator=(edge_t&&) = default;
+    inline edge_t& operator=(edge_t const&) = default;
+    inline edge_t(ukv_key_t source_id, ukv_key_t target_id) noexcept : source_id(source_id), target_id(target_id) {
+        id = edge_id(source_id, target_id);
+    }
 
     inline bool operator==(edge_t const& other) const noexcept {
         return (source_id == other.source_id) & (target_id == other.target_id) & (id == other.id);

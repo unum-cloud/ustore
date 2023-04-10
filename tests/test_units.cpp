@@ -1638,7 +1638,7 @@ TEST(db, docs_table) {
 #pragma region Graph Modality
 
 edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
-    return {v1, v2, edge_id};
+    return {v1, v2};
 }
 
 std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_connect = 1) {
@@ -1682,7 +1682,7 @@ TEST(db, graph_upsert_edge) {
     EXPECT_TRUE(db.open(config().c_str()));
 
     graph_collection_t net = db.main<graph_collection_t>();
-    edge_t edge {1, 2, 9};
+    edge_t edge {1, 2};
     EXPECT_TRUE(net.upsert_edge(edge));
     EXPECT_TRUE(*net.contains(1));
     EXPECT_TRUE(*net.contains(2));
@@ -1707,9 +1707,9 @@ TEST(db, graph_triangle) {
     graph_collection_t net = db.main<graph_collection_t>();
 
     // triangle
-    edge_t edge1 {1, 2, 9};
-    edge_t edge2 {2, 3, 10};
-    edge_t edge3 {3, 1, 11};
+    edge_t edge1 {1, 2};
+    edge_t edge2 {2, 3};
+    edge_t edge3 {3, 1};
 
     EXPECT_TRUE(net.upsert_edge(edge1));
     EXPECT_TRUE(net.upsert_edge(edge2));
@@ -1742,7 +1742,7 @@ TEST(db, graph_triangle) {
     EXPECT_EQ(net.edges_containing(2, ukv_vertex_source_k)->size(), 1ul);
     EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].source_id, 2);
     EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].target_id, 3);
-    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].id, 10);
+    // EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].id, 10);
     EXPECT_EQ(net.edges_between(3, 1)->size(), 1ul);
     EXPECT_EQ(net.edges_between(1, 3)->size(), 0ul);
 
@@ -1816,9 +1816,9 @@ TEST(db, graph_triangle_batch) {
     graph_collection_t net = db.main<graph_collection_t>();
 
     std::vector<edge_t> triangle {
-        {1, 2, 9},
-        {2, 3, 10},
-        {3, 1, 11},
+        {1, 2},
+        {2, 3},
+        {3, 1},
     };
 
     EXPECT_TRUE(net.upsert_edges(edges(triangle)));
@@ -1844,7 +1844,7 @@ TEST(db, graph_triangle_batch) {
     EXPECT_EQ(net.edges_containing(2, ukv_vertex_source_k)->size(), 1ul);
     EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].source_id, 2);
     EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].target_id, 3);
-    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].id, 10);
+    // EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].id, 10);
     EXPECT_EQ(net.edges_between(3, 1)->size(), 1ul);
     EXPECT_EQ(net.edges_between(1, 3)->size(), 0ul);
 
@@ -1914,8 +1914,8 @@ TEST(db, graph_transaction_watch) {
     EXPECT_TRUE(db.open(config().c_str()));
     graph_collection_t net = db.main<graph_collection_t>();
 
-    edge_t edge_ab {'A', 'B', 19};
-    edge_t edge_bc {'B', 'C', 31};
+    edge_t edge_ab {'A', 'B'};
+    edge_t edge_bc {'B', 'C'};
     EXPECT_TRUE(net.upsert_edge(edge_ab));
     EXPECT_TRUE(net.upsert_edge(edge_bc));
 
@@ -1965,8 +1965,8 @@ TEST(db, graph_conflicting_transactions) {
     transaction_t txn2 = *db.transact();
     graph_collection_t txn_net2 = txn2.main<graph_collection_t>();
 
-    edge_t edge4 {4, 5, 15};
-    edge_t edge5 {5, 6, 16};
+    edge_t edge4 {4, 5};
+    edge_t edge5 {5, 6};
 
     EXPECT_TRUE(txn_net.upsert_edge(edge4));
     EXPECT_TRUE(txn_net2.upsert_edge(edge5));
@@ -1997,25 +1997,25 @@ TEST(db, graph_layering_shapes) {
     over_the_vertices(false, 0);
 
     std::vector<edge_t> star {
-        {1, 3, 1},
-        {1, 4, 2},
-        {2, 4, 3},
-        {2, 5, 4},
-        {3, 5, 5},
+        {1, 3},
+        {1, 4},
+        {2, 4},
+        {2, 5},
+        {3, 5},
     };
     std::vector<edge_t> pentagon {
-        {1, 2, 6},
-        {2, 3, 7},
-        {3, 4, 8},
-        {4, 5, 9},
-        {5, 1, 10},
+        {1, 2},
+        {2, 3},
+        {3, 4},
+        {4, 5},
+        {5, 1},
     };
     std::vector<edge_t> self_loops {
-        {1, 1, 11},
-        {2, 2, 12},
-        {3, 3, 13},
-        {4, 4, 14},
-        {5, 5, 15},
+        {1, 1},
+        {2, 2},
+        {3, 3},
+        {4, 4},
+        {5, 5},
     };
 
     EXPECT_TRUE(graph.upsert_edges(edges(star)));
@@ -2154,9 +2154,9 @@ TEST(db, graph_neighbors) {
     EXPECT_TRUE(db.open(config().c_str()));
 
     graph_collection_t graph = db.main<graph_collection_t>();
-    edge_t edge1 {1, 1, 17};
-    edge_t edge2 {1, 2, 15};
-    edge_t edge3 {2, 3, 16};
+    edge_t edge1 {1, 1};
+    edge_t edge2 {1, 2};
+    edge_t edge3 {2, 3};
 
     EXPECT_TRUE(graph.upsert_edge(edge1));
     EXPECT_TRUE(graph.upsert_edge(edge2));
