@@ -468,8 +468,11 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
     });
 }
 
-void ukv_snapshot_list(ukv_snapshot_list_t*) {
-    // TODO
+void ukv_snapshot_list(ukv_snapshot_list_t* c_ptr) {
+    ukv_snapshot_list_t& c = *c_ptr;
+    *c.count = 0;
+    if (c.ids)
+        *c.ids = nullptr;
 }
 
 void ukv_snapshot_create(ukv_snapshot_create_t*) {
