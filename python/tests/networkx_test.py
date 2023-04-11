@@ -120,8 +120,8 @@ def test_neighbors():
     for node in range(1, 100):
         neighbors = net[node]
         assert len(neighbors) == 2
-        assert neighbors[0] == node + 1
-        assert neighbors[1] == node - 1
+        assert neighbors[0] == node - 1
+        assert neighbors[1] == node + 1
 
     net.clear()
 
