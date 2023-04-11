@@ -694,7 +694,7 @@ void ukv::wrap_networkx(py::module& m) {
                     if (attrs[i] && attrs[i].size())
                         map[keys[i]] = py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[i])));
                     else
-                        map[keys[i]] = py::reinterpret_steal<py::object>(from_json(json_t::parse("{}")));
+                        map[keys[i]] = py::dict();
                 }
 
                 stream.seek_to_next_batch();
