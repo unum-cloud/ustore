@@ -2169,8 +2169,8 @@ TEST(db, graph_neighbors) {
 
     neighbors = graph.neighbors(2).throw_or_release();
     EXPECT_EQ(neighbors.size(), 2);
-    EXPECT_EQ(neighbors[0], 3);
-    EXPECT_EQ(neighbors[1], 1);
+    EXPECT_EQ(neighbors[0], 1);
+    EXPECT_EQ(neighbors[1], 3);
 }
 
 #pragma region Vectors Modality
