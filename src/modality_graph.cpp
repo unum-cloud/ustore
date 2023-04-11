@@ -386,7 +386,6 @@ void export_edge_tuples( //
             continue;
         }
 
-        bool has_self_loop = false;
         ukv_vertex_degree_t degree = 0;
         if (find_edge.role & ukv_vertex_source_k) {
             auto ns = neighbors(value, ukv_vertex_source_k);
@@ -398,8 +397,6 @@ void export_edge_tuples( //
                         ids[passed_ids + export_center_ak] = n.neighbor_id;
                     if constexpr (export_edge_ak)
                         ids[passed_ids + export_center_ak + export_neighbor_ak] = n.edge_id;
-                    if (find_edge.vertex_id == n.neighbor_id)
-                        has_self_loop = true;
                     passed_ids += tuple_size_k;
                 }
             degree += static_cast<ukv_vertex_degree_t>(ns.size());
@@ -408,10 +405,6 @@ void export_edge_tuples( //
             auto ns = neighbors(value, ukv_vertex_target_k);
             if constexpr (tuple_size_k != 0)
                 for (neighborship_t n : ns) {
-                    if (n.neighbor_id == find_edge.vertex_id && has_self_loop) {
-                        --degree;
-                        continue;
-                    }
                     if constexpr (export_neighbor_ak)
                         ids[passed_ids + 0] = n.neighbor_id;
                     if constexpr (export_center_ak)
