@@ -690,8 +690,12 @@ void ukv::wrap_networkx(py::module& m) {
             while (!stream.is_end()) {
                 auto keys = stream.edges_batch().edge_ids.immutable();
                 auto attrs = read_attributes(g.relations_attrs, keys, name.c_str());
-                for (std::size_t i = 0; i != keys.size(); ++i)
-                    map[keys[i]] = py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[i])));
+                for (std::size_t i = 0; i != keys.size(); ++i) {
+                    if (attrs[i] && attrs[i].size())
+                        map[keys[i]] = py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[i])));
+                    else
+                        map[keys[i]] = py::reinterpret_steal<py::object>(from_json(json_t::parse("{}")));
+                }
 
                 stream.seek_to_next_batch();
             }
