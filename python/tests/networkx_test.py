@@ -260,6 +260,19 @@ def test_clear():
     net.clear()
 
 
+def test_size():
+    db = ukv.DataBase()
+    net = ukv.Network(db, 'graph', 'nodes', 'edges')
+    size = 1000
+    weighted_size = 0
+    for node in range(size):
+        net.add_edge(node, node+1, node, weight=node)
+        weighted_size += node
+
+    assert net.size() == size
+    assert net.size(weight='weight') == weighted_size
+
+
 def test_nodes_attributes():
     db = ukv.DataBase()
     net = ukv.Network(db, 'graph', 'nodes')
