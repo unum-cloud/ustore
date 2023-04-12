@@ -424,7 +424,9 @@ class graph_collection_t {
                 std::swap(u, v);
         }
 
-        return strided_range_gt<ukv_key_t> {es.target_ids};
+        auto neighbors = es.target_ids;
+        count = sort_and_deduplicate(neighbors.begin(), neighbors.end());
+        return strided_range_gt<ukv_key_t> {{neighbors.begin()}, count};
     }
 
     status_t export_adjacency_list(std::string const& path,
