@@ -693,13 +693,26 @@ void ukv::wrap_networkx(py::module& m) {
     g.def(
         "get_edge_attributes",
         [](py_graph_t& g, std::string& name) {
-            std::unordered_map<ukv_key_t, py::object> map;
+            auto hash = [](py::tuple const& tuple) {
+                return py_to_scalar<ukv_key_t>(PyTuple_GetItem(tuple.ptr(), 2));
+            };
+            std::unordered_map<py::tuple, py::object, decltype(hash)> map(0, hash);
+
             auto stream = g.ref().edges().throw_or_release().begin();
             while (!stream.is_end()) {
-                auto keys = stream.edges_batch().edge_ids.immutable();
-                auto attrs = read_attributes(g.relations_attrs, keys, name.c_str());
-                for (std::size_t i = 0; i != keys.size(); ++i)
-                    map[keys[i]] = py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[i])));
+                auto edges = stream.edges_batch();
+                map.reserve(edges.size());
+                auto sources = edges.source_ids;
+                auto targets = edges.target_ids;
+                auto edge_ids = edges.edge_ids.immutable();
+                auto attrs = read_attributes(g.relations_attrs, edge_ids, name.c_str());
+                for (std::size_t i = 0; i != edge_ids.size(); ++i) {
+                    auto key = py::make_tuple(sources[i], targets[i], edge_ids[i]);
+                    if (attrs[i] && attrs[i].size())
+                        map[key] = py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[i])));
+                    else
+                        map[key] = py::dict();
+                }
 
                 stream.seek_to_next_batch();
             }
