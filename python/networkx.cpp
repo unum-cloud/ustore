@@ -690,12 +690,9 @@ void ukv::wrap_networkx(py::module& m) {
             auto edges = g.ref().edges_between(v1, v2).throw_or_release();
             auto edge_ids = edges.edge_ids.immutable();
             auto attrs = read_attributes(g.relations_attrs, edge_ids, name.size() ? name.c_str() : nullptr);
-            py::object ret;
             if (attrs[0] && attrs[0].size())
-                ret = py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[0])));
-            else
-                ret = py::dict();
-            return ret;
+                return py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[0])));
+            return py::reinterpret_steal<py::object>(py::dict());
         },
         py::arg("u"),
         py::arg("v"),
