@@ -272,6 +272,10 @@ def test_size():
     assert net.size() == size
     assert net.size(weight='weight') == weighted_size
 
+    net.add_edge(size, size+1, size, weight='str')
+    with pytest.raises(Exception):
+        net.size(weight='weight')
+
 
 def test_nodes_attributes():
     db = ukv.DataBase()
