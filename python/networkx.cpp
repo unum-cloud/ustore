@@ -573,8 +573,13 @@ void ukv::wrap_networkx(py::module& m) {
                 for (std::size_t i = 0; i != edge_ids.size(); ++i) {
                     if (attrs[i] && attrs[i].size()) {
                         std::size_t number = 0;
-                        std::from_chars((char*)attrs[i].begin(), (char*)attrs[i].end(), number);
-                        size += number;
+                        auto result = std::from_chars((char*)attrs[i].begin(), (char*)attrs[i].end(), number);
+                        if (result.ec == std::errc())
+                            size += number;
+                        else if (result.ec == std::errc::invalid_argument)
+                            throw std::runtime_error("Unsupported Type");
+                        else
+                            throw std::runtime_error("Failed To Read Attribute");
                     }
                     else
                         size += 1;
