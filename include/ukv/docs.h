@@ -153,10 +153,10 @@ typedef struct ukv_docs_write_t {
     ukv_length_t const* lengths;
     ukv_size_t lengths_stride;
 
-    ukv_bytes_cptr_t const* values = NULL;
-    ukv_size_t values_stride = 0;
+    ukv_bytes_cptr_t const* values;
+    ukv_size_t values_stride;
 
-    ukv_str_view_t id_field = "_id";
+    ukv_str_view_t id_field; // "_id"
     /// @}
 
 } ukv_docs_write_t;
