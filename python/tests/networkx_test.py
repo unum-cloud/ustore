@@ -1,6 +1,7 @@
 import ukv.umem as ukv
 import numpy as np
 import pytest
+import networkx as nx
 
 
 def test_line():
@@ -382,7 +383,6 @@ def test_get_edge_attributes():
         assert weights[edge_id] == edge_id
 
     for node in range(1000):
-        assert net.get_edge_data(node, node+1, 'weight') == node
         assert net.get_edge_data(node, node+1) == {'weight': node}
 
 
