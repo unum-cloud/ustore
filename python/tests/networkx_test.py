@@ -120,8 +120,8 @@ def test_neighbors():
     for node in range(1, 100):
         neighbors = net[node]
         assert len(neighbors) == 2
-        assert neighbors[0] == node + 1
-        assert neighbors[1] == node - 1
+        assert neighbors[0] == node - 1
+        assert neighbors[1] == node + 1
 
     net.clear()
 
@@ -378,8 +378,8 @@ def test_get_edge_attributes():
         net.add_edge(node, node+1, node, weight=node)
 
     weights = net.get_edge_attributes("weight")
-    for edge_id in range(1000):
-        assert weights[edge_id] == edge_id
+    for node in range(1000):
+        assert weights[(node, node+1, node)] == node
 
 
 def test_set_node_attributes():
