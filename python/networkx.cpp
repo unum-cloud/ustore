@@ -686,17 +686,24 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("key"));
     g.def(
         "get_edge_data",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, std::string name) {
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, py::object default_value) {
+            std::string default_value_str;
+            to_string(default_value.ptr(), default_value_str);
             auto edges = g.ref().edges_between(v1, v2).throw_or_release();
+            if (!edges.size())
+                return py::reinterpret_steal<py::object>(Py_None);
+
             auto edge_ids = edges.edge_ids.immutable();
-            auto attrs = read_attributes(g.relations_attrs, edge_ids, name.size() ? name.c_str() : nullptr);
+            auto attrs = read_attributes(g.relations_attrs, edge_ids, nullptr);
             if (attrs[0] && attrs[0].size())
                 return py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[0])));
+            if (default_value_str.size())
+                return py::reinterpret_steal<py::object>(from_json(json_t::parse(default_value_str)));
             return py::reinterpret_steal<py::object>(py::dict());
         },
         py::arg("u"),
         py::arg("v"),
-        py::arg("name") = "");
+        py::arg("default") = py::reinterpret_steal<py::object>(Py_None));
 
     g.def(
         "get_edge_attributes",
