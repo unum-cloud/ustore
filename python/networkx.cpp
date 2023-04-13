@@ -572,7 +572,7 @@ void ukv::wrap_networkx(py::module& m) {
                 auto attrs = read_attributes(g.relations_attrs, edge_ids, weight.c_str());
                 for (std::size_t i = 0; i != edge_ids.size(); ++i) {
                     if (attrs[i] && attrs[i].size()) {
-                        std::size_t number;
+                        std::size_t number = 0;
                         std::from_chars((char*)attrs[i].begin(), (char*)attrs[i].end(), number);
                         size += number;
                     }
