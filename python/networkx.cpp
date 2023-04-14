@@ -699,7 +699,7 @@ void ukv::wrap_networkx(py::module& m) {
                 return py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[0])));
             if (default_value_str.size())
                 return py::reinterpret_steal<py::object>(from_json(json_t::parse(default_value_str)));
-            return py::reinterpret_steal<py::object>(py::dict());
+            return py::dict();
         },
         py::arg("u"),
         py::arg("v"),
