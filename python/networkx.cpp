@@ -561,7 +561,34 @@ void ukv::wrap_networkx(py::module& m) {
         "A DegreeView with the number outgoing edges for each Vertex.");
     g.def(
         "size",
-        [](py_graph_t& g) { return g.relations_attrs.size(); },
+        [](py_graph_t& g, std::string weight) {
+            if (!weight.size())
+                return g.ref().number_of_edges();
+
+            std::size_t size = 0;
+            auto stream = g.ref().edges(ukv_vertex_source_k).throw_or_release().begin();
+            while (!stream.is_end()) {
+                auto edge_ids = stream.edges_batch().edge_ids.immutable();
+                auto attrs = read_attributes(g.relations_attrs, edge_ids, weight.c_str());
+                for (std::size_t i = 0; i != edge_ids.size(); ++i) {
+                    if (attrs[i] && attrs[i].size()) {
+                        std::size_t number = 0;
+                        auto result = std::from_chars((char*)attrs[i].begin(), (char*)attrs[i].end(), number);
+                        if (result.ec == std::errc())
+                            size += number;
+                        else if (result.ec == std::errc::invalid_argument)
+                            throw std::runtime_error("Unsupported Type");
+                        else
+                            throw std::runtime_error("Failed To Read Attribute");
+                    }
+                    else
+                        size += 1;
+                }
+                stream.seek_to_next_batch();
+            }
+            return size;
+        },
+        py::arg("weight") = "",
         "Returns the number of attributed edges.");
     g.def(
         "number_of_edges",
