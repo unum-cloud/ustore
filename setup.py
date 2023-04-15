@@ -172,6 +172,8 @@ setup(
         'Programming Language :: C++',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: 3 :: Only',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
 
@@ -195,5 +197,5 @@ setup(
         'pyarrow>=10.0.0,<11'
     ],
     extras_require={'test': 'pytest'},
-    python_requires='>=3.9',
+    python_requires='>=3.7',
 )
