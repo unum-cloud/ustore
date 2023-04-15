@@ -1,19 +1,15 @@
 {
     "version": "1.0",
-    "directory": "./tmp/ukv_embedded_rocksdb/",
+    "directory": "./tmp/ukv/",
     "data_directories": [
         {
             "path": "./tmp/storage/",
             "max_size": "100GB"
         },
-        {
-            "path": "./tmp/storage/",
-            "max_size": "100GB"
-        }
     ],
     "engine": {
         "config_url": "",
-        "config_file_path": "./config_rocksdb.json",
+        "config_file_path": "",
         "config": {
             "Version": {
                 "rocksdb_version": "7.2.9",
