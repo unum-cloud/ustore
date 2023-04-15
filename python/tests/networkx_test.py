@@ -261,6 +261,23 @@ def test_clear():
     net.clear()
 
 
+def test_size():
+    db = ukv.DataBase()
+    net = ukv.Network(db, 'graph', 'nodes', 'edges')
+    size = 1000
+    weighted_size = 0
+    for node in range(size):
+        net.add_edge(node, node+1, node, weight=node)
+        weighted_size += node
+
+    assert net.size() == size
+    assert net.size(weight='weight') == weighted_size
+
+    net.add_edge(size, size+1, size, weight='str')
+    with pytest.raises(Exception):
+        net.size(weight='weight')
+
+
 def test_nodes_attributes():
     db = ukv.DataBase()
     net = ukv.Network(db, 'graph', 'nodes')
@@ -379,8 +396,8 @@ def test_get_edge_attributes():
         net.add_edge(node, node+1, node, weight=node)
 
     weights = net.get_edge_attributes('weight')
-    for edge_id in range(1000):
-        assert weights[edge_id] == edge_id
+    for node in range(1000):
+        assert weights[(node, node+1, node)] == node
 
     for node in range(1000):
         assert net.get_edge_data(node, node+1) == {'weight': node}
