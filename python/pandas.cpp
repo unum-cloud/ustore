@@ -420,7 +420,7 @@ void ukv::wrap_pandas(py::module& m) {
     // https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_json.html
     df.def(
         "to_json",
-        [](py_table_collection_t& df, std::string const& path) {
+        [](py_table_collection_t& df, std::string const& path) -> py::object {
             auto batch = materialize(df);
             auto& keys_found = std::get<std::vector<ukv_key_t>>(df.rows_keys);
 
@@ -450,7 +450,7 @@ void ukv::wrap_pandas(py::module& m) {
             if (!path.size())
                 return py::cast(result);
             fmt::output_file(path).print("{}", result);
-            return py::object(py::cast<py::none>(Py_None));
+            return py::none();
         },
         py::arg("path") = "");
 
