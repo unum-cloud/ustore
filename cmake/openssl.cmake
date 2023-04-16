@@ -24,11 +24,11 @@ ExternalProject_Add(
 file(MAKE_DIRECTORY ${OPENSSL_INCLUDE_DIR})
 
 add_library(openssl::ssl STATIC IMPORTED)
-set_property(TARGET openssl::ssl PROPERTY IMPORTED_LOCATION ${OPENSSL_INSTALL_DIR}/lib64/libssl.a)
+set_property(TARGET openssl::ssl PROPERTY IMPORTED_LOCATION ${OPENSSL_INSTALL_DIR}/lib/libssl.a)
 set_property(TARGET openssl::ssl PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${OPENSSL_INCLUDE_DIR})
 add_dependencies(openssl::ssl openssl-external)
 
 add_library(openssl::crypto STATIC IMPORTED GLOBAL)
-set_property(TARGET openssl::crypto PROPERTY IMPORTED_LOCATION ${OPENSSL_INSTALL_DIR}/lib64/libcrypto.a)
+set_property(TARGET openssl::crypto PROPERTY IMPORTED_LOCATION ${OPENSSL_INSTALL_DIR}/lib/libcrypto.a)
 set_property(TARGET openssl::crypto PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${OPENSSL_INCLUDE_DIR})
 add_dependencies(openssl::crypto openssl-external)
