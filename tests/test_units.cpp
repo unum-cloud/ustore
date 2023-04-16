@@ -110,7 +110,7 @@ void clear_environment() {
     auto directory_str = path() ? std::string_view(path()) : "";
     if (!directory_str.empty()) {
         stdfs::remove_all(directory_str);
-        stdfs::create_directories(stdfs::path(directory_str).parent_path());
+        stdfs::create_directories(stdfs::path(directory_str));
     }
 }
 
