@@ -19,5 +19,5 @@ cmake \
     -DUSTORE_BUILD_TESTS=0 \
     -DUSTORE_BUILD_BENCHMARKS=0 \
     . 
-make -j16
+make -j
 ./java/gradlew build #--info
