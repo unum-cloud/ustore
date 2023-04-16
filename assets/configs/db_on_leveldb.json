@@ -4,7 +4,7 @@
     "data_directories": [],
     "engine": {
         "config_url": "",
-        "config_file_path": "./config_leveldb.json",
+        "config_file_path": "./engine_leveldb.json",
         "config": {
             "write_buffer_size": 134217728,
             "max_file_size": 134217728,

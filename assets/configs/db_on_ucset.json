@@ -4,7 +4,7 @@
     "data_directories": [],
     "engine": {
         "config_url": "",
-        "config_file_path": "./config_ucset.json",
+        "config_file_path": "./engine_ucset.json",
         "config": {
             "encryption": false,
             "compression": false,

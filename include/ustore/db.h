@@ -247,7 +247,7 @@ extern bool const ustore_supports_snapshots_k;
 typedef struct ustore_database_init_t {
     /**
      * @brief Configuration parameter for the DBMS.
-     * @see `db.config.json` file.
+     * @see `db_config.json` file.
      *
      * For embedded distributions should be a json string containing DB options.
      *

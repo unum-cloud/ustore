@@ -44,13 +44,13 @@ RUN chmod +x /tini
 WORKDIR /var/lib/ustore/
 
 COPY --from=builder /usr/src/ustore/build/bin/ustore_flight_server_ucset ./ucset_server
-COPY ./assets/db.config.json /var/lib/ustore/config.json
+COPY ./assets/configs/db_on_ucset.json /var/lib/ustore/config.json
 
 COPY --from=builder /usr/src/ustore/build/bin/ustore_flight_server_leveldb ./leveldb_server
-COPY ./assets/db.config.json /var/lib/ustore/config.json
+COPY ./assets/configs/db_on_leveldb.json /var/lib/ustore/config.json
 
 COPY --from=builder /usr/src/ustore/build/bin/ustore_flight_server_rocksdb ./rocksdb_server
-COPY ./assets/db.config.json /var/lib/ustore/config.json
+COPY ./assets/configs/db_on_rocksdb.json /var/lib/ustore/config.json
 
 EXPOSE 38709
 ENTRYPOINT ["/tini", "--"]
