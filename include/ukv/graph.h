@@ -6,7 +6,7 @@
  *
  * @brief Binary Interface Standard for @b Graph collections.
  *
- * It essentially extends "ukv.h", to store @b Graphs.
+ * It essentially extends "ustore.h", to store @b Graphs.
  * Unlike raw values and docs collections, this is an index
  * and the data is transformed into @b Multi-Way @b Inverted-Index.
  *
@@ -56,35 +56,35 @@
 extern "C" {
 #endif
 
-#include "ukv/db.h"
+#include "ustore/db.h"
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
 /*********************************************************/
 
-extern ukv_key_t ukv_default_edge_id_k;
+extern ustore_key_t ustore_default_edge_id_k;
 
 /**
  * @brief Every vertex can be either a source or a target in a Directed Graph.
  *
  * When working with undirected graphs, this argument is irrelevant and
- * should be set to `::ukv_vertex_role_any_k`. With directed graphs, where
+ * should be set to `::ustore_vertex_role_any_k`. With directed graphs, where
  * source and target can belong to different collections its @b crucial
  * that members of each collection are fixed to be either only sources
  * or only edges.
  */
-typedef enum ukv_vertex_role_t {
-    ukv_vertex_role_unknown_k = 0,
-    ukv_vertex_source_k = 1,
-    ukv_vertex_target_k = 2,
-    ukv_vertex_role_any_k = 3,
-} ukv_vertex_role_t;
+typedef enum ustore_vertex_role_t {
+    ustore_vertex_role_unknown_k = 0,
+    ustore_vertex_source_k = 1,
+    ustore_vertex_target_k = 2,
+    ustore_vertex_role_any_k = 3,
+} ustore_vertex_role_t;
 
 /**
  * @brief Type to describe the number of edges a vertex connects to.
  */
-typedef uint32_t ukv_vertex_degree_t;
-extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
+typedef uint32_t ustore_vertex_degree_t;
+extern ustore_vertex_degree_t ustore_vertex_degree_missing_k;
 
 /*********************************************************/
 /*****************	 Primary Functions	  ****************/
@@ -92,21 +92,21 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
 
 /**
  * @brief Finds all the edges, connected to given vertices.
- * @see `ukv_graph_find_edges()`.
+ * @see `ustore_graph_find_edges()`.
  *
  * ## Output Form
  *
- * Similar to `ukv_read()`, this function exports a tape-like data
+ * Similar to `ustore_read()`, this function exports a tape-like data
  * to minimize memory copies and colocate the relevant data in the
  * global address space.
  *
- * Every edge will be represented by @b three @c ukv_key_t's:
+ * Every edge will be represented by @b three @c ustore_key_t's:
  * source, target and edge IDs respectively. It's not very
  * space-efficient, but will simplify the iteration over the
  * data in higher-level functions.
  *
  * Missing nodes will be exported with a "degree" set
- * to `::ukv_vertex_degree_missing_k`.
+ * to `::ustore_vertex_degree_missing_k`.
  *
  * ## Output Order
  *
@@ -120,245 +120,245 @@ extern ukv_vertex_degree_t ukv_vertex_degree_missing_k;
  * ## Checking Entity Existence
  *
  * To check if a node or edge is present - a simpler query is possible.
- * The `ukv_read()` on these same `collections` will return the presence
+ * The `ustore_read()` on these same `collections` will return the presence
  * indicators for vertices. For edges, you will have to check the
  * collection that stores the metadata of the edges.
  */
-typedef struct ukv_graph_find_edges_t {
+typedef struct ustore_graph_find_edges_t {
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /** @brief Pointer to exported error message. */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /** @brief A snapshot captures a point-in-time view of the DB at the time it's created. */
-    ukv_snapshot_t snapshot;
+    ustore_snapshot_t snapshot;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena;
-    /** @brief Read options. @see `ukv_read_t`. */
-    ukv_options_t options;
+    ustore_arena_t* arena;
+    /** @brief Read options. @see `ustore_read_t`. */
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count;
+    ustore_size_t tasks_count;
 
-    ukv_collection_t const* collections;
-    ukv_size_t collections_stride;
+    ustore_collection_t const* collections;
+    ustore_size_t collections_stride;
 
-    ukv_key_t const* vertices;
-    ukv_size_t vertices_stride;
+    ustore_key_t const* vertices;
+    ustore_size_t vertices_stride;
 
     /** @brief The roles of passed `vertices` within edges. */
-    ukv_vertex_role_t const* roles;
+    ustore_vertex_role_t const* roles;
     /** @brief Step between `roles`. */
-    ukv_size_t roles_stride;
+    ustore_size_t roles_stride;
 
     /// @}
     /// @name Outputs
     /// @{
 
-    ukv_vertex_degree_t** degrees_per_vertex;
-    ukv_key_t** edges_per_vertex;
+    ustore_vertex_degree_t** degrees_per_vertex;
+    ustore_key_t** edges_per_vertex;
 
     /// @}
 
-} ukv_graph_find_edges_t;
+} ustore_graph_find_edges_t;
 
 /**
  * @brief Finds all the edges, connected to given vertices.
- * @see `ukv_graph_find_edges_t`.
+ * @see `ustore_graph_find_edges_t`.
  */
-void ukv_graph_find_edges(ukv_graph_find_edges_t*);
+void ustore_graph_find_edges(ustore_graph_find_edges_t*);
 
 /**
  * @brief Inserts edges between provided vertices.
- * @see `ukv_graph_upsert_edges()`.
+ * @see `ustore_graph_upsert_edges()`.
  */
-typedef struct ukv_graph_upsert_edges_t {
+typedef struct ustore_graph_upsert_edges_t {
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /** @brief Pointer to exported error message. */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena;
-    /** @brief Read and Write options. @see `ukv_read_t`, `ukv_write_t`. */
-    ukv_options_t options;
+    ustore_arena_t* arena;
+    /** @brief Read and Write options. @see `ustore_read_t`, `ustore_write_t`. */
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
-    ukv_size_t tasks_count;
+    ustore_size_t tasks_count;
 
-    ukv_collection_t const* collections;
-    ukv_size_t collections_stride;
+    ustore_collection_t const* collections;
+    ustore_size_t collections_stride;
 
-    ukv_key_t const* edges_ids;
-    ukv_size_t edges_stride;
+    ustore_key_t const* edges_ids;
+    ustore_size_t edges_stride;
 
-    ukv_key_t const* sources_ids;
-    ukv_size_t sources_stride;
+    ustore_key_t const* sources_ids;
+    ustore_size_t sources_stride;
 
-    ukv_key_t const* targets_ids;
-    ukv_size_t targets_stride;
+    ustore_key_t const* targets_ids;
+    ustore_size_t targets_stride;
 
     /// @}
 
-} ukv_graph_upsert_edges_t;
+} ustore_graph_upsert_edges_t;
 
 /**
  * @brief Inserts edges between provided vertices.
- * @see `ukv_graph_upsert_edges_t`.
+ * @see `ustore_graph_upsert_edges_t`.
  */
-void ukv_graph_upsert_edges(ukv_graph_upsert_edges_t*);
+void ustore_graph_upsert_edges(ustore_graph_upsert_edges_t*);
 
 /**
  * @brief Removed edges between provided vertices.
- * @see `ukv_graph_remove_edges()`.
+ * @see `ustore_graph_remove_edges()`.
  */
-typedef struct ukv_graph_remove_edges_t { //
+typedef struct ustore_graph_remove_edges_t { //
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /** @brief Pointer to exported error message. */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena;
-    /** @brief Read and Write options. @see `ukv_read_t`, `ukv_write_t`. */
-    ukv_options_t options;
+    ustore_arena_t* arena;
+    /** @brief Read and Write options. @see `ustore_read_t`, `ustore_write_t`. */
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count;
+    ustore_size_t tasks_count;
 
-    ukv_collection_t const* collections;
-    ukv_size_t collections_stride;
+    ustore_collection_t const* collections;
+    ustore_size_t collections_stride;
 
-    ukv_key_t const* edges_ids;
-    ukv_size_t edges_stride;
+    ustore_key_t const* edges_ids;
+    ustore_size_t edges_stride;
 
-    ukv_key_t const* sources_ids;
-    ukv_size_t sources_stride;
+    ustore_key_t const* sources_ids;
+    ustore_size_t sources_stride;
 
-    ukv_key_t const* targets_ids;
-    ukv_size_t targets_stride;
+    ustore_key_t const* targets_ids;
+    ustore_size_t targets_stride;
 
     /// @}
 
-} ukv_graph_remove_edges_t;
+} ustore_graph_remove_edges_t;
 
 /**
  * @brief Removed edges between provided vertices.
- * @see `ukv_graph_remove_edges_t`.
+ * @see `ustore_graph_remove_edges_t`.
  */
-void ukv_graph_remove_edges(ukv_graph_remove_edges_t*);
+void ustore_graph_remove_edges(ustore_graph_remove_edges_t*);
 
 /**
  * @brief Upsert vertices.
- * @see `ukv_graph_upsert_vertices()`.
+ * @see `ustore_graph_upsert_vertices()`.
  */
-typedef struct ukv_graph_upsert_vertices_t { //
+typedef struct ustore_graph_upsert_vertices_t { //
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /** @brief Pointer to exported error message. */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena;
-    /** @brief Read and Write options. @see `ukv_read_t`, `ukv_write_t`. */
-    ukv_options_t options;
+    ustore_arena_t* arena;
+    /** @brief Read and Write options. @see `ustore_read_t`, `ustore_write_t`. */
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count;
+    ustore_size_t tasks_count;
 
-    ukv_collection_t const* collections;
-    ukv_size_t collections_stride;
+    ustore_collection_t const* collections;
+    ustore_size_t collections_stride;
 
-    ukv_key_t const* vertices;
-    ukv_size_t vertices_stride;
+    ustore_key_t const* vertices;
+    ustore_size_t vertices_stride;
 
     /// @}
 
-} ukv_graph_upsert_vertices_t;
+} ustore_graph_upsert_vertices_t;
 
 /**
  * @brief Upsert vertices.
- * @see `ukv_graph_upsert_vertices_t`.
+ * @see `ustore_graph_upsert_vertices_t`.
  */
-void ukv_graph_upsert_vertices(ukv_graph_upsert_vertices_t*);
+void ustore_graph_upsert_vertices(ustore_graph_upsert_vertices_t*);
 
 /**
  * @brief Removes vertices and all related edges from the graph.
- * @see `ukv_graph_remove_vertices()`.
+ * @see `ustore_graph_remove_vertices()`.
  */
-typedef struct ukv_graph_remove_vertices_t { //
+typedef struct ustore_graph_remove_vertices_t { //
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /** @brief Pointer to exported error message. */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena;
-    /** @brief Read and Write options. @see `ukv_read_t`, `ukv_write_t`. */
-    ukv_options_t options;
+    ustore_arena_t* arena;
+    /** @brief Read and Write options. @see `ustore_read_t`, `ustore_write_t`. */
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count;
+    ustore_size_t tasks_count;
 
-    ukv_collection_t const* collections;
-    ukv_size_t collections_stride;
+    ustore_collection_t const* collections;
+    ustore_size_t collections_stride;
 
-    ukv_key_t const* vertices;
-    ukv_size_t vertices_stride;
+    ustore_key_t const* vertices;
+    ustore_size_t vertices_stride;
 
     /** @brief Needed only for @b Joining graphs. */
-    ukv_vertex_role_t const* roles;
+    ustore_vertex_role_t const* roles;
     /** @brief Step between `roles`. */
-    ukv_size_t roles_stride;
+    ustore_size_t roles_stride;
 
     /// @}
 
-} ukv_graph_remove_vertices_t;
+} ustore_graph_remove_vertices_t;
 
 /**
  * @brief Removes vertices and all related edges from the graph.
- * @see `ukv_graph_remove_vertices_t`.
+ * @see `ustore_graph_remove_vertices_t`.
  */
-void ukv_graph_remove_vertices(ukv_graph_remove_vertices_t*);
+void ustore_graph_remove_vertices(ustore_graph_remove_vertices_t*);
 
 #ifdef __cplusplus
 } /* end extern "C" */

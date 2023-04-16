@@ -1,6 +1,6 @@
 {
     "version": "1.0",
-    "directory": "./tmp/ukv_embedded_umem/",
+    "directory": "./tmp/ustore_embedded_umem/",
     "data_directories": [],
     "engine": {
         "config_url": "",

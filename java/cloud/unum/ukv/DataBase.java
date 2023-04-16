@@ -1,4 +1,4 @@
-package cloud.unum.ukv;
+package cloud.unum.ustore;
 
 import java.io.File;
 import java.io.IOException;
@@ -68,9 +68,9 @@ public abstract class DataBase {
      */
 
     private static String extractLibrary(String backend) throws IOException {
-        File file = File.createTempFile("libukv", ".so");
+        File file = File.createTempFile("libustore", ".so");
         if (file.exists()) {
-            InputStream link = (DataBase.class.getResourceAsStream("/" + backend + "/libukv.so"));
+            InputStream link = (DataBase.class.getResourceAsStream("/" + backend + "/libustore.so"));
 
             if (link != null) {
                 Files.copy(

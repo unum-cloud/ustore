@@ -24,7 +24,7 @@ extern "C" {
 #include <inttypes.h> // `int64_t`
 #include <stdlib.h>   // `malloc`
 
-#include "ukv/docs.h"
+#include "ustore/docs.h"
 
 #if !__has_include("arrow/c/abi.h") && !defined(ARROW_C_DATA_INTERFACE)
 #define ARROW_C_DATA_INTERFACE
@@ -80,9 +80,9 @@ typedef struct ArrowArrayStream {
 #endif // ARROW_C_STREAM_INTERFACE
 
 /**
- * @brief Converts @c ukv_doc_field_type_t to a "format" string supported by Apache Arrow.
+ * @brief Converts @c ustore_doc_field_type_t to a "format" string supported by Apache Arrow.
  */
-static char const* ukv_doc_field_type_to_arrow_format(ukv_doc_field_type_t const field_type) {
+static char const* ustore_doc_field_type_to_arrow_format(ustore_doc_field_type_t const field_type) {
     // Export the right format string and number of buffers to be managed by Arrow.
     // For scalar arrays we need: bitmap and data.
     // For variable length arrays we need: bitmap, @b offsets and data.
@@ -90,24 +90,24 @@ static char const* ukv_doc_field_type_to_arrow_format(ukv_doc_field_type_t const
     // https://arrow.apache.org/docs/format/CDataInterface.html#data-type-description-format-strings
     // https://arrow.apache.org/docs/format/Columnar.html#buffer-listing-for-each-layout
     switch (field_type) {
-    case ukv_doc_field_null_k: return "n";
-    case ukv_doc_field_bool_k: return "b";
+    case ustore_doc_field_null_k: return "n";
+    case ustore_doc_field_bool_k: return "b";
     // TODO: UUID logical type may be natively supported in Arrow vocabulary:
     // https://arrow.apache.org/docs/format/Columnar.html#extension-types
-    case ukv_doc_field_uuid_k: return "w:16";
-    case ukv_doc_field_i8_k: return "c";
-    case ukv_doc_field_i16_k: return "s";
-    case ukv_doc_field_i32_k: return "i";
-    case ukv_doc_field_i64_k: return "l";
-    case ukv_doc_field_u8_k: return "C";
-    case ukv_doc_field_u16_k: return "S";
-    case ukv_doc_field_u32_k: return "I";
-    case ukv_doc_field_u64_k: return "L";
-    case ukv_doc_field_f16_k: return "e";
-    case ukv_doc_field_f32_k: return "f";
-    case ukv_doc_field_f64_k: return "g";
-    case ukv_doc_field_bin_k: return "z";
-    case ukv_doc_field_str_k: return "u";
+    case ustore_doc_field_uuid_k: return "w:16";
+    case ustore_doc_field_i8_k: return "c";
+    case ustore_doc_field_i16_k: return "s";
+    case ustore_doc_field_i32_k: return "i";
+    case ustore_doc_field_i64_k: return "l";
+    case ustore_doc_field_u8_k: return "C";
+    case ustore_doc_field_u16_k: return "S";
+    case ustore_doc_field_u32_k: return "I";
+    case ustore_doc_field_u64_k: return "L";
+    case ustore_doc_field_f16_k: return "e";
+    case ustore_doc_field_f32_k: return "f";
+    case ustore_doc_field_f64_k: return "g";
+    case ustore_doc_field_bin_k: return "z";
+    case ustore_doc_field_str_k: return "u";
     default: return "";
     }
 }
@@ -132,7 +132,7 @@ static void release_malloced_array(struct ArrowArray* array) {
         free(child);
     }
     free(array->children);
-    // Freeing buffers can be avoided, UKV still owns those regions
+    // Freeing buffers can be avoided, UStore still owns those regions
     // while the connection is alive and hasn't be reused for any other
     // requests.
     // for (int64_t i = 0; i < array->n_buffers; ++i)
@@ -145,13 +145,13 @@ static void release_malloced_array(struct ArrowArray* array) {
  * @brief Defines the structure of the continuous `arrow::RecordBatch`
  * represented in C as a combination of `ArrowSchema` and `ArrowArray`.
  */
-static void ukv_to_arrow_schema( //
-    ukv_size_t const docs_count,
-    ukv_size_t const fields_count,
+static void ustore_to_arrow_schema( //
+    ustore_size_t const docs_count,
+    ustore_size_t const fields_count,
 
     struct ArrowSchema* schema,
     struct ArrowArray* array,
-    ukv_error_t* error) {
+    ustore_error_t* error) {
 
     // Schema
     schema->format = "+s";
@@ -183,12 +183,12 @@ static void ukv_to_arrow_schema( //
     // Allocate sub-schemas and sub-arrays
     // TODO: Don't malloc every child schema/array separately,
     // use `private_data` member for that.
-    for (ukv_size_t field_idx = 0; field_idx != fields_count; ++field_idx)
+    for (ustore_size_t field_idx = 0; field_idx != fields_count; ++field_idx)
         if (!(schema->children[field_idx] = (ArrowSchema*)malloc(sizeof(struct ArrowSchema)))) {
             *error = "Failed to allocate memory";
             return;
         }
-    for (ukv_size_t field_idx = 0; field_idx != fields_count; ++field_idx)
+    for (ustore_size_t field_idx = 0; field_idx != fields_count; ++field_idx)
         if (!(array->children[field_idx] = (ArrowArray*)malloc(sizeof(struct ArrowArray)))) {
             *error = "Failed to allocate memory";
             return;
@@ -197,22 +197,22 @@ static void ukv_to_arrow_schema( //
 
 /**
  * @brief Fill a column in a continuous `arrow::RecordBatch`, pre-structured
- * by the `ukv_to_arrow_schema()` call. Supports scalar and string entries.
- * For lists use `ukv_to_arrow_list()`.
+ * by the `ustore_to_arrow_schema()` call. Supports scalar and string entries.
+ * For lists use `ustore_to_arrow_list()`.
  */
-static void ukv_to_arrow_column( //
-    ukv_size_t const docs_count,
-    ukv_str_view_t const field_name,
-    ukv_doc_field_type_t const field_type,
+static void ustore_to_arrow_column( //
+    ustore_size_t const docs_count,
+    ustore_str_view_t const field_name,
+    ustore_doc_field_type_t const field_type,
 
-    ukv_octet_t const* column_validities,
-    ukv_length_t const* column_offsets,
+    ustore_octet_t const* column_validities,
+    ustore_length_t const* column_offsets,
     void const* column_contents,
 
     struct ArrowSchema* schema,
     struct ArrowArray* array,
 
-    ukv_error_t* error) {
+    ustore_error_t* error) {
 
     schema->name = field_name;
     schema->metadata = NULL;
@@ -220,27 +220,27 @@ static void ukv_to_arrow_column( //
     schema->dictionary = NULL;
     schema->children = NULL;
     schema->release = &release_malloced_schema;
-    schema->format = ukv_doc_field_type_to_arrow_format(field_type);
+    schema->format = ustore_doc_field_type_to_arrow_format(field_type);
     schema->n_children = 0;
 
     // Export the data
     switch (field_type) {
-    case ukv_doc_field_bool_k:
-    case ukv_doc_field_uuid_k:
-    case ukv_doc_field_i8_k:
-    case ukv_doc_field_i16_k:
-    case ukv_doc_field_i32_k:
-    case ukv_doc_field_i64_k:
-    case ukv_doc_field_u8_k:
-    case ukv_doc_field_u16_k:
-    case ukv_doc_field_u32_k:
-    case ukv_doc_field_u64_k:
-    case ukv_doc_field_f16_k:
-    case ukv_doc_field_f32_k:
-    case ukv_doc_field_f64_k: array->n_buffers = 2; break;
-    case ukv_doc_field_bin_k:
-    case ukv_doc_field_str_k: array->n_buffers = 3; break;
-    case ukv_doc_field_null_k: array->n_buffers = 0; break;
+    case ustore_doc_field_bool_k:
+    case ustore_doc_field_uuid_k:
+    case ustore_doc_field_i8_k:
+    case ustore_doc_field_i16_k:
+    case ustore_doc_field_i32_k:
+    case ustore_doc_field_i64_k:
+    case ustore_doc_field_u8_k:
+    case ustore_doc_field_u16_k:
+    case ustore_doc_field_u32_k:
+    case ustore_doc_field_u64_k:
+    case ustore_doc_field_f16_k:
+    case ustore_doc_field_f32_k:
+    case ustore_doc_field_f64_k: array->n_buffers = 2; break;
+    case ustore_doc_field_bin_k:
+    case ustore_doc_field_str_k: array->n_buffers = 3; break;
+    case ustore_doc_field_null_k: array->n_buffers = 0; break;
     default: array->n_buffers = 0; break;
     }
     array->offset = 0;
@@ -271,26 +271,26 @@ static void ukv_to_arrow_column( //
 
 /**
  * @brief Fill a column in a continuous `arrow::RecordBatch`, pre-structured
- * by the `ukv_to_arrow_schema()` call. Supports lists of scalars.
- * For regular scalars or strings use `ukv_to_arrow_column()`.
+ * by the `ustore_to_arrow_schema()` call. Supports lists of scalars.
+ * For regular scalars or strings use `ustore_to_arrow_column()`.
  */
-static void ukv_to_arrow_list( //
-    ukv_size_t const docs_count,
-    ukv_str_view_t const field_name,
-    ukv_doc_field_type_t const field_type,
+static void ustore_to_arrow_list( //
+    ustore_size_t const docs_count,
+    ustore_str_view_t const field_name,
+    ustore_doc_field_type_t const field_type,
 
-    ukv_octet_t const* column_validities,
-    ukv_length_t const* column_offsets,
+    ustore_octet_t const* column_validities,
+    ustore_length_t const* column_offsets,
     void const* column_contents,
 
     struct ArrowSchema* schema,
     struct ArrowArray* array,
 
-    ukv_error_t* error) {
+    ustore_error_t* error) {
 
     // Allocate a sub-array
     // https://arrow.apache.org/docs/format/Columnar.html#variable-size-list-layout
-    ukv_to_arrow_schema(docs_count, 1, schema, array, error);
+    ustore_to_arrow_schema(docs_count, 1, schema, array, error);
     if (*error)
         return;
 
@@ -314,45 +314,44 @@ static void ukv_to_arrow_list( //
 
     array->buffers[0] = (void*)column_validities;
     array->buffers[1] = (void*)column_offsets;
-    ukv_to_arrow_column(column_offsets[docs_count],
-                        "chunks",
-                        field_type,
-                        NULL,
-                        NULL,
-                        column_contents,
-                        schema->children[0],
-                        array->children[0],
-                        error);
+    ustore_to_arrow_column(column_offsets[docs_count],
+                           "chunks",
+                           field_type,
+                           NULL,
+                           NULL,
+                           column_contents,
+                           schema->children[0],
+                           array->children[0],
+                           error);
 }
 
 /**
  * @brief Placeholder for future streaming exports.
  */
-static void ukv_to_arrow_stream( //
-    ukv_database_t const,
-    ukv_transaction_t const,
-    ukv_size_t const,
+static void ustore_to_arrow_stream( //
+    ustore_database_t const,
+    ustore_transaction_t const,
+    ustore_size_t const,
 
-    ukv_size_t const,
-    ukv_key_t const,
-    ukv_key_t const,
+    ustore_size_t const,
+    ustore_key_t const,
+    ustore_key_t const,
 
-    ukv_collection_t const*,
-    ukv_size_t const,
+    ustore_collection_t const*,
+    ustore_size_t const,
 
-    ukv_str_view_t const*,
-    ukv_size_t const,
+    ustore_str_view_t const*,
+    ustore_size_t const,
 
-    ukv_doc_field_type_t const*,
-    ukv_size_t const,
+    ustore_doc_field_type_t const*,
+    ustore_size_t const,
 
     struct ArrowArrayStream*,
-    ukv_arena_t*) {
+    ustore_arena_t*) {
 }
 
-
-static bool check_presence(ukv_octet_t const* begin, size_t idx) {
-    return *(begin + idx / CHAR_BIT) & ((ukv_octet_t)(1 << (idx % CHAR_BIT)));
+static bool check_presence(ustore_octet_t const* begin, size_t idx) {
+    return *(begin + idx / CHAR_BIT) & ((ustore_octet_t)(1 << (idx % CHAR_BIT)));
 }
 
 #ifdef __cplusplus

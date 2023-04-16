@@ -4,16 +4,16 @@
  * @date 26 Jun 2022
  * @addtogroup Cpp
  *
- * @brief C++ bindings for "ukv/db.h".
+ * @brief C++ bindings for "ustore/db.h".
  */
 
 #pragma once
-#include "ukv/db.h"
+#include "ustore/db.h"
 
-namespace unum::ukv {
+namespace unum::ustore {
 
 /**
- * Abstraction over @c ukv_database_t, @c ukv_transaction_t and @c ukv_arena_t,
+ * Abstraction over @c ustore_database_t, @c ustore_transaction_t and @c ustore_arena_t,
  * needed for default-construction.
  */
 class null_context_t {
@@ -25,16 +25,16 @@ class null_context_t {
  * Won't allow adding or removing collections or bulk-removing all entries.
  */
 class borrowed_transactional_context_t {
-    ukv_database_t db_ {nullptr};
-    ukv_transaction_t txn_ {nullptr};
-    ukv_arena_t* arena_ {nullptr};
+    ustore_database_t db_ {nullptr};
+    ustore_transaction_t txn_ {nullptr};
+    ustore_arena_t* arena_ {nullptr};
 
   public:
-    ukv_database_t db() noexcept { return db_; }
-    ukv_transaction_t txn() noexcept { return txn_; }
-    ukv_arena_t* arena() noexcept { return arena_; }
+    ustore_database_t db() noexcept { return db_; }
+    ustore_transaction_t txn() noexcept { return txn_; }
+    ustore_arena_t* arena() noexcept { return arena_; }
 
-    borrowed_transactional_context_t(ukv_database_t db, ukv_transaction_t txn, ukv_arena_t* arena) noexcept
+    borrowed_transactional_context_t(ustore_database_t db, ustore_transaction_t txn, ustore_arena_t* arena) noexcept
         : db_(db), txn_(txn), arena_(arena) {}
 };
 
@@ -43,14 +43,14 @@ class borrowed_transactional_context_t {
  * Won't allow adding or removing collections or bulk-removing all entries.
  */
 class owned_transactional_context_t {
-    ukv_database_t db_ {nullptr};
-    ukv_transaction_t txn_ {nullptr};
-    ukv_arena_t arena_ {nullptr};
+    ustore_database_t db_ {nullptr};
+    ustore_transaction_t txn_ {nullptr};
+    ustore_arena_t arena_ {nullptr};
 
   public:
-    ukv_database_t db() noexcept { return db_; }
-    ukv_transaction_t txn() noexcept { return txn_; }
-    ukv_arena_t* arena() noexcept { return &arena_; }
+    ustore_database_t db() noexcept { return db_; }
+    ustore_transaction_t txn() noexcept { return txn_; }
+    ustore_arena_t* arena() noexcept { return &arena_; }
 };
 
 /**
@@ -59,13 +59,13 @@ class owned_transactional_context_t {
  * and removal of collections and bulk entry removals.
  */
 class owned_context_t {
-    ukv_database_t db_ = nullptr;
-    ukv_arena_t arena_ = nullptr;
+    ustore_database_t db_ = nullptr;
+    ustore_arena_t arena_ = nullptr;
 
   public:
-    ukv_database_t db() noexcept { return db_; }
-    ukv_transaction_t txn() noexcept { return nullptr; }
-    ukv_arena_t* arena() noexcept { return &arena_; }
+    ustore_database_t db() noexcept { return db_; }
+    ustore_transaction_t txn() noexcept { return nullptr; }
+    ustore_arena_t* arena() noexcept { return &arena_; }
 };
 
-} // namespace unum::ukv
+} // namespace unum::ustore

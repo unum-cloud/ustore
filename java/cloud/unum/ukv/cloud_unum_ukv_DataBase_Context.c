@@ -1,11 +1,11 @@
-#include "cloud_unum_ukv_Shared.h"
-#include "cloud_unum_ukv_DataBase_Context.h"
+#include "cloud_unum_ustore_Shared.h"
+#include "cloud_unum_ustore_DataBase_Context.h"
 
-JNIEXPORT void JNICALL Java_cloud_unum_ukv_DataBase_00024Context_open(JNIEnv* env_java,
+JNIEXPORT void JNICALL Java_cloud_unum_ustore_DataBase_00024Context_open(JNIEnv* env_java,
                                                                       jobject db_java,
                                                                       jstring config_java) {
 
-    ukv_database_t db_ptr_c = db_ptr(env_java, db_java);
+    ustore_database_t db_ptr_c = db_ptr(env_java, db_java);
     if (db_ptr_c) {
         forward_error(env_java, "Database is already opened. Close it's current state first!");
         return;
@@ -17,14 +17,14 @@ JNIEXPORT void JNICALL Java_cloud_unum_ukv_DataBase_00024Context_open(JNIEnv* en
     if ((*env_java)->ExceptionCheck(env_java))
         return;
 
-    ukv_error_t error_c = NULL;
-    struct ukv_database_init_t database = {
+    ustore_error_t error_c = NULL;
+    struct ustore_database_init_t database = {
         .config = config_c,
         .db = &db_ptr_c,
         .error = &error_c,
     };
 
-    ukv_database_init(&database);
+    ustore_database_init(&database);
 
     if (config_is_copy_java == JNI_TRUE)
         (*env_java)->ReleaseStringUTFChars(env_java, config_java, config_c);
@@ -36,27 +36,27 @@ JNIEXPORT void JNICALL Java_cloud_unum_ukv_DataBase_00024Context_open(JNIEnv* en
     (*env_java)->SetLongField(env_java, db_java, db_ptr_field, (long int)db_ptr_c);
 }
 
-JNIEXPORT jobject JNICALL Java_cloud_unum_ukv_DataBase_00024Context_transaction(JNIEnv* env_java, jobject db_java) {
+JNIEXPORT jobject JNICALL Java_cloud_unum_ustore_DataBase_00024Context_transaction(JNIEnv* env_java, jobject db_java) {
 
-    ukv_database_t db_ptr_c = db_ptr(env_java, db_java);
-    ukv_transaction_t txn_ptr_c = txn_ptr(env_java, db_java);
+    ustore_database_t db_ptr_c = db_ptr(env_java, db_java);
+    ustore_transaction_t txn_ptr_c = txn_ptr(env_java, db_java);
     if (!db_ptr_c) {
         forward_error(env_java, "Database is closed!");
         return NULL;
     }
 
-    ukv_error_t error_c = NULL;
-    struct ukv_transaction_init_t txn_init = {
+    ustore_error_t error_c = NULL;
+    struct ustore_transaction_init_t txn_init = {
         .db = db_ptr_c,
         .error = &error_c,
         .transaction = &txn_ptr_c,
     };
 
-    ukv_transaction_init(&txn_init);
+    ustore_transaction_init(&txn_init);
     if (forward_error(env_java, error_c))
         return NULL;
 
-    jclass txn_class_java = (*env_java)->FindClass(env_java, "cloud/unum/ukv/DataBase$Transaction");
+    jclass txn_class_java = (*env_java)->FindClass(env_java, "cloud/unum/ustore/DataBase$Transaction");
     jmethodID txn_constructor_java = (*env_java)->GetMethodID(env_java, txn_class_java, "<init>", "()V");
     jobject txn_java = (*env_java)->NewObject(env_java, txn_class_java, txn_constructor_java);
 
@@ -69,9 +69,9 @@ JNIEXPORT jobject JNICALL Java_cloud_unum_ukv_DataBase_00024Context_transaction(
     return txn_java;
 }
 
-JNIEXPORT void JNICALL Java_cloud_unum_ukv_DataBase_00024Context_close_1(JNIEnv* env_java, jobject db_java) {
+JNIEXPORT void JNICALL Java_cloud_unum_ustore_DataBase_00024Context_close_1(JNIEnv* env_java, jobject db_java) {
 
-    ukv_database_t db_ptr_c = db_ptr(env_java, db_java);
+    ustore_database_t db_ptr_c = db_ptr(env_java, db_java);
     if (!db_ptr_c)
         // The DB is already closed
         return;
@@ -81,25 +81,25 @@ JNIEXPORT void JNICALL Java_cloud_unum_ukv_DataBase_00024Context_close_1(JNIEnv*
     (*env_java)->SetLongField(env_java, db_java, db_ptr_field, (long int)0);
 
     // Then actually dealloc
-    ukv_database_free(db_ptr_c);
+    ustore_database_free(db_ptr_c);
 }
 
-JNIEXPORT void JNICALL Java_cloud_unum_ukv_DataBase_00024Context_clear__(JNIEnv* env_java, jobject db_java) {
+JNIEXPORT void JNICALL Java_cloud_unum_ustore_DataBase_00024Context_clear__(JNIEnv* env_java, jobject db_java) {
 
-    ukv_database_t db_ptr_c = db_ptr(env_java, db_java);
-    ukv_error_t error_c = NULL;
+    ustore_database_t db_ptr_c = db_ptr(env_java, db_java);
+    ustore_error_t error_c = NULL;
     if (!db_ptr_c) {
         forward_error(env_java, "Database is closed!");
         return;
     }
 
-    struct ukv_collection_drop_t collection_drop = {
+    struct ustore_collection_drop_t collection_drop = {
         .db = db_ptr_c,
         .error = &error_c,
-        .id = ukv_collection_main_k,
-        .mode = ukv_drop_keys_vals_k,
+        .id = ustore_collection_main_k,
+        .mode = ustore_drop_keys_vals_k,
     };
 
-    ukv_collection_drop(&collection_drop);
-    forward_ukv_error(env_java, error_c);
+    ustore_collection_drop(&collection_drop);
+    forward_ustore_error(env_java, error_c);
 }

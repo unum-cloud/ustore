@@ -1,5 +1,5 @@
 
-import cloud.unum.ukv.DataBaseUMem;
+import cloud.unum.ustore.DataBaseUMem;
 import org.junit.Test;
 
 import java.util.Arrays;

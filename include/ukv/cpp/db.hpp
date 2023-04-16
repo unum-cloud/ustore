@@ -4,7 +4,7 @@
  * @date 26 Jun 2022
  * @addtogroup Cpp
  *
- * @brief C++ bindings for "ukv/db.h".
+ * @brief C++ bindings for "ustore/db.h".
  */
 
 #pragma once
@@ -12,16 +12,16 @@
 #include <cstring> // `std::strlen`
 #include <memory>  // `std::enable_shared_from_this`
 
-#include "ukv/ukv.h"
-#include "ukv/cpp/blobs_collection.hpp"
-#include "ukv/cpp/docs_collection.hpp"
-#include "ukv/cpp/graph_collection.hpp"
+#include "ustore/ustore.h"
+#include "ustore/cpp/blobs_collection.hpp"
+#include "ustore/cpp/docs_collection.hpp"
+#include "ustore/cpp/graph_collection.hpp"
 
-namespace unum::ukv {
+namespace unum::ustore {
 
-using snapshots_list_t = ptr_range_gt<ukv_snapshot_t>;
+using snapshots_list_t = ptr_range_gt<ustore_snapshot_t>;
 struct collections_list_t {
-    ptr_range_gt<ukv_collection_t> ids;
+    ptr_range_gt<ustore_collection_t> ids;
     strings_tape_iterator_t names;
 };
 
@@ -43,14 +43,14 @@ struct collections_list_t {
  */
 class context_t : public std::enable_shared_from_this<context_t> {
   protected:
-    ukv_database_t db_ {nullptr};
-    ukv_transaction_t txn_ {nullptr};
-    ukv_snapshot_t snap_ {};
+    ustore_database_t db_ {nullptr};
+    ustore_transaction_t txn_ {nullptr};
+    ustore_snapshot_t snap_ {};
     arena_t arena_ {nullptr};
 
   public:
     inline context_t() noexcept : arena_(nullptr) {}
-    inline context_t(ukv_database_t db, ukv_transaction_t txn = nullptr, ukv_snapshot_t snap = {}) noexcept
+    inline context_t(ustore_database_t db, ustore_transaction_t txn = nullptr, ustore_snapshot_t snap = {}) noexcept
         : db_(db), txn_(txn), snap_(snap), arena_(db) {}
     inline context_t(context_t const&) = delete;
     inline context_t(context_t&& other) noexcept
@@ -65,25 +65,25 @@ class context_t : public std::enable_shared_from_this<context_t> {
     }
 
     inline ~context_t() noexcept {
-        ukv_transaction_free(txn_);
+        ustore_transaction_free(txn_);
         txn_ = nullptr;
 
         status_t status;
-        ukv_snapshot_drop_t snap_drop {
+        ustore_snapshot_drop_t snap_drop {
             .db = db_,
             .error = status.member_ptr(),
             .id = snap_,
         };
-        ukv_snapshot_drop(&snap_drop);
+        ustore_snapshot_drop(&snap_drop);
         snap_ = 0;
     }
 
-    inline ukv_database_t db() const noexcept { return db_; }
-    inline ukv_transaction_t txn() const noexcept { return txn_; }
-    inline ukv_snapshot_t snap() const noexcept { return snap_; }
-    inline operator ukv_transaction_t() const noexcept { return txn_; }
+    inline ustore_database_t db() const noexcept { return db_; }
+    inline ustore_transaction_t txn() const noexcept { return txn_; }
+    inline ustore_snapshot_t snap() const noexcept { return snap_; }
+    inline operator ustore_transaction_t() const noexcept { return txn_; }
 
-    inline void set_snapshot(ukv_snapshot_t snap) noexcept { snap_ = snap; }
+    inline void set_snapshot(ustore_snapshot_t snap) noexcept { snap_ = snap; }
 
     blobs_ref_gt<places_arg_t> operator[](strided_range_gt<collection_key_t const> collections_and_keys) noexcept {
         places_arg_t arg;
@@ -115,19 +115,19 @@ class context_t : public std::enable_shared_from_this<context_t> {
         return blobs_ref_gt<keys_arg_at> {db_, txn_, snap_, std::forward<keys_arg_at>(keys), arena_.member_ptr()};
     }
 
-    expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return find(name); }
+    expected_gt<blobs_collection_t> operator[](ustore_str_view_t name) noexcept { return find(name); }
 
     template <typename collection_at = blobs_collection_t>
     collection_at main() noexcept {
-        return collection_at {db_, ukv_collection_main_k, txn_, snap_, arena_.member_ptr()};
+        return collection_at {db_, ustore_collection_main_k, txn_, snap_, arena_.member_ptr()};
     }
 
     expected_gt<collections_list_t> collections() noexcept {
-        ukv_size_t count = 0;
-        ukv_str_span_t names = nullptr;
-        ukv_collection_t* ids = nullptr;
+        ustore_size_t count = 0;
+        ustore_str_span_t names = nullptr;
+        ustore_collection_t* ids = nullptr;
         status_t status;
-        ukv_collection_list_t collection_list {};
+        ustore_collection_list_t collection_list {};
         collection_list.db = db_;
         collection_list.error = status.member_ptr();
         collection_list.transaction = txn_;
@@ -137,7 +137,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
         collection_list.ids = &ids;
         collection_list.names = &names;
 
-        ukv_collection_list(&collection_list);
+        ustore_collection_list(&collection_list);
         collections_list_t result;
         result.ids = {ids, ids + count};
         result.names = {count, names};
@@ -145,18 +145,18 @@ class context_t : public std::enable_shared_from_this<context_t> {
     }
 
     expected_gt<snapshots_list_t> snapshots() noexcept {
-        ukv_size_t count = 0;
-        ukv_str_span_t names = nullptr;
-        ukv_snapshot_t* ids = nullptr;
+        ustore_size_t count = 0;
+        ustore_str_span_t names = nullptr;
+        ustore_snapshot_t* ids = nullptr;
         status_t status;
-        ukv_snapshot_list_t snapshots_list {};
+        ustore_snapshot_list_t snapshots_list {};
         snapshots_list.db = db_;
         snapshots_list.error = status.member_ptr();
         snapshots_list.arena = arena_.member_ptr();
         snapshots_list.count = &count;
         snapshots_list.ids = &ids;
 
-        ukv_snapshot_list(&snapshots_list);
+        ustore_snapshot_list(&snapshots_list);
         snapshots_list_t result = {ids, ids + count};
         return {std::move(status), std::move(result)};
     }
@@ -189,7 +189,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
     expected_gt<collection_at> find(std::string_view name = {}) noexcept {
 
         if (name.empty())
-            return collection_at {db_, ukv_collection_main_k, txn_, {}, arena_.member_ptr()};
+            return collection_at {db_, ustore_collection_main_k, txn_, {}, arena_.member_ptr()};
 
         auto maybe_cols = collections();
         if (!maybe_cols)
@@ -216,12 +216,12 @@ class context_t : public std::enable_shared_from_this<context_t> {
      */
     status_t reset() noexcept {
         status_t status;
-        ukv_transaction_init_t txn_init {};
+        ustore_transaction_init_t txn_init {};
         txn_init.db = db_;
         txn_init.error = status.member_ptr();
         txn_init.transaction = &txn_;
 
-        ukv_transaction_init(&txn_init);
+        ustore_transaction_init(&txn_init);
         return status;
     }
 
@@ -231,27 +231,27 @@ class context_t : public std::enable_shared_from_this<context_t> {
      */
     status_t commit(bool flush = false) noexcept {
         status_t status;
-        auto options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
-        ukv_transaction_commit_t txn_commit {};
+        auto options = flush ? ustore_option_write_flush_k : ustore_options_default_k;
+        ustore_transaction_commit_t txn_commit {};
         txn_commit.db = db_;
         txn_commit.error = status.member_ptr();
         txn_commit.transaction = txn_;
         txn_commit.options = options;
-        ukv_transaction_commit(&txn_commit);
+        ustore_transaction_commit(&txn_commit);
         return status;
     }
 
-    expected_gt<ukv_sequence_number_t> sequenced_commit(bool flush = false) noexcept {
+    expected_gt<ustore_sequence_number_t> sequenced_commit(bool flush = false) noexcept {
         status_t status;
-        auto options = flush ? ukv_option_write_flush_k : ukv_options_default_k;
-        ukv_sequence_number_t sequence_number = std::numeric_limits<ukv_sequence_number_t>::max();
-        ukv_transaction_commit_t txn_commit {};
+        auto options = flush ? ustore_option_write_flush_k : ustore_options_default_k;
+        ustore_sequence_number_t sequence_number = std::numeric_limits<ustore_sequence_number_t>::max();
+        ustore_transaction_commit_t txn_commit {};
         txn_commit.db = db_;
         txn_commit.error = status.member_ptr();
         txn_commit.transaction = txn_;
         txn_commit.options = options;
         txn_commit.sequence_number = &sequence_number;
-        ukv_transaction_commit(&txn_commit);
+        ustore_transaction_commit(&txn_commit);
         return {std::move(status), std::move(sequence_number)};
     }
 };
@@ -270,26 +270,26 @@ using transaction_t = context_t;
  * - Exceptions: Never.
  */
 class database_t : public std::enable_shared_from_this<database_t> {
-    ukv_database_t db_ = nullptr;
+    ustore_database_t db_ = nullptr;
 
   public:
     database_t() = default;
     database_t(database_t const&) = delete;
     database_t(database_t&& other) noexcept : db_(std::exchange(other.db_, nullptr)) {}
-    operator ukv_database_t() const noexcept { return db_; }
+    operator ustore_database_t() const noexcept { return db_; }
 
-    status_t open(ukv_str_view_t config = nullptr) noexcept {
+    status_t open(ustore_str_view_t config = nullptr) noexcept {
         status_t status;
-        ukv_database_init_t database_init {};
+        ustore_database_init_t database_init {};
         database_init.config = config;
         database_init.db = &db_;
         database_init.error = status.member_ptr();
-        ukv_database_init(&database_init);
+        ustore_database_init(&database_init);
         return status;
     }
 
     void close() noexcept {
-        ukv_database_free(db_);
+        ustore_database_free(db_);
         db_ = nullptr;
     }
 
@@ -301,13 +301,13 @@ class database_t : public std::enable_shared_from_this<database_t> {
     expected_gt<context_t> transact() noexcept {
 
         status_t status {};
-        ukv_transaction_t raw {};
-        ukv_transaction_init_t txn_init {};
+        ustore_transaction_t raw {};
+        ustore_transaction_init_t txn_init {};
         txn_init.db = db_;
         txn_init.error = status.member_ptr();
         txn_init.transaction = &raw;
 
-        ukv_transaction_init(&txn_init);
+        ustore_transaction_init(&txn_init);
         if (!status)
             return {std::move(status), context_t {db_, nullptr}};
         else
@@ -316,13 +316,13 @@ class database_t : public std::enable_shared_from_this<database_t> {
 
     expected_gt<context_t> snapshot() noexcept {
         status_t status;
-        ukv_snapshot_t raw = {};
-        ukv_snapshot_create_t snap_create {
+        ustore_snapshot_t raw = {};
+        ustore_snapshot_create_t snap_create {
             .db = db_,
             .error = status.member_ptr(),
             .id = &raw,
         };
-        ukv_snapshot_create(&snap_create);
+        ustore_snapshot_create(&snap_create);
         if (!status)
             return {std::move(status), context_t {db_, nullptr}};
         else
@@ -331,25 +331,25 @@ class database_t : public std::enable_shared_from_this<database_t> {
 
     template <typename collection_at = blobs_collection_t>
     collection_at main() noexcept {
-        return collection_at {db_, ukv_collection_main_k};
+        return collection_at {db_, ustore_collection_main_k};
     }
 
     operator blobs_collection_t() noexcept { return main(); }
-    expected_gt<blobs_collection_t> operator[](ukv_str_view_t name) noexcept { return find_or_create(name); }
+    expected_gt<blobs_collection_t> operator[](ustore_str_view_t name) noexcept { return find_or_create(name); }
     expected_gt<bool> contains(std::string_view name) noexcept { return context_t {db_, nullptr}.contains(name); }
 
     template <typename collection_at = blobs_collection_t>
-    expected_gt<collection_at> create(ukv_str_view_t name, ukv_str_view_t config = "") noexcept {
+    expected_gt<collection_at> create(ustore_str_view_t name, ustore_str_view_t config = "") noexcept {
         status_t status;
-        ukv_collection_t collection = ukv_collection_main_k;
-        ukv_collection_create_t collection_init {};
+        ustore_collection_t collection = ustore_collection_main_k;
+        ustore_collection_create_t collection_init {};
         collection_init.db = db_;
         collection_init.error = status.member_ptr();
         collection_init.name = name;
         collection_init.config = config;
         collection_init.id = &collection;
 
-        ukv_collection_create(&collection_init);
+        ustore_collection_create(&collection_init);
         if (!status)
             return status;
         else
@@ -365,7 +365,7 @@ class database_t : public std::enable_shared_from_this<database_t> {
     }
 
     template <typename collection_at = blobs_collection_t>
-    expected_gt<collection_at> find_or_create(ukv_str_view_t name) noexcept {
+    expected_gt<collection_at> find_or_create(ustore_str_view_t name) noexcept {
         auto maybe_id = context_t {db_, nullptr}.find(name);
         if (maybe_id)
             return collection_at {db_, *maybe_id, nullptr};
@@ -387,13 +387,13 @@ class database_t : public std::enable_shared_from_this<database_t> {
         auto maybe_snaps = context.snapshots();
         auto snaps = *maybe_snaps;
 
-        ukv_snapshot_drop_t snapshot_drop {};
+        ustore_snapshot_drop_t snapshot_drop {};
         snapshot_drop.db = db_;
         snapshot_drop.error = status.member_ptr();
 
         for (auto id : snaps) {
             snapshot_drop.id = id;
-            ukv_snapshot_drop(&snapshot_drop);
+            ustore_snapshot_drop(&snapshot_drop);
             if (!status)
                 return status;
         }
@@ -404,24 +404,24 @@ class database_t : public std::enable_shared_from_this<database_t> {
             return maybe_cols.release_status();
 
         auto cols = *maybe_cols;
-        ukv_collection_drop_t collection_drop {};
+        ustore_collection_drop_t collection_drop {};
         collection_drop.db = db_;
         collection_drop.error = status.member_ptr();
-        collection_drop.mode = ukv_drop_keys_vals_handle_k;
+        collection_drop.mode = ustore_drop_keys_vals_handle_k;
 
         for (auto id : cols.ids) {
             collection_drop.id = id;
-            ukv_collection_drop(&collection_drop);
+            ustore_collection_drop(&collection_drop);
             if (!status)
                 return status;
         }
 
         // Clear the main collection
-        collection_drop.id = ukv_collection_main_k;
-        collection_drop.mode = ukv_drop_keys_vals_k;
-        ukv_collection_drop(&collection_drop);
+        collection_drop.id = ustore_collection_main_k;
+        collection_drop.mode = ustore_drop_keys_vals_k;
+        ustore_collection_drop(&collection_drop);
         return status;
     }
 };
 
-} // namespace unum::ukv
+} // namespace unum::ustore

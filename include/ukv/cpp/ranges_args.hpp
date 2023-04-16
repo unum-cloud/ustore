@@ -4,24 +4,24 @@
  * @date 4 Jul 2022
  * @addtogroup Cpp
  *
- * @brief Range-like argument resolvers for UKV.
+ * @brief Range-like argument resolvers for UStore.
  */
 
 #pragma once
 #include <limits> // `std::numeric_limits`
 
-#include "ukv/cpp/ranges.hpp" // `strided_iterator_gt`
-#include "ukv/cpp/status.hpp" // `return_error_if_m`
+#include "ustore/cpp/ranges.hpp" // `strided_iterator_gt`
+#include "ustore/cpp/status.hpp" // `return_error_if_m`
 
-namespace unum::ukv {
+namespace unum::ustore {
 
-using keys_view_t = strided_range_gt<ukv_key_t const>;
-using fields_view_t = strided_range_gt<ukv_str_view_t const>;
+using keys_view_t = strided_range_gt<ustore_key_t const>;
+using fields_view_t = strided_range_gt<ustore_str_view_t const>;
 
 struct place_t {
-    ukv_collection_t collection;
-    ukv_key_t const& key;
-    ukv_str_view_t field;
+    ustore_collection_t collection;
+    ustore_key_t const& key;
+    ustore_str_view_t field;
 
     inline collection_key_t collection_key() const noexcept { return {collection, key}; }
     inline collection_key_field_t collection_key_field() const noexcept { return {collection, key, field}; }
@@ -33,21 +33,21 @@ struct place_t {
  */
 struct places_arg_t {
     using value_type = place_t;
-    strided_iterator_gt<ukv_collection_t const> collections_begin;
-    strided_iterator_gt<ukv_key_t const> keys_begin;
-    strided_iterator_gt<ukv_str_view_t const> fields_begin;
-    ukv_size_t count {0};
+    strided_iterator_gt<ustore_collection_t const> collections_begin;
+    strided_iterator_gt<ustore_key_t const> keys_begin;
+    strided_iterator_gt<ustore_str_view_t const> fields_begin;
+    ustore_size_t count {0};
 
     inline std::size_t size() const noexcept { return count; }
     inline place_t operator[](std::size_t i) const noexcept {
-        ukv_collection_t collection = collections_begin ? collections_begin[i] : ukv_collection_main_k;
-        ukv_key_t const& key = keys_begin[i];
-        ukv_str_view_t field = fields_begin ? fields_begin[i] : nullptr;
+        ustore_collection_t collection = collections_begin ? collections_begin[i] : ustore_collection_main_k;
+        ustore_key_t const& key = keys_begin[i];
+        ustore_str_view_t field = fields_begin ? fields_begin[i] : nullptr;
         return {collection, key, field};
     }
 
     bool same_collection() const noexcept {
-        return strided_range_gt<ukv_collection_t const>(collections_begin, count).same_elements();
+        return strided_range_gt<ustore_collection_t const>(collections_begin, count).same_elements();
     }
 };
 
@@ -59,11 +59,11 @@ struct places_arg_t {
 struct contents_arg_t {
     using value_type = value_view_t;
     bits_view_t presences_begin;
-    strided_iterator_gt<ukv_length_t const> offsets_begin;
-    strided_iterator_gt<ukv_length_t const> lengths_begin;
-    strided_iterator_gt<ukv_bytes_cptr_t const> contents_begin;
-    ukv_size_t count {0};
-    ukv_char_t separator {'\0'};
+    strided_iterator_gt<ustore_length_t const> offsets_begin;
+    strided_iterator_gt<ustore_length_t const> lengths_begin;
+    strided_iterator_gt<ustore_bytes_cptr_t const> contents_begin;
+    ustore_size_t count {0};
+    ustore_char_t separator {'\0'};
 
     inline std::size_t size() const noexcept { return count; }
     inline value_view_t operator[](std::size_t i) const noexcept {
@@ -72,7 +72,7 @@ struct contents_arg_t {
 
         auto begin = reinterpret_cast<byte_t const*>(contents_begin[i]);
         auto off = offsets_begin ? offsets_begin[i] : 0u;
-        ukv_length_t len = 0;
+        ustore_length_t len = 0;
         if (lengths_begin)
             len = lengths_begin[i];
         else if (offsets_begin)
@@ -101,66 +101,66 @@ struct contents_arg_t {
 };
 
 struct scan_t {
-    ukv_collection_t collection;
-    ukv_key_t min_key;
-    ukv_length_t limit;
+    ustore_collection_t collection;
+    ustore_key_t min_key;
+    ustore_length_t limit;
 };
 
 /**
- * @brief Arguments of `ukv_scan()` aggregated into a Structure-of-Arrays.
+ * @brief Arguments of `ustore_scan()` aggregated into a Structure-of-Arrays.
  * Is used to validate various combinations of arguments, strides, NULLs, etc.
  */
 struct scans_arg_t {
-    strided_iterator_gt<ukv_collection_t const> collections;
-    strided_iterator_gt<ukv_key_t const> start_keys;
-    strided_iterator_gt<ukv_length_t const> limits;
-    ukv_size_t count = 0;
+    strided_iterator_gt<ustore_collection_t const> collections;
+    strided_iterator_gt<ustore_key_t const> start_keys;
+    strided_iterator_gt<ustore_length_t const> limits;
+    ustore_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
     inline scan_t operator[](std::size_t i) const noexcept {
-        ukv_collection_t collection = collections ? collections[i] : ukv_collection_main_k;
-        ukv_key_t min_key = start_keys ? start_keys[i] : std::numeric_limits<ukv_key_t>::min();
-        ukv_length_t limit = limits[i];
+        ustore_collection_t collection = collections ? collections[i] : ustore_collection_main_k;
+        ustore_key_t min_key = start_keys ? start_keys[i] : std::numeric_limits<ustore_key_t>::min();
+        ustore_length_t limit = limits[i];
         return {collection, min_key, limit};
     }
 
     bool same_collection() const noexcept {
-        strided_range_gt<ukv_collection_t const> range(collections, count);
+        strided_range_gt<ustore_collection_t const> range(collections, count);
         return range.same_elements();
     }
 };
 
 struct sample_arg_t {
-    ukv_collection_t collection;
-    ukv_length_t limit;
+    ustore_collection_t collection;
+    ustore_length_t limit;
 };
 
 /**
- * @brief Arguments of `ukv_sample` aggregated into a Structure-of-Arrays.
+ * @brief Arguments of `ustore_sample` aggregated into a Structure-of-Arrays.
  * Is used to validate various combinations of arguments, strides, NULLs, etc.
  */
 struct sample_args_t {
-    strided_iterator_gt<ukv_collection_t const> collections;
-    strided_iterator_gt<ukv_length_t const> limits;
-    ukv_size_t count = 0;
+    strided_iterator_gt<ustore_collection_t const> collections;
+    strided_iterator_gt<ustore_length_t const> limits;
+    ustore_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
     inline sample_arg_t operator[](std::size_t i) const noexcept {
-        ukv_collection_t collection = collections ? collections[i] : ukv_collection_main_k;
-        ukv_length_t limit = limits[i];
+        ustore_collection_t collection = collections ? collections[i] : ustore_collection_main_k;
+        ustore_length_t limit = limits[i];
         return {collection, limit};
     }
 
     bool same_collection() const noexcept {
-        strided_range_gt<ukv_collection_t const> range(collections, count);
+        strided_range_gt<ustore_collection_t const> range(collections, count);
         return range.same_elements();
     }
 };
 
 struct find_edge_t {
-    ukv_collection_t collection;
-    ukv_key_t const& vertex_id;
-    ukv_vertex_role_t role;
+    ustore_collection_t collection;
+    ustore_key_t const& vertex_id;
+    ustore_vertex_role_t role;
 };
 /**
  * Working with batched data is ugly in C++.
@@ -169,21 +169,21 @@ struct find_edge_t {
  */
 struct find_edges_t {
     using value_type = find_edge_t;
-    strided_iterator_gt<ukv_collection_t const> collections_begin;
-    strided_iterator_gt<ukv_key_t const> vertex_id_begin;
-    strided_iterator_gt<ukv_vertex_role_t const> roles_begin;
-    ukv_size_t count = 0;
+    strided_iterator_gt<ustore_collection_t const> collections_begin;
+    strided_iterator_gt<ustore_key_t const> vertex_id_begin;
+    strided_iterator_gt<ustore_vertex_role_t const> roles_begin;
+    ustore_size_t count = 0;
 
     inline std::size_t size() const noexcept { return count; }
     inline find_edge_t operator[](std::size_t i) const noexcept {
-        ukv_collection_t collection = collections_begin ? collections_begin[i] : ukv_collection_main_k;
-        ukv_key_t const& vertex_id = vertex_id_begin[i];
-        ukv_vertex_role_t role = roles_begin ? roles_begin[i] : ukv_vertex_role_any_k;
+        ustore_collection_t collection = collections_begin ? collections_begin[i] : ustore_collection_main_k;
+        ustore_key_t const& vertex_id = vertex_id_begin[i];
+        ustore_vertex_role_t role = roles_begin ? roles_begin[i] : ustore_vertex_role_any_k;
         return {collection, vertex_id, role};
     }
 
     bool same_collection() const noexcept {
-        return strided_range_gt<ukv_collection_t const>(collections_begin, count).same_elements();
+        return strided_range_gt<ustore_collection_t const>(collections_begin, count).same_elements();
     }
 };
 
@@ -206,7 +206,7 @@ struct edges_range_gt {
 
     inline edges_range_gt(strided_range_gt<id_t> sources,
                           strided_range_gt<id_t> targets,
-                          strided_range_gt<id_t> edges = {&ukv_default_edge_id_k, 1}) noexcept
+                          strided_range_gt<id_t> edges = {&ustore_default_edge_id_k, 1}) noexcept
         : source_ids(sources), target_ids(targets), edge_ids(edges) {}
 
     inline edges_range_gt(tuple_t* ptr, tuple_t* end) noexcept {
@@ -232,8 +232,8 @@ struct edges_range_gt {
     }
 };
 
-using edges_span_t = edges_range_gt<ukv_key_t>;
-using edges_view_t = edges_range_gt<ukv_key_t const>;
+using edges_span_t = edges_range_gt<ustore_key_t>;
+using edges_view_t = edges_range_gt<ustore_key_t const>;
 
 template <typename tuples_at>
 auto edges(tuples_at&& tuples) noexcept {
@@ -246,8 +246,8 @@ auto edges(tuples_at&& tuples) noexcept {
     return result_t(ptr, ptr + count);
 }
 
-inline bool same_collections_are_named(strided_iterator_gt<ukv_collection_t const> collections_begin) noexcept {
-    return collections_begin && collections_begin[0] != ukv_collection_main_k;
+inline bool same_collections_are_named(strided_iterator_gt<ustore_collection_t const> collections_begin) noexcept {
+    return collections_begin && collections_begin[0] != ustore_collection_main_k;
 }
 
 template <typename enum_at, typename allowed_mask_at>
@@ -255,16 +255,16 @@ inline bool enum_is_subset(enum_at enum_value, allowed_mask_at allowed) noexcept
     return (enum_value & ~allowed) == 0;
 }
 
-inline void validate_write(ukv_transaction_t const c_txn,
+inline void validate_write(ustore_transaction_t const c_txn,
                            places_arg_t const& places,
                            contents_arg_t const& contents,
-                           ukv_options_t const c_options,
-                           ukv_error_t* c_error) noexcept {
+                           ustore_options_t const c_options,
+                           ustore_error_t* c_error) noexcept {
 
-    auto allowed_options =                    //
-        ukv_option_transaction_dont_watch_k | //
-        ukv_option_dont_discard_memory_k |    //
-        ukv_option_write_flush_k;
+    auto allowed_options =                       //
+        ustore_option_transaction_dont_watch_k | //
+        ustore_option_dont_discard_memory_k |    //
+        ustore_option_write_flush_k;
     return_error_if_m(enum_is_subset(c_options, allowed_options), c_error, args_wrong_k, "Invalid options!");
 
     return_error_if_m(places.keys_begin, c_error, args_wrong_k, "No keys were provided!");
@@ -277,88 +277,91 @@ inline void validate_write(ukv_transaction_t const c_txn,
                           "Can't address NULLs!");
 
     if (!places.same_collection() || same_collections_are_named(places.collections_begin))
-        return_error_if_m(ukv_supports_named_collections_k,
+        return_error_if_m(ustore_supports_named_collections_k,
                           c_error,
                           args_wrong_k,
                           "Current engine does not support named collections!");
 
     if (c_txn)
-        return_error_if_m(ukv_supports_transactions_k,
+        return_error_if_m(ustore_supports_transactions_k,
                           c_error,
                           args_wrong_k,
                           "Current engine does not support transactions!");
 }
 
-inline void validate_read(ukv_transaction_t const c_txn,
+inline void validate_read(ustore_transaction_t const c_txn,
                           places_arg_t const& places,
-                          ukv_options_t const c_options,
-                          ukv_error_t* c_error) noexcept {
+                          ustore_options_t const c_options,
+                          ustore_error_t* c_error) noexcept {
 
-    auto allowed_options =                    //
-        ukv_option_transaction_dont_watch_k | //
-        ukv_option_dont_discard_memory_k |    //
-        ukv_option_read_shared_memory_k;
+    auto allowed_options =                       //
+        ustore_option_transaction_dont_watch_k | //
+        ustore_option_dont_discard_memory_k |    //
+        ustore_option_read_shared_memory_k;
     return_error_if_m(enum_is_subset(c_options, allowed_options), c_error, args_wrong_k, "Invalid options!");
 
     return_error_if_m(places.keys_begin, c_error, args_wrong_k, "No keys were provided!");
 
     if (!places.same_collection() || same_collections_are_named(places.collections_begin))
-        return_error_if_m(ukv_supports_named_collections_k,
+        return_error_if_m(ustore_supports_named_collections_k,
                           c_error,
                           args_wrong_k,
                           "Current engine does not support named collections!");
 
     if (c_txn)
-        return_error_if_m(ukv_supports_transactions_k,
+        return_error_if_m(ustore_supports_transactions_k,
                           c_error,
                           args_wrong_k,
                           "Current engine does not support transactions!");
 }
 
-inline void validate_scan(ukv_transaction_t const c_txn,
+inline void validate_scan(ustore_transaction_t const c_txn,
                           scans_arg_t const& args,
-                          ukv_options_t const c_options,
-                          ukv_error_t* c_error) noexcept {
+                          ustore_options_t const c_options,
+                          ustore_error_t* c_error) noexcept {
 
-    auto allowed_options =                    //
-        ukv_option_transaction_dont_watch_k | //
-        ukv_option_dont_discard_memory_k |    //
-        ukv_option_read_shared_memory_k |     //
-        ukv_option_scan_bulk_k;
+    auto allowed_options =                       //
+        ustore_option_transaction_dont_watch_k | //
+        ustore_option_dont_discard_memory_k |    //
+        ustore_option_read_shared_memory_k |     //
+        ustore_option_scan_bulk_k;
     return_error_if_m(enum_is_subset(c_options, allowed_options), c_error, args_wrong_k, "Invalid options!");
 
     return_error_if_m(args.limits, c_error, args_wrong_k, "Full scans aren't supported - paginate!");
 
     if (!args.same_collection() || same_collections_are_named(args.collections))
-        return_error_if_m(ukv_supports_named_collections_k,
+        return_error_if_m(ustore_supports_named_collections_k,
                           c_error,
                           args_wrong_k,
                           "Current engine does not support named collections!");
 
     if (c_txn)
-        return_error_if_m(ukv_supports_transactions_k,
+        return_error_if_m(ustore_supports_transactions_k,
                           c_error,
                           args_wrong_k,
                           "Current engine does not support transactions!");
 }
 
-inline void validate_transaction_begin(ukv_transaction_t const c_txn,
-                                       ukv_options_t const c_options,
-                                       ukv_error_t* c_error) noexcept {
+inline void validate_transaction_begin(ustore_transaction_t const c_txn,
+                                       ustore_options_t const c_options,
+                                       ustore_error_t* c_error) noexcept {
 
     return_error_if_m(c_txn, c_error, args_wrong_k, "Transaction is uninitialized");
-    return_error_if_m(enum_is_subset(c_options, ukv_option_transaction_dont_watch_k),
+    return_error_if_m(enum_is_subset(c_options, ustore_option_transaction_dont_watch_k),
                       c_error,
                       args_wrong_k,
                       "Invalid options!");
 }
 
-inline void validate_transaction_commit(ukv_transaction_t const c_txn,
-                                        ukv_options_t const c_options,
-                                        ukv_error_t* c_error) noexcept {
+inline void validate_transaction_commit(ustore_transaction_t const c_txn,
+                                        ustore_options_t const c_options,
+                                        ustore_error_t* c_error) noexcept {
 
     return_error_if_m(c_txn, c_error, args_wrong_k, "Transaction is uninitialized");
-    return_error_if_m(enum_is_subset(c_options, ukv_option_write_flush_k), c_error, args_wrong_k, "Invalid options!");
+    return_error_if_m(enum_is_subset(c_options, ustore_option_write_flush_k),
+                      c_error,
+                      args_wrong_k,
+                      "Invalid options!");
 }
 
-} // namespace unum::ukv
+} // namespace unum::ustore

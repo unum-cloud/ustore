@@ -1,4 +1,4 @@
-package cloud.unum.ukv;
+package cloud.unum.ustore;
 
 
 public class DataBaseUMem extends DataBase {

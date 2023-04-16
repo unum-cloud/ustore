@@ -24,7 +24,7 @@
  * - Supporting input tapes (values_stride = 0, offsets_stride != 0).
  * - List-oriented wrappers (values_stride != 0, offsets_stride = 0).
  *
- * In the first case, we may have received a tape from `ukv_read()`, which we
+ * In the first case, we may have received a tape from `ustore_read()`, which we
  * update in-place and write back, without changing the size of the original
  * entries.
  *
@@ -54,16 +54,16 @@
 extern "C" {
 #endif
 
-#include "ukv/db.h"
+#include "ustore/db.h"
 
 /**
  * @brief Main "setter" or "scatter" interface.
- * @see `ukv_write()`.
- * @see https://unum.cloud/ukv/c#writes
+ * @see `ustore_write()`.
+ * @see https://unum.cloud/ustore/c#writes
  *
  * ## Functionality
  *
- * This is one of the two primary methods, together with `ukv_read()`,
+ * This is one of the two primary methods, together with `ustore_read()`,
  * so its functionality is wide. It knots together various kinds of updates:
  *
  * - Single writes and Batches.
@@ -86,37 +86,37 @@ extern "C" {
  * which can be used to implement any advanced multi-step operations (often including conditionals),
  * like Compare-And-Swap, without losing atomicity.
  */
-typedef struct ukv_write_t {
+typedef struct ustore_write_t {
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /**
      * @brief Pointer to exported error message.
-     * If not NULL, must be deallocated with `ukv_error_free()`.
+     * If not NULL, must be deallocated with `ustore_error_free()`.
      */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /**
      * @brief The transaction in which the operation will be watched.
-     * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
+     * @see `ustore_transaction_init()`, `ustore_transaction_commit()`, `ustore_transaction_free()`.
      */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /**
      * @brief Reusable memory handle.
-     * @see `ukv_arena_free()`.
+     * @see `ustore_arena_free()`.
      */
-    ukv_arena_t* arena;
+    ustore_arena_t* arena;
     /**
      * @brief Write options.
      *
      * Possible values:
-     * - `::ukv_option_write_flush_k`: Forces to persist non-transactional writes on disk before returning.
-     * - `::ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional writes.
-     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ustore_option_write_flush_k`: Forces to persist non-transactional writes on disk before returning.
+     * - `::ustore_option_transaction_dont_watch_k`: Disables collision-detection for transactional writes.
+     * - `::ustore_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options;
+    ustore_options_t options;
 
     /// @}
     /// @name Locations
@@ -126,16 +126,16 @@ typedef struct ukv_write_t {
      * @brief Number of separate operations packed in this read.
      * Always equal to the number of provided `keys`.
      */
-    ukv_size_t tasks_count;
+    ustore_size_t tasks_count;
     /**
      * @brief Sequence of collections owning the `keys`.
      *
      * If `NULL` is passed, the default collection is assumed.
      * If multiple collections are passed, the step between them is defined by `collections_stride`.
-     * Use `ukv_collection_create()` or `ukv_collection_list()` to obtain collection IDs for string names.
+     * Use `ustore_collection_create()` or `ustore_collection_list()` to obtain collection IDs for string names.
      * Is @b optional.
      */
-    ukv_collection_t const* collections;
+    ustore_collection_t const* collections;
     /**
      * @brief Step between `collections`.
      *
@@ -144,14 +144,14 @@ typedef struct ukv_write_t {
      * You can use it to retrieve different keys from the same collection in one call.
      * Is @b optional.
      */
-    ukv_size_t collections_stride;
+    ustore_size_t collections_stride;
     /**
      * @brief Sequence of keys to update.
      *
      * Contains the pointer to the first of `tasks_count` keys to be collected from `collections`.
      * If multiple keys are passed, the step between them is defined by `keys_stride`.
      */
-    ukv_key_t const* keys;
+    ustore_key_t const* keys;
     /**
      * @brief Step between `keys`.
      *
@@ -160,7 +160,7 @@ typedef struct ukv_write_t {
      * You can use it to retrieve the same key from different collections in one call.
      * Is @b optional.
      */
-    ukv_size_t keys_stride;
+    ustore_size_t keys_stride;
 
     /// @}
     /// @name Contents
@@ -173,7 +173,7 @@ typedef struct ukv_write_t {
      * Is addressed the same way as in Apache Arrow.
      * Is @b optional.
      */
-    ukv_octet_t const* presences;
+    ustore_octet_t const* presences;
     /**
      * @brief The pointer to the offset (in bytes) of the first content within
      * the first chunk of `values`.
@@ -183,7 +183,7 @@ typedef struct ukv_write_t {
      * but also allows to skip some structure header, like the @c PyObject_HEAD
      * in every CPython runtime object.
      */
-    ukv_length_t const* offsets;
+    ustore_length_t const* offsets;
     /**
      * @brief Step between `offsets`.
      *
@@ -191,7 +191,7 @@ typedef struct ukv_write_t {
      * Zero stride would reuse the same address for all tasks.
      * Is @b optional.
      */
-    ukv_size_t offsets_stride;
+    ustore_size_t offsets_stride;
     /**
      * @brief The pointer to the offset (in bytes) of the first content within
      * the first chunk of `values`. Zero-length entries are allowed.
@@ -200,7 +200,7 @@ typedef struct ukv_write_t {
      * If neither `offsets` nor `lengths` are passed, we assume values
      * to be `NULL`-terminated and infer the length from `values` themselves.
      */
-    ukv_length_t const* lengths;
+    ustore_length_t const* lengths;
     /**
      * @brief Step between `keys`.
      *
@@ -208,7 +208,7 @@ typedef struct ukv_write_t {
      * Zero stride would reuse the same address for all tasks.
      * Is @b optional.
      */
-    ukv_size_t lengths_stride;
+    ustore_size_t lengths_stride;
     /**
      * @brief An array of pointers to data chunks.
      * If `NULL`, will simply delete all the `keys` from respective `collections`.
@@ -216,32 +216,32 @@ typedef struct ukv_write_t {
      * Generally, we expect each chunk to be identical to the content we want to write,
      * but we can specify subspans by using `offsets` and `lengths`.
      */
-    ukv_bytes_cptr_t const* values;
+    ustore_bytes_cptr_t const* values;
     /**
      * @brief The number of bytes separating entries in the `values` array.
      * Zero stride would reuse the same address for all tasks.
      * Is @b optional.
      */
-    ukv_size_t values_stride;
+    ustore_size_t values_stride;
 
     /// @}
 
-} ukv_write_t;
+} ustore_write_t;
 
 /**
  * @brief Main "setter" or "scatter" interface.
- * @see `ukv_write_t`.
+ * @see `ustore_write_t`.
  */
-void ukv_write(ukv_write_t*);
+void ustore_write(ustore_write_t*);
 
 /**
  * @brief Main "getter" or "gather" interface.
- * @see `ukv_read()`.
- * @see https://unum.cloud/ukv/c#reads
+ * @see `ustore_read()`.
+ * @see https://unum.cloud/ustore/c#reads
  *
  * ## Functionality
  *
- * This is one of the two primary methods, together with `ukv_write()`,
+ * This is one of the two primary methods, together with `ustore_write()`,
  * so its functionality is wide. It knots together various kinds of reads:
  *
  * - Single reads and Batches.
@@ -251,43 +251,43 @@ void ukv_write(ukv_write_t*);
  *
  * Check docs below to see how different variants can be invoked.
  */
-typedef struct ukv_read_t {
+typedef struct ustore_read_t {
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /**
      * @brief Pointer to exported error message.
-     * If not NULL, must be deallocated with `ukv_error_free()`.
+     * If not NULL, must be deallocated with `ustore_error_free()`.
      */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /**
      * @brief The transaction in which the operation will be watched.
-     * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
+     * @see `ustore_transaction_init()`, `ustore_transaction_commit()`, `ustore_transaction_free()`.
      */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /**
      * @brief The snapshot captures a view of the database at the time it's created.
-     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     * @see `ustore_snapshot_list()`, `ustore_snapshot_create()`, `ustore_snapshot_drop()`.
      */
-    ukv_snapshot_t snapshot;
+    ustore_snapshot_t snapshot;
     /**
      * @brief Reusable memory handle.
-     * @see `ukv_arena_free()`.
+     * @see `ustore_arena_free()`.
      */
-    ukv_arena_t* arena;
+    ustore_arena_t* arena;
     /**
      * @brief Read options.
      *
      * Possible values:
-     * - `::ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
-     * - `::ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
-     * - `::ukv_option_scan_bulk_k`: Suggests that the list of keys was received from a bulk scan.
-     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ustore_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
+     * - `::ustore_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
+     * - `::ustore_option_scan_bulk_k`: Suggests that the list of keys was received from a bulk scan.
+     * - `::ustore_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options;
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
@@ -297,16 +297,16 @@ typedef struct ukv_read_t {
      * @brief Number of separate operations packed in this read.
      * Always equal to the number of provided `keys`.
      */
-    ukv_size_t tasks_count;
+    ustore_size_t tasks_count;
     /**
      * @brief Sequence of collections owning the `keys`.
      *
      * If `NULL` is passed, the default collection is assumed.
      * If multiple collections are passed, the step between them is defined by `collections_stride`.
-     * Use `ukv_collection_create()` or `ukv_collection_list()` to obtain collection IDs for string names.
+     * Use `ustore_collection_create()` or `ustore_collection_list()` to obtain collection IDs for string names.
      * Is @b optional.
      */
-    ukv_collection_t const* collections;
+    ustore_collection_t const* collections;
     /**
      * @brief Step between `collections`.
      *
@@ -315,14 +315,14 @@ typedef struct ukv_read_t {
      * You can use it to retrieve different keys from the same collection in one call.
      * Is @b optional.
      */
-    ukv_size_t collections_stride;
+    ustore_size_t collections_stride;
     /**
      * @brief Sequence of `keys` to retrieve.
      *
      * Contains the pointer to the first of `tasks_count` keys to be collected from `collections`.
      * If multiple keys are passed, the step between them is defined by `keys_stride`.
      */
-    ukv_key_t const* keys;
+    ustore_key_t const* keys;
     /**
      * @brief Step between `keys`.
      *
@@ -331,7 +331,7 @@ typedef struct ukv_read_t {
      * You can use it to retrieve the same key from different collections in one call.
      * Is @b optional.
      */
-    ukv_size_t keys_stride;
+    ustore_size_t keys_stride;
 
     /// @}
     /// @name Outputs
@@ -345,7 +345,7 @@ typedef struct ukv_read_t {
      * Is addressed the same way as in Apache Arrow.
      * Is @b optional.
      */
-    ukv_octet_t** presences;
+    ustore_octet_t** presences;
     /**
      * @brief Output content offsets within `values`.
      *
@@ -355,7 +355,7 @@ typedef struct ukv_read_t {
      * the end to allow inferring the length of the last entry without using `lengths`.
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
-    ukv_length_t** offsets;
+    ustore_length_t** offsets;
     /**
      * @brief Output content lengths within `values`.
      *
@@ -363,7 +363,7 @@ typedef struct ukv_read_t {
      * Each defines a response length in bytes within `values`.
      * Is @b optional.
      */
-    ukv_length_t** lengths;
+    ustore_length_t** lengths;
     /**
      * @brief Output content tape.
      *
@@ -378,27 +378,27 @@ typedef struct ukv_read_t {
      *   The last offset will be used to determine the length of the last entry.
      *   Zero-length and Missing entries will be indistinguishable unless you also check `presences`.
      * - If only `lengths` are exported, entries are concatenated in-order without any gaps.
-     *   Missing entries will have a length equal to `::ukv_length_missing_k`.
+     *   Missing entries will have a length equal to `::ustore_length_missing_k`.
      *
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
-    ukv_byte_t** values;
+    ustore_byte_t** values;
     /// @}
-} ukv_read_t;
+} ustore_read_t;
 
 /**
  * @brief Main "getter" interface.
- * @see `ukv_read_t`.
+ * @see `ustore_read_t`.
  */
-void ukv_read(ukv_read_t*);
+void ustore_read(ustore_read_t*);
 
 /**
  * @brief Main "scanning", "range selection", "iteration", "enumeration" interface.
- * @see `ukv_scan()`.
+ * @see `ustore_scan()`.
  *
  * Retrieves the following (upto) `count_limits[i]` keys starting
  * from `start_key[i]` or the smallest following key in each collection.
- * Values are not exported, for that - follow up with a `ukv_read()` or
+ * Values are not exported, for that - follow up with a `ustore_read()` or
  * a higher-level interface for Graphs, Docs or other modalities.
  *
  * ## Scans vs Iterators
@@ -409,43 +409,43 @@ void ukv_read(ukv_read_t*);
  * ## Bulk Scans
  *
  */
-typedef struct ukv_scan_t {
+typedef struct ustore_scan_t {
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /**
      * @brief Pointer to exported error message.
-     * If not NULL, must be deallocated with `ukv_error_free()`.
+     * If not NULL, must be deallocated with `ustore_error_free()`.
      */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /**
      * @brief The transaction in which the operation will be watched.
-     * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
+     * @see `ustore_transaction_init()`, `ustore_transaction_commit()`, `ustore_transaction_free()`.
      */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /**
      * @brief A snapshot captures a point-in-time view of the DB at the time it's created.
-     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     * @see `ustore_snapshot_list()`, `ustore_snapshot_create()`, `ustore_snapshot_drop()`.
      */
-    ukv_snapshot_t snapshot;
+    ustore_snapshot_t snapshot;
     /**
      * @brief Reusable memory handle.
-     * @see `ukv_arena_free()`.
+     * @see `ustore_arena_free()`.
      */
-    ukv_arena_t* arena;
+    ustore_arena_t* arena;
     /**
      * @brief Scan options.
      *
      * Possible values:
-     * - `::ukv_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
-     * - `::ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
-     * - `::ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
-     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ustore_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
+     * - `::ustore_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
+     * - `::ustore_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
+     * - `::ustore_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options;
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
@@ -455,16 +455,16 @@ typedef struct ukv_scan_t {
      * @brief Number of separate operations packed in this read.
      * Always equal to the number of provided `start_keys`.
      */
-    ukv_size_t tasks_count;
+    ustore_size_t tasks_count;
     /**
      * @brief Sequence of collections owning the `start_keys`.
      *
      * If `NULL` is passed, the default collection is assumed.
      * If multiple collections are passed, the step between them is defined by `collections_stride`.
-     * Use `ukv_collection_create()` or `ukv_collection_list()` to obtain collection IDs for string names.
+     * Use `ustore_collection_create()` or `ustore_collection_list()` to obtain collection IDs for string names.
      * Is @b optional.
      */
-    ukv_collection_t const* collections;
+    ustore_collection_t const* collections;
     /**
      * @brief Step between `collections`.
      *
@@ -473,14 +473,14 @@ typedef struct ukv_scan_t {
      * You can use it to retrieve different keys from the same collection in one call.
      * Is @b optional.
      */
-    ukv_size_t collections_stride;
+    ustore_size_t collections_stride;
     /**
      * @brief Starting points for each scan or "range select".
      *
      * Contains the pointer to the first of `tasks_count` starting points.
      * If multiple scan tasks are passed, the step between them is defined by `start_keys_stride`.
      */
-    ukv_key_t const* start_keys;
+    ustore_key_t const* start_keys;
     /**
      * @brief Step between `start_keys`.
      *
@@ -489,14 +489,14 @@ typedef struct ukv_scan_t {
      * You can use it to retrieve the same "ray" of keys from different `collections`.
      * Is @b optional.
      */
-    ukv_size_t start_keys_stride;
+    ustore_size_t start_keys_stride;
     /**
      * @brief Number of consecutive entries to read in each request.
      *
      * Contains the pointer to the first of `tasks_count` starting points.
      * If multiple scan tasks are passed, the step between them is defined by `count_limits_stride`.
      */
-    ukv_length_t const* count_limits;
+    ustore_length_t const* count_limits;
     /**
      * @brief Step between `count_limits`.
      *
@@ -505,7 +505,7 @@ typedef struct ukv_scan_t {
      * You can use it to retrieve identical number of entries from different start points.
      * Is @b optional.
      */
-    ukv_size_t count_limits_stride;
+    ustore_size_t count_limits_stride;
 
     /// @}
     /// @name Outputs
@@ -515,12 +515,12 @@ typedef struct ukv_scan_t {
      * @brief Output number of exported entries before for each scan.
      *
      * Will contain a pointer to an array of `tasks_count` integer offsets.
-     * Each marks a response offset in number of @c ukv_key_t keys starting from `*keys`.
+     * Each marks a response offset in number of @c ustore_key_t keys starting from `*keys`.
      * To be fully compatible with Apache Arrow we append one more offset at
      * the end to allow inferring the length of the last entry without using `lengths`.
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
-    ukv_length_t** offsets;
+    ustore_length_t** offsets;
     /**
      * @brief Output number of found entries for each scan.
      *
@@ -529,7 +529,7 @@ typedef struct ukv_scan_t {
      * For any `i` under `tasks_count`, this holds: `count_limits[i] >= counts[i]`.
      * Is @b optional.
      */
-    ukv_length_t** counts;
+    ustore_length_t** counts;
     /**
      * @brief Output keys tape.
      *
@@ -538,58 +538,58 @@ typedef struct ukv_scan_t {
      * a single "tape" structure, which later be exported into (often disjoint)
      * runtime- or library-specific implementations.
      */
-    ukv_key_t** keys;
+    ustore_key_t** keys;
     /// @}
 
-} ukv_scan_t;
+} ustore_scan_t;
 
 /**
  * @brief Main "scanning", "range selection", "iteration", "enumeration" interface.
- * @see `ukv_scan_t`.
+ * @see `ustore_scan_t`.
  */
-void ukv_scan(ukv_scan_t*);
+void ustore_scan(ustore_scan_t*);
 
 /**
  * @brief Uniformly randomly samples keys from provided collections.
- * @see `ukv_sample()`.
+ * @see `ustore_sample()`.
  */
-typedef struct ukv_sample_t {
+typedef struct ustore_sample_t {
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /**
      * @brief Pointer to exported error message.
-     * If not NULL, must be deallocated with `ukv_error_free()`.
+     * If not NULL, must be deallocated with `ustore_error_free()`.
      */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /**
      * @brief The transaction in which the operation will be watched.
-     * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
+     * @see `ustore_transaction_init()`, `ustore_transaction_commit()`, `ustore_transaction_free()`.
      */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /**
      * @brief The snapshot captures a view of the database at the time it's created.
-     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     * @see `ustore_snapshot_list()`, `ustore_snapshot_create()`, `ustore_snapshot_drop()`.
      */
-    ukv_snapshot_t snapshot;
+    ustore_snapshot_t snapshot;
     /**
      * @brief Reusable memory handle.
-     * @see `ukv_arena_free()`.
+     * @see `ustore_arena_free()`.
      */
-    ukv_arena_t* arena;
+    ustore_arena_t* arena;
     /**
      * @brief Sampling options.
      *
      * Possible values:
-     * - `::ukv_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
-     * - `::ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
-     * - `::ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
-     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ustore_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
+     * - `::ustore_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
+     * - `::ustore_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
+     * - `::ustore_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options;
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
@@ -599,16 +599,16 @@ typedef struct ukv_sample_t {
      * @brief Number of separate operations packed in this read.
      * Always equal to the number of provided `start_keys`.
      */
-    ukv_size_t tasks_count;
+    ustore_size_t tasks_count;
     /**
      * @brief Sequence of collections owning the `start_keys`.
      *
      * If `NULL` is passed, the default collection is assumed.
      * If multiple collections are passed, the step between them is defined by `collections_stride`.
-     * Use `ukv_collection_create()` or `ukv_collection_list()` to obtain collection IDs for string names.
+     * Use `ustore_collection_create()` or `ustore_collection_list()` to obtain collection IDs for string names.
      * Is @b optional.
      */
-    ukv_collection_t const* collections;
+    ustore_collection_t const* collections;
     /**
      * @brief Step between `collections`.
      *
@@ -617,14 +617,14 @@ typedef struct ukv_sample_t {
      * You can use it to retrieve different keys from the same collection in one call.
      * Is @b optional.
      */
-    ukv_size_t collections_stride;
+    ustore_size_t collections_stride;
     /**
      * @brief Number of samples to be gathered for each request.
      *
      * Contains the pointer to the first of `tasks_count` starting points.
      * If multiple samples are requested, the step between them is defined by `count_limits_stride`.
      */
-    ukv_length_t const* count_limits;
+    ustore_length_t const* count_limits;
     /**
      * @brief Step between `count_limits`.
      *
@@ -633,7 +633,7 @@ typedef struct ukv_sample_t {
      * You can use it to retrieve identical number of entries from different collections.
      * Is @b optional.
      */
-    ukv_size_t count_limits_stride;
+    ustore_size_t count_limits_stride;
 
     /// @}
     /// @name Outputs
@@ -643,12 +643,12 @@ typedef struct ukv_sample_t {
      * @brief Output number of exported entries before for each scan.
      *
      * Will contain a pointer to an array of `tasks_count` integer offsets.
-     * Each marks a response offset in number of @c ukv_key_t keys starting from `*keys`.
+     * Each marks a response offset in number of @c ustore_key_t keys starting from `*keys`.
      * To be fully compatible with Apache Arrow we append one more offset at
      * the end to allow inferring the length of the last entry without using `lengths`.
      * Is @b optional, as you may only want to get `lengths` or check `presences`.
      */
-    ukv_length_t** offsets;
+    ustore_length_t** offsets;
     /**
      * @brief Output number of found entries for each scan.
      *
@@ -657,7 +657,7 @@ typedef struct ukv_sample_t {
      * For any `i` under `tasks_count`, this holds: `count_limits[i] >= counts[i]`.
      * Is @b optional.
      */
-    ukv_length_t** counts;
+    ustore_length_t** counts;
     /**
      * @brief Output keys tape.
      *
@@ -666,58 +666,58 @@ typedef struct ukv_sample_t {
      * a single "tape" structure, which later be exported into (often disjoint)
      * runtime- or library-specific implementations.
      */
-    ukv_key_t** keys;
+    ustore_key_t** keys;
     /// @}
 
-} ukv_sample_t;
+} ustore_sample_t;
 
 /**
  * @brief Uniformly randomly samples keys from provided collections.
- * @see `ukv_sample_t`.
+ * @see `ustore_sample_t`.
  */
-void ukv_sample(ukv_sample_t*);
+void ustore_sample(ustore_sample_t*);
 
 /**
  * @brief Estimates the number of entries and memory usage for a range of keys.
- * @see `ukv_measure()`.
+ * @see `ustore_measure()`.
  */
-typedef struct ukv_measure_t {
+typedef struct ustore_measure_t {
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /**
      * @brief Pointer to exported error message.
-     * If not NULL, must be deallocated with `ukv_error_free()`.
+     * If not NULL, must be deallocated with `ustore_error_free()`.
      */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /**
      * @brief The transaction in which the operation will be watched.
-     * @see `ukv_transaction_init()`, `ukv_transaction_commit()`, `ukv_transaction_free()`.
+     * @see `ustore_transaction_init()`, `ustore_transaction_commit()`, `ustore_transaction_free()`.
      */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /**
      * @brief A snapshot captures a point-in-time view of the DB at the time it's created.
-     * @see `ukv_snapshot_list()`, `ukv_snapshot_create()`, `ukv_snapshot_drop()`.
+     * @see `ustore_snapshot_list()`, `ustore_snapshot_create()`, `ustore_snapshot_drop()`.
      */
-    ukv_snapshot_t snapshot;
+    ustore_snapshot_t snapshot;
     /**
      * @brief Reusable memory handle.
-     * @see `ukv_arena_free()`.
+     * @see `ustore_arena_free()`.
      */
-    ukv_arena_t* arena;
+    ustore_arena_t* arena;
     /**
      * @brief Scan options.
      *
      * Possible values:
-     * - `::ukv_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
-     * - `::ukv_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
-     * - `::ukv_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
-     * - `::ukv_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     * - `::ustore_option_scan_bulk_k`: Allows out-of-order retrieval for higher throughput.
+     * - `::ustore_option_transaction_dont_watch_k`: Disables collision-detection for transactional reads.
+     * - `::ustore_option_read_shared_memory_k`: Exports to shared memory to accelerate inter-process communication.
+     * - `::ustore_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
      */
-    ukv_options_t options;
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
@@ -727,16 +727,16 @@ typedef struct ukv_measure_t {
      * @brief Number of separate operations packed in this read.
      * Always equal to the number of provided `start_keys`.
      */
-    ukv_size_t tasks_count;
+    ustore_size_t tasks_count;
     /**
      * @brief Sequence of collections owning the `start_keys`.
      *
      * If `NULL` is passed, the default collection is assumed.
      * If multiple collections are passed, the step between them is defined by `collections_stride`.
-     * Use `ukv_collection_create()` or `ukv_collection_list()` to obtain collection IDs for string names.
+     * Use `ustore_collection_create()` or `ustore_collection_list()` to obtain collection IDs for string names.
      * Is @b optional.
      */
-    ukv_collection_t const* collections;
+    ustore_collection_t const* collections;
     /**
      * @brief Step between `collections`.
      *
@@ -745,14 +745,14 @@ typedef struct ukv_measure_t {
      * You can use it to retrieve different keys from the same collection in one call.
      * Is @b optional.
      */
-    ukv_size_t collections_stride;
+    ustore_size_t collections_stride;
     /**
      * @brief Starting points for each estimate.
      *
      * Contains the pointer to the first of `tasks_count` starting points.
      * If multiple scan tasks are passed, the step between them is defined by `start_keys_stride`.
      */
-    ukv_key_t const* start_keys;
+    ustore_key_t const* start_keys;
     /**
      * @brief Step between `start_keys`.
      *
@@ -761,14 +761,14 @@ typedef struct ukv_measure_t {
      * You can use it to retrieve the same "ray" of keys from different `collections`.
      * Is @b optional.
      */
-    ukv_size_t start_keys_stride;
+    ustore_size_t start_keys_stride;
     /**
      * @brief Ending points for each estimate.
      *
      * Contains the pointer to the first of `tasks_count` ending points.
      * If multiple scan tasks are passed, the step between them is defined by `end_keys_stride`.
      */
-    ukv_key_t const* end_keys;
+    ustore_key_t const* end_keys;
     /**
      * @brief Step between `end_keys`.
      *
@@ -777,28 +777,28 @@ typedef struct ukv_measure_t {
      * You can use it to retrieve the same "ray" of keys from different `collections`.
      * Is @b optional.
      */
-    ukv_size_t end_keys_stride;
+    ustore_size_t end_keys_stride;
 
     /// @}
     /// @name Outputs
     /// @{
 
-    ukv_size_t** min_cardinalities;
-    ukv_size_t** max_cardinalities;
-    ukv_size_t** min_value_bytes;
-    ukv_size_t** max_value_bytes;
-    ukv_size_t** min_space_usages;
-    ukv_size_t** max_space_usages;
+    ustore_size_t** min_cardinalities;
+    ustore_size_t** max_cardinalities;
+    ustore_size_t** min_value_bytes;
+    ustore_size_t** max_value_bytes;
+    ustore_size_t** min_space_usages;
+    ustore_size_t** max_space_usages;
 
     /// @}
 
-} ukv_measure_t;
+} ustore_measure_t;
 
 /**
  * @brief Estimates the number of entries and memory usage for a range of keys.
- * @see `ukv_measure()`.
+ * @see `ustore_measure()`.
  */
-void ukv_measure(ukv_measure_t*);
+void ustore_measure(ustore_measure_t*);
 
 #ifdef __cplusplus
 } /* end extern "C" */

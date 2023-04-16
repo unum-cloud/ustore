@@ -4,15 +4,15 @@
  * @date 30 Jun 2022
  * @addtogroup Cpp
  *
- * @brief C++ bindings for "ukv/graph.h".
+ * @brief C++ bindings for "ustore/graph.h".
  */
 
 #pragma once
-#include "ukv/graph.h"
-#include "ukv/cpp/ranges.hpp"      // `edges_span_t`
-#include "ukv/cpp/blobs_range.hpp" // `keys_stream_t`
+#include "ustore/graph.h"
+#include "ustore/cpp/ranges.hpp"      // `edges_span_t`
+#include "ustore/cpp/blobs_range.hpp" // `keys_stream_t`
 
-namespace unum::ukv {
+namespace unum::ustore {
 
 /**
  * @brief A stream of all @c edge_t's in a graph.
@@ -20,11 +20,11 @@ namespace unum::ukv {
  */
 class graph_stream_t {
 
-    ukv_database_t db_ {nullptr};
-    ukv_collection_t collection_ {ukv_collection_main_k};
-    ukv_transaction_t transaction_ {nullptr};
-    ukv_snapshot_t snapshot_ {};
-    ukv_vertex_role_t role_ = ukv_vertex_role_any_k;
+    ustore_database_t db_ {nullptr};
+    ustore_collection_t collection_ {ustore_collection_main_k};
+    ustore_transaction_t transaction_ {nullptr};
+    ustore_snapshot_t snapshot_ {};
+    ustore_vertex_role_t role_ = ustore_vertex_role_any_k;
 
     edges_span_t fetched_edges_ {};
     std::size_t fetched_offset_ {0};
@@ -37,10 +37,10 @@ class graph_stream_t {
         auto vertices = vertex_stream_.keys_batch().strided();
 
         status_t status;
-        ukv_vertex_degree_t* degrees_per_vertex = nullptr;
-        ukv_key_t* edges_per_vertex = nullptr;
+        ustore_vertex_degree_t* degrees_per_vertex = nullptr;
+        ustore_key_t* edges_per_vertex = nullptr;
 
-        ukv_graph_find_edges_t graph_find_edges {};
+        ustore_graph_find_edges_t graph_find_edges {};
         graph_find_edges.db = db_;
         graph_find_edges.error = status.member_ptr();
         graph_find_edges.transaction = transaction_;
@@ -54,14 +54,14 @@ class graph_stream_t {
         graph_find_edges.degrees_per_vertex = &degrees_per_vertex;
         graph_find_edges.edges_per_vertex = &edges_per_vertex;
 
-        ukv_graph_find_edges(&graph_find_edges);
+        ustore_graph_find_edges(&graph_find_edges);
 
         if (!status)
             return status;
 
         auto edges_begin = reinterpret_cast<edge_t*>(edges_per_vertex);
-        auto edges_count = transform_reduce_n(degrees_per_vertex, vertices.size(), 0ul, [](ukv_vertex_degree_t deg) {
-            return deg == ukv_vertex_degree_missing_k ? 0 : deg;
+        auto edges_count = transform_reduce_n(degrees_per_vertex, vertices.size(), 0ul, [](ustore_vertex_degree_t deg) {
+            return deg == ustore_vertex_degree_missing_k ? 0 : deg;
         });
         fetched_offset_ = 0;
         fetched_edges_ = {edges_begin, edges_begin + edges_count};
@@ -71,18 +71,18 @@ class graph_stream_t {
   public:
     using iterator_category = std::forward_iterator_tag;
     using difference_type = std::ptrdiff_t;
-    using value_type = ukv_key_t;
-    using pointer = ukv_key_t*;
-    using reference = ukv_key_t&;
+    using value_type = ustore_key_t;
+    using pointer = ustore_key_t*;
+    using reference = ustore_key_t&;
 
     static constexpr std::size_t default_read_ahead_k = 256;
 
-    graph_stream_t(ukv_database_t db,
-                   ukv_collection_t collection = ukv_collection_main_k,
-                   ukv_transaction_t txn = nullptr,
-                   ukv_snapshot_t snap = 0,
+    graph_stream_t(ustore_database_t db,
+                   ustore_collection_t collection = ustore_collection_main_k,
+                   ustore_transaction_t txn = nullptr,
+                   ustore_snapshot_t snap = 0,
                    std::size_t read_ahead_vertices = keys_stream_t::default_read_ahead_k,
-                   ukv_vertex_role_t role = ukv_vertex_role_any_k) noexcept
+                   ustore_vertex_role_t role = ustore_vertex_role_any_k) noexcept
         : db_(db), collection_(collection), transaction_(txn), snapshot_(snap), role_(role), arena_(db),
           vertex_stream_(db, collection, read_ahead_vertices, txn) {}
 
@@ -92,7 +92,7 @@ class graph_stream_t {
     graph_stream_t(graph_stream_t const&) = delete;
     graph_stream_t& operator=(graph_stream_t const&) = delete;
 
-    status_t seek(ukv_key_t vertex_id) noexcept {
+    status_t seek(ustore_key_t vertex_id) noexcept {
         auto status = vertex_stream_.seek(vertex_id);
         if (!status)
             return status;
@@ -129,7 +129,7 @@ class graph_stream_t {
 
     edge_t edge() const noexcept { return fetched_edges_[fetched_offset_]; }
     edge_t operator*() const noexcept { return edge(); }
-    status_t seek_to_first() noexcept { return seek(std::numeric_limits<ukv_key_t>::min()); }
+    status_t seek_to_first() noexcept { return seek(std::numeric_limits<ustore_key_t>::min()); }
     status_t seek_to_next_batch() noexcept {
         auto status = vertex_stream_.seek_to_next_batch();
         if (!status)
@@ -157,4 +157,4 @@ class graph_stream_t {
     }
 };
 
-} // namespace unum::ukv
+} // namespace unum::ustore

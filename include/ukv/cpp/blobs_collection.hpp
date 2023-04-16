@@ -4,14 +4,14 @@
  * @date 26 Jun 2022
  * @addtogroup Cpp
  *
- * @brief C++ bindings for "ukv/db.h".
+ * @brief C++ bindings for "ustore/db.h".
  */
 
 #pragma once
-#include "ukv/cpp/blobs_ref.hpp"
-#include "ukv/cpp/blobs_range.hpp"
+#include "ustore/cpp/blobs_ref.hpp"
+#include "ustore/cpp/blobs_range.hpp"
 
-namespace unum::ukv {
+namespace unum::ustore {
 
 /**
  * @brief Collection is persistent associative container,
@@ -35,29 +35,29 @@ namespace unum::ukv {
  * Formats @b loosely describe the data stored in the collection
  * and @b exactly define the communication through this exact handle.
  * Example: Same collection can accept similar formats, such
- * as `::ukv_doc_field_json_k` and `::ukv_doc_field_msgpack_k`. Both will be
+ * as `::ustore_doc_field_json_k` and `::ustore_doc_field_msgpack_k`. Both will be
  * converted into some internal hierarchical representation
  * in "Document Collections", and can later be queried with
  * any "Document Format".
  */
 class blobs_collection_t {
-    ukv_database_t db_ {nullptr};
-    ukv_collection_t collection_ {ukv_collection_main_k};
-    ukv_transaction_t txn_ {nullptr};
-    ukv_snapshot_t snap_ {};
+    ustore_database_t db_ {nullptr};
+    ustore_collection_t collection_ {ustore_collection_main_k};
+    ustore_transaction_t txn_ {nullptr};
+    ustore_snapshot_t snap_ {};
     any_arena_t arena_ {nullptr};
 
   public:
     inline blobs_collection_t() noexcept : arena_(nullptr) {}
-    inline blobs_collection_t(ukv_database_t db_ptr,
-                              ukv_collection_t collection = ukv_collection_main_k,
-                              ukv_transaction_t txn = nullptr,
-                              ukv_snapshot_t snap = {},
-                              ukv_arena_t* arena = nullptr) noexcept
+    inline blobs_collection_t(ustore_database_t db_ptr,
+                              ustore_collection_t collection = ustore_collection_main_k,
+                              ustore_transaction_t txn = nullptr,
+                              ustore_snapshot_t snap = {},
+                              ustore_arena_t* arena = nullptr) noexcept
         : db_(db_ptr), collection_(collection), txn_(txn), snap_(snap), arena_(db_, arena) {}
 
     inline blobs_collection_t(blobs_collection_t&& other) noexcept
-        : db_(other.db_), collection_(std::exchange(other.collection_, ukv_collection_main_k)),
+        : db_(other.db_), collection_(std::exchange(other.collection_, ustore_collection_main_k)),
           txn_(std::exchange(other.txn_, nullptr)), snap_(std::exchange(other.snap_, {})),
           arena_(std::exchange(other.arena_, {nullptr})) {}
 
@@ -82,27 +82,27 @@ class blobs_collection_t {
         return *this;
     }
 
-    inline operator ukv_collection_t() const noexcept { return collection_; }
-    inline ukv_collection_t* member_ptr() noexcept { return &collection_; }
-    inline ukv_arena_t* member_arena() noexcept { return arena_.member_ptr(); }
-    inline ukv_database_t db() const noexcept { return db_; }
-    inline ukv_transaction_t txn() const noexcept { return txn_; }
-    inline ukv_snapshot_t snap() const noexcept { return snap_; }
+    inline operator ustore_collection_t() const noexcept { return collection_; }
+    inline ustore_collection_t* member_ptr() noexcept { return &collection_; }
+    inline ustore_arena_t* member_arena() noexcept { return arena_.member_ptr(); }
+    inline ustore_database_t db() const noexcept { return db_; }
+    inline ustore_transaction_t txn() const noexcept { return txn_; }
+    inline ustore_snapshot_t snap() const noexcept { return snap_; }
 
     inline blobs_range_t members( //
-        ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-        ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
+        ustore_key_t min_key = std::numeric_limits<ustore_key_t>::min(),
+        ustore_key_t max_key = std::numeric_limits<ustore_key_t>::max()) const noexcept {
         return {db_, txn_, snap_, collection_, min_key, max_key};
     }
     inline keys_range_t keys( //
-        ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-        ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
+        ustore_key_t min_key = std::numeric_limits<ustore_key_t>::min(),
+        ustore_key_t max_key = std::numeric_limits<ustore_key_t>::max()) const noexcept {
         return {members(min_key, max_key)};
     }
 
     inline pairs_range_t items( //
-        ukv_key_t min_key = std::numeric_limits<ukv_key_t>::min(),
-        ukv_key_t max_key = std::numeric_limits<ukv_key_t>::max()) const noexcept {
+        ustore_key_t min_key = std::numeric_limits<ustore_key_t>::min(),
+        ustore_key_t max_key = std::numeric_limits<ustore_key_t>::max()) const noexcept {
         return {blobs_range_t {db_, txn_, snap_, collection_, min_key, max_key}};
     }
 
@@ -117,39 +117,39 @@ class blobs_collection_t {
 
     status_t clear_values() noexcept {
         status_t status;
-        ukv_collection_drop_t collection_drop {};
+        ustore_collection_drop_t collection_drop {};
         collection_drop.db = db_;
         collection_drop.error = status.member_ptr();
         collection_drop.id = collection_;
-        collection_drop.mode = ukv_drop_vals_k;
-        ukv_collection_drop(&collection_drop);
+        collection_drop.mode = ustore_drop_vals_k;
+        ustore_collection_drop(&collection_drop);
         return status;
     }
 
     status_t clear() noexcept {
         status_t status;
-        ukv_collection_drop_t collection_drop {};
+        ustore_collection_drop_t collection_drop {};
         collection_drop.db = db_;
         collection_drop.error = status.member_ptr();
         collection_drop.id = collection_;
-        collection_drop.mode = ukv_drop_keys_vals_k;
-        ukv_collection_drop(&collection_drop);
+        collection_drop.mode = ustore_drop_keys_vals_k;
+        ustore_collection_drop(&collection_drop);
         return status;
     }
 
     status_t drop() noexcept {
         status_t status;
-        ukv_collection_drop_t collection_drop {};
+        ustore_collection_drop_t collection_drop {};
         collection_drop.db = db_;
         collection_drop.error = status.member_ptr();
         collection_drop.id = collection_;
-        collection_drop.mode = ukv_drop_keys_vals_handle_k;
-        ukv_collection_drop(&collection_drop);
+        collection_drop.mode = ustore_drop_keys_vals_handle_k;
+        ustore_collection_drop(&collection_drop);
         return status;
     }
 
-    inline blobs_ref_gt<places_arg_t> operator[](std::initializer_list<ukv_key_t> keys) noexcept { return at(keys); }
-    inline blobs_ref_gt<places_arg_t> at(std::initializer_list<ukv_key_t> keys) noexcept { //
+    inline blobs_ref_gt<places_arg_t> operator[](std::initializer_list<ustore_key_t> keys) noexcept { return at(keys); }
+    inline blobs_ref_gt<places_arg_t> at(std::initializer_list<ustore_key_t> keys) noexcept { //
         return at(strided_range(keys));
     }
 
@@ -194,4 +194,4 @@ class blobs_collection_t {
     }
 };
 
-} // namespace unum::ukv
+} // namespace unum::ustore

@@ -19,7 +19,7 @@
  *
  * ## Allowed Characters
  *
- * String keys can contain any characters, but if you plan to use `ukv_paths_match()`
+ * String keys can contain any characters, but if you plan to use `ustore_paths_match()`
  * for both RegEx and prefix matches it is recommended to avoid RegEx special characters
  * in names: ., +, *, ?, ^, $, (, ), [, ], {, }, |, \.
  * The other punctuation marks like: /, :, @, -, _, #, ~, comma.
@@ -35,211 +35,211 @@ extern "C" {
 
 /**
  * @brief Maps string paths to binary values.
- * Generalization of @c ukv_write_t to variable-length key.
- * @see `ukv_paths_write()`, `ukv_write_t`, `ukv_write()`.
+ * Generalization of @c ustore_write_t to variable-length key.
+ * @see `ustore_paths_write()`, `ustore_write_t`, `ustore_write()`.
  */
-typedef struct ukv_paths_write_t {
+typedef struct ustore_paths_write_t {
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /** @brief Pointer to exported error message. */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena;
-    /** @brief Read and Write options for Read-Modify-Write logic. @see `ukv_read_t`, `ukv_write_t`. */
-    ukv_options_t options;
+    ustore_arena_t* arena;
+    /** @brief Read and Write options for Read-Modify-Write logic. @see `ustore_read_t`, `ustore_write_t`. */
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count;
-    ukv_char_t path_separator;
+    ustore_size_t tasks_count;
+    ustore_char_t path_separator;
 
-    ukv_collection_t const* collections;
-    ukv_size_t collections_stride;
+    ustore_collection_t const* collections;
+    ustore_size_t collections_stride;
 
     /// @name Variable Length Keys
     /// @{
-    ukv_str_view_t const* paths;
-    ukv_size_t paths_stride;
+    ustore_str_view_t const* paths;
+    ustore_size_t paths_stride;
 
-    ukv_length_t const* paths_offsets;
-    ukv_size_t paths_offsets_stride;
+    ustore_length_t const* paths_offsets;
+    ustore_size_t paths_offsets_stride;
 
-    ukv_length_t const* paths_lengths;
-    ukv_size_t paths_lengths_stride;
+    ustore_length_t const* paths_lengths;
+    ustore_size_t paths_lengths_stride;
     // @}
 
     /// @name Variable Length Values
     /// @{
-    ukv_octet_t const* values_presences;
+    ustore_octet_t const* values_presences;
 
-    ukv_length_t const* values_offsets;
-    ukv_size_t values_offsets_stride;
+    ustore_length_t const* values_offsets;
+    ustore_size_t values_offsets_stride;
 
-    ukv_length_t const* values_lengths;
-    ukv_size_t values_lengths_stride;
+    ustore_length_t const* values_lengths;
+    ustore_size_t values_lengths_stride;
 
-    ukv_bytes_cptr_t const* values_bytes;
-    ukv_size_t values_bytes_stride;
+    ustore_bytes_cptr_t const* values_bytes;
+    ustore_size_t values_bytes_stride;
     // @}
 
     // @}
 
-} ukv_paths_write_t;
+} ustore_paths_write_t;
 
 /**
  * @brief Maps string paths to binary values.
- * Generalization of @c ukv_write_t to variable-length key.
- * @see `ukv_paths_write_t`, `ukv_write_t`, `ukv_write()`.
+ * Generalization of @c ustore_write_t to variable-length key.
+ * @see `ustore_paths_write_t`, `ustore_write_t`, `ustore_write()`.
  */
-void ukv_paths_write(ukv_paths_write_t*);
+void ustore_paths_write(ustore_paths_write_t*);
 
 /**
  * @brief Retrieves binary values given string paths.
- * Generalization of @c ukv_read_t to variable-length key.
- * @see `ukv_paths_read()`, `ukv_read_t`, `ukv_read()`.
+ * Generalization of @c ustore_read_t to variable-length key.
+ * @see `ustore_paths_read()`, `ustore_read_t`, `ustore_read()`.
  */
-typedef struct ukv_paths_read_t {
+typedef struct ustore_paths_read_t {
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /** @brief Pointer to exported error message. */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /** @brief The snapshot captures a view of the database at the time it's created. */
-    ukv_snapshot_t snapshot;
+    ustore_snapshot_t snapshot;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena;
-    /** @brief Read options. @see `ukv_read_t`. */
-    ukv_options_t options;
+    ustore_arena_t* arena;
+    /** @brief Read options. @see `ustore_read_t`. */
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count;
-    ukv_char_t path_separator;
+    ustore_size_t tasks_count;
+    ustore_char_t path_separator;
 
-    ukv_collection_t const* collections;
-    ukv_size_t collections_stride;
+    ustore_collection_t const* collections;
+    ustore_size_t collections_stride;
 
     /// @name Variable Length Keys
     /// @{
-    ukv_str_view_t const* paths;
-    ukv_size_t paths_stride;
+    ustore_str_view_t const* paths;
+    ustore_size_t paths_stride;
 
-    ukv_length_t const* paths_offsets;
-    ukv_size_t paths_offsets_stride;
+    ustore_length_t const* paths_offsets;
+    ustore_size_t paths_offsets_stride;
 
-    ukv_length_t const* paths_lengths;
-    ukv_size_t paths_lengths_stride;
+    ustore_length_t const* paths_lengths;
+    ustore_size_t paths_lengths_stride;
     /// @}
 
     /// @}
     /// @name Outputs
     /// @{
-    ukv_octet_t** presences;
-    ukv_length_t** offsets;
-    ukv_length_t** lengths;
-    ukv_byte_t** values;
+    ustore_octet_t** presences;
+    ustore_length_t** offsets;
+    ustore_length_t** lengths;
+    ustore_byte_t** values;
     /// @}
 
-} ukv_paths_read_t;
+} ustore_paths_read_t;
 
 /**
  * @brief Retrieves binary values given string paths.
- * Generalization of @c ukv_read_t to variable-length key.
- * @see `ukv_paths_read_t`, `ukv_read_t`, `ukv_read()`.
+ * Generalization of @c ustore_read_t to variable-length key.
+ * @see `ustore_paths_read_t`, `ustore_read_t`, `ustore_read()`.
  */
-void ukv_paths_read(ukv_paths_read_t*);
+void ustore_paths_read(ustore_paths_read_t*);
 
 /**
  * @brief Vectorized "Prefix" and RegEx "Pattern Matching" for paths.
- * @see `ukv_paths_match()`.
+ * @see `ustore_paths_match()`.
  *
  * If a "pattern" contains RegEx special symbols, than it is
  * treated as a RegEx pattern: ., +, *, ?, ^, $, (, ), [, ], {, }, |, \.
  * Otherwise, it is treated as a prefix for search.
  */
-typedef struct ukv_paths_match_t {
+typedef struct ustore_paths_match_t {
 
     /// @name Context
     /// @{
 
     /** @brief Already open database instance. */
-    ukv_database_t db;
+    ustore_database_t db;
     /** @brief Pointer to exported error message. */
-    ukv_error_t* error;
+    ustore_error_t* error;
     /** @brief The transaction in which the operation will be watched. */
-    ukv_transaction_t transaction;
+    ustore_transaction_t transaction;
     /** @brief Reusable memory handle. */
-    ukv_arena_t* arena;
-    /** @brief Read options. @see `ukv_read_t`. */
-    ukv_options_t options;
+    ustore_arena_t* arena;
+    /** @brief Read options. @see `ustore_read_t`. */
+    ustore_options_t options;
 
     /// @}
     /// @name Inputs
     /// @{
 
-    ukv_size_t tasks_count;
-    ukv_char_t path_separator;
+    ustore_size_t tasks_count;
+    ustore_char_t path_separator;
 
-    ukv_collection_t const* collections;
-    ukv_size_t collections_stride;
+    ustore_collection_t const* collections;
+    ustore_size_t collections_stride;
 
-    ukv_length_t const* match_counts_limits;
-    ukv_size_t match_counts_limits_stride;
+    ustore_length_t const* match_counts_limits;
+    ustore_size_t match_counts_limits_stride;
 
     /// @name Variable Length Patterns to Match in Paths
     /// @{
-    ukv_str_view_t const* patterns;
-    ukv_size_t patterns_stride;
+    ustore_str_view_t const* patterns;
+    ustore_size_t patterns_stride;
 
-    ukv_length_t const* patterns_offsets;
-    ukv_size_t patterns_offsets_stride;
+    ustore_length_t const* patterns_offsets;
+    ustore_size_t patterns_offsets_stride;
 
-    ukv_length_t const* patterns_lengths;
-    ukv_size_t patterns_lengths_stride;
+    ustore_length_t const* patterns_lengths;
+    ustore_size_t patterns_lengths_stride;
     /// @}
 
     /// @name Previous Matches Used for Pagination
     /// @{
-    ukv_str_view_t const* previous;
-    ukv_size_t previous_stride;
+    ustore_str_view_t const* previous;
+    ustore_size_t previous_stride;
 
-    ukv_length_t const* previous_offsets;
-    ukv_size_t previous_offsets_stride;
+    ustore_length_t const* previous_offsets;
+    ustore_size_t previous_offsets_stride;
 
-    ukv_length_t const* previous_lengths;
-    ukv_size_t previous_lengths_stride;
+    ustore_length_t const* previous_lengths;
+    ustore_size_t previous_lengths_stride;
     /// @}
 
     /// @}
     /// @name Outputs
     /// @{
-    ukv_length_t** match_counts;
-    ukv_length_t** paths_offsets;
-    ukv_char_t** paths_strings;
+    ustore_length_t** match_counts;
+    ustore_length_t** paths_offsets;
+    ustore_char_t** paths_strings;
     /// @}
 
-} ukv_paths_match_t;
+} ustore_paths_match_t;
 
 /**
  * @brief Vectorized "Prefix" and RegEx "Pattern Matching" for paths.
- * @see `ukv_paths_match_t`.
+ * @see `ustore_paths_match_t`.
  */
-void ukv_paths_match(ukv_paths_match_t*);
+void ustore_paths_match(ustore_paths_match_t*);
 
 #ifdef __cplusplus
 } /* end extern "C" */

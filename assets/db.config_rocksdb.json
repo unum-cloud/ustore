@@ -1,6 +1,6 @@
 {
     "version": "1.0",
-    "directory": "./tmp/ukv/",
+    "directory": "./tmp/ustore/",
     "data_directories": [
         {
             "path": "./tmp/storage/",

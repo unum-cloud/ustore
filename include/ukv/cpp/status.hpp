@@ -11,12 +11,12 @@
 #include <optional>  // `std::optional`
 #include <stdexcept> // `std::runtime_error`
 
-#include "ukv/cpp/types.hpp"
+#include "ustore/cpp/types.hpp"
 
-namespace unum::ukv {
+namespace unum::ustore {
 
 class [[nodiscard]] status_t {
-    ukv_error_t raw_ {nullptr};
+    ustore_error_t raw_ {nullptr};
     bool is_view_ {false};
 
   public:
@@ -26,7 +26,7 @@ class [[nodiscard]] status_t {
         return st;
     }
 
-    status_t(ukv_error_t err = nullptr) noexcept : raw_(err) {}
+    status_t(ustore_error_t err = nullptr) noexcept : raw_(err) {}
     operator bool() const noexcept { return !raw_; }
 
     status_t(status_t const&) = delete;
@@ -41,14 +41,14 @@ class [[nodiscard]] status_t {
     }
     ~status_t() noexcept {
         if (raw_ && !is_view_)
-            ukv_error_free(raw_);
+            ustore_error_free(raw_);
         raw_ = nullptr;
     }
 
     std::runtime_error release_exception() {
         std::runtime_error result(raw_);
         if (!is_view_)
-            ukv_error_free(std::exchange(raw_, nullptr));
+            ustore_error_free(std::exchange(raw_, nullptr));
         return result;
     }
 
@@ -57,9 +57,9 @@ class [[nodiscard]] status_t {
             throw release_exception();
     }
 
-    ukv_error_t* member_ptr() noexcept { return &raw_; }
-    ukv_error_t release_error() noexcept { return std::exchange(raw_, nullptr); }
-    ukv_error_t message() const noexcept { return raw_; }
+    ustore_error_t* member_ptr() noexcept { return &raw_; }
+    ustore_error_t release_error() noexcept { return std::exchange(raw_, nullptr); }
+    ustore_error_t message() const noexcept { return raw_; }
 };
 
 /**
@@ -185,7 +185,7 @@ enum error_code_t {
     error_unknown_k
 };
 
-} // namespace unum::ukv
+} // namespace unum::ustore
 
 // #define log_warning_m(format, ...) fprintf(stderr, format, __VA_ARGS__)
 #define log_warning_m(format, ...) \

@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "http://github.com/unum-cloud/ukv/collection.schema.json",
+    "$id": "http://github.com/unum-cloud/ustore/collection.schema.json",
     "type": "object",
     "properties": {
         "type": {

@@ -4,17 +4,17 @@
  * @date 26 Jun 2022
  * @addtogroup Cpp
  *
- * @brief C++ bindings for "ukv/db.h".
+ * @brief C++ bindings for "ustore/db.h".
  */
 
 #pragma once
-#include "ukv/ukv.h"
-#include "ukv/cpp/types.hpp"      // `arena_t`
-#include "ukv/cpp/status.hpp"     // `status_t`
-#include "ukv/cpp/sfinae.hpp"     // `location_store_gt`
-#include "ukv/cpp/docs_table.hpp" // `docs_table_t`
+#include "ustore/ustore.h"
+#include "ustore/cpp/types.hpp"      // `arena_t`
+#include "ustore/cpp/status.hpp"     // `status_t`
+#include "ustore/cpp/sfinae.hpp"     // `location_store_gt`
+#include "ustore/cpp/docs_table.hpp" // `docs_table_t`
 
-namespace unum::ukv {
+namespace unum::ustore {
 
 template <typename locations_store_t>
 class docs_ref_gt;
@@ -30,9 +30,9 @@ class docs_ref_gt;
  * The only impossible combination is assigning many values to one key.
  *
  * @tparam locations_at Type describing the address of a value in DBMS.
- * - (ukv_collection_t?, ukv_key_t, ukv_field_t?): Single KV-pair location.
- * - (ukv_collection_t*, ukv_key_t*, ukv_field_t*): Externally owned range of keys.
- * - (ukv_collection_t[x], ukv_key_t[x], ukv_field_t[x]): On-stack array of addresses.
+ * - (ustore_collection_t?, ustore_key_t, ustore_field_t?): Single KV-pair location.
+ * - (ustore_collection_t*, ustore_key_t*, ustore_field_t*): Externally owned range of keys.
+ * - (ustore_collection_t[x], ustore_key_t[x], ustore_field_t[x]): On-stack array of addresses.
  *
  * ## Memory Management
  *
@@ -63,32 +63,32 @@ class docs_ref_gt {
 
     using value_t = std::conditional_t<is_one_k, value_view_t, embedded_blobs_t>;
     using present_t = std::conditional_t<is_one_k, bool, bits_span_t>;
-    using length_t = std::conditional_t<is_one_k, ukv_length_t, ptr_range_gt<ukv_length_t>>;
+    using length_t = std::conditional_t<is_one_k, ustore_length_t, ptr_range_gt<ustore_length_t>>;
 
   protected:
-    ukv_database_t db_ = nullptr;
-    ukv_transaction_t transaction_ = nullptr;
-    ukv_snapshot_t snapshot_ = nullptr;
-    ukv_arena_t* arena_ = nullptr;
+    ustore_database_t db_ = nullptr;
+    ustore_transaction_t transaction_ = nullptr;
+    ustore_snapshot_t snapshot_ = nullptr;
+    ustore_arena_t* arena_ = nullptr;
     locations_store_t locations_;
-    ukv_doc_field_type_t type_ = ukv_doc_field_default_k;
+    ustore_doc_field_type_t type_ = ustore_doc_field_default_k;
 
     template <typename contents_arg_at>
-    status_t any_write(contents_arg_at&&, ukv_doc_modification_t, ukv_doc_field_type_t, ukv_options_t) noexcept;
+    status_t any_write(contents_arg_at&&, ustore_doc_modification_t, ustore_doc_field_type_t, ustore_options_t) noexcept;
 
     template <typename expected_at = value_t>
-    expected_gt<expected_at> any_get(ukv_doc_field_type_t, ukv_options_t) noexcept;
+    expected_gt<expected_at> any_get(ustore_doc_field_type_t, ustore_options_t) noexcept;
 
     template <typename expected_at, typename layout_at>
-    expected_gt<expected_at> any_gather(layout_at&&, ukv_options_t) noexcept;
+    expected_gt<expected_at> any_gather(layout_at&&, ustore_options_t) noexcept;
 
   public:
-    docs_ref_gt(ukv_database_t db,
-                ukv_transaction_t txn,
-                ukv_snapshot_t snap,
+    docs_ref_gt(ustore_database_t db,
+                ustore_transaction_t txn,
+                ustore_snapshot_t snap,
                 locations_at&& locations,
-                ukv_arena_t* arena,
-                ukv_doc_field_type_t type = ukv_doc_field_default_k) noexcept
+                ustore_arena_t* arena,
+                ustore_doc_field_type_t type = ustore_doc_field_default_k) noexcept
         : db_(db), transaction_(txn), snapshot_(snap), arena_(arena), locations_(std::forward<locations_at>(locations)),
           type_(type) {}
 
@@ -102,23 +102,23 @@ class docs_ref_gt {
         return *this;
     }
 
-    docs_ref_gt& as(ukv_doc_field_type_t type) noexcept {
+    docs_ref_gt& as(ustore_doc_field_type_t type) noexcept {
         type_ = type;
         return *this;
     }
 
     expected_gt<value_t> value(bool watch = true) noexcept {
-        return any_get<value_t>(type_, !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
+        return any_get<value_t>(type_, !watch ? ustore_option_transaction_dont_watch_k : ustore_options_default_k);
     }
 
-    expected_gt<value_t> value(ukv_doc_field_type_t type, bool watch = true) noexcept {
-        return any_get<value_t>(type, !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
+    expected_gt<value_t> value(ustore_doc_field_type_t type, bool watch = true) noexcept {
+        return any_get<value_t>(type, !watch ? ustore_option_transaction_dont_watch_k : ustore_options_default_k);
     }
 
     operator expected_gt<value_t>() noexcept { return value(); }
 
     expected_gt<length_t> length(bool watch = true) noexcept {
-        return any_get<length_t>(type_, !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
+        return any_get<length_t>(type_, !watch ? ustore_option_transaction_dont_watch_k : ustore_options_default_k);
     }
 
     /**
@@ -126,7 +126,7 @@ class docs_ref_gt {
      * ! Related values may be empty strings.
      */
     expected_gt<present_t> present(bool watch = true) noexcept {
-        return any_get<present_t>(type_, !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k);
+        return any_get<present_t>(type_, !watch ? ustore_option_transaction_dont_watch_k : ustore_options_default_k);
     }
 
     /**
@@ -138,17 +138,17 @@ class docs_ref_gt {
     template <typename contents_arg_at>
     status_t assign(contents_arg_at&& vals, bool flush = false) noexcept {
         return any_write(std::forward<contents_arg_at>(vals),
-                         ukv_doc_modify_upsert_k,
+                         ustore_doc_modify_upsert_k,
                          type_,
-                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
+                         flush ? ustore_option_write_flush_k : ustore_options_default_k);
     }
 
     template <typename contents_arg_at>
-    status_t assign(contents_arg_at&& vals, ukv_doc_field_type_t type, bool flush = false) noexcept {
+    status_t assign(contents_arg_at&& vals, ustore_doc_field_type_t type, bool flush = false) noexcept {
         return any_write(std::forward<contents_arg_at>(vals),
-                         ukv_doc_modify_upsert_k,
+                         ustore_doc_modify_upsert_k,
                          type,
-                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
+                         flush ? ustore_option_write_flush_k : ustore_options_default_k);
     }
 
     /**
@@ -166,8 +166,8 @@ class docs_ref_gt {
      * @return status_t Non-NULL if only an error had occurred.
      */
     status_t clear(bool flush = false) noexcept {
-        ukv_bytes_ptr_t any = reinterpret_cast<ukv_bytes_ptr_t>(this);
-        ukv_length_t len {};
+        ustore_bytes_ptr_t any = reinterpret_cast<ustore_bytes_ptr_t>(this);
+        ustore_length_t len {};
         contents_arg_t arg {};
         arg.offsets_begin = {};
         arg.lengths_begin = {&len};
@@ -199,9 +199,9 @@ class docs_ref_gt {
     template <typename contents_arg_at>
     status_t patch(contents_arg_at&& vals, bool flush = false) noexcept {
         return any_write(std::forward<contents_arg_at>(vals),
-                         ukv_doc_modify_patch_k,
+                         ustore_doc_modify_patch_k,
                          type_,
-                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
+                         flush ? ustore_option_write_flush_k : ustore_options_default_k);
     }
 
     /**
@@ -210,33 +210,33 @@ class docs_ref_gt {
     template <typename contents_arg_at>
     status_t merge(contents_arg_at&& vals, bool flush = false) noexcept {
         return any_write(std::forward<contents_arg_at>(vals),
-                         ukv_doc_modify_merge_k,
+                         ustore_doc_modify_merge_k,
                          type_,
-                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
+                         flush ? ustore_option_write_flush_k : ustore_options_default_k);
     }
 
     template <typename contents_arg_at>
     status_t insert(contents_arg_at&& vals, bool flush = false) noexcept {
         return any_write(std::forward<contents_arg_at>(vals),
-                         ukv_doc_modify_insert_k,
+                         ustore_doc_modify_insert_k,
                          type_,
-                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
+                         flush ? ustore_option_write_flush_k : ustore_options_default_k);
     }
 
     template <typename contents_arg_at>
     status_t upsert(contents_arg_at&& vals, bool flush = false) noexcept {
         return any_write(std::forward<contents_arg_at>(vals),
-                         ukv_doc_modify_upsert_k,
+                         ustore_doc_modify_upsert_k,
                          type_,
-                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
+                         flush ? ustore_option_write_flush_k : ustore_options_default_k);
     }
 
     template <typename contents_arg_at>
     status_t update(contents_arg_at&& vals, bool flush = false) noexcept {
         return any_write(std::forward<contents_arg_at>(vals),
-                         ukv_doc_modify_update_k,
+                         ustore_doc_modify_update_k,
                          type_,
-                         flush ? ukv_option_write_flush_k : ukv_options_default_k);
+                         flush ? ustore_option_write_flush_k : ustore_options_default_k);
     }
 
     /**
@@ -250,12 +250,12 @@ class docs_ref_gt {
      * Any column type annotation is optional.
      */
     expected_gt<docs_table_t> gather(table_header_t const& header, bool watch = true) noexcept {
-        auto options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
+        auto options = !watch ? ustore_option_transaction_dont_watch_k : ustore_options_default_k;
         return any_gather<docs_table_t, table_header_t const&>(header, options);
     }
 
     expected_gt<docs_table_t> gather(table_header_view_t const& header, bool watch = true) noexcept {
-        auto options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
+        auto options = !watch ? ustore_option_transaction_dont_watch_k : ustore_options_default_k;
         return any_gather<docs_table_t, table_header_view_t const&>(header, options);
     }
 
@@ -263,27 +263,27 @@ class docs_ref_gt {
     expected_gt<docs_table_gt<column_types_at...>> gather( //
         table_header_gt<column_types_at...> const& header,
         bool watch = true) noexcept {
-        auto options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
+        auto options = !watch ? ustore_option_transaction_dont_watch_k : ustore_options_default_k;
         using input_t = table_header_gt<column_types_at...>;
         using output_t = docs_table_gt<column_types_at...>;
         return any_gather<output_t, input_t const&>(header, options);
     }
 };
 
-static_assert(docs_ref_gt<ukv_key_t>::is_one_k);
-static_assert(std::is_same<docs_ref_gt<ukv_key_t>::value_t, value_view_t>());
-static_assert(docs_ref_gt<ukv_key_t>::is_one_k);
+static_assert(docs_ref_gt<ustore_key_t>::is_one_k);
+static_assert(std::is_same<docs_ref_gt<ustore_key_t>::value_t, value_view_t>());
+static_assert(docs_ref_gt<ustore_key_t>::is_one_k);
 static_assert(!docs_ref_gt<places_arg_t>::is_one_k);
 
 template <typename locations_at>
 template <typename expected_at>
-expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t type, ukv_options_t options) noexcept {
+expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ustore_doc_field_type_t type, ustore_options_t options) noexcept {
 
     status_t status;
-    ukv_length_t* found_offsets = nullptr;
-    ukv_length_t* found_lengths = nullptr;
-    ukv_bytes_ptr_t found_values = nullptr;
-    ukv_octet_t* found_presences = nullptr;
+    ustore_length_t* found_offsets = nullptr;
+    ustore_length_t* found_lengths = nullptr;
+    ustore_bytes_ptr_t found_values = nullptr;
+    ustore_octet_t* found_presences = nullptr;
     constexpr bool wants_value = std::is_same<value_t, expected_at>();
     constexpr bool wants_length = std::is_same<length_t, expected_at>();
     constexpr bool wants_present = std::is_same<present_t, expected_at>();
@@ -295,7 +295,7 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t
     auto fields = keys_extractor_t {}.fields(locs);
     auto has_fields = fields && (!fields.repeats() || *fields);
 
-    ukv_docs_read_t docs_read {};
+    ustore_docs_read_t docs_read {};
     docs_read.db = db_;
     docs_read.error = status.member_ptr();
     docs_read.transaction = transaction_;
@@ -315,13 +315,13 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t
     docs_read.lengths = wants_value || wants_length ? &found_lengths : nullptr;
     docs_read.values = wants_value ? &found_values : nullptr;
 
-    ukv_docs_read(&docs_read);
+    ustore_docs_read(&docs_read);
 
     if (!status)
         return std::move(status);
 
     if constexpr (wants_length) {
-        ptr_range_gt<ukv_length_t> many {found_lengths, found_lengths + count};
+        ptr_range_gt<ustore_length_t> many {found_lengths, found_lengths + count};
         if constexpr (is_one_k)
             return many[0];
         else
@@ -346,9 +346,9 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_get(ukv_doc_field_type_t
 template <typename locations_at>
 template <typename contents_arg_at>
 status_t docs_ref_gt<locations_at>::any_write(contents_arg_at&& vals_ref,
-                                              ukv_doc_modification_t modification,
-                                              ukv_doc_field_type_t type,
-                                              ukv_options_t options) noexcept {
+                                              ustore_doc_modification_t modification,
+                                              ustore_doc_field_type_t type,
+                                              ustore_options_t options) noexcept {
     status_t status;
     using value_extractor_t = contents_arg_extractor_gt<std::remove_reference_t<contents_arg_at>>;
 
@@ -363,7 +363,7 @@ status_t docs_ref_gt<locations_at>::any_write(contents_arg_at&& vals_ref,
     auto offsets = value_extractor_t {}.offsets(vals);
     auto lengths = value_extractor_t {}.lengths(vals);
 
-    ukv_docs_write_t docs_write {};
+    ustore_docs_write_t docs_write {};
     docs_write.db = db_;
     docs_write.error = status.member_ptr();
     docs_write.transaction = transaction_;
@@ -385,7 +385,7 @@ status_t docs_ref_gt<locations_at>::any_write(contents_arg_at&& vals_ref,
     docs_write.values = contents.get();
     docs_write.values_stride = contents.stride();
 
-    ukv_docs_write(&docs_write);
+    ustore_docs_write(&docs_write);
 
     return status;
 }
@@ -394,17 +394,17 @@ template <typename locations_at>
 expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool watch) noexcept {
 
     status_t status;
-    ukv_size_t found_count = 0;
-    ukv_length_t* found_offsets = nullptr;
-    ukv_str_span_t found_strings = nullptr;
+    ustore_size_t found_count = 0;
+    ustore_length_t* found_offsets = nullptr;
+    ustore_str_span_t found_strings = nullptr;
 
-    auto options = !watch ? ukv_option_transaction_dont_watch_k : ukv_options_default_k;
+    auto options = !watch ? ustore_option_transaction_dont_watch_k : ustore_options_default_k;
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
     auto keys = keys_extractor_t {}.keys(locs);
     auto collections = keys_extractor_t {}.collections(locs);
 
-    ukv_docs_gist_t docs_gist {};
+    ustore_docs_gist_t docs_gist {};
     docs_gist.db = db_;
     docs_gist.error = status.member_ptr();
     docs_gist.transaction = transaction_;
@@ -420,7 +420,7 @@ expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool watch) noexcept 
     docs_gist.offsets = &found_offsets;
     docs_gist.fields = &found_strings;
 
-    ukv_docs_gist(&docs_gist);
+    ustore_docs_gist(&docs_gist);
 
     joined_strs_t view {found_count, found_offsets, found_strings};
     return {std::move(status), std::move(view)};
@@ -428,7 +428,7 @@ expected_gt<joined_strs_t> docs_ref_gt<locations_at>::gist(bool watch) noexcept 
 
 template <typename locations_at>
 template <typename expected_at, typename layout_at>
-expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layout, ukv_options_t options) noexcept {
+expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layout, ustore_options_t options) noexcept {
 
     decltype(auto) locs = locations_.ref();
     auto count = keys_extractor_t {}.count(locs);
@@ -445,7 +445,7 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layou
         layout.types().begin(),
     };
 
-    ukv_docs_gather_t docs_gather {};
+    ustore_docs_gather_t docs_gather {};
     docs_gather.db = db_;
     docs_gather.error = status.member_ptr();
     docs_gather.transaction = transaction_;
@@ -470,9 +470,9 @@ expected_gt<expected_at> docs_ref_gt<locations_at>::any_gather(layout_at&& layou
     docs_gather.columns_lengths = view.member_lengths();
     docs_gather.joined_strings = view.member_tape();
 
-    ukv_docs_gather(&docs_gather);
+    ustore_docs_gather(&docs_gather);
 
     return {std::move(status), std::move(view)};
 }
 
-} // namespace unum::ukv
+} // namespace unum::ustore

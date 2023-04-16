@@ -1,5 +1,5 @@
 /**
- * @file ukv.h
+ * @file ustore.h
  * @author Ashot Vardanian
  * @date 12 Jun 2022
  * @addtogroup C
@@ -44,9 +44,9 @@
  */
 
 #pragma once
-#include "ukv/db.h"
-#include "ukv/blobs.h"
-#include "ukv/paths.h"
-#include "ukv/docs.h"
-#include "ukv/graph.h"
-#include "ukv/vectors.h"
+#include "ustore/db.h"
+#include "ustore/blobs.h"
+#include "ustore/paths.h"
+#include "ustore/docs.h"
+#include "ustore/graph.h"
+#include "ustore/vectors.h"

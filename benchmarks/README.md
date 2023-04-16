@@ -50,7 +50,7 @@ You can obtain results for your hardware and your sample of Tweets using the fol
 ```sh
 cmake \
     -DCMAKE_BUILD_TYPE=Release \
-    -DUKV_BUILD_BENCHMARKS=1 .. \
+    -DUSTORE_BUILD_BENCHMARKS=1 .. \
     && make bench_twitter_ustore_embedded_umem \
     && ./build/bin/bench_twitter_ustore_embedded_umem
 ```
@@ -92,7 +92,7 @@ Generalizing the Twitter benchmark, we wrote a Python and a C++ benchmark for ta
 Unlike the previous benchmark, the schema must be fixed, but you can input `.json`, `.csv`, and `.parquet` files.
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_BENCHMARKS=1 .. && make benchmark_tabular_graph_ustore_embedded_umem && ./build/bin/benchmark_tabular_graph_ustore_embedded_umem
+cmake -DCMAKE_BUILD_TYPE=Release -DUSTORE_BUILD_BENCHMARKS=1 .. && make benchmark_tabular_graph_ustore_embedded_umem && ./build/bin/benchmark_tabular_graph_ustore_embedded_umem
 ```
 
 For Python:
