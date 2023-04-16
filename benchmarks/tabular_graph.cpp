@@ -41,7 +41,6 @@ static database_t db;
 
 static std::vector<size_t> source_sizes;
 static std::vector<std::string> source_files;
-std::mutex mtx;
 
 struct args_t {
     std::string path;
@@ -119,6 +118,7 @@ static void bench_docs_import(bm::State& state, args_t const& args) {
 }
 
 size_t find_and_delete() {
+    static std::mutex mtx;
     mtx.lock();
     time_t now = time(0);
     std::string exp = ctime(&now);
