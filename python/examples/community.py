@@ -4,7 +4,7 @@ import networkx as nx
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 
-import ustore.umem as ustore
+import ustore.ucset as ustore
 sys.path.insert(0, 'python/algorithms/')
 from louvain import best_partition # autopep8: off
 

@@ -6,7 +6,7 @@ import json
 import networkx as nx
 import numpy as np
 
-import ustore.umem as ustore
+import ustore.ucset as ustore
 
 
 def flatten(l):

@@ -1,9 +1,9 @@
 package cloud.unum.ustore;
 
 
-public class DataBaseUMem extends DataBase {
+public class DataBaseUCSet extends DataBase {
     public static void init() {
-        loadLibrary("umem");
+        loadLibrary("ucset");
     }
 }
 

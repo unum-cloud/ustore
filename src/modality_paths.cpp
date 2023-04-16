@@ -45,8 +45,8 @@ using namespace unum;
 
 struct hash_t {
     ustore_key_t operator()(std::string_view key_str) const noexcept {
-        using umem_t = std::hash<std::string_view>;
-        auto result = umem_t {}(key_str);
+        using ucset_t = std::hash<std::string_view>;
+        auto result = ucset_t {}(key_str);
 #ifdef USTORE_DEBUG
         result %= 10ul;
 #endif

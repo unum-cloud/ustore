@@ -30,7 +30,7 @@ from cuxfilter import charts
 from bokeh.server.server import Server
 from bokeh.document.document import Document
 
-# import ustore.umem as ustore
+# import ustore.ucset as ustore
 
 MAPBOX_API_KEY = 'pk.eyJ1IjoiYXRob3J2ZSIsImEiOiJjazBmcmlhYzAwYXc2M25wMnE3bGttbzczIn0.JCDQliLc-XTU52iKa8L8-Q'
 GEOJSON_URL = 'https://raw.githubusercontent.com/rapidsai/cuxfilter/GTC-2018-mortgage-visualization/javascript/demos/GTC%20demo/public/data/zip3-ms-rhs-lessprops.json'

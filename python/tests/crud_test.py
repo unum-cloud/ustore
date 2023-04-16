@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-import ustore.umem as ustore
+import ustore.ucset as ustore
 
 
 def only_explicit(col):

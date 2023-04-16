@@ -2238,7 +2238,7 @@ int main(int argc, char** argv) {
 
 #if defined(USTORE_FLIGHT_CLIENT)
     srv_path = argv[0];
-    srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ustore_flight_server_umem";
+    srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ustore_flight_server_ucset";
 #endif
 
     auto directory_str = path() ? std::string_view(path()) : "";

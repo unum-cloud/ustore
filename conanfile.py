@@ -70,7 +70,7 @@ class ConanUStore(ConanFile):
         # https://docs.conan.io/en/1.26/creating_packages/package_information.html#using-components
         self.cpp_info.name = 'ustore'
         self.cpp_info.includedirs = ['include/']
-        self.cpp_info.components['umem'].libs = ['libustore_embedded_umem']
+        self.cpp_info.components['ucset'].libs = ['libustore_embedded_ucset']
         self.cpp_info.components['leveldb'].libs = [
             'libustore_embedded_leveldb']
         self.cpp_info.components['rocksdb'].libs = [

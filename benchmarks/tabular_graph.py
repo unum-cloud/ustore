@@ -14,7 +14,7 @@
 # https://arrow.apache.org/docs/python/parquet.html
 
 import fire
-import ustore.umem as ustore
+import ustore.ucset as ustore
 
 
 if __name__ == '__main__':

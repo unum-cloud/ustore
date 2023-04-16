@@ -5,7 +5,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.csv as csv
 import pyarrow.dataset as ds
-import ustore.umem as ustore
+import ustore.ucset as ustore
 
 pa.get_include()
 

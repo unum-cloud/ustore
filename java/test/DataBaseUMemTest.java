@@ -1,20 +1,20 @@
 
-import cloud.unum.ustore.DataBaseUMem;
+import cloud.unum.ustore.DataBaseUCSet;
 import org.junit.Test;
 
 import java.util.Arrays;
 
-public class DataBaseUMemTest {
+public class DataBaseUCSetTest {
     static {
-        DataBaseUMem.init();
+        DataBaseUCSet.init();
     }
     @Test
     public void test() {
-        DataBaseUMem.Context ctx = new DataBaseUMem.Context("");
+        DataBaseUCSet.Context ctx = new DataBaseUCSet.Context("");
         ctx.put(42, "hey".getBytes());
         assert Arrays.equals(ctx.get(42), "hey".getBytes()) : "Received wrong value";
 
-        DataBaseUMem.Transaction txn = ctx.transaction();
+        DataBaseUCSet.Transaction txn = ctx.transaction();
         txn.put("any", 42, "meaning of life".getBytes());
         assert Arrays.equals(txn.get("any", 42), "meaning of life".getBytes()) : "Wrong philosophy";
         txn.commit();

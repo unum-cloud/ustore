@@ -21,10 +21,10 @@
             "cppAttachName": "(GDB) Attach Python",
         },
         {
-            "name": "C++: Test UMem",
+            "name": "C++: Test UCSet",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ustore_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ustore_embedded_ucset",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -39,7 +39,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Debug UMem Test",
+            "preLaunchTask": "Build Debug UCSet Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -98,10 +98,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Test UMem Stateless",
+            "name": "C++: Test UCSet Stateless",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ustore_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ustore_embedded_ucset",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -120,15 +120,15 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Debug UMem Test",
+            "preLaunchTask": "Build Debug UCSet Test",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Atomicity UMem",
+            "name": "C++: Stress Atomicity UCSet",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/stress_atomicity_ustore_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_atomicity_ustore_embedded_ucset",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -147,7 +147,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Stress Atomicity UMem",
+            "preLaunchTask": "Build Stress Atomicity UCSet",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -175,10 +175,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Stress Linearizability UMem",
+            "name": "C++: Stress Linearizability UCSet",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/stress_linearizability_ustore_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/stress_linearizability_ustore_embedded_ucset",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -197,7 +197,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Stress Linearizability UMem",
+            "preLaunchTask": "Build Stress Linearizability UCSet",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -225,10 +225,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Benchmark UMem",
+            "name": "C++: Benchmark UCSet",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/bench_twitter_ustore_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/bench_twitter_ustore_embedded_ucset",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
@@ -238,7 +238,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Debug UMem Benchmark",
+            "preLaunchTask": "Build Debug UCSet Benchmark",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
@@ -318,7 +318,7 @@
             "name": "C++: Test Arrow Server",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/ustore_flight_server_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/ustore_flight_server_ucset",
             "cwd": "${workspaceFolder}",
             "environment": [],
             "showDisplayString": true,
@@ -359,7 +359,7 @@
             "name": "C++: Test Tools",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/test_tools_ustore_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_tools_ustore_embedded_ucset",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"

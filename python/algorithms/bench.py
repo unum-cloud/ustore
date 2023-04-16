@@ -6,7 +6,7 @@ import networkx as nx
 from networkx.algorithms.community import louvain_communities as networkx_louvain
 
 
-import ustore.umem as ustore
+import ustore.ucset as ustore
 import louvain
 
 dataset_dir = 'tmp/'

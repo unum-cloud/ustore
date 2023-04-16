@@ -19,13 +19,13 @@ RUN git config --global http.sslVerify "false"
 RUN cmake \
     -DUSTORE_BUILD_TESTS=0 \
     -DUSTORE_BUILD_BENCHMARKS=0 \
-    -DUSTORE_BUILD_ENGINE_UMEM=1 \
+    -DUSTORE_BUILD_ENGINE_UCSET=1 \
     -DUSTORE_BUILD_ENGINE_LEVELDB=1 \
     -DUSTORE_BUILD_ENGINE_ROCKSDB=1 \
     -DUSTORE_BUILD_API_FLIGHT_CLIENT=0 \
     -DUSTORE_BUILD_API_FLIGHT_SERVER=1 . && \
     make -j32 \
-    ustore_flight_server_umem \
+    ustore_flight_server_ucset \
     ustore_flight_server_leveldb \
     ustore_flight_server_rocksdb
 
@@ -43,7 +43,7 @@ RUN chmod +x /tini
 
 WORKDIR /var/lib/ustore/
 
-COPY --from=builder /usr/src/ustore/build/bin/ustore_flight_server_umem ./umem_server
+COPY --from=builder /usr/src/ustore/build/bin/ustore_flight_server_ucset ./ucset_server
 COPY ./assets/db.config.json /var/lib/ustore/config.json
 
 COPY --from=builder /usr/src/ustore/build/bin/ustore_flight_server_leveldb ./leveldb_server
@@ -54,4 +54,4 @@ COPY ./assets/db.config.json /var/lib/ustore/config.json
 
 EXPOSE 38709
 ENTRYPOINT ["/tini", "--"]
-CMD ["./umem_server"]
+CMD ["./ucset_server"]

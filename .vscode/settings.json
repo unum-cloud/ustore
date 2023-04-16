@@ -173,7 +173,7 @@
         "txns",
         "ucset",
         "ujrpc",
-        "umem",
+        "ucset",
         "UNUMDB",
         "upsert",
         "upserting",

@@ -36,7 +36,7 @@ dependencies {
 
 model {
     buildTypes{
-        umem
+        ucset
         rocksdb
         leveldb
     }
@@ -63,8 +63,8 @@ model {
                     cCompiler.args '-D_FILE_OFFSET_BITS=64'
                 }
 
-                if (buildType == buildTypes.umem) {
-                    linker.args '-L', "${projectDir}/build/lib", "-l", "ustore_umem_bundle", "-l", "c"
+                if (buildType == buildTypes.ucset) {
+                    linker.args '-L', "${projectDir}/build/lib", "-l", "ustore_ucset_bundle", "-l", "c"
                 } else if (buildType == buildTypes.rocksdb) {
                     linker.args '-L', "${projectDir}/build/lib", "-l", "ustore_rocksdb_bundle", "-l", "c"
                 } else if (buildType == buildTypes.leveldb) {
@@ -89,8 +89,8 @@ jar {
     dependsOn("ustoreRocksdbSharedLibrary")
     dependsOn("ustoreLeveldbSharedLibrary")
 
-    into("umem") {
-        from("$buildDir/libs/ustore/shared/umem/libustore.so")
+    into("ucset") {
+        from("$buildDir/libs/ustore/shared/ucset/libustore.so")
     }
 
     into("rocksdb") {

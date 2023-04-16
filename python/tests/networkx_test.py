@@ -1,4 +1,4 @@
-import ustore.umem as ustore
+import ustore.ucset as ustore
 import numpy as np
 import pytest
 import networkx as nx

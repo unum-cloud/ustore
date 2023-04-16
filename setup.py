@@ -46,7 +46,7 @@ class CMakeBuild(build_ext):
             f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extension_dir}',
             f'-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY={extension_dir}',
             f'-DPYTHON_EXECUTABLE={sys.executable}',
-            '-DUSTORE_BUILD_ENGINE_UMEM=1',
+            '-DUSTORE_BUILD_ENGINE_UCSET=1',
             '-DUSTORE_BUILD_ENGINE_LEVELDB=1',
             '-DUSTORE_BUILD_ENGINE_ROCKSDB=1',
             '-DUSTORE_BUILD_API_FLIGHT_CLIENT=1',
@@ -183,7 +183,7 @@ setup(
     ],
 
     ext_modules=[
-        CMakeExtension('ustore.umem'),
+        CMakeExtension('ustore.ucset'),
         CMakeExtension('ustore.rocksdb'),
         CMakeExtension('ustore.leveldb'),
         CMakeExtension('ustore.flight_client'),

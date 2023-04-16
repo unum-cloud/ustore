@@ -181,7 +181,7 @@ with ustore.Transaction(db) as txn:
 ## What we want to reach? Backend-Invariance
 
 ```python
-db = ustore.DataBase('umem')
+db = ustore.DataBase('ucset')
 db = ustore.DataBase('rocksdb')
 db = ustore.DataBase('leveldb')
 db = ustore.DataBase('leveldb://0.0.0.0:8080')
@@ -442,7 +442,7 @@ package ustore
 
 /*
 #cgo CFLAGS: -g -Wall -I${SRCDIR}/../include
-#cgo LDFLAGS: -L${SRCDIR}/../build/lib -lustore_embedded_umem -lstdc++
+#cgo LDFLAGS: -L${SRCDIR}/../build/lib -lustore_embedded_ucset -lstdc++
 #include "ustore/ustore.h"
 #include <stdlib.h>
 */

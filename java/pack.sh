@@ -12,7 +12,7 @@ set -e
 #       export JAVA_HOME="/usr/libexec/java_home -v 1.8"
 
 cmake \
-    -DUSTORE_BUILD_ENGINE_UMEM=1 \
+    -DUSTORE_BUILD_ENGINE_UCSET=1 \
     -DUSTORE_BUILD_ENGINE_ROCKSDB=1 \
     -DUSTORE_BUILD_ENGINE_LEVELDB=1 \
     -DUSTORE_BUILD_BUNDLES=1 \

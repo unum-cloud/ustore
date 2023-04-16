@@ -1,5 +1,5 @@
 /**
- * @file engine_umem.cpp
+ * @file engine_ucset.cpp
  * @author Ashot Vardanian
  *
  * @brief Embedded In-Memory Key-Value Store built on @b AVL trees or STL.
@@ -64,7 +64,7 @@ using json_t = nlohmann::json;
 
 using blob_allocator_t = std::allocator<byte_t>;
 
-struct umem_options_t {
+struct ucset_options_t {
     bool encryption = false;
     bool compression = false;
     size_t memory_limit = 0;
@@ -453,7 +453,7 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
             return_error_if_m(config.engine.config_url.empty(), c.error, args_wrong_k, "Doesn't support URL configs");
             return_error_if_m(config.engine.config.empty(), c.error, args_wrong_k, "Doesn't support nested configs");
 
-            auto fill_options = [](json_t const& js, umem_options_t& options) {
+            auto fill_options = [](json_t const& js, ucset_options_t& options) {
                 if (js.contains("encryption"))
                     options.encryption = js["encryption"];
                 if (js.contains("compression"))
@@ -463,7 +463,7 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
             };
 
             // Load from file
-            umem_options_t options;
+            ucset_options_t options;
             if (!config.engine.config_file_path.empty()) {
                 std::ifstream ifs(config.engine.config_file_path);
                 return_error_if_m(ifs, c.error, args_wrong_k, "Config file not found");

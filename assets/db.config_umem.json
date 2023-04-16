@@ -1,10 +1,10 @@
 {
     "version": "1.0",
-    "directory": "./tmp/ustore_embedded_umem/",
+    "directory": "./tmp/ustore_embedded_ucset/",
     "data_directories": [],
     "engine": {
         "config_url": "",
-        "config_file_path": "./config_umem.json",
+        "config_file_path": "./config_ucset.json",
         "config": {
             "encryption": false,
             "compression": false,

@@ -4,7 +4,7 @@ Benchmarks basic and batch consistent operations against native Python.
 """
 from time import perf_counter
 
-import ustore.umem as ustore
+import ustore.ucset as ustore
 import numpy as np
 from random import sample
 

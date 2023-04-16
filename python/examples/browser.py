@@ -1,6 +1,6 @@
 import requests as re
 
-import ustore.umem as ustore
+import ustore.ucset as ustore
 import streamlit as st
 
 collection_name_docs = 'Docs'

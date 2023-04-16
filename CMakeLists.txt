@@ -6,10 +6,10 @@ project(UStore
   LANGUAGES C CXX
   VERSION ${USTORE_VERSION}
   HOMEPAGE_URL "https://github.com/unum-cloud/ustore"
-  DESCRIPTION "Universal Binary DBMS Interface to manage Docs • Graphs • Blobs • Vectors × in Local • Remote × RocksDB • LevelDB • UMem • UDisk × from C • C++ • Python • Java • GoLang"
+  DESCRIPTION "Universal Binary DBMS Interface to manage Docs • Graphs • Blobs • Vectors × in Local • Remote × RocksDB • LevelDB • UCSet • UDisk × from C • C++ • Python • Java • GoLang"
 )
 
-option(USTORE_BUILD_ENGINE_UMEM "Building REST API server for all backends" ON)
+option(USTORE_BUILD_ENGINE_UCSET "Building REST API server for all backends" ON)
 option(USTORE_BUILD_ENGINE_LEVELDB "Building REST API server for all backends")
 option(USTORE_BUILD_ENGINE_ROCKSDB "Building REST API server for all backends")
 
@@ -134,7 +134,7 @@ else()
 endif()
 
 # Engines:
-if(${USTORE_BUILD_ENGINE_UMEM})
+if(${USTORE_BUILD_ENGINE_UCSET})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/ucset.cmake")
 endif()
 
@@ -164,10 +164,10 @@ if(${USTORE_USE_ONEAPI})
 endif()
 
 # Distributions:
-# > USTORE_BUILD_ENGINE_UMEM: Uses Arrow Parquet format to save binary collections on disk.
+# > USTORE_BUILD_ENGINE_UCSET: Uses Arrow Parquet format to save binary collections on disk.
 # > USTORE_BUILD_API_FLIGHT: Uses Arrow Flight RPC as a client-server communication protocol.
 # > USTORE_BUILD_SDK_PYTHON: Uses Arrow for zero-copy data exchage with the Python runtime.
-if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_ENGINE_UMEM})
+if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_ENGINE_UCSET})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
 
@@ -198,14 +198,14 @@ set(USTORE_CLIENT_LIBS)
 set(USTORE_TEST_NAMES "test_tools" "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
 
 # Define the Engine libraries we will need to build
-if(${USTORE_BUILD_ENGINE_UMEM})
-  add_library(ustore_embedded_umem src/engine_umem.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_umem pthread yyjson simdjson bson pcre2 arrow::parquet arrow::arrow arrow::bundled ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
-  target_compile_definitions(ustore_embedded_umem INTERFACE USTORE_VERSION="${USTORE_VERSION}")
-  target_compile_definitions(ustore_embedded_umem INTERFACE USTORE_ENGINE_IS_UMEM=1)
+if(${USTORE_BUILD_ENGINE_UCSET})
+  add_library(ustore_embedded_ucset src/engine_ucset.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
+  target_link_libraries(ustore_embedded_ucset pthread yyjson simdjson bson pcre2 arrow::parquet arrow::arrow arrow::bundled ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
+  target_compile_definitions(ustore_embedded_ucset INTERFACE USTORE_VERSION="${USTORE_VERSION}")
+  target_compile_definitions(ustore_embedded_ucset INTERFACE USTORE_ENGINE_IS_UCSET=1)
 
-  list(APPEND USTORE_ENGINE_NAMES "umem")
-  list(APPEND USTORE_CLIENT_LIBS "ustore_embedded_umem")
+  list(APPEND USTORE_ENGINE_NAMES "ucset")
+  list(APPEND USTORE_CLIENT_LIBS "ustore_embedded_ucset")
 endif()
 
 if(${USTORE_BUILD_ENGINE_ROCKSDB})
@@ -266,8 +266,8 @@ if(${USTORE_BUILD_API_FLIGHT_SERVER})
     target_link_libraries(${server_exe_name} pthread yyjson simdjson bson arrow::flight arrow::bundled arrow::dataset arrow::arrow ssl crypto ${embedded_lib_name} ${embedded_dependencies})
     target_compile_definitions(${server_exe_name} INTERFACE USTORE_ENGINE_NAME=${engine_name})
 
-    if(${engine_name} STREQUAL "umem")
-      target_compile_definitions(${server_exe_name} INTERFACE USTORE_ENGINE_IS_UMEM=1)
+    if(${engine_name} STREQUAL "ucset")
+      target_compile_definitions(${server_exe_name} INTERFACE USTORE_ENGINE_IS_UCSET=1)
     elseif(${engine_name} STREQUAL "rocksdb")
       target_compile_definitions(${server_exe_name} INTERFACE USTORE_ENGINE_IS_ROCKSDB=1)
     elseif(${engine_name} STREQUAL "leveldb")

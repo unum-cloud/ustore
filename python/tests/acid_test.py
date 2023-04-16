@@ -1,6 +1,6 @@
 
 import pytest
-import ustore.umem as ustore
+import ustore.ucset as ustore
 
 
 def test_transaction_set():
