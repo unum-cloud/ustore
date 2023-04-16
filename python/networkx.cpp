@@ -385,7 +385,7 @@ void ukv::wrap_networkx(py::module& m) {
             return range.shared_from_this();
         },
         py::arg("data"),
-        py::arg("default") = py::reinterpret_steal<py::object>(Py_None));
+        py::arg("default") = py::none());
 
     auto nodes_stream = py::class_<nodes_stream_t>(m, "NodesStream", py::module_local());
     nodes_stream.def("__next__", [](nodes_stream_t& stream) { return stream.next(); });
@@ -430,7 +430,7 @@ void ukv::wrap_networkx(py::module& m) {
             return range.shared_from_this();
         },
         py::arg("data"),
-        py::arg("default") = py::reinterpret_steal<py::object>(Py_None));
+        py::arg("default") = py::none());
 
     edges_range.def(
         "__call__",
@@ -468,7 +468,7 @@ void ukv::wrap_networkx(py::module& m) {
         },
         py::arg("vs"),
         py::arg("data"),
-        py::arg("default") = py::reinterpret_steal<py::object>(Py_None));
+        py::arg("default") = py::none());
 
     auto edges_iter = py::class_<edges_nbunch_iter_t>(m, "EdgesIter", py::module_local());
     edges_iter.def("__next__", [](edges_nbunch_iter_t& iter) { return iter.next(); });
@@ -561,7 +561,34 @@ void ukv::wrap_networkx(py::module& m) {
         "A DegreeView with the number outgoing edges for each Vertex.");
     g.def(
         "size",
-        [](py_graph_t& g) { return g.relations_attrs.size(); },
+        [](py_graph_t& g, std::string weight) {
+            if (!weight.size())
+                return g.ref().number_of_edges();
+
+            std::size_t size = 0;
+            auto stream = g.ref().edges(ukv_vertex_source_k).throw_or_release().begin();
+            while (!stream.is_end()) {
+                auto edge_ids = stream.edges_batch().edge_ids.immutable();
+                auto attrs = read_attributes(g.relations_attrs, edge_ids, weight.c_str());
+                for (std::size_t i = 0; i != edge_ids.size(); ++i) {
+                    if (attrs[i] && attrs[i].size()) {
+                        std::size_t number = 0;
+                        auto result = std::from_chars((char*)attrs[i].begin(), (char*)attrs[i].end(), number);
+                        if (result.ec == std::errc())
+                            size += number;
+                        else if (result.ec == std::errc::invalid_argument)
+                            throw std::runtime_error("Unsupported Type");
+                        else
+                            throw std::runtime_error("Failed To Read Attribute");
+                    }
+                    else
+                        size += 1;
+                }
+                stream.seek_to_next_batch();
+            }
+            return size;
+        },
+        py::arg("weight") = "",
         "Returns the number of attributed edges.");
     g.def(
         "number_of_edges",
@@ -686,9 +713,24 @@ void ukv::wrap_networkx(py::module& m) {
         py::arg("key"));
     g.def(
         "get_edge_data",
-        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2) { throw_not_implemented(); },
+        [](py_graph_t& g, ukv_key_t v1, ukv_key_t v2, py::object default_value) -> py::object {
+            std::string default_value_str;
+            to_string(default_value.ptr(), default_value_str);
+            auto edges = g.ref().edges_between(v1, v2).throw_or_release();
+            if (!edges.size())
+                return py::none();
+
+            auto edge_ids = edges.edge_ids.immutable();
+            auto attrs = read_attributes(g.relations_attrs, edge_ids, nullptr);
+            if (attrs[0] && attrs[0].size())
+                return py::reinterpret_steal<py::object>(from_json(json_t::parse(attrs[0])));
+            if (default_value_str.size())
+                return py::reinterpret_steal<py::object>(from_json(json_t::parse(default_value_str)));
+            return py::dict();
+        },
         py::arg("u"),
-        py::arg("v"));
+        py::arg("v"),
+        py::arg("default") = py::none());
 
     g.def(
         "get_edge_attributes",

@@ -64,6 +64,12 @@ using json_t = nlohmann::json;
 
 using blob_allocator_t = std::allocator<byte_t>;
 
+struct umem_options_t {
+    bool encryption = false;
+    bool compression = false;
+    size_t memory_limit = 0;
+};
+
 struct pair_t {
     collection_key_t collection_key;
     value_view_t range;
@@ -447,19 +453,26 @@ void ukv_database_init(ukv_database_init_t* c_ptr) {
             return_error_if_m(config.engine.config_url.empty(), c.error, args_wrong_k, "Doesn't support URL configs");
             return_error_if_m(config.engine.config.empty(), c.error, args_wrong_k, "Doesn't support nested configs");
 
+            auto fill_options = [](json_t const& js, umem_options_t& options) {
+                if (js.contains("encryption"))
+                    options.encryption = js["encryption"];
+                if (js.contains("compression"))
+                    options.compression = js["compression"];
+                if (js.contains("memory_limit"))
+                    options.memory_limit = js["memory_limit"];
+            };
+
             // Load from file
-            stdfs::path config_path = config.engine.config_file_path;
-            stdfs::file_status config_status = stdfs::status(config_path);
-            if (config_status.type() == stdfs::file_type::not_found) {
-                log_warning_m(
-                    "Configuration file is missing under the path %s. "
-                    "Default will be used\n",
-                    config_path.c_str());
+            umem_options_t options;
+            if (!config.engine.config_file_path.empty()) {
+                std::ifstream ifs(config.engine.config_file_path);
+                return_error_if_m(ifs, c.error, args_wrong_k, "Config file not found");
+                auto js = json_t::parse(ifs);
+                fill_options(js, options);
             }
-            else {
-                std::ifstream ifs(config_path);
-                json_t js = json_t::parse(ifs);
-            }
+            // Override with nested
+            if (!config.engine.config.empty())
+                fill_options(config.engine.config, options);
 
             db_ptr->persisted_directory = root;
             read(*db_ptr, db_ptr->persisted_directory, c.error);
