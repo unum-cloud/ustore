@@ -167,7 +167,7 @@ endif()
 # > USTORE_BUILD_ENGINE_UCSET: Uses Arrow Parquet format to save binary collections on disk.
 # > USTORE_BUILD_API_FLIGHT: Uses Arrow Flight RPC as a client-server communication protocol.
 # > USTORE_BUILD_SDK_PYTHON: Uses Arrow for zero-copy data exchage with the Python runtime.
-if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_ENGINE_UCSET})
+if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_ENGINE_UCSET} OR ${USTORE_BUILD_TESTS})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
 
