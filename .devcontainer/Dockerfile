@@ -23,7 +23,4 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends clang-format autoconf python3.10 python3-pip python3-dbg python3.10-dev
 
 # Pip installations
-RUN pip install pytest twine numpy pyarrow wheel gdb-tools sphinx breathe sphinx_mdinclude
-
-# Clone and install theme
-RUN git clone https://github.com/unum-cloud/www.unum.cloud-furo && cd www.unum.cloud-furo && pip install . && cd ../
+RUN pip install pytest twine numpy pyarrow wheel gdb-tools sphinx breathe furo sphinx_mdinclude

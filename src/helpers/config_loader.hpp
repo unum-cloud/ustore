@@ -12,9 +12,9 @@
 #include <nlohmann/json.hpp> // `nlohmann::json`
 #include <fmt/format.h>      // `fmt::format`
 
-#include "ukv/cpp/status.hpp" // `status_t`
+#include "ustore/cpp/status.hpp" // `status_t`
 
-namespace unum::ukv {
+namespace unum::ustore {
 
 using json_t = nlohmann::json;
 
@@ -98,13 +98,13 @@ inline status_t config_loader_t::load_from_json(json_t const& json, config_t& co
             auto j_disks = json["data_directories"];
             if (j_disks.is_array()) {
                 for (auto j_disk : j_disks) {
-                    disk_config_t disk;
-                    disk.path = j_disk.value("path", "");
-                    if (disk.path.empty())
+                    disk_config_t disk_config;
+                    disk_config.path = j_disk.value("path", "");
+                    if (disk_config.path.empty())
                         return "Empty data directory path";
-                    if (!parse_volume(j_disk, "max_size", disk.max_size))
+                    if (!parse_volume(j_disk, "max_size", disk_config.max_size))
                         return "Invalid volume format";
-                    config.data_directories.push_back(std::move(disk));
+                    config.data_directories.push_back(std::move(disk_config));
                 }
             }
             else
@@ -275,4 +275,4 @@ inline bool config_loader_t::parse_bytes(std::string const& str, size_t& bytes) 
     return true;
 }
 
-} // namespace unum::ukv
+} // namespace unum::ustore
