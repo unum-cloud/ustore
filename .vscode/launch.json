@@ -332,7 +332,7 @@
             "name": "C++: Test UMem Modality",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/build/bin/test_modality_ukv_embedded_umem",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_modality_ustore_embedded_ucset",
             "args": [
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
