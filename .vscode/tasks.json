@@ -2,6 +2,12 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Build Debug UMem Test Modality",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_TESTS=1 -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_LEVELDB=0 -DUKV_BUILD_ENGINE_ROCKSDB=0 -B ./build_debug && make test_modality_ukv_embedded_umem -j8 --silent -C ./build_debug",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Build Debug",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUKV_BUILD_BENCHMARKS=0 -DUKV_BUILD_TESTS=1 -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_LEVELDB=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make -j 12 -C ./build_debug",
             "args": [],
