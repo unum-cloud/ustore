@@ -329,6 +329,29 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
+            "name": "C++: Test UMem Modality",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_modality_ustore_embedded_ucset",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                }
+            ],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Debug UMem Test Modality",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",

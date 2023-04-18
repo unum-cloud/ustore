@@ -195,7 +195,7 @@ endif()
 
 set(USTORE_ENGINE_NAMES)
 set(USTORE_CLIENT_LIBS)
-set(USTORE_TEST_NAMES "test_tools" "test_compilation" "test_units" "stress_atomicity" "stress_linearizability")
+set(USTORE_TEST_NAMES "test_tools" "test_compilation" "test_units" "test_modality" "stress_atomicity" "stress_linearizability")
 
 # Define the Engine libraries we will need to build
 if(${USTORE_BUILD_ENGINE_UCSET})

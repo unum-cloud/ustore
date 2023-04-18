@@ -765,7 +765,7 @@ void ustore_graph_remove_vertices(ustore_graph_remove_vertices_t* c_ptr) {
     return_if_error_m(c.error);
 
     // From every opposite end - remove a match, and only then - the content itself
-    for (std::size_t i = 0; i != unique_strided.size(); ++i) {
+    for (std::size_t i = 0; i != vertices.size(); ++i) {
         auto vertex_collection = vertex_collections[i];
         auto vertex_id = vertices[i];
         auto vertex_role = vertex_roles ? vertex_roles[i] : ustore_vertex_role_any_k;
