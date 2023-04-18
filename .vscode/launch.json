@@ -329,7 +329,7 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Test UMem Modality",
+            "name": "C++: Test UCSet Modality",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build_debug/build/bin/test_modality_ustore_embedded_ucset",
@@ -347,7 +347,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Debug UMem Test Modality",
+            "preLaunchTask": "Build Debug UCSet Test Modality",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
