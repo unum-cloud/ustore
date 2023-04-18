@@ -2,10 +2,12 @@
 
 Rust implementation is designed to support:
 
-* Named Collections
-* ACID Transactions
-* Single & Batch Operations
-* [Apache DataFusion](https://arrow.apache.org/datafusion/) `TableProvider` for SQL
+-   Named Collections
+-   ACID Transactions
+-   Single & Batch Operations
+-   [Apache DataFusion](https://arrow.apache.org/datafusion/) `TableProvider` for SQL
+-   Tabular operation with [Polars](https://www.pola.rs/) and integration with [`Apache Arrow`](https://pola-rs.github.io/polars-book/user-guide/howcani/interop/arrow.html)
+-   NetworkX compatibility using [RustworkX](https://github.com/Qiskit/rustworkx)
 
 Using it should be, again, familiar, as it mimics [`std::collections`](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html):
 

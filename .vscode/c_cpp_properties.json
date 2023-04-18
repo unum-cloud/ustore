@@ -2,7 +2,11 @@
     "configurations": [
         {
             "name": "Linux",
-            "configurationProvider": "ms-vscode.cmake-tools"
+            "configurationProvider": "ms-vscode.cmake-tools",
+            "includePath": [
+                "${default}",
+                "${workspaceFolder}/include"
+            ]
         }
     ],
     "version": 4
